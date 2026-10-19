@@ -55,7 +55,7 @@ For a missing tool it prints `build.fish: error: <tool> not found; install it wi
 - **THEN** it exits 1, stderr contains `sudo dnf install git`, `build/` was not created, and the fake `sudo` was never invoked
 
 #### Scenario: validate with arguments needs only Python
-- **WHEN** a fish test runs `tools/build.fish validate --vocabulary tests/fixtures/reaction_types.toml --static-dir tests/fixtures/static tests/fixtures/valid/md`, with the repository as working directory and a `PATH` that holds only `fish` and `python3`
+- **WHEN** a fish test runs `tools/build.fish validate --vocabulary tests/fixtures/reaction_types.toml --static-dir tests/fixtures/static tests/fixtures/valid/md tests/fixtures/valid/export`, with the repository as working directory and a `PATH` that holds only `fish` and `python3`
 - **THEN** it exits 0, and stderr contains no `not found`
 
 ### Requirement: validate subcommand

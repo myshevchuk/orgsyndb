@@ -129,6 +129,7 @@ class MissingToolTests(FishTestCase):
         env = dict(os.environ, PATH=str(path.directory))
         result = self.run_real(
             "validate", *VALIDATE_ARGS, "tests/fixtures/valid/md",
+            "tests/fixtures/valid/export",
             cwd=REPO, env=env)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("not found", result.stderr)

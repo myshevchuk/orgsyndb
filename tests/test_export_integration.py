@@ -57,11 +57,19 @@ class IsolationTests(ExportTestCase):
                 sandbox, env=sandbox.env(TMPDIR=str(tmpdir)))
             self.assertEqual(result.returncode, 0,
                              result.stdout + result.stderr)
-            self.assertEqual(sorted(p.name for p in sandbox.home.iterdir()),
-                             [".config"])
+            # fish creates its own state directories at start-up, before
+            # the script runs; only those may appear beside .config/emacs.
+            fish_own = {".cache/fish", ".config/fish", ".local/share/fish"}
+            created = sorted(
+                str(p.relative_to(sandbox.home)) for p in
+                sandbox.home.rglob("*")
+                if not any(str(p.relative_to(sandbox.home)) == d
+                           or str(p.relative_to(sandbox.home)).startswith(
+                               d + "/") for d in fish_own))
             self.assertEqual(
-                sorted(p.name for p in (sandbox.home / ".config").iterdir()),
-                ["emacs"])
+                [c for c in created if c not in {
+                    ".cache", ".config", ".local", ".local/share"}],
+                [".config/emacs"])
             self.assertEqual(
                 list((sandbox.home / ".config" / "emacs").iterdir()), [])
             self.assertEqual(list(tmpdir.iterdir()), [])

@@ -16,7 +16,7 @@ The export writes nothing under `$HOME`, and nothing in the `TMPDIR` it inherite
 #### Scenario: Owner's directories and the inherited TMPDIR stay untouched
 - **WHEN** an integration test runs `tools/build.fish export` with `HOME` set to a temporary directory that contains only an empty `.config/emacs/`, and `TMPDIR` set to a separate, empty temporary directory with mode 0555
 - **THEN** the export exits 0
-- **AND** afterwards that `HOME` contains exactly the empty `.config/emacs/` directory and nothing else, in particular no `.emacs.d`
+- **AND** afterwards that `HOME` contains the empty `.config/emacs/` directory and nothing else apart from the fish interpreter's own start-up directories (`.cache/fish`, `.config/fish`, `.local/share/fish`), in particular no `.emacs.d`
 - **AND** the `TMPDIR` directory is still empty
 
 ### Requirement: Pinned ox-hugo and tomelr
