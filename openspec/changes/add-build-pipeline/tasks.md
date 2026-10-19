@@ -11,7 +11,7 @@ House rules for the tests:
 Definitions of "integration test" and "fish test" are in the spec
 comments, and the test layers are in design.md D18.
 
-- [ ] 1.1 Add `tests/fixtures/export/OSDB-0901-table-first.org`, a fully
+- [x] 1.1 Add `tests/fixtures/export/OSDB-0901-table-first.org`, a fully
       valid Org procedure with all eight sections:
       - its first `#+HUGO_CUSTOM_FRONT_MATTER:` line sets `:product`, and
         later lines set `:id`, `:authors`, `:status`, `:reaction_types`,
@@ -20,19 +20,19 @@ comments, and the test layers are in design.md D18.
       - `#+AI_MODEL: example-model-1`;
       - `#+CREATED: [2026-10-19 Mon 17:42:05]` and
         `#+LAST_MODIFIED: [2026-10-19 Mon 21:00:07]`.
-- [ ] 1.2 Add `tests/fixtures/export/OSDB-0902-literal-text.org`, a fully
+- [x] 1.2 Add `tests/fixtures/export/OSDB-0902-literal-text.org`, a fully
       valid Org procedure with `#+AI_MODEL: none`. Its Summary contains
       `Costs $5 and $10, $x$ and \(y^2\).` and
       `H_{2}O, CO_2 and yield_percent`. It also has an `emacs-lisp` source
       block with `:exports results` that would create the file named by the
       environment variable `OSDB_TEST_MARKER`.
-- [ ] 1.3 Add `tests/fixtures/export/OSDB-0903-named-paragraph.org`, a
+- [x] 1.3 Add `tests/fixtures/export/OSDB-0903-named-paragraph.org`, a
       fully valid Org procedure with `#+AI_MODEL: none`. Its Summary holds a
       paragraph preceded by `#+name: observation` and its Notes another
       preceded by `#+name: second`. This is the regression fixture for
       random reference IDs: without the seed in design.md D6, two exports
       of it differ. IDs 0901 to 0903 keep committed fixture IDs unique.
-- [ ] 1.4 Add an integration harness module (e.g.
+- [x] 1.4 Add an integration harness module (e.g.
       `tests/pipeline_support.py`). It does the following:
       - builds a temporary repository copy whose path contains a space,
         copying `tools/`, `site/`, `templates/`, `org/`, `md/` and
@@ -56,7 +56,7 @@ Write each test so that, once the module or script it exercises exists, it
 fails on its assertion and not on an import or setup error. The function
 names and signatures to test against are in design.md D1.
 
-- [ ] 2.1 `tests/test_pipeline_logic.py` covers these scenarios:
+- [x] 2.1 `tests/test_pipeline_logic.py` covers these scenarios:
       - from `build-script` "new subcommand": next ID, first ID, exhausted
         ID space, the deleted committed procedure (skip without `git`),
         the shallow clone (skip without `git`), slugs, long and empty
@@ -65,38 +65,38 @@ names and signatures to test against are in design.md D1.
         human-authored stub, and the invalid AI model;
       - from "pdf subcommand": job naming and missing page;
       - from "Pipeline helper module": both scenarios.
-- [ ] 2.2 Cover the `org-export` scenarios "Export plan" (all three,
+- [x] 2.2 Cover the `org-export` scenarios "Export plan" (all three,
       including the entries the validator does not examine) and
       "Exported timestamps" (all four) by running `pipeline.py
       export-plan` on temporary Org roots built from
       `tests/fixtures/valid/org/` and `tests/fixtures/org-invalid/`.
       Change only the keyword lines.
-- [ ] 2.3 `tests/test_pagefind_install.py` covers the four
+- [x] 2.3 `tests/test_pagefind_install.py` covers the four
       `install_pagefind` scenarios with tarballs built in the test. No
       network.
-- [ ] 2.3a `tests/test_export_replace.py` covers the `org-export` unit
+- [x] 2.3a `tests/test_export_replace.py` covers the `org-export` unit
       scenarios "Second rename fails", "Restore fails too" and "Backup
       deletion fails after a successful swap". They call `replace_export`
       and `recover_export` on temporary `build/` trees, injecting `rename`
       and `remove` functions that count their calls and raise `OSError` on
       the chosen one.
-- [ ] 2.4 `tests/test_site_config.py` covers these scenarios: "Hugo
+- [x] 2.4 `tests/test_site_config.py` covers these scenarios: "Hugo
       configuration", "Ignore rules", both "Caddyfile example" scenarios,
       and "Nothing enables the hook".
-- [ ] 2.5 `tests/test_samples.py` covers every `sample-procedures`
+- [x] 2.5 `tests/test_samples.py` covers every `sample-procedures`
       scenario except "Review before archive" (manual) and "Clean
       validation of the shipped tree" (2.8):
       - sample procedures are discovered by the `sample-data` tag;
       - Org tables and Markdown pipe tables are parsed from source;
       - atomic weights and the CAS rule are as the spec states.
-- [ ] 2.6 `tests/test_build_script.py` (fish tests) covers these
+- [x] 2.6 `tests/test_build_script.py` (fish tests) covers these
       `build-script` scenarios: unknown subcommand, no subcommand, help,
       syntax and formatting, symlink invocation, Hugo missing, git
       missing although ox-hugo is installed (skip unless `.emacs-batch/`
       is bootstrapped), validate with arguments needing only Python,
       arguments passed through to the validator, both "clean" scenarios,
       and both "check-deps" scenarios.
-- [ ] 2.7 `tests/test_export_integration.py` covers every `org-export`
+- [x] 2.7 `tests/test_export_integration.py` covers every `org-export`
       integration scenario:
       - untouched `HOME` and inherited `TMPDIR`, using the read-only
         `TMPDIR`;
@@ -108,7 +108,7 @@ names and signatures to test against are in design.md D1.
         no sources;
       - both idempotence scenarios, including the named paragraph, and
         "Other sources do not change a file's anchors".
-- [ ] 2.8 `tests/test_build_integration.py` covers these integration
+- [x] 2.8 `tests/test_build_integration.py` covers these integration
       scenarios:
       - every `site-build` integration scenario, including the
         future-dated and the expired procedure;
@@ -119,7 +119,7 @@ names and signatures to test against are in design.md D1.
 
       `serve` runs in its own process group, which the test kills in
       `tearDown`.
-- [ ] 2.9 Run `python3 -m pytest tests` and report which tests fail and
+- [x] 2.9 Run `python3 -m pytest tests` and report which tests fail and
       which skip, with reasons. At this stage:
       - the change-1 suite stays green;
       - pure, configuration, sample and fish tests are red;
