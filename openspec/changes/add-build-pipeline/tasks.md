@@ -207,12 +207,12 @@ names and signatures to test against are in design.md D1.
 
 Record each result in the review notes.
 
-- [ ] 9.1 Brief §9 check 1: in a fresh clone in a temporary directory whose
+- [x] 9.1 Brief §9 check 1: in a fresh clone in a temporary directory whose
       path contains a space, run `tools/build.fish check-deps`, then
       `tools/build.fish build`. Both succeed with no step beyond the
       printed `dnf` line, and the first run bootstraps ox-hugo, tomelr and
       Pagefind over the network.
-- [ ] 9.2 Brief §9 check 6. Confirm that `python3 -m pytest tests` is
+- [x] 9.2 Brief §9 check 6. Confirm that `python3 -m pytest tests` is
       green and that `tools/build.fish validate` passes on the seeds. Then
       run each committed fixture through the pass-through. Let `F` stand
       for `--vocabulary tests/fixtures/reaction_types.toml --static-dir
@@ -242,19 +242,19 @@ Record each result in the review notes.
         --org-root tests/fixtures/org-invalid/<case>/org
         tests/fixtures/org-invalid/<case>/export`. `export-offset-mismatch`
         gives one error and one warning.
-- [ ] 9.3 Brief §9 check 8: `tools/build.fish new "Manual check"` and
+- [x] 9.3 Brief §9 check 8: `tools/build.fish new "Manual check"` and
       `tools/build.fish new --md "Manual check"` create stubs with the next
       free IDs. The Org stub's `#+CREATED` is the current Europe/Berlin
       time with the right weekday, and `tools/build.fish validate` passes
       with both present. Delete both afterwards.
-- [ ] 9.4 Brief §9 check 9: every Org file under `org/procedures/` and
+- [x] 9.4 Brief §9 check 9: every Org file under `org/procedures/` and
       `templates/` carries the three keywords in the required format.
       Exported `date` and `lastmod` match them; the validator's
       cross-check passes in `build`.
-- [ ] 9.5 Brief §9 check 10: a second `tools/build.fish build` succeeds.
+- [x] 9.5 Brief §9 check 10: a second `tools/build.fish build` succeeds.
       `sha256sum build/export/*` is unchanged across it, and `git status`
       stays clean.
-- [ ] 9.6 Brief §9 check 2 (the part minimal layouts allow): run
+- [x] 9.6 Brief §9 check 2 (the part minimal layouts allow): run
       `tools/build.fish serve`. In a browser with the network panel open,
       the home page, a procedure page and a taxonomy page make zero
       requests to other hosts. Grep `public/` for `http://` and `https://`:
@@ -262,16 +262,16 @@ Record each result in the review notes.
       strings appear. A Pagefind search from the browser console
       (`await import("/pagefind/pagefind.js")`, then `search("aspirin")`)
       returns OSDB-0002. Ctrl-C stops the server.
-- [ ] 9.7 Brief §9 check 7 (the part minimal layouts allow):
+- [x] 9.7 Brief §9 check 7 (the part minimal layouts allow):
       `tools/build.fish pdf` writes one PDF per procedure, named
       `OSDB-NNNN-short-slug.pdf`. `pdfinfo` reports A4, and the PDFs carry
       no navigation chrome. Headers, footers and clipping are change 3's.
-- [ ] 9.8 Fish behaviour that only a manual check covers:
+- [x] 9.8 Fish behaviour that only a manual check covers:
       - the hook, enabled with `git config core.hooksPath tools/hooks` and
         then with a symlink, refuses a commit with an invalid procedure;
       - progress output reads cleanly in a terminal;
       - `check-deps` lines are correct on this machine.
-- [ ] 9.9 Review each sample procedure for the "Benign textbook
+- [x] 9.9 Review each sample procedure for the "Benign textbook
       chemistry" requirement.
 
 ## 10. Documentation (orchestrator)

@@ -117,11 +117,11 @@ function run_build
     run_validator; or return 1
     step "build: hugo"
     rm -rf "$repo/public"; or return 1
-    hugo --source "$repo/site" --minify; or return 1
+    hugo --source "$repo/site" --minify --quiet; or return 1
     step "build: pagefind"
     set -l pagefind (pipeline_py ensure-pagefind --tools-dir "$repo/.tools")
     or return 1
-    "$pagefind" --site "$repo/public"
+    "$pagefind" --site "$repo/public" --quiet
 end
 
 function no_arguments --argument-names name
