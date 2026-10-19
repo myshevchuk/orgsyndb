@@ -128,24 +128,24 @@ names and signatures to test against are in design.md D1.
 
 ## 3. Python core (implementer)
 
-- [ ] 3.1 Add `tools/pipeline.py` (design.md D1) with the pure functions
+- [x] 3.1 Add `tools/pipeline.py` (design.md D1) with the pure functions
       `slugify`, `next_id`, `org_timestamp`, `rfc3339`, `export_instants`,
       `fill_template` and `pdf_jobs`. It reuses `validate.py`'s helpers,
       `discover` included. If `validate.py` must change to expose them, its specified
       behaviour and its suite must not change.
-- [ ] 3.2 Add the CLI subcommands `export-plan`, `next-id` and `new`
+- [x] 3.2 Add the CLI subcommands `export-plan`, `next-id` and `new`
       (D3, D11). `export-plan` plans only the entries `validate.discover`
       returns as procedures. `new` scans the git history, falls back with
       a warning without git, and warns on a shallow clone.
-- [ ] 3.2a Add `recover_export` and `replace_export`, with injectable
+- [x] 3.2a Add `recover_export` and `replace_export`, with injectable
       `rename` and `remove`, and the CLI subcommands `recover-export` and
       `install-export` (D4).
-- [ ] 3.3 Add `install_pagefind` and `ensure-pagefind` with the pinned
+- [x] 3.3 Add `install_pagefind` and `ensure-pagefind` with the pinned
       URL and hashes (D8), and `pdf` with the WeasyPrint loop (D10).
 
 ## 4. Export (implementer)
 
-- [ ] 4.1 Add `tools/export.el` (D2–D6):
+- [x] 4.1 Add `tools/export.el` (D2–D6):
       - isolation settings before `(require 'package)` and before Org
         loads, `temporary-file-directory` and `TMPDIR` included;
       - the `package-vc-install` bootstrap and the pin check;
@@ -160,27 +160,27 @@ names and signatures to test against are in design.md D1.
 
 ## 5. Site (implementer)
 
-- [ ] 5.1 Add `site/hugo.toml` exactly as design.md D7 gives it, and
+- [x] 5.1 Add `site/hugo.toml` exactly as design.md D7 gives it, and
       `site/content/_index.md` with the title `OrgSynDB`.
-- [ ] 5.2 Add `site/layouts/baseof.html`, `single.html` and `list.html`
+- [x] 5.2 Add `site/layouts/baseof.html`, `single.html` and `list.html`
       that satisfy the layout contract (D16) and nothing more.
 
 ## 6. Build script and companions (implementer)
 
-- [ ] 6.1 Add `tools/build.fish` with the conventions of D13, and the tool
+- [x] 6.1 Add `tools/build.fish` with the conventions of D13, and the tool
       checks of the D12 preflight table, and `check-deps`.
-- [ ] 6.2 Implement the subcommands: `export` (recover, stage, then
+- [x] 6.2 Implement the subcommands: `export` (recover, stage, then
       install through `pipeline.py`, D4),
       `validate` (D14), `build`, `serve` (D9), `pdf` (D10), `new` (D11)
       and `clean`. While bootstrapping, send Emacs output to
       `build/export.log`, and print it only on failure.
-- [ ] 6.3 Add `tools/hooks/pre-commit` (D15) and make it executable. Add
+- [x] 6.3 Add `tools/hooks/pre-commit` (D15) and make it executable. Add
       `deploy/Caddyfile.example` (D15). Extend `.gitignore` with the D15
       entries.
 
 ## 7. Seed samples (implementer)
 
-- [ ] 7.1 Add `org/procedures/OSDB-0001-salicylic-acid.org` and
+- [x] 7.1 Add `org/procedures/OSDB-0001-salicylic-acid.org` and
       `md/procedures/OSDB-0002-aspirin.md` as design.md D17 specifies:
       - quantities from the D17 table, all eight sections, numbered steps
         and notes;
@@ -192,15 +192,15 @@ names and signatures to test against are in design.md D1.
 
 ## 8. Implementation verification (implementer)
 
-- [ ] 8.1 Run `tools/build.fish export` once to bootstrap `.emacs-batch/`
+- [x] 8.1 Run `tools/build.fish export` once to bootstrap `.emacs-batch/`
       (needs network). Then run `tools/build.fish build` to cache Pagefind.
 - [ ] 8.2 Run `python3 -m pytest tests` until it is fully green with no
       integration test skipped on this machine, except the Caddy parse
       test, without editing any test. Return any test that looks wrong to
       the orchestrator.
-- [ ] 8.3 Run `openspec validate add-build-pipeline --strict`, and confirm
+- [x] 8.3 Run `openspec validate add-build-pipeline --strict`, and confirm
       that `git status` shows no generated file.
-- [ ] 8.4 List every document a person reads that this change affects,
+- [x] 8.4 List every document a person reads that this change affects,
       and what changed in it. Write none of them.
 
 ## 9. Manual verification (orchestrator)

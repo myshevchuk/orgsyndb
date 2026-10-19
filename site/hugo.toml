@@ -1,0 +1,33 @@
+baseURL = "/"
+title = "OrgSynDB"
+locale = "en"
+publishDir = "../public"
+relativeURLs = true
+buildFuture = true
+buildExpired = true
+disableKinds = ["rss", "sitemap"]
+
+[taxonomies]
+author = "authors"
+reaction_type = "reaction_types"
+tag = "tags"
+
+[permalinks.page]
+procedures = "/procedures/:slug/"
+
+[markup.goldmark.renderer]
+unsafe = true
+
+[[module.mounts]]
+source = "content"
+target = "content"
+
+[[module.mounts]]
+source = "../build/export"
+target = "content/procedures"
+files = ["/OSDB-*.md"]
+
+[[module.mounts]]
+source = "../md/procedures"
+target = "content/procedures"
+files = ["/OSDB-*.md"]

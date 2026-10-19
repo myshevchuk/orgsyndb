@@ -1,0 +1,14 @@
+# Example Caddy configuration serving a built OrgSynDB site.
+#
+# Build the site with `tools/build.fish build`, copy public/ to the
+# server, then replace:
+#   orgsyndb.internal     with the internal host name of the server;
+#   /srv/orgsyndb/public  with the directory the copy of public/ is in.
+# `tls internal` makes Caddy issue the certificate from its own local
+# authority; replace it with your organisation's TLS settings if needed.
+
+orgsyndb.internal {
+	tls internal
+	root * /srv/orgsyndb/public
+	file_server
+}

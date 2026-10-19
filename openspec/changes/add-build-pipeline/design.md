@@ -109,6 +109,11 @@ function is pure unless marked otherwise.
 | `pdf_jobs(files, public, pdf_dir) -> list[PdfJob]` | Takes `(content path, front matter)` pairs and returns `PdfJob(html, pdf)` pairs under the rule in D10, sorted by PDF name. |
 | `install_pagefind(tarball, tar_sha256, bin_sha256, dest) -> Path` | (file I/O) Verifies and extracts the binary as in D8. Raises `PagefindError` naming the expected and actual hash. |
 
+`replace_export` takes no plan. The check that the staging directory holds
+exactly the planned files is made by the `install-export BUILD` subcommand,
+which reads `BUILD/export-plan.json` and calls `replace_export` only when
+the check passes.
+
 CLI subcommands: `export-plan`, `recover-export`, `install-export`,
 `next-id`, `new`, `pdf`, `ensure-pagefind`. Their arguments are given in the specs. They exit 0 on
 success, 1 on failure and 2 on usage errors, and write errors to stderr as
@@ -619,7 +624,9 @@ python3 -m http.server --bind 127.0.0.1 --directory "<repo>/public" <port>
 ```
 
 Before the server starts, it prints the line `serving
-http://127.0.0.1:<port>/ (Ctrl-C to stop)`. The default port is 8000. Pages,
+http://127.0.0.1:<port>/ (Ctrl-C to stop)`. It prints the line once
+`http.server` reports that it has bound the port, so a client that waits
+for the line is never refused a connection. The default port is 8000. Pages,
 `pagefind.js`, `pagefind-entry.json` and the `.pagefind` WASM files were all
 served with status 200. A Pagefind search run against this server returned
 the expected page (verified; see Verification).

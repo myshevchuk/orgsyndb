@@ -1,2 +1,9 @@
 __pycache__/
 .pytest_cache/
+/build/
+/public/
+/pdf/
+/.emacs-batch/
+/.tools/
+/site/.hugo_build.lock
+/site/resources/
