@@ -1,0 +1,11 @@
+#!/usr/bin/env fish
+# Optional pre-commit hook: refuses the commit when
+# `tools/build.fish validate` fails. It validates the working tree, not
+# the index. Nothing enables it; see the README.
+
+set -l top (git rev-parse --show-toplevel)
+or exit 1
+cd "$top"
+or exit 1
+"$top/tools/build.fish" validate
+exit $status

@@ -1,0 +1,17 @@
+{{ define "main" }}
+<main>
+<header>
+<h1>{{ .Title }}</h1>
+<p>{{ .Params.id }}</p>
+</header>
+{{ if eq .Section "procedures" }}
+<article data-pagefind-body>
+{{ .Content }}
+</article>
+{{ else }}
+<article>
+{{ .Content }}
+</article>
+{{ end }}
+</main>
+{{ end }}
