@@ -194,7 +194,7 @@ names and signatures to test against are in design.md D1.
 
 - [x] 8.1 Run `tools/build.fish export` once to bootstrap `.emacs-batch/`
       (needs network). Then run `tools/build.fish build` to cache Pagefind.
-- [ ] 8.2 Run `python3 -m pytest tests` until it is fully green with no
+- [x] 8.2 Run `python3 -m pytest tests` until it is fully green with no
       integration test skipped on this machine, except the Caddy parse
       test, without editing any test. Return any test that looks wrong to
       the orchestrator.
@@ -276,7 +276,7 @@ Record each result in the review notes.
 
 ## 10. Documentation (orchestrator)
 
-- [ ] 10.1 Hand README.md, docs/AUTHORING.md and docs/AUTHORING-ORG.org to
+- [x] 10.1 Hand README.md, docs/AUTHORING.md and docs/AUTHORING-ORG.org to
       the doc writer, as update or draft jobs. The facts each needs are
       listed in proposal.md Impact. The sources are this change's specs
       and design.md, `tools/build.fish help`, the templates, and the

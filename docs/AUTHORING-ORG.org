@@ -1,0 +1,174 @@
+#+TITLE: Writing OrgSynDB procedures in Org
+#+CREATED: [2026-10-20 Tue 00:06:38]
+#+LAST_MODIFIED: [2026-10-20 Tue 00:08:31]
+#+AI_MODEL: gpt-5.6-sol
+#+OPTIONS: toc:t num:nil
+#+STARTUP: showall
+#+AI_PASS: fact-check claude-opus-5-5 [2026-10-20 Tue 00:08] -- header: #+DATE replaced by the project keywords; #+AI_MODEL corrected from gpt-5 to the pinned run model
+
+* Start from a generated stub
+
+  Create an Org procedure with:
+
+#+begin_src fish
+  tools/build.fish new "Product name"
+#+end_src
+
+  The command chooses the next free identifier across the Org sources,
+  Markdown sources, existing exports, and available Git history. It creates
+  a file such as ~org/procedures/OSDB-0003-product-name.org~ and fills its
+  identifier, slug, title, and current Europe/Berlin timestamps.
+
+  When a model assisted with the procedure, record it while creating the
+  stub:
+
+#+begin_src fish
+  tools/build.fish new --ai-model example-model-1 "Product name"
+#+end_src
+
+  Without ~--ai-model~, the stub contains ~#+AI_MODEL: none~. The command
+  creates the file exclusively and never overwrites an existing file. It
+  prints a warning if Git history is unavailable or the clone is shallow,
+  because it may then be unable to see a deleted identifier.
+
+  The source template is [[file:../templates/procedure.org][templates/procedure.org]]. The complete field rules
+  are in [[file:SCHEMA.md][the procedure schema]].
+
+* Understand the template header
+
+  Org keyword lines start at column zero. Keep every required keyword once,
+  and do not indent it.
+
+  - ~#+TITLE~ :: The product name shown as the page title.
+  - ~#+CREATED~ :: When the procedure was first written, as an inactive Org
+    timestamp.
+  - ~#+LAST_MODIFIED~ :: When the procedure was last changed. Update this by
+    hand after every change; no command updates it automatically.
+  - ~#+AI_MODEL~ :: ~none~ for a human-authored procedure, or the identifier
+    of the model that assisted.
+  - ~#+OPTIONS: author:nil~ :: Prevents Org authorship metadata from becoming
+    an invalid ~author~ field in the export.
+  - ~#+HUGO_SLUG~ :: The lowercase procedure identifier, such as
+    ~osdb-0003~.
+  - ~#+HUGO_TAGS~ :: Space-separated tags. Use lowercase letters and digits
+    with single hyphens; do not use ~sample-data~ for a real procedure.
+  - ~#+HUGO_CUSTOM_FRONT_MATTER~ :: Repeated lines that supply the procedure
+    identifier, authors, status, reaction type, scale, yield, hazards, and
+    optional fields.
+
+  The ~:product~ custom-front-matter line is an association list containing
+  the product name, formula, molecular weight, SMILES, and optional CAS
+  number. Keep this line last among the custom-front-matter lines. The
+  exporter also guards the table order so later metadata does not become
+  part of the product table.
+
+  Use the template's quoting and list forms. For example, authors and hazards
+  use quoted Lisp lists such as ~'("A. Example" "B. Example")~. Consult
+  [[file:SCHEMA.md][docs/SCHEMA.md]] for the exact required values, optional fields, reaction
+  vocabulary, and file-name rules.
+
+* Use exact timestamps
+
+  ~#+CREATED~ and ~#+LAST_MODIFIED~ use this exact form:
+
+#+begin_example
+  [YYYY-MM-DD Day hh:mm:ss]
+#+end_example
+
+  Use Europe/Berlin local wall-clock time, an English three-letter weekday,
+  and seconds. Org timestamps do not carry the UTC offset. The exporter adds
+  the Berlin offset in force at that instant. A time skipped during the
+  spring clock change is invalid. During the repeated autumn hour, export
+  uses the earlier summer offset for ~#+CREATED~.
+
+  ~tools/build.fish new~ supplies valid timestamps and English weekday names.
+  For timestamps inserted interactively by Emacs, make its time locale
+  English:
+
+#+begin_src emacs-lisp
+  (setq system-time-locale "C")
+#+end_src
+
+  Keep ~#+CREATED~ unchanged. Set ~#+LAST_MODIFIED~ to the current local time
+  whenever you change the procedure. It must not be earlier than
+  ~#+CREATED~. See [[file:SCHEMA.md][the procedure schema]] for the exact validation rules
+  around clock changes.
+
+* Write the body
+
+  Keep these top-level headings in this order:
+
+  1. Summary
+  2. Reagents
+  3. Procedure
+  4. Workup and Purification
+  5. Characterization
+  6. Notes
+  7. Hazards and Waste Disposal
+  8. References
+
+  Use one leading star for each of these headings. Lower-level headings may
+  use more stars. Use an Org table for reagents and numbered lists for steps
+  and notes. Include quantities, temperatures, times, observations, workup,
+  purification, characterization, hazards, and waste handling. Write
+  ~None.~ under References when there is no reference.
+
+  Write chemical subscripts and superscripts with braces:
+
+#+begin_example
+  H_{2}O
+  10^{-3}
+#+end_example
+
+  Plain ~CO_2~ stays plain text. Dollar-delimited text such as ~$x$~ and
+  LaTeX delimiters such as ~\(y^2\)~ also stay literal because the site has
+  no math renderer.
+
+  The sample [[file:../org/procedures/OSDB-0001-salicylic-acid.org][OSDB-0001-salicylic-acid.org]] shows the expected
+  structure. It is sample data, not an experimentally verified procedure.
+
+* Export, validate, and preview
+
+  Export Org sources with:
+
+#+begin_src fish
+  tools/build.fish export
+#+end_src
+
+  Export runs Emacs in an isolated batch environment. It does not load or
+  write the owner's Emacs configuration. On the first run it fetches pinned
+  copies of ox-hugo and tomelr into ~.emacs-batch/~. Exported Markdown goes
+  to ~build/export/~, and Emacs output goes to ~build/export.log~. The log is
+  printed when export fails.
+
+  Org files remain the source of truth. Do not edit ~build/export/~. Each
+  export rebuilds the complete directory, removes orphaned exports, and
+  produces byte-identical output when the sources and tool versions have not
+  changed.
+
+  The export has deliberate limits:
+
+  - It does not render LaTeX or dollar-delimited mathematics.
+  - It interprets only braced Org subscript and superscript forms.
+  - It never evaluates source blocks.
+  - It ignores file-local variables.
+
+  Check both source formats and their exports with:
+
+#+begin_src fish
+  tools/build.fish validate
+#+end_src
+
+  Validator messages have the form ~path:field: error|warning: message~.
+  Errors fail validation; warnings do not. The schema explains every field
+  and the validator's exit statuses.
+
+  Build and preview the site with:
+
+#+begin_src fish
+  tools/build.fish serve
+#+end_src
+
+  Open http://127.0.0.1:8000/ after the command prints that it is serving.
+  The server is reachable only from the same machine. It has no live reload,
+  so stop it with ~Ctrl-C~ and run it again after an edit.
