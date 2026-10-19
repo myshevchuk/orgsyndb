@@ -1,0 +1,49 @@
+# Controlled vocabulary for the reaction_types front-matter field.
+# Each table name is a reaction-type slug (lowercase, hyphenated); its
+# label is the name shown on the site. A procedure's reaction_types
+# must hold exactly one of these slugs.
+
+[acylation]
+label = "Acylation"
+
+[aldol-condensation]
+label = "Aldol condensation"
+
+[alkylation]
+label = "Alkylation"
+
+[amide-coupling]
+label = "Amide coupling"
+
+[cross-coupling]
+label = "Cross-coupling"
+
+[cycloaddition]
+label = "Cycloaddition"
+
+[deprotection]
+label = "Deprotection"
+
+[esterification]
+label = "Esterification"
+
+[hydrolysis]
+label = "Hydrolysis"
+
+[nucleophilic-substitution]
+label = "Nucleophilic substitution"
+
+[olefination]
+label = "Olefination"
+
+[oxidation]
+label = "Oxidation"
+
+[protection]
+label = "Protection"
+
+[reduction]
+label = "Reduction"
+
+[reductive-amination]
+label = "Reductive amination"

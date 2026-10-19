@@ -1,0 +1,39 @@
+#+TITLE: Propyl Acetate
+#+CREATED: [2026-10-19 Mon 17:42:05]
+#+LAST_MODIFIED: [2026-10-20 Tue 09:00:00]
+#+AI_MODEL: none
+#+HUGO_SLUG: osdb-0212
+#+HUGO_TAGS: sample-data
+#+HUGO_CUSTOM_FRONT_MATTER: :id "OSDB-0212" :authors '("A. Example")
+#+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
+#+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("esterification")
+#+HUGO_CUSTOM_FRONT_MATTER: :scale "25 mmol" :yield_percent 85
+#+HUGO_CUSTOM_FRONT_MATTER: :hazards '("Flammable liquid")
+#+HUGO_CUSTOM_FRONT_MATTER: :product '((name . "Propyl acetate") (formula . "C5H10O2") (mw . 102.13) (smiles . "CCCOC(C)=O"))
+
+* Summary
+A short fictitious synthesis used as test data.
+
+* Reagents
+| Reagent | CAS | MW (g/mol) | Amount | mmol | Equiv |
+|---|---|---|---|---|---|
+| Acetic acid | 64-19-7 | 60.05 | 1.5 g | 25 | 1.0 |
+
+* Procedure
+1. Combine the reagents.
+2. Heat for 2 h.
+
+* Workup and Purification
+Wash, dry and concentrate.
+
+* Characterization
+Colourless liquid.
+
+* Notes
+1. Fictitious procedure.
+
+* Hazards and Waste Disposal
+Collect organic waste separately.
+
+* References
+None.

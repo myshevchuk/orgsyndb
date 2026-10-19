@@ -1,0 +1,51 @@
+#+TITLE: Product Name
+#+CREATED: [2026-10-19 Mon 22:32:22]
+#+LAST_MODIFIED: [2026-10-19 Mon 22:32:22]
+#+AI_MODEL: claude-opus-5-5
+#+OPTIONS: author:nil
+#+HUGO_SLUG: osdb-0000
+#+HUGO_TAGS: change-me
+#+HUGO_CUSTOM_FRONT_MATTER: :id "OSDB-0000"
+#+HUGO_CUSTOM_FRONT_MATTER: :authors '("A. Example")
+#+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
+#+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("esterification")
+#+HUGO_CUSTOM_FRONT_MATTER: :scale "25 mmol"
+#+HUGO_CUSTOM_FRONT_MATTER: :yield_percent 85
+#+HUGO_CUSTOM_FRONT_MATTER: :hazards '("Flammable liquid")
+# Optional fields: uncomment as needed, keeping them above the product line.
+# #+HUGO_CUSTOM_FRONT_MATTER: :precursors '("OSDB-0001")
+# #+HUGO_CUSTOM_FRONT_MATTER: :structure_image "structures/osdb-0001.svg"
+# #+HUGO_CUSTOM_FRONT_MATTER: :checked_by '("B. Example")
+# #+HUGO_CUSTOM_FRONT_MATTER: :references '("Example, A. J. Fictitious Chem. 2020, 1, 1.")
+# The product map must stay alone on the last custom front matter line;
+# tomelr would otherwise put every later key inside the [product] table.
+# Add (cas . "141-78-6") to it when the CAS number is known.
+#+HUGO_CUSTOM_FRONT_MATTER: :product '((name . "Product name") (formula . "C4H8O2") (mw . 88.11) (smiles . "CCOC(C)=O"))
+
+* Summary
+One or two sentences: what is made, from what, and how.
+
+* Reagents
+| Reagent           | CAS     | MW (g/mol) | Amount | mmol | Equiv |
+|-------------------+---------+------------+--------+------+-------|
+| Starting material | 64-19-7 |      60.05 | 1.50 g | 25.0 |   1.0 |
+| Second reagent    | 64-17-5 |      46.07 | 1.73 g | 37.5 |   1.5 |
+
+* Procedure
+1. First step, with amounts, temperature and time.
+2. Next step.
+
+* Workup and Purification
+How the product is isolated and purified.
+
+* Characterization
+Appearance, melting or boiling point, and spectroscopic data.
+
+* Notes
+1. Practical remarks, pitfalls, or variations.
+
+* Hazards and Waste Disposal
+Specific hazards of the reagents and product, and how waste is collected.
+
+* References
+Literature this procedure is based on, or "None."
