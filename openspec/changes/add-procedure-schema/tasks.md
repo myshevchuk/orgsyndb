@@ -180,7 +180,7 @@ separate from I/O.
 
 ## 7. Documentation (orchestrator)
 
-- [ ] 7.1 Hand `docs/SCHEMA.md` to the doc writer (Markdown, for the owner
+- [x] 7.1 Hand `docs/SCHEMA.md` to the doc writer (Markdown, for the owner
       and the co-worker). Its sources are this change's specs, design.md,
       `site/data/reaction_types.toml`, the two templates and
       `tools/validate.py`. Check the result against those sources.
