@@ -8,17 +8,17 @@ Every fixture is fully valid apart from the one fault it exists for:
 all required fields, all eight body sections, and correct offsets. That
 way it yields exactly one problem. Use fictitious names only.
 
-- [ ] 1.1 Add `tests/fixtures/reaction_types.toml`: at least
+- [x] 1.1 Add `tests/fixtures/reaction_types.toml`: at least
       `esterification` and `reduction`, each with a `label`, and
       deliberately without `reductive-amination`. Add
       `tests/fixtures/bad-vocabulary.toml` (entry `[reduction]` with no
       `label`) and `tests/fixtures/static/structures/osdb-0001.svg` (a
       minimal hand-written SVG).
-- [ ] 1.2 Add `tests/fixtures/baseline/OSDB-0100-baseline.md`. It has the
+- [x] 1.2 Add `tests/fixtures/baseline/OSDB-0100-baseline.md`. It has the
       required fields only, `reaction_types = ["esterification"]`, a
       summer `+02:00` `date`, one front-matter key per line, `[product]`
       as the last table, and all eight body sections.
-- [ ] 1.3 Add the valid set:
+- [x] 1.3 Add the valid set:
       - `valid/md/OSDB-0001-*.md`: every optional field;
         `structure_image = "structures/osdb-0001.svg"`; a valid `cas` such
         as `141-78-6`; a winter `+01:00` `date`; and the tolerated keys
@@ -37,7 +37,7 @@ way it yields exactly one problem. Use fictitious names only.
         `valid/export/OSDB-0004-ambiguous-hour.md` has
         `date = 2026-10-25T02:50:00+02:00` and
         `lastmod = 2026-10-25T02:10:00+01:00`.
-- [ ] 1.4 Add the committed invalid content cases under
+- [x] 1.4 Add the committed invalid content cases under
       `tests/fixtures/invalid/`, one directory and one file each:
       `invalid-toml`, `bad-id-format`, `file-name-id-mismatch`,
       `slug-mismatch`, `missing-title`, `unknown-reaction-type`,
@@ -46,10 +46,10 @@ way it yields exactly one problem. Use fictitious names only.
       shape:
       - `subdirectory`: the root holds only `nested/OSDB-0135-nested.md`.
       - `duplicate-id`: roots `a/` and `b/`, one file each.
-- [ ] 1.5 Add the committed warning cases under `tests/fixtures/warn/`:
+- [x] 1.5 Add the committed warning cases under `tests/fixtures/warn/`:
       `missing-section`, `offset`, and `stray-file` (a valid procedure plus
       `notes.txt`).
-- [ ] 1.6 Add the Org cases under
+- [x] 1.6 Add the Org cases under
       `tests/fixtures/org-invalid/<case>/org/`:
       - Lint-only: `missing-created`, `duplicate-created`,
         `active-timestamp`, `missing-seconds`, `invalid-date`,
@@ -71,7 +71,7 @@ directory, and locate the repo from their own `__file__` (design.md D12).
 Each test must fail on its assertion, not merely on an import error, once
 `tools/validate.py` exists.
 
-- [ ] 2.1 Add a shared test helper (e.g. `tests/support.py`). It makes
+- [x] 2.1 Add a shared test helper (e.g. `tests/support.py`). It makes
       fixture runs and valid-set runs as defined in "Fixture suite", and
       variant runs: it copies the baseline into a fresh temporary content
       root under a given file name, with one textual edit applied. The
@@ -79,12 +79,12 @@ Each test must fail on its assertion, not merely on an import error, once
       `[product]`), remove a line, swap the delimiters, move a body
       section, or fence a heading. It also parses stdout lines into
       `(path, field, severity, message)`.
-- [ ] 2.2 `tests/test_validate_cli.py` covers every scenario of the
+- [x] 2.2 `tests/test_validate_cli.py` covers every scenario of the
       requirements "Command-line interface", "Default paths resolve from
       the script location", "Vocabulary file errors are configuration
       errors", "Problem report format", "Exit status", "File discovery"
       (both subdirectory cases included) and "Front-matter parsing".
-- [ ] 2.3 `tests/test_schema_fields.py` covers the scenarios of the
+- [x] 2.3 `tests/test_schema_fields.py` covers the scenarios of the
       procedure-schema field requirements: identifier, uniqueness, file
       names, slug, required fields, status, reaction type, tags, yield,
       scale, product, timestamps, precursors, structure image, other
@@ -92,22 +92,22 @@ Each test must fail on its assertion, not merely on an import error, once
       runs from disk, and each variant case through the helper. Each test
       asserts the exit status, the exact line count, the field, the
       severity and the message substring.
-- [ ] 2.4 `tests/test_body_sections.py` covers the "Body sections"
+- [x] 2.4 `tests/test_body_sections.py` covers the "Body sections"
       scenarios. `missing-section` runs from disk; `section-order` and
       `heading-in-code` run as variants. It also checks that the valid
       set's anchors, case variants and extra headings produce no `body`
       line.
-- [ ] 2.5 `tests/test_org_sources.py` covers the scenarios of "Org
+- [x] 2.5 `tests/test_org_sources.py` covers the scenarios of "Org
       file-level keywords" (the ambiguous-hour case included), "Org
       keywords map to exported front matter" (including the in-test
       `OSDB-0004` mutation), "Org sources are cross-checked against their
       export", and the Org half of "Dependent checks are suppressed".
-- [ ] 2.6 `tests/test_vocabulary.py` covers both scenarios of
+- [x] 2.6 `tests/test_vocabulary.py` covers both scenarios of
       "Reaction-type vocabulary file".
-- [ ] 2.7 `tests/test_templates.py` covers every scenario of "Markdown
+- [x] 2.7 `tests/test_templates.py` covers every scenario of "Markdown
       template" and "Org template". It performs the `OSDB-0000` and
       `osdb-0000` substitutions itself, as `build.fish new` will.
-- [ ] 2.8 Add the "Fixture suite" scenarios ("Valid set passes cleanly",
+- [x] 2.8 Add the "Fixture suite" scenarios ("Valid set passes cleanly",
       "Baseline is valid", "Each committed invalid fixture fails for one
       reason") and the remaining "Dependent checks are suppressed"
       scenario. Then run the whole suite and report which tests fail and

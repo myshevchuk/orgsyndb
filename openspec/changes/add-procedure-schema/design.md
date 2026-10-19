@@ -443,6 +443,10 @@ Org template content:
 - It sets the schema fields through `#+TITLE`, `#+HUGO_SLUG`, `#+HUGO_TAGS`
   and repeated `#+HUGO_CUSTOM_FRONT_MATTER:` lines. `product` is written
   as an alist map, which ox-hugo emits as a `[product]` table.
+  It is set alone on the last custom-front-matter line: tomelr emits
+  keys in alist order, so any key after the `[product]` header parses
+  as a member of it (verified with ox-hugo 20251206.1738, tomelr 0.4.3
+  and `tomllib`).
 - It does not set `#+DATE`, `#+HUGO_LASTMOD`, `#+HUGO_AUTO_SET_LASTMOD`,
   `#+HUGO_DRAFT`, `#+HUGO_BASE_DIR` or `#+HUGO_SECTION`. `date` and
   `lastmod` come from the `#+CREATED`/`#+LAST_MODIFIED` mapping, and the

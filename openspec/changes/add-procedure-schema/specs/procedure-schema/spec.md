@@ -381,6 +381,7 @@ The file `templates/procedure.org` SHALL be a complete Org procedure that satisf
 - It carries `#+CREATED`, `#+LAST_MODIFIED` and `#+AI_MODEL` in the required format, with `#+AI_MODEL` naming the exact identifier of the model that wrote it, never `none`.
 - It sets `#+HUGO_SLUG: osdb-0000` and `#+HUGO_TAGS`.
 - It sets the keys `id` (as `OSDB-0000`), `authors`, `status`, `reaction_types`, `product`, `scale`, `yield_percent` and `hazards` on repeated `#+HUGO_CUSTOM_FRONT_MATTER:` lines.
+- It sets `product` alone on the last `#+HUGO_CUSTOM_FRONT_MATTER:` line, because tomelr emits keys in order and every key after a `[product]` table header would parse as a member of that table.
 - It has the eight body sections as top-level headings, in order.
 - It does not set `#+DATE`, `#+HUGO_LASTMOD`, `#+HUGO_AUTO_SET_LASTMOD`, `#+HUGO_DRAFT`, `#+HUGO_BASE_DIR` or `#+HUGO_SECTION`.
 
@@ -396,5 +397,6 @@ The file `templates/procedure.org` SHALL be a complete Org procedure that satisf
 - **WHEN** a test reads `templates/procedure.org`
 - **THEN** it contains the line `#+HUGO_SLUG: osdb-0000` and a `#+HUGO_TAGS:` line
 - **AND** the `#+HUGO_CUSTOM_FRONT_MATTER:` lines together contain `:id`, `:authors`, `:status`, `:reaction_types`, `:product`, `:scale`, `:yield_percent` and `:hazards`
+- **AND** the last `#+HUGO_CUSTOM_FRONT_MATTER:` line contains `:product` and no other `:key`, and no earlier such line contains `:product`
 - **AND** its top-level headings, in order, include `* Summary`, `* Reagents`, `* Procedure`, `* Workup and Purification`, `* Characterization`, `* Notes`, `* Hazards and Waste Disposal` and `* References`
 - **AND** no line begins, case-insensitively, with `#+DATE:`, `#+HUGO_LASTMOD:`, `#+HUGO_AUTO_SET_LASTMOD:`, `#+HUGO_DRAFT:`, `#+HUGO_BASE_DIR:` or `#+HUGO_SECTION:`
