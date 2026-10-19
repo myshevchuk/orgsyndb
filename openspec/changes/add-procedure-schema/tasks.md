@@ -115,7 +115,7 @@ Each test must fail on its assertion, not merely on an import error, once
 
 ## 3. Vocabulary (implementer)
 
-- [ ] 3.1 Add `site/data/reaction_types.toml` with the fifteen entries of
+- [x] 3.1 Add `site/data/reaction_types.toml` with the fifteen entries of
       design.md D7, in alphabetical order, each a table with a `label`.
 
 ## 4. Validator (implementer)
@@ -125,44 +125,44 @@ Each test must fail on its assertion, not merely on an import error, once
 an executable bit, and `main(argv) -> int` (design.md D12). Keep pure checks
 separate from I/O.
 
-- [ ] 4.1 Add argument parsing, default-path resolution from the script
+- [x] 4.1 Add argument parsing, default-path resolution from the script
       location, and configuration errors with exit status 2: no roots, a
       root that is not a directory, a bad vocabulary file, and the
       Europe/Berlin zone being unavailable.
-- [ ] 4.2 Add root discovery (D11): a subdirectory is an error, a stray
+- [x] 4.2 Add root discovery (D11): a subdirectory is an error, a stray
       file is a warning, and dotfiles and `_index.md` are skipped. Add
       front-matter splitting and parsing, with the `front_matter`
       errors.
-- [ ] 4.3 Add the per-field checks for the required fields, `status`,
+- [x] 4.3 Add the per-field checks for the required fields, `status`,
       `reaction_types`, `tags`, `yield_percent`, `scale`, `product` (with
       the CAS check digit) and `date`/`lastmod` (typing, ordering and the
       offset warning).
-- [ ] 4.4 Add the optional-field checks (`precursors` shape and self
+- [x] 4.4 Add the optional-field checks (`precursors` shape and self
       reference, `structure_image`, `checked_by`, `references`, `ai_model`)
       and the handling of tolerated, rejected and unknown keys (D4).
-- [ ] 4.5 Add the cross-file checks: file-name/ID agreement, `slug`
+- [x] 4.5 Add the cross-file checks: file-name/ID agreement, `slug`
       equality, duplicate IDs across roots and precursor existence. Apply
       the D10 suppression rules.
-- [ ] 4.6 Add body-section recognition and the missing-section and order
+- [x] 4.6 Add body-section recognition and the missing-section and order
       warnings (D6).
-- [ ] 4.7 Add the Org keyword lint for `--org-root`: presence, uniqueness,
+- [x] 4.7 Add the Org keyword lint for `--org-root`: presence, uniqueness,
       format, inactive brackets, calendar validity, weekday, Europe/Berlin
       existence, ordering (earliest possible `#+CREATED` instant against
       latest possible `#+LAST_MODIFIED` instant, D2), `#+AI_MODEL` and the
       file name.
-- [ ] 4.8 Add the Org-to-export cross-check: stem pairing, the missing
+- [x] 4.8 Add the Org-to-export cross-check: stem pairing, the missing
       export, `date`/`lastmod` against the Org timestamps under
       Europe/Berlin, and `ai_model` against `#+AI_MODEL`.
-- [ ] 4.9 Add output: sorted, deterministic problem lines on stdout, the
+- [x] 4.9 Add output: sorted, deterministic problem lines on stdout, the
       summary line on stderr, and exit statuses 0, 1 and 2.
 
 ## 5. Templates (implementer)
 
-- [ ] 5.1 Add `templates/procedure.md` per "Markdown template" and D8. It
+- [x] 5.1 Add `templates/procedure.md` per "Markdown template" and D8. It
       uses plain-language TOML comments for the co-worker, has the optional
       fields commented out, and passes once its placeholders are
       substituted.
-- [ ] 5.2 Add `templates/procedure.org` per "Org template" and D8. It has
+- [x] 5.2 Add `templates/procedure.org` per "Org template" and D8. It has
       real Europe/Berlin timestamps at the time of writing, `#+AI_MODEL`
       set to the writing model's exact identifier, repeated
       `#+HUGO_CUSTOM_FRONT_MATTER:` lines (with `product` as an alist map),
@@ -170,10 +170,10 @@ separate from I/O.
 
 ## 6. Verification (implementer)
 
-- [ ] 6.1 Run `python3 -m pytest tests` until it is fully green, without
+- [x] 6.1 Run `python3 -m pytest tests` until it is fully green, without
       editing any test. Return any test that looks wrong to the
       orchestrator.
-- [ ] 6.2 Run `tools/validate.py` by hand from a directory outside the repo
+- [x] 6.2 Run `tools/validate.py` by hand from a directory outside the repo
       on `tests/fixtures/valid/*` and confirm that the output is empty and
       the exit status is 0. Run `openspec validate add-procedure-schema
       --strict`.
