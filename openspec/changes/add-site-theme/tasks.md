@@ -14,7 +14,7 @@ and `N(s)` are defined in the spec comments. The test layers and skips are
 in design.md D17. Integration tests skip only for a missing tool or cache,
 naming it; they never skip for any other reason.
 
-- [ ] 1.1 Add `tests/fixtures/theme/OSDB-0904-twin.org` and
+- [x] 1.1 Add `tests/fixtures/theme/OSDB-0904-twin.org` and
       `tests/fixtures/theme/OSDB-0905-twin.md` (design.md D16). They are
       fully valid procedures with identical content, apart from `id` and
       `slug`:
@@ -33,17 +33,17 @@ naming it; they never skip for any other reason.
         and notes, italic, bold, and `H_{2}O` (Org) /
         `H<sub>2</sub>O` (Markdown);
       - identical line breaks in every paragraph and list item.
-- [ ] 1.2 Add `tests/fixtures/theme/OSDB-0906-quoted-title.md`. It is a
+- [x] 1.2 Add `tests/fixtures/theme/OSDB-0906-quoted-title.md`. It is a
       fully valid Markdown procedure titled `Bob's "best" </style> ester \ x`
       (a TOML basic string with escapes), with tags `banner-check` only,
       so no `sample-data`.
-- [ ] 1.2a Add `tests/fixtures/theme/clip-negative-control.html`
+- [x] 1.2a Add `tests/fixtures/theme/clip-negative-control.html`
       (design.md D12). It is a standalone HTML page with an inline
       `@page { size: A4; margin: 16mm }` and a visible paragraph, then
       `<div style="height:1px; overflow:hidden">` around two paragraphs,
       the first containing the word `HiddenClippedSentinel`, then another
       visible paragraph. It has no remote reference.
-- [ ] 1.3 Extend `tests/pipeline_support.py` with:
+- [x] 1.3 Extend `tests/pipeline_support.py` with:
       - a helper that copies named files from `tests/fixtures/theme/` into
         the sandbox's `org/procedures/` or `md/procedures/` by suffix;
       - an HTML page model built with `html.parser`. It gives:
@@ -78,7 +78,7 @@ naming it; they never skip for any other reason.
       - the clipping-CSS check of print-layout "No clipping CSS in print",
         as a function over parsed declarations, so that the static test
         and the negative-control test share it.
-- [ ] 1.4 Add `tests/js/pagefind-query.mjs`, a test-only Node script
+- [x] 1.4 Add `tests/js/pagefind-query.mjs`, a test-only Node script
       (design.md D15). It is invoked as `node pagefind-query.mjs
       <pagefind.mjs> <bundle base URL> <search-terms.js>`.
       - It imports both scripts and sets `basePath`.
@@ -95,20 +95,20 @@ naming it; they never skip for any other reason.
 Write each test so that, once the theme exists, it fails on its assertion
 and not on an import or setup error. Build once per test class.
 
-- [ ] 2.1 `tests/test_theme_static.py`: static tests that need no build.
+- [x] 2.1 `tests/test_theme_static.py`: static tests that need no build.
       They cover the scenarios "Dark mode only on screen", "Contrast in
       both schemes", "Shipped structure images", "Print colours",
       "Declarations present" and "No clipping CSS in print"
       (print-layout), and "No Node in the tools"
       (the file search; the `check-deps` half uses the fish-test `PATH`
       helper and skips without fish).
-- [ ] 2.2 `tests/test_theme_js.py` (skips without `node`): "Normalised
+- [x] 2.2 `tests/test_theme_js.py` (skips without `node`): "Normalised
       terms" and "Cleaned result".
-- [ ] 2.3 Extend `tests/test_samples.py` with the sample-procedures
+- [x] 2.3 Extend `tests/test_samples.py` with the sample-procedures
       scenarios "Set, counts and chain", "Structure image is set" and
       "Long sample". The existing sample tests must keep passing over all
       eight samples.
-- [ ] 2.4 `tests/test_theme_integration.py` (theme build). It covers
+- [x] 2.4 `tests/test_theme_integration.py` (theme build). It covers
       every site-theme scenario that is not marked as manual verification:
       - "No third-party theme and no web fonts" and "Only external, local
         scripts";
@@ -131,12 +131,12 @@ and not on an import or setup error. Build once per test class.
       wiring", "Metadata inside the body, chrome outside", "Filter
       attributes on every procedure page", "Index value" and "Index on
       every procedure page".
-- [ ] 2.5 `tests/test_search_integration.py` (theme build plus Node). It
+- [x] 2.5 `tests/test_search_integration.py` (theme build plus Node). It
       covers "CAS numbers are separate words", "Filter values and
       filter-only searches", "Result data", "Name, CAS, tag, ID and body
       word", "Every SMILES substring" and "Full SMILES is exact". Batch
       all queries of a class into one Node run.
-- [ ] 2.6 `tests/test_print_integration.py` (PDF build). It covers every
+- [x] 2.6 `tests/test_print_integration.py` (PDF build). It covers every
       print-layout scenario not marked manual and not covered by 2.1:
       - "A4 PDFs";
       - "Header and footer on every page" and "Title with quotes and
@@ -155,7 +155,7 @@ and not on an import or setup error. Build once per test class.
         clipping-CSS check fails, and say in the docstring that this
         records the checks' limit. Do not "fix" it into a failing test;
       - "Clean pdf run".
-- [ ] 2.7 Update `tests/test_build_integration.py` for the MODIFIED
+- [x] 2.7 Update `tests/test_build_integration.py` for the MODIFIED
       scenarios:
       - "One indexed body per procedure page": every procedure page has
         a body, derived from the content files' slugs instead of the two
@@ -168,7 +168,7 @@ and not on an import or setup error. Build once per test class.
       configuration": `keepWhitespace`, `params.siteurl` equal to
       `http://127.0.0.1:8000`, and the host check, which now allows
       exactly that one string.
-- [ ] 2.8 Run `python3 -m pytest tests` and report which tests fail and
+- [x] 2.8 Run `python3 -m pytest tests` and report which tests fail and
       which skip, with reasons. At this stage:
       - the change-1 and change-2 suites stay green, apart from the
         updated scenarios in 2.7 and the config test;

@@ -1,0 +1,49 @@
+#+TITLE: Twin product
+#+CREATED: [2026-10-20 Tue 09:00:00]
+#+LAST_MODIFIED: [2026-10-20 Tue 09:30:00]
+#+AI_MODEL: example-model-1
+#+OPTIONS: author:nil
+#+HUGO_SLUG: osdb-0904
+#+HUGO_TAGS: sample-data twin-check
+#+HUGO_CUSTOM_FRONT_MATTER: :id "OSDB-0904"
+#+HUGO_CUSTOM_FRONT_MATTER: :authors '("A. Example")
+#+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
+#+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("esterification")
+#+HUGO_CUSTOM_FRONT_MATTER: :scale "20 mmol"
+#+HUGO_CUSTOM_FRONT_MATTER: :yield_percent 70
+#+HUGO_CUSTOM_FRONT_MATTER: :hazards '("Acetic acid: flammable, causes severe skin burns" "Ethanol: highly flammable liquid")
+#+HUGO_CUSTOM_FRONT_MATTER: :precursors '("OSDB-0001")
+#+HUGO_CUSTOM_FRONT_MATTER: :checked_by '("D. Example")
+#+HUGO_CUSTOM_FRONT_MATTER: :references '("Example, A. Fictitious Chem. 2020, 1, 1.")
+# The product map must stay alone on the last custom front matter line.
+#+HUGO_CUSTOM_FRONT_MATTER: :product '((name . "Ethyl acetate") (formula . "C4H8O2") (mw . 88.11) (smiles . "CCOC(C)=O") (cas . "141-78-6"))
+
+* Summary
+Ethyl acetate by Fischer esterification of acetic acid with ethanol.
+This is sample data and is /not/ experimentally verified, so treat every *quantity* here as a placeholder.
+
+* Reagents
+| Reagent     | CAS     | MW (g/mol) | Amount           | mmol | Equiv |
+|-------------+---------+------------+------------------+------+-------|
+| Acetic acid | 64-19-7 |      60.05 | 1.20 g (1.15 mL) | 20.0 |   1.0 |
+| Ethanol     | 64-17-5 |      46.07 | 1.84 g (2.33 mL) | 40.0 |   2.0 |
+
+* Procedure
+1. Mix the acetic acid (1.20 g, 20.0 mmol) with the ethanol (1.84 g, 40.0 mmol).
+2. Warm the mixture under reflux for one hour, then cool it and wash it with H_{2}O.
+
+* Workup and Purification
+Separate the organic layer and dry it over a drying agent.
+
+* Characterization
+Colourless liquid with a fruity smell.
+
+* Notes
+1. Remove the water to push the equilibrium towards the ester.
+2. The ester is flammable.
+
+* Hazards and Waste Disposal
+Both reagents are flammable.
+
+* References
+1. Example, A. /Fictitious Chem./ 2020, 1, 1.

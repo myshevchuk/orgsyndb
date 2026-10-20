@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Clip negative control</title>
+<style>@page { size: A4; margin: 16mm }</style>
+</head>
+<body>
+<p>This visible paragraph comes before the clipped box.</p>
+<div style="height:1px; overflow:hidden">
+<p>HiddenClippedSentinel is a word inside a box that is one pixel high.</p>
+<p>A second clipped paragraph sits in the same box.</p>
+</div>
+<p>This visible paragraph comes after the clipped box.</p>
+</body>
+</html>

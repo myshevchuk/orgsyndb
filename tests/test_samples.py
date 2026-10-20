@@ -1,6 +1,7 @@
 """The seed and sample procedures (sample-procedures)."""
 
 import copy
+import re
 import unittest
 
 import sample_support as sup
@@ -99,3 +100,90 @@ class QuantityRuleCheckerTests(unittest.TestCase):
         for rule, sample in broken.items():
             with self.subTest(rule=rule):
                 self.assertNotEqual(sup.quantity_violations(sample), [])
+
+
+EXPECTED_SAMPLES = {
+    "org/procedures/OSDB-0003-isopentyl-acetate.org": (
+        "OSDB-0003", "esterification", [], "C7H14O2", "123-92-2"),
+    "org/procedures/OSDB-0004-4-acetylbiphenyl.org": (
+        "OSDB-0004", "cross-coupling", [], "C14H12O", "92-91-1"),
+    "org/procedures/OSDB-0005-1-biphenyl-4-yl-ethanol.org": (
+        "OSDB-0005", "reduction", ["OSDB-0004"], "C14H14O", "3562-73-0"),
+    "org/procedures/OSDB-0006-dibenzylideneacetone.org": (
+        "OSDB-0006", "aldol-condensation", [], "C17H14O", "538-58-9"),
+    "org/procedures/OSDB-0007-ethyl-cinnamate.org": (
+        "OSDB-0007", "olefination", [], "C11H12O2", "103-36-6"),
+    "md/procedures/OSDB-0008-cinnamic-acid.md": (
+        "OSDB-0008", "hydrolysis", ["OSDB-0007"], "C9H8O2", "140-10-3"),
+}
+LONG_SAMPLE = REPO / "org" / "procedures" / "OSDB-0004-4-acetylbiphenyl.org"
+STRUCTURE_SAMPLE = (REPO / "org" / "procedures"
+                    / "OSDB-0003-isopentyl-acetate.org")
+
+
+class ThemeSampleSetTests(unittest.TestCase):
+    def test_set_counts_and_chains(self) -> None:
+        """Scenario: Set, counts and chain."""
+        for relative, (ident, reaction, precursors, formula, cas) in (
+                EXPECTED_SAMPLES.items()):
+            path = REPO / relative
+            with self.subTest(file=relative):
+                self.assertTrue(path.is_file(), f"{relative} is missing")
+                sample = (sup.read_org(path) if path.suffix == ".org"
+                          else sup.read_markdown(path))
+                self.assertEqual(sample.data.get("id"), ident)
+                self.assertEqual(sample.data.get("reaction_types"),
+                                 [reaction])
+                self.assertEqual(sample.data.get("precursors", []),
+                                 precursors)
+                product = sample.data.get("product", {})
+                self.assertEqual(product.get("formula"), formula)
+                self.assertEqual(product.get("cas"), cas)
+        found = samples()
+        self.assertEqual(
+            sum(s.path.suffix == ".org" for s in found), 6,
+            "number of Org samples")
+        self.assertEqual(
+            sum(s.path.suffix == ".md" for s in found), 2,
+            "number of Markdown samples")
+        self.assertGreaterEqual(
+            len({r for s in found for r in s.data.get("reaction_types", [])}),
+            5)
+        for sample in found:
+            with self.subTest(sample=sample.path.name):
+                self.assertTrue(sup.cas_ok(
+                    sample.data.get("product", {}).get("cas", "")))
+                self.assertTrue(
+                    set(sample.data.get("tags", [])) - {"sample-data"},
+                    "no tag besides sample-data")
+
+
+class StructureImageSampleTests(unittest.TestCase):
+    def test_isopentyl_acetate_sets_its_structure_image(self) -> None:
+        """Scenario: Structure image is set."""
+        self.assertTrue(STRUCTURE_SAMPLE.is_file(),
+                        f"{STRUCTURE_SAMPLE.name} is missing")
+        sample = sup.read_org(STRUCTURE_SAMPLE)
+        self.assertEqual(sample.data.get("structure_image"),
+                         "structures/osdb-0003.svg")
+        self.assertTrue((REPO / "site" / "static" / "structures"
+                         / "osdb-0003.svg").is_file(),
+                        "site/static/structures/osdb-0003.svg is missing")
+
+
+class LongSampleTests(unittest.TestCase):
+    def test_the_acetylbiphenyl_sample_is_long(self) -> None:
+        """Scenario: Long sample."""
+        self.assertTrue(LONG_SAMPLE.is_file(), f"{LONG_SAMPLE.name} missing")
+        text = LONG_SAMPLE.read_text(encoding="utf-8")
+        sections = sup.org_sections(text)
+
+        def numbered(name: str) -> int:
+            return len(re.findall(r"(?m)^\d+\. ", sections.get(name, "")))
+
+        self.assertGreaterEqual(numbered("Procedure"), 15)
+        self.assertGreaterEqual(numbered("Notes"), 6)
+        rows = sup.read_org(LONG_SAMPLE).table[1:]
+        full = [r for r in rows if len(r) == 6 and r[4] != "cat."]
+        self.assertGreaterEqual(len(full), 4)
+        self.assertGreaterEqual(max((len(r[0]) for r in rows), default=0), 40)

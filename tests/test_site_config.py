@@ -13,6 +13,7 @@ HUGO_TOML = REPO / "site" / "hugo.toml"
 CADDYFILE = REPO / "deploy" / "Caddyfile.example"
 GITIGNORE = REPO / ".gitignore"
 
+SITE_URL = "http://127.0.0.1:8000"
 MOUNTS = [
     {"source": "content", "target": "content"},
     {"source": "../build/export", "target": "content/procedures",
@@ -55,6 +56,10 @@ class HugoConfigurationTests(unittest.TestCase):
             "/procedures/:slug/")
         goldmark = config.get("markup", {}).get("goldmark", {})
         self.assertIs(goldmark.get("renderer", {}).get("unsafe"), True)
+        html_minify = config.get("minify", {}).get("tdewolff", {}).get(
+            "html", {})
+        self.assertIs(html_minify.get("keepWhitespace"), True)
+        self.assertEqual(config.get("params", {}).get("siteurl"), SITE_URL)
         self.assertEqual(config.get("module", {}).get("mounts"), MOUNTS)
 
     def test_configuration_names_no_host(self) -> None:
@@ -62,7 +67,8 @@ class HugoConfigurationTests(unittest.TestCase):
         self.assertTrue(HUGO_TOML.is_file(), "site/hugo.toml does not exist")
         config = tomllib.loads(HUGO_TOML.read_text(encoding="utf-8"))
         hosts = [s for s in strings(config) if re.search(r"://|^//", s)]
-        self.assertEqual(hosts, [])
+        self.assertEqual(hosts, [SITE_URL])
+        self.assertEqual(config.get("params", {}).get("siteurl"), SITE_URL)
 
 
 @unittest.skipUnless(shutil.which("git"), "git not found")
