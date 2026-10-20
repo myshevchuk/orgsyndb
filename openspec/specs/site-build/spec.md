@@ -11,16 +11,19 @@ The file `site/hugo.toml` SHALL configure Hugo 0.162.1 as follows:
 - The taxonomies are exactly `author = "authors"`, `reaction_type = "reaction_types"` and `tag = "tags"`.
 - `[permalinks.page]` maps `procedures` to `/procedures/:slug/`.
 - `markup.goldmark.renderer.unsafe` is `true`.
+- `minify.tdewolff.html.keepWhitespace` is `true`, so that minified HTML keeps a space between adjacent elements that Pagefind would otherwise index as one word.
+- `params.siteurl` is `"http://127.0.0.1:8000"`, the default origin of `tools/build.fish serve`. The theme prints it as text before a page's path. The environment variable `HUGO_PARAMS_SITEURL` overrides it without editing the file.
 - `module.mounts` is exactly these three mounts, in this order:
   1. `content` → `content`;
   2. `../build/export` → `content/procedures` with `files = ["/OSDB-*.md"]`;
   3. `../md/procedures` → `content/procedures` with `files = ["/OSDB-*.md"]`.
 
-The configuration names no host.
+The configuration names no host other than the loopback address in `params.siteurl`.
 
 #### Scenario: Configuration parses to the contract
 - **WHEN** a test loads `site/hugo.toml` with `tomllib`
 - **THEN** every value listed above is present as stated, `taxonomies` has exactly the three entries, and `module.mounts` equals the three listed mounts
+- **AND** the only string value containing `://` or beginning with `//` is `params.siteurl`, equal to `http://127.0.0.1:8000`
 
 ### Requirement: Merged procedures section
 A build SHALL publish each procedure content file of `build/export/` and `md/procedures/` as one page at `public/procedures/<slug>/index.html`, whatever its `date`, `publishDate` or `expiryDate`. No other file from those two directories is published.
@@ -43,7 +46,7 @@ A build SHALL publish each procedure content file of `build/export/` and `md/pro
 - **THEN** the build exits 0, `public/procedures/notes.txt` does not exist, and `public/procedures/index.html` does not contain `Hijack`
 
 ### Requirement: Minimal layout contract
-The layouts SHALL live in `site/layouts/`. Whichever layouts are in place, now or after change 3 replaces them, they meet all of the following:
+The layouts SHALL live in `site/layouts/`. Whichever layouts are in place, they meet all of the following:
 - On every procedure page, the rendered body is inside exactly one element carrying `data-pagefind-body`.
 - No other page carries `data-pagefind-body`.
 - The procedure page shows the procedure's `title` and `id`.
@@ -52,8 +55,8 @@ The layouts SHALL live in `site/layouts/`. Whichever layouts are in place, now o
 - A procedure page's content does not depend on JavaScript.
 
 #### Scenario: One indexed body per procedure page
-- **WHEN** an integration test builds the seeds and parses every HTML file under `public/` with `html.parser`
-- **THEN** each of `procedures/osdb-0001/index.html` and `procedures/osdb-0002/index.html` has exactly one element with `data-pagefind-body`, and that element contains the procedure's `Summary` heading
+- **WHEN** an integration test builds the shipped procedures and parses every HTML file under `public/` with `html.parser`
+- **THEN** each `procedures/<slug>/index.html` whose slug is that of a content file in `build/export/` or `md/procedures/` has exactly one element with `data-pagefind-body`, and that element contains the procedure's `Summary` heading
 - **AND** no other HTML file has such an element
 
 #### Scenario: Title and ID shown
