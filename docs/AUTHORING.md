@@ -62,7 +62,8 @@ Fill in these required fields:
 - `status`: whether the procedure is a draft, checked, or retired.
 - `reaction_types`: one reaction category.
 - `tags`: useful lowercase search terms. Replace the template's
-  `change-me`; do not use `sample-data` for a real procedure.
+  `change-me`. The `sample-data` tag adds a warning banner to the page and
+  to printouts, so never use it for a real procedure.
 - `scale`: the amount of product made.
 - `yield_percent`: the isolated yield as a number without a percent sign.
 - `hazards`: short descriptions of the main hazards.
@@ -74,6 +75,28 @@ procedures, a structure image, checkers, literature references, an AI model,
 and the product's CAS number. Delete the `#` at the start of an optional line
 when you need it. Leave the line commented when it does not apply.
 
+Set `precursors` to the procedure numbers that make the starting material
+for this procedure. For example:
+
+```toml
+precursors = ["OSDB-0007"]
+```
+
+The page then links to OSDB-0007 under **Precursors**. The OSDB-0007 page
+automatically links back to this procedure under **Used in**.
+
+To show a product structure, place an SVG or PNG file in
+`site/static/structures/` and set a path such as:
+
+```toml
+structure_image = "structures/osdb-NNNN.svg"
+```
+
+For an SVG, use black lines and text on a white background rectangle. Give
+the file a `<title>`, and do not include scripts, external images, or other
+external references. The site shows the image on a white panel in dark mode.
+Ask the owner to add or check the image if you do not work with SVG files.
+
 Keep the `[product]` block last, immediately before the closing `+++`. TOML
 treats fields after `[product]` as part of that product block.
 
@@ -81,6 +104,22 @@ Write `date` and `lastmod` without quotes. Use Europe/Berlin local time and
 include `+01:00` in winter or `+02:00` in summer, as shown in the template.
 The [procedure schema](SCHEMA.md#front-matter-fields) gives the exact format
 and every allowed value.
+
+### How the fields appear on the page
+
+The page shows `id` and a `status` badge above the title. Its information
+panel repeats the ID and shows the product name, formula, molecular weight,
+CAS number when present, SMILES, scale, yield, reaction type, tags, authors,
+checkers when present, created and modified times, and precursor or used-in
+links. Formula digits appear as subscripts. Molecular weight gains `g/mol`,
+yield gains a percent sign, and SMILES has a **Copy** button. Reaction type,
+tag, and author values link to pages that list related procedures. The site
+title-cases author names for display, so a name entered as `van` appears as
+`Van`.
+
+The structure image appears after the information panel. Without one, the
+screen shows a **No structure image** placeholder, which is omitted from
+printouts. The eight body sections follow it.
 
 ## 3. Write the procedure
 
@@ -99,6 +138,11 @@ Replace the example text and table rows. Include the quantities,
 temperatures, times, observations, workup, purification, characterization,
 and safety information needed to follow the procedure. Write `None.` under
 References when there is no reference.
+
+Keep the Reagents table's six columns in this order: **Reagent**, **CAS**,
+**MW (g/mol)**, **Amount**, **mmol**, and **Equiv**. A wide table scrolls
+sideways inside its own area on screen and wraps to fit the paper when
+printed.
 
 You can compare your structure with
 [`md/procedures/OSDB-0002-aspirin.md`](../md/procedures/OSDB-0002-aspirin.md).
@@ -166,6 +210,11 @@ serving http://127.0.0.1:8000/ (Ctrl-C to stop)
 Open <http://127.0.0.1:8000/> in a web browser on the same computer. The
 address is local to that computer. Press `Ctrl-C` in the terminal to stop the
 preview.
+
+On a procedure page, choose **Print / Save as PDF** to open the browser's
+print dialog. The print layout is A4, complete, and black on white. Firefox
+does not add the running header and page numbers that the owner's
+WeasyPrint-generated PDFs contain.
 
 The preview does not update while it is running. After an edit, stop it and
 run `tools/build.fish serve` again.

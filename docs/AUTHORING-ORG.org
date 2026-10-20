@@ -1,10 +1,12 @@
 #+TITLE: Writing OrgSynDB procedures in Org
 #+CREATED: [2026-10-20 Tue 00:06:38]
-#+LAST_MODIFIED: [2026-10-20 Tue 00:08:31]
+#+LAST_MODIFIED: [2026-10-20 Tue 20:41:42]
 #+AI_MODEL: gpt-5.6-sol
 #+OPTIONS: toc:t num:nil
 #+STARTUP: showall
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-20 Tue 00:08] -- header: #+DATE replaced by the project keywords; #+AI_MODEL corrected from gpt-5 to the pinned run model
+#+AI_PASS: doc-writer gpt-5.6-sol [2026-10-20 Tue 20:41] -- theme, page fields, structure images, reagents, and printing
+#+AI_PASS: fact-check claude-opus-5-5 [2026-10-20 Tue 20:49] -- doc-writer pass line corrected from gpt-5 to the pinned run model
 
 * Start from a generated stub
 
@@ -51,7 +53,8 @@
   - ~#+HUGO_SLUG~ :: The lowercase procedure identifier, such as
     ~osdb-0003~.
   - ~#+HUGO_TAGS~ :: Space-separated tags. Use lowercase letters and digits
-    with single hyphens; do not use ~sample-data~ for a real procedure.
+    with single hyphens. The ~sample-data~ tag adds a warning banner on
+    screen and on paper, so never use it for a real procedure.
   - ~#+HUGO_CUSTOM_FRONT_MATTER~ :: Repeated lines that supply the procedure
     identifier, authors, status, reaction type, scale, yield, hazards, and
     optional fields.
@@ -62,10 +65,54 @@
   exporter also guards the table order so later metadata does not become
   part of the product table.
 
+  To link a procedure to its starting-material procedures, add a custom
+  front-matter line before ~:product~:
+
+#+begin_src org
+  #+HUGO_CUSTOM_FRONT_MATTER: :precursors '("OSDB-0007")
+#+end_src
+
+  This page then shows the OSDB-0007 link under *Precursors*. The OSDB-0007
+  page automatically links back under *Used in*.
+
+  Put all tags on the ~#+HUGO_TAGS~ line, separated by spaces:
+
+#+begin_src org
+  #+HUGO_TAGS: esterification fragrance
+#+end_src
+
+  To show a product structure, place an SVG or PNG file in
+  ~site/static/structures/~ and add this custom-front-matter line before
+  ~:product~:
+
+#+begin_src org
+  #+HUGO_CUSTOM_FRONT_MATTER: :structure_image "structures/osdb-NNNN.svg"
+#+end_src
+
+  A structure SVG uses black lines and text on a white background rectangle.
+  It includes a ~<title>~ and contains no scripts, external images, or other
+  external references. The white background keeps the drawing legible on
+  the site's dark colour scheme and on paper.
+
   Use the template's quoting and list forms. For example, authors and hazards
   use quoted Lisp lists such as ~'("A. Example" "B. Example")~. Consult
   [[file:SCHEMA.md][docs/SCHEMA.md]] for the exact required values, optional fields, reaction
   vocabulary, and file-name rules.
+
+* Understand the finished page
+
+  The page shows the procedure ID and a status badge above ~#+TITLE~. Its
+  metadata panel repeats the ID and shows the product fields, scale, yield,
+  reaction type, tags, authors, checkers when set, created and modified
+  times, and precursor or used-in links. Formula digits appear as subscripts.
+  Molecular weight gains ~g/mol~, yield gains a percent sign, and SMILES has
+  a *Copy* button. Reaction type, tag, and author values link to pages that
+  list related procedures. The site title-cases author names for display, so
+  ~van~ appears as ~Van~.
+
+  A structure image appears after the metadata panel. Without one, the
+  screen shows a *No structure image* placeholder, which is omitted from
+  printouts. The eight body sections follow it.
 
 * Use exact timestamps
 
@@ -112,6 +159,10 @@
   and notes. Include quantities, temperatures, times, observations, workup,
   purification, characterization, hazards, and waste handling. Write
   ~None.~ under References when there is no reference.
+
+  Keep the Reagents table's six columns in this order: ~Reagent~, ~CAS~,
+  ~MW (g/mol)~, ~Amount~, ~mmol~, and ~Equiv~. A wide table scrolls sideways
+  inside its own area on screen and wraps to fit the paper when printed.
 
   Write chemical subscripts and superscripts with braces:
 
@@ -172,3 +223,8 @@
   Open http://127.0.0.1:8000/ after the command prints that it is serving.
   The server is reachable only from the same machine. It has no live reload,
   so stop it with ~Ctrl-C~ and run it again after an edit.
+
+  On a procedure page, choose *Print / Save as PDF* to open the browser's
+  print dialog. The print layout is complete A4 output in black on white.
+  Firefox omits the running header and page numbers that WeasyPrint adds to
+  PDFs created by ~tools/build.fish pdf~.

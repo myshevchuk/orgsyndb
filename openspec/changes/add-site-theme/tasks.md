@@ -275,7 +275,7 @@ and not on an import or setup error. Build once per test class.
 
 ## 8. Chemistry review (orchestrator)
 
-- [ ] 8.1 Review each new sample for the "Benign textbook chemistry"
+- [x] 8.1 Review each new sample for the "Benign textbook chemistry"
       requirement:
       - reagents, conditions and hazards;
       - each product and reagent CAS number resolving on PubChem as a
@@ -293,7 +293,7 @@ Work in the repository root, in fish. Let `S` be a scratch directory
 outside the repository: `set S (mktemp -d)`. Record each result in the
 review notes, and delete `S` afterwards.
 
-- [ ] 9.1 Brief §9 check 2, zero external requests:
+- [x] 9.1 Brief §9 check 2, zero external requests:
       1. Run `tools/build.fish serve` in one terminal, and wait for
          `serving http://127.0.0.1:8000/ (Ctrl-C to stop)`.
       2. The printed page URL is text, once per procedure page (design.md
@@ -316,7 +316,7 @@ review notes, and delete `S` afterwards.
          `/reaction_types/olefination/`, `/tags/biphenyl/`,
          `/authors/a.-example/` and `/search/?q=aspirin`. Every request
          goes to `127.0.0.1:8000`, and none fails.
-- [ ] 9.2 Brief §9 check 3, search, in Firefox on `/search/`. Type each
+- [x] 9.2 Brief §9 check 3, search, in Firefox on `/search/`. Type each
       query into the box and confirm the result list.
       1. Each sample by:
          - product name: `Isopentyl acetate`, `4-acetylbiphenyl`,
@@ -364,7 +364,7 @@ review notes, and delete `S` afterwards.
          search form's Search button is visible; submitting `aspirin`
          loads `/search/?q=aspirin` with the `noscript` text. Re-enable
          JavaScript.
-- [ ] 9.3 Brief §9 check 4, taxonomy pages and source parity:
+- [x] 9.3 Brief §9 check 4, taxonomy pages and source parity:
       1. Open `/reaction_types/`, `/tags/` and `/authors/`. Every term
          shows its label or name and a count.
       2. For each term, compare its page with
@@ -375,13 +375,13 @@ review notes, and delete `S` afterwards.
          (Markdown) side by side. Their layouts are indistinguishable.
       4. Confirm that `tests/test_theme_integration.py`'s twin test
          passed.
-- [ ] 9.4 Brief §9 check 5, precursor and used-in links, for each chain
+- [x] 9.4 Brief §9 check 5, precursor and used-in links, for each chain
       OSDB-0001 → 0002, OSDB-0004 → 0005 and OSDB-0007 → 0008:
       1. On the first procedure's page, follow "Used in" to the second.
       2. On the second's page, follow "Precursors" back to the first.
       3. Every link lands on the named procedure, and no other procedure
          lists a precursor or used-in.
-- [ ] 9.5 Brief §9 check 7, PDFs:
+- [x] 9.5 Brief §9 check 7, PDFs:
       1. Run `tools/build.fish pdf`. It exits 0, prints one `pdf:` line
          per procedure (eight), and prints no `WARNING:` line.
       2. Run `ls pdf`: exactly the eight `OSDB-NNNN-short-slug.pdf`
@@ -420,7 +420,7 @@ review notes, and delete `S` afterwards.
          a PDF in `S` on A4, and render it with `pdftoppm`. Check it as
          in step 6, without the running header and page numbers, which
          Firefox omits (print-layout "Browser print fallback").
-- [ ] 9.6 Visual review of the rendered pages. Take headless Firefox
+- [x] 9.6 Visual review of the rendered pages. Take headless Firefox
       screenshots with throwaway profiles:
       1. Make the profiles:
          `mkdir "$S/light" "$S/dark"; echo 'user_pref("ui.systemUsesDarkTheme", 0);' > "$S/light/user.js"; echo 'user_pref("ui.systemUsesDarkTheme", 1);' > "$S/dark/user.js"`
@@ -444,7 +444,7 @@ review notes, and delete `S` afterwards.
       script it with a throwaway WebDriver BiDi client against
       `firefox --headless --remote-debugging-port`, kept out of the
       repository (design.md Verification).
-- [ ] 9.7 Copy button: on `http://127.0.0.1:8000/procedures/osdb-0002/`,
+- [x] 9.7 Copy button: on `http://127.0.0.1:8000/procedures/osdb-0002/`,
       Copy places `CC(=O)Oc1ccccc1C(=O)O` on the clipboard and the label
       changes. The Print / Save as PDF button opens the print dialog.
 
