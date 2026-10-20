@@ -1,0 +1,57 @@
+/* Print (linked with media="print"; WeasyPrint renders the PDFs with it).
+   A4 pages with page numbers, black on white, no navigation or controls,
+   and break control. Each procedure page adds its own @page rule with
+   the running header. Nothing here may clip content. */
+@page {
+  size: A4;
+  margin: 22mm 16mm 20mm 16mm;
+  @bottom-center {
+    content: "Page " counter(page) " of " counter(pages);
+    font-family: "Liberation Sans", Arial, sans-serif;
+    font-size: 8pt;
+  }
+  @top-left { font-family: "Liberation Sans", Arial, sans-serif; font-size: 8pt; }
+  @top-right { font-family: "Liberation Sans", Arial, sans-serif; font-size: 8pt; }
+}
+
+:root {
+  --bg: #ffffff;
+  --fg: #000000;
+  --muted: #000000;
+  --border: #000000;
+  --surface: #ffffff;
+  --link: #000000;
+  --banner-bg: #ffffff;
+  --banner-fg: #000000;
+  --banner-border: #000000;
+}
+
+html { color: #000; background: #fff; font-size: 10pt; }
+body { max-width: none; padding: 0; }
+a { color: #000; text-decoration: none; }
+
+.site-header, .site-footer, .skip-link, .actions, button, .search-form,
+.structure--placeholder { display: none; }
+.print-only { display: block; }
+.print-facts { font-family: var(--font-ui); font-size: 8.5pt; }
+
+main { padding: 0; }
+h1 { font-size: 16pt; }
+h2 { font-size: 12.5pt; }
+h3, h4 { font-size: 10.5pt; }
+
+.sample-banner { color: #000; background: none; border: 1.5pt solid #000; }
+.badge { color: #000; background: none; border: 1px solid #000; }
+.metadata { color: #000; background: none; border: 0.75pt solid #000; padding: 6pt 8pt; font-size: 9pt; }
+.structure img { background: none; border: none; padding: 0; max-height: 60mm; }
+
+h1, h2, h3, h4 { break-after: avoid; }
+tr, li, figure { break-inside: avoid; }
+.metadata dt, .metadata dd { break-inside: avoid; }
+.metadata dt { break-after: avoid; }
+thead { display: table-header-group; }
+
+.table-scroll { overflow: visible; }
+table { width: 100%; font-size: 8.5pt; }
+th, td { overflow-wrap: anywhere; border-color: #000; padding: 2pt 4pt; }
+th.num, td.num { overflow-wrap: normal; white-space: nowrap; }

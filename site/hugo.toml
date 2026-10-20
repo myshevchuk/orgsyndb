@@ -31,3 +31,9 @@ files = ["/OSDB-*.md"]
 source = "../md/procedures"
 target = "content/procedures"
 files = ["/OSDB-*.md"]
+
+[minify.tdewolff.html]
+keepWhitespace = true
+
+[params]
+siteurl = "http://127.0.0.1:8000"

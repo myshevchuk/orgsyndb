@@ -6,7 +6,8 @@ the owner writes Org files in `org/procedures/`, and co-workers can write
 Markdown files in `md/procedures/`. The build treats both formats alike.
 
 The finished site is static. Viewing it loads no fonts, analytics, or other
-resources from the internet. The current layouts are intentionally minimal.
+resources from the internet. It has a responsive light and dark theme,
+full-text search, browse pages, and an A4 print layout.
 
 ## Install the dependencies
 
@@ -81,7 +82,7 @@ A successful build of the shipped procedures prints these steps:
 ==> export: running ox-hugo
 ==> export: installing build/export/
 ==> validate: tools/validate.py --org-root org/procedures build/export md/procedures
-validated 3 files: 0 errors, 0 warnings
+validated 14 files: 0 errors, 0 warnings
 ==> build: hugo
 ==> build: pagefind
 ```
@@ -97,6 +98,66 @@ name, slug, title, and current Europe/Berlin timestamps. Add
 `--ai-model ID` when that model assisted with the procedure. Without this
 option, an Org stub uses `#+AI_MODEL: none`, and a Markdown stub has no
 `ai_model` field.
+
+## Use the site
+
+The built site provides these pages:
+
+- `/` introduces the collection, searches it, lists recent procedures, and
+  links reaction types and tags with their procedure counts.
+- `/procedures/` lists every procedure by ID.
+  `/procedures-by-date/` lists the same procedures by creation date, newest
+  first. Each page links to the other ordering.
+- `/procedures/osdb-NNNN/` shows one procedure, including its metadata,
+  structure image or on-screen placeholder, and eight body sections.
+- `/reaction_types/`, `/tags/`, and `/authors/` list the terms in each
+  category. Their term pages list the matching procedures. For example,
+  `/reaction_types/esterification/`, `/tags/sample-data/`, and
+  `/authors/a.-example/` are term-page URLs.
+- `/search/` provides full-text search and filters.
+
+Search finds a procedure by its ID, product name, CAS number, any part of
+its SMILES string, a tag, or a word in the procedure text. SMILES searches
+ignore punctuation and compare only letters and digits. A fragment may
+therefore match more than one compound. Results appear five at a time; use
+**Load more results** to continue.
+
+The Status, Reaction type, Tag, and Author filters each narrow a search term.
+Selecting two values in the same group requires a procedure to carry both,
+so selecting two reaction types produces no results. An empty search box
+lists nothing. Search needs the site over HTTP, from
+`tools/build.fish serve` or another web server; it does not work when you
+open `public/index.html` through a `file:` URL. Without JavaScript, use the
+browse-page links shown on the search page.
+
+On a procedure page, **Copy** copies the SMILES and briefly reports
+**Copied**. Clipboard access needs a secure context: `https:` or
+`http://127.0.0.1`. At another address the button selects the SMILES and
+reports **Selected: press Ctrl+C** instead.
+
+## Print procedures
+
+`tools/build.fish pdf` uses WeasyPrint to create A4 PDFs in `pdf/`. These
+PDFs have the procedure ID and title in a running header and `Page N of M`
+in the footer. Navigation, buttons, and an empty structure-image placeholder
+are omitted. The sample-data banner remains. Tables stay within the margins,
+numeric columns do not wrap, and table rows and numbered steps stay together
+across page breaks.
+
+The first printed page includes its full procedure URL, ID, status, and
+last-modified time. The URL begins with `params.siteurl` from
+`site/hugo.toml`, which defaults to `http://127.0.0.1:8000`. Set the public
+origin for a PDF run with `HUGO_PARAMS_SITEURL`, for example:
+
+```fish
+env HUGO_PARAMS_SITEURL=https://orgsyndb.example.org tools/build.fish pdf
+```
+
+The URL is printed as text and is not fetched. The procedure page's
+**Print / Save as PDF** button, or the browser's `Ctrl-P` command, uses the
+same complete black-on-white A4 layout. Browser support for running headers
+and page numbers varies; Firefox prints neither, while WeasyPrint includes
+both.
 
 ## Daily workflow
 
@@ -154,6 +215,26 @@ These directories are generated and must not be committed:
 Hugo may also create `site/.hugo_build.lock`. `clean` removes the build,
 site, PDF, and Hugo cache outputs. `clean --all` also removes both fetched
 tool caches.
+
+## Development
+
+Run the test suite from the repository root with:
+
+```fish
+python3 -m pytest tests
+```
+
+The command needs pytest. Node is optional and lets the tests exercise the
+real Pagefind search; it is never needed to build or view the site.
+`poppler-utils` is also optional and supplies `pdftotext` and `pdfinfo` for
+PDF checks. Tests that cannot find an optional tool skip their checks and
+name the missing tool.
+
+## Troubleshooting
+
+If a poppler tool reports `Embedded font file may be invalid` for Cantarell
+in a WeasyPrint PDF, the warning is harmless and the pages still render
+correctly.
 
 ## Optional validation before commits
 

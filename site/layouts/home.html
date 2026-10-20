@@ -1,0 +1,25 @@
+{{ define "main" -}}
+{{ $procedures := where site.RegularPages "Section" "procedures" -}}
+<h1>{{ site.Title }}</h1>
+<p class="lede">The group's synthetic procedures: written in Org or Markdown, validated against one schema, and published here for searching, browsing and printing.</p>
+<form class="search-form" action="/search/" method="get" role="search">
+<label for="home-search">Search procedures</label>
+<input id="home-search" name="q" type="search">
+<button type="submit">Search</button>
+</form>
+<h2>Recent procedures</h2>
+{{ partial "procedure-table.html" (first 5 (sort (sort $procedures "Params.id") "Date" "desc")) -}}
+<p><a href="/procedures/">All {{ len $procedures }} procedures</a> (<a href="/procedures-by-date/">newest first</a>)</p>
+<h2>Browse by reaction type</h2>
+<ul class="term-list">
+{{ range site.Taxonomies.reaction_types.Alphabetical -}}
+<li><a href="{{ .Page.RelPermalink }}">{{ partial "reaction-type-label.html" .Name }}</a> <span class="count">({{ .Count }})</span></li>
+{{ end -}}
+</ul>
+<h2>Browse by tag</h2>
+<ul class="term-list term-list--inline">
+{{ range site.Taxonomies.tags.Alphabetical -}}
+<li><a href="{{ .Page.RelPermalink }}">{{ .Name }}</a> <span class="count">({{ .Count }})</span></li>
+{{ end -}}
+</ul>
+{{ end }}

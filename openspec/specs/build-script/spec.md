@@ -119,7 +119,7 @@ A failing step stops the command with exit 1.
 
 #### Scenario: One PDF per procedure, no stale files
 - **WHEN** an integration test places `pdf/OSDB-0999-stale.pdf` in the temporary repository and runs `tools/build.fish pdf`
-- **THEN** it exits 0, `pdf/` holds exactly `OSDB-0001-salicylic-acid.pdf` and `OSDB-0002-aspirin.pdf`, and each file begins with `%PDF-`
+- **THEN** it exits 0, `pdf/` holds exactly one file `<stem>.pdf` for each procedure content file `<stem>.md` in `build/export/` and `md/procedures/`, among them `OSDB-0001-salicylic-acid.pdf` and `OSDB-0002-aspirin.pdf`, and each file begins with `%PDF-`
 - **AND** neither stdout nor stderr contains `pkg_resources`
 
 #### Scenario: Remote stylesheet fails the job

@@ -1,0 +1,45 @@
+/* Screen only (linked with media="screen"): the dark colour scheme, the
+   Pagefind UI's variables, scrolling table regions, focus and hover
+   states. WeasyPrint never loads this file, and browsers do not apply it
+   when printing. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15171a;
+    --fg: #e6e6e3;
+    --muted: #a8a8a3;
+    --border: #3d4147;
+    --surface: #1f2226;
+    --link: #8cc4ff;
+    --focus: #ffb366;
+    --banner-bg: #3a2f12;
+    --banner-fg: #ffe7a8;
+    --banner-border: #8a6d1f;
+    --draft-bg: #4a3410;
+    --draft-fg: #ffe0b0;
+    --checked-bg: #173d22;
+    --checked-fg: #c4f0cf;
+    --retired-bg: #33363a;
+    --retired-fg: #dddddd;
+  }
+}
+
+:root {
+  --pagefind-ui-scale: 0.9;
+  --pagefind-ui-primary: var(--link);
+  --pagefind-ui-text: var(--fg);
+  --pagefind-ui-background: var(--bg);
+  --pagefind-ui-border: var(--border);
+  --pagefind-ui-tag: var(--surface);
+  --pagefind-ui-font: var(--font-ui);
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.table-scroll { overflow-x: auto; }
+.table-scroll:focus-visible { outline-offset: 0; }
+
+button:hover { border-color: var(--muted); }
+.site-header a:hover, .site-title:hover { text-decoration: underline; }

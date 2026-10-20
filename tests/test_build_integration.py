@@ -133,8 +133,11 @@ class LayoutContractTests(BuildTestCase):
     def test_one_indexed_body_per_procedure_page(self) -> None:
         """Scenario: One indexed body per procedure page."""
         self.assert_ok(self.build("build"))
+        slugs = [front_matter(p.read_text(encoding="utf-8"))["slug"]
+                 for p in self.content_files()]
+        self.assertGreaterEqual(len(slugs), 2)
         procedure_pages = {self.public("procedures", slug, "index.html")
-                           for slug in ("osdb-0001", "osdb-0002")}
+                           for slug in slugs}
         for page in sorted(self.public().rglob("*.html")):
             scan = scan_page(page.read_text(encoding="utf-8"))
             with self.subTest(page=str(page.relative_to(self.public()))):
@@ -299,8 +302,11 @@ class PdfTests(BuildTestCase):
         (pdf / "OSDB-0999-stale.pdf").write_bytes(b"%PDF-stale\n")
         result = self.build("pdf")
         self.assert_ok(result)
+        stems = [p.stem for p in self.content_files()]
+        for seed in SEEDS:
+            self.assertIn(seed, stems)
         self.assertEqual(sorted(p.name for p in pdf.iterdir()),
-                         [f"{stem}.pdf" for stem in SEEDS])
+                         sorted(f"{stem}.pdf" for stem in stems))
         for path in pdf.iterdir():
             self.assertTrue(path.read_bytes().startswith(b"%PDF-"),
                             path.name)

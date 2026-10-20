@@ -1,0 +1,3 @@
+{{- /* The running header of the printed page: ID top left, title top right.
+html/template escapes both values as CSS strings. */ -}}
+<style>@page { @top-left { content: "{{ .Params.id }}"; } @top-right { content: "{{ .Title }}"; } }</style>

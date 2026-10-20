@@ -2,9 +2,26 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>{{ if .IsHome }}{{ site.Title }}{{ else }}{{ .Title }} | {{ site.Title }}{{ end }}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{{ if .IsHome }}{{ site.Title }}{{ else }}{{ partial "page-title.html" . }} | {{ site.Title }}{{ end }}</title>
+{{ $base := slice (resources.Get "css/tokens.css") (resources.Get "css/base.css") | resources.Concat "css/base.css" | minify | fingerprint -}}
+<link rel="stylesheet" href="{{ $base.RelPermalink }}">
+{{ $screen := resources.Get "css/screen.css" | minify | fingerprint -}}
+<link rel="stylesheet" href="{{ $screen.RelPermalink }}" media="screen">
+{{ $print := resources.Get "css/print.css" | minify | fingerprint -}}
+<link rel="stylesheet" href="{{ $print.RelPermalink }}" media="print">
+{{ block "head" . }}{{ end }}
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
+{{ partial "site-header.html" . }}
+<main id="main">
 {{ block "main" . }}{{ end }}
+</main>
+{{ partial "site-footer.html" . }}
+{{ $site := resources.Get "js/site.js" | minify | fingerprint -}}
+<script src="{{ $site.RelPermalink }}" defer></script>
+{{ block "scripts" . }}{{ end }}
 </body>
 </html>

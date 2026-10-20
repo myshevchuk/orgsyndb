@@ -1,0 +1,13 @@
+{{ define "head" }}<link rel="stylesheet" href="/pagefind/pagefind-ui.css">{{ end }}
+{{ define "main" -}}
+<h1>{{ .Title }}</h1>
+<div class="search" data-search></div>
+<noscript>
+<p>Search needs JavaScript. Without it, browse <a href="/procedures/">all procedures</a>, or by <a href="/reaction_types/">reaction type</a>, <a href="/tags/">tag</a> or <a href="/authors/">author</a>.</p>
+</noscript>
+{{ end }}
+{{ define "scripts" -}}
+<script src="/pagefind/pagefind-ui.js"></script>
+{{ $search := slice (resources.Get "js/search-terms.js") (resources.Get "js/search.js") | resources.Concat "js/search.js" | minify | fingerprint -}}
+<script src="{{ $search.RelPermalink }}"></script>
+{{ end }}

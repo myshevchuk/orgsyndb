@@ -1,0 +1,84 @@
+#+TITLE: Ethyl cinnamate
+#+CREATED: [2026-10-20 Tue 09:58:17]
+#+LAST_MODIFIED: [2026-10-20 Tue 10:22:50]
+#+AI_MODEL: claude-opus-5-5
+#+OPTIONS: author:nil
+#+HUGO_SLUG: osdb-0007
+#+HUGO_TAGS: sample-data wittig cinnamate
+#+HUGO_CUSTOM_FRONT_MATTER: :id "OSDB-0007"
+#+HUGO_CUSTOM_FRONT_MATTER: :authors '("G. Example")
+#+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
+#+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("olefination")
+#+HUGO_CUSTOM_FRONT_MATTER: :scale "5 mmol"
+#+HUGO_CUSTOM_FRONT_MATTER: :yield_percent 80
+#+HUGO_CUSTOM_FRONT_MATTER: :hazards '("Benzaldehyde: harmful if swallowed" "Ethyl (triphenylphosphoranylidene)acetate: causes skin, eye and respiratory irritation" "Heptane: highly flammable liquid and vapour, may be fatal if swallowed and enters airways, may cause drowsiness" "Triphenylphosphine oxide: harmful if swallowed")
+#+HUGO_CUSTOM_FRONT_MATTER: :references '("Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989.")
+# The product map must stay alone on the last custom front matter line.
+#+HUGO_CUSTOM_FRONT_MATTER: :product '((name . "Ethyl (E)-cinnamate") (formula . "C11H12O2") (mw . 176.21) (smiles . "CCOC(=O)/C=C/c1ccccc1") (cas . "103-36-6"))
+
+* Summary
+Ethyl (E)-cinnamate by a solvent-free Wittig olefination of benzaldehyde
+with the stabilised ylide ethyl (triphenylphosphoranylidene)acetate at
+room temperature. The ester is separated from triphenylphosphine oxide by
+trituration with heptane. The product is the starting material of
+OSDB-0008. This is sample data: the quantities follow the textbook
+method but are not experimentally verified.
+
+* Reagents
+| Reagent                                   | CAS       | MW (g/mol) | Amount             | mmol | Equiv |
+|-------------------------------------------+-----------+------------+--------------------+------+-------|
+| Benzaldehyde                              | 100-52-7  |     106.12 | 0.531 g (0.509 mL) | 5.00 |   1.0 |
+| Ethyl (triphenylphosphoranylidene)acetate | 1099-45-2 |     348.38 | 2.09 g             | 6.00 |   1.2 |
+
+* Procedure
+1. Weigh the ethyl (triphenylphosphoranylidene)acetate (2.09 g,
+   6.00 mmol) into a 25 mL conical flask containing a small magnetic
+   stirring bar.
+2. Add the benzaldehyde (0.531 g, 0.509 mL, 5.00 mmol) from a
+   graduated pipette, directly onto the solid (Note 1).
+3. Stir the paste at room temperature for 20 minutes, scraping the walls
+   with a spatula from time to time. The mixture becomes a thick, nearly
+   homogeneous slurry as the reaction proceeds (Note 2).
+4. Add heptane (15 mL) and stir vigorously for 5 minutes. The ester
+   dissolves, and triphenylphosphine oxide remains as a white powder.
+5. Filter the suspension through a small plug of cotton wool in a
+   Pasteur pipette or through a fluted filter paper, and rinse the solid
+   with heptane in two 5 mL portions (Note 3).
+
+* Workup and Purification
+Evaporate the combined heptane filtrates on a rotary evaporator (bath at
+40 °C). If more white solid separates from the residue, take it up in
+heptane (5 mL), filter again and evaporate. The product remains as a
+colourless to pale yellow oil. Expected yield 0.705 g (4.00 mmol, 80 %).
+
+* Characterization
+Colourless to pale yellow oil with a sweet, balsamic odour. Determine the
+E:Z ratio from the ¹H NMR spectrum. Expected signals of the (E)-isomer
+(CDCl₃): δ 7.69 (d, J = 16.0 Hz, 1H), 7.55–7.50 (m, 2H), 7.40–7.36 (m,
+3H), 6.44 (d, J = 16.0 Hz, 1H), 4.27 (q, J = 7.1 Hz, 2H), 1.34 (t,
+J = 7.1 Hz, 3H). The (Z)-isomer shows its vinylic doublets with a
+smaller coupling constant, near 12.5 Hz. The IR spectrum (neat film)
+shows the conjugated ester C=O stretch near 1710 cm⁻¹ and the C=C
+stretch near 1637 cm⁻¹.
+
+* Notes
+1. Benzaldehyde oxidises in air to benzoic acid; use a freshly opened or
+   recently distilled sample.
+2. Stabilised ylides react with aldehydes without a solvent or a strong
+   base and give mainly the (E)-alkene.
+3. Triphenylphosphine oxide is almost insoluble in cold heptane, which is
+   what makes this simple separation work.
+
+* Hazards and Waste Disposal
+Benzaldehyde is harmful if swallowed. The ylide irritates skin, eyes and
+the respiratory tract; weigh it in a fume hood. Heptane is highly
+flammable, may cause drowsiness, and may be fatal if swallowed and it
+enters the airways; keep it away from ignition sources. Triphenylphosphine
+oxide is harmful if swallowed. Collect the triphenylphosphine oxide as
+solid organic waste, and the heptane distillate as non-halogenated
+organic waste.
+
+* References
+1. Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R.
+   /Vogel's Textbook of Practical Organic Chemistry/, 5th ed.; Longman:
+   Harlow, 1989.

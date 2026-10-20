@@ -1,0 +1,8 @@
+{{- /* The search-only SMILES index: every suffix of N(smiles), longest
+first, separated by single spaces, where N lowercases and drops every
+character outside [a-z0-9]. Pagefind indexes it as the meta field
+smiles_index, which it never shows in excerpts. */ -}}
+{{ $key := lower (.Params.product.smiles | default "") | replaceRE "[^a-z0-9]" "" -}}
+{{ $suffixes := slice -}}
+{{ range $start := seq 0 (sub (len $key) 1) }}{{ if lt $start (len $key) }}{{ $suffixes = $suffixes | append (substr $key $start) }}{{ end }}{{ end -}}
+<span hidden data-smiles-index="{{ delimit $suffixes " " }}" data-pagefind-meta="smiles_index[data-smiles-index]"></span>

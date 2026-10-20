@@ -1,0 +1,3 @@
+{{- /* Reaction-type slug to its vocabulary label; the slug itself when the
+vocabulary has no entry. */ -}}
+{{- with index site.Data.reaction_types . }}{{ .label }}{{ else }}{{ . }}{{ end -}}
