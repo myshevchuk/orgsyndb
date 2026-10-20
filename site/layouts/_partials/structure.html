@@ -1,0 +1,7 @@
+{{- /* The structure image named by structure_image, relative to site/static/,
+or an empty slot that the print stylesheet hides. */ -}}
+{{ with .Params.structure_image -}}
+<figure class="structure"><img src="/{{ . }}" alt="Structure of {{ $.Params.product.name }}"></figure>
+{{ else -}}
+<figure class="structure structure--placeholder" data-pagefind-ignore><div class="structure__slot">No structure image</div></figure>
+{{ end -}}

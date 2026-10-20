@@ -1,0 +1,10 @@
+{{ define "head" }}{{ partial "print-page-style.html" . }}{{ end }}
+{{ define "main" -}}
+{{ partial "procedure-header.html" . -}}
+<article class="procedure" data-pagefind-body>
+{{ partial "procedure-meta.html" . -}}
+{{ partial "structure.html" . -}}
+{{ .Content }}
+{{ partial "smiles-index.html" . -}}
+</article>
+{{ end }}

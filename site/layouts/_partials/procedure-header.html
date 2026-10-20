@@ -1,0 +1,13 @@
+{{- /* The sample banner, then the procedure header: ID line with the status
+badge, title, print-only facts and the actions row. All of it lies outside
+the indexed body. */ -}}
+{{ $p := .Params -}}
+{{ if in $p.tags "sample-data" -}}
+<p class="sample-banner" role="note">Sample data — quantities not experimentally verified.</p>
+{{ end -}}
+<header class="procedure-header">
+<p class="procedure-id"><span data-pagefind-meta="id">{{ $p.id }}</span> <span class="badge badge--{{ $p.status }}" data-pagefind-filter="status">{{ $p.status }}</span></p>
+<h1>{{ .Title }}</h1>
+<p class="print-facts print-only"><span class="page-url">{{ strings.TrimSuffix "/" site.Params.siteurl }}{{ .RelPermalink }}</span> · {{ $p.id }} · status {{ $p.status }} · last modified {{ .Lastmod.Format "2006-01-02 15:04" }}</p>
+<p class="actions"><button type="button" class="print-button" data-print hidden>Print / Save as PDF</button></p>
+</header>

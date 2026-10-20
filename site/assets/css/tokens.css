@@ -1,0 +1,32 @@
+/* Design tokens for every medium: the light colour scheme, the font
+   stacks, the measure and the spacing scale. The dark scheme lives in
+   screen.css only, so that it can never reach paper. */
+:root {
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #555555;
+  --border: #c8c8c8;
+  --surface: #f4f4f1;
+  --link: #0b4f8a;
+  --focus: #b35c00;
+  --banner-bg: #fff4d6;
+  --banner-fg: #4a3300;
+  --banner-border: #c99a2e;
+  --draft-bg: #fde8c8;
+  --draft-fg: #5c3a00;
+  --checked-bg: #d6f0dc;
+  --checked-fg: #0f4a1f;
+  --retired-bg: #e4e4e4;
+  --retired-fg: #3a3a3a;
+
+  --font-text: Charter, "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif;
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Liberation Sans", Arial, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace;
+
+  --measure: 70ch;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 1rem;
+  --space-4: 1.5rem;
+  --space-5: 2.5rem;
+}

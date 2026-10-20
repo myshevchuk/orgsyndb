@@ -1,0 +1,5 @@
+{{ define "main" -}}
+<h1>{{ .Title }}</h1>
+{{ partial "sort-links.html" "/procedures/" -}}
+{{ partial "procedure-table.html" (sort .Pages "Params.id") -}}
+{{ end }}

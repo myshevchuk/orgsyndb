@@ -177,10 +177,10 @@ and not on an import or setup error. Build once per test class.
 
 ## 3. Site configuration and content (implementer)
 
-- [ ] 3.1 Add `[minify.tdewolff.html]` with `keepWhitespace = true`
+- [x] 3.1 Add `[minify.tdewolff.html]` with `keepWhitespace = true`
       (design.md D6) and `[params]` with `siteurl = "http://127.0.0.1:8000"`
       (D11) to `site/hugo.toml`. Change nothing else in the file.
-- [ ] 3.2 Add `site/content/search.md` (`title = "Search"`,
+- [x] 3.2 Add `site/content/search.md` (`title = "Search"`,
       `layout = "search"`), `site/content/procedures-by-date.md`
       (`title = "All procedures by date"`, `layout =
       "procedures-by-date"`), `site/content/procedures/_index.md`
@@ -190,27 +190,27 @@ and not on an import or setup error. Build once per test class.
 
 ## 4. Layouts (implementer)
 
-- [ ] 4.1 Rewrite `site/layouts/baseof.html` as the page shell (site-theme
+- [x] 4.1 Rewrite `site/layouts/baseof.html` as the page shell (site-theme
       "Page shell"; D1, D2). Keep a literal `<head>` line. It links the
       three stylesheets and `site.js`, and gives the `head` and `scripts`
       blocks. Remove `list.html` and `single.html`.
-- [ ] 4.2 Add the partials listed in D1. Put a newline between every
+- [x] 4.2 Add the partials listed in D1. Put a newline between every
       `</dt>` and `<dd>`.
-- [ ] 4.3 Add `site/layouts/procedures/page.html` (D1, D6–D11, D14):
+- [x] 4.3 Add `site/layouts/procedures/page.html` (D1, D6–D11, D14):
       - the banner, the header, the print facts and the hidden print
         button;
       - the body with the panel, the structure figure, the content and the
         SMILES index span;
       - the inline `@page` style in the `head` block.
-- [ ] 4.4 Add `home.html`, `section.html`, `procedures-by-date.html`,
+- [x] 4.4 Add `home.html`, `section.html`, `procedures-by-date.html`,
       `taxonomy.html`, `term.html`, `search.html` and `page.html` (D1, D4,
       D5).
-- [ ] 4.5 Add `site/layouts/_markup/render-table.html` (site-theme
+- [x] 4.5 Add `site/layouts/_markup/render-table.html` (site-theme
       "Measure, responsiveness and tables"; D11).
 
 ## 5. Stylesheets and scripts (implementer)
 
-- [ ] 5.1 Add `site/assets/css/tokens.css`, `base.css`, `screen.css` and
+- [x] 5.1 Add `site/assets/css/tokens.css`, `base.css`, `screen.css` and
       `print.css` (D2, D3, D11). Use only CSS that WeasyPrint 70.0 accepts
       in `tokens.css`, `base.css` and `print.css`. Keep screen-only
       properties and the dark tokens in `screen.css`. In the three
@@ -219,19 +219,19 @@ and not on an import or setup error. Build once per test class.
       other than `auto` or `none`, except `max-height` on `img`
       (print-layout "Nothing is clipped"). So no visually-hidden helper
       either.
-- [ ] 5.2 Add `site/assets/js/site.js`: print button, copy button with
+- [x] 5.2 Add `site/assets/js/site.js`: print button, copy button with
       the selection fallback, and the text of `span.page-url` (site-theme
       "Content does not need JavaScript"). Only the Print and Copy
       buttons start `hidden`; the home search submit button never does.
-- [ ] 5.3 Add `site/assets/js/search-terms.js`, a classic script, and
+- [x] 5.3 Add `site/assets/js/search-terms.js`, a classic script, and
       `site/assets/js/search.js` (site-search "Query normalisation" and
       "Search page"; D5, D7). The search page loads them as one
       concatenated, minified, fingerprinted bundle.
 
 ## 6. Structure image and samples (implementer)
 
-- [ ] 6.1 Hand-write `site/static/structures/osdb-0003.svg` (D14).
-- [ ] 6.2 Create the six samples with `tools/build.fish new`, in ID
+- [x] 6.1 Hand-write `site/static/structures/osdb-0003.svg` (D14).
+- [x] 6.2 Create the six samples with `tools/build.fish new`, in ID
       order, passing `--ai-model` with your own exact model identifier.
       The titles below give the file names the sample-procedures spec
       requires:
@@ -259,18 +259,18 @@ and not on an import or setup error. Build once per test class.
 
 ## 7. Implementation verification (implementer)
 
-- [ ] 7.1 Run `tools/build.fish build` and `tools/build.fish pdf`. The
+- [x] 7.1 Run `tools/build.fish build` and `tools/build.fish pdf`. The
       validator prints `validated 14 files: 0 errors, 0 warnings`, and
       the `pdf` output contains no `WARNING:` line.
-- [ ] 7.2 Run `python3 -m pytest tests` until it is fully green, with no
+- [x] 7.2 Run `python3 -m pytest tests` until it is fully green, with no
       test skipped on this machine except the Caddy parse test, and
       without editing any test. Return any test that looks wrong to the
       orchestrator.
-- [ ] 7.3 Run `openspec validate add-site-theme --strict`, and confirm
+- [x] 7.3 Run `openspec validate add-site-theme --strict`, and confirm
       that `git status` shows no generated file and that no committed
       file carries a user or machine identifier (`grep -rn "/home/"` over
       the changed files).
-- [ ] 7.4 List every document a person reads that this change affects,
+- [x] 7.4 List every document a person reads that this change affects,
       and what changed in it. Write none of them.
 
 ## 8. Chemistry review (orchestrator)
