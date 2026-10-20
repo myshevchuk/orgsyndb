@@ -1,0 +1,153 @@
+#+TITLE: 4-Acetylbiphenyl
+#+CREATED: [2026-10-20 Tue 09:58:17]
+#+LAST_MODIFIED: [2026-10-20 Tue 10:12:40]
+#+AI_MODEL: claude-opus-5-5
+#+OPTIONS: author:nil
+#+HUGO_SLUG: osdb-0004
+#+HUGO_TAGS: sample-data suzuki-coupling biphenyl
+#+HUGO_CUSTOM_FRONT_MATTER: :id "OSDB-0004"
+#+HUGO_CUSTOM_FRONT_MATTER: :authors '("C. Example" "E. Example")
+#+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
+#+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("cross-coupling")
+#+HUGO_CUSTOM_FRONT_MATTER: :scale "10 mmol"
+#+HUGO_CUSTOM_FRONT_MATTER: :yield_percent 85
+#+HUGO_CUSTOM_FRONT_MATTER: :hazards '("4′-Bromoacetophenone: harmful if swallowed, causes skin and serious eye irritation" "Phenylboronic acid: harmful if swallowed" "Potassium carbonate: causes skin and serious eye irritation" "Tetra-n-butylammonium bromide: harmful if swallowed, causes serious eye irritation" "Palladium(II) acetate: causes serious eye damage, may cause an allergic skin reaction, very toxic to aquatic life" "Ethyl acetate: highly flammable liquid and vapour, may cause drowsiness")
+#+HUGO_CUSTOM_FRONT_MATTER: :references '("Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989." "Miyaura, N.; Suzuki, A. Palladium-Catalyzed Cross-Coupling Reactions of Organoboron Compounds. Chem. Rev. 1995, 95, 2457.")
+# The product map must stay alone on the last custom front matter line.
+#+HUGO_CUSTOM_FRONT_MATTER: :product '((name . "4-Acetylbiphenyl") (formula . "C14H12O") (mw . 196.25) (smiles . "CC(=O)c1ccc(cc1)-c1ccccc1") (cas . "92-91-1"))
+
+* Summary
+4-Acetylbiphenyl (1-(biphenyl-4-yl)ethan-1-one) by a ligand-free Suzuki
+coupling of 4′-bromoacetophenone with phenylboronic acid in water, with
+palladium(II) acetate as the catalyst, potassium carbonate as the base
+and tetra-n-butylammonium bromide as a phase-transfer agent. The
+product is the starting material of OSDB-0005. This is sample data:
+the quantities follow the textbook method but are not experimentally verified.
+
+* Reagents
+| Reagent                                              | CAS       | MW (g/mol) | Amount                                         | mmol | Equiv |
+|------------------------------------------------------+-----------+------------+------------------------------------------------+------+-------|
+| 4′-Bromoacetophenone (1-(4-bromophenyl)ethan-1-one)  | 99-90-1   |     199.05 | 1.99 g (finely powdered in a mortar)           | 10.0 |   1.0 |
+| Phenylboronic acid (benzeneboronic acid)             | 98-80-6   |     121.93 | 1.46 g (stored dry, weighed quickly)           | 12.0 |   1.2 |
+| Potassium carbonate, anhydrous, finely ground        | 584-08-7  |     138.21 | 2.76 g (dried at 120 °C before use)            | 20.0 |   2.0 |
+| Tetra-n-butylammonium bromide (phase-transfer agent) | 1643-19-2 |     322.37 | 1.61 g (dried at 60 °C under vacuum)           | 5.00 |   0.5 |
+| Palladium(II) acetate (catalyst)                     | 3375-31-3 |     224.51 | 11.2 mg (0.5 mol %, weighed into a glass vial) | cat. |  cat. |
+
+* Procedure
+1. Weigh the potassium carbonate (2.76 g, 20.0 mmol) and the
+   tetra-n-butylammonium bromide (1.61 g, 5.00 mmol) into a 100 mL
+   round-bottomed flask containing an oval magnetic stirring bar
+   (Note 1).
+2. Add deionised water (20 mL) and stir until both salts have dissolved.
+3. Add the powdered 4′-bromoacetophenone (1.99 g, 10.0 mmol) and the
+   phenylboronic acid (1.46 g, 12.0 mmol). Both stay largely undissolved
+   at this stage.
+4. Bubble nitrogen through the stirred suspension for 10 minutes from a
+   long needle reaching to the bottom of the flask, to remove dissolved
+   oxygen (Note 2).
+5. Add the palladium(II) acetate (11.2 mg, 0.050 mmol) in one portion,
+   and rinse the vial into the flask with water (1 mL).
+6. Fit a reflux condenser and close it with a nitrogen-filled balloon on
+   a needle and septum.
+7. Lower the flask into a heating block or water bath preheated to
+   70 °C, and stir as fast as the stirring bar allows without splashing
+   (Note 3).
+8. Within a few minutes the organic solids melt to an oily phase
+   dispersed in the water, and within 15 minutes the mixture turns grey
+   to black as finely divided palladium separates (Note 4).
+9. After 30 minutes, take a sample of the oily phase with a capillary,
+   dissolve it in a drop of ethyl acetate and check it by thin-layer
+   chromatography on silica (heptane–ethyl acetate 4:1) beside a
+   reference spot of 4′-bromoacetophenone (Note 5).
+10. Repeat the check every 20 minutes. The reaction is complete when the
+    spot of the bromide can no longer be seen, usually within 1 hour.
+11. Lift the flask out of the bath and let it cool to room temperature
+    with stirring. The product solidifies to a grey, granular cake.
+12. Add ethyl acetate (30 mL) and water (20 mL), and stir until the
+    solid has dissolved in the organic layer.
+13. Filter the two-phase mixture through a pad of Celite (about 2 cm on
+    a sintered-glass funnel) under gentle suction, to remove the
+    palladium residues. Rinse the flask and the pad with ethyl acetate
+    in two 10 mL portions (Note 6).
+14. Transfer the filtrate to a separatory funnel and separate the
+    layers.
+15. Extract the aqueous layer with ethyl acetate (15 mL), and combine
+    the organic layers.
+16. Wash the combined organic layers with water (20 mL), then with
+    saturated sodium chloride solution (20 mL) (Note 7).
+17. Dry the organic solution over anhydrous sodium sulfate for
+    10 minutes, filter, and rinse the drying agent with ethyl acetate
+    (5 mL).
+18. Remove the solvent on a rotary evaporator with the bath at 40 °C,
+    leaving the crude product as an off-white solid (Note 8).
+
+* Workup and Purification
+Dissolve the crude solid in the minimum volume of boiling ethanol, about
+10 to 15 mL, added in small portions. If the solution is grey, add a
+spatula tip of activated charcoal, boil for one minute and filter it hot
+through a fluted filter paper into a warm conical flask. Let the
+solution cool slowly to room temperature and then in an ice bath for
+15 minutes. Collect the crystals by suction filtration, wash them with
+ice-cold ethanol (two 3 mL portions) and dry them under vacuum to
+constant mass. Expected yield 1.67 g (8.50 mmol, 85 %). A second crop
+can be obtained by concentrating the mother liquor to half its volume,
+but it is usually less pure.
+
+* Characterization
+Colourless plates. Determine the melting point; a range of 2 °C or less
+indicates a pure sample. Thin-layer chromatography (silica, heptane–ethyl
+acetate 4:1, UV at 254 nm) shows one spot, distinct from the reference
+spot of 4′-bromoacetophenone.
+
+Expected spectroscopic data:
+- ¹H NMR (400 MHz, CDCl₃): δ 8.04 (d, J = 8.5 Hz, 2H), 7.69 (d,
+  J = 8.5 Hz, 2H), 7.63 (d, J = 7.2 Hz, 2H), 7.48 (t, J = 7.4 Hz, 2H),
+  7.41 (t, J = 7.3 Hz, 1H), 2.65 (s, 3H).
+- ¹³C NMR (101 MHz, CDCl₃): δ 197.8, 145.8, 139.9, 135.9, 129.0, 128.9,
+  128.2, 127.3, 127.2, 26.7.
+- IR (ATR): about 1675 cm⁻¹ (aryl ketone C=O stretch), 1600 cm⁻¹
+  (aromatic C=C stretch), and 840 and 765 cm⁻¹ (aromatic C–H
+  out-of-plane bending).
+
+* Notes
+1. Tetra-n-butylammonium bromide carries the boronate into the organic
+   melt and stabilises the palladium particles. Without it the
+   conversion is much slower.
+2. Oxygen deactivates the catalyst and promotes the homocoupling of
+   phenylboronic acid to biphenyl, which then contaminates the product.
+3. The coupling takes place at the surface of the melt, so fast stirring
+   matters more than the exact temperature.
+4. The dark colour is normal and does not mean that the reaction has
+   failed.
+5. Visualise the plate under UV light at 254 nm. Spot the reaction
+   sample and the reference side by side, and a co-spot of both between
+   them.
+6. Keep the Celite pad wet with solvent; dry palladium residues on a
+   filter aid can ignite solvent vapour. Collect the used pad as
+   heavy-metal waste.
+7. The 0.2 equivalent excess of phenylboronic acid compensates for its
+   slow protodeboronation; the remaining boron compounds are removed in
+   the aqueous washes.
+8. The product is used as the starting material of OSDB-0005 after
+   recrystallisation.
+
+* Hazards and Waste Disposal
+4′-Bromoacetophenone, phenylboronic acid and tetra-n-butylammonium
+bromide are harmful if swallowed and irritate skin and eyes; weigh them
+in a fume hood or a ventilated balance enclosure. Potassium carbonate
+irritates skin and eyes. Palladium(II) acetate causes serious eye damage
+and may cause an allergic skin reaction; wear gloves and eye protection
+and avoid raising dust. Ethyl acetate is highly flammable and its vapour
+may cause drowsiness; use it in a fume hood away from ignition sources.
+Collect the Celite pad and any palladium residues as heavy-metal solid
+waste, because palladium compounds are very toxic to aquatic life.
+Neutralise the aqueous layers and dispose of them as aqueous waste
+containing heavy metals. Collect the ethyl acetate and ethanol mother
+liquors as non-halogenated organic waste.
+
+* References
+1. Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R.
+   /Vogel's Textbook of Practical Organic Chemistry/, 5th ed.; Longman:
+   Harlow, 1989.
+2. Miyaura, N.; Suzuki, A. Palladium-Catalyzed Cross-Coupling Reactions
+   of Organoboron Compounds. /Chem. Rev./ 1995, 95, 2457.

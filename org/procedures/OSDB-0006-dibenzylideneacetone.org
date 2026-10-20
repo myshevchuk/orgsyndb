@@ -1,0 +1,87 @@
+#+TITLE: Dibenzylideneacetone
+#+CREATED: [2026-10-20 Tue 09:58:16]
+#+LAST_MODIFIED: [2026-10-20 Tue 10:19:30]
+#+AI_MODEL: claude-opus-5-5
+#+OPTIONS: author:nil
+#+HUGO_SLUG: osdb-0006
+#+HUGO_TAGS: sample-data claisen-schmidt
+#+HUGO_CUSTOM_FRONT_MATTER: :id "OSDB-0006"
+#+HUGO_CUSTOM_FRONT_MATTER: :authors '("F. Example" "A. Example")
+#+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
+#+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("aldol-condensation")
+#+HUGO_CUSTOM_FRONT_MATTER: :scale "10 mmol"
+#+HUGO_CUSTOM_FRONT_MATTER: :yield_percent 85
+#+HUGO_CUSTOM_FRONT_MATTER: :hazards '("Benzaldehyde: harmful if swallowed" "Acetone: highly flammable liquid and vapour, causes serious eye irritation" "Sodium hydroxide: causes severe skin burns and eye damage" "Ethanol: highly flammable liquid and vapour" "Dibenzylideneacetone: may cause skin and eye irritation")
+#+HUGO_CUSTOM_FRONT_MATTER: :references '("Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989." "Conard, C. R.; Dolliver, M. A. Dibenzalacetone. Org. Synth. 1932, 12, 22.")
+# The product map must stay alone on the last custom front matter line.
+#+HUGO_CUSTOM_FRONT_MATTER: :product '((name . "Dibenzylideneacetone") (formula . "C17H14O") (mw . 234.30) (smiles . "O=C(/C=C/c1ccccc1)/C=C/c1ccccc1") (cas . "538-58-9"))
+
+* Summary
+(1E,4E)-Dibenzylideneacetone (1,5-diphenylpenta-1,4-dien-3-one) by a
+double Claisen–Schmidt condensation of benzaldehyde with acetone in
+aqueous ethanolic sodium hydroxide. The yellow product precipitates from
+the reaction mixture and is recrystallised from ethyl acetate. This is
+sample data: the quantities follow the textbook method but are
+not experimentally verified.
+
+* Reagents
+| Reagent          | CAS       | MW (g/mol) | Amount             | mmol | Equiv |
+|------------------+-----------+------------+--------------------+------+-------|
+| Benzaldehyde     | 100-52-7  |     106.12 | 2.12 g (2.03 mL)   | 20.0 |   2.0 |
+| Acetone          | 67-64-1   |      58.08 | 0.581 g (0.735 mL) | 10.0 |   1.0 |
+| Sodium hydroxide | 1310-73-2 |      40.00 | 2.00 g             | 50.0 |   5.0 |
+
+* Procedure
+1. Dissolve the sodium hydroxide (2.00 g, 50.0 mmol) in water (20 mL) in
+   a 100 mL conical flask, add ethanol (16 mL), and let the solution
+   cool to 20 to 25 °C in a water bath (Note 1).
+2. In a small beaker, mix the benzaldehyde (2.12 g, 2.03 mL, 20.0 mmol)
+   with the acetone (0.581 g, 0.735 mL, 10.0 mmol).
+3. Add half of this mixture to the vigorously stirred alkaline solution.
+   A yellow cloudiness appears within a minute and a flocculent
+   precipitate forms soon after.
+4. After 15 minutes, add the rest of the mixture, rinsing the beaker
+   with ethanol (1 mL), and stir for a further 30 minutes, keeping the
+   bath at 20 to 25 °C (Note 2).
+5. Collect the yellow solid by suction filtration and wash it on the
+   filter with plenty of cold water until the washings are neutral to
+   indicator paper (Note 3).
+
+* Workup and Purification
+Press the solid dry on the filter and dry it in air, then recrystallise
+it from hot ethyl acetate, using about 2.5 mL of solvent per gram of
+crude product. Cool the solution to room temperature and then in ice,
+collect the crystals by suction filtration, wash them with a little
+ice-cold ethanol and dry them in air. Expected yield 1.99 g (8.50 mmol,
+85 %).
+
+* Characterization
+Pale yellow crystals. Determine the melting point. The IR spectrum (ATR)
+shows the conjugated ketone C=O stretch near 1650 cm⁻¹. Expected ¹H NMR
+signals (CDCl₃): δ 7.75 (d, J = 15.9 Hz, 2H), 7.62 (m, 4H), 7.42 (m,
+6H), 7.10 (d, J = 15.9 Hz, 2H). The large coupling constant of the
+vinylic doublets shows the (E,E) configuration.
+
+* Notes
+1. Keep the temperature below 30 °C. Warmer mixtures give a sticky
+   product contaminated with resinous side products.
+2. Adding the aldehyde and ketone in two portions limits the formation
+   of benzalacetone, the product of a single condensation.
+3. Residual sodium hydroxide makes the product darken on storage, so
+   wash it thoroughly.
+
+* Hazards and Waste Disposal
+Sodium hydroxide solution causes severe burns to skin and eyes; wear
+gloves and eye protection. Benzaldehyde is harmful if swallowed. Acetone,
+ethanol and ethyl acetate are highly flammable; keep them away from
+flames and hot plates. Dibenzylideneacetone may irritate skin and eyes.
+Neutralise the alkaline filtrate and washings with dilute acid before
+disposing of them as aqueous waste. Collect the recrystallisation mother
+liquor as non-halogenated organic waste.
+
+* References
+1. Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R.
+   /Vogel's Textbook of Practical Organic Chemistry/, 5th ed.; Longman:
+   Harlow, 1989.
+2. Conard, C. R.; Dolliver, M. A. Dibenzalacetone. /Org. Synth./ 1932,
+   12, 22.
