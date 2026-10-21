@@ -5,14 +5,14 @@ import re
 import unittest
 
 import sample_support as sup
-from pipeline_support import FIXTURES, REPO
+from pipeline_support import DEMO, FIXTURES, REPO
 
-ORG_SEED = REPO / "org" / "procedures" / "OSDB-0001-salicylic-acid.org"
-MD_SEED = REPO / "md" / "procedures" / "OSDB-0002-aspirin.md"
+ORG_SEED = DEMO / "org" / "procedures" / "OSDB-0001-salicylic-acid.org"
+MD_SEED = DEMO / "md" / "procedures" / "OSDB-0002-aspirin.md"
 
 
 def samples() -> list[sup.Sample]:
-    found = sup.sample_procedures(REPO)
+    found = sup.sample_procedures(DEMO)
     if not found:
         raise AssertionError("no procedure is tagged sample-data")
     return found
@@ -116,8 +116,8 @@ EXPECTED_SAMPLES = {
     "md/procedures/OSDB-0008-cinnamic-acid.md": (
         "OSDB-0008", "hydrolysis", ["OSDB-0007"], "C9H8O2", "140-10-3"),
 }
-LONG_SAMPLE = REPO / "org" / "procedures" / "OSDB-0004-4-acetylbiphenyl.org"
-STRUCTURE_SAMPLE = (REPO / "org" / "procedures"
+LONG_SAMPLE = DEMO / "org" / "procedures" / "OSDB-0004-4-acetylbiphenyl.org"
+STRUCTURE_SAMPLE = (DEMO / "org" / "procedures"
                     / "OSDB-0003-isopentyl-acetate.org")
 
 
@@ -126,7 +126,7 @@ class ThemeSampleSetTests(unittest.TestCase):
         """Scenario: Set, counts and chain."""
         for relative, (ident, reaction, precursors, formula, cas) in (
                 EXPECTED_SAMPLES.items()):
-            path = REPO / relative
+            path = DEMO / relative
             with self.subTest(file=relative):
                 self.assertTrue(path.is_file(), f"{relative} is missing")
                 sample = (sup.read_org(path) if path.suffix == ".org"
@@ -166,9 +166,10 @@ class StructureImageSampleTests(unittest.TestCase):
         sample = sup.read_org(STRUCTURE_SAMPLE)
         self.assertEqual(sample.data.get("structure_image"),
                          "structures/osdb-0003.svg")
-        self.assertTrue((REPO / "site" / "static" / "structures"
+        self.assertTrue((DEMO / "static" / "structures"
                          / "osdb-0003.svg").is_file(),
-                        "site/static/structures/osdb-0003.svg is missing")
+                        "examples/demo/static/structures/osdb-0003.svg is "
+                        "missing")
 
 
 class LongSampleTests(unittest.TestCase):

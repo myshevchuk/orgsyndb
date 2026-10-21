@@ -6,10 +6,11 @@
 ;;
 ;; Exports every entry of PLAN_JSON (written by `pipeline.py export-plan')
 ;; to STAGING_DIR/<stem>.md.  ox-hugo and tomelr are installed into
-;; <repo>/.emacs-batch/elpa/ at pinned commits on first use, and every run
-;; checks the installed checkouts against the pins.  Nothing is read from
-;; or written to the user's own Emacs directories or the inherited
-;; TMPDIR.  Exits 0 on success; on any error it prints
+;; <app>/.emacs-batch/elpa/ at pinned commits on first use, and every run
+;; checks the installed checkouts against the pins.  Temporary files go
+;; to tmp/ beside STAGING_DIR, the collection's build/tmp/.  Nothing is
+;; read from or written to the user's own Emacs directories or the
+;; inherited TMPDIR.  Exits 0 on success; on any error it prints
 ;; "export.el: <source>: <message>" (or "export.el: error: <message>"
 ;; when no source is involved) and exits 1.
 
@@ -20,17 +21,26 @@
 ;; loads, and org-persist creates its directory in
 ;; `temporary-file-directory' when Org loads.
 
-(defconst osdb-repo
+(defconst osdb-app
   (file-name-directory
    (directory-file-name
     (file-name-directory (expand-file-name load-file-name))))
-  "The repository root, as a directory name.")
+  "The application root, as a directory name.")
 
-(defconst osdb-batch-dir (expand-file-name ".emacs-batch/" osdb-repo)
-  "The Emacs directory of the export, inside the repository.")
+(defconst osdb-batch-dir (expand-file-name ".emacs-batch/" osdb-app)
+  "The Emacs directory of the export, inside the application.")
 
-(defconst osdb-tmp-dir (expand-file-name "build/tmp/" osdb-repo)
-  "The temporary directory of the export, inside the repository.")
+(unless (= (length command-line-args-left) 2)
+  (message "export.el: error: usage: emacs -Q --batch -l tools/export.el \
+PLAN_JSON STAGING_DIR")
+  (kill-emacs 1))
+
+(defconst osdb-tmp-dir
+  (expand-file-name "tmp/" (file-name-directory
+                            (directory-file-name
+                             (expand-file-name
+                              (cadr command-line-args-left)))))
+  "The temporary directory of the export: tmp/ beside STAGING_DIR.")
 
 (make-directory osdb-tmp-dir t)
 (setq user-emacs-directory osdb-batch-dir
@@ -101,7 +111,7 @@ a checkout is not at its pin."
                  (head (osdb-checkout-head dir)))
       (unless (equal head commit)
         (error "%s is checked out at %s, but its pin is %s; run \
-tools/build.fish clean --all, then export again" name head commit)))))
+tools/orgsyndb clean --all, then export again" name head commit)))))
 
 (defun osdb-table-entry-p (entry)
   "Return non-nil when front-matter ENTRY has a TOML table as its value."

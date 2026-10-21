@@ -26,9 +26,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, NamedTuple
 
-REPO = Path(__file__).resolve().parent.parent
-DEFAULT_VOCABULARY = REPO / "site" / "data" / "reaction_types.toml"
-DEFAULT_STATIC_DIR = REPO / "site" / "static"
+APP = Path(__file__).resolve().parent.parent
+DEFAULT_VOCABULARY = APP / "site" / "data" / "reaction_types.toml"
+# Structure images belong to a collection; run from its root.
+DEFAULT_STATIC_DIR = Path("static")
 ZONE_NAME = "Europe/Berlin"
 
 ID_RE = re.compile(r"^OSDB-(\d{4})$")
@@ -911,12 +912,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--vocabulary", type=Path, default=DEFAULT_VOCABULARY,
         metavar="FILE",
         help="reaction-type vocabulary (default: "
-        "<repo>/site/data/reaction_types.toml)")
+        "<app>/site/data/reaction_types.toml)")
     parser.add_argument(
         "--static-dir", type=Path, default=DEFAULT_STATIC_DIR,
         metavar="DIR",
         help="directory that structure_image paths are relative to "
-        "(default: <repo>/site/static)")
+        "(default: static in the working directory)")
     return parser
 
 

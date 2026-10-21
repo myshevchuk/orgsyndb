@@ -1,26 +1,20 @@
-"""Hugo configuration, ignore rules and the Caddyfile example
-(site-build, build-script)."""
+"""Hugo configuration and its overlay, ignore rules, the demo collection
+and the Caddyfile example (site-build, build-script, sample-procedures)."""
 
 import re
 import shutil
 import subprocess
 import tomllib
 import unittest
+from pathlib import Path
 
-from pipeline_support import BUILD_FISH, PIPELINE, REPO
+from pipeline_support import DEMO, ORGSYNDB, PIPELINE, REPO, pipeline
 
 HUGO_TOML = REPO / "site" / "hugo.toml"
 CADDYFILE = REPO / "deploy" / "Caddyfile.example"
 GITIGNORE = REPO / ".gitignore"
 
 SITE_URL = "http://127.0.0.1:8000"
-MOUNTS = [
-    {"source": "content", "target": "content"},
-    {"source": "../build/export", "target": "content/procedures",
-     "files": ["/OSDB-*.md"]},
-    {"source": "../md/procedures", "target": "content/procedures",
-     "files": ["/OSDB-*.md"]},
-]
 
 
 def strings(value):
@@ -42,7 +36,6 @@ class HugoConfigurationTests(unittest.TestCase):
         config = tomllib.loads(HUGO_TOML.read_text(encoding="utf-8"))
         self.assertEqual(config.get("baseURL"), "/")
         self.assertEqual(config.get("locale"), "en")
-        self.assertEqual(config.get("publishDir"), "../public")
         self.assertIs(config.get("relativeURLs"), True)
         self.assertIs(config.get("buildFuture"), True)
         self.assertIs(config.get("buildExpired"), True)
@@ -60,7 +53,8 @@ class HugoConfigurationTests(unittest.TestCase):
             "html", {})
         self.assertIs(html_minify.get("keepWhitespace"), True)
         self.assertEqual(config.get("params", {}).get("siteurl"), SITE_URL)
-        self.assertEqual(config.get("module", {}).get("mounts"), MOUNTS)
+        for key in ("publishDir", "resourceDir", "module"):
+            self.assertNotIn(key, config)
 
     def test_configuration_names_no_host(self) -> None:
         """Scenario: Configuration parses to the contract (no host)."""
@@ -71,14 +65,49 @@ class HugoConfigurationTests(unittest.TestCase):
         self.assertEqual(config.get("params", {}).get("siteurl"), SITE_URL)
 
 
+class OverlayTests(unittest.TestCase):
+    def test_overlay_parses_to_the_contract(self) -> None:
+        """Scenario: Overlay parses to the contract."""
+        site = Path('/srv/app "one"/site')
+        collection = Path('/srv/data "two", here')
+        overlay = tomllib.loads(pipeline().hugo_overlay(site, collection))
+        self.assertEqual(set(overlay), {"publishDir", "resourceDir",
+                                        "module"})
+        self.assertEqual(overlay["publishDir"], f"{collection}/public")
+        self.assertEqual(overlay["resourceDir"],
+                         f"{collection}/build/hugo-resources")
+        files = ["/OSDB-*.md"]
+        self.assertEqual(overlay["module"], {"mounts": [
+            {"source": f"{site}/content", "target": "content"},
+            {"source": f"{collection}/build/export",
+             "target": "content/procedures", "files": files},
+            {"source": f"{collection}/md/procedures",
+             "target": "content/procedures", "files": files},
+            {"source": f"{collection}/static", "target": "static"},
+        ]})
+
+
+class DemoCollectionTests(unittest.TestCase):
+    def test_samples_live_in_the_demo_collection(self) -> None:
+        """Scenario: Samples live in the demo collection."""
+        self.assertTrue((DEMO / "orgsyndb.toml").is_file())
+        for path in ("org/procedures/OSDB-0001-salicylic-acid.org",
+                     "md/procedures/OSDB-0002-aspirin.md"):
+            self.assertTrue((DEMO / path).is_file(), path)
+        for path in ("org", "md", "site/static"):
+            self.assertFalse((REPO / path).exists(), path)
+
+
 @unittest.skipUnless(shutil.which("git"), "git not found")
 class IgnoreRuleTests(unittest.TestCase):
-    IGNORED = ["build/export/x.md", "public/index.html", "pdf/x.pdf",
+    IGNORED = ["examples/demo/build/export/x.md",
+               "examples/demo/public/index.html", "examples/demo/pdf/x.pdf",
                ".emacs-batch/elpa", ".tools/pagefind-1.5.2/pagefind",
                "site/.hugo_build.lock", "site/resources/_gen/x"]
-    TRACKED = ["org/procedures/OSDB-0001-salicylic-acid.org",
-               "md/procedures/OSDB-0002-aspirin.md", "site/hugo.toml",
-               "tests/fixtures/export/build/x"]
+    TRACKED = ["examples/demo/org/procedures/OSDB-0001-salicylic-acid.org",
+               "examples/demo/md/procedures/OSDB-0002-aspirin.md",
+               "examples/demo/static/structures/osdb-0003.svg",
+               "site/hugo.toml", "tests/fixtures/export/build/x"]
 
     def ignored(self, path: str) -> bool:
         done = subprocess.run(["git", "-C", str(REPO), "check-ignore",
@@ -130,7 +159,7 @@ class CaddyfileTests(unittest.TestCase):
 class NothingEnablesTheHookTests(unittest.TestCase):
     def test_scripts_never_touch_hook_configuration(self) -> None:
         """Scenario: Nothing enables the hook."""
-        for script in (BUILD_FISH, PIPELINE):
+        for script in (ORGSYNDB, PIPELINE):
             self.assertTrue(script.is_file(),
                             f"tools/{script.name} does not exist")
             text = script.read_text(encoding="utf-8")

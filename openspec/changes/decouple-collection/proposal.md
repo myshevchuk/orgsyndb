@@ -36,9 +36,10 @@ already.
   It calls `tools/pipeline.py` and `tools/validate.py` in-process instead of
   as subprocesses. fish is no longer used anywhere.
 - **Hugo configuration split.** `site/hugo.toml` keeps the site-wide
-  settings. The build writes `<collection>/build/hugo.toml`, holding
-  `publishDir`, `resourceDir` and the module mounts as absolute paths, and
-  passes both files to Hugo with `--noBuildLock`.
+  settings. The build writes an overlay into
+  `<collection>/build/hugo-config/`, holding `publishDir`, `resourceDir` and
+  the module mounts as absolute paths, and passes it to Hugo with
+  `--configDir` and `--noBuildLock`.
 - `tools/hooks/pre-commit` becomes a POSIX `sh` script meant for a
   collection's repository: it validates the collection at the top of the
   work tree with the application it belongs to.

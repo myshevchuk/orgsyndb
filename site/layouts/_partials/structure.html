@@ -1,5 +1,5 @@
-{{- /* The structure image named by structure_image, relative to site/static/,
-or an empty slot that the print stylesheet hides. */ -}}
+{{- /* The structure image named by structure_image, relative to the
+collection's static/, or an empty slot that the print stylesheet hides. */ -}}
 {{ with .Params.structure_image -}}
 <figure class="structure"><img src="/{{ . }}" alt="Structure of {{ $.Params.product.name }}"></figure>
 {{ else -}}

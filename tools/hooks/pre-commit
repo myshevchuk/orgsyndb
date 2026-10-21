@@ -1,11 +1,13 @@
-#!/usr/bin/env fish
-# Optional pre-commit hook: refuses the commit when
-# `tools/build.fish validate` fails. It validates the working tree, not
-# the index. Nothing enables it; see the README.
+#!/bin/sh
+# Optional pre-commit hook for the repository of an OrgSynDB collection:
+# refuses the commit when `orgsyndb validate` fails for the collection at
+# the top of the work tree. It validates the working tree, not the index.
+# Enable it in the collection's repository with either of
+#   git config core.hooksPath /path/to/orgsyndb/tools/hooks
+#   ln -s /path/to/orgsyndb/tools/hooks/pre-commit .git/hooks/pre-commit
+# Nothing enables it; see the README.
 
-set -l top (git rev-parse --show-toplevel)
-or exit 1
-cd "$top"
-or exit 1
-"$top/tools/build.fish" validate
-exit $status
+hook=$(readlink -f -- "$0") || exit 1
+app=$(dirname -- "$(dirname -- "$(dirname -- "$hook")")") || exit 1
+top=$(git rev-parse --show-toplevel) || exit 1
+exec "$app/tools/orgsyndb" -C "$top" validate

@@ -21,14 +21,19 @@ NOW = "2026-10-19T17:42:05+02:00"
 SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 
-def make_repo(case: unittest.TestCase, trees: bool = False) -> Path:
-    """A temporary repository holding templates/ and, optionally, empty
-    org/procedures/ and md/procedures/. The path contains a space."""
-    base = Path(tempfile.mkdtemp(prefix="orgsyndb new "))
-    case.addCleanup(shutil.rmtree, base, True)
-    root = base / "repo copy"
+def make_repo(case: unittest.TestCase, trees: bool = False,
+              base: Path | None = None) -> Path:
+    """A temporary collection holding orgsyndb.toml and, optionally, empty
+    org/procedures/ and md/procedures/. The path contains a space; with
+    ``base``, the collection is ``base/data``."""
+    if base is None:
+        base = Path(tempfile.mkdtemp(prefix="orgsyndb new "))
+        case.addCleanup(shutil.rmtree, base, True)
+        root = base / "collection copy"
+    else:
+        root = base / "data"
     root.mkdir()
-    shutil.copytree(REPO / "templates", root / "templates")
+    (root / "orgsyndb.toml").write_text("format = 1\n")
     if trees:
         (root / "org" / "procedures").mkdir(parents=True)
         (root / "md" / "procedures").mkdir(parents=True)
@@ -36,9 +41,9 @@ def make_repo(case: unittest.TestCase, trees: bool = False) -> Path:
 
 
 def new(root: Path, *args: str, env: dict[str, str] | None = None) -> Run:
-    """Run ``pipeline.py new --repo ROOT ARGS...`` in a neutral cwd."""
+    """Run ``pipeline.py new --collection ROOT ARGS...`` in a neutral cwd."""
     with tempfile.TemporaryDirectory() as cwd:
-        return run_pipeline(["new", "--repo", root, *args],
+        return run_pipeline(["new", "--collection", root, *args],
                             cwd=Path(cwd), env=env)
 
 
@@ -108,6 +113,25 @@ class NewWithGitHistoryTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(len(created(clone, before)), 1)
         self.assertIn("shallow", result.stderr)
+
+    def test_collection_in_a_subdirectory_of_a_work_tree(self) -> None:
+        """Scenario: Collection in a subdirectory of a work tree."""
+        top = Path(tempfile.mkdtemp(prefix="orgsyndb work tree "))
+        self.addCleanup(shutil.rmtree, top, True)
+        root = make_repo(self, trees=True, base=top)
+        git(top, "init", "-q")
+        old = root / "md" / "procedures" / "OSDB-0012-old.md"
+        old.write_text("x\n")
+        git(top, "add", "-A")
+        git(top, "commit", "-q", "-m", "add old procedure")
+        old.unlink()
+        git(top, "commit", "-q", "-a", "-m", "delete old procedure")
+        before = files_of(top)
+        result = new(root, "--md", "--now", NOW, "Test product")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(created(top, before),
+                         ["data/md/procedures/OSDB-0013-test-product.md"])
+        self.assertNotIn("warning", result.stderr)
 
 
 class SlugTests(unittest.TestCase):

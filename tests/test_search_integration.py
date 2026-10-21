@@ -122,7 +122,7 @@ class ShippedSearchTests(SearchBatchCase):
 
     @classmethod
     def plan(cls, items: list[Content]) -> None:
-        labels = ps.reaction_labels(cls.sandbox.root)
+        labels = ps.reaction_labels(cls.sandbox.app)
         cls.cas = cls.ask("50-78-2")
         cls.filters_only = {}
         for key, values in cls.filter_values(items, labels).items():
@@ -168,7 +168,7 @@ class ShippedSearchTests(SearchBatchCase):
     def test_filter_values_and_filter_only_searches(self) -> None:
         """Scenario: Filter values and filter-only searches."""
         items = self.content()
-        labels = ps.reaction_labels(self.sandbox.root)
+        labels = ps.reaction_labels(self.sandbox.app)
         self.assertEqual(
             {k: set(v) for k, v in self.out["filters"].items()},
             self.filter_values(items, labels))

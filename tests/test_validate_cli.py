@@ -55,6 +55,22 @@ class DefaultPathTests(ValidatorTestCase):
                          result.stdout)
         self.assert_clean(result)
 
+    def test_default_static_directory_is_the_working_directorys(
+            self) -> None:
+        """Scenario: Default static directory is the working directory's."""
+        edit = support.insert_line(
+            'structure_image = "structures/osdb-0100.svg"')
+        with variant_root("OSDB-0100-baseline.md", edit) as root:
+            with tempfile.TemporaryDirectory() as cwd:
+                structures = Path(cwd) / "static" / "structures"
+                structures.mkdir(parents=True)
+                (structures / "osdb-0100.svg").write_text("<svg/>\n")
+                result = run_validator([root], cwd=Path(cwd))
+                (structures / "osdb-0100.svg").unlink()
+                missing = run_validator([root], cwd=Path(cwd))
+        self.assert_clean(result)
+        self.assert_one(missing, "error", "structure_image", "not found")
+
 
 class VocabularyErrorTests(ValidatorTestCase):
     def test_entry_without_label_is_a_configuration_error(self) -> None:

@@ -45,14 +45,18 @@ A run SHALL write generated files only under the collection's `build/`, `public/
 ### Requirement: init subcommand
 `tools/orgsyndb init DIR` SHALL create an empty collection in `DIR`, creating `DIR` and its parents when missing. It writes:
 - `orgsyndb.toml` holding `format = 1`, preceded by comment lines;
-- `.gitignore` holding exactly the lines `/build/`, `/public/` and `/pdf/`;
+- `.gitignore` holding exactly the lines `/build/`, `/public/` and `/pdf/`, or, when a `.gitignore` exists, those of these lines it lacks, appended;
 - the empty directories `org/procedures/`, `md/procedures/` and `static/structures/`.
 
-It exits 1 without writing anything when `DIR/orgsyndb.toml` already exists, and 2 when `DIR` is missing from the command line. It prints the collection's path. It does not run `git` and does not configure a hook.
+It writes `orgsyndb.toml` last, so that an interrupted `init` can be rerun. It exits 1 without writing anything when `DIR/orgsyndb.toml` already exists, and 2 when `DIR` is missing from the command line. It prints the collection's absolute path. It does not run `git` and does not configure a hook.
 
-#### Scenario: New collection validates and builds
+#### Scenario: New collection takes a procedure
 - **WHEN** a test runs `tools/orgsyndb init "<tmp>/new collection"`, then `tools/orgsyndb -C "<tmp>/new collection" new --md "Ethyl acetate"`
 - **THEN** both exit 0, the second creates `md/procedures/OSDB-0001-ethyl-acetate.md`, and `orgsyndb.toml` parses with `tomllib` to `{"format": 1}`
+
+#### Scenario: Existing .gitignore is kept
+- **WHEN** a test runs `tools/orgsyndb init <dir>` on a directory whose `.gitignore` is `*.swp` and `/public/` without a final newline
+- **THEN** it exits 0, and the `.gitignore` is `*.swp`, `/public/`, `/build/` and `/pdf/`, one per line
 
 #### Scenario: Existing collection is refused
 - **WHEN** a test runs `tools/orgsyndb init <dir>` twice on the same directory

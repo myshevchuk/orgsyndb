@@ -1,6 +1,5 @@
 """Static checks of the theme sources (site-theme, print-layout,
-site-search). They need no build and never skip, except the check-deps half
-of "No Node in the tools", which skips without fish.
+site-search). They need no build and never skip.
 """
 
 import re
@@ -9,13 +8,12 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pipeline_support as ps
-from pipeline_support import REPO, Declaration
-from test_build_script import FishTestCase
+from pipeline_support import DEMO, REPO, Declaration
 
 CSS_DIR = REPO / "site" / "assets" / "css"
 SOURCES = ("tokens.css", "base.css", "screen.css", "print.css")
 PRINT_SOURCES = ("tokens.css", "base.css", "print.css")
-SVG_DIR = REPO / "site" / "static" / "structures"
+SVG_DIR = DEMO / "static" / "structures"
 SVG_NS = "{http://www.w3.org/2000/svg}"
 DARK = "@media(prefers-color-scheme:dark)"
 
@@ -257,7 +255,7 @@ class ClippingCheckTests(unittest.TestCase):
                 self.assertEqual(self.violations(source), [])
 
 
-class NoNodeInToolsTests(FishTestCase):
+class NoNodeInToolsTests(unittest.TestCase):
     def test_tools_never_mention_node_or_npm(self) -> None:
         """Scenario: No Node in the tools (file search)."""
         tools = REPO / "tools"
@@ -275,10 +273,10 @@ class NoNodeInToolsTests(FishTestCase):
     def test_check_deps_neither_reports_nor_requires_node(self) -> None:
         """Scenario: No Node in the tools (check-deps)."""
         sandbox = ps.make_sandbox(self)
-        path = ps.make_path(self, ("fish", "python3", "emacs", "git",
+        path = ps.make_path(self, ("python3", "emacs", "git",
                                    "hugo", "weasyprint"))
-        result = sandbox.build("check-deps",
-                               env=sandbox.env(PATH=str(path.directory)))
+        result = sandbox.program("check-deps",
+                                 env=sandbox.env(PATH=str(path.directory)))
         self.assertEqual(result.returncode, 0,
                          result.stdout + result.stderr)
         for line in (result.stdout + result.stderr).splitlines():

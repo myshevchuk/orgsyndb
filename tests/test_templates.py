@@ -22,7 +22,7 @@ def read_template(path: Path) -> str:
 
 
 def substituted(text: str) -> str:
-    """Fill the placeholders as ``build.fish new`` will."""
+    """Fill the placeholders as ``orgsyndb new`` will."""
     return text.replace("OSDB-0000", "OSDB-0001").replace(
         "osdb-0000", "osdb-0001")
 

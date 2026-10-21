@@ -89,8 +89,8 @@ For a missing tool it prints `orgsyndb: error: <tool> not found; install it with
 `tools/orgsyndb build` SHALL perform these steps in order:
 1. Run `export`.
 2. Validate as `validate` does without arguments, stopping with exit 1 on any validation error while tolerating warnings.
-3. Remove `public/`, and write the Hugo overlay `build/hugo.toml` (site-build "Hugo configuration").
-4. Run `hugo --source <app>/site --config <app>/site/hugo.toml,<collection>/build/hugo.toml --minify --quiet --noBuildLock`.
+3. Remove `public/`, and write the Hugo overlay `build/hugo-config/_default/hugo.toml` (site-build "Hugo configuration").
+4. Run `hugo --source <app>/site --configDir <collection>/build/hugo-config --minify --quiet --noBuildLock`.
 5. Obtain the Pagefind binary, and run it with `--site <collection>/public --quiet`.
 
 A failing step stops the command with exit 1.

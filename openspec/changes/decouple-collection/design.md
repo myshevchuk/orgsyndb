@@ -103,8 +103,8 @@ collections no longer share any output.
 ### D4 Hugo configuration: a static file plus a generated overlay
 
 `site/hugo.toml` keeps every site-wide key but drops `publishDir` and
-`module.mounts`. Before Hugo runs, the build writes
-`<collection>/build/hugo.toml`:
+`module.mounts`. Before Hugo runs, the build writes the overlay
+`<collection>/build/hugo-config/_default/hugo.toml`:
 
 ```toml
 publishDir = "<collection>/public"
@@ -116,9 +116,14 @@ resourceDir = "<collection>/build/hugo-resources"
 [[module.mounts]]   # <collection>/static     -> static
 ```
 
-and runs `hugo --source <app>/site --config <app>/site/hugo.toml,<overlay>
---minify --quiet --noBuildLock`. Paths are absolute and written as TOML
-basic strings by `pipeline.toml_string`, so spaces and quotes are safe.
+and runs `hugo --source <app>/site --configDir
+<collection>/build/hugo-config --minify --quiet --noBuildLock`. Hugo loads
+`site/hugo.toml` and merges the configuration directory's
+`_default/hugo.toml` over it. Paths are absolute and written as TOML basic
+strings by `pipeline.toml_string`, so spaces and quotes are safe.
+`--configDir` is used instead of `--config site/hugo.toml,<overlay>`
+because `--config` splits its value at commas, which a collection path may
+contain.
 `pipeline.hugo_overlay(site, collection)` is a pure function and is tested
 without Hugo.
 
@@ -128,8 +133,9 @@ overlay does not mention (layouts, assets, data, i18n, archetypes), all
 from `<app>/site/`.
 
 Verified with Hugo 0.162.1: the built `public/` is byte-identical to the
-one the old configuration produced from the same sources, and with
-`--noBuildLock` nothing is written under `site/`.
+one the old configuration produced from the same sources, a collection
+path with a space and a comma works, and with `--noBuildLock` nothing is
+written under `site/`.
 
 Rejected: absolute paths in `site/hugo.toml` (not portable); symlinking the
 collection into `site/` (writes into the application, breaks with two

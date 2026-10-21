@@ -3,12 +3,13 @@
 # requires-python = ">=3.14"
 # dependencies = []
 # ///
-"""Testable logic behind tools/build.fish.
+"""Testable logic behind tools/orgsyndb.
 
 The export plan and its timestamp rule, the recoverable replacement of
-``build/export/``, next-ID allocation, slugs, template filling, PDF jobs
-and the Pagefind download. File discovery and Org timestamp parsing come
-from ``validate.py`` in the same directory. The command-line interface
+``build/export/``, next-ID allocation, slugs, template filling, the Hugo
+overlay, PDF jobs and the Pagefind download. File discovery and Org
+timestamp parsing come from ``validate.py`` in the same directory. The
+command-line interface is low-level plumbing for tests and debugging; it
 exits 0 on success, 1 on failure and 2 on a usage error, and writes
 errors to stderr as ``pipeline.py: error: <message>``.
 """
@@ -33,6 +34,9 @@ from typing import Any, NamedTuple
 
 import validate
 
+APP = Path(__file__).resolve().parent.parent
+TEMPLATES = APP / "templates"
+
 ID_PREFIX_RE = re.compile(r"^OSDB-(\d{4})", re.IGNORECASE)
 SLUG_LIMIT = 40
 SOURCE_TREES = ("org/procedures", "md/procedures")
@@ -53,6 +57,10 @@ PAGEFIND_BIN_SHA256 = ("c4b86009ce5420dc2a1748ab2705bef6"
                        "ba730ed883f684fd52ef6008bd600532")
 
 WEASYPRINT_WARNING_FILTER = "ignore:pkg_resources is deprecated:UserWarning"
+
+# The program named in the messages this module prints; tools/orgsyndb
+# sets it to its own name.
+PROG = "pipeline.py"
 
 Rename = Callable[[Path, Path], None]
 Remove = Callable[[Path], None]
@@ -195,7 +203,7 @@ def _replace_once(text: str, pattern: str, line: str | None, what: str,
 
 def fill_template(text: str, kind: str, ident: str, title: str,
                   now: dt.datetime, ai_model: str | None) -> str:
-    """Fill a procedure template for ``build.fish new``.
+    """Fill a procedure template for ``orgsyndb new``.
 
     ``kind`` is ``"org"`` or ``"md"``. Every ``OSDB-0000`` becomes
     ``ident`` and every ``osdb-0000`` its lowercase form. The title,
@@ -337,7 +345,7 @@ def replace_export(build: Path, rename: Rename = os.rename,
         try:
             remove(previous)
         except OSError as exc:
-            print(f"pipeline.py: warning: cannot delete {previous}: {exc}; "
+            print(f"{PROG}: warning: cannot delete {previous}: {exc}; "
                   "the next export removes it", file=sys.stderr)
 
 
@@ -409,16 +417,17 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
                           capture_output=True, text=True, timeout=120)
 
 
-def candidate_names(repo: Path,
+def candidate_names(collection: Path,
                     warn: Callable[[str], None]) -> list[str]:
-    """Return every name ``next_id`` must stay above, for ``repo``.
+    """Return every name ``next_id`` must stay above, for ``collection``.
 
     These are the top-level entries of the source trees and of
     ``build/export/``, and the base names of every source-tree path in
-    the git history of all refs. Without usable git history, or in a
-    shallow clone, ``warn`` is called with the reason.
+    the git history of all refs. The collection may be anywhere inside a
+    work tree; the history paths are relative to it. Without usable git
+    history, or in a shallow clone, ``warn`` is called with the reason.
     """
-    repo = Path(repo)
+    repo = Path(collection)
     names: list[str] = []
     for tree in (*SOURCE_TREES, "build/export"):
         if (repo / tree).is_dir():
@@ -426,11 +435,10 @@ def candidate_names(repo: Path,
     if shutil.which("git") is None:
         warn("git not found; IDs of deleted procedures cannot be seen")
         return names
-    top = _git(repo, "rev-parse", "--show-toplevel")
-    if (top.returncode != 0 or not top.stdout.strip()
-            or Path(top.stdout.strip()).resolve() != repo.resolve()):
-        warn(f"{repo} is not a git work tree; IDs of deleted procedures "
-             "cannot be seen")
+    inside = _git(repo, "rev-parse", "--is-inside-work-tree")
+    if inside.returncode != 0 or inside.stdout.strip() != "true":
+        warn(f"{repo} is not inside a git work tree; IDs of deleted "
+             "procedures cannot be seen")
         return names
     shallow = _git(repo, "rev-parse", "--is-shallow-repository")
     if shallow.stdout.strip() == "true":
@@ -444,6 +452,38 @@ def candidate_names(repo: Path,
         return names
     names += [Path(p).name for p in log.stdout.split("\0") if p.strip()]
     return names
+
+
+# --------------------------------------------------------------------------
+# Hugo
+
+
+def hugo_overlay(site: Path, collection: Path) -> str:
+    """Return the Hugo configuration overlay for building ``collection``.
+
+    ``site`` is the application's Hugo project and ``collection`` the
+    collection directory, both absolute. The overlay sets the publish and
+    resource directories inside the collection and the four module
+    mounts: the application's pages, the Org export, the Markdown
+    procedures and the collection's static files.
+    """
+    site, collection = Path(site), Path(collection)
+
+    def mount(source: Path, target: str, files: bool) -> str:
+        text = (f"\n[[module.mounts]]\nsource = {toml_string(str(source))}\n"
+                f"target = {toml_string(target)}\n")
+        return text + ('files = ["/OSDB-*.md"]\n' if files else "")
+
+    return ("# Generated by tools/orgsyndb for this collection; do not edit.\n"
+            f"publishDir = {toml_string(str(collection / 'public'))}\n"
+            "resourceDir = "
+            f"{toml_string(str(collection / 'build' / 'hugo-resources'))}\n"
+            + mount(site / "content", "content", False)
+            + mount(collection / "build" / "export", "content/procedures",
+                    True)
+            + mount(collection / "md" / "procedures", "content/procedures",
+                    True)
+            + mount(collection / "static", "static", False))
 
 
 # --------------------------------------------------------------------------
@@ -592,7 +632,7 @@ def render_pdfs(jobs: Sequence[PdfJob]) -> list[PdfJob]:
             job.pdf.unlink(missing_ok=True)
             reason = (errors[0] if errors
                       else f"weasyprint exited {done.returncode}")
-            print(f"pipeline.py: error: {job.pdf.name}: {reason}",
+            print(f"{PROG}: error: {job.pdf.name}: {reason}",
                   file=sys.stderr, flush=True)
             failed.append(job)
     return failed
@@ -620,20 +660,31 @@ def _load_plan(path: Path) -> list[dict[str, Any]]:
     return plan
 
 
-def cmd_export_plan(args: argparse.Namespace) -> int:
-    """Write the export plan, or print lint errors and return 1."""
-    plan_path = Path(args.plan)
-    plan, problems = plan_export(args.org_root)
+def write_export_plan(org_root: str, plan_path: Path
+                      ) -> list[dict[str, Any]] | None:
+    """Plan the export of ``org_root`` and write the plan to ``plan_path``.
+
+    Returns the plan. When the sources have lint problems, prints them to
+    stderr, deletes any old plan and returns None.
+    """
+    plan_path = Path(plan_path)
+    plan, problems = plan_export(org_root)
     if problems:
         plan_path.unlink(missing_ok=True)
         for path, problem in sorted(problems, key=lambda p: p[0]):
             print(f"{path}:{problem.field}: {problem.severity}: "
                   f"{problem.message}", file=sys.stderr)
-        return 1
+        return None
     plan_path.parent.mkdir(parents=True, exist_ok=True)
     plan_path.write_text(json.dumps(plan, indent=2, ensure_ascii=False)
                          + "\n", encoding="utf-8")
-    return 0
+    return plan
+
+
+def cmd_export_plan(args: argparse.Namespace) -> int:
+    """Write the export plan, or print lint errors and return 1."""
+    plan = write_export_plan(args.org_root, Path(args.plan))
+    return 0 if plan is not None else 1
 
 
 def cmd_recover_export(args: argparse.Namespace) -> int:
@@ -675,41 +726,54 @@ def _now(value: str | None) -> dt.datetime:
 
 
 def _warn(message: str) -> None:
-    print(f"pipeline.py: warning: {message}", file=sys.stderr)
+    print(f"{PROG}: warning: {message}", file=sys.stderr)
 
 
 def cmd_next_id(args: argparse.Namespace) -> int:
-    """Print the next free procedure ID of the repository."""
-    print(next_id(candidate_names(Path(args.repo), _warn)))
+    """Print the next free procedure ID of the collection."""
+    print(next_id(candidate_names(Path(args.collection), _warn)))
     return 0
 
 
-def cmd_new(args: argparse.Namespace) -> int:
-    """Create a procedure stub and print its repo-relative path."""
-    if (args.ai_model is not None
-            and not validate.AI_MODEL_RE.match(args.ai_model)):
-        raise UsageError(f"--ai-model {args.ai_model!r} must match "
+def new_procedure(collection: Path, words: Sequence[str], md: bool,
+                  ai_model: str | None, now: dt.datetime | None = None
+                  ) -> Path:
+    """Create a procedure stub in ``collection``; return its relative path.
+
+    Raises UsageError for a bad title or model identifier, and ValueError
+    when the file exists or the template cannot be filled.
+    """
+    if ai_model is not None and not validate.AI_MODEL_RE.match(ai_model):
+        raise UsageError(f"--ai-model {ai_model!r} must match "
                          f"{validate.AI_MODEL_RE.pattern}")
-    title = _new_title(args.title)
+    title = _new_title(words)
     try:
         slug = slugify(title)
     except ValueError as exc:
         raise UsageError(str(exc)) from None
-    now = _now(args.now)
-    repo = Path(args.repo)
-    kind = "md" if args.md else "org"
-    ident = next_id(candidate_names(repo, _warn))
-    template = repo / "templates" / f"procedure.{kind}"
+    if now is None:
+        now = dt.datetime.now(berlin()).replace(microsecond=0)
+    collection = Path(collection)
+    kind = "md" if md else "org"
+    ident = next_id(candidate_names(collection, _warn))
+    template = TEMPLATES / f"procedure.{kind}"
     text = fill_template(template.read_text(encoding="utf-8"), kind, ident,
-                         title, now, args.ai_model)
+                         title, now, ai_model)
     relative = Path(SOURCE_TREES[kind == "md"]) / f"{ident}-{slug}.{kind}"
-    target = repo / relative
+    target = collection / relative
     target.parent.mkdir(parents=True, exist_ok=True)
     try:
         with open(target, "x", encoding="utf-8") as handle:
             handle.write(text)
     except FileExistsError:
         raise ValueError(f"{relative} already exists") from None
+    return relative
+
+
+def cmd_new(args: argparse.Namespace) -> int:
+    """Create a procedure stub and print its collection-relative path."""
+    relative = new_procedure(Path(args.collection), args.title, args.md,
+                             args.ai_model, _now(args.now))
     print(relative.as_posix())
     return 0
 
@@ -738,7 +802,7 @@ def build_parser() -> argparse.ArgumentParser:
     """Return the command-line parser."""
     parser = argparse.ArgumentParser(
         prog="pipeline.py",
-        description="Build-pipeline helpers called by tools/build.fish. "
+        description="Build-pipeline plumbing behind tools/orgsyndb. "
         "Exits 0 on success, 1 on failure and 2 on a usage error.")
     sub = parser.add_subparsers(dest="command", required=True,
                                 metavar="COMMAND")
@@ -769,16 +833,17 @@ def build_parser() -> argparse.ArgumentParser:
     nxt = sub.add_parser(
         "next-id", help="print the next free procedure ID",
         description="Print the ID one above the highest in the source "
-        "trees, the export directory and the git history.")
-    nxt.add_argument("--repo", required=True, metavar="REPO")
+        "trees, the export directory and the git history of COLLECTION.")
+    nxt.add_argument("--collection", required=True, metavar="COLLECTION")
     nxt.set_defaults(func=cmd_next_id)
 
     new = sub.add_parser(
         "new", help="create a procedure stub",
         description="Create org/procedures/<ID>-<slug>.org, or "
-        "md/procedures/<ID>-<slug>.md with --md, from the template, and "
-        "print its path relative to REPO.")
-    new.add_argument("--repo", required=True, metavar="REPO")
+        "md/procedures/<ID>-<slug>.md with --md, in COLLECTION from the "
+        "application's template, and print its path relative to "
+        "COLLECTION.")
+    new.add_argument("--collection", required=True, metavar="COLLECTION")
     new.add_argument("--md", action="store_true",
                      help="create a Markdown procedure")
     new.add_argument("--ai-model", metavar="ID",

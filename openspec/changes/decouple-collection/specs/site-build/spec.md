@@ -19,7 +19,7 @@ The file `site/hugo.toml` SHALL configure Hugo 0.162.1 as follows:
 
 The configuration names no host other than the loopback address in `params.siteurl`.
 
-`pipeline.hugo_overlay(site, collection)` SHALL return the text of the collection's overlay `build/hugo.toml`, given the absolute paths of the application's `site/` and of the collection. It sets `publishDir` to `<collection>/public`, `resourceDir` to `<collection>/build/hugo-resources`, and `module.mounts` to exactly these four mounts, in this order, every path absolute:
+`pipeline.hugo_overlay(site, collection)` SHALL return the text of the collection's overlay `build/hugo-config/_default/hugo.toml`, which the build passes to Hugo through `--configDir <collection>/build/hugo-config`, given the absolute paths of the application's `site/` and of the collection. It sets `publishDir` to `<collection>/public`, `resourceDir` to `<collection>/build/hugo-resources`, and `module.mounts` to exactly these four mounts, in this order, every path absolute:
 1. `<site>/content` → `content`;
 2. `<collection>/build/export` → `content/procedures` with `files = ["/OSDB-*.md"]`;
 3. `<collection>/md/procedures` → `content/procedures` with `files = ["/OSDB-*.md"]`;
