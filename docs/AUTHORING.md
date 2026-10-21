@@ -1,8 +1,9 @@
 # Writing a procedure in Markdown
 
 This guide takes you from the supplied template to a checked procedure. The
-OrgSynDB repository is the project folder that contains the sources and
-tools. You do not need to know Git, Org, TOML, or Hugo.
+procedures live in a *collection*, a project folder of its own that the
+OrgSynDB program turns into the website. You do not need to know Git, Org,
+TOML, or Hugo.
 
 Markdown is a plain-text format that uses marks such as `##` for headings.
 TOML is the small metadata block at the top of each procedure. Hugo is the
@@ -20,11 +21,11 @@ The file to copy is
 
 The easiest method is to ask the owner to create your file with:
 
-```fish
-tools/build.fish new --md "Product name"
+```sh
+orgsyndb new --md "Product name"
 ```
 
-This creates a file such as
+Run it inside the collection folder. This creates a file such as
 `md/procedures/OSDB-0003-product-name.md`. It fills in the next procedure
 number, the web-page name, the title, and both dates.
 
@@ -86,7 +87,7 @@ The page then links to OSDB-0007 under **Precursors**. The OSDB-0007 page
 automatically links back to this procedure under **Used in**.
 
 To show a product structure, place an SVG or PNG file in
-`site/static/structures/` and set a path such as:
+the collection's `static/structures/` and set a path such as:
 
 ```toml
 structure_image = "structures/osdb-NNNN.svg"
@@ -145,26 +146,27 @@ sideways inside its own area on screen and wraps to fit the paper when
 printed.
 
 You can compare your structure with
-[`md/procedures/OSDB-0002-aspirin.md`](../md/procedures/OSDB-0002-aspirin.md).
+[`OSDB-0002-aspirin.md`](../examples/demo/md/procedures/OSDB-0002-aspirin.md)
+in the demo collection.
 That file is sample data, not an experimentally verified procedure.
 
 ## 4. Save or send the file
 
-If you have the OrgSynDB repository, save the finished file directly inside
-`md/procedures/`. Do not put it in a subfolder.
+If you have the collection folder, save the finished file directly inside
+its `md/procedures/`. Do not put it in a subfolder.
 
-If you do not have the repository, send the `.md` file to the owner. Tell the
+If you do not have the collection, send the `.md` file to the owner. Tell the
 owner whether you used a procedure number they assigned or left the template
 number in place. The owner can then place, rename, and check it.
 
 ## 5. Check the file
 
 A validator is a program that checks the file for known mistakes. A terminal
-is a window where you type commands. If you have the repository, open a
-terminal in the repository folder and run:
+is a window where you type commands. If you have the collection and the
+OrgSynDB program, open a terminal in the collection folder and run:
 
-```fish
-tools/build.fish validate
+```sh
+orgsyndb validate
 ```
 
 The command exports the owner's Org procedures and then checks every
@@ -197,8 +199,8 @@ can run the same check and send you the messages.
 
 Run:
 
-```fish
-tools/build.fish serve
+```sh
+orgsyndb serve
 ```
 
 Wait for this line:
@@ -217,4 +219,4 @@ does not add the running header and page numbers that the owner's
 WeasyPrint-generated PDFs contain.
 
 The preview does not update while it is running. After an edit, stop it and
-run `tools/build.fish serve` again.
+run `orgsyndb serve` again.

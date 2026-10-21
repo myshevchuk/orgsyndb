@@ -1,6 +1,6 @@
 #+TITLE: OrgSynDB design decisions
 #+CREATED: [2026-10-20 Tue 20:41:42]
-#+LAST_MODIFIED: [2026-10-20 Tue 20:41:42]
+#+LAST_MODIFIED: [2026-10-21 Wed 22:45:00]
 #+AI_MODEL: gpt-5.6-sol
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-20 Tue 20:49] -- #+AI_MODEL corrected from gpt-5 to the pinned run model; theme design link pointed at its archive path
 
@@ -11,6 +11,7 @@ analysis:
 - [[file:../openspec/changes/archive/2026-10-19-add-procedure-schema/design.md][procedure schema design]]
 - [[file:../openspec/changes/archive/2026-10-19-add-build-pipeline/design.md][build pipeline design]]
 - [[file:../openspec/changes/archive/2026-10-20-add-site-theme/design.md][site theme design]]
+- [[file:../openspec/changes/decouple-collection/design.md][collection design]] (not yet archived)
 
 * Governance and formats
 
@@ -159,17 +160,71 @@ analysis:
 - Rejected :: Recursive discovery and continuing every dependent check were
   rejected as incompatible with the site layout or confusing to authors.
 
+* Application and data
+
+** Separate the application from the procedures it publishes
+
+- Decided :: Keep the program, schema, theme, and tests in this repository,
+  and the procedures in collections: directories, normally private Git
+  repositories, that the application builds. The samples form the demo
+  collection ~examples/demo/~.
+- Why :: The application can be developed in public while real procedures,
+  which are company data, stay private; a collection alone is enough to
+  rebuild its site.
+- Rejected :: Keeping procedures in the application repository, a Git
+  submodule for the data inside the application, and a private fork of the
+  whole application were rejected: each mixes public and private history.
+
+** Mark a collection with a versioned file
+
+- Decided :: A collection holds ~orgsyndb.toml~ with exactly ~format = 1~;
+  any other key or value is refused.
+- Why :: The number is the layout contract between two repositories that
+  change independently, and the marker stops a mistyped path from building
+  an empty site.
+- Rejected :: Accepting any directory, and ignoring unknown keys, were
+  rejected.
+
+** Choose the collection as Git chooses its repository
+
+- Decided :: Take ~-C DIR~ before the subcommand, otherwise the nearest
+  directory holding ~orgsyndb.toml~ from the working directory upwards.
+- Why :: Working inside a collection needs no option, scripts and servers
+  can be explicit, and both forms are familiar from ~git -C~ and ~make -C~.
+- Rejected :: An environment variable and defaulting to the demo collection
+  were rejected as invisible or silently wrong.
+
+** Write every build output into the collection
+
+- Decided :: ~build/~, ~public/~, ~pdf/~ and Hugo's resource cache belong to
+  the collection; Hugo runs without a build lock and gets the collection's
+  paths from a generated ~--configDir~ overlay. The application keeps only
+  its fetched-tool caches.
+- Why :: Two collections never share output, and the application's ~site/~
+  stays as checked out; ~--configDir~ accepts paths that ~--config~ would
+  split at commas.
+- Rejected :: Absolute paths in ~site/hugo.toml~, symlinking a collection into
+  ~site/~, and ~HUGO_*~ variables, which cannot express mounts, were
+  rejected.
+
 * Export and build
 
-** Put policy in Python behind a fish entry point
+** Put policy in Python behind a Python entry point
 
-- Decided :: Use ~tools/build.fish~ as the user interface, a standard-library
-  Python core for testable pipeline decisions, and thin Emacs Lisp for Org
-  export.
+- Decided :: Use ~tools/orgsyndb~, a standard-library Python program, as the
+  user interface; a standard-library Python core in ~tools/pipeline.py~ for
+  testable pipeline decisions; and thin Emacs Lisp for Org export. The
+  optional Git hook is POSIX ~sh~.
 - Why :: Timestamp arithmetic, template filling, recovery, hashes, and PDF
   job selection can be unit-tested without exercising every external tool.
-- Rejected :: All-fish logic, timestamp policy in Emacs Lisp, and a separate
-  PDF script were rejected as harder to test or duplicative.
+  Python is already required, so the entry point adds no dependency, and it
+  calls the core in-process.
+- Rejected :: The original fish entry point (~tools/build.fish~) was replaced:
+  fish is an interactive shell that servers do not have. A POSIX ~sh~ entry
+  point, bash, and a Makefile were rejected because the logic around the
+  steps would need Python anyway. All-shell logic, timestamp policy in Emacs
+  Lisp, and a separate PDF script were rejected as harder to test or
+  duplicative.
 
 ** Pin and isolate the Org export packages
 
@@ -200,11 +255,11 @@ analysis:
 - Rejected :: In-place and mtime-based incremental export, delete-then-rename,
   symlink swaps, and output inside committed content were rejected.
 
-** Keep Emacs export state inside the repository
+** Keep Emacs export state out of the owner's directories
 
 - Decided :: Redirect the Emacs user directory, package data, Org persistence,
-  native compilation state, and temporary export files into generated
-  repository directories.
+  and native compilation state into the application's ~.emacs-batch/~, and
+  temporary export files into the collection's ~build/tmp/~.
 - Why :: Batch export must not depend on or modify ~$HOME~ or the inherited
   temporary directory.
 - Rejected :: Loading the owner's Emacs setup or allowing transient state in
@@ -383,7 +438,7 @@ analysis:
 
 ** Generate PDFs through the main build command
 
-- Decided :: Make ~pdf~ a ~build.fish~ subcommand that rebuilds first and
+- Decided :: Make ~pdf~ an ~orgsyndb~ subcommand that rebuilds first and
   names each output after its source file.
 - Why :: The PDFs then come from current validated pages and retain the
   recognizable ~OSDB-NNNN-short-slug.pdf~ name.

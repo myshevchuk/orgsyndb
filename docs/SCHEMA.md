@@ -114,8 +114,9 @@ Omit an optional field when it does not apply.
 | `ai_model` | The model that assisted with the procedure. | Non-empty string | No | Omit the field when no AI assisted. The value `"none"` is an error. | `ai_model = "example-model-1"` |
 
 The `--static-dir` argument controls where the validator resolves a
-`structure_image`. Without that argument, it uses
-`site/static` relative to the repository.
+`structure_image`. Without that argument, it uses `static` in the current
+directory, which is right when the validator runs from a collection's root.
+`orgsyndb validate` always passes the collection's `static/`.
 
 ## Tolerated, rejected, and unknown keys
 
@@ -244,9 +245,10 @@ tools/validate.py [--org-root DIR]... [--vocabulary FILE] [--static-dir DIR] [CO
 
 Each positional `CONTENT_ROOT` is a directory of Markdown procedures.
 Repeat `--org-root DIR` for multiple directories of Org sources. If omitted,
-`--vocabulary` defaults to `site/data/reaction_types.toml` and
-`--static-dir` defaults to `site/static`, both resolved from the script's
-repository rather than from the current directory.
+`--vocabulary` defaults to the application's
+`site/data/reaction_types.toml`, resolved from the script's location rather
+than from the current directory, and `--static-dir` defaults to `static` in
+the current directory.
 
 Each problem is one line on standard output:
 
