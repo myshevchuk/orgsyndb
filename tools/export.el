@@ -163,9 +163,11 @@ after all plain keys."
           (insert-file-contents .source))
         (org-mode)
         (goto-char (point-min))
+        ;; Org replaces the extension of the export file name, so a
+        ;; bare stem such as OSDB-0001-x.de would lose its language code.
         (insert "#+DATE: " .date "\n"
                 "#+HUGO_LASTMOD: " .lastmod "\n"
-                "#+EXPORT_FILE_NAME: " .stem "\n")
+                "#+EXPORT_FILE_NAME: " .stem ".md\n")
         (when .ai_model
           (insert "#+HUGO_CUSTOM_FRONT_MATTER: :ai_model "
                   (prin1-to-string .ai_model) "\n"))

@@ -44,7 +44,8 @@ class SampleMarkingTests(unittest.TestCase):
                     self.assertRegex(author, r"^[A-Z]\. Example$")
                 self.assertIsNotNone(sample.ai_model,
                                      "ai model absent or none")
-                self.assertIn("not experimentally verified", sample.summary)
+                self.assertIn(sample.terms["unverified"],
+                              " ".join(sample.summary.split()))
 
 
 class SampleQuantityTests(unittest.TestCase):
@@ -101,6 +102,32 @@ class QuantityRuleCheckerTests(unittest.TestCase):
             with self.subTest(rule=rule):
                 self.assertNotEqual(sup.quantity_violations(sample), [])
 
+    def german(self) -> sup.Sample:
+        """The good table as a German translation writes it."""
+        base = self.good()
+        table = [sup.TERMS["de"]["header"],
+                 ["Methylsalicylat", "119-36-8", "152,15", "7,61 g (6 mL)",
+                  "50,0", "1,0"],
+                 ["Natriumhydroxid", "1310-73-2", "40,00", "6,00 g", "150",
+                  "3,0"],
+                 ["Phosphorsäure, 85 %", "7664-38-2", "97,99", "5 Tropfen",
+                  "kat.", "kat."]]
+        return base._replace(path=base.path.with_suffix(".de.org"),
+                             table=table)
+
+    def test_a_german_table_is_read_with_decimal_commas(self) -> None:
+        """Scenario: Translated sample tables are consistent (checker)."""
+        german = self.german()
+        self.assertEqual(german.language, "de")
+        self.assertEqual(sup.quantity_violations(german), [])
+        table = [list(r) for r in german.table]
+        table[2][4] = "100"
+        self.assertNotEqual(
+            sup.quantity_violations(german._replace(table=table)), [])
+        self.assertNotEqual(sup.quantity_violations(
+            german._replace(table=self.good().table)), [],
+            "a German sample must use the German columns")
+
 
 EXPECTED_SAMPLES = {
     "org/procedures/OSDB-0003-isopentyl-acetate.org": (
@@ -139,7 +166,7 @@ class ThemeSampleSetTests(unittest.TestCase):
                 product = sample.data.get("product", {})
                 self.assertEqual(product.get("formula"), formula)
                 self.assertEqual(product.get("cas"), cas)
-        found = samples()
+        found = [s for s in samples() if s.language == "en"]
         self.assertEqual(
             sum(s.path.suffix == ".org" for s in found), 6,
             "number of Org samples")
@@ -188,3 +215,42 @@ class LongSampleTests(unittest.TestCase):
         full = [r for r in rows if len(r) == 6 and r[4] != "cat."]
         self.assertGreaterEqual(len(full), 4)
         self.assertGreaterEqual(max((len(r[0]) for r in rows), default=0), 40)
+
+
+class GermanSampleTests(unittest.TestCase):
+    def test_every_sample_has_a_german_translation(self) -> None:
+        """Scenario: Every sample has a German translation."""
+        for relative in EXPECTED_SAMPLES:
+            original = DEMO / relative
+            translation = original.with_suffix(".de" + original.suffix)
+            with self.subTest(file=translation.name):
+                self.assertTrue(translation.is_file(),
+                                f"{translation.name} is missing")
+                read = (sup.read_org if original.suffix == ".org"
+                        else sup.read_markdown)
+                english, german = read(original), read(translation)
+                self.assertEqual(german.language, "de")
+                for key in ("id", "status", "reaction_types", "tags",
+                            "yield_percent", "precursors",
+                            "structure_image", "authors"):
+                    self.assertEqual(german.data.get(key),
+                                     english.data.get(key), key)
+                for key in ("formula", "mw", "smiles", "cas"):
+                    self.assertEqual(
+                        german.data.get("product", {}).get(key),
+                        english.data.get("product", {}).get(key), key)
+                self.assertTrue(german.data.get("product", {}).get("name"))
+                self.assertEqual(len(german.table), len(english.table))
+
+    def test_the_german_long_sample_is_long(self) -> None:
+        """Scenario: Every sample has a German translation (long
+        sample)."""
+        path = LONG_SAMPLE.with_suffix(".de.org")
+        sections = sup.org_sections(path.read_text(encoding="utf-8"))
+        terms = sup.TERMS["de"]
+
+        def numbered(name: str) -> int:
+            return len(re.findall(r"(?m)^\d+\. ", sections.get(name, "")))
+
+        self.assertGreaterEqual(numbered(terms["procedure"]), 15)
+        self.assertGreaterEqual(numbered(terms["notes"]), 6)

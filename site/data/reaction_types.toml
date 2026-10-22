@@ -1,49 +1,65 @@
 # Controlled vocabulary for the reaction_types front-matter field.
 # Each table name is a reaction-type slug (lowercase, hyphenated); its
-# label is the name shown on the site. A procedure's reaction_types
-# must hold exactly one of these slugs.
+# label is the name shown on the English site, and label_de the name on
+# the German site (label when label_de is missing). A procedure's
+# reaction_types must hold exactly one of these slugs.
 
 [acylation]
 label = "Acylation"
+label_de = "Acylierung"
 
 [aldol-condensation]
 label = "Aldol condensation"
+label_de = "Aldolkondensation"
 
 [alkylation]
 label = "Alkylation"
+label_de = "Alkylierung"
 
 [amide-coupling]
 label = "Amide coupling"
+label_de = "Amidkupplung"
 
 [cross-coupling]
 label = "Cross-coupling"
+label_de = "Kreuzkupplung"
 
 [cycloaddition]
 label = "Cycloaddition"
+label_de = "Cycloaddition"
 
 [deprotection]
 label = "Deprotection"
+label_de = "Entschützung"
 
 [esterification]
 label = "Esterification"
+label_de = "Veresterung"
 
 [hydrolysis]
 label = "Hydrolysis"
+label_de = "Hydrolyse"
 
 [nucleophilic-substitution]
 label = "Nucleophilic substitution"
+label_de = "Nucleophile Substitution"
 
 [olefination]
 label = "Olefination"
+label_de = "Olefinierung"
 
 [oxidation]
 label = "Oxidation"
+label_de = "Oxidation"
 
 [protection]
 label = "Protection"
+label_de = "Schützung"
 
 [reduction]
 label = "Reduction"
+label_de = "Reduktion"
 
 [reductive-amination]
 label = "Reductive amination"
+label_de = "Reduktive Aminierung"

@@ -91,13 +91,21 @@ def berlin() -> dt.tzinfo:
 # Pure functions
 
 
-def slugify(title: str) -> str:
+# German transliteration, applied to German titles before ASCII folding.
+GERMAN_FOLDS = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae",
+                              "Ö": "Oe", "Ü": "Ue", "ß": "ss", "ẞ": "SS"})
+
+
+def slugify(title: str, language: str = validate.DEFAULT_LANGUAGE) -> str:
     """Return the short ASCII slug of ``title``.
 
     The slug matches ``[a-z0-9]+(-[a-z0-9]+)*`` and has at most 40
     characters; a longer one is cut at its last hyphen within the limit.
+    A German title first has its umlauts and ß written out (ä → ae).
     Raises ValueError when no ASCII letter or digit survives.
     """
+    if language == "de":
+        title = title.translate(GERMAN_FOLDS)
     folded = unicodedata.normalize("NFKD", title).encode(
         "ascii", "ignore").decode("ascii").lower()
     slug = re.sub(r"[^a-z0-9]+", "-", folded).strip("-")
@@ -255,16 +263,23 @@ def pdf_jobs(files: Iterable[tuple[Path, dict[str, Any]]], public: Path,
     """Return the PDF jobs for ``(content path, front matter)`` pairs.
 
     Each job renders ``public/procedures/<slug>/index.html`` to
-    ``pdf_dir/<content file stem>.pdf``. The jobs are sorted by PDF name.
-    Raises ValueError naming the expected HTML path when a page is
-    missing, or when a front matter has no string ``slug``.
+    ``pdf_dir/<content file stem>.pdf``; a file in another language than
+    the default, such as ``OSDB-0001-x.de.md``, renders
+    ``public/de/procedures/<slug>/index.html`` to ``OSDB-0001-x.de.pdf``.
+    The jobs are sorted by PDF name. Raises ValueError naming the
+    expected HTML path when a page is missing, or when a front matter has
+    no string ``slug``.
     """
     jobs = []
     for path, data in files:
         slug = data.get("slug")
         if not isinstance(slug, str) or not slug:
             raise ValueError(f"{path}: front matter has no slug")
-        html = Path(public) / "procedures" / slug / "index.html"
+        language = validate.language_of(Path(path).name)
+        root = Path(public)
+        if language != validate.DEFAULT_LANGUAGE:
+            root = root / language
+        html = root / "procedures" / slug / "index.html"
         if not html.is_file():
             raise ValueError(f"{path}: page {html} does not exist; build "
                              "the site first")
@@ -735,20 +750,35 @@ def cmd_next_id(args: argparse.Namespace) -> int:
     return 0
 
 
+def template_path(kind: str, language: str) -> Path:
+    """Return the application's procedure template of ``kind`` in
+    ``language``: ``templates/procedure.<kind>``, or
+    ``templates/procedure.<language>.<kind>`` for another language."""
+    if language == validate.DEFAULT_LANGUAGE:
+        return TEMPLATES / f"procedure.{kind}"
+    return TEMPLATES / f"procedure.{language}.{kind}"
+
+
 def new_procedure(collection: Path, words: Sequence[str], md: bool,
-                  ai_model: str | None, now: dt.datetime | None = None
-                  ) -> Path:
+                  ai_model: str | None, now: dt.datetime | None = None,
+                  language: str = validate.DEFAULT_LANGUAGE) -> Path:
     """Create a procedure stub in ``collection``; return its relative path.
 
-    Raises UsageError for a bad title or model identifier, and ValueError
-    when the file exists or the template cannot be filled.
+    The stub is written in ``language`` from that language's template;
+    outside the default language, its file name carries the language
+    code, as in ``OSDB-0009-titel.de.org``. Raises UsageError for a bad
+    title, model identifier or language, and ValueError when the file
+    exists or the template cannot be filled.
     """
     if ai_model is not None and not validate.AI_MODEL_RE.match(ai_model):
         raise UsageError(f"--ai-model {ai_model!r} must match "
                          f"{validate.AI_MODEL_RE.pattern}")
+    if language not in validate.LANGUAGES:
+        raise UsageError(f"--lang {language!r} must be one of "
+                         f"{', '.join(validate.LANGUAGES)}")
     title = _new_title(words)
     try:
-        slug = slugify(title)
+        slug = slugify(title, language)
     except ValueError as exc:
         raise UsageError(str(exc)) from None
     if now is None:
@@ -756,10 +786,12 @@ def new_procedure(collection: Path, words: Sequence[str], md: bool,
     collection = Path(collection)
     kind = "md" if md else "org"
     ident = next_id(candidate_names(collection, _warn))
-    template = TEMPLATES / f"procedure.{kind}"
+    template = template_path(kind, language)
     text = fill_template(template.read_text(encoding="utf-8"), kind, ident,
                          title, now, ai_model)
-    relative = Path(SOURCE_TREES[kind == "md"]) / f"{ident}-{slug}.{kind}"
+    code = "" if language == validate.DEFAULT_LANGUAGE else f".{language}"
+    relative = (Path(SOURCE_TREES[kind == "md"])
+                / f"{ident}-{slug}{code}.{kind}")
     target = collection / relative
     target.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -773,7 +805,7 @@ def new_procedure(collection: Path, words: Sequence[str], md: bool,
 def cmd_new(args: argparse.Namespace) -> int:
     """Create a procedure stub and print its collection-relative path."""
     relative = new_procedure(Path(args.collection), args.title, args.md,
-                             args.ai_model, _now(args.now))
+                             args.ai_model, _now(args.now), args.lang)
     print(relative.as_posix())
     return 0
 
@@ -842,13 +874,18 @@ def build_parser() -> argparse.ArgumentParser:
         description="Create org/procedures/<ID>-<slug>.org, or "
         "md/procedures/<ID>-<slug>.md with --md, in COLLECTION from the "
         "application's template, and print its path relative to "
-        "COLLECTION.")
+        "COLLECTION. With --lang de, the stub is German and its name ends "
+        "in .de.org or .de.md.")
     new.add_argument("--collection", required=True, metavar="COLLECTION")
     new.add_argument("--md", action="store_true",
                      help="create a Markdown procedure")
     new.add_argument("--ai-model", metavar="ID",
                      help="identifier of the AI model writing it (default: "
                      "a human author)")
+    new.add_argument("--lang", default=validate.DEFAULT_LANGUAGE,
+                     choices=validate.LANGUAGES,
+                     help="language of the procedure (default: "
+                     f"{validate.DEFAULT_LANGUAGE})")
     new.add_argument("--now", metavar="DATETIME",
                      help="ISO 8601 date and time with offset to use "
                      "instead of the current time")

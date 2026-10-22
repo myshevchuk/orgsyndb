@@ -1,5 +1,6 @@
-{{- /* Links between the two all-procedures lists; the current order's link
-carries aria-current="page". Takes the current list's URL. */ -}}
-<p class="sort-links">Sort:
-<a href="/procedures/"{{ if eq . "/procedures/" }} aria-current="page"{{ end }}>by ID</a> ·
-<a href="/procedures-by-date/"{{ if eq . "/procedures-by-date/" }} aria-current="page"{{ end }}>by date created, newest first</a></p>
+{{- /* Links between the two all-procedures lists of the current language;
+the current order's link carries aria-current="page". Takes the current
+list's path without the language prefix. */ -}}
+<p class="sort-links">{{ T "sort" }}
+<a href="{{ "/procedures/" | relLangURL }}"{{ if eq . "/procedures/" }} aria-current="page"{{ end }}>{{ T "sort_by_id" }}</a> ·
+<a href="{{ "/procedures-by-date/" | relLangURL }}"{{ if eq . "/procedures-by-date/" }} aria-current="page"{{ end }}>{{ T "sort_by_date" }}</a></p>

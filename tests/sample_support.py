@@ -7,6 +7,19 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 HEADER = ["Reagent", "CAS", "MW (g/mol)", "Amount", "mmol", "Equiv"]
+# What the rules look for in a sample of each language: the Reagents
+# table header, the section names, the catalyst marker and the Summary
+# phrase. German samples write decimal commas.
+TERMS = {
+    "en": {"header": HEADER, "summary": "Summary", "reagents": "Reagents",
+           "procedure": "Procedure", "notes": "Notes", "catalyst": "cat.",
+           "unverified": "not experimentally verified"},
+    "de": {"header": ["Reagenz", "CAS", "M (g/mol)", "Menge", "mmol",
+                      "Äquiv."],
+           "summary": "Zusammenfassung", "reagents": "Reagenzien",
+           "procedure": "Durchführung", "notes": "Anmerkungen",
+           "catalyst": "kat.", "unverified": "nicht experimentell überprüft"},
+}
 WEIGHTS = {"C": 12.011, "H": 1.008, "N": 14.007, "O": 15.999, "Na": 22.990,
            "P": 30.974, "S": 32.06, "Cl": 35.45, "K": 39.098, "Br": 79.904}
 
@@ -17,6 +30,25 @@ class Sample(NamedTuple):
     ai_model: str | None       # None when absent or "none"
     summary: str
     table: list[list[str]]     # rows below the header, cells stripped
+
+    @property
+    def language(self) -> str:
+        return language_of(self.path)
+
+    @property
+    def terms(self) -> dict[str, Any]:
+        return TERMS[self.language]
+
+
+def language_of(path: Path) -> str:
+    """``de`` for ``*.de.org`` and ``*.de.md``, else ``en``."""
+    suffixes = path.suffixes
+    return suffixes[-2][1:] if len(suffixes) > 1 else "en"
+
+
+def number(text: str) -> float:
+    """A table number, with a decimal point or a German decimal comma."""
+    return float(text.replace(",", "."))
 
 
 # --- reading ---------------------------------------------------------------
@@ -139,9 +171,10 @@ def read_org(path: Path) -> Sample:
     data["tags"] = keywords.get("HUGO_TAGS", "").split()
     model = keywords.get("AI_MODEL")
     sections = org_sections(text)
-    rows = table_rows(sections.get("Reagents", ""))
+    terms = TERMS[language_of(path)]
+    rows = table_rows(sections.get(terms["reagents"], ""))
     return Sample(path, data, None if model in (None, "none") else model,
-                  sections.get("Summary", ""), rows)
+                  sections.get(terms["summary"], ""), rows)
 
 
 def read_markdown(path: Path) -> Sample:
@@ -149,14 +182,15 @@ def read_markdown(path: Path) -> Sample:
     end = lines.index("+++", 1)
     data = tomllib.loads("\n".join(lines[1:end]))
     sections = md_sections("\n".join(lines[end + 1:]))
+    terms = TERMS[language_of(path)]
     return Sample(path, data, data.get("ai_model"),
-                  sections.get("Summary", ""),
-                  table_rows(sections.get("Reagents", "")))
+                  sections.get(terms["summary"], ""),
+                  table_rows(sections.get(terms["reagents"], "")))
 
 
 def sample_procedures(repo: Path) -> list[Sample]:
-    """Every procedure in org/procedures/ and md/procedures/ whose tags
-    include ``sample-data``."""
+    """Every procedure in org/procedures/ and md/procedures/, in any
+    language, whose tags include ``sample-data``."""
     found = []
     for path in sorted((repo / "org" / "procedures").glob("OSDB-*.org")):
         found.append(read_org(path))
@@ -185,37 +219,38 @@ def formula_weight(formula: str) -> float:
 def quantity_violations(sample: Sample) -> list[str]:
     """Return the quantity rules the sample's Reagents table breaks."""
     problems = []
-    if not sample.table or sample.table[0] != HEADER:
-        return [f"columns are {sample.table[:1]}, not {HEADER}"]
+    header = sample.terms["header"]
+    if not sample.table or sample.table[0] != header:
+        return [f"columns are {sample.table[:1]}, not {header}"]
     rows = sample.table[1:]
     if not rows:
         return ["Reagents table has no rows"]
     for cells in rows:
-        if len(cells) != len(HEADER):
+        if len(cells) != len(header):
             problems.append(f"row {cells} has {len(cells)} cells")
-    rows = [r for r in rows if len(r) == len(HEADER)]
+    rows = [r for r in rows if len(r) == len(header)]
     for name, cas, _mw, _amount, _mmol, _equiv in rows:
         if not cas_ok(cas):
             problems.append(f"{name}: CAS {cas} fails the check digit")
-    full = [r for r in rows if "cat." not in (r[4], r[5])]
+    full = [r for r in rows if sample.terms["catalyst"] not in (r[4], r[5])]
     for name, _cas, mw, amount, mmol, _equiv in full:
-        mass = re.match(r"^(\d+(?:\.\d+)?) g(?:\s|$)", amount)
+        mass = re.match(r"^(\d+(?:[.,]\d+)?) g(?:\s|$)", amount)
         if mass:
-            expected = 1000 * float(mass.group(1)) / float(mw)
-            if abs(float(mmol) - expected) > 0.01 * expected:
+            expected = 1000 * number(mass.group(1)) / number(mw)
+            if abs(number(mmol) - expected) > 0.01 * expected:
                 problems.append(
                     f"{name}: {mmol} mmol, expected {expected:.2f}")
-    limiting = [r for r in full if float(r[5]) == 1.0]
+    limiting = [r for r in full if number(r[5]) == 1.0]
     if len(limiting) != 1:
         problems.append(f"{len(limiting)} rows have Equiv 1.0, not one")
         return problems
-    base = float(limiting[0][4])
+    base = number(limiting[0][4])
     for name, _c, _m, _a, mmol, equiv in full:
-        if abs(float(equiv) - float(mmol) / base) > 0.05:
+        if abs(number(equiv) - number(mmol) / base) > 0.05:
             problems.append(f"{name}: Equiv {equiv} vs {mmol}/{base:g}")
-    scale = re.fullmatch(r"(\d+(?:\.\d+)?) mmol", str(
+    scale = re.fullmatch(r"(\d+(?:[.,]\d+)?) mmol", str(
         sample.data.get("scale", "")))
-    if scale and abs(float(scale.group(1)) - base) > 0.01 * base:
+    if scale and abs(number(scale.group(1)) - base) > 0.01 * base:
         problems.append(f"scale {scale.group(1)} mmol vs limiting {base:g}")
     product = sample.data.get("product", {})
     try:

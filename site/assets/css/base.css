@@ -78,6 +78,7 @@ button {
   padding: 0;
 }
 .site-header li + li { margin-top: 0; }
+.language-switch { margin-left: auto; font-size: 0.875rem; }
 
 main { padding: var(--space-3) 0 var(--space-5); }
 

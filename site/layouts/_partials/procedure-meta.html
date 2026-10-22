@@ -1,61 +1,62 @@
 {{- /* The metadata panel: one dt/dd pair per field that is set, in the
-canonical order. A newline separates every </dt> from its <dd>, so that
-Pagefind indexes each label and value as separate words. */ -}}
+canonical order, labelled in the page's language. A newline separates
+every </dt> from its <dd>, so that Pagefind indexes each label and value
+as separate words. */ -}}
 {{ $p := .Params -}}
 {{ $product := $p.product | default dict -}}
 <dl class="metadata">
-<dt>ID</dt>
+<dt>{{ T "label_id" }}</dt>
 <dd>{{ $p.id }}</dd>
 {{ with $product.name -}}
-<dt>Product</dt>
+<dt>{{ T "label_product" }}</dt>
 <dd>{{ . }}</dd>
 {{ end -}}
 {{ with $product.formula -}}
-<dt>Formula</dt>
+<dt>{{ T "label_formula" }}</dt>
 <dd>{{ . | htmlEscape | replaceRE "([0-9]+)" "<sub>$1</sub>" | safeHTML }}</dd>
 {{ end -}}
 {{ if isset $product "mw" -}}
-<dt>MW</dt>
-<dd>{{ $product.mw }} g/mol</dd>
+<dt>{{ T "label_mw" }}</dt>
+<dd>{{ partial "decimal.html" $product.mw }} g/mol</dd>
 {{ end -}}
 {{ with $product.cas -}}
-<dt>CAS</dt>
+<dt>{{ T "label_cas" }}</dt>
 <dd>{{ . }}</dd>
 {{ end -}}
 {{ with $product.smiles -}}
-<dt>SMILES</dt>
-<dd><code data-smiles>{{ . }}</code> <button type="button" class="copy-button" data-copy-smiles data-pagefind-ignore hidden>Copy</button></dd>
+<dt>{{ T "label_smiles" }}</dt>
+<dd><code data-smiles>{{ . }}</code> <button type="button" class="copy-button" data-copy-smiles data-copied="{{ T "copied" }}" data-selected="{{ T "selected" }}" data-pagefind-ignore hidden>{{ T "copy" }}</button></dd>
 {{ end -}}
 {{ with $p.scale -}}
-<dt>Scale</dt>
+<dt>{{ T "label_scale" }}</dt>
 <dd>{{ . }}</dd>
 {{ end -}}
 {{ if isset $p "yield_percent" -}}
-<dt>Yield</dt>
-<dd>{{ $p.yield_percent }} %</dd>
+<dt>{{ T "label_yield" }}</dt>
+<dd>{{ partial "decimal.html" $p.yield_percent }} %</dd>
 {{ end -}}
 {{ with .GetTerms "reaction_types" -}}
-<dt>Reaction type</dt>
-<dd>{{ range $i, $term := . }}{{ if $i }}, {{ end }}<a href="{{ $term.RelPermalink }}" data-pagefind-filter="reaction type">{{ partial "reaction-type-label.html" $term.Data.Term }}</a>{{ end }}</dd>
+<dt>{{ T "label_reaction_type" }}</dt>
+<dd>{{ range $i, $term := . }}{{ if $i }}, {{ end }}<a href="{{ $term.RelPermalink }}" data-pagefind-filter="{{ T "filter_reaction_type" }}">{{ partial "reaction-type-label.html" $term.Data.Term }}</a>{{ end }}</dd>
 {{ end -}}
 {{ with .GetTerms "tags" -}}
-<dt>Tags</dt>
-<dd>{{ range $i, $term := . }}{{ if $i }}, {{ end }}<a href="{{ $term.RelPermalink }}" data-pagefind-filter="tag">{{ $term.Data.Term }}</a>{{ end }}</dd>
+<dt>{{ T "label_tags" }}</dt>
+<dd>{{ range $i, $term := . }}{{ if $i }}, {{ end }}<a href="{{ $term.RelPermalink }}" data-pagefind-filter="{{ T "filter_tag" }}">{{ $term.Data.Term }}</a>{{ end }}</dd>
 {{ end -}}
 {{ with .GetTerms "authors" -}}
-<dt>Authors</dt>
-<dd>{{ range $i, $term := . }}{{ if $i }}, {{ end }}<a href="{{ $term.RelPermalink }}" data-pagefind-filter="author">{{ $term.Title }}</a>{{ end }}</dd>
+<dt>{{ T "label_authors" }}</dt>
+<dd>{{ range $i, $term := . }}{{ if $i }}, {{ end }}<a href="{{ $term.RelPermalink }}" data-pagefind-filter="{{ T "filter_author" }}">{{ $term.Title }}</a>{{ end }}</dd>
 {{ end -}}
 {{ with $p.checked_by -}}
-<dt>Checked by</dt>
+<dt>{{ T "label_checked_by" }}</dt>
 <dd>{{ delimit . ", " }}</dd>
 {{ end -}}
 {{ if not .Date.IsZero -}}
-<dt>Created</dt>
+<dt>{{ T "label_created" }}</dt>
 <dd><time datetime="{{ .Date.Format "2006-01-02T15:04:05Z07:00" }}">{{ .Date.Format "2006-01-02 15:04" }}</time></dd>
 {{ end -}}
 {{ if not .Lastmod.IsZero -}}
-<dt>Modified</dt>
+<dt>{{ T "label_modified" }}</dt>
 <dd><time datetime="{{ .Lastmod.Format "2006-01-02T15:04:05Z07:00" }}">{{ .Lastmod.Format "2006-01-02 15:04" }}</time></dd>
 {{ end -}}
 {{ partial "procedure-links.html" . -}}

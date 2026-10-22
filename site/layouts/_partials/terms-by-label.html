@@ -1,0 +1,11 @@
+{{- /* The terms of a taxonomy, sorted by their display name in the current
+language: the vocabulary label for reaction types, so that German labels
+sort as German words, and the term name otherwise. Takes the taxonomy's
+plural name; returns a slice of dicts with the keys label and term. */ -}}
+{{- $terms := slice -}}
+{{- range (index site.Taxonomies .).Alphabetical -}}
+{{- $label := .Name -}}
+{{- if eq $ "reaction_types" }}{{ $label = partial "reaction-type-label.html" .Name }}{{ end -}}
+{{- $terms = $terms | append (dict "label" $label "term" .) -}}
+{{- end -}}
+{{- return sort $terms "label" -}}

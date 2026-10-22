@@ -3,7 +3,7 @@
 <h1>{{ .Title }}</h1>
 <div class="search" data-search></div>
 <noscript>
-<p>Search needs JavaScript. Without it, browse <a href="/procedures/">all procedures</a>, or by <a href="/reaction_types/">reaction type</a>, <a href="/tags/">tag</a> or <a href="/authors/">author</a>.</p>
+<p>{{ T "search_noscript" (dict "procedures" ("/procedures/" | relLangURL) "reaction_types" ("/reaction_types/" | relLangURL) "tags" ("/tags/" | relLangURL) "authors" ("/authors/" | relLangURL)) | safeHTML }}</p>
 </noscript>
 {{ end }}
 {{ define "scripts" -}}

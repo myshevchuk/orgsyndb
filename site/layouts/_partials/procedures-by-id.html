@@ -1,0 +1,14 @@
+{{- /* Every procedure ID to one page: the page in the current language if
+there is one, else the page in the first other language, by weight. */ -}}
+{{- $found := dict -}}
+{{- range where site.RegularPages "Section" "procedures" -}}
+{{- $found = merge $found (dict .Params.id .) -}}
+{{- end -}}
+{{- range hugo.Sites -}}
+{{- if ne .Language.Lang site.Language.Lang -}}
+{{- range where .RegularPages "Section" "procedures" -}}
+{{- if not (isset $found .Params.id) }}{{ $found = merge $found (dict .Params.id .) }}{{ end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- return $found -}}
