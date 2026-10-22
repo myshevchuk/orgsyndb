@@ -2,9 +2,13 @@
 {{ define "main" -}}
 {{ partial "procedure-header.html" . -}}
 <article class="procedure"{{ with .Params.language }}{{ if ne . site.Language.Lang }} lang="{{ . }}"{{ end }}{{ end }} data-pagefind-body>
+<div class="procedure-details">
 {{ partial "procedure-meta.html" . -}}
 {{ partial "structure.html" . -}}
+</div>
+<div class="procedure-content">
 {{ .Content }}
+</div>
 {{ partial "smiles-index.html" . -}}
 </article>
 {{ end }}

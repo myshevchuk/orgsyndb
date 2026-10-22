@@ -302,9 +302,10 @@ class ShippedSiteTests(SiteCase):
         for outside in (h1, marked):
             self.assertFalse(outside.within(article),
                              f"{outside.tag} lies inside the article")
-        panel = article.elements()[0]
-        self.assertEqual(panel.tag, "dl")
-        self.assertIn("metadata", panel.classes)
+        # The desktop columns wrap the details and body; reading and
+        # indexing order still starts with the metadata panel.
+        panel = article.find("dl", "metadata")
+        self.assertIsNotNone(panel, "no dl.metadata")
         figure = article.find("figure", "structure")
         summary = page.heading("Summary")
         index = article.find("span", data_smiles_index=True)

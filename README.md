@@ -10,6 +10,11 @@ resources from the internet. It has a responsive light and dark theme,
 full-text search, browse pages, and an A4 print layout. Its interface is
 German by default and can be switched to English.
 
+The browser layout is optimized for desktop work: wide procedure tables,
+recent procedures beside the browse links, and procedure details beside
+the readable procedure text. Narrow windows stack these panels; printing
+uses the separate single-column A4 layout.
+
 ## Application and collections
 
 This repository is the application: the build program, the validator, the

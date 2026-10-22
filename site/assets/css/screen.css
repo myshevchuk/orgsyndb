@@ -43,3 +43,106 @@
 
 button:hover { border-color: var(--muted); }
 .site-header a:hover, .site-title:hover { text-decoration: underline; }
+
+/* Desktop is the primary workspace. Keep the page shell wide for data
+   tables and use separate columns for browsing and procedure details.
+   These rules live here so the A4 layout keeps its single-column flow. */
+body {
+  max-width: 96rem;
+  padding: 0 2.5rem;
+}
+
+.site-header {
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+  padding: var(--space-4) 0;
+}
+.site-title { font-size: 1.25rem; }
+.site-header ul { gap: var(--space-2) var(--space-4); }
+main { padding: var(--space-5) 0; }
+h1 { font-size: 2.25rem; }
+
+.home-intro { margin-bottom: var(--space-5); }
+.lede { max-width: var(--measure); }
+.search-form { max-width: 60rem; }
+.search-form label { flex-basis: 100%; font-weight: 600; }
+.search-form input, .search-form button { padding: 0.6rem 0.75rem; }
+
+.home-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 19rem;
+  gap: var(--space-5);
+  align-items: start;
+}
+.home-recent, .home-browse, .procedure-details, .procedure-content { min-width: 0; }
+.home-layout h2:first-child { margin-top: 0; }
+.home-browse {
+  border-left: 1px solid var(--border);
+  padding-left: var(--space-4);
+}
+.home-browse section + section { margin-top: var(--space-5); }
+.home-browse .term-list { list-style: none; padding: 0; }
+.home-browse .term-list li + li { margin-top: var(--space-2); }
+.home-browse .term-list--inline { gap: var(--space-2) var(--space-3); }
+.home-browse .term-list--inline li + li { margin-top: 0; }
+
+.procedure-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.procedure-header .procedure-id, .procedure-header h1 { grid-column: 1; }
+.procedure-header h1 { margin-bottom: 0; }
+.procedure-header .actions { grid-column: 2; grid-row: 1 / 3; align-self: center; }
+.procedure {
+  display: grid;
+  grid-template-columns: 23rem minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+.procedure-content > :first-child { margin-top: 0; }
+.procedure-content > p, .procedure-content > ul, .procedure-content > ol {
+  max-width: 78ch;
+}
+.procedure-details .metadata { margin-bottom: var(--space-4); }
+.structure img { margin: 0 auto; }
+.structure__slot { max-width: none; }
+
+.procedure-list { width: 100%; }
+.procedure-list th, .procedure-list td { padding: 0.65rem 0.75rem; }
+.procedure-list thead { background: var(--surface); }
+.procedure-list tbody tr:hover { background: var(--surface); }
+.procedure-list th:first-child, .procedure-list td:first-child,
+.procedure-list time { white-space: nowrap; }
+.procedure-content table { width: 100%; }
+
+/* Pagefind already provides a filter column. Let it use the desktop
+   canvas and prevent long result titles or SMILES from widening it. */
+.search { max-width: 80rem; }
+.search .pagefind-ui__result { min-width: 0; overflow-wrap: anywhere; }
+
+/* A narrow browser window still has a complete reading order. */
+@media (max-width: 70rem) {
+  body { padding: 0 var(--space-4); }
+  .home-layout { grid-template-columns: minmax(0, 1fr); }
+  .home-browse {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-5);
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    padding: var(--space-4) 0 0;
+  }
+  .home-browse section + section { margin-top: 0; }
+  .procedure { grid-template-columns: 20rem minmax(0, 1fr); gap: var(--space-4); }
+}
+@media (max-width: 55rem) {
+  .procedure { grid-template-columns: minmax(0, 1fr); }
+  .procedure-header { display: block; }
+  .procedure-header .actions { margin-top: var(--space-3); }
+}
+@media (max-width: 35rem) {
+  body { padding: 0 var(--space-3); }
+  .home-browse { grid-template-columns: minmax(0, 1fr); }
+}
