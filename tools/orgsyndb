@@ -66,7 +66,8 @@ Options:
 Subcommands:
   export              export org/procedures/*.org to build/export/
   validate [ARGS...]  export, then validate every procedure; with ARGS,
-                      run tools/validate.py ARGS... without exporting
+                      run tools/validate.py ARGS... in the working
+                      directory without exporting (then -C is an error)
   build               export, validate, build the site into public/ and
                       index it with Pagefind
   serve [--port N]    build, then serve public/ on http://127.0.0.1:N/
@@ -268,25 +269,29 @@ def no_arguments(name: str, args: Sequence[str]) -> None:
 
 def cmd_export(option: str | None, args: Sequence[str]) -> int:
     no_arguments("export", args)
-    require_tools(*EXPORT_TOOLS)
     enter_collection(option)
+    require_tools(*EXPORT_TOOLS)
     run_export()
     return 0
 
 
 def cmd_validate(option: str | None, args: Sequence[str]) -> int:
     if args:
+        if option is not None:
+            raise UsageError("validate with arguments takes no -C: it runs "
+                             "tools/validate.py in the working directory")
         return validate.main(list(args))
-    require_tools(*EXPORT_TOOLS)
     enter_collection(option)
+    require_tools(*EXPORT_TOOLS)
     run_export()
     return run_validator()
 
 
 def cmd_build(option: str | None, args: Sequence[str]) -> int:
     no_arguments("build", args)
+    collection = enter_collection(option)
     require_tools(*BUILD_TOOLS)
-    run_build(enter_collection(option))
+    run_build(collection)
     return 0
 
 
@@ -299,8 +304,8 @@ def cmd_serve(option: str | None, args: Sequence[str]) -> int:
         raise UsageError(f"--port must be a number from 1 to 65535: "
                          f"{port_text}")
     port = int(port_text)
-    require_tools(*BUILD_TOOLS)
     collection = enter_collection(option)
+    require_tools(*BUILD_TOOLS)
     run_build(collection)
     handler = functools.partial(http.server.SimpleHTTPRequestHandler,
                                 directory=str(collection / "public"))
@@ -320,8 +325,9 @@ def cmd_serve(option: str | None, args: Sequence[str]) -> int:
 
 def cmd_pdf(option: str | None, args: Sequence[str]) -> int:
     no_arguments("pdf", args)
+    collection = enter_collection(option)
     require_tools(*BUILD_TOOLS, "weasyprint")
-    run_build(enter_collection(option))
+    run_build(collection)
     step("pdf: rendering procedure pages into pdf/")
     pdf_dir = Path("pdf")
     remove(pdf_dir)

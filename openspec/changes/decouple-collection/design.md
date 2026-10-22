@@ -130,7 +130,10 @@ without Hugo.
 Only the overlay defines `module.mounts`, so no array-merge rule of Hugo's
 is relied on. Hugo still adds its default mounts for the components the
 overlay does not mention (layouts, assets, data, i18n, archetypes), all
-from `<app>/site/`.
+from `<app>/site/`. The static mount does replace the default
+`<app>/site/static` mount, so the application keeps its own files in
+`assets/` and has no `site/static/`; a comment in `site/hugo.toml` says
+so.
 
 Verified with Hugo 0.162.1: the built `public/` is byte-identical to the
 one the old configuration produced from the same sources, a collection
@@ -173,9 +176,14 @@ make); keeping fish (unusual and absent on servers).
 
 The hook resolves its own path with `readlink -f`, so it works both through
 `core.hooksPath=<app>/tools/hooks` and as a symlink in `.git/hooks/`, and
-runs `<app>/tools/orgsyndb -C <top of work tree> validate`. It therefore
-validates a collection that is the root of its repository, which is the
-intended layout of a private data repository. Nothing enables it.
+runs `<app>/tools/orgsyndb -C <collection> validate` for the collection at
+the top of the work tree and for every collection whose `orgsyndb.toml` is
+in the index. The intended layout of a private data repository is a
+collection at its root; the index lookup also covers a collection in a
+subdirectory, such as `examples/demo/` in the application's own repository,
+which validating only the top would refuse on every commit. A repository
+without a collection commits unchecked, with a note on stderr. Nothing
+enables the hook.
 
 ### D7 The samples become the demo collection `examples/demo/`
 

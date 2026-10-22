@@ -245,7 +245,7 @@ prefix are relative to the collection.
 |---|---|
 | `export` | Exports every top-level `org/procedures/*.org` file into `build/export/`. Emacs output goes to `build/export.log` and is printed if export fails. |
 | `validate` | Exports first, then validates the Org sources, their exports, and all Markdown procedures. Errors fail the command; warnings do not. |
-| `validate ARGS...` | Passes the arguments directly to `tools/validate.py`, in the current directory, without exporting. This form needs only Python. |
+| `validate ARGS...` | Passes the arguments directly to `tools/validate.py`, in the current directory, without exporting. This form needs only Python and refuses `-C`. |
 | `build` | Runs export and validation, builds the site into `public/` with Hugo, then indexes it with Pagefind. A validation error stops the command before Hugo. |
 | `serve [--port N]` | Runs `build`, then serves `public/` on `http://127.0.0.1:N/` until `Ctrl-C`. The default port is `8000`. |
 | `pdf` | Runs `build`, removes the previous `pdf/`, and renders every procedure to `pdf/<source-file-name>.pdf` with WeasyPrint. |
@@ -330,8 +330,8 @@ correctly.
 
 The application includes `tools/hooks/pre-commit`, an optional Git hook for
 a collection's repository. A hook is a command that Git runs automatically
-at a particular point. This one runs `orgsyndb validate` on the collection
-at the top of the repository before every commit and refuses the commit if
+at a particular point. This one runs `orgsyndb validate` before every
+commit on each collection in the repository and refuses the commit if
 validation finds an error.
 
 Enable it in the collection's repository with:
@@ -349,8 +349,10 @@ ln -s /path/to/orgsyndb/tools/hooks/pre-commit .git/hooks/pre-commit
 Replace `/path/to/orgsyndb` with the application's directory. Nothing
 enables the hook automatically. It validates files as they exist in the
 working tree, including changes that are not staged, and it adds the normal
-export time to every commit. It expects the collection at the top of the
-repository.
+export time to every commit. It validates the collection at the top of the
+repository and every collection whose `orgsyndb.toml` is tracked or staged,
+so a collection may also live in a subdirectory. In a repository without a
+collection it lets the commit through.
 
 ## Deployment example
 

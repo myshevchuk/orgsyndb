@@ -1,8 +1,10 @@
 #!/bin/sh
-# Optional pre-commit hook for the repository of an OrgSynDB collection:
+# Optional pre-commit hook for a repository holding OrgSynDB collections:
 # refuses the commit when `orgsyndb validate` fails for the collection at
-# the top of the work tree. It validates the working tree, not the index.
-# Enable it in the collection's repository with either of
+# the top of the work tree or for any collection whose orgsyndb.toml is in
+# the index, so a collection may live in a subdirectory. It validates the
+# working tree, not the index, and lets the commit through when the
+# repository holds no collection. Enable it in the repository with either of
 #   git config core.hooksPath /path/to/orgsyndb/tools/hooks
 #   ln -s /path/to/orgsyndb/tools/hooks/pre-commit .git/hooks/pre-commit
 # Nothing enables it; see the README.
@@ -10,4 +12,27 @@
 hook=$(readlink -f -- "$0") || exit 1
 app=$(dirname -- "$(dirname -- "$(dirname -- "$hook")")") || exit 1
 top=$(git rev-parse --show-toplevel) || exit 1
-exec "$app/tools/orgsyndb" -C "$top" validate
+markers=$(git -C "$top" -c core.quotePath=false ls-files -- \
+    ':(glob)**/orgsyndb.toml') || exit 1
+if [ -f "$top/orgsyndb.toml" ]; then
+    markers=$(printf '%s\n%s\n' orgsyndb.toml "$markers" | sort -u)
+fi
+if [ -z "$markers" ]; then
+    echo "pre-commit: no OrgSynDB collection in this repository;" \
+        "nothing to validate" >&2
+    exit 0
+fi
+
+# One marker path per line; no globbing of the paths.
+set -f
+IFS='
+'
+for marker in $markers; do
+    collection=$(dirname -- "$marker")
+    if [ "$collection" = . ]; then
+        collection=$top
+    else
+        collection=$top/$collection
+    fi
+    "$app/tools/orgsyndb" -C "$collection" validate || exit
+done

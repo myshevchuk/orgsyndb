@@ -361,6 +361,33 @@ class HookTests(BuildTestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("validated", result.stderr)
 
+    def test_hook_validates_a_collection_in_a_subdirectory(self) -> None:
+        """Scenario: Hook validates a collection in a subdirectory."""
+        sandbox = self.sandbox
+        top = sandbox.root.parent
+        hook = sandbox.app / "tools" / "hooks" / "pre-commit"
+
+        def git(*args: str | Path) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(["git", *ps.GIT_QUIET, *map(str, args)],
+                                  cwd=top, env=sandbox.env(),
+                                  capture_output=True, text=True,
+                                  timeout=900)
+
+        for args in (("init", "-q"),
+                     ("config", "core.hooksPath", hook.parent),
+                     ("add", "--", sandbox.root.name)):
+            done = git(*args)
+            self.assertEqual(done.returncode, 0, done.stderr)
+        target = shutil.copy2(MISSING_TITLE, sandbox.md_dir())
+        relative = Path(target).relative_to(top)
+        self.assertEqual(git("add", "--", relative).returncode, 0)
+        result = git("commit", "-m", "add invalid procedure")
+        self.assertNotEqual(result.returncode, 0,
+                            result.stdout + result.stderr)
+        self.assertIn("missing-title", result.stdout + result.stderr)
+        self.assertNotEqual(git("rev-parse", "--verify", "-q",
+                                "HEAD").returncode, 0)
+
 
 class CollectionBuildTests(BuildTestCase):
     def test_the_applications_site_directory_is_untouched(self) -> None:

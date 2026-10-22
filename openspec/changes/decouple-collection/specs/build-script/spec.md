@@ -54,7 +54,7 @@ Each subcommand SHALL check, before its first step, every external tool it will 
 - `serve`: what `build` needs.
 - `pdf`: what `build` needs, plus `weasyprint`.
 
-For a missing tool it prints `orgsyndb: error: <tool> not found; install it with: sudo dnf install <package>` and exits 1 without starting any step. It never invokes `sudo`.
+For a missing tool it prints `orgsyndb: error: <tool> not found; install it with: sudo dnf install <package>` and exits 1 without starting any step. It never invokes `sudo`. A subcommand that works on a collection finds the collection before it checks the tools, so a missing or malformed collection is reported whatever tools are installed.
 
 #### Scenario: Hugo missing
 - **WHEN** a test runs `tools/orgsyndb -C <collection> build` with a `PATH` that holds `python3`, `emacs`, `git` and a recording fake `sudo`, but not `hugo`
@@ -64,6 +64,10 @@ For a missing tool it prints `orgsyndb: error: <tool> not found; install it with
 - **WHEN** a test runs `tools/orgsyndb -C <collection> export` in an application copy whose `.emacs-batch/` is linked from a bootstrapped checkout, with a `PATH` that holds `python3`, `emacs` and a recording fake `sudo`, but not `git`
 - **THEN** it exits 1, stderr contains `sudo dnf install git`, the collection's `build/` was not created, and the fake `sudo` was never invoked
 
+#### Scenario: Collection error comes before missing tools
+- **WHEN** a test runs `tools/orgsyndb -C <directory without orgsyndb.toml> build` with a `PATH` that holds only `python3` and a recording fake `sudo`
+- **THEN** it exits 1, stderr contains `orgsyndb.toml` and no `not found`, and the fake `sudo` was never invoked
+
 #### Scenario: validate with arguments needs only Python
 - **WHEN** a test runs `tools/orgsyndb validate --vocabulary tests/fixtures/reaction_types.toml --static-dir tests/fixtures/static tests/fixtures/valid/md tests/fixtures/valid/export`, with the application as working directory and a `PATH` that holds only `python3`
 - **THEN** it exits 0, and stderr contains no `not found`
@@ -71,7 +75,7 @@ For a missing tool it prints `orgsyndb: error: <tool> not found; install it with
 ### Requirement: validate subcommand
 `tools/orgsyndb validate` SHALL behave in one of two ways:
 - **Without arguments,** it runs `export`, then the validator as `validate.py --org-root org/procedures --static-dir static build/export md/procedures` with the collection as working directory, leaving out `--org-root org/procedures` and any content root whose directory does not exist. It prints the validator's stdout and stderr unchanged and exits with the validator's status.
-- **With arguments,** it runs the validator with exactly those arguments, in the caller's working directory, without exporting and without a collection.
+- **With arguments,** it runs the validator with exactly those arguments, in the caller's working directory, without exporting and without a collection. Combined with `-C` or `--collection` it is a usage error, because the arguments would not be read relative to the named collection.
 
 #### Scenario: Seeds validate
 - **WHEN** an integration test runs `tools/orgsyndb -C <collection> validate` on the demo collection
@@ -84,6 +88,10 @@ For a missing tool it prints `orgsyndb: error: <tool> not found; install it with
 #### Scenario: Arguments pass through to the validator
 - **WHEN** a test runs `tools/orgsyndb validate --vocabulary tests/fixtures/reaction_types.toml --static-dir tests/fixtures/static tests/fixtures/invalid/missing-title` with the application as working directory
 - **THEN** it exits 1, its stdout equals that of `tools/validate.py` run with the same arguments, and no `build/` directory was created or modified
+
+#### Scenario: Arguments with a collection are refused
+- **WHEN** a test runs `tools/orgsyndb -C <collection> validate md/procedures`, and the same with `--collection=<collection>`
+- **THEN** each exits 2, stderr contains `-C`, and the collection's `build/` was not created
 
 ### Requirement: build subcommand
 `tools/orgsyndb build` SHALL perform these steps in order:
@@ -257,7 +265,7 @@ It never installs anything and never invokes `sudo`.
 - **THEN** it exits 2, and stderr is not empty
 
 ### Requirement: Optional pre-commit hook
-`tools/hooks/pre-commit` SHALL be an executable POSIX `sh` script for the repository of a collection. It resolves its own path with `readlink -f`, so that it works both when `core.hooksPath` names `<app>/tools/hooks` and when it is symlinked into `.git/hooks/`, and runs `<app>/tools/orgsyndb -C <top level of the work tree> validate`, exiting with its status. No subcommand enables the hook or writes to `.git/hooks/` or `core.hooksPath`.
+`tools/hooks/pre-commit` SHALL be an executable POSIX `sh` script for a repository holding collections. It resolves its own path with `readlink -f`, so that it works both when `core.hooksPath` names `<app>/tools/hooks` and when it is symlinked into `.git/hooks/`. It runs `<app>/tools/orgsyndb -C <collection> validate` for the collection at the top level of the work tree, when `orgsyndb.toml` exists there, and for every directory whose `orgsyndb.toml` is in the index, each once, and exits with the status of the first that fails. When there is no such collection it prints a note to stderr and exits 0. No subcommand enables the hook or writes to `.git/hooks/` or `core.hooksPath`.
 
 #### Scenario: Hook refuses an invalid commit
 - **WHEN** an integration test makes the collection copy a git repository with `core.hooksPath` set to the application copy's absolute `tools/hooks`, adds `tests/fixtures/invalid/missing-title/OSDB-0101-missing-title.md` to `md/procedures/`, and runs `git commit`
@@ -266,6 +274,14 @@ It never installs anything and never invokes `sudo`.
 #### Scenario: Hook through a symlink accepts a valid commit
 - **WHEN** an integration test makes the collection copy a git repository, symlinks `.git/hooks/pre-commit` to the application copy's hook, adds the demo procedures, and runs `git commit`
 - **THEN** the commit succeeds
+
+#### Scenario: Hook validates a collection in a subdirectory
+- **WHEN** an integration test makes the directory holding the collection copy a git repository with `core.hooksPath` set to the application copy's absolute `tools/hooks`, adds the collection copy, then adds `tests/fixtures/invalid/missing-title/OSDB-0101-missing-title.md` to its `md/procedures/` and runs `git commit`
+- **THEN** the commit fails, and the new file is not committed
+
+#### Scenario: Hook without a collection lets the commit through
+- **WHEN** a test makes an empty temporary directory a git repository with `core.hooksPath` set to the application's absolute `tools/hooks`, adds a file and runs `git commit`
+- **THEN** the commit succeeds, and stderr contains `no OrgSynDB collection`
 
 #### Scenario: Nothing enables the hook
 - **WHEN** a test searches `tools/orgsyndb` and `tools/pipeline.py` for `hooksPath` and `.git/hooks`

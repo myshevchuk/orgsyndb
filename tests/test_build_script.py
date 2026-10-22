@@ -17,9 +17,9 @@ import unittest
 from pathlib import Path
 
 import support
-from pipeline_support import (BOOTSTRAP_HINT, DEMO, HOOK, ORGSYNDB, REPO,
-                              TOOLS, Run, make_path, make_sandbox,
-                              run_script, snapshot)
+from pipeline_support import (BOOTSTRAP_HINT, DEMO, GIT_QUIET, HOOK,
+                              ORGSYNDB, REPO, TOOLS, Run, make_path,
+                              make_sandbox, run_script, snapshot)
 
 SUBCOMMANDS = ["export", "validate", "build", "serve", "pdf", "new", "init",
                "clean", "check-deps", "help"]
@@ -135,6 +135,26 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(found, [])
 
 
+class HookWithoutCollectionTests(ProgramTestCase):
+    def test_hook_without_a_collection_lets_the_commit_through(self) -> None:
+        """Scenario: Hook without a collection lets the commit through."""
+        directory = self.temp_dir()
+
+        def git(*args: str | Path) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(["git", *GIT_QUIET, *map(str, args)],
+                                  cwd=directory, capture_output=True,
+                                  text=True, timeout=120)
+
+        self.assertEqual(git("init", "-q").returncode, 0)
+        self.assertEqual(
+            git("config", "core.hooksPath", HOOK.parent).returncode, 0)
+        (directory / "notes.txt").write_text("notes\n", encoding="utf-8")
+        self.assertEqual(git("add", "notes.txt").returncode, 0)
+        result = git("commit", "-q", "-m", "add notes")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("no OrgSynDB collection", result.stderr)
+
+
 class MissingToolTests(ProgramTestCase):
     def repo_and_path(self, tools: tuple[str, ...], **kwargs):
         sandbox = make_sandbox(self, **kwargs)
@@ -175,6 +195,16 @@ class MissingToolTests(ProgramTestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("not found", result.stderr)
 
+    def test_collection_error_comes_before_missing_tools(self) -> None:
+        """Scenario: Collection error comes before missing tools."""
+        path = make_path(self, ("python3",))
+        env = dict(os.environ, PATH=str(path.directory))
+        result = self.run_real("-C", self.temp_dir(), "build", env=env)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("orgsyndb.toml", result.stderr)
+        self.assertNotIn("not found", result.stderr)
+        self.assertEqual(path.sudo_calls(), [])
+
 
 class ValidatePassThroughTests(ProgramTestCase):
     def test_arguments_reach_the_validator_unchanged(self) -> None:
@@ -189,6 +219,17 @@ class ValidatePassThroughTests(ProgramTestCase):
         self.assertNotEqual(result.stdout, "")
         after = snapshot(build) if build.exists() else None
         self.assertEqual(after, before)
+
+    def test_arguments_with_a_collection_are_refused(self) -> None:
+        """Scenario: Arguments with a collection are refused."""
+        sandbox = make_sandbox(self)
+        for form in (["-C", str(sandbox.root)],
+                     [f"--collection={sandbox.root}"]):
+            result = self.run_real(*form, "validate", "md/procedures")
+            with self.subTest(form=form[0]):
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertIn("-C", result.stderr)
+                self.assertFalse((sandbox.root / "build").exists())
 
 
 class CleanTests(ProgramTestCase):

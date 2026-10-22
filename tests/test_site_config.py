@@ -55,6 +55,8 @@ class HugoConfigurationTests(unittest.TestCase):
         self.assertEqual(config.get("params", {}).get("siteurl"), SITE_URL)
         for key in ("publishDir", "resourceDir", "module"):
             self.assertNotIn(key, config)
+        self.assertFalse((REPO / "site" / "static").exists(),
+                         "the overlay's static mount hides site/static/")
 
     def test_configuration_names_no_host(self) -> None:
         """Scenario: Configuration parses to the contract (no host)."""

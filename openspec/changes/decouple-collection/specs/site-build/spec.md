@@ -25,10 +25,13 @@ The configuration names no host other than the loopback address in `params.siteu
 3. `<collection>/md/procedures` → `content/procedures` with `files = ["/OSDB-*.md"]`;
 4. `<collection>/static` → `static`.
 
+Mount 4 replaces Hugo's default `<site>/static` mount, so the application SHALL have no `site/static/`; its own static files go in `site/assets/`.
+
 #### Scenario: Configuration parses to the contract
 - **WHEN** a test loads `site/hugo.toml` with `tomllib`
 - **THEN** every value listed above is present as stated, `taxonomies` has exactly the three entries, and none of `publishDir`, `resourceDir` and `module` is present
 - **AND** the only string value containing `://` or beginning with `//` is `params.siteurl`, equal to `http://127.0.0.1:8000`
+- **AND** `site/static/` does not exist
 
 #### Scenario: Overlay parses to the contract
 - **WHEN** a test calls `hugo_overlay` with a site path and a collection path that both contain a space and a double quote, and loads the result with `tomllib`
