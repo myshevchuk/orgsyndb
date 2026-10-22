@@ -25,3 +25,53 @@ Download [the HTML comparison](minimal-layouts.html) and open it locally
 to switch between layouts. These are static proposals, rendered from
 HTML with WeasyPrint; the depicted search, filtering and selection
 controls illustrate the proposed layout.
+
+## Layouts 7–9
+
+Three further layouts under the same constraints, each shown as a home
+page and a procedure page. They keep the site's colour tokens and use
+only system sans-serif, monospace for IDs, CAS numbers and SMILES, and
+hairline rules instead of boxes. The interface text is the site's own
+German strings. All frames are 1440 × 900 px Chromium renders of
+[layouts-7-9.html](layouts-7-9.html), which needs no server or
+external assets.
+
+### 7. Marginalia
+
+One reading column at the existing 70ch measure, left of centre. A wide
+right margin holds the structure, product facts, hazards and numbered
+notes beside the text, instead of above it. On the home page the same
+margin lists reaction types, tags and authors. This is the only one of
+4–9 that rearranges the procedure page itself. It is the closest to the
+printed A4 page, and it is cheap: two grid columns in `screen.css` and a
+partial that places each note beside its section.
+
+![Marginalia, home](layout-7-home.png)
+![Marginalia, procedure](layout-7-procedure.png)
+
+### 8. Split index
+
+A variant of 6: a fixed index pane holds the search field, the filter
+chips and every procedure, and typing filters the list. The procedure
+pane adds a section index beside the text and one row of key facts
+under the title. The list pane must be a partial rendered into every
+page, so that it works without JavaScript. It also needs a plan for
+collections of several hundred procedures.
+
+![Split index, home](layout-8-home.png)
+![Split index, procedure](layout-8-procedure.png)
+
+### 9. Ledger
+
+A variant of 4 on a 12-column grid. The home page is the full index,
+sortable by column, with the facets as one line of text toggles. A
+procedure opens as a sheet: one band of key facts across the full
+width, the section headings in columns 1–3, the text in 4–10 and the
+notes in 11–12.
+
+![Ledger, home](layout-9-home.png)
+![Ledger, procedure](layout-9-procedure.png)
+
+Suggested combination: 9 for the home and list pages, 7 for procedure
+pages. Both are CSS-grid changes over the existing markup plus one
+partial each, and neither adds persistent interface state.
