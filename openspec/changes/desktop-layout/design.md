@@ -23,6 +23,15 @@ navigation and denser data panels. The night-lab concept uses dark
 surfaces and a compound preview. These concepts are static review aids;
 the application change retains the established visual style.
 
+## Follow-up design constraints
+
+The owner requested three further layouts using plain system sans-serif
+fonts, light surfaces and functional labels. Omit promotional copy,
+decorative typography and dark-theme exploration. The alternatives are a
+full-width table, a filter sidebar and a list/detail split. Their static
+previews live in docs/designs/minimal/; selecting a final layout remains
+a separate implementation decision.
+
 ## Verification
 
 Build the German demo and run the full suite, including English/German

@@ -1,5 +1,9 @@
 # Desktop design directions
 
+The follow-up [minimalist layouts](../minimal/README.md) reflect the
+owner's preference for plain sans-serif fonts, light surfaces and minimal
+interface text. The original concepts below are retained for reference.
+
 These are static visual concepts using the German demo collection. The
 layout fix retains the existing theme; these images propose a later visual
 direction. Search, navigation and filters in the mockups are illustrative.

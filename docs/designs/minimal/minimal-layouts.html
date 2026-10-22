@@ -1,0 +1,85 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OrgSynDB — minimalist layouts</title><style>
+@page {size:1440px 1000px;margin:0}
+* {box-sizing:border-box}
+html,body {margin:0;background:#fff;color:#222;font-family:Arial,"Liberation Sans",sans-serif;font-size:15px;line-height:1.45}
+.layout {padding:0 40px;width:100%;min-width:1200px}
+header {display:grid;grid-template-columns:190px minmax(0,1fr);align-items:center;border-bottom:1px solid #d8d8d8;padding:20px 0}
+.brand {font-size:17px;font-weight:600}
+nav span {display:inline-block;margin-right:30px;font-size:14px;color:#555}
+nav .active {color:#222;text-decoration:underline;text-underline-offset:7px;text-decoration-thickness:2px}
+h1,h2,h3,p {margin:0}
+h1 {font-size:23px;font-weight:600;line-height:1.3}
+h2 {font-size:17px;font-weight:600;line-height:1.3}
+h3 {font-size:15px;font-weight:600}
+.titlebar {display:flex;align-items:baseline;gap:14px;margin:32px 0 24px}
+.count {color:#777;font-size:13px}
+.toolbar {display:flex;gap:10px;align-items:center;margin-bottom:25px}
+.search {border:1px solid #aaa;padding:10px 12px;color:#777;flex:1;background:#fff;min-width:0;font-size:14px}
+.button {display:inline-block;flex:0 0 auto;font:inherit;font-size:14px;background:#f7f7f7;border:1px solid #aaa;border-radius:2px;color:#333;padding:10px 19px;white-space:nowrap}
+.filter {border:1px solid #ccc;padding:10px 12px;font-size:13px;white-space:nowrap}
+.filter i {font-style:normal;color:#777;margin-left:24px}
+.tools {display:flex;align-items:center;justify-content:space-between;margin:0 0 12px;font-size:13px;color:#666}
+.tools .sort {color:#333}
+table {border-collapse:collapse;text-align:left;width:100%;font-size:14px}
+th {font-weight:600;font-size:13px;background:#f7f7f7;color:#444;border-top:1px solid #d8d8d8;border-bottom:1px solid #bdbdbd;padding:12px 14px}
+td {border-bottom:1px solid #e2e2e2;padding:19px 14px;vertical-align:middle}
+.index .col-0 {width:135px;white-space:nowrap;font-size:13px;color:#555}
+.index .col-1 {color:#22557a}
+.index .col-2 {width:210px}
+.index .col-3 {width:105px;color:#666;font-size:13px;text-transform:lowercase}
+.index .col-4,.index .col-5 {font-size:13px;color:#666;white-space:nowrap;width:135px}
+.sample {font-size:12px;color:#666;margin-top:25px}
+footer {border-top:1px solid #ddd;margin-top:34px;padding:18px 0;font-size:12px;color:#777}
+.plain .toolbar .search {max-width:630px}
+.plain .toolbar .button + .filter {margin-left:auto}
+.plain .bottom {display:flex;align-items:center;justify-content:space-between;font-size:13px;margin-top:22px;color:#555}
+.plain .bottom p {margin:0;font-size:12px;color:#666}
+.sidebar .columns {display:grid;grid-template-columns:215px minmax(0,1fr);column-gap:32px;margin-top:30px}
+.sidebar aside {border-right:1px solid #ddd;padding-right:26px}
+.sidebar aside h2 {font-size:14px;margin-bottom:16px}
+.sidebar .titlebar {margin-top:0}
+.sidebar .choices {list-style:none;padding:0;margin:0 0 28px;font-size:13px}
+.sidebar .choices li {display:flex;justify-content:space-between;align-items:center;gap:9px;padding:9px 0}
+.sidebar .choices b {font-weight:400;color:#888;font-size:12px}
+.sidebar .choices .selected {font-weight:600}
+.sidebar .choices li span::before {content:'□';color:#999;margin-right:8px}
+.sidebar .choices .selected span::before {content:'■';color:#555;font-size:11px}
+.sidebar .toolbar {margin-bottom:22px}
+.sidebar .choices.tags li {font-size:12px}
+.sidebar .index .col-2 {width:170px}
+.sidebar .index .col-4,.sidebar .index .col-5 {width:115px;font-size:12px}
+.sidebar .index td {padding:18px 10px;font-size:13px}
+.sidebar .index th {padding:12px 10px}
+.split .split-tools {display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:30px;padding:24px 0 20px}
+.split .toolbar {margin:0;max-width:650px}
+.split .view-label {text-align:right;color:#777;font-size:13px;padding-top:12px}
+.split .panes {display:grid;grid-template-columns:380px minmax(0,1fr);gap:0;border-top:1px solid #d3d3d3}
+.split .list-pane {border-right:1px solid #ccc;padding:21px 22px 0 0}
+.split .list-head {display:flex;align-items:baseline;justify-content:space-between;margin-bottom:21px}
+.split .list-head h1 {font-size:18px}
+.split .list {list-style:none;margin:0;padding:0}
+.split .list li {border-bottom:1px solid #ddd;padding:12px 12px}
+.split .list li.selected {background:#f1f4f6;border-left:3px solid #546775;padding-left:9px}
+.split .list .row-id {color:#777;font-size:12px;margin-bottom:2px}
+.split .list .row-title {font-size:14px;color:#22557a}
+.split .list .row-type {font-size:12px;color:#777;margin-top:3px}
+.split .detail-pane {padding:23px 0 0 32px}
+.split .detail-top {display:flex;align-items:baseline;justify-content:space-between;margin-bottom:7px}
+.split .detail-top span {font-size:12px;color:#777}
+.split .detail-top .button {padding:6px 12px;font-size:12px}
+.split .detail-pane h1 {font-size:22px;margin-bottom:20px}
+.split .facts {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 20px;border-top:1px solid #ddd;border-bottom:1px solid #ddd;padding:15px 0;margin-bottom:20px}
+.split .fact {font-size:13px}
+.split .fact span {display:block;color:#777;font-size:12px;margin-bottom:3px}
+.split .detail-pane h2 {margin:18px 0 9px;font-size:16px}
+.split .detail-pane p {font-size:14px;line-height:1.6;max-width:85ch}
+.split .reagents {font-size:12px}
+.split .reagents td,.split .reagents th {padding:10px 8px}
+.split .reagents th {font-size:12px}
+.split .reagents td:not(:first-child) {white-space:nowrap}
+.split ol {padding-left:23px;margin:0 0 15px;font-size:14px;line-height:1.6;max-width:85ch}
+.split ol li {padding-left:3px;margin-bottom:5px}
+.split .detail-pane .sample {font-size:12px;color:#666;line-height:1.5;margin:18px 0}
+.split .detail-pane .open {font-size:13px;color:#22557a;margin-top:15px}
+.split footer {display:none}
+.controls{display:flex;gap:10px;align-items:center;padding:15px 40px;background:#f7f7f7;border-bottom:1px solid #ccc;font:13px Arial,sans-serif}.controls b{margin-right:20px}.controls button{padding:7px 12px;font-size:13px}.controls button[aria-pressed="true"]{background:#ddd}.controls small{margin-left:auto;color:#777}.view[hidden]{display:none}</style><body><div class="controls"><b>OrgSynDB · Layouts</b><button type="button" data-choice="0" aria-pressed="true">4. Full-width table</button><button type="button" data-choice="1" aria-pressed="false">5. Filter sidebar</button><button type="button" data-choice="2" aria-pressed="false">6. List and detail</button><small>Static previews</small></div><div class="view" ><div class="layout plain"><header><span class="brand">OrgSynDB</span><nav><span class="active">Vorschriften</span><span>Reaktionstypen</span><span>Schlagwörter</span><span>Autoren</span></nav></header><main><div class="titlebar"><h1>Vorschriften</h1><span class="count">8 Einträge</span></div><div class="toolbar"><div class="search">Produkt, CAS, SMILES oder Stichwort</div><span class="button">Suchen</span><div class="filter"><span>Reaktionstyp: Alle</span><i>⌄</i></div><div class="filter"><span>Status: Alle</span><i>⌄</i></div></div><div class="tools"><span>Alle Vorschriften</span><span class="sort">Sortieren: ID ↑</span></div><table class="index"><thead><tr><th>ID</th><th>Vorschrift</th><th>Reaktionstyp</th><th>Status</th><th>Erstellt</th><th>Geändert</th></tr></thead><tbody><tr><td class="col-0">OSDB-0001</td><td class="col-1">Salicylsäure</td><td class="col-2">Hydrolyse</td><td class="col-3">Entwurf</td><td class="col-4">2026-10-22</td><td class="col-5">2026-10-22</td></tr><tr><td class="col-0">OSDB-0002</td><td class="col-1">Aspirin (Acetylsalicylsäure)</td><td class="col-2">Acylierung</td><td class="col-3">Entwurf</td><td class="col-4">2026-10-22</td><td class="col-5">2026-10-22</td></tr><tr><td class="col-0">OSDB-0003</td><td class="col-1">Isopentylacetat</td><td class="col-2">Veresterung</td><td class="col-3">Entwurf</td><td class="col-4">2026-10-22</td><td class="col-5">2026-10-22</td></tr><tr><td class="col-0">OSDB-0004</td><td class="col-1">4-Acetylbiphenyl</td><td class="col-2">Kreuzkupplung</td><td class="col-3">Entwurf</td><td class="col-4">2026-10-22</td><td class="col-5">2026-10-22</td></tr><tr><td class="col-0">OSDB-0005</td><td class="col-1">1-(Biphenyl-4-yl)ethanol</td><td class="col-2">Reduktion</td><td class="col-3">Entwurf</td><td class="col-4">2026-10-22</td><td class="col-5">2026-10-22</td></tr><tr><td class="col-0">OSDB-0006</td><td class="col-1">Dibenzylidenaceton</td><td class="col-2">Aldolkondensation</td><td class="col-3">Entwurf</td><td class="col-4">2026-10-22</td><td class="col-5">2026-10-22</td></tr><tr><td class="col-0">OSDB-0007</td><td class="col-1">Zimtsäureethylester</td><td class="col-2">Olefinierung</td><td class="col-3">Entwurf</td><td class="col-4">2026-10-22</td><td class="col-5">2026-10-22</td></tr><tr><td class="col-0">OSDB-0008</td><td class="col-1">Zimtsäure</td><td class="col-2">Hydrolyse</td><td class="col-3">Entwurf</td><td class="col-4">2026-10-22</td><td class="col-5">2026-10-22</td></tr></tbody></table><div class="bottom"><p class="sample">Beispieldaten – Mengenangaben nicht experimentell überprüft.</p><span>1–8 von 8</span></div></main><footer>OrgSynDB · interne Vorschriften</footer></div></div><div class="view" hidden><div class="layout sidebar"><header><span class="brand">OrgSynDB</span><nav><span class="active">Vorschriften</span><span>Reaktionstypen</span><span>Schlagwörter</span><span>Autoren</span></nav></header><div class="columns"><aside><h2>Reaktionstyp</h2><ul class="choices"><li class="selected"><span>Alle Reaktionstypen</span><b>8</b></li><li><span>Acylierung</span><b>1</b></li><li><span>Aldolkondensation</span><b>1</b></li><li><span>Hydrolyse</span><b>2</b></li><li><span>Kreuzkupplung</span><b>1</b></li><li><span>Olefinierung</span><b>1</b></li><li><span>Reduktion</span><b>1</b></li><li><span>Veresterung</span><b>1</b></li></ul><h2>Status</h2><ul class="choices"><li class="selected"><span>Alle</span><b>8</b></li><li><span>Entwurf</span><b>8</b></li><li><span>Geprüft</span><b>0</b></li><li><span>Zurückgezogen</span><b>0</b></li></ul><h2>Schlagwort</h2><ul class="choices tags"><li><span>sample-data</span><b>8</b></li><li><span>biphenyl</span><b>2</b></li><li><span>cinnamate</span><b>2</b></li></ul></aside><main><div class="titlebar"><h1>Vorschriften</h1><span class="count">8 Einträge</span></div><div class="toolbar"><div class="search">Produkt, CAS, SMILES oder Stichwort</div><span class="button">Suchen</span></div><div class="tools"><span>Alle Vorschriften</span><span class="sort">Sortieren: ID ↑</span></div><table class="index"><thead><tr><th>ID</th><th>Vorschrift</th><th>Reaktionstyp</th><th>Status</th><th>Erstellt</th><th>Geändert</th></tr></thead><tbody><tr><td class="col-0">OSDB-0001</td><td class="col-1">Salicylsäure</td><td class="col-2">Hydrolyse</td><td class="col-3">Entwurf</td><td class="col-4">2026-10-22</td><td class="col-5">2026-10-22</td></tr><tr><td class="col-0">OSDB-0002</td><td class="col-1">Aspirin (Acetylsalicylsäure)</td><td class="col-2">Acylierung</td><td class="col-3">Entwurf</td><td class="col-4">2026-10-22</td><td class="col-5">2026-10-22</td></tr><tr><td class="col-0">OSDB-0003</td><td class="col-1">Isopentylacetat</td><td class="col-2">Veresterung</td><td class="col-3">Entwurf</td><td class="col-4">2026-10-22</td><td class="col-5">2026-10-22</td></tr><tr><td class="col-0">OSDB-0004</td><td class="col-1">4-Acetylbiphenyl</td><td class="col-2">Kreuzkupplung</td><td class="col-3">Entwurf</td><td class="col-4">2026-10-22</td><td class="col-5">2026-10-22</td></tr><tr><td class="col-0">OSDB-0005</td><td class="col-1">1-(Biphenyl-4-yl)ethanol</td><td class="col-2">Reduktion</td><td class="col-3">Entwurf</td><td class="col-4">2026-10-22</td><td class="col-5">2026-10-22</td></tr><tr><td class="col-0">OSDB-0006</td><td class="col-1">Dibenzylidenaceton</td><td class="col-2">Aldolkondensation</td><td class="col-3">Entwurf</td><td class="col-4">2026-10-22</td><td class="col-5">2026-10-22</td></tr><tr><td class="col-0">OSDB-0007</td><td class="col-1">Zimtsäureethylester</td><td class="col-2">Olefinierung</td><td class="col-3">Entwurf</td><td class="col-4">2026-10-22</td><td class="col-5">2026-10-22</td></tr><tr><td class="col-0">OSDB-0008</td><td class="col-1">Zimtsäure</td><td class="col-2">Hydrolyse</td><td class="col-3">Entwurf</td><td class="col-4">2026-10-22</td><td class="col-5">2026-10-22</td></tr></tbody></table><p class="sample">Beispieldaten – Mengenangaben nicht experimentell überprüft.</p></main></div><footer>OrgSynDB · interne Vorschriften</footer></div></div><div class="view" hidden><div class="layout split"><header><span class="brand">OrgSynDB</span><nav><span class="active">Vorschriften</span><span>Reaktionstypen</span><span>Schlagwörter</span><span>Autoren</span></nav></header><div class="split-tools"><div class="toolbar"><div class="search">Produkt, CAS, SMILES oder Stichwort</div><span class="button">Suchen</span></div><div class="view-label">Liste / Detail</div></div><main class="panes"><section class="list-pane"><div class="list-head"><h1>Vorschriften</h1><span class="count">8 Einträge · ID ↑</span></div><ul class="list"><li><div class="row-id">OSDB-0001</div><div class="row-title">Salicylsäure</div><div class="row-type">Hydrolyse</div></li><li class="selected"><div class="row-id">OSDB-0002</div><div class="row-title">Aspirin (Acetylsalicylsäure)</div><div class="row-type">Acylierung</div></li><li><div class="row-id">OSDB-0003</div><div class="row-title">Isopentylacetat</div><div class="row-type">Veresterung</div></li><li><div class="row-id">OSDB-0004</div><div class="row-title">4-Acetylbiphenyl</div><div class="row-type">Kreuzkupplung</div></li><li><div class="row-id">OSDB-0005</div><div class="row-title">1-(Biphenyl-4-yl)ethanol</div><div class="row-type">Reduktion</div></li><li><div class="row-id">OSDB-0006</div><div class="row-title">Dibenzylidenaceton</div><div class="row-type">Aldolkondensation</div></li><li><div class="row-id">OSDB-0007</div><div class="row-title">Zimtsäureethylester</div><div class="row-type">Olefinierung</div></li><li><div class="row-id">OSDB-0008</div><div class="row-title">Zimtsäure</div><div class="row-type">Hydrolyse</div></li></ul></section><article class="detail-pane"><div class="detail-top"><span>OSDB-0002 · Entwurf</span><span class="button">Drucken / PDF</span></div><h1>Aspirin (Acetylsalicylsäure)</h1><div class="facts"><div class="fact"><span>Summenformel</span>C₉H₈O₄</div><div class="fact"><span>CAS</span>50-78-2</div><div class="fact"><span>Molmasse</span>180,16 g/mol</div><div class="fact"><span>Ansatzgröße</span>20 mmol</div><div class="fact"><span>Ausbeute</span>75 %</div><div class="fact"><span>Reaktionstyp</span>Acylierung</div></div><h2>Zusammenfassung</h2><p>Acetylsalicylsäure (Aspirin) durch Acetylierung von Salicylsäure, dem Produkt von OSDB-0001, mit Acetanhydrid und Phosphorsäure als Katalysator. Dies sind Beispieldaten: Die Mengen folgen der Lehrbuchmethode, sind aber nicht experimentell überprüft.</p><h2>Reagenzien</h2><table class="reagents"><tr><th>Reagenz</th><th>CAS</th><th>M (g/mol)</th><th>Menge</th><th>mmol</th><th>Äquiv.</th></tr><tr><td>Salicylsäure</td><td>69-72-7</td><td>138,12</td><td>2,76 g</td><td>20,0</td><td>1,0</td></tr><tr><td>Acetanhydrid</td><td>108-24-7</td><td>102,09</td><td>6,13 g (5,67 mL)</td><td>60,0</td><td>3,0</td></tr><tr><td>Phosphorsäure, 85 %</td><td>7664-38-2</td><td>97,99</td><td>5 Tropfen</td><td>kat.</td><td>kat.</td></tr></table><h2>Durchführung</h2><ol><li>Die trockene Salicylsäure (2,76 g, 20,0 mmol) in einen 100-mL-Erlenmeyerkolben geben.</li><li>Im Abzug das Acetanhydrid (6,13 g, 5,67 mL, 60,0 mmol) und dann 5 Tropfen 85-prozentige Phosphorsäure zugeben und durch Umschwenken mischen.</li></ol><p class="open">Vollständige Vorschrift öffnen →</p><p class="sample">Beispieldaten – Mengenangaben nicht experimentell überprüft.</p></article></main><footer>OrgSynDB · interne Vorschriften</footer></div></div><script>document.querySelectorAll('[data-choice]').forEach(button=>button.addEventListener('click',()=>{document.querySelectorAll('[data-choice]').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));document.querySelectorAll('.view').forEach((view,i)=>view.hidden=String(i)!==button.dataset.choice)}));</script></body></html>
