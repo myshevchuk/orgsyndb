@@ -3,7 +3,7 @@
 <!-- Reason: files carry a language code; IDs repeat across languages. -->
 
 ### Requirement: Unique identifiers across all source trees
-Two procedure files of the same language SHALL NOT carry the same `id`, whichever content roots they come from. A duplicate is reported as one error on each file involved, naming the other file's path. Files of different languages with the same `id` are translations, as the localization spec defines.
+Two procedure files with the same language code, or both without one, SHALL NOT carry the same `id`, whichever content roots they come from. A duplicate is reported as one error on each file involved, naming the other file's path. Other files with the same `id` are variants, as the localization spec defines.
 
 #### Scenario: Same ID in two content roots
 - **WHEN** a fixture run on the two roots `invalid/duplicate-id/a` and `invalid/duplicate-id/b` examines `a/OSDB-0104-first.md` and `b/OSDB-0104-second.md`, which both have `id = "OSDB-0104"`
@@ -15,7 +15,7 @@ Two procedure files of the same language SHALL NOT carry the same `id`, whicheve
 - **THEN** it reports exactly two errors, field `id`, containing `duplicate id OSDB-0100`
 
 ### Requirement: Procedure file names
-A procedure source file SHALL be named `OSDB-NNNN-short-slug.md` (content) or `OSDB-NNNN-short-slug.org` (Org source), with an optional language code before the suffix for a language other than English: `OSDB-NNNN-short-slug.de.md`, `OSDB-NNNN-short-slug.de.org`. The short slug matches `[a-z0-9]+(-[a-z0-9]+)*`, and the `OSDB-NNNN` prefix equals the file's `id` exactly. The code `.en` is an error (an English file has no code), and so is a code outside the site languages.
+A procedure source file SHALL be named `OSDB-NNNN-short-slug.md` (content) or `OSDB-NNNN-short-slug.org` (Org source), with an optional language code, `de` or `en`, before the suffix: `OSDB-NNNN-short-slug.de.md`, `OSDB-NNNN-short-slug.en.org`. The short slug matches `[a-z0-9]+(-[a-z0-9]+)*`, and the `OSDB-NNNN` prefix equals the file's `id` exactly. Any other code is an error.
 
 #### Scenario: Lowercase prefix is rejected
 - **WHEN** a variant run leaves the baseline unchanged under the file name `osdb-0100-lowercase.md`
@@ -27,7 +27,7 @@ A procedure source file SHALL be named `OSDB-NNNN-short-slug.md` (content) or `O
 
 #### Scenario: Language code in a file name
 - **WHEN** a run examines the baseline as `OSDB-0100-baseline.en.md`, and then as `OSDB-0100-baseline.fr.md`
-- **THEN** each reports exactly one error, field `file_name`, containing `drop the language` and `unknown language code ".fr"` respectively
+- **THEN** the first is clean, and the second reports exactly one error, field `file_name`, containing `unknown language code ".fr"`
 
 <!-- Reason: German text writes a decimal comma. -->
 
@@ -59,7 +59,7 @@ The file `site/data/reaction_types.toml` SHALL map each reaction-type slug, as a
 <!-- Reason: German procedures have German section names. -->
 
 ### Requirement: Body sections
-Every procedure body SHALL contain these eight level-2 sections, in this order; a German procedure uses the German names that the localization spec gives instead:
+Every procedure body SHALL contain these eight level-2 sections, in this order; a procedure in German uses the German names that the localization spec gives instead, and a file without a language code may use either set:
 1. Summary
 2. Reagents
 3. Procedure

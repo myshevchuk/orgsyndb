@@ -8,129 +8,119 @@ mounted trees, the Org export and the Markdown sources, and the validator
 fixes eight English section headings. All interface strings are literal
 English text in the layouts, the site script and the print stylesheet.
 
+A first version of this change built an English site at `/` and a German
+one under `/de/`, linked by a language switch, with each language listing
+only its own procedures. The owner's review replaced it with the design
+below: one site language, German by default, and every procedure on it.
+
 ## Goals / Non-Goals
 
 **Goals:**
 
-- A German reader can browse, search and print the site in German.
+- The site, its search and its PDFs work entirely in German, or entirely
+  in English.
+- Every procedure is published whatever languages its files are in.
 - A co-worker can write a procedure in German, in either format, and have
   it validate cleanly.
-- An English procedure and its German translation cannot drift apart in
-  the facts that do not depend on language.
-- The English site keeps its URLs, texts and behaviour.
+- Variants of one procedure cannot drift apart in the facts that do not
+  depend on language.
 
 **Non-Goals:**
 
-- Languages other than English and German. The code keeps a language list
-  so that adding one is a data change plus strings and sections, but this
-  change ships only `de`.
+- A language switch, or English and German sites side by side.
+- Languages other than German and English. The code keeps a language
+  list, so adding one is strings, sections and a template.
+- A per-collection language. The locale belongs to the application's site
+  configuration, as the owner asked.
 - Machine translation or any check that a translation's prose matches the
   original.
-- Showing an English procedure on the German lists when it has no
-  translation (content fallback).
-- Localised URL paths (`/de/vorschriften/`); paths stay English.
+- Localised URL paths; paths stay English.
 
 ## Decisions
 
-### D1 Hugo multilingual mode, English at the root
+### D1 One site language from `locale`
 
-`site/hugo.toml` declares `languages.en` (weight 1) and `languages.de`
-(weight 2), `defaultContentLanguage = "en"`,
-`defaultContentLanguageInSubdir = false` and
-`disableDefaultLanguageRedirect = true`. English pages keep their URLs;
-German pages live under `/de/`. Hugo's redirect page at `/en/` is
-suppressed because it is not a page of the theme and would break the page
-shell contract.
+`site/hugo.toml` sets `locale = "de"`; the program reads its language
+subtag (`de` from `de` or `de-AT`) and refuses a locale outside the
+language list. The generated overlay sets `defaultContentLanguage` to it,
+so Hugo picks `i18n/<language>.toml` and writes `<html lang>`. The
+configuration has no `languages` table.
 
-Rejected: a per-collection language setting in `orgsyndb.toml`. A group
-with readers of both languages would have to pick one, and translated
-procedures could not coexist.
+Rejected: a key in `orgsyndb.toml`. The owner asked for the site's TOML
+file; one setting for all collections is also what an installation for
+one group needs.
 
-### D2 The language is part of the file name
+### D2 Variants by file name, chosen and staged before Hugo
 
-`OSDB-0001-x.md` is English and `OSDB-0001-x.de.md` German, for Org
-sources as well. This is Hugo's own translation-by-file-name convention,
-so the two files become translations of each other without any front
-matter. The validator reads the code from the name; `.en` is refused (the
-default language has no code), and so is any code outside the language
-list.
+`OSDB-0001-x.org` has no code; `OSDB-0001-x.de.org` and
+`OSDB-0001-x.en.md` carry one. The build reads every validated content
+file, groups them by `id`, and picks per ID: the file tagged with the site
+language; else the untagged file; else the other tagged files in language
+order. It copies the chosen files into `build/content/procedures/` under
+their base names without the code, adding `language = "<code>"` to a
+tagged file that lacks the field, and mounts that directory alone as
+`content/procedures`. PDFs use the same choice, named after the chosen
+source file.
 
-Because Org replaces the extension of an export file name,
-`export.el` passes `#+EXPORT_FILE_NAME: <stem>.md`; a bare
-`OSDB-0001-x.de` would be exported as `OSDB-0001-x.md`.
+Staging keeps Hugo single-language: Hugo would otherwise read `.de` and
+`.en` in file names as its own language suffixes. Because Org replaces an
+export file name's extension, `export.el` passes
+`#+EXPORT_FILE_NAME: <stem>.md` so `OSDB-0001-x.de` keeps its code.
 
-Rejected: a `lang` front-matter field. It would need a schema field, an Org
-keyword and an export mapping, and would still need distinct file names.
+Rejected: mounting both source trees, as before. Two variants of one ID
+would be two pages at one URL.
 
-### D3 IDs are unique per language; translations share their facts
+### D3 Variants share their facts
 
-An ID may appear once per language. When an ID has a file in the default
-language, every other file with that ID is a translation and must have the
-same base name (`OSDB-0001-x`) and the same value, or absence, of
-`status`, `reaction_types`, `tags`, `yield_percent`, `precursors`,
-`structure_image` and `product.formula`, `product.mw`, `product.smiles`,
-`product.cas`. Each mismatch is an error on the translation, naming the
-original. Free per language: `title`, `product.name`, `scale` (decimal
-comma), `hazards`, `references`, `authors`, `checked_by`, `ai_model`,
-`date`, `lastmod` and the body.
+An ID may occur once per code and once without one. The reference variant
+is the untagged file, else the first tagged one in language order (`de`
+before `en`). Every other variant must have the reference's base name and
+the same value, or absence, of `status`, `reaction_types`, `tags`,
+`yield_percent`, `precursors`, `structure_image` and `product.formula`,
+`product.mw`, `product.smiles`, `product.cas`. Each mismatch is an error
+on that variant, naming the reference. Tags are shared, not translated:
+they are identifiers, and `sample-data` drives the banner.
 
-Tags are shared, not translated: they are identifiers, the
-`sample-data` tag drives the banner, and a shared set keeps the two tag
-taxonomies parallel.
+### D4 The `language` field
 
-Rejected: requiring a translation for every procedure. Real collections
-will be mostly English; translation is optional.
+Optional, `"de"` or `"en"`. It must match the file name's code when both
+exist. It chooses the section names of an untagged file. A procedure page
+whose `language` differs from the site's carries `lang` on its header and
+article, so the change of language is marked for readers and assistive
+software. Hugo's own `lang` front-matter key was removed in Hugo 0.144 and
+now fails the build, hence the longer name.
 
-### D4 German sections and table columns
+### D5 Sections, tables and numbers
 
 German bodies use `Zusammenfassung`, `Reagenzien`, `Durchführung`,
 `Aufarbeitung und Reinigung`, `Charakterisierung`, `Anmerkungen`,
-`Gefahren und Entsorgung`, `Literatur`, with the same rules as the English
-ones. The Reagents columns are `Reagenz | CAS | M (g/mol) | Menge | mmol |
-Äquiv.`; the table hook marks `M (g/mol)` and `Äquiv.` as numeric columns
-too. German text uses decimal commas, and `scale` accepts them
-(`^\d+([.,]\d+)?\s+\S+$`); front-matter numbers stay TOML numbers with a
-decimal point, and the German panel prints them with a comma.
+`Gefahren und Entsorgung`, `Literatur`. A file's set is chosen by its
+code, else its `language`, else whichever set gives the fewer problems.
+German Reagents columns are `Reagenz | CAS | M (g/mol) | Menge | mmol |
+Äquiv.`; the table hook marks `M (g/mol)` and `Äquiv.` numeric. `scale`
+accepts a decimal comma; front-matter numbers keep a decimal point and a
+German site prints them with a comma.
 
-### D5 Interface strings in Hugo's i18n files
+### D6 Interface strings
 
-Every visible string of the layouts is a key of `site/i18n/en.toml` and
-`site/i18n/de.toml`, looked up with `T`. Status values are shown through
-`status_<value>` keys, so `draft` reads `Entwurf` on German pages while the
-badge class and the stored value stay English. Reaction-type labels live
-in the vocabulary as `label_de`, beside `label`, so that the list of types
-stays in one file; the label partial falls back to `label`. Pagefind
-filter names are interface strings too (`Reaktionstyp`, `Schlagwort`,
-`Autor`, `Status`). The copy button carries its two messages as
-`data-copied` and `data-selected` attributes, so `site.js` holds no
-language. The per-page `@page` rule, which already sets the running
-header, also sets the footer text; `print.css` keeps the English footer
-for pages without that rule.
+Every visible layout string is a key of `site/i18n/de.toml` and
+`site/i18n/en.toml`, looked up with `T`; the site pages of `site/content/`
+name their title by a `title_key`. Status values are shown through
+`status_<value>` keys, so `draft` reads `Entwurf` while the badge class
+and stored value stay English. Reaction-type labels live in the
+vocabulary as `label_de` beside `label`, and lists sort by the shown
+label. Pagefind filter names are strings too. The copy button carries its
+messages in data attributes, so `site.js` holds no language. The per-page
+`@page` rule, which sets the running header, also sets the footer text.
 
-### D6 Cross-language links
+### D7 German stubs and templates
 
-The language switch lists `.Translations`, so it appears only where a
-translation exists. Precursor and used-in links use the current language's
-page of an ID and fall back to the page in another language, marked with
-`hreflang`, so a German page never loses a link because its precursor is
-not translated yet. Lists, taxonomies and search show only the current
-language's procedures (no content fallback, see Non-Goals).
+`new --lang de|en` uses that language's template and writes
+`OSDB-NNNN-<slug>.<code>.<ext>`; without `--lang` the stub is the English
+template without a code, as before. A German title's slug writes umlauts
+and ß out (`Größe` → `groesse`).
 
-### D7 Search per language
-
-Pagefind already splits its index by the `lang` attribute of `<html>`;
-the layouts now set it from the page's language. The German UI of
-Pagefind is chosen automatically from the same attribute.
-
-### D8 German stubs and templates
-
-`new --lang de` uses `templates/procedure.de.org` or `.de.md`, which carry
-the same anchor lines as the English templates, German comments and
-section headings, and writes `OSDB-NNNN-<slug>.de.<ext>`. The slug of a
-German title writes umlauts and ß out (`Größe` → `groesse`) before the
-usual ASCII folding.
-
-### D9 Documentation
+### D8 Documentation
 
 German readers get German versions of the co-worker guide, the Org guide
 and the schema reference, next to the English ones with a `.de` suffix.
@@ -138,11 +128,11 @@ The README, the decision record and the specs stay English.
 
 ## Risks / Trade-offs
 
-- [An English-only collection shows an empty German section] → The
-  language switch only appears where a translation exists; the German home
-  is reachable from English pages that have a German twin (home, lists,
-  taxonomy pages), and states the count of German procedures.
+- [Existing English installations turn German] → The shipped locale is
+  `de`, as the owner asked; `locale = "en"` restores an English site, and
+  untagged English procedures publish unchanged in either.
+- [A procedure on a German site may be in English] → Its page carries
+  `lang="en"` when its language is known; tagging or the `language` field
+  makes it known.
 - [Shared tags read English on German pages] → Accepted; tags are search
-  identifiers, and translating them would split the taxonomy.
-- [Two places to change a shared fact] → The validator reports every
-  disagreement as an error, so a build cannot publish drifting facts.
+  identifiers.

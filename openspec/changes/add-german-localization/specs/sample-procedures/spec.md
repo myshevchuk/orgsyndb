@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: German sample translations
-Every sample procedure of the theme sample set and the seeds SHALL have a German translation beside it, in the same format, named with `.de` before the suffix (for example `org/procedures/OSDB-0001-salicylic-acid.de.org` and `md/procedures/OSDB-0002-aspirin.de.md`). Each translation meets the localization spec, carries the same `authors` as its original, has a Reagents table with as many rows as the original's, and writes decimal commas in its text and table. The German long sample has at least 15 numbered steps under `Durchführung` and at least 6 numbered notes under `Anmerkungen`.
+Every sample procedure of the theme sample set and the seeds SHALL have a German variant beside it, in the same format, named with `.de` before the suffix (for example `org/procedures/OSDB-0001-salicylic-acid.de.org` and `md/procedures/OSDB-0002-aspirin.de.md`). Each translation meets the localization spec, carries the same `authors` as its original, has a Reagents table with as many rows as the original's, and writes decimal commas in its text and table. The German long sample has at least 15 numbered steps under `Durchführung` and at least 6 numbered notes under `Anmerkungen`.
 
 #### Scenario: Every sample has a German translation
 - **WHEN** a test reads each sample and its `.de` twin
@@ -57,7 +57,7 @@ The repository SHALL ship, besides the two seeds, these six sample procedures:
 | `md/procedures/OSDB-0008-cinnamic-acid.md` | (E)-cinnamic acid (C9H8O2, CAS `140-10-3`), by saponification of ethyl (E)-cinnamate with aqueous sodium hydroxide in ethanol, then acidification with hydrochloric acid | `hydrolysis` | `OSDB-0007` |
 
 The full set meets the following:
-- **Counts.** There are exactly six Org and two Markdown English sample procedures, with at least five distinct reaction types among them. Their German translations are not counted.
+- **Counts.** There are exactly six Org and two Markdown sample procedures without a language code, with at least five distinct reaction types among them. Their German variants are not counted.
 - **Product CAS.** Every sample's `product` has a `cas` that resolves to that product on PubChem. The orchestrator checks this during review, because the tests cannot reach the network.
 - **Tags.** Every sample has at least one tag besides `sample-data`.
 - **Structure image.** OSDB-0003 sets `structure_image = "structures/osdb-0003.svg"`.
@@ -66,7 +66,7 @@ The full set meets the following:
 
 #### Scenario: Set, counts and chain
 - **WHEN** a test reads every sample procedure
-- **THEN** the files above exist with those IDs, reaction types and precursors, there are six Org and two Markdown English samples, and at least five distinct reaction types
+- **THEN** the files above exist with those IDs, reaction types and precursors, there are six Org and two Markdown samples without a language code, and at least five distinct reaction types
 - **AND** every product has a `cas` that passes the check-digit rule, and every sample has a tag besides `sample-data`
 
 #### Scenario: Structure image is set
