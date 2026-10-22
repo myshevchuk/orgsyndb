@@ -1,11 +1,12 @@
 {{- /* Every Markdown table: wrapped in a focusable scroll region, header cells
 scoped to their column, and the cells of the CAS, MW (g/mol), mmol and
-Equiv columns marked "num" so that they never wrap. A newline separates
+Equiv columns (in German tables M (g/mol) and Äquiv.) marked "num" so
+that they never wrap. A newline separates
 adjacent cells, so that Pagefind indexes each cell as separate words. */ -}}
-{{- $numeric := slice "CAS" "MW (g/mol)" "mmol" "Equiv" -}}
+{{- $numeric := slice "CAS" "MW (g/mol)" "mmol" "Equiv" "M (g/mol)" "Äquiv." -}}
 {{- $heads := slice -}}
 {{- with .THead }}{{ range index . 0 }}{{ $heads = $heads | append (.Text | plainify | htmlUnescape | strings.TrimSpace) }}{{ end }}{{ end -}}
-<div class="table-scroll" tabindex="0" role="region" aria-label="Table">
+<div class="table-scroll" tabindex="0" role="region" aria-label="{{ T "table_label" }}">
 <table>
 {{- with .THead }}
 <thead>

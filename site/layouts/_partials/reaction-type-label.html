@@ -1,3 +1,4 @@
-{{- /* Reaction-type slug to its vocabulary label; the slug itself when the
-vocabulary has no entry. */ -}}
-{{- with index site.Data.reaction_types . }}{{ .label }}{{ else }}{{ . }}{{ end -}}
+{{- /* Reaction-type slug to its vocabulary label in the current language:
+label_<lang> when the vocabulary has one, else label; the slug itself
+when the vocabulary has no entry. */ -}}
+{{- with index site.Data.reaction_types . }}{{ index . (printf "label_%s" site.Language.Lang) | default .label }}{{ else }}{{ . }}{{ end -}}

@@ -1,3 +1,4 @@
-{{- /* The running header of the printed page: ID top left, title top right.
-html/template escapes both values as CSS strings. */ -}}
-<style>@page { @top-left { content: "{{ .Params.id }}"; } @top-right { content: "{{ .Title }}"; } }</style>
+{{- /* The running header of the printed page: ID top left, title top right,
+and the page footer in the page's language. html/template escapes the
+values as CSS strings. */ -}}
+<style>@page { @top-left { content: "{{ .Params.id }}"; } @top-right { content: "{{ .Title }}"; } @bottom-center { content: "{{ T "print_page" }} " counter(page) " {{ T "print_of" }} " counter(pages); } }</style>

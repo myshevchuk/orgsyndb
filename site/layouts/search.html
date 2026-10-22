@@ -1,9 +1,9 @@
 {{ define "head" }}<link rel="stylesheet" href="/pagefind/pagefind-ui.css">{{ end }}
 {{ define "main" -}}
-<h1>{{ .Title }}</h1>
+<h1>{{ partial "page-title.html" . }}</h1>
 <div class="search" data-search></div>
 <noscript>
-<p>Search needs JavaScript. Without it, browse <a href="/procedures/">all procedures</a>, or by <a href="/reaction_types/">reaction type</a>, <a href="/tags/">tag</a> or <a href="/authors/">author</a>.</p>
+<p>{{ T "search_noscript" (dict "procedures" "/procedures/" "reaction_types" "/reaction_types/" "tags" "/tags/" "authors" "/authors/") | safeHTML }}</p>
 </noscript>
 {{ end }}
 {{ define "scripts" -}}

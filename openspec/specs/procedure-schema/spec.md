@@ -2,7 +2,9 @@
 
 ## Purpose
 Define what a valid OrgSynDB procedure is in either source format: identifiers, file names and URLs, front-matter fields and types, the reaction-type vocabulary, the Org file-level keywords and their mapping to front matter, the body sections, and the two authoring templates.
+
 ## Requirements
+
 ### Requirement: Procedure identifier
 Every procedure SHALL carry a front-matter `id` string matching `OSDB-NNNN`: the literal `OSDB-` followed by exactly four digits whose value lies between 1 and 9999. `OSDB-0000` is reserved as the template placeholder and is never a valid ID.
 
@@ -15,15 +17,19 @@ Every procedure SHALL carry a front-matter `id` string matching `OSDB-NNNN`: the
 - **THEN** it reports exactly one error, field `id`, containing `must be between OSDB-0001 and OSDB-9999`
 
 ### Requirement: Unique identifiers across all source trees
-Two procedure files SHALL NOT carry the same `id`, whichever content roots they come from. A duplicate is reported as one error on each file involved, naming the other file's path.
+Two procedure files with the same language code, or both without one, SHALL NOT carry the same `id`, whichever content roots they come from. A duplicate is reported as one error on each file involved, naming the other file's path. Other files with the same `id` are variants, as the localization spec defines.
 
 #### Scenario: Same ID in two content roots
 - **WHEN** a fixture run on the two roots `invalid/duplicate-id/a` and `invalid/duplicate-id/b` examines `a/OSDB-0104-first.md` and `b/OSDB-0104-second.md`, which both have `id = "OSDB-0104"`
 - **THEN** the exit status is 1, and stdout is exactly two lines, both with field `id` and severity `error`
 - **AND** the line for each file contains `duplicate id OSDB-0104` and the path of the other file
 
+#### Scenario: Duplicate ID within one language
+- **WHEN** a run examines two German files `OSDB-0100-baseline.de.md` and `OSDB-0100-copy.de.md` with the same `id`
+- **THEN** it reports exactly two errors, field `id`, containing `duplicate id OSDB-0100`
+
 ### Requirement: Procedure file names
-A procedure source file SHALL be named `OSDB-NNNN-short-slug.md` (content) or `OSDB-NNNN-short-slug.org` (Org source). The short slug matches `[a-z0-9]+(-[a-z0-9]+)*`, and the `OSDB-NNNN` prefix equals the file's `id` exactly.
+A procedure source file SHALL be named `OSDB-NNNN-short-slug.md` (content) or `OSDB-NNNN-short-slug.org` (Org source), with an optional language code, `de` or `en`, before the suffix: `OSDB-NNNN-short-slug.de.md`, `OSDB-NNNN-short-slug.en.org`. The short slug matches `[a-z0-9]+(-[a-z0-9]+)*`, and the `OSDB-NNNN` prefix equals the file's `id` exactly. Any other code is an error.
 
 #### Scenario: Lowercase prefix is rejected
 - **WHEN** a variant run leaves the baseline unchanged under the file name `osdb-0100-lowercase.md`
@@ -32,6 +38,12 @@ A procedure source file SHALL be named `OSDB-NNNN-short-slug.md` (content) or `O
 #### Scenario: File name disagrees with the ID
 - **WHEN** a fixture run on `invalid/file-name-id-mismatch` examines `OSDB-0106-file-name-id-mismatch.md`, whose `id` is `"OSDB-0199"` and `slug` is `"osdb-0199"`
 - **THEN** it reports exactly one error, field `file_name`, containing `does not match id OSDB-0199`
+
+#### Scenario: Language code in a file name
+- **WHEN** a run examines the baseline as `OSDB-0100-baseline.en.md`, and then as `OSDB-0100-baseline.fr.md`
+- **THEN** the first is clean, and the second reports exactly one error, field `file_name`, containing `unknown language code ".fr"`
+
+<!-- Reason: German text writes a decimal comma. -->
 
 ### Requirement: Slug determines the URL
 Every procedure SHALL carry a front-matter `slug` string equal to its `id` lowercased (`OSDB-0001` gives `osdb-0001`). A Hugo permalink of `/procedures/:slug/` then serves the procedure at `/procedures/osdb-0001/`. The error message states the exact expected value.
@@ -109,11 +121,17 @@ The `yield_percent` field SHALL be a finite number from 0 to 100 inclusive.
 - **THEN** it reports exactly one error, field `yield_percent`, containing `must be between 0 and 100`
 
 ### Requirement: Scale with unit
-The `scale` field SHALL be a string consisting of a number, whitespace, and a unit token, matching `^\d+(\.\d+)?\s+\S+$` (e.g. `"25 mmol"`).
+The `scale` field SHALL be a string consisting of a number, whitespace, and a unit token, matching `^\d+([.,]\d+)?\s+\S+$` (e.g. `"25 mmol"` or `"2,5 mmol"`).
 
 #### Scenario: Scale without a unit
 - **WHEN** a variant run sets `scale = "25"` under the file name `OSDB-0100-bad-scale.md`
 - **THEN** it reports exactly one error, field `scale`, containing `must be a number followed by a unit`
+
+#### Scenario: Scale with a decimal comma
+- **WHEN** a run examines the baseline with `scale = "2,5 mmol"`
+- **THEN** it exits 0 and prints nothing
+
+<!-- Reason: the vocabulary carries German labels. -->
 
 ### Requirement: Product table
 The `product` table SHALL contain these keys:
@@ -223,16 +241,18 @@ Front-matter keys outside the schema SHALL be handled as follows:
 - **THEN** no line is printed for that file
 
 ### Requirement: Reaction-type vocabulary file
-The file `site/data/reaction_types.toml` SHALL map each reaction-type slug, as a top-level key matching `^[a-z0-9]+(-[a-z0-9]+)*$`, to a table containing a non-empty string `label`. Its entries include at least `acylation`, `aldol-condensation`, `cross-coupling`, `esterification`, `olefination`, `protection`, `reduction` and `reductive-amination`.
+The file `site/data/reaction_types.toml` SHALL map each reaction-type slug, as a top-level key matching `^[a-z0-9]+(-[a-z0-9]+)*$`, to a table containing a non-empty string `label` and, for each site language other than English, a non-empty string `label_<language>` (`label_de`). Its entries include at least `acylation`, `aldol-condensation`, `cross-coupling`, `esterification`, `olefination`, `protection`, `reduction` and `reductive-amination`.
 
 #### Scenario: Shipped vocabulary is well formed and complete
 - **WHEN** a test loads `site/data/reaction_types.toml` with `tomllib`
-- **THEN** every top-level key matches the slug pattern and maps to a table whose `label` is a non-empty string
+- **THEN** every top-level key matches the slug pattern and maps to a table whose `label` and `label_de` are non-empty strings
 - **AND** the keys include `acylation`, `aldol-condensation`, `cross-coupling`, `esterification`, `olefination`, `protection`, `reduction` and `reductive-amination`
 
 #### Scenario: Validator accepts the shipped vocabulary
 - **WHEN** the validator runs with its default vocabulary on an empty temporary content root
 - **THEN** it exits 0 and prints nothing to stdout
+
+<!-- Reason: German procedures have German section names. -->
 
 ### Requirement: Org file-level keywords
 Every Org procedure source SHALL carry each of the file-level keywords `#+CREATED`, `#+LAST_MODIFIED` and `#+AI_MODEL` exactly once. Keyword names are matched case-insensitively. The following rules apply to the values:
@@ -320,7 +340,7 @@ The export of an Org procedure SHALL carry front matter as follows:
 - **THEN** it reports exactly one error, on the `.org` path, field `#+AI_MODEL`, containing `does not match exported ai_model`
 
 ### Requirement: Body sections
-Every procedure body SHALL contain these eight level-2 sections, in this order:
+Every procedure body SHALL contain these eight level-2 sections, in this order; a procedure in German uses the German names that the localization spec gives instead, and a file without a language code may use either set:
 1. Summary
 2. Reagents
 3. Procedure
@@ -391,4 +411,3 @@ The file `templates/procedure.org` SHALL be a complete Org procedure that satisf
 - **AND** the last `#+HUGO_CUSTOM_FRONT_MATTER:` line contains `:product` and no other `:key`, and no earlier such line contains `:product`
 - **AND** its top-level headings, in order, include `* Summary`, `* Reagents`, `* Procedure`, `* Workup and Purification`, `* Characterization`, `* Notes`, `* Hazards and Waste Disposal` and `* References`
 - **AND** no line begins, case-insensitively, with `#+DATE:`, `#+HUGO_LASTMOD:`, `#+HUGO_AUTO_SET_LASTMOD:`, `#+HUGO_DRAFT:`, `#+HUGO_BASE_DIR:` or `#+HUGO_SECTION:`
-

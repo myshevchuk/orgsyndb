@@ -34,13 +34,30 @@ ZONE_NAME = "Europe/Berlin"
 
 ID_RE = re.compile(r"^OSDB-(\d{4})$")
 SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
-SCALE_RE = re.compile(r"^\d+(\.\d+)?\s+\S+$")
+SCALE_RE = re.compile(r"^\d+([.,]\d+)?\s+\S+$")
 CAS_RE = re.compile(r"^(\d{2,7})-(\d{2})-(\d)$")
 AI_MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$")
 STATUSES = ("draft", "checked", "retired")
-SECTIONS = ("Summary", "Reagents", "Procedure", "Workup and Purification",
-            "Characterization", "Notes", "Hazards and Waste Disposal",
-            "References")
+# The languages a procedure may be written in. A file name may carry one
+# of them before its suffix, as in OSDB-0001-x.de.md; the files of one ID
+# are variants of one procedure, and the build publishes the one that
+# suits the site's language. A file without a code is in any language.
+LANGUAGES = ("de", "en")
+DEFAULT_LANGUAGE = "en"
+SECTIONS_BY_LANGUAGE = {
+    "en": ("Summary", "Reagents", "Procedure", "Workup and Purification",
+           "Characterization", "Notes", "Hazards and Waste Disposal",
+           "References"),
+    "de": ("Zusammenfassung", "Reagenzien", "Durchführung",
+           "Aufarbeitung und Reinigung", "Charakterisierung", "Anmerkungen",
+           "Gefahren und Entsorgung", "Literatur"),
+}
+SECTIONS = SECTIONS_BY_LANGUAGE[DEFAULT_LANGUAGE]
+# Front-matter values that every variant of a procedure shares; the
+# dotted names are keys of the product table.
+SHARED_FIELDS = ("status", "reaction_types", "tags", "yield_percent",
+                 "precursors", "structure_image", "product.formula",
+                 "product.mw", "product.smiles", "product.cas")
 ORG_KEYWORDS = ("CREATED", "LAST_MODIFIED", "AI_MODEL")
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
@@ -406,6 +423,27 @@ def check_structure_image(value: object, static_dir: Path) -> list[Problem]:
     return []
 
 
+def check_language(value: object) -> list[Problem]:
+    """Check that ``language`` is one of the procedure languages."""
+    if value not in LANGUAGES:
+        return [error("language", f"{value!r} must be one of "
+                      f"{', '.join(LANGUAGES)}")]
+    return []
+
+
+def check_language_agrees(name: str, value: object) -> list[Problem]:
+    """Check that ``language`` names the language code of file ``name``.
+
+    Nothing is reported when either is missing or ``language`` is
+    invalid.
+    """
+    code = language_of(name)
+    if code is None or value not in LANGUAGES or value == code:
+        return []
+    return [error("language", f'"{value}" does not match the language code '
+                  f'".{code}" of the file name')]
+
+
 def check_ai_model(value: object) -> list[Problem]:
     """Check that ``ai_model`` is a model name and not ``none``."""
     found = check_string("ai_model", value)
@@ -442,7 +480,7 @@ REQUIRED_KEYS = ("id", "slug", "title", "date", "lastmod", "authors",
                  "status", "reaction_types", "tags", "product", "scale",
                  "yield_percent", "hazards")
 OPTIONAL_KEYS = ("precursors", "structure_image", "checked_by",
-                 "references", "ai_model")
+                 "references", "ai_model", "language")
 
 
 def check_fields(data: dict[str, Any], ctx: Context) -> list[Problem]:
@@ -502,6 +540,8 @@ def check_fields(data: dict[str, Any], ctx: Context) -> list[Problem]:
                 found += check_string_list(key, value, non_empty=False)
             case "ai_model":
                 found += check_ai_model(value)
+            case "language":
+                found += check_language(value)
     for key, value in data.items():
         if key not in REQUIRED_KEYS and key not in OPTIONAL_KEYS:
             found += check_extra_key(key, value)
@@ -509,9 +549,32 @@ def check_fields(data: dict[str, Any], ctx: Context) -> list[Problem]:
 
 
 def file_name_pattern(suffix: str) -> re.Pattern[str]:
-    """Return the procedure file-name pattern for ``suffix``."""
-    return re.compile(
-        rf"^(OSDB-\d{{4}})-[a-z0-9]+(-[a-z0-9]+)*{re.escape(suffix)}$")
+    """Return the procedure file-name pattern for ``suffix``.
+
+    Group 1 is the ID, group 2 the base name without the language code
+    and suffix, and group 3 the language code, if any.
+    """
+    return re.compile(rf"^((OSDB-\d{{4}})-[a-z0-9]+(?:-[a-z0-9]+)*)"
+                      rf"(?:\.([a-z]{{2}}))?{re.escape(suffix)}$")
+
+
+def language_of(name: str) -> str | None:
+    """Return the language code of a procedure file name, or None.
+
+    That is the two-letter code before the suffix, as in
+    ``OSDB-0001-ethyl-acetate.de.md``. The code is not checked against
+    ``LANGUAGES``.
+    """
+    match = re.search(r"\.([a-z]{2})\.(md|org|pdf)$", name)
+    return match.group(1) if match else None
+
+
+def base_name(name: str) -> str:
+    """Return ``name`` without its suffix and language code."""
+    stem = name.rsplit(".", 1)[0]
+    if language_of(name) is not None:
+        stem = stem.rsplit(".", 1)[0]
+    return stem
 
 
 def check_file_name(name: str, suffix: str,
@@ -524,9 +587,14 @@ def check_file_name(name: str, suffix: str,
     match = file_name_pattern(suffix).match(name)
     if match is None:
         return [error("file_name", f"must be named OSDB-NNNN-short-slug"
-                      f"{suffix}, e.g. OSDB-0001-ethyl-acetate{suffix}")]
-    if is_valid_id(ident) and match.group(1) != ident:
-        return [error("file_name", f"file name prefix {match.group(1)} "
+                      f"{suffix}, e.g. OSDB-0001-ethyl-acetate{suffix}, or "
+                      f"OSDB-0001-ethyl-acetate.de{suffix} with a language")]
+    code = match.group(3)
+    if code is not None and code not in LANGUAGES:
+        return [error("file_name", f'unknown language code ".{code}"; '
+                      f"use {' or '.join(LANGUAGES)}, or none")]
+    if is_valid_id(ident) and match.group(2) != ident:
+        return [error("file_name", f"file name prefix {match.group(2)} "
                       f"does not match id {ident}")]
     return []
 
@@ -569,24 +637,30 @@ def section_headings(body: str) -> list[str]:
     return found
 
 
-def check_body(body: str) -> list[Problem]:
+def check_body(body: str, language: str | None = DEFAULT_LANGUAGE
+               ) -> list[Problem]:
     """Check that ``body`` has the eight sections in canonical order.
 
-    Each missing section is a warning, and any canonical section out of
-    order gives one further warning.
+    The section names are those of ``language``; with None, those of the
+    language that gives the fewest problems. Each missing section is a
+    warning, and any canonical section out of order gives one further
+    warning.
     """
+    if language is None:
+        return min((check_body(body, lang) for lang in LANGUAGES), key=len)
+    sections = SECTIONS_BY_LANGUAGE.get(language, SECTIONS)
     folded = [h.casefold() for h in section_headings(body)]
     found: list[Problem] = []
     order: list[int] = []
-    for index, name in enumerate(SECTIONS):
+    for index, name in enumerate(sections):
         if name.casefold() in folded:
             order.append(index)
         else:
             found.append(warning("body", f'missing section "{name}"'))
-    order.sort(key=lambda i: folded.index(SECTIONS[i].casefold()))
+    order.sort(key=lambda i: folded.index(sections[i].casefold()))
     if order != sorted(order):
         found.append(warning("body", "sections out of order; expected "
-                             f"{', '.join(SECTIONS)}"))
+                             f"{', '.join(sections)}"))
     return found
 
 
@@ -757,10 +831,71 @@ class ContentFile:
     data: dict[str, Any] | None = None
     problems: list[Problem] = field(default_factory=list)
 
+    @property
+    def language(self) -> str | None:
+        """The language code of the file name, or None."""
+        return language_of(self.name)
+
+
+def shared_value(data: dict[str, Any], name: str) -> object:
+    """Return the value of a ``SHARED_FIELDS`` entry, or None if unset."""
+    if name.startswith("product."):
+        product = data.get("product")
+        return (product.get(name.removeprefix("product."))
+                if isinstance(product, dict) else None)
+    return data.get(name)
+
+
+def same_value(mine: object, theirs: object) -> bool:
+    """Whether two shared-field values agree: numbers by value, so that
+    ``85`` and ``85.0`` match, and anything else by value and type."""
+    if is_number(mine) and is_number(theirs):
+        return mine == theirs
+    return mine == theirs and type(mine) is type(theirs)
+
+
+def reference_variant(holders: Sequence[ContentFile]) -> ContentFile:
+    """The variant the others of one ID are compared with: the file
+    without a language code, else the first in ``LANGUAGES`` order."""
+    def rank(item: ContentFile) -> tuple[int, str]:
+        lang = item.language
+        return (-1 if lang is None else LANGUAGES.index(lang), item.path)
+    return min(holders, key=rank)
+
+
+def check_variants(holders: Sequence[ContentFile]) -> None:
+    """Check the variants of one ID against their reference variant.
+
+    ``holders`` are the parsed files sharing one ID, at most one per
+    language code (or none). Each must have the reference's base name
+    and the same value, or absence, of every ``SHARED_FIELDS`` entry.
+    """
+    original = reference_variant(holders)
+    assert original.data is not None
+    for item in holders:
+        if item is original:
+            continue
+        assert item.data is not None
+        if base_name(item.name) != base_name(original.name):
+            item.problems.append(error(
+                "file_name", f"a variant must be named after "
+                f"{original.path}: {base_name(original.name)}."
+                f"{item.language}{Path(item.name).suffix}"))
+        for name in SHARED_FIELDS:
+            mine = shared_value(item.data, name)
+            theirs = shared_value(original.data, name)
+            if not same_value(mine, theirs):
+                shown = "unset" if theirs is None else repr(theirs)
+                item.problems.append(error(
+                    name, f"must equal the value in {original.path} "
+                    f"({shown}); the variants of a procedure share it"))
+
 
 def check_cross_file(files: Sequence[ContentFile]) -> None:
-    """Add duplicate-ID and precursor-existence problems to ``files``.
+    """Add duplicate-ID, variant and precursor-existence problems.
 
+    An ID may be used once per language code, and once without one; the
+    files of one ID are variants, checked by ``check_variants``.
     Files whose front matter did not parse contribute no ID and are not
     checked.
     """
@@ -769,12 +904,20 @@ def check_cross_file(files: Sequence[ContentFile]) -> None:
         if item.data is not None and is_valid_id(item.data.get("id")):
             by_id.setdefault(item.data["id"], []).append(item)
     for ident, holders in by_id.items():
-        if len(holders) < 2:
-            continue
+        by_language: dict[str | None, list[ContentFile]] = {}
         for item in holders:
-            others = ", ".join(o.path for o in holders if o is not item)
-            item.problems.append(error(
-                "id", f"duplicate id {ident}, also used by {others}"))
+            by_language.setdefault(item.language, []).append(item)
+        duplicated = False
+        for same in by_language.values():
+            if len(same) < 2:
+                continue
+            duplicated = True
+            for item in same:
+                others = ", ".join(o.path for o in same if o is not item)
+                item.problems.append(error(
+                    "id", f"duplicate id {ident}, also used by {others}"))
+        if not duplicated and len(holders) > 1:
+            check_variants(holders)
     for item in files:
         if item.data is None:
             continue
@@ -817,6 +960,12 @@ def load_vocabulary(path: Path) -> frozenset[str]:
         if not isinstance(label, str) or not label.strip():
             raise ConfigError(f"vocabulary file {path}: entry {key!r} "
                               "must be a table with a non-empty label")
+        for lang in LANGUAGES:
+            name = f"label_{lang}"
+            if name in entry and (not isinstance(entry[name], str)
+                                  or not entry[name].strip()):
+                raise ConfigError(f"vocabulary file {path}: entry "
+                                  f"{key!r} has an empty {name}")
     return frozenset(data)
 
 
@@ -888,7 +1037,10 @@ def examine_content(entry: Entry, ctx: Context) -> ContentFile:
     ident = parsed.data.get("id")
     item.problems += check_file_name(entry.name, ".md", ident)
     item.problems += check_fields(parsed.data, ctx)
-    item.problems += check_body(parsed.body)
+    lang = parsed.data.get("language")
+    item.problems += check_language_agrees(entry.name, lang)
+    item.problems += check_body(parsed.body, item.language or (
+        lang if lang in LANGUAGES else None))
     return item
 
 

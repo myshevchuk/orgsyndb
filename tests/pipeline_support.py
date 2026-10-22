@@ -48,6 +48,7 @@ DEMO = REPO / "examples" / "demo"
 OX_HUGO_PIN = "b7dc44dc28911b9d8e3055a18deac16c3b560b03"
 TOMELR_PIN = "670e0a08f625175fd80137cf69e799619bf8a381"
 PAGEFIND_RELATIVE = Path(".tools") / "pagefind-1.5.2" / "pagefind"
+LANGUAGES = ("de", "en")
 BOOTSTRAP_HINT = ("ox-hugo not bootstrapped: run tools/orgsyndb -C "
                   "examples/demo export once (needs network)")
 PAGEFIND_HINT = ("pagefind not cached: run tools/orgsyndb -C examples/demo "
@@ -245,6 +246,16 @@ class Sandbox:
             ["git", *GIT_QUIET, *map(str, args)], cwd=self.root,
             env=self.env(), capture_output=True, text=True, timeout=120)
         return Run(done.returncode, done.stdout, done.stderr)
+
+    def set_locale(self, locale: str) -> None:
+        """Set ``locale`` in the application copy's site/hugo.toml."""
+        config = self.app / "site" / "hugo.toml"
+        text = config.read_text(encoding="utf-8")
+        changed = re.sub(r'(?m)^locale = ".*"$', f'locale = "{locale}"',
+                         text)
+        if changed.count(f'locale = "{locale}"') != 1:
+            raise AssertionError("site/hugo.toml has no locale line")
+        config.write_text(changed, encoding="utf-8")
 
     def put_fixture(self, name: str) -> Path:
         """Copy a tests/fixtures/export file into org/procedures/."""
@@ -532,6 +543,7 @@ class ThemeBuildCase(unittest.TestCase):
 
     FIXTURES: tuple[str, ...] = ()
     COMMAND = "build"
+    LOCALE = "en"
     ENV: dict[str, str] = {}
     sandbox: Sandbox
     result: Run
@@ -541,11 +553,17 @@ class ThemeBuildCase(unittest.TestCase):
         """Skip the class when a tool beyond the builder is missing."""
 
     @classmethod
+    def prepare(cls) -> None:
+        """Change the sandbox before the build. Subclasses override."""
+
+    @classmethod
     def setUpClass(cls) -> None:
         require_builder()
         cls.require_tools()
         cls.sandbox = make_sandbox(_ClassCase(cls))
+        cls.sandbox.set_locale(cls.LOCALE)
         put_theme_fixtures(cls.sandbox, *cls.FIXTURES)
+        cls.prepare()
         cls.result = cls.sandbox.build(
             cls.COMMAND, env=cls.sandbox.env(**cls.ENV))
 
@@ -558,7 +576,8 @@ class ThemeBuildCase(unittest.TestCase):
         return self.sandbox.root / "public"
 
     def content(self) -> list["Content"]:
-        return read_content(self.sandbox)
+        """The content files the build published, one per ID."""
+        return read_content(self.sandbox, self.LOCALE)
 
     def pages(self) -> list[tuple[Path, "Page"]]:
         """Every HTML page of the build except the Pagefind bundle."""
@@ -566,10 +585,10 @@ class ThemeBuildCase(unittest.TestCase):
                 for path in html_files(self.public)]
 
     def procedure_pages(self) -> list[tuple["Content", "Page"]]:
-        """Each procedure's content file with its page, by ID."""
+        """Each published content file with its page, by ID."""
         found = []
         for item in self.content():
-            path = self.public / "procedures" / item.slug / "index.html"
+            path = item.page_file(self.public)
             self.assertTrue(path.is_file(), f"{path.relative_to(self.public)}"
                             " was not published")
             found.append((item, load_page(self.public, path)))
@@ -603,9 +622,38 @@ class Content(NamedTuple):
     def product(self) -> dict[str, Any]:
         return self.data.get("product", {})
 
+    @property
+    def language(self) -> str | None:
+        """The language code of the file name, or None."""
+        return language_of(self.path.name)
 
-def read_content(sandbox: Sandbox) -> list[Content]:
-    """Front matter and body of every procedure content file, by ID."""
+    def page_file(self, public: Path) -> Path:
+        """The procedure's page under ``public``."""
+        return public / "procedures" / self.slug / "index.html"
+
+
+def language_of(name: str) -> str | None:
+    """The language code of a file name (``de`` for ``*.de.md``) or
+    None."""
+    match = re.search(r"\.([a-z]{2})\.(md|org|pdf)$", name)
+    return match.group(1) if match else None
+
+
+def variant_rank(name: str, locale: str) -> tuple[int, str]:
+    """Order of preference of a variant for a site in ``locale``: the
+    file tagged with it, then the untagged file, then the others."""
+    code = language_of(name)
+    if code == locale:
+        return (0, name)
+    if code is None:
+        return (1, name)
+    return (2 + LANGUAGES.index(code), name)
+
+
+def read_content(sandbox: Sandbox, locale: str | None) -> list[Content]:
+    """Front matter and body of the procedure content files, by ID: the
+    variant published in ``locale`` of each ID, or every file with None.
+    """
     found = []
     for directory in (sandbox.export_dir(), sandbox.md_dir()):
         if not directory.is_dir():
@@ -613,15 +661,25 @@ def read_content(sandbox: Sandbox) -> list[Content]:
         for path in sorted(directory.glob("OSDB-*.md")):
             text = path.read_text(encoding="utf-8")
             found.append(Content(path, front_matter(text), body_of(text)))
-    return sorted(found, key=lambda item: item.id)
+    if locale is not None:
+        chosen: dict[str, Content] = {}
+        for item in found:
+            best = chosen.get(item.id)
+            if best is None or variant_rank(item.path.name, locale) < \
+                    variant_rank(best.path.name, locale):
+                chosen[item.id] = item
+        found = list(chosen.values())
+    return sorted(found, key=lambda item: (item.id, item.path.name))
 
 
-def reaction_labels(root: Path) -> dict[str, str]:
-    """Reaction-type slug to label, from the application at ``root``."""
+def reaction_labels(root: Path, language: str = "en") -> dict[str, str]:
+    """Reaction-type slug to label in ``language``, from the application
+    at ``root``."""
     data = tomllib.loads(
         (root / "site" / "data" / "reaction_types.toml")
         .read_text(encoding="utf-8"))
-    return {slug: entry["label"] for slug, entry in data.items()}
+    return {slug: entry.get(f"label_{language}", entry["label"])
+            for slug, entry in data.items()}
 
 
 def smiles_key(smiles: str) -> str:
@@ -1054,10 +1112,12 @@ def serve_directory(path: Path) -> Iterator[str]:
 
 
 def pagefind_search(public: Path, requests: list[dict[str, Any]],
-                    search_terms: Path = SEARCH_TERMS) -> dict[str, Any]:
+                    search_terms: Path = SEARCH_TERMS,
+                    language: str = "en") -> dict[str, Any]:
     """Run searches with the built Pagefind bundle under Node.
 
-    Each request is ``{"term", "filters", "normalise"}``. Returns the
+    Each request is ``{"term", "filters", "normalise"}``, run against the
+    index of ``language``. Returns the
     parsed ``{"results": [[{"id", "title", "excerpt", "meta"}, ...], ...],
     "filters": {...}}``, with one result list per request. Skips unless
     node exists; a missing script or bundle fails on an assertion.
@@ -1075,7 +1135,7 @@ def pagefind_search(public: Path, requests: list[dict[str, Any]],
         with serve_directory(public) as base:
             done = subprocess.run(
                 [node, str(PAGEFIND_QUERY), str(copy), f"{base}/pagefind/",
-                 str(search_terms)],
+                 str(search_terms), language],
                 input=json.dumps(requests), capture_output=True, text=True,
                 timeout=600)
     if done.returncode != 0:

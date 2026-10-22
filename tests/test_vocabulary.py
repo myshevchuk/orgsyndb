@@ -24,9 +24,10 @@ class ShippedVocabularyTests(ValidatorTestCase):
         for key, entry in data.items():
             self.assertRegex(key, SLUG)
             self.assertIsInstance(entry, dict, key)
-            label = entry.get("label")
-            self.assertIsInstance(label, str, key)
-            self.assertNotEqual(label.strip(), "", key)
+            for name in ("label", "label_de"):
+                label = entry.get(name)
+                self.assertIsInstance(label, str, f"{key}: {name}")
+                self.assertNotEqual(label.strip(), "", f"{key}: {name}")
         self.assertLessEqual(set(REQUIRED), set(data))
 
     def test_validator_accepts_the_shipped_vocabulary(self) -> None:

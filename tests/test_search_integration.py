@@ -44,7 +44,7 @@ class SearchBatchCase(ps.ThemeBuildCase):
         cls.out = {}
         cls.batch_error = None
         try:
-            cls.plan(ps.read_content(cls.sandbox))
+            cls.plan(ps.read_content(cls.sandbox, cls.LOCALE))
             cls.out = ps.pagefind_search(
                 cls.sandbox.root / "public", cls.requests)
         except AssertionError as exc:

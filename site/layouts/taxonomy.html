@@ -1,8 +1,8 @@
 {{ define "main" -}}
-<h1>{{ .Title }}</h1>
+<h1>{{ partial "page-title.html" . }}</h1>
 <ul class="term-list">
-{{ range .Data.Terms.Alphabetical -}}
-<li><a href="{{ .Page.RelPermalink }}">{{ partial "page-title.html" .Page }}</a> <span class="count">({{ .Count }})</span></li>
+{{ range partial "terms-by-label.html" .Data.Plural -}}
+<li><a href="{{ .term.Page.RelPermalink }}">{{ partial "page-title.html" .term.Page }}</a> <span class="count">({{ .term.Count }})</span></li>
 {{ end -}}
 </ul>
 {{ end }}

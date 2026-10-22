@@ -29,6 +29,8 @@ MISSING_TITLE = (FIXTURES / "invalid" / "missing-title"
                  / "OSDB-0101-missing-title.md")
 PROBLEM_LINE = re.compile(r"^.+?:[^:\s]+: (error|warning): ")
 SEEDS = ["OSDB-0001-salicylic-acid", "OSDB-0002-aspirin"]
+# The locale of the shipped site/hugo.toml.
+LOCALE = "de"
 
 
 class BuildTestCase(unittest.TestCase):
@@ -49,12 +51,10 @@ class BuildTestCase(unittest.TestCase):
         return self.sandbox.root / "public" / Path(*parts)
 
     def content_files(self) -> list[Path]:
-        """Procedure content files of build/export/ and md/procedures/."""
-        found: list[Path] = []
-        for directory in (self.sandbox.export_dir(), self.sandbox.md_dir()):
-            if directory.is_dir():
-                found += sorted(directory.glob("OSDB-*.md"))
-        return found
+        """The procedure content files of build/export/ and
+        md/procedures/ that a build in the shipped locale, de, publishes:
+        one per ID."""
+        return [item.path for item in ps.read_content(self.sandbox, LOCALE)]
 
     def add_baseline(self, *extra_lines: str, date: str | None = None) -> Path:
         text = BASELINE.read_text(encoding="utf-8")
@@ -100,7 +100,7 @@ class MergedSectionTests(BuildTestCase):
                                     "index.html").is_file())
         entry = json.loads(self.public("pagefind", "pagefind-entry.json")
                            .read_text(encoding="utf-8"))
-        self.assertEqual(entry["languages"]["en"]["page_count"],
+        self.assertEqual(entry["languages"][LOCALE]["page_count"],
                          len(self.content_files()))
         self.assertTrue((self.sandbox.root / "pdf"
                          / "OSDB-0100-baseline.pdf").is_file())
@@ -143,14 +143,16 @@ class LayoutContractTests(BuildTestCase):
             with self.subTest(page=str(page.relative_to(self.public()))):
                 if page in procedure_pages:
                     self.assertEqual(len(scan.bodies), 1)
-                    self.assertIn("Summary", scan.bodies[0].headings)
+                    self.assertTrue({"Summary", "Zusammenfassung"}
+                                    & set(scan.bodies[0].headings),
+                                    scan.bodies[0].headings)
                 else:
                     self.assertEqual(scan.bodies, [])
 
     def test_title_and_id_are_shown_outside_the_indexed_body(self) -> None:
         """Scenario: Title and ID shown."""
         self.assert_ok(self.build("build"))
-        source = self.sandbox.md_dir() / "OSDB-0002-aspirin.md"
+        source = self.sandbox.md_dir() / "OSDB-0002-aspirin.de.md"
         title = front_matter(source.read_text(encoding="utf-8"))["title"]
         page = self.public("procedures", "osdb-0002", "index.html")
         outside = scan_page(page.read_text(encoding="utf-8")).outside_text
@@ -184,7 +186,8 @@ class SearchIndexTests(BuildTestCase):
         entry = json.loads(self.public("pagefind", "pagefind-entry.json")
                            .read_text(encoding="utf-8"))
         self.assertEqual(entry["version"], "1.5.2")
-        self.assertEqual(entry["languages"]["en"]["page_count"],
+        self.assertEqual(set(entry["languages"]), {LOCALE})
+        self.assertEqual(entry["languages"][LOCALE]["page_count"],
                          len(self.content_files()))
 
 
@@ -305,7 +308,7 @@ class PdfTests(BuildTestCase):
         self.assert_ok(result)
         stems = [p.stem for p in self.content_files()]
         for seed in SEEDS:
-            self.assertIn(seed, stems)
+            self.assertIn(f"{seed}.{LOCALE}", stems)
         self.assertEqual(sorted(p.name for p in pdf.iterdir()),
                          sorted(f"{stem}.pdf" for stem in stems))
         for path in pdf.iterdir():
@@ -325,7 +328,7 @@ class PdfTests(BuildTestCase):
             encoding="utf-8")
         result = self.build("pdf")
         self.assertEqual(result.returncode, 1, result.stdout)
-        self.assertRegex(result.stderr, r"OSDB-000[12]-[a-z-]+\.pdf")
+        self.assertRegex(result.stderr, r"OSDB-000[12]-[a-z-]+(\.de)?\.pdf")
 
 
 class HookTests(BuildTestCase):

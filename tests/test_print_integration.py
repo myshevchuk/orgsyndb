@@ -13,10 +13,27 @@ import pipeline_support as ps
 from pipeline_support import Content, norm_text
 
 A4 = "595.276 x 841.89 pts (A4)"
-BANNER = "Sample data — quantities not experimentally verified."
 QUOTED_TITLE = 'Bob\'s "best" </style> ester \\ x'
-CHROME = ["Skip to content", "Print / Save as PDF", "No structure image",
-          "OrgSynDB · internal procedures"]
+# The printed texts of each language: the sample banner, the chrome that
+# must not print, the two navigation words that share a line only in the
+# site header, the page footer, and the headings of the steps and table.
+TEXTS = {
+    "en": {"banner": "Sample data — quantities not experimentally verified.",
+           "chrome": ["Skip to content", "Print / Save as PDF",
+                      "No structure image", "OrgSynDB · internal procedures"],
+           "navigation": ("Reaction types", "Authors"),
+           "page": "Page {} of {}", "procedure": "Procedure",
+           "reagents": "Reagents"},
+    "de": {"banner": "Beispieldaten – Mengenangaben nicht experimentell "
+                     "überprüft.",
+           "chrome": ["Zum Inhalt springen", "Drucken / Als PDF speichern",
+                      "Keine Strukturformel",
+                      "OrgSynDB · interne Vorschriften"],
+           "navigation": ("Reaktionstypen", "Autoren"),
+           "page": "Seite {} von {}", "procedure": "Durchführung",
+           "reagents": "Reagenzien"},
+}
+FOOTER_LINE = re.compile(r"(Page \d+ of \d+|Seite \d+ von \d+)")
 NEGATIVE_CONTROL = ps.THEME_FIXTURES / "clip-negative-control.html"
 
 
@@ -37,8 +54,7 @@ class PdfCase(ps.ThemeBuildCase):
         return [(path, by_stem[path.stem]) for path in found]
 
     def html_of(self, item: Content) -> ps.Page:
-        return ps.load_page(self.public, self.public / "procedures"
-                            / item.slug / "index.html")
+        return ps.load_page(self.public, item.page_file(self.public))
 
     def pdf_of(self, stem: str) -> Path:
         path = self.sandbox.root / "pdf" / f"{stem}.pdf"
@@ -69,7 +85,8 @@ class PdfBuildTests(PdfCase):
                     self.assertIn(item.id, text)
                     self.assertIn(norm_text(item.title), norm_text(text))
                     lines = [line.strip() for line in text.splitlines()]
-                    self.assertIn(f"Page {number} of {len(pages)}", lines)
+                    footer = TEXTS[self.LOCALE]["page"]
+                    self.assertIn(footer.format(number, len(pages)), lines)
 
     def test_title_with_quotes_and_markup_characters(self) -> None:
         """Scenario: Title with quotes and markup characters."""
@@ -84,17 +101,18 @@ class PdfBuildTests(PdfCase):
     def test_no_chrome_in_the_pdfs(self) -> None:
         """Scenario: No chrome in the PDFs."""
         for path, item in self.pdfs():
+            texts = TEXTS[self.LOCALE]
             pages = ps.pdf_page_texts(path)
             for number, text in enumerate(pages, 1):
                 with self.subTest(pdf=path.name, page=number):
-                    for chrome in CHROME:
+                    for chrome in texts["chrome"]:
                         self.assertNotIn(chrome, text)
+                    first, second = texts["navigation"]
                     for line in text.splitlines():
-                        self.assertFalse(
-                            "Reaction types" in line and "Authors" in line)
+                        self.assertFalse(first in line and second in line)
             if "sample-data" in item.tags:
                 with self.subTest(pdf=path.name, check="banner"):
-                    self.assertIn(BANNER, norm_text(pages[0]))
+                    self.assertIn(texts["banner"], norm_text(pages[0]))
 
     def test_full_url_is_on_the_first_page_by_default(self) -> None:
         """Scenario: Full URL on the first page by default."""
@@ -113,8 +131,7 @@ class PdfBuildTests(PdfCase):
             for number, text in enumerate(pages[:-1], 1):
                 lines = [ln.strip() for ln in text.splitlines()
                          if ln.strip()
-                         and not re.fullmatch(r"Page \d+ of \d+",
-                                              ln.strip())]
+                         and not FOOTER_LINE.fullmatch(ln.strip())]
                 with self.subTest(pdf=path.name, page=number):
                     self.assertTrue(lines)
                     self.assertNotIn(norm_text(lines[-1]), headings)
@@ -124,8 +141,9 @@ class PdfBuildTests(PdfCase):
         for path, item in self.pdfs():
             page = self.html_of(item)
             raw = ps.pdf_page_texts(path, "raw")
-            steps = page.following(page.heading("Procedure"), "ol")
-            table = page.following(page.heading("Reagents"), "table")
+            texts = TEXTS[self.LOCALE]
+            steps = page.following(page.heading(texts["procedure"]), "ol")
+            table = page.following(page.heading(texts["reagents"]), "table")
             self.assertIsNotNone(steps, "no list under Procedure")
             self.assertIsNotNone(table, "no table under Reagents")
             texts = ([li.text() for li in steps.find_all("li")]

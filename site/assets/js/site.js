@@ -4,6 +4,8 @@
 // - Reveals each [data-copy-smiles] button. It copies the SMILES string of
 //   the [data-smiles] element beside it with the Clipboard API, and selects
 //   that text instead when the API is missing or refuses (plain-http hosts).
+//   It reports either outcome in the page's language, from its
+//   data-copied and data-selected attributes.
 // - On http: and https: pages, replaces the text of each span.page-url
 //   with location.href, so a browser printout shows the address in use.
 (() => {
@@ -42,10 +44,10 @@
           throw new Error("Clipboard API unavailable");
         }
         await navigator.clipboard.writeText(text);
-        flash(button, "Copied");
+        flash(button, button.dataset.copied || "Copied");
       } catch {
         selectText(code);
-        flash(button, "Selected: press Ctrl+C");
+        flash(button, button.dataset.selected || "Selected: press Ctrl+C");
       }
     });
     button.hidden = false;

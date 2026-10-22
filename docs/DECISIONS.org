@@ -1,8 +1,10 @@
 #+TITLE: OrgSynDB design decisions
 #+CREATED: [2026-10-20 Tue 20:41:42]
-#+LAST_MODIFIED: [2026-10-22 Thu 11:15:55]
+#+LAST_MODIFIED: [2026-10-22 Thu 21:52:00]
 #+AI_MODEL: gpt-5.6-sol
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-20 Tue 20:49] -- #+AI_MODEL corrected from gpt-5 to the pinned run model; theme design link pointed at its archive path
+#+AI_PASS: doc-writer claude-opus-5-5 [2026-10-22 Thu 19:50] -- languages section and the localization design link
+#+AI_PASS: doc-writer claude-opus-5-5 [2026-10-22 Thu 21:52] -- languages section rewritten for one site language and variants
 
 This file records the project-wide choices that are useful after the
 implementation details have faded. The change-local designs retain the full
@@ -12,6 +14,7 @@ analysis:
 - [[file:../openspec/changes/archive/2026-10-19-add-build-pipeline/design.md][build pipeline design]]
 - [[file:../openspec/changes/archive/2026-10-20-add-site-theme/design.md][site theme design]]
 - [[file:../openspec/changes/archive/2026-10-22-decouple-collection/design.md][collection design]]
+- [[file:../openspec/changes/archive/2026-10-22-add-german-localization/design.md][localization design]]
 
 * Governance and formats
 
@@ -507,3 +510,78 @@ analysis:
 - Rejected :: Adding artificial table columns was rejected; the table keeps
   the six columns required of every procedure and gets its width from real
   cell content.
+
+* Languages
+
+** Build the site in one language, German by default
+
+- Decided :: ~locale~ in the application's ~site/hugo.toml~ sets the one
+  language of the site, ~"de"~ by default; the build passes it to Hugo as
+  ~defaultContentLanguage~. Interface strings are in ~site/i18n/~, German
+  reaction-type labels are ~label_de~ beside ~label~, and there is no
+  language switch.
+- Why :: The owner chose one German site over two parallel ones, and one
+  site keeps every list, count and search over all procedures.
+- Rejected :: Hugo's multilingual mode with English at ~/~ and German under
+  ~/de/~ was built first and dropped on the owner's review: lists and
+  search split by language and hid untranslated procedures.
+
+** Publish every procedure in the variant that suits the site
+
+- Decided :: A file name may carry ~.de~ or ~.en~ before its suffix; files
+  with one ID are variants. The build stages one file per ID in
+  ~build/content/procedures/~, named without the code: the variant tagged
+  with the site's language, else the untagged one, else one tagged with
+  the other language. The export keeps the code in its file name.
+- Why :: Every procedure reaches every site, and a translation replaces
+  its original where it exists, without front matter or Hugo's
+  translation machinery.
+- Rejected :: Mounting the source trees directly was rejected because Hugo
+  would publish every variant of an ID at one URL.
+
+** Let variants share their facts
+
+- Decided :: An ID may occur once per language code and once without one.
+  Variants keep one base name and the same status, reaction type, tags,
+  yield, precursors, structure image and product formula, weight, SMILES
+  and CAS number, compared with the untagged file, else the ~.de~ file;
+  each difference is an error. Title, product name, scale, hazards,
+  references, people, timestamps and body are free.
+- Why :: Facts that do not depend on language must not drift between
+  variants, while translators need to change all wording.
+- Rejected :: Translating tags was rejected: tags are search identifiers,
+  and the sample banner hangs on ~sample-data~.
+
+** State a procedure's language in an optional field
+
+- Decided :: An optional ~language~ field, ~"de"~ or ~"en"~, must match the
+  file name's code; the build adds it to tagged files, it chooses the
+  section names of an untagged file, and a page marks a procedure in
+  another language than the site's with a ~lang~ attribute.
+- Why :: A file without a code still needs a way to say its language, and
+  readers and screen readers need to know when the text switches language.
+- Rejected :: Hugo's own ~lang~ key was rejected because Hugo 0.162 refuses
+  it in front matter; requiring the field everywhere was rejected as
+  redundant with the file name.
+
+** Write German procedures with German headings and decimal commas
+
+- Decided :: German bodies use the eight German section names and the
+  Reagents columns ~Reagenz | CAS | M (g/mol) | Menge | mmol | Äquiv.~; a
+  file without a language code may use either set. ~scale~ accepts a
+  decimal comma, while front-matter numbers keep a decimal point and are
+  shown with a comma on a German site.
+- Why :: A German procedure should read like German laboratory writing,
+  and TOML numbers cannot hold a comma.
+- Rejected :: Keeping English headings in German procedures was rejected
+  as a half translation.
+
+** Translate the authoring documents, not the specifications
+
+- Decided :: Ship German versions of the two authoring guides and the
+  schema reference beside the English ones; keep the README, this record
+  and the specifications English.
+- Why :: Co-workers who write procedures need the guides in their
+  language; the owner and contributors work from the English sources,
+  which stay authoritative.
+- Rejected :: Translating the README was rejected by the owner.

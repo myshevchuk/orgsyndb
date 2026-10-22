@@ -2,7 +2,9 @@
 
 ## Purpose
 Define the print stylesheet and batch PDFs: A4 pages with a running header and page footer, black on white, first-page URL facts, break rules, and the checks that nothing is clipped.
+
 ## Requirements
+
 ### Requirement: A4 page box
 The print stylesheet SHALL set `@page` to `size: A4` with margins of at least 15 mm on every side. WeasyPrint's PDFs of procedure pages are then A4.
 
@@ -13,10 +15,10 @@ The print stylesheet SHALL set `@page` to `size: A4` with margins of at least 15
 ### Requirement: Running header and page numbers
 Each procedure page SHALL give WeasyPrint a running header and footer:
 - **Header.** Its `head` holds a `style` element with an `@page` rule. The rule sets the `@top-left` margin box's `content` to the procedure's `id` and the `@top-right` box's `content` to its `title`, both as CSS strings escaped by Hugo's HTML template engine.
-- **Footer.** The print stylesheet sets `@bottom-center` to `"Page " counter(page) " of " counter(pages)`.
+- **Footer.** The same rule sets `@bottom-center` to `"Page " counter(page) " of " counter(pages)` on an English site and `"Seite " counter(page) " von " counter(pages)` on a German one. The print stylesheet sets the English footer for every other page.
 
 #### Scenario: Header and footer on every page
-- **WHEN** a test reads the page text of every page `i` of every PDF of `n` pages after a PDF build
+- **WHEN** a test reads the page text of every page `i` of every PDF of `n` pages after a PDF build in locale `en`
 - **THEN** each page text contains the procedure's `id`, its whitespace-normalised `title`, and the line text `Page <i> of <n>`
 
 #### Scenario: Title with quotes and markup characters
@@ -140,4 +142,3 @@ Printing a procedure page from Firefox or Chromium SHALL use the same print styl
 #### Scenario: Firefox print
 - **WHEN** the orchestrator prints `procedures/osdb-0004/` to PDF from Firefox on A4 (manual verification, tasks.md section 9) and renders its pages as images
 - **THEN** the pages are black on white, show the banner, the full `http://127.0.0.1:…` URL, the ID, status and modified date on the first page, show no navigation or buttons, and every word lies within the page
-

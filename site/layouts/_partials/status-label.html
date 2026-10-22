@@ -1,0 +1,3 @@
+{{- /* A status value as the current language names it; an unknown value
+as itself. */ -}}
+{{- with T (printf "status_%s" .) }}{{ . }}{{ else }}{{ $ }}{{ end -}}
