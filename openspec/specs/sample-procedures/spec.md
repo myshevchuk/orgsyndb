@@ -19,12 +19,14 @@ Every sample procedure SHALL have `status = "draft"` and `sample-data` among its
 - Org sources carry `#+AI_MODEL` set to the writing model's exact identifier, never `none`.
 - Markdown sources carry `ai_model` set to the same kind of identifier.
 
-The Summary section states that the procedure is sample data whose quantities are not experimentally verified.
+The Summary section states that the procedure is sample data whose quantities are not experimentally verified; a German sample's `Zusammenfassung` says `nicht experimentell überprüft`.
 
 #### Scenario: Seeds are marked as samples
-- **WHEN** a test reads every sample procedure
+- **WHEN** a test reads every sample procedure, in either language
 - **THEN** each has `status` equal to `draft` and `sample-data` in its tags, every author matches `^[A-Z]\. Example$`, and its `#+AI_MODEL` or `ai_model` is present and is not `none`
-- **AND** its Summary section contains `not experimentally verified`
+- **AND** its Summary section, with whitespace collapsed, contains `not experimentally verified`, or its `Zusammenfassung` contains `nicht experimentell überprüft`
+
+<!-- Reason: German tables have German columns and decimal commas. -->
 
 ### Requirement: Benign textbook chemistry
 Every sample procedure SHALL describe a well-known textbook reaction suitable for an undergraduate teaching laboratory, and nothing energetic, highly toxic, controlled or dual-use. Its `references` cite only real, published sources, without page numbers or details that cannot be checked. Its `hazards` and its "Hazards and Waste Disposal" section name the main hazards of the reagents and the product.
@@ -34,7 +36,7 @@ Every sample procedure SHALL describe a well-known textbook reaction suitable fo
 - **THEN** the reaction, reagents and conditions are textbook-standard and benign, and every citation names a real published source
 
 ### Requirement: Quantities agree
-Every sample procedure's Reagents table SHALL have the columns `Reagent | CAS | MW (g/mol) | Amount | mmol | Equiv`, and its numbers SHALL agree with each other and with the front matter. A row whose `mmol` or `Equiv` is `cat.` is a catalyst and is exempt from the rules below.
+Every sample procedure's Reagents table SHALL have the columns `Reagent | CAS | MW (g/mol) | Amount | mmol | Equiv`, or `Reagenz | CAS | M (g/mol) | Menge | mmol | Äquiv.` in a German sample, and its numbers SHALL agree with each other and with the front matter. A German table may write decimal commas. A row whose `mmol` or `Equiv` is `cat.` (German `kat.`) is a catalyst and is exempt from the rules below.
 - **Mass and moles.** Where `Amount` begins with a mass `<number> g`, `mmol` equals `1000 × mass / MW` within 1 %.
 - **Limiting reagent.** Exactly one row has `Equiv` `1.0`. Every other row's `Equiv` equals its `mmol` divided by that row's `mmol`, within 0.05.
 - **Scale.** When `scale` is given in `mmol`, its number equals the limiting row's `mmol` within 1 %.
@@ -42,8 +44,14 @@ Every sample procedure's Reagents table SHALL have the columns `Reagent | CAS | 
 - **CAS numbers.** Every CAS number in the table passes the CAS check-digit rule.
 
 #### Scenario: Seed tables are consistent
-- **WHEN** a test parses the Reagents table of every sample procedure (an Org table or a Markdown pipe table, in the source file) and applies the rules above
+- **WHEN** a test parses the Reagents table of every sample procedure, in either language (an Org table or a Markdown pipe table, in the source file) and applies the rules above
 - **THEN** every rule holds for every row
+
+#### Scenario: Translated sample tables are consistent (checker)
+- **WHEN** a test gives the checker a German table with decimal commas and `kat.` rows, then the same table with a wrong `mmol`, then an English table under a German file name
+- **THEN** it accepts the first and rejects the other two
+
+<!-- Reason: the counts are of the English originals. -->
 
 ### Requirement: Samples validate and export cleanly
 The sample procedures SHALL produce no validator problem line at all, neither error nor warning, both as sources and after export.
@@ -65,7 +73,7 @@ The repository SHALL ship, besides the two seeds, these six sample procedures:
 | `md/procedures/OSDB-0008-cinnamic-acid.md` | (E)-cinnamic acid (C9H8O2, CAS `140-10-3`), by saponification of ethyl (E)-cinnamate with aqueous sodium hydroxide in ethanol, then acidification with hydrochloric acid | `hydrolysis` | `OSDB-0007` |
 
 The full set meets the following:
-- **Counts.** There are exactly six Org and two Markdown sample procedures, with at least five distinct reaction types among them.
+- **Counts.** There are exactly six Org and two Markdown sample procedures without a language code, with at least five distinct reaction types among them. Their German variants are not counted.
 - **Product CAS.** Every sample's `product` has a `cas` that resolves to that product on PubChem. The orchestrator checks this during review, because the tests cannot reach the network.
 - **Tags.** Every sample has at least one tag besides `sample-data`.
 - **Structure image.** OSDB-0003 sets `structure_image = "structures/osdb-0003.svg"`.
@@ -74,7 +82,7 @@ The full set meets the following:
 
 #### Scenario: Set, counts and chain
 - **WHEN** a test reads every sample procedure
-- **THEN** the files above exist with those IDs, reaction types and precursors, there are six Org and two Markdown samples, and at least five distinct reaction types
+- **THEN** the files above exist with those IDs, reaction types and precursors, there are six Org and two Markdown samples without a language code, and at least five distinct reaction types
 - **AND** every product has a `cas` that passes the check-digit rule, and every sample has a tag besides `sample-data`
 
 #### Scenario: Structure image is set
@@ -91,3 +99,11 @@ The sample procedures SHALL form the demo collection `examples/demo/` of the app
 #### Scenario: Samples live in the demo collection
 - **WHEN** a test inspects the application
 - **THEN** `examples/demo/orgsyndb.toml` exists, `examples/demo/org/procedures/OSDB-0001-salicylic-acid.org` and `examples/demo/md/procedures/OSDB-0002-aspirin.md` exist, and neither `org/`, `md/` nor `site/static/` exists at the application root
+
+### Requirement: German sample translations
+Every sample procedure of the theme sample set and the seeds SHALL have a German variant beside it, in the same format, named with `.de` before the suffix (for example `org/procedures/OSDB-0001-salicylic-acid.de.org` and `md/procedures/OSDB-0002-aspirin.de.md`). Each translation meets the localization spec, carries the same `authors` as its original, has a Reagents table with as many rows as the original's, and writes decimal commas in its text and table. The German long sample has at least 15 numbered steps under `Durchführung` and at least 6 numbered notes under `Anmerkungen`.
+
+#### Scenario: Every sample has a German translation
+- **WHEN** a test reads each sample and its `.de` twin
+- **THEN** the twin exists, has the same `id`, `status`, `reaction_types`, `tags`, `yield_percent`, `precursors`, `structure_image`, `authors` and product formula, weight, SMILES and CAS, a non-empty product name, and as many table rows
+- **AND** the German OSDB-0004 has at least 15 steps and 6 notes
