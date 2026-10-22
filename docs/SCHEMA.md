@@ -4,6 +4,8 @@ This reference defines a valid OrgSynDB procedure. Use it to look up the
 exact spelling, type, and rule for a field, or to interpret a message from
 `tools/validate.py`.
 
+A German version of this reference is [SCHEMA.de.md](SCHEMA.de.md).
+
 A Markdown procedure starts with TOML front matter. TOML is the metadata
 block between the opening and closing `+++` lines. The opening `+++` must be
 the first line of the file. Text after the closing `+++` is the procedure
@@ -20,19 +22,25 @@ an unquoted date and time with its UTC offset, such as
 The procedure identifier has the exact form `OSDB-NNNN`, where `NNNN` is
 four digits from `0001` through `9999`. For example, `OSDB-0001` is valid.
 `OSDB-0000` is reserved for templates and is not a valid procedure
-identifier. An identifier must be unique across all content roots passed to
-the validator.
+identifier. Within one language, an identifier must be unique across all
+content roots passed to the validator. An English procedure and its German
+translation share one identifier; see [Languages and
+translations](#languages-and-translations).
 
 The source file name has this form:
 
 ```text
 OSDB-NNNN-short-slug.md
 OSDB-NNNN-short-slug.org
+OSDB-NNNN-short-slug.de.md     (German)
+OSDB-NNNN-short-slug.de.org    (German)
 ```
 
 The `OSDB-NNNN` prefix must equal the procedure's `id`. The short slug after
 the prefix contains lowercase letters or digits. It may contain single
-hyphens between groups, as in `OSDB-0001-ethyl-acetate.md`.
+hyphens between groups, as in `OSDB-0001-ethyl-acetate.md`. A file without
+a language code is English. `.de` before the suffix marks a German file;
+`.en` and any other code are errors.
 
 The front-matter `slug` is not the short slug from the file name. It is
 always the lowercase identifier: `OSDB-0001` becomes `osdb-0001`. This gives
@@ -53,7 +61,7 @@ least one entry, and every entry must contain non-whitespace text.
 
 | Field | Meaning | TOML type | Required | Value rule | Example |
 |---|---|---|---|---|---|
-| `id` | The procedure identifier. | String | Yes | Must be `OSDB-0001` through `OSDB-9999` and unique across the validated content roots. | `id = "OSDB-0001"` |
+| `id` | The procedure identifier. | String | Yes | Must be `OSDB-0001` through `OSDB-9999` and unique among the validated procedures of its language. | `id = "OSDB-0001"` |
 | `slug` | The value used in the procedure URL. | String | Yes | Must equal the lowercase `id` exactly. | `slug = "osdb-0001"` |
 | `title` | The product name shown in the page heading. | Non-empty string | Yes | Must not be empty. | `title = "Product Name"` |
 | `date` | When the procedure was created. | Offset datetime | Yes | Must be unquoted. Its offset should be the Europe/Berlin offset in force at that instant. | `date = 2026-10-19T17:42:05+02:00` |
@@ -63,7 +71,7 @@ least one entry, and every entry must contain non-whitespace text.
 | `reaction_types` | The controlled reaction category. | Array of strings | Yes | Must contain exactly one slug from the reaction-type vocabulary. | `reaction_types = ["esterification"]` |
 | `tags` | Search terms for the procedure. | Non-empty array of strings | Yes | Every tag must contain lowercase letters or digits, with single hyphens between groups. | `tags = ["acid-catalysed"]` |
 | `product` | Structured information about the product. | Table | Yes | Must contain all required product fields described below. | `[product]` |
-| `scale` | The amount of product the procedure makes. | String | Yes | Must contain a number, whitespace, and a unit token. The unit vocabulary is not restricted. | `scale = "25 mmol"` |
+| `scale` | The amount of product the procedure makes. | String | Yes | Must contain a number, whitespace, and a unit token. The number may have a decimal point or a decimal comma. The unit vocabulary is not restricted. | `scale = "25 mmol"` |
 | `yield_percent` | Isolated yield as a percentage. | Integer or float | Yes | Must be finite and from 0 through 100, inclusive. Do not quote it or add `%`. A boolean is not a number. | `yield_percent = 85` |
 | `hazards` | The main hazards. | Non-empty array of non-empty strings | Yes | Must contain at least one short description. | `hazards = ["Flammable liquid"]` |
 
@@ -186,28 +194,32 @@ roots, it performs the Org checks without looking for exports.
 ## Reaction-type vocabulary
 
 `reaction_types` contains exactly one slug from this table. The slug is the
-value written in front matter. The label is the name shown on the site.
+value written in front matter, in every language. The label is the name
+shown on the English site, and the German label the name on the German
+site.
 
-| Slug | Label |
-|---|---|
-| `acylation` | Acylation |
-| `aldol-condensation` | Aldol condensation |
-| `alkylation` | Alkylation |
-| `amide-coupling` | Amide coupling |
-| `cross-coupling` | Cross-coupling |
-| `cycloaddition` | Cycloaddition |
-| `deprotection` | Deprotection |
-| `esterification` | Esterification |
-| `hydrolysis` | Hydrolysis |
-| `nucleophilic-substitution` | Nucleophilic substitution |
-| `olefination` | Olefination |
-| `oxidation` | Oxidation |
-| `protection` | Protection |
-| `reduction` | Reduction |
-| `reductive-amination` | Reductive amination |
+| Slug | Label | German label |
+|---|---|---|
+| `acylation` | Acylation | Acylierung |
+| `aldol-condensation` | Aldol condensation | Aldolkondensation |
+| `alkylation` | Alkylation | Alkylierung |
+| `amide-coupling` | Amide coupling | Amidkupplung |
+| `cross-coupling` | Cross-coupling | Kreuzkupplung |
+| `cycloaddition` | Cycloaddition | Cycloaddition |
+| `deprotection` | Deprotection | Entschützung |
+| `esterification` | Esterification | Veresterung |
+| `hydrolysis` | Hydrolysis | Hydrolyse |
+| `nucleophilic-substitution` | Nucleophilic substitution | Nucleophile Substitution |
+| `olefination` | Olefination | Olefinierung |
+| `oxidation` | Oxidation | Oxidation |
+| `protection` | Protection | Schützung |
+| `reduction` | Reduction | Reduktion |
+| `reductive-amination` | Reductive amination | Reduktive Aminierung |
 
 The vocabulary is stored in `site/data/reaction_types.toml`. Each entry is
-a lowercase, hyphenated slug whose table contains a non-empty `label`.
+a lowercase, hyphenated slug whose table contains a non-empty `label` and
+a non-empty `label_de`. The site shows `label` where `label_de` is
+missing, and the validator refuses an empty `label_de`.
 
 ## Procedure body sections
 
@@ -222,6 +234,17 @@ Every procedure body has these eight sections in this order:
 7. Hazards and Waste Disposal
 8. References
 
+A German procedure uses these German names instead, in the same order:
+
+1. Zusammenfassung
+2. Reagenzien
+3. Durchführung
+4. Aufarbeitung und Reinigung
+5. Charakterisierung
+6. Anmerkungen
+7. Gefahren und Entsorgung
+8. Literatur
+
 In Markdown, write them as level-2 headings such as `## Summary`. In Org,
 write them as top-level headings such as `* Summary`. A missing Markdown
 section or sections in the wrong order produces a warning, not an error.
@@ -234,6 +257,45 @@ whitespace. It also accepts an exported trailing attribute such as
 `## Summary {#summary}` and a closing `#` sequence. A heading inside a
 fenced code block does not count. Other level-2 headings and headings at
 other levels are allowed.
+
+## Languages and translations
+
+The site has an English part at `/` and a German part at `/de/`. The
+language of a procedure is the code in its file name: none for English,
+`.de` for German. A German procedure is published only on the German part,
+and an English one only on the English part.
+
+A German file whose identifier also has an English file is that file's
+translation. The two pages then link to each other. A translation:
+
+- has the original's file name with `.de` added before the suffix, for
+  example `OSDB-0001-salicylic-acid.de.org` beside
+  `OSDB-0001-salicylic-acid.org`. Org and Markdown may be mixed;
+- has the same `id` and `slug`;
+- has the same value, or the same absence, of `status`, `reaction_types`,
+  `tags`, `yield_percent`, `precursors`, `structure_image`, and of
+  `formula`, `mw`, `smiles` and `cas` in `[product]`;
+- may differ in every other field and in the body: `title`,
+  `product.name`, `scale`, `hazards`, `references`, `authors`,
+  `checked_by`, `ai_model`, `date` and `lastmod`.
+
+Each difference in a shared field is an error on the translation that
+names the original, for example:
+
+```text
+md/procedures/OSDB-0002-aspirin.de.md:yield_percent: error: must equal the value in md/procedures/OSDB-0002-aspirin.md (75); a translation shares it
+```
+
+A German file with an identifier that no English file carries is a
+German-only procedure and is not compared with anything. A precursor may
+be a procedure in either language. When a page's precursor has no page in
+the same language, the link goes to its page in the other language.
+
+A German Reagents table has the columns **Reagenz**, **CAS**,
+**M (g/mol)**, **Menge**, **mmol** and **Äquiv.**, and German text uses
+decimal commas. Front-matter numbers such as `yield_percent` and
+`product.mw` stay TOML numbers with a decimal point in every language; the
+German page shows them with a comma.
 
 ## Reading validator output
 

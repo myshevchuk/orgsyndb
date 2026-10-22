@@ -14,6 +14,8 @@ For exact spelling, allowed values, and field rules, use the
 [procedure schema](SCHEMA.md). This guide explains the work in order instead
 of repeating that reference.
 
+Diese Anleitung gibt es auch auf Deutsch: [AUTHORING.de.md](AUTHORING.de.md).
+
 ## 1. Get a procedure file
 
 The file to copy is
@@ -220,3 +222,30 @@ WeasyPrint-generated PDFs contain.
 
 The preview does not update while it is running. After an edit, stop it and
 run `orgsyndb serve` again.
+
+## 7. Write in German or translate a procedure
+
+The site has a German part at <http://127.0.0.1:8000/de/>. A procedure
+written in German goes there, and a German translation of an English
+procedure appears there with a link to the English page and back.
+
+To start a new procedure in German, ask for a German stub:
+
+```sh
+orgsyndb new --md --lang de "Produktname"
+```
+
+This creates a file such as `md/procedures/OSDB-0003-produktname.de.md`
+from the German template, with German notes and German section headings.
+The [German version of this guide](AUTHORING.de.md) explains it step by
+step.
+
+To translate an existing procedure, copy its file and add `.de` before the
+extension, for example `OSDB-0002-aspirin.md` to `OSDB-0002-aspirin.de.md`.
+Keep the `id`, `slug`, `status`, `reaction_types`, `tags`, `yield_percent`,
+`precursors`, `structure_image` and the product's `formula`, `mw`,
+`smiles` and `cas` exactly as they are; the check reports any difference
+as an error. Translate the title, the product name, the hazards and the
+body, set `date` and `lastmod` to the time of the translation, and use
+the German section headings and Reagents columns that the
+[procedure schema](SCHEMA.md#languages-and-translations) lists.

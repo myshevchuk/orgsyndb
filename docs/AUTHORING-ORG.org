@@ -1,12 +1,15 @@
 #+TITLE: Writing OrgSynDB procedures in Org
 #+CREATED: [2026-10-20 Tue 00:06:38]
-#+LAST_MODIFIED: [2026-10-21 Wed 22:45:00]
+#+LAST_MODIFIED: [2026-10-22 Thu 19:45:00]
 #+AI_MODEL: gpt-5.6-sol
 #+OPTIONS: toc:t num:nil
 #+STARTUP: showall
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-20 Tue 00:08] -- header: #+DATE replaced by the project keywords; #+AI_MODEL corrected from gpt-5 to the pinned run model
 #+AI_PASS: doc-writer gpt-5.6-sol [2026-10-20 Tue 20:41] -- theme, page fields, structure images, reagents, and printing
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-20 Tue 20:49] -- doc-writer pass line corrected from gpt-5 to the pinned run model
+#+AI_PASS: doc-writer claude-opus-5-5 [2026-10-22 Thu 19:45] -- German procedures and translations
+
+Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
 * Start from a generated stub
 
@@ -229,3 +232,40 @@
   print dialog. The print layout is complete A4 output in black on white.
   Firefox omits the running header and page numbers that WeasyPrint adds to
   PDFs created by ~orgsyndb pdf~.
+
+* Write in German or translate
+
+  The site has an English part at ~/~ and a German part at ~/de/~. The
+  language of a procedure is the code before its suffix: none for English,
+  ~.de~ for German. Create a German stub with:
+
+#+begin_src sh
+  orgsyndb new --lang de "Produktname"
+#+end_src
+
+  It fills [[file:../templates/procedure.de.org][templates/procedure.de.org]] and names the file
+  ~OSDB-NNNN-produktname.de.org~. Umlauts and ß in the title are written
+  out in the slug: ~Größe~ becomes ~groesse~. The German body uses these
+  top-level headings, in this order: Zusammenfassung, Reagenzien,
+  Durchführung, Aufarbeitung und Reinigung, Charakterisierung,
+  Anmerkungen, Gefahren und Entsorgung, Literatur. Its Reagents table has
+  the columns ~Reagenz~, ~CAS~, ~M (g/mol)~, ~Menge~, ~mmol~ and ~Äquiv.~,
+  and its text uses decimal commas. Org keywords, custom-front-matter keys,
+  status values, reaction-type slugs and tags stay English, and so do the
+  weekday names in ~#+CREATED~ and ~#+LAST_MODIFIED~.
+
+  To translate a procedure, copy ~OSDB-0001-x.org~ to ~OSDB-0001-x.de.org~
+  and translate the title, the product ~name~, the hazards, the references
+  if needed, and the body. Set both timestamps to the time of the
+  translation. Leave ~:status~, ~:reaction_types~, ~#+HUGO_TAGS~,
+  ~:yield_percent~, ~:precursors~, ~:structure_image~ and the product's
+  ~formula~, ~mw~, ~smiles~ and ~cas~ unchanged: the validator compares
+  them with the original and reports each difference as an error. The
+  original and its translation may use different formats.
+
+  The export keeps the language code: ~OSDB-0001-x.de.org~ becomes
+  ~build/export/OSDB-0001-x.de.md~, its page ~/de/procedures/osdb-0001/~,
+  and ~orgsyndb pdf~ prints it to ~pdf/OSDB-0001-x.de.pdf~ with a German
+  page footer. The English and German pages link to each other from the
+  site header. Lists, taxonomy pages and search show only the procedures
+  of their own language. [[file:SCHEMA.md][The procedure schema]] gives the exact rules.

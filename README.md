@@ -7,7 +7,8 @@ build treats both formats alike.
 
 The finished site is static. Viewing it loads no fonts, analytics, or other
 resources from the internet. It has a responsive light and dark theme,
-full-text search, browse pages, and an A4 print layout.
+full-text search, browse pages, and an A4 print layout, in English and in
+German.
 
 ## Application and collections
 
@@ -31,7 +32,8 @@ goes into the collection. The application's checkout receives only its two
 caches of fetched tools, `.emacs-batch/` and `.tools/`.
 
 [`examples/demo/`](examples/demo/) is a complete collection with eight
-sample procedures. It shows the layout, and the tests build it.
+sample procedures, each with a German translation. It shows the layout, and
+the tests build it.
 
 `orgsyndb.toml` must contain exactly `format = 1`. The number is the
 version of the collection layout; an application that does not know a
@@ -147,7 +149,8 @@ Markdown sources, exports, and available Git history of the collection. It
 fills the file name, slug, title, and current Europe/Berlin timestamps. Add
 `--ai-model ID` when that model assisted with the procedure. Without this
 option, an Org stub uses `#+AI_MODEL: none`, and a Markdown stub has no
-`ai_model` field.
+`ai_model` field. Add `--lang de` for a German stub; see
+[Languages](#languages).
 
 ## Use the site
 
@@ -165,6 +168,8 @@ The built site provides these pages:
   `/reaction_types/esterification/`, `/tags/sample-data/`, and
   `/authors/a.-example/` are term-page URLs.
 - `/search/` provides full-text search and filters.
+- `/de/` and every path below it are the German versions of these pages,
+  such as `/de/procedures/osdb-NNNN/`. See [Languages](#languages).
 
 Search finds a procedure by its ID, product name, CAS number, any part of
 its SMILES string, a tag, or a word in the procedure text. SMILES searches
@@ -185,12 +190,49 @@ On a procedure page, **Copy** copies the SMILES and briefly reports
 `http://127.0.0.1`. At another address the button selects the SMILES and
 reports **Selected: press Ctrl+C** instead.
 
+## Languages
+
+The site is built in English, at `/`, and in German, at `/de/`. Every
+interface text, the reaction-type labels, the Pagefind search interface
+and the PDF page footer follow the page's language. The interface strings
+are in `site/i18n/en.toml` and `site/i18n/de.toml`, and the German
+reaction-type labels are the `label_de` entries of
+`site/data/reaction_types.toml`.
+
+A procedure's language is a code in its file name. `OSDB-0001-x.org` and
+`OSDB-0001-x.md` are English; `OSDB-0001-x.de.org` and `OSDB-0001-x.de.md`
+are German. A German file whose ID also has an English file is its
+translation, and the two pages link to each other from a language switch in
+the site header. A translation keeps the original's ID, base name and
+language-neutral facts: status, reaction type, tags, yield, precursors,
+structure image, and the product's formula, molecular weight, SMILES and
+CAS number. `orgsyndb validate` reports any difference as an error. Title,
+product name, scale, hazards, references, authors, timestamps and the body
+are translated freely. A German file without an English one is a
+German-only procedure. Translation is optional: an untranslated procedure
+appears only on the English site.
+
+German procedures use German section headings, from `Zusammenfassung` to
+`Literatur`, and German Reagents columns; the
+[procedure schema](docs/SCHEMA.md#languages-and-translations) lists them.
+Create a German stub with:
+
+```sh
+orgsyndb new --lang de "Produktname"
+orgsyndb new --md --lang de "Produktname"
+```
+
+Lists, taxonomy pages and search show only the procedures of their own
+language. A precursor or used-in link to a procedure that has no page in
+the current language goes to its page in the other language.
+
 ## Print procedures
 
 `orgsyndb pdf` uses WeasyPrint to create A4 PDFs in the collection's
-`pdf/`. These
-PDFs have the procedure ID and title in a running header and `Page N of M`
-in the footer. Navigation, buttons, and an empty structure-image placeholder
+`pdf/`, one per procedure file; a German translation gives
+`pdf/<file name>.de.pdf`. These
+PDFs have the procedure ID and title in a running header and `Page N of M`,
+or `Seite N von M`, in the footer. Navigation, buttons, and an empty structure-image placeholder
 are omitted. The sample-data banner remains. Tables stay within the margins,
 numeric columns do not wrap, and table rows and numbered steps stay together
 across page breaks.
@@ -249,7 +291,7 @@ prefix are relative to the collection.
 | `build` | Runs export and validation, builds the site into `public/` with Hugo, then indexes it with Pagefind. A validation error stops the command before Hugo. |
 | `serve [--port N]` | Runs `build`, then serves `public/` on `http://127.0.0.1:N/` until `Ctrl-C`. The default port is `8000`. |
 | `pdf` | Runs `build`, removes the previous `pdf/`, and renders every procedure to `pdf/<source-file-name>.pdf` with WeasyPrint. |
-| `new [--md] [--ai-model ID] TITLE...` | Creates an Org stub with the next free ID, or a Markdown stub with `--md`. It never overwrites an existing file. |
+| `new [--md] [--lang LANG] [--ai-model ID] TITLE...` | Creates an Org stub with the next free ID, or a Markdown stub with `--md`. `--lang de` creates a German stub named `<ID>-<slug>.de.org` or `.de.md`. It never overwrites an existing file. |
 | `init DIR` | Creates an empty collection in `DIR`: `orgsyndb.toml`, a `.gitignore` for the generated directories, and empty source directories. It refuses a directory that already holds `orgsyndb.toml`, and it does not run `git init`. |
 | `clean` | Removes `build/`, `public/`, and `pdf/`. |
 | `clean --all` | Also removes the application's `.emacs-batch/` and `.tools/`. Their contents are fetched again on the next relevant run. |
@@ -366,10 +408,13 @@ the example's `tls internal` setting against your organisation's TLS setup.
 ## Authoring references
 
 - [Procedure schema](docs/SCHEMA.md): exact field, file-name, vocabulary,
-  body-section, and validator rules.
+  body-section, language, and validator rules. German:
+  [SCHEMA.de.md](docs/SCHEMA.de.md).
 - [Markdown authoring guide](docs/AUTHORING.md): step-by-step instructions
-  for co-workers writing procedures in Markdown.
+  for co-workers writing procedures in Markdown. German:
+  [AUTHORING.de.md](docs/AUTHORING.de.md).
 - [Org authoring guide](docs/AUTHORING-ORG.org): Org templates, timestamps,
-  export behaviour, and Emacs conventions.
+  export behaviour, and Emacs conventions. German:
+  [AUTHORING-ORG.de.org](docs/AUTHORING-ORG.de.org).
 - [Design decisions](docs/DECISIONS.org): the project-wide choices and why
   they were made.

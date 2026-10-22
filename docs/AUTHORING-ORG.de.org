@@ -1,0 +1,298 @@
+#+TITLE: OrgSynDB-Vorschriften in Org schreiben
+#+CREATED: [2026-10-22 Thu 19:47:33]
+#+LAST_MODIFIED: [2026-10-22 Thu 19:47:33]
+#+AI_MODEL: claude-opus-5-5
+#+LANGUAGE: de
+#+OPTIONS: toc:t num:nil
+#+STARTUP: showall
+
+Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
+Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
+Vorschriften. Org-Schlüsselwörter, Feldnamen, Statuswerte,
+Reaktionstyp-Kürzel, Schlagwörter und die Wochentage der Zeitstempel
+bleiben auch in einer deutschen Vorschrift englisch.
+
+* Mit einem erzeugten Gerüst beginnen
+
+  Legen Sie eine deutsche Org-Vorschrift im Ordner ihrer Sammlung so an:
+
+#+begin_src sh
+  orgsyndb new --lang de "Produktname"
+#+end_src
+
+  Der Befehl wählt die nächste freie Nummer über Org-Quellen,
+  Markdown-Quellen, vorhandene Exporte und die verfügbare Git-Geschichte.
+  Er legt eine Datei wie ~org/procedures/OSDB-0003-produktname.de.org~ an
+  und trägt Nummer, Slug, Titel und die aktuellen Zeitstempel in Berliner
+  Zeit ein. Umlaute und ß im Titel werden im Dateinamen ausgeschrieben:
+  aus ~Größe~ wird ~groesse~.
+
+  Hat ein KI-Modell beim Schreiben geholfen, geben Sie es beim Anlegen an:
+
+#+begin_src sh
+  orgsyndb new --lang de --ai-model example-model-1 "Produktname"
+#+end_src
+
+  Ohne ~--ai-model~ enthält das Gerüst ~#+AI_MODEL: none~. Der Befehl legt
+  die Datei exklusiv an und überschreibt nie eine vorhandene. Er warnt,
+  wenn keine Git-Geschichte verfügbar oder der Klon flach ist, weil er dann
+  eine gelöschte Nummer übersehen kann.
+
+  Die Vorlage ist [[file:../templates/procedure.de.org][templates/procedure.de.org]]. Die vollständigen Feldregeln
+  stehen in der [[file:SCHEMA.de.md][Schema-Referenz]].
+
+* Den Kopf der Vorlage verstehen
+
+  Org-Schlüsselwortzeilen beginnen in der ersten Spalte. Behalten Sie jedes
+  Pflicht-Schlüsselwort genau einmal und rücken Sie es nicht ein.
+
+  - ~#+TITLE~ :: Der Produktname als Seitentitel.
+  - ~#+CREATED~ :: Wann die Vorschrift zuerst geschrieben wurde, als
+    inaktiver Org-Zeitstempel.
+  - ~#+LAST_MODIFIED~ :: Wann die Vorschrift zuletzt geändert wurde.
+    Aktualisieren Sie es nach jeder Änderung von Hand; kein Befehl tut das
+    automatisch.
+  - ~#+AI_MODEL~ :: ~none~ für eine von Menschen geschriebene Vorschrift,
+    sonst die Kennung des Modells, das geholfen hat.
+  - ~#+OPTIONS: author:nil~ :: Verhindert, dass Org-Autorenangaben im
+    Export zu einem ungültigen Feld ~author~ werden.
+  - ~#+HUGO_SLUG~ :: Die Vorschriftennummer in Kleinbuchstaben, etwa
+    ~osdb-0003~.
+  - ~#+HUGO_TAGS~ :: Schlagwörter, durch Leerzeichen getrennt.
+    Kleinbuchstaben und Ziffern mit einzelnen Bindestrichen. Das Schlagwort
+    ~sample-data~ setzt einen Warnhinweis auf Bildschirm und Papier;
+    verwenden Sie es nie für eine echte Vorschrift.
+  - ~#+HUGO_CUSTOM_FRONT_MATTER~ :: Wiederholte Zeilen mit Nummer, Autoren,
+    Status, Reaktionstyp, Ansatzgröße, Ausbeute, Gefahren und optionalen
+    Feldern.
+
+  Die Zeile ~:product~ ist eine Assoziationsliste mit Produktname,
+  Summenformel, Molmasse, SMILES und optional der CAS-Nummer. Sie bleibt
+  die letzte der Custom-Front-Matter-Zeilen. Der Export sichert die
+  Reihenfolge zusätzlich ab, damit spätere Angaben nicht in die
+  Produkttabelle geraten.
+
+  Zahlen in diesen Zeilen, etwa ~:yield_percent 85~ oder ~(mw . 88.11)~,
+  schreiben Sie mit Dezimalpunkt. Die deutsche Seite zeigt sie mit
+  Dezimalkomma. Text wie ~:scale "2,5 mmol"~ darf ein Komma enthalten.
+
+  Um die Vorschriften zu verlinken, aus denen der Ausgangsstoff stammt,
+  fügen Sie vor ~:product~ eine Zeile ein:
+
+#+begin_src org
+  #+HUGO_CUSTOM_FRONT_MATTER: :precursors '("OSDB-0007")
+#+end_src
+
+  Die Seite verlinkt dann OSDB-0007 unter *Vorstufen*, und die Seite von
+  OSDB-0007 verlinkt automatisch unter *Verwendet in* zurück. Gibt es
+  OSDB-0007 nur auf Englisch, führt der Link zur englischen Seite.
+
+  Alle Schlagwörter stehen in der Zeile ~#+HUGO_TAGS~, durch Leerzeichen
+  getrennt:
+
+#+begin_src org
+  #+HUGO_TAGS: esterification fragrance
+#+end_src
+
+  Für eine Strukturformel legen Sie eine SVG- oder PNG-Datei in
+  ~static/structures/~ der Sammlung ab und fügen vor ~:product~ diese Zeile
+  ein:
+
+#+begin_src org
+  #+HUGO_CUSTOM_FRONT_MATTER: :structure_image "structures/osdb-NNNN.svg"
+#+end_src
+
+  Ein Struktur-SVG verwendet schwarze Linien und Schrift auf einem weißen
+  Hintergrundrechteck. Es hat ein ~<title>~ und enthält keine Skripte,
+  externen Bilder oder anderen externen Verweise. Der weiße Hintergrund
+  hält die Zeichnung im dunklen Farbschema der Website und auf Papier
+  lesbar.
+
+  Verwenden Sie die Anführungs- und Listenformen der Vorlage. Autoren und
+  Gefahren sind zum Beispiel gequotete Lisp-Listen wie
+  ~'("A. Example" "B. Example")~. Die genauen Pflichtwerte, die optionalen
+  Felder, die Reaktionstypen und die Regeln für Dateinamen stehen in
+  [[file:SCHEMA.de.md][docs/SCHEMA.de.md]].
+
+* Die fertige Seite verstehen
+
+  Über ~#+TITLE~ stehen die Vorschriftennummer und ein Statusabzeichen,
+  auf der deutschen Seite /Entwurf/, /geprüft/ oder /zurückgezogen/. Das
+  Datenfeld wiederholt die Nummer und zeigt die Produktangaben,
+  Ansatzgröße, Ausbeute, Reaktionstyp, Schlagwörter, Autoren,
+  gegebenenfalls die Prüfenden, Erstellungs- und Änderungszeit und die
+  Links zu Vorstufen und Folgevorschriften. Ziffern der Summenformel
+  erscheinen tiefgestellt. Molmasse und Ausbeute erscheinen mit
+  Dezimalkomma, ~g/mol~ und Prozentzeichen; neben SMILES steht eine
+  Schaltfläche *Kopieren*. Reaktionstyp, Schlagwörter und Autoren
+  verlinken auf Seiten mit verwandten Vorschriften. Autorennamen werden
+  mit großem Anfangsbuchstaben angezeigt, aus ~van~ wird ~Van~.
+
+  Das Strukturbild folgt auf das Datenfeld. Ohne Bild zeigt der
+  Bildschirm den Platzhalter *Keine Strukturformel*, der im Ausdruck
+  fehlt. Danach folgen die acht Abschnitte des Textes.
+
+* Genaue Zeitstempel verwenden
+
+  ~#+CREATED~ und ~#+LAST_MODIFIED~ haben genau diese Form:
+
+#+begin_example
+  [YYYY-MM-DD Day hh:mm:ss]
+#+end_example
+
+  Verwenden Sie Berliner Ortszeit, einen englischen Wochentag mit drei
+  Buchstaben (~Mon~ bis ~Sun~, nicht ~Mo~ oder ~Mi~) und Sekunden.
+  Org-Zeitstempel tragen keinen UTC-Versatz; der Export ergänzt den zu
+  diesem Zeitpunkt geltenden Berliner Versatz. Eine Uhrzeit, die die
+  Zeitumstellung im Frühjahr überspringt, ist ungültig. In der
+  wiederholten Stunde im Herbst verwendet der Export für ~#+CREATED~ den
+  früheren Sommerzeit-Versatz.
+
+  ~orgsyndb new~ schreibt gültige Zeitstempel mit englischen Wochentagen.
+  Damit auch die von Emacs eingefügten Zeitstempel englische Wochentage
+  haben, wenn Ihr System auf Deutsch eingestellt ist, setzen Sie:
+
+#+begin_src emacs-lisp
+  (setq system-time-locale "C")
+#+end_src
+
+  Lassen Sie ~#+CREATED~ unverändert. Setzen Sie ~#+LAST_MODIFIED~ bei jeder
+  Änderung auf die aktuelle Ortszeit. Es darf nicht vor ~#+CREATED~
+  liegen. Die genauen Regeln um die Zeitumstellung stehen in der
+  [[file:SCHEMA.de.md][Schema-Referenz]].
+
+* Den Text schreiben
+
+  Behalten Sie diese Überschriften der obersten Ebene in dieser
+  Reihenfolge:
+
+  1. Zusammenfassung
+  2. Reagenzien
+  3. Durchführung
+  4. Aufarbeitung und Reinigung
+  5. Charakterisierung
+  6. Anmerkungen
+  7. Gefahren und Entsorgung
+  8. Literatur
+
+  Jede dieser Überschriften hat genau einen Stern; tiefere Überschriften
+  dürfen mehr haben. Verwenden Sie eine Org-Tabelle für die Reagenzien und
+  nummerierte Listen für Schritte und Anmerkungen. Geben Sie Mengen,
+  Temperaturen, Zeiten, Beobachtungen, Aufarbeitung, Reinigung,
+  Charakterisierung, Gefahren und Entsorgung an, mit Dezimalkommas im
+  Text. Steht unter Literatur nichts, schreiben Sie ~Keine.~
+
+  Behalten Sie die sechs Spalten der Reagenzientabelle in dieser
+  Reihenfolge: ~Reagenz~, ~CAS~, ~M (g/mol)~, ~Menge~, ~mmol~ und
+  ~Äquiv.~ Ein Katalysator hat ~kat.~ in ~mmol~ und ~Äquiv.~ Eine breite
+  Tabelle lässt sich auf dem Bildschirm in ihrem eigenen Bereich seitlich
+  verschieben und wird beim Drucken an das Papier angepasst. Org richtet
+  Zahlen mit Dezimalkomma linksbündig aus; das ist nur Darstellung im
+  Editor.
+
+  Schreiben Sie Tief- und Hochstellungen mit geschweiften Klammern:
+
+#+begin_example
+  H_{2}O
+  10^{-3}
+#+end_example
+
+  Ein einfaches ~CO_2~ bleibt normaler Text. Text zwischen Dollarzeichen
+  wie ~$x$~ und LaTeX-Begrenzer wie ~\(y^2\)~ bleiben ebenfalls wörtlich
+  stehen, weil die Website keine Formeln setzt.
+
+  Die Beispielvorschrift [[file:../examples/demo/org/procedures/OSDB-0001-salicylic-acid.de.org][OSDB-0001-salicylic-acid.de.org]] der
+  Beispielsammlung zeigt den erwarteten Aufbau. Sie enthält
+  Beispieldaten, keine experimentell überprüfte Vorschrift.
+
+* Eine englische Vorschrift übersetzen
+
+  Eine deutsche Datei mit derselben Nummer wie eine englische ist deren
+  Übersetzung. Die beiden Seiten verlinken sich über die Sprachauswahl im
+  Seitenkopf.
+
+  1. Kopieren Sie ~OSDB-0001-x.org~ nach ~OSDB-0001-x.de.org~. Der übrige
+     Name bleibt gleich. Original und Übersetzung dürfen verschiedene
+     Formate haben; neben ~OSDB-0002-x.md~ darf also ~OSDB-0002-x.de.org~
+     stehen.
+  2. Übersetzen Sie ~#+TITLE~, den Produktnamen ~name~ in ~:product~,
+     ~:hazards~ und bei Bedarf ~:references~. ~:scale~, ~:authors~ und
+     ~:checked_by~ dürfen Sie anpassen.
+  3. Setzen Sie ~#+CREATED~ und ~#+LAST_MODIFIED~ auf den Zeitpunkt der
+     Übersetzung und ~#+AI_MODEL~ auf das Modell, das beim Übersetzen
+     geholfen hat, oder ~none~.
+  4. Lassen Sie ~#+HUGO_SLUG~, ~:id~, ~:status~, ~:reaction_types~,
+     ~#+HUGO_TAGS~, ~:yield_percent~, ~:precursors~, ~:structure_image~
+     sowie ~formula~, ~mw~, ~smiles~ und ~cas~ in ~:product~ genau wie im
+     Original. Der Validator vergleicht sie mit dem Original und meldet
+     jede Abweichung als Fehler.
+  5. Übersetzen Sie den Text, ersetzen Sie die englischen Überschriften
+     und Tabellenspalten durch die deutschen und schreiben Sie
+     Dezimalkommas.
+
+  Ändert sich später eine gemeinsame Angabe, ändern Sie sie in beiden
+  Dateien. Eine Vorschrift ohne Übersetzung erscheint nur auf der
+  englischen Website. Listen, Schlagwort- und Reaktionstypseiten und die
+  Suche zeigen nur die Vorschriften ihrer eigenen Sprache.
+
+* Exportieren, prüfen und ansehen
+
+  Exportieren Sie die Org-Quellen mit:
+
+#+begin_src sh
+  orgsyndb export
+#+end_src
+
+  Der Export startet Emacs in einer abgeschotteten Batch-Umgebung. Er lädt
+  und schreibt keine Emacs-Konfiguration der Nutzerin oder des Nutzers.
+  Beim ersten Lauf holt er festgelegte Versionen von ox-hugo und tomelr in
+  das ~.emacs-batch/~ der Anwendung. Das exportierte Markdown landet in
+  ~build/export/~ der Sammlung, die Ausgabe von Emacs in
+  ~build/export.log~. Das Protokoll wird angezeigt, wenn der Export
+  scheitert.
+
+  Der Export behält das Sprachkürzel: aus ~OSDB-0001-x.de.org~ wird
+  ~build/export/OSDB-0001-x.de.md~ und daraus die Seite
+  ~/de/procedures/osdb-0001/~.
+
+  Die Org-Dateien bleiben die maßgebliche Quelle. Bearbeiten Sie
+  ~build/export/~ nicht. Jeder Export baut das ganze Verzeichnis neu, löscht
+  verwaiste Exporte und erzeugt byte-gleiche Ausgabe, solange sich Quellen
+  und Werkzeugversionen nicht ändern.
+
+  Der Export hat bewusste Grenzen:
+
+  - Er setzt weder LaTeX noch Mathematik zwischen Dollarzeichen.
+  - Er versteht nur Tief- und Hochstellungen mit geschweiften Klammern.
+  - Er wertet nie Quellcodeblöcke aus.
+  - Er ignoriert dateilokale Variablen.
+
+  Prüfen Sie beide Quellformate und ihre Exporte mit:
+
+#+begin_src sh
+  orgsyndb validate
+#+end_src
+
+  Die Meldungen des Validators haben die Form
+  ~pfad:feld: error|warning: meldung~ und sind englisch. Fehler lassen die
+  Prüfung scheitern, Warnungen nicht. Meldet der Validator für eine
+  deutsche Datei ~missing section "Summary"~, fehlt ihrem Namen das ~.de~.
+  Die Schema-Referenz erklärt jedes Feld und die Rückgabewerte.
+
+  Bauen und betrachten Sie die Website mit:
+
+#+begin_src sh
+  orgsyndb serve
+#+end_src
+
+  Öffnen Sie http://127.0.0.1:8000/de/, sobald der Befehl meldet, dass er
+  läuft. Der Server ist nur vom selben Rechner aus erreichbar. Er lädt
+  nicht automatisch neu; beenden Sie ihn nach einer Änderung mit ~Strg+C~
+  und starten Sie ihn neu.
+
+  Auf einer Vorschriftenseite öffnet *Drucken / Als PDF speichern* den
+  Druckdialog des Browsers. Das Drucklayout ist vollständig, A4 und
+  schwarz auf weiß. Firefox lässt die Kopfzeile und die Seitenzahlen weg,
+  die WeasyPrint in die PDFs von ~orgsyndb pdf~ setzt. Dort heißt die PDF
+  einer deutschen Vorschrift ~pdf/OSDB-0001-x.de.pdf~ und trägt die
+  Fußzeile ~Seite N von M~.

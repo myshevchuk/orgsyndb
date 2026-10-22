@@ -1,8 +1,9 @@
 #+TITLE: OrgSynDB design decisions
 #+CREATED: [2026-10-20 Tue 20:41:42]
-#+LAST_MODIFIED: [2026-10-22 Thu 11:15:55]
+#+LAST_MODIFIED: [2026-10-22 Thu 19:50:00]
 #+AI_MODEL: gpt-5.6-sol
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-20 Tue 20:49] -- #+AI_MODEL corrected from gpt-5 to the pinned run model; theme design link pointed at its archive path
+#+AI_PASS: doc-writer claude-opus-5-5 [2026-10-22 Thu 19:50] -- languages section and the localization design link
 
 This file records the project-wide choices that are useful after the
 implementation details have faded. The change-local designs retain the full
@@ -12,6 +13,7 @@ analysis:
 - [[file:../openspec/changes/archive/2026-10-19-add-build-pipeline/design.md][build pipeline design]]
 - [[file:../openspec/changes/archive/2026-10-20-add-site-theme/design.md][site theme design]]
 - [[file:../openspec/changes/archive/2026-10-22-decouple-collection/design.md][collection design]]
+- [[file:../openspec/changes/add-german-localization/design.md][localization design]]
 
 * Governance and formats
 
@@ -507,3 +509,74 @@ analysis:
 - Rejected :: Adding artificial table columns was rejected; the table keeps
   the six columns required of every procedure and gets its width from real
   cell content.
+
+* Languages
+
+** Build an English and a German site from one collection
+
+- Decided :: Use Hugo's multilingual mode: English at the root with its
+  existing URLs, German under ~/de/~, every interface string in
+  ~site/i18n/~, and German reaction-type labels as ~label_de~ beside
+  ~label~ in the vocabulary.
+- Why :: Readers of both languages share one collection, and the English
+  site keeps every URL and text it had.
+- Rejected :: A per-collection language setting was rejected because a
+  mixed group would have to choose one language and could not keep
+  translations side by side.
+
+** Mark a procedure's language in its file name
+
+- Decided :: ~OSDB-0001-x.org~ is English and ~OSDB-0001-x.de.org~ (or
+  ~.de.md~) German; the export file name keeps the code.
+- Why :: This is Hugo's own translation-by-file-name rule, so the two
+  pages become translations without new front matter, and the language is
+  visible in every listing of the source tree.
+- Rejected :: A ~lang~ front-matter field was rejected because it needs a
+  new schema field, an Org keyword and an export mapping, and still needs
+  distinct file names.
+
+** Let a translation share its original's facts
+
+- Decided :: An ID is unique per language. A translation keeps its
+  original's base name and the same status, reaction type, tags, yield,
+  precursors, structure image and product formula, weight, SMILES and CAS
+  number; the validator reports each difference as an error. Title,
+  product name, scale, hazards, references, people, timestamps and body
+  are free.
+- Why :: Facts that do not depend on language must not drift between the
+  two pages, while translators need to change all wording.
+- Rejected :: Requiring a translation of every procedure, and translating
+  tags, were rejected: most procedures will stay English, and tags are
+  search identifiers whose translation would split the taxonomy.
+
+** Show each language its own procedures
+
+- Decided :: Lists, taxonomy pages and search hold only the procedures of
+  their language; precursor and used-in links fall back to the other
+  language's page, marked with ~hreflang~.
+- Why :: A page never loses a link because its precursor is not
+  translated, and each list stays in one language.
+- Rejected :: Listing untranslated English procedures on the German site
+  was rejected because Pagefind indexes by page language and the lists,
+  counts and search would disagree.
+
+** Write German procedures with German headings and decimal commas
+
+- Decided :: German bodies use the eight German section names and the
+  Reagents columns ~Reagenz | CAS | M (g/mol) | Menge | mmol | Äquiv.~;
+  ~scale~ accepts a decimal comma, while front-matter numbers keep a
+  decimal point and are shown with a comma.
+- Why :: A German procedure should read like German laboratory writing,
+  and TOML numbers cannot hold a comma.
+- Rejected :: Keeping English headings in German procedures was rejected
+  as a half translation.
+
+** Translate the authoring documents, not the specifications
+
+- Decided :: Ship German versions of the two authoring guides and the
+  schema reference beside the English ones; keep the README, this record
+  and the specifications English.
+- Why :: Co-workers who write procedures need the guides in their
+  language; the owner and contributors work from the English sources,
+  which stay authoritative.
+- Rejected :: Translating the README was rejected by the owner.
