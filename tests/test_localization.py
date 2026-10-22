@@ -171,6 +171,24 @@ class TranslatedFileTests(ValidatorTestCase):
                     self.assertIn("OSDB-0100-baseline.md",
                                   errors[0].message)
 
+    def test_equal_numbers_of_either_type_agree(self) -> None:
+        """Scenario: A translation shares its ID and facts (integer and
+        float)."""
+        self.assert_clean(run({
+            "OSDB-0100-baseline.md": baseline(
+                replace("yield_percent", "yield_percent = 85"),
+                replace("mw", "mw = 88")),
+            "OSDB-0100-baseline.de.md": germanised(baseline(
+                replace("yield_percent", "yield_percent = 85.0"),
+                replace("mw", "mw = 88.0"))),
+        }))
+        result = run({
+            "OSDB-0100-baseline.md": baseline(),
+            "OSDB-0100-baseline.de.md": germanised(baseline(
+                replace("yield_percent", "yield_percent = true")))})
+        self.assertIn(("yield_percent", "error"),
+                      [(p.field, p.severity) for p in result.problems])
+
     def test_a_german_only_procedure_is_a_valid_precursor(self) -> None:
         """Scenario: Precursors in any language."""
         self.assert_clean(run({

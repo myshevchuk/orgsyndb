@@ -846,6 +846,14 @@ def shared_value(data: dict[str, Any], name: str) -> object:
     return data.get(name)
 
 
+def same_value(mine: object, theirs: object) -> bool:
+    """Whether two shared-field values agree: numbers by value, so that
+    ``85`` and ``85.0`` match, and anything else by value and type."""
+    if is_number(mine) and is_number(theirs):
+        return mine == theirs
+    return mine == theirs and type(mine) is type(theirs)
+
+
 def reference_variant(holders: Sequence[ContentFile]) -> ContentFile:
     """The variant the others of one ID are compared with: the file
     without a language code, else the first in ``LANGUAGES`` order."""
@@ -876,7 +884,7 @@ def check_variants(holders: Sequence[ContentFile]) -> None:
         for name in SHARED_FIELDS:
             mine = shared_value(item.data, name)
             theirs = shared_value(original.data, name)
-            if mine != theirs or type(mine) is not type(theirs):
+            if not same_value(mine, theirs):
                 shown = "unset" if theirs is None else repr(theirs)
                 item.problems.append(error(
                     name, f"must equal the value in {original.path} "

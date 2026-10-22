@@ -48,12 +48,16 @@ Every entry of `site/data/reaction_types.toml` SHALL have, besides `label`, a no
 - **AND** both lists show the German labels in alphabetical order
 
 ### Requirement: Procedure variants
-A procedure file's name MAY carry a language code, `de` or `en`, before its suffix: `OSDB-0001-x.de.md`, `OSDB-0001-x.en.org`. Files with the same `id` are variants of one procedure; an ID may occur once per code and once without one. Every variant SHALL have the same base name (the name without code and suffix) and the same value, or absence, of `status`, `reaction_types`, `tags`, `yield_percent`, `precursors`, `structure_image`, `product.formula`, `product.mw`, `product.smiles` and `product.cas` as the reference variant: the untagged file, else the `.de` file. A mismatch is an error on the other variant, under the field's name (`file_name` for the base name), naming the reference's path. Any other field, and the body, may differ. A precursor may be any procedure ID, whatever the languages of its variants.
+A procedure file's name MAY carry a language code, `de` or `en`, before its suffix: `OSDB-0001-x.de.md`, `OSDB-0001-x.en.org`. Files with the same `id` are variants of one procedure; an ID may occur once per code and once without one. Every variant SHALL have the same base name (the name without code and suffix) and the same value, or absence, of `status`, `reaction_types`, `tags`, `yield_percent`, `precursors`, `structure_image`, `product.formula`, `product.mw`, `product.smiles` and `product.cas` as the reference variant: the untagged file, else the `.de` file. Numbers compare by value, so `85` and `85.0` agree; other values compare by value and type. A mismatch is an error on the other variant, under the field's name (`file_name` for the base name), naming the reference's path. Any other field, and the body, may differ. A precursor may be any procedure ID, whatever the languages of its variants.
 
 #### Scenario: A translation shares its ID and facts
 - **WHEN** a run examines the baseline as `OSDB-0100-baseline.md` and, as `OSDB-0100-baseline.de.md`, the baseline with German headings and a different title, product name, hazards, authors and `scale = "25,0 mmol"`
 - **THEN** it exits 0 and prints nothing
 - **AND** when the German file instead changes `yield_percent`, `status`, `tags`, `product.mw` or adds `precursors`, it reports an error under that field on the German file, naming `OSDB-0100-baseline.md`
+
+#### Scenario: A translation shares its ID and facts (integer and float)
+- **WHEN** a run examines an untagged file with `yield_percent = 85` and `mw = 88`, and its `.de` variant with `85.0` and `88.0`
+- **THEN** it exits 0 and prints nothing, while `yield_percent = true` in the variant is still an error
 
 #### Scenario: A translation shares its ID and facts (no untagged file)
 - **WHEN** a run examines `OSDB-0100-baseline.de.md` and an `OSDB-0100-baseline.en.md` with a different `yield_percent`
