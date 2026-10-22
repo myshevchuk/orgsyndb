@@ -1,24 +1,12 @@
-{{- /* The site header: title, navigation of the current language, and a
-link to each translation of the current page. A page without a
-translation, such as an untranslated procedure, has no language links. */ -}}
 <header class="site-header">
-<a class="site-title" href="{{ "/" | relLangURL }}">{{ site.Title }}</a>
+<a class="site-title" href="/">{{ site.Title }}</a>
 <nav aria-label="{{ T "nav_site" }}">
 <ul>
-<li><a href="{{ "/procedures/" | relLangURL }}">{{ T "nav_procedures" }}</a></li>
-<li><a href="{{ "/reaction_types/" | relLangURL }}">{{ T "nav_reaction_types" }}</a></li>
-<li><a href="{{ "/tags/" | relLangURL }}">{{ T "nav_tags" }}</a></li>
-<li><a href="{{ "/authors/" | relLangURL }}">{{ T "nav_authors" }}</a></li>
-<li><a href="{{ "/search/" | relLangURL }}">{{ T "nav_search" }}</a></li>
+<li><a href="/procedures/">{{ T "nav_procedures" }}</a></li>
+<li><a href="/reaction_types/">{{ T "nav_reaction_types" }}</a></li>
+<li><a href="/tags/">{{ T "nav_tags" }}</a></li>
+<li><a href="/authors/">{{ T "nav_authors" }}</a></li>
+<li><a href="/search/">{{ T "nav_search" }}</a></li>
 </ul>
 </nav>
-{{ with .Translations -}}
-<nav class="language-switch" aria-label="{{ T "nav_languages" }}">
-<ul>
-{{ range . -}}
-<li><a href="{{ .RelPermalink }}" hreflang="{{ .Language.Lang }}" lang="{{ .Language.Lang }}">{{ .Language.Label }}</a></li>
-{{ end -}}
-</ul>
-</nav>
-{{ end -}}
 </header>

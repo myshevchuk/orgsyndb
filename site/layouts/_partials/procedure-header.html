@@ -1,11 +1,12 @@
 {{- /* The sample banner, then the procedure header: ID line with the status
 badge, title, print-only facts and the actions row. All of it lies outside
-the indexed body. */ -}}
+the indexed body. A procedure whose language differs from the site's carries
+it on the header, as the page template does on the article. */ -}}
 {{ $p := .Params -}}
 {{ if in $p.tags "sample-data" -}}
 <p class="sample-banner" role="note">{{ T "sample_banner" }}</p>
 {{ end -}}
-<header class="procedure-header">
+<header class="procedure-header"{{ with $p.language }}{{ if ne . site.Language.Lang }} lang="{{ . }}"{{ end }}{{ end }}>
 <p class="procedure-id"><span data-pagefind-meta="id">{{ $p.id }}</span> <span class="badge badge--{{ $p.status }}" data-pagefind-filter="{{ T "filter_status" }}">{{ partial "status-label.html" $p.status }}</span></p>
 <h1>{{ .Title }}</h1>
 <p class="print-facts print-only"><span class="page-url">{{ strings.TrimSuffix "/" site.Params.siteurl }}{{ .RelPermalink }}</span> · {{ $p.id }} · {{ T "print_status" }} {{ partial "status-label.html" $p.status }} · {{ T "print_modified" }} {{ .Lastmod.Format "2006-01-02 15:04" }}</p>

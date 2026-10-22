@@ -1,18 +1,12 @@
-{{- /* The Precursors and Used in pairs of the metadata panel. Both draw on
-the procedures of the page's language and, for an ID that has no page in
-that language, on its page in another language, which the link marks
-with hreflang. Precursors are looked up by ID; "used in" is every
-procedure listing this one's ID among its precursors, by ID. A precursor
-ID without any page is shown as text. */ -}}
+{{- /* The Precursors and Used in pairs of the metadata panel. Precursors are
+looked up by ID; "used in" is every procedure listing this one's ID among
+its precursors, by ID. A precursor ID without a page is shown as text. */ -}}
 {{ $id := .Params.id -}}
-{{ $pages := partial "procedures-by-id.html" . -}}
 {{ with .Params.precursors -}}
 <dt>{{ T "label_precursors" }}</dt>
-<dd>{{ range $i, $ref := . }}{{ if $i }}, {{ end }}{{ with index $pages $ref }}<a class="precursor" href="{{ .RelPermalink }}"{{ if ne .Language.Lang site.Language.Lang }} hreflang="{{ .Language.Lang }}"{{ end }}>{{ .Params.id }} {{ .Title }}</a>{{ else }}{{ $ref }}{{ end }}{{ end }}</dd>
+<dd>{{ range $i, $ref := . }}{{ if $i }}, {{ end }}{{ with where site.RegularPages "Params.id" $ref }}{{ with index . 0 }}<a class="precursor" href="{{ .RelPermalink }}">{{ .Params.id }} {{ .Title }}</a>{{ end }}{{ else }}{{ $ref }}{{ end }}{{ end }}</dd>
 {{ end -}}
-{{ $users := slice -}}
-{{ range $ref, $page := $pages }}{{ if in ($page.Params.precursors | default slice) $id }}{{ $users = $users | append $page }}{{ end }}{{ end -}}
-{{ with $users -}}
+{{ with where (where site.RegularPages "Section" "procedures") "Params.precursors" "intersect" (slice $id) -}}
 <dt>{{ T "label_used_in" }}</dt>
-<dd>{{ range $i, $page := sort . "Params.id" }}{{ if $i }}, {{ end }}<a class="used-in" href="{{ $page.RelPermalink }}"{{ if ne $page.Language.Lang site.Language.Lang }} hreflang="{{ $page.Language.Lang }}"{{ end }}>{{ $page.Params.id }} {{ $page.Title }}</a>{{ end }}</dd>
+<dd>{{ range $i, $page := sort . "Params.id" }}{{ if $i }}, {{ end }}<a class="used-in" href="{{ $page.RelPermalink }}">{{ $page.Params.id }} {{ $page.Title }}</a>{{ end }}</dd>
 {{ end -}}

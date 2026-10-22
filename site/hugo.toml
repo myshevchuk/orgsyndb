@@ -4,14 +4,13 @@
 # put the application's own files in assets/, not in a site/static/.
 baseURL = "/"
 title = "OrgSynDB"
-locale = "en"
+# The site's language: "de" or "en". It picks the interface strings in
+# i18n/ and, for each procedure ID, the file to publish: the one whose
+# name carries this language code (OSDB-0001-x.de.md), else the one
+# without a code (OSDB-0001-x.md), else one in another language.
+# tools/orgsyndb sets defaultContentLanguage from it in the overlay.
+locale = "de"
 relativeURLs = true
-# English pages are at the root, German ones under /de/. A procedure's
-# language is the code in its file name: OSDB-0001-x.md is English and
-# OSDB-0001-x.de.md its German translation. UI strings are in i18n/.
-defaultContentLanguage = "en"
-defaultContentLanguageInSubdir = false
-disableDefaultLanguageRedirect = true
 buildFuture = true
 buildExpired = true
 disableKinds = ["rss", "sitemap"]
@@ -33,12 +32,3 @@ keepWhitespace = true
 [params]
 siteurl = "http://127.0.0.1:8000"
 
-[languages.en]
-label = "English"
-locale = "en"
-weight = 1
-
-[languages.de]
-label = "Deutsch"
-locale = "de"
-weight = 2

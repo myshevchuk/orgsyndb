@@ -2,14 +2,14 @@
 {{ $procedures := where site.RegularPages "Section" "procedures" -}}
 <h1>{{ site.Title }}</h1>
 <p class="lede">{{ T "home_lede" }}</p>
-<form class="search-form" action="{{ "/search/" | relLangURL }}" method="get" role="search">
+<form class="search-form" action="/search/" method="get" role="search">
 <label for="home-search">{{ T "search_label" }}</label>
 <input id="home-search" name="q" type="search">
 <button type="submit">{{ T "search_button" }}</button>
 </form>
 <h2>{{ T "recent_procedures" }}</h2>
 {{ partial "procedure-table.html" (first 5 (sort (sort $procedures "Params.id") "Date" "desc")) -}}
-<p><a href="{{ "/procedures/" | relLangURL }}">{{ T "all_procedures" (dict "Count" (len $procedures)) }}</a> (<a href="{{ "/procedures-by-date/" | relLangURL }}">{{ T "newest_first" }}</a>)</p>
+<p><a href="/procedures/">{{ T "all_procedures" (dict "Count" (len $procedures)) }}</a> (<a href="/procedures-by-date/">{{ T "newest_first" }}</a>)</p>
 <h2>{{ T "browse_reaction_type" }}</h2>
 <ul class="term-list">
 {{ range partial "terms-by-label.html" "reaction_types" -}}

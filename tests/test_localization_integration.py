@@ -1,87 +1,88 @@
-"""German site tests: HTML scans and searches of a sandbox build
-(localization). ``GermanSiteTests`` builds the demo collection with its
-German translations; ``PartialTranslationTests`` builds it with one
-translation removed. Tests skip, naming the missing tool or cache, as the
-other integration tests do.
+"""German site tests: HTML scans, searches and PDFs of sandbox builds in
+the shipped locale, de (localization). ``GermanSiteTests`` builds the demo
+collection; ``PartialTranslationTests`` builds it with two translations
+removed and an English-only variant added; ``GermanPdfTests`` renders
+its PDFs. Tests skip, naming the missing tool or cache, as the other
+integration tests do.
 """
 
 import pipeline_support as ps
 from pipeline_support import Page
 
-NAVIGATION = [("/de/procedures/", "Vorschriften"),
-              ("/de/reaction_types/", "Reaktionstypen"),
-              ("/de/tags/", "Schlagwörter"), ("/de/authors/", "Autoren"),
-              ("/de/search/", "Suche")]
+NAVIGATION = [("/procedures/", "Vorschriften"),
+              ("/reaction_types/", "Reaktionstypen"),
+              ("/tags/", "Schlagwörter"), ("/authors/", "Autoren"),
+              ("/search/", "Suche")]
 FOOTER = "OrgSynDB · interne Vorschriften"
 BANNER = "Beispieldaten – Mengenangaben nicht experimentell überprüft."
 PANEL_LABELS = ["ID", "Produkt", "Summenformel", "Molmasse", "CAS", "SMILES",
                 "Ansatzgröße", "Ausbeute", "Reaktionstyp", "Schlagwörter",
                 "Autoren", "Erstellt", "Geändert", "Vorstufen"]
+TITLES = {"procedures/index.html": "Alle Vorschriften",
+          "procedures-by-date/index.html": "Alle Vorschriften nach Datum",
+          "reaction_types/index.html": "Reaktionstypen",
+          "tags/index.html": "Schlagwörter",
+          "authors/index.html": "Autoren", "search/index.html": "Suche"}
 
 
-def language_links(page: Page) -> list[tuple[str, str, str]]:
-    """(target, hreflang, text) of each link of the language switch."""
-    nav = page.find("nav", "language-switch")
-    if nav is None:
-        return []
-    return [(link.target, link.node.get("hreflang"), link.node.norm())
-            for link in page.links(nav)]
+class GermanCase(ps.ThemeBuildCase):
+    LOCALE = "de"
 
-
-class GermanSiteTests(ps.ThemeBuildCase):
-    """The demo collection with every German translation."""
-
-    def german_page(self, slug: str) -> Page:
-        path = self.public / "de" / "procedures" / slug / "index.html"
-        self.assertTrue(path.is_file(), f"de/procedures/{slug} not built")
+    def page(self, relative: str) -> Page:
+        path = self.public / relative
+        self.assertTrue(path.is_file(), f"{relative} not built")
         return ps.load_page(self.public, path)
 
-    def test_every_german_page_has_the_german_shell(self) -> None:
+
+class GermanSiteTests(GermanCase):
+    """The demo collection, built in German."""
+
+    def test_every_page_has_the_german_shell(self) -> None:
         """Scenario: German page shell."""
-        pages = self.pages("de")
+        pages = self.pages()
         self.assertGreater(len(pages), 20)
         for path, page in pages:
             with self.subTest(page=str(path.relative_to(self.public))):
                 self.assertEqual(page.find("html").get("lang"), "de")
-                skip = page.find("a", "skip-link")
-                self.assertEqual(skip.norm(), "Zum Inhalt springen")
-                nav = page.find("header", "site-header").find(
-                    "nav", aria_label="Website")
+                self.assertEqual(page.find("a", "skip-link").norm(),
+                                 "Zum Inhalt springen")
+                header = page.find("header", "site-header")
+                nav = header.find("nav", aria_label="Website")
                 self.assertIsNotNone(nav, "no nav[aria-label=Website]")
                 links = [(l.target, l.node.norm()) for l in page.links(nav)]
                 self.assertEqual(links, NAVIGATION)
+                self.assertEqual(len(header.find_all("nav")), 1,
+                                 "the header has a language switch")
                 self.assertEqual(page.find("footer", "site-footer").norm(),
                                  FOOTER)
-                title = page.title()
-                self.assertTrue(title == "OrgSynDB"
-                                or title.endswith(" | OrgSynDB"), title)
+        self.assertFalse((self.public / "de").exists())
+        self.assertFalse((self.public / "en").exists())
 
-    def test_english_pages_keep_the_english_language(self) -> None:
-        """Scenario: German page shell (English pages)."""
-        for path, page in self.pages("en"):
-            with self.subTest(page=str(path.relative_to(self.public))):
-                self.assertEqual(page.find("html").get("lang"), "en")
+    def test_site_pages_have_german_titles(self) -> None:
+        """Scenario: German page titles."""
+        for relative, title in TITLES.items():
+            page = self.page(relative)
+            with self.subTest(page=relative):
+                self.assertEqual(page.find("h1").norm(), title)
+                self.assertEqual(page.title(), f"{title} | OrgSynDB")
 
-    def test_translations_link_to_each_other(self) -> None:
-        """Scenario: Language switch."""
-        english = {item.id: item for item in self.content("en")}
-        german = self.content("de")
-        self.assertEqual(sorted(item.id for item in german), sorted(english))
-        for item in german:
+    def test_the_german_variants_are_published(self) -> None:
+        """Scenario: Choosing the variant to publish (demo)."""
+        published = self.content()
+        self.assertEqual(len(published), 8)
+        for item in published:
             with self.subTest(procedure=item.id):
-                theirs = ps.load_page(self.public,
-                                      english[item.id].page_file(self.public))
-                ours = ps.load_page(self.public, item.page_file(self.public))
-                self.assertEqual(language_links(theirs), [
-                    (f"/de/procedures/{item.slug}/", "de", "Deutsch")])
-                self.assertEqual(language_links(ours), [
-                    (f"/procedures/{item.slug}/", "en", "English")])
-        home = ps.load_page(self.public, self.public / "index.html")
-        self.assertEqual(language_links(home), [("/de/", "de", "Deutsch")])
+                self.assertEqual(item.language, "de")
+                page = self.page(f"procedures/{item.slug}/index.html")
+                self.assertEqual(page.find("h1").norm(), item.title)
+                self.assertIsNone(page.find("article").get("lang"))
+        dirs = {p.name for p in (self.public / "procedures").iterdir()
+                if p.is_dir()}
+        self.assertEqual(dirs, {item.slug for item in published})
 
     def test_german_panel_of_the_markdown_seed(self) -> None:
         """Scenario: German metadata panel."""
-        page = self.german_page("osdb-0002")
+        page = self.page("procedures/osdb-0002/index.html")
         self.assertEqual(page.find("p", "sample-banner").norm(), BANNER)
         self.assertEqual(page.find("span", "badge").norm(), "Entwurf")
         self.assertEqual(page.find("button", "print-button").norm(),
@@ -94,54 +95,36 @@ class GermanSiteTests(ps.ThemeBuildCase):
         self.assertEqual(pairs["Ausbeute"].norm(), "75 %")
         reaction = page.links(pairs["Reaktionstyp"])
         self.assertEqual([(l.target, l.node.norm()) for l in reaction],
-                         [("/de/reaction_types/acylation/", "Acylierung")])
+                         [("/reaction_types/acylation/", "Acylierung")])
         self.assertEqual(reaction[0].node.get("data-pagefind-filter"),
                          "Reaktionstyp")
         precursor = page.links(pairs["Vorstufen"])
-        self.assertEqual(
-            [(l.target, l.node.get("hreflang"), l.node.norm())
-             for l in precursor],
-            [("/de/procedures/osdb-0001/", None, "OSDB-0001 Salicylsäure")])
+        self.assertEqual([(l.target, l.node.norm()) for l in precursor],
+                         [("/procedures/osdb-0001/", "OSDB-0001 Salicylsäure")])
         button = page.find("button", "copy-button")
         self.assertEqual((button.norm(), button.get("data-copied")),
                          ("Kopieren", "Kopiert"))
         self.assertIsNotNone(page.heading("Reagenzien"))
 
-    def test_german_term_titles_use_german_labels(self) -> None:
+    def test_german_labels_for_reaction_types(self) -> None:
         """Scenario: German labels for reaction types."""
-        path = (self.public / "de" / "reaction_types" / "aldol-condensation"
-                / "index.html")
-        page = ps.load_page(self.public, path)
+        page = self.page("reaction_types/aldol-condensation/index.html")
         self.assertEqual(page.find("h1").norm(), "Aldolkondensation")
         self.assertEqual(page.title(), "Aldolkondensation | OrgSynDB")
         labels = ps.reaction_labels(self.sandbox.app, "de")
-        used = {slug for item in self.content("de")
+        used = {slug for item in self.content()
                 for slug in item.data["reaction_types"]}
         expected = sorted(labels[slug] for slug in used)
         self.assertIn("Veresterung", expected)
-        for relative in ("de/index.html", "de/reaction_types/index.html"):
-            page = ps.load_page(self.public, self.public / relative)
+        for relative in ("index.html", "reaction_types/index.html"):
+            page = self.page(relative)
             shown = [l.node.norm() for l in page.links()
-                     if "/de/reaction_types/" in l.target
-                     and l.target != "/de/reaction_types/"]
+                     if l.target.startswith("/reaction_types/")
+                     and l.target != "/reaction_types/"]
             with self.subTest(page=relative):
                 self.assertEqual(shown, expected)
 
-    def test_german_lists_hold_the_german_procedures(self) -> None:
-        """Scenario: German lists."""
-        german = sorted(self.content("de"), key=lambda item: item.id)
-        page = ps.load_page(self.public, self.public / "de" / "procedures"
-                            / "index.html")
-        table = page.find("table", "procedure-list")
-        rows = [[c.norm() for c in tr.find_all("td")]
-                for tr in table.find_all("tr")][1:]
-        self.assertEqual([row[:2] for row in rows],
-                         [[item.id, item.title] for item in german])
-        header = [th.norm() for th in table.find_all("th")]
-        self.assertEqual(header, ["ID", "Vorschrift", "Reaktionstyp",
-                                  "Status", "Erstellt", "Geändert"])
-
-    def test_german_index_finds_german_words(self) -> None:
+    def test_the_german_index_finds_german_words(self) -> None:
         """Scenario: German search index."""
         ps.require_node()
         out = ps.pagefind_search(self.public, [
@@ -157,14 +140,15 @@ class GermanSiteTests(ps.ThemeBuildCase):
         self.assertEqual(ids[2], ["OSDB-0001", "OSDB-0008"])
         self.assertEqual(sorted(out["filters"]),
                          ["Autor", "Reaktionstyp", "Schlagwort", "Status"])
-        titles = {item.title for item in self.content("de")}
+        titles = {item.title for item in self.content()}
         for results in out["results"]:
             for hit in results:
                 self.assertIn(hit["title"], titles)
 
 
-class PartialTranslationTests(ps.ThemeBuildCase):
-    """The demo collection without the German OSDB-0001 and OSDB-0004."""
+class PartialTranslationTests(GermanCase):
+    """Without the German OSDB-0001 and OSDB-0004, and with an English
+    OSDB-0100 whose only file is tagged .en."""
 
     REMOVED = ("OSDB-0001-salicylic-acid.de.org",
                "OSDB-0004-4-acetylbiphenyl.de.org")
@@ -173,38 +157,69 @@ class PartialTranslationTests(ps.ThemeBuildCase):
     def prepare(cls) -> None:
         for name in cls.REMOVED:
             (cls.sandbox.root / "org" / "procedures" / name).unlink()
+        baseline = ps.FIXTURES / "baseline" / "OSDB-0100-baseline.md"
+        (cls.sandbox.md_dir() / "OSDB-0100-baseline.en.md").write_text(
+            baseline.read_text(encoding="utf-8"), encoding="utf-8")
 
-    def test_an_untranslated_procedure_has_no_language_link(self) -> None:
-        """Scenario: Untranslated procedure."""
-        self.assertFalse((self.public / "de" / "procedures" / "osdb-0001")
-                         .exists())
-        page = ps.load_page(self.public, self.public / "procedures"
-                            / "osdb-0001" / "index.html")
-        self.assertEqual(language_links(page), [])
+    def test_every_procedure_is_published(self) -> None:
+        """Scenario: Every procedure in every locale."""
+        chosen = {item.id: item.path.name for item in self.content()}
+        self.assertEqual(len(chosen), 9)
+        self.assertEqual(chosen["OSDB-0001"], "OSDB-0001-salicylic-acid.md")
+        self.assertEqual(chosen["OSDB-0100"], "OSDB-0100-baseline.en.md")
+        self.assertEqual(chosen["OSDB-0002"], "OSDB-0002-aspirin.de.md")
+        page = self.page("procedures/osdb-0001/index.html")
+        self.assertEqual(page.find("h1").norm(), "Salicylic acid")
+        self.assertEqual(page.find("html").get("lang"), "de")
+        home = self.page("index.html")
+        self.assertIn("Alle 9 Vorschriften", home.find("main").norm())
 
-    def test_links_fall_back_to_another_language(self) -> None:
-        """Scenario: Links to an untranslated procedure."""
-        for slug, cls_name, target in (
-                ("osdb-0002", "precursor", "/procedures/osdb-0001/"),
-                ("osdb-0005", "precursor", "/procedures/osdb-0004/")):
-            page = ps.load_page(self.public, self.public / "de"
-                                / "procedures" / slug / "index.html")
-            links = [l for l in page.links() if l.node.has_class(cls_name)]
-            with self.subTest(page=slug):
-                self.assertEqual(
-                    [(l.target, l.node.get("hreflang")) for l in links],
-                    [(target, "en")])
-                self.assertTrue(ps.target_file(self.public, links[0].target)
-                                .is_file())
-        english = ps.load_page(self.public, self.public / "procedures"
-                               / "osdb-0004" / "index.html")
-        used_in = [(l.target, l.node.get("hreflang")) for l in english.links()
+    def test_a_variant_in_another_language_is_marked(self) -> None:
+        """Scenario: A procedure in another language is marked."""
+        page = self.page("procedures/osdb-0100/index.html")
+        self.assertEqual(page.find("article").get("lang"), "en")
+        self.assertEqual(page.find("header", "procedure-header").get("lang"),
+                         "en")
+        self.assertEqual(page.find("main").find("p", "sample-banner").norm(),
+                         BANNER)
+        untagged = self.page("procedures/osdb-0001/index.html")
+        self.assertIsNone(untagged.find("article").get("lang"))
+
+    def test_links_join_the_languages(self) -> None:
+        """Scenario: Links between variants of different languages."""
+        page = self.page("procedures/osdb-0002/index.html")
+        links = [(l.target, l.node.norm()) for l in page.links()
+                 if l.node.has_class("precursor")]
+        self.assertEqual(links,
+                         [("/procedures/osdb-0001/", "OSDB-0001 Salicylic acid")])
+        english = self.page("procedures/osdb-0004/index.html")
+        used_in = [(l.target, l.node.norm()) for l in english.links()
                    if l.node.has_class("used-in")]
-        self.assertEqual(used_in, [("/procedures/osdb-0005/", None)])
+        self.assertEqual(used_in, [("/procedures/osdb-0005/",
+                                    "OSDB-0005 1-(Biphenyl-4-yl)ethanol")])
 
-    def test_the_german_home_counts_the_german_procedures(self) -> None:
-        """Scenario: German lists (partial translation)."""
-        page = ps.load_page(self.public, self.public / "de" / "index.html")
-        count = len(self.content("de"))
-        self.assertEqual(count, 6)
-        self.assertIn(f"Alle {count} Vorschriften", page.find("main").norm())
+
+class GermanPdfTests(GermanCase):
+    """PDFs of the demo collection, built in German."""
+
+    COMMAND = "pdf"
+
+    @classmethod
+    def require_tools(cls) -> None:
+        ps.require_pdf_tools()
+
+    def test_german_first_page_and_footer(self) -> None:
+        """Scenario: German first page."""
+        pdf_dir = self.sandbox.root / "pdf"
+        self.assertEqual(sorted(p.name for p in pdf_dir.iterdir()),
+                         sorted(f"{item.path.stem}.pdf"
+                                for item in self.content()))
+        pages = ps.pdf_page_texts(pdf_dir / "OSDB-0002-aspirin.de.pdf")
+        self.assertIn(
+            "http://127.0.0.1:8000/procedures/osdb-0002/ · OSDB-0002 · "
+            "Status Entwurf · zuletzt geändert 2026-10-22 20:20",
+            ps.norm_text(pages[0]))
+        for number, text in enumerate(pages, 1):
+            with self.subTest(page=number):
+                lines = [line.strip() for line in text.splitlines()]
+                self.assertIn(f"Seite {number} von {len(pages)}", lines)

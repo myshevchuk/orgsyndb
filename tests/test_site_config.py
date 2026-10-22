@@ -35,7 +35,9 @@ class HugoConfigurationTests(unittest.TestCase):
         self.assertTrue(HUGO_TOML.is_file(), "site/hugo.toml does not exist")
         config = tomllib.loads(HUGO_TOML.read_text(encoding="utf-8"))
         self.assertEqual(config.get("baseURL"), "/")
-        self.assertEqual(config.get("locale"), "en")
+        self.assertEqual(config.get("locale"), "de")
+        for key in ("languages", "defaultContentLanguage"):
+            self.assertNotIn(key, config)
         self.assertIs(config.get("relativeURLs"), True)
         self.assertIs(config.get("buildFuture"), True)
         self.assertIs(config.get("buildExpired"), True)
@@ -72,18 +74,18 @@ class OverlayTests(unittest.TestCase):
         """Scenario: Overlay parses to the contract."""
         site = Path('/srv/app "one"/site')
         collection = Path('/srv/data "two", here')
-        overlay = tomllib.loads(pipeline().hugo_overlay(site, collection))
+        overlay = tomllib.loads(pipeline().hugo_overlay(site, collection,
+                                                         "de"))
         self.assertEqual(set(overlay), {"publishDir", "resourceDir",
-                                        "module"})
+                                        "defaultContentLanguage", "module"})
+        self.assertEqual(overlay["defaultContentLanguage"], "de")
         self.assertEqual(overlay["publishDir"], f"{collection}/public")
         self.assertEqual(overlay["resourceDir"],
                          f"{collection}/build/hugo-resources")
         files = ["/OSDB-*.md"]
         self.assertEqual(overlay["module"], {"mounts": [
             {"source": f"{site}/content", "target": "content"},
-            {"source": f"{collection}/build/export",
-             "target": "content/procedures", "files": files},
-            {"source": f"{collection}/md/procedures",
+            {"source": f"{collection}/build/content/procedures",
              "target": "content/procedures", "files": files},
             {"source": f"{collection}/static", "target": "static"},
         ]})

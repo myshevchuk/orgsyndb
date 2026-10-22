@@ -72,12 +72,13 @@ Subcommands:
                       index it with Pagefind
   serve [--port N]    build, then serve public/ on http://127.0.0.1:N/
                       (default port 8000) until Ctrl-C
-  pdf                 build, then render every procedure to
+  pdf                 build, then render every published procedure to
                       pdf/<file name>.pdf
   new [--md] [--lang LANG] [--ai-model ID] TITLE...
                       create a procedure stub with the next free ID in
                       org/procedures/, or md/procedures/ with --md; with
-                      --lang de, a German stub named <ID>-<slug>.de.org
+                      --lang de or en, a stub in that language named
+                      <ID>-<slug>.<LANG>.org
   init DIR            create an empty collection in DIR
   clean [--all]       remove build/, public/ and pdf/; --all also removes
                       the application's .emacs-batch/ and .tools/
@@ -242,21 +243,29 @@ def run_validator() -> int:
     return status
 
 
-def run_build(collection: Path) -> None:
+def run_build(collection: Path) -> list[tuple[Path, dict]]:
+    """Export, validate and build; return the published content files."""
     run_export()
     if run_validator() != 0:
         raise Failure("validation found errors; the site was not built")
+    language = pipeline.site_language(APP / "site")
+    chosen = pipeline.choose_variants(
+        pipeline.content_files(existing(CONTENT_ROOTS)), language)
+    step(f"build: staging {len(chosen)} procedures for locale {language}")
+    pipeline.stage_content(chosen, Path("build") / pipeline.STAGED)
     step("build: hugo")
     remove(Path("public"))
     config = collection / "build" / "hugo-config"
     (config / "_default").mkdir(parents=True, exist_ok=True)
     (config / "_default" / "hugo.toml").write_text(
-        pipeline.hugo_overlay(APP / "site", collection), encoding="utf-8")
+        pipeline.hugo_overlay(APP / "site", collection, language),
+        encoding="utf-8")
     run(["hugo", "--source", APP / "site", "--configDir", config,
          "--minify", "--quiet", "--noBuildLock"])
     step("build: pagefind")
     binary = pipeline.ensure_pagefind(APP / ".tools")
     run([binary, "--site", collection / "public", "--quiet"])
+    return chosen
 
 
 # --------------------------------------------------------------------------
@@ -328,12 +337,11 @@ def cmd_pdf(option: str | None, args: Sequence[str]) -> int:
     no_arguments("pdf", args)
     collection = enter_collection(option)
     require_tools(*BUILD_TOOLS, "weasyprint")
-    run_build(collection)
+    chosen = run_build(collection)
     step("pdf: rendering procedure pages into pdf/")
     pdf_dir = Path("pdf")
     remove(pdf_dir)
-    jobs = pipeline.pdf_jobs(pipeline.content_files(existing(CONTENT_ROOTS)),
-                             Path("public"), pdf_dir)
+    jobs = pipeline.pdf_jobs(chosen, Path("public"), pdf_dir)
     pdf_dir.mkdir()
     failed = pipeline.render_pdfs(jobs)
     print(f"pdf: {len(jobs) - len(failed)} of {len(jobs)} files written")
@@ -346,12 +354,12 @@ def cmd_new(option: str | None, args: Sequence[str]) -> int:
     parser = Parser(prog=f"{PROG} new", add_help=False)
     parser.add_argument("--md", action="store_true")
     parser.add_argument("--ai-model")
-    parser.add_argument("--lang", default=validate.DEFAULT_LANGUAGE)
+    parser.add_argument("--lang")
     parser.add_argument("title", nargs="*")
     parsed = parser.parse_intermixed_args(args)
     if not " ".join(parsed.title).strip():
         raise UsageError("new needs a TITLE")
-    if parsed.lang not in validate.LANGUAGES:
+    if parsed.lang is not None and parsed.lang not in validate.LANGUAGES:
         raise UsageError(f"new: --lang must be one of "
                          f"{', '.join(validate.LANGUAGES)}: {parsed.lang}")
     collection = find_collection(option)

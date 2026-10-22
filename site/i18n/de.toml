@@ -1,6 +1,14 @@
-# Oberflächentexte der deutschen Seite, mit denselben Schlüsseln wie
-# en.toml. Die Inhalte der Vorschriften stehen nicht hier, sondern in
-# den deutschen Vorschriftendateien (OSDB-NNNN-name.de.md oder .de.org).
+# Oberflächentexte auf Deutsch, verwendet bei locale = "de" in
+# site/hugo.toml, mit denselben Schlüsseln wie en.toml. Die Seitentitel
+# von site/content/ stehen hier unter ihrem title_key. Die Inhalte der
+# Vorschriften stehen nicht hier, sondern in den Vorschriftendateien.
+
+title_by_date = "Alle Vorschriften nach Datum"
+title_search = "Suche"
+title_procedures = "Alle Vorschriften"
+title_reaction_types = "Reaktionstypen"
+title_tags = "Schlagwörter"
+title_authors = "Autoren"
 
 skip_link = "Zum Inhalt springen"
 nav_site = "Website"

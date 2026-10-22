@@ -29,6 +29,8 @@ MISSING_TITLE = (FIXTURES / "invalid" / "missing-title"
                  / "OSDB-0101-missing-title.md")
 PROBLEM_LINE = re.compile(r"^.+?:[^:\s]+: (error|warning): ")
 SEEDS = ["OSDB-0001-salicylic-acid", "OSDB-0002-aspirin"]
+# The locale of the shipped site/hugo.toml.
+LOCALE = "de"
 
 
 class BuildTestCase(unittest.TestCase):
@@ -48,21 +50,11 @@ class BuildTestCase(unittest.TestCase):
     def public(self, *parts: str) -> Path:
         return self.sandbox.root / "public" / Path(*parts)
 
-    def content_files(self, language: str | None = None) -> list[Path]:
-        """Procedure content files of build/export/ and md/procedures/,
-        of every language or of ``language``."""
-        found: list[Path] = []
-        for directory in (self.sandbox.export_dir(), self.sandbox.md_dir()):
-            if directory.is_dir():
-                found += sorted(directory.glob("OSDB-*.md"))
-        return [path for path in found if language is None
-                or ps.language_of(path.name) == language]
-
-    def page_of(self, path: Path) -> Path:
-        """The published page of the content file ``path``."""
-        slug = front_matter(path.read_text(encoding="utf-8"))["slug"]
-        return (ps.language_root(self.public(), ps.language_of(path.name))
-                / "procedures" / slug / "index.html")
+    def content_files(self) -> list[Path]:
+        """The procedure content files of build/export/ and
+        md/procedures/ that a build in the shipped locale, de, publishes:
+        one per ID."""
+        return [item.path for item in ps.read_content(self.sandbox, LOCALE)]
 
     def add_baseline(self, *extra_lines: str, date: str | None = None) -> Path:
         text = BASELINE.read_text(encoding="utf-8")
@@ -91,12 +83,11 @@ class MergedSectionTests(BuildTestCase):
                                     "index.html").is_file())
         self.assertTrue(self.public("procedures", "osdb-0002",
                                     "index.html").is_file())
-        for language in ps.LANGUAGES:
-            slugs = {front_matter(p.read_text(encoding="utf-8"))["slug"]
-                     for p in self.content_files(language)}
-            root = ps.language_root(self.public(), language) / "procedures"
-            published = {p.name for p in root.iterdir() if p.is_dir()}
-            self.assertEqual(published, slugs, language)
+        slugs = {front_matter(p.read_text(encoding="utf-8"))["slug"]
+                 for p in self.content_files()}
+        published = {p.name for p in self.public("procedures").iterdir()
+                     if p.is_dir()}
+        self.assertEqual(published, slugs)
 
     def test_future_dated_procedure_is_published_indexed_and_printed(
             self) -> None:
@@ -109,8 +100,8 @@ class MergedSectionTests(BuildTestCase):
                                     "index.html").is_file())
         entry = json.loads(self.public("pagefind", "pagefind-entry.json")
                            .read_text(encoding="utf-8"))
-        self.assertEqual(entry["languages"]["en"]["page_count"],
-                         len(self.content_files("en")))
+        self.assertEqual(entry["languages"][LOCALE]["page_count"],
+                         len(self.content_files()))
         self.assertTrue((self.sandbox.root / "pdf"
                          / "OSDB-0100-baseline.pdf").is_file())
 
@@ -142,24 +133,26 @@ class LayoutContractTests(BuildTestCase):
     def test_one_indexed_body_per_procedure_page(self) -> None:
         """Scenario: One indexed body per procedure page."""
         self.assert_ok(self.build("build"))
-        summaries = {"en": "Summary", "de": "Zusammenfassung"}
-        procedure_pages = {self.page_of(p): summaries[ps.language_of(p.name)]
-                           for p in self.content_files()}
-        self.assertGreaterEqual(len(procedure_pages), 2)
+        slugs = [front_matter(p.read_text(encoding="utf-8"))["slug"]
+                 for p in self.content_files()]
+        self.assertGreaterEqual(len(slugs), 2)
+        procedure_pages = {self.public("procedures", slug, "index.html")
+                           for slug in slugs}
         for page in sorted(self.public().rglob("*.html")):
             scan = scan_page(page.read_text(encoding="utf-8"))
             with self.subTest(page=str(page.relative_to(self.public()))):
                 if page in procedure_pages:
                     self.assertEqual(len(scan.bodies), 1)
-                    self.assertIn(procedure_pages[page],
-                                  scan.bodies[0].headings)
+                    self.assertTrue({"Summary", "Zusammenfassung"}
+                                    & set(scan.bodies[0].headings),
+                                    scan.bodies[0].headings)
                 else:
                     self.assertEqual(scan.bodies, [])
 
     def test_title_and_id_are_shown_outside_the_indexed_body(self) -> None:
         """Scenario: Title and ID shown."""
         self.assert_ok(self.build("build"))
-        source = self.sandbox.md_dir() / "OSDB-0002-aspirin.md"
+        source = self.sandbox.md_dir() / "OSDB-0002-aspirin.de.md"
         title = front_matter(source.read_text(encoding="utf-8"))["title"]
         page = self.public("procedures", "osdb-0002", "index.html")
         outside = scan_page(page.read_text(encoding="utf-8")).outside_text
@@ -193,9 +186,9 @@ class SearchIndexTests(BuildTestCase):
         entry = json.loads(self.public("pagefind", "pagefind-entry.json")
                            .read_text(encoding="utf-8"))
         self.assertEqual(entry["version"], "1.5.2")
-        for language in ps.LANGUAGES:
-            self.assertEqual(entry["languages"][language]["page_count"],
-                             len(self.content_files(language)), language)
+        self.assertEqual(set(entry["languages"]), {LOCALE})
+        self.assertEqual(entry["languages"][LOCALE]["page_count"],
+                         len(self.content_files()))
 
 
 class BuildSubcommandTests(BuildTestCase):
@@ -315,7 +308,7 @@ class PdfTests(BuildTestCase):
         self.assert_ok(result)
         stems = [p.stem for p in self.content_files()]
         for seed in SEEDS:
-            self.assertIn(seed, stems)
+            self.assertIn(f"{seed}.{LOCALE}", stems)
         self.assertEqual(sorted(p.name for p in pdf.iterdir()),
                          sorted(f"{stem}.pdf" for stem in stems))
         for path in pdf.iterdir():
@@ -335,7 +328,7 @@ class PdfTests(BuildTestCase):
             encoding="utf-8")
         result = self.build("pdf")
         self.assertEqual(result.returncode, 1, result.stdout)
-        self.assertRegex(result.stderr, r"OSDB-000[12]-[a-z-]+\.pdf")
+        self.assertRegex(result.stderr, r"OSDB-000[12]-[a-z-]+(\.de)?\.pdf")
 
 
 class HookTests(BuildTestCase):

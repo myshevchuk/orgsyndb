@@ -45,9 +45,8 @@ class PdfCase(ps.ThemeBuildCase):
         ps.require_pdf_tools()
 
     def pdfs(self) -> list[tuple[Path, Content]]:
-        """Each PDF of pdf/ with the content file it was made from, in
-        every language."""
-        by_stem = {item.path.stem: item for item in self.content(None)}
+        """Each PDF of pdf/ with the content file it was made from."""
+        by_stem = {item.path.stem: item for item in self.content()}
         directory = self.sandbox.root / "pdf"
         found = sorted(directory.glob("*.pdf"))
         self.assertTrue(found, "pdf/ holds no PDF")
@@ -86,7 +85,7 @@ class PdfBuildTests(PdfCase):
                     self.assertIn(item.id, text)
                     self.assertIn(norm_text(item.title), norm_text(text))
                     lines = [line.strip() for line in text.splitlines()]
-                    footer = TEXTS[item.language]["page"]
+                    footer = TEXTS[self.LOCALE]["page"]
                     self.assertIn(footer.format(number, len(pages)), lines)
 
     def test_title_with_quotes_and_markup_characters(self) -> None:
@@ -102,7 +101,7 @@ class PdfBuildTests(PdfCase):
     def test_no_chrome_in_the_pdfs(self) -> None:
         """Scenario: No chrome in the PDFs."""
         for path, item in self.pdfs():
-            texts = TEXTS[item.language]
+            texts = TEXTS[self.LOCALE]
             pages = ps.pdf_page_texts(path)
             for number, text in enumerate(pages, 1):
                 with self.subTest(pdf=path.name, page=number):
@@ -121,11 +120,6 @@ class PdfBuildTests(PdfCase):
         self.assertIn(
             "http://127.0.0.1:8000/procedures/osdb-0002/ · OSDB-0002 · "
             "status draft · last modified 2026-10-19 23:50",
-            norm_text(first))
-        first = ps.pdf_page_texts(self.pdf_of("OSDB-0002-aspirin.de"))[0]
-        self.assertIn(
-            "http://127.0.0.1:8000/de/procedures/osdb-0002/ · OSDB-0002 · "
-            "Status Entwurf · zuletzt geändert 2026-10-22 20:20",
             norm_text(first))
 
     def test_no_page_ends_on_a_heading(self) -> None:
@@ -147,7 +141,7 @@ class PdfBuildTests(PdfCase):
         for path, item in self.pdfs():
             page = self.html_of(item)
             raw = ps.pdf_page_texts(path, "raw")
-            texts = TEXTS[item.language]
+            texts = TEXTS[self.LOCALE]
             steps = page.following(page.heading(texts["procedure"]), "ol")
             table = page.following(page.heading(texts["reagents"]), "table")
             self.assertIsNotNone(steps, "no list under Procedure")
@@ -180,9 +174,8 @@ class PdfBuildTests(PdfCase):
             with self.subTest(pdf=path.name):
                 pages = ps.pdf_info(path).pages
                 self.assertTrue(1 <= pages <= 10, f"{pages} pages")
-        for stem in ("OSDB-0004-4-acetylbiphenyl",
-                     "OSDB-0004-4-acetylbiphenyl.de"):
-            self.assertGreaterEqual(ps.pdf_info(self.pdf_of(stem)).pages, 3)
+        self.assertGreaterEqual(
+            ps.pdf_info(self.pdf_of("OSDB-0004-4-acetylbiphenyl")).pages, 3)
 
     def test_the_pdf_run_prints_no_warning(self) -> None:
         """Scenario: Clean pdf run."""

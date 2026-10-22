@@ -1,7 +1,7 @@
-"""German localization without a build (localization): translated file
-names and sections in the validator, translation checks, German stubs and
-templates, PDF jobs of translations, and the site's language settings,
-interface strings and vocabulary labels."""
+"""Localization without a build (localization): language codes in file
+names, sections and the language field in the validator, variant checks,
+the choice and staging of variants, German stubs and templates, and the
+site's locale, interface strings and vocabulary labels."""
 
 import contextlib
 import datetime as dt
@@ -79,12 +79,34 @@ class TranslatedFileTests(ValidatorTestCase):
 
     def test_language_codes_in_file_names(self) -> None:
         """Scenario: Language code in a file name."""
-        for name, text in (("OSDB-0100-baseline.en.md", "drop the language"),
-                           ("OSDB-0100-baseline.fr.md",
-                            'unknown language code ".fr"')):
-            with self.subTest(name=name):
-                self.assert_one(run({name: baseline()}), "error",
-                                "file_name", text)
+        self.assert_clean(run({"OSDB-0100-baseline.en.md": baseline()}))
+        self.assert_one(run({"OSDB-0100-baseline.fr.md": baseline()}),
+                        "error", "file_name", 'unknown language code ".fr"')
+
+    def test_an_untagged_file_may_use_either_set_of_sections(self) -> None:
+        """Scenario: Sections of a file without a language code."""
+        self.assert_clean(run({"OSDB-0100-baseline.md": baseline()}))
+        self.assert_clean(run({"OSDB-0100-baseline.md":
+                               germanised(baseline())}))
+        result = run({"OSDB-0100-baseline.md": germanised(baseline()).replace(
+            "## Anmerkungen\n", "## Notizen\n")})
+        self.assert_one(result, "warning", "body",
+                        'missing section "Anmerkungen"')
+
+    def test_the_language_field(self) -> None:
+        """Scenario: The language field."""
+        self.assert_clean(run({"OSDB-0100-baseline.md": germanised(baseline(
+            support.insert_line('language = "de"')))}))
+        self.assert_one(run({"OSDB-0100-baseline.md": baseline(
+            support.insert_line('language = "fr"'))}),
+            "error", "language", "must be one of")
+        self.assert_one(run({"OSDB-0100-baseline.de.md": germanised(baseline(
+            support.insert_line('language = "en"')))}),
+            "error", "language", 'does not match the language code ".de"')
+        result = run({"OSDB-0100-baseline.md": baseline(
+            support.insert_line('language = "de"'))})
+        self.assertIn('missing section "Zusammenfassung"',
+                      [p.message for p in result.problems])
 
     def test_a_translation_shares_its_id(self) -> None:
         """Scenario: A translation shares its ID and facts."""
@@ -108,12 +130,22 @@ class TranslatedFileTests(ValidatorTestCase):
         self.assertIn("duplicate id OSDB-0100", result.problems[0].message)
 
     def test_a_translation_must_have_the_original_base_name(self) -> None:
-        """Scenario: A translation is named after its original."""
+        """Scenario: Variants share a base name."""
         problem = self.assert_one(
             run({"OSDB-0100-baseline.md": baseline(),
                  "OSDB-0100-other.de.md": germanised(baseline())}),
             "error", "file_name", "OSDB-0100-baseline.de.md")
         self.assertTrue(problem.path.endswith("OSDB-0100-other.de.md"))
+
+    def test_variants_without_an_untagged_file(self) -> None:
+        """Scenario: A translation shares its ID and facts (no untagged
+        file)."""
+        result = run({"OSDB-0100-baseline.de.md": germanised(baseline()),
+                      "OSDB-0100-baseline.en.md": baseline(
+                          replace("yield_percent", "yield_percent = 80"))})
+        problem = self.assert_one(result, "error", "yield_percent",
+                                  "OSDB-0100-baseline.de.md")
+        self.assertTrue(problem.path.endswith("OSDB-0100-baseline.en.md"))
 
     def test_shared_fields_must_agree(self) -> None:
         """Scenario: A translation shares its ID and facts (a differing
@@ -212,6 +244,16 @@ class GermanStubTests(unittest.TestCase):
         self.assertEqual((checked.returncode, checked.stdout), (0, ""),
                          checked.stderr)
 
+    def test_an_english_stub_with_a_language_code(self) -> None:
+        """Scenario: German stub (English with a code)."""
+        root = make_repo(self, trees=True)
+        result = new(root, "--lang", "en", "--now", NOW, "Ethyl acetate")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(),
+                         "org/procedures/OSDB-0001-ethyl-acetate.en.org")
+        text = (root / result.stdout.strip()).read_text(encoding="utf-8")
+        self.assertIn("* Summary\n", text)
+
     def test_unknown_language_is_a_usage_error(self) -> None:
         """Scenario: German stub (unknown language)."""
         root = make_repo(self)
@@ -252,12 +294,80 @@ class GermanTemplateTests(ValidatorTestCase):
         self.assertNotEqual(model, "none")
 
 
-class TranslationPdfJobTests(unittest.TestCase):
-    def test_a_translation_prints_its_own_page(self) -> None:
+def pair(name: str, ident: str = "OSDB-0001") -> tuple[Path, dict]:
+    return Path("md/procedures") / name, {"id": ident, "slug": ident.lower()}
+
+
+class VariantChoiceTests(unittest.TestCase):
+    def chosen(self, names: list[str], language: str) -> list[str]:
+        return [path.name for path, _ in pipeline().choose_variants(
+            [pair(name) for name in names], language)]
+
+    def test_the_variant_for_the_locale_is_preferred(self) -> None:
+        """Scenario: Choosing the variant to publish."""
+        cases = [
+            (["OSDB-0001-x.md"], "de", "OSDB-0001-x.md"),
+            (["OSDB-0001-x.md", "OSDB-0001-x.de.md"], "de",
+             "OSDB-0001-x.de.md"),
+            (["OSDB-0001-x.md", "OSDB-0001-x.en.md"], "de",
+             "OSDB-0001-x.md"),
+            (["OSDB-0001-x.md", "OSDB-0001-x.de.md"], "en",
+             "OSDB-0001-x.md"),
+            (["OSDB-0001-x.en.md"], "de", "OSDB-0001-x.en.md"),
+            (["OSDB-0001-x.en.md", "OSDB-0001-x.de.md"], "en",
+             "OSDB-0001-x.en.md"),
+        ]
+        for names, language, expected in cases:
+            with self.subTest(names=names, language=language):
+                self.assertEqual(self.chosen(names, language), [expected])
+
+    def test_every_id_is_published_once(self) -> None:
+        """Scenario: Choosing the variant to publish (every ID)."""
+        files = [pair("OSDB-0002-y.de.md", "OSDB-0002"),
+                 pair("OSDB-0001-x.md"), pair("OSDB-0001-x.de.md"),
+                 pair("OSDB-0003-z.en.md", "OSDB-0003")]
+        chosen = pipeline().choose_variants(files, "de")
+        self.assertEqual([p.name for p, _ in chosen],
+                         ["OSDB-0001-x.de.md", "OSDB-0002-y.de.md",
+                          "OSDB-0003-z.en.md"])
+
+    def test_staged_files_lose_the_code_and_keep_the_language(self) -> None:
+        """Scenario: Staging the chosen variants."""
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "md"
+            source.mkdir()
+            tagged = source / "OSDB-0001-x.de.md"
+            tagged.write_text("+++\nid = \"OSDB-0001\"\n+++\nText\n",
+                              encoding="utf-8")
+            declared = source / "OSDB-0002-y.en.md"
+            declared.write_text("+++\nlanguage = \"en\"\n+++\n",
+                                encoding="utf-8")
+            plain = source / "OSDB-0003-z.md"
+            plain.write_text("+++\n+++\n", encoding="utf-8")
+            target = Path(tmp) / "build" / "content" / "procedures"
+            target.mkdir(parents=True)
+            (target / "OSDB-0009-stale.md").write_text("x")
+            pipeline().stage_content(
+                [(tagged, {}), (declared, {"language": "en"}),
+                 (plain, {})], target)
+            names = sorted(p.name for p in target.iterdir())
+            self.assertEqual(names, ["OSDB-0001-x.md", "OSDB-0002-y.md",
+                                     "OSDB-0003-z.md"])
+            self.assertEqual(
+                (target / "OSDB-0001-x.md").read_text(encoding="utf-8"),
+                '+++\nlanguage = "de"\nid = "OSDB-0001"\n+++\nText\n')
+            self.assertEqual(
+                (target / "OSDB-0002-y.md").read_text(encoding="utf-8"),
+                declared.read_text(encoding="utf-8"))
+            self.assertEqual(
+                (target / "OSDB-0003-z.md").read_text(encoding="utf-8"),
+                "+++\n+++\n")
+
+    def test_a_translation_prints_under_its_own_name(self) -> None:
         """Scenario: PDF of a translation."""
         with tempfile.TemporaryDirectory(prefix="pdf jobs ") as tmp:
             public, out = Path(tmp) / "public", Path(tmp) / "pdf"
-            page = public / "de" / "procedures" / "osdb-0002" / "index.html"
+            page = public / "procedures" / "osdb-0002" / "index.html"
             page.parent.mkdir(parents=True)
             page.write_text("<html></html>")
             jobs = pipeline().pdf_jobs(
@@ -271,15 +381,29 @@ class SiteLanguageTests(unittest.TestCase):
     def config(self) -> dict:
         return tomllib.loads((SITE / "hugo.toml").read_text(encoding="utf-8"))
 
-    def test_languages_are_configured(self) -> None:
-        """Scenario: Site languages."""
+    def test_the_locale_is_german(self) -> None:
+        """Scenario: Site locale."""
         config = self.config()
-        self.assertEqual(config.get("defaultContentLanguage"), "en")
-        self.assertIs(config.get("defaultContentLanguageInSubdir"), False)
-        self.assertIs(config.get("disableDefaultLanguageRedirect"), True)
-        self.assertEqual(config.get("languages"), {
-            "en": {"label": "English", "locale": "en", "weight": 1},
-            "de": {"label": "Deutsch", "locale": "de", "weight": 2}})
+        self.assertEqual(config.get("locale"), "de")
+        for key in ("languages", "defaultContentLanguage"):
+            self.assertNotIn(key, config)
+        self.assertEqual(pipeline().site_language(SITE), "de")
+
+    def test_site_language_reads_the_locale(self) -> None:
+        """Scenario: Site locale (reading it)."""
+        for locale, expected in (("de", "de"), ("de-AT", "de"),
+                                 ("en_GB", "en"), ("fr", None),
+                                 (None, None)):
+            with self.subTest(locale=locale), \
+                    tempfile.TemporaryDirectory() as tmp:
+                text = f'locale = "{locale}"\n' if locale else 'title = ""\n'
+                (Path(tmp) / "hugo.toml").write_text(text, encoding="utf-8")
+                if expected is None:
+                    with self.assertRaises(ValueError):
+                        pipeline().site_language(Path(tmp))
+                else:
+                    self.assertEqual(pipeline().site_language(Path(tmp)),
+                                     expected)
 
     def strings(self, language: str) -> dict[str, str]:
         return tomllib.loads((I18N / f"{language}.toml")
@@ -294,7 +418,10 @@ class SiteLanguageTests(unittest.TestCase):
                 with self.subTest(language=language, key=key):
                     self.assertIsInstance(value, str)
                     self.assertTrue(value.strip())
-        used = set()
+        used = {tomllib.loads(page.read_text(encoding="utf-8").split(
+                    "+++")[1]).get("title_key")
+                for page in (SITE / "content").rglob("*.md")} - {None}
+        self.assertEqual(len(used), 6)
         for path in LAYOUTS.rglob("*.html"):
             text = path.read_text(encoding="utf-8")
             used |= set(re.findall(r'\bT "([a-z_]+)"', text))
@@ -311,17 +438,12 @@ class SiteLanguageTests(unittest.TestCase):
             with self.subTest(slug=slug):
                 self.assertTrue(entry.get("label_de", "").strip())
 
-    def test_every_site_page_has_a_german_twin(self) -> None:
-        """Scenario: Site languages (content pages)."""
+    def test_site_pages_are_one_per_page(self) -> None:
+        """Scenario: Site locale (content pages)."""
         content = SITE / "content"
-        for page in content.rglob("*.md"):
-            if page.name.endswith(".de.md"):
-                continue
-            twin = page.with_name(page.stem + ".de.md")
-            with self.subTest(page=str(page.relative_to(content))):
-                self.assertTrue(twin.is_file())
+        self.assertEqual(sorted(p.name for p in content.rglob("*.*.md")), [])
         for taxonomy in ("tags", "authors", "reaction_types"):
-            self.assertTrue((content / taxonomy / "_index.de.md").is_file(),
+            self.assertTrue((content / taxonomy / "_index.md").is_file(),
                             taxonomy)
 
 

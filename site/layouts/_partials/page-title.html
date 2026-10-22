@@ -1,10 +1,13 @@
 {{- /* The display title: the vocabulary label on a reaction-type term page,
-the tag itself on a tag term page, and .Title otherwise. Hugo would
+the tag itself on a tag term page, the interface string named by the
+page's title_key in the site's language, and .Title otherwise. Hugo would
 title-case term names. */ -}}
 {{- if and (eq .Kind "term") (eq .Data.Plural "reaction_types") -}}
 {{ partial "reaction-type-label.html" .Data.Term }}
 {{- else if and (eq .Kind "term") (eq .Data.Plural "tags") -}}
 {{ .Data.Term }}
+{{- else if .Params.title_key -}}
+{{ T .Params.title_key }}
 {{- else -}}
 {{ .Title }}
 {{- end -}}

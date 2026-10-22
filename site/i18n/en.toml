@@ -1,6 +1,14 @@
-# Interface strings of the English site. Each key has a German twin in
-# de.toml; the layouts look them up with T. Procedure content is not
-# here: it comes from the procedure files of each language.
+# Interface strings in English, used when site/hugo.toml sets locale =
+# "en". Each key has a German twin in de.toml; the layouts look them up
+# with T. Page titles of site/content/ are here too, named by the page's
+# title_key. Procedure content is not here: it comes from the files.
+
+title_by_date = "All procedures by date"
+title_search = "Search"
+title_procedures = "All procedures"
+title_reaction_types = "Reaction types"
+title_tags = "Tags"
+title_authors = "Authors"
 
 skip_link = "Skip to content"
 nav_site = "Site"

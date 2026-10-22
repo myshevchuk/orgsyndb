@@ -25,6 +25,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tomllib
 import unicodedata
 import urllib.error
 import urllib.request
@@ -45,6 +46,8 @@ EXPORT = "export"
 STAGING = ".export-staging"
 PREVIOUS = ".export-previous"
 PLAN_NAME = "export-plan.json"
+# The procedures Hugo publishes, one variant per ID, under build/.
+STAGED = Path("content") / "procedures"
 
 PAGEFIND_VERSION = "1.5.2"
 PAGEFIND_TARBALL = (f"pagefind-v{PAGEFIND_VERSION}-x86_64-unknown-linux-"
@@ -96,7 +99,7 @@ GERMAN_FOLDS = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae",
                               "Ö": "Oe", "Ü": "Ue", "ß": "ss", "ẞ": "SS"})
 
 
-def slugify(title: str, language: str = validate.DEFAULT_LANGUAGE) -> str:
+def slugify(title: str, language: str | None = None) -> str:
     """Return the short ASCII slug of ``title``.
 
     The slug matches ``[a-z0-9]+(-[a-z0-9]+)*`` and has at most 40
@@ -263,23 +266,18 @@ def pdf_jobs(files: Iterable[tuple[Path, dict[str, Any]]], public: Path,
     """Return the PDF jobs for ``(content path, front matter)`` pairs.
 
     Each job renders ``public/procedures/<slug>/index.html`` to
-    ``pdf_dir/<content file stem>.pdf``; a file in another language than
-    the default, such as ``OSDB-0001-x.de.md``, renders
-    ``public/de/procedures/<slug>/index.html`` to ``OSDB-0001-x.de.pdf``.
-    The jobs are sorted by PDF name. Raises ValueError naming the
-    expected HTML path when a page is missing, or when a front matter has
-    no string ``slug``.
+    ``pdf_dir/<content file stem>.pdf``, so a published variant such as
+    ``OSDB-0001-x.de.md`` gives ``OSDB-0001-x.de.pdf``. The jobs are
+    sorted by PDF name. Raises ValueError naming the expected HTML path
+    when a page is missing, or when a front matter has no string
+    ``slug``.
     """
     jobs = []
     for path, data in files:
         slug = data.get("slug")
         if not isinstance(slug, str) or not slug:
             raise ValueError(f"{path}: front matter has no slug")
-        language = validate.language_of(Path(path).name)
-        root = Path(public)
-        if language != validate.DEFAULT_LANGUAGE:
-            root = root / language
-        html = root / "procedures" / slug / "index.html"
+        html = Path(public) / "procedures" / slug / "index.html"
         if not html.is_file():
             raise ValueError(f"{path}: page {html} does not exist; build "
                              "the site first")
@@ -473,14 +471,88 @@ def candidate_names(collection: Path,
 # Hugo
 
 
-def hugo_overlay(site: Path, collection: Path) -> str:
+def site_language(site: Path) -> str:
+    """Return the language of the ``locale`` in ``site/hugo.toml``.
+
+    That is its language subtag, lowercased: ``de`` for ``de`` or
+    ``de-DE``. Raises ValueError when the file cannot be read, or when
+    the locale is missing or names no language in ``validate.LANGUAGES``.
+    """
+    path = Path(site) / "hugo.toml"
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        raise ValueError(f"cannot read {path}: {exc}") from None
+    locale = data.get("locale")
+    language = (re.split(r"[-_]", locale)[0].lower()
+                if isinstance(locale, str) else None)
+    if language not in validate.LANGUAGES:
+        raise ValueError(f"{path}: locale is {locale!r}; set it to one of "
+                         f"{', '.join(validate.LANGUAGES)}")
+    return language
+
+
+def choose_variants(files: Iterable[tuple[Path, dict[str, Any]]],
+                    language: str) -> list[tuple[Path, dict[str, Any]]]:
+    """Choose the variant of each procedure ID to publish in ``language``.
+
+    ``files`` are ``(content path, front matter)`` pairs. Of the files
+    with one ``id``, the first of these is chosen: the one whose name
+    carries ``language``, the one whose name carries no language code,
+    then the others in ``validate.LANGUAGES`` order. Returns the chosen
+    pairs sorted by ID; a front matter without a string ``id`` raises
+    ValueError.
+    """
+    def rank(pair: tuple[Path, dict[str, Any]]) -> tuple[int, str]:
+        code = validate.language_of(Path(pair[0]).name)
+        if code == language:
+            return (0, str(pair[0]))
+        if code is None:
+            return (1, str(pair[0]))
+        return (2 + validate.LANGUAGES.index(code), str(pair[0]))
+
+    by_id: dict[str, list[tuple[Path, dict[str, Any]]]] = {}
+    for path, data in files:
+        ident = data.get("id")
+        if not isinstance(ident, str):
+            raise ValueError(f"{path}: front matter has no id")
+        by_id.setdefault(ident, []).append((Path(path), data))
+    return [min(by_id[ident], key=rank) for ident in sorted(by_id)]
+
+
+def stage_content(chosen: Iterable[tuple[Path, dict[str, Any]]],
+                  target: Path) -> None:
+    """Copy the chosen content files into ``target`` for Hugo.
+
+    ``target`` is emptied first. Each copy is named after its base name,
+    without a language code, so that Hugo, built in one language, reads
+    every file alike. A file whose name carries a language code and whose
+    front matter has no ``language`` gets ``language = "<code>"`` as the
+    first front-matter line.
+    """
+    target = Path(target)
+    _remove_tree(target)
+    target.mkdir(parents=True)
+    for path, data in chosen:
+        name = Path(path).name
+        text = Path(path).read_text(encoding="utf-8-sig")
+        code = validate.language_of(name)
+        if code is not None and "language" not in data:
+            first, _, rest = text.partition("\n")
+            text = f"{first}\nlanguage = {toml_string(code)}\n{rest}"
+        (target / f"{validate.base_name(name)}.md").write_text(
+            text, encoding="utf-8")
+
+
+def hugo_overlay(site: Path, collection: Path, language: str) -> str:
     """Return the Hugo configuration overlay for building ``collection``.
 
     ``site`` is the application's Hugo project and ``collection`` the
-    collection directory, both absolute. The overlay sets the publish and
-    resource directories inside the collection and the four module
-    mounts: the application's pages, the Org export, the Markdown
-    procedures and the collection's static files.
+    collection directory, both absolute; ``language`` is the site's
+    language. The overlay sets ``defaultContentLanguage`` to it, the
+    publish and resource directories inside the collection, and three
+    module mounts: the application's pages, the staged procedures of
+    ``build/content/procedures/`` and the collection's static files.
     """
     site, collection = Path(site), Path(collection)
 
@@ -493,10 +565,9 @@ def hugo_overlay(site: Path, collection: Path) -> str:
             f"publishDir = {toml_string(str(collection / 'public'))}\n"
             "resourceDir = "
             f"{toml_string(str(collection / 'build' / 'hugo-resources'))}\n"
+            f"defaultContentLanguage = {toml_string(language)}\n"
             + mount(site / "content", "content", False)
-            + mount(collection / "build" / "export", "content/procedures",
-                    True)
-            + mount(collection / "md" / "procedures", "content/procedures",
+            + mount(collection / "build" / STAGED, "content/procedures",
                     True)
             + mount(collection / "static", "static", False))
 
@@ -750,30 +821,30 @@ def cmd_next_id(args: argparse.Namespace) -> int:
     return 0
 
 
-def template_path(kind: str, language: str) -> Path:
+def template_path(kind: str, language: str | None) -> Path:
     """Return the application's procedure template of ``kind`` in
-    ``language``: ``templates/procedure.<kind>``, or
-    ``templates/procedure.<language>.<kind>`` for another language."""
-    if language == validate.DEFAULT_LANGUAGE:
+    ``language``: ``templates/procedure.<kind>`` for English or None,
+    ``templates/procedure.<language>.<kind>`` otherwise."""
+    if language in (None, validate.DEFAULT_LANGUAGE):
         return TEMPLATES / f"procedure.{kind}"
     return TEMPLATES / f"procedure.{language}.{kind}"
 
 
 def new_procedure(collection: Path, words: Sequence[str], md: bool,
                   ai_model: str | None, now: dt.datetime | None = None,
-                  language: str = validate.DEFAULT_LANGUAGE) -> Path:
+                  language: str | None = None) -> Path:
     """Create a procedure stub in ``collection``; return its relative path.
 
-    The stub is written in ``language`` from that language's template;
-    outside the default language, its file name carries the language
-    code, as in ``OSDB-0009-titel.de.org``. Raises UsageError for a bad
-    title, model identifier or language, and ValueError when the file
-    exists or the template cannot be filled.
+    Without ``language`` the stub is the English template under a name
+    without a language code. With one, it is that language's template,
+    and the name carries the code, as in ``OSDB-0009-titel.de.org``.
+    Raises UsageError for a bad title, model identifier or language, and
+    ValueError when the file exists or the template cannot be filled.
     """
     if ai_model is not None and not validate.AI_MODEL_RE.match(ai_model):
         raise UsageError(f"--ai-model {ai_model!r} must match "
                          f"{validate.AI_MODEL_RE.pattern}")
-    if language not in validate.LANGUAGES:
+    if language is not None and language not in validate.LANGUAGES:
         raise UsageError(f"--lang {language!r} must be one of "
                          f"{', '.join(validate.LANGUAGES)}")
     title = _new_title(words)
@@ -789,7 +860,7 @@ def new_procedure(collection: Path, words: Sequence[str], md: bool,
     template = template_path(kind, language)
     text = fill_template(template.read_text(encoding="utf-8"), kind, ident,
                          title, now, ai_model)
-    code = "" if language == validate.DEFAULT_LANGUAGE else f".{language}"
+    code = "" if language is None else f".{language}"
     relative = (Path(SOURCE_TREES[kind == "md"])
                 / f"{ident}-{slug}{code}.{kind}")
     target = collection / relative
@@ -874,18 +945,17 @@ def build_parser() -> argparse.ArgumentParser:
         description="Create org/procedures/<ID>-<slug>.org, or "
         "md/procedures/<ID>-<slug>.md with --md, in COLLECTION from the "
         "application's template, and print its path relative to "
-        "COLLECTION. With --lang de, the stub is German and its name ends "
-        "in .de.org or .de.md.")
+        "COLLECTION. With --lang LANG, the stub is in that language and its "
+        "name ends in .LANG.org or .LANG.md.")
     new.add_argument("--collection", required=True, metavar="COLLECTION")
     new.add_argument("--md", action="store_true",
                      help="create a Markdown procedure")
     new.add_argument("--ai-model", metavar="ID",
                      help="identifier of the AI model writing it (default: "
                      "a human author)")
-    new.add_argument("--lang", default=validate.DEFAULT_LANGUAGE,
-                     choices=validate.LANGUAGES,
-                     help="language of the procedure (default: "
-                     f"{validate.DEFAULT_LANGUAGE})")
+    new.add_argument("--lang", choices=validate.LANGUAGES,
+                     help="language of the procedure, written into its file "
+                     "name (default: English, no code)")
     new.add_argument("--now", metavar="DATETIME",
                      help="ISO 8601 date and time with offset to use "
                      "instead of the current time")
