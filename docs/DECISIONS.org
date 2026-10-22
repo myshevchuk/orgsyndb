@@ -1,6 +1,6 @@
 #+TITLE: OrgSynDB design decisions
 #+CREATED: [2026-10-20 Tue 20:41:42]
-#+LAST_MODIFIED: [2026-10-21 Wed 22:45:00]
+#+LAST_MODIFIED: [2026-10-22 Thu 11:15:55]
 #+AI_MODEL: gpt-5.6-sol
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-20 Tue 20:49] -- #+AI_MODEL corrected from gpt-5 to the pinned run model; theme design link pointed at its archive path
 
@@ -11,7 +11,7 @@ analysis:
 - [[file:../openspec/changes/archive/2026-10-19-add-procedure-schema/design.md][procedure schema design]]
 - [[file:../openspec/changes/archive/2026-10-19-add-build-pipeline/design.md][build pipeline design]]
 - [[file:../openspec/changes/archive/2026-10-20-add-site-theme/design.md][site theme design]]
-- [[file:../openspec/changes/decouple-collection/design.md][collection design]] (not yet archived)
+- [[file:../openspec/changes/archive/2026-10-22-decouple-collection/design.md][collection design]]
 
 * Governance and formats
 

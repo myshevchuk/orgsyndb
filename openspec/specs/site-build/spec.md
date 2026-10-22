@@ -2,39 +2,51 @@
 
 ## Purpose
 Define the Hugo project under `site/`: configuration, the merged procedures section, the minimal layout contract later themes inherit, the no-remote-fetch rule, and the pinned Pagefind binary and its search index.
+
 ## Requirements
+
 ### Requirement: Hugo configuration
 The file `site/hugo.toml` SHALL configure Hugo 0.162.1 as follows:
-- `baseURL = "/"`, `locale = "en"`, `publishDir = "../public"` and `relativeURLs = true`.
+- `baseURL = "/"`, `locale = "en"` and `relativeURLs = true`.
 - `buildFuture = true` and `buildExpired = true`, so that no date in front matter decides whether a validated procedure is published.
 - `disableKinds` includes `rss` and `sitemap`.
 - The taxonomies are exactly `author = "authors"`, `reaction_type = "reaction_types"` and `tag = "tags"`.
 - `[permalinks.page]` maps `procedures` to `/procedures/:slug/`.
 - `markup.goldmark.renderer.unsafe` is `true`.
 - `minify.tdewolff.html.keepWhitespace` is `true`, so that minified HTML keeps a space between adjacent elements that Pagefind would otherwise index as one word.
-- `params.siteurl` is `"http://127.0.0.1:8000"`, the default origin of `tools/build.fish serve`. The theme prints it as text before a page's path. The environment variable `HUGO_PARAMS_SITEURL` overrides it without editing the file.
-- `module.mounts` is exactly these three mounts, in this order:
-  1. `content` → `content`;
-  2. `../build/export` → `content/procedures` with `files = ["/OSDB-*.md"]`;
-  3. `../md/procedures` → `content/procedures` with `files = ["/OSDB-*.md"]`.
+- `params.siteurl` is `"http://127.0.0.1:8000"`, the default origin of `tools/orgsyndb serve`. The theme prints it as text before a page's path. The environment variable `HUGO_PARAMS_SITEURL` overrides it without editing the file.
+- It sets neither `publishDir`, `resourceDir` nor `module`.
 
 The configuration names no host other than the loopback address in `params.siteurl`.
 
+`pipeline.hugo_overlay(site, collection)` SHALL return the text of the collection's overlay `build/hugo-config/_default/hugo.toml`, which the build passes to Hugo through `--configDir <collection>/build/hugo-config`, given the absolute paths of the application's `site/` and of the collection. It sets `publishDir` to `<collection>/public`, `resourceDir` to `<collection>/build/hugo-resources`, and `module.mounts` to exactly these four mounts, in this order, every path absolute:
+1. `<site>/content` → `content`;
+2. `<collection>/build/export` → `content/procedures` with `files = ["/OSDB-*.md"]`;
+3. `<collection>/md/procedures` → `content/procedures` with `files = ["/OSDB-*.md"]`;
+4. `<collection>/static` → `static`.
+
+Mount 4 replaces Hugo's default `<site>/static` mount, so the application SHALL have no `site/static/`; its own static files go in `site/assets/`.
+
 #### Scenario: Configuration parses to the contract
 - **WHEN** a test loads `site/hugo.toml` with `tomllib`
-- **THEN** every value listed above is present as stated, `taxonomies` has exactly the three entries, and `module.mounts` equals the three listed mounts
+- **THEN** every value listed above is present as stated, `taxonomies` has exactly the three entries, and none of `publishDir`, `resourceDir` and `module` is present
 - **AND** the only string value containing `://` or beginning with `//` is `params.siteurl`, equal to `http://127.0.0.1:8000`
+- **AND** `site/static/` does not exist
+
+#### Scenario: Overlay parses to the contract
+- **WHEN** a test calls `hugo_overlay` with a site path and a collection path that both contain a space and a double quote, and loads the result with `tomllib`
+- **THEN** it has exactly the keys `publishDir`, `resourceDir` and `module`, with the values and the four mounts listed above
 
 ### Requirement: Merged procedures section
 A build SHALL publish each procedure content file of `build/export/` and `md/procedures/` as one page at `public/procedures/<slug>/index.html`, whatever its `date`, `publishDate` or `expiryDate`. No other file from those two directories is published.
 
 #### Scenario: Org-sourced and Markdown-sourced pages
-- **WHEN** an integration test runs `tools/build.fish build` on the seed procedures
+- **WHEN** an integration test runs `tools/orgsyndb -C <collection> build` on the seed procedures
 - **THEN** `public/procedures/osdb-0001/index.html` (from Org) and `public/procedures/osdb-0002/index.html` (from Markdown) exist
 - **AND** the subdirectories of `public/procedures/` are exactly the `slug` values of the content files in `build/export/` and `md/procedures/`
 
 #### Scenario: Future-dated procedure is published, indexed and printed
-- **WHEN** an integration test adds to `md/procedures/` a copy of `tests/fixtures/baseline/OSDB-0100-baseline.md` whose `date` and `lastmod` are `2099-01-01T10:00:00+01:00`, and runs `tools/build.fish pdf`
+- **WHEN** an integration test adds to `md/procedures/` a copy of `tests/fixtures/baseline/OSDB-0100-baseline.md` whose `date` and `lastmod` are `2099-01-01T10:00:00+01:00`, and runs `tools/orgsyndb -C <collection> pdf`
 - **THEN** it exits 0, `public/procedures/osdb-0100/index.html` exists, `languages.en.page_count` in `public/pagefind/pagefind-entry.json` counts it, and `pdf/OSDB-0100-baseline.pdf` exists
 
 #### Scenario: Expired procedure is still published
@@ -74,7 +86,7 @@ A built site SHALL contain no reference that makes a browser or WeasyPrint fetch
 - **THEN** no violation is found
 
 ### Requirement: Pagefind binary acquisition
-`build` SHALL index with the Pagefind 1.5.2 standalone binary at `<repo>/.tools/pagefind-1.5.2/pagefind`, obtained through `tools/pipeline.py ensure-pagefind --tools-dir <repo>/.tools`. That command prints the binary's path and works as follows:
+`build` SHALL index with the Pagefind 1.5.2 standalone binary at `<app>/.tools/pagefind-1.5.2/pagefind`, obtained through `pipeline.ensure_pagefind(<app>/.tools)` (also `tools/pipeline.py ensure-pagefind --tools-dir <app>/.tools`). That command prints the binary's path and works as follows:
 - It accepts a cached binary only when its SHA-256 is `c4b86009ce5420dc2a1748ab2705bef6ba730ed883f684fd52ef6008bd600532`.
 - Otherwise it downloads `https://github.com/Pagefind/pagefind/releases/download/v1.5.2/pagefind-v1.5.2-x86_64-unknown-linux-musl.tar.gz` into an empty download directory and requires the tarball's SHA-256 to be `afb824a9e7f64905a934900481cea5be679c03975e527329e0e5e6cc70f5feda`.
 - From the tarball it extracts only the regular-file member `pagefind`. It requires that file's SHA-256 to be the binary hash above, makes it executable, and moves it into place.
@@ -107,4 +119,3 @@ No Node, npm or pip is used.
 - **WHEN** an integration test builds the seeds
 - **THEN** `public/pagefind/pagefind.js`, `public/pagefind/pagefind-ui.js` and `public/pagefind/pagefind-ui.css` exist
 - **AND** `public/pagefind/pagefind-entry.json` parses as JSON with `version` equal to `1.5.2`, and `languages.en.page_count` equal to the number of procedure content files in `build/export/` and `md/procedures/`
-

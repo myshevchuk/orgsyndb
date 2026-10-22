@@ -1,8 +1,10 @@
 # sample-procedures Specification
 
 ## Purpose
-Define the sample procedures shipped with the repository: their marking as sample data, benign textbook chemistry, and quantities that agree with each other.
+Define the sample procedures shipped as the demo collection `examples/demo/`: their marking as sample data, benign textbook chemistry, and quantities that agree with each other.
+
 ## Requirements
+
 ### Requirement: Seed procedures
 The repository SHALL ship at least these two seed procedures, linked as precursor and product across the two source trees:
 - `org/procedures/OSDB-0001-salicylic-acid.org`: salicylic acid by hydrolysis of methyl salicylate with aqueous sodium hydroxide, then acidification. `reaction_types` is `["hydrolysis"]`, and the product is salicylic acid (C7H6O3, MW 138.12, CAS `69-72-7`).
@@ -47,7 +49,7 @@ Every sample procedure's Reagents table SHALL have the columns `Reagent | CAS | 
 The sample procedures SHALL produce no validator problem line at all, neither error nor warning, both as sources and after export.
 
 #### Scenario: Clean validation of the shipped tree
-- **WHEN** an integration test runs `tools/build.fish validate` on the repository's own `org/procedures/` and `md/procedures/`
+- **WHEN** an integration test runs `tools/orgsyndb -C <copy of examples/demo> validate`
 - **THEN** it exits 0, and no line of the form `<path>:<field>: <severity>: <message>` is printed
 
 ### Requirement: Theme sample set
@@ -77,9 +79,15 @@ The full set meets the following:
 
 #### Scenario: Structure image is set
 - **WHEN** a test reads `org/procedures/OSDB-0003-isopentyl-acetate.org`
-- **THEN** its custom-front-matter lines set `structure_image` to `structures/osdb-0003.svg`, and `site/static/structures/osdb-0003.svg` exists
+- **THEN** its custom-front-matter lines set `structure_image` to `structures/osdb-0003.svg`, and `static/structures/osdb-0003.svg` exists
 
 #### Scenario: Long sample
 - **WHEN** a test reads `org/procedures/OSDB-0004-4-acetylbiphenyl.org`
 - **THEN** its `Procedure` section has at least 15 numbered items, its `Notes` section at least 6, and its Reagents table at least four rows whose `mmol` is not `cat.`, one of them with a `Reagent` cell of at least 40 characters
 
+### Requirement: Demo collection
+The sample procedures SHALL form the demo collection `examples/demo/` of the application, a complete collection as the `collection` capability defines it, with the structure images in `examples/demo/static/structures/`. Every path that this capability names under `org/procedures/` or `md/procedures/` is relative to `examples/demo/`. The application's own root holds no `org/`, `md/` or `site/static/` directory.
+
+#### Scenario: Samples live in the demo collection
+- **WHEN** a test inspects the application
+- **THEN** `examples/demo/orgsyndb.toml` exists, `examples/demo/org/procedures/OSDB-0001-salicylic-acid.org` and `examples/demo/md/procedures/OSDB-0002-aspirin.md` exist, and neither `org/`, `md/` nor `site/static/` exists at the application root

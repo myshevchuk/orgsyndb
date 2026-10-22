@@ -29,7 +29,7 @@ templates/, .emacs-batch/ or .tools/ is relative to the application. -->
 - **WHEN** a test runs `tools/orgsyndb help`
 - **THEN** it exits 0, and stdout names every subcommand and `-C`
 
-#### Scenario: Syntax
+#### Scenario: Syntax and formatting
 - **WHEN** a test compiles `tools/orgsyndb` with `py_compile` and runs `sh -n tools/hooks/pre-commit`
 - **THEN** both succeed
 

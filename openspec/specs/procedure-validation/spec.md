@@ -2,7 +2,9 @@
 
 ## Purpose
 Define how `tools/validate.py` is invoked on content and Org roots, what it reports and in which format, its exit statuses, and the fixture suite that proves each rejection.
+
 ## Requirements
+
 ### Requirement: Command-line interface
 The validator SHALL be the executable file `tools/validate.py`, invoked as `validate.py [--org-root DIR]... [--vocabulary FILE] [--static-dir DIR] [CONTENT_ROOT ...]`, and it SHALL use only the Python standard library.
 - Each positional `CONTENT_ROOT` is a directory of procedure Markdown files with `+++` TOML front matter, such as an ox-hugo export directory or `md/procedures/`.
@@ -23,12 +25,16 @@ The validator SHALL be the executable file `tools/validate.py`, invoked as `vali
 - **THEN** every name is in `sys.stdlib_module_names`
 
 ### Requirement: Default paths resolve from the script location
-When `--vocabulary` or `--static-dir` is omitted, the validator SHALL use `<repo>/site/data/reaction_types.toml` and `<repo>/site/static` respectively, where `<repo>` is the parent of the directory containing the resolved `validate.py`, independent of the working directory. A static directory that does not exist is not a configuration error; it only makes every `structure_image` unresolvable.
+When `--vocabulary` is omitted, the validator SHALL use `<app>/site/data/reaction_types.toml`, where `<app>` is the parent of the directory containing the resolved `validate.py`, independent of the working directory. When `--static-dir` is omitted, it SHALL use `static` in the working directory, the location of a collection's static files when run from the collection's root. A static directory that does not exist is not a configuration error; it only makes every `structure_image` unresolvable.
 
 #### Scenario: Run from an unrelated working directory
-- **WHEN** a test runs `<repo>/tools/validate.py` as a subprocess, with `cwd` set to an empty temporary directory and without `--vocabulary`, on a temporary content root holding one procedure whose `reaction_types` is `["reductive-amination"]`
+- **WHEN** a test runs `<app>/tools/validate.py` as a subprocess, with `cwd` set to an empty temporary directory and without `--vocabulary`, on a temporary content root holding one procedure whose `reaction_types` is `["reductive-amination"]`
 - **AND** `reductive-amination` is a key of the shipped vocabulary but not of `tests/fixtures/reaction_types.toml`
 - **THEN** it reports no `reaction_types` problem and exits 0
+
+#### Scenario: Default static directory is the working directory's
+- **WHEN** a test runs `<app>/tools/validate.py` without `--static-dir`, with `cwd` set to a temporary directory holding `static/structures/osdb-0100.svg` and a content root whose one procedure sets `structure_image = "structures/osdb-0100.svg"`
+- **THEN** it reports no `structure_image` problem and exits 0
 
 ### Requirement: Vocabulary file errors are configuration errors
 The validator SHALL exit with status 2, writing `validate.py: error:` and a message to stderr, when any of these holds:
@@ -176,4 +182,3 @@ Procedure IDs are unique across the committed fixtures. The exceptions are the d
 - **WHEN** each directory under `tests/fixtures/invalid/` except `duplicate-id` is used as the single root of its own fixture run
 - **THEN** each run reports exactly one error, with the field and message given by its scenario
 - **AND** there are at least five such directories
-

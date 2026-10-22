@@ -51,14 +51,17 @@
 
 ## 5. Review
 
-- [ ] 5.1 Separate design check of this proposal (not run; the owner asked
-      for the change directly).
+- [x] 5.1 Review by a separate session after implementation; its fixes
+      are in `fix(orgsyndb): find collection before tool checks`. No
+      design check ran before implementation: the owner asked for the
+      change directly.
 - [ ] 5.2 Owner verifies on Fedora 44 with Emacs 30: `check-deps`, a demo
-      build, `init` and a first private procedure.
+      build, `init` and a first private procedure. Left open at archive:
+      the owner does it after the merge.
 
 ## 6. Archive
 
-- [ ] 6.1 Apply the deltas to `openspec/specs/`, add the `collection`
+- [x] 6.1 Apply the deltas to `openspec/specs/`, add the `collection`
       capability, and rewrite every remaining `tools/build.fish` mention
       and repository-relative content path in the main specs as design.md
       D11 describes.

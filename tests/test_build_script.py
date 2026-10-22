@@ -93,7 +93,7 @@ class UsageTests(ProgramTestCase):
 
 class SourceTests(unittest.TestCase):
     def test_program_compiles_and_hook_parses(self) -> None:
-        """Scenario: Syntax."""
+        """Scenario: Syntax and formatting."""
         for script in (ORGSYNDB, HOOK):
             self.assertTrue(script.is_file(),
                             f"{script.relative_to(REPO)} does not exist")
