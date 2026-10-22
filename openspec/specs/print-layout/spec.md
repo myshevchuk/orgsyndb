@@ -54,7 +54,7 @@ It keeps the sample banner, the procedure header, the print facts and the indexe
 ### Requirement: First-page facts
 The procedure header SHALL contain a `p.print-facts`, shown only in print, whose text is the page's full URL, then ` · `, the `id`, ` · status `, the `status`, ` · last modified `, and the `lastmod` formatted `YYYY-MM-DD HH:MM`. The full URL is the whole text of a `span.page-url` inside it, built as follows:
 - It is Hugo's `site.Params.siteurl` with any trailing `/` removed, followed by the page's path `/procedures/<slug>/`.
-- `site/hugo.toml` sets `[params] siteurl = "http://127.0.0.1:8000"`, the default origin of `tools/build.fish serve`.
+- `site/hugo.toml` sets `[params] siteurl = "http://127.0.0.1:8000"`, the default origin of `tools/orgsyndb serve`.
 - The environment variable `HUGO_PARAMS_SITEURL` overrides it, for example with an internal host.
 - In a browser, the site script replaces the span's text with `location.href` when the protocol is `http:` or `https:`.
 

@@ -1,6 +1,6 @@
 # Example Caddy configuration serving a built OrgSynDB site.
 #
-# Build the site with `tools/build.fish build`, copy public/ to the
+# Build the site with `orgsyndb build`, copy the collection's public/ to the
 # server, then replace:
 #   orgsyndb.internal     with the internal host name of the server;
 #   /srv/orgsyndb/public  with the directory the copy of public/ is in.

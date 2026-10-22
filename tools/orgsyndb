@@ -1,0 +1,517 @@
+#!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.14"
+# dependencies = []
+# ///
+"""OrgSynDB command-line program. Run ``orgsyndb help`` for usage.
+
+It builds a collection: a directory holding ``orgsyndb.toml``, whose
+procedures are in ``org/procedures/`` and ``md/procedures/``. Everything
+a build generates goes into the collection's ``build/``, ``public/`` and
+``pdf/``; the application directory holds only the fetched-tool caches
+``.emacs-batch/`` and ``.tools/``. The logic lives in ``pipeline.py`` and
+``validate.py`` beside this file, which it calls in-process. It exits 0
+on success, 1 on failure and 2 on a usage error, and writes errors to
+stderr as ``orgsyndb: error: <message>``.
+"""
+
+import argparse
+import functools
+import http.server
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+import tomllib
+from collections.abc import Callable, Sequence
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+APP = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(APP / "tools"))
+
+import pipeline  # noqa: E402
+import validate  # noqa: E402
+
+PROG = "orgsyndb"
+MARKER = "orgsyndb.toml"
+FORMAT = 1
+MARKER_TEXT = (
+    "# OrgSynDB collection: procedures in org/procedures/ and\n"
+    "# md/procedures/, static files in static/. See the OrgSynDB README.\n"
+    f"format = {FORMAT}\n")
+IGNORED = ("/build/", "/public/", "/pdf/")
+COLLECTION_DIRS = ("org/procedures", "md/procedures", "static/structures")
+OUTPUTS = ("build", "public", "pdf")
+APP_CACHES = (".emacs-batch", ".tools")
+CONTENT_ROOTS = ("build/export", "md/procedures")
+
+REQUIRED_TOOLS = ("emacs", "git", "python3", "hugo", "weasyprint")
+EXPORT_TOOLS = ("emacs", "git")
+BUILD_TOOLS = (*EXPORT_TOOLS, "hugo")
+TESTED_VERSIONS = {"hugo": ("0.162.1", ["hugo", "version"]),
+                   "weasyprint": ("70.0", ["weasyprint", "--version"])}
+
+USAGE = """\
+usage: orgsyndb [-C DIR] <subcommand> [options] [arguments]
+
+Options:
+  -C DIR, --collection DIR
+                      the collection to work on; without it, the nearest
+                      directory holding orgsyndb.toml, from the working
+                      directory upwards
+
+Subcommands:
+  export              export org/procedures/*.org to build/export/
+  validate [ARGS...]  export, then validate every procedure; with ARGS,
+                      run tools/validate.py ARGS... in the working
+                      directory without exporting (then -C is an error)
+  build               export, validate, build the site into public/ and
+                      index it with Pagefind
+  serve [--port N]    build, then serve public/ on http://127.0.0.1:N/
+                      (default port 8000) until Ctrl-C
+  pdf                 build, then render every procedure to
+                      pdf/<file name>.pdf
+  new [--md] [--ai-model ID] TITLE...
+                      create a procedure stub with the next free ID in
+                      org/procedures/, or md/procedures/ with --md
+  init DIR            create an empty collection in DIR
+  clean [--all]       remove build/, public/ and pdf/; --all also removes
+                      the application's .emacs-batch/ and .tools/
+  check-deps          report missing tools and the dnf line installing them
+  help                show this text
+
+Paths are relative to the collection, except tools/ and the caches, which
+belong to the application."""
+
+
+class Failure(Exception):
+    """The command failed; the program exits 1."""
+
+
+class UsageError(Exception):
+    """The command line is wrong; the program exits 2."""
+
+
+class Parser(argparse.ArgumentParser):
+    """An argument parser that raises UsageError instead of exiting."""
+
+    def error(self, message: str) -> None:  # type: ignore[override]
+        raise UsageError(f"{self.prog.removeprefix(PROG + ' ')}: {message}")
+
+
+def step(message: str) -> None:
+    print(f"==> {message}", flush=True)
+
+
+def require_tools(*tools: str) -> None:
+    """Raise Failure naming the first of ``tools`` not on PATH."""
+    for tool in tools:
+        if shutil.which(tool) is None:
+            raise Failure(f"{tool} not found; install it with: "
+                          f"sudo dnf install {tool}")
+
+
+def run(command: Sequence[str | Path], **kwargs) -> None:
+    """Run ``command``; raise Failure when it exits non-zero."""
+    sys.stdout.flush()
+    done = subprocess.run([str(part) for part in command], **kwargs)
+    if done.returncode != 0:
+        raise Failure(f"{Path(command[0]).name} exited {done.returncode}")
+
+
+def remove(path: Path) -> None:
+    """Remove the file or directory tree ``path`` if it exists."""
+    if path.is_dir() and not path.is_symlink():
+        shutil.rmtree(path)
+    elif path.exists() or path.is_symlink():
+        path.unlink()
+
+
+# --------------------------------------------------------------------------
+# Collections
+
+
+def check_marker(directory: Path) -> None:
+    """Raise Failure unless ``directory/orgsyndb.toml`` is format 1."""
+    path = directory / MARKER
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError) as exc:
+        raise Failure(f"{path}: cannot read it: {exc}") from None
+    except tomllib.TOMLDecodeError as exc:
+        raise Failure(f"{path}: not valid TOML: {exc}") from None
+    unknown = sorted(set(data) - {"format"})
+    if unknown:
+        raise Failure(f"{path}: unknown key {', '.join(unknown)}; only "
+                      "format is allowed")
+    value = data.get("format")
+    if type(value) is not int or value != FORMAT:
+        shown = "missing" if value is None else repr(value)
+        raise Failure(f"{path}: format is {shown}; this OrgSynDB reads "
+                      f"format = {FORMAT}")
+
+
+def find_collection(option: str | None) -> Path:
+    """Return the collection named by ``-C``, or found from the cwd."""
+    if option is not None:
+        directory = Path(option).resolve()
+        if not (directory / MARKER).is_file():
+            raise Failure(f"{option} is not a collection: it holds no "
+                          f"{MARKER}")
+        check_marker(directory)
+        return directory
+    start = Path.cwd()
+    for directory in (start, *start.parents):
+        if (directory / MARKER).is_file():
+            check_marker(directory)
+            return directory
+    raise Failure(f"no collection found: neither {start} nor a parent "
+                  f"holds {MARKER}; name one with -C DIR, or create one "
+                  "with: orgsyndb init DIR")
+
+
+def enter_collection(option: str | None) -> Path:
+    """Find the collection and make it the working directory."""
+    collection = find_collection(option)
+    os.chdir(collection)
+    return collection
+
+
+def existing(paths: Sequence[str]) -> list[str]:
+    """The members of ``paths`` that are directories, in order."""
+    return [path for path in paths if Path(path).is_dir()]
+
+
+# --------------------------------------------------------------------------
+# Steps; each runs with the collection as working directory
+
+
+def bootstrapped() -> bool:
+    elpa = APP / ".emacs-batch" / "elpa"
+    return (elpa / "ox-hugo").is_dir() and (elpa / "tomelr").is_dir()
+
+
+def run_export() -> None:
+    build = Path("build")
+    step("export: recovering build/export/")
+    pipeline.recover_export(build)
+    step("export: planning org/procedures/")
+    plan_path = build / pipeline.PLAN_NAME
+    plan = pipeline.write_export_plan("org/procedures", plan_path)
+    if plan is None:
+        raise Failure("the Org sources have errors; build/export/ is "
+                      "unchanged")
+    staging = build / pipeline.STAGING
+    staging.mkdir(parents=True, exist_ok=True)
+    if bootstrapped():
+        step("export: running ox-hugo")
+    else:
+        step("export: installing ox-hugo and tomelr into the application's "
+             ".emacs-batch/ (first run, needs network)")
+    log = build / "export.log"
+    sys.stdout.flush()
+    with open(log, "w", encoding="utf-8") as handle:
+        done = subprocess.run(
+            ["emacs", "-Q", "--batch", "-l", str(APP / "tools" / "export.el"),
+             str(plan_path), str(staging)],
+            stdout=handle, stderr=subprocess.STDOUT)
+    if done.returncode != 0:
+        sys.stderr.write(log.read_text(encoding="utf-8", errors="replace"))
+        raise Failure(f"export failed; Emacs output is in {log}")
+    step("export: installing build/export/")
+    pipeline.check_staging(build, plan)
+    pipeline.replace_export(build)
+
+
+def validator_args() -> list[str]:
+    args = ["--org-root", "org/procedures"] if Path(
+        "org/procedures").is_dir() else []
+    return [*args, "--static-dir", "static", *existing(CONTENT_ROOTS)]
+
+
+def run_validator() -> int:
+    args = validator_args()
+    step("validate: validate.py " + " ".join(args))
+    status = validate.main(args)
+    sys.stdout.flush()
+    sys.stderr.flush()
+    return status
+
+
+def run_build(collection: Path) -> None:
+    run_export()
+    if run_validator() != 0:
+        raise Failure("validation found errors; the site was not built")
+    step("build: hugo")
+    remove(Path("public"))
+    config = collection / "build" / "hugo-config"
+    (config / "_default").mkdir(parents=True, exist_ok=True)
+    (config / "_default" / "hugo.toml").write_text(
+        pipeline.hugo_overlay(APP / "site", collection), encoding="utf-8")
+    run(["hugo", "--source", APP / "site", "--configDir", config,
+         "--minify", "--quiet", "--noBuildLock"])
+    step("build: pagefind")
+    binary = pipeline.ensure_pagefind(APP / ".tools")
+    run([binary, "--site", collection / "public", "--quiet"])
+
+
+# --------------------------------------------------------------------------
+# Subcommands
+
+
+def no_arguments(name: str, args: Sequence[str]) -> None:
+    if args:
+        raise UsageError(f"{name} takes no arguments: {' '.join(args)}")
+
+
+def cmd_export(option: str | None, args: Sequence[str]) -> int:
+    no_arguments("export", args)
+    enter_collection(option)
+    require_tools(*EXPORT_TOOLS)
+    run_export()
+    return 0
+
+
+def cmd_validate(option: str | None, args: Sequence[str]) -> int:
+    if args:
+        if option is not None:
+            raise UsageError("validate with arguments takes no -C: it runs "
+                             "tools/validate.py in the working directory")
+        return validate.main(list(args))
+    enter_collection(option)
+    require_tools(*EXPORT_TOOLS)
+    run_export()
+    return run_validator()
+
+
+def cmd_build(option: str | None, args: Sequence[str]) -> int:
+    no_arguments("build", args)
+    collection = enter_collection(option)
+    require_tools(*BUILD_TOOLS)
+    run_build(collection)
+    return 0
+
+
+def cmd_serve(option: str | None, args: Sequence[str]) -> int:
+    parser = Parser(prog=f"{PROG} serve", add_help=False)
+    parser.add_argument("--port", default="8000")
+    port_text = parser.parse_args(args).port
+    if not re.fullmatch(r"[0-9]{1,5}", port_text) or not (
+            1 <= int(port_text) <= 65535):
+        raise UsageError(f"--port must be a number from 1 to 65535: "
+                         f"{port_text}")
+    port = int(port_text)
+    collection = enter_collection(option)
+    require_tools(*BUILD_TOOLS)
+    run_build(collection)
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler,
+                                directory=str(collection / "public"))
+    try:
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", port),
+                                                 handler)
+    except OSError as exc:
+        raise Failure(f"cannot listen on 127.0.0.1:{port}: {exc}") from None
+    print(f"serving http://127.0.0.1:{port}/ (Ctrl-C to stop)", flush=True)
+    with server:
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            pass
+    return 0
+
+
+def cmd_pdf(option: str | None, args: Sequence[str]) -> int:
+    no_arguments("pdf", args)
+    collection = enter_collection(option)
+    require_tools(*BUILD_TOOLS, "weasyprint")
+    run_build(collection)
+    step("pdf: rendering procedure pages into pdf/")
+    pdf_dir = Path("pdf")
+    remove(pdf_dir)
+    jobs = pipeline.pdf_jobs(pipeline.content_files(existing(CONTENT_ROOTS)),
+                             Path("public"), pdf_dir)
+    pdf_dir.mkdir()
+    failed = pipeline.render_pdfs(jobs)
+    print(f"pdf: {len(jobs) - len(failed)} of {len(jobs)} files written")
+    if failed:
+        raise Failure("failed: " + ", ".join(job.pdf.name for job in failed))
+    return 0
+
+
+def cmd_new(option: str | None, args: Sequence[str]) -> int:
+    parser = Parser(prog=f"{PROG} new", add_help=False)
+    parser.add_argument("--md", action="store_true")
+    parser.add_argument("--ai-model")
+    parser.add_argument("title", nargs="*")
+    parsed = parser.parse_intermixed_args(args)
+    if not " ".join(parsed.title).strip():
+        raise UsageError("new needs a TITLE")
+    collection = find_collection(option)
+    relative = pipeline.new_procedure(collection, parsed.title, parsed.md,
+                                      parsed.ai_model)
+    print(relative.as_posix())
+    return 0
+
+
+def cmd_init(option: str | None, args: Sequence[str]) -> int:
+    parser = Parser(prog=f"{PROG} init", add_help=False)
+    parser.add_argument("directory")
+    target = Path(parser.parse_args(args).directory)
+    if (target / MARKER).exists():
+        raise Failure(f"{target} already holds {MARKER}")
+    for name in COLLECTION_DIRS:
+        (target / name).mkdir(parents=True, exist_ok=True)
+    ignore = target / ".gitignore"
+    lines = (ignore.read_text(encoding="utf-8").splitlines()
+             if ignore.exists() else [])
+    missing = [line for line in IGNORED if line not in lines]
+    if missing:
+        with open(ignore, "a", encoding="utf-8") as handle:
+            if lines and not ignore.read_text(encoding="utf-8").endswith(
+                    "\n"):
+                handle.write("\n")
+            handle.write("".join(f"{line}\n" for line in missing))
+    # The marker comes last, so that a failed init can simply be rerun.
+    with open(target / MARKER, "x", encoding="utf-8") as handle:
+        handle.write(MARKER_TEXT)
+    print(target.resolve())
+    return 0
+
+
+def cmd_clean(option: str | None, args: Sequence[str]) -> int:
+    parser = Parser(prog=f"{PROG} clean", add_help=False)
+    parser.add_argument("--all", action="store_true")
+    everything = parser.parse_args(args).all
+    collection = find_collection(option)
+    targets = [collection / name for name in OUTPUTS]
+    if everything:
+        targets += [APP / name for name in APP_CACHES]
+    step("clean: " + ", ".join(str(path) for path in targets))
+    for path in targets:
+        remove(path)
+    return 0
+
+
+def version_note(tool: str) -> str:
+    """`` (tested with V)`` when ``tool`` reports another version."""
+    tested, command = TESTED_VERSIONS[tool]
+    try:
+        done = subprocess.run(command, capture_output=True, text=True,
+                              timeout=60)
+        found = re.search(r"(\d+\.\d+(?:\.\d+)?)", done.stdout)
+    except (OSError, subprocess.SubprocessError):
+        found = None
+    reported = found.group(1) if found else None
+    return "" if reported == tested else f" (tested with {tested})"
+
+
+def cmd_check_deps(option: str | None, args: Sequence[str]) -> int:
+    no_arguments("check-deps", args)
+    missing = []
+    for tool in REQUIRED_TOOLS:
+        if shutil.which(tool) is None:
+            print(f"missing {tool}")
+            missing.append(tool)
+            continue
+        note = version_note(tool) if tool in TESTED_VERSIONS else ""
+        print(f"ok      {tool}{note}")
+    state = "installed" if shutil.which("caddy") else "not installed"
+    print(f"optional caddy ({state}; only for deploy/Caddyfile.example)")
+    pagefind = (APP / ".tools" / f"pagefind-{pipeline.PAGEFIND_VERSION}"
+                / "pagefind")
+    print(f"auto    pagefind {pipeline.PAGEFIND_VERSION} "
+          + ("(cached in .tools/)" if pagefind.is_file()
+             else "(fetched from GitHub on first build)"))
+    print("auto    ox-hugo/tomelr "
+          + ("(cached in .emacs-batch/)" if bootstrapped()
+             else "(fetched from GitHub on first export)"))
+    if missing:
+        print("sudo dnf install " + " ".join(missing))
+        return 1
+    return 0
+
+
+def cmd_help(option: str | None, args: Sequence[str]) -> int:
+    print(USAGE)
+    return 0
+
+
+COMMANDS: dict[str, Callable[[str | None, Sequence[str]], int]] = {
+    "export": cmd_export,
+    "validate": cmd_validate,
+    "build": cmd_build,
+    "serve": cmd_serve,
+    "pdf": cmd_pdf,
+    "new": cmd_new,
+    "init": cmd_init,
+    "clean": cmd_clean,
+    "check-deps": cmd_check_deps,
+    "help": cmd_help,
+}
+
+
+# --------------------------------------------------------------------------
+# Command line
+
+
+def split_global(argv: Sequence[str]) -> tuple[str | None, str, list[str]]:
+    """Split ``argv`` into the ``-C`` value, the subcommand and the rest."""
+    option = None
+    index = 0
+    while index < len(argv):
+        arg = argv[index]
+        if arg in ("-C", "--collection"):
+            if index + 1 >= len(argv):
+                raise UsageError(f"{arg} needs a directory")
+            option = argv[index + 1]
+            index += 2
+        elif arg.startswith("--collection="):
+            option = arg.removeprefix("--collection=")
+            index += 1
+        elif arg.startswith("-C"):
+            option = arg.removeprefix("-C")
+            index += 1
+        elif arg in ("-h", "--help"):
+            return option, "help", list(argv[index + 1:])
+        elif arg.startswith("-"):
+            raise UsageError(f"unknown option: {arg}")
+        else:
+            return option, arg, list(argv[index + 1:])
+        if option == "":
+            raise UsageError("-C needs a directory")
+    raise UsageError("no subcommand given")
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run the program on ``argv`` and return the exit status."""
+    os.environ["TZ"] = "Europe/Berlin"
+    os.environ["LC_TIME"] = "C"
+    time.tzset()
+    pipeline.PROG = PROG
+    try:
+        option, command, args = split_global(
+            sys.argv[1:] if argv is None else argv)
+        if command not in COMMANDS:
+            raise UsageError(f"unknown subcommand: {command}")
+        if not ((APP / "tools" / "orgsyndb").is_file()
+                and (APP / "site" / "hugo.toml").is_file()):
+            raise Failure(f"{APP} does not look like the OrgSynDB "
+                          "application")
+        return COMMANDS[command](option, args)
+    except (UsageError, pipeline.UsageError) as exc:
+        print(f"{PROG}: error: {exc}", file=sys.stderr)
+        print(USAGE, file=sys.stderr)
+        return 2
+    except (Failure, pipeline.ExportError, pipeline.PagefindError,
+            validate.ConfigError, ValueError, OSError) as exc:
+        print(f"{PROG}: error: {exc}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        return 130
+
+
+if __name__ == "__main__":
+    sys.exit(main())

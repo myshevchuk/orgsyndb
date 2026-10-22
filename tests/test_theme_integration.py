@@ -43,7 +43,7 @@ class SiteCase(ps.ThemeBuildCase):
         return {item.id: item for item in self.content()}
 
     def labels(self) -> dict[str, str]:
-        return ps.reaction_labels(self.sandbox.root)
+        return ps.reaction_labels(self.sandbox.app)
 
     def order_by_id(self) -> list[Content]:
         return sorted(self.content(), key=lambda item: item.id)
@@ -106,7 +106,7 @@ class ShippedSiteTests(SiteCase):
 
     def test_no_third_party_theme_and_no_web_fonts(self) -> None:
         """Scenario: No third-party theme and no web fonts."""
-        site = self.sandbox.root / "site"
+        site = self.sandbox.app / "site"
         config = tomllib.loads(
             (site / "hugo.toml").read_text(encoding="utf-8"))
         self.assertNotIn("theme", config)

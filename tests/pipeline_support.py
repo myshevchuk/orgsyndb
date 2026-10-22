@@ -1,9 +1,10 @@
 """Shared helpers for the build-pipeline tests.
 
 Pure tests load ``tools/pipeline.py`` lazily, so a missing module fails
-the test on an assertion. Fish and integration tests work in a temporary
-copy of the repository whose path contains a space, and run
-``tools/build.fish`` with ``cwd`` set to another temporary directory.
+the test on an assertion. Program and integration tests work in a
+temporary copy of the application and of the demo collection, under a
+path that contains a space, and run ``tools/orgsyndb -C <collection>``
+with ``cwd`` set to a third temporary directory.
 """
 
 import contextlib
@@ -40,18 +41,20 @@ THEME_FIXTURES = FIXTURES / "theme"
 PAGEFIND_QUERY = REPO / "tests" / "js" / "pagefind-query.mjs"
 SEARCH_TERMS = REPO / "site" / "assets" / "js" / "search-terms.js"
 PIPELINE = TOOLS / "pipeline.py"
-BUILD_FISH = TOOLS / "build.fish"
+ORGSYNDB = TOOLS / "orgsyndb"
+HOOK = TOOLS / "hooks" / "pre-commit"
+DEMO = REPO / "examples" / "demo"
 
 OX_HUGO_PIN = "b7dc44dc28911b9d8e3055a18deac16c3b560b03"
 TOMELR_PIN = "670e0a08f625175fd80137cf69e799619bf8a381"
 PAGEFIND_RELATIVE = Path(".tools") / "pagefind-1.5.2" / "pagefind"
-BOOTSTRAP_HINT = ("ox-hugo not bootstrapped: run tools/build.fish export "
-                  "once (needs network)")
-PAGEFIND_HINT = ("pagefind not cached: run tools/build.fish build once "
-                 "(needs network)")
+BOOTSTRAP_HINT = ("ox-hugo not bootstrapped: run tools/orgsyndb -C "
+                  "examples/demo export once (needs network)")
+PAGEFIND_HINT = ("pagefind not cached: run tools/orgsyndb -C examples/demo "
+                 "build once (needs network)")
 
-# Directories the integration harness copies from the real repository.
-COPIED = ("tools", "site", "templates", "org", "md")
+# Directories the integration harness copies from the real application.
+COPIED = ("tools", "site", "templates")
 GIT_QUIET = ["-c", "user.name=Test Author",
              "-c", "user.email=author@example.invalid",
              "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"]
@@ -171,8 +174,8 @@ def require_pagefind() -> None:
 
 
 def require_exporter() -> None:
-    """Skip unless fish, Emacs, git and the ox-hugo bootstrap exist."""
-    for tool in ("fish", "emacs", "git"):
+    """Skip unless Emacs, git and the ox-hugo bootstrap exist."""
+    for tool in ("emacs", "git"):
         require_tool(tool)
     require_ox_hugo()
 
@@ -184,12 +187,18 @@ def require_builder() -> None:
     require_pagefind()
 
 
-# --- a temporary copy of the repository -------------------------------------
+# --- temporary copies of the application and the demo collection -----------
 
 class Sandbox:
-    """A temporary repository copy and a separate working directory."""
+    """An application copy, a collection copy and a working directory.
 
-    def __init__(self, root: Path, work: Path, home: Path) -> None:
+    ``root`` is the collection, so that content and output paths read as
+    before the split; ``app`` is the application.
+    """
+
+    def __init__(self, app: Path, root: Path, work: Path,
+                 home: Path) -> None:
+        self.app = app
         self.root = root
         self.work = work
         self.home = home
@@ -206,16 +215,26 @@ class Sandbox:
     def build(self, *args: str | Path, cwd: Path | None = None,
               env: dict[str, str] | None = None,
               timeout: int = 900) -> Run:
-        """Run the copy's tools/build.fish."""
-        return run_script(self.root / "tools" / "build.fish", args,
+        """Run the application copy's tools/orgsyndb on the collection."""
+        return run_script(self.app / "tools" / "orgsyndb",
+                          ["-C", self.root, *args],
+                          cwd=self.work if cwd is None else cwd,
+                          env=self.env() if env is None else env,
+                          timeout=timeout)
+
+    def program(self, *args: str | Path, cwd: Path | None = None,
+                env: dict[str, str] | None = None,
+                timeout: int = 900) -> Run:
+        """Run the application copy's tools/orgsyndb without ``-C``."""
+        return run_script(self.app / "tools" / "orgsyndb", args,
                           cwd=self.work if cwd is None else cwd,
                           env=self.env() if env is None else env,
                           timeout=timeout)
 
     def validator(self, *args: str | Path) -> Run:
-        """Run the copy's tools/validate.py with the copy as cwd."""
+        """Run the copy's tools/validate.py with the collection as cwd."""
         done = subprocess.run(
-            [sys.executable, str(self.root / "tools" / "validate.py"),
+            [sys.executable, str(self.app / "tools" / "validate.py"),
              *map(str, args)],
             cwd=self.root, env=self.env(), capture_output=True, text=True,
             timeout=120)
@@ -255,7 +274,7 @@ def run_script(script: Path, args, *, cwd: Path,
     """Run an executable script directly. Absent scripts fail the test."""
     if not script.exists() and not script.is_symlink():
         raise AssertionError(
-            f"tools/{script.name} does not exist")
+            f"{script} does not exist")
     done = subprocess.run(
         [str(script), *map(str, args)], cwd=cwd, env=env,
         capture_output=True, text=True, timeout=timeout)
@@ -264,36 +283,39 @@ def run_script(script: Path, args, *, cwd: Path,
 
 def make_sandbox(case: unittest.TestCase, *, copy_emacs: bool = False,
                  link_caches: bool = True) -> Sandbox:
-    """Create the repository copy for ``case``; removed on clean-up.
+    """Create the copies for ``case``; removed on clean-up.
 
-    The copy lives under a directory whose name contains a space. It holds
-    ``tools/``, ``site/``, ``templates/``, ``org/``, ``md/`` and
-    ``tests/fixtures/export/``. ``.emacs-batch/`` and ``.tools/`` are
-    symlinked from the real repository (when they exist), or
-    ``.emacs-batch/`` is copied with ``copy_emacs``.
+    Both live under a directory whose name contains a space. The
+    application copy holds ``tools/``, ``site/`` and ``templates/``;
+    ``.emacs-batch/`` and ``.tools/`` are symlinked from the real
+    application (when they exist), or ``.emacs-batch/`` is copied with
+    ``copy_emacs``. The collection copy is a copy of ``examples/demo/``
+    without its generated directories.
     """
     base = Path(tempfile.mkdtemp(prefix="orgsyndb test "))
     case.addCleanup(shutil.rmtree, base, True)
-    root = base / "repo copy"
-    root.mkdir()
+    app = base / "app copy"
+    app.mkdir()
     for name in COPIED:
         if (REPO / name).is_dir():
-            shutil.copytree(REPO / name, root / name, symlinks=True,
+            shutil.copytree(REPO / name, app / name, symlinks=True,
                             ignore=shutil.ignore_patterns("__pycache__"))
-    (root / "tests" / "fixtures").mkdir(parents=True)
-    shutil.copytree(EXPORT_FIXTURES, root / "tests" / "fixtures" / "export")
     if copy_emacs and (REPO / ".emacs-batch").is_dir():
-        shutil.copytree(REPO / ".emacs-batch", root / ".emacs-batch",
-                        symlinks=True)
+        shutil.copytree(REPO / ".emacs-batch", app / ".emacs-batch",
+                        symlinks=True,
+                        ignore=shutil.ignore_patterns("S.gpg-agent*"))
     if link_caches:
         for name in (".emacs-batch", ".tools"):
-            if (REPO / name).is_dir() and not (root / name).exists():
-                (root / name).symlink_to(REPO / name)
+            if (REPO / name).is_dir() and not (app / name).exists():
+                (app / name).symlink_to(REPO / name)
+    root = base / "collection copy"
+    shutil.copytree(DEMO, root, symlinks=True,
+                    ignore=shutil.ignore_patterns("build", "public", "pdf"))
     work = base / "work dir"
     work.mkdir()
     home = base / "home"
     home.mkdir()
-    return Sandbox(root, work, home)
+    return Sandbox(app, root, work, home)
 
 
 # --- a reduced PATH ----------------------------------------------------------
@@ -595,7 +617,7 @@ def read_content(sandbox: Sandbox) -> list[Content]:
 
 
 def reaction_labels(root: Path) -> dict[str, str]:
-    """Reaction-type slug to label, from the vocabulary under ``root``."""
+    """Reaction-type slug to label, from the application at ``root``."""
     data = tomllib.loads(
         (root / "site" / "data" / "reaction_types.toml")
         .read_text(encoding="utf-8"))

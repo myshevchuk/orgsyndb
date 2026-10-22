@@ -1,10 +1,10 @@
 """Integration tests of build, validate, serve, pdf and the hook
-(site-build, build-script, sample-procedures).
+(site-build, build-script, sample-procedures, collection).
 
-Each runs tools/build.fish in a temporary copy of the repository. Tests
-skip, naming the missing tool or cache, unless fish, Emacs, git, the
-pinned ox-hugo bootstrap, Hugo and the cached Pagefind binary exist; the
-pdf tests also need WeasyPrint.
+Each runs tools/orgsyndb from a temporary application copy on a temporary
+copy of the demo collection. Tests skip, naming the missing tool or
+cache, unless Emacs, git, the pinned ox-hugo bootstrap, Hugo and the
+cached Pagefind binary exist; the pdf tests also need WeasyPrint.
 """
 
 import json
@@ -253,11 +253,12 @@ class ServeTests(BuildTestCase):
 
     def test_site_and_search_bundle_are_served(self) -> None:
         """Scenario: Site and search bundle are served."""
-        script = self.sandbox.root / "tools" / "build.fish"
-        self.assertTrue(script.is_file(), "tools/build.fish does not exist")
+        script = self.sandbox.app / "tools" / "orgsyndb"
+        self.assertTrue(script.is_file(), "tools/orgsyndb does not exist")
         port = ps.free_port()
         self.process = subprocess.Popen(
-            [str(script), "serve", "--port", str(port)],
+            [str(script), "-C", str(self.sandbox.root), "serve", "--port",
+             str(port)],
             cwd=self.sandbox.work, env=self.sandbox.env(),
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
             start_new_session=True)
@@ -314,7 +315,7 @@ class PdfTests(BuildTestCase):
 
     def test_remote_stylesheet_fails_the_job(self) -> None:
         """Scenario: Remote stylesheet fails the job."""
-        layout = self.sandbox.root / "site" / "layouts" / "baseof.html"
+        layout = self.sandbox.app / "site" / "layouts" / "baseof.html"
         self.assertTrue(layout.is_file(), "site/layouts/baseof.html missing")
         text = layout.read_text(encoding="utf-8")
         self.assertIn("<head>", text)
@@ -331,10 +332,10 @@ class HookTests(BuildTestCase):
     def test_hook_refuses_an_invalid_commit(self) -> None:
         """Scenario: Hook refuses an invalid commit."""
         sandbox = self.sandbox
-        hook = sandbox.root / "tools" / "hooks" / "pre-commit"
+        hook = sandbox.app / "tools" / "hooks" / "pre-commit"
         self.assertTrue(hook.is_file(), "tools/hooks/pre-commit is missing")
         for args in (("init", "-q"),
-                     ("config", "core.hooksPath", "tools/hooks")):
+                     ("config", "core.hooksPath", hook.parent)):
             self.assertEqual(sandbox.git(*args).returncode, 0)
         target = shutil.copy2(MISSING_TITLE, sandbox.md_dir())
         relative = Path(target).relative_to(sandbox.root)
@@ -346,3 +347,81 @@ class HookTests(BuildTestCase):
         if head.returncode == 0:
             listing = sandbox.git("ls-tree", "-r", "--name-only", "HEAD")
             self.assertNotIn(str(relative), listing.stdout.splitlines())
+
+    def test_hook_through_a_symlink_accepts_a_valid_commit(self) -> None:
+        """Scenario: Hook through a symlink accepts a valid commit."""
+        sandbox = self.sandbox
+        hook = sandbox.app / "tools" / "hooks" / "pre-commit"
+        self.assertEqual(sandbox.git("init", "-q").returncode, 0)
+        link = sandbox.root / ".git" / "hooks" / "pre-commit"
+        link.parent.mkdir(parents=True, exist_ok=True)
+        link.symlink_to(hook)
+        self.assertEqual(sandbox.git("add", "--", ".").returncode, 0)
+        result = sandbox.git("commit", "-q", "-m", "add the demo")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("validated", result.stderr)
+
+    def test_hook_validates_a_collection_in_a_subdirectory(self) -> None:
+        """Scenario: Hook validates a collection in a subdirectory."""
+        sandbox = self.sandbox
+        top = sandbox.root.parent
+        hook = sandbox.app / "tools" / "hooks" / "pre-commit"
+
+        def git(*args: str | Path) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(["git", *ps.GIT_QUIET, *map(str, args)],
+                                  cwd=top, env=sandbox.env(),
+                                  capture_output=True, text=True,
+                                  timeout=900)
+
+        for args in (("init", "-q"),
+                     ("config", "core.hooksPath", hook.parent),
+                     ("add", "--", sandbox.root.name)):
+            done = git(*args)
+            self.assertEqual(done.returncode, 0, done.stderr)
+        target = shutil.copy2(MISSING_TITLE, sandbox.md_dir())
+        relative = Path(target).relative_to(top)
+        self.assertEqual(git("add", "--", relative).returncode, 0)
+        result = git("commit", "-m", "add invalid procedure")
+        self.assertNotEqual(result.returncode, 0,
+                            result.stdout + result.stderr)
+        self.assertIn("missing-title", result.stdout + result.stderr)
+        self.assertNotEqual(git("rev-parse", "--verify", "-q",
+                                "HEAD").returncode, 0)
+
+
+class CollectionBuildTests(BuildTestCase):
+    def test_the_applications_site_directory_is_untouched(self) -> None:
+        """Scenario: The application's site directory is untouched."""
+        site = self.sandbox.app / "site"
+        before = snapshot(site)
+        self.assert_ok(self.build("build"))
+        self.assertEqual(snapshot(site), before)
+        self.assertFalse((site / ".hugo_build.lock").exists())
+        self.assertFalse((site / "resources").exists())
+        self.assertTrue(self.public("index.html").is_file())
+
+    def test_collection_is_found_from_a_subdirectory(self) -> None:
+        """Scenario: Found from a subdirectory."""
+        result = self.sandbox.program(
+            "validate", cwd=self.sandbox.md_dir())
+        self.assert_ok(result)
+        self.assertTrue(self.sandbox.export_dir().is_dir())
+
+    def test_structure_images_come_from_the_collection(self) -> None:
+        """Scenario: The application's site directory is untouched
+        (static files are the collection's)."""
+        self.assert_ok(self.build("build"))
+        for svg in sorted((self.sandbox.root / "static" / "structures")
+                          .glob("*.svg")):
+            with self.subTest(svg=svg.name):
+                self.assertEqual(self.public("structures", svg.name)
+                                 .read_bytes(), svg.read_bytes())
+
+    def test_collection_path_with_a_comma_builds(self) -> None:
+        """Scenario: Overlay parses to the contract (a comma in the path)."""
+        moved = self.sandbox.root.with_name("collection, copy")
+        self.sandbox.root.rename(moved)
+        self.sandbox.root = moved
+        self.assert_ok(self.build("build"))
+        self.assertTrue(self.public("procedures", "osdb-0001",
+                                    "index.html").is_file())

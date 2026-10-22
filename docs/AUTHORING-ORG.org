@@ -1,6 +1,6 @@
 #+TITLE: Writing OrgSynDB procedures in Org
 #+CREATED: [2026-10-20 Tue 00:06:38]
-#+LAST_MODIFIED: [2026-10-20 Tue 20:41:42]
+#+LAST_MODIFIED: [2026-10-21 Wed 22:45:00]
 #+AI_MODEL: gpt-5.6-sol
 #+OPTIONS: toc:t num:nil
 #+STARTUP: showall
@@ -10,10 +10,10 @@
 
 * Start from a generated stub
 
-  Create an Org procedure with:
+  Create an Org procedure, from inside its collection, with:
 
-#+begin_src fish
-  tools/build.fish new "Product name"
+#+begin_src sh
+  orgsyndb new "Product name"
 #+end_src
 
   The command chooses the next free identifier across the Org sources,
@@ -24,8 +24,8 @@
   When a model assisted with the procedure, record it while creating the
   stub:
 
-#+begin_src fish
-  tools/build.fish new --ai-model example-model-1 "Product name"
+#+begin_src sh
+  orgsyndb new --ai-model example-model-1 "Product name"
 #+end_src
 
   Without ~--ai-model~, the stub contains ~#+AI_MODEL: none~. The command
@@ -82,7 +82,7 @@
 #+end_src
 
   To show a product structure, place an SVG or PNG file in
-  ~site/static/structures/~ and add this custom-front-matter line before
+  the collection's ~static/structures/~ and add this custom-front-matter line before
   ~:product~:
 
 #+begin_src org
@@ -128,7 +128,7 @@
   spring clock change is invalid. During the repeated autumn hour, export
   uses the earlier summer offset for ~#+CREATED~.
 
-  ~tools/build.fish new~ supplies valid timestamps and English weekday names.
+  ~orgsyndb new~ supplies valid timestamps and English weekday names.
   For timestamps inserted interactively by Emacs, make its time locale
   English:
 
@@ -175,21 +175,22 @@
   LaTeX delimiters such as ~\(y^2\)~ also stay literal because the site has
   no math renderer.
 
-  The sample [[file:../org/procedures/OSDB-0001-salicylic-acid.org][OSDB-0001-salicylic-acid.org]] shows the expected
-  structure. It is sample data, not an experimentally verified procedure.
+  The sample [[file:../examples/demo/org/procedures/OSDB-0001-salicylic-acid.org][OSDB-0001-salicylic-acid.org]] in the demo collection
+  shows the expected structure. It is sample data, not an experimentally verified procedure.
 
 * Export, validate, and preview
 
   Export Org sources with:
 
-#+begin_src fish
-  tools/build.fish export
+#+begin_src sh
+  orgsyndb export
 #+end_src
 
   Export runs Emacs in an isolated batch environment. It does not load or
   write the owner's Emacs configuration. On the first run it fetches pinned
-  copies of ox-hugo and tomelr into ~.emacs-batch/~. Exported Markdown goes
-  to ~build/export/~, and Emacs output goes to ~build/export.log~. The log is
+  copies of ox-hugo and tomelr into the application's ~.emacs-batch/~.
+  Exported Markdown goes to the collection's ~build/export/~, and Emacs
+  output goes to ~build/export.log~. The log is
   printed when export fails.
 
   Org files remain the source of truth. Do not edit ~build/export/~. Each
@@ -206,8 +207,8 @@
 
   Check both source formats and their exports with:
 
-#+begin_src fish
-  tools/build.fish validate
+#+begin_src sh
+  orgsyndb validate
 #+end_src
 
   Validator messages have the form ~path:field: error|warning: message~.
@@ -216,8 +217,8 @@
 
   Build and preview the site with:
 
-#+begin_src fish
-  tools/build.fish serve
+#+begin_src sh
+  orgsyndb serve
 #+end_src
 
   Open http://127.0.0.1:8000/ after the command prints that it is serving.
@@ -227,4 +228,4 @@
   On a procedure page, choose *Print / Save as PDF* to open the browser's
   print dialog. The print layout is complete A4 output in black on white.
   Firefox omits the running header and page numbers that WeasyPrint adds to
-  PDFs created by ~tools/build.fish pdf~.
+  PDFs created by ~orgsyndb pdf~.

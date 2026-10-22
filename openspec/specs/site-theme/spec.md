@@ -8,7 +8,7 @@ The site SHALL be rendered by a theme written for this repository, made of these
 - layouts in `site/layouts/`;
 - stylesheets in `site/assets/css/`;
 - scripts in `site/assets/js/`;
-- structure images in `site/static/structures/`.
+- structure images in the collection's `static/structures/`.
 
 The following apply:
 - `site/hugo.toml` sets no `theme` key, and no `themes/` directory exists under `site/`.
@@ -172,7 +172,7 @@ A procedure page SHALL carry exactly one `p.sample-banner` with `role="note"` an
 - **THEN** `procedures/osdb-0906/index.html` has no `p.sample-banner`
 
 ### Requirement: Structure image slot
-When a procedure sets `structure_image`, its page SHALL contain, after the metadata panel, a `figure.structure` holding an `img` whose `src` resolves to the published copy of `site/static/<structure_image>`, and whose `alt` is `Structure of <product name>`. Otherwise the page contains a `figure.structure.structure--placeholder` holding `div.structure__slot` with the text `No structure image`. The print stylesheet hides the placeholder.
+When a procedure sets `structure_image`, its page SHALL contain, after the metadata panel, a `figure.structure` holding an `img` whose `src` resolves to the published copy of the collection's `static/<structure_image>`, and whose `alt` is `Structure of <product name>`. Otherwise the page contains a `figure.structure.structure--placeholder` holding `div.structure__slot` with the text `No structure image`. The print stylesheet hides the placeholder.
 
 #### Scenario: Image and placeholder
 - **WHEN** a test scans `procedures/osdb-0003/index.html` and `procedures/osdb-0002/index.html` after a theme build
@@ -180,7 +180,7 @@ When a procedure sets `structure_image`, its page SHALL contain, after the metad
 - **AND** the second has the placeholder figure and no `img`
 
 ### Requirement: Structure images are safe SVG
-Every `.svg` file under `site/static/structures/` SHALL be a hand-written SVG that meets all of the following:
+Every `.svg` file under the demo collection's `static/structures/` SHALL be a hand-written SVG that meets all of the following:
 - It parses as XML with the root element `{http://www.w3.org/2000/svg}svg`.
 - The root has a `viewBox`, `role="img"` and a child `title` with non-empty text.
 - The first drawing element is a `rect` filling the view box with `fill="#fff"`.
@@ -191,7 +191,7 @@ Every `.svg` file under `site/static/structures/` SHALL be a hand-written SVG th
 - No attribute value begins with `http:`, `https:` or `//`.
 
 #### Scenario: Shipped structure images
-- **WHEN** a test parses every `.svg` file under `site/static/structures/` with `xml.etree.ElementTree`
+- **WHEN** a test parses every `.svg` file under `examples/demo/static/structures/` with `xml.etree.ElementTree`
 - **THEN** at least one file exists, `osdb-0003.svg` among them, and each meets every rule above
 
 ### Requirement: Procedure lists and their order

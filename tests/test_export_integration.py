@@ -1,8 +1,8 @@
-"""Integration tests of ``tools/build.fish export`` (org-export).
+"""Integration tests of ``tools/orgsyndb export`` (org-export).
 
-Each runs the script in a temporary copy of the repository and skips,
-naming the missing tool or cache, unless fish, Emacs, git and the pinned
-ox-hugo bootstrap are present.
+Each runs the program from a temporary application copy on a temporary
+copy of the demo collection, and skips, naming the missing tool or cache,
+unless Emacs, git and the pinned ox-hugo bootstrap are present.
 """
 
 import datetime as dt
@@ -11,7 +11,7 @@ import subprocess
 import unittest
 
 import pipeline_support as ps
-from pipeline_support import (OX_HUGO_PIN, TOMELR_PIN, REPO, Sandbox,
+from pipeline_support import (DEMO, OX_HUGO_PIN, TOMELR_PIN, Sandbox,
                               body_of, front_matter, make_sandbox,
                               read_only_dir, snapshot)
 
@@ -57,19 +57,9 @@ class IsolationTests(ExportTestCase):
                 sandbox, env=sandbox.env(TMPDIR=str(tmpdir)))
             self.assertEqual(result.returncode, 0,
                              result.stdout + result.stderr)
-            # fish creates its own state directories at start-up, before
-            # the script runs; only those may appear beside .config/emacs.
-            fish_own = {".cache/fish", ".config/fish", ".local/share/fish"}
-            created = sorted(
-                str(p.relative_to(sandbox.home)) for p in
-                sandbox.home.rglob("*")
-                if not any(str(p.relative_to(sandbox.home)) == d
-                           or str(p.relative_to(sandbox.home)).startswith(
-                               d + "/") for d in fish_own))
-            self.assertEqual(
-                [c for c in created if c not in {
-                    ".cache", ".config", ".local", ".local/share"}],
-                [".config/emacs"])
+            created = sorted(str(p.relative_to(sandbox.home))
+                             for p in sandbox.home.rglob("*"))
+            self.assertEqual(created, [".config", ".config/emacs"])
             self.assertEqual(
                 list((sandbox.home / ".config" / "emacs").iterdir()), [])
             self.assertEqual(list(tmpdir.iterdir()), [])
@@ -78,7 +68,7 @@ class IsolationTests(ExportTestCase):
 class PinTests(ExportTestCase):
     def head(self, sandbox: Sandbox, package: str) -> str:
         done = subprocess.run(
-            ["git", "-C", str(sandbox.root / ".emacs-batch" / "elpa"
+            ["git", "-C", str(sandbox.app / ".emacs-batch" / "elpa"
                               / package), "rev-parse", "HEAD"],
             capture_output=True, text=True, timeout=60)
         self.assertEqual(done.returncode, 0, done.stderr)
@@ -97,7 +87,7 @@ class PinTests(ExportTestCase):
         first = self.export(sandbox)
         self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
         before = snapshot(sandbox.export_dir())
-        checkout = sandbox.root / ".emacs-batch" / "elpa" / "ox-hugo"
+        checkout = sandbox.app / ".emacs-batch" / "elpa" / "ox-hugo"
         parent = subprocess.run(
             ["git", "-C", str(checkout), "rev-parse", "HEAD^"],
             capture_output=True, text=True, timeout=60, check=True,
@@ -280,7 +270,7 @@ class IdempotenceTests(ExportTestCase):
     def test_other_sources_do_not_change_a_files_anchors(self) -> None:
         """Scenario: Other sources do not change a file's anchors."""
         sandbox = self.sandbox()
-        seeds = REPO / "org" / "procedures"
+        seeds = DEMO / "org" / "procedures"
         self.assertTrue(any(seeds.glob("OSDB-*.org")),
                         "org/procedures/ holds no seed")
         self.only_sources(sandbox, "OSDB-0903-named-paragraph.org")

@@ -1,7 +1,10 @@
+# Site-wide settings. tools/orgsyndb adds the publish directory and the
+# module mounts per collection (pipeline.hugo_overlay). Its static mount is
+# the collection's static/, which replaces Hugo's default site/static mount:
+# put the application's own files in assets/, not in a site/static/.
 baseURL = "/"
 title = "OrgSynDB"
 locale = "en"
-publishDir = "../public"
 relativeURLs = true
 buildFuture = true
 buildExpired = true
@@ -17,20 +20,6 @@ procedures = "/procedures/:slug/"
 
 [markup.goldmark.renderer]
 unsafe = true
-
-[[module.mounts]]
-source = "content"
-target = "content"
-
-[[module.mounts]]
-source = "../build/export"
-target = "content/procedures"
-files = ["/OSDB-*.md"]
-
-[[module.mounts]]
-source = "../md/procedures"
-target = "content/procedures"
-files = ["/OSDB-*.md"]
 
 [minify.tdewolff.html]
 keepWhitespace = true

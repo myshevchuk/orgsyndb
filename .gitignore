@@ -1,9 +1,12 @@
 __pycache__/
 .pytest_cache/
+# Fetched-tool caches of the application.
+/.emacs-batch/
+/.tools/
+# Left behind by builds from before collections; a collection ignores
+# its own build/, public/ and pdf/ (see examples/demo/.gitignore).
 /build/
 /public/
 /pdf/
-/.emacs-batch/
-/.tools/
 /site/.hugo_build.lock
 /site/resources/

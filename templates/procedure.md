@@ -62,7 +62,8 @@ hazards = ["Flammable liquid"]
 # precursors = ["OSDB-0001"]
 
 # Picture of the product's structure, an .svg or .png file placed in
-# site/static/structures/. Write the path starting with structures/.
+# the collection's static/structures/. Write the path starting with
+# structures/.
 # structure_image = "structures/osdb-0001.svg"
 
 # Who checked the procedure, as a list of names.
