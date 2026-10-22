@@ -22,25 +22,24 @@ an unquoted date and time with its UTC offset, such as
 The procedure identifier has the exact form `OSDB-NNNN`, where `NNNN` is
 four digits from `0001` through `9999`. For example, `OSDB-0001` is valid.
 `OSDB-0000` is reserved for templates and is not a valid procedure
-identifier. Within one language, an identifier must be unique across all
-content roots passed to the validator. An English procedure and its German
-translation share one identifier; see [Languages and
-translations](#languages-and-translations).
+identifier. An identifier must be unique across all content roots passed
+to the validator, except that the variants of one procedure in different
+languages share it; see [Languages and variants](#languages-and-variants).
 
 The source file name has this form:
 
 ```text
 OSDB-NNNN-short-slug.md
 OSDB-NNNN-short-slug.org
-OSDB-NNNN-short-slug.de.md     (German)
-OSDB-NNNN-short-slug.de.org    (German)
+OSDB-NNNN-short-slug.de.md     (German variant)
+OSDB-NNNN-short-slug.en.org    (English variant)
 ```
 
 The `OSDB-NNNN` prefix must equal the procedure's `id`. The short slug after
 the prefix contains lowercase letters or digits. It may contain single
-hyphens between groups, as in `OSDB-0001-ethyl-acetate.md`. A file without
-a language code is English. `.de` before the suffix marks a German file;
-`.en` and any other code are errors.
+hyphens between groups, as in `OSDB-0001-ethyl-acetate.md`. A language
+code, `.de` or `.en`, may stand before the suffix; any other code is an
+error.
 
 The front-matter `slug` is not the short slug from the file name. It is
 always the lowercase identifier: `OSDB-0001` becomes `osdb-0001`. This gives
@@ -61,7 +60,7 @@ least one entry, and every entry must contain non-whitespace text.
 
 | Field | Meaning | TOML type | Required | Value rule | Example |
 |---|---|---|---|---|---|
-| `id` | The procedure identifier. | String | Yes | Must be `OSDB-0001` through `OSDB-9999` and unique among the validated procedures of its language. | `id = "OSDB-0001"` |
+| `id` | The procedure identifier. | String | Yes | Must be `OSDB-0001` through `OSDB-9999` and unique across the validated content roots, except among the variants of one procedure. | `id = "OSDB-0001"` |
 | `slug` | The value used in the procedure URL. | String | Yes | Must equal the lowercase `id` exactly. | `slug = "osdb-0001"` |
 | `title` | The product name shown in the page heading. | Non-empty string | Yes | Must not be empty. | `title = "Product Name"` |
 | `date` | When the procedure was created. | Offset datetime | Yes | Must be unquoted. Its offset should be the Europe/Berlin offset in force at that instant. | `date = 2026-10-19T17:42:05+02:00` |
@@ -120,6 +119,7 @@ Omit an optional field when it does not apply.
 | `checked_by` | People who checked the procedure. | Array of non-empty strings | No | The array may be empty, but an entry may not be an empty string. | `checked_by = ["B. Example"]` |
 | `references` | Literature references stored as metadata. | Array of non-empty strings | No | The array may be empty, but an entry may not be an empty string. | `references = ["Example, A. J. Fictitious Chem. 2020, 1, 1."]` |
 | `ai_model` | The model that assisted with the procedure. | Non-empty string | No | Omit the field when no AI assisted. The value `"none"` is an error. | `ai_model = "example-model-1"` |
+| `language` | The language the procedure is written in. | String | No | Must be `de` or `en`, and match the language code of the file name when it has one. | `language = "de"` |
 
 The `--static-dir` argument controls where the validator resolves a
 `structure_image`. Without that argument, it uses `static` in the current
@@ -195,8 +195,8 @@ roots, it performs the Org checks without looking for exports.
 
 `reaction_types` contains exactly one slug from this table. The slug is the
 value written in front matter, in every language. The label is the name
-shown on the English site, and the German label the name on the German
-site.
+an English site shows, and the German label the name a German site
+shows.
 
 | Slug | Label | German label |
 |---|---|---|
@@ -234,7 +234,7 @@ Every procedure body has these eight sections in this order:
 7. Hazards and Waste Disposal
 8. References
 
-A German procedure uses these German names instead, in the same order:
+A procedure in German uses these names instead, in the same order:
 
 1. Zusammenfassung
 2. Reagenzien
@@ -244,6 +244,10 @@ A German procedure uses these German names instead, in the same order:
 6. Anmerkungen
 7. Gefahren und Entsorgung
 8. Literatur
+
+Which set applies depends on the language: the code in the file name, else
+the `language` field. A file with neither is checked against the set that
+fits its headings better, so it may use either.
 
 In Markdown, write them as level-2 headings such as `## Summary`. In Org,
 write them as top-level headings such as `* Summary`. A missing Markdown
@@ -258,44 +262,53 @@ whitespace. It also accepts an exported trailing attribute such as
 fenced code block does not count. Other level-2 headings and headings at
 other levels are allowed.
 
-## Languages and translations
+## Languages and variants
 
-The site has an English part at `/` and a German part at `/de/`. The
-language of a procedure is the code in its file name: none for English,
-`.de` for German. A German procedure is published only on the German part,
-and an English one only on the English part.
+A procedure file's name may carry a language code, `.de` or `.en`, before
+its suffix. Any other code is an error. A file without a code may be in
+either language. Files with the same identifier are *variants* of one
+procedure, for example `OSDB-0001-salicylic-acid.org` and its German
+translation `OSDB-0001-salicylic-acid.de.org`. Org and Markdown may be
+mixed. Within one identifier, each code, and the absence of a code, may
+occur once.
 
-A German file whose identifier also has an English file is that file's
-translation. The two pages then link to each other. A translation:
+The site has one language, set by `locale` in the application's
+`site/hugo.toml` (`"de"` by default). Every procedure is published once,
+in the variant that suits that language: the file tagged with it, else
+the file without a code, else a file tagged with the other language. A
+precursor may be any procedure, whatever the language of its variants.
 
-- has the original's file name with `.de` added before the suffix, for
-  example `OSDB-0001-salicylic-acid.de.org` beside
-  `OSDB-0001-salicylic-acid.org`. Org and Markdown may be mixed;
-- has the same `id` and `slug`;
-- has the same value, or the same absence, of `status`, `reaction_types`,
+The variants of a procedure:
+
+- have the same base name, the file name without code and suffix;
+- have the same `id` and `slug`;
+- have the same value, or the same absence, of `status`, `reaction_types`,
   `tags`, `yield_percent`, `precursors`, `structure_image`, and of
   `formula`, `mw`, `smiles` and `cas` in `[product]`;
 - may differ in every other field and in the body: `title`,
   `product.name`, `scale`, `hazards`, `references`, `authors`,
-  `checked_by`, `ai_model`, `date` and `lastmod`.
+  `checked_by`, `ai_model`, `language`, `date` and `lastmod`.
 
-Each difference in a shared field is an error on the translation that
-names the original, for example:
+The validator compares each variant with a reference variant: the file
+without a code, else the `.de` file. Each difference is an error on the
+other variant that names the reference, for example:
 
 ```text
-md/procedures/OSDB-0002-aspirin.de.md:yield_percent: error: must equal the value in md/procedures/OSDB-0002-aspirin.md (75); a translation shares it
+md/procedures/OSDB-0002-aspirin.de.md:yield_percent: error: must equal the value in md/procedures/OSDB-0002-aspirin.md (75); the variants of a procedure share it
 ```
 
-A German file with an identifier that no English file carries is a
-German-only procedure and is not compared with anything. A precursor may
-be a procedure in either language. When a page's precursor has no page in
-the same language, the link goes to its page in the other language.
+The optional front-matter field `language` states a procedure's language,
+`"de"` or `"en"`. When the file name has a code, the field must name the
+same language; the build adds it to a tagged file that lacks it. It also
+picks the section names that a file without a code is checked against.
+When the published variant's language differs from the site's, its page
+marks the procedure with a `lang` attribute.
 
 A German Reagents table has the columns **Reagenz**, **CAS**,
 **M (g/mol)**, **Menge**, **mmol** and **Äquiv.**, and German text uses
 decimal commas. Front-matter numbers such as `yield_percent` and
-`product.mw` stay TOML numbers with a decimal point in every language; the
-German page shows them with a comma.
+`product.mw` stay TOML numbers with a decimal point in every language; a
+German site shows them with a comma.
 
 ## Reading validator output
 

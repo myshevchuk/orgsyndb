@@ -10,9 +10,11 @@ verwendet. TOML ist der kleine Datenblock am Anfang jeder Vorschrift. Hugo
 ist das Programm, das aus den Vorschriftendateien die Website macht. Sie
 können dieser Anleitung folgen, ohne eines davon direkt zu benutzen.
 
-Die Website gibt es auf Englisch und auf Deutsch. Diese Anleitung
-beschreibt, wie Sie eine Vorschrift auf Deutsch schreiben (Abschnitte 1
-bis 6) und wie Sie eine englische Vorschrift übersetzen (Abschnitt 7).
+Die Website ist auf Deutsch, sofern die oder der Verantwortliche sie nicht
+auf Englisch umgestellt hat, und zeigt Vorschriften in jeder Sprache.
+Diese Anleitung beschreibt, wie Sie eine Vorschrift auf Deutsch schreiben
+(Abschnitte 1 bis 6) und wie Sie eine englische Vorschrift übersetzen
+(Abschnitt 7).
 
 Genaue Schreibweisen, erlaubte Werte und Feldregeln stehen in der
 [Schema-Referenz](SCHEMA.de.md). Diese Anleitung erklärt die Arbeit der
@@ -46,8 +48,10 @@ Sie die Datei nach diesem Muster:
 OSDB-NNNN-kurzer-name.de.md
 ```
 
-Das `.de` vor der Endung kennzeichnet die Datei als deutsch; eine Datei
-ohne Sprachkürzel ist englisch. In `kurzer-name` stehen nur Kleinbuchstaben,
+Das `.de` vor der Endung kennzeichnet die Datei als deutsch. Eine Datei
+ohne Sprachkürzel darf ebenfalls deutsch sein; dann tragen Sie im
+Datenblock `language = "de"` ein. In `kurzer-name` stehen nur
+Kleinbuchstaben,
 Ziffern und einzelne Bindestriche. Wenn Sie die unveränderte Vorlage
 zurückschicken, kann die oder der Verantwortliche die Ersetzungen auch für
 Sie vornehmen.
@@ -105,8 +109,8 @@ precursors = ["OSDB-0007"]
 ```
 
 Die Seite verlinkt dann OSDB-0007 unter **Vorstufen**, und die Seite von
-OSDB-0007 verlinkt automatisch unter **Verwendet in** zurück. Gibt es
-OSDB-0007 nur auf Englisch, führt der Link zur englischen Seite.
+OSDB-0007 verlinkt automatisch unter **Verwendet in** zurück, auch wenn
+OSDB-0007 nur auf Englisch vorliegt.
 
 Für eine Strukturformel legen Sie eine SVG- oder PNG-Datei in
 `static/structures/` der Sammlung ab und setzen einen Pfad wie:
@@ -139,7 +143,7 @@ gegebenenfalls die CAS-Nummer, SMILES, Ansatzgröße, Ausbeute,
 Reaktionstyp, Schlagwörter, Autoren, gegebenenfalls die Prüfenden,
 Erstellungs- und Änderungszeit sowie die Links zu Vorstufen und
 Folgevorschriften. Ziffern der Summenformel erscheinen tiefgestellt.
-Molmasse und Ausbeute erscheinen auf der deutschen Seite mit Dezimalkomma,
+Molmasse und Ausbeute erscheinen mit Dezimalkomma,
 mit `g/mol` und Prozentzeichen; neben SMILES steht eine Schaltfläche
 **Kopieren**. Reaktionstyp, Schlagwörter und Autoren verlinken auf Seiten
 mit verwandten Vorschriften. Autorennamen werden mit großem
@@ -247,7 +251,7 @@ Warten Sie auf diese Zeile:
 serving http://127.0.0.1:8000/ (Ctrl-C to stop)
 ```
 
-Öffnen Sie <http://127.0.0.1:8000/de/> in einem Browser auf demselben
+Öffnen Sie <http://127.0.0.1:8000/> in einem Browser auf demselben
 Rechner. Die Adresse funktioniert nur auf diesem Rechner. Drücken Sie im
 Terminal `Strg+C`, um die Vorschau zu beenden.
 
@@ -261,9 +265,11 @@ einer Änderung und starten Sie `orgsyndb serve` erneut.
 
 ## 7. Eine englische Vorschrift übersetzen
 
-Eine deutsche Datei mit derselben Nummer wie eine englische ist deren
-Übersetzung. Die beiden Seiten verlinken sich dann gegenseitig über die
-Sprachauswahl oben auf der Seite.
+Dateien mit derselben Nummer sind Fassungen einer Vorschrift. Die Website
+veröffentlicht jede Vorschrift genau einmal, in der Fassung, die zu ihrer
+Sprache passt: auf einer deutschen Website die `.de`-Datei, sonst die
+Datei ohne Sprachkürzel, sonst die `.en`-Datei. Eine Übersetzung ersetzt
+also auf der deutschen Website das englische Original.
 
 1. Kopieren Sie die englische Datei und fügen Sie `.de` vor der Endung
    ein: aus `OSDB-0002-aspirin.md` wird `OSDB-0002-aspirin.de.md`. Der
@@ -272,13 +278,15 @@ Sprachauswahl oben auf der Seite.
    Bedarf `references`. `scale`, `authors` und `checked_by` dürfen Sie
    anpassen.
 3. Setzen Sie `date` und `lastmod` auf den Zeitpunkt der Übersetzung.
+   Steht im Original `language = "en"`, ändern Sie es in `"de"` oder
+   löschen Sie die Zeile.
 4. Lassen Sie `id`, `slug`, `status`, `reaction_types`, `tags`,
    `yield_percent`, `precursors`, `structure_image` sowie `formula`, `mw`,
    `smiles` und `cas` im Block `[product]` genau wie im Original. Die
    Prüfung meldet jede Abweichung als Fehler, zum Beispiel:
 
    ```text
-   md/procedures/OSDB-0002-aspirin.de.md:yield_percent: error: must equal the value in md/procedures/OSDB-0002-aspirin.md (75); a translation shares it
+   md/procedures/OSDB-0002-aspirin.de.md:yield_percent: error: must equal the value in md/procedures/OSDB-0002-aspirin.md (75); the variants of a procedure share it
    ```
 
 5. Übersetzen Sie den Text, ersetzen Sie die englischen Überschriften und
@@ -286,6 +294,5 @@ Sprachauswahl oben auf der Seite.
    Dezimalkommas.
 
 Ändert sich später eine gemeinsame Angabe, etwa der Status, ändern Sie sie
-in beiden Dateien. Eine Vorschrift ohne Übersetzung erscheint nur auf der
-englischen Website; eine Vorschrift, die es nur auf Deutsch gibt, nur auf
-der deutschen.
+in beiden Dateien. Eine Vorschrift ohne deutsche Fassung erscheint auf der
+deutschen Website in ihrer vorhandenen Fassung.

@@ -110,7 +110,9 @@ and every allowed value.
 
 ### How the fields appear on the page
 
-The page shows `id` and a `status` badge above the title. Its information
+The labels below are those of an English site; a German site, the
+default, shows them in German, such as **Kopieren** for **Copy**. The page
+shows `id` and a `status` badge above the title. Its information
 panel repeats the ID and shows the product name, formula, molecular weight,
 CAS number when present, SMILES, scale, yield, reaction type, tags, authors,
 checkers when present, created and modified times, and precursor or used-in
@@ -225,9 +227,9 @@ run `orgsyndb serve` again.
 
 ## 7. Write in German or translate a procedure
 
-The site has a German part at <http://127.0.0.1:8000/de/>. A procedure
-written in German goes there, and a German translation of an English
-procedure appears there with a link to the English page and back.
+The site shows one language, German unless the owner has set it to
+English. A procedure in any language appears on it. When a procedure has
+a file in the site's language, that file is shown instead of the others.
 
 To start a new procedure in German, ask for a German stub:
 
@@ -238,14 +240,16 @@ orgsyndb new --md --lang de "Produktname"
 This creates a file such as `md/procedures/OSDB-0003-produktname.de.md`
 from the German template, with German notes and German section headings.
 The [German version of this guide](AUTHORING.de.md) explains it step by
-step.
+step. A file without `.de` may also be written in German; then add
+`language = "de"` to its information block.
 
-To translate an existing procedure, copy its file and add `.de` before the
-extension, for example `OSDB-0002-aspirin.md` to `OSDB-0002-aspirin.de.md`.
-Keep the `id`, `slug`, `status`, `reaction_types`, `tags`, `yield_percent`,
-`precursors`, `structure_image` and the product's `formula`, `mw`,
-`smiles` and `cas` exactly as they are; the check reports any difference
-as an error. Translate the title, the product name, the hazards and the
-body, set `date` and `lastmod` to the time of the translation, and use
-the German section headings and Reagents columns that the
-[procedure schema](SCHEMA.md#languages-and-translations) lists.
+To translate an existing procedure, copy its file and add the language
+code before the extension, for example `OSDB-0002-aspirin.md` to
+`OSDB-0002-aspirin.de.md`. Keep the `id`, `slug`, `status`,
+`reaction_types`, `tags`, `yield_percent`, `precursors`,
+`structure_image` and the product's `formula`, `mw`, `smiles` and `cas`
+exactly as they are; the check reports any difference as an error.
+Translate the title, the product name, the hazards and the body, set
+`date` and `lastmod` to the time of the translation, and use the section
+headings and Reagents columns of the new language, which the
+[procedure schema](SCHEMA.md#languages-and-variants) lists.

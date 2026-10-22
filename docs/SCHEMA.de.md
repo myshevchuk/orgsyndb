@@ -8,7 +8,8 @@ Fassung ist [SCHEMA.md](SCHEMA.md); bei Abweichungen gilt sie.
 Feldnamen, Org-Schlüsselwörter, Statuswerte, Reaktionstyp-Kürzel,
 Schlagwörter und die Meldungen des Validators sind in jeder Sprache
 englisch. Deutsch sind die Texte einer deutschen Vorschrift, ihre
-Abschnittsüberschriften und die Spalten ihrer Reagenzientabelle.
+Abschnittsüberschriften und die Spalten ihrer Reagenzientabelle, und auf
+einer deutschen Website die Oberfläche.
 
 Eine Markdown-Vorschrift beginnt mit einem TOML-Datenblock (*Front
 Matter*), der zwischen einer öffnenden und einer schließenden `+++`-Zeile
@@ -27,31 +28,30 @@ mit Uhrzeit und UTC-Versatz ohne Anführungszeichen, etwa
 Die Vorschriftennummer hat genau die Form `OSDB-NNNN`, wobei `NNNN` vier
 Ziffern von `0001` bis `9999` sind. `OSDB-0001` ist also gültig.
 `OSDB-0000` ist den Vorlagen vorbehalten und keine gültige Nummer.
-Innerhalb einer Sprache muss eine Nummer in allen Inhaltsverzeichnissen, die
-der Validator prüft, eindeutig sein. Eine englische Vorschrift und ihre
-deutsche Übersetzung teilen sich eine Nummer; siehe
-[Sprachen und Übersetzungen](#sprachen-und-übersetzungen).
+Eine Nummer muss in allen Inhaltsverzeichnissen, die der Validator prüft,
+eindeutig sein; nur die Fassungen einer Vorschrift in verschiedenen
+Sprachen teilen sich eine Nummer, siehe
+[Sprachen und Fassungen](#sprachen-und-fassungen).
 
 Der Dateiname hat diese Form:
 
 ```text
 OSDB-NNNN-kurzer-slug.md
 OSDB-NNNN-kurzer-slug.org
-OSDB-NNNN-kurzer-slug.de.md     (deutsch)
-OSDB-NNNN-kurzer-slug.de.org    (deutsch)
+OSDB-NNNN-kurzer-slug.de.md     (deutsche Fassung)
+OSDB-NNNN-kurzer-slug.en.org    (englische Fassung)
 ```
 
 Das Präfix `OSDB-NNNN` muss gleich der `id` der Vorschrift sein. Der kurze
 Slug nach dem Präfix besteht aus Kleinbuchstaben oder Ziffern, mit einzelnen
 Bindestrichen zwischen den Gruppen, wie in `OSDB-0001-ethyl-acetate.md`.
-Eine Datei ohne Sprachkürzel ist englisch. `.de` vor der Endung kennzeichnet
-eine deutsche Datei; `.en` und jedes andere Kürzel sind Fehler.
+Vor der Endung darf ein Sprachkürzel stehen, `.de` oder `.en`; jedes andere
+Kürzel ist ein Fehler.
 
 Der `slug` im Datenblock ist nicht der kurze Slug des Dateinamens. Er ist
 immer die Nummer in Kleinbuchstaben: aus `OSDB-0001` wird `osdb-0001`. Die
-Seite erhält so die URL `/procedures/osdb-0001/`, auf Deutsch
-`/de/procedures/osdb-0001/`. Fügen Sie kein Feld `url` hinzu; die URL ergibt
-sich aus `slug`.
+Seite erhält so die URL `/procedures/osdb-0001/`. Fügen Sie kein Feld `url`
+hinzu; die URL ergibt sich aus `slug`.
 
 Der Validator prüft Vorschriftendateien nur auf der obersten Ebene jedes
 Verzeichnisses. Ein Unterverzeichnis ist ein Fehler. Versteckte Dateien und
@@ -69,13 +69,13 @@ Eintrag muss Text enthalten.
 
 | Feld | Bedeutung | TOML-Typ | Pflicht | Regel | Beispiel |
 |---|---|---|---|---|---|
-| `id` | Die Vorschriftennummer. | String | Ja | Muss `OSDB-0001` bis `OSDB-9999` sein und unter den geprüften Vorschriften ihrer Sprache eindeutig. | `id = "OSDB-0001"` |
+| `id` | Die Vorschriftennummer. | String | Ja | Muss `OSDB-0001` bis `OSDB-9999` sein und in den geprüften Verzeichnissen eindeutig, außer unter den Fassungen einer Vorschrift. | `id = "OSDB-0001"` |
 | `slug` | Der Wert in der URL der Vorschrift. | String | Ja | Muss genau die `id` in Kleinbuchstaben sein. | `slug = "osdb-0001"` |
 | `title` | Der Produktname in der Seitenüberschrift. | Nicht leerer String | Ja | Darf nicht leer sein. | `title = "Produktname"` |
 | `date` | Wann die Vorschrift angelegt wurde. | Datum mit Zeitzonenversatz | Ja | Ohne Anführungszeichen. Der Versatz sollte der zu diesem Zeitpunkt geltende von Europe/Berlin sein. | `date = 2026-10-19T17:42:05+02:00` |
 | `lastmod` | Wann die Vorschrift zuletzt geändert wurde. | Datum mit Zeitzonenversatz | Ja | Ohne Anführungszeichen, nicht früher als `date`, mit dem zu diesem Zeitpunkt geltenden Versatz von Europe/Berlin. | `lastmod = 2026-10-19T17:42:05+02:00` |
 | `authors` | Alle, die die Vorschrift geschrieben haben. | Nicht leeres Array nicht leerer Strings | Ja | Mindestens ein Name. | `authors = ["A. Example"]` |
-| `status` | Der Bearbeitungsstand. | String | Ja | Genau `draft`, `checked` oder `retired`. Die deutsche Seite zeigt *Entwurf*, *geprüft* oder *zurückgezogen*. | `status = "draft"` |
+| `status` | Der Bearbeitungsstand. | String | Ja | Genau `draft`, `checked` oder `retired`. Eine deutsche Website zeigt *Entwurf*, *geprüft* oder *zurückgezogen*. | `status = "draft"` |
 | `reaction_types` | Die festgelegte Reaktionsklasse. | String-Array | Ja | Genau ein Kürzel aus dem Reaktionstyp-Vokabular. | `reaction_types = ["esterification"]` |
 | `tags` | Suchbegriffe. | Nicht leeres String-Array | Ja | Jedes Schlagwort besteht aus Kleinbuchstaben oder Ziffern mit einzelnen Bindestrichen zwischen den Gruppen. | `tags = ["acid-catalysed"]` |
 | `product` | Angaben zum Produkt. | Tabelle | Ja | Muss alle unten beschriebenen Pflichtfelder des Produkts enthalten. | `[product]` |
@@ -129,6 +129,7 @@ Lassen Sie ein optionales Feld weg, wenn es nicht zutrifft.
 | `checked_by` | Wer die Vorschrift geprüft hat. | Array nicht leerer Strings | Nein | Das Array darf leer sein, ein Eintrag aber nicht. | `checked_by = ["B. Example"]` |
 | `references` | Literaturangaben als Metadaten. | Array nicht leerer Strings | Nein | Das Array darf leer sein, ein Eintrag aber nicht. | `references = ["Example, A. J. Fictitious Chem. 2020, 1, 1."]` |
 | `ai_model` | Das KI-Modell, das beim Schreiben geholfen hat. | Nicht leerer String | Nein | Weglassen, wenn keine KI beteiligt war. Der Wert `"none"` ist ein Fehler. | `ai_model = "example-model-1"` |
+| `language` | Die Sprache, in der die Vorschrift geschrieben ist. | String | Nein | `de` oder `en`; trägt der Dateiname ein Sprachkürzel, muss es dieselbe Sprache sein. | `language = "de"` |
 
 Das Argument `--static-dir` bestimmt, wo der Validator ein
 `structure_image` sucht. Ohne das Argument nimmt er `static` im aktuellen
@@ -208,7 +209,7 @@ Org-Regeln, ohne Exporte zu suchen.
 
 `reaction_types` enthält genau ein Kürzel aus dieser Tabelle. Das Kürzel
 ist der Wert im Datenblock, in jeder Sprache. Die Bezeichnungen sind die
-Namen auf der englischen und der deutschen Website.
+Namen, die eine englische und eine deutsche Website zeigen.
 
 | Kürzel | Englisch | Deutsch |
 |---|---|---|
@@ -231,12 +232,13 @@ Namen auf der englischen und der deutschen Website.
 Das Vokabular steht in `site/data/reaction_types.toml`. Jeder Eintrag ist
 ein Kürzel aus Kleinbuchstaben und Bindestrichen, dessen Tabelle ein nicht
 leeres `label` und ein nicht leeres `label_de` enthält. Fehlt `label_de`,
-zeigt die deutsche Seite `label`; ein leeres `label_de` lehnt der Validator
-ab.
+zeigt eine deutsche Website `label`; ein leeres `label_de` lehnt der
+Validator ab.
 
 ## Abschnitte des Textes
 
-Jede deutsche Vorschrift hat diese acht Abschnitte in dieser Reihenfolge:
+Jede Vorschrift auf Deutsch hat diese acht Abschnitte in dieser
+Reihenfolge:
 
 1. Zusammenfassung
 2. Reagenzien
@@ -249,8 +251,10 @@ Jede deutsche Vorschrift hat diese acht Abschnitte in dieser Reihenfolge:
 
 Eine englische Vorschrift verwendet stattdessen Summary, Reagents,
 Procedure, Workup and Purification, Characterization, Notes, Hazards and
-Waste Disposal und References. Welche Namen gelten, hängt allein am
-Dateinamen: Eine Datei ohne `.de` braucht die englischen.
+Waste Disposal und References. Welche Namen gelten, bestimmt das
+Sprachkürzel im Dateinamen, sonst das Feld `language`. Eine Datei ohne
+beides wird mit dem Satz verglichen, zu dem ihre Überschriften besser
+passen; sie darf also beide verwenden.
 
 In Markdown sind das Überschriften der zweiten Ebene wie
 `## Zusammenfassung`, in Org Überschriften der obersten Ebene wie
@@ -267,48 +271,58 @@ schließende `#`-Folge. Eine Überschrift in einem umzäunten Codeblock zählt
 nicht. Weitere Überschriften der zweiten Ebene und Überschriften anderer
 Ebenen sind erlaubt.
 
-## Sprachen und Übersetzungen
+## Sprachen und Fassungen
 
-Die Website hat einen englischen Teil unter `/` und einen deutschen unter
-`/de/`. Die Sprache einer Vorschrift ist das Kürzel in ihrem Dateinamen:
-keines für Englisch, `.de` für Deutsch. Eine deutsche Vorschrift erscheint
-nur im deutschen Teil, eine englische nur im englischen.
+Der Dateiname einer Vorschrift darf vor der Endung ein Sprachkürzel
+tragen, `.de` oder `.en`. Jedes andere Kürzel ist ein Fehler. Eine Datei
+ohne Kürzel darf in jeder der beiden Sprachen geschrieben sein. Dateien
+mit derselben Nummer sind *Fassungen* einer Vorschrift, zum Beispiel
+`OSDB-0001-salicylic-acid.org` und ihre deutsche Übersetzung
+`OSDB-0001-salicylic-acid.de.org`. Org und Markdown dürfen gemischt
+werden. Unter einer Nummer darf jedes Kürzel, und das Fehlen eines
+Kürzels, einmal vorkommen.
 
-Eine deutsche Datei, deren Nummer auch eine englische Datei trägt, ist
-deren Übersetzung. Die beiden Seiten verlinken sich dann gegenseitig. Eine
-Übersetzung
+Die Website hat eine Sprache, festgelegt durch `locale` in der Datei
+`site/hugo.toml` der Anwendung (voreingestellt `"de"`). Jede Vorschrift
+wird genau einmal veröffentlicht, in der Fassung, die zu dieser Sprache
+passt: die Datei mit diesem Kürzel, sonst die Datei ohne Kürzel, sonst
+eine Datei mit dem Kürzel der anderen Sprache. Eine Vorstufe darf jede
+Vorschrift sein, in welcher Sprache ihre Fassungen auch sind.
 
-- hat den Dateinamen des Originals mit `.de` vor der Endung, zum Beispiel
-  `OSDB-0001-salicylic-acid.de.org` neben `OSDB-0001-salicylic-acid.org`.
-  Org und Markdown dürfen gemischt werden;
-- hat dieselbe `id` und denselben `slug`;
-- hat denselben Wert, oder dasselbe Fehlen, von `status`,
+Die Fassungen einer Vorschrift
+
+- haben denselben Grundnamen, den Dateinamen ohne Kürzel und Endung;
+- haben dieselbe `id` und denselben `slug`;
+- haben denselben Wert, oder dasselbe Fehlen, von `status`,
   `reaction_types`, `tags`, `yield_percent`, `precursors`,
   `structure_image` sowie `formula`, `mw`, `smiles` und `cas` in
   `[product]`;
-- darf sich in allen übrigen Feldern und im Text unterscheiden: `title`,
+- dürfen sich in allen übrigen Feldern und im Text unterscheiden: `title`,
   `product.name`, `scale`, `hazards`, `references`, `authors`,
-  `checked_by`, `ai_model`, `date` und `lastmod`.
+  `checked_by`, `ai_model`, `language`, `date` und `lastmod`.
 
-Jede Abweichung in einem gemeinsamen Feld ist ein Fehler an der
-Übersetzung, der das Original nennt, zum Beispiel:
+Der Validator vergleicht jede Fassung mit einer Bezugsfassung: der Datei
+ohne Kürzel, sonst der `.de`-Datei. Jede Abweichung ist ein Fehler an der
+anderen Fassung, der die Bezugsfassung nennt, zum Beispiel:
 
 ```text
-md/procedures/OSDB-0002-aspirin.de.md:yield_percent: error: must equal the value in md/procedures/OSDB-0002-aspirin.md (75); a translation shares it
+md/procedures/OSDB-0002-aspirin.de.md:yield_percent: error: must equal the value in md/procedures/OSDB-0002-aspirin.md (75); the variants of a procedure share it
 ```
 
-Eine deutsche Datei mit einer Nummer, die keine englische Datei trägt, ist
-eine rein deutsche Vorschrift und wird mit nichts verglichen. Eine Vorstufe
-darf eine Vorschrift in jeder Sprache sein. Hat die Vorstufe einer Seite
-keine Seite in deren Sprache, führt der Link zur Seite in der anderen
-Sprache.
+Das optionale Feld `language` gibt die Sprache einer Vorschrift an,
+`"de"` oder `"en"`. Trägt der Dateiname ein Kürzel, muss das Feld dieselbe
+Sprache nennen; einer Datei mit Kürzel, der das Feld fehlt, fügt der Build
+es hinzu. Bei einer Datei ohne Kürzel bestimmt es, welche
+Abschnittsnamen gelten. Ist die veröffentlichte Fassung in einer anderen
+Sprache als die Website, kennzeichnet ihre Seite die Vorschrift mit einem
+`lang`-Attribut.
 
 Die Reagenzientabelle einer deutschen Vorschrift hat die Spalten
 **Reagenz**, **CAS**, **M (g/mol)**, **Menge**, **mmol** und **Äquiv.**;
 ein Katalysator hat `kat.` in **mmol** und **Äquiv.** Deutscher Text
 schreibt Dezimalkommas. Zahlen im Datenblock wie `yield_percent` und
-`product.mw` bleiben in jeder Sprache TOML-Zahlen mit Dezimalpunkt; die
-deutsche Seite zeigt sie mit Komma.
+`product.mw` bleiben in jeder Sprache TOML-Zahlen mit Dezimalpunkt; eine
+deutsche Website zeigt sie mit Komma.
 
 ## Meldungen des Validators lesen
 

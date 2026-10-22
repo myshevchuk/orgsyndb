@@ -1,6 +1,6 @@
 #+TITLE: Writing OrgSynDB procedures in Org
 #+CREATED: [2026-10-20 Tue 00:06:38]
-#+LAST_MODIFIED: [2026-10-22 Thu 19:45:00]
+#+LAST_MODIFIED: [2026-10-22 Thu 21:47:00]
 #+AI_MODEL: gpt-5.6-sol
 #+OPTIONS: toc:t num:nil
 #+STARTUP: showall
@@ -8,6 +8,7 @@
 #+AI_PASS: doc-writer gpt-5.6-sol [2026-10-20 Tue 20:41] -- theme, page fields, structure images, reagents, and printing
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-20 Tue 20:49] -- doc-writer pass line corrected from gpt-5 to the pinned run model
 #+AI_PASS: doc-writer claude-opus-5-5 [2026-10-22 Thu 19:45] -- German procedures and translations
+#+AI_PASS: doc-writer claude-opus-5-5 [2026-10-22 Thu 21:47] -- one site language and procedure variants
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -104,7 +105,9 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
 
 * Understand the finished page
 
-  The page shows the procedure ID and a status badge above ~#+TITLE~. Its
+  The labels below are those of an English site; a German site, the
+  default, shows them in German, such as *Kopieren* for *Copy*. The page
+  shows the procedure ID and a status badge above ~#+TITLE~. Its
   metadata panel repeats the ID and shows the product fields, scale, yield,
   reaction type, tags, authors, checkers when set, created and modified
   times, and precursor or used-in links. Formula digits appear as subscripts.
@@ -235,9 +238,12 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
 
 * Write in German or translate
 
-  The site has an English part at ~/~ and a German part at ~/de/~. The
-  language of a procedure is the code before its suffix: none for English,
-  ~.de~ for German. Create a German stub with:
+  The site has one language, set by ~locale~ in the application's
+  ~site/hugo.toml~: ~"de"~ by default, or ~"en"~. A file name may carry a
+  language code before its suffix, ~.de~ or ~.en~; files with the same ID
+  are variants of one procedure. Every procedure is published once: the
+  variant tagged with the site's language, else the one without a code,
+  else one tagged with the other language. Create a German stub with:
 
 #+begin_src sh
   orgsyndb new --lang de "Produktname"
@@ -254,6 +260,17 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   status values, reaction-type slugs and tags stay English, and so do the
   weekday names in ~#+CREATED~ and ~#+LAST_MODIFIED~.
 
+  A file without a code may use the English or the German headings. To
+  state its language, add a custom-front-matter line before ~:product~:
+
+#+begin_src org
+  #+HUGO_CUSTOM_FRONT_MATTER: :language "de"
+#+end_src
+
+  On a tagged file the field must name the code's language; the build adds
+  it when it is missing. A page whose procedure is in another language than
+  the site carries a ~lang~ attribute.
+
   To translate a procedure, copy ~OSDB-0001-x.org~ to ~OSDB-0001-x.de.org~
   and translate the title, the product ~name~, the hazards, the references
   if needed, and the body. Set both timestamps to the time of the
@@ -264,8 +281,7 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   original and its translation may use different formats.
 
   The export keeps the language code: ~OSDB-0001-x.de.org~ becomes
-  ~build/export/OSDB-0001-x.de.md~, its page ~/de/procedures/osdb-0001/~,
-  and ~orgsyndb pdf~ prints it to ~pdf/OSDB-0001-x.de.pdf~ with a German
-  page footer. The English and German pages link to each other from the
-  site header. Lists, taxonomy pages and search show only the procedures
-  of their own language. [[file:SCHEMA.md][The procedure schema]] gives the exact rules.
+  ~build/export/OSDB-0001-x.de.md~. On a German site it is published at
+  ~/procedures/osdb-0001/~ in place of ~OSDB-0001-x.org~, and ~orgsyndb pdf~
+  prints it to ~pdf/OSDB-0001-x.de.pdf~ with a German page footer.
+  [[file:SCHEMA.md][The procedure schema]] gives the exact rules.

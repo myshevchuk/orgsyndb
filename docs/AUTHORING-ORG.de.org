@@ -1,6 +1,6 @@
 #+TITLE: OrgSynDB-Vorschriften in Org schreiben
 #+CREATED: [2026-10-22 Thu 19:47:33]
-#+LAST_MODIFIED: [2026-10-22 Thu 19:47:33]
+#+LAST_MODIFIED: [2026-10-22 Thu 21:50:00]
 #+AI_MODEL: claude-opus-5-5
 #+LANGUAGE: de
 #+OPTIONS: toc:t num:nil
@@ -8,7 +8,9 @@
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
-Vorschriften. Org-Schlüsselwörter, Feldnamen, Statuswerte,
+Vorschriften. Die Website hat eine Sprache, festgelegt durch ~locale~ in
+~site/hugo.toml~ der Anwendung: ~"de"~ (voreingestellt) oder ~"en"~. Sie
+zeigt jede Vorschrift, in welcher Sprache auch immer. Org-Schlüsselwörter, Feldnamen, Statuswerte,
 Reaktionstyp-Kürzel, Schlagwörter und die Wochentage der Zeitstempel
 bleiben auch in einer deutschen Vorschrift englisch.
 
@@ -84,8 +86,8 @@ bleiben auch in einer deutschen Vorschrift englisch.
 #+end_src
 
   Die Seite verlinkt dann OSDB-0007 unter *Vorstufen*, und die Seite von
-  OSDB-0007 verlinkt automatisch unter *Verwendet in* zurück. Gibt es
-  OSDB-0007 nur auf Englisch, führt der Link zur englischen Seite.
+  OSDB-0007 verlinkt automatisch unter *Verwendet in* zurück, auch wenn
+  OSDB-0007 nur auf Englisch vorliegt.
 
   Alle Schlagwörter stehen in der Zeile ~#+HUGO_TAGS~, durch Leerzeichen
   getrennt:
@@ -117,7 +119,7 @@ bleiben auch in einer deutschen Vorschrift englisch.
 * Die fertige Seite verstehen
 
   Über ~#+TITLE~ stehen die Vorschriftennummer und ein Statusabzeichen,
-  auf der deutschen Seite /Entwurf/, /geprüft/ oder /zurückgezogen/. Das
+  auf einer deutschen Website /Entwurf/, /geprüft/ oder /zurückgezogen/. Das
   Datenfeld wiederholt die Nummer und zeigt die Produktangaben,
   Ansatzgröße, Ausbeute, Reaktionstyp, Schlagwörter, Autoren,
   gegebenenfalls die Prüfenden, Erstellungs- und Änderungszeit und die
@@ -207,9 +209,11 @@ bleiben auch in einer deutschen Vorschrift englisch.
 
 * Eine englische Vorschrift übersetzen
 
-  Eine deutsche Datei mit derselben Nummer wie eine englische ist deren
-  Übersetzung. Die beiden Seiten verlinken sich über die Sprachauswahl im
-  Seitenkopf.
+  Dateien mit derselben Nummer sind Fassungen einer Vorschrift. Die
+  Website veröffentlicht jede Vorschrift genau einmal: die Fassung mit dem
+  Sprachkürzel der Website, sonst die ohne Kürzel, sonst die mit dem
+  Kürzel der anderen Sprache. Auf einer deutschen Website ersetzt eine
+  Übersetzung also das englische Original.
 
   1. Kopieren Sie ~OSDB-0001-x.org~ nach ~OSDB-0001-x.de.org~. Der übrige
      Name bleibt gleich. Original und Übersetzung dürfen verschiedene
@@ -220,7 +224,8 @@ bleiben auch in einer deutschen Vorschrift englisch.
      ~:checked_by~ dürfen Sie anpassen.
   3. Setzen Sie ~#+CREATED~ und ~#+LAST_MODIFIED~ auf den Zeitpunkt der
      Übersetzung und ~#+AI_MODEL~ auf das Modell, das beim Übersetzen
-     geholfen hat, oder ~none~.
+     geholfen hat, oder ~none~. Steht im Original ~:language "en"~,
+     ändern Sie es in ~"de"~ oder löschen Sie die Zeile.
   4. Lassen Sie ~#+HUGO_SLUG~, ~:id~, ~:status~, ~:reaction_types~,
      ~#+HUGO_TAGS~, ~:yield_percent~, ~:precursors~, ~:structure_image~
      sowie ~formula~, ~mw~, ~smiles~ und ~cas~ in ~:product~ genau wie im
@@ -231,9 +236,20 @@ bleiben auch in einer deutschen Vorschrift englisch.
      Dezimalkommas.
 
   Ändert sich später eine gemeinsame Angabe, ändern Sie sie in beiden
-  Dateien. Eine Vorschrift ohne Übersetzung erscheint nur auf der
-  englischen Website. Listen, Schlagwort- und Reaktionstypseiten und die
-  Suche zeigen nur die Vorschriften ihrer eigenen Sprache.
+  Dateien. Eine Vorschrift ohne deutsche Fassung erscheint auf der
+  deutschen Website in ihrer vorhandenen Fassung; ist diese in einer
+  anderen Sprache bekannt, trägt ihre Seite ein ~lang~-Attribut.
+
+  Eine Datei ohne Kürzel darf die deutschen oder die englischen
+  Überschriften verwenden. Um ihre Sprache anzugeben, fügen Sie vor
+  ~:product~ diese Zeile ein:
+
+#+begin_src org
+  #+HUGO_CUSTOM_FRONT_MATTER: :language "de"
+#+end_src
+
+  Bei einer Datei mit Kürzel muss das Feld dieselbe Sprache nennen; fehlt
+  es, ergänzt der Build es.
 
 * Exportieren, prüfen und ansehen
 
@@ -252,8 +268,8 @@ bleiben auch in einer deutschen Vorschrift englisch.
   scheitert.
 
   Der Export behält das Sprachkürzel: aus ~OSDB-0001-x.de.org~ wird
-  ~build/export/OSDB-0001-x.de.md~ und daraus die Seite
-  ~/de/procedures/osdb-0001/~.
+  ~build/export/OSDB-0001-x.de.md~. Auf einer deutschen Website erscheint
+  es unter ~/procedures/osdb-0001/~ an Stelle von ~OSDB-0001-x.org~.
 
   Die Org-Dateien bleiben die maßgebliche Quelle. Bearbeiten Sie
   ~build/export/~ nicht. Jeder Export baut das ganze Verzeichnis neu, löscht
@@ -285,7 +301,7 @@ bleiben auch in einer deutschen Vorschrift englisch.
   orgsyndb serve
 #+end_src
 
-  Öffnen Sie http://127.0.0.1:8000/de/, sobald der Befehl meldet, dass er
+  Öffnen Sie http://127.0.0.1:8000/, sobald der Befehl meldet, dass er
   läuft. Der Server ist nur vom selben Rechner aus erreichbar. Er lädt
   nicht automatisch neu; beenden Sie ihn nach einer Änderung mit ~Strg+C~
   und starten Sie ihn neu.

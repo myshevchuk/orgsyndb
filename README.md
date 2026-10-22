@@ -7,8 +7,8 @@ build treats both formats alike.
 
 The finished site is static. Viewing it loads no fonts, analytics, or other
 resources from the internet. It has a responsive light and dark theme,
-full-text search, browse pages, and an A4 print layout, in English and in
-German.
+full-text search, browse pages, and an A4 print layout. Its interface is
+German by default and can be switched to English.
 
 ## Application and collections
 
@@ -32,8 +32,8 @@ goes into the collection. The application's checkout receives only its two
 caches of fetched tools, `.emacs-batch/` and `.tools/`.
 
 [`examples/demo/`](examples/demo/) is a complete collection with eight
-sample procedures, each with a German translation. It shows the layout, and
-the tests build it.
+sample procedures in English, each with a German translation. It shows the
+layout, and the tests build it.
 
 `orgsyndb.toml` must contain exactly `format = 1`. The number is the
 version of the collection layout; an application that does not know a
@@ -135,7 +135,8 @@ A successful build of the demo collection prints these steps:
 ==> export: running ox-hugo
 ==> export: installing build/export/
 ==> validate: validate.py --org-root org/procedures --static-dir static build/export md/procedures
-validated 14 files: 0 errors, 0 warnings
+validated 28 files: 0 errors, 0 warnings
+==> build: staging 8 procedures for locale de
 ==> build: hugo
 ==> build: pagefind
 ```
@@ -154,7 +155,9 @@ option, an Org stub uses `#+AI_MODEL: none`, and a Markdown stub has no
 
 ## Use the site
 
-The built site provides these pages:
+The built site provides these pages. Buttons and messages are named below
+as an English site shows them; the German site, the default, shows the
+German equivalents, such as **Kopieren** for **Copy**.
 
 - `/` introduces the collection, searches it, lists recent procedures, and
   links reaction types and tags with their procedure counts.
@@ -168,8 +171,6 @@ The built site provides these pages:
   `/reaction_types/esterification/`, `/tags/sample-data/`, and
   `/authors/a.-example/` are term-page URLs.
 - `/search/` provides full-text search and filters.
-- `/de/` and every path below it are the German versions of these pages,
-  such as `/de/procedures/osdb-NNNN/`. See [Languages](#languages).
 
 Search finds a procedure by its ID, product name, CAS number, any part of
 its SMILES string, a tag, or a word in the procedure text. SMILES searches
@@ -192,48 +193,54 @@ reports **Selected: press Ctrl+C** instead.
 
 ## Languages
 
-The site is built in English, at `/`, and in German, at `/de/`. Every
-interface text, the reaction-type labels, the Pagefind search interface
-and the PDF page footer follow the page's language. The interface strings
-are in `site/i18n/en.toml` and `site/i18n/de.toml`, and the German
-reaction-type labels are the `label_de` entries of
-`site/data/reaction_types.toml`.
+The site has one language, set by `locale` in the application's
+`site/hugo.toml`: `"de"` (the default) or `"en"`. It applies to every
+collection the application builds. The language decides the interface
+text, the reaction-type labels, the Pagefind search interface, the PDF
+page footer and the decimal separator, and it decides which file of a
+procedure is published. The interface strings are in `site/i18n/de.toml`
+and `site/i18n/en.toml`, and the German reaction-type labels are the
+`label_de` entries of `site/data/reaction_types.toml`.
 
-A procedure's language is a code in its file name. `OSDB-0001-x.org` and
-`OSDB-0001-x.md` are English; `OSDB-0001-x.de.org` and `OSDB-0001-x.de.md`
-are German. A German file whose ID also has an English file is its
-translation, and the two pages link to each other from a language switch in
-the site header. A translation keeps the original's ID, base name and
-language-neutral facts: status, reaction type, tags, yield, precursors,
-structure image, and the product's formula, molecular weight, SMILES and
-CAS number. `orgsyndb validate` reports any difference as an error. Title,
-product name, scale, hazards, references, authors, timestamps and the body
-are translated freely. A German file without an English one is a
-German-only procedure. Translation is optional: an untranslated procedure
-appears only on the English site.
+A procedure file's name may carry a language code before its suffix:
+`OSDB-0001-x.de.org` or `OSDB-0001-x.en.md`. Files with the same ID are
+variants of one procedure. Every procedure is published, once: for each
+ID the build takes the file tagged with the site's language if there is
+one, else the file without a code, else a file tagged with another
+language. With `locale = "de"`, `OSDB-0001-x.de.org` is published in place
+of `OSDB-0001-x.org`, while `OSDB-0001-x.en.org` would lose to it. There
+is no language switch on the site.
+
+Variants share their ID, base name and language-neutral facts: status,
+reaction type, tags, yield, precursors, structure image, and the product's
+formula, molecular weight, SMILES and CAS number. `orgsyndb validate`
+reports any difference as an error. Title, product name, scale, hazards,
+references, authors, timestamps and the body are translated freely.
+
+A procedure may state its language in an optional front-matter field,
+`language = "de"` or `"en"`, which must match the file name's code when
+both are present. A tagged file gets it on publication. The page marks a
+procedure whose language differs from the site's with a `lang` attribute.
 
 German procedures use German section headings, from `Zusammenfassung` to
 `Literatur`, and German Reagents columns; the
-[procedure schema](docs/SCHEMA.md#languages-and-translations) lists them.
-Create a German stub with:
+[procedure schema](docs/SCHEMA.md#languages-and-variants) lists them. A
+file without a code may use the English or the German headings. Create a
+stub in a given language with:
 
 ```sh
 orgsyndb new --lang de "Produktname"
 orgsyndb new --md --lang de "Produktname"
 ```
 
-Lists, taxonomy pages and search show only the procedures of their own
-language. A precursor or used-in link to a procedure that has no page in
-the current language goes to its page in the other language.
-
 ## Print procedures
 
 `orgsyndb pdf` uses WeasyPrint to create A4 PDFs in the collection's
-`pdf/`, one per procedure file; a German translation gives
-`pdf/<file name>.de.pdf`. These
-PDFs have the procedure ID and title in a running header and `Page N of M`,
-or `Seite N von M`, in the footer. Navigation, buttons, and an empty structure-image placeholder
-are omitted. The sample-data banner remains. Tables stay within the margins,
+`pdf/`, one per published procedure, named after its file, such as
+`pdf/OSDB-0001-salicylic-acid.de.pdf`. These PDFs have the procedure ID
+and title in a running header and `Seite N von M`, or `Page N of M` on an
+English site, in the footer. Navigation, buttons, and an empty
+structure-image placeholder are omitted. The sample-data banner remains. Tables stay within the margins,
 numeric columns do not wrap, and table rows and numbered steps stay together
 across page breaks.
 
@@ -291,7 +298,7 @@ prefix are relative to the collection.
 | `build` | Runs export and validation, builds the site into `public/` with Hugo, then indexes it with Pagefind. A validation error stops the command before Hugo. |
 | `serve [--port N]` | Runs `build`, then serves `public/` on `http://127.0.0.1:N/` until `Ctrl-C`. The default port is `8000`. |
 | `pdf` | Runs `build`, removes the previous `pdf/`, and renders every procedure to `pdf/<source-file-name>.pdf` with WeasyPrint. |
-| `new [--md] [--lang LANG] [--ai-model ID] TITLE...` | Creates an Org stub with the next free ID, or a Markdown stub with `--md`. `--lang de` creates a German stub named `<ID>-<slug>.de.org` or `.de.md`. It never overwrites an existing file. |
+| `new [--md] [--lang LANG] [--ai-model ID] TITLE...` | Creates an Org stub with the next free ID, or a Markdown stub with `--md`. `--lang de` or `--lang en` creates a stub in that language named `<ID>-<slug>.<LANG>.org` or `.md`. It never overwrites an existing file. |
 | `init DIR` | Creates an empty collection in `DIR`: `orgsyndb.toml`, a `.gitignore` for the generated directories, and empty source directories. It refuses a directory that already holds `orgsyndb.toml`, and it does not run `git init`. |
 | `clean` | Removes `build/`, `public/`, and `pdf/`. |
 | `clean --all` | Also removes the application's `.emacs-batch/` and `.tools/`. Their contents are fetched again on the next relevant run. |
