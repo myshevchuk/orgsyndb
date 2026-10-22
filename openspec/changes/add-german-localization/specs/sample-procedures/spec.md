@@ -1,0 +1,78 @@
+## ADDED Requirements
+
+### Requirement: German sample translations
+Every sample procedure of the theme sample set and the seeds SHALL have a German translation beside it, in the same format, named with `.de` before the suffix (for example `org/procedures/OSDB-0001-salicylic-acid.de.org` and `md/procedures/OSDB-0002-aspirin.de.md`). Each translation meets the localization spec, carries the same `authors` as its original, has a Reagents table with as many rows as the original's, and writes decimal commas in its text and table. The German long sample has at least 15 numbered steps under `Durchführung` and at least 6 numbered notes under `Anmerkungen`.
+
+#### Scenario: Every sample has a German translation
+- **WHEN** a test reads each sample and its `.de` twin
+- **THEN** the twin exists, has the same `id`, `status`, `reaction_types`, `tags`, `yield_percent`, `precursors`, `structure_image`, `authors` and product formula, weight, SMILES and CAS, a non-empty product name, and as many table rows
+- **AND** the German OSDB-0004 has at least 15 steps and 6 notes
+
+## MODIFIED Requirements
+
+<!-- Reason: German samples state the sample marking in German. -->
+
+### Requirement: Sample marking
+Every sample procedure SHALL have `status = "draft"` and `sample-data` among its `tags`. Its `authors` are fictitious names of the form `<Initial>. Example`, and it names the model that wrote it:
+- Org sources carry `#+AI_MODEL` set to the writing model's exact identifier, never `none`.
+- Markdown sources carry `ai_model` set to the same kind of identifier.
+
+The Summary section states that the procedure is sample data whose quantities are not experimentally verified; a German sample's `Zusammenfassung` says `nicht experimentell überprüft`.
+
+#### Scenario: Seeds are marked as samples
+- **WHEN** a test reads every sample procedure, in either language
+- **THEN** each has `status` equal to `draft` and `sample-data` in its tags, every author matches `^[A-Z]\. Example$`, and its `#+AI_MODEL` or `ai_model` is present and is not `none`
+- **AND** its Summary section, with whitespace collapsed, contains `not experimentally verified`, or its `Zusammenfassung` contains `nicht experimentell überprüft`
+
+<!-- Reason: German tables have German columns and decimal commas. -->
+
+### Requirement: Quantities agree
+Every sample procedure's Reagents table SHALL have the columns `Reagent | CAS | MW (g/mol) | Amount | mmol | Equiv`, or `Reagenz | CAS | M (g/mol) | Menge | mmol | Äquiv.` in a German sample, and its numbers SHALL agree with each other and with the front matter. A German table may write decimal commas. A row whose `mmol` or `Equiv` is `cat.` (German `kat.`) is a catalyst and is exempt from the rules below.
+- **Mass and moles.** Where `Amount` begins with a mass `<number> g`, `mmol` equals `1000 × mass / MW` within 1 %.
+- **Limiting reagent.** Exactly one row has `Equiv` `1.0`. Every other row's `Equiv` equals its `mmol` divided by that row's `mmol`, within 0.05.
+- **Scale.** When `scale` is given in `mmol`, its number equals the limiting row's `mmol` within 1 %.
+- **Product weight.** `product.mw` equals the formula weight of `product.formula`, computed from standard atomic weights (C 12.011, H 1.008, N 14.007, O 15.999, Na 22.990, P 30.974, S 32.06, Cl 35.45, K 39.098, Br 79.904), within 0.02 g/mol.
+- **CAS numbers.** Every CAS number in the table passes the CAS check-digit rule.
+
+#### Scenario: Seed tables are consistent
+- **WHEN** a test parses the Reagents table of every sample procedure, in either language (an Org table or a Markdown pipe table, in the source file) and applies the rules above
+- **THEN** every rule holds for every row
+
+#### Scenario: Translated sample tables are consistent (checker)
+- **WHEN** a test gives the checker a German table with decimal commas and `kat.` rows, then the same table with a wrong `mmol`, then an English table under a German file name
+- **THEN** it accepts the first and rejects the other two
+
+<!-- Reason: the counts are of the English originals. -->
+
+### Requirement: Theme sample set
+The repository SHALL ship, besides the two seeds, these six sample procedures:
+
+| File | Product | Reaction type | Precursors |
+|---|---|---|---|
+| `org/procedures/OSDB-0003-isopentyl-acetate.org` | isopentyl acetate (C7H14O2, CAS `123-92-2`), by Fischer esterification of isopentyl alcohol with acetic acid | `esterification` | none |
+| `org/procedures/OSDB-0004-4-acetylbiphenyl.org` | 4-acetylbiphenyl (C14H12O, CAS `92-91-1`), by Suzuki coupling of 4′-bromoacetophenone with phenylboronic acid | `cross-coupling` | none |
+| `org/procedures/OSDB-0005-1-biphenyl-4-yl-ethanol.org` | 1-(biphenyl-4-yl)ethanol (C14H14O, CAS `3562-73-0`), by sodium borohydride reduction of 4-acetylbiphenyl | `reduction` | `OSDB-0004` |
+| `org/procedures/OSDB-0006-dibenzylideneacetone.org` | dibenzylideneacetone (C17H14O, CAS `538-58-9`), by Claisen–Schmidt condensation of benzaldehyde with acetone | `aldol-condensation` | none |
+| `org/procedures/OSDB-0007-ethyl-cinnamate.org` | ethyl (E)-cinnamate (C11H12O2, CAS `103-36-6`), by Wittig olefination of benzaldehyde with ethyl (triphenylphosphoranylidene)acetate | `olefination` | none |
+| `md/procedures/OSDB-0008-cinnamic-acid.md` | (E)-cinnamic acid (C9H8O2, CAS `140-10-3`), by saponification of ethyl (E)-cinnamate with aqueous sodium hydroxide in ethanol, then acidification with hydrochloric acid | `hydrolysis` | `OSDB-0007` |
+
+The full set meets the following:
+- **Counts.** There are exactly six Org and two Markdown English sample procedures, with at least five distinct reaction types among them. Their German translations are not counted.
+- **Product CAS.** Every sample's `product` has a `cas` that resolves to that product on PubChem. The orchestrator checks this during review, because the tests cannot reach the network.
+- **Tags.** Every sample has at least one tag besides `sample-data`.
+- **Structure image.** OSDB-0003 sets `structure_image = "structures/osdb-0003.svg"`.
+- **Chains.** Besides the seeds' OSDB-0001 → OSDB-0002, OSDB-0004 → OSDB-0005 and OSDB-0007 → OSDB-0008 are precursor chains. No procedure needs both a precursor and a used-in link.
+- **Long sample.** OSDB-0004 is the long sample: at least 15 numbered steps under `Procedure` and at least 6 numbered notes under `Notes`. Its Reagents table holds at least four non-catalyst rows, and the longest cell text of its `Reagent` column has at least 40 characters.
+
+#### Scenario: Set, counts and chain
+- **WHEN** a test reads every sample procedure
+- **THEN** the files above exist with those IDs, reaction types and precursors, there are six Org and two Markdown English samples, and at least five distinct reaction types
+- **AND** every product has a `cas` that passes the check-digit rule, and every sample has a tag besides `sample-data`
+
+#### Scenario: Structure image is set
+- **WHEN** a test reads `org/procedures/OSDB-0003-isopentyl-acetate.org`
+- **THEN** its custom-front-matter lines set `structure_image` to `structures/osdb-0003.svg`, and `static/structures/osdb-0003.svg` exists
+
+#### Scenario: Long sample
+- **WHEN** a test reads `org/procedures/OSDB-0004-4-acetylbiphenyl.org`
+- **THEN** its `Procedure` section has at least 15 numbered items, its `Notes` section at least 6, and its Reagents table at least four rows whose `mmol` is not `cat.`, one of them with a `Reagent` cell of at least 40 characters
