@@ -2,9 +2,7 @@
 
 ## Purpose
 Define the site's one language and its interface strings, procedure variants by language code and the choice of the variant to publish, the language field, German procedures, stubs and PDFs, and the German authoring documents.
-
 ## Requirements
-
 ### Requirement: Site language
 The site SHALL be built in one language, named by `locale` in `site/hugo.toml`, which is `"de"` in the shipped file. The language is the locale's first subtag, lowercased (`de` for `de` or `de-AT`), and must be `de` or `en`; any other locale makes the build fail with a message naming the file. `pipeline.site_language(site)` returns it. `site/hugo.toml` has no `languages` table and no `defaultContentLanguage`; the overlay sets `defaultContentLanguage` to the language. The site has no language switch, no `/de/` or `/en/` directory, and every page has `<html lang="<language>">`.
 
@@ -128,7 +126,7 @@ Pagefind SHALL index the procedure pages under the site's language.
 `tools/orgsyndb new` SHALL accept `--lang LANG`, where `LANG` is `de` or `en`; any other value is a usage error (exit 2) naming `--lang`. With `--lang`, it fills `templates/procedure.<LANG>.org` (or `.md` with `--md`), the English template for `en`, exactly as it fills the English template, and names the file `OSDB-NNNN-<slug>.<LANG>.org` or `.md`. Without `--lang` it behaves as before. The slug of a German title has `ä`, `ö`, `ü`, `ß` (and capitals) written out as `ae`, `oe`, `ue`, `ss` before the ASCII folding. The German templates carry the same keyword or anchor lines as the English ones, German comments and the German section headings, and validate cleanly once their placeholders are filled.
 
 #### Scenario: German stub
-- **WHEN** a test runs `pipeline.py new --lang de --now 2026-10-19T17:42:05+02:00 "Größe Säure"` and then `new --md --lang de` with `Ölsäure` in an empty collection
+- **WHEN** a test calls `new_procedure` with `language` `de` at `2026-10-19T17:42:05+02:00` for the Org title `Größe Säure`, and then for the Markdown title `Ölsäure`, in an empty collection
 - **THEN** it creates `org/procedures/OSDB-0001-groesse-saeure.de.org` and `md/procedures/OSDB-0002-oelsaeure.de.md`, the Org stub has `#+TITLE: Größe Säure` and `* Zusammenfassung`, and both validate without any problem line
 
 #### Scenario: German templates
@@ -148,3 +146,4 @@ The application SHALL ship German versions of the co-worker guide, the Org guide
 #### Scenario: German guides exist
 - **WHEN** a reviewer lists `docs/` and reads the README
 - **THEN** the three German documents exist, and the README links them under its authoring references
+

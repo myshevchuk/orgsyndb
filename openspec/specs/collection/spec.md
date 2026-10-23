@@ -2,9 +2,7 @@
 
 ## Purpose
 Define a collection, the directory of procedures that the application builds: its `orgsyndb.toml` marker and layout, how the program chooses it, which generated files go into it, and `init`.
-
 ## Requirements
-
 ### Requirement: Collection layout
 A collection SHALL be a directory holding a file `orgsyndb.toml`. Relative to that directory:
 - `org/procedures/` holds Org procedure sources and `md/procedures/` Markdown procedure sources. Either may be missing, which means it is empty.
@@ -26,7 +24,7 @@ The program SHALL accept a global option `-C DIR` or `--collection DIR` (also `-
 - With the option, `DIR` is the collection. When `DIR/orgsyndb.toml` does not exist, the program exits 1 with an error naming `DIR` and `orgsyndb.toml`; it does not search elsewhere.
 - Without it, the collection is the first directory holding `orgsyndb.toml` among the working directory and its ancestors. When there is none, the program exits 1 with an error that names `-C` and `init`.
 
-Only `export`, `validate` without arguments, `build`, `serve`, `pdf`, `new` and `clean` use a collection. `help`, `check-deps`, `init` and `validate` with arguments never look for one.
+Only `export`, `validate`, `build`, `serve`, `pdf`, `new` and `clean` use a collection. `help`, `check-deps` and `init` never look for one.
 
 #### Scenario: Found from a subdirectory
 - **WHEN** a test runs `<app>/tools/orgsyndb validate` with the working directory set to `md/procedures/` of a collection copy
@@ -70,3 +68,4 @@ It writes `orgsyndb.toml` last, so that an interrupted `init` can be rerun. It e
 #### Scenario: The demo collection matches init
 - **WHEN** a test compares `examples/demo/.gitignore` and `examples/demo/orgsyndb.toml` with the files `init` writes
 - **THEN** both `.gitignore` files are equal, and both `orgsyndb.toml` files parse to `{"format": 1}`
+
