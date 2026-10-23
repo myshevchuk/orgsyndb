@@ -13,7 +13,7 @@
 </thead>
 <tbody>
 {{ range . -}}
-<tr>
+<tr data-reaction-types="{{ delimit .Params.reaction_types " " }}" data-status="{{ .Params.status }}">
 <td><a href="{{ .RelPermalink }}">{{ .Params.id }}</a></td>
 <td><a href="{{ .RelPermalink }}">{{ .Title }}</a></td>
 <td>{{ range $i, $slug := .Params.reaction_types }}{{ if $i }}, {{ end }}{{ partial "reaction-type-label.html" $slug }}{{ end }}</td>

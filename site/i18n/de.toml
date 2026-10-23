@@ -33,6 +33,11 @@ search_noscript = "Die Suche braucht JavaScript. Ohne JavaScript finden Sie <a h
 sort = "Sortierung:"
 sort_by_id = "nach ID"
 sort_by_date = "nach Erstellungsdatum, neueste zuerst"
+list_count_one = "1 Eintrag"
+list_count = "{{ .Count }} Einträge"
+list_count_filtered = "{shown} von {total} Einträgen"
+list_search_placeholder = "Produkt, CAS, SMILES oder Stichwort"
+filter_all = "Alle"
 
 table_procedures = "Vorschriften"
 table_label = "Tabelle"

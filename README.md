@@ -10,6 +10,12 @@ resources from the internet. It has a responsive light and dark theme,
 full-text search, browse pages, and an A4 print layout. Its interface is
 German by default and can be switched to English.
 
+The browser layout is optimized for desktop work: full-width procedure
+tables with search and filters, recent procedures beside the browse links,
+and procedure details in a margin beside the readable procedure text.
+Narrow windows stack these panels; printing uses the separate
+single-column A4 layout.
+
 ## Application and collections
 
 This repository is the application: the build program, the validator, the
@@ -143,7 +149,9 @@ validated 28 files: 0 errors, 0 warnings
 
 The preview server listens only on `127.0.0.1`, so other machines cannot
 reach it. Use `serve --port N` to choose another port. The preview does not
-reload after an edit; stop it and run `serve` again.
+reload after an edit; stop it and run `serve` again. The server tells the
+browser to revalidate every file, so the next page load shows the new
+build.
 
 `new` selects the next free `OSDB-NNNN` identifier across the Org sources,
 Markdown sources, exports, and available Git history of the collection. It
@@ -163,7 +171,9 @@ German equivalents, such as **Kopieren** for **Copy**.
   links reaction types and tags with their procedure counts.
 - `/procedures/` lists every procedure by ID.
   `/procedures-by-date/` lists the same procedures by creation date, newest
-  first. Each page links to the other ordering.
+  first. Each page links to the other ordering. Both pages have a search
+  field and, with JavaScript, **Reaction type** and **Status** selects
+  that filter the table in place and update the entry count.
 - `/procedures/osdb-NNNN/` shows one procedure, including its metadata,
   structure image or on-screen placeholder, and eight body sections.
 - `/reaction_types/`, `/tags/`, and `/authors/` list the terms in each

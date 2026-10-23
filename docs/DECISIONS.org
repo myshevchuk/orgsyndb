@@ -1,10 +1,11 @@
 #+TITLE: OrgSynDB design decisions
 #+CREATED: [2026-10-20 Tue 20:41:42]
-#+LAST_MODIFIED: [2026-10-22 Thu 21:52:00]
+#+LAST_MODIFIED: [2026-10-23 Fri 19:52:47]
 #+AI_MODEL: gpt-5.6-sol
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-20 Tue 20:49] -- #+AI_MODEL corrected from gpt-5 to the pinned run model; theme design link pointed at its archive path
 #+AI_PASS: doc-writer claude-opus-5-5 [2026-10-22 Thu 19:50] -- languages section and the localization design link
 #+AI_PASS: doc-writer claude-opus-5-5 [2026-10-22 Thu 21:52] -- languages section rewritten for one site language and variants
+#+AI_PASS: doc-writer claude-opus-5-5 [2026-10-23 Fri 19:52] -- linear history, desktop layouts, preview caching and the desktop-layout design link
 
 This file records the project-wide choices that are useful after the
 implementation details have faded. The change-local designs retain the full
@@ -15,6 +16,7 @@ analysis:
 - [[file:../openspec/changes/archive/2026-10-20-add-site-theme/design.md][site theme design]]
 - [[file:../openspec/changes/archive/2026-10-22-decouple-collection/design.md][collection design]]
 - [[file:../openspec/changes/archive/2026-10-22-add-german-localization/design.md][localization design]]
+- [[file:../openspec/changes/archive/2026-10-23-desktop-layout/design.md][desktop layout design]]
 
 * Governance and formats
 
@@ -26,6 +28,15 @@ analysis:
   before the site can render all samples.
 - Rejected :: The brief's pipeline-after-site order was rejected because Org
   samples could not render before export existed.
+
+** Keep the main branch history linear
+
+- Decided :: Require linear history on ~main~ and merge pull requests by
+  rebase or squash, starting with the desktop-layout change. This replaces
+  the merge commits of the first changes.
+- Why :: The owner requested a linear history, which reads and bisects as
+  one sequence of changes.
+- Rejected :: Further merge commits on ~main~ were rejected.
 
 ** Check proposals before implementation
 
@@ -294,6 +305,9 @@ analysis:
   keeps confidential procedures off the local network.
 - Rejected :: Pagefind's fixed-port server, Hugo's server without the index,
   required Caddy, and binding to ~0.0.0.0~ were rejected.
+- Amended :: The preview and the Caddyfile example send
+  ~Cache-Control: no-cache~. Without it, browsers cached pages heuristically
+  and showed an earlier build's HTML and CSS after a rebuild.
 
 ** Allocate IDs from current trees and available history
 
@@ -352,6 +366,19 @@ analysis:
   sideways page scrolling at phone width.
 - Rejected :: A JavaScript theme toggle, ~light-dark()~, and a separate dark
   stylesheet link that could affect printing were rejected.
+
+** Lay out the screen for desktop work
+
+- Decided :: Use a shell up to 96rem wide in system sans-serif. The
+  procedure lists follow the full-width table layout with search, client-side
+  reaction-type and status filters and a count; procedure pages follow the
+  Marginalia layout, with the body on the left and the details as a margin
+  on the right. Print keeps its single column and serif text.
+- Why :: The owner works on desktop browsers and chose these two of the
+  minimalist layouts in ~docs/designs/minimal/~.
+- Rejected :: The filter sidebar, list/detail split and Ledger layouts, and
+  the earlier visual concepts, were not chosen. Sidenotes beside their
+  sections were rejected because they would change the document order.
 
 ** Provide two static procedure orders
 

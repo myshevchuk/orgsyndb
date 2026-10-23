@@ -1,5 +1,6 @@
 {{ define "main" -}}
 {{ $procedures := where site.RegularPages "Section" "procedures" -}}
+<div class="home-intro">
 <h1>{{ site.Title }}</h1>
 <p class="lede">{{ T "home_lede" }}</p>
 <form class="search-form" action="/search/" method="get" role="search">
@@ -7,19 +8,30 @@
 <input id="home-search" name="q" type="search">
 <button type="submit">{{ T "search_button" }}</button>
 </form>
-<h2>{{ T "recent_procedures" }}</h2>
+</div>
+<div class="home-layout">
+<section class="home-recent" aria-labelledby="recent-procedures">
+<h2 id="recent-procedures">{{ T "recent_procedures" }}</h2>
 {{ partial "procedure-table.html" (first 5 (sort (sort $procedures "Params.id") "Date" "desc")) -}}
 <p><a href="/procedures/">{{ T "all_procedures" (dict "Count" (len $procedures)) }}</a> (<a href="/procedures-by-date/">{{ T "newest_first" }}</a>)</p>
-<h2>{{ T "browse_reaction_type" }}</h2>
+</section>
+<aside class="home-browse">
+<section aria-labelledby="browse-reaction-type">
+<h2 id="browse-reaction-type">{{ T "browse_reaction_type" }}</h2>
 <ul class="term-list">
 {{ range partial "terms-by-label.html" "reaction_types" -}}
 <li><a href="{{ .term.Page.RelPermalink }}">{{ .label }}</a> <span class="count">({{ .term.Count }})</span></li>
 {{ end -}}
 </ul>
-<h2>{{ T "browse_tag" }}</h2>
+</section>
+<section aria-labelledby="browse-tag">
+<h2 id="browse-tag">{{ T "browse_tag" }}</h2>
 <ul class="term-list term-list--inline">
 {{ range site.Taxonomies.tags.Alphabetical -}}
 <li><a href="{{ .Page.RelPermalink }}">{{ .Name }}</a> <span class="count">({{ .Count }})</span></li>
 {{ end -}}
 </ul>
+</section>
+</aside>
+</div>
 {{ end }}

@@ -143,6 +143,7 @@ class CaddyfileTests(unittest.TestCase):
                         "deploy/Caddyfile.example does not exist")
         text = CADDYFILE.read_text(encoding="utf-8")
         self.assertIn("file_server", text)
+        self.assertRegex(text, r'(?m)^\s*header\s+Cache-Control\s+"no-cache"\s*$')
         self.assertRegex(text, r"(?m)^\s*root\s+\S")
         self.assertNotIn("/home/", text)
         self.assertNotRegex(text, r"\.(local|lan|home\.arpa)\b")

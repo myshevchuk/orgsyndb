@@ -43,3 +43,199 @@
 
 button:hover { border-color: var(--muted); }
 .site-header a:hover, .site-title:hover { text-decoration: underline; }
+
+/* Desktop is the primary workspace. Keep the page shell wide for data
+   tables and use separate columns for browsing and procedure details.
+   These rules live here so the A4 layout keeps its single-column flow. */
+/* On screen the whole interface is plain sans-serif; paper keeps the
+   text face of tokens.css. */
+html { font-family: var(--font-ui); }
+body {
+  max-width: 96rem;
+  padding: 0 2.5rem;
+}
+
+.site-header {
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+  padding: var(--space-4) 0;
+}
+.site-title { font-size: 1.25rem; }
+.site-header ul { gap: var(--space-2) var(--space-4); }
+.site-header nav a { color: var(--muted); text-decoration: none; padding-bottom: 0.2rem; }
+.site-header nav a:hover { color: var(--fg); }
+.site-header nav a[aria-current] {
+  color: var(--fg);
+  border-bottom: 2px solid currentColor;
+}
+main { padding: var(--space-5) 0; }
+h1 { font-size: 2.25rem; }
+
+.home-intro { margin-bottom: var(--space-5); }
+.lede { max-width: var(--measure); }
+.search-form { max-width: 60rem; }
+.search-form label { flex-basis: 100%; font-weight: 600; }
+.search-form input, .search-form button { padding: 0.6rem 0.75rem; }
+
+.home-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 19rem;
+  gap: var(--space-5);
+  align-items: start;
+}
+.home-recent, .home-browse, .procedure-details, .procedure-content { min-width: 0; }
+.home-layout h2:first-child { margin-top: 0; }
+.home-browse {
+  border-left: 1px solid var(--border);
+  padding-left: var(--space-4);
+}
+.home-browse section + section { margin-top: var(--space-5); }
+.home-browse .term-list { list-style: none; padding: 0; }
+.home-browse .term-list li + li { margin-top: var(--space-2); }
+.home-browse .term-list--inline { gap: var(--space-2) var(--space-3); }
+.home-browse .term-list--inline li + li { margin-top: 0; }
+
+.procedure-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.procedure-header .procedure-id, .procedure-header h1 { grid-column: 1; }
+.procedure-header h1 { margin-bottom: 0; }
+.procedure-header .actions { grid-column: 2; grid-row: 1 / 3; align-self: center; }
+/* Marginalia: the body is one reading column; the details follow it as
+   a margin on the right. The details stay first in the document, so
+   print, Pagefind and narrow windows keep their order. */
+.procedure {
+  display: grid;
+  grid-template-columns: minmax(0, 48rem) minmax(15rem, 21rem);
+  grid-template-areas: "content details";
+  justify-content: space-between;
+  column-gap: var(--space-5);
+  align-items: start;
+}
+.procedure-content { grid-area: content; }
+.procedure-details {
+  grid-area: details;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.procedure-content > :first-child { margin-top: 0; }
+.procedure-content > p, .procedure-content > ul, .procedure-content > ol {
+  max-width: 78ch;
+}
+.procedure-details .structure { order: -1; margin: 0; }
+.procedure-details .metadata {
+  display: block;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  font-size: 0.875rem;
+}
+.procedure-details .metadata dt {
+  margin-top: var(--space-3);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.procedure-details .metadata dt:first-child { margin-top: 0; }
+.procedure-details .metadata dd { margin-top: 0.1rem; }
+.procedure-details .structure img { margin: 0 auto; border-width: 1px 0; border-radius: 0; }
+.procedure-details .structure__slot {
+  max-width: none;
+  border-style: solid;
+  border-width: 1px 0;
+  border-radius: 0;
+}
+
+/* Full-width table (layout 4): a head with the count, one tool row and
+   a plain table whose status reads as text. */
+.list-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-3); }
+.list-head h1 { font-size: 1.75rem; margin-bottom: var(--space-4); }
+.list-count { color: var(--muted); font-size: 0.875rem; margin: 0; }
+.list-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.list-search { flex: 0 1 44rem; margin: 0; }
+.list-search input, .list-search button { padding: 0.6rem 0.75rem; }
+.list-search button { padding-inline: 1.25rem; }
+.list-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); font-size: 0.875rem; }
+.list-filters[hidden] { display: none; }
+.list-filters label { display: flex; align-items: center; gap: var(--space-2); color: var(--muted); }
+.list-filters select {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  padding: 0.55rem 0.5rem;
+}
+.list-bar { display: flex; justify-content: flex-end; font-size: 0.875rem; }
+.list-bar .sort-links { margin-bottom: var(--space-2); }
+
+.procedure-list { width: 100%; font-size: 0.925rem; }
+.procedure-list th, .procedure-list td {
+  padding: 0.85rem 0.9rem;
+  vertical-align: middle;
+}
+.procedure-list thead { background: var(--surface); }
+.procedure-list thead th { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.procedure-list tbody tr:hover { background: var(--surface); }
+.procedure-list td:first-child a { color: var(--fg); text-decoration: none; }
+.procedure-list td:nth-child(2) a { text-decoration: none; }
+.procedure-list td:nth-child(2) a:hover { text-decoration: underline; }
+.procedure-list td:nth-child(n+4) { color: var(--muted); }
+.procedure-list .badge {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: inherit;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.procedure-list th:first-child, .procedure-list td:first-child,
+.procedure-list time { white-space: nowrap; }
+.procedure-content table { width: 100%; }
+
+/* Pagefind already provides a filter column. Let it use the desktop
+   canvas and prevent long result titles or SMILES from widening it. */
+.search { max-width: 80rem; }
+.search .pagefind-ui__result { min-width: 0; overflow-wrap: anywhere; }
+
+/* A narrow browser window still has a complete reading order. */
+@media (max-width: 70rem) {
+  body { padding: 0 var(--space-4); }
+  .home-layout { grid-template-columns: minmax(0, 1fr); }
+  .home-browse {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-5);
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    padding: var(--space-4) 0 0;
+  }
+  .home-browse section + section { margin-top: 0; }
+  .procedure { grid-template-columns: minmax(0, 1fr) 16rem; column-gap: var(--space-5); }
+}
+@media (max-width: 55rem) {
+  .procedure { display: block; }
+  .procedure-details { margin-bottom: var(--space-5); }
+  .procedure-header { display: block; }
+  .procedure-header .actions { margin-top: var(--space-3); }
+}
+@media (max-width: 35rem) {
+  body { padding: 0 var(--space-3); }
+  .home-browse { grid-template-columns: minmax(0, 1fr); }
+}

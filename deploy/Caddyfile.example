@@ -6,9 +6,12 @@
 #   /srv/orgsyndb/public  with the directory the copy of public/ is in.
 # `tls internal` makes Caddy issue the certificate from its own local
 # authority; replace it with your organisation's TLS settings if needed.
+# `Cache-Control: no-cache` makes browsers revalidate every file, so they
+# show a new build at once instead of cached pages of the previous one.
 
 orgsyndb.internal {
 	tls internal
 	root * /srv/orgsyndb/public
+	header Cache-Control "no-cache"
 	file_server
 }

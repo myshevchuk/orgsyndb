@@ -291,6 +291,8 @@ class ServeTests(BuildTestCase):
                 with opener.open(f"http://127.0.0.1:{port}{path}",
                                  timeout=30) as response:
                     self.assertEqual(response.status, 200)
+                    self.assertEqual(
+                        response.headers.get("Cache-Control"), "no-cache")
 
 
 class PdfTests(BuildTestCase):

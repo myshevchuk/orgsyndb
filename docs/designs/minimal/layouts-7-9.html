@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OrgSynDB layouts 7–9</title>
+<style>
+/* Minimalist desktop layouts 7-9. They reuse the site's colour tokens
+   (site/assets/css/tokens.css) with plain sans-serif type throughout,
+   per the follow-up constraints in openspec/changes/desktop-layout.
+   Each frame is 1440 x 900 px, a common desktop viewport. */
+:root {
+  --bg: #ffffff; --fg: #1a1a1a; --muted: #555555; --border: #c8c8c8;
+  --surface: #f4f4f1; --link: #0b4f8a;
+  --draft-bg: #fde8c8; --draft-fg: #5c3a00;
+  --checked-bg: #d6f0dc; --checked-fg: #0f4a1f;
+  --font-text: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Liberation Sans", Arial, sans-serif;
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Liberation Sans", Arial, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace;
+  --hair: #e3e3df;
+}
+* { box-sizing: border-box; }
+html { background: #d9d9d4; }
+body { margin: 0; padding: 40px 0; font: 16px/1.5 var(--font-ui); color: var(--fg); }
+.caption { width: 1440px; margin: 0 auto 12px; font: 600 14px var(--font-ui); color: #333; }
+.frame { width: 1440px; height: 900px; margin: 0 auto 56px; overflow: hidden;
+         background: var(--bg); position: relative; }
+h1, h2, h3, p, ul, ol, dl, dd, table { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
+a { color: var(--link); text-decoration: none; }
+.mono { font-family: var(--font-mono); }
+.muted { color: var(--muted); }
+.status { font: 600 11px var(--font-ui); letter-spacing: .04em; text-transform: uppercase;
+          padding: 2px 6px; border-radius: 3px; background: var(--draft-bg); color: var(--draft-fg); }
+.status.ok { background: var(--checked-bg); color: var(--checked-fg); }
+.input { border: 1px solid var(--border); border-radius: 4px; height: 44px; display: flex;
+         align-items: center; padding: 0 14px; color: var(--muted); font-size: 15px; }
+.kbd { margin-left: auto; font: 12px var(--font-mono); border: 1px solid var(--border);
+       border-radius: 3px; padding: 1px 6px; color: var(--muted); }
+
+/* ---------- 7. Marginalia --------------------------------------------
+   One reading column at the site's 70ch measure, set left of centre;
+   a wide right margin carries metadata and browse lists as sidenotes.
+   No boxes, no fills: rules and type only. */
+.m { padding: 0 0 0 168px; }
+.m .top { display: flex; gap: 32px; align-items: baseline; height: 76px; padding-top: 30px;
+          font-size: 14px; width: 1104px; border-bottom: 1px solid var(--hair); }
+.m .top b { font: 600 17px var(--font-ui); margin-right: auto; }
+.m .top .on { color: var(--fg); }
+.m .grid { display: grid; grid-template-columns: 640px 336px; column-gap: 128px; padding-top: 56px; }
+.m h1 { font: 600 30px/1.2 var(--font-text); }
+.m .lede { font: 17px/1.55 var(--font-text); color: var(--muted); margin: 14px 0 32px; }
+.m .row { display: grid; grid-template-columns: 96px 1fr auto; gap: 16px; align-items: baseline;
+          padding: 13px 0; border-bottom: 1px solid var(--hair); font: 16px var(--font-text); }
+.m .row .mono { font-size: 13px; color: var(--muted); }
+.m .row small { font: 13px var(--font-ui); color: var(--muted); }
+.m h2 { font: 600 12px var(--font-ui); letter-spacing: .08em; text-transform: uppercase;
+        color: var(--muted); margin: 0 0 10px; }
+.m .side section { margin-bottom: 36px; }
+.m .side li { font-size: 14px; padding: 3px 0; }
+.m .side .count { color: var(--muted); font-size: 13px; }
+.m .inline li { display: inline; margin-right: 12px; }
+.m .proc h1 { font-size: 28px; }
+.m .proc .sub { font: 15px var(--font-ui); color: var(--muted); margin: 8px 0 34px; }
+.m .proc h3 { font: 600 18px var(--font-text); margin: 28px 0 8px; }
+.m .proc p, .m .proc li { font: 16px/1.6 var(--font-text); }
+.m .proc ol { list-style: decimal; padding-left: 22px; }
+.m .proc li { margin-bottom: 6px; }
+.m .proc p.mono { font: 13px var(--font-mono); }
+.m .note { font: 13px/1.5 var(--font-ui); color: var(--muted); }
+.m .note dt { font-weight: 600; color: var(--fg); margin-top: 12px; font-size: 12px;
+              letter-spacing: .06em; text-transform: uppercase; }
+.m .note dd { margin: 2px 0 0; }
+.m .struct { height: 150px; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair);
+             display: flex; align-items: center; justify-content: center; margin-bottom: 18px;
+             font: 13px var(--font-mono); color: var(--muted); }
+.m .tbl { width: 100%; border-collapse: collapse; font: 14px var(--font-ui); margin-top: 6px; }
+.m .tbl th { text-align: left; font-weight: 600; font-size: 12px; color: var(--muted);
+             border-bottom: 1px solid var(--fg); padding: 6px 8px 6px 0; }
+.m .tbl td { border-bottom: 1px solid var(--hair); padding: 7px 8px 7px 0; }
+.m .tbl .n { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---------- 8. Split index -------------------------------------------
+   Master-detail. A fixed index pane (search + every procedure) stays
+   on screen; the detail pane holds the page. Moving between procedures
+   never loses the list. Without JavaScript it is ordinary links. */
+.s { display: grid; grid-template-columns: 384px 1fr; height: 900px; }
+.s .pane { border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+.s .brand { height: 64px; display: flex; align-items: center; padding: 0 24px;
+            font: 600 16px var(--font-ui); justify-content: space-between; }
+.s .brand span { font: 400 13px var(--font-ui); color: var(--muted); }
+.s .pane .input { margin: 0 24px 12px; }
+.s .filters { display: flex; gap: 6px; padding: 0 24px 14px; border-bottom: 1px solid var(--border);
+              font-size: 12px; flex-wrap: wrap; }
+.s .filters span { border: 1px solid var(--border); border-radius: 12px; padding: 2px 10px; color: var(--muted); }
+.s .filters .on { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+.s .list li { display: grid; grid-template-columns: 78px 1fr; column-gap: 10px;
+              padding: 11px 24px; border-bottom: 1px solid var(--hair); font-size: 14px; }
+.s .list .mono { font-size: 12px; color: var(--muted); padding-top: 2px; }
+.s .list small { grid-column: 2; font-size: 12px; color: var(--muted); }
+.s .list .sel { background: var(--surface); box-shadow: inset 3px 0 0 var(--link); }
+.s .list .sel b { color: var(--link); }
+.s .foot { margin-top: auto; padding: 14px 24px; font-size: 12px; color: var(--muted);
+           border-top: 1px solid var(--border); display: flex; justify-content: space-between; }
+.s .detail { padding: 0 64px; overflow: hidden; }
+.s .crumb { height: 64px; display: flex; align-items: center; gap: 28px; font-size: 13px;
+            border-bottom: 1px solid var(--hair); }
+.s .crumb .r { margin-left: auto; display: flex; gap: 20px; }
+.s .head { display: grid; grid-template-columns: 1fr 280px; gap: 48px; padding: 36px 0 28px;
+           border-bottom: 1px solid var(--hair); }
+.s h1 { font: 600 28px/1.2 var(--font-text); margin: 6px 0 10px; }
+.s .facts { display: grid; grid-template-columns: repeat(4, auto); justify-content: start;
+            column-gap: 36px; row-gap: 2px; font-size: 13px; }
+.s .facts dt { color: var(--muted); font-size: 12px; }
+.s .facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+.s .mol { border: 1px solid var(--hair); border-radius: 4px; height: 150px; display: flex;
+          align-items: center; justify-content: center; font: 12px var(--font-mono); color: var(--muted); }
+.s .body { display: grid; grid-template-columns: 180px minmax(0, 70ch); gap: 48px; padding-top: 28px; }
+.s .toc li { font-size: 13px; padding: 4px 0 4px 12px; border-left: 2px solid var(--hair); color: var(--muted); }
+.s .toc .on { border-color: var(--link); color: var(--fg); }
+.s .body h3 { font: 600 18px var(--font-text); margin: 0 0 8px; }
+.s .body p, .s .body li { font: 16px/1.6 var(--font-text); }
+.s .body ol { list-style: decimal; padding-left: 22px; margin-top: 4px; }
+.s .body li { margin-bottom: 5px; }
+.s .home h1 { font-size: 30px; }
+.s .home .lede { font: 16px/1.55 var(--font-text); color: var(--muted); max-width: 62ch; margin-bottom: 36px; }
+.s .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 48px; }
+.s .cols h2 { font: 600 12px var(--font-ui); letter-spacing: .08em; text-transform: uppercase;
+              color: var(--muted); padding-bottom: 8px; border-bottom: 1px solid var(--fg); margin-bottom: 6px; }
+.s .cols li { display: flex; justify-content: space-between; font-size: 14px; padding: 7px 0;
+              border-bottom: 1px solid var(--hair); }
+.s .cols .c { color: var(--muted); font-variant-numeric: tabular-nums; }
+.s .empty { margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--hair); font-size: 13px; color: var(--muted); }
+
+/* ---------- 9. Ledger -----------------------------------------------
+   A 12-column grid of hairlines. The home page is the index itself: a
+   full-width table with facets as one line of text toggles. A
+   procedure opens as a sheet: one band of key facts, then hanging
+   section headings in columns 1-3 and text in 4-10. */
+.l { padding: 0 72px; }
+.l .top { display: grid; grid-template-columns: repeat(12, 1fr); column-gap: 24px; height: 72px;
+          align-items: center; border-bottom: 2px solid var(--fg); font-size: 14px; }
+.l .top b { grid-column: 1 / 4; font: 700 16px var(--font-ui); letter-spacing: -.01em; }
+.l .top nav { grid-column: 4 / 10; display: flex; gap: 28px; }
+.l .top nav .on { color: var(--fg); font-weight: 600; }
+.l .top .input { grid-column: 10 / 13; height: 36px; font-size: 13px; }
+.l .intro { display: grid; grid-template-columns: repeat(12, 1fr); column-gap: 24px; padding: 40px 0 28px; }
+.l .intro h1 { grid-column: 1 / 7; font: 600 30px/1.2 var(--font-text); }
+.l .intro p { grid-column: 7 / 13; font: 15px/1.55 var(--font-text); color: var(--muted); align-self: end; }
+.l .facets { display: flex; gap: 22px; font-size: 13px; padding: 12px 0; border-top: 1px solid var(--border);
+             border-bottom: 1px solid var(--border); color: var(--muted); }
+.l .facets b { color: var(--fg); font-weight: 600; }
+.l .facets .on { color: var(--fg); text-decoration: underline; text-underline-offset: 4px; }
+.l .facets .r { margin-left: auto; }
+.l table.idx { width: 100%; border-collapse: collapse; font-size: 14px; }
+.l .idx th { text-align: left; font: 600 11px var(--font-ui); letter-spacing: .08em; text-transform: uppercase;
+             color: var(--muted); padding: 14px 12px 10px 0; border-bottom: 1px solid var(--fg); }
+.l .idx td { padding: 14px 12px 14px 0; border-bottom: 1px solid var(--hair); vertical-align: baseline; }
+.l .idx .id { font: 600 15px var(--font-mono); width: 120px; }
+.l .idx .nm { font: 15px var(--font-text); }
+.l .idx .n { text-align: right; font-variant-numeric: tabular-nums; padding-right: 32px; }
+.l .idx td:last-child, .l .idx th:last-child { padding-right: 0; }
+.l .idx .sm { font: 12px var(--font-mono); color: var(--muted); }
+.l .sheet-head { display: grid; grid-template-columns: repeat(12, 1fr); column-gap: 24px; padding: 34px 0 24px; }
+.l .bigid { grid-column: 1 / 4; font: 600 15px var(--font-mono); padding-top: 6px; }
+.l .sheet-head h1 { grid-column: 4 / 11; font: 600 28px/1.2 var(--font-text); }
+.l .sheet-head .acts { grid-column: 11 / 13; text-align: right; font-size: 13px; padding-top: 6px; }
+.l .band { display: grid; grid-template-columns: repeat(7, 1fr); border-top: 1px solid var(--fg);
+           border-bottom: 1px solid var(--border); }
+.l .band div { padding: 12px 16px 14px 0; }
+.l .band div + div { padding-left: 16px; border-left: 1px solid var(--hair); }
+.l .band dt { font: 600 11px var(--font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.l .band dd { margin: 4px 0 0; font-size: 15px; font-variant-numeric: tabular-nums; }
+.l .sec { display: grid; grid-template-columns: repeat(12, 1fr); column-gap: 24px;
+          padding: 22px 0; border-bottom: 1px solid var(--hair); }
+.l .sec h3 { grid-column: 1 / 4; font: 600 13px var(--font-ui); letter-spacing: .06em;
+             text-transform: uppercase; padding-top: 3px; }
+.l .sec h3 span { display: block; font: 400 12px var(--font-mono); color: var(--muted); letter-spacing: 0; }
+.l .sec .txt { grid-column: 4 / 11; font: 16px/1.6 var(--font-text); }
+.l .sec .aside { grid-column: 11 / 13; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.l .sec ol { list-style: decimal; padding-left: 22px; }
+.l .sec li { margin-bottom: 5px; }
+.l .sec table { width: 100%; border-collapse: collapse; font: 14px var(--font-ui); }
+.l .sec th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600;
+             border-bottom: 1px solid var(--border); padding: 0 10px 6px 0; }
+.l .sec td { padding: 7px 10px 7px 0; border-bottom: 1px solid var(--hair); }
+.l .sec .n { text-align: right; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+
+<!-- ===================== 7. Marginalia: home ===================== -->
+<p class="caption" id="m-home">7 · Marginalia: Startseite</p>
+<div class="frame m">
+  <div class="top">
+    <b>OrgSynDB</b>
+    <a href="#">Vorschriften</a><a href="#">Reaktionstypen</a><a href="#">Schlagwörter</a><a href="#">Suche</a>
+    <span class="muted">EN</span>
+  </div>
+  <div class="grid">
+    <main>
+      <h1>OrgSynDB</h1>
+      <p class="lede">Die Synthesevorschriften der Arbeitsgruppe: in Org oder Markdown geschrieben, nach einem gemeinsamen Schema geprüft und hier zum Suchen, Stöbern und Drucken veröffentlicht.</p>
+      <div class="input" style="margin-bottom:40px">Name, CAS, SMILES oder OSDB-Nummer<span class="kbd">/</span></div>
+      <h2>Neueste Vorschriften</h2>
+      <div class="row"><span class="mono">OSDB-0008</span><a href="#">Zimtsäure</a><small>Hydrolyse · 22.10.2026</small></div>
+      <div class="row"><span class="mono">OSDB-0007</span><a href="#">Zimtsäureethylester</a><small>Olefinierung · 22.10.2026</small></div>
+      <div class="row"><span class="mono">OSDB-0006</span><a href="#">Dibenzylidenaceton</a><small>Aldolkondensation · 22.10.2026</small></div>
+      <div class="row"><span class="mono">OSDB-0005</span><a href="#">1-(Biphenyl-4-yl)ethanol</a><small>Reduktion · 22.10.2026</small></div>
+      <div class="row"><span class="mono">OSDB-0004</span><a href="#">4-Acetylbiphenyl</a><small>Kreuzkupplung · 22.10.2026</small></div>
+      <p style="margin-top:18px;font-size:14px"><a href="#">Alle 8 Vorschriften</a> (<a href="#">neueste zuerst</a>)</p>
+    </main>
+    <aside class="side">
+      <section>
+        <h2>Reaktionstypen</h2>
+        <ul>
+          <li><a href="#">Acylierung</a> <span class="count">1</span></li>
+          <li><a href="#">Aldolkondensation</a> <span class="count">1</span></li>
+          <li><a href="#">Hydrolyse</a> <span class="count">2</span></li>
+          <li><a href="#">Kreuzkupplung</a> <span class="count">1</span></li>
+          <li><a href="#">Olefinierung</a> <span class="count">1</span></li>
+          <li><a href="#">Reduktion</a> <span class="count">1</span></li>
+          <li><a href="#">Veresterung</a> <span class="count">1</span></li>
+        </ul>
+      </section>
+      <section>
+        <h2>Schlagwörter</h2>
+        <ul class="inline">
+          <li><a href="#">acetylation</a> <span class="count">1</span></li>
+          <li><a href="#">biphenyl</a> <span class="count">2</span></li>
+          <li><a href="#">cinnamate</a> <span class="count">2</span></li>
+          <li><a href="#">claisen-schmidt</a> <span class="count">1</span></li>
+          <li><a href="#">fischer-esterification</a> <span class="count">1</span></li>
+          <li><a href="#">fragrance</a> <span class="count">1</span></li>
+          <li><a href="#">sample-data</a> <span class="count">8</span></li>
+          <li><a href="#">saponification</a> <span class="count">2</span></li>
+          <li><a href="#">sodium-borohydride</a> <span class="count">1</span></li>
+          <li><a href="#">suzuki-coupling</a> <span class="count">1</span></li>
+          <li><a href="#">wittig</a> <span class="count">1</span></li>
+        </ul>
+      </section>
+      <section>
+        <h2>Autoren</h2>
+        <ul class="inline"><li><a href="#">A. Example</a> <span class="count">3</span></li><li><a href="#">B. Example</a> <span class="count">3</span></li><li><a href="#">C. Example</a> <span class="count">2</span></li><li><a href="#">E. Example</a> <span class="count">2</span></li><li><a href="#">G. Example</a> <span class="count">2</span></li><li><a href="#">…</a></li></ul>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<!-- ===================== 7. Marginalia: procedure ===================== -->
+<p class="caption" id="m-proc">7 · Marginalia: Vorschrift</p>
+<div class="frame m">
+  <div class="top">
+    <b>OrgSynDB</b>
+    <a class="on" href="#">Vorschriften</a><a href="#">Reaktionstypen</a><a href="#">Schlagwörter</a><a href="#">Suche</a>
+    <span class="muted">EN</span>
+  </div>
+  <div class="grid proc">
+    <main>
+      <p class="mono muted" style="font-size:13px">OSDB-0007 · <span class="status">Entwurf</span></p>
+      <h1 style="margin-top:8px">Zimtsäureethylester</h1>
+      <p class="sub">(E)-Zimtsäureethylester · Olefinierung · G. Example</p>
+      <h3>Zusammenfassung</h3>
+      <p>(E)-Zimtsäureethylester durch lösungsmittelfreie Wittig-Olefinierung von Benzaldehyd mit dem stabilisierten Ylid (Triphenylphosphoranyliden)essigsäureethylester bei Raumtemperatur. Der Ester wird durch Digerieren mit Heptan vom Triphenylphosphanoxid getrennt.</p>
+      <h3>Reagenzien</h3>
+      <table class="tbl">
+        <tr><th>Reagenz</th><th>CAS</th><th class="n">M (g/mol)</th><th class="n">Menge</th><th class="n">mmol</th><th class="n">Äquiv.</th></tr>
+        <tr><td>Benzaldehyd</td><td class="mono">100-52-7</td><td class="n">106,12</td><td class="n">0,531 g</td><td class="n">5,00</td><td class="n">1,0</td></tr>
+        <tr><td>Ph₃P=CHCO₂Et</td><td class="mono">1099-45-2</td><td class="n">348,38</td><td class="n">2,09 g</td><td class="n">6,00</td><td class="n">1,2</td></tr>
+      </table>
+      <h3>Durchführung</h3>
+      <ol>
+        <li>Den (Triphenylphosphoranyliden)essigsäureethylester (2,09 g, 6,00 mmol) in einen 25-mL-Erlenmeyerkolben mit kleinem Magnetrührstab einwiegen.</li>
+        <li>Den Benzaldehyd (0,531 g, 0,509 mL, 5,00 mmol) mit einer Messpipette direkt auf den Feststoff geben.</li>
+      </ol>
+    </main>
+    <aside class="note">
+      <div class="struct">CCOC(=O)/C=C/c1ccccc1</div>
+      <dl>
+        <dt>Produkt</dt><dd>(E)-Zimtsäureethylester</dd>
+        <dt>Formel · M</dt><dd>C₁₁H₁₂O₂ · 176,21 g/mol</dd>
+        <dt>CAS</dt><dd class="mono">103-36-6</dd>
+        <dt>Maßstab · Ausbeute</dt><dd>5 mmol · 80 %</dd>
+        <dt>Gefahren</dt><dd>Heptan: leicht entzündbar. Benzaldehyd: gesundheitsschädlich bei Verschlucken.</dd>
+        <dt>Anmerkung 1</dt><dd>Benzaldehyd oxidiert an der Luft zu Benzoesäure; eine frisch geöffnete oder kürzlich destillierte Probe verwenden.</dd>
+      </dl>
+    </aside>
+  </div>
+</div>
+
+<!-- ===================== 8. Split index: home ===================== -->
+<p class="caption" id="s-home">8 · Split index: Startseite</p>
+<div class="frame s">
+  <div class="pane">
+    <div class="brand">OrgSynDB <span>DE · EN</span></div>
+    <div class="input">Suchen<span class="kbd">/</span></div>
+    <div class="filters"><span>Status</span><span>Reaktionstyp</span><span>Schlagwort</span><span>Autor</span></div>
+    <ul class="list">
+      <li><span class="mono">OSDB-0001</span><b>Salicylsäure</b><small>Hydrolyse</small></li>
+      <li><span class="mono">OSDB-0002</span><b>Aspirin (Acetylsalicylsäure)</b><small>Acylierung</small></li>
+      <li><span class="mono">OSDB-0003</span><b>Isopentylacetat</b><small>Veresterung</small></li>
+      <li><span class="mono">OSDB-0004</span><b>4-Acetylbiphenyl</b><small>Kreuzkupplung</small></li>
+      <li><span class="mono">OSDB-0005</span><b>1-(Biphenyl-4-yl)ethanol</b><small>Reduktion</small></li>
+      <li><span class="mono">OSDB-0006</span><b>Dibenzylidenaceton</b><small>Aldolkondensation</small></li>
+      <li><span class="mono">OSDB-0007</span><b>Zimtsäureethylester</b><small>Olefinierung</small></li>
+      <li><span class="mono">OSDB-0008</span><b>Zimtsäure</b><small>Hydrolyse</small></li>
+    </ul>
+    <div class="foot"><span>8 Vorschriften</span><span>Nummer · Datum</span></div>
+  </div>
+  <div class="detail home">
+    <div class="crumb"><span class="muted">Übersicht</span><span class="r"><a href="#">Reaktionstypen</a><a href="#">Schlagwörter</a><a href="#">Autoren</a></span></div>
+    <div style="padding-top:56px">
+      <h1>OrgSynDB</h1>
+      <p class="lede">Die Synthesevorschriften der Arbeitsgruppe: in Org oder Markdown geschrieben, nach einem gemeinsamen Schema geprüft und hier zum Suchen, Stöbern und Drucken veröffentlicht.</p>
+      <div class="cols">
+        <section><h2>Reaktionstypen</h2><ul>
+          <li><a href="#">Acylierung</a><span class="c">1</span></li><li><a href="#">Aldolkondensation</a><span class="c">1</span></li>
+          <li><a href="#">Hydrolyse</a><span class="c">2</span></li><li><a href="#">Kreuzkupplung</a><span class="c">1</span></li>
+          <li><a href="#">Olefinierung</a><span class="c">1</span></li><li><a href="#">Reduktion</a><span class="c">1</span></li></ul></section>
+        <section><h2>Schlagwörter</h2><ul>
+          <li><a href="#">biphenyl</a><span class="c">2</span></li><li><a href="#">cinnamate</a><span class="c">2</span></li>
+          <li><a href="#">saponification</a><span class="c">2</span></li><li><a href="#">suzuki-coupling</a><span class="c">1</span></li>
+          <li><a href="#">sample-data</a><span class="c">8</span></li><li><a href="#">wittig</a><span class="c">1</span></li></ul></section>
+        <section><h2>Neueste Vorschriften</h2><ul>
+          <li><a href="#">Zimtsäure</a><span class="c">22.10.</span></li><li><a href="#">Zimtsäureethylester</a><span class="c">22.10.</span></li>
+          <li><a href="#">Dibenzylidenaceton</a><span class="c">22.10.</span></li><li><a href="#">1-(Biphenyl-4-yl)ethanol</a><span class="c">22.10.</span></li>
+          <li><a href="#">4-Acetylbiphenyl</a><span class="c">22.10.</span></li><li><a href="#">Isopentylacetat</a><span class="c">22.10.</span></li></ul></section>
+      </div>
+      <p class="empty">Tastatur: <span class="mono">/</span> Suche · <span class="mono">j k</span> nächste/vorige Vorschrift · <span class="mono">Enter</span> öffnen</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 8. Split index: procedure ===================== -->
+<p class="caption" id="s-proc">8 · Split index: Vorschrift</p>
+<div class="frame s">
+  <div class="pane">
+    <div class="brand">OrgSynDB <span>DE · EN</span></div>
+    <div class="input" style="color:var(--fg)">ester<span class="kbd">Esc</span></div>
+    <div class="filters"><span>Status</span><span class="on">Olefinierung ×</span><span>Schlagwort</span><span>Autor</span></div>
+    <ul class="list">
+      <li class="sel"><span class="mono">OSDB-0007</span><b>Zimtsäureethylester</b><small>Olefinierung · Entwurf</small></li>
+    </ul>
+    <div class="foot"><span>1 von 8</span><a href="#">Filter löschen</a></div>
+  </div>
+  <div class="detail">
+    <div class="crumb"><span class="mono muted">OSDB-0007</span><span class="status">Entwurf</span><span class="r"><a href="#">Drucken</a><a href="#">PDF</a><a href="#">Quelle</a></span></div>
+    <div class="head">
+      <div>
+        <h1>Zimtsäureethylester</h1>
+        <p class="muted" style="font-size:14px;margin-bottom:18px">Olefinierung · G. Example · erstellt 22.10.2026</p>
+        <dl class="facts">
+          <dt>Formel</dt><dt>M (g/mol)</dt><dt>CAS</dt><dt>Ausbeute</dt>
+          <dd>C₁₁H₁₂O₂</dd><dd>176,21</dd><dd class="mono">103-36-6</dd><dd>80 % · 5 mmol</dd>
+        </dl>
+      </div>
+      <div class="mol">CCOC(=O)/C=C/c1ccccc1 · Kopieren</div>
+    </div>
+    <div class="body">
+      <ul class="toc">
+        <li>Zusammenfassung</li><li>Reagenzien</li><li class="on">Durchführung</li><li>Aufarbeitung</li>
+        <li>Charakterisierung</li><li>Anmerkungen</li><li>Gefahren</li><li>Literatur</li>
+      </ul>
+      <div>
+        <h3>Durchführung</h3>
+        <ol>
+          <li>Den (Triphenylphosphoranyliden)essigsäureethylester (2,09 g, 6,00 mmol) in einen 25-mL-Erlenmeyerkolben mit kleinem Magnetrührstab einwiegen.</li>
+          <li>Den Benzaldehyd (0,531 g, 0,509 mL, 5,00 mmol) mit einer Messpipette direkt auf den Feststoff geben (Anmerkung 1).</li>
+          <li>Die Paste 20 Minuten bei Raumtemperatur rühren und dabei die Wände von Zeit zu Zeit mit einem Spatel abkratzen.</li>
+          <li>Heptan (15 mL) zugeben und 5 Minuten kräftig rühren. Der Ester löst sich, Triphenylphosphanoxid bleibt als weißes Pulver zurück.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== 9. Ledger: home ===================== -->
+<p class="caption" id="l-home">9 · Ledger: Startseite</p>
+<div class="frame l">
+  <div class="top">
+    <b>OrgSynDB</b>
+    <nav><a class="on" href="#">Index</a><a href="#">Reaktionstypen</a><a href="#">Schlagwörter</a><a href="#">Autoren</a></nav>
+    <div class="input">Suchen<span class="kbd">/</span></div>
+  </div>
+  <div class="intro">
+    <h1>Alle 8 Vorschriften</h1>
+    <p>Die Synthesevorschriften der Arbeitsgruppe: in Org oder Markdown geschrieben, nach einem gemeinsamen Schema geprüft und hier zum Suchen, Stöbern und Drucken veröffentlicht.</p>
+  </div>
+  <div class="facets">
+    <b>Status</b><span class="on">alle</span><span>Entwurf</span><span>geprüft</span><span>zurückgezogen</span>
+    <b style="margin-left:18px">Reaktionstyp</b><span class="on">alle</span><span>Hydrolyse</span><span>Kreuzkupplung</span><span>Olefinierung</span><span>…</span>
+    <span class="r">Sortierung: Nummer ↑</span>
+  </div>
+  <table class="idx">
+    <tr><th>Nummer</th><th>Produkt</th><th>Reaktionstyp</th><th>SMILES</th><th class="n">Ausbeute</th><th>Status</th><th class="n">Erstellt</th></tr>
+    <tr><td class="id">OSDB-0001</td><td class="nm"><a href="#">Salicylsäure</a></td><td>Hydrolyse</td><td class="sm">OC(=O)c1ccccc1O</td><td class="n">80 %</td><td><span class="status">Entwurf</span></td><td class="n">22.10.2026</td></tr>
+    <tr><td class="id">OSDB-0002</td><td class="nm"><a href="#">Aspirin (Acetylsalicylsäure)</a></td><td>Acylierung</td><td class="sm">CC(=O)Oc1ccccc1C(=O)O</td><td class="n">75 %</td><td><span class="status">Entwurf</span></td><td class="n">22.10.2026</td></tr>
+    <tr><td class="id">OSDB-0003</td><td class="nm"><a href="#">Isopentylacetat</a></td><td>Veresterung</td><td class="sm">CC(C)CCOC(C)=O</td><td class="n">70 %</td><td><span class="status">Entwurf</span></td><td class="n">22.10.2026</td></tr>
+    <tr><td class="id">OSDB-0004</td><td class="nm"><a href="#">4-Acetylbiphenyl</a></td><td>Kreuzkupplung</td><td class="sm">CC(=O)c1ccc(cc1)-c1ccccc1</td><td class="n">85 %</td><td><span class="status">Entwurf</span></td><td class="n">22.10.2026</td></tr>
+    <tr><td class="id">OSDB-0005</td><td class="nm"><a href="#">1-(Biphenyl-4-yl)ethanol</a></td><td>Reduktion</td><td class="sm">CC(O)c1ccc(cc1)-c1ccccc1</td><td class="n">90 %</td><td><span class="status">Entwurf</span></td><td class="n">22.10.2026</td></tr>
+    <tr><td class="id">OSDB-0006</td><td class="nm"><a href="#">Dibenzylidenaceton</a></td><td>Aldolkondensation</td><td class="sm">O=C(/C=C/c1ccccc1)/C=C/c1ccccc1</td><td class="n">85 %</td><td><span class="status">Entwurf</span></td><td class="n">22.10.2026</td></tr>
+    <tr><td class="id">OSDB-0007</td><td class="nm"><a href="#">Zimtsäureethylester</a></td><td>Olefinierung</td><td class="sm">CCOC(=O)/C=C/c1ccccc1</td><td class="n">80 %</td><td><span class="status">Entwurf</span></td><td class="n">22.10.2026</td></tr>
+    <tr><td class="id">OSDB-0008</td><td class="nm"><a href="#">Zimtsäure</a></td><td>Hydrolyse</td><td class="sm">OC(=O)/C=C/c1ccccc1</td><td class="n">90 %</td><td><span class="status">Entwurf</span></td><td class="n">22.10.2026</td></tr>
+  </table>
+</div>
+
+<!-- ===================== 9. Ledger: procedure ===================== -->
+<p class="caption" id="l-proc">9 · Ledger: Vorschrift</p>
+<div class="frame l">
+  <div class="top">
+    <b>OrgSynDB</b>
+    <nav><a href="#">Index</a><a href="#">Reaktionstypen</a><a href="#">Schlagwörter</a><a href="#">Autoren</a></nav>
+    <div class="input">Suchen<span class="kbd">/</span></div>
+  </div>
+  <div class="sheet-head">
+    <div class="bigid">OSDB-0007 <span class="status">Entwurf</span></div>
+    <h1>Zimtsäureethylester</h1>
+    <div class="acts"><a href="#">Drucken</a> · <a href="#">← 0006</a> <a href="#">0008 →</a></div>
+  </div>
+  <dl class="band">
+    <div><dt>Produkt</dt><dd>(E)-Zimtsäure&shy;ethylester</dd></div>
+    <div><dt>Formel</dt><dd>C₁₁H₁₂O₂</dd></div>
+    <div><dt>M</dt><dd>176,21 g/mol</dd></div>
+    <div><dt>CAS</dt><dd class="mono">103-36-6</dd></div>
+    <div><dt>Maßstab</dt><dd>5 mmol</dd></div>
+    <div><dt>Ausbeute</dt><dd>80 %</dd></div>
+    <div><dt>Reaktionstyp</dt><dd>Olefinierung</dd></div>
+  </dl>
+  <div class="sec">
+    <h3>Zusammenfassung<span>§1</span></h3>
+    <p class="txt">(E)-Zimtsäureethylester durch lösungsmittelfreie Wittig-Olefinierung von Benzaldehyd mit dem stabilisierten Ylid bei Raumtemperatur. Der Ester wird durch Digerieren mit Heptan vom Triphenylphosphanoxid getrennt.</p>
+    <p class="aside mono">CCOC(=O)/C=C/c1ccccc1<br><a href="#" style="font-family:var(--font-ui)">Kopieren</a></p>
+  </div>
+  <div class="sec">
+    <h3>Reagenzien<span>§2</span></h3>
+    <div class="txt"><table>
+      <tr><th>Reagenz</th><th>CAS</th><th class="n">M (g/mol)</th><th class="n">Menge</th><th class="n">mmol</th><th class="n">Äquiv.</th></tr>
+      <tr><td>Benzaldehyd</td><td class="mono">100-52-7</td><td class="n">106,12</td><td class="n">0,531 g (0,509 mL)</td><td class="n">5,00</td><td class="n">1,0</td></tr>
+      <tr><td>(Triphenylphosphoranyliden)essigsäureethylester</td><td class="mono">1099-45-2</td><td class="n">348,38</td><td class="n">2,09 g</td><td class="n">6,00</td><td class="n">1,2</td></tr>
+    </table></div>
+  </div>
+  <div class="sec">
+    <h3>Durchführung<span>§3</span></h3>
+    <ol class="txt">
+      <li>Den (Triphenylphosphoranyliden)essigsäureethylester (2,09 g, 6,00 mmol) in einen 25-mL-Erlenmeyerkolben mit kleinem Magnetrührstab einwiegen.</li>
+      <li>Den Benzaldehyd (0,531 g, 0,509 mL, 5,00 mmol) mit einer Messpipette direkt auf den Feststoff geben.</li>
+    </ol>
+    <p class="aside">Anm. 1 — Benzaldehyd oxidiert an der Luft; frisch geöffnete oder destillierte Probe verwenden.</p>
+  </div>
+</div>
+
+</body>
+</html>
