@@ -1,10 +1,8 @@
 # site-theme Specification
 
 ## Purpose
-Define the custom OrgSynDB theme: the page kinds and their content, the procedure metadata panel, precursor and used-in links, the sample banner, light and dark colour schemes, responsive layout and accessibility basics, without third-party themes or frameworks.
-
+Define the custom OrgSynDB theme: the page kinds and their content, the procedure metadata panel, precursor and used-in links, the sample banner, light and dark colour schemes, the desktop layout and accessibility basics, without third-party themes or frameworks.
 ## Requirements
-
 ### Requirement: Theme sources and constraints
 The site SHALL be rendered by a theme written for this repository, made of these sources and no others:
 - layouts in `site/layouts/`;
@@ -35,7 +33,7 @@ Every HTML page the theme renders SHALL contain, in this order:
 
 These texts are those of an English site; a German site has the German texts that the localization spec gives.
 
-Each page's head has a `<meta name="viewport" content="width=device-width, initial-scale=1">` and a `<meta name="color-scheme" content="light dark">`. The site-build "Minimal layout contract" elements also stay: `lang`, `charset` and `<title>`.
+Each page's head has a `<meta name="color-scheme" content="light dark">` and no `<meta name="viewport">`. The site-build "Minimal layout contract" elements also stay: `lang`, `charset` and `<title>`.
 
 Headings follow these rules:
 - Each page has exactly one `h1`.
@@ -44,7 +42,7 @@ Headings follow these rules:
 
 #### Scenario: Shell on every page
 - **WHEN** a test scans every HTML file under `public/` except files under `public/pagefind/`, after a theme build in locale `en`
-- **THEN** each has the skip link, the site header with the five navigation links, one `main#main`, the footer text, both `meta` elements, exactly one `h1`, and no heading-level jump greater than one
+- **THEN** each has the skip link, the site header with the five navigation links, one `main#main`, the footer text, the `color-scheme` meta and no `viewport` meta, exactly one `h1`, and no heading-level jump greater than one
 
 #### Scenario: Term titles use labels and tags
 - **WHEN** a test reads `public/reaction_types/aldol-condensation/index.html` and `public/tags/sample-data/index.html` after a theme build in locale `en`
@@ -88,38 +86,6 @@ Both sets define `--bg`, `--fg`, `--muted`, `--border`, `--surface`, `--link`, `
 #### Scenario: Contrast in both schemes
 - **WHEN** a test parses the custom properties of both sets from the source files and computes the WCAG relative-luminance contrast of each listed pair
 - **THEN** every token is defined in both sets, and every pair meets its threshold
-
-### Requirement: Measure, responsiveness and tables
-The screen layout SHALL prioritize desktop browsers with a shell up to 96rem wide, set in the system sans-serif stack; printed pages keep the text face of `tokens.css`. Running procedure paragraphs and lists SHALL keep a reading measure up to 78ch, while procedure tables SHALL use their available column width. Narrow windows SHALL retain a complete reading order, with wide tables scrolling within their own containers. Every Markdown table SHALL be rendered by `site/layouts/_markup/render-table.html` as follows:
-- The `<table>` is the only child of a `div.table-scroll` with `tabindex="0"`, `role="region"` and a non-empty `aria-label`.
-- Each header cell is a `th` with `scope="col"`.
-- Every cell of a column whose header text is `CAS`, `MW (g/mol)`, `mmol` or `Equiv` carries `class="num"`.
-- A newline separates adjacent cells in the output.
-
-The screen stylesheet gives `.table-scroll` `overflow-x: auto`, so a wide table scrolls inside its own container. The base stylesheet gives `.num` cells `white-space: nowrap` and right alignment.
-
-#### Scenario: Reagents tables are wrapped and marked
-- **WHEN** a test scans every procedure page after a theme build
-- **THEN** the table under the `Reagents` heading is the only child of a `div.table-scroll` with the three attributes, its header cells read `Reagent`, `CAS`, `MW (g/mol)`, `Amount`, `mmol` and `Equiv`, and exactly the cells of columns 2, 3, 5 and 6 carry `class="num"`
-
-#### Scenario: Phone-width review
-- **WHEN** the orchestrator views a procedure page, the all-procedures list and the search page at 390 CSS pixels wide (manual verification, tasks.md section 9)
-- **THEN** no page scrolls sideways, and the long sample's Reagents table scrolls inside its container
-
-#### Scenario: Desktop workspace
-- **WHEN** a browser displays the home page at 1280 CSS pixels or wider
-- **THEN** recent procedures and browse links occupy adjacent columns
-- **AND** the all-procedures table uses the available shell width
-
-#### Scenario: Procedure reference and text
-- **WHEN** a browser displays a procedure at 1280 CSS pixels or wider
-- **THEN** the body occupies a reading column on the left and the structure and metadata occupy a margin column on the right, without a panel border or background (the Marginalia design, `docs/designs/minimal/`, layout 7)
-- **AND** prose has a bounded reading measure and wide tables scroll locally
-- **AND** the details stay first in document order, so narrower windows, print and the search index show them before the body
-
-#### Scenario: Print keeps document flow
-- **WHEN** a procedure is printed or rendered to an A4 PDF
-- **THEN** the details, structure and body retain their single-column order
 
 ### Requirement: Procedure page structure
 Each procedure page's `main` element SHALL contain, in document order:
@@ -232,7 +198,7 @@ Above its table, each list SHALL have, in this order:
 
 Every row of a procedure table carries `data-reaction-types`, the procedure's reaction-type slugs joined by single spaces, and `data-status`, its status.
 
-On screen, the lists follow the full-width table design (`docs/designs/minimal/`, layout 4): the tool row spans the shell with the search form on the left and the filters on the right, the sort links sit right-aligned above a table that uses the shell width, and the status column reads as plain text.
+On screen, each list is a full-width table: the tool row spans the shell with the search form on the left and the filters on the right, the sort links sit right-aligned above a table that uses the shell width, and the status column reads as plain text.
 
 #### Scenario: Both orders
 - **WHEN** a test scans `public/procedures/index.html` and `public/procedures-by-date/index.html` after a theme build, and computes both orders from the content files' front matter
@@ -295,3 +261,36 @@ A procedure SHALL render to the same HTML whichever source format it was written
 #### Scenario: Twin fixtures
 - **WHEN** a theme build includes `tests/fixtures/theme/OSDB-0904-twin.org` in `org/procedures/` and `tests/fixtures/theme/OSDB-0905-twin.md` in `md/procedures/`, which hold the same title, dates, metadata, tags, precursor and body
 - **THEN** after `OSDB-0904`, `osdb-0904`, `OSDB-0905` and `osdb-0905` are replaced by `OSDB-NNNN` and `osdb-nnnn`, `procedures/osdb-0904/index.html` and `procedures/osdb-0905/index.html` are byte-identical
+
+### Requirement: Measure and tables
+The screen layout SHALL prioritize desktop browsers with a shell up to 96rem wide, set in the system sans-serif stack; printed pages keep the text face of `tokens.css`. Running procedure paragraphs and lists SHALL keep a reading measure up to 78ch, while procedure tables SHALL use their available column width. Wide tables SHALL scroll within their own containers. The theme SHALL make no provision for phones or other narrow screens: no stylesheet has a media query on the viewport width. Every Markdown table SHALL be rendered by `site/layouts/_markup/render-table.html` as follows:
+- The `<table>` is the only child of a `div.table-scroll` with `tabindex="0"`, `role="region"` and a non-empty `aria-label`.
+- Each header cell is a `th` with `scope="col"`.
+- Every cell of a column whose header text is `CAS`, `MW (g/mol)`, `mmol` or `Equiv` carries `class="num"`.
+- A newline separates adjacent cells in the output.
+
+The screen stylesheet gives `.table-scroll` `overflow-x: auto`, so a wide table scrolls inside its own container. The base stylesheet gives `.num` cells `white-space: nowrap` and right alignment.
+
+#### Scenario: Reagents tables are wrapped and marked
+- **WHEN** a test scans every procedure page after a theme build
+- **THEN** the table under the `Reagents` heading is the only child of a `div.table-scroll` with the three attributes, its header cells read `Reagent`, `CAS`, `MW (g/mol)`, `Amount`, `mmol` and `Equiv`, and exactly the cells of columns 2, 3, 5 and 6 carry `class="num"`
+
+#### Scenario: No width-dependent layout
+- **WHEN** a test reads the four source stylesheets
+- **THEN** none of them contains a media query on `width`, `min-width` or `max-width`
+
+#### Scenario: Desktop workspace
+- **WHEN** a browser displays the home page at 1280 CSS pixels or wider
+- **THEN** recent procedures and browse links occupy adjacent columns
+- **AND** the all-procedures table uses the available shell width
+
+#### Scenario: Procedure reference and text
+- **WHEN** a browser displays a procedure at 1280 CSS pixels or wider
+- **THEN** the body occupies a reading column on the left and the structure and metadata occupy a margin column on the right, without a panel border or background
+- **AND** prose has a bounded reading measure and wide tables scroll locally
+- **AND** the details stay first in document order, so print and the search index show them before the body
+
+#### Scenario: Print keeps document flow
+- **WHEN** a procedure is printed or rendered to an A4 PDF
+- **THEN** the details, structure and body retain their single-column order
+
