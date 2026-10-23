@@ -3,9 +3,15 @@
 All three use plain system sans-serif fonts, white backgrounds, thin
 dividers and functional labels. The previews use the German demo data.
 
+**Implemented:** layout 4 for the procedure lists and layout 7
+(Marginalia) for procedure pages. The others remain proposals. See
+`openspec/changes/desktop-layout/design.md` for what was built and what
+differs from the mock-ups.
+
 ## 4. Full-width table
 
-Search and filters above a table. Recommended for the simplest interface.
+Search and filters above a table. Implemented for `/procedures/` and
+`/procedures-by-date/`.
 
 ![Full-width table](layout-4.png)
 
@@ -72,6 +78,6 @@ notes in 11–12.
 ![Ledger, home](layout-9-home.png)
 ![Ledger, procedure](layout-9-procedure.png)
 
-Suggested combination: 9 for the home and list pages, 7 for procedure
-pages. Both are CSS-grid changes over the existing markup plus one
-partial each, and neither adds persistent interface state.
+Layout 7 is implemented for procedure pages, without the sidenotes
+beside their sections: the notes stay in the Notes section so that the
+document order does not change.

@@ -2,11 +2,11 @@
 
 The follow-up [minimalist layouts](../minimal/README.md) reflect the
 owner's preference for plain sans-serif fonts, light surfaces and minimal
-interface text. The original concepts below are retained for reference.
+interface text; layouts 4 and 7 from there are implemented. The original
+concepts below were not implemented and are kept for reference.
 
-These are static visual concepts using the German demo collection. The
-layout fix retains the existing theme; these images propose a later visual
-direction. Search, navigation and filters in the mockups are illustrative.
+These are static visual concepts using the German demo collection.
+Search, navigation and filters in the mockups are illustrative.
 
 ## 1. Reference library
 

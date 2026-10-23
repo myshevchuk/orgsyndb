@@ -49,8 +49,8 @@ Both color schemes continue to use the existing contrast-tested tokens.
 The reference-library concept uses editorial typography and a light
 paper surface. The research-workbench concept uses persistent sidebar
 navigation and denser data panels. The night-lab concept uses dark
-surfaces and a compound preview. These concepts are static review aids;
-the application change retains the established visual style.
+surfaces and a compound preview. These concepts are static review aids
+and were not implemented.
 
 ## Follow-up design constraints
 
@@ -58,8 +58,9 @@ The owner requested three further layouts using plain system sans-serif
 fonts, light surfaces and functional labels. Omit promotional copy,
 decorative typography and dark-theme exploration. The alternatives are a
 full-width table, a filter sidebar and a list/detail split. Their static
-previews live in docs/designs/minimal/; selecting a final layout remains
-a separate implementation decision.
+previews live in docs/designs/minimal/, with layouts 7-9 added later
+under the same constraints. The owner chose layout 4 for the lists and
+layout 7 for procedure pages; the Layout section describes them.
 
 ## Stale pages after a rebuild
 
