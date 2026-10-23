@@ -16,6 +16,8 @@
 - [x] Use sans-serif on screen; keep print unchanged.
 - [x] Mark the current page and section in the navigation.
 - [x] Add the list-tools, navigation and filter tests; update the spec.
+- [x] Send `Cache-Control: no-cache` from `serve` and the Caddyfile
+  example, so a rebuilt site is not hidden by cached pages.
 
 ## Validation
 

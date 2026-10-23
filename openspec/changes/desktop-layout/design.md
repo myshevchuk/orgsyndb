@@ -61,6 +61,16 @@ full-width table, a filter sidebar and a list/detail split. Their static
 previews live in docs/designs/minimal/; selecting a final layout remains
 a separate implementation decision.
 
+## Stale pages after a rebuild
+
+`orgsyndb serve` used the standard library handler, which sends
+`Last-Modified` but no `Cache-Control`. Browsers then cache pages by
+heuristic freshness, so after a rebuild they kept showing the earlier
+HTML, which names the earlier fingerprinted stylesheets: the new layout
+did not appear. `serve` now sends `Cache-Control: no-cache` on every
+response, and the Caddyfile example sets the same header, so browsers
+revalidate (a 304 when nothing changed) and show each new build at once.
+
 ## Verification
 
 Build the German demo and run the full suite, including English/German

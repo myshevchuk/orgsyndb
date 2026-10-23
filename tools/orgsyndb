@@ -305,6 +305,16 @@ def cmd_build(option: str | None, args: Sequence[str]) -> int:
     return 0
 
 
+class PreviewHandler(http.server.SimpleHTTPRequestHandler):
+    """Serve public/ so that a browser revalidates every file. Without
+    Cache-Control, browsers cache pages by Last-Modified heuristics and keep
+    showing the pages, and the stylesheets they name, of an earlier build."""
+
+    def end_headers(self) -> None:
+        self.send_header("Cache-Control", "no-cache")
+        super().end_headers()
+
+
 def cmd_serve(option: str | None, args: Sequence[str]) -> int:
     parser = Parser(prog=f"{PROG} serve", add_help=False)
     parser.add_argument("--port", default="8000")
@@ -317,7 +327,7 @@ def cmd_serve(option: str | None, args: Sequence[str]) -> int:
     collection = enter_collection(option)
     require_tools(*BUILD_TOOLS)
     run_build(collection)
-    handler = functools.partial(http.server.SimpleHTTPRequestHandler,
+    handler = functools.partial(PreviewHandler,
                                 directory=str(collection / "public"))
     try:
         server = http.server.ThreadingHTTPServer(("127.0.0.1", port),

@@ -149,7 +149,9 @@ validated 28 files: 0 errors, 0 warnings
 
 The preview server listens only on `127.0.0.1`, so other machines cannot
 reach it. Use `serve --port N` to choose another port. The preview does not
-reload after an edit; stop it and run `serve` again.
+reload after an edit; stop it and run `serve` again. The server tells the
+browser to revalidate every file, so the next page load shows the new
+build.
 
 `new` selects the next free `OSDB-NNNN` identifier across the Org sources,
 Markdown sources, exports, and available Git history of the collection. It
