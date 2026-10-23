@@ -1,12 +1,16 @@
 <header class="site-header">
 <a class="site-title" href="/">{{ site.Title }}</a>
 <nav aria-label="{{ T "nav_site" }}">
+{{- /* The link of the page itself carries aria-current="page"; the link
+of the section a page belongs to carries aria-current="true". The list by
+date belongs to the procedures. */ -}}
+{{ $here := .RelPermalink -}}
+{{ $within := cond (eq $here "/procedures-by-date/") "/procedures/" $here -}}
 <ul>
-<li><a href="/procedures/">{{ T "nav_procedures" }}</a></li>
-<li><a href="/reaction_types/">{{ T "nav_reaction_types" }}</a></li>
-<li><a href="/tags/">{{ T "nav_tags" }}</a></li>
-<li><a href="/authors/">{{ T "nav_authors" }}</a></li>
-<li><a href="/search/">{{ T "nav_search" }}</a></li>
+{{ range slice (slice "/procedures/" "nav_procedures") (slice "/reaction_types/" "nav_reaction_types") (slice "/tags/" "nav_tags") (slice "/authors/" "nav_authors") (slice "/search/" "nav_search") -}}
+{{ $url := index . 0 -}}
+<li><a href="{{ $url }}"{{ if eq $here $url }} aria-current="page"{{ else if hasPrefix $within $url }} aria-current="true"{{ end }}>{{ T (index . 1) }}</a></li>
+{{ end -}}
 </ul>
 </nav>
 </header>

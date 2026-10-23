@@ -514,6 +514,79 @@ class ShippedSiteTests(SiteCase):
                 self.assertNotIn(other, [l.target for l in current])
         self.assertEqual(len(items), len(self.order_by_date()))
 
+    def test_list_tools_on_both_lists(self) -> None:
+        """Scenario: List tools."""
+        labels = self.labels()
+        in_use = sorted({labels[slug] for item in self.content()
+                         for slug in item.data["reaction_types"]})
+        total = len(self.content())
+        for url in ("procedures", "procedures-by-date"):
+            path = self.public / url / "index.html"
+            with self.subTest(page=url):
+                page = ps.load_page(self.public, path)
+                main = page.find("main")
+                count = main.find("p", "list-count", data_list_count=True)
+                self.assertIsNotNone(count, "no p.list-count")
+                self.assertEqual(count.norm(), f"{total} entries")
+                self.assertEqual(count.attrs.get("data-filtered"),
+                                 "{shown} of {total} entries")
+                form = main.find("form", role="search")
+                self.assertIsNotNone(form, "no form[role=search]")
+                self.assertEqual(form.attrs.get("method", "").lower(), "get")
+                self.assertEqual(page.resolve(form.attrs.get("action", "")),
+                                 "/search/")
+                field = form.find("input", name="q")
+                self.assertIsNotNone(field, "no input[name=q]")
+                self.assertTrue(field.attrs.get("aria-label"))
+                submit = form.find("button", type="submit")
+                self.assertIsNotNone(submit, "no submit button")
+                self.assertNotIn("hidden", submit.attrs)
+                filters = main.find("div", "list-filters",
+                                    data_list_filters=True)
+                self.assertIsNotNone(filters, "no div.list-filters")
+                self.assertIn("hidden", filters.attrs)
+                kinds = filters.find("select", data_filter="reaction-type")
+                options = [(o.attrs.get("value"), o.norm())
+                           for o in kinds.find_all("option")]
+                self.assertEqual(options[0], ("", "All"))
+                self.assertEqual(sorted(text for _, text in options[1:]),
+                                 in_use)
+                states = filters.find("select", data_filter="status")
+                self.assertEqual(
+                    [o.attrs.get("value") for o in states.find_all("option")],
+                    ["", "draft", "checked", "retired"])
+                table = self.procedure_table(page)
+                rows = table.node.find("tbody").find_all("tr")
+                items = {item.id: item for item in self.content()}
+                for row in rows:
+                    item = items[row.find("td").norm()]
+                    self.assertEqual(row.attrs.get("data-status"),
+                                     item.data["status"])
+                    self.assertEqual(row.attrs.get("data-reaction-types"),
+                                     " ".join(item.data["reaction_types"]))
+                scripts = [page.resolve(s.attrs.get("src", ""))
+                           for s in page.find_all("script")]
+                self.assertTrue(any(re.match(r"^/js/list-filter\b", s)
+                                    for s in scripts), scripts)
+
+    def test_navigation_marks_the_current_section(self) -> None:
+        """Scenario: Current section in the navigation."""
+        cases = {"index.html": {},
+                 "procedures/index.html": {"/procedures/": "page"},
+                 "procedures-by-date/index.html": {"/procedures/": "true"},
+                 "procedures/osdb-0001/index.html": {"/procedures/": "true"},
+                 "tags/index.html": {"/tags/": "page"},
+                 "tags/sample-data/index.html": {"/tags/": "true"},
+                 "search/index.html": {"/search/": "page"}}
+        for name, expected in cases.items():
+            with self.subTest(page=name):
+                page = ps.load_page(self.public, self.public / name)
+                nav = page.find("header", "site-header").find("nav")
+                marked = {l.target: l.node.attrs["aria-current"]
+                          for l in page.links(nav)
+                          if "aria-current" in l.node.attrs}
+                self.assertEqual(marked, expected)
+
     def test_home_page_content(self) -> None:
         """Scenario: Home page content."""
         path = self.public / "index.html"

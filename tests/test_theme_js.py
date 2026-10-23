@@ -60,3 +60,41 @@ class CleanedResultTests(unittest.TestCase):
         got = call_search_terms([("cleanResult", result)])
         self.assertEqual(got, [{"meta": {"id": "OSDB-0001"},
                                 "excerpt": "e"}])
+
+
+LIST_RUNNER = r"""
+const fs = require("fs");
+const vm = require("vm");
+vm.runInThisContext(fs.readFileSync(process.argv[1], "utf8"),
+                    { filename: process.argv[1] });
+const calls = JSON.parse(fs.readFileSync(0, "utf8"));
+const out = calls.map(([row, filters]) =>
+  globalThis.OrgSynListFilter.rowMatches(row, filters));
+process.stdout.write(JSON.stringify(out));
+"""
+
+
+class ListFilterTests(unittest.TestCase):
+    def test_rows_match_every_set_filter(self) -> None:
+        """Scenario: List filter matching (site-theme "List tools")."""
+        node = ps.require_node()
+        if not ps.LIST_FILTER.is_file():
+            raise AssertionError("site/assets/js/list-filter.js does not exist")
+        row = {"reactionTypes": "hydrolysis", "status": "draft"}
+        multi = {"reactionTypes": "acylation hydrolysis", "status": "checked"}
+        cases = [((row, {"reactionType": "", "status": ""}), True),
+                 ((row, {"reactionType": "hydrolysis", "status": ""}), True),
+                 ((row, {"reactionType": "hydro", "status": ""}), False),
+                 ((row, {"reactionType": "", "status": "checked"}), False),
+                 ((row, {"reactionType": "hydrolysis",
+                         "status": "draft"}), True),
+                 ((multi, {"reactionType": "acylation",
+                           "status": "checked"}), True),
+                 (({}, {"reactionType": "acylation", "status": ""}), False)]
+        done = subprocess.run(
+            [node, "-e", LIST_RUNNER, str(ps.LIST_FILTER)],
+            input=json.dumps([call for call, _ in cases]),
+            capture_output=True, text=True, timeout=60)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(json.loads(done.stdout),
+                         [want for _, want in cases])

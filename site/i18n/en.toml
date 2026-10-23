@@ -33,6 +33,11 @@ search_noscript = "Search needs JavaScript. Without it, browse <a href=\"{{ .pro
 sort = "Sort:"
 sort_by_id = "by ID"
 sort_by_date = "by date created, newest first"
+list_count_one = "1 entry"
+list_count = "{{ .Count }} entries"
+list_count_filtered = "{shown} of {total} entries"
+list_search_placeholder = "Product, CAS, SMILES or keyword"
+filter_all = "All"
 
 table_procedures = "Procedures"
 table_label = "Table"
