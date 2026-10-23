@@ -6,15 +6,14 @@ the owner writes Org files, and co-workers can write Markdown files. The
 build treats both formats alike.
 
 The finished site is static. Viewing it loads no fonts, analytics, or other
-resources from the internet. It has a responsive light and dark theme,
-full-text search, browse pages, and an A4 print layout. Its interface is
-German by default and can be switched to English.
+resources from the internet. It has a light and dark theme, full-text
+search, browse pages, and an A4 print layout. Its interface is German by
+default and can be switched to English.
 
 The browser layout is optimized for desktop work: full-width procedure
 tables with search and filters, recent procedures beside the browse links,
 and procedure details in a margin beside the readable procedure text.
-Narrow windows stack these panels; printing uses the separate
-single-column A4 layout.
+Printing uses a separate single-column A4 layout.
 
 ## Application and collections
 
@@ -340,29 +339,6 @@ mounts the collection's sources and static files into the application's
 site and sets the output directories. It runs Hugo without a build lock, so
 nothing is written under the application's `site/`.
 
-## Moving from `tools/build.fish`
-
-`tools/build.fish` and fish are gone. Every subcommand keeps its name and
-behaviour; call `orgsyndb -C <collection> <subcommand>` instead. The sample
-procedures that used to sit in `org/procedures/`, `md/procedures/` and
-`site/static/structures/` are now in `examples/demo/`. If you added
-procedures of your own in those places, move them into a collection:
-
-```sh
-orgsyndb init ~/my-procedures
-cp org/procedures/OSDB-*.org ~/my-procedures/org/procedures/
-cp md/procedures/OSDB-*.md ~/my-procedures/md/procedures/
-cp site/static/structures/* ~/my-procedures/static/structures/
-```
-
-Run these from the application's directory, then delete the copied files
-there. Files that were ever committed to the application's repository stay
-in its history.
-
-Old `build/`, `public/`, `pdf/`, `site/resources/` and
-`site/.hugo_build.lock` in the application's directory are leftovers. They
-stay ignored by Git and can be deleted.
-
 ## Development
 
 Run the test suite from the application's root with:
@@ -433,5 +409,3 @@ the example's `tls internal` setting against your organisation's TLS setup.
 - [Org authoring guide](docs/AUTHORING-ORG.org): Org templates, timestamps,
   export behaviour, and Emacs conventions. German:
   [AUTHORING-ORG.de.org](docs/AUTHORING-ORG.de.org).
-- [Design decisions](docs/DECISIONS.org): the project-wide choices and why
-  they were made.
