@@ -13,6 +13,10 @@ The screen stylesheet gives `.table-scroll` `overflow-x: auto`, so a wide table 
 - **WHEN** a test scans every procedure page after a theme build
 - **THEN** the table under the `Reagents` heading is the only child of a `div.table-scroll` with the three attributes, its header cells read `Reagent`, `CAS`, `MW (g/mol)`, `Amount`, `mmol` and `Equiv`, and exactly the cells of columns 2, 3, 5 and 6 carry `class="num"`
 
+#### Scenario: Phone-width review
+- **WHEN** the orchestrator views a procedure page, the all-procedures list and the search page at 390 CSS pixels wide (manual verification, tasks.md section 9)
+- **THEN** no page scrolls sideways, and the long sample's Reagents table scrolls inside its container
+
 #### Scenario: Desktop workspace
 - **WHEN** a browser displays the home page at 1280 CSS pixels or wider
 - **THEN** recent procedures and browse links occupy adjacent columns
