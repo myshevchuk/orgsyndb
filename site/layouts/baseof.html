@@ -2,6 +2,7 @@
 <html lang="{{ site.Language.Lang }}">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>{{ if .IsHome }}{{ site.Title }}{{ else }}{{ partial "page-title.html" . }} | {{ site.Title }}{{ end }}</title>
 {{ $base := slice (resources.Get "css/tokens.css") (resources.Get "css/base.css") | resources.Concat "css/base.css" | minify | fingerprint -}}

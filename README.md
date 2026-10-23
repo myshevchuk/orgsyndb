@@ -13,7 +13,8 @@ default and can be switched to English.
 The browser layout is optimized for desktop work: full-width procedure
 tables with search and filters, recent procedures beside the browse links,
 and procedure details in a margin beside the readable procedure text.
-Printing uses a separate single-column A4 layout.
+Narrow windows stack these panels; printing uses the separate
+single-column A4 layout.
 
 ## Application and collections
 

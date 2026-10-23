@@ -1,10 +1,7 @@
 ## Mobile
 
-- [x] Remove the width media queries from `screen.css` and the
-  narrow-window wording from its comments.
-- [x] Remove the viewport meta from `baseof.html`.
-- [x] Update the shell test for the missing viewport meta, and add the
-  width-media-query test.
+- [x] Remove the phone-width rule set from `screen.css`; keep the
+  narrow-window stacking.
 
 ## Documents
 

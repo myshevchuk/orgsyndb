@@ -171,8 +171,11 @@ class ShippedSiteTests(SiteCase):
         self.assertEqual(footer.norm(), FOOTER)
         order = [page.index_of(n) for n in (skip, header, mains[0], footer)]
         self.assertEqual(order, sorted(order), "shell elements out of order")
-        self.assertIsNone(page.find("meta", name="viewport"),
-                          "viewport meta present")
+        viewport = page.find("meta", name="viewport")
+        self.assertIsNotNone(viewport, "no viewport meta")
+        # Hugo's minifier drops the space after the comma.
+        self.assertEqual(ps.squash(viewport.attrs.get("content", "")),
+                         "width=device-width,initial-scale=1")
         scheme = page.find("meta", name="color-scheme")
         self.assertIsNotNone(scheme, "no color-scheme meta")
         self.assertEqual(scheme.attrs.get("content"), "light dark")

@@ -1,9 +1,10 @@
 ## Why
 
-The site is used on desktop browsers only, yet the theme still carries
-phone-width rules, a viewport meta and a manual phone-width review. The
-owner asked to drop mobile compatibility entirely; mobile support, if it
-is ever wanted, will be a change of its own.
+The site is used on desktop browsers. The theme's specs still carry a
+manual phone-width review, and its stylesheet a phone-only rule set.
+Basic stacking for narrower windows stays, since a desktop window can
+be narrow too, but mobile is no longer a goal of its own; support for
+it, if it is ever wanted, will be a change of its own.
 
 The design concepts under `docs/designs/` were transient material for
 choosing the desktop layout and have served their purpose. The specs
@@ -14,20 +15,19 @@ versions the export targets, is recorded nowhere else.
 
 ## What Changes
 
-- Remove the screen stylesheet's width media queries and the viewport
-  meta. The desktop grids already shrink their flexible columns, so a
-  smaller desktop window keeps working without them.
-- Replace the manual phone-width scenario with an automated check that
-  no stylesheet has a width media query.
+- Remove the screen stylesheet's phone-width (35rem) rule set; keep the
+  70rem and 55rem rules that stack the columns in narrower windows.
+- Drop the manual phone-width scenario, and state narrow-window
+  stacking in one sentence of the measure requirement.
 - Drop the references to `docs/designs/` from the site-theme spec, and
   delete `docs/designs/`.
 - Delete `docs/DECISIONS.org`; record the Emacs 30.2 and Org 9.7.11
   target in the org-export spec.
 - Remove the README's "Moving from `tools/build.fish`" section, its
-  link to the decisions file and its mentions of responsive layout.
+  link to the decisions file and the word "responsive".
 
 ## Impact
 
-Affects the site-theme and org-export capabilities, `screen.css`,
-`baseof.html`, the theme tests and the README. Print, search, the build
-program and collections keep their contracts.
+Affects the site-theme and org-export capabilities, `screen.css` and
+the README. Print, search, the build program and collections keep
+their contracts.

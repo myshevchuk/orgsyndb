@@ -33,7 +33,7 @@ Every HTML page the theme renders SHALL contain, in this order:
 
 These texts are those of an English site; a German site has the German texts that the localization spec gives.
 
-Each page's head has a `<meta name="color-scheme" content="light dark">` and no `<meta name="viewport">`. The site-build "Minimal layout contract" elements also stay: `lang`, `charset` and `<title>`.
+Each page's head has a `<meta name="viewport" content="width=device-width, initial-scale=1">` and a `<meta name="color-scheme" content="light dark">`. The site-build "Minimal layout contract" elements also stay: `lang`, `charset` and `<title>`.
 
 Headings follow these rules:
 - Each page has exactly one `h1`.
@@ -42,7 +42,7 @@ Headings follow these rules:
 
 #### Scenario: Shell on every page
 - **WHEN** a test scans every HTML file under `public/` except files under `public/pagefind/`, after a theme build in locale `en`
-- **THEN** each has the skip link, the site header with the five navigation links, one `main#main`, the footer text, the `color-scheme` meta and no `viewport` meta, exactly one `h1`, and no heading-level jump greater than one
+- **THEN** each has the skip link, the site header with the five navigation links, one `main#main`, the footer text, both `meta` elements, exactly one `h1`, and no heading-level jump greater than one
 
 #### Scenario: Term titles use labels and tags
 - **WHEN** a test reads `public/reaction_types/aldol-condensation/index.html` and `public/tags/sample-data/index.html` after a theme build in locale `en`
@@ -263,7 +263,7 @@ A procedure SHALL render to the same HTML whichever source format it was written
 - **THEN** after `OSDB-0904`, `osdb-0904`, `OSDB-0905` and `osdb-0905` are replaced by `OSDB-NNNN` and `osdb-nnnn`, `procedures/osdb-0904/index.html` and `procedures/osdb-0905/index.html` are byte-identical
 
 ### Requirement: Measure and tables
-The screen layout SHALL prioritize desktop browsers with a shell up to 96rem wide, set in the system sans-serif stack; printed pages keep the text face of `tokens.css`. Running procedure paragraphs and lists SHALL keep a reading measure up to 78ch, while procedure tables SHALL use their available column width. Wide tables SHALL scroll within their own containers. The theme SHALL make no provision for phones or other narrow screens: no stylesheet has a media query on the viewport width. Every Markdown table SHALL be rendered by `site/layouts/_markup/render-table.html` as follows:
+The screen layout SHALL prioritize desktop browsers with a shell up to 96rem wide, set in the system sans-serif stack; printed pages keep the text face of `tokens.css`. Running procedure paragraphs and lists SHALL keep a reading measure up to 78ch, while procedure tables SHALL use their available column width. Narrower windows SHALL stack the columns in document order, and wide tables SHALL scroll within their own containers. Every Markdown table SHALL be rendered by `site/layouts/_markup/render-table.html` as follows:
 - The `<table>` is the only child of a `div.table-scroll` with `tabindex="0"`, `role="region"` and a non-empty `aria-label`.
 - Each header cell is a `th` with `scope="col"`.
 - Every cell of a column whose header text is `CAS`, `MW (g/mol)`, `mmol` or `Equiv` carries `class="num"`.
@@ -274,10 +274,6 @@ The screen stylesheet gives `.table-scroll` `overflow-x: auto`, so a wide table 
 #### Scenario: Reagents tables are wrapped and marked
 - **WHEN** a test scans every procedure page after a theme build
 - **THEN** the table under the `Reagents` heading is the only child of a `div.table-scroll` with the three attributes, its header cells read `Reagent`, `CAS`, `MW (g/mol)`, `Amount`, `mmol` and `Equiv`, and exactly the cells of columns 2, 3, 5 and 6 carry `class="num"`
-
-#### Scenario: No width-dependent layout
-- **WHEN** a test reads the four source stylesheets
-- **THEN** none of them contains a media query on `width`, `min-width` or `max-width`
 
 #### Scenario: Desktop workspace
 - **WHEN** a browser displays the home page at 1280 CSS pixels or wider
