@@ -44,7 +44,7 @@
 button:hover { border-color: var(--muted); }
 .site-header a:hover, .site-title:hover { text-decoration: underline; }
 
-/* Desktop is the primary workspace. Keep the page shell wide for data
+/* Desktop is the only workspace. Keep the page shell wide for data
    tables and use separate columns for browsing and procedure details.
    These rules live here so the A4 layout keeps its single-column flow. */
 /* On screen the whole interface is plain sans-serif; paper keeps the
@@ -106,7 +106,7 @@ h1 { font-size: 2.25rem; }
 .procedure-header .actions { grid-column: 2; grid-row: 1 / 3; align-self: center; }
 /* Marginalia: the body is one reading column; the details follow it as
    a margin on the right. The details stay first in the document, so
-   print, Pagefind and narrow windows keep their order. */
+   print and Pagefind keep their order. */
 .procedure {
   display: grid;
   grid-template-columns: minmax(0, 48rem) minmax(15rem, 21rem);
@@ -213,29 +213,3 @@ h1 { font-size: 2.25rem; }
    canvas and prevent long result titles or SMILES from widening it. */
 .search { max-width: 80rem; }
 .search .pagefind-ui__result { min-width: 0; overflow-wrap: anywhere; }
-
-/* A narrow browser window still has a complete reading order. */
-@media (max-width: 70rem) {
-  body { padding: 0 var(--space-4); }
-  .home-layout { grid-template-columns: minmax(0, 1fr); }
-  .home-browse {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-5);
-    border-left: 0;
-    border-top: 1px solid var(--border);
-    padding: var(--space-4) 0 0;
-  }
-  .home-browse section + section { margin-top: 0; }
-  .procedure { grid-template-columns: minmax(0, 1fr) 16rem; column-gap: var(--space-5); }
-}
-@media (max-width: 55rem) {
-  .procedure { display: block; }
-  .procedure-details { margin-bottom: var(--space-5); }
-  .procedure-header { display: block; }
-  .procedure-header .actions { margin-top: var(--space-3); }
-}
-@media (max-width: 35rem) {
-  body { padding: 0 var(--space-3); }
-  .home-browse { grid-template-columns: minmax(0, 1fr); }
-}

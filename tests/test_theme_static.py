@@ -69,6 +69,15 @@ class DarkModeOnScreenTests(unittest.TestCase):
                                                  "clip-path"))
 
 
+
+class NoWidthDependentLayoutTests(unittest.TestCase):
+    def test_no_stylesheet_queries_the_width(self) -> None:
+        """Scenario: No width-dependent layout."""
+        width = re.compile(r"@media[^{]*\(\s*(min-|max-)?width\s*:")
+        for name in SOURCES:
+            with self.subTest(file=name):
+                self.assertNotRegex(css_text(name), width)
+
 class ContrastTests(unittest.TestCase):
     def sets(self) -> dict[str, dict[str, str]]:
         return {"light": custom_properties(css("tokens.css"), ()),
