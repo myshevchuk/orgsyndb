@@ -4,7 +4,7 @@
 
 ;; Usage: emacs -Q --batch -l tools/export.el PLAN_JSON STAGING_DIR
 ;;
-;; Exports every entry of PLAN_JSON (written by `pipeline.py export-plan')
+;; Exports every entry of PLAN_JSON (written by `pipeline.write_export_plan')
 ;; to STAGING_DIR/<stem>.md.  ox-hugo and tomelr are installed into
 ;; <app>/.emacs-batch/elpa/ at pinned commits on first use, and every run
 ;; checks the installed checkouts against the pins.  Temporary files go
@@ -177,10 +177,8 @@ after all plain keys."
         (org-hugo-export-to-md)))))
 
 (defun osdb-main (args)
-  "Export the plan named by ARGS, (PLAN_JSON STAGING_DIR), and exit."
-  (unless (= (length args) 2)
-    (osdb-fail nil "usage: emacs -Q --batch -l tools/export.el \
-PLAN_JSON STAGING_DIR"))
+  "Export the plan named by ARGS, (PLAN_JSON STAGING_DIR), and exit.
+The argument count is checked when this file loads."
   (let ((plan-file (expand-file-name (car args)))
         (staging (file-name-as-directory (expand-file-name (cadr args))))
         (count 0))

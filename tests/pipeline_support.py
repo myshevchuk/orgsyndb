@@ -1,10 +1,11 @@
 """Shared helpers for the build-pipeline tests.
 
 Pure tests load ``tools/pipeline.py`` lazily, so a missing module fails
-the test on an assertion. Program and integration tests work in a
-temporary copy of the application and of the demo collection, under a
-path that contains a space, and run ``tools/orgsyndb -C <collection>``
-with ``cwd`` set to a third temporary directory.
+the test on an assertion, and call its functions in-process. Program and
+integration tests work in a temporary copy of the application and of the
+demo collection, under a path that contains a space, and run
+``tools/orgsyndb -C <collection>`` with ``cwd`` set to a third temporary
+directory.
 """
 
 import contextlib
@@ -12,6 +13,7 @@ import functools
 import hashlib
 import html as html_lib
 import importlib.util
+import io
 import json
 import os
 import re
@@ -96,15 +98,15 @@ class Run(NamedTuple):
     stderr: str
 
 
-def run_pipeline(args: list[str | Path], *, cwd: Path | None = None,
-                 env: dict[str, str] | None = None) -> Run:
-    """Run tools/pipeline.py as a subprocess."""
-    if not PIPELINE.is_file():
-        raise AssertionError("tools/pipeline.py does not exist")
-    done = subprocess.run(
-        [sys.executable, str(PIPELINE), *map(str, args)],
-        cwd=cwd, env=env, capture_output=True, text=True, timeout=120)
-    return Run(done.returncode, done.stdout, done.stderr)
+def captured(function: Any, *args: Any) -> tuple[Any, str, str]:
+    """Call ``function(*args)`` with stdout and stderr captured.
+
+    Returns the result and both outputs; an exception propagates.
+    """
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        result = function(*args)
+    return result, out.getvalue(), err.getvalue()
 
 
 # --- small file helpers ----------------------------------------------------

@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from pipeline_support import FIXTURES, run_pipeline
+from pipeline_support import FIXTURES, Run, captured, pipeline
 
 VALID_ORG = FIXTURES / "valid" / "org"
 PROPYL = VALID_ORG / "OSDB-0003-propyl-acetate.org"
@@ -31,8 +31,11 @@ class PlanTestCase(unittest.TestCase):
         (base / "org root").mkdir()
         return base / "org root", base / "plan.json"
 
-    def plan(self, root: Path, plan: Path):
-        return run_pipeline(["export-plan", root, plan])
+    def plan(self, root: Path, plan: Path) -> Run:
+        """Write the plan; exit status 1 stands for a refused plan."""
+        written, out, err = captured(pipeline().write_export_plan,
+                                     str(root), plan)
+        return Run(0 if written is not None else 1, out, err)
 
     def plan_for(self, source: Path, **keywords: str) -> dict:
         """Plan a copy of ``source`` with keyword lines replaced."""

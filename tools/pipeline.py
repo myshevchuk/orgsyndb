@@ -1,20 +1,12 @@
-#!/usr/bin/env python3
-# /// script
-# requires-python = ">=3.14"
-# dependencies = []
-# ///
 """Testable logic behind tools/orgsyndb.
 
 The export plan and its timestamp rule, the recoverable replacement of
 ``build/export/``, next-ID allocation, slugs, template filling, the Hugo
 overlay, PDF jobs and the Pagefind download. File discovery and Org
-timestamp parsing come from ``validate.py`` in the same directory. The
-command-line interface is low-level plumbing for tests and debugging; it
-exits 0 on success, 1 on failure and 2 on a usage error, and writes
-errors to stderr as ``pipeline.py: error: <message>``.
+timestamp parsing come from ``validate.py`` in the same directory.
+Messages printed to stderr name the program ``orgsyndb``.
 """
 
-import argparse
 import datetime as dt
 import functools
 import hashlib
@@ -61,9 +53,7 @@ PAGEFIND_BIN_SHA256 = ("c4b86009ce5420dc2a1748ab2705bef6"
 
 WEASYPRINT_WARNING_FILTER = "ignore:pkg_resources is deprecated:UserWarning"
 
-# The program named in the messages this module prints; tools/orgsyndb
-# sets it to its own name.
-PROG = "pipeline.py"
+PROG = "orgsyndb"
 
 Rename = Callable[[Path, Path], None]
 Remove = Callable[[Path], None]
@@ -219,18 +209,16 @@ def fill_template(text: str, kind: str, ident: str, title: str,
     ``kind`` is ``"org"`` or ``"md"``. Every ``OSDB-0000`` becomes
     ``ident`` and every ``osdb-0000`` its lowercase form. The title,
     both timestamps (from aware ``now``) and the AI model (``None`` for a
-    human author) are written into their anchor lines. Raises ValueError
-    when an anchor line is missing or repeated, when ``title`` holds a
-    line break, or when ``ai_model`` is not a model identifier.
+    human author) are written into their anchor lines; ``title`` is a
+    single line and ``ai_model`` a model identifier, as
+    ``new_procedure`` checks. Raises ValueError for an unknown ``kind``
+    or a malformed ``ident``, and when an anchor line is missing or
+    repeated.
     """
     if kind not in ("org", "md"):
         raise ValueError(f"unknown template kind {kind!r}")
     if not validate.ID_RE.match(ident):
         raise ValueError(f"{ident!r} is not a procedure ID")
-    if "\n" in title or "\r" in title:
-        raise ValueError("the title must be a single line")
-    if ai_model is not None and not validate.AI_MODEL_RE.match(ai_model):
-        raise ValueError(f"{ai_model!r} is not a model identifier")
     text = text.replace("OSDB-0000", ident).replace("osdb-0000",
                                                     ident.lower())
     if kind == "org":
@@ -289,7 +277,7 @@ def pdf_jobs(files: Iterable[tuple[Path, dict[str, Any]]], public: Path,
 # The export directory
 
 
-def _remove_tree(path: Path) -> None:
+def remove_tree(path: Path) -> None:
     """Remove ``path``, a directory tree or a single file, if it exists."""
     if path.is_dir() and not path.is_symlink():
         shutil.rmtree(path)
@@ -309,14 +297,14 @@ def recover_export(build: Path) -> None:
     export, previous = build / EXPORT, build / PREVIOUS
     if previous.exists():
         if export.exists():
-            _remove_tree(previous)
+            remove_tree(previous)
         else:
             os.rename(previous, export)
-    _remove_tree(build / STAGING)
+    remove_tree(build / STAGING)
     tmp = build / "tmp"
     if tmp.is_dir():
         for entry in tmp.iterdir():
-            _remove_tree(entry)
+            remove_tree(entry)
 
 
 def replace_export(build: Path, rename: Rename = os.rename,
@@ -531,7 +519,7 @@ def stage_content(chosen: Iterable[tuple[Path, dict[str, Any]]],
     first front-matter line.
     """
     target = Path(target)
-    _remove_tree(target)
+    remove_tree(target)
     target.mkdir(parents=True)
     for path, data in chosen:
         name = Path(path).name
@@ -647,8 +635,8 @@ def ensure_pagefind(tools_dir: Path) -> Path:
     created = not home.exists()
     download = home / "download"
     try:
-        _remove_tree(binary)
-        _remove_tree(download)
+        remove_tree(binary)
+        remove_tree(download)
         download.mkdir(parents=True)
         tarball = download / PAGEFIND_TARBALL
         try:
@@ -725,25 +713,11 @@ def render_pdfs(jobs: Sequence[PdfJob]) -> list[PdfJob]:
 
 
 # --------------------------------------------------------------------------
-# Command line
+# Export plans and procedure stubs
 
 
 class UsageError(Exception):
-    """A command-line argument is wrong; the CLI exits 2."""
-
-
-def _load_plan(path: Path) -> list[dict[str, Any]]:
-    """Read an export plan written by ``export-plan``."""
-    try:
-        plan = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise ExportError(f"cannot read the export plan {path}: "
-                          f"{exc}") from exc
-    if not isinstance(plan, list) or not all(
-            isinstance(e, dict) and isinstance(e.get("stem"), str)
-            for e in plan):
-        raise ExportError(f"{path} is not an export plan")
-    return plan
+    """An argument of ``orgsyndb new`` is wrong; the program exits 2."""
 
 
 def write_export_plan(org_root: str, plan_path: Path
@@ -767,26 +741,6 @@ def write_export_plan(org_root: str, plan_path: Path
     return plan
 
 
-def cmd_export_plan(args: argparse.Namespace) -> int:
-    """Write the export plan, or print lint errors and return 1."""
-    plan = write_export_plan(args.org_root, Path(args.plan))
-    return 0 if plan is not None else 1
-
-
-def cmd_recover_export(args: argparse.Namespace) -> int:
-    """Repair the leftovers of an interrupted export."""
-    recover_export(Path(args.build))
-    return 0
-
-
-def cmd_install_export(args: argparse.Namespace) -> int:
-    """Check the staging directory against the plan, then install it."""
-    build = Path(args.build)
-    check_staging(build, _load_plan(build / PLAN_NAME))
-    replace_export(build)
-    return 0
-
-
 def _new_title(words: Sequence[str]) -> str:
     """Join and check the title words; raise UsageError."""
     title = " ".join(words).strip()
@@ -797,28 +751,8 @@ def _new_title(words: Sequence[str]) -> str:
     return title
 
 
-def _now(value: str | None) -> dt.datetime:
-    """Return ``--now`` as an aware datetime, or the current second."""
-    if value is None:
-        return dt.datetime.now(berlin()).replace(microsecond=0)
-    try:
-        moment = dt.datetime.fromisoformat(value)
-    except ValueError:
-        raise UsageError(f"--now {value!r} is not an ISO 8601 date and "
-                         "time") from None
-    if moment.utcoffset() is None:
-        raise UsageError(f"--now {value!r} needs a UTC offset")
-    return moment
-
-
 def _warn(message: str) -> None:
     print(f"{PROG}: warning: {message}", file=sys.stderr)
-
-
-def cmd_next_id(args: argparse.Namespace) -> int:
-    """Print the next free procedure ID of the collection."""
-    print(next_id(candidate_names(Path(args.collection), _warn)))
-    return 0
 
 
 def template_path(kind: str, language: str | None) -> Path:
@@ -871,130 +805,3 @@ def new_procedure(collection: Path, words: Sequence[str], md: bool,
     except FileExistsError:
         raise ValueError(f"{relative} already exists") from None
     return relative
-
-
-def cmd_new(args: argparse.Namespace) -> int:
-    """Create a procedure stub and print its collection-relative path."""
-    relative = new_procedure(Path(args.collection), args.title, args.md,
-                             args.ai_model, _now(args.now), args.lang)
-    print(relative.as_posix())
-    return 0
-
-
-def cmd_pdf(args: argparse.Namespace) -> int:
-    """Render every procedure page to a PDF; return 1 if any job failed."""
-    pdf_dir = Path(args.pdf_dir)
-    jobs = pdf_jobs(content_files(args.roots), Path(args.public), pdf_dir)
-    pdf_dir.mkdir(parents=True, exist_ok=True)
-    failed = render_pdfs(jobs)
-    print(f"pdf: {len(jobs) - len(failed)} of {len(jobs)} files written")
-    if failed:
-        print("pipeline.py: error: failed: "
-              + ", ".join(job.pdf.name for job in failed), file=sys.stderr)
-        return 1
-    return 0
-
-
-def cmd_ensure_pagefind(args: argparse.Namespace) -> int:
-    """Print the path of the verified Pagefind binary."""
-    print(ensure_pagefind(Path(args.tools_dir)))
-    return 0
-
-
-def build_parser() -> argparse.ArgumentParser:
-    """Return the command-line parser."""
-    parser = argparse.ArgumentParser(
-        prog="pipeline.py",
-        description="Build-pipeline plumbing behind tools/orgsyndb. "
-        "Exits 0 on success, 1 on failure and 2 on a usage error.")
-    sub = parser.add_subparsers(dest="command", required=True,
-                                metavar="COMMAND")
-
-    plan = sub.add_parser(
-        "export-plan", help="plan the export of an Org root",
-        description="Write a JSON export plan for the Org procedures of "
-        "ORG_ROOT, or print lint errors to stderr and exit 1.")
-    plan.add_argument("org_root", metavar="ORG_ROOT")
-    plan.add_argument("plan", metavar="PLAN_JSON")
-    plan.set_defaults(func=cmd_export_plan)
-
-    recover = sub.add_parser(
-        "recover-export", help="repair an interrupted export",
-        description="Repair the export directories under BUILD left by an "
-        "interrupted run, and empty BUILD/tmp/.")
-    recover.add_argument("build", metavar="BUILD")
-    recover.set_defaults(func=cmd_recover_export)
-
-    install = sub.add_parser(
-        "install-export", help="install the staged export",
-        description="Check that BUILD/.export-staging/ holds exactly the "
-        f"files planned in BUILD/{PLAN_NAME}, then replace BUILD/export/ "
-        "with it.")
-    install.add_argument("build", metavar="BUILD")
-    install.set_defaults(func=cmd_install_export)
-
-    nxt = sub.add_parser(
-        "next-id", help="print the next free procedure ID",
-        description="Print the ID one above the highest in the source "
-        "trees, the export directory and the git history of COLLECTION.")
-    nxt.add_argument("--collection", required=True, metavar="COLLECTION")
-    nxt.set_defaults(func=cmd_next_id)
-
-    new = sub.add_parser(
-        "new", help="create a procedure stub",
-        description="Create org/procedures/<ID>-<slug>.org, or "
-        "md/procedures/<ID>-<slug>.md with --md, in COLLECTION from the "
-        "application's template, and print its path relative to "
-        "COLLECTION. With --lang LANG, the stub is in that language and its "
-        "name ends in .LANG.org or .LANG.md.")
-    new.add_argument("--collection", required=True, metavar="COLLECTION")
-    new.add_argument("--md", action="store_true",
-                     help="create a Markdown procedure")
-    new.add_argument("--ai-model", metavar="ID",
-                     help="identifier of the AI model writing it (default: "
-                     "a human author)")
-    new.add_argument("--lang", choices=validate.LANGUAGES,
-                     help="language of the procedure, written into its file "
-                     "name (default: English, no code)")
-    new.add_argument("--now", metavar="DATETIME",
-                     help="ISO 8601 date and time with offset to use "
-                     "instead of the current time")
-    new.add_argument("title", nargs="+", metavar="TITLE")
-    new.set_defaults(func=cmd_new)
-
-    pdf = sub.add_parser(
-        "pdf", help="render procedure pages to PDF",
-        description="Render public/procedures/<slug>/index.html of every "
-        "procedure in ROOT... to PDF_DIR/<file stem>.pdf with WeasyPrint.")
-    pdf.add_argument("--public", required=True, metavar="DIR")
-    pdf.add_argument("--pdf-dir", required=True, metavar="DIR")
-    pdf.add_argument("roots", nargs="+", metavar="ROOT")
-    pdf.set_defaults(func=cmd_pdf)
-
-    pagefind = sub.add_parser(
-        "ensure-pagefind", help="print the path of a verified Pagefind",
-        description=f"Print the path of Pagefind {PAGEFIND_VERSION} under "
-        "TOOLS_DIR, downloading and verifying it first when needed.")
-    pagefind.add_argument("--tools-dir", required=True, metavar="TOOLS_DIR")
-    pagefind.set_defaults(func=cmd_ensure_pagefind)
-    return parser
-
-
-def main(argv: Sequence[str] | None = None) -> int:
-    """Run the command line on ``argv`` and return the exit status."""
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    try:
-        return args.func(args)
-    except UsageError as exc:
-        parser.print_usage(sys.stderr)
-        print(f"pipeline.py: error: {exc}", file=sys.stderr)
-        return 2
-    except (ExportError, PagefindError, validate.ConfigError, ValueError,
-            OSError) as exc:
-        print(f"pipeline.py: error: {exc}", file=sys.stderr)
-        return 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())
