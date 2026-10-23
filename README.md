@@ -140,7 +140,7 @@ A successful build of the demo collection prints these steps:
 ==> export: planning org/procedures/
 ==> export: running ox-hugo
 ==> export: installing build/export/
-==> validate: validate.py --org-root org/procedures --static-dir static build/export md/procedures
+==> validate: org/procedures, build/export, md/procedures
 validated 28 files: 0 errors, 0 warnings
 ==> build: staging 8 procedures for locale de
 ==> build: hugo
@@ -295,7 +295,7 @@ orgsyndb [-C DIR] <subcommand> [options] [arguments]
 `-C DIR` (or `--collection DIR`) names the collection. Without it, the
 program uses the nearest directory, from the working directory upwards,
 that holds `orgsyndb.toml`, and fails if there is none. `help`,
-`check-deps`, `init`, and `validate` with arguments need no collection.
+`check-deps` and `init` need no collection.
 The program finds the application from its own location, following
 symlinks, so it works from any directory. In the table, paths without a
 prefix are relative to the collection.
@@ -304,7 +304,6 @@ prefix are relative to the collection.
 |---|---|
 | `export` | Exports every top-level `org/procedures/*.org` file into `build/export/`. Emacs output goes to `build/export.log` and is printed if export fails. |
 | `validate` | Exports first, then validates the Org sources, their exports, and all Markdown procedures. Errors fail the command; warnings do not. |
-| `validate ARGS...` | Passes the arguments directly to `tools/validate.py`, in the current directory, without exporting. This form needs only Python and refuses `-C`. |
 | `build` | Runs export and validation, builds the site into `public/` with Hugo, then indexes it with Pagefind. A validation error stops the command before Hugo. |
 | `serve [--port N]` | Runs `build`, then serves `public/` on `http://127.0.0.1:N/` until `Ctrl-C`. The default port is `8000`. |
 | `pdf` | Runs `build`, removes the previous `pdf/`, and renders every procedure to `pdf/<source-file-name>.pdf` with WeasyPrint. |
