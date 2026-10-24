@@ -6,10 +6,10 @@
 ## Validation
 
 - [x] Run the full test suite.
-- [ ] See the workflow's build job pass on the pull request.
+- [x] See the workflow's build job pass on its first run on `main`.
 
 ## Publication
 
 - [x] Set the repository's GitHub Pages source to GitHub Actions.
-- [ ] After the merge, check the deployed site as the "Demo is published"
+- [x] After the merge, check the deployed site as the "Demo is published"
   scenario describes.
