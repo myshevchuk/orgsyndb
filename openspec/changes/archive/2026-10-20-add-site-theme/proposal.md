@@ -177,7 +177,7 @@ No new front-matter field is introduced.
     kind-specific templates;
   - `tests/pipeline_support.py`, `tests/test_build_integration.py` and
     `tests/test_samples.py`.
-- Unchanged: `tools/` (`build.fish`, `pipeline.py`, `export.el`,
+- Unchanged: `tools/` (`orgsyndb`, `pipeline.py`, `export.el`,
   `validate.py`), `templates/`, `.gitignore`. The `pdf` subcommand
   already renders whatever `public/` holds.
 - Dependencies:
@@ -192,7 +192,7 @@ No new front-matter field is introduced.
     - The site's pages and URLs: `/`, `/procedures/` (by ID),
       `/procedures-by-date/` (newest first), `/reaction_types/`,
       `/tags/`, `/authors/` and their term pages, `/search/`.
-    - Search works only through a web server (`tools/build.fish serve`,
+    - Search works only through a web server (`tools/orgsyndb serve`,
       or Caddy), never from `file:` URLs. Without JS, the search page
       points to the browse pages.
     - What search finds:
@@ -208,9 +208,9 @@ No new front-matter field is introduced.
     - Printing from the browser uses the same print stylesheet. Firefox
       prints no running header or page numbers from the stylesheet;
       enable them in Firefox's print dialog. WeasyPrint PDFs from
-      `tools/build.fish pdf` carry the ID and title on every page and
+      `tools/orgsyndb pdf` carry the ID and title on every page and
       "Page N of M".
-    - PDFs from `tools/build.fish pdf` print the full URL
+    - PDFs from `tools/orgsyndb pdf` print the full URL
       `http://127.0.0.1:8000/procedures/<slug>/` on the first page by
       default, the `serve` address. Setting
       `HUGO_PARAMS_SITEURL=https://<internal host>` when running `pdf` or

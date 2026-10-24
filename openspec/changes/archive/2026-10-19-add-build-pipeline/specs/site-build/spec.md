@@ -27,12 +27,12 @@ The configuration names no host.
 A build SHALL publish each procedure content file of `build/export/` and `md/procedures/` as one page at `public/procedures/<slug>/index.html`, whatever its `date`, `publishDate` or `expiryDate`. No other file from those two directories is published.
 
 #### Scenario: Org-sourced and Markdown-sourced pages
-- **WHEN** an integration test runs `tools/build.fish build` on the seed procedures
+- **WHEN** an integration test runs `tools/orgsyndb build` on the seed procedures
 - **THEN** `public/procedures/osdb-0001/index.html` (from Org) and `public/procedures/osdb-0002/index.html` (from Markdown) exist
 - **AND** the subdirectories of `public/procedures/` are exactly the `slug` values of the content files in `build/export/` and `md/procedures/`
 
 #### Scenario: Future-dated procedure is published, indexed and printed
-- **WHEN** an integration test adds to `md/procedures/` a copy of `tests/fixtures/baseline/OSDB-0100-baseline.md` whose `date` and `lastmod` are `2099-01-01T10:00:00+01:00`, and runs `tools/build.fish pdf`
+- **WHEN** an integration test adds to `md/procedures/` a copy of `tests/fixtures/baseline/OSDB-0100-baseline.md` whose `date` and `lastmod` are `2099-01-01T10:00:00+01:00`, and runs `tools/orgsyndb pdf`
 - **THEN** it exits 0, `public/procedures/osdb-0100/index.html` exists, `languages.en.page_count` in `public/pagefind/pagefind-entry.json` counts it, and `pdf/OSDB-0100-baseline.pdf` exists
 
 #### Scenario: Expired procedure is still published

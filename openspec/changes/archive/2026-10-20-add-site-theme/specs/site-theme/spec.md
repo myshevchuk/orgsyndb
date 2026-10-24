@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 <!-- "Integration test" is defined in the org-export spec. A "theme build"
-is an integration test that runs tools/build.fish build on a temporary
+is an integration test that runs tools/orgsyndb build on a temporary
 repository copy holding the shipped org/ and md/ trees, plus the fixtures a
 scenario names, copied from tests/fixtures/theme/ into org/procedures/ or
 md/procedures/. "Procedure page" means public/procedures/<slug>/index.html.

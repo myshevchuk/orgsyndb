@@ -51,9 +51,8 @@ already.
 - The validator's default `--static-dir` becomes `static` in the working
   directory, since structure images now belong to a collection.
 
-**BREAKING:** `tools/build.fish` is removed; existing checkouts must call
-`tools/orgsyndb -C <collection> …`. Procedures that lived in the repository
-root must move into a collection.
+**BREAKING:** `tools/build.fish` is replaced by
+`tools/orgsyndb -C <collection> …`.
 
 ## Capabilities
 

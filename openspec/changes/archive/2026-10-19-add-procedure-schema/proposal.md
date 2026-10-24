@@ -26,7 +26,7 @@ schema and a validator that enforces it have to exist first.
   formats.
 - Add `templates/procedure.org` and `templates/procedure.md`, whose
   placeholders (`OSDB-0000`, `osdb-0000`, the timestamp and `#+AI_MODEL`
-  lines) form the interface that `build.fish new` (change 2) fills in.
+  lines) form the interface that `orgsyndb new` (change 2) fills in.
 - Add `tools/validate.py`, a standard-library-only Python 3.14 validator.
   It takes explicit content roots (directories of `+++` TOML front-matter
   Markdown files) plus optional Org source roots. It reports one
@@ -80,7 +80,7 @@ None. `openspec/specs/` is empty.
     `ai_model` mismatch.
   - Its `export.el` produces `date`, `lastmod`, `ai_model` and `slug`
     exactly as specified here, and disables ox-hugo's `author` key.
-  - Its `build.fish new` fills the template placeholders.
+  - Its `orgsyndb new` fills the template placeholders.
   - Its Hugo config sets the `procedures` permalink to `/procedures/:slug/`
     and declares the `authors`, `reaction_types` and `tags` taxonomies.
 - Change 3 (`add-site-theme`) reads the vocabulary labels and the schema

@@ -106,7 +106,7 @@ Each test must fail on its assertion, not merely on an import error, once
       "Reaction-type vocabulary file".
 - [x] 2.7 `tests/test_templates.py` covers every scenario of "Markdown
       template" and "Org template". It performs the `OSDB-0000` and
-      `osdb-0000` substitutions itself, as `build.fish new` will.
+      `osdb-0000` substitutions itself, as `orgsyndb new` will.
 - [x] 2.8 Add the "Fixture suite" scenarios ("Valid set passes cleanly",
       "Baseline is valid", "Each committed invalid fixture fails for one
       reason") and the remaining "Dependent checks are suppressed"

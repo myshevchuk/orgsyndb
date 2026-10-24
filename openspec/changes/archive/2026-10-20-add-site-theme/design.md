@@ -22,7 +22,7 @@ Three inherited requirements are modified, each with a reason (D18).
 
 State on `main` at the start:
 
-- `tools/build.fish build` exports, validates (`validated 3 files`),
+- `tools/orgsyndb build` exports, validates (`validated 3 files`),
   runs `hugo --source site --minify`, then Pagefind 1.5.2.
 - `pdf` renders every page in `public/procedures/` with WeasyPrint 70.0,
   allowing only `file:` URLs. A job fails only on an `ERROR:` line;
@@ -571,7 +571,7 @@ printed page, and nothing waives it, so a full URL is the default.
 `lastmod`). The URL is built as follows:
 
 - `site/hugo.toml` sets `[params] siteurl = "http://127.0.0.1:8000"`, the
-  origin `tools/build.fish serve` uses by default.
+  origin `tools/orgsyndb serve` uses by default.
 - The environment variable `HUGO_PARAMS_SITEURL` overrides it, for an
   internal host. Verified: with the configured default, the page carried
   `http://127.0.0.1:8000…`; with the variable set, it carried
@@ -594,7 +594,7 @@ The URL is plain text, never an attribute value, so:
   An automated scenario (print-layout "First-page facts") requires that
   `siteurl` occur in published HTML only as the text of `span.page-url`.
 
-`build.fish` already passes its environment to Hugo, so nothing in
+`orgsyndb` already passes its environment to Hugo, so nothing in
 `tools/` changes. `site/hugo.toml` gains one host, the loopback default,
 so the site-build "Hugo configuration" requirement is restated to allow
 exactly that value (D18).
@@ -700,7 +700,7 @@ reject its CSS.
 
 ### D13. Samples
 
-Six new samples, created with `tools/build.fish new` (Org by default,
+Six new samples, created with `tools/orgsyndb new` (Org by default,
 `--md` for OSDB-0008), then filled. Timestamps are real Europe/Berlin
 times of writing. `#+AI_MODEL` and `ai_model` name the writer's exact
 model identifier. Authors are fictitious `X. Example` names. Every sample
@@ -919,7 +919,7 @@ be byte-identical. This held with the prototype theme (verified).
 |---|---|---|
 | Static source tests: contrast, CSS media split and print colours, SVG rules, sample set, render-hook and template text | Python | never |
 | JS unit tests of `search-terms.js` | Node | `node` missing |
-| Theme integration (HTML scans of a sandbox build) | change 2's builder (fish, Emacs, bootstrapped `.emacs-batch/`, Hugo, cached Pagefind) | as change 2, by name |
+| Theme integration (HTML scans of a sandbox build) | change 2's builder (Emacs, bootstrapped `.emacs-batch/`, Hugo, cached Pagefind) | as change 2, by name |
 | Search integration | builder plus Node | either missing |
 | Print integration | builder plus WeasyPrint, `pdfinfo` and `pdftotext` | any missing ("pdftotext not found (poppler-utils)") |
 

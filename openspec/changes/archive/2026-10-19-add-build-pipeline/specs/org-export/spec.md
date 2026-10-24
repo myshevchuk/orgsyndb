@@ -1,10 +1,10 @@
 ## ADDED Requirements
 
-<!-- "Integration test" means a test that runs tools/build.fish in a
+<!-- "Integration test" means a test that runs tools/orgsyndb in a
 temporary copy of the repository whose path contains a space, with cwd set
 to another temporary directory, and .emacs-batch/ and .tools/ linked from
 the real repository (design.md D18). Such a test skips, naming the missing
-tool or cache, when fish, Emacs or the pinned ox-hugo bootstrap is absent. -->
+tool or cache, when Emacs or the pinned ox-hugo bootstrap is absent. -->
 
 ### Requirement: Isolated batch Emacs
 `tools/export.el` SHALL run under `emacs -Q --batch`. Before loading package.el or Org it SHALL make these settings:
@@ -14,9 +14,9 @@ tool or cache, when fish, Emacs or the pinned ox-hugo bootstrap is absent. -->
 The export writes nothing under `$HOME`, and nothing in the `TMPDIR` it inherited. It neither loads nor writes anything in `~/.emacs.d` or `~/.config/emacs`. git, which the bootstrap and the pin check run, may still read its own user configuration.
 
 #### Scenario: Owner's directories and the inherited TMPDIR stay untouched
-- **WHEN** an integration test runs `tools/build.fish export` with `HOME` set to a temporary directory that contains only an empty `.config/emacs/`, and `TMPDIR` set to a separate, empty temporary directory with mode 0555
+- **WHEN** an integration test runs `tools/orgsyndb export` with `HOME` set to a temporary directory that contains only an empty `.config/emacs/`, and `TMPDIR` set to a separate, empty temporary directory with mode 0555
 - **THEN** the export exits 0
-- **AND** afterwards that `HOME` contains the empty `.config/emacs/` directory and nothing else apart from the fish interpreter's own start-up directories (`.cache/fish`, `.config/fish`, `.local/share/fish`), in particular no `.emacs.d`
+- **AND** afterwards that `HOME` contains the empty `.config/emacs/` directory and nothing else, in particular no `.emacs.d`
 - **AND** the `TMPDIR` directory is still empty
 
 ### Requirement: Pinned ox-hugo and tomelr
@@ -24,14 +24,14 @@ The export writes nothing under `$HOME`, and nothing in the `TMPDIR` it inherite
 - tomelr: `https://github.com/kaushalmodi/tomelr` at `670e0a08f625175fd80137cf69e799619bf8a381` (0.4.3).
 - ox-hugo: `https://github.com/kaushalmodi/ox-hugo` at `b7dc44dc28911b9d8e3055a18deac16c3b560b03` (MELPA `20251206.1738`).
 
-On every run, the export compares each installed checkout's `HEAD` with its pin. On a mismatch it exits non-zero, before exporting anything, with a message that names the package, both commits, and `tools/build.fish clean --all`.
+On every run, the export compares each installed checkout's `HEAD` with its pin. On a mismatch it exits non-zero, before exporting anything, with a message that names the package, both commits, and `tools/orgsyndb clean --all`.
 
 #### Scenario: Installed checkouts are at the pins
 - **WHEN** an integration test reads `git rev-parse HEAD` in `.emacs-batch/elpa/ox-hugo` and `.emacs-batch/elpa/tomelr` after an export
 - **THEN** the values are `b7dc44dc28911b9d8e3055a18deac16c3b560b03` and `670e0a08f625175fd80137cf69e799619bf8a381`
 
 #### Scenario: A checkout at another commit stops the export
-- **WHEN** an integration test copies `.emacs-batch/` into the temporary repository instead of linking it, checks out ox-hugo's parent commit in the copy, and runs `tools/build.fish export`
+- **WHEN** an integration test copies `.emacs-batch/` into the temporary repository instead of linking it, checks out ox-hugo's parent commit in the copy, and runs `tools/orgsyndb export`
 - **THEN** the exit status is non-zero, and the output contains `ox-hugo`, `b7dc44dc28911b9d8e3055a18deac16c3b560b03`, the parent commit's hash, and `clean --all`
 - **AND** `build/export/` is unchanged
 
@@ -86,7 +86,7 @@ The export of each planned Org source `<stem>.org` SHALL be a file `<stem>.md` w
 Before exporting, the export checks that `org-hugo--gen-front-matter` and `tomelr-toml-table-p` are defined. If either is not, it exits non-zero with a message naming the missing function.
 
 #### Scenario: Seed export validates cleanly
-- **WHEN** an integration test runs `tools/build.fish export` and then `tools/validate.py --org-root org/procedures build/export md/procedures` in the temporary repository
+- **WHEN** an integration test runs `tools/orgsyndb export` and then `tools/validate.py --org-root org/procedures build/export md/procedures` in the temporary repository
 - **THEN** the validator exits 0 and prints nothing to stdout
 
 #### Scenario: Table written first in the source is emitted last
@@ -125,7 +125,7 @@ No math renderer is configured or loaded anywhere in the site.
 - **THEN** the export exits 0 and the marker file does not exist
 
 ### Requirement: Complete and fresh export directory
-`tools/build.fish export` SHALL leave `build/export/` holding exactly one `<stem>.md` for each planned Org source of `org/procedures/`, and no other file. It uses the sibling directories `build/.export-staging/` and `build/.export-previous/` in these steps:
+`tools/orgsyndb export` SHALL leave `build/export/` holding exactly one `<stem>.md` for each planned Org source of `org/procedures/`, and no other file. It uses the sibling directories `build/.export-staging/` and `build/.export-previous/` in these steps:
 1. **Recover.** `pipeline.recover_export(build)` runs first, through `pipeline.py recover-export`:
    - If `.export-previous/` exists and `export/` does not, it renames `.export-previous/` to `export/`.
    - If both exist, it deletes `.export-previous/`.
@@ -161,7 +161,7 @@ When there are no Org sources, `build/export/` exists and is empty. When any ste
 - **THEN** `replace_export` returns normally, `build/export/` holds exactly `B.md`, and a following call of `recover_export` removes `.export-previous/`
 
 #### Scenario: Leftovers from a crashed run
-- **WHEN** an integration test leaves `build/.export-previous/` holding a complete earlier export with no `build/export/`, plus a partial `build/.export-staging/`, and then runs `tools/build.fish export`
+- **WHEN** an integration test leaves `build/.export-previous/` holding a complete earlier export with no `build/export/`, plus a partial `build/.export-staging/`, and then runs `tools/orgsyndb export`
 - **THEN** the export exits 0, `build/export/` holds exactly the current exports, and neither `.export-previous/` nor `.export-staging/` remains
 
 #### Scenario: No Org sources
@@ -172,7 +172,7 @@ When there are no Org sources, `build/export/` exists and is empty. When any ste
 Exporting unchanged sources SHALL produce byte-identical files.
 
 #### Scenario: Re-export without changes
-- **WHEN** an integration test runs `tools/build.fish export` twice without changing any source
+- **WHEN** an integration test runs `tools/orgsyndb export` twice without changing any source
 - **THEN** `build/export/` holds the same file names after both runs, and each file has identical bytes
 
 #### Scenario: Re-export of a named paragraph

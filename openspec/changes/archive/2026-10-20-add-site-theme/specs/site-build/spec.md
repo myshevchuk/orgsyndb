@@ -25,7 +25,7 @@ The file `site/hugo.toml` SHALL configure Hugo 0.162.1 as follows:
 - `[permalinks.page]` maps `procedures` to `/procedures/:slug/`.
 - `markup.goldmark.renderer.unsafe` is `true`.
 - `minify.tdewolff.html.keepWhitespace` is `true`, so that minified HTML keeps a space between adjacent elements that Pagefind would otherwise index as one word.
-- `params.siteurl` is `"http://127.0.0.1:8000"`, the default origin of `tools/build.fish serve`. The theme prints it as text before a page's path. The environment variable `HUGO_PARAMS_SITEURL` overrides it without editing the file.
+- `params.siteurl` is `"http://127.0.0.1:8000"`, the default origin of `tools/orgsyndb serve`. The theme prints it as text before a page's path. The environment variable `HUGO_PARAMS_SITEURL` overrides it without editing the file.
 - `module.mounts` is exactly these three mounts, in this order:
   1. `content` → `content`;
   2. `../build/export` → `content/procedures` with `files = ["/OSDB-*.md"]`;

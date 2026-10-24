@@ -16,13 +16,13 @@ Change 1 left these obligations to this change:
   `ai_model` mismatch.
 - Hugo mounts exactly the two validated content roots into the
   `procedures` section, with the `/procedures/:slug/` permalink.
-- `build.fish new` fills the template placeholders: `OSDB-0000`,
+- `orgsyndb new` fills the template placeholders: `OSDB-0000`,
   `osdb-0000`, the timestamp lines and `#+AI_MODEL`.
 
 Machine facts (Fedora 44):
 
 - Installed: Hugo 0.162.1 (Fedora, extended), WeasyPrint 70.0, Emacs 30.2
-  with native compilation and Org 9.7.11, fish 4.6.0, Python 3.14, pytest
+  with native compilation and Org 9.7.11, Python 3.14, pytest
   8.4, and git.
 - Caddy is not installed; 2.10.2 is in the repositories.
 - Node 22 is present but must not become a dependency.
@@ -40,7 +40,7 @@ Stakeholders:
 
 **Goals:**
 
-- One command (`tools/build.fish build`) that goes from a fresh clone to
+- One command (`tools/orgsyndb build`) that goes from a fresh clone to
   an indexed static site with no manual steps beyond the printed `dnf`
   line.
 - An export that is deterministic, isolated from the owner's Emacs, and
@@ -64,13 +64,13 @@ Stakeholders:
 
 ## Decisions
 
-### D1. Where code lives: fish adapters over a Python core
+### D1. Where code lives: a thin entry point over a Python core
 
-- `tools/build.fish` is the single user-facing entry point. It parses
+- `tools/orgsyndb` is the single user-facing entry point. It parses
   subcommands, resolves the repository, sets the environment, checks tools,
   orders steps and prints progress.
 - `tools/pipeline.py` is a stdlib-only Python 3.14 module with a small CLI.
-  `build.fish` calls it for every decision that has a right answer worth
+  `orgsyndb` calls it for every decision that has a right answer worth
   testing:
   - the export plan;
   - the recoverable replacement of the export directory (D4);
@@ -121,15 +121,9 @@ success, 1 on failure and 2 on usage errors, and write errors to stderr as
 
 *Rejected alternatives:*
 
-- *All logic in fish.* fish has no unit-test framework. Template filling,
-  timestamp arithmetic across clock changes, and hash verification would
-  be testable only end to end.
 - *Timestamp logic in Elisp.* Testing it would need Emacs, and it would be
   a second parser of the keyword format beside `validate.py`'s, written in
   a second language.
-- *A separate `tools/pdf.fish`* (brief §4 allows either). One entry point
-  keeps repository resolution, environment and tool checks in one place,
-  and `pdf` must run `build` first anyway (D10).
 
 ### D2. Pinning ox-hugo: `package-vc-install` at upstream commits
 
@@ -146,7 +140,7 @@ COMMIT)`, with `package-archives` set to nil and tomelr installed before
 ox-hugo. ox-hugo's `Package-Requires` (`emacs`, `tomelr`) is then satisfied
 locally, so no archive is consulted. On every run, `export.el` compares each
 checkout's `HEAD` with its pin. A mismatch fails the export, naming the
-package, both commits, and the remedy `tools/build.fish clean --all`.
+package, both commits, and the remedy `tools/orgsyndb clean --all`.
 
 **Isolation.** These are set at the top of `export.el`, before
 `(require 'package)`:
@@ -178,7 +172,7 @@ wrote no `eln-cache` anywhere.
 
 **Cost.** The first run clones both repositories (about 17 MB) and
 byte-compiles them, which took about 20 s. ox-hugo's `test/` files emit
-harmless compile errors. `build.fish` therefore prints one line before a
+harmless compile errors. `orgsyndb` therefore prints one line before a
 bootstrap and sends Emacs's output to `build/export.log`, which it prints
 only on failure. The bootstrap needs `git` and network access to GitHub.
 
@@ -281,7 +275,7 @@ Three sibling directories under `build/` take part:
 - `build/.export-previous/`: the backup of the live export during a
   replacement.
 
-`build.fish export` runs these steps:
+`orgsyndb export` runs these steps:
 
 1. **Recover** (`pipeline.py recover-export <repo>/build`). This repairs
    whatever an interrupted run left behind:
@@ -392,7 +386,7 @@ belt and braces rather than the only defence.
 | `org-hugo-base-dir`, `org-hugo-section` | staging | Sources set neither (frozen template rule). |
 | random seed | `(random "<stem>")` before each source | Org's reference IDs become a function of the file name (below). |
 
-The environment is `TZ=Europe/Berlin` and `LC_TIME=C`, set by `build.fish`
+The environment is `TZ=Europe/Berlin` and `LC_TIME=C`, set by `orgsyndb`
 for every child process.
 
 **Deterministic reference IDs.** Org 9.7.11's `org-export-new-reference`
@@ -609,9 +603,6 @@ that was reviewed.
 
 - *The PyPI `pagefind` package.* It needs pip, which the owner excluded.
 - *npm.* It needs Node.
-- *`curl`, `sha256sum` and `tar` in fish.* That works, but the
-  verification could then be tested only against the network. In Python,
-  a test builds a local tarball and exercises every failure path offline.
 - *Downloading on every build.* It is slow and needs the network every
   time.
 
@@ -684,7 +675,7 @@ the expected page (verified; see Verification).
 
 ### D11. `new`: next ID, slug, template filling
 
-`tools/build.fish new [--md] [--ai-model ID] TITLE...` calls
+`tools/orgsyndb new [--md] [--ai-model ID] TITLE...` calls
 `pipeline.py new --repo "<repo>" [--md] [--ai-model ID] TITLE`. It joins the
 title words with single spaces and trims the result.
 
@@ -774,8 +765,7 @@ then prints the repo-relative path.
 
 ### D12. `check-deps`
 
-`check-deps` uses fish builtins and the tools it probes, nothing else. It
-prints one line per tool in this order:
+`check-deps` prints one line per tool in this order:
 
 | Tool | Fedora package | Needed by |
 |---|---|---|
@@ -815,7 +805,7 @@ Every other subcommand checks the tools it needs before its first step:
 
 `git` is required for every export, not only the bootstrap, because every
 run checks the checkouts against their pins (D2). When a tool is missing,
-the subcommand prints `build.fish: error: <tool> not found; install it
+the subcommand prints `orgsyndb: error: <tool> not found; install it
 with: sudo dnf install <package>` and exits 1, so it never stops
 halfway.
 
@@ -825,13 +815,11 @@ halfway.
   several commands.
 - *Installing automatically.* The brief forbids sudo.
 
-### D13. `build.fish` conventions
+### D13. `orgsyndb` conventions
 
-- **Repository.** The root is `path dirname (path dirname (path resolve
-  (status filename)))`. `status dirname` alone gives the directory of a
-  symlink to the script, not the repository (verified). Before deleting
-  anything, `build.fish` refuses to run unless `<repo>/tools/build.fish`
-  and `<repo>/site/hugo.toml` exist.
+- **Repository.** The program finds the repository from its own path,
+  resolving symlinks. Before deleting anything, it refuses to run unless
+  `<repo>/tools/orgsyndb` and `<repo>/site/hugo.toml` exist.
 - **Working directory.** Child tools run with the repository as their
   working directory and get repo-relative paths, so validator lines read
   `md/procedures/OSDB-0002-aspirin.md:…`. The one exception is
@@ -840,16 +828,10 @@ halfway.
   every child process.
 - **Output and exit status.**
   - Each step prints `==> <step>…` to stdout.
-  - Errors go to stderr as `build.fish: error: <message>`.
+  - Errors go to stderr as `orgsyndb: error: <message>`.
   - The exit status is 0 on success, 1 on failure, and 2 on a usage error:
     no subcommand, an unknown one, or a bad option.
   - `help`, `-h` and `--help` print the usage and exit 0.
-- **Style.**
-  - Subcommands are fish functions.
-  - Paths are always quoted, and the script uses no bash-isms.
-  - `fish --no-execute` and `fish_indent --check` both pass. In fish 4.6,
-    `fish_indent --check` exits 1 on unformatted input and 0 on formatted
-    input (verified).
 - **Clean.** `clean` removes `build/`, `public/`, `pdf/`,
   `site/.hugo_build.lock` and `site/resources/`. `clean --all` also removes
   `.emacs-batch/` and `.tools/`. Nothing else is touched, and cleaning an
@@ -868,7 +850,7 @@ halfway.
   This is how acceptance check 6 points it at fixtures:
 
   ```
-  tools/build.fish validate --vocabulary tests/fixtures/reaction_types.toml \
+  tools/orgsyndb validate --vocabulary tests/fixtures/reaction_types.toml \
       --static-dir tests/fixtures/static tests/fixtures/invalid/missing-title
   ```
 - **`build`** runs export, then validation, then removes `public/`, then
@@ -885,9 +867,9 @@ halfway.
 
 ### D15. Pre-commit hook, Caddyfile, `.gitignore`
 
-- **Hook.** `tools/hooks/pre-commit` is an executable fish script. It
+- **Hook.** `tools/hooks/pre-commit` is an executable `sh` script. It
   changes to `git rev-parse --show-toplevel` and runs
-  `tools/build.fish validate`, exiting with its status. Nothing in this
+  `tools/orgsyndb validate`, exiting with its status. Nothing in this
   change enables it. The README will give both ways to enable it:
   `git config core.hooksPath tools/hooks`, or a symlink from
   `.git/hooks/pre-commit`.
@@ -1017,13 +999,13 @@ as a precursor, or start its own.
 |---|---|---|
 | Pure unit tests (`pipeline.py` functions, offline Pagefind verification, `replace_export`/`recover_export` with an injected failing rename and pre-built leftover directories) | Python | never |
 | Configuration and content tests (parse `hugo.toml`, `.gitignore` via `git check-ignore`, Caddyfile text, seed front matter and Reagents tables) | Python, git for ignore checks | `git` missing (ignore checks only) |
-| Fish tests (`--no-execute`, `fish_indent --check`, usage/exit 2, `check-deps` under a reduced `PATH` with a recording fake `sudo`, `clean`) | fish | `fish` missing |
-| Integration tests (export, build, serve, pdf, hook) | fish, Emacs and a bootstrapped `.emacs-batch/` at the pins; plus Hugo and a cached Pagefind for build and serve; plus WeasyPrint for pdf | each missing tool or cache, by name; reasons such as "ox-hugo not bootstrapped: run tools/build.fish export once (needs network)" |
+| Program tests (usage/exit 2, `check-deps` under a reduced `PATH` with a recording fake `sudo`, `clean`) | Python | never |
+| Integration tests (export, build, serve, pdf, hook) | Emacs and a bootstrapped `.emacs-batch/` at the pins; plus Hugo and a cached Pagefind for build and serve; plus WeasyPrint for pdf | each missing tool or cache, by name; reasons such as "ox-hugo not bootstrapped: run tools/orgsyndb export once (needs network)" |
 
 Integration tests copy `tools/`, `site/`, `templates/`, `org/`, `md/` and
 `tests/fixtures/export/` into a temporary directory whose path contains a
 space. They symlink `.emacs-batch/` and `.tools/` from the real repository,
-and they run `build.fish` with `cwd` set to a different temporary
+and they run `orgsyndb` with `cwd` set to a different temporary
 directory. The tests then need no network, never touch the real
 `build/`, `public/` or `pdf/`, and exercise quoting and any-cwd behaviour.
 The pin-mismatch test copies `.emacs-batch/` instead of linking it, then
@@ -1224,16 +1206,6 @@ directory names contained a space on purpose.
   `pagefind.js` with `basePath` set to the server. `search("markdown")`
   returned the expected page.
 
-**fish 4.6:**
-
-- `path resolve (status filename)` gives the real script through a
-  symlink, and `status dirname` does not.
-- The script worked from `/` and from another directory.
-- `fish --no-execute` returned 127 for a missing `end` and 0 for valid
-  input.
-- `fish_indent --check` returned 1 on unformatted input, and 0 once
-  `fish_indent -w` had formatted it.
-
 **Unverified:**
 
 - The Caddyfile: Caddy is not installed. If the test finds Caddy, it runs
@@ -1282,7 +1254,7 @@ directory names contained a space on purpose.
 
 ## Open Questions
 
-- Should `build.fish new` also open the new file in `$EDITOR`? Left out.
+- Should `orgsyndb new` also open the new file in `$EDITOR`? Left out.
   It is easy to add later, and it would complicate tests.
 - Should Pagefind's `--include-characters` cover SMILES punctuation?
   Deferred to change 3, which owns acceptance check 3.
