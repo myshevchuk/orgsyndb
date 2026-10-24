@@ -2,7 +2,9 @@
 
 ## Purpose
 Define the Hugo project under `site/`: configuration, the merged procedures section, the minimal layout contract later themes inherit, the no-remote-fetch rule, and the pinned Pagefind binary and its search index.
+
 ## Requirements
+
 ### Requirement: Hugo configuration
 The file `site/hugo.toml` SHALL configure Hugo 0.162.1 as follows:
 - `baseURL = "/"`, `locale = "de"` and `relativeURLs = true`. The locale is the site's language, as the localization spec defines.
@@ -122,4 +124,3 @@ No Node, npm or pip is used.
 - **WHEN** an integration test builds the seeds
 - **THEN** `public/pagefind/pagefind.js`, `public/pagefind/pagefind-ui.js` and `public/pagefind/pagefind-ui.css` exist
 - **AND** `public/pagefind/pagefind-entry.json` parses as JSON with `version` equal to `1.5.2`, `languages` holding only the site's language, and its `page_count` equal to the number of published procedures
-

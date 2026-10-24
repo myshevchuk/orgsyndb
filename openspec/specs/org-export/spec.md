@@ -2,7 +2,9 @@
 
 ## Purpose
 Define how `tools/export.el` turns Org procedure sources into Hugo content: an isolated, pinned batch Emacs, the front-matter mapping, body export options, and a complete, fresh and byte-identical export directory.
+
 ## Requirements
+
 ### Requirement: Isolated batch Emacs
 `tools/export.el` SHALL run under `emacs -Q --batch`, invoked as `emacs -Q --batch -l tools/export.el PLAN_JSON STAGING_DIR`, and SHALL work with Emacs 30.2 and the Org 9.7.11 it bundles. Before loading package.el or Org it SHALL make these settings:
 - `user-emacs-directory`, `package-user-dir` and `package-gnupghome-dir` point to directories inside the application's `.emacs-batch/`.
@@ -183,4 +185,3 @@ The export SHALL seed Emacs's random number generator with `(random "<stem>")` i
 #### Scenario: Other sources do not change a file's anchors
 - **WHEN** an integration test exports with `OSDB-0903-named-paragraph.org` as the only Org source, then adds `OSDB-0902-literal-text.org` and the seeds and exports again
 - **THEN** the export of `OSDB-0903-named-paragraph.org` has identical bytes in both runs
-

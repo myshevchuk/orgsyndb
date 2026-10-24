@@ -2,7 +2,9 @@
 
 ## Purpose
 Define `tools/orgsyndb`, its subcommands and conventions, the stdlib pipeline helper module, the optional pre-commit hook, the Caddyfile example and the ignore rules. Content and output paths are relative to the collection; `tools/`, `site/`, `templates/`, `.emacs-batch/` and `.tools/` belong to the application.
+
 ## Requirements
+
 ### Requirement: Entry point conventions
 `tools/orgsyndb` SHALL be an executable Python 3.14 program that uses only the standard library, besides importing `pipeline` and `validate` from its own directory. It has a `#!/usr/bin/env python3` shebang and is invoked as `orgsyndb [-C DIR] <subcommand> [options] [arguments]`, with the subcommands `export`, `validate`, `build`, `serve`, `pdf`, `new`, `init`, `clean`, `check-deps` and `help`. It follows these conventions:
 - It locates the application from its own resolved path, following symlinks, so it works from any working directory. It refuses to run, with exit 1, unless `<app>/tools/orgsyndb` and `<app>/site/hugo.toml` exist.
@@ -291,4 +293,3 @@ The application's `.gitignore` SHALL keep `__pycache__/` and `.pytest_cache/`, a
 - **WHEN** a test runs `git check-ignore` in the application on `examples/demo/build/export/x.md`, `examples/demo/public/index.html`, `examples/demo/pdf/x.pdf`, `.emacs-batch/elpa` and `.tools/pagefind-1.5.2/pagefind`, skipping when `git` is absent
 - **THEN** each path is reported as ignored
 - **AND** `examples/demo/org/procedures/OSDB-0001-salicylic-acid.org`, `examples/demo/md/procedures/OSDB-0002-aspirin.md`, `examples/demo/static/structures/osdb-0003.svg`, `site/hugo.toml`, `site/.hugo_build.lock`, `build/x` and `tests/fixtures/export/build/x` are not
-

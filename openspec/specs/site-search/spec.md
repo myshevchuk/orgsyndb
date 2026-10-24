@@ -2,7 +2,9 @@
 
 ## Purpose
 Define the Pagefind search: what is indexed, the status, reaction type, tag and author filters, SMILES substring search, and the search page with its no-JavaScript fallback.
+
 ## Requirements
+
 ### Requirement: Search page
 The site SHALL publish `/search/` from `site/content/search.md`, with the following:
 - **Assets.** It links `/pagefind/pagefind-ui.css` and loads, in order, `/pagefind/pagefind-ui.js` and the theme's search script. The search script is built from `site/assets/js/search-terms.js` and `site/assets/js/search.js`.
@@ -146,4 +148,3 @@ Node SHALL be used only by tests. `tools/orgsyndb`, `tools/pipeline.py`, `tools/
 #### Scenario: No Node in the tools
 - **WHEN** a test searches the files under `tools/` for the words `node` and `npm`, and runs `tools/orgsyndb check-deps` with a `PATH` that holds the five required tools and no `node`
 - **THEN** neither word is found, and `check-deps` exits 0 and prints no line mentioning `node`
-
