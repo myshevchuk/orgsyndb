@@ -100,7 +100,8 @@ and not on an import or setup error. Build once per test class.
       both schemes", "Shipped structure images", "Print colours",
       "Declarations present" and "No clipping CSS in print"
       (print-layout), and "No Node in the tools"
-      (the file search, and `check-deps` under a reduced `PATH`).
+      (the file search; the `check-deps` half uses the fish-test `PATH`
+      helper and skips without fish).
 - [x] 2.2 `tests/test_theme_js.py` (skips without `node`): "Normalised
       terms" and "Cleaned result".
 - [x] 2.3 Extend `tests/test_samples.py` with the sample-procedures
@@ -230,7 +231,7 @@ and not on an import or setup error. Build once per test class.
 ## 6. Structure image and samples (implementer)
 
 - [x] 6.1 Hand-write `site/static/structures/osdb-0003.svg` (D14).
-- [x] 6.2 Create the six samples with `tools/orgsyndb new`, in ID
+- [x] 6.2 Create the six samples with `tools/build.fish new`, in ID
       order, passing `--ai-model` with your own exact model identifier.
       The titles below give the file names the sample-procedures spec
       requires:
@@ -258,7 +259,7 @@ and not on an import or setup error. Build once per test class.
 
 ## 7. Implementation verification (implementer)
 
-- [x] 7.1 Run `tools/orgsyndb build` and `tools/orgsyndb pdf`. The
+- [x] 7.1 Run `tools/build.fish build` and `tools/build.fish pdf`. The
       validator prints `validated 14 files: 0 errors, 0 warnings`, and
       the `pdf` output contains no `WARNING:` line.
 - [x] 7.2 Run `python3 -m pytest tests` until it is fully green, with no
@@ -293,7 +294,7 @@ outside the repository: `set S (mktemp -d)`. Record each result in the
 review notes, and delete `S` afterwards.
 
 - [x] 9.1 Brief §9 check 2, zero external requests:
-      1. Run `tools/orgsyndb serve` in one terminal, and wait for
+      1. Run `tools/build.fish serve` in one terminal, and wait for
          `serving http://127.0.0.1:8000/ (Ctrl-C to stop)`.
       2. The printed page URL is text, once per procedure page (design.md
          D11). Count it:
@@ -381,7 +382,7 @@ review notes, and delete `S` afterwards.
       3. Every link lands on the named procedure, and no other procedure
          lists a precursor or used-in.
 - [x] 9.5 Brief §9 check 7, PDFs:
-      1. Run `tools/orgsyndb pdf`. It exits 0, prints one `pdf:` line
+      1. Run `tools/build.fish pdf`. It exits 0, prints one `pdf:` line
          per procedure (eight), and prints no `WARNING:` line.
       2. Run `ls pdf`: exactly the eight `OSDB-NNNN-short-slug.pdf`
          names.
@@ -411,9 +412,9 @@ review notes, and delete `S` afterwards.
          - no heading at the foot of a page;
          - the SVG structure on OSDB-0003.
       7. Run
-         `env HUGO_PARAMS_SITEURL=https://orgsyndb.example.invalid tools/orgsyndb pdf`,
+         `env HUGO_PARAMS_SITEURL=https://orgsyndb.example.invalid tools/build.fish pdf`,
          then `pdftotext -l 1 pdf/OSDB-0002-aspirin.pdf - | grep orgsyndb.example.invalid`.
-         It shows the absolute URL. Run `tools/orgsyndb pdf` again
+         It shows the absolute URL. Run `tools/build.fish pdf` again
          without the variable.
       8. Browser fallback: in Firefox, print `/procedures/osdb-0004/` to
          a PDF in `S` on A4, and render it with `pdftoppm`. Check it as
@@ -453,7 +454,7 @@ review notes, and delete `S` afterwards.
       updates to the doc writer.
       - The facts each needs are listed in proposal.md Impact. The
         sources are this change's specs and design.md, the earlier
-        changes' archived design.md files, `tools/orgsyndb help`, the
+        changes' archived design.md files, `tools/build.fish help`, the
         templates, and the implementer's list from 7.4.
       - Check each diff against those sources, and confirm that no
         committed document carries a user or machine identifier.

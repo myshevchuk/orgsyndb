@@ -5,7 +5,7 @@ first of three:
 
 1. `add-procedure-schema` (this change) covers the schema, vocabulary,
    templates, validator, fixtures and tests.
-2. `add-build-pipeline` covers `export.el`, `orgsyndb`, the Hugo config,
+2. `add-build-pipeline` covers `export.el`, `build.fish`, the Hugo config,
    the minimum layouts, Pagefind, PDF, the hook and the seed samples.
 3. `add-site-theme` covers the theme, the remaining samples and the
    structure images.
@@ -111,7 +111,7 @@ The interface is
 - *Defaults for the content roots* (e.g. `<repo>/md/procedures`). The export
   directory is change 2's decision. A default that covers only one tree
   would also silently skip the cross-tree duplicate-ID check.
-- *Resolving defaults from the cwd.* `orgsyndb` must work from any
+- *Resolving defaults from the cwd.* `build.fish` must work from any
   directory, and so must the validator it calls.
 - *A config file.* It would add a file for three paths.
 - *JSON output.* The brief asks for human-readable lines, and nothing
@@ -219,7 +219,7 @@ The decision has four parts:
 - Change 2 sets the `procedures` permalink to `/procedures/:slug/`.
 - In Org, the slug is written as `#+HUGO_SLUG: osdb-0001`, which ox-hugo
   emits as `slug`. Both templates carry the placeholder `osdb-0000`, which
-  `orgsyndb new` replaces.
+  `build.fish new` replaces.
 
 This is the least error-prone option for the co-worker. `new` fills the
 value, so it is never typed. If it is edited wrongly, the error message
@@ -305,7 +305,7 @@ This is what ox-hugo emits. `org-hugo-date-format` defaults to
 TOML encoder, writes any string matching its RFC 3339 regexp unquoted, so
 both `#+date` values and custom-front-matter values reach the TOML as
 datetimes (verified in source; see Verification). A hand-written
-Markdown file uses the same literal form, which `orgsyndb new --md` will
+Markdown file uses the same literal form, which `build.fish new --md` will
 fill.
 
 *Rejected alternatives:*
@@ -413,14 +413,14 @@ narrow enough that the taxonomy pages stay meaningful.
 - *Mechanism-level types (`sn2`, `e2`).* Too fine-grained for a category
   taxonomy.
 
-### D8. Templates and their interface to `orgsyndb new`
+### D8. Templates and their interface to `build.fish new`
 
 Both templates use the placeholder ID `OSDB-0000` and the placeholder slug
 `osdb-0000`. `OSDB-0000` is outside the valid ID range
 (`OSDB-0001`–`OSDB-9999`), so a template copied by hand without
 substitution fails validation instead of publishing.
 
-`orgsyndb new` (change 2) does the following:
+`build.fish new` (change 2) does the following:
 
 - replaces every occurrence of `OSDB-0000` with the new ID, and of
   `osdb-0000` with its lowercase form;
@@ -580,7 +580,7 @@ Fixtures come in two kinds: committed files for a representative case of
 each category, and in-test variants of one committed baseline for every
 other field variation. Every behaviour scenario is kept either way; the
 split changes only how a scenario is realised. Committed files are what
-brief acceptance criterion 6 needs, since `orgsyndb validate` must have
+brief acceptance criterion 6 needs, since `build.fish validate` must have
 real files to reject. Variants keep the fixture tree from becoming 30
 near-copies of one procedure that drift apart as the schema evolves.
 
@@ -738,7 +738,7 @@ shaped like the verified output.
   disagrees. That correction restores this spec, so it needs no proposal.
 - [The owner's Emacs may insert localised weekday names (`Mo`) when
   `system-time-locale` is not `C`.] → The rule fixes English abbreviations,
-  and the lint error names the expected abbreviation. `orgsyndb new`
+  and the lint error names the expected abbreviation. `build.fish new`
   formats under `LC_TIME=C` (change 2), and `docs/AUTHORING-ORG.org` will
   say how to configure Emacs.
 - [`zoneinfo` needs the system tz database.] → Fedora ships `tzdata`. If it
@@ -760,7 +760,7 @@ shaped like the verified output.
   validator noticing (D2).] → Change 2 owns freshness and orphan removal:
   the export writes into a directory it empties first, or an equivalent
   mechanism of its choosing.
-- [Variant fixtures exist only while the tests run, so `orgsyndb
+- [Variant fixtures exist only while the tests run, so `build.fish
   validate` cannot be pointed at them.] → The committed cases cover every
   category, and they are what acceptance criterion 6 exercises.
 

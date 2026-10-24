@@ -8,7 +8,7 @@ House rules for the tests:
 - Paths are passed as list arguments, never through a shell string.
 - Names are fictitious, and no user or machine identifier appears.
 
-The definition of "integration test" is in the spec
+Definitions of "integration test" and "fish test" are in the spec
 comments, and the test layers are in design.md D18.
 
 - [x] 1.1 Add `tests/fixtures/export/OSDB-0901-table-first.org`, a fully
@@ -39,7 +39,7 @@ comments, and the test layers are in design.md D18.
         `tests/fixtures/export/`;
       - symlinks `.emacs-batch/` and `.tools/` from the real repository,
         with an option to copy `.emacs-batch/` instead;
-      - runs `tools/orgsyndb` with `cwd` set to a second temporary
+      - runs `tools/build.fish` with `cwd` set to a second temporary
         directory;
       - builds a reduced `PATH` from named tools plus a recording fake
         `sudo`;
@@ -48,7 +48,7 @@ comments, and the test layers are in design.md D18.
       - finds a free TCP port;
       - provides skip helpers that name the missing tool or cache. For an
         unbootstrapped `.emacs-batch/` the reason is "ox-hugo not
-        bootstrapped: run tools/orgsyndb export once (needs network)".
+        bootstrapped: run tools/build.fish export once (needs network)".
 
 ## 2. Failing tests (test writer)
 
@@ -89,9 +89,9 @@ names and signatures to test against are in design.md D1.
       - sample procedures are discovered by the `sample-data` tag;
       - Org tables and Markdown pipe tables are parsed from source;
       - atomic weights and the CAS rule are as the spec states.
-- [x] 2.6 `tests/test_build_script.py` covers these
+- [x] 2.6 `tests/test_build_script.py` (fish tests) covers these
       `build-script` scenarios: unknown subcommand, no subcommand, help,
-      symlink invocation, Hugo missing, git
+      syntax and formatting, symlink invocation, Hugo missing, git
       missing although ox-hugo is installed (skip unless `.emacs-batch/`
       is bootstrapped), validate with arguments needing only Python,
       arguments passed through to the validator, both "clean" scenarios,
@@ -122,7 +122,7 @@ names and signatures to test against are in design.md D1.
 - [x] 2.9 Run `python3 -m pytest tests` and report which tests fail and
       which skip, with reasons. At this stage:
       - the change-1 suite stays green;
-      - pure, configuration, sample and program tests are red;
+      - pure, configuration, sample and fish tests are red;
       - integration tests skip, because `.emacs-batch/` cannot be
         bootstrapped before `export.el` exists.
 
@@ -167,7 +167,7 @@ names and signatures to test against are in design.md D1.
 
 ## 6. Build script and companions (implementer)
 
-- [x] 6.1 Add `tools/orgsyndb` with the conventions of D13, and the tool
+- [x] 6.1 Add `tools/build.fish` with the conventions of D13, and the tool
       checks of the D12 preflight table, and `check-deps`.
 - [x] 6.2 Implement the subcommands: `export` (recover, stage, then
       install through `pipeline.py`, D4),
@@ -188,12 +188,12 @@ names and signatures to test against are in design.md D1.
       - real Europe/Berlin timestamps at the time of writing;
       - your own exact model identifier in `#+AI_MODEL` and `ai_model`.
 
-      Use `tools/orgsyndb new` to create both stubs, then fill them.
+      Use `tools/build.fish new` to create both stubs, then fill them.
 
 ## 8. Implementation verification (implementer)
 
-- [x] 8.1 Run `tools/orgsyndb export` once to bootstrap `.emacs-batch/`
-      (needs network). Then run `tools/orgsyndb build` to cache Pagefind.
+- [x] 8.1 Run `tools/build.fish export` once to bootstrap `.emacs-batch/`
+      (needs network). Then run `tools/build.fish build` to cache Pagefind.
 - [x] 8.2 Run `python3 -m pytest tests` until it is fully green with no
       integration test skipped on this machine, except the Caddy parse
       test, without editing any test. Return any test that looks wrong to
@@ -208,21 +208,21 @@ names and signatures to test against are in design.md D1.
 Record each result in the review notes.
 
 - [x] 9.1 Brief §9 check 1: in a fresh clone in a temporary directory whose
-      path contains a space, run `tools/orgsyndb check-deps`, then
-      `tools/orgsyndb build`. Both succeed with no step beyond the
+      path contains a space, run `tools/build.fish check-deps`, then
+      `tools/build.fish build`. Both succeed with no step beyond the
       printed `dnf` line, and the first run bootstraps ox-hugo, tomelr and
       Pagefind over the network.
 - [x] 9.2 Brief §9 check 6. Confirm that `python3 -m pytest tests` is
-      green and that `tools/orgsyndb validate` passes on the seeds. Then
+      green and that `tools/build.fish validate` passes on the seeds. Then
       run each committed fixture through the pass-through. Let `F` stand
       for `--vocabulary tests/fixtures/reaction_types.toml --static-dir
       tests/fixtures/static`, and run every command from the repository
       root. Confirm each scenario's field and message:
       - every `tests/fixtures/invalid/<case>` except `duplicate-id`, as
-        its own single root: `tools/orgsyndb validate F
+        its own single root: `tools/build.fish validate F
         tests/fixtures/invalid/<case>`. Each gives exactly one error.
       - `duplicate-id`, with both roots in one run:
-        `tools/orgsyndb validate F tests/fixtures/invalid/duplicate-id/a
+        `tools/build.fish validate F tests/fixtures/invalid/duplicate-id/a
         tests/fixtures/invalid/duplicate-id/b`. This gives two `id`
         errors, each naming the other file. Run as a single root, the
         directory gives only two `subdirectories are not supported`
@@ -234,28 +234,28 @@ Record each result in the review notes.
         `wrong-weekday`, `nonexistent-local-time`,
         `last-modified-before-created`, `bad-ai-model`,
         `bad-org-file-name` and `subdirectory`, with the Org root only:
-        `tools/orgsyndb validate F --org-root
+        `tools/build.fish validate F --org-root
         tests/fixtures/org-invalid/<case>/org`.
       - the cross-check cases `export-date-mismatch`,
         `export-offset-mismatch`, `export-ai-model-mismatch` and
-        `missing-export`, with both roots: `tools/orgsyndb validate F
+        `missing-export`, with both roots: `tools/build.fish validate F
         --org-root tests/fixtures/org-invalid/<case>/org
         tests/fixtures/org-invalid/<case>/export`. `export-offset-mismatch`
         gives one error and one warning.
-- [x] 9.3 Brief §9 check 8: `tools/orgsyndb new "Manual check"` and
-      `tools/orgsyndb new --md "Manual check"` create stubs with the next
+- [x] 9.3 Brief §9 check 8: `tools/build.fish new "Manual check"` and
+      `tools/build.fish new --md "Manual check"` create stubs with the next
       free IDs. The Org stub's `#+CREATED` is the current Europe/Berlin
-      time with the right weekday, and `tools/orgsyndb validate` passes
+      time with the right weekday, and `tools/build.fish validate` passes
       with both present. Delete both afterwards.
 - [x] 9.4 Brief §9 check 9: every Org file under `org/procedures/` and
       `templates/` carries the three keywords in the required format.
       Exported `date` and `lastmod` match them; the validator's
       cross-check passes in `build`.
-- [x] 9.5 Brief §9 check 10: a second `tools/orgsyndb build` succeeds.
+- [x] 9.5 Brief §9 check 10: a second `tools/build.fish build` succeeds.
       `sha256sum build/export/*` is unchanged across it, and `git status`
       stays clean.
 - [x] 9.6 Brief §9 check 2 (the part minimal layouts allow): run
-      `tools/orgsyndb serve`. In a browser with the network panel open,
+      `tools/build.fish serve`. In a browser with the network panel open,
       the home page, a procedure page and a taxonomy page make zero
       requests to other hosts. Grep `public/` for `http://` and `https://`:
       only citation `<a href>` links and the Pagefind bundle's inert
@@ -263,7 +263,7 @@ Record each result in the review notes.
       (`await import("/pagefind/pagefind.js")`, then `search("aspirin")`)
       returns OSDB-0002. Ctrl-C stops the server.
 - [x] 9.7 Brief §9 check 7 (the part minimal layouts allow):
-      `tools/orgsyndb pdf` writes one PDF per procedure, named
+      `tools/build.fish pdf` writes one PDF per procedure, named
       `OSDB-NNNN-short-slug.pdf`. `pdfinfo` reports A4, and the PDFs carry
       no navigation chrome. Headers, footers and clipping are change 3's.
 - [x] 9.8 Fish behaviour that only a manual check covers:
@@ -279,5 +279,5 @@ Record each result in the review notes.
 - [x] 10.1 Hand README.md, docs/AUTHORING.md and docs/AUTHORING-ORG.org to
       the doc writer, as update or draft jobs. The facts each needs are
       listed in proposal.md Impact. The sources are this change's specs
-      and design.md, `tools/orgsyndb help`, the templates, and the
+      and design.md, `tools/build.fish help`, the templates, and the
       implementer's list from 8.4. Check each diff against those sources.

@@ -50,5 +50,5 @@ Every sample procedure's Reagents table SHALL have the columns `Reagent | CAS | 
 The sample procedures SHALL produce no validator problem line at all, neither error nor warning, both as sources and after export.
 
 #### Scenario: Clean validation of the shipped tree
-- **WHEN** an integration test runs `tools/orgsyndb validate` on the repository's own `org/procedures/` and `md/procedures/`
+- **WHEN** an integration test runs `tools/build.fish validate` on the repository's own `org/procedures/` and `md/procedures/`
 - **THEN** it exits 0, and no line of the form `<path>:<field>: <severity>: <message>` is printed

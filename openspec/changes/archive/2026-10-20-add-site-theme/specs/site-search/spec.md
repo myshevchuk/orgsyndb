@@ -28,7 +28,7 @@ The page carries no `data-pagefind-body`.
 - **AND** the built search script contains `PagefindUI`, `processTerm`, `processResult` and `triggerSearch`
 
 #### Scenario: Keyboard use in a browser
-- **WHEN** the orchestrator opens `/search/?q=aspirin` from `tools/orgsyndb serve` and uses only the keyboard (manual verification, tasks.md section 9)
+- **WHEN** the orchestrator opens `/search/?q=aspirin` from `tools/build.fish serve` and uses only the keyboard (manual verification, tasks.md section 9)
 - **THEN** results are shown for `aspirin`, focus reaches the input, the filter groups, their checkboxes and the result links with Tab, a focus outline is visible on each, and Space toggles a filter
 
 ### Requirement: Indexed content
@@ -147,8 +147,8 @@ Two further rules apply:
 - **AND** no excerpt shows the SMILES index
 
 ### Requirement: Node stays optional
-Node SHALL be used only by tests. `tools/orgsyndb`, `tools/pipeline.py`, `tools/export.el` and `tools/hooks/pre-commit` neither invoke nor mention `node` or `npm`, and `check-deps` neither reports nor requires Node. Tests that need Node skip with a reason that names `node` when it is absent.
+Node SHALL be used only by tests. `tools/build.fish`, `tools/pipeline.py`, `tools/export.el` and `tools/hooks/pre-commit` neither invoke nor mention `node` or `npm`, and `check-deps` neither reports nor requires Node. Tests that need Node skip with a reason that names `node` when it is absent.
 
 #### Scenario: No Node in the tools
-- **WHEN** a test searches the files under `tools/` for the words `node` and `npm`, and runs `tools/orgsyndb check-deps` with a `PATH` that holds the five required tools and no `node`
+- **WHEN** a test searches the files under `tools/` for the words `node` and `npm`, and runs `tools/build.fish check-deps` with a `PATH` that holds the five required tools and no `node`
 - **THEN** neither word is found, and `check-deps` exits 0 and prints no line mentioning `node`

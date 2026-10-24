@@ -29,7 +29,7 @@ it end to end.
   result is exactly one `.md` per Org source the validator examines (so
   Emacs lock files and other dotfiles are never exported), with no orphan
   files and byte-identical output on re-export.
-- Add `tools/pipeline.py`, a stdlib-only helper that `orgsyndb` calls. It
+- Add `tools/pipeline.py`, a stdlib-only helper that `build.fish` calls. It
   holds every piece of logic that can be tested without Emacs, Hugo or the
   network: the export plan and timestamp rules, next-ID allocation, slug
   derivation, template filling, PDF job naming, and Pagefind download
@@ -53,11 +53,11 @@ it end to end.
   first need and checked against pinned SHA-256 hashes of the tarball and of
   the binary. It indexes `public/` into `public/pagefind/`. No Node and no
   pip.
-- Add `tools/orgsyndb` with the subcommands `export`, `validate`, `build`,
+- Add `tools/build.fish` with the subcommands `export`, `validate`, `build`,
   `serve`, `pdf`, `new [--md]`, `clean`, `check-deps` and `help`:
   - `serve` builds the site, then serves `public/` with Python's
     `http.server` on `http://127.0.0.1:8000/`.
-  - `pdf` is a subcommand. It builds, then renders
+  - `pdf` is a subcommand, not a separate `pdf.fish`. It builds, then renders
     each procedure page to `pdf/<source stem>.pdf` with WeasyPrint 70.0,
     allowing only `file:` URLs and silencing pyphen's `pkg_resources`
     warning.
@@ -65,7 +65,7 @@ it end to end.
     trees, the export directory, and the git history of both trees.
   - `check-deps` prints a `sudo dnf install …` line for the missing packages
     and never runs sudo.
-- Add `tools/hooks/pre-commit`, which runs `orgsyndb validate` and is
+- Add `tools/hooks/pre-commit`, which runs `build.fish validate` and is
   never enabled automatically. Also add `deploy/Caddyfile.example` and
   extend `.gitignore` with the generated and cached directories.
 - Add the seed procedures `org/procedures/OSDB-0001-salicylic-acid.org`
@@ -76,7 +76,7 @@ it end to end.
 - Add tests:
   - pure-logic unit tests;
   - configuration tests that parse `hugo.toml` and `.gitignore`;
-  - program tests: usage, `check-deps` under a reduced
+  - fish tests: syntax, `fish_indent`, usage, `check-deps` under a reduced
     `PATH`, and `clean`;
   - integration tests for export, build, serve, PDF and the hook. These run
     in a temporary copy of the repository whose path contains a space, and
@@ -94,7 +94,7 @@ it end to end.
   configuration, the merged procedures section, the minimal layout contract
   that change 3 inherits, the absence of external fetches, Pagefind
   acquisition, and the search index.
-- `build-script`: the `tools/orgsyndb` entry point and its helpers.
+- `build-script`: the `tools/build.fish` entry point and its helpers.
   Covers the conventions every subcommand follows, the stop on a missing
   tool, each subcommand, `tools/pipeline.py`, the pre-commit hook, the
   Caddyfile example, and the ignore rules.
@@ -115,7 +115,7 @@ no correction.
 ## Impact
 
 - New files:
-  - `tools/export.el`, `tools/pipeline.py`, `tools/orgsyndb` and
+  - `tools/export.el`, `tools/pipeline.py`, `tools/build.fish` and
     `tools/hooks/pre-commit`;
   - `site/hugo.toml`, `site/content/_index.md` and `site/layouts/*.html`;
   - `deploy/Caddyfile.example`;
@@ -128,8 +128,9 @@ no correction.
   specified behaviour does not change.
 - Generated, gitignored paths: `build/`, `public/`, `pdf/`, `.emacs-batch/`,
   `.tools/`, `site/.hugo_build.lock` and `site/resources/`.
-- Layout deviation from brief §4: the PDF batch is the `pdf` subcommand.
-  `tools/pipeline.py` is added, for the reasons given in design.md D1.
+- Layout deviation from brief §4: the PDF batch is the `pdf` subcommand, so
+  there is no `tools/pdf.fish`. `tools/pipeline.py` is added, for the
+  reasons given in design.md D1.
 - Dependencies:
   - Fedora packages: `emacs`, `git`, `python3`, `hugo` 0.162.1 and
     `weasyprint` 70.0. `caddy` is optional.
@@ -144,7 +145,7 @@ no correction.
     `public/pagefind/` (`pagefind-ui.js`, `pagefind-ui.css`, `pagefind.js`).
   - `serve` is `http://127.0.0.1:8000/`, and search works there.
   - The seeds take `OSDB-0001` and `OSDB-0002`, so change 3 numbers from
-    `OSDB-0003` with `orgsyndb new`.
+    `OSDB-0003` with `build.fish new`.
 - Facts the doc writer needs. The final orchestrator task hands these over;
   no relay stage writes these documents.
   - `README.md`:
@@ -154,19 +155,19 @@ no correction.
       pins, while `validate` with explicit arguments needs only Python;
     - `new` cannot see IDs deleted beyond a shallow clone's history, and
       warns;
-    - every `orgsyndb` subcommand with its options and outputs: `serve`'s
+    - every `build.fish` subcommand with its options and outputs: `serve`'s
       URL and `--port`, `pdf`'s output names, and `clean --all`;
     - enabling the hook with `git config core.hooksPath tools/hooks` or a
       symlink, and the fact that it checks the working tree, not the index;
     - the Caddyfile example and the generated directories.
   - `docs/AUTHORING.md` (co-worker, Markdown):
-    - `tools/orgsyndb new --md "Title"` and what it fills in;
-    - `tools/orgsyndb validate` and how to read its lines;
-    - `tools/orgsyndb serve` to preview at `http://127.0.0.1:8000/`;
+    - `tools/build.fish new --md "Title"` and what it fills in;
+    - `tools/build.fish validate` and how to read its lines;
+    - `tools/build.fish serve` to preview at `http://127.0.0.1:8000/`;
     - files in `md/procedures/` other than `OSDB-*.md` are never published;
     - a procedure dated in the future is published at once.
   - `docs/AUTHORING-ORG.org` (owner):
-    - `tools/orgsyndb new "Title"` and `--ai-model`, and Org timestamps
+    - `tools/build.fish new "Title"` and `--ai-model`, and Org timestamps
       in Europe/Berlin under `LC_TIME=C`;
     - the export runs in isolation and never touches `~/.config/emacs`;
     - `$…$` and `\(…\)` are kept as literal text, only braced

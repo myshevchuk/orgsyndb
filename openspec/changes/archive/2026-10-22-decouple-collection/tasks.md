@@ -43,7 +43,7 @@
 ## 4. Documents
 
 - [x] 4.1 README: application and collections, the demo, `init`, the
-      command reference.
+      command reference, migration from `build.fish`.
 - [x] 4.2 Authoring guides and schema reference: commands and the
       structure-image location.
 - [x] 4.3 `deploy/Caddyfile.example`: the collection's `public/`.
