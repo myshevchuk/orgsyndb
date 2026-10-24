@@ -243,6 +243,10 @@ The [German version of this guide](AUTHORING.de.md) explains it step by
 step. A file without `.de` may also be written in German; then add
 `language = "de"` to its information block.
 
+Use the [German procedure style guide](STYLE.de.md) for the wording and the
+[German organic-synthesis glossary](GLOSSARY.de.md) for terms, fixed
+phrases, reusable sentences, and their English equivalents.
+
 To translate an existing procedure, copy its file and add the language
 code before the extension, for example `OSDB-0002-aspirin.md` to
 `OSDB-0002-aspirin.de.md`. Keep the `id`, `slug`, `status`,

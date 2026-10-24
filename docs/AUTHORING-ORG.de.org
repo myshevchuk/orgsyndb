@@ -5,6 +5,8 @@
 #+LANGUAGE: de
 #+OPTIONS: toc:t num:nil
 #+STARTUP: showall
+#+AI_PASS: doc-writer gpt-5.6-sol [2026-10-24 Sat 11:14] -- Stil und Glossar
+#+AI_PASS: fact-check claude-opus-5-5 [2026-10-24 Sat 11:16] -- doc-writer pass line corrected from gpt-5 to the pinned run model
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
@@ -184,6 +186,11 @@ bleiben auch in einer deutschen Vorschrift englisch.
   Charakterisierung, Gefahren und Entsorgung an, mit Dezimalkommas im
   Text. Steht unter Literatur nichts, schreiben Sie ~Keine.~
 
+  Der [[file:STYLE.de.md][Stilratgeber für deutsche Vorschriften]] erklärt,
+  wie der Text formuliert wird. Verwenden Sie das
+  [[file:GLOSSARY.de.md][Glossar zur organischen Synthese]] für Fachbegriffe,
+  feste Wendungen und wiederverwendbare Sätze mit englischen Entsprechungen.
+
   Behalten Sie die sechs Spalten der Reagenzientabelle in dieser
   Reihenfolge: ~Reagenz~, ~CAS~, ~M (g/mol)~, ~Menge~, ~mmol~ und
   ~Äquiv.~ Ein Katalysator hat ~kat.~ in ~mmol~ und ~Äquiv.~ Eine breite
@@ -233,7 +240,10 @@ bleiben auch in einer deutschen Vorschrift englisch.
      jede Abweichung als Fehler.
   5. Übersetzen Sie den Text, ersetzen Sie die englischen Überschriften
      und Tabellenspalten durch die deutschen und schreiben Sie
-     Dezimalkommas.
+     Dezimalkommas. Richten Sie sich dabei nach dem
+     [[file:STYLE.de.md][Stilratgeber]], und verwenden Sie das
+     [[file:GLOSSARY.de.md][Glossar]] für Begriffe, feste Wendungen und
+     wiederverwendbare Sätze.
 
   Ändert sich später eine gemeinsame Angabe, ändern Sie sie in beiden
   Dateien. Eine Vorschrift ohne deutsche Fassung erscheint auf der

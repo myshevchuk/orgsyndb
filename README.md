@@ -409,3 +409,7 @@ the example's `tls internal` setting against your organisation's TLS setup.
 - [Org authoring guide](docs/AUTHORING-ORG.org): Org templates, timestamps,
   export behaviour, and Emacs conventions. German:
   [AUTHORING-ORG.de.org](docs/AUTHORING-ORG.de.org).
+- [German procedure style guide](docs/STYLE.de.md): guidance for clear,
+  consistent German procedure text.
+- [German organic-synthesis glossary](docs/GLOSSARY.de.md): terms, fixed
+  phrases, and reusable sentences with English equivalents.

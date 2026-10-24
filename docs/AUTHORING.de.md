@@ -173,6 +173,11 @@ Charakterisierung und Sicherheitshinweise so an, dass man der Vorschrift
 folgen kann. Schreiben Sie im Text Dezimalkommas: „2,76 g“. Steht unter
 Literatur nichts, schreiben Sie `Keine.`
 
+Der [Stilratgeber für deutsche Vorschriften](STYLE.de.md) erklärt, wie der
+Text formuliert wird. Verwenden Sie das
+[Glossar zur organischen Synthese](GLOSSARY.de.md) für Fachbegriffe, feste
+Wendungen und wiederverwendbare Sätze mit englischen Entsprechungen.
+
 Behalten Sie die sechs Spalten der Reagenzientabelle in dieser
 Reihenfolge: **Reagenz**, **CAS**, **M (g/mol)**, **Menge**, **mmol** und
 **Äquiv.** Schreiben Sie `kat.` in **mmol** und **Äquiv.** eines
@@ -291,7 +296,10 @@ also auf der deutschen Website das englische Original.
 
 5. Übersetzen Sie den Text, ersetzen Sie die englischen Überschriften und
    Tabellenspalten durch die deutschen aus Abschnitt 3 und schreiben Sie
-   Dezimalkommas.
+   Dezimalkommas. Richten Sie sich dabei nach dem
+   [Stilratgeber](STYLE.de.md), und verwenden Sie das
+   [Glossar](GLOSSARY.de.md) für Begriffe, feste Wendungen und
+   wiederverwendbare Sätze.
 
 Ändert sich später eine gemeinsame Angabe, etwa der Status, ändern Sie sie
 in beiden Dateien. Eine Vorschrift ohne deutsche Fassung erscheint auf der

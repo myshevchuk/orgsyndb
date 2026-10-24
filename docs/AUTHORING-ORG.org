@@ -9,6 +9,8 @@
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-20 Tue 20:49] -- doc-writer pass line corrected from gpt-5 to the pinned run model
 #+AI_PASS: doc-writer claude-opus-5-5 [2026-10-22 Thu 19:45] -- German procedures and translations
 #+AI_PASS: doc-writer claude-opus-5-5 [2026-10-22 Thu 21:47] -- one site language and procedure variants
+#+AI_PASS: doc-writer gpt-5.6-sol [2026-10-24 Sat 11:14] -- style and glossary
+#+AI_PASS: fact-check claude-opus-5-5 [2026-10-24 Sat 11:16] -- doc-writer pass line corrected from gpt-5 to the pinned run model
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -259,6 +261,10 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   and its text uses decimal commas. Org keywords, custom-front-matter keys,
   status values, reaction-type slugs and tags stay English, and so do the
   weekday names in ~#+CREATED~ and ~#+LAST_MODIFIED~.
+
+  Use the [[file:STYLE.de.md][German procedure style guide]] for the wording
+  and the [[file:GLOSSARY.de.md][German organic-synthesis glossary]] for terms,
+  fixed phrases, reusable sentences, and their English equivalents.
 
   A file without a code may use the English or the German headings. To
   state its language, add a custom-front-matter line before ~:product~:
