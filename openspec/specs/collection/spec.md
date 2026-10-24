@@ -2,7 +2,9 @@
 
 ## Purpose
 Define a collection, the directory of procedures that the application builds: its `orgsyndb.toml` marker and layout, how the program chooses it, which generated files go into it, and `init`.
+
 ## Requirements
+
 ### Requirement: Collection layout
 A collection SHALL be a directory holding a file `orgsyndb.toml`. Relative to that directory:
 - `org/procedures/` holds Org procedure sources and `md/procedures/` Markdown procedure sources. Either may be missing, which means it is empty.
@@ -68,4 +70,3 @@ It writes `orgsyndb.toml` last, so that an interrupted `init` can be rerun. It e
 #### Scenario: The demo collection matches init
 - **WHEN** a test compares `examples/demo/.gitignore` and `examples/demo/orgsyndb.toml` with the files `init` writes
 - **THEN** both `.gitignore` files are equal, and both `orgsyndb.toml` files parse to `{"format": 1}`
-
