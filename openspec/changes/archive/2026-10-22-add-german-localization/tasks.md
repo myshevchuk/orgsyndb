@@ -39,4 +39,5 @@
 - [x] 5.1 README, `docs/SCHEMA.md`, both authoring guides.
 - [x] 5.2 `docs/AUTHORING.de.md`, `docs/AUTHORING-ORG.de.org`,
       `docs/SCHEMA.de.md`.
-- [ ] 5.3 Owner's review of the German texts and a build on Fedora 44.
+- [x] 5.3 `docs/DECISIONS.org`: the localization decisions.
+- [ ] 5.4 Owner's review of the German texts and a build on Fedora 44.

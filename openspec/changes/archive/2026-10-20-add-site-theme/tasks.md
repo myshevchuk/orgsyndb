@@ -450,8 +450,11 @@ review notes, and delete `S` afterwards.
 
 ## 10. Documentation (orchestrator)
 
-- [ ] 10.1 Hand README.md, docs/AUTHORING.md and docs/AUTHORING-ORG.org
-      updates to the doc writer.
+- [ ] 10.1 Hand README.md, docs/AUTHORING.md, docs/AUTHORING-ORG.org
+      updates and docs/DECISIONS.org to the doc writer.
+      - The first three are update jobs. docs/DECISIONS.org is a draft
+        job, in Org, compiled from the three changes' design.md files
+        and the orchestrator's cross-cutting decision notes.
       - The facts each needs are listed in proposal.md Impact. The
         sources are this change's specs and design.md, the earlier
         changes' archived design.md files, `tools/build.fish help`, the

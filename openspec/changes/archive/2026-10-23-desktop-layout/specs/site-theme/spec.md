@@ -24,7 +24,7 @@ The screen stylesheet gives `.table-scroll` `overflow-x: auto`, so a wide table 
 
 #### Scenario: Procedure reference and text
 - **WHEN** a browser displays a procedure at 1280 CSS pixels or wider
-- **THEN** the body occupies a reading column on the left and the structure and metadata occupy a margin column on the right, without a panel border or background
+- **THEN** the body occupies a reading column on the left and the structure and metadata occupy a margin column on the right, without a panel border or background (the Marginalia design, `docs/designs/minimal/`, layout 7)
 - **AND** prose has a bounded reading measure and wide tables scroll locally
 - **AND** the details stay first in document order, so narrower windows, print and the search index show them before the body
 
@@ -105,7 +105,7 @@ Above its table, each list SHALL have, in this order:
 
 Every row of a procedure table carries `data-reaction-types`, the procedure's reaction-type slugs joined by single spaces, and `data-status`, its status.
 
-On screen, each list is a full-width table: the tool row spans the shell with the search form on the left and the filters on the right, the sort links sit right-aligned above a table that uses the shell width, and the status column reads as plain text.
+On screen, the lists follow the full-width table design (`docs/designs/minimal/`, layout 4): the tool row spans the shell with the search form on the left and the filters on the right, the sort links sit right-aligned above a table that uses the shell width, and the status column reads as plain text.
 
 #### Scenario: Both orders
 - **WHEN** a test scans `public/procedures/index.html` and `public/procedures-by-date/index.html` after a theme build, and computes both orders from the content files' front matter

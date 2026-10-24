@@ -5,35 +5,36 @@ for data tables without stretching indefinitely on very wide monitors.
 The home page has a flexible recent-procedures column and a 19rem browse
 column. Smaller browser windows reduce or stack these columns.
 
-The owner chose two minimalist layouts:
+The owner chose two of the minimalist layouts in docs/designs/minimal/:
 
-- **Lists: full-width table.** `/procedures/` and `/procedures-by-date/`
-  show the title with the entry count, one tool row (search on the left,
-  reaction-type and status selects on the right), the sort links
-  right-aligned, and a table across the shell whose status column reads
-  as plain text. The search field submits to `/search/`, so it works
-  without JavaScript. The selects filter the rows in place:
-  `list-filter.js` reveals them and hides rows by their
+- **Lists: layout 4, full-width table.** `/procedures/` and
+  `/procedures-by-date/` show the title with the entry count, one tool
+  row (search on the left, reaction-type and status selects on the
+  right), the sort links right-aligned, and a table across the shell
+  whose status column reads as plain text. The search field submits to
+  `/search/`, so it works without JavaScript. The selects filter the
+  rows in place: `list-filter.js` reveals them and hides rows by their
   `data-reaction-types` and `data-status`. Without JavaScript they stay
   hidden and the table is complete. The sort links stay links, because
   each order is its own static page.
-- **Procedures: Marginalia.** The body is a reading column of up to
-  48rem on the left. The structure and metadata form an unboxed margin
-  of 15-21rem on the right, the structure first. CSS grid areas place
-  them; the details stay first in the document, so print, Pagefind and
-  windows under 55rem keep the order details, then body.
+- **Procedures: layout 7, Marginalia.** The body is a reading column of
+  up to 48rem on the left. The structure and metadata form an unboxed
+  margin of 15-21rem on the right, the structure first. CSS grid areas
+  place them; the details stay first in the document, so print, Pagefind
+  and windows under 55rem keep the order details, then body.
 
-On screen the interface uses the system sans-serif stack. Paper keeps
-the text face of tokens.css, so the A4 output does not change.
+On screen the interface uses the system sans-serif stack, following the
+owner's constraint for the minimalist layouts. Paper keeps the text face
+of tokens.css, so the A4 output does not change.
 
 The navigation marks the current page with `aria-current="page"` and
 the current section with `aria-current="true"`, which the screen
 stylesheet underlines.
 
-Not implemented:
-- Marginalia sidenotes beside their sections, because moving body
+Not implemented from the mock-ups:
+- the Marginalia sidenotes beside their sections, because moving body
   notes out of the Notes section would change the document order;
-- a pager on the lists, because the lists have no pages.
+- the "1-8 of 8" pager of layout 4, because the lists have no pages.
 
 ## Rendering and accessibility
 
@@ -42,6 +43,24 @@ existing single-column A4 flow. Add neutral wrappers around the procedure
 details and body without changing document or Pagefind indexing order.
 Keep keyboard-focusable table scrolling, headings, labels and navigation.
 Both color schemes continue to use the existing contrast-tested tokens.
+
+## Design exploration
+
+The reference-library concept uses editorial typography and a light
+paper surface. The research-workbench concept uses persistent sidebar
+navigation and denser data panels. The night-lab concept uses dark
+surfaces and a compound preview. These concepts are static review aids
+and were not implemented.
+
+## Follow-up design constraints
+
+The owner requested three further layouts using plain system sans-serif
+fonts, light surfaces and functional labels. Omit promotional copy,
+decorative typography and dark-theme exploration. The alternatives are a
+full-width table, a filter sidebar and a list/detail split. Their static
+previews live in docs/designs/minimal/, with layouts 7-9 added later
+under the same constraints. The owner chose layout 4 for the lists and
+layout 7 for procedure pages; the Layout section describes them.
 
 ## Stale pages after a rebuild
 

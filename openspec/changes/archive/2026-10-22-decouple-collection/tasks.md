@@ -46,7 +46,8 @@
       command reference, migration from `build.fish`.
 - [x] 4.2 Authoring guides and schema reference: commands and the
       structure-image location.
-- [x] 4.3 `deploy/Caddyfile.example`: the collection's `public/`.
+- [x] 4.3 `docs/DECISIONS.org`: the split, the marker, and Python over fish.
+- [x] 4.4 `deploy/Caddyfile.example`: the collection's `public/`.
 
 ## 5. Review
 

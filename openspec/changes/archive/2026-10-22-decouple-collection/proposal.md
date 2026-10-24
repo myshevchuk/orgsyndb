@@ -80,5 +80,6 @@ root must move into a collection.
   `examples/demo/`.
 - Tests: the sandbox becomes an application copy plus a collection copy;
   the fish-specific tests become Python and `sh` tests.
-- Docs: README, both authoring guides and the schema reference.
+- Docs: README, both authoring guides, the schema reference and the
+  decision record.
 - Dependencies: fish is dropped. Nothing is added.

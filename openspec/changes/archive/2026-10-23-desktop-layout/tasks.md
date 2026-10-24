@@ -6,13 +6,13 @@
 - [x] Keep tables scrollable within their available column.
 - [x] Preserve source order, localization and print flow.
 - [x] Update the existing HTML order assertion and README.
+- [x] Prepare three visual design concepts with real demo content.
 
 ## Chosen layouts
 
-- [x] Lists: implement the full-width table (count, search, filters,
-      sort bar, table).
+- [x] Lists: implement layout 4 (count, search, filters, sort bar, table).
 - [x] Add list-filter.js with a Node-tested matching function.
-- [x] Procedures: implement Marginalia (body left, margin right).
+- [x] Procedures: implement layout 7 Marginalia (body left, margin right).
 - [x] Use sans-serif on screen; keep print unchanged.
 - [x] Mark the current page and section in the navigation.
 - [x] Add the list-tools, navigation and filter tests; update the spec.
