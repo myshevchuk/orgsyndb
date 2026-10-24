@@ -235,7 +235,3 @@ h1 { font-size: 2.25rem; }
   .procedure-header { display: block; }
   .procedure-header .actions { margin-top: var(--space-3); }
 }
-@media (max-width: 35rem) {
-  body { padding: 0 var(--space-3); }
-  .home-browse { grid-template-columns: minmax(0, 1fr); }
-}
