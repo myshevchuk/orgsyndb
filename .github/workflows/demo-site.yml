@@ -1,0 +1,45 @@
+# Builds the demo collection and publishes it with GitHub Pages. Pull
+# requests only build; pushes to main also deploy. The repository's
+# Pages source must be set to GitHub Actions.
+name: Demo site
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demo-site-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: fedora:44
+    steps:
+      # git before checkout, so that checkout makes a real clone; tar for
+      # upload-pages-artifact.
+      - run: dnf install -y emacs-nox git python3 hugo tar
+      - uses: actions/checkout@v5
+      - run: tools/orgsyndb -C examples/demo build
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: examples/demo/public
+
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

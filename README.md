@@ -39,7 +39,8 @@ caches of fetched tools, `.emacs-batch/` and `.tools/`.
 
 [`examples/demo/`](examples/demo/) is a complete collection with eight
 sample procedures in English, each with a German translation. It shows the
-layout, and the tests build it.
+layout, and the tests build it. You can explore the same collection on the
+[live demo site](https://myshevchuk.github.io/orgsyndb/).
 
 `orgsyndb.toml` must contain exactly `format = 1`. The number is the
 version of the collection layout; an application that does not know a
@@ -397,6 +398,20 @@ shows how Caddy can serve a copy of that directory. Replace
 `orgsyndb.internal` with the server's internal host name and
 `/srv/orgsyndb/public` with the directory containing the copied site. Review
 the example's `tls internal` setting against your organisation's TLS setup.
+
+This repository publishes only its demo collection to GitHub Pages with
+[`.github/workflows/demo-site.yml`](.github/workflows/demo-site.yml). The
+workflow builds `examples/demo/` in a `fedora:44` container with
+`tools/orgsyndb -C examples/demo build`, then uploads
+`examples/demo/public`. A push to `main` builds and deploys the site. A pull
+request builds it without deploying, and you can also start the workflow by
+hand. Deployment runs only for `main`.
+
+To publish the demo from a fork, set the repository's Pages source to
+**GitHub Actions** under **Settings > Pages**. The workflow needs no
+repository secrets. The demo works below a path such as `/orgsyndb/`
+without additional configuration: Hugo writes relative URLs, and Pagefind
+finds its files and result links from the location of its own script.
 
 ## Authoring references
 
