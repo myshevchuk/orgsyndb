@@ -2,9 +2,7 @@
 
 ## Purpose
 Define the Hugo project under `site/`: configuration, the merged procedures section, the minimal layout contract later themes inherit, the no-remote-fetch rule, and the pinned Pagefind binary and its search index.
-
 ## Requirements
-
 ### Requirement: Hugo configuration
 The file `site/hugo.toml` SHALL configure Hugo 0.162.1 as follows:
 - `baseURL = "/"`, `locale = "de"` and `relativeURLs = true`. The locale is the site's language, as the localization spec defines.
@@ -91,11 +89,11 @@ A built site SHALL contain no reference that makes a browser or WeasyPrint fetch
 - **THEN** no violation is found
 
 ### Requirement: Pagefind binary acquisition
-`build` SHALL index with the Pagefind 1.5.2 standalone binary at `<app>/.tools/pagefind-1.5.2/pagefind`, obtained through `pipeline.ensure_pagefind(<app>/.tools)` (also `tools/pipeline.py ensure-pagefind --tools-dir <app>/.tools`). That command prints the binary's path and works as follows:
+`build` SHALL index with the Pagefind 1.5.2 standalone binary at `<app>/.tools/pagefind-1.5.2/pagefind`, obtained through `pipeline.ensure_pagefind(<app>/.tools)`, which returns the binary's path and works as follows:
 - It accepts a cached binary only when its SHA-256 is `c4b86009ce5420dc2a1748ab2705bef6ba730ed883f684fd52ef6008bd600532`.
 - Otherwise it downloads `https://github.com/Pagefind/pagefind/releases/download/v1.5.2/pagefind-v1.5.2-x86_64-unknown-linux-musl.tar.gz` into an empty download directory and requires the tarball's SHA-256 to be `afb824a9e7f64905a934900481cea5be679c03975e527329e0e5e6cc70f5feda`.
 - From the tarball it extracts only the regular-file member `pagefind`. It requires that file's SHA-256 to be the binary hash above, makes it executable, and moves it into place.
-- Any mismatch or download error removes everything that run wrote and exits 1, with a message giving the URL or the expected and actual hashes.
+- Any mismatch or download error removes everything that run wrote and raises `PagefindError`, so that `build` exits 1, with a message giving the URL or the expected and actual hashes.
 
 No Node, npm or pip is used.
 
@@ -124,3 +122,4 @@ No Node, npm or pip is used.
 - **WHEN** an integration test builds the seeds
 - **THEN** `public/pagefind/pagefind.js`, `public/pagefind/pagefind-ui.js` and `public/pagefind/pagefind-ui.css` exist
 - **AND** `public/pagefind/pagefind-entry.json` parses as JSON with `version` equal to `1.5.2`, `languages` holding only the site's language, and its `page_count` equal to the number of published procedures
+

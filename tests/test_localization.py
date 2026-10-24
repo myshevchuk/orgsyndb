@@ -237,7 +237,7 @@ class GermanStubTests(unittest.TestCase):
     def test_german_stubs_are_filled_and_valid(self) -> None:
         """Scenario: German stub."""
         root = make_repo(self, trees=True)
-        result = new(root, "--lang", "de", "--now", NOW, "Größe Säure")
+        result = new(root, "Größe Säure", lang="de")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(),
                          "org/procedures/OSDB-0001-groesse-saeure.de.org")
@@ -250,7 +250,7 @@ class GermanStubTests(unittest.TestCase):
         self.assertEqual((checked.returncode, checked.stdout), (0, ""),
                          checked.stderr)
 
-        result = new(root, "--md", "--lang", "de", "--now", NOW, "Ölsäure")
+        result = new(root, "Ölsäure", md=True, lang="de")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(),
                          "md/procedures/OSDB-0002-oelsaeure.de.md")
@@ -265,7 +265,7 @@ class GermanStubTests(unittest.TestCase):
     def test_an_english_stub_with_a_language_code(self) -> None:
         """Scenario: German stub (English with a code)."""
         root = make_repo(self, trees=True)
-        result = new(root, "--lang", "en", "--now", NOW, "Ethyl acetate")
+        result = new(root, "Ethyl acetate", lang="en")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(),
                          "org/procedures/OSDB-0001-ethyl-acetate.en.org")
@@ -275,7 +275,7 @@ class GermanStubTests(unittest.TestCase):
     def test_unknown_language_is_a_usage_error(self) -> None:
         """Scenario: German stub (unknown language)."""
         root = make_repo(self)
-        result = new(root, "--lang", "fr", "Test")
+        result = new(root, "Test", lang="fr")
         self.assertEqual(result.returncode, 2, result.stderr)
         self.assertIn("--lang", result.stderr)
 

@@ -33,23 +33,23 @@ On every run, the export compares each installed checkout's `HEAD` with its pin.
 - **AND** `build/export/` is unchanged
 
 ### Requirement: Export plan
-`tools/pipeline.py export-plan ORG_ROOT PLAN_JSON` SHALL plan exactly the entries that `validate.discover(ORG_ROOT, ".org")` returns with no problem attached, the files the validator examines as Org procedures. Every other entry, such as a dotfile like the Emacs lock symlink `.#OSDB-0001-x.org`, a subdirectory or a file not ending in `.org`, is left out of the plan and so produces no export. It lints each planned file with the validator's Org keyword lint and then acts as follows:
-- If any file has a lint error, it prints the validator-format problem lines to stderr, writes no plan, and exits 1.
-- Otherwise it writes `PLAN_JSON` as a JSON array sorted by file name. Each element has `source` (absolute path), `stem` (file name without `.org`), `date` and `lastmod` (RFC 3339 strings), and `ai_model` (the `#+AI_MODEL` value, or `null` when it is `none`).
+`pipeline.write_export_plan(org_root, plan_path)` SHALL plan exactly the entries that `validate.discover(org_root, ".org")` returns with no problem attached, the files the validator examines as Org procedures. Every other entry, such as a dotfile like the Emacs lock symlink `.#OSDB-0001-x.org`, a subdirectory or a file not ending in `.org`, is left out of the plan and so produces no export. It lints each planned file with the validator's Org keyword lint and then acts as follows:
+- If any file has a lint error, it prints the validator-format problem lines to stderr, deletes any earlier plan file, and returns None.
+- Otherwise it writes `plan_path`, creating its directory, and returns the plan. The file is a JSON array sorted by file name. Each element has `source` (absolute path), `stem` (file name without `.org`), `date` and `lastmod` (RFC 3339 strings), and `ai_model` (the `#+AI_MODEL` value, or `null` when it is `none`).
 
-A missing `ORG_ROOT` yields an empty array.
+A missing `org_root` yields an empty array.
 
 #### Scenario: Plan for a valid source
-- **WHEN** a test runs `export-plan` on a temporary Org root holding a copy of `tests/fixtures/valid/org/OSDB-0003-*.org`
-- **THEN** it exits 0, and the plan has one element whose `stem` is that file's stem, whose `date` is `2026-10-19T17:42:05+02:00`, and whose `ai_model` is `null`
+- **WHEN** a test calls `write_export_plan` on a temporary Org root holding a copy of `tests/fixtures/valid/org/OSDB-0003-*.org`
+- **THEN** it returns a plan, and the written plan has one element whose `stem` is that file's stem, whose `date` is `2026-10-19T17:42:05+02:00`, and whose `ai_model` is `null`
 
 #### Scenario: Entries the validator does not examine are not planned
-- **WHEN** a test runs `export-plan` on a temporary Org root holding a copy of `tests/fixtures/valid/org/OSDB-0003-*.org`, a dangling symlink named `.#OSDB-0003-x.org`, a regular file `.OSDB-0005-hidden.org`, a subdirectory `nested.org/`, and `notes.txt`
-- **THEN** it exits 0, and the plan has exactly one element, the `OSDB-0003` source
+- **WHEN** a test calls `write_export_plan` on a temporary Org root holding a copy of `tests/fixtures/valid/org/OSDB-0003-*.org`, a dangling symlink named `.#OSDB-0003-x.org`, a regular file `.OSDB-0005-hidden.org`, a subdirectory `nested.org/`, and `notes.txt`
+- **THEN** it returns a plan, and the written plan has exactly one element, the `OSDB-0003` source
 
 #### Scenario: Lint error stops the plan
-- **WHEN** a test runs `export-plan` on `tests/fixtures/org-invalid/missing-seconds/org`
-- **THEN** it exits 1, stderr contains a line with field `#+CREATED` containing `must have the form [YYYY-MM-DD Day hh:mm:ss]`, and no plan file exists
+- **WHEN** a test calls `write_export_plan` on `tests/fixtures/org-invalid/missing-seconds/org`
+- **THEN** it returns None, stderr contains a line with field `#+CREATED` containing `must have the form [YYYY-MM-DD Day hh:mm:ss]`, and no plan file exists
 
 ### Requirement: Exported timestamps
 The export SHALL write `date` and `lastmod` with the wall-clock time of `#+CREATED` and `#+LAST_MODIFIED`, seconds included, and a Europe/Berlin UTC offset in force at that instant. Where a time in the autumn fall-back hour names two instants, the choice is made as follows:
@@ -123,12 +123,12 @@ No math renderer is configured or loaded anywhere in the site.
 
 ### Requirement: Complete and fresh export directory
 `tools/orgsyndb export` SHALL leave `build/export/` holding exactly one `<stem>.md` for each planned Org source of `org/procedures/`, and no other file. It uses the sibling directories `build/.export-staging/` and `build/.export-previous/` in these steps:
-1. **Recover.** `pipeline.recover_export(build)` runs first, through `pipeline.py recover-export`:
+1. **Recover.** `pipeline.recover_export(build)` runs first:
    - If `.export-previous/` exists and `export/` does not, it renames `.export-previous/` to `export/`.
    - If both exist, it deletes `.export-previous/`.
    - It deletes any `.export-staging/`, and empties `build/tmp/`.
 2. **Stage.** The export writes into a new, empty `.export-staging/`.
-3. **Install.** `pipeline.replace_export(build, rename, remove)` runs, through `pipeline.py install-export`. `rename` defaults to `os.rename` and `remove` to `shutil.rmtree`; both are injectable so that tests can make a step fail:
+3. **Install.** `pipeline.check_staging(build, plan)` and then `pipeline.replace_export(build, rename, remove)` run. `rename` defaults to `os.rename` and `remove` to `shutil.rmtree`; both are injectable so that tests can make a step fail:
    1. It checks that the staging directory holds exactly the planned files.
    2. It renames an existing `export/` to `.export-previous/`.
    3. It renames `.export-staging/` to `export/`. When that rename fails, it renames `.export-previous/` back to `export/` before failing.

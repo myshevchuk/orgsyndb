@@ -106,12 +106,12 @@ class DemoCollectionTests(unittest.TestCase):
 class IgnoreRuleTests(unittest.TestCase):
     IGNORED = ["examples/demo/build/export/x.md",
                "examples/demo/public/index.html", "examples/demo/pdf/x.pdf",
-               ".emacs-batch/elpa", ".tools/pagefind-1.5.2/pagefind",
-               "site/.hugo_build.lock", "site/resources/_gen/x"]
+               ".emacs-batch/elpa", ".tools/pagefind-1.5.2/pagefind"]
     TRACKED = ["examples/demo/org/procedures/OSDB-0001-salicylic-acid.org",
                "examples/demo/md/procedures/OSDB-0002-aspirin.md",
                "examples/demo/static/structures/osdb-0003.svg",
-               "site/hugo.toml", "tests/fixtures/export/build/x"]
+               "site/hugo.toml", "site/.hugo_build.lock", "build/x",
+               "tests/fixtures/export/build/x"]
 
     def ignored(self, path: str) -> bool:
         done = subprocess.run(["git", "-C", str(REPO), "check-ignore",

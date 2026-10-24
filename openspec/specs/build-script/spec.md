@@ -2,9 +2,7 @@
 
 ## Purpose
 Define `tools/orgsyndb`, its subcommands and conventions, the stdlib pipeline helper module, the optional pre-commit hook, the Caddyfile example and the ignore rules. Content and output paths are relative to the collection; `tools/`, `site/`, `templates/`, `.emacs-batch/` and `.tools/` belong to the application.
-
 ## Requirements
-
 ### Requirement: Entry point conventions
 `tools/orgsyndb` SHALL be an executable Python 3.14 program that uses only the standard library, besides importing `pipeline` and `validate` from its own directory. It has a `#!/usr/bin/env python3` shebang and is invoked as `orgsyndb [-C DIR] <subcommand> [options] [arguments]`, with the subcommands `export`, `validate`, `build`, `serve`, `pdf`, `new`, `init`, `clean`, `check-deps` and `help`. It follows these conventions:
 - It locates the application from its own resolved path, following symlinks, so it works from any working directory. It refuses to run, with exit 1, unless `<app>/tools/orgsyndb` and `<app>/site/hugo.toml` exist.
@@ -46,8 +44,8 @@ Define `tools/orgsyndb`, its subcommands and conventions, the stdlib pipeline he
 ### Requirement: Missing tools stop a subcommand before its first step
 Each subcommand SHALL check, before its first step, every external tool it will need:
 - `export`: `emacs` and `git`. `git` is needed on every run, not only for the bootstrap, because every export checks the installed checkouts against their pins.
-- `validate` without arguments: what `export` needs.
-- `validate` with arguments, `new`, `init`, `clean`, `check-deps` and `help`: no external tool. `git` is optional for `new`; without it `new` warns and scans the directories alone.
+- `validate`: what `export` needs.
+- `new`, `init`, `clean`, `check-deps` and `help`: no external tool. `git` is optional for `new`; without it `new` warns and scans the directories alone.
 - `build`: what `export` needs, plus `hugo`.
 - `serve`: what `build` needs.
 - `pdf`: what `build` needs, plus `weasyprint`.
@@ -66,14 +64,8 @@ For a missing tool it prints `orgsyndb: error: <tool> not found; install it with
 - **WHEN** a test runs `tools/orgsyndb -C <directory without orgsyndb.toml> build` with a `PATH` that holds only `python3` and a recording fake `sudo`
 - **THEN** it exits 1, stderr contains `orgsyndb.toml` and no `not found`, and the fake `sudo` was never invoked
 
-#### Scenario: validate with arguments needs only Python
-- **WHEN** a test runs `tools/orgsyndb validate --vocabulary tests/fixtures/reaction_types.toml --static-dir tests/fixtures/static tests/fixtures/valid/md tests/fixtures/valid/export`, with the application as working directory and a `PATH` that holds only `python3`
-- **THEN** it exits 0, and stderr contains no `not found`
-
 ### Requirement: validate subcommand
-`tools/orgsyndb validate` SHALL behave in one of two ways:
-- **Without arguments,** it runs `export`, then the validator as `validate.py --org-root org/procedures --static-dir static build/export md/procedures` with the collection as working directory, leaving out `--org-root org/procedures` and any content root whose directory does not exist. It prints the validator's stdout and stderr unchanged and exits with the validator's status.
-- **With arguments,** it runs the validator with exactly those arguments, in the caller's working directory, without exporting and without a collection. Combined with `-C` or `--collection` it is a usage error, because the arguments would not be read relative to the named collection.
+`tools/orgsyndb validate` SHALL take no arguments. It runs `export`, then the validator with the arguments `--org-root org/procedures --static-dir static build/export md/procedures` and the collection as working directory, leaving out `--org-root org/procedures` and any content root whose directory does not exist. It prints the validator's stdout and stderr unchanged and exits with the validator's status. Any argument is a usage error; other directories are validated by running `tools/validate.py` directly.
 
 #### Scenario: Seeds validate
 - **WHEN** an integration test runs `tools/orgsyndb -C <collection> validate` on the demo collection
@@ -83,13 +75,9 @@ For a missing tool it prints `orgsyndb: error: <tool> not found; install it with
 - **WHEN** an integration test copies `tests/fixtures/invalid/missing-title/OSDB-0101-missing-title.md` into the collection's `md/procedures/` and runs `tools/orgsyndb -C <collection> validate`
 - **THEN** it exits 1, and stdout contains a line beginning `md/procedures/OSDB-0101-missing-title.md:title: error:`
 
-#### Scenario: Arguments pass through to the validator
-- **WHEN** a test runs `tools/orgsyndb validate --vocabulary tests/fixtures/reaction_types.toml --static-dir tests/fixtures/static tests/fixtures/invalid/missing-title` with the application as working directory
-- **THEN** it exits 1, its stdout equals that of `tools/validate.py` run with the same arguments, and no `build/` directory was created or modified
-
-#### Scenario: Arguments with a collection are refused
+#### Scenario: Arguments are refused
 - **WHEN** a test runs `tools/orgsyndb -C <collection> validate md/procedures`, and the same with `--collection=<collection>`
-- **THEN** each exits 2, stderr contains `-C`, and the collection's `build/` was not created
+- **THEN** each exits 2, stderr contains `validate.py`, and the collection's `build/` was not created
 
 ### Requirement: build subcommand
 `tools/orgsyndb build` SHALL perform these steps in order:
@@ -148,7 +136,7 @@ A failing step stops the command with exit 1.
 - **THEN** it exits 1, and stderr names the failing PDF
 
 ### Requirement: new subcommand
-`tools/orgsyndb new [--md] [--ai-model ID] TITLE...` SHALL create one procedure stub in the collection, the same way as `tools/pipeline.py new --collection <collection> [--md] [--ai-model ID] TITLE`, and print the created file's path relative to the collection. The stub is created as follows:
+`tools/orgsyndb new [--md] [--ai-model ID] TITLE...` SHALL create one procedure stub in the collection with `pipeline.new_procedure(collection, words, md, ai_model, now, language)`, and print the created file's path relative to the collection. `new_procedure` is the only place that checks the title and the `--ai-model` and `--lang` values; a bad value raises `pipeline.UsageError`, and the program exits 2. The stub is created as follows:
 - The title is the words of `TITLE...` joined by single spaces and trimmed. It must not be empty or contain a newline.
 - The file is `org/procedures/<ID>-<slug>.org`, or `md/procedures/<ID>-<slug>.md` with `--md`. It is copied from the application's `templates/procedure.org` or `templates/procedure.md` and filled by `pipeline.fill_template`.
 - It is created with exclusive creation, so an existing file is never overwritten.
@@ -174,16 +162,16 @@ When `git` is unavailable or the collection is not inside a git work tree, `new`
 - **THEN** it raises `ValueError`
 
 #### Scenario: Deleted committed procedure is not reused
-- **WHEN** a test makes a temporary git repository holding a collection, commits `md/procedures/OSDB-0012-old.md`, deletes it in a second commit, and runs `pipeline.py new --collection <it> --md --now 2026-10-19T17:42:05+02:00 Test product`
+- **WHEN** a test makes a temporary git repository holding a collection, commits `md/procedures/OSDB-0012-old.md`, deletes it in a second commit, and calls `new_procedure` on it for the Markdown title `Test product` at `2026-10-19T17:42:05+02:00`
 - **THEN** the created file is `md/procedures/OSDB-0013-test-product.md`
 
 #### Scenario: Collection in a subdirectory of a work tree
-- **WHEN** a test makes a temporary git repository with a collection in its subdirectory `data/`, commits `data/md/procedures/OSDB-0012-old.md`, deletes it in a second commit, and runs `pipeline.py new --collection <repo>/data --md --now 2026-10-19T17:42:05+02:00 Test product`
+- **WHEN** a test makes a temporary git repository with a collection in its subdirectory `data/`, commits `data/md/procedures/OSDB-0012-old.md`, deletes it in a second commit, and calls `new_procedure` on `<repo>/data` for the Markdown title `Test product` at `2026-10-19T17:42:05+02:00`
 - **THEN** the created file is `data/md/procedures/OSDB-0013-test-product.md`, and stderr contains no warning
 
 #### Scenario: Shallow clone warns
-- **WHEN** a test makes a temporary git repository holding a collection and two commits, clones it with `git clone --depth 1 file://…`, and runs `pipeline.py new --collection <clone> --md --now 2026-10-19T17:42:05+02:00 Test product`
-- **THEN** it exits 0, creates the stub, and stderr contains `shallow`
+- **WHEN** a test makes a temporary git repository holding a collection and two commits, clones it with `git clone --depth 1 file://…`, and calls `new_procedure` on the clone for the Markdown title `Test product` at `2026-10-19T17:42:05+02:00`
+- **THEN** it creates the stub, and stderr contains `shallow`
 
 #### Scenario: Slugs from titles
 - **WHEN** a test calls `slugify` on `4-tert-Butylcyclohexanol`, `(E)-Chalcone`, `Salicylic acid` and `Ethyl  acetate!`
@@ -199,28 +187,28 @@ When `git` is unavailable or the collection is not inside a git work tree, `new`
 - **THEN** it returns `[2026-10-19 Mon 17:42:05]` and `[2026-01-05 Mon 09:00:00]`
 
 #### Scenario: Weekday independent of the locale
-- **WHEN** a test runs `pipeline.py new` as a subprocess with `LC_ALL=de_DE.UTF-8` and `LC_TIME=de_DE.UTF-8` and `--now 2026-10-19T17:42:05+02:00`
+- **WHEN** a test sets the process's `LC_TIME` locale to `de_DE.UTF-8`, skipping when that locale is not installed, and calls `new_procedure` for an Org stub at `2026-10-19T17:42:05+02:00`
 - **THEN** the created Org stub contains `#+CREATED: [2026-10-19 Mon 17:42:05]`
 
 #### Scenario: Org stub
-- **WHEN** a test runs `pipeline.py new --collection <temporary collection with empty trees> --now 2026-10-19T17:42:05+02:00 Salicylic acid`
-- **THEN** the created file is `org/procedures/OSDB-0001-salicylic-acid.org`
+- **WHEN** a test calls `new_procedure` on a temporary collection with empty trees for the Org title `Salicylic acid` at `2026-10-19T17:42:05+02:00`
+- **THEN** it returns `org/procedures/OSDB-0001-salicylic-acid.org`, and that file exists
 - **AND** it contains `#+TITLE: Salicylic acid`, `#+CREATED: [2026-10-19 Mon 17:42:05]`, `#+LAST_MODIFIED: [2026-10-19 Mon 17:42:05]`, `#+AI_MODEL: none` and `#+HUGO_SLUG: osdb-0001`, and no `OSDB-0000` or `osdb-0000`
 - **AND** `tools/validate.py --org-root` on its directory exits 0 and prints nothing to stdout
 
 #### Scenario: Markdown stub with an AI model and a quoted title
-- **WHEN** a test runs `pipeline.py new --md --ai-model example-model-1 --now 2026-10-19T17:42:05+02:00` with the title `Bob's "best" ester` in an empty temporary collection
+- **WHEN** a test calls `new_procedure` in an empty temporary collection for the Markdown title `Bob's "best" ester`, with `ai_model` `example-model-1`, at `2026-10-19T17:42:05+02:00`
 - **THEN** the created file is `md/procedures/OSDB-0001-bob-s-best-ester.md`
 - **AND** its front matter parses with `tomllib`, with `title` equal to `Bob's "best" ester`, `date` and `lastmod` equal to `2026-10-19T17:42:05+02:00`, `ai_model` equal to `example-model-1`, and `id` equal to `OSDB-0001`
 - **AND** `tools/validate.py` on its directory exits 0 and prints nothing to stdout
 
 #### Scenario: Human-authored Markdown stub
-- **WHEN** a test runs `pipeline.py new --md --now 2026-10-19T17:42:05+02:00 Test product` in an empty temporary collection
+- **WHEN** a test calls `new_procedure` in an empty temporary collection for the Markdown title `Test product` at `2026-10-19T17:42:05+02:00`, without `ai_model`
 - **THEN** the stub's front matter has no `ai_model` key
 
 #### Scenario: Invalid AI model identifier
-- **WHEN** a test runs `pipeline.py new --collection <empty temporary collection> --ai-model "two words" Test product`
-- **THEN** it exits 2, stderr mentions `--ai-model`, and no file is created
+- **WHEN** a test calls `new_procedure` in an empty temporary collection for `Test product` with `ai_model` `two words`
+- **THEN** it raises `pipeline.UsageError` whose message mentions `--ai-model`, and no file is created
 
 ### Requirement: clean subcommand
 `tools/orgsyndb clean` SHALL remove the collection's `build/`, `public/` and `pdf/`. `clean --all` also removes the application's `.emacs-batch/` and `.tools/`. Both forms touch no other path, and both succeed when there is nothing to remove.
@@ -235,7 +223,7 @@ When `git` is unavailable or the collection is not inside a git work tree, `new`
 
 ### Requirement: check-deps subcommand
 `tools/orgsyndb check-deps` SHALL run no external program other than the tools it probes. It reports the required tools `emacs`, `git`, `python3`, `hugo` and `weasyprint`, in that order, as follows:
-- Each required tool gets a line beginning `ok ` or `missing `, followed by the tool's name.
+- Each required tool gets a line beginning `ok ` or `missing `, followed by the tool's name and nothing else.
 - A line beginning `optional ` reports `caddy`.
 - Lines beginning `auto ` report Pagefind 1.5.2 and ox-hugo/tomelr, each saying whether it is cached or will be fetched on first use.
 - When any required tool is missing, the last line is exactly `sudo dnf install <packages>`, listing the Fedora packages of the missing tools in that order (`emacs`, `git`, `python3`, `hugo`, `weasyprint`), and the exit status is 1. Otherwise the exit status is 0.
@@ -249,18 +237,18 @@ It never installs anything and never invokes `sudo`.
 
 #### Scenario: Nothing missing
 - **WHEN** a test runs `tools/orgsyndb check-deps` with a `PATH` holding all five required tools (real or stub executables)
-- **THEN** it exits 0, and no line begins `missing ` or `sudo `
+- **THEN** it exits 0, no line begins `missing ` or `sudo `, and each `ok ` line ends with its tool's name
 
 ### Requirement: Pipeline helper module
-`tools/pipeline.py` SHALL be an executable Python 3.14 file that uses only the standard library, besides importing `validate` from its own directory. It has a `#!/usr/bin/env python3` shebang and a PEP 723 block, and it annotates every callable. It exposes the functions `slugify`, `next_id`, `org_timestamp`, `rfc3339`, `export_instants`, `fill_template`, `recover_export`, `replace_export`, `pdf_jobs`, `install_pagefind` and `hugo_overlay`, the variable `PROG` naming the program in the messages the module prints (default `pipeline.py`), and the CLI subcommands `export-plan`, `recover-export`, `install-export`, `next-id`, `new`, `pdf` and `ensure-pagefind`. `next-id` and `new` take `--collection DIR`. The CLI exits 0 on success, 1 on failure and 2 on a usage error, and writes errors to stderr as `pipeline.py: error: <message>`.
+`tools/pipeline.py` SHALL be a Python 3.14 module that uses only the standard library, besides importing `validate` from its own directory, and it annotates every callable. It has no command-line interface: `tools/orgsyndb` imports it, and the messages it prints name the program `orgsyndb`. It exposes the functions `slugify`, `next_id`, `org_timestamp`, `rfc3339`, `export_instants`, `fill_template`, `write_export_plan`, `recover_export`, `replace_export`, `new_procedure`, `pdf_jobs`, `install_pagefind`, `ensure_pagefind`, `hugo_overlay` and `remove_tree`.
 
 #### Scenario: Only standard-library imports
 - **WHEN** a test parses `tools/pipeline.py` with `ast` and collects the top-level module names of every import
 - **THEN** every name is in `sys.stdlib_module_names` or is `validate`
 
-#### Scenario: Unknown CLI subcommand
-- **WHEN** a test runs `tools/pipeline.py frobnicate`
-- **THEN** it exits 2, and stderr is not empty
+#### Scenario: No command-line interface
+- **WHEN** a test reads `tools/pipeline.py`
+- **THEN** it is not executable, does not begin with `#!`, and has no `if __name__ == "__main__":` block
 
 ### Requirement: Optional pre-commit hook
 `tools/hooks/pre-commit` SHALL be an executable POSIX `sh` script for a repository holding collections. It resolves its own path with `readlink -f`, so that it works both when `core.hooksPath` names `<app>/tools/hooks` and when it is symlinked into `.git/hooks/`. It runs `<app>/tools/orgsyndb -C <collection> validate` for the collection at the top level of the work tree, when `orgsyndb.toml` exists there, and for every directory whose `orgsyndb.toml` is in the index, each once, and exits with the status of the first that fails. When there is no such collection it prints a note to stderr and exits 0. No subcommand enables the hook or writes to `.git/hooks/` or `core.hooksPath`.
@@ -297,9 +285,10 @@ The file `deploy/Caddyfile.example` SHALL serve a copy of `public/` as static fi
 - **THEN** it exits 0
 
 ### Requirement: Ignore rules
-The application's `.gitignore` SHALL keep `__pycache__/` and `.pytest_cache/`, and it SHALL ignore `/.emacs-batch/` and `/.tools/`, anchored at the application root, and `/site/.hugo_build.lock` and `/site/resources/`, which builds before this change left behind. The demo collection's `.gitignore` ignores its `/build/`, `/public/` and `/pdf/`.
+The application's `.gitignore` SHALL keep `__pycache__/` and `.pytest_cache/`, and it SHALL ignore `/.emacs-batch/` and `/.tools/`, anchored at the application root, and nothing else; build output belongs to collections. The demo collection's `.gitignore` ignores its `/build/`, `/public/` and `/pdf/`.
 
 #### Scenario: Generated paths ignored, sources not
-- **WHEN** a test runs `git check-ignore` in the application on `examples/demo/build/export/x.md`, `examples/demo/public/index.html`, `examples/demo/pdf/x.pdf`, `.emacs-batch/elpa`, `.tools/pagefind-1.5.2/pagefind`, `site/.hugo_build.lock` and `site/resources/_gen/x`, skipping when `git` is absent
+- **WHEN** a test runs `git check-ignore` in the application on `examples/demo/build/export/x.md`, `examples/demo/public/index.html`, `examples/demo/pdf/x.pdf`, `.emacs-batch/elpa` and `.tools/pagefind-1.5.2/pagefind`, skipping when `git` is absent
 - **THEN** each path is reported as ignored
-- **AND** `examples/demo/org/procedures/OSDB-0001-salicylic-acid.org`, `examples/demo/md/procedures/OSDB-0002-aspirin.md`, `examples/demo/static/structures/osdb-0003.svg`, `site/hugo.toml` and `tests/fixtures/export/build/x` are not
+- **AND** `examples/demo/org/procedures/OSDB-0001-salicylic-acid.org`, `examples/demo/md/procedures/OSDB-0002-aspirin.md`, `examples/demo/static/structures/osdb-0003.svg`, `site/hugo.toml`, `site/.hugo_build.lock`, `build/x` and `tests/fixtures/export/build/x` are not
+

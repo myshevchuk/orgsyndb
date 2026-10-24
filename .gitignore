@@ -3,10 +3,3 @@ __pycache__/
 # Fetched-tool caches of the application.
 /.emacs-batch/
 /.tools/
-# Left behind by builds from before collections; a collection ignores
-# its own build/, public/ and pdf/ (see examples/demo/.gitignore).
-/build/
-/public/
-/pdf/
-/site/.hugo_build.lock
-/site/resources/

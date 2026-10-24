@@ -1,5 +1,5 @@
 """tools/orgsyndb without Emacs or Hugo: usage, conventions, tool checks,
-validate pass-through, clean and check-deps (build-script), and the
+validate arguments, clean and check-deps (build-script), and the
 collection rules that need no build (collection).
 
 A missing tools/orgsyndb fails them, because it is a deliverable.
@@ -16,15 +16,12 @@ import tomllib
 import unittest
 from pathlib import Path
 
-import support
 from pipeline_support import (BOOTSTRAP_HINT, DEMO, GIT_QUIET, HOOK,
                               ORGSYNDB, REPO, TOOLS, Run, make_path,
                               make_sandbox, run_script, snapshot)
 
 SUBCOMMANDS = ["export", "validate", "build", "serve", "pdf", "new", "init",
                "clean", "check-deps", "help"]
-VALIDATE_ARGS = ["--vocabulary", "tests/fixtures/reaction_types.toml",
-                 "--static-dir", "tests/fixtures/static"]
 
 
 class ProgramTestCase(unittest.TestCase):
@@ -184,17 +181,6 @@ class MissingToolTests(ProgramTestCase):
         result = sandbox.build("export", env=env)
         self.assert_stopped(result, sandbox, path, "git")
 
-    def test_validate_with_arguments_needs_only_python(self) -> None:
-        """Scenario: validate with arguments needs only Python."""
-        path = make_path(self, ("python3",))
-        env = dict(os.environ, PATH=str(path.directory))
-        result = self.run_real(
-            "validate", *VALIDATE_ARGS, "tests/fixtures/valid/md",
-            "tests/fixtures/valid/export",
-            cwd=REPO, env=env)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertNotIn("not found", result.stderr)
-
     def test_collection_error_comes_before_missing_tools(self) -> None:
         """Scenario: Collection error comes before missing tools."""
         path = make_path(self, ("python3",))
@@ -206,29 +192,16 @@ class MissingToolTests(ProgramTestCase):
         self.assertEqual(path.sudo_calls(), [])
 
 
-class ValidatePassThroughTests(ProgramTestCase):
-    def test_arguments_reach_the_validator_unchanged(self) -> None:
-        """Scenario: Arguments pass through to the validator."""
-        args = [*VALIDATE_ARGS, "tests/fixtures/invalid/missing-title"]
-        build = REPO / "build"
-        before = snapshot(build) if build.exists() else None
-        result = self.run_real("validate", *args, cwd=REPO)
-        direct = support.run_validator(args, cwd=REPO)
-        self.assertEqual(result.returncode, 1, result.stderr)
-        self.assertEqual(result.stdout, direct.stdout)
-        self.assertNotEqual(result.stdout, "")
-        after = snapshot(build) if build.exists() else None
-        self.assertEqual(after, before)
-
-    def test_arguments_with_a_collection_are_refused(self) -> None:
-        """Scenario: Arguments with a collection are refused."""
+class ValidateArgumentTests(ProgramTestCase):
+    def test_arguments_are_refused(self) -> None:
+        """Scenario: Arguments are refused."""
         sandbox = make_sandbox(self)
         for form in (["-C", str(sandbox.root)],
                      [f"--collection={sandbox.root}"]):
             result = self.run_real(*form, "validate", "md/procedures")
             with self.subTest(form=form[0]):
                 self.assertEqual(result.returncode, 2, result.stdout)
-                self.assertIn("-C", result.stderr)
+                self.assertIn("validate.py", result.stderr)
                 self.assertFalse((sandbox.root / "build").exists())
 
 
@@ -292,6 +265,8 @@ class CheckDepsTests(ProgramTestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         for line in result.stdout.splitlines():
             self.assertFalse(line.startswith(("missing ", "sudo ")), line)
+        for tool in ("emacs", "git", "python3", "hugo", "weasyprint"):
+            self.assertIn(f"ok      {tool}", result.stdout.splitlines())
         self.assertEqual(path.sudo_calls(), [])
 
 

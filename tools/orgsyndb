@@ -51,8 +51,6 @@ CONTENT_ROOTS = ("build/export", "md/procedures")
 REQUIRED_TOOLS = ("emacs", "git", "python3", "hugo", "weasyprint")
 EXPORT_TOOLS = ("emacs", "git")
 BUILD_TOOLS = (*EXPORT_TOOLS, "hugo")
-TESTED_VERSIONS = {"hugo": ("0.162.1", ["hugo", "version"]),
-                   "weasyprint": ("70.0", ["weasyprint", "--version"])}
 
 USAGE = """\
 usage: orgsyndb [-C DIR] <subcommand> [options] [arguments]
@@ -65,9 +63,7 @@ Options:
 
 Subcommands:
   export              export org/procedures/*.org to build/export/
-  validate [ARGS...]  export, then validate every procedure; with ARGS,
-                      run tools/validate.py ARGS... in the working
-                      directory without exporting (then -C is an error)
+  validate            export, then validate every procedure
   build               export, validate, build the site into public/ and
                       index it with Pagefind
   serve [--port N]    build, then serve public/ on http://127.0.0.1:N/
@@ -122,14 +118,6 @@ def run(command: Sequence[str | Path], **kwargs) -> None:
     done = subprocess.run([str(part) for part in command], **kwargs)
     if done.returncode != 0:
         raise Failure(f"{Path(command[0]).name} exited {done.returncode}")
-
-
-def remove(path: Path) -> None:
-    """Remove the file or directory tree ``path`` if it exists."""
-    if path.is_dir() and not path.is_symlink():
-        shutil.rmtree(path)
-    elif path.exists() or path.is_symlink():
-        path.unlink()
 
 
 # --------------------------------------------------------------------------
@@ -228,16 +216,13 @@ def run_export() -> None:
     pipeline.replace_export(build)
 
 
-def validator_args() -> list[str]:
-    args = ["--org-root", "org/procedures"] if Path(
-        "org/procedures").is_dir() else []
-    return [*args, "--static-dir", "static", *existing(CONTENT_ROOTS)]
-
-
 def run_validator() -> int:
-    args = validator_args()
-    step("validate: validate.py " + " ".join(args))
-    status = validate.main(args)
+    step("validate: " + ", ".join(existing(["org/procedures",
+                                            *CONTENT_ROOTS])))
+    org = (["--org-root", "org/procedures"]
+           if Path("org/procedures").is_dir() else [])
+    status = validate.main([*org, "--static-dir", "static",
+                            *existing(CONTENT_ROOTS)])
     sys.stdout.flush()
     sys.stderr.flush()
     return status
@@ -254,7 +239,7 @@ def run_build(collection: Path) -> list[tuple[Path, dict]]:
     step(f"build: staging {len(chosen)} procedures for locale {language}")
     pipeline.stage_content(chosen, Path("build") / pipeline.STAGED)
     step("build: hugo")
-    remove(Path("public"))
+    pipeline.remove_tree(Path("public"))
     config = collection / "build" / "hugo-config"
     (config / "_default").mkdir(parents=True, exist_ok=True)
     (config / "_default" / "hugo.toml").write_text(
@@ -287,10 +272,8 @@ def cmd_export(option: str | None, args: Sequence[str]) -> int:
 
 def cmd_validate(option: str | None, args: Sequence[str]) -> int:
     if args:
-        if option is not None:
-            raise UsageError("validate with arguments takes no -C: it runs "
-                             "tools/validate.py in the working directory")
-        return validate.main(list(args))
+        raise UsageError("validate takes no arguments; to validate other "
+                         "directories, run tools/validate.py")
     enter_collection(option)
     require_tools(*EXPORT_TOOLS)
     run_export()
@@ -350,7 +333,7 @@ def cmd_pdf(option: str | None, args: Sequence[str]) -> int:
     chosen = run_build(collection)
     step("pdf: rendering procedure pages into pdf/")
     pdf_dir = Path("pdf")
-    remove(pdf_dir)
+    pipeline.remove_tree(pdf_dir)
     jobs = pipeline.pdf_jobs(chosen, Path("public"), pdf_dir)
     pdf_dir.mkdir()
     failed = pipeline.render_pdfs(jobs)
@@ -367,11 +350,6 @@ def cmd_new(option: str | None, args: Sequence[str]) -> int:
     parser.add_argument("--lang")
     parser.add_argument("title", nargs="*")
     parsed = parser.parse_intermixed_args(args)
-    if not " ".join(parsed.title).strip():
-        raise UsageError("new needs a TITLE")
-    if parsed.lang is not None and parsed.lang not in validate.LANGUAGES:
-        raise UsageError(f"new: --lang must be one of "
-                         f"{', '.join(validate.LANGUAGES)}: {parsed.lang}")
     collection = find_collection(option)
     relative = pipeline.new_procedure(collection, parsed.title, parsed.md,
                                       parsed.ai_model,
@@ -415,21 +393,8 @@ def cmd_clean(option: str | None, args: Sequence[str]) -> int:
         targets += [APP / name for name in APP_CACHES]
     step("clean: " + ", ".join(str(path) for path in targets))
     for path in targets:
-        remove(path)
+        pipeline.remove_tree(path)
     return 0
-
-
-def version_note(tool: str) -> str:
-    """`` (tested with V)`` when ``tool`` reports another version."""
-    tested, command = TESTED_VERSIONS[tool]
-    try:
-        done = subprocess.run(command, capture_output=True, text=True,
-                              timeout=60)
-        found = re.search(r"(\d+\.\d+(?:\.\d+)?)", done.stdout)
-    except (OSError, subprocess.SubprocessError):
-        found = None
-    reported = found.group(1) if found else None
-    return "" if reported == tested else f" (tested with {tested})"
 
 
 def cmd_check_deps(option: str | None, args: Sequence[str]) -> int:
@@ -440,8 +405,7 @@ def cmd_check_deps(option: str | None, args: Sequence[str]) -> int:
             print(f"missing {tool}")
             missing.append(tool)
             continue
-        note = version_note(tool) if tool in TESTED_VERSIONS else ""
-        print(f"ok      {tool}{note}")
+        print(f"ok      {tool}")
     state = "installed" if shutil.which("caddy") else "not installed"
     print(f"optional caddy ({state}; only for deploy/Caddyfile.example)")
     pagefind = (APP / ".tools" / f"pagefind-{pipeline.PAGEFIND_VERSION}"
@@ -514,7 +478,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     os.environ["TZ"] = "Europe/Berlin"
     os.environ["LC_TIME"] = "C"
     time.tzset()
-    pipeline.PROG = PROG
     try:
         option, command, args = split_global(
             sys.argv[1:] if argv is None else argv)

@@ -3,6 +3,7 @@ PDF job naming and the helper module's shape (build-script)."""
 
 import ast
 import datetime as dt
+import locale
 import os
 import re
 import shutil
@@ -14,8 +15,8 @@ import zoneinfo
 from pathlib import Path
 
 import support
-from pipeline_support import (GIT_QUIET, PIPELINE, REPO, Run, front_matter,
-                              pipeline, run_pipeline, snapshot)
+from pipeline_support import (GIT_QUIET, PIPELINE, REPO, Run, captured,
+                              front_matter, pipeline, snapshot)
 
 NOW = "2026-10-19T17:42:05+02:00"
 SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -40,11 +41,21 @@ def make_repo(case: unittest.TestCase, trees: bool = False,
     return root
 
 
-def new(root: Path, *args: str, env: dict[str, str] | None = None) -> Run:
-    """Run ``pipeline.py new --collection ROOT ARGS...`` in a neutral cwd."""
-    with tempfile.TemporaryDirectory() as cwd:
-        return run_pipeline(["new", "--collection", root, *args],
-                            cwd=Path(cwd), env=env)
+def new(root: Path, *words: str, md: bool = False,
+        ai_model: str | None = None, lang: str | None = None) -> Run:
+    """Create a stub in ``root`` at ``NOW`` with ``new_procedure``.
+
+    A UsageError gives exit status 2 with its message on stderr;
+    otherwise stdout is the created path, as ``orgsyndb new`` prints it.
+    """
+    module = pipeline()
+    try:
+        relative, _, err = captured(
+            module.new_procedure, root, words, md, ai_model,
+            dt.datetime.fromisoformat(NOW), lang)
+    except module.UsageError as exc:
+        return Run(2, "", str(exc))
+    return Run(0, relative.as_posix() + "\n", err)
 
 
 def files_of(root: Path) -> set[str]:
@@ -95,7 +106,7 @@ class NewWithGitHistoryTests(unittest.TestCase):
         (root / "md" / "procedures" / "OSDB-0012-old.md").unlink()
         git(root, "commit", "-q", "-a", "-m", "delete old procedure")
         before = files_of(root)
-        result = new(root, "--md", "--now", NOW, "Test product")
+        result = new(root, "Test product", md=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(created(root, before),
                          ["md/procedures/OSDB-0013-test-product.md"])
@@ -109,7 +120,7 @@ class NewWithGitHistoryTests(unittest.TestCase):
         git(origin.parent, "clone", "-q", "--depth", "1", origin.as_uri(),
             clone)
         before = files_of(clone)
-        result = new(clone, "--md", "--now", NOW, "Test product")
+        result = new(clone, "Test product", md=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(len(created(clone, before)), 1)
         self.assertIn("shallow", result.stderr)
@@ -127,7 +138,7 @@ class NewWithGitHistoryTests(unittest.TestCase):
         old.unlink()
         git(top, "commit", "-q", "-a", "-m", "delete old procedure")
         before = files_of(top)
-        result = new(root, "--md", "--now", NOW, "Test product")
+        result = new(root, "Test product", md=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(created(top, before),
                          ["data/md/procedures/OSDB-0013-test-product.md"])
@@ -212,7 +223,7 @@ class StubTests(unittest.TestCase):
     def test_org_stub_is_filled_and_valid(self) -> None:
         """Scenario: Org stub."""
         root = make_repo(self, trees=True)
-        result = new(root, "--now", NOW, "Salicylic acid")
+        result = new(root, "Salicylic acid")
         self.assertEqual(result.returncode, 0, result.stderr)
         stub = root / "org" / "procedures" / "OSDB-0001-salicylic-acid.org"
         self.assertTrue(stub.is_file(), result.stdout + result.stderr)
@@ -233,8 +244,13 @@ class StubTests(unittest.TestCase):
     def test_org_stub_weekday_ignores_the_locale(self) -> None:
         """Scenario: Weekday independent of the locale."""
         root = make_repo(self, trees=True)
-        env = dict(os.environ, LC_ALL="de_DE.UTF-8", LC_TIME="de_DE.UTF-8")
-        result = new(root, "--now", NOW, "Salicylic acid", env=env)
+        saved = locale.setlocale(locale.LC_TIME)
+        try:
+            locale.setlocale(locale.LC_TIME, "de_DE.UTF-8")
+        except locale.Error:
+            self.skipTest("locale de_DE.UTF-8 is not installed")
+        self.addCleanup(locale.setlocale, locale.LC_TIME, saved)
+        result = new(root, "Salicylic acid")
         self.assertEqual(result.returncode, 0, result.stderr)
         stub = root / "org" / "procedures" / "OSDB-0001-salicylic-acid.org"
         self.assertIn("#+CREATED: [2026-10-19 Mon 17:42:05]\n",
@@ -244,8 +260,7 @@ class StubTests(unittest.TestCase):
         """Scenario: Markdown stub with an AI model and a quoted title."""
         root = make_repo(self)
         title = 'Bob\'s "best" ester'
-        result = new(root, "--md", "--ai-model", "example-model-1",
-                     "--now", NOW, title)
+        result = new(root, title, md=True, ai_model="example-model-1")
         self.assertEqual(result.returncode, 0, result.stderr)
         stub = root / "md" / "procedures" / "OSDB-0001-bob-s-best-ester.md"
         self.assertTrue(stub.is_file(), result.stdout + result.stderr)
@@ -263,7 +278,7 @@ class StubTests(unittest.TestCase):
     def test_human_authored_markdown_stub_has_no_ai_model(self) -> None:
         """Scenario: Human-authored Markdown stub."""
         root = make_repo(self)
-        result = new(root, "--md", "--now", NOW, "Test product")
+        result = new(root, "Test product", md=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         stub = root / "md" / "procedures" / "OSDB-0001-test-product.md"
         self.assertTrue(stub.is_file(), result.stdout + result.stderr)
@@ -275,7 +290,7 @@ class StubTests(unittest.TestCase):
         """Scenario: Invalid AI model identifier."""
         root = make_repo(self)
         before = files_of(root)
-        result = new(root, "--ai-model", "two words", "Test product")
+        result = new(root, "Test product", ai_model="two words")
         self.assertEqual(result.returncode, 2, result.stderr)
         self.assertIn("--ai-model", result.stderr)
         self.assertEqual(files_of(root), before)
@@ -336,8 +351,9 @@ class HelperModuleTests(unittest.TestCase):
         self.assertEqual(names - set(sys.stdlib_module_names) - {"validate"},
                          set())
 
-    def test_unknown_subcommand_is_a_usage_error(self) -> None:
-        """Scenario: Unknown CLI subcommand."""
-        result = run_pipeline(["frobnicate"])
-        self.assertEqual(result.returncode, 2)
-        self.assertNotEqual(result.stderr.strip(), "")
+    def test_module_has_no_command_line(self) -> None:
+        """Scenario: No command-line interface."""
+        text = PIPELINE.read_text(encoding="utf-8")
+        self.assertFalse(os.access(PIPELINE, os.X_OK), "executable")
+        self.assertFalse(text.startswith("#!"), "has a shebang")
+        self.assertNotIn('if __name__ == "__main__":', text)
