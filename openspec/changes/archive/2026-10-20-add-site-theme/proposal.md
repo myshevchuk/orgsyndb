@@ -244,16 +244,3 @@ No new front-matter field is introduced.
       tags on `#+HUGO_TAGS`, and the `sample-data` banner rule;
     - the SVG convention: black strokes on a white background rectangle,
       a `<title>`, and no external references.
-  - `docs/DECISIONS.org` (owner): compile one entry per decision (what,
-    why, alternatives rejected) from:
-    - the design.md files of `add-procedure-schema`,
-      `add-build-pipeline` and this change;
-    - the cross-cutting notes the orchestrator keeps (governance, the
-      Europe/Berlin time zone, document formats, tool versions).
-
-    Include the version-specific findings recorded under "Verification"
-    in each design.md, for example:
-    - Hugo 0.162.1's template names;
-    - Pagefind 1.5.2's tokenisation and its searchable meta fields;
-    - WeasyPrint 70.0 skipping `media="screen"` stylesheets;
-    - Firefox 158 ignoring `@page` margin boxes.

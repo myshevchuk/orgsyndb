@@ -124,7 +124,7 @@ and ß out (`Größe` → `groesse`).
 
 German readers get German versions of the co-worker guide, the Org guide
 and the schema reference, next to the English ones with a `.de` suffix.
-The README, the decision record and the specs stay English.
+The README and the specs stay English.
 
 ## Risks / Trade-offs
 

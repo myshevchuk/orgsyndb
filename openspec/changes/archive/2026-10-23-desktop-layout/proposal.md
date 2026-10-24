@@ -11,9 +11,9 @@ A browser could also hide a rebuilt site behind cached pages.
 
 - Widen the screen shell to 96rem, with desktop padding and navigation.
 - Place recent procedures beside the reaction-type and tag links.
-- Lists: implement layout 4 (full-width table) with an entry count, a
+- Lists: implement a full-width table with an entry count, a
   search field, reaction-type and status filters, and a sort bar.
-- Procedures: implement layout 7 (Marginalia), with the body on the left
+- Procedures: implement a Marginalia layout, with the body on the left
   and the structure and metadata as an unboxed margin on the right.
 - Use the system sans-serif stack on screen; print keeps its text face.
 - Mark the current page and section in the site navigation.
@@ -21,8 +21,6 @@ A browser could also hide a rebuilt site behind cached pages.
 - Keep narrow-window stacking and the existing A4 print flow.
 - Send `Cache-Control: no-cache` from `serve` and the Caddyfile example,
   so a browser shows a new build instead of cached pages.
-- Supply the design concepts and minimalist layouts (docs/designs/) using
-  the German demo collection, as the record of the options considered.
 
 ## Impact
 

@@ -72,8 +72,7 @@ procedure in German that the validator accepts without warnings.
 - Tests: the harness builds in a chosen locale and reads the published
   variants; new `tests/test_localization.py` and
   `tests/test_localization_integration.py`.
-- Docs: README, schema, both guides, their German versions, the decision
-  record.
+- Docs: README, schema, both guides and their German versions.
 - Behaviour: the shipped site is German. An owner who wants English sets
   `locale = "en"` in `site/hugo.toml`.
 - Dependencies: none.
