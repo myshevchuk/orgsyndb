@@ -98,6 +98,37 @@ class ContrastTests(unittest.TestCase):
                 self.assertIn(name, declared)
 
 
+def narrow_value(declarations: list[Declaration], selector: str,
+                 prop: str, width_rem: float) -> str | None:
+    """The value a window ``width_rem`` wide gets from unconditional and
+    ``max-width`` rules, the last matching declaration winning."""
+    max_width = re.compile(r"@media\s*\(\s*max-width\s*:\s*([\d.]+)rem\s*\)")
+    found = None
+    for decl in declarations:
+        if decl.prop != prop or selector not in ps.selectors_of(decl):
+            continue
+        limits = [max_width.fullmatch(c.strip()) for c in decl.context]
+        if all(m and float(m.group(1)) >= width_rem for m in limits):
+            found = ps.plain_value(decl.value)
+    return found
+
+
+class NarrowWindowTests(unittest.TestCase):
+    def test_columns_stack_at_500_pixels(self) -> None:
+        """Scenario: Narrow windows stack the columns."""
+        declarations = css("screen.css")
+        width = 500 / 16
+        for selector in (".home-layout", ".home-browse"):
+            with self.subTest(selector=selector):
+                self.assertEqual(
+                    narrow_value(declarations, selector,
+                                 "grid-template-columns", width),
+                    "minmax(0, 1fr)")
+        self.assertEqual(
+            narrow_value(declarations, ".procedure", "display", width),
+            "block")
+
+
 class ContrastFunctionTests(unittest.TestCase):
     """The helpers must reproduce known WCAG values, or the test above
     would hold nothing."""
