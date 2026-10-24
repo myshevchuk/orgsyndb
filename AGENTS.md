@@ -25,7 +25,9 @@ understood or work correctly without it.
 - Do not keep transient material in the repository: design drafts,
   mock-ups, decision logs or notes to yourself. Create such files only
   when the owner asks for them.
-- When a file or directory is deleted, remove the references to it.
-  Git keeps the history.
+- When a file or directory is deleted, remove the references to it from
+  the living specs (`openspec/specs/`) and documentation. Archived
+  changes under `openspec/changes/archive/` record what was true when
+  they were made; leave them as they are.
 - The product is an early alpha with no users. Do not add backward
   compatibility, migration guides or deprecation paths.
