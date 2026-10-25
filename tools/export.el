@@ -5,9 +5,10 @@
 ;; Usage: emacs -Q --batch -l tools/export.el PLAN_JSON STAGING_DIR
 ;;
 ;; Exports every entry of PLAN_JSON (written by `pipeline.write_export_plan')
-;; to STAGING_DIR/<stem>.md.  ox-hugo and tomelr are installed into
+;; to STAGING_DIR/<stem>.md.  ox-hugo and tomelr are cloned with git into
 ;; <app>/.emacs-batch/elpa/ at pinned commits on first use, and every run
-;; checks the installed checkouts against the pins.  Temporary files go
+;; checks the installed checkouts against the pins.  Needs Emacs 29.1 or
+;; later; package.el is not used.  Temporary files go
 ;; to tmp/ beside STAGING_DIR, the collection's build/tmp/.  Nothing is
 ;; read from or written to the user's own Emacs directories or the
 ;; inherited TMPDIR.  Exits 0 on success; on any error it prints
@@ -16,10 +17,8 @@
 
 ;;; Code:
 
-;; Isolation.  These must be set before package.el or Org is loaded:
-;; package.el derives its GnuPG directory from `package-user-dir' when it
-;; loads, and org-persist creates its directory in
-;; `temporary-file-directory' when Org loads.
+;; Isolation.  These must be set before Org is loaded: org-persist
+;; creates its directory in `temporary-file-directory' when Org loads.
 
 (defconst osdb-app
   (file-name-directory
@@ -29,6 +28,11 @@
 
 (defconst osdb-batch-dir (expand-file-name ".emacs-batch/" osdb-app)
   "The Emacs directory of the export, inside the application.")
+
+(when (version< emacs-version "29.1")
+  (message "export.el: error: Emacs 29.1 or later is required; this is \
+Emacs %s" emacs-version)
+  (kill-emacs 1))
 
 (unless (= (length command-line-args-left) 2)
   (message "export.el: error: usage: emacs -Q --batch -l tools/export.el \
@@ -44,8 +48,6 @@ PLAN_JSON STAGING_DIR")
 
 (make-directory osdb-tmp-dir t)
 (setq user-emacs-directory osdb-batch-dir
-      package-user-dir (expand-file-name "elpa" osdb-batch-dir)
-      package-gnupghome-dir (expand-file-name "elpa/gnupg" osdb-batch-dir)
       temporary-file-directory osdb-tmp-dir)
 (setenv "TMPDIR" (directory-file-name osdb-tmp-dir))
 
@@ -78,40 +80,42 @@ PLAN_JSON STAGING_DIR")
   (message "export.el: %s: %s" (or where "error") message)
   (kill-emacs 1))
 
-(defun osdb-checkout-head (dir)
-  "Return the commit checked out in DIR, or signal an error."
+(defun osdb-git (&rest args)
+  "Run git with ARGS; return its trimmed output, or signal an error."
   (with-temp-buffer
-    (let ((status (call-process "git" nil t nil "-C" dir
-                                "rev-parse" "HEAD")))
-      (unless (eq status 0)
-        (error "Cannot read the commit of %s: %s" dir
-               (string-trim (buffer-string))))
-      (string-trim (buffer-string)))))
+    (unless (eq (apply #'call-process "git" nil t nil args) 0)
+      (error "git %s failed: %s" (string-join args " ")
+             (string-trim (buffer-string))))
+    (string-trim (buffer-string))))
 
 (defun osdb-bootstrap ()
-  "Install any missing pinned package, then check every pin.
-Signals an error naming the package, both commits and the remedy when
-a checkout is not at its pin."
-  (require 'package)
-  (require 'package-vc)
-  (setq package-archives nil
-        package-vc-register-as-project nil)
-  (package-initialize)
+  "Clone any missing pinned package, check every pin, extend `load-path'.
+Signals an error naming the package when it cannot be installed, and
+naming the package, both commits and the remedy when a checkout is not
+at its pin."
   (dolist (pin osdb-pins)
-    (pcase-let ((`(,name ,url ,commit) pin))
-      (unless (package-installed-p name)
+    (pcase-let* ((`(,name ,url ,commit) pin)
+                 (dir (expand-file-name (format "elpa/%s" name)
+                                        osdb-batch-dir)))
+      (unless (file-directory-p dir)
         (message "export.el: installing %s at %s" name commit)
-        (package-vc-install (list name :url url) commit))))
-  (dolist (pin osdb-pins)
-    (pcase-let* ((`(,name ,_url ,commit) pin)
-                 (desc (cadr (assq name package-alist)))
-                 (dir (if desc (package-desc-dir desc)
-                        (expand-file-name (symbol-name name)
-                                          package-user-dir)))
-                 (head (osdb-checkout-head dir)))
-      (unless (equal head commit)
-        (error "%s is checked out at %s, but its pin is %s; run \
-tools/orgsyndb clean --all, then export again" name head commit)))))
+        (condition-case err
+            (progn
+              (osdb-git "clone" "--quiet" url dir)
+              (osdb-git "-C" dir "-c" "advice.detachedHead=false"
+                        "checkout" "--quiet" commit))
+          (error
+           (delete-directory dir t)
+           (error "Cannot install %s: %s" name
+                  (error-message-string err)))))
+      (let ((head (condition-case err
+                      (osdb-git "-C" dir "rev-parse" "HEAD")
+                    (error (error "Cannot read the commit of %s: %s" dir
+                                  (error-message-string err))))))
+        (unless (equal head commit)
+          (error "%s is checked out at %s, but its pin is %s; run \
+tools/orgsyndb clean --all, then export again" name head commit)))
+      (add-to-list 'load-path dir))))
 
 (defun osdb-table-entry-p (entry)
   "Return non-nil when front-matter ENTRY has a TOML table as its value."

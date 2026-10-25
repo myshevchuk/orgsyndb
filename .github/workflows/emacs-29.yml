@@ -1,0 +1,27 @@
+# Runs the export integration tests on Emacs 29, the oldest Emacs the
+# export supports, as Ubuntu 24.04 ships it.
+name: Emacs 29 export
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - run: sudo apt-get update && sudo apt-get install -y emacs-nox git
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - run: python -m pip install pytest
+      # The first export clones ox-hugo and tomelr; without them the
+      # integration tests would skip.
+      - run: tools/orgsyndb -C examples/demo export
+      - run: python -m pytest tests/test_export_integration.py

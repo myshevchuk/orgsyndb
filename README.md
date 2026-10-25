@@ -48,7 +48,8 @@ collection's format refuses it instead of misreading it.
 
 ## Install the dependencies
 
-OrgSynDB is designed for Fedora. Install the required system packages with:
+OrgSynDB is designed for Fedora. Its Org export requires Emacs 29.1 or
+later. Install the required system packages with:
 
 ```sh
 sudo dnf install emacs git python3 hugo weasyprint
@@ -67,11 +68,11 @@ ln -s "$PWD/tools/orgsyndb" ~/.local/bin/orgsyndb
 The commands below assume the symlink; otherwise write `tools/orgsyndb`
 from the application's directory.
 
-On the first export or build, OrgSynDB fetches pinned copies of ox-hugo and
-tomelr into the application's `.emacs-batch/`. On the first build, it also
-fetches Pagefind 1.5.2 into `.tools/` and verifies its SHA-256 checksum.
-The first run therefore needs network access and Git. These tools do not
-write to your Emacs configuration.
+On the first export or build, OrgSynDB clones ox-hugo and tomelr with Git at
+pinned commits into the application's `.emacs-batch/elpa/`. On the first
+build, it also fetches Pagefind 1.5.2 into `.tools/` and verifies its SHA-256
+checksum. The first run therefore needs network access and Git. These tools
+do not write to your Emacs configuration.
 
 Check the current machine before building:
 
@@ -355,6 +356,10 @@ PDF checks. Tests that cannot find an optional tool skip their checks and
 name the missing tool. The integration tests build copies of the demo
 collection and need the caches that a first `orgsyndb -C examples/demo
 build` fetches.
+
+The `Emacs 29 export` GitHub Actions workflow runs the export integration
+tests on Ubuntu 24.04's Emacs 29. It runs on pushes to `main`, pull requests,
+and manual dispatch.
 
 ## Troubleshooting
 

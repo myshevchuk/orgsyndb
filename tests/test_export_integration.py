@@ -8,10 +8,12 @@ unless Emacs, git and the pinned ox-hugo bootstrap are present.
 import datetime as dt
 import shutil
 import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 
 import pipeline_support as ps
-from pipeline_support import (DEMO, OX_HUGO_PIN, TOMELR_PIN, Sandbox,
+from pipeline_support import (DEMO, OX_HUGO_PIN, REPO, TOMELR_PIN, Sandbox,
                               body_of, front_matter, make_sandbox,
                               read_only_dir, snapshot)
 
@@ -102,6 +104,47 @@ class PinTests(ExportTestCase):
         for needle in ("ox-hugo", OX_HUGO_PIN, parent, "clean --all"):
             self.assertIn(needle, output)
         self.assertEqual(snapshot(sandbox.export_dir()), before)
+
+
+class OldEmacsTests(ExportTestCase):
+    def test_an_old_emacs_is_refused(self) -> None:
+        """Scenario: An old Emacs is refused."""
+        sandbox = self.sandbox()
+        first = self.export(sandbox)
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        before = snapshot(sandbox.export_dir())
+        bin_dir = Path(tempfile.mkdtemp(prefix="orgsyndb old emacs "))
+        self.addCleanup(shutil.rmtree, bin_dir, True)
+        def quoted(value: str) -> str:
+            return "'" + value.replace("'", "'\\''") + "'"
+
+        # The fake restores PATH, since a launcher such as Fedora's
+        # re-executes Emacs by the bare name emacs.
+        inherited = sandbox.env()["PATH"]
+        pretend = ("(setq emacs-version \"28.2\" emacs-major-version 28 "
+                   "emacs-minor-version 2)")
+        fake = bin_dir / "emacs"
+        fake.write_text("#!/bin/sh\n"
+                        f"PATH={quoted(inherited)}; export PATH\n"
+                        "a=\"$1\" b=\"$2\"; shift 2\n"
+                        f"exec {quoted(shutil.which('emacs'))} \"$a\" "
+                        f"\"$b\" --eval '{pretend}' \"$@\"\n")
+        fake.chmod(0o755)
+        path = f"{bin_dir}:{inherited}"
+        result = self.export(sandbox, env=sandbox.env(PATH=path))
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, output)
+        self.assertIn("Emacs 29.1 or later is required; this is Emacs 28.2",
+                      output)
+        self.assertEqual(snapshot(sandbox.export_dir()), before)
+
+
+class NoPackageElTests(unittest.TestCase):
+    def test_no_package_el(self) -> None:
+        """Scenario: No package.el."""
+        text = (REPO / "tools" / "export.el").read_text(encoding="utf-8")
+        self.assertNotIn("package-vc", text)
+        self.assertNotIn("(require 'package)", text)
 
 
 class ExportedFrontMatterTests(ExportTestCase):
