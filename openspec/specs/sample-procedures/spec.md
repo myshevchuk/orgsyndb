@@ -2,9 +2,7 @@
 
 ## Purpose
 Define the sample procedures shipped as the demo collection `examples/demo/`: their marking as sample data, benign textbook chemistry, and quantities that agree with each other.
-
 ## Requirements
-
 ### Requirement: Seed procedures
 The repository SHALL ship at least these two seed procedures, linked as precursor and product across the two source trees:
 - `org/procedures/OSDB-0001-salicylic-acid.org`: salicylic acid by hydrolysis of methyl salicylate with aqueous sodium hydroxide, then acidification. `reaction_types` is `["hydrolysis"]`, and the product is salicylic acid (C7H6O3, MW 138.12, CAS `69-72-7`).
@@ -67,22 +65,23 @@ The repository SHALL ship, besides the two seeds, these six sample procedures:
 |---|---|---|---|
 | `org/procedures/OSDB-0003-isopentyl-acetate.org` | isopentyl acetate (C7H14O2, CAS `123-92-2`), by Fischer esterification of isopentyl alcohol with acetic acid | `esterification` | none |
 | `org/procedures/OSDB-0004-4-acetylbiphenyl.org` | 4-acetylbiphenyl (C14H12O, CAS `92-91-1`), by Suzuki coupling of 4′-bromoacetophenone with phenylboronic acid | `cross-coupling` | none |
-| `org/procedures/OSDB-0005-1-biphenyl-4-yl-ethanol.org` | 1-(biphenyl-4-yl)ethanol (C14H14O, CAS `3562-73-0`), by sodium borohydride reduction of 4-acetylbiphenyl | `reduction` | `OSDB-0004` |
-| `org/procedures/OSDB-0006-dibenzylideneacetone.org` | dibenzylideneacetone (C17H14O, CAS `538-58-9`), by Claisen–Schmidt condensation of benzaldehyde with acetone | `aldol-condensation` | none |
+| `md/procedures/OSDB-0005-1-biphenyl-4-yl-ethanol.md` | 1-(biphenyl-4-yl)ethanol (C14H14O, CAS `3562-73-0`), by sodium borohydride reduction of 4-acetylbiphenyl | `reduction` | `OSDB-0004` |
+| `md/procedures/OSDB-0006-dibenzylideneacetone.md` | dibenzylideneacetone (C17H14O, CAS `538-58-9`), by Claisen–Schmidt condensation of benzaldehyde with acetone | `aldol-condensation` | none |
 | `org/procedures/OSDB-0007-ethyl-cinnamate.org` | ethyl (E)-cinnamate (C11H12O2, CAS `103-36-6`), by Wittig olefination of benzaldehyde with ethyl (triphenylphosphoranylidene)acetate | `olefination` | none |
 | `md/procedures/OSDB-0008-cinnamic-acid.md` | (E)-cinnamic acid (C9H8O2, CAS `140-10-3`), by saponification of ethyl (E)-cinnamate with aqueous sodium hydroxide in ethanol, then acidification with hydrochloric acid | `hydrolysis` | `OSDB-0007` |
 
 The full set meets the following:
-- **Counts.** There are exactly six Org and two Markdown sample procedures without a language code, with at least five distinct reaction types among them. Their German variants are not counted.
+- **Counts.** There are exactly four Org and four Markdown sample procedures without a language code, with at least five distinct reaction types among them. Their German variants are not counted.
 - **Product CAS.** Every sample's `product` has a `cas` that resolves to that product on PubChem. The orchestrator checks this during review, because the tests cannot reach the network.
 - **Tags.** Every sample has at least one tag besides `sample-data`.
 - **Structure image.** OSDB-0003 sets `structure_image = "structures/osdb-0003.svg"`.
-- **Chains.** Besides the seeds' OSDB-0001 → OSDB-0002, OSDB-0004 → OSDB-0005 and OSDB-0007 → OSDB-0008 are precursor chains. No procedure needs both a precursor and a used-in link.
+- **Chains.** Besides the seeds' OSDB-0001 → OSDB-0002, OSDB-0004 → OSDB-0005 and OSDB-0007 → OSDB-0008 are precursor chains. Each chain leads from an Org procedure to a Markdown one. No procedure needs both a precursor and a used-in link.
 - **Long sample.** OSDB-0004 is the long sample: at least 15 numbered steps under `Procedure` and at least 6 numbered notes under `Notes`. Its Reagents table holds at least four non-catalyst rows, and the longest cell text of its `Reagent` column has at least 40 characters.
 
 #### Scenario: Set, counts and chain
 - **WHEN** a test reads every sample procedure
-- **THEN** the files above exist with those IDs, reaction types and precursors, there are six Org and two Markdown samples without a language code, and at least five distinct reaction types
+- **THEN** the files above exist with those IDs, reaction types and precursors, there are four Org and four Markdown samples without a language code, and at least five distinct reaction types
+- **AND** in every chain the precursor is an Org file and the procedure naming it a Markdown file
 - **AND** every product has a `cas` that passes the check-digit rule, and every sample has a tag besides `sample-data`
 
 #### Scenario: Structure image is set
@@ -107,3 +106,4 @@ Every sample procedure of the theme sample set and the seeds SHALL have a German
 - **WHEN** a test reads each sample and its `.de` twin
 - **THEN** the twin exists, has the same `id`, `status`, `reaction_types`, `tags`, `yield_percent`, `precursors`, `structure_image`, `authors` and product formula, weight, SMILES and CAS, a non-empty product name, and as many table rows
 - **AND** the German OSDB-0004 has at least 15 steps and 6 notes
+

@@ -1,36 +1,52 @@
-#+TITLE: 1-(Biphenyl-4-yl)ethanol
-#+CREATED: [2026-10-22 Thu 20:20:00]
-#+LAST_MODIFIED: [2026-10-22 Thu 20:20:00]
-#+AI_MODEL: claude-opus-5-5
-#+OPTIONS: author:nil
-#+HUGO_SLUG: osdb-0005
-#+HUGO_TAGS: sample-data sodium-borohydride biphenyl
-#+HUGO_CUSTOM_FRONT_MATTER: :id "OSDB-0005"
-#+HUGO_CUSTOM_FRONT_MATTER: :authors '("E. Example")
-#+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
-#+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("reduction")
-#+HUGO_CUSTOM_FRONT_MATTER: :scale "5 mmol"
-#+HUGO_CUSTOM_FRONT_MATTER: :yield_percent 90
-#+HUGO_CUSTOM_FRONT_MATTER: :hazards '("Natriumborhydrid: entwickelt in Berührung mit Wasser entzündbaren Wasserstoff, giftig bei Verschlucken, verursacht schwere Verätzungen der Haut und schwere Augenschäden, kann die Fruchtbarkeit beeinträchtigen oder das Kind im Mutterleib schädigen" "Ethanol: leicht entzündbare Flüssigkeit und Dampf, verursacht schwere Augenreizung" "Salzsäure, 1 M: kann Haut und Augen reizen" "Ethylacetat: leicht entzündbare Flüssigkeit und Dampf, kann Schläfrigkeit verursachen")
-#+HUGO_CUSTOM_FRONT_MATTER: :precursors '("OSDB-0004")
-#+HUGO_CUSTOM_FRONT_MATTER: :references '("Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989.")
-# Die Produktangaben müssen allein auf der letzten Custom-Front-Matter-Zeile stehen.
-#+HUGO_CUSTOM_FRONT_MATTER: :product '((name . "1-(Biphenyl-4-yl)ethanol") (formula . "C14H14O") (mw . 198.26) (smiles . "CC(O)c1ccc(cc1)-c1ccccc1") (cas . "3562-73-0"))
++++
+id = "OSDB-0005"
+slug = "osdb-0005"
+title = "1-(Biphenyl-4-yl)ethanol"
+date = 2026-10-22T20:20:00+02:00
+lastmod = 2026-10-22T20:20:00+02:00
+authors = ["E. Example"]
+status = "draft"
+reaction_types = ["reduction"]
+tags = ["sample-data", "sodium-borohydride", "biphenyl"]
+scale = "5 mmol"
+yield_percent = 90
+hazards = [
+  "Natriumborhydrid: entwickelt in Berührung mit Wasser entzündbaren Wasserstoff, giftig bei Verschlucken, verursacht schwere Verätzungen der Haut und schwere Augenschäden, kann die Fruchtbarkeit beeinträchtigen oder das Kind im Mutterleib schädigen",
+  "Ethanol: leicht entzündbare Flüssigkeit und Dampf, verursacht schwere Augenreizung",
+  "Salzsäure, 1 M: kann Haut und Augen reizen",
+  "Ethylacetat: leicht entzündbare Flüssigkeit und Dampf, kann Schläfrigkeit verursachen",
+]
+precursors = ["OSDB-0004"]
+references = [
+  "Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989.",
+]
+ai_model = "claude-opus-5-5"
 
-* Zusammenfassung
+[product]
+name = "1-(Biphenyl-4-yl)ethanol"
+formula = "C14H14O"
+mw = 198.26
+smiles = "CC(O)c1ccc(cc1)-c1ccccc1"
+cas = "3562-73-0"
++++
+
+## Zusammenfassung
+
 1-(Biphenyl-4-yl)ethanol durch Reduktion von 4-Acetylbiphenyl, dem
 Produkt von OSDB-0004, mit Natriumborhydrid in Ethanol bei
 Raumtemperatur, gefolgt von saurem Quenchen und Extraktion. Man erhält
 den racemischen sekundären Alkohol. Dies sind Beispieldaten: Die Mengen
 folgen der Lehrbuchmethode, sind aber nicht experimentell überprüft.
 
-* Reagenzien
-| Reagenz          |        CAS | M (g/mol) | Menge   | mmol | Äquiv. |
-|------------------+------------+-----------+---------+------+--------|
-| 4-Acetylbiphenyl |    92-91-1 | 196,25    | 0,981 g | 5,00 | 1,0    |
-| Natriumborhydrid | 16940-66-2 | 37,83     | 0,114 g | 3,01 | 0,6    |
+## Reagenzien
 
-* Durchführung
+| Reagenz | CAS | M (g/mol) | Menge | mmol | Äquiv. |
+|---|---|---|---|---|---|
+| 4-Acetylbiphenyl | 92-91-1 | 196,25 | 0,981 g | 5,00 | 1,0 |
+| Natriumborhydrid | 16940-66-2 | 37,83 | 0,114 g | 3,01 | 0,6 |
+
+## Durchführung
+
 1. Das 4-Acetylbiphenyl (0,981 g, 5,00 mmol) in einem
    100-mL-Erlenmeyerkolben mit Magnetrührstab in Ethanol (20 mL) lösen,
    falls nötig unter leichtem Erwärmen, und die Lösung dann auf
@@ -48,7 +64,8 @@ folgen der Lehrbuchmethode, sind aber nicht experimentell überprüft.
    5 mL), bis die Gasentwicklung aufhört und das Gemisch auf
    Indikatorpapier gerade sauer reagiert (Anmerkung 2).
 
-* Aufarbeitung und Reinigung
+## Aufarbeitung und Reinigung
+
 Den größten Teil des Ethanols am Rotationsverdampfer entfernen (Bad
 40 °C), Wasser (20 mL) zugeben und das Produkt mit zwei Portionen
 Ethylacetat zu 20 mL extrahieren. Die vereinigten Extrakte mit
@@ -58,7 +75,8 @@ aus wenig heißem Heptan mit etwas Ethylacetat umkristallisieren, im
 Eisbad abkühlen, absaugen und an der Luft trocknen. Erwartete Ausbeute
 0,892 g (4,50 mmol, 90 %).
 
-* Charakterisierung
+## Charakterisierung
+
 Weißer kristalliner Feststoff. Den Schmelzpunkt bestimmen. Das
 IR-Spektrum (ATR) zeigt eine breite O–H-Valenzschwingung bei etwa
 3350 cm⁻¹ und keine C=O-Valenzschwingung des Ketons bei etwa
@@ -67,7 +85,8 @@ IR-Spektrum (ATR) zeigt eine breite O–H-Valenzschwingung bei etwa
 (t, 1H), 4,96 (q, J = 6,4 Hz, 1H), 1,85 (br s, 1H, OH), 1,55 (d,
 J = 6,4 Hz, 3H).
 
-* Anmerkungen
+## Anmerkungen
+
 1. Ein Mol Borhydrid kann bis zu vier Mol Keton reduzieren, 0,6
    Äquivalente sind also ein reichlicher Überschuss. Die portionsweise
    Zugabe hält die leichte Erwärmung und die Wasserstoffentwicklung
@@ -78,7 +97,8 @@ J = 6,4 Hz, 3H).
 3. Das Produkt ist ein Racemat; die Reduktion erzeugt ein neues
    Stereozentrum ohne Bevorzugung einer Konfiguration.
 
-* Gefahren und Entsorgung
+## Gefahren und Entsorgung
+
 Natriumborhydrid entwickelt mit Wasser und Säuren entzündbaren
 Wasserstoff, ist giftig bei Verschlucken, verursacht schwere
 Verätzungen und kann die Fruchtbarkeit beeinträchtigen oder das Kind im
@@ -89,7 +109,8 @@ Entsorgung mit verdünnter Säure zersetzen. Die wässrigen Phasen
 neutralisieren und als wässrigen Abfall entsorgen; die organischen
 Filtrate als halogenfreien organischen Abfall sammeln.
 
-* Literatur
+## Literatur
+
 1. Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R.
-   /Vogel's Textbook of Practical Organic Chemistry/, 5th ed.; Longman:
+   *Vogel's Textbook of Practical Organic Chemistry*, 5th ed.; Longman:
    Harlow, 1989.

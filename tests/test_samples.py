@@ -134,9 +134,9 @@ EXPECTED_SAMPLES = {
         "OSDB-0003", "esterification", [], "C7H14O2", "123-92-2"),
     "org/procedures/OSDB-0004-4-acetylbiphenyl.org": (
         "OSDB-0004", "cross-coupling", [], "C14H12O", "92-91-1"),
-    "org/procedures/OSDB-0005-1-biphenyl-4-yl-ethanol.org": (
+    "md/procedures/OSDB-0005-1-biphenyl-4-yl-ethanol.md": (
         "OSDB-0005", "reduction", ["OSDB-0004"], "C14H14O", "3562-73-0"),
-    "org/procedures/OSDB-0006-dibenzylideneacetone.org": (
+    "md/procedures/OSDB-0006-dibenzylideneacetone.md": (
         "OSDB-0006", "aldol-condensation", [], "C17H14O", "538-58-9"),
     "org/procedures/OSDB-0007-ethyl-cinnamate.org": (
         "OSDB-0007", "olefination", [], "C11H12O2", "103-36-6"),
@@ -168,14 +168,20 @@ class ThemeSampleSetTests(unittest.TestCase):
                 self.assertEqual(product.get("cas"), cas)
         found = [s for s in samples() if s.language == "en"]
         self.assertEqual(
-            sum(s.path.suffix == ".org" for s in found), 6,
+            sum(s.path.suffix == ".org" for s in found), 4,
             "number of Org samples")
         self.assertEqual(
-            sum(s.path.suffix == ".md" for s in found), 2,
+            sum(s.path.suffix == ".md" for s in found), 4,
             "number of Markdown samples")
         self.assertGreaterEqual(
             len({r for s in found for r in s.data.get("reaction_types", [])}),
             5)
+        by_id = {s.data.get("id"): s for s in found}
+        for sample in found:
+            for precursor in sample.data.get("precursors", []):
+                with self.subTest(chain=f"{precursor} -> {sample.path.name}"):
+                    self.assertEqual(by_id[precursor].path.suffix, ".org")
+                    self.assertEqual(sample.path.suffix, ".md")
         for sample in found:
             with self.subTest(sample=sample.path.name):
                 self.assertTrue(sup.cas_ok(

@@ -1,36 +1,52 @@
-#+TITLE: 1-(Biphenyl-4-yl)ethanol
-#+CREATED: [2026-10-20 Tue 09:58:16]
-#+LAST_MODIFIED: [2026-10-20 Tue 10:16:05]
-#+AI_MODEL: claude-opus-5-5
-#+OPTIONS: author:nil
-#+HUGO_SLUG: osdb-0005
-#+HUGO_TAGS: sample-data sodium-borohydride biphenyl
-#+HUGO_CUSTOM_FRONT_MATTER: :id "OSDB-0005"
-#+HUGO_CUSTOM_FRONT_MATTER: :authors '("E. Example")
-#+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
-#+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("reduction")
-#+HUGO_CUSTOM_FRONT_MATTER: :scale "5 mmol"
-#+HUGO_CUSTOM_FRONT_MATTER: :yield_percent 90
-#+HUGO_CUSTOM_FRONT_MATTER: :hazards '("Sodium borohydride: in contact with water releases flammable hydrogen, toxic if swallowed, causes severe skin burns and eye damage, may damage fertility or the unborn child" "Ethanol: highly flammable liquid and vapour, causes serious eye irritation" "Hydrochloric acid, 1 M: may irritate skin and eyes" "Ethyl acetate: highly flammable liquid and vapour, may cause drowsiness")
-#+HUGO_CUSTOM_FRONT_MATTER: :precursors '("OSDB-0004")
-#+HUGO_CUSTOM_FRONT_MATTER: :references '("Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989.")
-# The product map must stay alone on the last custom front matter line.
-#+HUGO_CUSTOM_FRONT_MATTER: :product '((name . "1-(Biphenyl-4-yl)ethanol") (formula . "C14H14O") (mw . 198.26) (smiles . "CC(O)c1ccc(cc1)-c1ccccc1") (cas . "3562-73-0"))
++++
+id = "OSDB-0005"
+slug = "osdb-0005"
+title = "1-(Biphenyl-4-yl)ethanol"
+date = 2026-10-20T09:58:16+02:00
+lastmod = 2026-10-20T10:16:05+02:00
+authors = ["E. Example"]
+status = "draft"
+reaction_types = ["reduction"]
+tags = ["sample-data", "sodium-borohydride", "biphenyl"]
+scale = "5 mmol"
+yield_percent = 90
+hazards = [
+  "Sodium borohydride: in contact with water releases flammable hydrogen, toxic if swallowed, causes severe skin burns and eye damage, may damage fertility or the unborn child",
+  "Ethanol: highly flammable liquid and vapour, causes serious eye irritation",
+  "Hydrochloric acid, 1 M: may irritate skin and eyes",
+  "Ethyl acetate: highly flammable liquid and vapour, may cause drowsiness",
+]
+precursors = ["OSDB-0004"]
+references = [
+  "Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989.",
+]
+ai_model = "claude-opus-5-5"
 
-* Summary
+[product]
+name = "1-(Biphenyl-4-yl)ethanol"
+formula = "C14H14O"
+mw = 198.26
+smiles = "CC(O)c1ccc(cc1)-c1ccccc1"
+cas = "3562-73-0"
++++
+
+## Summary
+
 1-(Biphenyl-4-yl)ethanol by reduction of 4-acetylbiphenyl, the product
 of OSDB-0004, with sodium borohydride in ethanol at room temperature,
 followed by an acidic quench and extraction. The racemic secondary
 alcohol is obtained. This is sample data: the quantities follow the
 textbook method but are not experimentally verified.
 
-* Reagents
-| Reagent            | CAS        | MW (g/mol) | Amount  | mmol | Equiv |
-|--------------------+------------+------------+---------+------+-------|
-| 4-Acetylbiphenyl   | 92-91-1    |     196.25 | 0.981 g | 5.00 |   1.0 |
-| Sodium borohydride | 16940-66-2 |      37.83 | 0.114 g | 3.01 |   0.6 |
+## Reagents
 
-* Procedure
+| Reagent | CAS | MW (g/mol) | Amount | mmol | Equiv |
+|---|---|---|---|---|---|
+| 4-Acetylbiphenyl | 92-91-1 | 196.25 | 0.981 g | 5.00 | 1.0 |
+| Sodium borohydride | 16940-66-2 | 37.83 | 0.114 g | 3.01 | 0.6 |
+
+## Procedure
+
 1. Dissolve the 4-acetylbiphenyl (0.981 g, 5.00 mmol) in ethanol
    (20 mL) in a 100 mL conical flask with a magnetic stirring bar,
    warming gently if necessary, then cool the solution to room
@@ -47,7 +63,8 @@ textbook method but are not experimentally verified.
    (about 5 mL) until gas evolution stops and the mixture is just acidic
    to indicator paper (Note 2).
 
-* Workup and Purification
+## Workup and Purification
+
 Remove most of the ethanol on a rotary evaporator (bath at 40 °C), add
 water (20 mL) and extract the product with ethyl acetate in two 20 mL
 portions. Wash the combined extracts with saturated sodium chloride
@@ -57,7 +74,8 @@ heptane containing a little ethyl acetate, cool in ice, collect by
 suction filtration and dry in air. Expected yield 0.892 g (4.50 mmol,
 90 %).
 
-* Characterization
+## Characterization
+
 White crystalline solid. Determine the melting point. The IR spectrum
 (ATR) shows a broad O–H stretch near 3350 cm⁻¹ and no ketone C=O stretch
 near 1675 cm⁻¹, which distinguishes the product from its starting
@@ -65,7 +83,8 @@ material. Expected ¹H NMR signals (CDCl₃): δ 7.62–7.55 (m, 4H),
 7.48–7.40 (m, 4H), 7.34 (t, 1H), 4.96 (q, J = 6.4 Hz, 1H), 1.85 (br s,
 1H, OH), 1.55 (d, J = 6.4 Hz, 3H).
 
-* Notes
+## Notes
+
 1. Each mole of borohydride can reduce up to four moles of ketone, so
    0.6 equivalent is a comfortable excess. Adding it in portions keeps
    the slight warming and the hydrogen evolution under control.
@@ -74,7 +93,8 @@ material. Expected ¹H NMR signals (CDCl₃): δ 7.62–7.55 (m, 4H),
 3. The product is a racemate; the reduction creates a new stereocentre
    without any preference for either configuration.
 
-* Hazards and Waste Disposal
+## Hazards and Waste Disposal
+
 Sodium borohydride releases flammable hydrogen with water and acids, is
 toxic if swallowed, causes severe burns, and may damage fertility or the
 unborn child; weigh it in a fume hood with gloves and eye protection, and
@@ -84,7 +104,8 @@ before disposal. Neutralise the aqueous layers and dispose of them as
 aqueous waste, and collect the organic filtrates as non-halogenated
 organic waste.
 
-* References
+## References
+
 1. Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R.
-   /Vogel's Textbook of Practical Organic Chemistry/, 5th ed.; Longman:
+   *Vogel's Textbook of Practical Organic Chemistry*, 5th ed.; Longman:
    Harlow, 1989.
