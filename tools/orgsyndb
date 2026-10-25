@@ -48,9 +48,8 @@ OUTPUTS = ("build", "public", "pdf")
 APP_CACHES = (".emacs-batch", ".tools")
 CONTENT_ROOTS = ("build/export", "md/procedures")
 
-REQUIRED_TOOLS = ("emacs", "git", "python3", "hugo", "weasyprint")
-EXPORT_TOOLS = ("emacs", "git")
-BUILD_TOOLS = (*EXPORT_TOOLS, "hugo")
+REQUIRED_TOOLS = ("python3", "hugo", "weasyprint")
+ORG_TOOLS = ("emacs", "git")
 
 USAGE = """\
 usage: orgsyndb [-C DIR] <subcommand> [options] [arguments]
@@ -196,6 +195,10 @@ def run_export() -> None:
                       "unchanged")
     staging = build / pipeline.STAGING
     staging.mkdir(parents=True, exist_ok=True)
+    if not plan:
+        step("export: no Org sources; Emacs is not needed")
+        install_export(build, plan)
+        return
     if bootstrapped():
         step("export: running ox-hugo")
     else:
@@ -211,6 +214,10 @@ def run_export() -> None:
     if done.returncode != 0:
         sys.stderr.write(log.read_text(encoding="utf-8", errors="replace"))
         raise Failure(f"export failed; Emacs output is in {log}")
+    install_export(build, plan)
+
+
+def install_export(build: Path, plan: list[dict]) -> None:
     step("export: installing build/export/")
     pipeline.check_staging(build, plan)
     pipeline.replace_export(build)
@@ -262,10 +269,15 @@ def no_arguments(name: str, args: Sequence[str]) -> None:
         raise UsageError(f"{name} takes no arguments: {' '.join(args)}")
 
 
+def export_tools() -> tuple[str, ...]:
+    """The tools the export needs in the current collection."""
+    return ORG_TOOLS if pipeline.has_org_sources("org/procedures") else ()
+
+
 def cmd_export(option: str | None, args: Sequence[str]) -> int:
     no_arguments("export", args)
     enter_collection(option)
-    require_tools(*EXPORT_TOOLS)
+    require_tools(*export_tools())
     run_export()
     return 0
 
@@ -275,7 +287,7 @@ def cmd_validate(option: str | None, args: Sequence[str]) -> int:
         raise UsageError("validate takes no arguments; to validate other "
                          "directories, run tools/validate.py")
     enter_collection(option)
-    require_tools(*EXPORT_TOOLS)
+    require_tools(*export_tools())
     run_export()
     return run_validator()
 
@@ -283,7 +295,7 @@ def cmd_validate(option: str | None, args: Sequence[str]) -> int:
 def cmd_build(option: str | None, args: Sequence[str]) -> int:
     no_arguments("build", args)
     collection = enter_collection(option)
-    require_tools(*BUILD_TOOLS)
+    require_tools(*export_tools(), "hugo")
     run_build(collection)
     return 0
 
@@ -308,7 +320,7 @@ def cmd_serve(option: str | None, args: Sequence[str]) -> int:
                          f"{port_text}")
     port = int(port_text)
     collection = enter_collection(option)
-    require_tools(*BUILD_TOOLS)
+    require_tools(*export_tools(), "hugo")
     run_build(collection)
     handler = functools.partial(PreviewHandler,
                                 directory=str(collection / "public"))
@@ -329,7 +341,7 @@ def cmd_serve(option: str | None, args: Sequence[str]) -> int:
 def cmd_pdf(option: str | None, args: Sequence[str]) -> int:
     no_arguments("pdf", args)
     collection = enter_collection(option)
-    require_tools(*BUILD_TOOLS, "weasyprint")
+    require_tools(*export_tools(), "hugo", "weasyprint")
     chosen = run_build(collection)
     step("pdf: rendering procedure pages into pdf/")
     pdf_dir = Path("pdf")
@@ -406,8 +418,10 @@ def cmd_check_deps(option: str | None, args: Sequence[str]) -> int:
             missing.append(tool)
             continue
         print(f"ok      {tool}")
-    state = "installed" if shutil.which("caddy") else "not installed"
-    print(f"optional caddy ({state}; only for deploy/Caddyfile.example)")
+    for tool, purpose in (*((tool, "Org procedures") for tool in ORG_TOOLS),
+                          ("caddy", "deploy/Caddyfile.example")):
+        state = "installed" if shutil.which(tool) else "not installed"
+        print(f"optional {tool} ({state}; only for {purpose})")
     pagefind = (APP / ".tools" / f"pagefind-{pipeline.PAGEFIND_VERSION}"
                 / "pagefind")
     print(f"auto    pagefind {pipeline.PAGEFIND_VERSION} "
@@ -415,7 +429,7 @@ def cmd_check_deps(option: str | None, args: Sequence[str]) -> int:
              else "(fetched from GitHub on first build)"))
     print("auto    ox-hugo/tomelr "
           + ("(cached in .emacs-batch/)" if bootstrapped()
-             else "(fetched from GitHub on first export)"))
+             else "(fetched from GitHub on first Org export)"))
     if missing:
         print("sudo dnf install " + " ".join(missing))
         return 1

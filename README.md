@@ -48,12 +48,22 @@ collection's format refuses it instead of misreading it.
 
 ## Install the dependencies
 
-OrgSynDB is designed for Fedora. Its Org export requires Emacs 29.1 or
-later. Install the required system packages with:
+OrgSynDB is designed for Fedora. Install the system packages required for
+every collection with:
 
 ```sh
-sudo dnf install emacs git python3 hugo weasyprint
+sudo dnf install python3 hugo weasyprint
 ```
+
+If the collection contains Org procedures, exporting them also requires
+Emacs 29.1 or later and Git. Install both with:
+
+```sh
+sudo dnf install emacs git
+```
+
+A collection that contains only Markdown procedures needs neither Emacs nor
+Git.
 
 The build program `tools/orgsyndb` is a Python 3.14 script that uses only
 the standard library, so there is nothing to install with pip. You do not
@@ -68,11 +78,12 @@ ln -s "$PWD/tools/orgsyndb" ~/.local/bin/orgsyndb
 The commands below assume the symlink; otherwise write `tools/orgsyndb`
 from the application's directory.
 
-On the first export or build, OrgSynDB clones ox-hugo and tomelr with Git at
-pinned commits into the application's `.emacs-batch/elpa/`. On the first
-build, it also fetches Pagefind 1.5.2 into `.tools/` and verifies its SHA-256
-checksum. The first run therefore needs network access and Git. These tools
-do not write to your Emacs configuration.
+On the first export of an Org procedure, OrgSynDB clones ox-hugo and tomelr
+with Git at pinned commits into the application's `.emacs-batch/elpa/`. On
+the first build, it fetches Pagefind 1.5.2 into `.tools/` and verifies its
+SHA-256 checksum. Each first use needs network access. A Markdown-only build
+does not fetch the Org export tools or start Emacs. These tools do not write
+to your Emacs configuration.
 
 Check the current machine before building:
 
@@ -80,18 +91,19 @@ Check the current machine before building:
 orgsyndb check-deps
 ```
 
-The command reports each installed or missing tool. If packages are missing,
-its final line is the `sudo dnf install ...` command for only those packages.
-It reports Caddy separately as optional and never runs `sudo` itself.
+The command reports each installed or missing required tool. It reports
+Emacs, Git, and Caddy separately as optional. If required packages are
+missing, its final line is the `sudo dnf install ...` command for only those
+packages. It never runs `sudo` itself.
 
 A machine with all required tools and both downloaded caches reports:
 
 ```text
-ok      emacs
-ok      git
 ok      python3
 ok      hugo
 ok      weasyprint
+optional emacs (installed; only for Org procedures)
+optional git (installed; only for Org procedures)
 optional caddy (not installed; only for deploy/Caddyfile.example)
 auto    pagefind 1.5.2 (cached in .tools/)
 auto    ox-hugo/tomelr (cached in .emacs-batch/)
@@ -304,7 +316,7 @@ prefix are relative to the collection.
 
 | Command | What it does |
 |---|---|
-| `export` | Exports every top-level `org/procedures/*.org` file into `build/export/`. Emacs output goes to `build/export.log` and is printed if export fails. |
+| `export` | Exports every top-level `org/procedures/*.org` file into `build/export/`. With no Org procedures, it leaves that directory empty and starts no Emacs. For Org sources, Emacs output goes to `build/export.log` and is printed if export fails. |
 | `validate` | Exports first, then validates the Org sources, their exports, and all Markdown procedures. Errors fail the command; warnings do not. |
 | `build` | Runs export and validation, builds the site into `public/` with Hugo, then indexes it with Pagefind. A validation error stops the command before Hugo. |
 | `serve [--port N]` | Runs `build`, then serves `public/` on `http://127.0.0.1:N/` until `Ctrl-C`. The default port is `8000`. |
@@ -313,7 +325,7 @@ prefix are relative to the collection.
 | `init DIR` | Creates an empty collection in `DIR`: `orgsyndb.toml`, a `.gitignore` for the generated directories, and empty source directories. It refuses a directory that already holds `orgsyndb.toml`, and it does not run `git init`. |
 | `clean` | Removes `build/`, `public/`, and `pdf/`. |
 | `clean --all` | Also removes the application's `.emacs-batch/` and `.tools/`. Their contents are fetched again on the next relevant run. |
-| `check-deps` | Reports required tools, optional Caddy, fetched tools, and the Fedora install command when something is missing. |
+| `check-deps` | Reports required tools; optional Emacs, Git, and Caddy; fetched tools; and the Fedora install command when a required tool is missing. |
 | `help` | Prints the command summary. `-h` and `--help` do the same. |
 
 The program exits 0 on success, 1 on failure, and 2 on a usage error.
@@ -354,8 +366,9 @@ real Pagefind search; it is never needed to build or view the site.
 `poppler-utils` is also optional and supplies `pdftotext` and `pdfinfo` for
 PDF checks. Tests that cannot find an optional tool skip their checks and
 name the missing tool. The integration tests build copies of the demo
-collection and need the caches that a first `orgsyndb -C examples/demo
-build` fetches.
+collection. Because the demo contains Org procedures, these tests need Emacs
+and Git, as well as the caches that a first `orgsyndb -C examples/demo build`
+fetches.
 
 The `Emacs 29 export` GitHub Actions workflow runs the export integration
 tests on Ubuntu 24.04's Emacs 29. It runs on pushes to `main`, pull requests,

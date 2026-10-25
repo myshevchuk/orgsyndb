@@ -371,6 +371,14 @@ def check_staging(build: Path, plan: Sequence[dict[str, Any]]) -> None:
                           + "; ".join(details))
 
 
+def has_org_sources(org_root: str) -> bool:
+    """Whether ``org_root`` holds a file the validator examines as an Org
+    procedure. A missing ``org_root`` holds none."""
+    return os.path.isdir(org_root) and any(
+        entry.problem is None
+        for entry in validate.discover(org_root, ".org"))
+
+
 def plan_export(org_root: str) -> tuple[list[dict[str, Any]],
                                         list[tuple[str, validate.Problem]]]:
     """Plan the export of the Org procedures in ``org_root``.

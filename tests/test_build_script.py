@@ -8,6 +8,7 @@ A missing tools/orgsyndb fails them, because it is a deliverable.
 import ast
 import os
 import py_compile
+import re
 import shutil
 import subprocess
 import sys
@@ -18,7 +19,8 @@ from pathlib import Path
 
 from pipeline_support import (BOOTSTRAP_HINT, DEMO, GIT_QUIET, HOOK,
                               ORGSYNDB, REPO, TOOLS, Run, make_path,
-                              make_sandbox, run_script, snapshot)
+                              make_sandbox, require_pagefind, require_tool,
+                              run_script, snapshot)
 
 SUBCOMMANDS = ["export", "validate", "build", "serve", "pdf", "new", "init",
                "clean", "check-deps", "help"]
@@ -181,6 +183,35 @@ class MissingToolTests(ProgramTestCase):
         result = sandbox.build("export", env=env)
         self.assert_stopped(result, sandbox, path, "git")
 
+    def test_emacs_missing_with_org_sources_stops_build(self) -> None:
+        """Scenario: Emacs missing with Org sources."""
+        sandbox, path = self.repo_and_path(("python3", "git", "hugo"))
+        env = sandbox.env(PATH=str(path.directory))
+        result = sandbox.build("build", env=env)
+        self.assert_stopped(result, sandbox, path, "emacs")
+
+    def test_markdown_only_collection_builds_without_emacs_and_git(
+            self) -> None:
+        """Scenario: Markdown-only collection builds without Emacs and
+        git."""
+        require_tool("hugo")
+        require_pagefind()
+        sandbox, path = self.repo_and_path(("python3", "hugo"))
+        sandbox.clear_org()
+        # The Markdown samples name Org samples as their precursors.
+        for source in sandbox.md_dir().glob("*.md"):
+            text = source.read_text(encoding="utf-8")
+            source.write_text(re.sub(r"(?m)^precursors = .*\n", "", text),
+                              encoding="utf-8")
+        env = sandbox.env(PATH=str(path.directory))
+        result = sandbox.build("build", env=env)
+        self.assertEqual(result.returncode, 0,
+                         result.stdout + result.stderr)
+        public = sandbox.root / "public"
+        self.assertTrue((public / "index.html").is_file())
+        self.assertTrue(
+            (public / "procedures" / "osdb-0002" / "index.html").is_file())
+
     def test_collection_error_comes_before_missing_tools(self) -> None:
         """Scenario: Collection error comes before missing tools."""
         path = make_path(self, ("python3",))
@@ -260,13 +291,16 @@ class CheckDepsTests(ProgramTestCase):
 
     def test_nothing_missing_exits_zero_without_a_dnf_line(self) -> None:
         """Scenario: Nothing missing."""
-        result, path = self.run_check(("python3",),
-                                      ("emacs", "git", "hugo", "weasyprint"))
+        result, path = self.run_check(("python3",), ("hugo", "weasyprint"))
         self.assertEqual(result.returncode, 0, result.stderr)
-        for line in result.stdout.splitlines():
+        lines = result.stdout.splitlines()
+        for line in lines:
             self.assertFalse(line.startswith(("missing ", "sudo ")), line)
-        for tool in ("emacs", "git", "python3", "hugo", "weasyprint"):
-            self.assertIn(f"ok      {tool}", result.stdout.splitlines())
+        for tool in ("python3", "hugo", "weasyprint"):
+            self.assertIn(f"ok      {tool}", lines)
+        for tool in ("emacs", "git"):
+            self.assertIn(f"optional {tool} (not installed; only for Org "
+                          "procedures)", lines)
         self.assertEqual(path.sudo_calls(), [])
 
 

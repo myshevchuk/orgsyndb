@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pipeline_support as ps
 from pipeline_support import (DEMO, OX_HUGO_PIN, REPO, TOMELR_PIN, Sandbox,
-                              body_of, front_matter, make_sandbox,
-                              read_only_dir, snapshot)
+                              body_of, front_matter, make_path,
+                              make_sandbox, read_only_dir, snapshot)
 
 PRODUCT = {"name": "Propyl acetate", "formula": "C5H10O2", "mw": 102.13,
            "smiles": "CCCOC(C)=O"}
@@ -145,6 +145,22 @@ class NoPackageElTests(unittest.TestCase):
         text = (REPO / "tools" / "export.el").read_text(encoding="utf-8")
         self.assertNotIn("package-vc", text)
         self.assertNotIn("(require 'package)", text)
+
+
+class ExportWithoutOrgTests(unittest.TestCase):
+    def test_export_with_neither_emacs_nor_git(self) -> None:
+        """Scenario: Export with neither Emacs nor git."""
+        sandbox = make_sandbox(self)
+        sandbox.clear_org()
+        path = make_path(self, ("python3",))
+        result = sandbox.build("export",
+                               env=sandbox.env(PATH=str(path.directory)))
+        self.assertEqual(result.returncode, 0,
+                         result.stdout + result.stderr)
+        self.assertIn("==> export: no Org sources; Emacs is not needed",
+                      result.stdout)
+        self.assertTrue(sandbox.export_dir().is_dir())
+        self.assertEqual(list(sandbox.export_dir().iterdir()), [])
 
 
 class ExportedFrontMatterTests(ExportTestCase):
