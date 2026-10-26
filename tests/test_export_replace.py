@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from pipeline_support import pipeline
+from pipeline_support import pipeline, pipeline_function
 
 
 class FailingOn:
@@ -77,3 +77,58 @@ class ReplaceExportTests(unittest.TestCase):
         pipeline().recover_export(self.build)
         self.assertFalse(self.previous.exists())
         self.assertEqual(files(self.export), {"B.md": b"new export\n"})
+
+
+class OrgStemTests(unittest.TestCase):
+    def test_org_stems_are_the_names_of_the_sources(self) -> None:
+        """Scenario: Org stems."""
+        org_stems = pipeline_function("org_stems")
+        base = Path(tempfile.mkdtemp(prefix="orgsyndb stems "))
+        self.addCleanup(shutil.rmtree, base, True)
+        root = base / "org procedures"
+        root.mkdir()
+        for name in ("OSDB-0002-b.org", "OSDB-0001-a.de.org",
+                     ".#OSDB-0001-a.org", "notes.txt"):
+            (root / name).write_text("x\n", encoding="utf-8")
+        (root / "nested").mkdir()
+        self.assertEqual(org_stems(str(root)),
+                         ["OSDB-0001-a.de", "OSDB-0002-b"])
+        self.assertEqual(org_stems(str(base / "absent")), [])
+
+
+class OrgErrorReportedTests(unittest.TestCase):
+    def test_severity_is_read_after_the_entry_path(self) -> None:
+        """Scenario: Severity is read after the entry path."""
+        reported = pipeline_function("org_error_reported")
+        tricky = "org/procedures/x:file_name: error: y"
+        paths = [tricky, "org/procedures/OSDB-0001-a.org"]
+        warning = (f"{tricky}:file_name: warning: not a procedure file; "
+                   "ignored\n")
+        error = ("org/procedures/OSDB-0001-a.org:#+CREATED: error: keyword "
+                 "missing\n")
+        self.assertFalse(reported(warning, paths))
+        self.assertTrue(reported(warning + error, paths))
+        self.assertFalse(reported(
+            "other/OSDB-0001-a.org:#+CREATED: error: keyword missing\n",
+            paths))
+        self.assertFalse(reported("", paths))
+
+
+class StagingCheckTests(unittest.TestCase):
+    def test_staging_must_hold_exactly_the_stems(self) -> None:
+        """Scenario: Staging check."""
+        module = pipeline()
+        base = Path(tempfile.mkdtemp(prefix="orgsyndb staging "))
+        self.addCleanup(shutil.rmtree, base, True)
+        build = base / "build dir"
+        staging = build / ".export-staging"
+        staging.mkdir(parents=True)
+        for name in ("A.md", "C.md"):
+            (staging / name).write_text("x\n", encoding="utf-8")
+        self.assertTrue(hasattr(module, "ExportError"))
+        with self.assertRaises(module.ExportError) as caught:
+            module.check_staging(build, ["A", "B"])
+        message = str(caught.exception)
+        self.assertRegex(message, r"missing [^;]*B\.md")
+        self.assertRegex(message, r"unexpected [^;]*C\.md")
+        self.assertNotRegex(message, r"missing [^;]*A\.md")

@@ -6,6 +6,7 @@ unless Emacs, git and the pinned ox-hugo bootstrap are present.
 """
 
 import datetime as dt
+import re
 import shutil
 import subprocess
 import tempfile
@@ -13,12 +14,38 @@ import unittest
 from pathlib import Path
 
 import pipeline_support as ps
-from pipeline_support import (DEMO, OX_HUGO_PIN, REPO, TOMELR_PIN, Sandbox,
-                              body_of, front_matter, make_path,
+from pipeline_support import (DEMO, FIXTURES, OX_HUGO_PIN, REPO, TOMELR_PIN,
+                              Sandbox, body_of, front_matter, make_path,
                               make_sandbox, read_only_dir, snapshot)
 
 PRODUCT = {"name": "Propyl acetate", "formula": "C5H10O2", "mw": 102.13,
            "smiles": "CCCOC(C)=O"}
+NOTES_WARNING = ("org/procedures/notes.txt:file_name: warning: "
+                 "not a procedure file; ignored")
+PROBLEM_LINE = re.compile(r"^\S.*: (?:error|warning): ")
+
+
+def report_lines(stdout: str) -> list[str]:
+    """The lines of stdout that are not step lines."""
+    return [line for line in stdout.splitlines()
+            if not line.startswith("==> ")]
+
+
+def check_out_ox_hugo_parent(sandbox: Sandbox) -> str:
+    """Check out the parent of the pin in the copied ox-hugo checkout.
+
+    Returns the parent's hash.
+    """
+    checkout = sandbox.app / ".emacs-batch" / "elpa" / "ox-hugo"
+    parent = subprocess.run(
+        ["git", "-C", str(checkout), "rev-parse", "HEAD^"],
+        capture_output=True, text=True, timeout=60, check=True,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "-C", str(checkout), "-c", "advice.detachedHead=false",
+         "checkout", "-q", parent], check=True, capture_output=True,
+        timeout=60)
+    return parent
 
 
 class ExportTestCase(unittest.TestCase):
@@ -89,15 +116,7 @@ class PinTests(ExportTestCase):
         first = self.export(sandbox)
         self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
         before = snapshot(sandbox.export_dir())
-        checkout = sandbox.app / ".emacs-batch" / "elpa" / "ox-hugo"
-        parent = subprocess.run(
-            ["git", "-C", str(checkout), "rev-parse", "HEAD^"],
-            capture_output=True, text=True, timeout=60, check=True,
-        ).stdout.strip()
-        subprocess.run(
-            ["git", "-C", str(checkout), "-c", "advice.detachedHead=false",
-             "checkout", "-q", parent], check=True, capture_output=True,
-            timeout=60)
+        parent = check_out_ox_hugo_parent(sandbox)
         result = self.export(sandbox)
         output = result.stdout + result.stderr
         self.assertNotEqual(result.returncode, 0, output)
@@ -142,9 +161,13 @@ class OldEmacsTests(ExportTestCase):
 class NoPackageElTests(unittest.TestCase):
     def test_no_package_el(self) -> None:
         """Scenario: No package.el."""
-        text = (REPO / "tools" / "export.el").read_text(encoding="utf-8")
-        self.assertNotIn("package-vc", text)
-        self.assertNotIn("(require 'package)", text)
+        for name in ("export.el", "osdb-org.el"):
+            path = REPO / "tools" / name
+            self.assertTrue(path.is_file(), f"tools/{name} does not exist")
+            text = path.read_text(encoding="utf-8")
+            with self.subTest(file=name):
+                self.assertNotIn("package-vc", text)
+                self.assertNotIn("(require 'package)", text)
 
 
 class ExportWithoutOrgTests(unittest.TestCase):
@@ -173,8 +196,7 @@ class ExportedFrontMatterTests(ExportTestCase):
                             f"{seed} does not exist")
         result = self.export(sandbox)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        checked = sandbox.validator("--org-root", "org/procedures",
-                                    "build/export", "md/procedures")
+        checked = sandbox.validator("build/export", "md/procedures")
         self.assertEqual(checked.returncode, 0, checked.stderr)
         self.assertEqual(checked.stdout, "")
 
@@ -341,3 +363,206 @@ class IdempotenceTests(ExportTestCase):
             shutil.copy2(seed, sandbox.root / "org" / "procedures")
         self.assertEqual(self.export(sandbox).returncode, 0)
         self.assertEqual((sandbox.export_dir() / name).read_bytes(), alone)
+
+
+class OrgErrorTests(unittest.TestCase):
+    """Org problems stop the program before any package is installed."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        for tool in ("emacs", "git"):
+            ps.require_tool(tool)
+
+    def sandbox_with(self, fixture: str) -> Sandbox:
+        """A test-collection copy holding the Org fixture, no ox-hugo."""
+        sandbox = make_sandbox(self, link_caches=False)
+        target = sandbox.root / "org" / "procedures"
+        target.mkdir(parents=True)
+        shutil.copy2(FIXTURES / fixture, target)
+        return sandbox
+
+    def test_org_errors_stop_validate_before_any_package_is_installed(
+            self) -> None:
+        """Scenario: Org errors stop validate before any package is
+        installed."""
+        sandbox = self.sandbox_with(
+            "org-invalid/missing-seconds/org/OSDB-0204-missing-seconds.org")
+        result = sandbox.build("validate")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(report_lines(result.stdout), [
+            "org/procedures/OSDB-0204-missing-seconds.org:#+CREATED: error: "
+            '"[2026-10-19 Mon 17:42]" must have the form '
+            "[YYYY-MM-DD Day hh:mm:ss]"])
+        self.assertIn(
+            "the Org sources have errors; build/export/ is unchanged",
+            result.stderr)
+        self.assertFalse((sandbox.app / ".emacs-batch").exists())
+        self.assertFalse(sandbox.export_dir().exists())
+
+    def test_conflicting_front_matter_stops_the_export(self) -> None:
+        """Scenario: Conflicting front matter stops the export."""
+        sandbox = self.sandbox_with(
+            "org-invalid/custom-ai-model/org/"
+            "OSDB-0216-custom-ai-model.org")
+        result = sandbox.build("export")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(report_lines(result.stdout), [
+            "org/procedures/OSDB-0216-custom-ai-model.org:"
+            "#+HUGO_CUSTOM_FRONT_MATTER: error: must not set :ai_model; "
+            "the export writes it from #+AI_MODEL"])
+        self.assertIn("the Org sources have errors", result.stderr)
+        self.assertFalse(sandbox.export_dir().exists())
+
+
+class ExportElTests(unittest.TestCase):
+    """tools/export.el run directly."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        ps.require_tool("emacs")
+
+    def run_export_el(self, org_root: Path, staging: Path):
+        base = org_root.parent
+        return subprocess.run(
+            ["emacs", "-Q", "--batch", "-l", str(REPO / "tools/export.el"),
+             str(org_root), str(staging)],
+            cwd=base, capture_output=True, text=True, timeout=300)
+
+    def workspace(self) -> Path:
+        base = Path(tempfile.mkdtemp(prefix="orgsyndb export el "))
+        self.addCleanup(shutil.rmtree, base, True)
+        return base
+
+    def test_emacs_stdout_holds_only_problem_lines(self) -> None:
+        """Scenario: Emacs's stdout holds only problem lines."""
+        base = self.workspace()
+        root = base / "org root"
+        root.mkdir()
+        staging = base / "staging dir"
+        staging.mkdir()
+        shutil.copy2(FIXTURES / "org-invalid/wrong-weekday/org"
+                     / "OSDB-0206-wrong-weekday.org", root)
+        (root / "notes.txt").write_text("notes\n", encoding="utf-8")
+        done = self.run_export_el(root, staging)
+        self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+        self.assertEqual(
+            done.stdout,
+            f"{root}/OSDB-0206-wrong-weekday.org:#+CREATED: error: "
+            'weekday "Tue" does not match 2026-10-19 (Mon)\n'
+            f"{root}/notes.txt:file_name: warning: not a procedure file; "
+            "ignored\n")
+        self.assertEqual(list(staging.iterdir()), [])
+
+    def test_org_root_that_is_not_a_directory_is_refused(self) -> None:
+        """Scenario: ORG_ROOT that is not a directory."""
+        base = self.workspace()
+        staging = base / "staging dir"
+        staging.mkdir()
+        done = self.run_export_el(base / "absent", staging)
+        self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+        output = done.stdout + done.stderr
+        self.assertIn("export.el: error:", output)
+        self.assertIn("is not a directory", output)
+
+
+class OrgRootTests(unittest.TestCase):
+    def test_org_root_that_is_not_a_directory_keeps_the_export(self) -> None:
+        """Scenario: Org root that is not a directory."""
+        sandbox = make_sandbox(self)
+        first = sandbox.build("export")
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        (sandbox.export_dir() / "keep.md").write_bytes(b"keep\n")
+        (sandbox.root / "org").mkdir()
+        (sandbox.root / "org" / "procedures").write_text(
+            "not a directory\n", encoding="utf-8")
+        path = make_path(self, ("python3",))
+        result = sandbox.build("export",
+                               env=sandbox.env(PATH=str(path.directory)))
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("orgsyndb: error: org/procedures is not a directory",
+                      result.stderr)
+        self.assertEqual(snapshot(sandbox.export_dir()),
+                         {"keep.md": b"keep\n"})
+
+
+class OrgReportTests(ExportTestCase):
+    def with_notes(self, **kwargs) -> Sandbox:
+        """A demo-collection copy with a stray file among the sources."""
+        sandbox = self.sandbox(**kwargs)
+        (sandbox.root / "org" / "procedures" / "notes.txt").write_text(
+            "notes\n", encoding="utf-8")
+        return sandbox
+
+    def test_warnings_alone_do_not_stop_the_export(self) -> None:
+        """Scenario: Warnings alone do not stop the export."""
+        sandbox = self.with_notes()
+        result = self.export(sandbox)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(report_lines(result.stdout), [NOTES_WARNING])
+        stems = sorted(path.stem for path in
+                       (sandbox.root / "org" / "procedures").glob("*.org"))
+        self.assertEqual(
+            sorted(path.name for path in sandbox.export_dir().iterdir()),
+            sorted(f"{stem}.md" for stem in stems))
+
+    def test_warnings_followed_by_an_export_failure(self) -> None:
+        """Scenario: Warnings followed by an export failure."""
+        sandbox = self.with_notes(copy_emacs=True)
+        first = self.export(sandbox)
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        before = snapshot(sandbox.export_dir())
+        check_out_ox_hugo_parent(sandbox)
+        result = self.export(sandbox)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(report_lines(result.stdout), [NOTES_WARNING])
+        self.assertIn("clean --all", result.stderr)
+        self.assertIn("export failed; Emacs output is in build/export.log",
+                      result.stderr)
+        self.assertNotIn("the Org sources have errors", result.stderr)
+        self.assertEqual(snapshot(sandbox.export_dir()), before)
+
+    def test_stubs_from_new_pass_the_org_checks(self) -> None:
+        """Scenario: Stubs from new pass the Org checks."""
+        sandbox = self.sandbox()
+        stems = []
+        for args in (["Test product"], ["--lang", "de", "Prüfprodukt"]):
+            made = sandbox.build("new", *args)
+            self.assertEqual(made.returncode, 0, made.stderr)
+            stems.append(Path(made.stdout.strip()).stem)
+        result = self.export(sandbox)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual([line for line in result.stdout.splitlines()
+                          if PROBLEM_LINE.match(line)], [])
+        for stem in stems:
+            self.exported(sandbox, stem)
+
+
+class ExportedDateTests(ExportTestCase):
+    def test_exported_dates_match_the_fixture_exports(self) -> None:
+        """Scenario: Exported dates match the fixture exports."""
+        sandbox = make_sandbox(self)
+        target = sandbox.root / "org" / "procedures"
+        target.mkdir(parents=True)
+        stems = ("OSDB-0003-propyl-acetate", "OSDB-0004-ambiguous-hour")
+        for stem in stems:
+            shutil.copy2(FIXTURES / "valid" / "org" / f"{stem}.org", target)
+        result = self.export(sandbox)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        exported = {}
+        for stem in stems:
+            got = front_matter(self.exported(sandbox, stem))
+            want = front_matter((FIXTURES / "valid" / "export"
+                                 / f"{stem}.md").read_text(encoding="utf-8"))
+            with self.subTest(stem=stem):
+                for key in ("date", "lastmod"):
+                    self.assertEqual(got[key].isoformat(),
+                                     want[key].isoformat())
+                self.assertEqual("ai_model" in got, "ai_model" in want)
+                self.assertEqual(got.get("ai_model"), want.get("ai_model"))
+            exported[stem] = got
+        ambiguous = exported["OSDB-0004-ambiguous-hour"]
+        self.assertEqual(ambiguous["date"].isoformat(),
+                         "2026-10-25T02:50:00+02:00")
+        self.assertEqual(ambiguous["lastmod"].isoformat(),
+                         "2026-10-25T02:10:00+01:00")
+        self.assertEqual(ambiguous["ai_model"], "claude-sonnet-5-5")

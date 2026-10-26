@@ -97,6 +97,14 @@ def pipeline() -> ModuleType:
     return module
 
 
+def pipeline_function(name: str) -> Any:
+    """Return ``pipeline.<name>``, failing on an assertion when absent."""
+    module = pipeline()
+    if not hasattr(module, name):
+        raise AssertionError(f"tools/pipeline.py defines no {name}")
+    return getattr(module, name)
+
+
 class Run(NamedTuple):
     returncode: int
     stdout: str

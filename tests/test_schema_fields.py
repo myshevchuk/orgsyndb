@@ -1,10 +1,12 @@
 """Front-matter field rules (procedure-schema)."""
 
+import tempfile
 import unittest
+from pathlib import Path
 
-from support import (ValidatorTestCase, fixture_run, insert_in_product,
-                     insert_line, remove_line, replace_line, valid_set_run,
-                     variant_run)
+from support import (FIXTURES, ValidatorTestCase, fixture_run,
+                     insert_in_product, insert_line, remove_line,
+                     replace_line, valid_set_run, variant_run)
 
 
 class IdentifierTests(ValidatorTestCase):
@@ -197,6 +199,23 @@ class TimestampTests(ValidatorTestCase):
             replace_line("date", "date = 2026-10-19T17:42:05+02:00"),
             replace_line("lastmod", "lastmod = 2026-10-18T09:00:00+02:00"))
         self.assert_one(result, "error", "lastmod", "is earlier than date")
+
+    def test_exported_instants_decide_the_ordering(self) -> None:
+        """Scenario: Exported instants decide the ordering."""
+        stem = "OSDB-0004-ambiguous-hour"
+        text = (FIXTURES / "valid/export" / f"{stem}.md").read_text(
+            encoding="utf-8")
+        old = "lastmod = 2026-10-25T02:10:00+01:00"
+        self.assertIn(old, text)
+        with tempfile.TemporaryDirectory() as tmp:
+            content = Path(tmp) / "content"
+            content.mkdir()
+            (content / f"{stem}.md").write_text(
+                text.replace(old, "lastmod = 2026-10-25T02:10:00+02:00"),
+                encoding="utf-8")
+            result = fixture_run(content)
+        self.assert_one(result, "error", "lastmod", "is earlier than date",
+                        path_suffix=f"{stem}.md")
 
     def test_winter_offset_in_summer_is_a_warning(self) -> None:
         """Scenario: Winter offset in summer."""

@@ -17,9 +17,10 @@ import unittest
 from pathlib import Path
 
 from pipeline_support import (BOOTSTRAP_HINT, DEMO, GIT_QUIET, HOOK,
-                              ORGSYNDB, REPO, TOOLS, Run, make_path,
-                              make_sandbox, require_pagefind, require_tool,
-                              run_script, snapshot)
+                              ORGSYNDB, PIPELINE, REPO, TOOLS, Run,
+                              make_path, make_sandbox, pipeline_function,
+                              require_pagefind, require_tool, run_script,
+                              snapshot)
 
 SUBCOMMANDS = ["export", "validate", "build", "serve", "pdf", "new", "init",
                "clean", "check-deps", "help"]
@@ -120,6 +121,15 @@ class SourceTests(unittest.TestCase):
         self.assertTrue(ORGSYNDB.read_text().startswith(
             "#!/usr/bin/env python3\n"))
 
+    def test_python_does_not_read_org(self) -> None:
+        """Scenario: No Org reading in Python."""
+        for script in (PIPELINE, TOOLS / "validate.py", ORGSYNDB):
+            text = script.read_text(encoding="utf-8")
+            for needle in ("--org-root", "export-plan", "lint_org",
+                           "cross_check", "export_instants"):
+                with self.subTest(script=script.name, needle=needle):
+                    self.assertNotIn(needle, text)
+
     def test_no_fish_is_left(self) -> None:
         """Scenario: No fish."""
         found = []
@@ -151,6 +161,29 @@ class HookWithoutCollectionTests(ProgramTestCase):
         result = git("commit", "-q", "-m", "add notes")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("no OrgSynDB collection", result.stderr)
+
+
+class OrgSourceDetectionTests(unittest.TestCase):
+    def test_org_sources_are_decided_by_entry_names(self) -> None:
+        """Scenario: Org sources by entry names."""
+        has_org_sources = pipeline_function("has_org_sources")
+        base = Path(tempfile.mkdtemp(prefix="orgsyndb sources "))
+        self.addCleanup(shutil.rmtree, base, True)
+        cases = {"empty": None, "dotfile": ".gitkeep",
+                 "stray file": "notes.txt", "subdirectory": "nested/",
+                 "source": "OSDB-0001-a.org"}
+        found = {"absent": has_org_sources(str(base / "absent"))}
+        for case, entry in cases.items():
+            root = base / case
+            root.mkdir()
+            if entry is not None and entry.endswith("/"):
+                (root / entry).mkdir()
+            elif entry is not None:
+                (root / entry).write_text("x\n", encoding="utf-8")
+            found[case] = has_org_sources(str(root))
+        self.assertEqual(found, {"absent": False, "empty": False,
+                                 "dotfile": False, "stray file": True,
+                                 "subdirectory": True, "source": True})
 
 
 class MissingToolTests(ProgramTestCase):

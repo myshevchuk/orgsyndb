@@ -1,5 +1,6 @@
-# Runs the export integration tests on Emacs 29, the oldest Emacs the
-# export supports, as Ubuntu 24.04 ships it.
+# Runs the export integration tests and the ERT suite of
+# tools/osdb-org.el on Emacs 29, the oldest Emacs the export supports, as
+# Ubuntu 24.04 ships it.
 name: Emacs 29 export
 
 on:
@@ -24,4 +25,4 @@ jobs:
       # The first export clones ox-hugo and tomelr; without them the
       # integration tests would skip.
       - run: tools/orgsyndb -C examples/demo export
-      - run: python -m pytest tests/test_export_integration.py
+      - run: python -m pytest tests/test_export_integration.py tests/test_elisp.py

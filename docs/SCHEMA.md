@@ -2,7 +2,7 @@
 
 This reference defines a valid OrgSynDB procedure. Use it to look up the
 exact spelling, type, and rule for a field, or to interpret a message from
-`tools/validate.py`.
+`tools/validate.py` or `orgsyndb export`.
 
 A German version of this reference is [SCHEMA.de.md](SCHEMA.de.md).
 
@@ -152,8 +152,8 @@ produces a warning under its dotted name, such as `product.colour`.
 
 ## Org file-level keywords
 
-An Org procedure must contain each of these file-level keywords exactly
-once. Keyword names are case-insensitive.
+`orgsyndb export` checks that an Org procedure contains each of these
+file-level keywords exactly once. Keyword names are case-insensitive.
 
 | Org keyword | Required value | Exported front matter |
 |---|---|---|
@@ -185,11 +185,23 @@ and `#+HUGO_TAGS` to `tags`. Repeated
 `#+HUGO_CUSTOM_FRONT_MATTER` lines supply the other schema fields. The
 export must not contain an `author` key.
 
-When both content roots and Org roots are passed to the validator, each
-`X.org` must have an `X.md` export with the same file-name stem. The
-validator cross-checks `#+CREATED`, `#+LAST_MODIFIED`, and `#+AI_MODEL`
-against `date`, `lastmod`, and `ai_model` in that export. With only Org
-roots, it performs the Org checks without looking for exports.
+An Org source must not set `date`, `lastmod`, `ai_model`, or the export file
+name through another ox-hugo input. `orgsyndb export` rejects the keywords
+`#+DATE`, `#+HUGO_LASTMOD`, `#+HUGO_AUTO_SET_LASTMOD`,
+`#+HUGO_FRONT_MATTER_KEY_REPLACE`, `#+EXPORT_FILE_NAME`,
+`#+HUGO_BASE_DIR`, `#+HUGO_BASE_CONTENT_FOLDER`, `#+HUGO_SECTION`,
+`#+HUGO_BUNDLE`, `#+SETUPFILE`, and `#+INCLUDE`; custom front-matter keys
+`:date`, `:lastmod`, and `:ai_model`; `#+PROPERTY` or drawer properties
+named `EXPORT_*` or `LOG_INTO_DRAWER`; a `:LOGBOOK:` drawer; and the
+source-block header argument `:front_matter_extra`. Lines
+inside `#+begin_` ... `#+end_` blocks are ignored. The general error is
+`must not be used; the export sets date, lastmod, ai_model and the export
+file name itself`. A `#+PROPERTY` error is `must not set <NAME>; the export
+sets date, lastmod, ai_model and the export file name itself`. The custom
+front-matter errors are `must not set :date; the export writes it from
+#+CREATED`, `must not set :lastmod; the export writes it from
+#+LAST_MODIFIED`, and `must not set :ai_model; the export writes it from
+#+AI_MODEL`.
 
 ## Reaction-type vocabulary
 
@@ -252,9 +264,8 @@ fits its headings better, so it may use either.
 In Markdown, write them as level-2 headings such as `## Summary`. In Org,
 write them as top-level headings such as `* Summary`. A missing Markdown
 section or sections in the wrong order produces a warning, not an error.
-For an Org procedure, the validator applies this body check to the exported
-Markdown. An Org-only run checks the source's file-level keywords and file
-name, but not its headings.
+`orgsyndb validate` applies this body check to the Markdown exported from an
+Org procedure. `tools/validate.py` does not read Org sources directly.
 
 Markdown matching is case-insensitive and ignores surrounding or repeated
 whitespace. It also accepts an exported trailing attribute such as
@@ -312,15 +323,14 @@ German site shows them with a comma.
 
 ## Reading validator output
 
-Run the validator with at least one Markdown content root or Org root:
+Run the validator with at least one Markdown content root:
 
 ```text
-tools/validate.py [--org-root DIR]... [--vocabulary FILE] [--static-dir DIR] [CONTENT_ROOT ...]
+tools/validate.py [--vocabulary FILE] [--static-dir DIR] CONTENT_ROOT...
 ```
 
 Each positional `CONTENT_ROOT` is a directory of Markdown procedures.
-Repeat `--org-root DIR` for multiple directories of Org sources. If omitted,
-`--vocabulary` defaults to the application's
+If omitted, `--vocabulary` defaults to the application's
 `site/data/reaction_types.toml`, resolved from the script's location rather
 than from the current directory, and `--static-dir` defaults to `static` in
 the current directory.
@@ -332,9 +342,13 @@ Each problem is one line on standard output:
 ```
 
 The field is normally a front-matter key. Product fields use dotted names,
-such as `product.mw`. Org keyword fields include `#+`, such as
-`#+CREATED`. The other possible fields are `file_name`, `front_matter`, and
-`body`.
+such as `product.mw`. The other possible fields are `file_name`,
+`front_matter`, and `body`.
+
+`orgsyndb export` prints Org-source problems on standard output in the same
+line format. Its fields can also be Org keywords such as `#+CREATED`,
+properties such as `#+PROPERTY` or `:EXPORT_DATE:`, and drawers such as
+`:LOGBOOK:`.
 
 An `error` means the procedure is invalid. A `warning` identifies a problem
 that does not make validation fail, such as a missing body section or an
@@ -345,7 +359,8 @@ standard error:
 validated 1 files: 1 errors, 0 warnings
 ```
 
-These are real lines produced from the validator fixtures:
+The first two lines below are real validator output. The last is the same
+line form produced by `orgsyndb export` for an Org source:
 
 ```text
 tests/fixtures/invalid/yield-out-of-range/OSDB-0110-yield-out-of-range.md:yield_percent: error: 104.5 must be between 0 and 100

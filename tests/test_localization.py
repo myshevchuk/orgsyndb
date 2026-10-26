@@ -204,22 +204,6 @@ class TranslatedFileTests(ValidatorTestCase):
         self.assert_clean(run({"OSDB-0100-baseline.md": baseline(
             replace("scale", 'scale = "2,5 mmol"'))}))
 
-    def test_german_org_source_and_its_export(self) -> None:
-        """Scenario: A German Org source is exported under its own name."""
-        with tempfile.TemporaryDirectory() as tmp:
-            org = Path(tmp) / "org"
-            org.mkdir()
-            text = (REPO / "templates" / "procedure.de.org").read_text(
-                encoding="utf-8").replace("OSDB-0000", "OSDB-0001")
-            (org / "OSDB-0001-produkt.de.org").write_text(
-                text, encoding="utf-8")
-            self.assert_clean(fixture_run(org_roots=[org]))
-            export = Path(tmp) / "export"
-            export.mkdir()
-            result = fixture_run(export, org_roots=[org])
-        self.assert_one(result, "error", "file_name",
-                        "no exported content file OSDB-0001-produkt.de.md")
-
     def test_empty_german_label_is_a_configuration_error(self) -> None:
         """Scenario: Vocabulary with German labels."""
         with tempfile.TemporaryDirectory() as tmp:
@@ -246,9 +230,6 @@ class GermanStubTests(unittest.TestCase):
         self.assertIn("#+TITLE: Größe Säure\n", text)
         self.assertIn("#+CREATED: [2026-10-19 Mon 17:42:05]\n", text)
         self.assertIn("* Zusammenfassung\n", text)
-        checked = support.run_validator(["--org-root", stub.parent])
-        self.assertEqual((checked.returncode, checked.stdout), (0, ""),
-                         checked.stderr)
 
         result = new(root, "Ölsäure", md=True, lang="de")
         self.assertEqual(result.returncode, 0, result.stderr)

@@ -73,22 +73,20 @@ def run_validator(args: Sequence[str | Path],
     return Result(done.returncode, stdout, done.stderr, problems)
 
 
-def fixture_run(*roots: str, org_roots: Sequence[str | Path] = (),
+def fixture_run(*roots: str | Path,
                 extra: Sequence[str | Path] = ()) -> Result:
     """Fixture run: roots are relative to tests/fixtures/ unless absolute."""
     args: list[str | Path] = [
         "--vocabulary", VOCABULARY, "--static-dir", STATIC_DIR,
     ]
-    for org_root in org_roots:
-        args += ["--org-root", FIXTURES / org_root]
     args += extra
     args += [FIXTURES / root for root in roots]
     return run_validator(args)
 
 
 def valid_set_run() -> Result:
-    """Fixture run on valid/md and valid/export, Org root valid/org."""
-    return fixture_run("valid/md", "valid/export", org_roots=["valid/org"])
+    """Fixture run on valid/md and valid/export."""
+    return fixture_run("valid/md", "valid/export")
 
 
 # Textual edits on the baseline. Each takes and returns the full text.

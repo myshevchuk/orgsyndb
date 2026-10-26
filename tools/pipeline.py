@@ -1,16 +1,17 @@
 """Testable logic behind tools/orgsyndb.
 
-The export plan and its timestamp rule, the recoverable replacement of
+The Org source names the export needs, the recoverable replacement of
 ``build/export/``, next-ID allocation, slugs, template filling, the Hugo
-overlay, PDF jobs and the Pagefind download. File discovery and Org
-timestamp parsing come from ``validate.py`` in the same directory.
-Messages printed to stderr name the program ``orgsyndb``.
+overlay, PDF jobs and the Pagefind download. File discovery comes from
+``validate.py`` in the same directory. No Org source is read here: of
+``org/procedures/`` only the entry names are, and Emacs examines and
+exports the sources. Messages printed to stderr name the program
+``orgsyndb``.
 """
 
 import datetime as dt
 import functools
 import hashlib
-import json
 import os
 import re
 import shutil
@@ -37,7 +38,6 @@ SOURCE_TREES = ("org/procedures", "md/procedures")
 EXPORT = "export"
 STAGING = ".export-staging"
 PREVIOUS = ".export-previous"
-PLAN_NAME = "export-plan.json"
 # The procedures Hugo publishes, one variant per ID, under build/.
 STAGED = Path("content") / "procedures"
 
@@ -150,26 +150,6 @@ def rfc3339(moment: dt.datetime) -> str:
     local = _berlin_local(moment)
     offset = validate.format_offset(local.utcoffset() or dt.timedelta())
     return f"{local:%Y-%m-%dT%H:%M:%S}{offset}"
-
-
-def export_instants(created: Sequence[dt.datetime],
-                    last_modified: Sequence[dt.datetime]
-                    ) -> tuple[dt.datetime, dt.datetime]:
-    """Choose the exported ``(date, lastmod)`` from the named instants.
-
-    Both arguments are non-empty lists of aware instants. ``date`` is the
-    earliest of ``created``. ``lastmod`` is the earliest of
-    ``last_modified`` not earlier than ``date``, or the latest of
-    ``last_modified`` when there is none.
-    """
-    def instant(moment: dt.datetime) -> dt.datetime:
-        return moment.astimezone(dt.UTC)
-
-    date = min(created, key=instant)
-    later = [m for m in last_modified if instant(m) >= instant(date)]
-    lastmod = (min(later, key=instant) if later
-               else max(last_modified, key=instant))
-    return date, lastmod
 
 
 def toml_string(value: str) -> str:
@@ -350,15 +330,16 @@ def replace_export(build: Path, rename: Rename = os.rename,
                   "the next export removes it", file=sys.stderr)
 
 
-def check_staging(build: Path, plan: Sequence[dict[str, Any]]) -> None:
-    """Check that the staging directory holds exactly the planned files.
+def check_staging(build: Path, stems: Iterable[str]) -> None:
+    """Check that the staging directory holds exactly ``<stem>.md`` for
+    each of ``stems``.
 
     Raises ExportError naming the missing and unexpected entries.
     """
     staging = Path(build) / STAGING
     if not staging.is_dir():
         raise ExportError(f"{staging} does not exist")
-    expected = {f"{entry['stem']}.md" for entry in plan}
+    expected = {f"{stem}.md" for stem in stems}
     present = {path.name for path in staging.iterdir()}
     missing, extra = sorted(expected - present), sorted(present - expected)
     if missing or extra:
@@ -367,53 +348,47 @@ def check_staging(build: Path, plan: Sequence[dict[str, Any]]) -> None:
             details.append("missing " + ", ".join(missing))
         if extra:
             details.append("unexpected " + ", ".join(extra))
-        raise ExportError(f"{staging} does not hold the planned files: "
-                          + "; ".join(details))
+        raise ExportError(f"{staging} does not hold one export per Org "
+                          "source: " + "; ".join(details))
 
 
 def has_org_sources(org_root: str) -> bool:
-    """Whether ``org_root`` holds a file the validator examines as an Org
-    procedure. A missing ``org_root`` holds none."""
-    return os.path.isdir(org_root) and any(
-        entry.problem is None
-        for entry in validate.discover(org_root, ".org"))
+    """Whether the directory ``org_root`` has an entry that the export
+    exports or reports: one that ``validate.discover`` returns, with or
+    without a problem. A missing ``org_root``, or one that is not a
+    directory, has none. Only entry names are read."""
+    return os.path.isdir(org_root) and bool(
+        validate.discover(org_root, ".org"))
 
 
-def plan_export(org_root: str) -> tuple[list[dict[str, Any]],
-                                        list[tuple[str, validate.Problem]]]:
-    """Plan the export of the Org procedures in ``org_root``.
+def org_stems(org_root: str) -> list[str]:
+    """Return, sorted, the stems of the Org sources in ``org_root``: the
+    names without ``.org`` of the entries that ``validate.discover``
+    returns without a problem. A missing ``org_root`` has none. Only
+    entry names are read."""
+    if not os.path.isdir(org_root):
+        return []
+    return sorted(entry.name.removesuffix(".org")
+                  for entry in validate.discover(org_root, ".org")
+                  if entry.problem is None)
 
-    Returns the plan entries, sorted by file name, and the lint problems
-    found, as ``(path, problem)`` pairs. Only entries that
-    ``validate.discover`` returns without a problem are planned. A
-    missing ``org_root`` gives an empty plan.
-    """
-    if not os.path.exists(org_root):
-        return [], []
-    plan: list[dict[str, Any]] = []
-    problems: list[tuple[str, validate.Problem]] = []
-    for entry in validate.discover(org_root, ".org"):
-        if entry.problem is not None:
-            continue
-        text = validate.read_text(entry.path)
-        if isinstance(text, validate.Problem):
-            problems.append((entry.path, text))
-            continue
-        found, source = validate.lint_org(text, berlin())
-        if found or source.created is None or source.last_modified is None:
-            problems += [(entry.path, problem) for problem in found]
-            continue
-        date, lastmod = export_instants(source.created,
-                                        source.last_modified)
-        plan.append({
-            "source": os.path.abspath(entry.path),
-            "stem": entry.name.removesuffix(".org"),
-            "date": rfc3339(date),
-            "lastmod": rfc3339(lastmod),
-            "ai_model": (None if source.ai_model == "none"
-                         else source.ai_model),
-        })
-    return plan, problems
+
+# The field and severity of a problem line, after its path.
+ORG_ERROR_RE = re.compile(
+    r"(?:file_name|front_matter|#\+[A-Za-z_]+|:[^:\s]+:): error: ")
+
+
+def org_error_reported(report: str, paths: Iterable[str]) -> bool:
+    """Whether ``report``, the stdout of export.el, holds a problem line
+    with severity ``error``. A line counts only when it begins with one
+    of ``paths``, the longest that fits, followed by ``:``, a field and
+    ``: error: ``; a path may itself contain such text."""
+    ordered = sorted(paths, key=len, reverse=True)
+    for line in report.splitlines():
+        path = next((p for p in ordered if line.startswith(p + ":")), None)
+        if path is not None and ORG_ERROR_RE.match(line, len(path) + 1):
+            return True
+    return False
 
 
 # --------------------------------------------------------------------------
@@ -721,32 +696,11 @@ def render_pdfs(jobs: Sequence[PdfJob]) -> list[PdfJob]:
 
 
 # --------------------------------------------------------------------------
-# Export plans and procedure stubs
+# Procedure stubs
 
 
 class UsageError(Exception):
     """An argument of ``orgsyndb new`` is wrong; the program exits 2."""
-
-
-def write_export_plan(org_root: str, plan_path: Path
-                      ) -> list[dict[str, Any]] | None:
-    """Plan the export of ``org_root`` and write the plan to ``plan_path``.
-
-    Returns the plan. When the sources have lint problems, prints them to
-    stderr, deletes any old plan and returns None.
-    """
-    plan_path = Path(plan_path)
-    plan, problems = plan_export(org_root)
-    if problems:
-        plan_path.unlink(missing_ok=True)
-        for path, problem in sorted(problems, key=lambda p: p[0]):
-            print(f"{path}:{problem.field}: {problem.severity}: "
-                  f"{problem.message}", file=sys.stderr)
-        return None
-    plan_path.parent.mkdir(parents=True, exist_ok=True)
-    plan_path.write_text(json.dumps(plan, indent=2, ensure_ascii=False)
-                         + "\n", encoding="utf-8")
-    return plan
 
 
 def _new_title(words: Sequence[str]) -> str:

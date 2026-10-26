@@ -56,17 +56,6 @@ class MarkdownTemplateTests(ValidatorTestCase):
 
 
 class OrgTemplateTests(ValidatorTestCase):
-    def test_substituted_org_template_passes_the_lint(self) -> None:
-        """Scenario: Org template passes the Org lint."""
-        text = substituted(read_template(ORG_TEMPLATE))
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "org"
-            root.mkdir()
-            (root / "OSDB-0001-template.org").write_text(
-                text, encoding="utf-8")
-            result = run_validator(["--org-root", root], cwd=Path(tmp))
-        self.assert_clean(result)
-
     def test_org_template_names_its_writing_model(self) -> None:
         """Scenario: Org template names its writing model."""
         text = read_template(ORG_TEMPLATE)

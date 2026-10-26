@@ -6,9 +6,11 @@
 """Validate OrgSynDB procedure files against the procedure schema.
 
 Content roots are directories of Markdown procedures with ``+++`` TOML
-front matter; Org roots are directories of Org procedure sources. Each
-problem is printed to stdout as ``<path>:<field>: <severity>: <message>``,
-followed by a summary line on stderr. The exit status is 0 when no error
+front matter, such as an ox-hugo export directory. The validator reads
+no Org source: an Org procedure reaches it only as its export, and the
+export checks the Org source itself. Each problem is printed to stdout
+as ``<path>:<field>: <severity>: <message>``, followed by a summary line
+on stderr. The exit status is 0 when no error
 was found, 1 when at least one was, and 2 on a usage or configuration
 error.
 """
@@ -58,7 +60,6 @@ SECTIONS = SECTIONS_BY_LANGUAGE[DEFAULT_LANGUAGE]
 SHARED_FIELDS = ("status", "reaction_types", "tags", "yield_percent",
                  "precursors", "structure_image", "product.formula",
                  "product.mw", "product.smiles", "product.cas")
-ORG_KEYWORDS = ("CREATED", "LAST_MODIFIED", "AI_MODEL")
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 ERROR = "error"
@@ -152,24 +153,6 @@ def zone_offset_mismatch(value: dt.datetime,
     if expected is None or expected == value.utcoffset():
         return None
     return format_offset(expected)
-
-
-def local_instants(wall: dt.datetime,
-                   zone: dt.tzinfo) -> list[dt.datetime]:
-    """Return the instants a naive wall-clock time names in ``zone``.
-
-    The result is empty for a time skipped by a forward clock change,
-    holds two aware datetimes for a time repeated by a backward change,
-    and one otherwise. Datetimes are ordered from earliest to latest.
-    """
-    found: list[dt.datetime] = []
-    for fold in (0, 1):
-        aware = wall.replace(tzinfo=zone, fold=fold)
-        back = aware.astimezone(dt.UTC).astimezone(zone)
-        if back.replace(tzinfo=None) == wall and all(
-                aware.utcoffset() != f.utcoffset() for f in found):
-            found.append(aware)
-    return sorted(found, key=lambda d: d.astimezone(dt.UTC))
 
 
 # --------------------------------------------------------------------------
@@ -665,160 +648,6 @@ def check_body(body: str, language: str | None = DEFAULT_LANGUAGE
 
 
 # --------------------------------------------------------------------------
-# Org sources
-
-ORG_KEYWORD_RE = re.compile(r"^[ \t]*#\+([A-Za-z_]+):(.*)$")
-ORG_BLOCK_BEGIN_RE = re.compile(r"^[ \t]*#\+begin_", re.I)
-ORG_BLOCK_END_RE = re.compile(r"^[ \t]*#\+end_", re.I)
-ORG_TIMESTAMP_RE = re.compile(
-    r"^([\[<])(\d{4})-(\d{2})-(\d{2}) ([^\s\]>]+) "
-    r"(\d{2}):(\d{2}):(\d{2})([\]>])$")
-ORG_FORM = "[YYYY-MM-DD Day hh:mm:ss]"
-
-
-def org_keywords(text: str) -> dict[str, list[str]]:
-    """Return the trimmed values of each Org keyword in ``text``.
-
-    Keyword names are upper-cased. Lines inside ``#+begin_``/``#+end_``
-    blocks are skipped.
-    """
-    found: dict[str, list[str]] = {}
-    in_block = False
-    for line in text.splitlines():
-        if in_block:
-            in_block = not ORG_BLOCK_END_RE.match(line)
-            continue
-        if ORG_BLOCK_BEGIN_RE.match(line):
-            in_block = True
-            continue
-        match = ORG_KEYWORD_RE.match(line)
-        if match:
-            found.setdefault(match.group(1).upper(), []).append(
-                match.group(2).strip())
-    return found
-
-
-def parse_org_timestamp(name: str, value: str,
-                        zone: dt.tzinfo) -> list[dt.datetime] | Problem:
-    """Parse an Org inactive timestamp in Berlin local time.
-
-    Returns the instants it names (one, or two in the autumn fall-back
-    hour), or the first problem found, reported under ``name``.
-    """
-    match = ORG_TIMESTAMP_RE.match(value)
-    if match is None or (match.group(1) == "[") != (match.group(9) == "]"):
-        return error(name, f'"{value}" must have the form {ORG_FORM}')
-    if match.group(1) == "<":
-        return error(name, f'"{value}" must be an inactive timestamp '
-                     f"in square brackets, {ORG_FORM}")
-    year, month, day, hour, minute, second = map(
-        int, match.group(2, 3, 4, 6, 7, 8))
-    try:
-        date = dt.date(year, month, day)
-    except ValueError:
-        return error(name, f'"{value}" is not a valid date')
-    try:
-        wall = dt.datetime.combine(date, dt.time(hour, minute, second))
-    except ValueError:
-        return error(name, f'"{value}" is not a valid time')
-    expected = WEEKDAYS[date.weekday()]
-    if match.group(5) != expected:
-        return error(name, f'weekday "{match.group(5)}" does not match '
-                     f"{date.isoformat()} ({expected})")
-    instants = local_instants(wall, zone)
-    if not instants:
-        return error(name, f'"{value}" does not exist in Europe/Berlin '
-                     "(skipped by the clock change)")
-    return instants
-
-
-class OrgSource(NamedTuple):
-    """What the Org lint learnt from one source, for the cross-check.
-
-    A timestamp is None when it is missing or invalid; ``ai_model`` is
-    None when the keyword is missing or invalid.
-    """
-
-    created: list[dt.datetime] | None
-    last_modified: list[dt.datetime] | None
-    ai_model: str | None
-
-
-def lint_org(text: str, zone: dt.tzinfo) -> tuple[list[Problem], OrgSource]:
-    """Lint the file-level keywords of one Org source.
-
-    Returns the problems found and the values usable by the cross-check.
-    """
-    keywords = org_keywords(text)
-    found: list[Problem] = []
-    values: dict[str, Any] = {}
-    for keyword in ORG_KEYWORDS:
-        name = f"#+{keyword}"
-        given = keywords.get(keyword, [])
-        if not given:
-            found.append(error(name, "keyword missing"))
-            continue
-        if len(given) > 1:
-            found.append(error(name, "appears more than once"))
-            continue
-        if keyword == "AI_MODEL":
-            if given[0] == "none" or AI_MODEL_RE.match(given[0]):
-                values[keyword] = given[0]
-            else:
-                found.append(error(name, "must be a model identifier or "
-                                   "none"))
-            continue
-        parsed = parse_org_timestamp(name, given[0], zone)
-        if isinstance(parsed, Problem):
-            found.append(parsed)
-        else:
-            values[keyword] = parsed
-    created = values.get("CREATED")
-    last_modified = values.get("LAST_MODIFIED")
-    # Same-zone aware datetimes compare by wall time, ignoring fold.
-    if created and last_modified and created[0].astimezone(
-            dt.UTC) > last_modified[-1].astimezone(dt.UTC):
-        found.append(error("#+LAST_MODIFIED", "is earlier than #+CREATED"))
-    return found, OrgSource(created, last_modified, values.get("AI_MODEL"))
-
-
-def describe_instants(instants: Sequence[dt.datetime]) -> str:
-    """Join the ISO forms of ``instants`` with ``or``."""
-    return " or ".join(i.isoformat() for i in instants)
-
-
-def cross_check(source: OrgSource, data: dict[str, Any]) -> list[Problem]:
-    """Check an Org source's keywords against its export's front matter.
-
-    A keyword or exported field that is missing or invalid is skipped.
-    """
-    found: list[Problem] = []
-    pairs = (("#+CREATED", source.created, "date"),
-             ("#+LAST_MODIFIED", source.last_modified, "lastmod"))
-    for name, instants, key in pairs:
-        exported = data.get(key)
-        if instants is None or not is_offset_datetime(exported):
-            continue
-        if not any(exported.replace(tzinfo=None) == i.replace(tzinfo=None)
-                   and exported.utcoffset() == i.utcoffset()
-                   for i in instants):
-            found.append(error(
-                name, f"does not match exported {key} "
-                f"{exported.isoformat()} (expected "
-                f"{describe_instants(instants)})"))
-    if source.ai_model is not None:
-        exported = data.get("ai_model")
-        expected = None if source.ai_model == "none" else source.ai_model
-        if exported != expected:
-            shown = "no ai_model" if exported is None else repr(exported)
-            want = "no ai_model" if expected is None else repr(expected)
-            found.append(error(
-                "#+AI_MODEL", f"does not match exported ai_model: export "
-                f"has {shown}, expected {want}"))
-    return found
-
-
-# --------------------------------------------------------------------------
 # Cross-file checks
 
 
@@ -1053,13 +882,9 @@ def build_parser() -> argparse.ArgumentParser:
         "exits 0 (no errors), 1 (errors found) or 2 (usage or "
         "configuration error).")
     parser.add_argument(
-        "content_roots", nargs="*", metavar="CONTENT_ROOT",
+        "content_roots", nargs="+", metavar="CONTENT_ROOT",
         help="directory of procedure Markdown files with +++ TOML front "
-        "matter")
-    parser.add_argument(
-        "--org-root", action="append", default=[], metavar="DIR",
-        help="directory of Org procedure sources (repeatable); with a "
-        "content root, each source is also checked against its export")
+        "matter, such as an export directory (at least one)")
     parser.add_argument(
         "--vocabulary", type=Path, default=DEFAULT_VOCABULARY,
         metavar="FILE",
@@ -1087,9 +912,8 @@ def report(problems: Iterable[tuple[str, Problem]], files: int) -> int:
     return 1 if errors else 0
 
 
-def run(content_roots: Sequence[str], org_roots: Sequence[str],
-        ctx: Context) -> int:
-    """Validate the given roots and report; return the exit status."""
+def run(content_roots: Sequence[str], ctx: Context) -> int:
+    """Validate the content roots and report; return the exit status."""
     problems: list[tuple[str, Problem]] = []
     content: list[ContentFile] = []
     for root in content_roots:
@@ -1099,35 +923,9 @@ def run(content_roots: Sequence[str], org_roots: Sequence[str],
             else:
                 content.append(examine_content(entry, ctx))
     check_cross_file(content)
-    exports: dict[str, ContentFile] = {}
     for item in content:
-        exports.setdefault(item.name.removesuffix(".md"), item)
         problems += [(item.path, p) for p in item.problems]
-    org_count = 0
-    for root in org_roots:
-        for entry in discover(root, ".org"):
-            if entry.problem is not None:
-                problems.append((entry.path, entry.problem))
-                continue
-            org_count += 1
-            text = read_text(entry.path)
-            if isinstance(text, Problem):
-                problems.append((entry.path, text))
-                continue
-            found = check_file_name(entry.name, ".org", None)
-            lint, source = lint_org(text, ctx.zone)
-            found += lint
-            if content_roots:
-                export = exports.get(entry.name.removesuffix(".org"))
-                if export is None:
-                    found.append(error(
-                        "file_name", "no exported content file "
-                        f"{entry.name.removesuffix('.org')}.md in any "
-                        "content root"))
-                elif export.data is not None:
-                    found += cross_check(source, export.data)
-            problems += [(entry.path, p) for p in found]
-    return report(problems, len(content) + org_count)
+    return report(problems, len(content))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1138,10 +936,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     """
     parser = build_parser()
     args = parser.parse_args(argv)
-    if not args.content_roots and not args.org_root:
-        parser.error("give at least one CONTENT_ROOT or --org-root")
     try:
-        for root in [*args.content_roots, *args.org_root]:
+        for root in args.content_roots:
             if not os.path.isdir(root):
                 raise ConfigError(f"{root} is not a directory")
         ctx = Context(load_vocabulary(args.vocabulary), args.static_dir,
@@ -1149,7 +945,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ConfigError as exc:
         print(f"validate.py: error: {exc}", file=sys.stderr)
         return 2
-    return run(args.content_roots, args.org_root, ctx)
+    return run(args.content_roots, ctx)
 
 
 if __name__ == "__main__":

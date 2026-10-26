@@ -7,6 +7,8 @@
 #+STARTUP: showall
 #+AI_PASS: doc-writer gpt-5.6-sol [2026-10-24 Sat 11:14] -- Stil und Glossar
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-24 Sat 11:16] -- doc-writer pass line corrected from gpt-5 to the pinned run model
+#+AI_PASS: doc-writer gpt-5.6-sol [2026-10-26 Mon 11:44] -- Exportieren, prüfen und ansehen
+#+AI_PASS: fact-check claude-opus-5-5 [2026-10-26 Mon 12:05] -- doc-writer pass line corrected from gpt-6.1-sol to the pinned run model
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
@@ -269,13 +271,29 @@ bleiben auch in einer deutschen Vorschrift englisch.
   orgsyndb export
 #+end_src
 
+  Vor dem Export prüft der Befehl die Org-Dateinamen, die nötigen
+  Schlüsselwörter auf Dateiebene und Wege, über die sich die exportierten
+  Datumsangaben, das KI-Modell oder der Dateiname setzen ließen. Jedes
+  Problem erscheint als ~<pfad>:<feld>: error|warning: <meldung>~, also in
+  derselben Zeilenform wie beim Validator. Ein Fehler bricht den Export ab
+  und lässt ~build/export/~ unverändert.
+
   Der Export startet Emacs in einer abgeschotteten Batch-Umgebung. Er lädt
   und schreibt keine Emacs-Konfiguration der Nutzerin oder des Nutzers.
   Beim ersten Lauf holt er festgelegte Versionen von ox-hugo und tomelr in
   das ~.emacs-batch/~ der Anwendung. Das exportierte Markdown landet in
   ~build/export/~ der Sammlung, die Ausgabe von Emacs in
-  ~build/export.log~. Das Protokoll wird angezeigt, wenn der Export
-  scheitert.
+  ~build/export.log~.
+
+  Ein Fehler der Org-Prüfung, ein anderer Emacs-Fehler und ein
+  ~org/procedures~, das kein Verzeichnis ist, ergeben nacheinander diese
+  Meldungen. Im zweiten Fall zeigt der Befehl zuerst das Protokoll.
+
+#+begin_example
+  orgsyndb: error: the Org sources have errors; build/export/ is unchanged
+  orgsyndb: error: export failed; Emacs output is in build/export.log
+  orgsyndb: error: org/procedures is not a directory
+#+end_example
 
   Der Export behält das Sprachkürzel: aus ~OSDB-0001-x.de.org~ wird
   ~build/export/OSDB-0001-x.de.md~. Auf einer deutschen Website erscheint
@@ -293,17 +311,19 @@ bleiben auch in einer deutschen Vorschrift englisch.
   - Er wertet nie Quellcodeblöcke aus.
   - Er ignoriert dateilokale Variablen.
 
-  Prüfen Sie beide Quellformate und ihre Exporte mit:
+  Prüfen Sie die Org-Quellen und das gesamte exportierte oder von Hand
+  geschriebene Markdown mit:
 
 #+begin_src sh
   orgsyndb validate
 #+end_src
 
-  Die Meldungen des Validators haben die Form
-  ~pfad:feld: error|warning: meldung~ und sind englisch. Fehler lassen die
-  Prüfung scheitern, Warnungen nicht. Meldet der Validator für eine
-  deutsche Datei ~missing section "Summary"~, fehlt ihrem Namen das ~.de~.
-  Die Schema-Referenz erklärt jedes Feld und die Rückgabewerte.
+  ~orgsyndb validate~ führt zuerst den Export aus. Meldet dieser einen
+  Org-Fehler, endet die Prüfung dort und startet den Markdown-Validator
+  nicht. Sonst lassen Fehler die Prüfung scheitern, Warnungen nicht. Die
+  Meldungen sind englisch. Meldet der Validator für eine deutsche Datei
+  ~missing section "Summary"~, fehlt ihrem Namen das ~.de~. Die
+  Schema-Referenz erklärt jedes Feld und die Rückgabewerte.
 
   Bauen und betrachten Sie die Website mit:
 

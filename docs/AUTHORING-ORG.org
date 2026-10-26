@@ -11,6 +11,8 @@
 #+AI_PASS: doc-writer claude-opus-5-5 [2026-10-22 Thu 21:47] -- one site language and procedure variants
 #+AI_PASS: doc-writer gpt-5.6-sol [2026-10-24 Sat 11:14] -- style and glossary
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-24 Sat 11:16] -- doc-writer pass line corrected from gpt-5 to the pinned run model
+#+AI_PASS: doc-writer gpt-5.6-sol [2026-10-26 Mon 11:44] -- Export, validate, and preview
+#+AI_PASS: fact-check claude-opus-5-5 [2026-10-26 Mon 12:05] -- doc-writer pass line corrected from gpt-6.1-sol to the pinned run model
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -194,12 +196,27 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   orgsyndb export
 #+end_src
 
+  Before exporting anything, the command checks Org file names, the required
+  file-level keywords, and routes that could set the exported dates, AI
+  model, or file name. It reports each problem as
+  ~<path>:<field>: error|warning: <message>~, the same line format as the
+  validator. An error stops the export and leaves ~build/export/~ unchanged.
+
   Export runs Emacs in an isolated batch environment. It does not load or
   write the owner's Emacs configuration. On the first run it fetches pinned
   copies of ox-hugo and tomelr into the application's ~.emacs-batch/~.
   Exported Markdown goes to the collection's ~build/export/~, and Emacs
-  output goes to ~build/export.log~. The log is
-  printed when export fails.
+  output goes to ~build/export.log~.
+
+  An Org check error, another Emacs failure, and an ~org/procedures~ that is
+  not a directory produce these messages, respectively. For the second
+  case, the command prints the log first.
+
+#+begin_example
+  orgsyndb: error: the Org sources have errors; build/export/ is unchanged
+  orgsyndb: error: export failed; Emacs output is in build/export.log
+  orgsyndb: error: org/procedures is not a directory
+#+end_example
 
   Org files remain the source of truth. Do not edit ~build/export/~. Each
   export rebuilds the complete directory, removes orphaned exports, and
@@ -213,15 +230,16 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   - It never evaluates source blocks.
   - It ignores file-local variables.
 
-  Check both source formats and their exports with:
+  Check the Org sources and all exported or hand-written Markdown with:
 
 #+begin_src sh
   orgsyndb validate
 #+end_src
 
-  Validator messages have the form ~path:field: error|warning: message~.
-  Errors fail validation; warnings do not. The schema explains every field
-  and the validator's exit statuses.
+  ~orgsyndb validate~ runs the export first. If the export reports an Org
+  error, validation stops there and does not start the Markdown validator.
+  Otherwise, errors fail validation and warnings do not. The schema explains
+  every field and the validator's exit statuses.
 
   Build and preview the site with:
 

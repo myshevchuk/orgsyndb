@@ -47,6 +47,7 @@ COLLECTION_DIRS = ("org/procedures", "md/procedures", "static/structures")
 OUTPUTS = ("build", "public", "pdf")
 APP_CACHES = (".emacs-batch", ".tools")
 CONTENT_ROOTS = ("build/export", "md/procedures")
+ORG_ROOT = "org/procedures"
 
 REQUIRED_TOOLS = ("python3", "hugo", "weasyprint")
 ORG_TOOLS = ("emacs", "git")
@@ -61,7 +62,8 @@ Options:
                       directory upwards
 
 Subcommands:
-  export              export org/procedures/*.org to build/export/
+  export              check org/procedures/*.org, printing each problem,
+                      and export them to build/export/
   validate            export, then validate every procedure
   build               export, validate, build the site into public/ and
                       index it with Pagefind
@@ -184,51 +186,64 @@ def bootstrapped() -> bool:
 
 
 def run_export() -> None:
+    """Export org/procedures/ into a fresh build/export/.
+
+    Emacs examines and exports the Org sources. Its stdout, which holds
+    only the problem lines of the sources, is copied to stdout; both of
+    its streams go to build/export.log. Raises Failure, leaving
+    build/export/ unchanged, when org/procedures is not a directory,
+    when the sources have an error, or when Emacs fails otherwise.
+    """
     build = Path("build")
+    org_root = Path(ORG_ROOT)
     step("export: recovering build/export/")
     pipeline.recover_export(build)
-    step("export: planning org/procedures/")
-    plan_path = build / pipeline.PLAN_NAME
-    plan = pipeline.write_export_plan("org/procedures", plan_path)
-    if plan is None:
-        raise Failure("the Org sources have errors; build/export/ is "
-                      "unchanged")
+    if org_root.exists() and not org_root.is_dir():
+        raise Failure(f"{ORG_ROOT} is not a directory")
     staging = build / pipeline.STAGING
     staging.mkdir(parents=True, exist_ok=True)
-    if not plan:
+    if not pipeline.has_org_sources(ORG_ROOT):
         step("export: no Org sources; Emacs is not needed")
-        install_export(build, plan)
+        install_export(build)
         return
     if bootstrapped():
-        step("export: running ox-hugo")
+        step(f"export: checking {ORG_ROOT}/ and running ox-hugo")
     else:
-        step("export: installing ox-hugo and tomelr into the application's "
-             ".emacs-batch/ (first run, needs network)")
+        step(f"export: checking {ORG_ROOT}/, then installing ox-hugo and "
+             "tomelr into the application's .emacs-batch/ (first run, "
+             "needs network)")
     log = build / "export.log"
     sys.stdout.flush()
-    with open(log, "w", encoding="utf-8") as handle:
-        done = subprocess.run(
-            ["emacs", "-Q", "--batch", "-l", str(APP / "tools" / "export.el"),
-             str(plan_path), str(staging)],
-            stdout=handle, stderr=subprocess.STDOUT)
+    done = subprocess.run(
+        ["emacs", "-Q", "--batch", "-l", str(APP / "tools" / "export.el"),
+         ORG_ROOT, str(staging)], capture_output=True)
+    log.write_bytes(done.stdout + done.stderr)
+    # Decoded by hand: text mode would turn a CR inside a line into a
+    # line break.
+    report = done.stdout.decode("utf-8", errors="replace")
+    sys.stdout.write(report)
+    sys.stdout.flush()
     if done.returncode != 0:
+        paths = [entry.path for entry in validate.discover(ORG_ROOT, ".org")]
+        if pipeline.org_error_reported(report, paths):
+            raise Failure("the Org sources have errors; build/export/ is "
+                          "unchanged")
         sys.stderr.write(log.read_text(encoding="utf-8", errors="replace"))
         raise Failure(f"export failed; Emacs output is in {log}")
-    install_export(build, plan)
+    install_export(build)
 
 
-def install_export(build: Path, plan: list[dict]) -> None:
+def install_export(build: Path) -> None:
+    """Install the staging directory, which must hold one export per Org
+    source, as build/export/."""
     step("export: installing build/export/")
-    pipeline.check_staging(build, plan)
+    pipeline.check_staging(build, pipeline.org_stems(ORG_ROOT))
     pipeline.replace_export(build)
 
 
 def run_validator() -> int:
-    step("validate: " + ", ".join(existing(["org/procedures",
-                                            *CONTENT_ROOTS])))
-    org = (["--org-root", "org/procedures"]
-           if Path("org/procedures").is_dir() else [])
-    status = validate.main([*org, "--static-dir", "static",
+    step("validate: " + ", ".join(existing(CONTENT_ROOTS)))
+    status = validate.main(["--static-dir", "static",
                             *existing(CONTENT_ROOTS)])
     sys.stdout.flush()
     sys.stderr.flush()
@@ -271,7 +286,7 @@ def no_arguments(name: str, args: Sequence[str]) -> None:
 
 def export_tools() -> tuple[str, ...]:
     """The tools the export needs in the current collection."""
-    return ORG_TOOLS if pipeline.has_org_sources("org/procedures") else ()
+    return ORG_TOOLS if pipeline.has_org_sources(ORG_ROOT) else ()
 
 
 def cmd_export(option: str | None, args: Sequence[str]) -> int:

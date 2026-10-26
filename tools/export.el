@@ -2,23 +2,29 @@
 
 ;;; Commentary:
 
-;; Usage: emacs -Q --batch -l tools/export.el PLAN_JSON STAGING_DIR
+;; Usage: emacs -Q --batch -l tools/export.el ORG_ROOT STAGING_DIR
 ;;
-;; Exports every entry of PLAN_JSON (written by `pipeline.write_export_plan')
-;; to STAGING_DIR/<stem>.md.  ox-hugo and tomelr are cloned with git into
+;; Examines the Org sources in the directory ORG_ROOT with osdb-org.el,
+;; beside this file, and prints each problem to stdout as
+;; "<path>:<field>: <severity>: <message>"; nothing else goes to stdout.
+;; When any problem is an error, it exits 1 without installing, loading
+;; or exporting anything.  Otherwise it exports every source to
+;; STAGING_DIR/<stem>.md with the date, lastmod and ai_model that
+;; osdb-org.el chose.  ox-hugo and tomelr are cloned with git into
 ;; <app>/.emacs-batch/elpa/ at pinned commits on first use, and every run
-;; checks the installed checkouts against the pins.  Needs Emacs 29.1 or
-;; later; package.el is not used.  Temporary files go
-;; to tmp/ beside STAGING_DIR, the collection's build/tmp/.  Nothing is
-;; read from or written to the user's own Emacs directories or the
-;; inherited TMPDIR.  Exits 0 on success; on any error it prints
+;; that exports checks the installed checkouts against the pins.  Needs
+;; Emacs 29.1 or later; package.el is not used.  Temporary files go to
+;; tmp/ beside STAGING_DIR, the collection's build/tmp/.  Nothing is read
+;; from or written to the user's own Emacs directories or the inherited
+;; TMPDIR.  Exits 0 on success; on any other error it prints
 ;; "export.el: <source>: <message>" (or "export.el: error: <message>"
-;; when no source is involved) and exits 1.
+;; when no source is involved) to stderr and exits 1.
 
 ;;; Code:
 
-;; Isolation.  These must be set before Org is loaded: org-persist
-;; creates its directory in `temporary-file-directory' when Org loads.
+;; Isolation.  These must be set before Org or osdb-org.el is loaded:
+;; org-persist creates its directory in `temporary-file-directory' when
+;; Org loads.
 
 (defconst osdb-app
   (file-name-directory
@@ -36,7 +42,7 @@ Emacs %s" emacs-version)
 
 (unless (= (length command-line-args-left) 2)
   (message "export.el: error: usage: emacs -Q --batch -l tools/export.el \
-PLAN_JSON STAGING_DIR")
+ORG_ROOT STAGING_DIR")
   (kill-emacs 1))
 
 (defconst osdb-tmp-dir
@@ -67,6 +73,27 @@ PLAN_JSON STAGING_DIR")
 
 (setq enable-local-variables nil)
 (prefer-coding-system 'utf-8-unix)
+
+;; By file name, so that `load-path' stays as it is.
+(require 'osdb-org (expand-file-name
+                    "osdb-org"
+                    (file-name-directory
+                     (or load-file-name
+                         (bound-and-true-p byte-compile-current-file)))))
+
+;; Org, ox-hugo and tomelr load in `osdb-setup', after the Org sources
+;; have been examined; their options are bound dynamically.
+(defvar org-export-coding-system)
+(defvar org-export-use-babel)
+(defvar org-export-with-author)
+(defvar org-export-with-sub-superscripts)
+(defvar org-html-with-latex)
+(defvar org-hugo-auto-set-lastmod)
+(defvar org-hugo-base-dir)
+(defvar org-hugo-content-folder)
+(defvar org-hugo-section)
+(declare-function org-hugo-export-to-md "ox-hugo")
+(declare-function tomelr-toml-table-p "tomelr")
 
 (defconst osdb-pins
   '((tomelr "https://github.com/kaushalmodi/tomelr"
@@ -145,68 +172,86 @@ after all plain keys."
         org-hugo-auto-set-lastmod nil
         org-export-coding-system 'utf-8-unix))
 
-(defun osdb-read-plan (file)
-  "Return the entries of the JSON export plan FILE as alists."
-  (with-temp-buffer
-    (let ((coding-system-for-read 'utf-8))
-      (insert-file-contents file))
-    (json-parse-buffer :object-type 'alist :array-type 'list
-                       :null-object nil :false-object nil)))
+(defun osdb-export-source (source staging)
+  "Export SOURCE to STAGING/<stem>.md and return the file name.
+SOURCE is a plist of `osdb-org-examine'."
+  (let ((file (plist-get source :path))
+        (stem (plist-get source :stem))
+        (ai-model (plist-get source :ai-model))
+        (org-hugo-base-dir (file-name-directory
+                            (directory-file-name staging)))
+        (org-hugo-content-folder (file-name-nondirectory
+                                  (directory-file-name staging)))
+        (org-hugo-section "."))
+    (with-temp-buffer
+      (setq default-directory (file-name-directory file))
+      (let ((coding-system-for-read 'utf-8-auto))
+        (insert-file-contents file))
+      (org-mode)
+      (goto-char (point-min))
+      ;; Org replaces the extension of the export file name, so a
+      ;; bare stem such as OSDB-0001-x.de would lose its language code.
+      (insert "#+DATE: " (plist-get source :date) "\n"
+              "#+HUGO_LASTMOD: " (plist-get source :lastmod) "\n"
+              "#+EXPORT_FILE_NAME: " stem ".md\n")
+      (when ai-model
+        (insert "#+HUGO_CUSTOM_FRONT_MATTER: :ai_model "
+                (prin1-to-string ai-model) "\n"))
+      ;; ox-hugo takes the date from the CLOSED line of the heading at
+      ;; point; at the buffer start there is none.
+      (goto-char (point-min))
+      ;; Org draws reference IDs from `random'; seeding it with the
+      ;; stem makes the anchors a function of this file alone.
+      (random stem)
+      (org-hugo-export-to-md))))
 
-(defun osdb-export-entry (entry staging)
-  "Export plan ENTRY to STAGING/<stem>.md and return the file name."
-  (let-alist entry
-    (let ((org-hugo-base-dir (file-name-directory
-                              (directory-file-name staging)))
-          (org-hugo-content-folder (file-name-nondirectory
-                                    (directory-file-name staging)))
-          (org-hugo-section "."))
-      (with-temp-buffer
-        (setq default-directory (file-name-directory .source))
-        (let ((coding-system-for-read 'utf-8))
-          (insert-file-contents .source))
-        (org-mode)
-        (goto-char (point-min))
-        ;; Org replaces the extension of the export file name, so a
-        ;; bare stem such as OSDB-0001-x.de would lose its language code.
-        (insert "#+DATE: " .date "\n"
-                "#+HUGO_LASTMOD: " .lastmod "\n"
-                "#+EXPORT_FILE_NAME: " .stem ".md\n")
-        (when .ai_model
-          (insert "#+HUGO_CUSTOM_FRONT_MATTER: :ai_model "
-                  (prin1-to-string .ai_model) "\n"))
-        ;; Org draws reference IDs from `random'; seeding it with the
-        ;; stem makes the anchors a function of this file alone.
-        (random .stem)
-        (org-hugo-export-to-md)))))
+(defun osdb-report (problems)
+  "Print PROBLEMS, (PATH . PROBLEM) pairs, to stdout, one line each.
+Return non-nil when any of them is an error."
+  (let ((errors nil))
+    (pcase-dolist (`(,path . ,problem) problems)
+      (princ (concat (osdb-org-problem-line path problem) "\n"))
+      (when (equal (nth 1 problem) "error")
+        (setq errors t)))
+    errors))
 
 (defun osdb-main (args)
-  "Export the plan named by ARGS, (PLAN_JSON STAGING_DIR), and exit.
+  "Examine and export the sources named by ARGS, (ORG_ROOT STAGING_DIR).
+Exit 1 when the zone is unknown, an argument is not a directory, the
+sources have an error, or a step of the export fails, and 0 otherwise.
 The argument count is checked when this file loads."
-  (let ((plan-file (expand-file-name (car args)))
+  (let ((org-root (car args))
         (staging (file-name-as-directory (expand-file-name (cadr args))))
         (count 0))
-    (condition-case err
-        (progn
-          (unless (file-directory-p staging)
-            (error "Staging directory %s does not exist" staging))
-          (osdb-bootstrap)
-          (osdb-setup))
-      (error (osdb-fail nil (error-message-string err))))
-    (dolist (entry (condition-case err
-                       (osdb-read-plan plan-file)
-                     (error (osdb-fail plan-file
-                                       (error-message-string err)))))
-      (let ((source (alist-get 'source entry)))
+    (unless (osdb-org-zone-available-p)
+      (osdb-fail nil (format "time zone %s is not available; install the \
+tz database (tzdata)" osdb-org-zone)))
+    (unless (file-directory-p org-root)
+      (osdb-fail nil (format "%s is not a directory" org-root)))
+    (unless (file-directory-p staging)
+      (osdb-fail nil (format "Staging directory %s does not exist" staging)))
+    (pcase-let ((`(,sources . ,problems) (osdb-org-examine org-root)))
+      (when (osdb-report problems)
+        (kill-emacs 1))
+      (unless sources
+        (message "export.el: no Org sources to export")
+        (kill-emacs 0))
+      (condition-case err
+          (progn
+            (osdb-bootstrap)
+            (osdb-setup))
+        (error (osdb-fail nil (error-message-string err))))
+      (dolist (source sources)
         (condition-case err
-            (let ((written (osdb-export-entry entry staging))
+            (let ((written (osdb-export-source source staging))
                   (expected (expand-file-name
-                             (concat (alist-get 'stem entry) ".md")
+                             (concat (plist-get source :stem) ".md")
                              staging)))
               (unless (file-equal-p written expected)
                 (error "Exported to %s instead of %s" written expected))
               (setq count (1+ count)))
-          (error (osdb-fail source (error-message-string err))))))
+          (error (osdb-fail (plist-get source :path)
+                            (error-message-string err))))))
     (message "export.el: exported %d files" count)
     (kill-emacs 0)))
 

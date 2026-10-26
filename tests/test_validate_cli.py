@@ -19,6 +19,14 @@ class CommandLineInterfaceTests(ValidatorTestCase):
         self.assertEqual(result.returncode, 2)
         self.assertNotEqual(result.stderr.strip(), "")
 
+    def test_org_root_option_is_refused(self) -> None:
+        """Scenario: Org root option is refused."""
+        result = run_validator(["--org-root", FIXTURES / "valid" / "org",
+                                FIXTURES / "valid" / "md"])
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("--org-root", result.stderr)
+        self.assertEqual(result.stdout, "")
+
     def test_root_that_is_not_a_directory_is_a_usage_error(self) -> None:
         """Scenario: Root is not a directory."""
         result = run_validator([FIXTURES / "does-not-exist"])
@@ -129,7 +137,7 @@ class ProblemReportFormatTests(ValidatorTestCase):
     def test_summary_line_goes_to_stderr(self) -> None:
         """Scenario: Summary line."""
         result = valid_set_run()
-        self.assertIn("validated 6 files: 0 errors, 0 warnings",
+        self.assertIn("validated 4 files: 0 errors, 0 warnings",
                       result.stderr)
 
     def test_identical_input_gives_byte_identical_output(self) -> None:
@@ -162,15 +170,6 @@ class FileDiscoveryTests(ValidatorTestCase):
     def test_subdirectory_in_content_root_is_an_error(self) -> None:
         """Scenario: Subdirectory in a content root."""
         result = fixture_run("invalid/subdirectory")
-        self.assert_one(result, "error", "file_name",
-                        "subdirectories are not supported",
-                        path_suffix="nested")
-
-    def test_subdirectory_in_org_root_is_an_error(self) -> None:
-        """Scenario: Subdirectory in an Org root."""
-        result = support.run_validator(
-            ["--vocabulary", support.VOCABULARY,
-             "--org-root", FIXTURES / "org-invalid/subdirectory/org"])
         self.assert_one(result, "error", "file_name",
                         "subdirectories are not supported",
                         path_suffix="nested")

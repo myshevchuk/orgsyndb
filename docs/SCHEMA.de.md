@@ -2,14 +2,15 @@
 
 Diese Referenz legt fest, was eine gültige OrgSynDB-Vorschrift ist. Schlagen
 Sie hier die genaue Schreibweise, den Typ und die Regel eines Feldes nach,
-oder die Bedeutung einer Meldung von `tools/validate.py`. Die englische
-Fassung ist [SCHEMA.md](SCHEMA.md); bei Abweichungen gilt sie.
+oder die Bedeutung einer Meldung von `tools/validate.py` oder dem Befehl
+`orgsyndb export`. Die englische Fassung ist [SCHEMA.md](SCHEMA.md); bei
+Abweichungen gilt sie.
 
 Feldnamen, Org-Schlüsselwörter, Statuswerte, Reaktionstyp-Kürzel,
-Schlagwörter und die Meldungen des Validators sind in jeder Sprache
-englisch. Deutsch sind die Texte einer deutschen Vorschrift, ihre
-Abschnittsüberschriften und die Spalten ihrer Reagenzientabelle, und auf
-einer deutschen Website die Oberfläche.
+Schlagwörter sowie die Meldungen des Validators und des Org-Exports sind in
+jeder Sprache englisch. Deutsch sind die Texte einer deutschen Vorschrift,
+ihre Abschnittsüberschriften und die Spalten ihrer Reagenzientabelle, und
+auf einer deutschen Website die Oberfläche.
 
 Eine Markdown-Vorschrift beginnt mit einem TOML-Datenblock (*Front
 Matter*), der zwischen einer öffnenden und einer schließenden `+++`-Zeile
@@ -163,8 +164,9 @@ ebenfalls eine Warnung, unter seinem Namen mit Punkt, etwa
 
 ## Org-Schlüsselwörter auf Dateiebene
 
-Eine Org-Vorschrift muss jedes dieser Schlüsselwörter genau einmal
-enthalten. Groß- und Kleinschreibung der Namen spielt keine Rolle.
+`orgsyndb export` prüft, dass eine Org-Vorschrift jedes dieser
+Schlüsselwörter genau einmal enthält. Groß- und Kleinschreibung der Namen
+spielt keine Rolle.
 
 | Org-Schlüsselwort | Wert | Exportierter Datenblock |
 |---|---|---|
@@ -198,12 +200,24 @@ Die Org-Vorlage bildet außerdem `#+TITLE` auf `title`, `#+HUGO_SLUG` auf
 `#+HUGO_CUSTOM_FRONT_MATTER`-Zeilen liefern die übrigen Felder. Der Export
 darf kein Feld `author` enthalten.
 
-Erhält der Validator sowohl Inhaltsverzeichnisse als auch Org-Verzeichnisse,
-muss es zu jeder `X.org` einen Export `X.md` mit demselben Namensstamm
-geben; zu `X.de.org` gehört also `X.de.md`. Der Validator vergleicht
-`#+CREATED`, `#+LAST_MODIFIED` und `#+AI_MODEL` mit `date`, `lastmod` und
-`ai_model` dieses Exports. Erhält er nur Org-Verzeichnisse, prüft er die
-Org-Regeln, ohne Exporte zu suchen.
+Eine Org-Quelle darf `date`, `lastmod`, `ai_model` oder den Dateinamen des
+Exports nicht über eine andere von ox-hugo gelesene Angabe setzen.
+`orgsyndb export` weist die Schlüsselwörter `#+DATE`, `#+HUGO_LASTMOD`,
+`#+HUGO_AUTO_SET_LASTMOD`, `#+HUGO_FRONT_MATTER_KEY_REPLACE`,
+`#+EXPORT_FILE_NAME`, `#+HUGO_BASE_DIR`, `#+HUGO_BASE_CONTENT_FOLDER`,
+`#+HUGO_SECTION`, `#+HUGO_BUNDLE`, `#+SETUPFILE` und `#+INCLUDE` zurück;
+ebenso die Schlüssel `:date`, `:lastmod` und `:ai_model` in
+`#+HUGO_CUSTOM_FRONT_MATTER`, `#+PROPERTY`- oder Schubladeneigenschaften
+namens `EXPORT_*` oder `LOG_INTO_DRAWER`, eine `:LOGBOOK:`-Schublade
+sowie das Kopfargument `:front_matter_extra` eines Quelltextblocks.
+Zeilen in `#+begin_`-...-`#+end_`-Blöcken werden ignoriert. Die allgemeine
+Fehlermeldung lautet `must not be used; the export sets date, lastmod,
+ai_model and the export file name itself`. Bei `#+PROPERTY` lautet sie
+`must not set <NAME>; the export sets date, lastmod, ai_model and the export
+file name itself`. Die Fehler für `#+HUGO_CUSTOM_FRONT_MATTER` lauten `must
+not set :date; the export writes it from #+CREATED`, `must not set
+:lastmod; the export writes it from #+LAST_MODIFIED` und `must not set
+:ai_model; the export writes it from #+AI_MODEL`.
 
 ## Reaktionstypen
 
@@ -259,10 +273,9 @@ passen; sie darf also beide verwenden.
 In Markdown sind das Überschriften der zweiten Ebene wie
 `## Zusammenfassung`, in Org Überschriften der obersten Ebene wie
 `* Zusammenfassung`. Ein fehlender Markdown-Abschnitt oder eine falsche
-Reihenfolge ergibt eine Warnung, keinen Fehler. Bei einer Org-Vorschrift
-wendet der Validator diese Prüfung auf das exportierte Markdown an. Eine
-Prüfung nur der Org-Verzeichnisse prüft Schlüsselwörter und Dateinamen,
-aber nicht die Überschriften.
+Reihenfolge ergibt eine Warnung, keinen Fehler. `orgsyndb validate` wendet
+diese Prüfung auf das aus einer Org-Vorschrift exportierte Markdown an.
+`tools/validate.py` liest Org-Quellen nicht direkt.
 
 Der Vergleich in Markdown ignoriert Groß- und Kleinschreibung sowie Leerraum
 am Rand oder mehrfachen Leerraum. Er akzeptiert auch ein exportiertes
@@ -326,19 +339,16 @@ deutsche Website zeigt sie mit Komma.
 
 ## Meldungen des Validators lesen
 
-Starten Sie den Validator mit mindestens einem Markdown- oder
-Org-Verzeichnis:
+Starten Sie den Validator mit mindestens einem Markdown-Verzeichnis:
 
 ```text
-tools/validate.py [--org-root DIR]... [--vocabulary FILE] [--static-dir DIR] [CONTENT_ROOT ...]
+tools/validate.py [--vocabulary FILE] [--static-dir DIR] CONTENT_ROOT...
 ```
 
 Jedes `CONTENT_ROOT` ist ein Verzeichnis mit Markdown-Vorschriften.
-Wiederholen Sie `--org-root DIR` für mehrere Verzeichnisse mit
-Org-Quellen. Ohne Angabe ist `--vocabulary` die Datei
-`site/data/reaction_types.toml` der Anwendung, ausgehend vom Ort des
-Skripts und nicht vom aktuellen Verzeichnis, und `--static-dir` ist
-`static` im aktuellen Verzeichnis.
+Ohne Angabe ist `--vocabulary` die Datei `site/data/reaction_types.toml` der
+Anwendung, ausgehend vom Ort des Skripts und nicht vom aktuellen
+Verzeichnis, und `--static-dir` ist `static` im aktuellen Verzeichnis.
 
 Jedes Problem ist eine Zeile auf der Standardausgabe:
 
@@ -347,9 +357,13 @@ Jedes Problem ist eine Zeile auf der Standardausgabe:
 ```
 
 Das Feld ist meist ein Feld des Datenblocks. Felder des Produkts haben
-Namen mit Punkt wie `product.mw`. Felder für Org-Schlüsselwörter beginnen
-mit `#+`, etwa `#+CREATED`. Weitere mögliche Felder sind `file_name`,
+Namen mit Punkt wie `product.mw`. Weitere mögliche Felder sind `file_name`,
 `front_matter` und `body`. Die Meldungen sind englisch.
+
+`orgsyndb export` schreibt Probleme der Org-Quellen in derselben Zeilenform
+auf die Standardausgabe. Seine Felder können auch Org-Schlüsselwörter wie
+`#+CREATED`, Eigenschaften wie `#+PROPERTY` oder `:EXPORT_DATE:` und
+Schubladen wie `:LOGBOOK:` sein.
 
 Ein `error` bedeutet, dass die Vorschrift ungültig ist. Eine `warning`
 bezeichnet ein Problem, das die Prüfung nicht scheitern lässt, etwa einen
@@ -360,7 +374,8 @@ schreibt der Validator eine Zusammenfassung auf die Standardfehlerausgabe:
 validated 1 files: 1 errors, 0 warnings
 ```
 
-Das sind echte Zeilen aus den Testdaten des Validators:
+Die ersten beiden Zeilen sind echte Ausgaben des Validators. Die letzte
+Zeile erzeugt `orgsyndb export` in derselben Form für eine Org-Quelle:
 
 ```text
 tests/fixtures/invalid/yield-out-of-range/OSDB-0110-yield-out-of-range.md:yield_percent: error: 104.5 must be between 0 and 100

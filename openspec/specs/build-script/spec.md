@@ -42,7 +42,7 @@ Define `tools/orgsyndb`, its subcommands and conventions, the stdlib pipeline he
 - **THEN** none ends in `.fish`, and none begins with a `#!` line naming `fish`
 
 ### Requirement: Missing tools stop a subcommand before its first step
-Each subcommand SHALL check, before its first step, every external tool it will need. A collection has Org sources when `org/procedures/` holds at least one entry that `validate.discover(org_root, ".org")` returns with no problem attached, the files the validator examines as Org procedures.
+Each subcommand SHALL check, before its first step, every external tool it will need. A collection has Org sources when `org/procedures/` holds at least one entry that `validate.discover(org_root, ".org")` returns, with or without a problem attached, that is, an entry that the export either exports or reports (org-export "Org sources and their problems"). `pipeline.has_org_sources(org_root)` makes this decision from the entry names alone.
 - `export`: `emacs` and `git` when the collection has Org sources, and no external tool otherwise. With Org sources, `git` is needed on every run, not only for the bootstrap, because every export checks the installed checkouts against their pins.
 - `validate`: what `export` needs.
 - `new`, `init`, `clean`, `check-deps` and `help`: no external tool. `git` is optional for `new`; without it `new` warns and scans the directories alone.
@@ -51,6 +51,10 @@ Each subcommand SHALL check, before its first step, every external tool it will 
 - `pdf`: what `build` needs, plus `weasyprint`.
 
 For a missing tool it prints `orgsyndb: error: <tool> not found; install it with: sudo dnf install <package>` and exits 1 without starting any step. It never invokes `sudo`. A subcommand that works on a collection finds the collection before it checks the tools, so a missing or malformed collection is reported whatever tools are installed.
+
+#### Scenario: Org sources by entry names
+- **WHEN** a test calls `has_org_sources` on a directory that does not exist, an empty directory, a directory holding only `.gitkeep`, one holding only `notes.txt`, one holding only a subdirectory `nested/`, and one holding only `OSDB-0001-a.org`
+- **THEN** it returns false, false, false, true, true and true
 
 #### Scenario: Hugo missing
 - **WHEN** a test runs `tools/orgsyndb -C <collection> build` on a copy of the test collection `tests/fixtures/collection/`, which has no Org sources, with a `PATH` that holds `python3` and a recording fake `sudo`, but not `hugo`
@@ -73,7 +77,7 @@ For a missing tool it prints `orgsyndb: error: <tool> not found; install it with
 - **THEN** it exits 1, stderr contains `orgsyndb.toml` and no `not found`, and the fake `sudo` was never invoked
 
 ### Requirement: validate subcommand
-`tools/orgsyndb validate` SHALL take no arguments. It runs `export`, then the validator with the arguments `--org-root org/procedures --static-dir static build/export md/procedures` and the collection as working directory, leaving out `--org-root org/procedures` and any content root whose directory does not exist. It prints the validator's stdout and stderr unchanged and exits with the validator's status. Any argument is a usage error; other directories are validated by running `tools/validate.py` directly.
+`tools/orgsyndb validate` SHALL take no arguments. It runs `export`, then the validator with the arguments `--static-dir static build/export md/procedures` and the collection as working directory, leaving out any content root whose directory does not exist. It prints the validator's stdout and stderr unchanged and exits with the validator's status. The problem lines of the Org sources come from the export step, on stdout, in the same form; when the Org sources have an error, `validate` stops there with exit 1 and the validator does not run. Any argument is a usage error; other directories are validated by running `tools/validate.py` directly.
 
 #### Scenario: Seeds validate
 - **WHEN** an integration test runs `tools/orgsyndb -C <collection> validate` on a copy of the test collection `tests/fixtures/collection/`
@@ -201,8 +205,7 @@ When `git` is unavailable or the collection is not inside a git work tree, `new`
 #### Scenario: Org stub
 - **WHEN** a test calls `new_procedure` on a temporary collection with empty trees for the Org title `Salicylic acid` at `2026-10-19T17:42:05+02:00`
 - **THEN** it returns `org/procedures/OSDB-0001-salicylic-acid.org`, and that file exists
-- **AND** it contains `#+TITLE: Salicylic acid`, `#+CREATED: [2026-10-19 Mon 17:42:05]`, `#+LAST_MODIFIED: [2026-10-19 Mon 17:42:05]`, `#+AI_MODEL: none` and `#+HUGO_SLUG: osdb-0001`, and no `OSDB-0000` or `osdb-0000`
-- **AND** `tools/validate.py --org-root` on its directory exits 0 and prints nothing to stdout
+- **AND** it contains the lines `#+TITLE: Salicylic acid`, `#+CREATED: [2026-10-19 Mon 17:42:05]`, `#+LAST_MODIFIED: [2026-10-19 Mon 17:42:05]`, `#+AI_MODEL: none` and `#+HUGO_SLUG: osdb-0001`, each exactly once, and no `OSDB-0000` or `osdb-0000`
 
 #### Scenario: Markdown stub with an AI model and a quoted title
 - **WHEN** a test calls `new_procedure` in an empty temporary collection for the Markdown title `Bob's "best" ester`, with `ai_model` `example-model-1`, at `2026-10-19T17:42:05+02:00`
@@ -249,7 +252,7 @@ It never installs anything and never invokes `sudo`.
 - **AND** stdout has the lines `optional emacs (not installed; only for Org procedures)` and `optional git (not installed; only for Org procedures)`
 
 ### Requirement: Pipeline helper module
-`tools/pipeline.py` SHALL be a Python 3.14 module that uses only the standard library, besides importing `validate` from its own directory, and it annotates every callable. It has no command-line interface: `tools/orgsyndb` imports it, and the messages it prints name the program `orgsyndb`. It exposes the functions `slugify`, `next_id`, `org_timestamp`, `rfc3339`, `export_instants`, `fill_template`, `write_export_plan`, `recover_export`, `replace_export`, `new_procedure`, `pdf_jobs`, `install_pagefind`, `ensure_pagefind`, `hugo_overlay` and `remove_tree`.
+`tools/pipeline.py` SHALL be a Python 3.14 module that uses only the standard library, besides importing `validate` from its own directory, and it annotates every callable. It has no command-line interface: `tools/orgsyndb` imports it, and the messages it prints name the program `orgsyndb`. It reads no Org source; of `org/procedures/` it reads only the entry names. It exposes the functions `slugify`, `next_id`, `org_timestamp`, `rfc3339`, `fill_template`, `has_org_sources`, `org_stems`, `org_error_reported`, `check_staging`, `recover_export`, `replace_export`, `new_procedure`, `pdf_jobs`, `install_pagefind`, `ensure_pagefind`, `hugo_overlay` and `remove_tree`.
 
 #### Scenario: Only standard-library imports
 - **WHEN** a test parses `tools/pipeline.py` with `ast` and collects the top-level module names of every import
@@ -258,6 +261,10 @@ It never installs anything and never invokes `sudo`.
 #### Scenario: No command-line interface
 - **WHEN** a test reads `tools/pipeline.py`
 - **THEN** it is not executable, does not begin with `#!`, and has no `if __name__ == "__main__":` block
+
+#### Scenario: No Org reading in Python
+- **WHEN** a test reads `tools/pipeline.py`, `tools/validate.py` and `tools/orgsyndb`
+- **THEN** none contains `--org-root`, `export-plan`, `lint_org`, `cross_check` or `export_instants`
 
 ### Requirement: Optional pre-commit hook
 `tools/hooks/pre-commit` SHALL be an executable POSIX `sh` script for a repository holding collections. It resolves its own path with `readlink -f`, so that it works both when `core.hooksPath` names `<app>/tools/hooks` and when it is symlinked into `.git/hooks/`. It runs `<app>/tools/orgsyndb -C <collection> validate` for the collection at the top level of the work tree, when `orgsyndb.toml` exists there, and for every directory whose `orgsyndb.toml` is in the index, each once, and exits with the status of the first that fails. When there is no such collection it prints a note to stderr and exits 0. No subcommand enables the hook or writes to `.git/hooks/` or `core.hooksPath`.

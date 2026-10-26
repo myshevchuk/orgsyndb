@@ -151,11 +151,10 @@ A successful build of the demo collection prints these steps:
 
 ```text
 ==> export: recovering build/export/
-==> export: planning org/procedures/
-==> export: running ox-hugo
+==> export: checking org/procedures/ and running ox-hugo
 ==> export: installing build/export/
-==> validate: org/procedures, build/export, md/procedures
-validated 28 files: 0 errors, 0 warnings
+==> validate: build/export, md/procedures
+validated 16 files: 0 errors, 0 warnings
 ==> build: staging 8 procedures for locale de
 ==> build: hugo
 ==> build: pagefind
@@ -316,8 +315,8 @@ prefix are relative to the collection.
 
 | Command | What it does |
 |---|---|
-| `export` | Exports every top-level `org/procedures/*.org` file into `build/export/`. With no Org procedures, it leaves that directory empty and starts no Emacs. For Org sources, Emacs output goes to `build/export.log` and is printed if export fails. |
-| `validate` | Exports first, then validates the Org sources, their exports, and all Markdown procedures. Errors fail the command; warnings do not. |
+| `export` | Checks the top-level entries in `org/procedures/`, reports Org file-name, keyword, and forbidden-route problems on standard output, then exports every `*.org` source into `build/export/` if it finds no error. An Org error stops the export before ox-hugo is fetched and leaves `build/export/` unchanged. When it finds no Org source or reportable entry, it leaves that directory empty and starts no Emacs. |
+| `validate` | Runs `export` first. An Org error stops the command there; otherwise the Markdown-only validator checks `build/export/` and `md/procedures/`. Errors fail the command; warnings do not. |
 | `build` | Runs export and validation, builds the site into `public/` with Hugo, then indexes it with Pagefind. A validation error stops the command before Hugo. |
 | `serve [--port N]` | Runs `build`, then serves `public/` on `http://127.0.0.1:N/` until `Ctrl-C`. The default port is `8000`. |
 | `pdf` | Runs `build`, removes the previous `pdf/`, and renders every procedure to `pdf/<source-file-name>.pdf` with WeasyPrint. |
@@ -342,7 +341,7 @@ These directories are generated and must not be committed. The collection's
 
 | Directory | Where | Contents |
 |---|---|---|
-| `build/` | collection | Org exports, the export plan, the generated Hugo configuration overlay, Hugo's resource cache, temporary export data, and `export.log`. |
+| `build/` | collection | Org exports, the generated Hugo configuration overlay, Hugo's resource cache, temporary export data, and `export.log`. |
 | `public/` | collection | The complete static website and Pagefind index. |
 | `pdf/` | collection | One generated PDF per procedure. |
 | `.emacs-batch/` | application | The application's own ox-hugo and tomelr installations. |
@@ -372,6 +371,13 @@ WeasyPrint. Only the Org export tests copy the demo collection. Those tests
 need Emacs, Git, and the ox-hugo cache in `.emacs-batch/`; without Emacs, they
 skip with the reason `emacs not found`.
 
+The Org front end has an ERT suite in `tests/el/osdb-org-tests.el`.
+`tests/test_elisp.py` runs it under pytest, or you can run it directly:
+
+```sh
+emacs -Q --batch -l tests/el/osdb-org-tests.el -f ert-run-tests-batch-and-exit
+```
+
 To cache Pagefind, run `tools/orgsyndb -C examples/demo build` once. If you do
 not have Emacs, build a copy of `tests/fixtures/collection` outside
 `tests/fixtures/` instead. Do not build the test collection in place because
@@ -379,8 +385,13 @@ the generated `build/` and `public/` directories would affect the fixture
 checks.
 
 The `Emacs 29 export` GitHub Actions workflow runs the export integration
-tests on Ubuntu 24.04's Emacs 29. It runs on pushes to `main`, pull requests,
-and manual dispatch.
+tests and the ERT suite on Ubuntu 24.04's Emacs 29 with:
+
+```sh
+python -m pytest tests/test_export_integration.py tests/test_elisp.py
+```
+
+It runs on pushes to `main`, pull requests, and manual dispatch.
 
 ## Troubleshooting
 

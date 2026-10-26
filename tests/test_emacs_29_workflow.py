@@ -35,7 +35,8 @@ class Emacs29WorkflowTests(unittest.TestCase):
         self.assertIn("actions/setup-python", job)
         self.assertRegex(job, r"(?m)^\s+python-version:\s*['\"]?3\.14['\"]?")
         export = job.find("tools/orgsyndb -C examples/demo export")
-        tests = job.find("python -m pytest tests/test_export_integration.py")
+        tests = job.find("python -m pytest tests/test_export_integration.py "
+                         "tests/test_elisp.py")
         self.assertNotEqual(export, -1, "export job does not export")
         self.assertNotEqual(tests, -1, "export job does not run the tests")
         self.assertLess(export, tests)
