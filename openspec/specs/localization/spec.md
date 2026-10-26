@@ -2,9 +2,7 @@
 
 ## Purpose
 Define the site's one language and its interface strings, procedure variants by language code and the choice of the variant to publish, the language field, German procedures, stubs and PDFs, and the German authoring documents.
-
 ## Requirements
-
 ### Requirement: Site language
 The site SHALL be built in one language, named by `locale` in `site/hugo.toml`, which is `"de"` in the shipped file. The language is the locale's first subtag, lowercased (`de` for `de` or `de-AT`), and must be `de` or `en`; any other locale makes the build fail with a message naming the file. `pipeline.site_language(site)` returns it. `site/hugo.toml` has no `languages` table and no `defaultContentLanguage`; the overlay sets `defaultContentLanguage` to the language. The site has no language switch, no `/de/` or `/en/` directory, and every page has `<html lang="<language>">`.
 
@@ -29,7 +27,7 @@ The site script holds no language: the copy button carries its messages in `data
 - **THEN** both files have the same keys with non-empty string values, every used key is present, and `site/content/` holds no file with a language code
 
 #### Scenario: German page shell
-- **WHEN** a test scans every HTML page of a build of the demo collection in locale `de`
+- **WHEN** a test scans every HTML page of a build of a copy of the test collection `tests/fixtures/collection/` in locale `de`
 - **THEN** each has `<html lang="de">`, the German skip link, exactly one `nav` in the site header with the German navigation, and the German footer, and `public/de/` and `public/en/` do not exist
 
 #### Scenario: German page titles
@@ -87,12 +85,12 @@ For each procedure ID, the build SHALL publish exactly one variant: the file tag
 - **WHEN** a test stages a tagged file without `language`, a tagged file with it and an untagged file into a directory holding a stale file
 - **THEN** the directory holds exactly the three base names with `.md`, the first copy has `language = "<code>"` after its opening `+++`, and the others are byte-identical to their sources
 
-#### Scenario: Choosing the variant to publish (demo)
-- **WHEN** a test builds the demo collection in locale `de`
+#### Scenario: Choosing the variant to publish (test collection)
+- **WHEN** a test builds a copy of the test collection `tests/fixtures/collection/` in locale `de`
 - **THEN** the eight `.de` variants are published, one page per ID at `/procedures/<slug>/`
 
 #### Scenario: Every procedure in every locale
-- **WHEN** a test removes `OSDB-0001-salicylic-acid.de.org` and `OSDB-0004-4-acetylbiphenyl.de.org` from a copy of the demo, adds the baseline as `md/procedures/OSDB-0100-baseline.en.md`, and builds it in locale `de`
+- **WHEN** a test removes `md/procedures/OSDB-0001-salicylic-acid.de.md` and `md/procedures/OSDB-0004-4-acetylbiphenyl.de.md` from a copy of the test collection, adds the baseline as `md/procedures/OSDB-0100-baseline.en.md`, and builds it in locale `de`
 - **THEN** nine procedures are published, OSDB-0001 from the untagged English file, OSDB-0100 from the `.en` file, and the German home page says `Alle 9 Vorschriften`
 
 ### Requirement: The language field
@@ -121,7 +119,7 @@ A procedure in German SHALL meet the body-section rules of the procedure-schema 
 Pagefind SHALL index the procedure pages under the site's language.
 
 #### Scenario: German search index
-- **WHEN** a test queries the `de` index of a German demo build under Node
+- **WHEN** a test queries the `de` index of a German build of a copy of the test collection `tests/fixtures/collection/` under Node
 - **THEN** `Verseifung` finds exactly OSDB-0001 and OSDB-0008, the filter `Reaktionstyp` = `Hydrolyse` finds the same two, the filter names are `Autor`, `Reaktionstyp`, `Schlagwort` and `Status`, and every result title is a published title
 
 ### Requirement: Stubs in a language
@@ -139,7 +137,7 @@ Pagefind SHALL index the procedure pages under the site's language.
 A German site's procedure PDFs SHALL show German first-page facts and footer: `· Status <German status> · zuletzt geändert <time>` and `Seite <i> von <n>`.
 
 #### Scenario: German first page
-- **WHEN** a test runs `pdf` on the demo collection in locale `de`
+- **WHEN** a test runs `pdf` on a copy of the test collection `tests/fixtures/collection/` in locale `de`
 - **THEN** `pdf/` holds exactly `<stem>.pdf` for each published file, `pdf/OSDB-0002-aspirin.de.pdf` starts with `http://127.0.0.1:8000/procedures/osdb-0002/ · OSDB-0002 · Status Entwurf · zuletzt geändert`, and every page has the line `Seite <i> von <n>`
 
 ### Requirement: German authoring documentation
@@ -163,3 +161,4 @@ The application SHALL ship `docs/STYLE.de.md`, a style guide for the text of Ger
 #### Scenario: Glossary size and shape
 - **WHEN** a reviewer counts the entries of `docs/GLOSSARY.de.md`
 - **THEN** there are at least 500, every entry has a German form and an English equivalent, and every entry marked as a form to avoid names its replacement
+

@@ -8,7 +8,6 @@ A missing tools/orgsyndb fails them, because it is a deliverable.
 import ast
 import os
 import py_compile
-import re
 import shutil
 import subprocess
 import sys
@@ -155,9 +154,10 @@ class HookWithoutCollectionTests(ProgramTestCase):
 
 
 class MissingToolTests(ProgramTestCase):
-    def repo_and_path(self, tools: tuple[str, ...], **kwargs):
+    def repo_and_path(self, tools: tuple[str, ...],
+                      stubs: tuple[str, ...] = (), **kwargs):
         sandbox = make_sandbox(self, **kwargs)
-        return sandbox, make_path(self, tools)
+        return sandbox, make_path(self, tools, stubs)
 
     def assert_stopped(self, result: Run, sandbox, path, package: str):
         self.assertEqual(result.returncode, 1, result.stdout)
@@ -167,7 +167,7 @@ class MissingToolTests(ProgramTestCase):
 
     def test_hugo_missing_stops_build_before_its_first_step(self) -> None:
         """Scenario: Hugo missing."""
-        sandbox, path = self.repo_and_path(("python3", "emacs", "git"))
+        sandbox, path = self.repo_and_path(("python3",))
         env = sandbox.env(PATH=str(path.directory))
         result = sandbox.build("build", env=env)
         self.assert_stopped(result, sandbox, path, "hugo")
@@ -178,14 +178,16 @@ class MissingToolTests(ProgramTestCase):
         elpa = REPO / ".emacs-batch" / "elpa"
         if not (elpa / "ox-hugo").is_dir():
             self.skipTest(BOOTSTRAP_HINT)
-        sandbox, path = self.repo_and_path(("python3", "emacs"))
+        sandbox, path = self.repo_and_path(("python3",), ("emacs",),
+                                           collection=DEMO)
         env = sandbox.env(PATH=str(path.directory))
         result = sandbox.build("export", env=env)
         self.assert_stopped(result, sandbox, path, "git")
 
     def test_emacs_missing_with_org_sources_stops_build(self) -> None:
         """Scenario: Emacs missing with Org sources."""
-        sandbox, path = self.repo_and_path(("python3", "git", "hugo"))
+        sandbox, path = self.repo_and_path(("python3", "git", "hugo"),
+                                           collection=DEMO)
         env = sandbox.env(PATH=str(path.directory))
         result = sandbox.build("build", env=env)
         self.assert_stopped(result, sandbox, path, "emacs")
@@ -197,12 +199,6 @@ class MissingToolTests(ProgramTestCase):
         require_tool("hugo")
         require_pagefind()
         sandbox, path = self.repo_and_path(("python3", "hugo"))
-        sandbox.clear_org()
-        # The Markdown samples name Org samples as their precursors.
-        for source in sandbox.md_dir().glob("*.md"):
-            text = source.read_text(encoding="utf-8")
-            source.write_text(re.sub(r"(?m)^precursors = .*\n", "", text),
-                              encoding="utf-8")
         env = sandbox.env(PATH=str(path.directory))
         result = sandbox.build("build", env=env)
         self.assertEqual(result.returncode, 0,
@@ -240,7 +236,7 @@ class CleanTests(ProgramTestCase):
     def test_clean_keeps_sources_and_caches_and_clean_all_removes_them(
             self) -> None:
         """Scenarios: Clean keeps sources and caches; Clean all, twice."""
-        sandbox = make_sandbox(self, link_caches=False)
+        sandbox = make_sandbox(self, collection=DEMO, link_caches=False)
         root, app = sandbox.root, sandbox.app
         generated = [root / "build/export", root / "public/pagefind",
                      root / "pdf", app / ".emacs-batch/elpa",
@@ -280,7 +276,7 @@ class CheckDepsTests(ProgramTestCase):
 
     def test_two_missing_tools_are_named_in_one_dnf_line(self) -> None:
         """Scenario: Two tools missing."""
-        result, path = self.run_check(("python3", "emacs", "git"))
+        result, path = self.run_check(("python3",), ("emacs", "git"))
         lines = result.stdout.splitlines()
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertTrue(any(ln.startswith("missing hugo") for ln in lines))

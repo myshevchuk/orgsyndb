@@ -53,11 +53,11 @@ Each subcommand SHALL check, before its first step, every external tool it will 
 For a missing tool it prints `orgsyndb: error: <tool> not found; install it with: sudo dnf install <package>` and exits 1 without starting any step. It never invokes `sudo`. A subcommand that works on a collection finds the collection before it checks the tools, so a missing or malformed collection is reported whatever tools are installed.
 
 #### Scenario: Hugo missing
-- **WHEN** a test runs `tools/orgsyndb -C <collection> build` with a `PATH` that holds `python3`, `emacs`, `git` and a recording fake `sudo`, but not `hugo`
+- **WHEN** a test runs `tools/orgsyndb -C <collection> build` on a copy of the test collection `tests/fixtures/collection/`, which has no Org sources, with a `PATH` that holds `python3` and a recording fake `sudo`, but not `hugo`
 - **THEN** it exits 1, stderr contains `sudo dnf install hugo`, the collection's `build/` was not created, and the fake `sudo` was never invoked
 
 #### Scenario: git missing although ox-hugo is installed
-- **WHEN** a test runs `tools/orgsyndb -C <collection> export` in an application copy whose `.emacs-batch/` is linked from a bootstrapped checkout, with a `PATH` that holds `python3`, `emacs` and a recording fake `sudo`, but not `git`
+- **WHEN** a test runs `tools/orgsyndb -C <collection> export` on a copy of the demo collection in an application copy whose `.emacs-batch/` is linked from a bootstrapped checkout, with a `PATH` that holds `python3`, `emacs` (real or stub executable) and a recording fake `sudo`, but not `git`
 - **THEN** it exits 1, stderr contains `sudo dnf install git`, the collection's `build/` was not created, and the fake `sudo` was never invoked
 
 #### Scenario: Emacs missing with Org sources
@@ -65,7 +65,7 @@ For a missing tool it prints `orgsyndb: error: <tool> not found; install it with
 - **THEN** it exits 1, stderr contains `sudo dnf install emacs`, the collection's `build/` was not created, and the fake `sudo` was never invoked
 
 #### Scenario: Markdown-only collection builds without Emacs and git
-- **WHEN** an integration test removes every file from the demo collection's `org/procedures/`, removes the `precursors` line from each Markdown procedure, since those name Org procedures, and runs `tools/orgsyndb -C <collection> build` with a `PATH` that holds `python3` and `hugo` but neither `emacs` nor `git`, skipping when Hugo or the Pagefind cache is absent
+- **WHEN** an integration test runs `tools/orgsyndb -C <collection> build` on a copy of the test collection `tests/fixtures/collection/` with a `PATH` that holds `python3` and `hugo` but neither `emacs` nor `git`, skipping when Hugo or the Pagefind cache is absent
 - **THEN** it exits 0, and `public/index.html` and `public/procedures/osdb-0002/index.html` exist
 
 #### Scenario: Collection error comes before missing tools
@@ -76,7 +76,7 @@ For a missing tool it prints `orgsyndb: error: <tool> not found; install it with
 `tools/orgsyndb validate` SHALL take no arguments. It runs `export`, then the validator with the arguments `--org-root org/procedures --static-dir static build/export md/procedures` and the collection as working directory, leaving out `--org-root org/procedures` and any content root whose directory does not exist. It prints the validator's stdout and stderr unchanged and exits with the validator's status. Any argument is a usage error; other directories are validated by running `tools/validate.py` directly.
 
 #### Scenario: Seeds validate
-- **WHEN** an integration test runs `tools/orgsyndb -C <collection> validate` on the demo collection
+- **WHEN** an integration test runs `tools/orgsyndb -C <collection> validate` on a copy of the test collection `tests/fixtures/collection/`
 - **THEN** it exits 0, and no validator problem line is printed
 
 #### Scenario: Invalid Markdown procedure
@@ -102,8 +102,8 @@ A failing step stops the command with exit 1.
 - **THEN** the second build exits 1, and `public/` still holds the first build's output
 
 #### Scenario: Second build without changes
-- **WHEN** an integration test runs `tools/orgsyndb -C <collection> build` twice without changing any source
-- **THEN** both runs exit 0, and `build/export/` holds identical bytes after each
+- **WHEN** an integration test runs `tools/orgsyndb -C <collection> build` twice on a copy of the demo collection without changing any source
+- **THEN** both runs exit 0, and `build/export/` is not empty and holds identical bytes after each
 
 ### Requirement: serve subcommand
 `tools/orgsyndb serve [--port N]` SHALL run `build`, bind `127.0.0.1:<N>`, print the line `serving http://127.0.0.1:<N>/ (Ctrl-C to stop)` once the port is bound, and then serve the collection's `public/` with the standard library's HTTP server until interrupted. Every response carries `Cache-Control: no-cache`, so a browser revalidates each file and shows a new build instead of cached pages of an earlier one. The default port is 8000; a port outside 1–65535 or not a number is a usage error. It never binds an address other than `127.0.0.1`.
@@ -239,7 +239,7 @@ When `git` is unavailable or the collection is not inside a git work tree, `new`
 It never installs anything and never invokes `sudo`.
 
 #### Scenario: Two tools missing
-- **WHEN** a test runs `tools/orgsyndb check-deps` with a `PATH` that holds only `python3`, `emacs`, `git` and a recording fake `sudo`
+- **WHEN** a test runs `tools/orgsyndb check-deps` with a `PATH` that holds only `python3`, `emacs` and `git` (real or stub executables) and a recording fake `sudo`
 - **THEN** it exits 1, stdout has a line beginning `missing hugo` and one beginning `missing weasyprint`, and the last line is exactly `sudo dnf install hugo weasyprint`
 - **AND** the fake `sudo` was never invoked
 
@@ -267,7 +267,7 @@ It never installs anything and never invokes `sudo`.
 - **THEN** the commit fails, and the new file is not committed
 
 #### Scenario: Hook through a symlink accepts a valid commit
-- **WHEN** an integration test makes the collection copy a git repository, symlinks `.git/hooks/pre-commit` to the application copy's hook, adds the demo procedures, and runs `git commit`
+- **WHEN** an integration test makes the collection copy, a copy of the test collection `tests/fixtures/collection/`, a git repository, symlinks `.git/hooks/pre-commit` to the application copy's hook, adds every file of the collection copy, and runs `git commit`
 - **THEN** the commit succeeds
 
 #### Scenario: Hook validates a collection in a subdirectory

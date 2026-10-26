@@ -2,9 +2,7 @@
 
 ## Purpose
 Define the Pagefind search: what is indexed, the status, reaction type, tag and author filters, SMILES substring search, and the search page with its no-JavaScript fallback.
-
 ## Requirements
-
 ### Requirement: Search page
 The site SHALL publish `/search/` from `site/content/search.md`, with the following:
 - **Assets.** It links `/pagefind/pagefind-ui.css` and loads, in order, `/pagefind/pagefind-ui.js` and the theme's search script. The search script is built from `site/assets/js/search-terms.js` and `site/assets/js/search.js`.
@@ -69,7 +67,7 @@ No list or container element carries `data-pagefind-filter`.
 
 #### Scenario: Filter values and filter-only searches
 - **WHEN** a search test reads the bundle's `filters()`, and searches with a `null` term and each single filter value in turn
-- **THEN** the filter keys are exactly `author`, `reaction type`, `status` and `tag`, and their values are exactly the authors, labels, statuses and tags of the shipped procedures
+- **THEN** the filter keys are exactly `author`, `reaction type`, `status` and `tag`, and their values are exactly the authors, labels, statuses and tags of the published procedures
 - **AND** each filter-only search returns exactly the procedures that carry that value
 
 #### Scenario: Filters in the UI
@@ -125,17 +123,17 @@ Two further rules apply:
 - Searching a procedure's full SMILES returns exactly the procedures whose `N(product.smiles)` contains `N` of it.
 
 #### Scenario: Name, CAS, tag, ID and body word
-- **WHEN** a search test searches, for each shipped procedure, its `product.name`, its `product.cas`, each of its tags, its `id`, and the body word chosen below
+- **WHEN** a search test builds a copy of the test collection `tests/fixtures/collection/` and searches, for each published procedure, its `product.name`, its `product.cas`, each of its tags, its `id`, and the body word chosen below
 - **THEN** every search returns that procedure
-- **AND** the body word is chosen from the procedure's source file as the longest word matching `[A-Za-z]{6,}` in its `Procedure` section that, compared case-insensitively, occurs in no other shipped procedure's source file, with ties broken alphabetically. Every shipped procedure has such a word.
+- **AND** the body word is chosen from the procedure's source file in that copy as the longest word matching `[A-Za-z]{6,}` in its `Procedure` section that, compared case-insensitively, occurs in no other procedure's source file in that copy, with ties broken alphabetically. Every published procedure has such a word.
 
 #### Scenario: Every SMILES substring
-- **WHEN** a search test searches every contiguous substring `q` of every shipped procedure's `product.smiles` with `len(N(q)) >= 3`
+- **WHEN** a search test searches every contiguous substring `q` of every published procedure's `product.smiles` with `len(N(q)) >= 3`
 - **THEN** each search returns the procedure the substring was taken from
 
 #### Scenario: Full SMILES is exact
-- **WHEN** a search test searches each shipped procedure's full `product.smiles`
-- **THEN** the results are exactly the shipped procedures whose `N(product.smiles)` contains `N` of the searched string
+- **WHEN** a search test searches each published procedure's full `product.smiles`
+- **THEN** the results are exactly the published procedures whose `N(product.smiles)` contains `N` of the searched string
 
 #### Scenario: SMILES substring in the UI
 - **WHEN** the orchestrator searches `c1ccccc1O`, `ccc(cc1)-c1`, `O=C(/C=C/c1`, `CCOC(=O)/C=C` and `OC(=O)/C=C/c1` on `/search/` in a browser (manual verification, tasks.md section 9)
@@ -146,5 +144,6 @@ Two further rules apply:
 Node SHALL be used only by tests. `tools/orgsyndb`, `tools/pipeline.py`, `tools/export.el` and `tools/hooks/pre-commit` neither invoke nor mention `node` or `npm`, and `check-deps` neither reports nor requires Node. Tests that need Node skip with a reason that names `node` when it is absent.
 
 #### Scenario: No Node in the tools
-- **WHEN** a test searches the files under `tools/` for the words `node` and `npm`, and runs `tools/orgsyndb check-deps` with a `PATH` that holds the five required tools and no `node`
+- **WHEN** a test searches the files under `tools/` for the words `node` and `npm`, and runs `tools/orgsyndb check-deps` with a `PATH` that holds `python3`, `hugo`, `weasyprint`, `emacs` and `git`, real or stub executables, and no `node`
 - **THEN** neither word is found, and `check-deps` exits 0 and prints no line mentioning `node`
+

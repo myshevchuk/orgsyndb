@@ -1,10 +1,12 @@
 """Read sample procedures from their source files and check the quantity
 rules of the sample-procedures spec. Pure helpers, no I/O beyond reading."""
 
+import datetime
 import re
 import tomllib
 from pathlib import Path
 from typing import Any, NamedTuple
+from zoneinfo import ZoneInfo
 
 HEADER = ["Reagent", "CAS", "MW (g/mol)", "Amount", "mmol", "Equiv"]
 # What the rules look for in a sample of each language: the Reagents
@@ -260,3 +262,140 @@ def quantity_violations(sample: Sample) -> list[str]:
     except ValueError as exc:
         problems.append(str(exc))
     return problems
+
+
+# --- agreement of a converted sample with its Org source -------------------
+
+_SPAN = r"\S(?:.*?\S)?"
+# Org's emphasis syntax: the opening marker follows the start of the text,
+# whitespace or one of -('"{ and the closing marker precedes the end,
+# whitespace or one of -.,:!?;'")}\[.
+ORG_EMPHASIS = re.compile(
+    rf"""(?<![^\s\-('"{{])([/*=~+_])({_SPAN})\1(?![^\s\-.,:!?;'")}}\[])""")
+MD_EMPHASIS = re.compile(
+    rf"\*\*({_SPAN})\*\*|\*({_SPAN})\*|`({_SPAN})`"
+    rf"|(?<!\w)_({_SPAN})_(?!\w)")
+TIMESTAMP = re.compile(r"\[(\d{4}-\d\d-\d\d)(?: [^\W\d_]+)?"
+                       r"(?: (\d\d:\d\d)(?::(\d\d))?)?\]")
+BERLIN = ZoneInfo("Europe/Berlin")
+
+
+def read_org_keywords(path: Path) -> dict[str, str]:
+    """The first value of each Org keyword in the file, keyed by its
+    upper-cased name. ``#+HUGO_CUSTOM_FRONT_MATTER`` is left out."""
+    keywords: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        match = re.match(r"^#\+([A-Za-z_]+):\s*(.*?)\s*$", line)
+        if match and match.group(1).upper() != "HUGO_CUSTOM_FRONT_MATTER":
+            keywords.setdefault(match.group(1).upper(), match.group(2))
+    return keywords
+
+
+def berlin_instants(stamp: str) -> list[datetime.datetime]:
+    """The Europe/Berlin instants an Org timestamp names, earliest first:
+    two in the autumn fall-back hour, otherwise one. Empty when ``stamp``
+    is not a timestamp."""
+    match = TIMESTAMP.fullmatch(stamp)
+    if match is None:
+        return []
+    date, clock, seconds = match.groups()
+    naive = datetime.datetime.fromisoformat(
+        f"{date}T{clock or '00:00'}:{seconds or '00'}")
+    found = {naive.replace(tzinfo=BERLIN, fold=fold).utcoffset(): fold
+             for fold in (0, 1)}
+    return sorted((naive.replace(tzinfo=BERLIN, fold=fold)
+                   for fold in found.values()),
+                  key=lambda moment: moment.astimezone(datetime.UTC))
+
+
+def exported_instants(created: list[datetime.datetime],
+                      modified: list[datetime.datetime]
+                      ) -> tuple[datetime.datetime, datetime.datetime]:
+    """The ``date`` and ``lastmod`` instants the export writes: the
+    earliest of ``created``, and the earliest of ``modified`` not before
+    it, else the latest of ``modified``. Both lists are non-empty and
+    sorted earliest first."""
+    date = created[0]
+    later = [m for m in modified if m.astimezone(datetime.UTC)
+             >= date.astimezone(datetime.UTC)]
+    return date, later[0] if later else modified[-1]
+
+
+def normalise_text(text: str, emphasis: re.Pattern[str]) -> str:
+    """Section text without table lines, whitespace collapsed to single
+    spaces and each emphasis span replaced by its inner text, the last
+    group of the pattern that matched."""
+    text = "\n".join(line for line in text.splitlines()
+                     if not line.strip().startswith("|"))
+    return emphasis.sub(
+        lambda m: [g for g in m.groups() if g is not None][-1],
+        " ".join(text.split()))
+
+
+def agreement_differences(org: Path, markdown: Path) -> list[str]:
+    """Where the Markdown procedure disagrees with the Org source it was
+    converted from; empty when they agree. Compared are the front matter,
+    the ``date`` and ``lastmod`` wall-clock time and Berlin offset, the
+    top-level headings, the Reagents rows and each section's text."""
+    out: list[str] = []
+    source = read_org(org)
+    keywords = read_org_keywords(org)
+    lines = markdown.read_text(encoding="utf-8").split("\n")
+    end = lines.index("+++", 1)
+    data = tomllib.loads("\n".join(lines[1:end]))
+    body = lines[end + 1:]
+
+    expected = {k: v for k, v in source.data.items() if k != "tags"} | {
+        "title": keywords.get("TITLE"), "slug": keywords.get("HUGO_SLUG"),
+        "tags": source.data["tags"], "ai_model": keywords.get("AI_MODEL")}
+    for key in sorted(expected.keys() | data.keys() | {"date", "lastmod"}):
+        if key in ("date", "lastmod"):
+            if key not in data:
+                out.append(f"front matter lacks {key}")
+        elif key not in data:
+            out.append(f"front matter lacks {key}")
+        elif key not in expected:
+            out.append(f"front matter has extra key {key}")
+        elif data[key] != expected[key]:
+            out.append(f"{key} is {data[key]!r}, not {expected[key]!r}")
+    created = berlin_instants(keywords.get("CREATED", ""))
+    modified = berlin_instants(keywords.get("LAST_MODIFIED", ""))
+    chosen = (exported_instants(created, modified) if created and modified
+              else (None, None))
+    for key, name, want in (("date", "CREATED", chosen[0]),
+                            ("lastmod", "LAST_MODIFIED", chosen[1])):
+        got = data.get(key)
+        if want is None:
+            out.append(f"#+{name} is not a timestamp, or #+CREATED and "
+                       "#+LAST_MODIFIED are not both timestamps")
+        elif not isinstance(got, datetime.datetime) or got.tzinfo is None:
+            out.append(f"{key} is not an offset datetime")
+        elif (got.replace(tzinfo=None) != want.replace(tzinfo=None)
+              or got.utcoffset() != want.utcoffset()):
+            out.append(f"{key} is {got.isoformat()}, not "
+                       f"{want.isoformat()}")
+
+    before = "".join(body[:next((i for i, line in enumerate(body)
+                                 if line.startswith("## ")), len(body))])
+    if before.strip():
+        out.append("text before the first heading")
+    org_text = org.read_text(encoding="utf-8")
+    org_heads = re.findall(r"(?m)^\* (.+?)\s*$", org_text)
+    md_heads = re.findall(r"(?m)^## (.+?)\s*$", "\n".join(body))
+    if md_heads != org_heads:
+        out.append(f"headings are {md_heads}, not {org_heads}")
+
+    terms = TERMS[language_of(org)]
+    sections = md_sections("\n".join(body))
+    org_sects = org_sections(org_text)
+    rows = table_rows(sections.get(terms["reagents"], ""))
+    if rows != source.table:
+        out.append(f"Reagents rows are {rows}, not {source.table}")
+    for name, text in org_sects.items():
+        if name not in sections:
+            continue
+        want = normalise_text(text, ORG_EMPHASIS)
+        got = normalise_text(sections[name], MD_EMPHASIS)
+        if got != want:
+            out.append(f"section {name} reads {got!r}, not {want!r}")
+    return out

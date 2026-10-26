@@ -365,10 +365,18 @@ The command needs pytest. Node is optional and lets the tests exercise the
 real Pagefind search; it is never needed to build or view the site.
 `poppler-utils` is also optional and supplies `pdftotext` and `pdfinfo` for
 PDF checks. Tests that cannot find an optional tool skip their checks and
-name the missing tool. The integration tests build copies of the demo
-collection. Because the demo contains Org procedures, these tests need Emacs
-and Git, as well as the caches that a first `orgsyndb -C examples/demo build`
-fetches.
+name the missing tool. The integration tests build, validate, serve, and print
+copies of the Markdown-only test collection in `tests/fixtures/collection/`.
+They need Hugo and the cached Pagefind binary; the PDF tests also need
+WeasyPrint. Only the Org export tests copy the demo collection. Those tests
+need Emacs, Git, and the ox-hugo cache in `.emacs-batch/`; without Emacs, they
+skip with the reason `emacs not found`.
+
+To cache Pagefind, run `tools/orgsyndb -C examples/demo build` once. If you do
+not have Emacs, build a copy of `tests/fixtures/collection` outside
+`tests/fixtures/` instead. Do not build the test collection in place because
+the generated `build/` and `public/` directories would affect the fixture
+checks.
 
 The `Emacs 29 export` GitHub Actions workflow runs the export integration
 tests on Ubuntu 24.04's Emacs 29. It runs on pushes to `main`, pull requests,

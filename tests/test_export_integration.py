@@ -27,7 +27,7 @@ class ExportTestCase(unittest.TestCase):
         ps.require_exporter()
 
     def sandbox(self, **kwargs) -> Sandbox:
-        return make_sandbox(self, **kwargs)
+        return make_sandbox(self, collection=DEMO, **kwargs)
 
     def export(self, sandbox: Sandbox, **kwargs):
         return sandbox.build("export", **kwargs)
@@ -150,7 +150,7 @@ class NoPackageElTests(unittest.TestCase):
 class ExportWithoutOrgTests(unittest.TestCase):
     def test_export_with_neither_emacs_nor_git(self) -> None:
         """Scenario: Export with neither Emacs nor git."""
-        sandbox = make_sandbox(self)
+        sandbox = make_sandbox(self, collection=DEMO)
         sandbox.clear_org()
         path = make_path(self, ("python3",))
         result = sandbox.build("export",

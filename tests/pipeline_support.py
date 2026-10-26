@@ -2,10 +2,12 @@
 
 Pure tests load ``tools/pipeline.py`` lazily, so a missing module fails
 the test on an assertion, and call its functions in-process. Program and
-integration tests work in a temporary copy of the application and of the
-demo collection, under a path that contains a space, and run
+integration tests work in a temporary copy of the application and of a
+collection, under a path that contains a space, and run
 ``tools/orgsyndb -C <collection>`` with ``cwd`` set to a third temporary
-directory.
+directory. The collection is the Markdown-only test collection
+``tests/fixtures/collection/``, which builds without Emacs, unless a test
+exercises the Org export and copies the demo collection instead.
 """
 
 import contextlib
@@ -47,6 +49,7 @@ PIPELINE = TOOLS / "pipeline.py"
 ORGSYNDB = TOOLS / "orgsyndb"
 HOOK = TOOLS / "hooks" / "pre-commit"
 DEMO = REPO / "examples" / "demo"
+TEST_COLLECTION = FIXTURES / "collection"
 
 OX_HUGO_PIN = "b7dc44dc28911b9d8e3055a18deac16c3b560b03"
 TOMELR_PIN = "670e0a08f625175fd80137cf69e799619bf8a381"
@@ -55,7 +58,9 @@ LANGUAGES = ("de", "en")
 BOOTSTRAP_HINT = ("ox-hugo not bootstrapped: run tools/orgsyndb -C "
                   "examples/demo export once (needs network)")
 PAGEFIND_HINT = ("pagefind not cached: run tools/orgsyndb -C examples/demo "
-                 "build once (needs network)")
+                 "build once, or without Emacs build a copy of "
+                 "tests/fixtures/collection made outside tests/fixtures "
+                 "(needs network)")
 
 # Directories the integration harness copies from the real application.
 COPIED = ("tools", "site", "templates")
@@ -173,6 +178,7 @@ def require_ox_hugo() -> None:
 
 
 def require_pagefind() -> None:
+    """Skip unless the pinned Pagefind binary is cached in .tools/."""
     if not (REPO / PAGEFIND_RELATIVE).is_file():
         raise unittest.SkipTest(PAGEFIND_HINT)
 
@@ -185,13 +191,16 @@ def require_exporter() -> None:
 
 
 def require_builder() -> None:
-    """Skip unless export works and Hugo and Pagefind are present."""
-    require_exporter()
+    """Skip unless Hugo and the cached Pagefind binary are present.
+
+    Enough to build a collection without Org sources; a test that
+    exports Org sources also calls ``require_exporter``.
+    """
     require_tool("hugo")
     require_pagefind()
 
 
-# --- temporary copies of the application and the demo collection -----------
+# --- temporary copies of the application and a collection -----------------
 
 class Sandbox:
     """An application copy, a collection copy and a working directory.
@@ -295,7 +304,9 @@ def run_script(script: Path, args, *, cwd: Path,
     return Run(done.returncode, done.stdout, done.stderr)
 
 
-def make_sandbox(case: unittest.TestCase, *, copy_emacs: bool = False,
+def make_sandbox(case: unittest.TestCase, *,
+                 collection: Path = TEST_COLLECTION,
+                 copy_emacs: bool = False,
                  link_caches: bool = True) -> Sandbox:
     """Create the copies for ``case``; removed on clean-up.
 
@@ -303,8 +314,9 @@ def make_sandbox(case: unittest.TestCase, *, copy_emacs: bool = False,
     application copy holds ``tools/``, ``site/`` and ``templates/``;
     ``.emacs-batch/`` and ``.tools/`` are symlinked from the real
     application (when they exist), or ``.emacs-batch/`` is copied with
-    ``copy_emacs``. The collection copy is a copy of ``examples/demo/``
-    without its generated directories.
+    ``copy_emacs``. The collection copy is a copy of ``collection``, the
+    test collection unless ``DEMO`` is passed, without its generated
+    directories ``build/``, ``public/`` and ``pdf/``.
     """
     base = Path(tempfile.mkdtemp(prefix="orgsyndb test "))
     case.addCleanup(shutil.rmtree, base, True)
@@ -323,7 +335,7 @@ def make_sandbox(case: unittest.TestCase, *, copy_emacs: bool = False,
             if (REPO / name).is_dir() and not (app / name).exists():
                 (app / name).symlink_to(REPO / name)
     root = base / "collection copy"
-    shutil.copytree(DEMO, root, symlinks=True,
+    shutil.copytree(collection, root, symlinks=True,
                     ignore=shutil.ignore_patterns("build", "public", "pdf"))
     work = base / "work dir"
     work.mkdir()
@@ -567,12 +579,15 @@ def require_pdf_tools() -> None:
 class ThemeBuildCase(unittest.TestCase):
     """Base of the integration tests: one build per test class.
 
-    A subclass names the theme ``FIXTURES`` to copy into the sandbox, the
-    build ``COMMAND`` (``build`` or ``pdf``) and extra environment
+    A subclass names the ``COLLECTION`` to copy (the test collection
+    unless it sets ``DEMO``, and then calls ``require_exporter`` from
+    ``require_tools``), the theme ``FIXTURES`` to copy into the sandbox,
+    the build ``COMMAND`` (``build`` or ``pdf``) and extra environment
     variables in ``ENV``. A build that fails does not error the class: it
     fails every test on an assertion that shows the build output.
     """
 
+    COLLECTION = TEST_COLLECTION
     FIXTURES: tuple[str, ...] = ()
     COMMAND = "build"
     LOCALE = "en"
@@ -592,7 +607,8 @@ class ThemeBuildCase(unittest.TestCase):
     def setUpClass(cls) -> None:
         require_builder()
         cls.require_tools()
-        cls.sandbox = make_sandbox(_ClassCase(cls))
+        cls.sandbox = make_sandbox(_ClassCase(cls),
+                                   collection=cls.COLLECTION)
         cls.sandbox.set_locale(cls.LOCALE)
         put_theme_fixtures(cls.sandbox, *cls.FIXTURES)
         cls.prepare()

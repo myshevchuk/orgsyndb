@@ -1,5 +1,5 @@
 """German site tests: HTML scans, searches and PDFs of sandbox builds in
-the shipped locale, de (localization). ``GermanSiteTests`` builds the demo
+the shipped locale, de (localization). ``GermanSiteTests`` builds the test
 collection; ``PartialTranslationTests`` builds it with two translations
 removed and an English-only variant added; ``GermanPdfTests`` renders
 its PDFs. Tests skip, naming the missing tool or cache, as the other
@@ -35,7 +35,7 @@ class GermanCase(ps.ThemeBuildCase):
 
 
 class GermanSiteTests(GermanCase):
-    """The demo collection, built in German."""
+    """The test collection, built in German."""
 
     def test_every_page_has_the_german_shell(self) -> None:
         """Scenario: German page shell."""
@@ -67,7 +67,7 @@ class GermanSiteTests(GermanCase):
                 self.assertEqual(page.title(), f"{title} | OrgSynDB")
 
     def test_the_german_variants_are_published(self) -> None:
-        """Scenario: Choosing the variant to publish (demo)."""
+        """Scenario: Choosing the variant to publish (test collection)."""
         published = self.content()
         self.assertEqual(len(published), 8)
         for item in published:
@@ -150,13 +150,13 @@ class PartialTranslationTests(GermanCase):
     """Without the German OSDB-0001 and OSDB-0004, and with an English
     OSDB-0100 whose only file is tagged .en."""
 
-    REMOVED = ("OSDB-0001-salicylic-acid.de.org",
-               "OSDB-0004-4-acetylbiphenyl.de.org")
+    REMOVED = ("OSDB-0001-salicylic-acid.de.md",
+               "OSDB-0004-4-acetylbiphenyl.de.md")
 
     @classmethod
     def prepare(cls) -> None:
         for name in cls.REMOVED:
-            (cls.sandbox.root / "org" / "procedures" / name).unlink()
+            (cls.sandbox.md_dir() / name).unlink()
         baseline = ps.FIXTURES / "baseline" / "OSDB-0100-baseline.md"
         (cls.sandbox.md_dir() / "OSDB-0100-baseline.en.md").write_text(
             baseline.read_text(encoding="utf-8"), encoding="utf-8")
@@ -200,7 +200,7 @@ class PartialTranslationTests(GermanCase):
 
 
 class GermanPdfTests(GermanCase):
-    """PDFs of the demo collection, built in German."""
+    """PDFs of the test collection, built in German."""
 
     COMMAND = "pdf"
 

@@ -89,11 +89,11 @@ class DependentCheckTests(ValidatorTestCase):
 class FixtureHygieneTests(unittest.TestCase):
     def test_committed_ids_are_unique_apart_from_the_duplicate_case(
             self) -> None:
-        """Requirement: Fixture suite (unique IDs, fictitious names)."""
+        """Scenario: Committed IDs are unique."""
         seen: dict[str, str] = {}
         for path in sorted(FIXTURES.rglob("*.md")):
             rel = path.relative_to(FIXTURES).as_posix()
-            if rel.startswith("invalid/duplicate-id/"):
+            if rel.startswith(("invalid/duplicate-id/", "collection/")):
                 continue
             match = re.search(r'^id = "(OSDB-[^"]*)"', path.read_text(
                 encoding="utf-8"), re.M)
@@ -104,10 +104,13 @@ class FixtureHygieneTests(unittest.TestCase):
             seen[match.group(1)] = rel
 
     def test_fixtures_carry_no_machine_or_user_identifiers(self) -> None:
-        """Requirement: Fixture suite (no user or machine identifier)."""
+        """Scenario: Committed fixtures carry no identifiers."""
         pattern = re.compile(r"/home/|@[\w.-]+\.\w+|\.local\b|\.lan\b")
+        generated = tuple(f"collection/{d}/"
+                          for d in ("build", "public", "pdf"))
         for path in sorted(FIXTURES.rglob("*")):
-            if path.is_file():
+            rel = path.relative_to(FIXTURES).as_posix()
+            if path.is_file() and not rel.startswith(generated):
                 with self.subTest(path=path.name):
                     self.assertIsNone(pattern.search(
                         path.read_text(encoding="utf-8")))

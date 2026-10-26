@@ -1,9 +1,11 @@
 """Theme build tests: HTML scans of a sandbox build (site-theme,
 site-search static scenarios, print-layout "The URL is text only").
 
-Each class builds once. ``ShippedSiteTests`` builds the shipped procedures
-alone; ``FixtureSiteTests`` adds the twin and quoted-title fixtures. Tests
-skip, naming the missing tool or cache, as the other integration tests do.
+Each class builds once. ``ShippedSiteTests`` builds the test collection
+alone, and ``QuotedTitleSiteTests`` adds the quoted-title fixture to it;
+``FixtureSiteTests`` builds the demo collection with the Org and Markdown
+twin fixtures, and needs Emacs for their export. Tests skip, naming the
+missing tool or cache, as the other integration tests do.
 """
 
 import difflib
@@ -37,7 +39,7 @@ SHIPPED_CHAINS = [("OSDB-0001", "OSDB-0002"), ("OSDB-0004", "OSDB-0005"),
 
 
 class SiteCase(ps.ThemeBuildCase):
-    """Helpers shared by the two build classes."""
+    """Helpers shared by the build classes."""
 
     def by_id(self) -> dict[str, Content]:
         return {item.id: item for item in self.content()}
@@ -852,10 +854,14 @@ class ShippedSiteTests(SiteCase):
 
 
 class FixtureSiteTests(SiteCase):
-    """The shipped procedures plus the twin and quoted-title fixtures."""
+    """The demo collection plus the Org and Markdown twin fixtures."""
 
-    FIXTURES = ("OSDB-0904-twin.org", "OSDB-0905-twin.md",
-                "OSDB-0906-quoted-title.md")
+    COLLECTION = ps.DEMO
+    FIXTURES = ("OSDB-0904-twin.org", "OSDB-0905-twin.md")
+
+    @classmethod
+    def require_tools(cls) -> None:
+        ps.require_exporter()
 
     def twin(self, ident: str) -> str:
         path = (self.public / "procedures" / ident.lower() / "index.html")
@@ -875,6 +881,12 @@ class FixtureSiteTests(SiteCase):
         difference = "".join(difflib.unified_diff(
             org.splitlines(True), markdown.splitlines(True), n=0))
         self.assertEqual(org, markdown, difference[:2000])
+
+
+class QuotedTitleSiteTests(SiteCase):
+    """The test collection plus the quoted-title fixture."""
+
+    FIXTURES = ("OSDB-0906-quoted-title.md",)
 
     def test_a_procedure_without_the_tag_has_no_banner(self) -> None:
         """Scenario: A procedure without the tag has none."""

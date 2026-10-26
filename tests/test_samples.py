@@ -2,13 +2,16 @@
 
 import copy
 import re
+import tempfile
 import unittest
+from pathlib import Path
 
 import sample_support as sup
 from pipeline_support import DEMO, FIXTURES, REPO
 
 ORG_SEED = DEMO / "org" / "procedures" / "OSDB-0001-salicylic-acid.org"
 MD_SEED = DEMO / "md" / "procedures" / "OSDB-0002-aspirin.md"
+COLLECTION = FIXTURES / "collection"
 
 
 def samples() -> list[sup.Sample]:
@@ -260,3 +263,166 @@ class GermanSampleTests(unittest.TestCase):
 
         self.assertGreaterEqual(numbered(terms["procedure"]), 15)
         self.assertGreaterEqual(numbered(terms["notes"]), 6)
+
+
+ORG_SOURCE = """\
+#+TITLE: Test acetate
+#+CREATED: [2026-07-20 Mon 09:58:17]
+#+LAST_MODIFIED: [2026-07-20 Mon 10:04:12]
+#+AI_MODEL: model-x
+#+HUGO_SLUG: osdb-0990
+#+HUGO_TAGS: sample-data first second
+#+HUGO_CUSTOM_FRONT_MATTER: :id "OSDB-0990"
+#+HUGO_CUSTOM_FRONT_MATTER: :yield_percent 70
+#+HUGO_CUSTOM_FRONT_MATTER: :product '((name . "Test") (formula . "C2H4"))
+
+* Summary
+A sample with /italic/ text, a C=O stretch and an E/Z ratio that
+is wrapped
+at a column.
+
+* Reagents
+| Reagent | CAS      |
+|---------+----------|
+| Water   | 7732-18-5 |
+"""
+MD_SOURCE = """\
++++
+id = "OSDB-0990"
+slug = "osdb-0990"
+title = "Test acetate"
+date = 2026-07-20T09:58:17+02:00
+lastmod = 2026-07-20T10:04:12+02:00
+yield_percent = 70
+tags = ["sample-data", "first", "second"]
+ai_model = "model-x"
+
+[product]
+name = "Test"
+formula = "C2H4"
++++
+
+## Summary
+
+A sample with *italic* text, a C=O stretch and an E/Z ratio that is
+wrapped at a column.
+
+## Reagents
+
+| Reagent | CAS |
+|---|---|
+| Water | 7732-18-5 |
+"""
+
+
+class AgreementCheckerTests(unittest.TestCase):
+    """The agreement check must reject what the spec forbids, or the
+    collection tests would hold nothing."""
+
+    def differences(self, markdown: str,
+                    source: str = ORG_SOURCE) -> list[str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            org, md = Path(tmp, "OSDB-0990-test.org"), Path(
+                tmp, "OSDB-0990-test.md")
+            org.write_text(source, encoding="utf-8")
+            md.write_text(markdown, encoding="utf-8")
+            return sup.agreement_differences(org, md)
+
+    def test_rewrapping_and_emphasis_markers_are_accepted(self) -> None:
+        """Scenario: The agreement check (checker, accepted)."""
+        self.assertEqual(self.differences(MD_SOURCE), [])
+
+    def test_each_disagreement_is_rejected(self) -> None:
+        """Scenario: The agreement check (checker, rejected)."""
+        broken = {
+            "changed word": MD_SOURCE.replace("stretch", "stretches"),
+            "C=O as CO": MD_SOURCE.replace("C=O", "CO"),
+            "E/Z as EZ": MD_SOURCE.replace("E/Z", "EZ"),
+            "changed Reagents cell": MD_SOURCE.replace(
+                "7732-18-5", "7732-18-6"),
+            "renamed heading": MD_SOURCE.replace(
+                "## Summary", "## Abstract"),
+            "lastmod a minute later": MD_SOURCE.replace(
+                "10:04:12+02:00", "10:05:12+02:00"),
+            "summer date with +01:00": MD_SOURCE.replace(
+                "09:58:17+02:00", "09:58:17+01:00"),
+            "extra front-matter key": MD_SOURCE.replace(
+                "yield_percent = 70\n", "yield_percent = 70\nscale = \"1\"\n"),
+        }
+        for change, markdown in broken.items():
+            with self.subTest(change=change):
+                self.assertNotEqual(markdown, MD_SOURCE)
+                self.assertNotEqual(self.differences(markdown), [])
+
+    def test_fall_back_hour_takes_the_exported_instants(self) -> None:
+        """Scenario: The agreement check (checker, fall-back hour)."""
+        source = ORG_SOURCE.replace(
+            "[2026-07-20 Mon 09:58:17]", "[2026-10-25 Sun 02:50:00]"
+        ).replace("[2026-07-20 Mon 10:04:12]", "[2026-10-25 Sun 02:10:00]")
+        markdown = MD_SOURCE.replace(
+            "2026-07-20T09:58:17+02:00", "2026-10-25T02:50:00+02:00"
+        ).replace("2026-07-20T10:04:12+02:00", "2026-10-25T02:10:00+01:00")
+        self.assertEqual(self.differences(markdown, source), [])
+        self.assertNotEqual(self.differences(markdown.replace(
+            "2026-10-25T02:10:00+01:00", "2026-10-25T02:10:00+02:00"),
+            source), [], "lastmod must not be earlier than date")
+        self.assertNotEqual(self.differences(markdown.replace(
+            "2026-10-25T02:50:00+02:00", "2026-10-25T02:50:00+01:00"),
+            source), [], "date must be the earliest instant")
+
+
+def sample_files() -> list[Path]:
+    """The demo's sample procedure files, Org and Markdown."""
+    return sorted(
+        [*(DEMO / "org" / "procedures").glob("OSDB-*.org"),
+         *(DEMO / "md" / "procedures").glob("OSDB-*.md")])
+
+
+def relative_files(root: Path) -> set[str]:
+    return {p.relative_to(root).as_posix()
+            for p in root.rglob("*") if p.is_file()}
+
+
+class TestCollectionTests(unittest.TestCase):
+    def test_the_collection_mirrors_the_demo(self) -> None:
+        """Scenario: The test collection mirrors the demo."""
+        self.assertTrue(COLLECTION.is_dir(), f"{COLLECTION} is missing")
+        self.assertFalse((COLLECTION / "org").exists(), "org/ exists")
+        copied = ["orgsyndb.toml", ".gitignore",
+                  *sorted(f"static/{p}" for p in relative_files(
+                      DEMO / "static"))]
+        self.assertIn("static/structures/osdb-0003.svg", copied)
+        for relative in copied:
+            with self.subTest(file=relative):
+                self.assertTrue((COLLECTION / relative).is_file(),
+                                f"{relative} is missing")
+                self.assertEqual((COLLECTION / relative).read_bytes(),
+                                 (DEMO / relative).read_bytes())
+        self.assertEqual(
+            {p for p in relative_files(COLLECTION / "static")},
+            relative_files(DEMO / "static"), "static/ files")
+        names = {p.stem + ".md" if p.suffix == ".org" else p.name
+                 for p in sample_files()}
+        self.assertEqual(len(names), 16)
+        self.assertEqual(
+            relative_files(COLLECTION / "md" / "procedures"), names)
+        for path in sample_files():
+            if path.suffix == ".md":
+                with self.subTest(file=path.name):
+                    self.assertEqual(
+                        (COLLECTION / "md" / "procedures"
+                         / path.name).read_bytes(), path.read_bytes())
+
+    def test_converted_samples_agree_with_their_org_sources(self) -> None:
+        """Scenario: Converted samples agree with their Org sources."""
+        self.assertTrue(COLLECTION.is_dir(), f"{COLLECTION} is missing")
+        orgs = sorted((DEMO / "org" / "procedures").glob("OSDB-*.org"))
+        self.assertEqual(len(orgs), 8)
+        for org in orgs:
+            converted = COLLECTION / "md" / "procedures" / (
+                org.stem + ".md")
+            with self.subTest(sample=converted.name):
+                self.assertTrue(converted.is_file(),
+                                f"{converted.name} is missing")
+                self.assertEqual(
+                    sup.agreement_differences(org, converted), [])

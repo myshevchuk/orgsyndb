@@ -304,8 +304,8 @@ class NoNodeInToolsTests(unittest.TestCase):
     def test_check_deps_neither_reports_nor_requires_node(self) -> None:
         """Scenario: No Node in the tools (check-deps)."""
         sandbox = ps.make_sandbox(self)
-        path = ps.make_path(self, ("python3", "emacs", "git",
-                                   "hugo", "weasyprint"))
+        path = ps.make_path(self, ("python3", "hugo", "weasyprint"),
+                            ("emacs", "git"))
         result = sandbox.program("check-deps",
                                  env=sandbox.env(PATH=str(path.directory)))
         self.assertEqual(result.returncode, 0,

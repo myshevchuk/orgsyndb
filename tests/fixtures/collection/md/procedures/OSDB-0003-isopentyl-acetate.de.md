@@ -1,0 +1,112 @@
++++
+id = "OSDB-0003"
+slug = "osdb-0003"
+title = "Isopentylacetat"
+date = 2026-10-22T20:20:00+02:00
+lastmod = 2026-10-22T20:20:00+02:00
+authors = ["B. Example", "D. Example"]
+status = "draft"
+reaction_types = ["esterification"]
+tags = ["sample-data", "fischer-esterification", "fragrance"]
+scale = "50 mmol"
+yield_percent = 70
+hazards = [
+  "Isopentylalkohol: entzündbare Flüssigkeit und Dampf, gesundheitsschädlich bei Einatmen, verursacht Hautreizungen und schwere Augenreizung",
+  "Eisessig: entzündbar, verursacht schwere Verätzungen der Haut und schwere Augenschäden",
+  "Konzentrierte Schwefelsäure: verursacht schwere Verätzungen der Haut und schwere Augenschäden",
+  "Isopentylacetat: entzündbare Flüssigkeit und Dampf",
+]
+references = [
+  "Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989.",
+]
+structure_image = "structures/osdb-0003.svg"
+ai_model = "claude-opus-5-5"
+
+[product]
+name = "Isopentylacetat"
+formula = "C7H14O2"
+mw = 130.19
+smiles = "CC(C)CCOC(C)=O"
+cas = "123-92-2"
++++
+
+## Zusammenfassung
+
+Isopentylacetat (3-Methylbutylacetat, „Bananenöl“) durch
+Fischer-Veresterung von Isopentylalkohol mit einem Überschuss Eisessig
+und Schwefelsäure als Katalysator, gefolgt von wässriger Aufarbeitung
+und einfacher Destillation. Dies sind Beispieldaten: Die Mengen folgen
+der Lehrbuchmethode, sind aber nicht experimentell überprüft.
+
+## Reagenzien
+
+| Reagenz | CAS | M (g/mol) | Menge | mmol | Äquiv. |
+|---|---|---|---|---|---|
+| Isopentylalkohol (3-Methylbutan-1-ol) | 123-51-3 | 88,15 | 4,41 g (5,44 mL) | 50,0 | 1,0 |
+| Essigsäure, Eisessig | 64-19-7 | 60,05 | 6,01 g (5,73 mL) | 100 | 2,0 |
+| Schwefelsäure, 96 % | 7664-93-9 | 98,08 | 0,5 mL | kat. | kat. |
+
+## Durchführung
+
+1. Den Isopentylalkohol (4,41 g, 5,44 mL, 50,0 mmol) und den Eisessig
+   (6,01 g, 5,73 mL, 100 mmol) in einen 50-mL-Rundkolben mit
+   Magnetrührstab und zwei Siedesteinchen geben.
+2. Im Abzug die konzentrierte Schwefelsäure (0,5 mL) unter Umschwenken
+   des Kolbens mit einer Pasteurpipette zutropfen (Anmerkung 1).
+3. Einen wassergekühlten Rückflusskühler aufsetzen und das Gemisch im
+   Heizpilz 60 Minuten unter schwachem Rückfluss erhitzen.
+4. Den Kolben auf Raumtemperatur abkühlen lassen. Der fruchtige Geruch
+   des Esters, der an reife Bananen erinnert, ist jetzt unverkennbar.
+5. Das abgekühlte Gemisch in einen Scheidetrichter mit kaltem Wasser
+   (25 mL) gießen und den Kolben mit weiteren 5 mL Wasser nachspülen.
+
+## Aufarbeitung und Reinigung
+
+Den Scheidetrichter schütteln, die Phasen trennen lassen und die untere,
+wässrige Phase verwerfen. Die obere Esterphase mit gesättigter
+Natriumhydrogencarbonat-Lösung in zwei Portionen zu 15 mL waschen; vor
+dem Verschließen umschwenken und häufig belüften, weil Kohlendioxid
+entsteht (Anmerkung 2), bis die Waschlösung nicht mehr sauer ist. Den
+Ester einmal mit gesättigter Natriumchlorid-Lösung (10 mL) waschen, in
+einen kleinen Erlenmeyerkolben überführen und 10 Minuten über
+wasserfreiem Natriumsulfat trocknen. In einen trockenen 25-mL-Kolben
+dekantieren und bei Normaldruck destillieren; die Fraktion auffangen,
+die bei konstanter Temperatur übergeht. Erwartete Ausbeute 4,56 g
+(35,0 mmol, 70 %).
+
+## Charakterisierung
+
+Farblose Flüssigkeit mit starkem, bananenartigem Geruch. Den
+Siedebereich der aufgefangenen Fraktion notieren. Das IR-Spektrum
+(Film) zeigt die Ester-C=O-Valenzschwingung bei etwa 1740 cm⁻¹ und keine
+breite O–H-Bande des Alkohols. Erwartete ¹H-NMR-Signale (CDCl₃): δ 4,09
+(t, 2H, OCH₂), 2,04 (s, 3H, COCH₃), 1,68 (m, 1H, CH), 1,51 (q, 2H,
+CH₂), 0,92 (d, 6H, 2 × CH₃).
+
+## Anmerkungen
+
+1. Beim Mischen der Schwefelsäure mit den organischen Reagenzien wird
+   Wärme frei; langsam zugeben.
+2. Die Hydrogencarbonat-Wäsche entfernt die überschüssige Essigsäure und
+   die Schwefelsäure. Den Scheidetrichter nach jeweils wenigen
+   Schüttelstößen belüften.
+3. Die Veresterung ist eine Gleichgewichtsreaktion. Der zweifache
+   Überschuss an Essigsäure verschiebt sie zum Ester; der Überschuss wird
+   bei den wässrigen Wäschen entfernt.
+
+## Gefahren und Entsorgung
+
+Isopentylalkohol und das Produkt sind entzündbare Flüssigkeiten; von
+Flammen und heißen Oberflächen fernhalten. Isopentylalkohol ist
+gesundheitsschädlich bei Einatmen und reizt Haut und Augen. Eisessig und
+konzentrierte Schwefelsäure verursachen schwere Verätzungen von Haut und
+Augen; Schutzhandschuhe und Schutzbrille tragen und beide im Abzug
+handhaben. Die vereinigten wässrigen Waschlösungen neutralisieren und als
+wässrigen Abfall entsorgen. Den Destillationsrückstand als
+halogenfreien organischen Abfall sammeln.
+
+## Literatur
+
+1. Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R.
+   *Vogel's Textbook of Practical Organic Chemistry*, 5th ed.; Longman:
+   Harlow, 1989.

@@ -2,9 +2,11 @@
 (site-build, build-script, sample-procedures, collection).
 
 Each runs tools/orgsyndb from a temporary application copy on a temporary
-copy of the demo collection. Tests skip, naming the missing tool or
-cache, unless Emacs, git, the pinned ox-hugo bootstrap, Hugo and the
-cached Pagefind binary exist; the pdf tests also need WeasyPrint.
+copy of the test collection, which has no Org sources. Tests skip, naming
+the missing tool or cache, unless Hugo and the cached Pagefind binary
+exist; the pdf tests also need WeasyPrint. The tests whose subject is the
+export of Org sources copy the demo collection instead, and also skip
+unless Emacs, git and the pinned ox-hugo bootstrap exist.
 """
 
 import json
@@ -34,12 +36,16 @@ LOCALE = "de"
 
 
 class BuildTestCase(unittest.TestCase):
+    """A fresh copy of ``COLLECTION`` for each test."""
+
+    COLLECTION = ps.TEST_COLLECTION
+
     @classmethod
     def setUpClass(cls) -> None:
         ps.require_builder()
 
     def setUp(self) -> None:
-        self.sandbox: Sandbox = make_sandbox(self)
+        self.sandbox: Sandbox = make_sandbox(self, collection=self.COLLECTION)
 
     def build(self, *args: str, **kwargs):
         return self.sandbox.build(*args, **kwargs)
@@ -67,6 +73,17 @@ class BuildTestCase(unittest.TestCase):
         return target
 
 
+class DemoBuildTestCase(BuildTestCase):
+    """A copy of the demo collection, whose Org sources are exported."""
+
+    COLLECTION = ps.DEMO
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        ps.require_exporter()
+
+
 def apply(text: str, *edits) -> str:
     return support.apply_edits(text, edits)
 
@@ -75,7 +92,7 @@ def problem_lines(stdout: str) -> list[str]:
     return [ln for ln in stdout.splitlines() if PROBLEM_LINE.match(ln)]
 
 
-class MergedSectionTests(BuildTestCase):
+class OrgAndMarkdownSectionTests(DemoBuildTestCase):
     def test_org_and_markdown_sourced_pages_are_published(self) -> None:
         """Scenario: Org-sourced and Markdown-sourced pages."""
         self.assert_ok(self.build("build"))
@@ -89,6 +106,8 @@ class MergedSectionTests(BuildTestCase):
                      if p.is_dir()}
         self.assertEqual(published, slugs)
 
+
+class MergedSectionTests(BuildTestCase):
     def test_future_dated_procedure_is_published_indexed_and_printed(
             self) -> None:
         """Scenario: Future-dated procedure is published, indexed and
@@ -201,6 +220,8 @@ class BuildSubcommandTests(BuildTestCase):
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertEqual(snapshot(self.public()), before)
 
+
+class SecondBuildTests(DemoBuildTestCase):
     def test_second_build_without_changes_keeps_the_export(self) -> None:
         """Scenario: Second build without changes."""
         self.assert_ok(self.build("build"))
@@ -227,6 +248,8 @@ class ValidateSubcommandTests(BuildTestCase):
                           "title: error:")
             for ln in result.stdout.splitlines()), result.stdout)
 
+
+class ShippedTreeValidationTests(DemoBuildTestCase):
     def test_shipped_tree_validates_without_any_problem_line(self) -> None:
         """Scenario: Clean validation of the shipped tree."""
         result = self.build("validate")

@@ -2,9 +2,7 @@
 
 ## Purpose
 Define how `tools/validate.py` is invoked on content and Org roots, what it reports and in which format, its exit statuses, and the fixture suite that proves each rejection.
-
 ## Requirements
-
 ### Requirement: Command-line interface
 The validator SHALL be the executable file `tools/validate.py`, invoked as `validate.py [--org-root DIR]... [--vocabulary FILE] [--static-dir DIR] [CONTENT_ROOT ...]`, and it SHALL use only the Python standard library.
 - Each positional `CONTENT_ROOT` is a directory of procedure Markdown files with `+++` TOML front matter, such as an ox-hugo export directory or `md/procedures/`.
@@ -167,7 +165,15 @@ The committed fixtures are these:
 - `warn/`: `missing-section`, `offset` and `stray-file`.
 - `org-invalid/`: every Org lint and cross-check case named in either spec, including `subdirectory`.
 
-Procedure IDs are unique across the committed fixtures. The exceptions are the duplicate-ID case and an Org source paired with its own export. Names are fictitious, and no user or machine identifier appears.
+Procedure IDs are unique across the committed fixtures outside `collection/`, the test collection that the sample-procedures spec defines, whose procedures carry the demo collection's IDs. The exceptions are the duplicate-ID case and an Org source paired with its own export. Names are fictitious, and no committed fixture file contains a user or machine identifier. The identifier check reads every file under `tests/fixtures/` except those under `collection/build/`, `collection/public/` and `collection/pdf/`, which a run of `tools/orgsyndb` on the test collection in place would generate.
+
+#### Scenario: Committed IDs are unique
+- **WHEN** a test reads the `id` of every Markdown file under `tests/fixtures/` outside `invalid/duplicate-id/` and `collection/`
+- **THEN** no `id` occurs twice
+
+#### Scenario: Committed fixtures carry no identifiers
+- **WHEN** a test reads every file under `tests/fixtures/` outside `collection/build/`, `collection/public/` and `collection/pdf/` as UTF-8
+- **THEN** none contains `/home/`, an `@` followed by a dotted host name, `.local` or `.lan`
 
 #### Scenario: Valid set passes cleanly
 - **WHEN** the valid-set run completes
@@ -182,3 +188,4 @@ Procedure IDs are unique across the committed fixtures. The exceptions are the d
 - **WHEN** each directory under `tests/fixtures/invalid/` except `duplicate-id` is used as the single root of its own fixture run
 - **THEN** each run reports exactly one error, with the field and message given by its scenario
 - **AND** there are at least five such directories
+
