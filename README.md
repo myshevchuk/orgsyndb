@@ -48,19 +48,37 @@ collection's format refuses it instead of misreading it.
 
 ## Install the dependencies
 
-OrgSynDB is designed for Fedora. Install the system packages required for
-every collection with:
+OrgSynDB uses ordinary packages available on all major Linux distributions
+and many other Unix-like systems. On Fedora, install the packages required
+for every collection with:
 
 ```sh
 sudo dnf install python3 hugo weasyprint
 ```
 
 If the collection contains Org procedures, exporting them also requires
-Emacs 29.1 or later and Git. Install both with:
+Emacs 29.1 or later and Git:
 
 ```sh
 sudo dnf install emacs git
 ```
+
+On Debian or Ubuntu, install the packages required for every collection
+with:
+
+```sh
+sudo apt install python3 hugo weasyprint
+```
+
+For Org procedures, also install Emacs and Git:
+
+```sh
+sudo apt install emacs-nox git
+```
+
+On other systems, install the same tools with your package manager. The
+project is tested with Python 3.14, Hugo 0.162.1, and WeasyPrint 70.0. An
+older distribution release may package older versions.
 
 A collection that contains only Markdown procedures needs neither Emacs nor
 Git.
@@ -92,9 +110,10 @@ orgsyndb check-deps
 ```
 
 The command reports each installed or missing required tool. It reports
-Emacs, Git, and Caddy separately as optional. If required packages are
-missing, its final line is the `sudo dnf install ...` command for only those
-packages. It never runs `sudo` itself.
+Emacs, Git, and Caddy separately as optional. If required tools are
+missing, its final line names only those tools, for example
+`install with your package manager: hugo weasyprint`. It never runs `sudo`
+itself.
 
 A machine with all required tools and both downloaded caches reports:
 
@@ -323,7 +342,7 @@ prefix are relative to the collection.
 | `init DIR` | Creates an empty collection in `DIR`: `orgsyndb.toml`, a `.gitignore` for the generated directories, and empty source directories. It refuses a directory that already holds `orgsyndb.toml`, and it does not run `git init`. |
 | `clean` | Removes `build/`, `public/`, and `pdf/`. |
 | `clean --all` | Also removes the application's `.emacs-batch/` and `.tools/`. Their contents are fetched again on the next relevant run. |
-| `check-deps` | Reports required tools; optional Emacs, Git, and Caddy; fetched tools; and the Fedora install command when a required tool is missing. |
+| `check-deps` | Reports required tools; optional Emacs, Git, and Caddy; fetched tools; and the missing tool names when a required tool is missing. |
 | `help` | Prints the command summary. `-h` and `--help` do the same. |
 
 The program exits 0 on success, 1 on failure, and 2 on a usage error.

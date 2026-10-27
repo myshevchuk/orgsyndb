@@ -50,7 +50,7 @@ Each subcommand SHALL check, before its first step, every external tool it will 
 - `serve`: what `build` needs.
 - `pdf`: what `build` needs, plus `weasyprint`.
 
-For a missing tool it prints `orgsyndb: error: <tool> not found; install it with: sudo dnf install <package>` and exits 1 without starting any step. It never invokes `sudo`. A subcommand that works on a collection finds the collection before it checks the tools, so a missing or malformed collection is reported whatever tools are installed.
+For a missing tool it prints `orgsyndb: error: <tool> not found; install it with your system's package manager` and exits 1 without starting any step. It never invokes `sudo`. A subcommand that works on a collection finds the collection before it checks the tools, so a missing or malformed collection is reported whatever tools are installed.
 
 #### Scenario: Org sources by entry names
 - **WHEN** a test calls `has_org_sources` on a directory that does not exist, an empty directory, a directory holding only `.gitkeep`, one holding only `notes.txt`, one holding only a subdirectory `nested/`, and one holding only `OSDB-0001-a.org`
@@ -58,15 +58,15 @@ For a missing tool it prints `orgsyndb: error: <tool> not found; install it with
 
 #### Scenario: Hugo missing
 - **WHEN** a test runs `tools/orgsyndb -C <collection> build` on a copy of the test collection `tests/fixtures/collection/`, which has no Org sources, with a `PATH` that holds `python3` and a recording fake `sudo`, but not `hugo`
-- **THEN** it exits 1, stderr contains `sudo dnf install hugo`, the collection's `build/` was not created, and the fake `sudo` was never invoked
+- **THEN** it exits 1, stderr contains `hugo not found; install it with your system's package manager`, the collection's `build/` was not created, and the fake `sudo` was never invoked
 
 #### Scenario: git missing although ox-hugo is installed
 - **WHEN** a test runs `tools/orgsyndb -C <collection> export` on a copy of the demo collection in an application copy whose `.emacs-batch/` is linked from a bootstrapped checkout, with a `PATH` that holds `python3`, `emacs` (real or stub executable) and a recording fake `sudo`, but not `git`
-- **THEN** it exits 1, stderr contains `sudo dnf install git`, the collection's `build/` was not created, and the fake `sudo` was never invoked
+- **THEN** it exits 1, stderr contains `git not found; install it with your system's package manager`, the collection's `build/` was not created, and the fake `sudo` was never invoked
 
 #### Scenario: Emacs missing with Org sources
 - **WHEN** a test runs `tools/orgsyndb -C <collection> build` on the demo collection with a `PATH` that holds `python3`, `git`, `hugo` and a recording fake `sudo`, but not `emacs`
-- **THEN** it exits 1, stderr contains `sudo dnf install emacs`, the collection's `build/` was not created, and the fake `sudo` was never invoked
+- **THEN** it exits 1, stderr contains `emacs not found; install it with your system's package manager`, the collection's `build/` was not created, and the fake `sudo` was never invoked
 
 #### Scenario: Markdown-only collection builds without Emacs and git
 - **WHEN** an integration test runs `tools/orgsyndb -C <collection> build` on a copy of the test collection `tests/fixtures/collection/` with a `PATH` that holds `python3` and `hugo` but neither `emacs` nor `git`, skipping when Hugo or the Pagefind cache is absent
@@ -229,18 +229,18 @@ When `git` is unavailable or the collection is not inside a git work tree, `new`
 - Each required tool gets a line beginning `ok ` or `missing `, followed by the tool's name and nothing else.
 - Lines beginning `optional ` report `emacs` and `git`, each saying whether it is installed and that it is only for Org procedures, and then `caddy`.
 - Lines beginning `auto ` report Pagefind 1.5.2 and ox-hugo/tomelr, each saying whether it is cached or will be fetched on first use.
-- When any required tool is missing, the last line is exactly `sudo dnf install <packages>`, listing the Fedora packages of the missing required tools in that order (`python3`, `hugo`, `weasyprint`), and the exit status is 1. Otherwise the exit status is 0.
+- When any required tool is missing, the last line is exactly `install with your package manager: <tools>`, listing the missing required tools, separated by single spaces, in that order (`python3`, `hugo`, `weasyprint`), and the exit status is 1. Otherwise the exit status is 0.
 
 It never installs anything and never invokes `sudo`.
 
 #### Scenario: Two tools missing
 - **WHEN** a test runs `tools/orgsyndb check-deps` with a `PATH` that holds only `python3`, `emacs` and `git` (real or stub executables) and a recording fake `sudo`
-- **THEN** it exits 1, stdout has a line beginning `missing hugo` and one beginning `missing weasyprint`, and the last line is exactly `sudo dnf install hugo weasyprint`
+- **THEN** it exits 1, stdout has a line beginning `missing hugo` and one beginning `missing weasyprint`, and the last line is exactly `install with your package manager: hugo weasyprint`
 - **AND** the fake `sudo` was never invoked
 
 #### Scenario: Nothing missing
 - **WHEN** a test runs `tools/orgsyndb check-deps` with a `PATH` holding the three required tools (real or stub executables) and neither `emacs` nor `git`
-- **THEN** it exits 0, no line begins `missing ` or `sudo `, and each `ok ` line ends with its tool's name
+- **THEN** it exits 0, no line begins `missing ` or `install `, and each `ok ` line ends with its tool's name
 - **AND** stdout has the lines `optional emacs (not installed; only for Org procedures)` and `optional git (not installed; only for Org procedures)`
 
 ### Requirement: Pipeline helper module

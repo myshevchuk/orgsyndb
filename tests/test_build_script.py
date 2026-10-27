@@ -192,9 +192,10 @@ class MissingToolTests(ProgramTestCase):
         sandbox = make_sandbox(self, **kwargs)
         return sandbox, make_path(self, tools, stubs)
 
-    def assert_stopped(self, result: Run, sandbox, path, package: str):
+    def assert_stopped(self, result: Run, sandbox, path, tool: str):
         self.assertEqual(result.returncode, 1, result.stdout)
-        self.assertIn(f"sudo dnf install {package}", result.stderr)
+        self.assertIn(f"{tool} not found; install it with your "
+                      "system's package manager", result.stderr)
         self.assertFalse((sandbox.root / "build").exists())
         self.assertEqual(path.sudo_calls(), [])
 
@@ -307,7 +308,7 @@ class CheckDepsTests(ProgramTestCase):
         env = sandbox.env(PATH=str(path.directory))
         return sandbox.program("check-deps", env=env), path
 
-    def test_two_missing_tools_are_named_in_one_dnf_line(self) -> None:
+    def test_two_missing_tools_are_named_in_one_line(self) -> None:
         """Scenario: Two tools missing."""
         result, path = self.run_check(("python3",), ("emacs", "git"))
         lines = result.stdout.splitlines()
@@ -315,16 +316,17 @@ class CheckDepsTests(ProgramTestCase):
         self.assertTrue(any(ln.startswith("missing hugo") for ln in lines))
         self.assertTrue(
             any(ln.startswith("missing weasyprint") for ln in lines))
-        self.assertEqual(lines[-1], "sudo dnf install hugo weasyprint")
+        self.assertEqual(lines[-1],
+                         "install with your package manager: hugo weasyprint")
         self.assertEqual(path.sudo_calls(), [])
 
-    def test_nothing_missing_exits_zero_without_a_dnf_line(self) -> None:
+    def test_nothing_missing_exits_zero_without_an_install_line(self) -> None:
         """Scenario: Nothing missing."""
         result, path = self.run_check(("python3",), ("hugo", "weasyprint"))
         self.assertEqual(result.returncode, 0, result.stderr)
         lines = result.stdout.splitlines()
         for line in lines:
-            self.assertFalse(line.startswith(("missing ", "sudo ")), line)
+            self.assertFalse(line.startswith(("missing ", "install ")), line)
         for tool in ("python3", "hugo", "weasyprint"):
             self.assertIn(f"ok      {tool}", lines)
         for tool in ("emacs", "git"):
