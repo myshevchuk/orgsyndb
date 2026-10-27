@@ -29,6 +29,8 @@ class Emacs29WorkflowTests(unittest.TestCase):
         self.assertRegex(job, r"(?m)^\s+runs-on:\s*ubuntu-24\.04\s*$")
         install = re.search(r"apt-get install[^\n]*", job)
         self.assertIsNotNone(install, "export job has no apt-get install")
+        self.assertRegex(install.group(0),
+                         r"\s--no-install-recommends(\s|$)")
         for package in ("emacs-nox", "git"):
             with self.subTest(package=package):
                 self.assertRegex(install.group(0), rf"\s{package}(\s|$)")
