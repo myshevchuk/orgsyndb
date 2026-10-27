@@ -51,6 +51,8 @@ class HugoConfigurationTests(unittest.TestCase):
             "/procedures/:slug/")
         goldmark = config.get("markup", {}).get("goldmark", {})
         self.assertIs(goldmark.get("renderer", {}).get("unsafe"), True)
+        highlight = config.get("markup", {}).get("highlight", {})
+        self.assertIs(highlight.get("noClasses"), False)
         html_minify = config.get("minify", {}).get("tdewolff", {}).get(
             "html", {})
         self.assertIs(html_minify.get("keepWhitespace"), True)
@@ -87,6 +89,8 @@ class OverlayTests(unittest.TestCase):
             {"source": f"{site}/content", "target": "content"},
             {"source": f"{collection}/build/content/procedures",
              "target": "content/procedures", "files": files},
+            {"source": f"{collection}/build/content/help",
+             "target": "content/help"},
             {"source": f"{collection}/static", "target": "static"},
         ]})
 

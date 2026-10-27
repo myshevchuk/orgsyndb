@@ -63,7 +63,7 @@ PAGEFIND_HINT = ("pagefind not cached: run tools/orgsyndb -C examples/demo "
                  "(needs network)")
 
 # Directories the integration harness copies from the real application.
-COPIED = ("tools", "site", "templates")
+COPIED = ("tools", "site", "templates", "docs")
 GIT_QUIET = ["-c", "user.name=Test Author",
              "-c", "user.email=author@example.invalid",
              "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"]
@@ -319,10 +319,10 @@ def make_sandbox(case: unittest.TestCase, *,
     """Create the copies for ``case``; removed on clean-up.
 
     Both live under a directory whose name contains a space. The
-    application copy holds ``tools/``, ``site/`` and ``templates/``;
-    ``.emacs-batch/`` and ``.tools/`` are symlinked from the real
-    application (when they exist), or ``.emacs-batch/`` is copied with
-    ``copy_emacs``. The collection copy is a copy of ``collection``, the
+    application copy holds ``tools/``, ``site/``, ``templates/`` and
+    ``docs/``; ``.emacs-batch/`` and ``.tools/`` are symlinked from the
+    real application (when they exist), or ``.emacs-batch/`` is copied
+    with ``copy_emacs``. The collection copy is a copy of ``collection``, the
     test collection unless ``DEMO`` is passed, without its generated
     directories ``build/``, ``public/`` and ``pdf/``.
     """
@@ -726,6 +726,39 @@ def read_content(sandbox: Sandbox, locale: str | None) -> list[Content]:
                 chosen[item.id] = item
         found = list(chosen.values())
     return sorted(found, key=lambda item: (item.id, item.path.name))
+
+
+class HelpDocument(NamedTuple):
+    """A document of an application's docs/, as the help section shows it."""
+    name: str
+    slug: str
+    base: str
+    language: str
+    group: str
+    title: str
+
+
+def help_documents(app: Path) -> list[HelpDocument]:
+    """The documents of ``app``/docs/ by name, read independently of the
+    pipeline: the title from the first line (``# ``) or ``#+TITLE:``."""
+    found = []
+    for path in sorted((app / "docs").iterdir()):
+        if not path.is_file() or path.suffix not in (".md", ".org"):
+            continue
+        text = path.read_text(encoding="utf-8-sig")
+        if path.suffix == ".md":
+            title = text.split("\n", 1)[0].removeprefix("# ")
+        else:
+            title = re.search(r"(?im)^#\+title:\s*(.*)$", text).group(1)
+        code = re.search(r"\.([a-z]{2})\.(md|org)$", path.name)
+        stem = path.name.rsplit(".", 1)[0]
+        base = stem.rsplit(".", 1)[0] if code else stem
+        found.append(HelpDocument(
+            path.name, stem.lower().replace(".", "-"), base.lower(),
+            code.group(1) if code else "en",
+            "glossaries" if path.name.startswith("GLOSSARY") else "guides",
+            title.strip()))
+    return found
 
 
 def reaction_labels(root: Path, language: str = "en") -> dict[str, str]:

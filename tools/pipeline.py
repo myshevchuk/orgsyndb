@@ -40,6 +40,7 @@ STAGING = ".export-staging"
 PREVIOUS = ".export-previous"
 # The procedures Hugo publishes, one variant per ID, under build/.
 STAGED = Path("content") / "procedures"
+HELP_STAGED = Path("content") / "help"
 
 PAGEFIND_VERSION = "1.5.2"
 PAGEFIND_TARBALL = (f"pagefind-v{PAGEFIND_VERSION}-x86_64-unknown-linux-"
@@ -507,19 +508,182 @@ def stage_content(chosen: Iterable[tuple[Path, dict[str, Any]]],
             text, encoding="utf-8")
 
 
+# --------------------------------------------------------------------------
+# Help pages
+
+# A fenced code block of Markdown, from its opening fence to the closing
+# one (or the end of the text).
+MD_FENCE_RE = re.compile(
+    r"^ {0,3}(?P<fence>`{3,}|~{3,})[^\n]*\n.*?(?:^ {0,3}(?P=fence)[`~]*[ \t]*$"
+    r"|\Z)", re.M | re.S)
+# A code span, or an inline link [text](target), image or not.
+MD_LINK_RE = re.compile(r"(?P<code>(`+).+?\2)"
+                        r"|(?P<bang>!?)\[(?P<text>[^\]]*)\]"
+                        r"\((?P<target>[^()\s]+)\)", re.S)
+# An Org block, from #+begin_<name> to #+end_<name>.
+ORG_BLOCK_RE = re.compile(r"^[ \t]*#\+begin_(\w+).*?^[ \t]*#\+end_\1[^\n]*$",
+                          re.M | re.S | re.I)
+# A =verbatim= or ~code~ span, or a bracket link [[target][description]].
+ORG_LINK_RE = re.compile(
+    r"(?P<code>(?:(?<=[\s({'\"-])|^)([=~])\S(?:[^\n]*?\S)??\2"
+    r"(?=[\s.,;:!?')}\"\\-]|$))"
+    r"|\[\[(?P<target>[^\]]+)\](?:\[(?P<text>[^\]]+)\])?\]", re.M)
+URI_SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
+
+
+def help_slug(name: str) -> str:
+    """Return the help-page slug of the document file ``name``.
+
+    That is the name without its suffix, lowercased, with every ``.``
+    replaced by ``-``: ``authoring-org-de`` for ``AUTHORING-ORG.de.org``.
+    """
+    return name.rsplit(".", 1)[0].lower().replace(".", "-")
+
+
+def help_link(target: str, names: set[str]) -> str | None:
+    """Return the help-page URL a document link ``target`` leads to.
+
+    A target with a URI scheme, or beginning with ``#``, ``/`` or ``*``,
+    is returned unchanged. A target whose path names one of ``names``
+    becomes ``/help/<slug>/`` with the target's fragment, if any. Any
+    other target names an unpublished file: returns None.
+    """
+    if URI_SCHEME_RE.match(target) or target[:1] in ("#", "/", "*"):
+        return target
+    path, hash_, fragment = target.partition("#")
+    if path not in names:
+        return None
+    return f"/help/{help_slug(path)}/{hash_}{fragment}"
+
+
+def outside(pattern: re.Pattern[str], text: str,
+            change: Callable[[str], str]) -> str:
+    """Return ``text`` with ``change`` applied to every stretch between
+    the matches of ``pattern``; the matches are kept as they are."""
+    out, last = [], 0
+    for match in pattern.finditer(text):
+        out += [change(text[last:match.start()]), match.group(0)]
+        last = match.end()
+    return "".join(out + [change(text[last:])])
+
+
+def help_page(name: str, text: str, names: set[str]) -> str:
+    """Return the text to stage for the help document ``name``.
+
+    ``text`` is the document's text and ``names`` the names of all
+    staged documents. A Markdown document begins with a ``# <title>``
+    line; an Org document has a ``#+TITLE:`` line before its first
+    heading. That line is replaced by a TOML front matter with
+    ``title``, ``help_group`` (``glossaries`` for a name beginning with
+    ``GLOSSARY``, else ``guides``), ``help_base`` (the slug of the name
+    without its language code) and ``help_language`` (the name's
+    language code, or ``en``). Links outside code are rewritten: a link
+    to one of ``names`` leads to its help page, and a link to any other
+    relative path becomes its text. Raises ValueError when the title
+    line is missing.
+    """
+    if name.endswith(".org"):
+        head = re.split(r"(?m)^\*+ ", text, maxsplit=1)[0]
+        line = re.search(r"(?im)^#\+title:[ \t]*(.*)$", head)
+        if line is None:
+            raise ValueError("no #+TITLE: line before the first heading")
+        title = line.group(1).strip()
+        body = text[:line.start()] + text[line.end() + 1:]
+
+        def link(match: re.Match[str]) -> str:
+            if match.group("code"):
+                return match.group(0)
+            target = match.group("target").removeprefix("file:")
+            label = match.group("text") or target
+            url = help_link(target, names)
+            if url is None:
+                return label
+            if url == target:
+                return match.group(0)
+            return f"[[{url}][{label}]]"
+
+        body = outside(ORG_BLOCK_RE, body,
+                       lambda part: ORG_LINK_RE.sub(link, part))
+    else:
+        first, _, body = text.partition("\n")
+        title = first.removeprefix("# ").strip()
+        if not first.startswith("# ") or not title:
+            raise ValueError("the first line is not a '# ' title")
+
+        def link(match: re.Match[str]) -> str:
+            if match.group("code") or match.group("bang"):
+                return match.group(0)
+            url = help_link(match.group("target"), names)
+            if url is None:
+                return match.group("text")
+            return f"[{match.group('text')}]({url})"
+
+        body = outside(MD_FENCE_RE, body,
+                       lambda part: MD_LINK_RE.sub(link, part))
+    group = "glossaries" if name.startswith("GLOSSARY") else "guides"
+    base = validate.base_name(name).lower().replace(".", "-")
+    language = validate.language_of(name) or "en"
+    return ("+++\n"
+            f"title = {toml_string(title)}\n"
+            f"help_group = {toml_string(group)}\n"
+            f"help_base = {toml_string(base)}\n"
+            f"help_language = {toml_string(language)}\n"
+            "+++\n" + body)
+
+
+def stage_help(docs: Path, target: Path) -> int:
+    """Stage the documents of ``docs`` as help pages in ``target``.
+
+    The documents are the ``.md`` and ``.org`` files directly in
+    ``docs``; none when it does not exist. Each is staged as its
+    ``help_slug`` and suffix, with the text ``help_page`` returns.
+    ``target`` is emptied first. Returns the number of pages staged.
+    Raises ValueError, before ``target`` is touched, when two documents
+    have one slug, when a name carries a language code outside
+    ``validate.LANGUAGES``, or when a document has no title.
+    """
+    docs, target = Path(docs), Path(target)
+    sources = sorted(p for p in docs.iterdir()
+                     if p.is_file() and p.suffix in (".md", ".org")) \
+        if docs.is_dir() else []
+    names = {path.name for path in sources}
+    staged: dict[str, tuple[Path, str]] = {}
+    for path in sources:
+        code = validate.language_of(path.name)
+        if code is not None and code not in validate.LANGUAGES:
+            raise ValueError(f"{path}: language code {code} is not one of "
+                             f"{', '.join(validate.LANGUAGES)}")
+        slug = help_slug(path.name)
+        if slug in staged:
+            raise ValueError(f"{staged[slug][0]} and {path} both give the "
+                             f"help page /help/{slug}/")
+        try:
+            text = help_page(path.name, path.read_text(encoding="utf-8-sig"),
+                             names)
+        except ValueError as exc:
+            raise ValueError(f"{path}: {exc}") from None
+        staged[slug] = (path, text)
+    remove_tree(target)
+    target.mkdir(parents=True)
+    for slug, (path, text) in staged.items():
+        (target / f"{slug}{path.suffix}").write_text(text, encoding="utf-8")
+    return len(staged)
+
+
 def hugo_overlay(site: Path, collection: Path, language: str) -> str:
     """Return the Hugo configuration overlay for building ``collection``.
 
     ``site`` is the application's Hugo project and ``collection`` the
     collection directory, both absolute; ``language`` is the site's
     language. The overlay sets ``defaultContentLanguage`` to it, the
-    publish and resource directories inside the collection, and three
+    publish and resource directories inside the collection, and four
     module mounts: the application's pages, the staged procedures of
-    ``build/content/procedures/`` and the collection's static files.
+    ``build/content/procedures/``, the staged help pages of
+    ``build/content/help/`` and the collection's static files.
     """
     site, collection = Path(site), Path(collection)
 
-    def mount(source: Path, target: str, files: bool) -> str:
+    def mount(source: Path, target: str, files: bool = False) -> str:
         text = (f"\n[[module.mounts]]\nsource = {toml_string(str(source))}\n"
                 f"target = {toml_string(target)}\n")
         return text + ('files = ["/OSDB-*.md"]\n' if files else "")
@@ -529,10 +693,11 @@ def hugo_overlay(site: Path, collection: Path, language: str) -> str:
             "resourceDir = "
             f"{toml_string(str(collection / 'build' / 'hugo-resources'))}\n"
             f"defaultContentLanguage = {toml_string(language)}\n"
-            + mount(site / "content", "content", False)
+            + mount(site / "content", "content")
             + mount(collection / "build" / STAGED, "content/procedures",
                     True)
-            + mount(collection / "static", "static", False))
+            + mount(collection / "build" / HELP_STAGED, "content/help")
+            + mount(collection / "static", "static"))
 
 
 # --------------------------------------------------------------------------

@@ -12,6 +12,7 @@ import difflib
 import re
 import tomllib
 import unittest
+import urllib.parse
 
 import pipeline_support as ps
 from pipeline_support import Content, Node, Page
@@ -21,7 +22,7 @@ FOOTER = "OrgSynDB · internal procedures"
 ORIGIN = "http://127.0.0.1:8000"
 NAVIGATION = [("/procedures/", "Procedures"),
               ("/reaction_types/", "Reaction types"), ("/tags/", "Tags"),
-              ("/authors/", "Authors"), ("/search/", "Search")]
+              ("/authors/", "Authors"), ("/help/", "Help")]
 SECTIONS = ["Summary", "Reagents", "Procedure", "Workup and Purification",
             "Characterization", "Notes", "Hazards and Waste Disposal",
             "References"]
@@ -579,7 +580,9 @@ class ShippedSiteTests(SiteCase):
                  "procedures/osdb-0001/index.html": {"/procedures/": "true"},
                  "tags/index.html": {"/tags/": "page"},
                  "tags/sample-data/index.html": {"/tags/": "true"},
-                 "search/index.html": {"/search/": "page"}}
+                 "search/index.html": {},
+                 "help/index.html": {"/help/": "page"},
+                 "help/schema/index.html": {"/help/": "true"}}
         for name, expected in cases.items():
             with self.subTest(page=name):
                 page = ps.load_page(self.public, self.public / name)
@@ -588,6 +591,91 @@ class ShippedSiteTests(SiteCase):
                           for l in page.links(nav)
                           if "aria-current" in l.node.attrs}
                 self.assertEqual(marked, expected)
+
+    def help_lists(self, page: Page) -> dict[str, Node]:
+        """The ul.help-list after each h2 of a help index, by heading."""
+        lists = {}
+        for heading in page.find("main").find_all("h2"):
+            node = page.following(heading, "ul", "h2")
+            self.assertIsNotNone(node, f"no list after {heading.norm()}")
+            self.assertTrue(node.has_class("help-list"), heading.norm())
+            lists[heading.norm()] = node
+        return lists
+
+    def test_english_help_index(self) -> None:
+        """Scenario: English help index."""
+        page = ps.load_page(self.public, self.public / "help" / "index.html")
+        main = page.find("main")
+        self.assertEqual([h.norm() for h in main.find_all("h1")], ["Help"])
+        lede = main.find("p", "lede")
+        self.assertIsNotNone(lede, "no p.lede")
+        self.assertEqual(lede.norm(),
+                         "Guides to writing procedures, and glossaries.")
+        lists = self.help_lists(page)
+        self.assertEqual(list(lists), ["Guides", "Glossaries"])
+        documents = ps.help_documents(self.sandbox.app)
+        names = {"de": "Deutsch", "en": "English"}
+        for group, heading in [("guides", "Guides"),
+                               ("glossaries", "Glossaries")]:
+            versions: dict[str, list[ps.HelpDocument]] = {}
+            for doc in documents:
+                if doc.group == group:
+                    versions.setdefault(doc.base, []).append(doc)
+            items = [li for li in lists[heading].elements()
+                     if li.tag == "li"]
+            self.assertEqual(len(items), len(versions), heading)
+            for li, base in zip(items, sorted(versions)):
+                with self.subTest(base=base):
+                    docs = sorted(versions[base], key=lambda d: d.language)
+                    first = next((d for d in docs if d.language == "en"),
+                                 docs[0])
+                    links = page.links(li)
+                    self.assertEqual(links[0].target, f"/help/{first.slug}/")
+                    self.assertEqual(links[0].node.norm(), first.title)
+                    self.assertEqual(links[0].node.get("hreflang"),
+                                     first.language)
+                    self.assertEqual(links[0].node.get("lang"),
+                                     None if first.language == "en"
+                                     else first.language)
+                    others = [d for d in docs if d is not first]
+                    self.assertEqual(
+                        [(l.target, l.node.norm(), l.node.get("hreflang"))
+                         for l in links[1:]],
+                        [(f"/help/{d.slug}/", names[d.language], d.language)
+                         for d in others])
+
+    def test_help_pages_of_a_build(self) -> None:
+        """Scenario: Help pages of a build."""
+        documents = ps.help_documents(self.sandbox.app)
+        pages = (self.public / "help").glob("*/index.html")
+        published = sorted(p.parent.name for p in pages)
+        self.assertEqual(published, sorted(d.slug for d in documents))
+        scheme = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
+        for doc in documents:
+            with self.subTest(document=doc.name):
+                page = ps.load_page(self.public, self.public / "help"
+                                    / doc.slug / "index.html")
+                articles = page.find("main").find_all("article", "help-page")
+                self.assertEqual(len(articles), 1)
+                article = articles[0]
+                self.assertEqual(article.get("lang"), doc.language)
+                self.assertEqual([h.norm() for h in article.find_all("h1")],
+                                 [doc.title])
+                self.assertEqual(page.indexed_bodies(), [])
+                for link in page.links(article):
+                    href = link.href
+                    self.assertIsNone(
+                        re.search(r"\.(md|org)(#|$)", href), href)
+                    if scheme.match(href) or href.startswith("#"):
+                        continue
+                    self.assertTrue(link.target.startswith("/help/"), href)
+                    target = ps.target_file(self.public, link.target)
+                    self.assertTrue(target.is_file(), href)
+                    fragment = urllib.parse.unquote(
+                        urllib.parse.urldefrag(href).fragment)
+                    if fragment:
+                        other = ps.load_page(self.public, target)
+                        self.assertIsNotNone(other.find(id=fragment), href)
 
     def test_home_page_content(self) -> None:
         """Scenario: Home page content."""
@@ -739,8 +827,15 @@ class ShippedSiteTests(SiteCase):
             with self.subTest(page=name):
                 spans = page.find_all("span", "page-url")
                 inside = sum(s.text().count(ORIGIN) for s in spans)
-                self.assertEqual(page.source.count(ORIGIN), inside)
+                source = page.source
+                document = page.find("article", "help-page")
+                if document is not None:
+                    source = (source[:document.start]
+                              + source[document.end_tag_end:])
+                self.assertEqual(source.count(ORIGIN), inside)
                 for node in page.nodes:
+                    if document is not None and node.within(document):
+                        continue
                     for value in node.attrs.values():
                         self.assertNotIn("127.0.0.1", value)
                 if page.url in procedure_urls:

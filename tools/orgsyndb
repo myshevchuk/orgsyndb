@@ -260,6 +260,9 @@ def run_build(collection: Path) -> list[tuple[Path, dict]]:
         pipeline.content_files(existing(CONTENT_ROOTS)), language)
     step(f"build: staging {len(chosen)} procedures for locale {language}")
     pipeline.stage_content(chosen, Path("build") / pipeline.STAGED)
+    count = pipeline.stage_help(APP / "docs",
+                                Path("build") / pipeline.HELP_STAGED)
+    step(f"build: staging {count} help pages from docs/")
     step("build: hugo")
     pipeline.remove_tree(Path("public"))
     config = collection / "build" / "hugo-config"

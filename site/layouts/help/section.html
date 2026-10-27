@@ -1,0 +1,26 @@
+{{- /* The help index: the guides, then the glossaries, that the build
+staged from the application's docs/. One entry per document, whatever
+its languages: a link to the version in the site's language (else the
+English one, else the first by language code), then links to the other
+versions under their language names. */ -}}
+{{ define "main" -}}
+<h1>{{ partial "page-title.html" . }}</h1>
+<p class="lede">{{ T "help_lede" }}</p>
+{{ range $group := slice "guides" "glossaries" -}}
+{{ $pages := where $.Pages "Params.help_group" $group -}}
+{{ with $pages -}}
+<h2>{{ T (printf "help_%s" $group) }}</h2>
+<ul class="help-list">
+{{ range (sort . "Params.help_base").GroupByParam "help_base" -}}
+{{ $versions := sort .Pages "Params.help_language" -}}
+{{ $first := index $versions 0 -}}
+{{ with where $versions "Params.help_language" "en" }}{{ $first = index . 0 }}{{ end -}}
+{{ with where $versions "Params.help_language" site.Language.Lang }}{{ $first = index . 0 }}{{ end -}}
+{{ $language := $first.Params.help_language -}}
+<li><a href="{{ $first.RelPermalink }}" hreflang="{{ $language }}"{{ if ne $language site.Language.Lang }} lang="{{ $language }}"{{ end }}>{{ $first.Title }}</a>
+{{- range $versions }}{{ if ne . $first }} · <a href="{{ .RelPermalink }}" hreflang="{{ .Params.help_language }}">{{ T (printf "language_%s" .Params.help_language) }}</a>{{ end }}{{ end }}</li>
+{{ end -}}
+</ul>
+{{ end -}}
+{{ end -}}
+{{ end }}

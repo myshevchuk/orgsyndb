@@ -12,7 +12,7 @@ from pipeline_support import Page
 NAVIGATION = [("/procedures/", "Vorschriften"),
               ("/reaction_types/", "Reaktionstypen"),
               ("/tags/", "Schlagwörter"), ("/authors/", "Autoren"),
-              ("/search/", "Suche")]
+              ("/help/", "Hilfe")]
 FOOTER = "OrgSynDB · interne Vorschriften"
 BANNER = "Beispieldaten – Mengenangaben nicht experimentell überprüft."
 PANEL_LABELS = ["ID", "Produkt", "Summenformel", "Molmasse", "CAS", "SMILES",
@@ -22,7 +22,8 @@ TITLES = {"procedures/index.html": "Alle Vorschriften",
           "procedures-by-date/index.html": "Alle Vorschriften nach Datum",
           "reaction_types/index.html": "Reaktionstypen",
           "tags/index.html": "Schlagwörter",
-          "authors/index.html": "Autoren", "search/index.html": "Suche"}
+          "authors/index.html": "Autoren", "search/index.html": "Suche",
+          "help/index.html": "Hilfe"}
 
 
 class GermanCase(ps.ThemeBuildCase):
@@ -65,6 +66,24 @@ class GermanSiteTests(GermanCase):
             with self.subTest(page=relative):
                 self.assertEqual(page.find("h1").norm(), title)
                 self.assertEqual(page.title(), f"{title} | OrgSynDB")
+
+    def test_german_help_index(self) -> None:
+        """Scenario: German help index."""
+        page = self.page("help/index.html")
+        main = page.find("main")
+        self.assertEqual(main.find("h1").norm(), "Hilfe")
+        self.assertEqual([h.norm() for h in main.find_all("h2")],
+                         ["Anleitungen", "Glossare"])
+        first = page.following(main.find("h2"), "li")
+        self.assertIsNotNone(first, "the guides list has no entry")
+        title = (self.sandbox.app / "docs" / "AUTHORING.de.md").read_text(
+            encoding="utf-8").split("\n", 1)[0].removeprefix("# ")
+        links = page.links(first)
+        self.assertEqual(
+            [(l.target, l.node.norm(), l.node.get("hreflang"))
+             for l in links],
+            [("/help/authoring-de/", title, "de"),
+             ("/help/authoring/", "English", "en")])
 
     def test_the_german_variants_are_published(self) -> None:
         """Scenario: Choosing the variant to publish (test collection)."""

@@ -26,6 +26,11 @@ procedures = "/procedures/:slug/"
 [markup.goldmark.renderer]
 unsafe = true
 
+# Highlighted code carries classes, not inline colours, so that it shows
+# in the theme's colours.
+[markup.highlight]
+noClasses = false
+
 [minify.tdewolff.html]
 keepWhitespace = true
 

@@ -175,6 +175,7 @@ A successful build of the demo collection prints these steps:
 ==> validate: build/export, md/procedures
 validated 16 files: 0 errors, 0 warnings
 ==> build: staging 8 procedures for locale de
+==> build: staging 8 help pages from docs/
 ==> build: hugo
 ==> build: pagefind
 ```
@@ -211,7 +212,14 @@ German equivalents, such as **Kopieren** for **Copy**.
   category. Their term pages list the matching procedures. For example,
   `/reaction_types/esterification/`, `/tags/sample-data/`, and
   `/authors/a.-example/` are term-page URLs.
-- `/search/` provides full-text search and filters.
+- `/search/` is the results page for the search fields on `/`,
+  `/procedures/`, and `/procedures-by-date/`. It provides full-text search
+  and filters, but the site navigation does not link to it.
+- `/help/` lists the guides and glossaries from the application's `docs/`
+  directory. Each document has a page under `/help/<slug>/`. The index
+  prefers the site's language where a document has both versions and links
+  the other version as **English** or **Deutsch**. Documents that exist only
+  in German remain available on an English site.
 
 Search finds a procedure by its ID, product name, CAS number, any part of
 its SMILES string, a tag, or a word in the procedure text. SMILES searches
@@ -225,7 +233,8 @@ so selecting two reaction types produces no results. An empty search box
 lists nothing. Search needs the site over HTTP, from
 `orgsyndb serve` or another web server; it does not work when you
 open `public/index.html` through a `file:` URL. Without JavaScript, use the
-browse-page links shown on the search page.
+browse-page links shown on the search page. Search results contain procedures
+only; help pages are not indexed.
 
 On a procedure page, **Copy** copies the SMILES and briefly reports
 **Copied**. Clipboard access needs a secure context: `https:` or
@@ -469,6 +478,9 @@ without additional configuration: Hugo writes relative URLs, and Pagefind
 finds its files and result links from the location of its own script.
 
 ## Authoring references
+
+The built site publishes these documents under `/help/`, reached through
+**Help** in the navigation, or **Hilfe** on a German site.
 
 - [Procedure schema](docs/SCHEMA.md): exact field, file-name, vocabulary,
   body-section, language, and validator rules. German:

@@ -2,9 +2,7 @@
 
 ## Purpose
 Define the custom OrgSynDB theme: the page kinds and their content, the procedure metadata panel, precursor and used-in links, the sample banner, light and dark colour schemes, the desktop layout and accessibility basics, without third-party themes or frameworks.
-
 ## Requirements
-
 ### Requirement: Theme sources and constraints
 The site SHALL be rendered by a theme written for this repository, made of these sources and no others:
 - layouts in `site/layouts/`;
@@ -29,7 +27,7 @@ The following apply:
 ### Requirement: Page shell
 Every HTML page the theme renders SHALL contain, in this order:
 - a skip link `a.skip-link` with `href="#main"`;
-- a `header.site-header` with a `nav` element carrying `aria-label="Site"`. The nav links to `/procedures/`, `/reaction_types/`, `/tags/`, `/authors/` and `/search/`, with the texts `Procedures`, `Reaction types`, `Tags`, `Authors` and `Search`. The header holds no other `nav`. The link whose URL is the page's own URL carries `aria-current="page"`; otherwise the link of the section the page lies in carries `aria-current="true"`, where `/procedures-by-date/` and every procedure page lie in `/procedures/`, and every term page lies in its taxonomy's page. No other navigation link carries `aria-current`;
+- a `header.site-header` with a `nav` element carrying `aria-label="Site"`. The nav links to `/procedures/`, `/reaction_types/`, `/tags/`, `/authors/` and `/help/`, with the texts `Procedures`, `Reaction types`, `Tags`, `Authors` and `Help`. No navigation link leads to `/search/`, the results page of the search forms (site-search spec). The header holds no other `nav`. The link whose URL is the page's own URL carries `aria-current="page"`; otherwise the link of the section the page lies in carries `aria-current="true"`, where `/procedures-by-date/` and every procedure page lie in `/procedures/`, and every term page lies in its taxonomy's page, and every help page lies in `/help/`. No other navigation link carries `aria-current`;
 - exactly one `main` element with `id="main"`;
 - a `footer.site-footer` whose text is `OrgSynDB · internal procedures`.
 
@@ -51,8 +49,8 @@ Headings follow these rules:
 - **THEN** their `h1` texts are `Aldol condensation` and `sample-data`, and their `<title>` texts are `Aldol condensation | OrgSynDB` and `sample-data | OrgSynDB`
 
 #### Scenario: Current section in the navigation
-- **WHEN** a test scans the home page, both procedure lists, a procedure page, the tags page, a tag term page and the search page after a theme build
-- **THEN** the home page marks no navigation link, `/procedures/` marks its own link with `aria-current="page"`, `/procedures-by-date/` and the procedure page mark `/procedures/` with `aria-current="true"`, the tags page marks `/tags/` with `page` and the term page with `true`, and the search page marks `/search/` with `page`
+- **WHEN** a test scans the home page, both procedure lists, a procedure page, the tags page, a tag term page, the search page, the help index and a help page after a theme build
+- **THEN** the home page marks no navigation link, `/procedures/` marks its own link with `aria-current="page"`, `/procedures-by-date/` and the procedure page mark `/procedures/` with `aria-current="true"`, the tags page marks `/tags/` with `page` and the term page with `true`, the search page marks no navigation link, `/help/` marks its own link with `page`, and the help page `/help/schema/` marks `/help/` with `true`
 
 ### Requirement: Stylesheets by medium
 The theme SHALL build three stylesheets with Hugo Pipes functions available in the standard Hugo build (`resources.Get`, `resources.Concat`, `minify`, `fingerprint`), and link them from every page in this order:
@@ -296,3 +294,4 @@ A procedure SHALL render to the same HTML whichever source format it was written
 #### Scenario: Twin fixtures
 - **WHEN** a theme build includes `tests/fixtures/theme/OSDB-0904-twin.org` in `org/procedures/` and `tests/fixtures/theme/OSDB-0905-twin.md` in `md/procedures/`, which hold the same title, dates, metadata, tags, precursor and body
 - **THEN** after `OSDB-0904`, `osdb-0904`, `OSDB-0905` and `osdb-0905` are replaced by `OSDB-NNNN` and `osdb-nnnn`, `procedures/osdb-0904/index.html` and `procedures/osdb-0905/index.html` are byte-identical
+

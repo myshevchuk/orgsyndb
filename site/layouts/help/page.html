@@ -1,0 +1,8 @@
+{{- /* A help page: a document of the application's docs/, as the build
+staged it, in its own language. Not indexed by search. */ -}}
+{{ define "main" -}}
+<article class="help-page" lang="{{ .Params.help_language }}">
+<h1>{{ .Title }}</h1>
+{{ .Content }}
+</article>
+{{ end }}

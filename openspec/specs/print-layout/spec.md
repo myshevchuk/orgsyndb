@@ -2,9 +2,7 @@
 
 ## Purpose
 Define the print stylesheet and batch PDFs: A4 pages with a running header and page footer, black on white, first-page URL facts, break rules, and the checks that nothing is clipped.
-
 ## Requirements
-
 ### Requirement: A4 page box
 The print stylesheet SHALL set `@page` to `size: A4` with margins of at least 15 mm on every side. WeasyPrint's PDFs of procedure pages are then A4.
 
@@ -60,7 +58,7 @@ The procedure header SHALL contain a `p.print-facts`, shown only in print, whose
 - The environment variable `HUGO_PARAMS_SITEURL` overrides it, for example with an internal host.
 - In a browser, the site script replaces the span's text with `location.href` when the protocol is `http:` or `https:`.
 
-The URL is plain text. The `siteurl` value appears in published HTML only as the text of `span.page-url`, never in an attribute. So `relativeURLs` does not rewrite it, and the site-build "No fetches from other hosts" rules, which concern fetching attributes, `url()` and `@import`, do not apply to it.
+The URL is plain text. The `siteurl` value appears in published HTML only as the text of `span.page-url`, never in an attribute. The article of a help page is exempt: its text is a document of `docs/` (site-help spec), which may name the address of `tools/orgsyndb serve` in its text and its links. So `relativeURLs` does not rewrite it, and the site-build "No fetches from other hosts" rules, which concern fetching attributes, `url()` and `@import`, do not apply to it.
 
 #### Scenario: Full URL on the first page by default
 - **WHEN** a test reads the first page text of `pdf/OSDB-0002-aspirin.pdf` after a PDF build without `HUGO_PARAMS_SITEURL`
@@ -71,7 +69,7 @@ The URL is plain text. The `siteurl` value appears in published HTML only as the
 - **THEN** the first page text of `pdf/OSDB-0002-aspirin.pdf` contains `https://orgsyndb.example.invalid/procedures/osdb-0002/`, and does not contain `127.0.0.1`
 
 #### Scenario: The URL is text only
-- **WHEN** a test scans every HTML file under `public/` after a theme build
+- **WHEN** a test scans every HTML file under `public/` after a theme build, leaving out the `article.help-page` of each help page
 - **THEN** every occurrence of `http://127.0.0.1:8000` is inside the text of a `span.page-url`, and each such span's text equals `http://127.0.0.1:8000` followed by its page's path
 - **AND** no attribute value contains `127.0.0.1`
 
@@ -142,3 +140,4 @@ Printing a procedure page from Firefox or Chromium SHALL use the same print styl
 #### Scenario: Firefox print
 - **WHEN** the orchestrator prints `procedures/osdb-0004/` to PDF from Firefox on A4 (manual verification, tasks.md section 9) and renders its pages as images
 - **THEN** the pages are black on white, show the banner, the full `http://127.0.0.1:…` URL, the ID, status and modified date on the first page, show no navigation or buttons, and every word lies within the page
+
