@@ -1,7 +1,6 @@
 #+TITLE: Named Paragraph Fixture
 #+CREATED: [2026-10-19 Mon 17:42:05]
 #+LAST_MODIFIED: [2026-10-19 Mon 18:30:00]
-#+AI_MODEL: none
 #+HUGO_SLUG: osdb-0903
 #+HUGO_TAGS: sample-data
 #+HUGO_CUSTOM_FRONT_MATTER: :id "OSDB-0903" :authors '("A. Example")

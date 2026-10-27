@@ -148,12 +148,12 @@ A failing step stops the command with exit 1.
 - **THEN** it exits 1, and stderr names the failing PDF
 
 ### Requirement: new subcommand
-`tools/orgsyndb new [--md] [--ai-model ID] TITLE...` SHALL create one procedure stub in the collection with `pipeline.new_procedure(collection, words, md, ai_model, now, language)`, and print the created file's path relative to the collection. `new_procedure` is the only place that checks the title and the `--ai-model` and `--lang` values; a bad value raises `pipeline.UsageError`, and the program exits 2. The stub is created as follows:
+`tools/orgsyndb new [--md] TITLE...` SHALL create one procedure stub in the collection with `pipeline.new_procedure(collection, words, md, now, language)`, and print the created file's path relative to the collection. `new_procedure` is the only place that checks the title and the `--lang` value; a bad value raises `pipeline.UsageError`, and the program exits 2. The stub is created as follows:
 - The title is the words of `TITLE...` joined by single spaces and trimmed. It must not be empty or contain a newline.
 - The file is `org/procedures/<ID>-<slug>.org`, or `md/procedures/<ID>-<slug>.md` with `--md`. It is copied from the application's `templates/procedure.org` or `templates/procedure.md` and filled by `pipeline.fill_template`.
 - It is created with exclusive creation, so an existing file is never overwritten.
 - `ID` is `pipeline.next_id` over the candidate names, and `slug` is `pipeline.slugify(title)`.
-- The `--ai-model` value must match `^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$`.
+- The stub records no AI model. An Org stub has no `#+AI_MODEL` line, even when the template has one, and a Markdown stub has no `ai_model` key; the Markdown template's commented-out `ai_model` line stays commented out.
 
 The candidate names for `next_id` are:
 - the top-level entry names of the collection's `org/procedures/`, `md/procedures/` and `build/export/`;
@@ -205,21 +205,13 @@ When `git` is unavailable or the collection is not inside a git work tree, `new`
 #### Scenario: Org stub
 - **WHEN** a test calls `new_procedure` on a temporary collection with empty trees for the Org title `Salicylic acid` at `2026-10-19T17:42:05+02:00`
 - **THEN** it returns `org/procedures/OSDB-0001-salicylic-acid.org`, and that file exists
-- **AND** it contains the lines `#+TITLE: Salicylic acid`, `#+CREATED: [2026-10-19 Mon 17:42:05]`, `#+LAST_MODIFIED: [2026-10-19 Mon 17:42:05]`, `#+AI_MODEL: none` and `#+HUGO_SLUG: osdb-0001`, each exactly once, and no `OSDB-0000` or `osdb-0000`
+- **AND** it contains the lines `#+TITLE: Salicylic acid`, `#+CREATED: [2026-10-19 Mon 17:42:05]`, `#+LAST_MODIFIED: [2026-10-19 Mon 17:42:05]` and `#+HUGO_SLUG: osdb-0001`, each exactly once, no line that begins, case-insensitively, with `#+AI_MODEL:`, and no `OSDB-0000` or `osdb-0000`
 
-#### Scenario: Markdown stub with an AI model and a quoted title
-- **WHEN** a test calls `new_procedure` in an empty temporary collection for the Markdown title `Bob's "best" ester`, with `ai_model` `example-model-1`, at `2026-10-19T17:42:05+02:00`
+#### Scenario: Markdown stub with a quoted title
+- **WHEN** a test calls `new_procedure` in an empty temporary collection for the Markdown title `Bob's "best" ester` at `2026-10-19T17:42:05+02:00`
 - **THEN** the created file is `md/procedures/OSDB-0001-bob-s-best-ester.md`
-- **AND** its front matter parses with `tomllib`, with `title` equal to `Bob's "best" ester`, `date` and `lastmod` equal to `2026-10-19T17:42:05+02:00`, `ai_model` equal to `example-model-1`, and `id` equal to `OSDB-0001`
+- **AND** its front matter parses with `tomllib`, with `title` equal to `Bob's "best" ester`, `date` and `lastmod` equal to `2026-10-19T17:42:05+02:00`, `id` equal to `OSDB-0001`, and no `ai_model` key
 - **AND** `tools/validate.py` on its directory exits 0 and prints nothing to stdout
-
-#### Scenario: Human-authored Markdown stub
-- **WHEN** a test calls `new_procedure` in an empty temporary collection for the Markdown title `Test product` at `2026-10-19T17:42:05+02:00`, without `ai_model`
-- **THEN** the stub's front matter has no `ai_model` key
-
-#### Scenario: Invalid AI model identifier
-- **WHEN** a test calls `new_procedure` in an empty temporary collection for `Test product` with `ai_model` `two words`
-- **THEN** it raises `pipeline.UsageError` whose message mentions `--ai-model`, and no file is created
 
 ### Requirement: clean subcommand
 `tools/orgsyndb clean` SHALL remove the collection's `build/`, `public/` and `pdf/`. `clean --all` also removes the application's `.emacs-batch/` and `.tools/`. Both forms touch no other path, and both succeed when there is nothing to remove.

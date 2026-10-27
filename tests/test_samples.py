@@ -45,8 +45,6 @@ class SampleMarkingTests(unittest.TestCase):
                 self.assertTrue(authors)
                 for author in authors:
                     self.assertRegex(author, r"^[A-Z]\. Example$")
-                self.assertIsNotNone(sample.ai_model,
-                                     "ai model absent or none")
                 self.assertIn(sample.terms["unverified"],
                               " ".join(sample.summary.split()))
 
@@ -353,6 +351,14 @@ class AgreementCheckerTests(unittest.TestCase):
             with self.subTest(change=change):
                 self.assertNotEqual(markdown, MD_SOURCE)
                 self.assertNotEqual(self.differences(markdown), [])
+
+    def test_ai_model_only_where_the_source_names_one(self) -> None:
+        """Scenario: The agreement check (checker, no AI model)."""
+        source = ORG_SOURCE.replace("#+AI_MODEL: model-x\n", "")
+        self.assertNotEqual(source, ORG_SOURCE)
+        self.assertEqual(self.differences(
+            MD_SOURCE.replace('ai_model = "model-x"\n', ""), source), [])
+        self.assertNotEqual(self.differences(MD_SOURCE, source), [])
 
     def test_fall_back_hour_takes_the_exported_instants(self) -> None:
         """Scenario: The agreement check (checker, fall-back hour)."""

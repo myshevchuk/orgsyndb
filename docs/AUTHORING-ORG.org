@@ -13,6 +13,8 @@
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-24 Sat 11:16] -- doc-writer pass line corrected from gpt-5 to the pinned run model
 #+AI_PASS: doc-writer gpt-5.6-sol [2026-10-26 Mon 11:44] -- Export, validate, and preview
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-26 Mon 12:05] -- doc-writer pass line corrected from gpt-6.1-sol to the pinned run model
+#+AI_PASS: doc-writer gpt-5.6-sol [2026-10-27 Tue 09:39] -- generated stubs and optional #+AI_MODEL
+#+AI_PASS: fact-check claude-opus-5-5 [2026-10-27 Tue 09:45] -- doc-writer pass line corrected from gpt-5 to the pinned run model
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -29,17 +31,11 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   a file such as ~org/procedures/OSDB-0003-product-name.org~ and fills its
   identifier, slug, title, and current Europe/Berlin timestamps.
 
-  When a model assisted with the procedure, record it while creating the
-  stub:
-
-#+begin_src sh
-  orgsyndb new --ai-model example-model-1 "Product name"
-#+end_src
-
-  Without ~--ai-model~, the stub contains ~#+AI_MODEL: none~. The command
-  creates the file exclusively and never overwrites an existing file. It
-  prints a warning if Git history is unavailable or the clone is shallow,
-  because it may then be unable to see a deleted identifier.
+  The stub records no AI model. To record an assisting model, add
+  ~#+AI_MODEL: example-model-1~ by hand. The command creates the file
+  exclusively and never overwrites an existing file. It prints a warning if
+  Git history is unavailable or the clone is shallow, because it may then be
+  unable to see a deleted identifier.
 
   The source template is [[file:../templates/procedure.org][templates/procedure.org]]. The complete field rules
   are in [[file:SCHEMA.md][the procedure schema]].
@@ -54,8 +50,8 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
     timestamp.
   - ~#+LAST_MODIFIED~ :: When the procedure was last changed. Update this by
     hand after every change; no command updates it automatically.
-  - ~#+AI_MODEL~ :: ~none~ for a human-authored procedure, or the identifier
-    of the model that assisted.
+  - ~#+AI_MODEL~ (optional) :: The identifier of a model that assisted. Omit
+    the line or use ~none~ to record no model.
   - ~#+OPTIONS: author:nil~ :: Prevents Org authorship metadata from becoming
     an invalid ~author~ field in the export.
   - ~#+HUGO_SLUG~ :: The lowercase procedure identifier, such as

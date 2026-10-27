@@ -56,15 +56,6 @@ class MarkdownTemplateTests(ValidatorTestCase):
 
 
 class OrgTemplateTests(ValidatorTestCase):
-    def test_org_template_names_its_writing_model(self) -> None:
-        """Scenario: Org template names its writing model."""
-        text = read_template(ORG_TEMPLATE)
-        match = re.search(r"^#\+AI_MODEL:[ \t]*(.*?)[ \t]*$", text,
-                          re.M | re.I)
-        self.assertIsNotNone(match, "no #+AI_MODEL line")
-        self.assertNotEqual(match.group(1), "")
-        self.assertNotEqual(match.group(1).lower(), "none")
-
     def test_org_template_carries_the_schema_keywords_and_sections(
             self) -> None:
         """Scenario: Org template carries the schema keywords and

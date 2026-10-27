@@ -9,6 +9,8 @@
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-24 Sat 11:16] -- doc-writer pass line corrected from gpt-5 to the pinned run model
 #+AI_PASS: doc-writer gpt-5.6-sol [2026-10-26 Mon 11:44] -- Exportieren, prüfen und ansehen
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-26 Mon 12:05] -- doc-writer pass line corrected from gpt-6.1-sol to the pinned run model
+#+AI_PASS: doc-writer gpt-5.6-sol [2026-10-27 Tue 09:39] -- Gerüste, optionales #+AI_MODEL und Übersetzungsschritt 3
+#+AI_PASS: fact-check claude-opus-5-5 [2026-10-27 Tue 09:45] -- doc-writer pass line corrected from gpt-5 to the pinned run model; verbatim kept on one line
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
@@ -33,16 +35,12 @@ bleiben auch in einer deutschen Vorschrift englisch.
   Zeit ein. Umlaute und ß im Titel werden im Dateinamen ausgeschrieben:
   aus ~Größe~ wird ~groesse~.
 
-  Hat ein KI-Modell beim Schreiben geholfen, geben Sie es beim Anlegen an:
-
-#+begin_src sh
-  orgsyndb new --lang de --ai-model example-model-1 "Produktname"
-#+end_src
-
-  Ohne ~--ai-model~ enthält das Gerüst ~#+AI_MODEL: none~. Der Befehl legt
-  die Datei exklusiv an und überschreibt nie eine vorhandene. Er warnt,
-  wenn keine Git-Geschichte verfügbar oder der Klon flach ist, weil er dann
-  eine gelöschte Nummer übersehen kann.
+  Das Gerüst erfasst kein KI-Modell. Wenn Sie ein Modell angeben möchten,
+  das beim Schreiben geholfen hat, fügen Sie
+  ~#+AI_MODEL: example-model-1~ von Hand hinzu. Der Befehl legt die Datei
+  exklusiv an und überschreibt nie eine vorhandene. Er warnt, wenn keine Git-Geschichte
+  verfügbar oder der Klon flach ist, weil er dann eine gelöschte Nummer
+  übersehen kann.
 
   Die Vorlage ist [[file:../templates/procedure.de.org][templates/procedure.de.org]]. Die vollständigen Feldregeln
   stehen in der [[file:SCHEMA.de.md][Schema-Referenz]].
@@ -58,8 +56,9 @@ bleiben auch in einer deutschen Vorschrift englisch.
   - ~#+LAST_MODIFIED~ :: Wann die Vorschrift zuletzt geändert wurde.
     Aktualisieren Sie es nach jeder Änderung von Hand; kein Befehl tut das
     automatisch.
-  - ~#+AI_MODEL~ :: ~none~ für eine von Menschen geschriebene Vorschrift,
-    sonst die Kennung des Modells, das geholfen hat.
+  - ~#+AI_MODEL~ (optional) :: Die Kennung eines Modells, das geholfen hat.
+    Lassen Sie die Zeile weg oder verwenden Sie ~none~, um kein Modell zu
+    erfassen.
   - ~#+OPTIONS: author:nil~ :: Verhindert, dass Org-Autorenangaben im
     Export zu einem ungültigen Feld ~author~ werden.
   - ~#+HUGO_SLUG~ :: Die Vorschriftennummer in Kleinbuchstaben, etwa
@@ -232,9 +231,10 @@ bleiben auch in einer deutschen Vorschrift englisch.
      ~:hazards~ und bei Bedarf ~:references~. ~:scale~, ~:authors~ und
      ~:checked_by~ dürfen Sie anpassen.
   3. Setzen Sie ~#+CREATED~ und ~#+LAST_MODIFIED~ auf den Zeitpunkt der
-     Übersetzung und ~#+AI_MODEL~ auf das Modell, das beim Übersetzen
-     geholfen hat, oder ~none~. Steht im Original ~:language "en"~,
-     ändern Sie es in ~"de"~ oder löschen Sie die Zeile.
+     Übersetzung. Das optionale ~#+AI_MODEL~ kann die Kennung des Modells
+     enthalten, das beim Übersetzen geholfen hat; die Zeile darf fehlen.
+     Steht im Original ~:language "en"~, ändern Sie es in ~"de"~ oder
+     löschen Sie die Zeile.
   4. Lassen Sie ~#+HUGO_SLUG~, ~:id~, ~:status~, ~:reaction_types~,
      ~#+HUGO_TAGS~, ~:yield_percent~, ~:precursors~, ~:structure_image~
      sowie ~formula~, ~mw~, ~smiles~ und ~cas~ in ~:product~ genau wie im

@@ -152,21 +152,21 @@ produces a warning under its dotted name, such as `product.colour`.
 
 ## Org file-level keywords
 
-`orgsyndb export` checks that an Org procedure contains each of these
-file-level keywords exactly once. Keyword names are case-insensitive.
+`orgsyndb export` checks that an Org procedure contains `#+CREATED` and
+`#+LAST_MODIFIED` exactly once. It may contain `#+AI_MODEL` at most once.
+Keyword names are case-insensitive.
 
 | Org keyword | Required value | Exported front matter |
 |---|---|---|
 | `#+CREATED` | An inactive timestamp in the exact form `[YYYY-MM-DD Day hh:mm:ss]`. | `date`, with the same local date and time and the Europe/Berlin offset in force at that instant. |
 | `#+LAST_MODIFIED` | An inactive timestamp in the exact form `[YYYY-MM-DD Day hh:mm:ss]`. | `lastmod`, with the same local date and time and the Europe/Berlin offset in force at that instant. |
-| `#+AI_MODEL` | `none` for a human-authored file, or one model identifier matching `[A-Za-z0-9][A-Za-z0-9._:/@+-]*`. | No `ai_model` field when the value is `none`; otherwise an `ai_model` string equal to the keyword value. |
+| `#+AI_MODEL` (optional) | When present, `none` or one model identifier matching `[A-Za-z0-9][A-Za-z0-9._:/@+-]*`. | No `ai_model` field when the keyword is absent or its value is `none`; otherwise an `ai_model` string equal to the keyword value. |
 
 For example:
 
 ```org
 #+CREATED: [2026-10-19 Mon 17:42:05]
 #+LAST_MODIFIED: [2026-10-19 Mon 17:42:05]
-#+AI_MODEL: none
 ```
 
 `Day` must be the correct English three-letter weekday, from `Mon` through

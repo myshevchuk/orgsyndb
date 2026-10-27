@@ -289,8 +289,6 @@ class GermanTemplateTests(ValidatorTestCase):
             return re.findall(r"(?m)^#\+([A-Z_]+):", text)
 
         self.assertEqual(keys(german), keys(english))
-        model = re.search(r"(?m)^#\+AI_MODEL: (.+)$", german).group(1)
-        self.assertNotEqual(model, "none")
 
 
 def pair(name: str, ident: str = "OSDB-0001") -> tuple[Path, dict]:

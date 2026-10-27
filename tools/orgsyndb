@@ -71,7 +71,7 @@ Subcommands:
                       (default port 8000) until Ctrl-C
   pdf                 build, then render every published procedure to
                       pdf/<file name>.pdf
-  new [--md] [--lang LANG] [--ai-model ID] TITLE...
+  new [--md] [--lang LANG] TITLE...
                       create a procedure stub with the next free ID in
                       org/procedures/, or md/procedures/ with --md; with
                       --lang de or en, a stub in that language named
@@ -373,13 +373,11 @@ def cmd_pdf(option: str | None, args: Sequence[str]) -> int:
 def cmd_new(option: str | None, args: Sequence[str]) -> int:
     parser = Parser(prog=f"{PROG} new", add_help=False)
     parser.add_argument("--md", action="store_true")
-    parser.add_argument("--ai-model")
     parser.add_argument("--lang")
     parser.add_argument("title", nargs="*")
     parsed = parser.parse_intermixed_args(args)
     collection = find_collection(option)
     relative = pipeline.new_procedure(collection, parsed.title, parsed.md,
-                                      parsed.ai_model,
                                       language=parsed.lang)
     print(relative.as_posix())
     return 0

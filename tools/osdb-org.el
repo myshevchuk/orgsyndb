@@ -50,8 +50,9 @@
           "\\(?:\\.\\([a-z]\\{2\\}\\)\\)?\\.org\\'")
   "An Org procedure file name: ID as group 1, language code as group 2.")
 
-(defconst osdb-org-required-keywords '("CREATED" "LAST_MODIFIED" "AI_MODEL")
-  "The file-level keywords every source carries once, in check order.")
+(defconst osdb-org-file-keywords '("CREATED" "LAST_MODIFIED" "AI_MODEL")
+  "The file-level keywords a source carries at most once, in check order.
+All but `AI_MODEL' are required.")
 
 (defconst osdb-org-forbidden-keywords
   '("DATE" "HUGO_LASTMOD" "HUGO_AUTO_SET_LASTMOD"
@@ -449,17 +450,19 @@ Timestamps are read in ZONE.  Return (PROBLEMS CREATED LAST-MODIFIED
 AI-MODEL).  PROBLEMS come in the order `#+CREATED', `#+LAST_MODIFIED',
 `#+AI_MODEL', ordering, forbidden routes.  CREATED and LAST-MODIFIED are
 the instants each timestamp names, and AI-MODEL the value of
-`#+AI_MODEL'; each is nil when its keyword is missing or invalid."
+`#+AI_MODEL'; each is nil when its keyword is missing or invalid.
+`#+AI_MODEL' is optional."
   (let* ((zone (or zone osdb-org-zone))
          (lines (osdb-org--outside-lines text))
          (keywords (osdb-org--keywords-of-lines lines))
          (case-fold-search nil)
          (problems nil)
          (values nil))
-    (dolist (keyword osdb-org-required-keywords)
+    (dolist (keyword osdb-org-file-keywords)
       (let ((field (concat "#+" keyword))
             (given (cdr (assoc keyword keywords))))
         (cond
+         ((and (null given) (equal keyword "AI_MODEL")))
          ((null given)
           (push (osdb-org--error field "keyword missing") problems))
          ((cdr given)
@@ -537,7 +540,8 @@ Return (SOURCES . PROBLEMS).
 SOURCES holds one plist (:path :stem :date :lastmod :ai-model) per Org
 source without any problem, in name order.  :path is absolute, :stem
 the file name without `.org', :date and :lastmod are RFC 3339 strings
-from `osdb-org-rfc3339', and :ai-model is nil for `none'.
+from `osdb-org-rfc3339', and :ai-model is nil when `#+AI_MODEL' is
+absent or `none'.
 
 PROBLEMS holds (PATH . PROBLEM) pairs, sorted by PATH and otherwise in
 check order.  PATH is ROOT as given joined with the entry name.  A

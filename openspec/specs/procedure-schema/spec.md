@@ -253,18 +253,18 @@ The file `site/data/reaction_types.toml` SHALL map each reaction-type slug, as a
 <!-- Reason: German procedures have German section names. -->
 
 ### Requirement: Org file-level keywords
-Every Org procedure source SHALL carry each of the file-level keywords `#+CREATED`, `#+LAST_MODIFIED` and `#+AI_MODEL` exactly once. A keyword line is a line made of optional spaces or tabs, `#+`, a name of ASCII letters and underscores, matched case-insensitively, a `:` and the value. The value is trimmed of spaces, tabs and CRs. A line whose text after optional spaces or tabs begins with `#+begin_`, in any case, opens a block. The block runs to the next line that begins the same way with `#+end_`, and no line from the opening line to the closing line is a keyword line. The following rules apply to the values:
+Every Org procedure source SHALL carry each of the file-level keywords `#+CREATED` and `#+LAST_MODIFIED` exactly once, and MAY carry the file-level keyword `#+AI_MODEL` at most once. A keyword line is a line made of optional spaces or tabs, `#+`, a name of ASCII letters and underscores, matched case-insensitively, a `:` and the value. The value is trimmed of spaces, tabs and CRs. A line whose text after optional spaces or tabs begins with `#+begin_`, in any case, opens a block. The block runs to the next line that begins the same way with `#+end_`, and no line from the opening line to the closing line is a keyword line. The following rules apply to the values:
 - Each timestamp is an Org inactive timestamp of the exact form `[YYYY-MM-DD Day hh:mm:ss]`. Its digits are the ASCII digits `0` to `9`, and `Day` is a run of characters other than spaces, tabs, `]` and `>`.
 - Its date and time are valid, and `Day` is the English three-letter abbreviation (`Mon` … `Sun`) of that date.
 - It is Europe/Berlin local wall-clock time, carrying no offset, and names a time that exists in Europe/Berlin.
 - `#+LAST_MODIFIED` is not earlier than `#+CREATED`, compared as follows. A wall-clock time in the autumn fall-back hour maps to two instants, so the earliest possible instant of `#+CREATED` is compared with the latest possible instant of `#+LAST_MODIFIED`. The check passes when the first is not later than the second, that is, when some choice of Berlin offsets puts the two in order. The exported `lastmod >= date` comparison is the authoritative ordering check.
-- `#+AI_MODEL` is `none` for human-authored files, or otherwise a single model identifier matching `^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$`.
+- `#+AI_MODEL`, when present, is `none` or a single model identifier matching `^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$`. A source without `#+AI_MODEL` and a source whose `#+AI_MODEL` is `none` record no AI model.
 
-The export checks these rules, as org-export "Org sources and their problems" states. A keyword that is missing or given more than once gets one error and no further check. A timestamp gets at most one error, from the first of these checks that fails: form (including brackets that do not pair, such as `[` with `>`), active, date, time, weekday, existence. The ordering check runs only when both timestamps are present once and valid. The `#+AI_MODEL` check is independent of the timestamps. Problems are reported in the order `#+CREATED`, `#+LAST_MODIFIED`, `#+AI_MODEL`, ordering. The messages are:
+The export checks these rules, as org-export "Org sources and their problems" states. A timestamp keyword that is missing, and any of the three keywords given more than once, gets one error and no further check. A timestamp gets at most one error, from the first of these checks that fails: form (including brackets that do not pair, such as `[` with `>`), active, date, time, weekday, existence. The ordering check runs only when both timestamps are present once and valid. The `#+AI_MODEL` check is independent of the timestamps. Problems are reported in the order `#+CREATED`, `#+LAST_MODIFIED`, `#+AI_MODEL`, ordering. The messages are:
 
 | Problem | Field | Message |
 |---|---|---|
-| Missing keyword | the keyword | `keyword missing` |
+| Missing timestamp keyword | the keyword | `keyword missing` |
 | Repeated keyword | the keyword | `appears more than once` |
 | Wrong form | the keyword | `"<value>" must have the form [YYYY-MM-DD Day hh:mm:ss]` |
 | Active timestamp | the keyword | `"<value>" must be an inactive timestamp in square brackets, [YYYY-MM-DD Day hh:mm:ss]` |
@@ -341,7 +341,9 @@ The export checks these rules, as org-export "Org sources and their problems" st
   6. `#+CREATED: [2026-03-29 Mon 02:30:00]`;
   7. `#+CREATED: [2026-02-30 Mon 25:00:00]`;
   8. `#+CREATED: [2026-10-19 Mon 17:42:05>`;
-  9. `#+AI_MODEL: example-model-1`
+  9. `#+AI_MODEL: example-model-1`;
+  10. no `#+AI_MODEL` line;
+  11. a second line `#+AI_MODEL: example-model-1`
 - **THEN** the problem lines, with `P` standing for `R/OSDB-0003-propyl-acetate.org`, are exactly:
   1. `P:#+CREATED: error: "[2026-10-19 Mon 17:42]" must have the form [YYYY-MM-DD Day hh:mm:ss]`;
   2. `P:#+LAST_MODIFIED: error: "[2026-03-29 Sun 02:30:00]" does not exist in Europe/Berlin (skipped by the clock change)`;
@@ -351,7 +353,9 @@ The export checks these rules, as org-export "Org sources and their problems" st
   6. `P:#+CREATED: error: weekday "Mon" does not match 2026-03-29 (Sun)`;
   7. `P:#+CREATED: error: "[2026-02-30 Mon 25:00:00]" is not a valid date`;
   8. `P:#+CREATED: error: "[2026-10-19 Mon 17:42:05>" must have the form [YYYY-MM-DD Day hh:mm:ss]`;
-  9. none, and the source's AI model is `example-model-1`
+  9. none, and the source's AI model is `example-model-1`;
+  10. none, and the source has no AI model;
+  11. `P:#+AI_MODEL: error: appears more than once`
 
 #### Scenario: Keyword lines
 - **WHEN** an ERT test examines, each alone, copies of `valid/org/OSDB-0003-propyl-acetate.org` whose `#+CREATED` line is written as `#+created: [2026-10-19 Mon 17:42:05]`; as `  #+CREATED:   [2026-10-19 Mon 17:42:05]  `; and moved between a `#+begin_example` line and a `#+END_EXAMPLE` line
@@ -364,7 +368,7 @@ The export checks these rules, as org-export "Org sources and their problems" st
 ### Requirement: Org keywords map to exported front matter
 The export of an Org procedure SHALL carry front matter as follows:
 - `date` equal to `#+CREATED` and `lastmod` equal to `#+LAST_MODIFIED`. Each is read as Europe/Berlin local time and written as a TOML offset datetime with the same wall-clock time and the Europe/Berlin offset in force at that instant (`+01:00` or `+02:00`).
-- `ai_model` equal to `#+AI_MODEL`, or no `ai_model` key at all when `#+AI_MODEL` is `none`.
+- `ai_model` equal to `#+AI_MODEL` when it names a model, and no `ai_model` key at all when `#+AI_MODEL` is absent or `none`.
 - `slug` from `#+HUGO_SLUG`.
 - No `author` key.
 
@@ -427,7 +431,7 @@ The file `templates/procedure.md` SHALL be a complete procedure using the placeh
 
 ### Requirement: Org template
 The file `templates/procedure.org` SHALL be a complete Org procedure that satisfies the following:
-- It carries `#+CREATED`, `#+LAST_MODIFIED` and `#+AI_MODEL` in the required format, with `#+AI_MODEL` naming the exact identifier of the model that wrote it, never `none`.
+- It carries `#+CREATED` and `#+LAST_MODIFIED` in the required format.
 - It sets `#+HUGO_SLUG: osdb-0000` and `#+HUGO_TAGS`.
 - It sets the keys `id` (as `OSDB-0000`), `authors`, `status`, `reaction_types`, `product`, `scale`, `yield_percent` and `hazards` on repeated `#+HUGO_CUSTOM_FRONT_MATTER:` lines.
 - It sets `product` alone on the last `#+HUGO_CUSTOM_FRONT_MATTER:` line, because tomelr emits keys in order and every key after a `[product]` table header would parse as a member of that table.
@@ -437,10 +441,6 @@ The file `templates/procedure.org` SHALL be a complete Org procedure that satisf
 #### Scenario: Org template passes the Org checks
 - **WHEN** an ERT test copies `templates/procedure.org` to a temporary directory as `OSDB-0001-template.org`, replacing every `OSDB-0000` with `OSDB-0001` and every `osdb-0000` with `osdb-0001`, and calls `osdb-org-examine` on that directory
 - **THEN** it returns no problem and one source
-
-#### Scenario: Org template names its writing model
-- **WHEN** a test reads the `#+AI_MODEL:` value of `templates/procedure.org`
-- **THEN** the value is non-empty and is not `none`
 
 #### Scenario: Org template carries the schema keywords and sections
 - **WHEN** a test reads `templates/procedure.org`

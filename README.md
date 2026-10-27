@@ -168,11 +168,10 @@ build.
 
 `new` selects the next free `OSDB-NNNN` identifier across the Org sources,
 Markdown sources, exports, and available Git history of the collection. It
-fills the file name, slug, title, and current Europe/Berlin timestamps. Add
-`--ai-model ID` when that model assisted with the procedure. Without this
-option, an Org stub uses `#+AI_MODEL: none`, and a Markdown stub has no
-`ai_model` field. Add `--lang de` for a German stub; see
-[Languages](#languages).
+fills the file name, slug, title, and current Europe/Berlin timestamps. New
+stubs record no AI model. To record an assisting model, add it by hand as
+`#+AI_MODEL: example-model-1` in Org or `ai_model = "example-model-1"` in
+Markdown. Add `--lang de` for a German stub; see [Languages](#languages).
 
 ## Use the site
 
@@ -320,7 +319,7 @@ prefix are relative to the collection.
 | `build` | Runs export and validation, builds the site into `public/` with Hugo, then indexes it with Pagefind. A validation error stops the command before Hugo. |
 | `serve [--port N]` | Runs `build`, then serves `public/` on `http://127.0.0.1:N/` until `Ctrl-C`. The default port is `8000`. |
 | `pdf` | Runs `build`, removes the previous `pdf/`, and renders every procedure to `pdf/<source-file-name>.pdf` with WeasyPrint. |
-| `new [--md] [--lang LANG] [--ai-model ID] TITLE...` | Creates an Org stub with the next free ID, or a Markdown stub with `--md`. `--lang de` or `--lang en` creates a stub in that language named `<ID>-<slug>.<LANG>.org` or `.md`. It never overwrites an existing file. |
+| `new [--md] [--lang LANG] TITLE...` | Creates an Org stub with the next free ID, or a Markdown stub with `--md`. `--lang de` or `--lang en` creates a stub in that language named `<ID>-<slug>.<LANG>.org` or `.md`. It never overwrites an existing file. |
 | `init DIR` | Creates an empty collection in `DIR`: `orgsyndb.toml`, a `.gitignore` for the generated directories, and empty source directories. It refuses a directory that already holds `orgsyndb.toml`, and it does not run `git init`. |
 | `clean` | Removes `build/`, `public/`, and `pdf/`. |
 | `clean --all` | Also removes the application's `.emacs-batch/` and `.tools/`. Their contents are fetched again on the next relevant run. |

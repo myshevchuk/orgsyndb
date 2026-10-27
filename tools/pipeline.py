@@ -165,35 +165,32 @@ def toml_string(value: str) -> str:
     return '"' + "".join(out) + '"'
 
 
-def _replace_once(text: str, pattern: str, line: str | None, what: str,
+def _replace_once(text: str, pattern: str, line: str, what: str,
                   flags: re.RegexFlag = re.NOFLAG) -> str:
     """Replace the one line matching ``pattern`` with ``line``.
 
-    A ``line`` of None keeps the matched line. Raises ValueError, naming
-    ``what``, when the line is missing or repeated.
+    Raises ValueError, naming ``what``, when the line is missing or
+    repeated.
     """
     found = re.findall(pattern, text, flags=flags | re.MULTILINE)
     if len(found) != 1:
         state = "missing" if not found else "repeated"
         raise ValueError(f"template line {what} is {state}")
-    if line is None:
-        return text
     return re.sub(pattern, lambda _: line, text,
                   flags=flags | re.MULTILINE)
 
 
 def fill_template(text: str, kind: str, ident: str, title: str,
-                  now: dt.datetime, ai_model: str | None) -> str:
+                  now: dt.datetime) -> str:
     """Fill a procedure template for ``orgsyndb new``.
 
     ``kind`` is ``"org"`` or ``"md"``. Every ``OSDB-0000`` becomes
-    ``ident`` and every ``osdb-0000`` its lowercase form. The title,
-    both timestamps (from aware ``now``) and the AI model (``None`` for a
-    human author) are written into their anchor lines; ``title`` is a
-    single line and ``ai_model`` a model identifier, as
-    ``new_procedure`` checks. Raises ValueError for an unknown ``kind``
-    or a malformed ``ident``, and when an anchor line is missing or
-    repeated.
+    ``ident`` and every ``osdb-0000`` its lowercase form. The title and
+    both timestamps (from aware ``now``) are written into their anchor
+    lines; ``title`` is a single line, as ``new_procedure`` checks. The
+    stub records no AI model: ``#+AI_MODEL`` lines are dropped. Raises
+    ValueError for an unknown ``kind`` or a malformed ``ident``, and
+    when an anchor line is missing or repeated.
     """
     if kind not in ("org", "md"):
         raise ValueError(f"unknown template kind {kind!r}")
@@ -204,12 +201,12 @@ def fill_template(text: str, kind: str, ident: str, title: str,
     if kind == "org":
         stamp = org_timestamp(now)
         for keyword, value in (("TITLE", title), ("CREATED", stamp),
-                               ("LAST_MODIFIED", stamp),
-                               ("AI_MODEL", ai_model or "none")):
+                               ("LAST_MODIFIED", stamp)):
             text = _replace_once(
                 text, rf"^#\+{keyword}:.*$", f"#+{keyword}: {value}",
                 f"#+{keyword}:", re.IGNORECASE)
-        return text
+        return re.sub(r"^#\+AI_MODEL:.*\n?", "", text,
+                      flags=re.IGNORECASE | re.MULTILINE)
     lines = text.split("\n")
     if not lines or lines[0] != "+++" or "+++" not in lines[1:]:
         raise ValueError("template has no +++ front matter")
@@ -221,11 +218,6 @@ def fill_template(text: str, kind: str, ident: str, title: str,
     head = _replace_once(head, r"^date = .*$", f"date = {stamp}", "date =")
     head = _replace_once(head, r"^lastmod = .*$", f"lastmod = {stamp}",
                          "lastmod =")
-    # Without a model the commented line stays, but must still be there.
-    head = _replace_once(
-        head, r"^# ai_model = .*$",
-        f"ai_model = {toml_string(ai_model)}" if ai_model else None,
-        "# ai_model =")
     return head + "\n" + rest
 
 
@@ -727,19 +719,16 @@ def template_path(kind: str, language: str | None) -> Path:
 
 
 def new_procedure(collection: Path, words: Sequence[str], md: bool,
-                  ai_model: str | None, now: dt.datetime | None = None,
+                  now: dt.datetime | None = None,
                   language: str | None = None) -> Path:
     """Create a procedure stub in ``collection``; return its relative path.
 
     Without ``language`` the stub is the English template under a name
     without a language code. With one, it is that language's template,
     and the name carries the code, as in ``OSDB-0009-titel.de.org``.
-    Raises UsageError for a bad title, model identifier or language, and
+    Raises UsageError for a bad title or language, and
     ValueError when the file exists or the template cannot be filled.
     """
-    if ai_model is not None and not validate.AI_MODEL_RE.match(ai_model):
-        raise UsageError(f"--ai-model {ai_model!r} must match "
-                         f"{validate.AI_MODEL_RE.pattern}")
     if language is not None and language not in validate.LANGUAGES:
         raise UsageError(f"--lang {language!r} must be one of "
                          f"{', '.join(validate.LANGUAGES)}")
@@ -755,7 +744,7 @@ def new_procedure(collection: Path, words: Sequence[str], md: bool,
     ident = next_id(candidate_names(collection, _warn))
     template = template_path(kind, language)
     text = fill_template(template.read_text(encoding="utf-8"), kind, ident,
-                         title, now, ai_model)
+                         title, now)
     code = "" if language is None else f".{language}"
     relative = (Path(SOURCE_TREES[kind == "md"])
                 / f"{ident}-{slug}{code}.{kind}")

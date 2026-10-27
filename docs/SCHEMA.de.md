@@ -164,22 +164,21 @@ ebenfalls eine Warnung, unter seinem Namen mit Punkt, etwa
 
 ## Org-Schlüsselwörter auf Dateiebene
 
-`orgsyndb export` prüft, dass eine Org-Vorschrift jedes dieser
-Schlüsselwörter genau einmal enthält. Groß- und Kleinschreibung der Namen
-spielt keine Rolle.
+`orgsyndb export` prüft, dass eine Org-Vorschrift `#+CREATED` und
+`#+LAST_MODIFIED` genau einmal enthält. `#+AI_MODEL` darf höchstens einmal
+vorkommen. Groß- und Kleinschreibung der Namen spielt keine Rolle.
 
 | Org-Schlüsselwort | Wert | Exportierter Datenblock |
 |---|---|---|
 | `#+CREATED` | Ein inaktiver Zeitstempel genau in der Form `[YYYY-MM-DD Day hh:mm:ss]`. | `date`, mit demselben Ortsdatum und derselben Ortszeit und dem zu diesem Zeitpunkt geltenden Versatz von Europe/Berlin. |
 | `#+LAST_MODIFIED` | Ein inaktiver Zeitstempel genau in der Form `[YYYY-MM-DD Day hh:mm:ss]`. | `lastmod`, ebenso. |
-| `#+AI_MODEL` | `none` für eine von Menschen geschriebene Datei oder eine Modellkennung, die `[A-Za-z0-9][A-Za-z0-9._:/@+-]*` entspricht. | Kein Feld `ai_model` bei `none`, sonst ein String `ai_model` mit dem Wert des Schlüsselworts. |
+| `#+AI_MODEL` (optional) | Falls vorhanden: `none` oder eine Modellkennung, die `[A-Za-z0-9][A-Za-z0-9._:/@+-]*` entspricht. | Kein Feld `ai_model`, wenn das Schlüsselwort fehlt oder den Wert `none` hat; sonst ein String `ai_model` mit dem Wert des Schlüsselworts. |
 
 Zum Beispiel:
 
 ```org
 #+CREATED: [2026-10-19 Mon 17:42:05]
 #+LAST_MODIFIED: [2026-10-19 Mon 17:42:05]
-#+AI_MODEL: none
 ```
 
 `Day` muss der richtige englische Wochentag mit drei Buchstaben sein, von

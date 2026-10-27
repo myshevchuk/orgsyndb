@@ -347,7 +347,8 @@ def agreement_differences(org: Path, markdown: Path) -> list[str]:
 
     expected = {k: v for k, v in source.data.items() if k != "tags"} | {
         "title": keywords.get("TITLE"), "slug": keywords.get("HUGO_SLUG"),
-        "tags": source.data["tags"], "ai_model": keywords.get("AI_MODEL")}
+        "tags": source.data["tags"]} | (
+            {"ai_model": source.ai_model} if source.ai_model else {})
     for key in sorted(expected.keys() | data.keys() | {"date", "lastmod"}):
         if key in ("date", "lastmod"):
             if key not in data:

@@ -38,7 +38,6 @@ ID_RE = re.compile(r"^OSDB-(\d{4})$")
 SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 SCALE_RE = re.compile(r"^\d+([.,]\d+)?\s+\S+$")
 CAS_RE = re.compile(r"^(\d{2,7})-(\d{2})-(\d)$")
-AI_MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@+-]*$")
 STATUSES = ("draft", "checked", "retired")
 # The languages a procedure may be written in. A file name may carry one
 # of them before its suffix, as in OSDB-0001-x.de.md; the files of one ID

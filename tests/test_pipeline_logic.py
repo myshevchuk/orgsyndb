@@ -42,7 +42,7 @@ def make_repo(case: unittest.TestCase, trees: bool = False,
 
 
 def new(root: Path, *words: str, md: bool = False,
-        ai_model: str | None = None, lang: str | None = None) -> Run:
+        lang: str | None = None) -> Run:
     """Create a stub in ``root`` at ``NOW`` with ``new_procedure``.
 
     A UsageError gives exit status 2 with its message on stderr;
@@ -51,7 +51,7 @@ def new(root: Path, *words: str, md: bool = False,
     module = pipeline()
     try:
         relative, _, err = captured(
-            module.new_procedure, root, words, md, ai_model,
+            module.new_procedure, root, words, md,
             dt.datetime.fromisoformat(NOW), lang)
     except module.UsageError as exc:
         return Run(2, "", str(exc))
@@ -216,9 +216,10 @@ class StubTests(unittest.TestCase):
         for line in ("#+TITLE: Salicylic acid",
                      "#+CREATED: [2026-10-19 Mon 17:42:05]",
                      "#+LAST_MODIFIED: [2026-10-19 Mon 17:42:05]",
-                     "#+AI_MODEL: none", "#+HUGO_SLUG: osdb-0001"):
+                     "#+HUGO_SLUG: osdb-0001"):
             with self.subTest(line=line):
                 self.assertEqual(text.splitlines().count(line), 1)
+        self.assertNotRegex(text, r"(?im)^#\+AI_MODEL:")
         self.assertNotIn("OSDB-0000", text)
         self.assertNotIn("osdb-0000", text)
 
@@ -237,11 +238,11 @@ class StubTests(unittest.TestCase):
         self.assertIn("#+CREATED: [2026-10-19 Mon 17:42:05]\n",
                       stub.read_text(encoding="utf-8"))
 
-    def test_markdown_stub_with_model_and_quoted_title(self) -> None:
-        """Scenario: Markdown stub with an AI model and a quoted title."""
+    def test_markdown_stub_with_quoted_title(self) -> None:
+        """Scenario: Markdown stub with a quoted title."""
         root = make_repo(self)
         title = 'Bob\'s "best" ester'
-        result = new(root, title, md=True, ai_model="example-model-1")
+        result = new(root, title, md=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         stub = root / "md" / "procedures" / "OSDB-0001-bob-s-best-ester.md"
         self.assertTrue(stub.is_file(), result.stdout + result.stderr)
@@ -250,31 +251,11 @@ class StubTests(unittest.TestCase):
         moment = dt.datetime.fromisoformat(NOW)
         self.assertEqual(data["date"], moment)
         self.assertEqual(data["lastmod"], moment)
-        self.assertEqual(data["ai_model"], "example-model-1")
         self.assertEqual(data["id"], "OSDB-0001")
+        self.assertNotIn("ai_model", data)
         checked = support.run_validator([stub.parent])
         self.assertEqual(checked.returncode, 0, checked.stderr)
         self.assertEqual(checked.stdout, "")
-
-    def test_human_authored_markdown_stub_has_no_ai_model(self) -> None:
-        """Scenario: Human-authored Markdown stub."""
-        root = make_repo(self)
-        result = new(root, "Test product", md=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        stub = root / "md" / "procedures" / "OSDB-0001-test-product.md"
-        self.assertTrue(stub.is_file(), result.stdout + result.stderr)
-        self.assertNotIn("ai_model",
-                         front_matter(stub.read_text(encoding="utf-8")))
-
-    def test_invalid_ai_model_is_a_usage_error_and_creates_nothing(
-            self) -> None:
-        """Scenario: Invalid AI model identifier."""
-        root = make_repo(self)
-        before = files_of(root)
-        result = new(root, "Test product", ai_model="two words")
-        self.assertEqual(result.returncode, 2, result.stderr)
-        self.assertIn("--ai-model", result.stderr)
-        self.assertEqual(files_of(root), before)
 
     def test_template_filling_rejects_a_missing_anchor_line(self) -> None:
         """Scenario: Template filling (design D1: ValueError on a missing
@@ -284,8 +265,7 @@ class StubTests(unittest.TestCase):
         broken = re.sub(r"^#\+TITLE:.*\n", "", text, flags=re.M)
         now = dt.datetime.fromisoformat(NOW)
         with self.assertRaises(ValueError):
-            pipeline().fill_template(broken, "org", "OSDB-0001", "T", now,
-                                     None)
+            pipeline().fill_template(broken, "org", "OSDB-0001", "T", now)
 
 
 class PdfJobTests(unittest.TestCase):

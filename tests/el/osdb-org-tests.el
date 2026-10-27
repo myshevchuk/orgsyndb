@@ -627,7 +627,11 @@ See `osdb-org-test-assert-lines' for EXPECTED."
     (8 ((set "CREATED" "[2026-10-19 Mon 17:42:05>"))
        (("#+CREATED" "\"[2026-10-19 Mon 17:42:05>\" must have the form [YYYY-MM-DD Day hh:mm:ss]")))
     (9 ((set "AI_MODEL" "example-model-1"))
-       nil))
+       nil)
+    (10 ((remove "AI_MODEL"))
+        nil)
+    (11 ((add-after "AI_MODEL" "#+AI_MODEL: example-model-1"))
+        (("#+AI_MODEL" "appears more than once"))))
   "The cases of the dependent checks: number, edits, expected errors.
 The edits apply to the valid propyl-acetate source.  Each expected error
 is a field and a message.")
@@ -639,9 +643,11 @@ is a field and a message.")
          (result (osdb-org-test-propyl-lines
                   (osdb-org-test-edit (osdb-org-test-propyl) (nth 1 entry))
                   (nth 2 entry))))
-    (when (= number 9)
-      (should (equal (plist-get (car (car result)) :ai-model)
-                     "example-model-1")))))
+    (pcase number
+      (9 (should (equal (plist-get (car (car result)) :ai-model)
+                        "example-model-1")))
+      (10 (should (car result))
+          (should (null (plist-get (car (car result)) :ai-model)))))))
 
 (ert-deftest osdb-org-test-dependent-checks-1 ()
   "Scenario: Dependent checks of the keywords, case 1."
@@ -678,6 +684,14 @@ is a field and a message.")
 (ert-deftest osdb-org-test-dependent-checks-9 ()
   "Scenario: Dependent checks of the keywords, case 9."
   (osdb-org-test-dependent 9))
+
+(ert-deftest osdb-org-test-dependent-checks-10 ()
+  "Scenario: Dependent checks of the keywords, case 10."
+  (osdb-org-test-dependent 10))
+
+(ert-deftest osdb-org-test-dependent-checks-11 ()
+  "Scenario: Dependent checks of the keywords, case 11."
+  (osdb-org-test-dependent 11))
 
 (ert-deftest osdb-org-test-keyword-lines ()
   "Scenario: Keyword lines."

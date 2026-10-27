@@ -217,17 +217,19 @@ class ExportedFrontMatterTests(ExportTestCase):
         """Scenario: AI model mapping."""
         sandbox = self.sandbox()
         self.only_sources(sandbox, "OSDB-0901-table-first.org",
-                          "OSDB-0902-literal-text.org")
+                          "OSDB-0902-literal-text.org",
+                          "OSDB-0903-named-paragraph.org")
         result = self.export(sandbox)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        modelled = front_matter(
-            self.exported(sandbox, "OSDB-0901-table-first"))
-        human = front_matter(
-            self.exported(sandbox, "OSDB-0902-literal-text"))
+        modelled, none, absent = (
+            front_matter(self.exported(sandbox, stem))
+            for stem in ("OSDB-0901-table-first", "OSDB-0902-literal-text",
+                         "OSDB-0903-named-paragraph"))
         self.assertEqual(modelled.get("ai_model"), "example-model-1")
-        self.assertNotIn("ai_model", human)
-        self.assertNotIn("author", modelled)
-        self.assertNotIn("author", human)
+        self.assertNotIn("ai_model", none)
+        self.assertNotIn("ai_model", absent)
+        for data in (modelled, none, absent):
+            self.assertNotIn("author", data)
 
     def test_seconds_survive(self) -> None:
         """Scenario: Seconds survive."""
