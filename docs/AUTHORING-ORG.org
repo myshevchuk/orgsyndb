@@ -17,6 +17,8 @@
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-27 Tue 09:45] -- doc-writer pass line corrected from gpt-5 to the pinned run model
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-28 Wed 21:35] -- note references in Write the body
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-28 Wed 21:37] -- metadata panel no longer repeats the ID
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-10-28 Wed 21:55] -- Understand the finished page
+#+AI_PASS: fact-check claude-opus-5-5 [2026-10-28 Wed 21:57] -- doc-writer pass line corrected from gpt-6 to the pinned run model
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -108,20 +110,29 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
 * Understand the finished page
 
   The labels below are those of an English site; a German site, the
-  default, shows them in German, such as *Kopieren* for *Copy*. The page
-  shows the procedure ID and a status badge above ~#+TITLE~. Its
-  metadata panel shows the product fields, the product name only when it
-  differs from the title, then scale, yield,
-  reaction type, tags, authors, checkers when set, created and modified
-  times, and precursor or used-in links. Formula digits appear as subscripts.
-  Molecular weight gains ~g/mol~, yield gains a percent sign, and SMILES has
-  a *Copy* button. Reaction type, tag, and author values link to pages that
-  list related procedures. The site title-cases author names for display, so
-  ~van~ appears as ~Van~.
+  default, shows them in German, such as *Kopieren* for *Copy*. The title
+  block shows the procedure ID and a status badge above ~#+TITLE~. When
+  ~:status~ is ~checked~ and ~:checked_by~ is set, the checkers' names
+  follow the badge, so the line reads *checked by* followed by the names.
+  Under the title, ~:scale~ appears as *Scale* and ~:yield_percent~ as
+  *Yield*, each when set. The *Print / Save as PDF* button follows them.
 
-  A structure image appears after the metadata panel. Without one, the
-  screen shows a *No structure image* placeholder, which is omitted from
-  printouts. The eight body sections follow it.
+  On a wide screen, the structure image sits to the right of the title,
+  above the metadata panel. In a narrow window it follows the print
+  button, before the panel. In print it also precedes the panel. Without
+  an image, the screen shows a *No structure image* placeholder, which is
+  omitted from printouts. A rule closes the title block on screen.
+
+  The metadata panel shows the product fields, the product name only when
+  it differs from the title, then reaction type, tags, authors, checkers
+  when set for draft or retired procedures under *Checked by*, created
+  and modified times, and precursor or used-in links. Formula digits
+  appear as subscripts. Molecular weight gains ~g/mol~, yield gains a
+  percent sign, and SMILES has a *Copy* button. Reaction type, tag, and
+  author values link to pages that list related procedures. The site
+  title-cases author names for display, so ~van~ appears as ~Van~. The
+  eight body sections appear beside the panel on a wide screen and after
+  it in a narrow window or in print.
 
 * Use exact timestamps
 

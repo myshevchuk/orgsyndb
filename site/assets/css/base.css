@@ -162,14 +162,18 @@ main { padding: var(--space-3) 0 var(--space-5); }
 }
 .procedure-header h1 { margin-top: var(--space-1); }
 .actions { margin: 0; }
+/* The key facts read as one line under the title: label, value, label,
+   value. */
+.key-facts { margin: 0; font-family: var(--font-ui); }
+.key-facts dt, .key-facts dd { display: inline; margin: 0; }
+.key-facts dt { color: var(--muted); }
+.key-facts dd { margin-right: var(--space-4); font-weight: 600; }
 
 .badge {
   display: inline-block;
   font-family: var(--font-ui);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   line-height: 1.4;
   padding: 0 0.5rem;
   border-radius: 1rem;

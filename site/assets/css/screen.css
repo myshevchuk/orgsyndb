@@ -111,15 +111,25 @@ h1 { font-size: 2.25rem; }
 .recent-list a, .unchecked-list a { min-width: 0; overflow-wrap: anywhere; }
 .browse-list li { padding: var(--space-1) 0; }
 
+/* The title block: the ID line, the title, the key facts and the actions
+   in the reading column, and the structure at the right in the columns
+   of the article below, so that the drawing stands above the details. The
+   last row takes whatever height the drawing needs beyond the text, so
+   the text rows stay together. A rule closes the block. */
 .procedure-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: var(--space-4);
-  margin-bottom: var(--space-4);
+  grid-template-columns: minmax(0, 1fr) minmax(15rem, 21rem);
+  grid-template-rows: repeat(4, auto) 1fr;
+  column-gap: var(--space-5);
+  align-items: start;
+  margin-bottom: var(--space-5);
+  padding-bottom: var(--space-4);
+  border-bottom: 2px solid var(--fg);
 }
-.procedure-header .procedure-id, .procedure-header h1 { grid-column: 1; }
-.procedure-header h1 { margin-bottom: 0; }
-.procedure-header .actions { grid-column: 2; grid-row: 1 / 3; align-self: center; }
+.procedure-header > :not(.structure) { grid-column: 1; }
+.procedure-header h1 { margin-bottom: var(--space-3); }
+.procedure-header .actions { margin-top: var(--space-4); }
+.procedure-header .structure { grid-column: 2; grid-row: 1 / -1; margin: 0; }
 /* Marginalia: the body takes the width beside a margin of details on
    the right. Its prose keeps a reading measure and its tables use the
    whole column. The details stay first in the document, so print,
@@ -148,7 +158,6 @@ h1 { font-size: 2.25rem; }
   background: var(--surface);
   box-shadow: 0 0 0 var(--space-2) var(--surface);
 }
-.procedure-details .structure { order: -1; margin: 0; }
 /* The details keep the label beside its value, as on paper, but drop the
    panel's box. */
 .procedure-details .metadata {
@@ -163,11 +172,11 @@ h1 { font-size: 2.25rem; }
 /* The rule lines belong to the figure, so that the dark scheme's filter
    on the image leaves them alone. Without an image the slot is one
    quiet line. */
-.procedure-details .structure:not(.structure--placeholder) {
+.procedure-header .structure:not(.structure--placeholder) {
   border-block: 1px solid var(--border);
 }
-.procedure-details .structure img { margin: 0 auto; border: 0; border-radius: 0; }
-.procedure-details .structure__slot {
+.procedure-header .structure img { margin: 0 auto; border: 0; border-radius: 0; }
+.procedure-header .structure__slot {
   max-width: none;
   padding: 0;
   border: 0;
@@ -319,7 +328,7 @@ pre { overflow-x: auto; }
     border-top: 1px solid var(--border);
     padding: var(--space-4) 0 0;
   }
-  .procedure { grid-template-columns: minmax(0, 1fr) 16rem; column-gap: var(--space-5); }
+  .procedure, .procedure-header { grid-template-columns: minmax(0, 1fr) 16rem; }
 }
 /* Below 55rem the search form takes a line of its own under the title and
    the navigation, and the facets wait behind the Filters button, above
@@ -333,6 +342,10 @@ pre { overflow-x: auto; }
   .procedure-details { margin-bottom: var(--space-5); }
   .procedure-header { display: block; }
   .procedure-header .actions { margin-top: var(--space-3); }
+  .procedure-header .structure { margin-top: var(--space-4); }
+  /* The block's own rule follows the drawing, so the figure's lower rule
+     goes. */
+  .procedure-header .structure:not(.structure--placeholder) { border-bottom: 0; }
 }
 @media (max-width: 35rem) {
   .catalogue-select:first-of-type { margin-left: 0; }

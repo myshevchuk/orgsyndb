@@ -16,8 +16,8 @@ FOOTER = (r"^OrgSynDB · interne Vorschriften · Stand "
           r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}$")
 BANNER = "Beispieldaten – Mengenangaben nicht experimentell überprüft."
 PANEL_LABELS = ["Produkt", "Summenformel", "Molmasse", "CAS", "SMILES",
-                "Ansatzgröße", "Ausbeute", "Reaktionstyp", "Schlagwörter",
-                "Autoren", "Erstellt", "Geändert", "Vorstufen"]
+                "Reaktionstyp", "Schlagwörter", "Autoren", "Erstellt",
+                "Geändert", "Vorstufen"]
 TITLES = {"procedures/index.html": "Vorschriften",
           "reaction_types/index.html": "Reaktionstypen",
           "tags/index.html": "Schlagwörter",
@@ -125,7 +125,10 @@ class GermanSiteTests(GermanCase):
         self.assertEqual(list(pairs), PANEL_LABELS)
         self.assertEqual(pairs["Produkt"].norm(), "Acetylsalicylsäure")
         self.assertEqual(pairs["Molmasse"].norm(), "180,16 g/mol")
-        self.assertEqual(pairs["Ausbeute"].norm(), "75 %")
+        key = page.find("dl", "key-facts")
+        self.assertEqual([(p.label, p.definition.norm())
+                          for p in page.definition_pairs(key)],
+                         [("Ansatzgröße", "20 mmol"), ("Ausbeute", "75 %")])
         reaction = page.links(pairs["Reaktionstyp"])
         self.assertEqual([(l.target, l.node.norm()) for l in reaction],
                          [("/reaction_types/acylation/", "Acylierung")])

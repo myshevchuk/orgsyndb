@@ -1,7 +1,9 @@
 {{- /* The metadata panel: one dt/dd pair per field that is set, in the
 canonical order, labelled in the page's language. It repeats nothing the
-procedure header shows: no ID, and the product only when it differs from
-the title; index-terms.html keeps both in the indexed text. A newline
+procedure header shows: no ID, scale or yield, the product only when it
+differs from the title, and the checkers only when the status is not
+checked; index-terms.html keeps the ID and the product in the indexed
+text. A newline
 separates every </dt> from its <dd>, so that Pagefind indexes each label
 and value as separate words. */ -}}
 {{ $p := .Params -}}
@@ -27,14 +29,6 @@ and value as separate words. */ -}}
 <dt>{{ T "label_smiles" }}</dt>
 <dd><code data-smiles>{{ . }}</code> <button type="button" class="copy-button" data-copy-smiles data-copied="{{ T "copied" }}" data-selected="{{ T "selected" }}" data-pagefind-ignore hidden>{{ T "copy" }}</button></dd>
 {{ end -}}
-{{ with $p.scale -}}
-<dt>{{ T "label_scale" }}</dt>
-<dd>{{ . }}</dd>
-{{ end -}}
-{{ if isset $p "yield_percent" -}}
-<dt>{{ T "label_yield" }}</dt>
-<dd>{{ partial "decimal.html" $p.yield_percent }} %</dd>
-{{ end -}}
 {{ with .GetTerms "reaction_types" -}}
 <dt>{{ T "label_reaction_type" }}</dt>
 <dd>{{ range $i, $term := . }}{{ if $i }}, {{ end }}<a href="{{ $term.RelPermalink }}">{{ partial "reaction-type-label.html" $term.Data.Term }}</a>{{ end }}</dd>
@@ -47,10 +41,10 @@ and value as separate words. */ -}}
 <dt>{{ T "label_authors" }}</dt>
 <dd>{{ range $i, $term := . }}{{ if $i }}, {{ end }}<a href="{{ $term.RelPermalink }}">{{ $term.Title }}</a>{{ end }}</dd>
 {{ end -}}
-{{ with $p.checked_by -}}
+{{ if ne $p.status "checked" }}{{ with $p.checked_by -}}
 <dt>{{ T "label_checked_by" }}</dt>
 <dd>{{ delimit . ", " }}</dd>
-{{ end -}}
+{{ end }}{{ end -}}
 {{ if not .Date.IsZero -}}
 <dt>{{ T "label_created" }}</dt>
 <dd><time datetime="{{ .Date.Format "2006-01-02T15:04:05Z07:00" }}">{{ .Date.Format "2006-01-02 15:04" }}</time></dd>

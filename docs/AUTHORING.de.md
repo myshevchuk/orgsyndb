@@ -137,22 +137,33 @@ Format und jeden erlaubten Wert.
 
 ### So erscheinen die Felder auf der Seite
 
-Über dem Titel stehen die `id` und ein Statusabzeichen. Das Datenfeld der
-Seite zeigt den Produktnamen, wenn er vom Titel abweicht, und
-Summenformel, Molmasse,
-gegebenenfalls die CAS-Nummer, SMILES, Ansatzgröße, Ausbeute,
-Reaktionstyp, Schlagwörter, Autoren, gegebenenfalls die Prüfenden,
+Der Titelblock zeigt über dem Titel die `id` und ein Statusabzeichen.
+Wenn `status` den Wert `checked` hat und `checked_by` ausgefüllt ist,
+folgen die Namen der Prüfenden auf das Abzeichen: **Geprüft von** und die
+Namen. Unter dem Titel erscheinen `scale` als **Ansatzgröße** und
+`yield_percent` als **Ausbeute**, jeweils wenn ausgefüllt. Darunter steht
+die Schaltfläche **Drucken / Als PDF speichern**.
+
+Auf einem breiten Bildschirm steht das Strukturbild rechts neben dem
+Titel, über dem Datenfeld. In einem schmalen Fenster folgt es auf die
+Druckschaltfläche, vor dem Datenfeld. Auch im Ausdruck steht es vor dem
+Datenfeld. Ohne Bild zeigt der Bildschirm den Platzhalter
+**Keine Strukturformel**, der im Ausdruck fehlt. Eine Linie schließt den
+Titelblock auf dem Bildschirm ab.
+
+Das Datenfeld zeigt den Produktnamen, wenn er vom Titel abweicht, und
+Summenformel, Molmasse, gegebenenfalls die CAS-Nummer, SMILES,
+Reaktionstyp, Schlagwörter, Autoren, bei Entwürfen und zurückgezogenen
+Vorschriften gegebenenfalls die Prüfenden unter **Geprüft von**,
 Erstellungs- und Änderungszeit sowie die Links zu Vorstufen und
 Folgevorschriften. Ziffern der Summenformel erscheinen tiefgestellt.
-Molmasse und Ausbeute erscheinen mit Dezimalkomma,
-mit `g/mol` und Prozentzeichen; neben SMILES steht eine Schaltfläche
-**Kopieren**. Reaktionstyp, Schlagwörter und Autoren verlinken auf Seiten
-mit verwandten Vorschriften. Autorennamen werden mit großem
-Anfangsbuchstaben angezeigt, aus `van` wird also `Van`.
-
-Das Strukturbild folgt auf das Datenfeld. Ohne Bild zeigt der Bildschirm
-den Platzhalter **Keine Strukturformel**, der im Ausdruck fehlt. Danach
-folgen die acht Abschnitte des Textes.
+Molmasse und Ausbeute erscheinen mit Dezimalkomma, mit `g/mol` und
+Prozentzeichen; neben SMILES steht eine Schaltfläche **Kopieren**.
+Reaktionstyp, Schlagwörter und Autoren verlinken auf Seiten mit verwandten
+Vorschriften. Autorennamen werden mit großem Anfangsbuchstaben angezeigt,
+aus `van` wird also `Van`. Die acht Abschnitte des Textes stehen auf einem
+breiten Bildschirm neben dem Datenfeld, in einem schmalen Fenster und im
+Ausdruck danach.
 
 ## 3. Die Vorschrift schreiben
 

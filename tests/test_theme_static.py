@@ -122,9 +122,11 @@ class NarrowWindowTests(unittest.TestCase):
                     narrow_value(declarations, selector,
                                  "grid-template-columns", width),
                     "minmax(0, 1fr)")
-        self.assertEqual(
-            narrow_value(declarations, ".procedure", "display", width),
-            "block")
+        for selector in (".procedure", ".procedure-header"):
+            with self.subTest(selector=selector):
+                self.assertEqual(
+                    narrow_value(declarations, selector, "display", width),
+                    "block")
 
 
 class RowDetailsTests(unittest.TestCase):

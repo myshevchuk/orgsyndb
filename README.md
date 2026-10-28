@@ -220,10 +220,17 @@ accessible name is **Search procedures**.
   in one list. With no query or filters it lists every procedure by ID.
   Its table shows **ID**, **Procedure**, **Reaction type**, **Status**
   and **Modified**; follow an ID or title to read the procedure.
-- `/procedures/osdb-NNNN/` shows one procedure, including its metadata,
-  structure image or on-screen placeholder, and eight body sections.
-  The ID appears once, above the title. The details beside the text show the
-  product name only when it differs from the title. Follow a reference
+- `/procedures/osdb-NNNN/` shows one procedure. Its title block opens with
+  the ID and status badge above the title. For a checked procedure, the
+  checkers' names follow the badge when supplied. **Scale** and **Yield**
+  appear under the title, each when set, followed by **Print / Save as PDF**.
+  On a wide screen, the structure image or **No structure image** placeholder
+  sits to the right, above the details column. In a narrow window it follows
+  the print button, before the details. A rule closes the title block.
+  The details beside the eight body sections show the product name only
+  when it differs from the title. They do not repeat the ID, scale, yield
+  or checkers of a checked procedure; checkers of draft or retired procedures
+  appear there when supplied. Follow a reference
   such as **(Note 2)** in the text to jump to that note in **Notes**;
   the note is highlighted on screen. A reference to a missing note stays
   plain text.

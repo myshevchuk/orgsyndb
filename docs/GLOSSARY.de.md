@@ -181,7 +181,7 @@ Grund. `X`, `Y` und `…` sind in den Mustersätzen Platzhalter.
 |---|---|---|
 |der Ansatz|run; batch (of a reaction)|„ein Ansatz im 50-mmol-Maßstab“; dazu „die Ansatzgröße“|
 |der Maßstab|scale|„im 10-mmol-Maßstab“|
-|die Ansatzgröße|scale (of a run)|Bezeichnung im Datenfeld der Website|
+|die Ansatzgröße|scale (of a run)|Bezeichnung unter dem Titel einer Vorschrift auf der Website|
 |vorlegen|to charge (a flask) first|trennbar; Part. II vorgelegt; „Das Amin in THF vorlegen“|
 |einwiegen|to weigh into|trennbar; Part. II eingewogen|
 |zugeben|to add|trennbar (gibt … zu); Part. II zugegeben|

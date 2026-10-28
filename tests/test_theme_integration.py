@@ -32,8 +32,8 @@ SECTIONS = ["Summary", "Reagents", "Procedure", "Workup and Purification",
             "Characterization", "Notes", "Hazards and Waste Disposal",
             "References"]
 REAGENT_HEADER = ["Reagent", "CAS", "MW (g/mol)", "Amount", "mmol", "Equiv"]
-PANEL_LABELS = ["Product", "Formula", "MW", "CAS", "SMILES", "Scale",
-                "Yield", "Reaction type", "Tags", "Authors", "Checked by",
+PANEL_LABELS = ["Product", "Formula", "MW", "CAS", "SMILES",
+                "Reaction type", "Tags", "Authors", "Checked by",
                 "Created", "Modified", "Precursors", "Used in"]
 FONT_SUFFIXES = (".woff", ".woff2", ".ttf", ".otf", ".eot")
 TAXONOMIES = {"reaction_types": "Reaction types", "tags": "Tags",
@@ -80,12 +80,11 @@ class SiteCase(ps.ThemeBuildCase):
                   ("MW", product.get("mw") is not None),
                   ("CAS", product.get("cas")),
                   ("SMILES", product.get("smiles")),
-                  ("Scale", data.get("scale")),
-                  ("Yield", data.get("yield_percent") is not None),
                   ("Reaction type", data.get("reaction_types")),
                   ("Tags", data.get("tags")),
                   ("Authors", data.get("authors")),
-                  ("Checked by", data.get("checked_by")),
+                  ("Checked by", data.get("checked_by")
+                   and data.get("status") != "checked"),
                   ("Created", data.get("date")),
                   ("Modified", data.get("lastmod")),
                   ("Precursors", data.get("precursors")),
@@ -318,38 +317,42 @@ class ShippedSiteTests(SiteCase):
         self.assertIsNotNone(badge, "no status badge")
         self.assertIn("badge--draft", badge.classes)
         self.assertEqual(badge.norm(), "draft")
+        self.assertIsNone(identity.find("span", "sign-off"))
         h1 = header.find("h1")
+        key = header.find("dl", "key-facts")
         facts = header.find("p", "print-facts")
         actions = header.find("p", "actions")
-        for node, what in ((h1, "h1"), (facts, "p.print-facts"),
-                           (actions, "p.actions")):
+        figure = header.find("figure", "structure")
+        for node, what in ((h1, "h1"), (key, "dl.key-facts"),
+                           (facts, "p.print-facts"), (actions, "p.actions"),
+                           (figure, "figure.structure")):
             self.assertIsNotNone(node, f"header has no {what}")
-        parts = [page.index_of(n) for n in (identity, h1, facts, actions)]
+        parts = [page.index_of(n)
+                 for n in (identity, h1, key, facts, actions, figure)]
         self.assertEqual(parts, sorted(parts), "header parts out of order")
+        self.assertIs(header.elements()[-1], figure)
         button = actions.find("button", "print-button")
         self.assertIsNotNone(button, "no button.print-button")
         self.assertEqual(button.attrs.get("type"), "button")
         self.assertIn("data-print", button.attrs)
         self.assertIn("hidden", button.attrs)
         self.assertEqual(button.norm(), "Print / Save as PDF")
-        for outside in (h1, marked):
+        for outside in (h1, marked, key, figure):
             self.assertFalse(outside.within(article),
                              f"{outside.tag} lies inside the article")
+        self.assertEqual(article.find_all("figure"), [])
         # The desktop columns wrap the details and body; reading and
         # indexing order still starts with the metadata panel.
         panel = article.find("dl", "metadata")
         self.assertIsNotNone(panel, "no dl.metadata")
-        figure = article.find("figure", "structure")
         summary = page.heading("Summary")
         terms = article.find("span", "index-terms")
         index = article.find("span", data_smiles_index=True)
-        for node, what in ((figure, "figure.structure"),
-                           (summary, "Summary heading"),
+        for node, what in ((summary, "Summary heading"),
                            (terms, "index-terms element"),
                            (index, "SMILES index")):
             self.assertIsNotNone(node, f"article has no {what}")
-        order = [page.index_of(n)
-                 for n in (panel, figure, summary, terms, index)]
+        order = [page.index_of(n) for n in (panel, summary, terms, index)]
         self.assertEqual(order, sorted(order))
         self.assertTrue(summary.within(article))
 
@@ -361,9 +364,8 @@ class ShippedSiteTests(SiteCase):
         panel = self.panel(page)
         self.assertEqual(
             list(panel),
-            ["Product", "Formula", "MW", "CAS", "SMILES", "Scale",
-             "Yield", "Reaction type", "Tags", "Authors", "Created",
-             "Modified", "Precursors"])
+            ["Product", "Formula", "MW", "CAS", "SMILES", "Reaction type",
+             "Tags", "Authors", "Created", "Modified", "Precursors"])
         text = {label: pair.definition.norm()
                 for label, pair in panel.items()}
         self.assertEqual(text["Product"], "Acetylsalicylic acid")
@@ -382,8 +384,6 @@ class ShippedSiteTests(SiteCase):
         self.assertIn("hidden", copy.attrs)
         self.assertEqual(copy.norm(), "Copy")
         self.assertGreater(page.index_of(copy), page.index_of(code))
-        self.assertEqual(text["Scale"], "20 mmol")
-        self.assertEqual(text["Yield"], "75 %")
         for label, texts in (("Reaction type", ["Acylation"]),
                              ("Tags", ["sample-data", "acetylation"]),
                              ("Authors", ["A. Example", "C. Example"])):
@@ -410,6 +410,20 @@ class ShippedSiteTests(SiteCase):
             with self.subTest(label=label):
                 self.assertNotEqual(pair.gap, "")
                 self.assertEqual(pair.gap.strip(), "")
+
+    def test_key_facts_of_the_markdown_seed(self) -> None:
+        """Scenario: Key facts and sign-off (the Markdown seed)."""
+        page = ps.load_page(self.public, self.public / "procedures"
+                            / "osdb-0002" / "index.html")
+        key = page.find("header", "procedure-header").find("dl", "key-facts")
+        self.assertIsNotNone(key, "no dl.key-facts")
+        pairs = page.definition_pairs(key)
+        self.assertEqual([(p.label, p.definition.norm()) for p in pairs],
+                         [("Scale", "20 mmol"), ("Yield", "75 %")])
+        for pair in pairs:
+            self.assertNotEqual(pair.gap, "")
+            self.assertEqual(pair.gap.strip(), "")
+        self.assertIsNone(page.find("span", "sign-off"))
 
     def test_a_product_named_like_its_procedure(self) -> None:
         """Scenario: A product named like its procedure."""
@@ -528,6 +542,8 @@ class ShippedSiteTests(SiteCase):
         page = ps.load_page(self.public, path)
         figure = page.find("figure", "structure")
         self.assertIsNotNone(figure, "no figure.structure")
+        self.assertTrue(figure.within(
+            page.find("header", "procedure-header")))
         self.assertFalse(figure.has_class("structure--placeholder"))
         image = figure.find("img")
         self.assertIsNotNone(image, "no img in the figure")
@@ -541,6 +557,8 @@ class ShippedSiteTests(SiteCase):
         page = ps.load_page(self.public, path)
         figure = page.find("figure", "structure")
         self.assertIsNotNone(figure, "no figure.structure")
+        self.assertTrue(figure.within(
+            page.find("header", "procedure-header")))
         self.assertTrue(figure.has_class("structure--placeholder"))
         slot = figure.find("div", "structure__slot")
         self.assertIsNotNone(slot, "no div.structure__slot")
@@ -731,9 +749,10 @@ class ShippedSiteTests(SiteCase):
                 name = item.product.get("name")
                 self.assertIn(name, header if name == item.title else text)
                 for value in (item.product.get("cas"),
-                              item.product.get("smiles"),
-                              f"{item.data.get('yield_percent')} %"):
+                              item.product.get("smiles")):
                     self.assertIn(value, text)
+                self.assertIn(f"{item.data.get('yield_percent')} %",
+                              page.find("dl", "key-facts").norm())
                 article = page.find("article", "procedure")
                 self.assertEqual(
                     [n.norm() for n in article.find_all("h2")

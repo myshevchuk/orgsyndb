@@ -111,20 +111,30 @@ and every allowed value.
 ### How the fields appear on the page
 
 The labels below are those of an English site; a German site, the
-default, shows them in German, such as **Kopieren** for **Copy**. The page
-shows `id` and a `status` badge above the title. Its information
-panel shows the product name when it differs from the title, then the
-formula, molecular weight, CAS number when present, SMILES, scale, yield,
-reaction type, tags, authors, checkers when present, created and modified
-times, and precursor or used-in links. Formula digits appear as subscripts. Molecular weight gains `g/mol`,
-yield gains a percent sign, and SMILES has a **Copy** button. Reaction type,
-tag, and author values link to pages that list related procedures. The site
-title-cases author names for display, so a name entered as `van` appears as
-`Van`.
+default, shows them in German, such as **Kopieren** for **Copy**. The title
+block shows `id` and a `status` badge above the title. When `status` is
+`checked` and `checked_by` is set, the checkers' names follow the badge,
+so the line reads **checked by** followed by the names. Under the title,
+`scale` appears as **Scale** and `yield_percent` as **Yield**, each when
+set. The **Print / Save as PDF** button follows them.
 
-The structure image appears after the information panel. Without one, the
-screen shows a **No structure image** placeholder, which is omitted from
-printouts. The eight body sections follow it.
+On a wide screen, the structure image sits to the right of the title,
+above the information panel. In a narrow window it follows the print
+button, before the panel. In print it also precedes the panel. Without
+an image, the screen shows a **No structure image** placeholder, which is
+omitted from printouts. A rule closes the title block on screen.
+
+The information panel shows the product name when it differs from the
+title, then the formula, molecular weight, CAS number when present,
+SMILES, reaction type, tags, authors, checkers when present for draft or
+retired procedures under **Checked by**, created and modified times, and
+precursor or used-in links. Formula digits appear as subscripts.
+Molecular weight gains `g/mol`, yield gains a percent sign, and SMILES has
+a **Copy** button. Reaction type, tag, and author values link to pages
+that list related procedures. The site title-cases author names for
+display, so a name entered as `van` appears as `Van`. The eight body
+sections appear beside the panel on a wide screen and after it in a
+narrow window or in print.
 
 ## 3. Write the procedure
 

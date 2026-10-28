@@ -314,6 +314,20 @@ class CatalogueFixtureTests(cs.CatalogueCase):
                          "(11)")
 
 
+    def test_the_sign_off_of_a_checked_procedure(self) -> None:
+        """Scenario: Key facts and sign-off (the catalogue fixtures)."""
+        checked = self.page("procedures/osdb-0921/index.html")
+        identity = checked.find("p", "procedure-id")
+        self.assertEqual(identity.norm(), "OSDB-0921 checked by B. Example")
+        self.assertEqual(identity.find("span", "sign-off").norm(),
+                         "by B. Example")
+        labels = [p.label for p in checked.definition_pairs(
+            checked.find("dl", "metadata"))]
+        self.assertNotIn("Checked by", labels)
+        draft = self.page("procedures/osdb-0923/index.html")
+        self.assertIsNone(draft.find("span", "sign-off"))
+
+
 class AllCheckedHomeTests(cs.CatalogueCase):
     """The test collection with every procedure checked."""
 
