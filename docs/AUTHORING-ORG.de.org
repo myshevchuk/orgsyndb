@@ -11,6 +11,8 @@
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-26 Mon 12:05] -- doc-writer pass line corrected from gpt-6.1-sol to the pinned run model
 #+AI_PASS: doc-writer gpt-5.6-sol [2026-10-27 Tue 09:39] -- Gerüste, optionales #+AI_MODEL und Übersetzungsschritt 3
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-27 Tue 09:45] -- doc-writer pass line corrected from gpt-5 to the pinned run model; verbatim kept on one line
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-10-28 Wed 21:35] -- Verweise auf Anmerkungen
+#+AI_PASS: fact-check claude-opus-5-5 [2026-10-28 Wed 21:37] -- Datenfeld ohne Nummer, Statusbezeichnungen groß
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
@@ -122,9 +124,9 @@ bleiben auch in einer deutschen Vorschrift englisch.
 * Die fertige Seite verstehen
 
   Über ~#+TITLE~ stehen die Vorschriftennummer und ein Statusabzeichen,
-  auf einer deutschen Website /Entwurf/, /geprüft/ oder /zurückgezogen/. Das
-  Datenfeld wiederholt die Nummer und zeigt die Produktangaben,
-  Ansatzgröße, Ausbeute, Reaktionstyp, Schlagwörter, Autoren,
+  auf einer deutschen Website /Entwurf/, /Geprüft/ oder /Zurückgezogen/. Das
+  Datenfeld zeigt die Produktangaben, den Produktnamen nur, wenn er vom
+  Titel abweicht, Ansatzgröße, Ausbeute, Reaktionstyp, Schlagwörter, Autoren,
   gegebenenfalls die Prüfenden, Erstellungs- und Änderungszeit und die
   Links zu Vorstufen und Folgevorschriften. Ziffern der Summenformel
   erscheinen tiefgestellt. Molmasse und Ausbeute erscheinen mit
@@ -186,6 +188,15 @@ bleiben auch in einer deutschen Vorschrift englisch.
   Temperaturen, Zeiten, Beobachtungen, Aufarbeitung, Reinigung,
   Charakterisierung, Gefahren und Entsorgung an, mit Dezimalkommas im
   Text. Steht unter Literatur nichts, schreiben Sie ~Keine.~
+
+  Damit Lesende vom Text zur passenden Anmerkung springen können, schreiben
+  Sie die Anmerkungen als nummerierte Liste im Abschnitt Anmerkungen.
+  Schreiben Sie den Verweis im Org-Text als normalen Text ~(Anmerkung 2)~:
+  das ausgeschriebene Wort, ein Leerzeichen und die Nummer in Klammern.
+  Nach dem Export verlinkt die Website ihn, wenn die Anmerkung vorhanden ist.
+  Andere Formen wie ~(Anmerkungen 2 und 3)~, ~(Anmerkung 2a)~ oder
+  ~siehe Anmerkung 2~ bleiben unverlinkt. In Quelltextblöcken und als Code
+  ausgezeichnetem Text entstehen keine Links.
 
   Der [[file:STYLE.de.md][Stilratgeber für deutsche Vorschriften]] erklärt,
   wie der Text formuliert wird. Verwenden Sie das

@@ -1,7 +1,8 @@
 {{- /* The site header: the site title, the navigation and the search form,
 which submits q to /procedures/. On the catalogue and term pages the form
 is the catalogue's: catalogue.js drives its field, #catalogue-q, the page
-itself is its action, and on a term page its label names the scope. The
+itself is its action, and on a term page its label names the scope while
+its placeholder, short enough to show whole, says it is scoped. The
 link of the page itself carries aria-current="page"; the link of the
 section a page lies in carries aria-current="true". The tag and author
 directories and their term pages lie in /procedures/, as their facets
@@ -16,7 +17,7 @@ do. */ -}}
 {{ if eq .Kind "term" -}}
 {{ $facet := index (dict "reaction_types" "type" "tags" "tag" "authors" "author") .Data.Plural -}}
 {{ $label = T (printf "search_scope_%s" $facet) (partial "page-title.html" .) -}}
-{{ $hint = $label -}}
+{{ $hint = T "search_scope_placeholder" -}}
 {{ end -}}
 <header class="site-header">
 <a class="site-title" href="/">{{ site.Title }}</a>

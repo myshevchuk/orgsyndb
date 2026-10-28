@@ -1,16 +1,16 @@
 {{- /* The metadata panel: one dt/dd pair per field that is set, in the
-canonical order, labelled in the page's language. A newline separates
-every </dt> from its <dd>, so that Pagefind indexes each label and value
-as separate words. */ -}}
+canonical order, labelled in the page's language. It repeats nothing the
+procedure header shows: no ID, and the product only when it differs from
+the title; index-terms.html keeps both in the indexed text. A newline
+separates every </dt> from its <dd>, so that Pagefind indexes each label
+and value as separate words. */ -}}
 {{ $p := .Params -}}
 {{ $product := $p.product | default dict -}}
 <dl class="metadata">
-<dt>{{ T "label_id" }}</dt>
-<dd>{{ $p.id }}</dd>
-{{ with $product.name -}}
+{{ with $product.name }}{{ if ne . $.Title -}}
 <dt>{{ T "label_product" }}</dt>
 <dd>{{ . }}</dd>
-{{ end -}}
+{{ end }}{{ end -}}
 {{ with $product.formula -}}
 <dt>{{ T "label_formula" }}</dt>
 <dd>{{ . | htmlEscape | replaceRE "([0-9]+)" "<sub>$1</sub>" | safeHTML }}</dd>

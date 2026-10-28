@@ -19,15 +19,20 @@ import pipeline_support as ps
 from pipeline_support import Content, Node, Page
 
 BANNER = "Sample data — quantities not experimentally verified."
-FOOTER = "OrgSynDB · internal procedures"
+# The footer ends with the build time, YYYY-MM-DD HH:MM, in its time
+# element.
+FOOTER = re.compile(r"OrgSynDB · internal procedures · built "
+                    r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}")
 ORIGIN = "http://127.0.0.1:8000"
+RFC3339 = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
+                     r"(Z|[+-]\d{2}:\d{2})$")
 NAVIGATION = [("/procedures/", "Procedures"),
               ("/reaction_types/", "Reaction types"), ("/help/", "Help")]
 SECTIONS = ["Summary", "Reagents", "Procedure", "Workup and Purification",
             "Characterization", "Notes", "Hazards and Waste Disposal",
             "References"]
 REAGENT_HEADER = ["Reagent", "CAS", "MW (g/mol)", "Amount", "mmol", "Equiv"]
-PANEL_LABELS = ["ID", "Product", "Formula", "MW", "CAS", "SMILES", "Scale",
+PANEL_LABELS = ["Product", "Formula", "MW", "CAS", "SMILES", "Scale",
                 "Yield", "Reaction type", "Tags", "Authors", "Checked by",
                 "Created", "Modified", "Precursors", "Used in"]
 FONT_SUFFIXES = (".woff", ".woff2", ".ttf", ".otf", ".eot")
@@ -69,7 +74,8 @@ class SiteCase(ps.ThemeBuildCase):
 
     def expected_labels(self, item: Content) -> list[str]:
         data, product = item.data, item.product
-        wanted = [("ID", True), ("Product", product.get("name")),
+        named = product.get("name")
+        wanted = [("Product", named and named != item.title),
                   ("Formula", product.get("formula")),
                   ("MW", product.get("mw") is not None),
                   ("CAS", product.get("cas")),
@@ -134,12 +140,15 @@ class ShippedSiteTests(SiteCase):
 
     def test_every_page_has_the_shell(self) -> None:
         """Scenario: Shell on every page."""
+        built = set()
         for path, page in self.pages():
             name = str(path.relative_to(self.public))
             with self.subTest(page=name):
-                self.check_shell(page)
+                built.add(self.check_shell(page))
+        self.assertEqual(len(built), 1, f"footers show {sorted(built)}")
 
-    def check_shell(self, page: Page) -> None:
+    def check_shell(self, page: Page) -> str:
+        """Check the page shell; return the footer's build time."""
         skip = page.find("a", "skip-link")
         self.assertIsNotNone(skip, "no a.skip-link")
         self.assertEqual(skip.attrs.get("href"), "#main")
@@ -159,7 +168,12 @@ class ShippedSiteTests(SiteCase):
         self.assertEqual(mains[0].attrs.get("id"), "main")
         footer = page.find("footer", "site-footer")
         self.assertIsNotNone(footer, "no footer.site-footer")
-        self.assertEqual(footer.norm(), FOOTER)
+        self.assertRegex(footer.norm(), f"^{FOOTER.pattern}$")
+        moments = footer.find_all("time")
+        self.assertEqual(len(moments), 1, "not one time in the footer")
+        built = moments[0].attrs.get("datetime", "")
+        self.assertRegex(built, RFC3339)
+        self.assertEqual(moments[0].norm(), f"{built[:10]} {built[11:16]}")
         order = [page.index_of(n) for n in (skip, header, mains[0], footer)]
         self.assertEqual(order, sorted(order), "shell elements out of order")
         self.check_header_search(page, header, nav)
@@ -182,6 +196,7 @@ class ShippedSiteTests(SiteCase):
             self.assertEqual(title, "OrgSynDB")
         else:
             self.assertTrue(title.endswith(" | OrgSynDB"), title)
+        return built
 
     def check_header_search(self, page: Page, header: Node,
                             nav: Node) -> None:
@@ -326,12 +341,15 @@ class ShippedSiteTests(SiteCase):
         self.assertIsNotNone(panel, "no dl.metadata")
         figure = article.find("figure", "structure")
         summary = page.heading("Summary")
+        terms = article.find("span", "index-terms")
         index = article.find("span", data_smiles_index=True)
         for node, what in ((figure, "figure.structure"),
                            (summary, "Summary heading"),
+                           (terms, "index-terms element"),
                            (index, "SMILES index")):
             self.assertIsNotNone(node, f"article has no {what}")
-        order = [page.index_of(n) for n in (panel, figure, summary, index)]
+        order = [page.index_of(n)
+                 for n in (panel, figure, summary, terms, index)]
         self.assertEqual(order, sorted(order))
         self.assertTrue(summary.within(article))
 
@@ -343,12 +361,11 @@ class ShippedSiteTests(SiteCase):
         panel = self.panel(page)
         self.assertEqual(
             list(panel),
-            ["ID", "Product", "Formula", "MW", "CAS", "SMILES", "Scale",
+            ["Product", "Formula", "MW", "CAS", "SMILES", "Scale",
              "Yield", "Reaction type", "Tags", "Authors", "Created",
              "Modified", "Precursors"])
         text = {label: pair.definition.norm()
                 for label, pair in panel.items()}
-        self.assertEqual(text["ID"], "OSDB-0002")
         self.assertEqual(text["Product"], "Acetylsalicylic acid")
         self.assertEqual(text["Formula"], "C9H8O4")
         self.assertEqual(len(panel["Formula"].definition.find_all("sub")), 3)
@@ -393,6 +410,34 @@ class ShippedSiteTests(SiteCase):
             with self.subTest(label=label):
                 self.assertNotEqual(pair.gap, "")
                 self.assertEqual(pair.gap.strip(), "")
+
+    def test_a_product_named_like_its_procedure(self) -> None:
+        """Scenario: A product named like its procedure."""
+        page = ps.load_page(self.public, self.public / "procedures"
+                            / "osdb-0001" / "index.html")
+        self.assertEqual(page.find("main").find("h1").norm(),
+                         "Salicylic acid")
+        self.assertNotIn("Product", self.panel(page))
+        terms = page.find("article", "procedure").find("span", "index-terms")
+        self.assertIsNotNone(terms, "no span.index-terms")
+        self.assertEqual(terms.norm(), "OSDB-0001 Salicylic acid")
+
+    def test_linked_notes_on_a_procedure_page(self) -> None:
+        """Scenario: Linked notes on a procedure page."""
+        page = ps.load_page(self.public, self.public / "procedures"
+                            / "osdb-0003" / "index.html")
+        article = page.find("article", "procedure")
+        links = {l.node.norm(): l.href for l in page.links(article)
+                 if l.href.startswith("#note-")}
+        self.assertEqual(links, {"Note 1": "#note-1", "Note 2": "#note-2"})
+        notes = page.following(page.heading("Notes"), "ol")
+        self.assertIsNotNone(notes, "no list after the Notes heading")
+        items = [n for n in notes.elements() if n.tag == "li"]
+        for number, item in enumerate(items[:2], start=1):
+            with self.subTest(note=number):
+                anchor = item.find(id=f"note-{number}")
+                self.assertIsNotNone(anchor, f"no #note-{number} in item")
+        self.assertEqual(len(page.find_all(id="note-1")), 1)
 
     def test_panel_labels_follow_the_canonical_order(self) -> None:
         """Scenario: Panel labels follow the canonical order on every
@@ -679,8 +724,13 @@ class ShippedSiteTests(SiteCase):
                 panel = page.find("dl", "metadata")
                 self.assertIsNotNone(panel, "no dl.metadata")
                 text = panel.norm()
-                for value in (item.id, item.product.get("name"),
-                              item.product.get("cas"),
+                # The header holds the ID, and the title a product named
+                # like its procedure; the panel holds the rest.
+                header = page.find("header", "procedure-header").norm()
+                self.assertIn(item.id, header)
+                name = item.product.get("name")
+                self.assertIn(name, header if name == item.title else text)
+                for value in (item.product.get("cas"),
                               item.product.get("smiles"),
                               f"{item.data.get('yield_percent')} %"):
                     self.assertIn(value, text)
@@ -754,6 +804,11 @@ class ShippedSiteTests(SiteCase):
                     expected.append(item.product["cas"])
                 for value in expected:
                     self.assertIn(value, text)
+                terms = bodies[0].find_all("span", "index-terms")
+                self.assertEqual(len(terms), 1, "not one span.index-terms")
+                self.assertIn("hidden", terms[0].attrs)
+                self.assertEqual(terms[0].norm(),
+                                 f"{item.id} {item.product['name']}")
                 self.assertNotIn(BANNER, text)
                 self.assertNotIn(navigation, text)
                 self.assertNotIn(navigation.replace(" ", ""),

@@ -12,9 +12,10 @@ from pipeline_support import Page
 
 NAVIGATION = [("/procedures/", "Vorschriften"),
               ("/reaction_types/", "Reaktionstypen"), ("/help/", "Hilfe")]
-FOOTER = "OrgSynDB · interne Vorschriften"
+FOOTER = (r"^OrgSynDB · interne Vorschriften · Stand "
+          r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}$")
 BANNER = "Beispieldaten – Mengenangaben nicht experimentell überprüft."
-PANEL_LABELS = ["ID", "Produkt", "Summenformel", "Molmasse", "CAS", "SMILES",
+PANEL_LABELS = ["Produkt", "Summenformel", "Molmasse", "CAS", "SMILES",
                 "Ansatzgröße", "Ausbeute", "Reaktionstyp", "Schlagwörter",
                 "Autoren", "Erstellt", "Geändert", "Vorstufen"]
 TITLES = {"procedures/index.html": "Vorschriften",
@@ -46,7 +47,7 @@ class GermanSiteTests(GermanCase):
                 self.assertEqual(links, NAVIGATION)
                 self.assertEqual(len(header.find_all("nav")), 1,
                                  "the header has a language switch")
-                self.assertEqual(page.find("footer", "site-footer").norm(),
+                self.assertRegex(page.find("footer", "site-footer").norm(),
                                  FOOTER)
                 self.check_header_search(page, header)
         self.assertFalse((self.public / "de").exists())
@@ -62,9 +63,13 @@ class GermanSiteTests(GermanCase):
         if not ps.is_catalogue_url(page.url) or page.url == "/procedures/":
             self.assertEqual(field.get("aria-label"),
                              "Vorschriften durchsuchen")
+            self.assertEqual(field.get("placeholder"),
+                             "Produkt, CAS, SMILES oder Stichwort")
         else:
             self.assertRegex(field.get("aria-label"),
                              r"^Vorschriften .+ durchsuchen$")
+            self.assertEqual(field.get("placeholder"),
+                             "Diese Vorschriften durchsuchen")
         buttons = forms[0].find_all("button")
         self.assertEqual([b.norm() for b in buttons], ["Suchen"])
 
@@ -162,7 +167,7 @@ class GermanSiteTests(GermanCase):
         self.assertEqual(
             [label.norm() for label in
              statuses.find_all("span", "facet-label")],
-            ["Entwurf", "geprüft", "zurückgezogen"])
+            ["Entwurf", "Geprüft", "Zurückgezogen"])
         self.assertEqual(self.table_ids(page), sorted(
             item.id for item in self.content()))
 

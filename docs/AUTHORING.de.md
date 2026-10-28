@@ -79,8 +79,8 @@ Füllen Sie diese Pflichtfelder aus:
 - `authors`: alle, die die Vorschrift geschrieben haben.
 - `status`: ob die Vorschrift ein Entwurf (`"draft"`), geprüft
   (`"checked"`) oder zurückgezogen (`"retired"`) ist. Der Wert bleibt
-  englisch; die deutsche Seite zeigt *Entwurf*, *geprüft* oder
-  *zurückgezogen*.
+  englisch; die deutsche Seite zeigt *Entwurf*, *Geprüft* oder
+  *Zurückgezogen*.
 - `reaction_types`: genau ein Reaktionstyp, als englisches Kürzel wie
   `"esterification"`. Die [Schema-Referenz](SCHEMA.de.md#reaktionstypen)
   listet die Kürzel mit ihren deutschen Bezeichnungen.
@@ -138,7 +138,8 @@ Format und jeden erlaubten Wert.
 ### So erscheinen die Felder auf der Seite
 
 Über dem Titel stehen die `id` und ein Statusabzeichen. Das Datenfeld der
-Seite wiederholt die ID und zeigt Produktname, Summenformel, Molmasse,
+Seite zeigt den Produktnamen, wenn er vom Titel abweicht, und
+Summenformel, Molmasse,
 gegebenenfalls die CAS-Nummer, SMILES, Ansatzgröße, Ausbeute,
 Reaktionstyp, Schlagwörter, Autoren, gegebenenfalls die Prüfenden,
 Erstellungs- und Änderungszeit sowie die Links zu Vorstufen und
@@ -172,6 +173,15 @@ Temperaturen, Zeiten, Beobachtungen, Aufarbeitung, Reinigung,
 Charakterisierung und Sicherheitshinweise so an, dass man der Vorschrift
 folgen kann. Schreiben Sie im Text Dezimalkommas: „2,76 g“. Steht unter
 Literatur nichts, schreiben Sie `Keine.`
+
+Damit Lesende vom Text zur passenden Anmerkung springen können, schreiben
+Sie die Anmerkungen als nummerierte Liste im Abschnitt Anmerkungen.
+Schreiben Sie den Verweis als normalen Text `(Anmerkung 2)`: das
+ausgeschriebene Wort, ein Leerzeichen und die Nummer in Klammern. Die
+Website verlinkt ihn, wenn die Anmerkung vorhanden ist. Andere Formen wie
+`(Anmerkungen 2 und 3)`, `(Anmerkung 2a)` oder `siehe Anmerkung 2`
+bleiben unverlinkt. In Codeblöcken und als Code ausgezeichnetem Text
+entstehen keine Links.
 
 Der [Stilratgeber für deutsche Vorschriften](STYLE.de.md) erklärt, wie der
 Text formuliert wird. Verwenden Sie das

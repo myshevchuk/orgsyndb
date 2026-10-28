@@ -32,7 +32,7 @@ Every HTML page the theme renders SHALL contain, in this order:
   - a `nav` element carrying `aria-label="Site"`, which links, in this order, to `/procedures/`, `/reaction_types/` and `/help/`, with the texts `Procedures`, `Reaction types` and `Help`. The header holds no other `nav`;
   - `form.site-search` with `role="search"` and `method="get"`, holding one `input` with `type="search"` and `name="q"`, and a `button` with `type="submit"` and the text `Search`. On the catalogue and term pages it is the catalogue's search form, with the `action`, attributes and texts that site-catalogue "Catalogue controls" gives. On every other page its `action` resolves to `/procedures/`, and its input carries `aria-label="Search procedures"` and the placeholder `Product, CAS, SMILES or keyword`;
 - exactly one `main` element with `id="main"`;
-- a `footer.site-footer` whose text is `OrgSynDB · internal procedures`.
+- a `footer.site-footer` whose text is `OrgSynDB · internal procedures · built <time>`, where `<time>` is a `time` element whose `datetime` is the time the site was built, as an RFC 3339 date-time, and whose text is that time as `YYYY-MM-DD HH:MM`. Every page of one build shows the same time.
 
 The navigation link whose URL is the page's own URL carries `aria-current="page"`. Otherwise the link of the section the page lies in carries `aria-current="true"`: every procedure page, `/tags/`, `/authors/` and their term pages lie in `/procedures/`; every reaction-type term page lies in `/reaction_types/`; every help page lies in `/help/`. No other navigation link carries `aria-current`. Every page has exactly one `input` with `name="q"`: the header's.
 
@@ -49,7 +49,7 @@ Headings follow these rules:
 
 #### Scenario: Shell on every page
 - **WHEN** a test scans every HTML file under `public/` except files under `public/pagefind/`, after a theme build in locale `en`
-- **THEN** each has the skip link, the site title, the site header with the three navigation links in order and then `form.site-search`, one `main#main`, the footer text, both `meta` elements, exactly one `h1`, no heading-level jump greater than one, and exactly one `input[name=q]`, the header's
+- **THEN** each has the skip link, the site title, the site header with the three navigation links in order and then `form.site-search`, one `main#main`, the footer text with its `time`, the same on every page, both `meta` elements, exactly one `h1`, no heading-level jump greater than one, and exactly one `input[name=q]`, the header's
 - **AND** on every page except `/procedures/` and the term pages the form's `action` resolves to `/procedures/` and its input has the stated `aria-label` and placeholder
 
 #### Scenario: Term titles use labels and tags
@@ -144,16 +144,15 @@ Each procedure page's `main` element SHALL contain, in document order:
    - the metadata panel;
    - the structure figure;
    - the rendered body;
-   - the SMILES index element of the site-search spec.
+   - the index-terms element and then the SMILES index element of the site-search spec.
 
 #### Scenario: Header and body in order
 - **WHEN** a test scans `procedures/osdb-0002/index.html` and `procedures/osdb-0001/index.html` after a theme build
-- **THEN** each has the elements in the stated order, the `h1` and the ID lie outside the `article`, and the `article` contains the `Summary` heading after the metadata panel
+- **THEN** each has the elements in the stated order, the `h1` and the visible ID lie outside the `article`, and the `article` contains the `Summary` heading after the metadata panel
 
 ### Requirement: Metadata panel
-The metadata panel SHALL be a `dl.metadata`, the first element of the details wrapper at the start of `article.procedure`. It holds one `dt`/`dd` pair per field, with these labels in this order, each pair present only when the field is set:
-- `ID`;
-- `Product` (the `product.name`);
+The metadata panel SHALL be a `dl.metadata`, the first element of the details wrapper at the start of `article.procedure`. It holds one `dt`/`dd` pair per field, with these labels in this order, each pair present only when the field is set. The panel repeats nothing the procedure header shows: the ID is in the header's ID line, and the product name, when it equals the title, is the `h1`.
+- `Product` (the `product.name`), only when it differs from the title;
 - `Formula`, where each digit run is wrapped in `<sub>`;
 - `MW`, as `<mw> g/mol`;
 - `CAS`;
@@ -173,12 +172,16 @@ Whitespace separates every `</dt>` from the following `<dd>` in the published HT
 
 #### Scenario: Panel of the Markdown seed
 - **WHEN** a test scans `procedures/osdb-0002/index.html` after a theme build
-- **THEN** the `dt` texts are, in order, `ID`, `Product`, `Formula`, `MW`, `CAS`, `SMILES`, `Scale`, `Yield`, `Reaction type`, `Tags`, `Authors`, `Created`, `Modified` and `Precursors`
-- **AND** the values include `OSDB-0002`, `Acetylsalicylic acid`, `C9H8O4` with three `<sub>` elements, `180.16 g/mol`, `50-78-2`, `CC(=O)Oc1ccccc1C(=O)O` in `code[data-smiles]`, `20 mmol`, `75 %`, a link with text `Acylation`, links `sample-data` and `acetylation`, links `A. Example` and `C. Example`, and `<time datetime="2026-10-19T23:46:11+02:00">`
+- **THEN** the `dt` texts are, in order, `Product`, `Formula`, `MW`, `CAS`, `SMILES`, `Scale`, `Yield`, `Reaction type`, `Tags`, `Authors`, `Created`, `Modified` and `Precursors`
+- **AND** the values include `Acetylsalicylic acid`, `C9H8O4` with three `<sub>` elements, `180.16 g/mol`, `50-78-2`, `CC(=O)Oc1ccccc1C(=O)O` in `code[data-smiles]`, `20 mmol`, `75 %`, a link with text `Acylation`, links `sample-data` and `acetylation`, links `A. Example` and `C. Example`, and `<time datetime="2026-10-19T23:46:11+02:00">`
 
 #### Scenario: Panel labels follow the canonical order on every page
 - **WHEN** a test scans every procedure page after a theme build
-- **THEN** each page's `dt` texts are a subsequence of the canonical label list in its order, they include every label whose field the content file sets, and whitespace follows every `</dt>`
+- **THEN** each page's `dt` texts are a subsequence of the canonical label list in its order, they include every label whose field the content file sets except `Product` where `product.name` equals the title, no page has an `ID` label, and whitespace follows every `</dt>`
+
+#### Scenario: A product named like its procedure
+- **WHEN** a test scans `procedures/osdb-0001/index.html`, whose title and `product.name` are both `Salicylic acid`, after a theme build
+- **THEN** its panel has no `Product` pair, and its index-terms element reads `OSDB-0001 Salicylic acid`
 
 ### Requirement: Precursor and used-in links
 For each ID in a procedure's `precursors`, the `Precursors` value SHALL contain an `a.precursor` that links to that procedure's page, with the text `<ID> <title>`. The `Used in` value SHALL contain one `a.used-in` for every procedure whose `precursors` contains this procedure's `id`, linking to its page with the text `<ID> <title>`, ordered by ID. A procedure that no other lists has no `Used in` pair.
@@ -230,18 +233,24 @@ Every `.svg` file under the demo collection's `static/structures/` SHALL be a ha
 
 ### Requirement: Home page
 The home page's `main` SHALL contain, in this order:
-- `div.home-intro`, holding the `h1` `OrgSynDB` and a `p.lede` with the text `The group's synthetic procedures, written in Org or Markdown and checked against one schema.`;
-- `div.home-layout`, holding:
+- `div.home-intro`, holding the `h1` `Synthetic procedures` and a `p.lede` with the text `The group's procedures, written in Org or Markdown to one schema.`;
+- `div.home-layout`, holding, in this order:
   - `section.home-recent`, with the `h2` `Recently updated`, then an `ol.recent-list` with one `li` per procedure for the first five published procedures, or all when there are fewer, ordered by `lastmod` as an instant, newest first, and by `id` ascending for equal instants. Each `li` holds an `a` linking the procedure page whose text is `<id> <title>`, then `<time datetime="<RFC 3339 lastmod>">YYYY-MM-DD</time>`. After the list, a `p` links `/procedures/?sort=modified` with the text `All procedures, recently updated first`;
-  - `section.home-browse`, with the `h2` `Browse`, then a `ul.browse-list` whose `li` entries hold, in this order, a link and then ` ` and a `span.count` reading `(<n>)`: `All procedures` to `/procedures/`, `n` the number of published procedures; `Draft procedures` to `/procedures/?status=draft`, `n` the number whose `status` is `draft`; `Reaction types` to `/reaction_types/`, `Tags` to `/tags/` and `Authors` to `/authors/`, each `n` the number of terms of that taxonomy in use.
+  - `section.home-unchecked`, only when some published procedure has the status `draft`, with the `h2` `Not yet checked`, then an `ol.unchecked-list` with one `li` per draft for the first five drafts by `id` ascending, or all when there are fewer: the drafts the catalogue lists first under `/procedures/?status=draft`. Each `li` holds an `a` linking the procedure page whose text is `<id> <title>`, then `<time datetime="<RFC 3339 date>">YYYY-MM-DD</time>` of its creation. After the list, a `p` holds a link to `/procedures/?status=draft` with the text `All draft procedures`, then ` ` and a `span.count` reading `(<n>)`, `n` the number of drafts;
+  - `section.home-browse`, with the `h2` `Browse`, then a `ul.browse-list` whose `li` entries hold, in this order, a link and then ` ` and a `span.count` reading `(<n>)`: `All procedures` to `/procedures/`, `n` the number of published procedures; `Reaction types` to `/reaction_types/`, `Tags` to `/tags/` and `Authors` to `/authors/`, each `n` the number of terms of that taxonomy in use.
 
-The counts are computed from the published procedures and written with the site language's digit grouping. The home page's `main` holds no form, no `input` and no procedure table.
+The counts are computed from the published procedures and written with the site language's digit grouping. The home page's `main` holds no form, no `input` and no procedure table. On screen, from 70rem up, the recent and unchecked lists form the first column and the browse list the second.
 
 #### Scenario: Home page content
 - **WHEN** a test scans `public/index.html` of a theme build that adds the catalogue fixtures to the test collection, in locale `en`
-- **THEN** the recent list holds the first five procedures in the computed order, each ID once, with the stated link texts and dates, and two fixtures whose `lastmod` is the same instant are ordered by ID
-- **AND** the browse list has the five entries in order, with the stated targets, and counts equal to those computed from the published content files
-- **AND** `main` has the link to `/procedures/?sort=modified`, and no `form`, `input` or `table`
+- **THEN** the `h1` is `Synthetic procedures`, and the recent list holds the first five procedures in the computed order, each ID once, with the stated link texts and dates, and two fixtures whose `lastmod` is the same instant are ordered by ID
+- **AND** the unchecked list holds the first five drafts by ID with their creation dates, and its link reads the number of drafts computed from the published content files
+- **AND** the browse list has the four entries in order, with the stated targets, and counts equal to those computed from the published content files
+- **AND** `main` has the links to `/procedures/?sort=modified` and `/procedures/?status=draft`, and no `form`, `input` or `table`
+
+#### Scenario: Nothing waits for a check
+- **WHEN** a test scans `public/index.html` of a theme build of a collection whose procedures are all `checked`
+- **THEN** it has no `section.home-unchecked` and no link to `/procedures/?status=draft`
 
 ### Requirement: Taxonomy and term pages
 For each taxonomy, `reaction_types`, `tags` and `authors`, the site SHALL publish:
@@ -279,4 +288,24 @@ A procedure SHALL render to the same HTML whichever source format it was written
 #### Scenario: Twin fixtures
 - **WHEN** a theme build includes `tests/fixtures/theme/OSDB-0904-twin.org` in `org/procedures/` and `tests/fixtures/theme/OSDB-0905-twin.md` in `md/procedures/`, which hold the same title, dates, metadata, tags, precursor and body
 - **THEN** after `OSDB-0904`, `osdb-0904`, `OSDB-0905` and `osdb-0905` are replaced by `OSDB-NNNN` and `osdb-nnnn`, `procedures/osdb-0904/index.html` and `procedures/osdb-0905/index.html` are byte-identical
+
+### Requirement: Note references
+A reference to a note in a procedure's body SHALL link to that note. `pipeline.link_notes(text)` returns the text of a Markdown procedure file with the changes below, and `pipeline.stage_content` applies it to every file it stages, so that Org and Markdown sources get the same links:
+- **The notes list** is the first ordered list after the level-2 heading of the notes section, `Notes` or `Anmerkungen`, compared as validation compares section headings (attribute block and closing `#` removed, case ignored), and before the next level-2 heading. The list ends at its first line that follows a blank line and is neither indented nor an item of the list.
+- **Anchors.** The text of each top-level item of the notes list starts with `<span id="note-<n>"></span>`, where `n` is the number the item is rendered with: the list's first number, then one more for each further item.
+- **References.** Outside fenced code blocks and code spans, each `(Note <n>)` or `(Anmerkung <n>)`, with any run of whitespace between the word and the number, becomes `([<word><whitespace><n>](#note-<n>))` when the notes list has an item `n`. Any other reference is left as it is.
+
+A text without a notes list is returned unchanged. On screen, the note an address targets is highlighted.
+
+#### Scenario: Notes and references are linked
+- **WHEN** a test calls `link_notes` on a text whose `## Notes {#notes}` section holds an ordered list of two items, the first continued on an indented line, followed by a paragraph, and whose body refers to `(Note 1)`, to `(Note` and `2)` across a line break, to `(Note 3)`, and to `(Note 1)` in a fenced code block and in a code span
+- **THEN** the two items start with the anchors `note-1` and `note-2`, the first two references link to them, keeping the line break, and `(Note 3)`, the code block, the code span and the paragraph after the list are unchanged
+
+#### Scenario: German notes, other numbering
+- **WHEN** a test calls `link_notes` on a text with `## Anmerkungen` and a list whose items are all numbered `1.`, on a text whose notes list starts at `3.`, and on a text without a notes section
+- **THEN** the first gets `note-1` and `note-2` and links `(Anmerkung 2)`, the second numbers its anchors from `note-3`, and the third is returned unchanged
+
+#### Scenario: Linked notes on a procedure page
+- **WHEN** a test scans `procedures/osdb-0003/index.html` after a theme build in locale `en`
+- **THEN** its body has links `Note 1` and `Note 2` to `#note-1` and `#note-2`, and the first two items of the list after the `Notes` heading hold the elements with those IDs
 

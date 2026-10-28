@@ -304,7 +304,34 @@ class CatalogueFixtureTests(cs.CatalogueCase):
         self.assertEqual(tied["OSDB-0921"], tied["OSDB-0922"])
         counts = [entry.find("span", "count").norm() for entry in
                   page.find("ul", "browse-list").find_all("li")]
-        self.assertEqual(counts[:2], ["(14)", "(11)"])
+        self.assertEqual(counts[0], "(14)")
+        unchecked = page.find("section", "home-unchecked")
+        self.assertEqual(
+            [entry.elements()[0].norm().split()[0] for entry in
+             unchecked.find("ol", "unchecked-list").find_all("li")],
+            [f"OSDB-000{n}" for n in range(1, 6)])
+        self.assertEqual(unchecked.find("p").find("span", "count").norm(),
+                         "(11)")
+
+
+class AllCheckedHomeTests(cs.CatalogueCase):
+    """The test collection with every procedure checked."""
+
+    @classmethod
+    def prepare(cls) -> None:
+        for path in cls.sandbox.md_dir().glob("*.md"):
+            text = path.read_text(encoding="utf-8")
+            path.write_text(text.replace('status = "draft"',
+                                         'status = "checked"'),
+                            encoding="utf-8")
+
+    def test_nothing_waits_for_a_check(self) -> None:
+        """Scenario: Nothing waits for a check."""
+        self.assertEqual({item.data["status"] for item in self.content()},
+                         {"checked"})
+        page = self.page("index.html")
+        self.check_home(page, self.content())
+        self.assertIsNone(page.find("section", "home-unchecked"))
 
 
 if __name__ == "__main__":

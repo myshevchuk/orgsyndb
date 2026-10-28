@@ -113,10 +113,10 @@ and every allowed value.
 The labels below are those of an English site; a German site, the
 default, shows them in German, such as **Kopieren** for **Copy**. The page
 shows `id` and a `status` badge above the title. Its information
-panel repeats the ID and shows the product name, formula, molecular weight,
-CAS number when present, SMILES, scale, yield, reaction type, tags, authors,
-checkers when present, created and modified times, and precursor or used-in
-links. Formula digits appear as subscripts. Molecular weight gains `g/mol`,
+panel shows the product name when it differs from the title, then the
+formula, molecular weight, CAS number when present, SMILES, scale, yield,
+reaction type, tags, authors, checkers when present, created and modified
+times, and precursor or used-in links. Formula digits appear as subscripts. Molecular weight gains `g/mol`,
 yield gains a percent sign, and SMILES has a **Copy** button. Reaction type,
 tag, and author values link to pages that list related procedures. The site
 title-cases author names for display, so a name entered as `van` appears as
@@ -143,6 +143,13 @@ Replace the example text and table rows. Include the quantities,
 temperatures, times, observations, workup, purification, characterization,
 and safety information needed to follow the procedure. Write `None.` under
 References when there is no reference.
+
+To let readers jump from a step to a note, number the notes as an ordered
+list under Notes. In the body, write a reference as plain text `(Note 2)`:
+the word `Note`, a space and the number, in parentheses. The site links
+it to note 2 if that note exists. Forms such as `(Notes 2 and 3)`,
+`(Note 2a)` and `see Note 2` stay plain text. References inside code
+blocks or inline code are not linked.
 
 Keep the Reagents table's six columns in this order: **Reagent**, **CAS**,
 **MW (g/mol)**, **Amount**, **mmol**, and **Equiv**. A wide table scrolls

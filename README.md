@@ -206,19 +206,27 @@ Every page has a search field in the same place in the header. Except on
 term pages, its placeholder is **Product, CAS, SMILES or keyword** and its
 accessible name is **Search procedures**.
 
-- `/` gives a short introduction and a **Recently updated** list of up to
-  five procedures, most recently modified first. **Browse** links to
-  **All procedures**, **Draft procedures**, **Reaction types**, **Tags**
-  and **Authors**, with counts of procedures or terms in use. **Draft
-  procedures** opens the catalogue with the draft status selected.
-  **All procedures, recently updated first** opens it sorted by modification
-  date.
+- `/` opens with **Synthetic procedures** and a short introduction.
+  **Recently updated** lists up to five procedures, most recently modified
+  first. **All procedures, recently updated first** opens the catalogue
+  sorted by modification date. To find procedures awaiting a check, use
+  **Not yet checked**: it lists up to five drafts, lowest ID first, with
+  their creation dates. **All draft procedures (n)** opens the catalogue
+  with the draft status selected; `n` is the total number of drafts. This
+  section is absent when there are no drafts. **Browse** links to
+  **All procedures**, **Reaction types**, **Tags** and **Authors**, with
+  counts of procedures or terms in use.
 - `/procedures/` is the catalogue: search, filter, sort and read details
   in one list. With no query or filters it lists every procedure by ID.
   Its table shows **ID**, **Procedure**, **Reaction type**, **Status**
   and **Modified**; follow an ID or title to read the procedure.
 - `/procedures/osdb-NNNN/` shows one procedure, including its metadata,
   structure image or on-screen placeholder, and eight body sections.
+  The ID appears once, above the title. The details beside the text show the
+  product name only when it differs from the title. Follow a reference
+  such as **(Note 2)** in the text to jump to that note in **Notes**;
+  the note is highlighted on screen. A reference to a missing note stays
+  plain text.
 - `/reaction_types/`, `/tags/`, and `/authors/` list the terms in each
   category with their procedure counts. Each term page is a catalogue
   limited to that reaction type, tag or author. For example,
@@ -238,9 +246,10 @@ To find a procedure, type in the header search field. On `/procedures/` and
 term pages, this is the catalogue's only search field. Results update as you
 type; **Search** applies the query immediately. On other pages, submit the
 field to search in `/procedures/`. On a term page, the field searches only
-that term's procedures. Its placeholder and accessible name say so, for
-example **Search procedures with the tag cinnamate**. Full-text search uses
-the Pagefind index and finds procedures by ID, product name, CAS number (a
+that term's procedures. Its placeholder is **Search these procedures**;
+its accessible name identifies the term, for example
+**Search procedures with the tag cinnamate**. Full-text search uses the
+Pagefind index and finds procedures by ID, product name, CAS number (a
 chemical registry identifier), any part of a SMILES string (a text notation
 for a molecular structure), tag, or word in the procedure text. SMILES
 searches ignore punctuation and compare only letters and digits. A fragment
@@ -296,6 +305,10 @@ On a procedure page, **Copy** copies the SMILES and briefly reports
 **Copied**. Clipboard access needs a secure context: `https:` or
 `http://127.0.0.1`. At another address the button selects the SMILES and
 reports **Selected: press Ctrl+C** instead.
+
+To see when the site was built, look at the end of any page's footer,
+for example `built 2026-10-28 20:08` or `Stand 2026-10-28 20:08` on a
+German site. Every page of one build shows the same time.
 
 ## Languages
 

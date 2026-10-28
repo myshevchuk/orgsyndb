@@ -1,0 +1,4 @@
+{{- /* The time the site was built, as a time element. Called through
+partialCached, so every page of one build shows the same time. */ -}}
+{{ $now := now -}}
+<time datetime="{{ $now.Format "2006-01-02T15:04:05Z07:00" }}">{{ $now.Format "2006-01-02 15:04" }}</time>

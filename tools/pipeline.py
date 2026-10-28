@@ -492,7 +492,8 @@ def stage_content(chosen: Iterable[tuple[Path, dict[str, Any]]],
     without a language code, so that Hugo, built in one language, reads
     every file alike. A file whose name carries a language code and whose
     front matter has no ``language`` gets ``language = "<code>"`` as the
-    first front-matter line.
+    first front-matter line. Every copy has its note references linked
+    (``link_notes``).
     """
     target = Path(target)
     remove_tree(target)
@@ -505,7 +506,137 @@ def stage_content(chosen: Iterable[tuple[Path, dict[str, Any]]],
             first, _, rest = text.partition("\n")
             text = f"{first}\nlanguage = {toml_string(code)}\n{rest}"
         (target / f"{validate.base_name(name)}.md").write_text(
-            text, encoding="utf-8")
+            link_notes(text), encoding="utf-8")
+
+
+# --------------------------------------------------------------------------
+# Note references
+
+# The heading of the notes section and the word that refers to a note, in
+# each procedure language.
+NOTES = {"en": ("Notes", "Note"), "de": ("Anmerkungen", "Anmerkung")}
+NOTES_HEADINGS = {heading.casefold() for heading, _ in NOTES.values()}
+NOTE_REF_RE = re.compile(
+    r"\((?P<word>" + "|".join(word for _, word in NOTES.values())
+    + r")(?P<space>\s+)(?P<number>\d{1,9})\)")
+# A list item at the top level: indent, number, delimiter, spacing.
+NOTE_ITEM_RE = re.compile(r"^( {0,3})(\d{1,9})([.)])([ \t]+|(?=\r?\n)|$)")
+ATX_HEADING_RE = re.compile(r"^ {0,3}#{1,6}(?:[ \t]|$)")
+# A fence line at any indentation: indent, fence.
+ANY_FENCE_RE = re.compile(r"^([ \t]*)(`{3,}|~{3,})")
+# A code span: a backtick run neither escaped nor part of a longer run,
+# up to the next run of exactly its length.
+MD_CODE_RE = re.compile(r"(?<![\\`])(`+)(?!`).+?(?<!`)\1(?!`)", re.S)
+
+
+def _indent(line: str) -> int:
+    """The width of the leading whitespace of ``line``, tabs at four."""
+    return len(line.expandtabs(4)) - len(line.expandtabs(4).lstrip(" "))
+
+
+def _note_items(lines: list[str]) -> dict[int, int]:
+    """Map the index of each top-level item line of the notes list in
+    ``lines`` to the number the item is rendered with.
+
+    The notes list is the first ordered list after the level-2 notes
+    heading and before the next heading. A line indented to an item's
+    content, a nested list or fence among them, belongs to that item.
+    The list ends at a line that follows a blank line and is neither
+    indented so nor one of its items, or at a fence outside its items.
+    Empty when there is no notes list.
+    """
+    found: dict[int, int] = {}
+    fence: str | None = None
+    section = False
+    number: int | None = None
+    delimiter = ""
+    content = 0
+    after_blank = False
+    for index, line in enumerate(lines):
+        if fence is not None:
+            if re.fullmatch(rf"{re.escape(fence[0])}{{{len(fence)},}}",
+                            line.strip()):
+                fence = None
+            continue
+        indent = _indent(line)
+        opening = ANY_FENCE_RE.match(line)
+        if opening:
+            if number is not None and indent < content:
+                break
+            if number is not None or indent <= 3:
+                fence = opening.group(2)
+                after_blank = False
+            continue
+        if ATX_HEADING_RE.match(line):
+            if number is not None:
+                break
+            headings = validate.section_headings(line)
+            if headings:
+                section = headings[0].casefold() in NOTES_HEADINGS
+            continue
+        if not section:
+            continue
+        item = NOTE_ITEM_RE.match(line)
+        top = item is not None and (number is None or (
+            indent < content and item.group(3) == delimiter))
+        if top:
+            assert item is not None
+            if number is None:
+                number, delimiter = int(item.group(2)), item.group(3)
+            found[index] = number
+            number += 1
+            spacing = len(item.group(4).expandtabs(4))
+            content = item.end(3) + (spacing if 1 <= spacing <= 4 else 1)
+            after_blank = False
+        elif number is None:
+            continue
+        elif not line.strip():
+            after_blank = True
+        elif indent >= content or not after_blank:
+            after_blank = False
+        else:
+            break
+    return found
+
+
+def link_notes(text: str) -> str:
+    """Return the Markdown procedure ``text`` with its notes linked.
+
+    Each top-level item of the notes list, the first ordered list of the
+    ``Notes`` or ``Anmerkungen`` section, starts with the anchor
+    ``<span id="note-<n>"></span>``, ``n`` the number the item is
+    rendered with. Outside fenced code and code spans, each
+    ``(Note <n>)`` or ``(Anmerkung <n>)`` becomes a link to the anchor
+    of note ``n`` when the list has one. The front matter is left alone,
+    and a text without a notes list is returned unchanged.
+    """
+    front = validate.parse_front_matter(text)
+    head = "" if isinstance(front, validate.Problem) else text[
+        :len(text) - len(front.body)]
+    lines = text[len(head):].splitlines(keepends=True)
+    numbers = _note_items(lines)
+    if not numbers:
+        return text
+    for index, number in numbers.items():
+        item = NOTE_ITEM_RE.match(lines[index])
+        assert item is not None
+        cut = item.end()
+        space = "" if item.group(4) else " "
+        lines[index] = (f'{lines[index][:cut]}{space}'
+                        f'<span id="note-{number}"></span>'
+                        f'{lines[index][cut:]}')
+    notes = set(numbers.values())
+
+    def link(match: re.Match[str]) -> str:
+        if int(match["number"]) not in notes:
+            return match.group(0)
+        return (f"([{match['word']}{match['space']}{match['number']}]"
+                f"(#note-{int(match['number'])}))")
+
+    return head + outside(
+        MD_FENCE_RE, "".join(lines),
+        lambda prose: outside(MD_CODE_RE, prose,
+                              lambda plain: NOTE_REF_RE.sub(link, plain)))
 
 
 # --------------------------------------------------------------------------

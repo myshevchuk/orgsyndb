@@ -28,7 +28,17 @@
   outline-offset: 2px;
 }
 
-.table-scroll { overflow-x: auto; }
+/* A table wider than its box scrolls inside it, and a shadow at an edge
+   shows that more columns lie that way. The covers scroll with the
+   content and hide each shadow once its edge is reached. */
+.table-scroll {
+  overflow-x: auto;
+  background:
+    linear-gradient(to right, var(--bg) 40%, transparent) left / 2rem 100% no-repeat local,
+    linear-gradient(to left, var(--bg) 40%, transparent) right / 2rem 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--fg) 30%, transparent), transparent) left / 0.75rem 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--fg) 30%, transparent), transparent) right / 0.75rem 100% no-repeat scroll;
+}
 .table-scroll:focus-visible { outline-offset: 0; }
 
 button:hover { border-color: var(--muted); }
@@ -70,20 +80,26 @@ h1 { font-size: 2.25rem; }
 .home-intro { margin-bottom: var(--space-5); }
 .lede { max-width: var(--measure); }
 
+/* The recent and unchecked lists stop short of the full width, so that
+   each date stays within reach of its title; the browse list stands
+   beside both. */
 .home-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 19rem;
+  grid-template-columns: minmax(0, 46rem) 19rem;
   gap: var(--space-5);
   align-items: start;
 }
-.home-recent, .home-browse, .procedure-details, .procedure-content { min-width: 0; }
+.home-recent, .home-unchecked, .home-browse, .procedure-details,
+.procedure-content { min-width: 0; }
 .home-layout h2:first-child { margin-top: 0; }
 .home-browse {
+  grid-column: 2;
+  grid-row: 1 / span 2;
   border-left: 1px solid var(--border);
   padding-left: var(--space-4);
 }
-.recent-list, .browse-list { list-style: none; padding: 0; }
-.recent-list li {
+.recent-list, .unchecked-list, .browse-list { list-style: none; padding: 0; }
+.recent-list li, .unchecked-list li {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
@@ -91,8 +107,8 @@ h1 { font-size: 2.25rem; }
   padding: var(--space-2) 0;
   border-bottom: 1px solid var(--border);
 }
-.recent-list li + li, .browse-list li + li { margin-top: 0; }
-.recent-list a { min-width: 0; overflow-wrap: anywhere; }
+.recent-list li + li, .unchecked-list li + li, .browse-list li + li { margin-top: 0; }
+.recent-list a, .unchecked-list a { min-width: 0; overflow-wrap: anywhere; }
 .browse-list li { padding: var(--space-1) 0; }
 
 .procedure-header {
@@ -104,14 +120,14 @@ h1 { font-size: 2.25rem; }
 .procedure-header .procedure-id, .procedure-header h1 { grid-column: 1; }
 .procedure-header h1 { margin-bottom: 0; }
 .procedure-header .actions { grid-column: 2; grid-row: 1 / 3; align-self: center; }
-/* Marginalia: the body is one reading column; the details follow it as
-   a margin on the right. The details stay first in the document, so
-   print, Pagefind and narrow windows keep their order. */
+/* Marginalia: the body takes the width beside a margin of details on
+   the right. Its prose keeps a reading measure and its tables use the
+   whole column. The details stay first in the document, so print,
+   Pagefind and narrow windows keep their order. */
 .procedure {
   display: grid;
-  grid-template-columns: minmax(0, 48rem) minmax(15rem, 21rem);
+  grid-template-columns: minmax(0, 1fr) minmax(15rem, 21rem);
   grid-template-areas: "content details";
-  justify-content: space-between;
   column-gap: var(--space-5);
   align-items: start;
 }
@@ -124,11 +140,19 @@ h1 { font-size: 2.25rem; }
 }
 .procedure-content > :first-child { margin-top: 0; }
 .procedure-content > p, .procedure-content > ul, .procedure-content > ol {
-  max-width: 78ch;
+  max-width: 64ch;
+}
+/* A note reached from a reference is marked, so the eye lands on it. */
+.procedure-content [id^="note-"] { scroll-margin-top: var(--space-4); }
+.procedure-content li:has(> :target, > p:first-child > :target) {
+  background: var(--surface);
+  box-shadow: 0 0 0 var(--space-2) var(--surface);
 }
 .procedure-details .structure { order: -1; margin: 0; }
+/* The details keep the label beside its value, as on paper, but drop the
+   panel's box. */
 .procedure-details .metadata {
-  display: block;
+  gap: 0.4rem var(--space-3);
   margin: 0;
   padding: 0;
   background: none;
@@ -136,21 +160,18 @@ h1 { font-size: 2.25rem; }
   border-radius: 0;
   font-size: 0.875rem;
 }
-.procedure-details .metadata dt {
-  margin-top: var(--space-3);
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+/* The rule lines belong to the figure, so that the dark scheme's filter
+   on the image leaves them alone. Without an image the slot is one
+   quiet line. */
+.procedure-details .structure:not(.structure--placeholder) {
+  border-block: 1px solid var(--border);
 }
-.procedure-details .metadata dt:first-child { margin-top: 0; }
-.procedure-details .metadata dd { margin-top: 0.1rem; }
-.procedure-details .structure img { margin: 0 auto; border-width: 1px 0; border-radius: 0; }
+.procedure-details .structure img { margin: 0 auto; border: 0; border-radius: 0; }
 .procedure-details .structure__slot {
   max-width: none;
-  border-style: solid;
-  border-width: 1px 0;
-  border-radius: 0;
+  padding: 0;
+  border: 0;
+  text-align: left;
 }
 
 /* Catalogue: the head with the count, then the facets as a sidebar
@@ -223,11 +244,22 @@ h1 { font-size: 2.25rem; }
   border: 1px solid var(--border);
   border-radius: 0.25rem;
 }
+/* Structure drawings are black on white. In the dark scheme they are
+   inverted and blended into the page instead of glaring as a white box;
+   the hue turns back so that coloured atoms keep their colour. A border
+   would be inverted too, so the thumbnail's goes. */
+@media (prefers-color-scheme: dark) {
+  .structure img, .row-structure {
+    filter: invert(0.92) hue-rotate(180deg);
+    mix-blend-mode: lighten;
+  }
+  .row-structure { border-color: transparent; }
+}
 .catalogue[data-view="details"] .procedure-list td { vertical-align: top; }
 
 .procedure-list { width: 100%; font-size: 0.925rem; }
 .procedure-list th, .procedure-list td {
-  padding: 0.85rem 0.9rem;
+  padding: 0.5rem 0.9rem;
   vertical-align: middle;
 }
 .procedure-list thead { background: var(--surface); }
@@ -247,13 +279,32 @@ h1 { font-size: 2.25rem; }
   letter-spacing: 0;
   text-transform: none;
 }
+/* The table marks only the exceptions: a draft keeps its tinted badge,
+   and a retired procedure's whole row is muted. */
+.procedure-list .badge--draft {
+  padding: 0 0.5rem;
+  border-radius: 1rem;
+  background: var(--draft-bg);
+  color: var(--draft-fg);
+}
+.procedure-list tr[data-status="retired"] td,
+.procedure-list tr[data-status="retired"] a { color: var(--muted); }
 .procedure-list th:first-child, .procedure-list td:first-child,
 .procedure-list time { white-space: nowrap; }
 .procedure-content table { width: 100%; }
+/* While a search is pending the rows shown so far fade back, after a
+   short delay so that a quick search does not flicker. */
+.catalogue-results[aria-busy="true"] tbody {
+  opacity: 0.5;
+  transition: opacity 0.2s 0.2s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .catalogue-results[aria-busy="true"] tbody { transition-duration: 0s; }
+}
 
 /* Help pages read like a procedure body: prose keeps a measure, code
    blocks and tables scroll in their own boxes. */
-.help-page :is(p, ul, ol, dl) { max-width: 78ch; }
+.help-page :is(p, ul, ol, dl) { max-width: 64ch; }
 pre { overflow-x: auto; }
 .help-list li + li { margin-top: var(--space-2); }
 
@@ -262,6 +313,8 @@ pre { overflow-x: auto; }
   body { padding: 0 var(--space-4); }
   .home-layout { grid-template-columns: minmax(0, 1fr); }
   .home-browse {
+    grid-column: auto;
+    grid-row: auto;
     border-left: 0;
     border-top: 1px solid var(--border);
     padding: var(--space-4) 0 0;

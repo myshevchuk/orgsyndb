@@ -128,8 +128,8 @@ main { padding: var(--space-3) 0 var(--space-5); }
 .lede { font-size: 1.1rem; }
 .count { font-family: var(--font-ui); color: var(--muted); }
 .term-list, .browse-list { font-family: var(--font-ui); padding-left: var(--space-4); }
-.recent-list { font-family: var(--font-ui); padding-left: var(--space-4); }
-.recent-list time { color: var(--muted); white-space: nowrap; }
+.recent-list, .unchecked-list { font-family: var(--font-ui); padding-left: var(--space-4); }
+.recent-list time, .unchecked-list time { color: var(--muted); white-space: nowrap; }
 
 /* Catalogue */
 .catalogue-count, .catalogue-scope, .catalogue-noscript, .catalogue-message,

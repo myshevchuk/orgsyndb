@@ -15,6 +15,8 @@
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-26 Mon 12:05] -- doc-writer pass line corrected from gpt-6.1-sol to the pinned run model
 #+AI_PASS: doc-writer gpt-5.6-sol [2026-10-27 Tue 09:39] -- generated stubs and optional #+AI_MODEL
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-27 Tue 09:45] -- doc-writer pass line corrected from gpt-5 to the pinned run model
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-10-28 Wed 21:35] -- note references in Write the body
+#+AI_PASS: fact-check claude-opus-5-5 [2026-10-28 Wed 21:37] -- metadata panel no longer repeats the ID
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -108,7 +110,8 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   The labels below are those of an English site; a German site, the
   default, shows them in German, such as *Kopieren* for *Copy*. The page
   shows the procedure ID and a status badge above ~#+TITLE~. Its
-  metadata panel repeats the ID and shows the product fields, scale, yield,
+  metadata panel shows the product fields, the product name only when it
+  differs from the title, then scale, yield,
   reaction type, tags, authors, checkers when set, created and modified
   times, and precursor or used-in links. Formula digits appear as subscripts.
   Molecular weight gains ~g/mol~, yield gains a percent sign, and SMILES has
@@ -165,6 +168,13 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   and notes. Include quantities, temperatures, times, observations, workup,
   purification, characterization, hazards, and waste handling. Write
   ~None.~ under References when there is no reference.
+
+  To let readers jump from a step to a note, number the notes as an ordered
+  list under Notes. In the Org body, write a reference as plain text
+  ~(Note 2)~: the word ~Note~, a space and the number, in parentheses.
+  After export, the site links it to note 2 if that note exists. Forms
+  such as ~(Notes 2 and 3)~, ~(Note 2a)~ and ~see Note 2~ stay plain text.
+  References inside source blocks or inline code are not linked.
 
   Keep the Reagents table's six columns in this order: ~Reagent~, ~CAS~,
   ~MW (g/mol)~, ~Amount~, ~mmol~, and ~Equiv~. A wide table scrolls sideways

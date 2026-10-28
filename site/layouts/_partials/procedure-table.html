@@ -4,7 +4,8 @@ script: data-id, data-title, data-status, data-type, data-tag and
 data-author (JSON arrays of term keys, in front-matter order), and
 data-created and data-modified (RFC 3339). The Procedure cell ends in the
 Details block, row-details.html, which the screen stylesheet shows only in
-the Details view. */ -}}
+the Details view. The ID link is left out of the tab order, because the
+title links the same page. */ -}}
 {{ $keys := partialCached "term-keys.html" "term keys" -}}
 <div class="table-scroll" tabindex="0" role="region" aria-label="{{ T "table_procedures" }}">
 <table class="procedure-list">
@@ -27,7 +28,7 @@ the Details view. */ -}}
 {{ $facets = merge $facets (dict $facet $found) -}}
 {{ end -}}
 <tr data-id="{{ .Params.id }}" data-title="{{ .Title }}" data-status="{{ .Params.status }}" data-type="{{ jsonify $facets.type }}" data-tag="{{ jsonify $facets.tag }}" data-author="{{ jsonify $facets.author }}" data-created="{{ .Date.Format "2006-01-02T15:04:05Z07:00" }}" data-modified="{{ .Lastmod.Format "2006-01-02T15:04:05Z07:00" }}">
-<td><a href="{{ .RelPermalink }}">{{ .Params.id }}</a></td>
+<td><a href="{{ .RelPermalink }}" tabindex="-1">{{ .Params.id }}</a></td>
 <td><a href="{{ .RelPermalink }}">{{ .Title }}</a>
 {{ partial "row-details.html" . }}</td>
 <td>{{ range $i, $slug := .Params.reaction_types }}{{ if $i }}, {{ end }}{{ partial "reaction-type-label.html" $slug }}{{ end }}</td>

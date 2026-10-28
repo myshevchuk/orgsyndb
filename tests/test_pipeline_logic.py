@@ -296,6 +296,127 @@ class PdfJobTests(unittest.TestCase):
             self.assertIn(str(expected), str(caught.exception))
 
 
+FENCE = "`" * 3
+LINKED_SOURCE = f"""+++
+id = "OSDB-0001"
++++
+## Procedure
+
+Add the acid (Note 1). Stir the mixture (Note
+2) and cool it (Note 3).
+
+{FENCE}text
+(Note 1)
+{FENCE}
+
+Keep `(Note 1)` literal.
+
+## Notes {{#notes}}
+
+1.  First note,
+    continued.
+2.  Second note.
+
+A paragraph after the list.
+3. Not a note.
+
+## Hazards and Waste Disposal
+"""
+LINKED_RESULT = f"""+++
+id = "OSDB-0001"
++++
+## Procedure
+
+Add the acid ([Note 1](#note-1)). Stir the mixture ([Note
+2](#note-2)) and cool it (Note 3).
+
+{FENCE}text
+(Note 1)
+{FENCE}
+
+Keep `(Note 1)` literal.
+
+## Notes {{#notes}}
+
+1.  <span id="note-1"></span>First note,
+    continued.
+2.  <span id="note-2"></span>Second note.
+
+A paragraph after the list.
+3. Not a note.
+
+## Hazards and Waste Disposal
+"""
+
+
+class NoteLinkTests(unittest.TestCase):
+    """site-theme "Note references": pipeline.link_notes."""
+
+    def test_notes_and_references_are_linked(self) -> None:
+        """Scenario: Notes and references are linked."""
+        self.assertEqual(pipeline().link_notes(LINKED_SOURCE), LINKED_RESULT)
+
+    def test_german_notes_and_other_numbering(self) -> None:
+        """Scenario: German notes, other numbering."""
+        link = pipeline().link_notes
+        self.assertEqual(
+            link("## Durchführung\n\nRühren (Anmerkung 2).\n\n"
+                 "## Anmerkungen\n\n1. Eins.\n1. Zwei.\n"),
+            "## Durchführung\n\nRühren ([Anmerkung 2](#note-2)).\n\n"
+            "## Anmerkungen\n\n1. <span id=\"note-1\"></span>Eins.\n"
+            "1. <span id=\"note-2\"></span>Zwei.\n")
+        self.assertEqual(
+            link("## NOTES\n\n3. Three.\n4. Four.\n\n"
+                 "See (Note 3) and (Note 1).\n"),
+            "## NOTES\n\n3. <span id=\"note-3\"></span>Three.\n"
+            "4. <span id=\"note-4\"></span>Four.\n\n"
+            "See ([Note 3](#note-3)) and (Note 1).\n")
+        plain = "## Procedure\n\nStir (Note 1).\n\n1. A step.\n"
+        self.assertEqual(link(plain), plain)
+
+    def test_nested_lists_and_fences_stay_inside_their_note(self) -> None:
+        """Requirement: Note references (top-level items only)."""
+        link = pipeline().link_notes
+        nested = ("## Notes\n\n1. First\n   1. Detail\n2. Second\n\n"
+                  "See (Note 2) and (Note 3).\n")
+        self.assertEqual(
+            link(nested),
+            "## Notes\n\n1. <span id=\"note-1\"></span>First\n"
+            "   1. Detail\n2. <span id=\"note-2\"></span>Second\n\n"
+            "See ([Note 2](#note-2)) and (Note 3).\n")
+        fenced = (f"## Notes\n\n1. First:\n\n   {FENCE}\n   2. not a note\n"
+                  f"   {FENCE}\n\n2. Second\n\nSee (Note 2).\n")
+        self.assertEqual(
+            link(fenced),
+            f"## Notes\n\n1. <span id=\"note-1\"></span>First:\n\n"
+            f"   {FENCE}\n   2. not a note\n   {FENCE}\n\n"
+            "2. <span id=\"note-2\"></span>Second\n\n"
+            "See ([Note 2](#note-2)).\n")
+
+    def test_an_escaped_backtick_opens_no_code_span(self) -> None:
+        """Requirement: Note references (code spans as Markdown reads
+        them)."""
+        text = ("Use \\` for a backtick (Note 1), then `literal` and "
+                "``(Note 1)`` and ```a `` b (Note 1)```.\n\n"
+                "## Notes\n\n1. Only.\n")
+        self.assertEqual(
+            pipeline().link_notes(text),
+            "Use \\` for a backtick ([Note 1](#note-1)), then `literal` "
+            "and ``(Note 1)`` and ```a `` b (Note 1)```.\n\n"
+            "## Notes\n\n1. <span id=\"note-1\"></span>Only.\n")
+
+    def test_staging_links_the_notes(self) -> None:
+        """Requirement: Note references (stage_content applies it)."""
+        with tempfile.TemporaryDirectory(prefix="note links ") as tmp:
+            source = Path(tmp) / "OSDB-0001-x.md"
+            source.write_text(LINKED_SOURCE, encoding="utf-8")
+            target = Path(tmp) / "staged"
+            pipeline().stage_content([(source, {})], target)
+            self.assertEqual(
+                (target / "OSDB-0001-x.md").read_text(encoding="utf-8"),
+                LINKED_RESULT)
+
+
 class HelperModuleTests(unittest.TestCase):
     def test_only_standard_library_imports(self) -> None:
         """Scenario: Only standard-library imports."""

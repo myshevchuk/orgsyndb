@@ -40,6 +40,7 @@ TEXTS: dict[str, dict[str, Any]] = {
             "type": "Search procedures of the reaction type {term}",
             "tag": "Search procedures with the tag {term}",
             "author": "Search procedures by {term}"},
+        "scoped_placeholder": "Search these procedures",
         "filters": "Filters",
         "facets": {"type": "Reaction type", "status": "Status",
                    "tag": "Tag", "author": "Author"},
@@ -68,12 +69,14 @@ TEXTS: dict[str, dict[str, Any]] = {
                   "tag": "Only procedures with the tag {term}",
                   "author": "Only procedures by {term}"},
         "browse_all": "Browse all procedures",
-        "lede": "The group's synthetic procedures, written in Org or "
-                "Markdown and checked against one schema.",
+        "home_title": "Synthetic procedures",
+        "lede": "The group's procedures, written in Org or Markdown to "
+                "one schema.",
         "recent": "Recently updated", "browse": "Browse",
         "recent_link": "All procedures, recently updated first",
-        "entries": ["All procedures", "Draft procedures", "Reaction types",
-                    "Tags", "Authors"],
+        "unchecked": "Not yet checked",
+        "unchecked_link": "All draft procedures",
+        "entries": ["All procedures", "Reaction types", "Tags", "Authors"],
         "thousands": ",",
     },
     "de": {
@@ -93,6 +96,7 @@ TEXTS: dict[str, dict[str, Any]] = {
             "type": "Vorschriften des Reaktionstyps {term} durchsuchen",
             "tag": "Vorschriften mit dem Schlagwort {term} durchsuchen",
             "author": "Vorschriften von {term} durchsuchen"},
+        "scoped_placeholder": "Diese Vorschriften durchsuchen",
         "filters": "Filter",
         "facets": {"type": "Reaktionstyp", "status": "Status",
                    "tag": "Schlagwort", "author": "Autor"},
@@ -106,8 +110,8 @@ TEXTS: dict[str, dict[str, Any]] = {
                   ("modified", "Geändert (neueste zuerst)")],
         "view_label": "Ansicht",
         "views": [("table", "Tabelle"), ("details", "Details")],
-        "status": {"draft": "Entwurf", "checked": "geprüft",
-                   "retired": "zurückgezogen"},
+        "status": {"draft": "Entwurf", "checked": "Geprüft",
+                   "retired": "Zurückgezogen"},
         "data_text": {
             "searching": "Suche läuft …",
             "unavailable": "Suche nicht verfügbar",
@@ -121,13 +125,15 @@ TEXTS: dict[str, dict[str, Any]] = {
                   "tag": "Nur Vorschriften mit dem Schlagwort {term}",
                   "author": "Nur Vorschriften von {term}"},
         "browse_all": "Alle Vorschriften anzeigen",
-        "lede": "Die Synthesevorschriften der Arbeitsgruppe, in Org oder "
-                "Markdown geschrieben und nach einem gemeinsamen Schema "
-                "geprüft.",
+        "home_title": "Synthesevorschriften",
+        "lede": "Die Vorschriften der Arbeitsgruppe, in Org oder Markdown "
+                "nach einem gemeinsamen Schema geschrieben.",
         "recent": "Zuletzt geändert", "browse": "Übersicht",
         "recent_link": "Alle Vorschriften, zuletzt geänderte zuerst",
-        "entries": ["Alle Vorschriften", "Entwürfe", "Reaktionstypen",
-                    "Schlagwörter", "Autoren"],
+        "unchecked": "Noch nicht geprüft",
+        "unchecked_link": "Alle Entwürfe",
+        "entries": ["Alle Vorschriften", "Reaktionstypen", "Schlagwörter",
+                    "Autoren"],
         "thousands": ".",
     },
 }
@@ -309,7 +315,8 @@ class CatalogueCase(ps.ThemeBuildCase):
             name, hint = texts["search_label"], texts["placeholder"]
         else:
             term = page.find("main").find("h1").norm()
-            name = hint = texts["search_scope"][fixed].format(term=term)
+            name = texts["search_scope"][fixed].format(term=term)
+            hint = texts["scoped_placeholder"]
         fields = form.find_all("input")
         self.assertEqual(len(fields), 1)
         self.assertEqual(
@@ -494,22 +501,65 @@ class CatalogueCase(ps.ThemeBuildCase):
                                      ("div", ["home-layout"])])
         intro, layout = main.elements()[:2]
         self.assertEqual([h.norm() for h in intro.find_all("h1")],
-                         ["OrgSynDB"])
+                         [texts["home_title"]])
         lede = intro.find("p", "lede")
         self.assertIsNotNone(lede, "no p.lede")
         self.assertEqual(lede.norm(), texts["lede"])
+        drafts = sorted((i for i in items if i.data["status"] == "draft"),
+                        key=lambda i: i.id)
+        sections = ["home-recent", "home-unchecked", "home-browse"]
+        if not drafts:
+            sections.remove("home-unchecked")
         self.assertEqual([(n.tag, n.classes[:1])
                           for n in layout.elements()],
-                         [("section", ["home-recent"]),
-                          ("section", ["home-browse"])])
-        recent, browse = layout.elements()
-        self.check_recent(page, recent, items)
-        self.check_browse(page, browse, items)
+                         [("section", [name]) for name in sections])
+        parts = layout.elements()
+        self.check_recent(page, parts[0], items)
+        if drafts:
+            self.check_unchecked(page, parts[1], drafts)
+        self.check_browse(page, parts[-1], items)
         self.assertEqual(main.find_all("form"), [])
         self.assertEqual(main.find_all("input"), [])
         self.assertEqual(main.find_all("table"), [])
-        self.assertIn("/procedures/?sort=modified",
-                      [link.target for link in page.links(main)])
+        targets = [link.target for link in page.links(main)]
+        self.assertIn("/procedures/?sort=modified", targets)
+        self.assertEqual("/procedures/?status=draft" in targets, bool(drafts))
+
+    def check_unchecked(self, page: Page, section: Node,
+                        drafts: list[Content]) -> None:
+        """The first five drafts by ID, with their creation dates, and
+        the link to every draft with their count."""
+        texts = self.texts
+        self.assertEqual([h.norm() for h in section.find_all("h2")],
+                         [texts["unchecked"]])
+        listing = section.find("ol", "unchecked-list")
+        self.assertIsNotNone(listing, "no ol.unchecked-list")
+        entries = listing.find_all("li")
+        self.assertEqual(len(entries), min(5, len(drafts)))
+        for entry, item in zip(entries, drafts):
+            with self.subTest(procedure=item.id):
+                link = entry.elements()[0]
+                self.assertEqual(link.tag, "a")
+                self.assertEqual(page.resolve(link.attrs["href"]),
+                                 f"/procedures/{item.slug}/")
+                self.assertEqual(link.norm(), f"{item.id} {item.title}")
+                moment = entry.find("time")
+                self.assertIsNotNone(moment, "no time in the list item")
+                self.assertGreater(page.index_of(moment),
+                                   page.index_of(link))
+                self.assertEqual(moment.attrs.get("datetime"),
+                                 ps.rfc3339(item.data["date"]))
+                self.assertEqual(moment.norm(),
+                                 item.data["date"].strftime("%Y-%m-%d"))
+        after = page.following(listing, "p")
+        self.assertIsNotNone(after, "no p after the unchecked list")
+        self.assertEqual([(l.target, l.node.norm())
+                          for l in page.links(after)],
+                         [("/procedures/?status=draft",
+                           texts["unchecked_link"])])
+        count = f"({self.grouped(len(drafts))})"
+        self.assertEqual(after.find("span", "count").norm(), count)
+        self.assertEqual(after.norm(), f"{texts['unchecked_link']} {count}")
 
     def check_recent(self, page: Page, section: Node,
                      items: list[Content]) -> None:
@@ -555,10 +605,8 @@ class CatalogueCase(ps.ThemeBuildCase):
         self.assertIsNotNone(listing, "no ul.browse-list")
         terms = {taxonomy: {t for i in items for t in i.data[taxonomy]}
                  for taxonomy in ("reaction_types", "tags", "authors")}
-        drafts = sum(1 for i in items if i.data["status"] == "draft")
         wanted = [
             ("/procedures/", len(items)),
-            ("/procedures/?status=draft", drafts),
             ("/reaction_types/", len(terms["reaction_types"])),
             ("/tags/", len(terms["tags"])),
             ("/authors/", len(terms["authors"]))]

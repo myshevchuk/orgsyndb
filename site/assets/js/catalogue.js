@@ -364,6 +364,10 @@
     results.setAttribute("aria-busy", "true");
     count.textContent = text("searching");
     setMessage([notice], null);
+    // No search result can show a row outside the selected facets, so
+    // such rows go at once rather than when the search answers.
+    const possible = new Set(core.select(records, state, null, language).ids);
+    for (const [id, row] of rows) if (!possible.has(id)) row.hidden = true;
     search(state.q).then((ids) => {
       if (turn === latest) show(core.select(records, state, ids, language));
     }, () => {

@@ -1,0 +1,4 @@
+{{- /* The ID and the product name for the search index: the metadata
+panel shows neither the ID nor a product name equal to the title, so
+this hidden element keeps both in the indexed text. */ -}}
+<span class="index-terms" hidden>{{ .Params.id }}{{ with .Params.product }}{{ with .name }} {{ . }}{{ end }}{{ end }}</span>

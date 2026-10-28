@@ -1,10 +1,13 @@
 {{- /* The home page: the introduction, the five most recently modified
-procedures (lastmod newest first, ID ascending for equal instants) and the
-browse list with the collection's totals. */ -}}
+procedures (lastmod newest first, ID ascending for equal instants), the
+first five drafts by ID, which the catalogue lists first under
+?status=draft, when there are any, and the browse list with the
+collection's totals. */ -}}
 {{ define "main" -}}
 {{ $procedures := where site.RegularPages "Section" "procedures" -}}
+{{ $drafts := sort (where $procedures "Params.status" "draft") "Params.id" -}}
 <div class="home-intro">
-<h1>{{ site.Title }}</h1>
+<h1>{{ T "home_title" }}</h1>
 <p class="lede">{{ T "home_lede" }}</p>
 </div>
 <div class="home-layout">
@@ -17,12 +20,22 @@ browse list with the collection's totals. */ -}}
 </ol>
 <p><a href="/procedures/?sort=modified">{{ T "home_recent_all" }}</a></p>
 </section>
+{{ with $drafts -}}
+<section class="home-unchecked" aria-labelledby="home-unchecked">
+<h2 id="home-unchecked">{{ T "home_unchecked" }}</h2>
+<ol class="unchecked-list">
+{{ range first 5 . -}}
+<li><a href="{{ .RelPermalink }}">{{ .Params.id }} {{ .Title }}</a> <time datetime="{{ .Date.Format "2006-01-02T15:04:05Z07:00" }}">{{ .Date.Format "2006-01-02" }}</time></li>
+{{ end -}}
+</ol>
+<p><a href="/procedures/?status=draft">{{ T "home_unchecked_all" }}</a> <span class="count">({{ lang.FormatNumber 0 (len .) }})</span></p>
+</section>
+{{ end -}}
 <section class="home-browse" aria-labelledby="home-browse">
 <h2 id="home-browse">{{ T "home_browse" }}</h2>
 <ul class="browse-list">
 {{ range slice
   (slice "/procedures/" (T "home_all_procedures") (len $procedures))
-  (slice "/procedures/?status=draft" (T "home_drafts") (len (where $procedures "Params.status" "draft")))
   (slice "/reaction_types/" (T "title_reaction_types") (len site.Taxonomies.reaction_types))
   (slice "/tags/" (T "title_tags") (len site.Taxonomies.tags))
   (slice "/authors/" (T "title_authors") (len site.Taxonomies.authors)) -}}
