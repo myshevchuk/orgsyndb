@@ -3,7 +3,8 @@ Node (site-search). They skip, naming node, when it is absent.
 
 All queries of the class go to Node in one run, from ``setUpClass``. A
 failure of that run fails every test on an assertion instead of erroring
-the class.
+the class. Findability is checked through the catalogue's searcher
+(``OrgSynCatalogue.searcher``), which the run also calls for every term.
 """
 
 import re
@@ -27,10 +28,11 @@ class SearchBatchCase(ps.ThemeBuildCase):
 
     @classmethod
     def ask(cls, term: str | None, filters: dict[str, str] | None = None,
-            normalise: bool = True) -> int:
+            normalise: bool = True,
+            sort: dict[str, str] | None = None) -> int:
         """Queue one search; return the index of its result list."""
         cls.requests.append({"term": term, "filters": filters,
-                             "normalise": normalise})
+                             "normalise": normalise, "sort": sort})
         return len(cls.requests) - 1
 
     @classmethod
@@ -56,7 +58,15 @@ class SearchBatchCase(ps.ThemeBuildCase):
             self.fail(self.batch_error)
 
     def ids(self, index: int) -> list[str]:
+        """The ``meta.id`` of each hit of a plain search, in order."""
         return [hit["id"] for hit in self.out["results"][index]]
+
+    def found(self, index: int) -> list[str]:
+        """The IDs the catalogue searcher returned for a search."""
+        entry = self.out["searched"][index]
+        self.assertIsNotNone(entry, "the search had a null term")
+        self.assertNotIn("error", entry, f"the searcher failed: {entry}")
+        return entry["ids"]
 
 
 def source_words(path_text: str) -> set[str]:
@@ -113,7 +123,8 @@ class ShippedSearchTests(SearchBatchCase):
     """Searches over the shipped procedures, without fixtures."""
 
     cas: int
-    filters_only: dict[tuple[str, str], int]
+    sorted_by_id: int
+    by_id: dict[str, int]
     wintergreen: int
     lookups: dict[str, tuple[int, str]]
     missing_words: list[str]
@@ -122,13 +133,11 @@ class ShippedSearchTests(SearchBatchCase):
 
     @classmethod
     def plan(cls, items: list[Content]) -> None:
-        labels = ps.reaction_labels(cls.sandbox.app)
         cls.cas = cls.ask("50-78-2")
-        cls.filters_only = {}
-        for key, values in cls.filter_values(items, labels).items():
-            for value in values:
-                cls.filters_only[(key, value)] = cls.ask(
-                    None, {key: value}, normalise=False)
+        cls.sorted_by_id = cls.ask(None, normalise=False, sort={"id": "asc"})
+        cls.by_id = {item.id: cls.ask(None, {"id": item.id},
+                                      normalise=False)
+                     for item in items}
         cls.wintergreen = cls.ask("wintergreen")
         words, cls.missing_words = body_words(cls.sandbox)
         cls.lookups = {}
@@ -151,38 +160,22 @@ class ShippedSearchTests(SearchBatchCase):
         cls.full = {item.id: cls.ask(item.product["smiles"])
                     for item in items}
 
-    @staticmethod
-    def filter_values(items: list[Content],
-                      labels: dict[str, str]) -> dict[str, set[str]]:
-        return {
-            "author": {a for i in items for a in i.data["authors"]},
-            "reaction type": {labels[s] for i in items
-                              for s in i.data["reaction_types"]},
-            "status": {i.data["status"] for i in items},
-            "tag": {t for i in items for t in i.tags}}
-
     def test_cas_numbers_are_separate_words(self) -> None:
         """Scenario: CAS numbers are separate words."""
-        self.assertEqual(self.ids(self.cas), ["OSDB-0002"])
+        self.assertEqual(self.found(self.cas), ["OSDB-0002"])
 
-    def test_filter_values_and_filter_only_searches(self) -> None:
-        """Scenario: Filter values and filter-only searches."""
-        items = self.content()
-        labels = ps.reaction_labels(self.sandbox.app)
-        self.assertEqual(
-            {k: set(v) for k, v in self.out["filters"].items()},
-            self.filter_values(items, labels))
-        carrying = {
-            "author": lambda i, v: v in i.data["authors"],
-            "reaction type": lambda i, v: v in [
-                labels[s] for s in i.data["reaction_types"]],
-            "status": lambda i, v: v == i.data["status"],
-            "tag": lambda i, v: v in i.tags}
-        for (key, value), index in self.filters_only.items():
-            with self.subTest(filter=key, value=value):
-                self.assertEqual(
-                    sorted(self.ids(index)),
-                    sorted(i.id for i in items if carrying[key](i, value)))
+    def test_the_id_filter_and_sort_key(self) -> None:
+        """Scenario: The ID filter and sort key."""
+        published = sorted(item.id for item in self.content())
+        self.assertEqual(list(self.out["filters"]), ["id"])
+        self.assertEqual(self.out["filters"]["id"],
+                         {ident: 1 for ident in published})
+        listed = [hit["meta"].get("id")
+                  for hit in self.out["results"][self.sorted_by_id]]
+        self.assertEqual(listed, published)
+        for ident, index in self.by_id.items():
+            with self.subTest(procedure=ident):
+                self.assertEqual(self.ids(index), [ident])
 
     def test_result_data_has_the_id_and_title(self) -> None:
         """Scenario: Result data."""
@@ -190,6 +183,7 @@ class ShippedSearchTests(SearchBatchCase):
         self.assertEqual(len(hits), 1)
         self.assertEqual(hits[0]["meta"].get("id"), "OSDB-0001")
         self.assertEqual(hits[0]["meta"].get("title"), "Salicylic acid")
+        self.assertEqual(self.found(self.wintergreen), ["OSDB-0001"])
 
     def test_name_cas_tag_id_and_body_word_find_the_procedure(self) -> None:
         """Scenario: Name, CAS, tag, ID and body word."""
@@ -198,14 +192,14 @@ class ShippedSearchTests(SearchBatchCase):
         self.assertTrue(self.lookups)
         for label, (index, ident) in self.lookups.items():
             with self.subTest(search=label):
-                self.assertIn(ident, self.ids(index))
+                self.assertIn(ident, self.found(index))
 
     def test_every_smiles_substring_finds_its_procedure(self) -> None:
         """Scenario: Every SMILES substring."""
         self.assertTrue(self.parts)
-        failures = [f"{part!r} lacks {sorted(wanted - set(self.ids(i)))}"
+        failures = [f"{part!r} lacks {sorted(wanted - set(self.found(i)))}"
                     for part, (i, wanted) in sorted(self.parts.items())
-                    if wanted - set(self.ids(i))]
+                    if wanted - set(self.found(i))]
         self.assertEqual(failures, [])
 
     def test_a_full_smiles_finds_exactly_the_containing_ones(self) -> None:
@@ -217,5 +211,17 @@ class ShippedSearchTests(SearchBatchCase):
                 other.id for other in items
                 if key in ps.smiles_key(other.product["smiles"]))
             with self.subTest(procedure=item.id):
-                self.assertEqual(sorted(self.ids(self.full[item.id])),
+                self.assertEqual(sorted(self.found(self.full[item.id])),
                                  expected)
+
+    def test_the_searcher_agrees_with_the_result_data(self) -> None:
+        """Scenario: Same procedures in the same order as the result data."""
+        searches = [index for index, request in enumerate(self.requests)
+                    if request["term"] is not None
+                    and request["normalise"]]
+        self.assertGreater(len(searches), len(self.parts))
+        different = [
+            f"{self.requests[index]['term']!r}: {self.found(index)} "
+            f"is not {self.ids(index)}"
+            for index in searches if self.found(index) != self.ids(index)]
+        self.assertEqual(different, [])

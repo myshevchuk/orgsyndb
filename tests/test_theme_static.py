@@ -27,9 +27,6 @@ TEXT_PAIRS = [("--fg", "--bg"), ("--muted", "--bg"), ("--link", "--bg"),
               ("--draft-fg", "--draft-bg"),
               ("--checked-fg", "--checked-bg"),
               ("--retired-fg", "--retired-bg")]
-PAGEFIND_VARIABLES = ["--pagefind-ui-primary", "--pagefind-ui-text",
-                      "--pagefind-ui-background", "--pagefind-ui-border",
-                      "--pagefind-ui-tag", "--pagefind-ui-font"]
 
 
 def css(name: str) -> list[Declaration]:
@@ -90,12 +87,13 @@ class ContrastTests(unittest.TestCase):
                 ratio = ps.contrast_ratio(tokens["--focus"], tokens["--bg"])
                 self.assertGreaterEqual(ratio, 3.0, f"{ratio:.2f}")
 
-    def test_screen_stylesheet_sets_the_pagefind_variables(self) -> None:
-        """Scenario: Contrast in both schemes (Pagefind variables)."""
-        declared = {d.prop for d in css("screen.css")}
-        for name in PAGEFIND_VARIABLES:
-            with self.subTest(variable=name):
-                self.assertIn(name, declared)
+    def test_no_stylesheet_sets_a_pagefind_variable(self) -> None:
+        """Scenario: Contrast in both schemes (no Pagefind variables)."""
+        for name in SOURCES:
+            for decl in css(name):
+                with self.subTest(file=name, selector=decl.selector,
+                                  prop=decl.prop):
+                    self.assertFalse(decl.prop.startswith("--pagefind-ui-"))
 
 
 def narrow_value(declarations: list[Declaration], selector: str,
@@ -118,7 +116,7 @@ class NarrowWindowTests(unittest.TestCase):
         """Scenario: Narrow windows stack the columns."""
         declarations = css("screen.css")
         width = 500 / 16
-        for selector in (".home-layout", ".home-browse"):
+        for selector in (".home-layout", ".catalogue-layout"):
             with self.subTest(selector=selector):
                 self.assertEqual(
                     narrow_value(declarations, selector,
@@ -127,6 +125,27 @@ class NarrowWindowTests(unittest.TestCase):
         self.assertEqual(
             narrow_value(declarations, ".procedure", "display", width),
             "block")
+
+
+class RowDetailsTests(unittest.TestCase):
+    def test_details_show_only_in_the_details_view(self) -> None:
+        """Requirement: Details view (screen stylesheet)."""
+        details = re.compile(r"\[data-view=[\"']?details[\"']?\]")
+        hides, shows = [], []
+        for decl in css("screen.css"):
+            if decl.prop != "display":
+                continue
+            for selector in ps.selectors_of(decl):
+                if ".row-details" not in selector:
+                    continue
+                if ps.plain_value(decl.value) == "none":
+                    hides.append(selector)
+                elif details.search(selector):
+                    shows.append(selector)
+        self.assertTrue(hides, "screen.css never hides .row-details")
+        self.assertTrue(
+            shows or any(":not(" in s and details.search(s) for s in hides),
+            "screen.css never shows .row-details in the details view")
 
 
 class ContrastFunctionTests(unittest.TestCase):

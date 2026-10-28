@@ -1,0 +1,91 @@
+## MODIFIED Requirements
+
+### Requirement: Search filters
+Each procedure page SHALL give Pagefind its ID as a filter and as a sort key. The element holding the ID in the procedure header, which carries `data-pagefind-meta="id"` (site-theme "Procedure page structure"), also carries `data-pagefind-filter="id"` and `data-pagefind-sort="id"`, and its whole text is the ID. No other element carries `data-pagefind-filter` or `data-pagefind-sort`.
+
+#### Scenario: Filter attributes on every procedure page
+- **WHEN** a test scans every procedure page after a theme build
+- **THEN** it has exactly one element with `data-pagefind-filter` and exactly one with `data-pagefind-sort`, the same element, whose attributes are both `id` and whose text equals the procedure's `id`
+- **AND** no other page under `public/` carries either attribute
+
+#### Scenario: The ID filter and sort key
+- **WHEN** a search test reads the bundle's `filters()`, searches with a `null` term sorted by `id` ascending, and searches with a `null` term and the filter `id` set to each published ID in turn
+- **THEN** the filter keys are exactly `id`, whose values are exactly the published IDs, each with the count 1
+- **AND** the sorted search returns every procedure page, their `meta.id` values in ascending order, and each filtered search returns exactly that procedure
+
+### Requirement: Result metadata
+Each procedure page SHALL give Pagefind:
+- the meta field `id`, from the element holding the ID in the header;
+- the meta field `smiles_index`, from the SMILES index element.
+
+Pagefind takes the result title from the page's `h1`. The catalogue shows no field of a Pagefind result: its rows are the static rows of the page (site-catalogue "Catalogue rows"), so neither an excerpt nor the SMILES index is ever displayed.
+
+#### Scenario: Result data
+- **WHEN** a search test searches `wintergreen`
+- **THEN** the single result has `meta.id` `OSDB-0001` and `meta.title` `Salicylic acid`
+
+### Requirement: Query normalisation
+`site/assets/js/search-terms.js` SHALL be a classic script, with no `import` or `export`, that defines `globalThis.OrgSynSearch` with one function, `normaliseTerm(term)`. It splits `term` on whitespace, removes from each word every character that is not a Unicode letter (`\p{L}`) or number (`\p{N}`), drops empty words, and joins the rest with single spaces.
+
+#### Scenario: Normalised terms
+- **WHEN** a Node test loads `search-terms.js` and calls `normaliseTerm` on `CC(=O)O c1ccccc1`, `50-78-2`, `  sample-data  `, `α-pinene` and `(E)-chalcone`, skipping when `node` is absent
+- **THEN** it returns `CCOO c1ccccc1`, `50782`, `sampledata`, `αpinene` and `Echalcone`
+- **AND** `OrgSynSearch` has no other property
+
+### Requirement: Every sample is findable
+Search SHALL find every shipped procedure by each of the following. Each search, made with the catalogue's searcher (requirement "Catalogue text search"), returns that procedure among its IDs:
+- its product name;
+- its product CAS number, written with hyphens;
+- a SMILES substring;
+- each of its tags;
+- its ID;
+- a word of its body text.
+
+Two further rules apply:
+- For every contiguous substring `q` of a procedure's SMILES with `len(N(q)) >= 3`, searching `q` returns that procedure.
+- Searching a procedure's full SMILES returns exactly the procedures whose `N(product.smiles)` contains `N` of it.
+
+#### Scenario: Name, CAS, tag, ID and body word
+- **WHEN** a search test builds a copy of the test collection `tests/fixtures/collection/` and searches, for each published procedure, its `product.name`, its `product.cas`, each of its tags, its `id`, and the body word chosen below
+- **THEN** every search returns that procedure
+- **AND** the body word is chosen from the procedure's source file in that copy as the longest word matching `[A-Za-z]{6,}` in its `Procedure` section that, compared case-insensitively, occurs in no other procedure's source file in that copy, with ties broken alphabetically. Every published procedure has such a word.
+
+#### Scenario: CAS numbers are separate words
+- **WHEN** a search test searches `50-78-2`
+- **THEN** the results are exactly `OSDB-0002`
+
+#### Scenario: Every SMILES substring
+- **WHEN** a search test searches every contiguous substring `q` of every published procedure's `product.smiles` with `len(N(q)) >= 3`
+- **THEN** each search returns the procedure the substring was taken from
+
+#### Scenario: Full SMILES is exact
+- **WHEN** a search test searches each published procedure's full `product.smiles`
+- **THEN** the results are exactly the published procedures whose `N(product.smiles)` contains `N` of the searched string
+
+#### Scenario: SMILES substring in the catalogue
+- **WHEN** the orchestrator searches `c1ccccc1O`, `ccc(cc1)-c1`, `O=C(/C=C/c1`, `CCOC(=O)/C=C` and `OC(=O)/C=C/c1` on `/procedures/` in a browser (manual verification, tasks.md section 6)
+- **THEN** they show exactly OSDB-0001; OSDB-0004 and OSDB-0005; OSDB-0006; OSDB-0007; and OSDB-0007 and OSDB-0008, the sets whose normalised SMILES contain the normalised query
+- **AND** the page shows no SMILES index text
+
+## ADDED Requirements
+
+### Requirement: Catalogue text search
+`OrgSynCatalogue.searcher(pagefind)` SHALL take the module object of an imported `pagefind.js` and return an object whose method `search(q)` returns a promise of the IDs of the procedure pages Pagefind finds for `OrgSynSearch.normaliseTerm(q)`, in Pagefind's result order, each once:
+- **Empty query.** When the normalised query is empty, it resolves to `[]` without calling Pagefind.
+- **Pairing.** On its first search, the searcher calls `pagefind.filters()` and then `pagefind.search(null, {sort: {id: "asc"}})`. It pairs the result pages of that search, in their order, with the IDs whose `id` filter count is positive, sorted by code point. Later searches reuse the pairing.
+- **Searching.** Each search calls `pagefind.search` with the normalised query and replaces each result page's `id` by its paired procedure ID.
+- **Refusal.** It rejects with an `Error` when the number of counted IDs differs from the number of pages of the sorted search, or when a result page has no paired ID. After a rejection, the next search starts over with the pairing.
+- **No fragments.** It never calls a result's `data()`.
+
+#### Scenario: Same procedures in the same order as the result data
+- **WHEN** a search test builds a copy of the test collection, loads the real bundle under Node, and runs every search of the requirement "Every sample is findable" both through the searcher and as a plain `pagefind.search` of the normalised query
+- **THEN** for each, the searcher's IDs equal the `meta.id` values of the plain search's results, read with `data()`, in the same order
+
+#### Scenario: A mismatched index is refused
+- **WHEN** a Node test gives the searcher a stub whose `filters()` counts three IDs while its sorted search returns two pages; then a stub whose query result names a page the sorted search did not return; then a consistent stub with the query `--`
+- **THEN** the first two searches reject with an `Error`, the third resolves to `[]` without a call to the stub's `search`, and no stub result's `data()` is ever called
+
+## REMOVED Requirements
+
+### Requirement: Search page
+**Reason**: `/procedures/` is the search page: its catalogue runs the query through Pagefind's API together with the facets and the sort (site-catalogue). The header search form of every other page submits to it, and its keyboard scenario is the catalogue's.

@@ -418,7 +418,7 @@ class SiteLanguageTests(unittest.TestCase):
         used = {tomllib.loads(page.read_text(encoding="utf-8").split(
                     "+++")[1]).get("title_key")
                 for page in (SITE / "content").rglob("*.md")} - {None}
-        self.assertEqual(len(used), 7)
+        self.assertEqual(len(used), 5)
         for path in LAYOUTS.rglob("*.html"):
             text = path.read_text(encoding="utf-8")
             used |= set(re.findall(r'\bT "([a-z_]+)"', text))

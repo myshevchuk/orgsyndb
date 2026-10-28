@@ -1,6 +1,5 @@
+{{- /* The catalogue at /procedures/: every published procedure. */ -}}
 {{ define "main" -}}
-{{ $pages := sort .Pages "Params.id" -}}
-{{ partial "list-tools.html" (dict "page" . "url" "/procedures/" "pages" $pages) -}}
-{{ partial "procedure-table.html" $pages -}}
+{{ partial "catalogue.html" (dict "page" . "pages" (sort .Pages "Params.id") "fixed" "") -}}
 {{ end }}
-{{ define "scripts" }}{{ partial "list-filter-script.html" . }}{{ end }}
+{{ define "scripts" }}{{ partial "catalogue-script.html" . }}{{ end }}

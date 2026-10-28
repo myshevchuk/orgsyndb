@@ -1,4 +1,7 @@
+{{- /* A reaction-type, tag or author term page: the catalogue of the
+term's procedures, with the term as its fixed facet. */ -}}
 {{ define "main" -}}
-<h1>{{ partial "page-title.html" . }}</h1>
-{{ partial "procedure-table.html" (sort .Pages "Params.id") -}}
+{{ $fixed := index (dict "reaction_types" "type" "tags" "tag" "authors" "author") .Data.Plural -}}
+{{ partial "catalogue.html" (dict "page" . "pages" (sort .Pages "Params.id") "fixed" $fixed) -}}
 {{ end }}
+{{ define "scripts" }}{{ partial "catalogue-script.html" . }}{{ end }}

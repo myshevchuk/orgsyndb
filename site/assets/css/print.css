@@ -30,8 +30,13 @@ html { color: #000; background: #fff; font-size: 10pt; }
 body { max-width: none; padding: 0; }
 a { color: #000; text-decoration: none; }
 
-.site-header, .site-footer, .skip-link, .actions, button, .search-form,
+.site-header, .site-footer, .skip-link, .actions, button, .site-search,
 .structure--placeholder { display: none; }
+/* A printed catalogue is its list as shown: no facets or toolbar, and the
+   Details block only in the Details view. */
+.catalogue-facets, .catalogue-toolbar, .catalogue-message,
+.catalogue:not([data-view="details"]) .row-details { display: none; }
+.row-structure { width: 25mm; border: none; padding: 0; }
 .print-only { display: block; }
 .print-facts { font-family: var(--font-ui); font-size: 8.5pt; }
 

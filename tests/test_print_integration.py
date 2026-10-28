@@ -20,16 +20,17 @@ QUOTED_TITLE = 'Bob\'s "best" </style> ester \\ x'
 TEXTS = {
     "en": {"banner": "Sample data — quantities not experimentally verified.",
            "chrome": ["Skip to content", "Print / Save as PDF",
-                      "No structure image", "OrgSynDB · internal procedures"],
-           "navigation": ("Reaction types", "Authors"),
+                      "No structure image", "Search procedures",
+                      "OrgSynDB · internal procedures"],
+           "navigation": ("Reaction types", "Help"),
            "page": "Page {} of {}", "procedure": "Procedure",
            "reagents": "Reagents"},
     "de": {"banner": "Beispieldaten – Mengenangaben nicht experimentell "
                      "überprüft.",
            "chrome": ["Zum Inhalt springen", "Drucken / Als PDF speichern",
-                      "Keine Strukturformel",
+                      "Keine Strukturformel", "Vorschriften durchsuchen",
                       "OrgSynDB · interne Vorschriften"],
-           "navigation": ("Reaktionstypen", "Autoren"),
+           "navigation": ("Reaktionstypen", "Hilfe"),
            "page": "Seite {} von {}", "procedure": "Durchführung",
            "reagents": "Reagenzien"},
 }

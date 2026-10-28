@@ -1,0 +1,73 @@
+{{- /* The catalogue: the heading and count, the scope line on a term page,
+the noscript note, the facets, the toolbar, the message and the procedure
+table. Its search form is the site header's (site-header.html). Takes a dict with page (the page shown), pages
+(its procedures, by ID) and fixed (the facet a term page fixes: type, tag
+or author; "" on /procedures/). Every control lies in an element carrying
+data-catalogue-controls and hidden, which catalogue.js reveals; without
+it the page is the table and the note. The texts the script shows are
+data-text-* attributes of div.catalogue. */ -}}
+{{ $page := .page -}}
+{{ $fixed := .fixed -}}
+{{ $count := len .pages -}}
+{{ $plurals := dict "type" "reaction_types" "tag" "tags" "author" "authors" -}}
+{{ $keys := partialCached "term-keys.html" "term keys" -}}
+<div class="catalogue" data-catalogue{{ with $fixed }} data-fixed="{{ . }}"{{ end }} data-text-searching="{{ T "catalogue_searching" }}" data-text-unavailable="{{ T "catalogue_unavailable" }}" data-text-error="{{ T "catalogue_error" }}" data-text-error-action="{{ T "catalogue_error_action" }}" data-text-empty="{{ T "catalogue_empty" }}" data-text-ignored="{{ T "catalogue_ignored" }}" data-text-remove="{{ T "catalogue_remove" }}">
+<div class="list-head">
+<h1>{{ partial "page-title.html" $page }}</h1>
+<p class="catalogue-count" role="status" data-catalogue-count data-filtered="{{ T "catalogue_filtered" }}">{{ if eq $count 1 }}{{ T "catalogue_count_one" }}{{ else }}{{ T "catalogue_count" (dict "Count" (lang.FormatNumber 0 $count)) }}{{ end }}</p>
+</div>
+{{ with $fixed -}}
+<p class="catalogue-scope">{{ T (printf "scope_%s" .) (partial "page-title.html" $page) }} · <a href="/procedures/" data-browse-all>{{ T "browse_all" }}</a> · <a href="/{{ index $plurals . }}/">{{ T (printf "facet_all_%s" .) }}</a></p>
+{{ end -}}
+<noscript>
+<p class="catalogue-noscript">{{ T "catalogue_noscript" (dict "reaction_types" "/reaction_types/" "tags" "/tags/" "authors" "/authors/") | safeHTML }}</p>
+</noscript>
+<div class="catalogue-layout">
+<div class="catalogue-facets" id="catalogue-facets" data-catalogue-controls hidden>
+<h2>{{ T "catalogue_filters" }}</h2>
+{{ range $facet := slice "type" "status" "tag" "author" -}}
+{{ $values := slice -}}
+{{ if eq $facet $fixed -}}
+{{ $values = slice (dict "key" (index $keys $page.RelPermalink) "label" (partial "page-title.html" $page)) -}}
+{{ else if eq $facet "status" -}}
+{{ range slice "draft" "checked" "retired" }}{{ $values = $values | append (dict "key" . "label" (partial "status-label.html" .)) }}{{ end -}}
+{{ else -}}
+{{ $values = partial "terms-by-label.html" (index $plurals $facet) -}}
+{{ end -}}
+<details class="facet" data-facet="{{ $facet }}"{{ if eq $facet $fixed }} data-fixed{{ end }}{{ if or (eq $facet "type") (eq $facet "status") (eq $facet $fixed) }} open{{ end }}>
+<summary id="facet-{{ $facet }}">{{ T (printf "facet_%s" $facet) }}</summary>
+<div class="facet-values" role="group" aria-labelledby="facet-{{ $facet }}">
+{{ range $values -}}
+<label class="facet-value"><input type="checkbox" name="{{ $facet }}" value="{{ .key }}"{{ if eq $facet $fixed }} checked disabled{{ end }}> <span class="facet-label">{{ .label }}</span> <span class="facet-count"></span></label>
+{{ end -}}
+</div>
+{{ with index $plurals $facet -}}
+<p class="facet-directory"><a href="/{{ . }}/">{{ T (printf "facet_all_%s" $facet) }}</a></p>
+{{ end -}}
+</details>
+{{ end -}}
+</div>
+<div class="catalogue-results">
+<div class="catalogue-toolbar" data-catalogue-controls hidden>
+<button type="button" class="facets-toggle" aria-controls="catalogue-facets" aria-expanded="false">{{ T "catalogue_filters" }}</button>
+<ul class="catalogue-active"></ul>
+<button type="button" class="clear-all">{{ T "catalogue_clear" }}</button>
+<span class="catalogue-select"><label for="catalogue-sort">{{ T "catalogue_sort" }}</label>
+<select id="catalogue-sort">
+<option value="relevance">{{ T "sort_relevance" }}</option>
+<option value="id">{{ T "sort_id" }}</option>
+<option value="title">{{ T "sort_title" }}</option>
+<option value="created">{{ T "sort_created" }}</option>
+<option value="modified">{{ T "sort_modified" }}</option>
+</select></span>
+<span class="catalogue-select"><label for="catalogue-view">{{ T "catalogue_view" }}</label>
+<select id="catalogue-view">
+<option value="table">{{ T "view_table" }}</option>
+<option value="details">{{ T "view_details" }}</option>
+</select></span>
+</div>
+<p class="catalogue-message" data-catalogue-message role="status" hidden></p>
+{{ partial "procedure-table.html" .pages -}}
+</div>
+</div>
+</div>

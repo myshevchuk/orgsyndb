@@ -4,7 +4,8 @@ site-search static scenarios, print-layout "The URL is text only").
 Each class builds once. ``ShippedSiteTests`` builds the test collection
 alone, and ``QuotedTitleSiteTests`` adds the quoted-title fixture to it;
 ``FixtureSiteTests`` builds the demo collection with the Org and Markdown
-twin fixtures, and needs Emacs for their export. Tests skip, naming the
+twin fixtures, and needs Emacs for their export. The catalogue's own
+scans are in ``test_catalogue_integration.py``. Tests skip, naming the
 missing tool or cache, as the other integration tests do.
 """
 
@@ -21,14 +22,11 @@ BANNER = "Sample data — quantities not experimentally verified."
 FOOTER = "OrgSynDB · internal procedures"
 ORIGIN = "http://127.0.0.1:8000"
 NAVIGATION = [("/procedures/", "Procedures"),
-              ("/reaction_types/", "Reaction types"), ("/tags/", "Tags"),
-              ("/authors/", "Authors"), ("/help/", "Help")]
+              ("/reaction_types/", "Reaction types"), ("/help/", "Help")]
 SECTIONS = ["Summary", "Reagents", "Procedure", "Workup and Purification",
             "Characterization", "Notes", "Hazards and Waste Disposal",
             "References"]
 REAGENT_HEADER = ["Reagent", "CAS", "MW (g/mol)", "Amount", "mmol", "Equiv"]
-LIST_HEADER = ["ID", "Procedure", "Reaction type", "Status", "Created",
-               "Modified"]
 PANEL_LABELS = ["ID", "Product", "Formula", "MW", "CAS", "SMILES", "Scale",
                 "Yield", "Reaction type", "Tags", "Authors", "Checked by",
                 "Created", "Modified", "Precursors", "Used in"]
@@ -51,10 +49,6 @@ class SiteCase(ps.ThemeBuildCase):
     def order_by_id(self) -> list[Content]:
         return sorted(self.content(), key=lambda item: item.id)
 
-    def order_by_date(self) -> list[Content]:
-        return sorted(self.order_by_id(), key=lambda item: item.data["date"],
-                      reverse=True)
-
     def page_of(self, item: Content) -> Page:
         return ps.load_page(self.public, self.public / "procedures"
                             / item.slug / "index.html")
@@ -64,19 +58,10 @@ class SiteCase(ps.ThemeBuildCase):
         self.assertIsNotNone(panel, f"{page.url} has no dl.metadata")
         return {pair.label: pair for pair in page.definition_pairs(panel)}
 
-    def table_ids(self, table: ps.TableModel) -> list[str]:
-        """The first-cell texts of the body rows of a procedure table."""
-        return [row[0].text for row in table.rows
-                if row and row[0].tag == "td"]
-
-    def procedure_table(self, page: Page, scope: Node | None = None):
-        for table in page.tables():
-            header = [c.text for c in table.rows[0]] if table.rows else []
-            if header == LIST_HEADER and (
-                    scope is None or table.node is scope
-                    or table.node.within(scope)):
-                return table
-        self.fail(f"{page.url} has no table with the columns {LIST_HEADER}")
+    def table_ids(self, page: Page) -> list[str]:
+        """The ID cells of the body rows of the page's procedure table."""
+        return [ps.row_cells(row)[0].norm()
+                for row in ps.catalogue_rows(page)]
 
     def used_in(self, item: Content) -> list[str]:
         return sorted(other.id for other in self.content()
@@ -160,12 +145,15 @@ class ShippedSiteTests(SiteCase):
         self.assertEqual(skip.attrs.get("href"), "#main")
         header = page.find("header", "site-header")
         self.assertIsNotNone(header, "no header.site-header")
+        title = header.find("a", "site-title")
+        self.assertIsNotNone(title, "no a.site-title")
+        self.assertEqual((page.resolve(title.attrs.get("href", "")),
+                          title.norm()), ("/", "OrgSynDB"))
+        self.assertEqual(len(header.find_all("nav")), 1)
         nav = header.find("nav", aria_label="Site")
         self.assertIsNotNone(nav, "no nav[aria-label=Site]")
-        links = [(link.target, link.node.norm())
-                 for link in page.links(nav)]
-        for entry in NAVIGATION:
-            self.assertIn(entry, links)
+        self.assertEqual([(link.target, link.node.norm())
+                          for link in page.links(nav)], NAVIGATION)
         mains = page.find_all("main")
         self.assertEqual(len(mains), 1)
         self.assertEqual(mains[0].attrs.get("id"), "main")
@@ -174,6 +162,9 @@ class ShippedSiteTests(SiteCase):
         self.assertEqual(footer.norm(), FOOTER)
         order = [page.index_of(n) for n in (skip, header, mains[0], footer)]
         self.assertEqual(order, sorted(order), "shell elements out of order")
+        self.check_header_search(page, header, nav)
+        self.assertEqual(len(page.find_all("input", name="q")), 1,
+                         "not exactly one input[name=q]")
         viewport = page.find("meta", name="viewport")
         self.assertIsNotNone(viewport, "no viewport meta")
         # Hugo's minifier drops the space after the comma.
@@ -191,6 +182,40 @@ class ShippedSiteTests(SiteCase):
             self.assertEqual(title, "OrgSynDB")
         else:
             self.assertTrue(title.endswith(" | OrgSynDB"), title)
+
+    def check_header_search(self, page: Page, header: Node,
+                            nav: Node) -> None:
+        """The header holds the search form on every page; on a
+        catalogue page it is the catalogue's (catalogue_support)."""
+        catalogue = ps.is_catalogue_url(page.url)
+        self.assertEqual(page.find("div", "catalogue") is not None,
+                         catalogue, f"{page.url} is {'not ' * (not catalogue)}"
+                         "a catalogue page")
+        forms = header.find_all("form")
+        self.assertEqual(len(forms), 1)
+        form = forms[0]
+        self.assertTrue(form.has_class("site-search"))
+        self.assertEqual(form.attrs.get("role"), "search")
+        self.assertEqual(form.attrs.get("method", "").lower(), "get")
+        self.assertGreater(page.index_of(form), page.index_of(nav))
+        self.assertFalse(form.within(nav))
+        fields = form.find_all("input")
+        self.assertEqual(len(fields), 1)
+        self.assertEqual((fields[0].attrs.get("type"),
+                          fields[0].attrs.get("name")), ("search", "q"))
+        self.assertEqual("data-catalogue-search" in form.attrs, catalogue)
+        if not catalogue:
+            self.assertEqual(page.resolve(form.attrs.get("action", "")),
+                             "/procedures/")
+            self.assertEqual((fields[0].attrs.get("aria-label"),
+                              fields[0].attrs.get("placeholder")),
+                             ("Search procedures",
+                              "Product, CAS, SMILES or keyword"))
+        buttons = form.find_all("button")
+        self.assertEqual(len(buttons), 1)
+        self.assertEqual((buttons[0].attrs.get("type"), buttons[0].norm()),
+                         ("submit", "Search"))
+        self.assertNotIn("hidden", buttons[0].attrs)
 
     def test_term_titles_use_labels_and_tags(self) -> None:
         """Scenario: Term titles use labels and tags."""
@@ -215,22 +240,12 @@ class ShippedSiteTests(SiteCase):
             with self.subTest(page=name):
                 sheets = [(page.resolve(href), media)
                           for href, media in page.stylesheets()]
-                site = [s for s in sheets
-                        if not s[0].startswith("/pagefind/")]
-                self.assertEqual([m for _, m in site],
+                self.assertEqual([m for _, m in sheets],
                                  [None, "screen", "print"])
-                for target, _ in site:
+                for target, _ in sheets:
                     self.assertRegex(target, r"^/css/")
                     self.assertTrue(ps.target_file(self.public, target)
                                     .is_file(), target)
-                bundle = [t for t, _ in sheets
-                          if t.startswith("/pagefind/")]
-                if name == "search/index.html":
-                    self.assertEqual(bundle, ["/pagefind/pagefind-ui.css"])
-                    self.assertTrue((self.public / "pagefind"
-                                     / "pagefind-ui.css").is_file())
-                else:
-                    self.assertEqual(bundle, [])
 
     def test_reagents_tables_are_wrapped_and_marked(self) -> None:
         """Scenario: Reagents tables are wrapped and marked."""
@@ -487,100 +502,19 @@ class ShippedSiteTests(SiteCase):
         self.assertEqual(slot.norm(), "No structure image")
         self.assertEqual(page.find_all("img"), [])
 
-    def test_both_procedure_lists_are_in_order(self) -> None:
-        """Scenario: Both orders."""
-        items = {item.id: item for item in self.content()}
-        for url, order, other in (
-                ("procedures", self.order_by_id(), "/procedures-by-date/"),
-                ("procedures-by-date", self.order_by_date(),
-                 "/procedures/")):
-            path = self.public / url / "index.html"
-            with self.subTest(page=url):
-                self.assertTrue(path.is_file(), f"{url} not published")
-                page = ps.load_page(self.public, path)
-                table = self.procedure_table(page)
-                self.assertEqual(self.table_ids(table),
-                                 [item.id for item in order])
-                labels = self.labels()
-                for row, item in zip(table.rows[1:], order):
-                    self.assertEqual(row[2].text, labels[
-                        item.data["reaction_types"][0]])
-                    self.assertEqual(row[3].text, item.data["status"])
-                    for cell in row[:2]:
-                        self.assertEqual(
-                            [l.target for l in page.links(cell.node)],
-                            [f"/procedures/{item.slug}/"])
-                self.assertIn(other, [l.target for l in page.links()])
-                current = [l for l in page.links()
-                           if l.node.attrs.get("aria-current") == "page"]
-                self.assertIn(page.url, [l.target for l in current])
-                self.assertNotIn(other, [l.target for l in current])
-        self.assertEqual(len(items), len(self.order_by_date()))
-
-    def test_list_tools_on_both_lists(self) -> None:
-        """Scenario: List tools."""
-        labels = self.labels()
-        in_use = sorted({labels[slug] for item in self.content()
-                         for slug in item.data["reaction_types"]})
-        total = len(self.content())
-        for url in ("procedures", "procedures-by-date"):
-            path = self.public / url / "index.html"
-            with self.subTest(page=url):
-                page = ps.load_page(self.public, path)
-                main = page.find("main")
-                count = main.find("p", "list-count", data_list_count=True)
-                self.assertIsNotNone(count, "no p.list-count")
-                self.assertEqual(count.norm(), f"{total} entries")
-                self.assertEqual(count.attrs.get("data-filtered"),
-                                 "{shown} of {total} entries")
-                form = main.find("form", role="search")
-                self.assertIsNotNone(form, "no form[role=search]")
-                self.assertEqual(form.attrs.get("method", "").lower(), "get")
-                self.assertEqual(page.resolve(form.attrs.get("action", "")),
-                                 "/search/")
-                field = form.find("input", name="q")
-                self.assertIsNotNone(field, "no input[name=q]")
-                self.assertTrue(field.attrs.get("aria-label"))
-                submit = form.find("button", type="submit")
-                self.assertIsNotNone(submit, "no submit button")
-                self.assertNotIn("hidden", submit.attrs)
-                filters = main.find("div", "list-filters",
-                                    data_list_filters=True)
-                self.assertIsNotNone(filters, "no div.list-filters")
-                self.assertIn("hidden", filters.attrs)
-                kinds = filters.find("select", data_filter="reaction-type")
-                options = [(o.attrs.get("value"), o.norm())
-                           for o in kinds.find_all("option")]
-                self.assertEqual(options[0], ("", "All"))
-                self.assertEqual(sorted(text for _, text in options[1:]),
-                                 in_use)
-                states = filters.find("select", data_filter="status")
-                self.assertEqual(
-                    [o.attrs.get("value") for o in states.find_all("option")],
-                    ["", "draft", "checked", "retired"])
-                table = self.procedure_table(page)
-                rows = table.node.find("tbody").find_all("tr")
-                items = {item.id: item for item in self.content()}
-                for row in rows:
-                    item = items[row.find("td").norm()]
-                    self.assertEqual(row.attrs.get("data-status"),
-                                     item.data["status"])
-                    self.assertEqual(row.attrs.get("data-reaction-types"),
-                                     " ".join(item.data["reaction_types"]))
-                scripts = [page.resolve(s.attrs.get("src", ""))
-                           for s in page.find_all("script")]
-                self.assertTrue(any(re.match(r"^/js/list-filter\b", s)
-                                    for s in scripts), scripts)
-
     def test_navigation_marks_the_current_section(self) -> None:
         """Scenario: Current section in the navigation."""
+        within = {"/procedures/": "true"}
         cases = {"index.html": {},
                  "procedures/index.html": {"/procedures/": "page"},
-                 "procedures-by-date/index.html": {"/procedures/": "true"},
-                 "procedures/osdb-0001/index.html": {"/procedures/": "true"},
-                 "tags/index.html": {"/tags/": "page"},
-                 "tags/sample-data/index.html": {"/tags/": "true"},
-                 "search/index.html": {},
+                 "procedures/osdb-0001/index.html": within,
+                 "tags/index.html": within,
+                 "authors/index.html": within,
+                 "tags/sample-data/index.html": within,
+                 "authors/a.-example/index.html": within,
+                 "reaction_types/index.html": {"/reaction_types/": "page"},
+                 "reaction_types/hydrolysis/index.html": {
+                     "/reaction_types/": "true"},
                  "help/index.html": {"/help/": "page"},
                  "help/schema/index.html": {"/help/": "true"}}
         for name, expected in cases.items():
@@ -677,67 +611,6 @@ class ShippedSiteTests(SiteCase):
                         other = ps.load_page(self.public, target)
                         self.assertIsNotNone(other.find(id=fragment), href)
 
-    def test_home_page_content(self) -> None:
-        """Scenario: Home page content."""
-        path = self.public / "index.html"
-        page = ps.load_page(self.public, path)
-        main = page.find("main")
-        form = main.find("form", role="search")
-        self.assertIsNotNone(form, "no form[role=search]")
-        self.assertEqual(form.attrs.get("method", "").lower(), "get")
-        self.assertEqual(page.resolve(form.attrs.get("action", "")),
-                         "/search/")
-        field = form.find("input", name="q")
-        self.assertIsNotNone(field, "no input[name=q]")
-        label = form.find("label", **{"for": field.attrs.get("id", "-")})
-        labelled = label is not None or field.attrs.get("aria-label") or any(
-            a.tag == "label" for a in field.ancestors())
-        self.assertTrue(labelled, "the input has no label")
-        submits = [n for n in form.find_all()
-                   if (n.tag == "button" and n.attrs.get(
-                       "type", "submit") == "submit")
-                   or (n.tag == "input" and n.attrs.get("type") == "submit")]
-        self.assertTrue(submits, "no submit control")
-        for node in submits:
-            self.assertNotIn("hidden", node.attrs)
-        recent = self.heading_of(page, "Recent procedures")
-        table = self.procedure_table(
-            page, page.following(recent, "table"))
-        self.assertEqual(self.table_ids(table),
-                         [i.id for i in self.order_by_date()[:5]])
-        counts = self.term_counts()
-        for text, taxonomy, expected in (
-                ("Browse by reaction type", "reaction_types",
-                 {self.labels()[s]: n for s, n
-                  in counts["reaction_types"].items()}),
-                ("Browse by tag", "tags", counts["tags"])):
-            with self.subTest(heading=text):
-                heading = self.heading_of(page, text)
-                container = page.following(heading, "ul", "ol")
-                self.assertIsNotNone(container, f"no list after {text}")
-                links = page.links(container)
-                found = {}
-                for link in links:
-                    entry = next(a for a in link.node.ancestors()
-                                 if a.tag == "li")
-                    rest = entry.norm().replace(link.node.norm(), "", 1)
-                    found[link.node.norm()] = (
-                        link.target, re.findall(r"\b\d+\b", rest))
-                self.assertEqual(len(found), len(links))
-                self.assertEqual(sorted(found), sorted(expected))
-                for name, count in expected.items():
-                    self.assertIn(str(count), found[name][1], name)
-                    self.assertTrue(found[name][0].startswith(
-                        f"/{taxonomy}/"))
-        self.assertIn("/procedures/", [l.target for l in page.links(main)])
-
-    def heading_of(self, page: Page, text: str) -> Node:
-        for level in range(1, 7):
-            found = page.heading(text, level)
-            if found is not None:
-                return found
-        self.fail(f"{page.url} has no heading {text!r}")
-
     def term_counts(self) -> dict[str, dict[str, int]]:
         counts: dict[str, dict[str, int]] = {
             "reaction_types": {}, "tags": {}, "authors": {}}
@@ -758,36 +631,46 @@ class ShippedSiteTests(SiteCase):
                 page = ps.load_page(self.public, path)
                 self.assertEqual(
                     [t for lv, t in page.headings() if lv == 1], [heading])
-                main = page.find("main")
-                links = [l for l in page.links(main)
-                         if l.target.startswith(f"/{taxonomy}/")
-                         and l.target != f"/{taxonomy}/"]
-                shown = {l.node.norm(): l for l in links}
-                self.assertEqual(len(shown), len(links))
+                listing = page.find("main").find("ul", "term-list")
+                self.assertIsNotNone(listing, "no ul.term-list")
+                entries = listing.find_all("li")
                 expected = {}
                 for term, count in self.term_counts()[taxonomy].items():
                     name = labels[term] if taxonomy == "reaction_types" \
                         else term
                     expected[name] = (term, count)
-                self.assertEqual(sorted(shown), sorted(expected))
-                for name, (term, count) in expected.items():
-                    link = shown[name]
-                    entry = next(a for a in link.node.ancestors()
-                                 if a.tag == "li")
-                    rest = entry.norm().replace(name, "", 1)
-                    self.assertIn(str(count), re.findall(r"\b\d+\b", rest))
-                    term_path = ps.target_file(self.public, link.target)
-                    self.assertTrue(term_path.is_file(), link.target)
-                    term_page = ps.load_page(self.public, term_path)
-                    self.assertEqual(
-                        [t for lv, t in term_page.headings() if lv == 1],
-                        [name])
-                    table = self.procedure_table(
-                        term_page, term_page.find("main"))
-                    self.assertEqual(
-                        self.table_ids(table),
-                        sorted(i.id for i in self.content()
-                               if term in i.data.get(taxonomy, [])))
+                shown = [page.links(entry)[0] for entry in entries]
+                self.assertEqual([l.node.norm() for l in shown],
+                                 sorted(expected))
+                for entry, link in zip(entries, shown):
+                    name = link.node.norm()
+                    term, count = expected[name]
+                    with self.subTest(term=name):
+                        self.assertEqual(entry.norm(), f"{name} ({count})")
+                        counter = entry.find("span", "count")
+                        self.assertIsNotNone(counter, "no span.count")
+                        self.assertEqual(counter.norm(), f"({count})")
+                        self.assertIs(entry.elements()[0], link.node)
+                        self.check_term_page(link.target, name, taxonomy,
+                                             term)
+
+    def check_term_page(self, target: str, name: str, taxonomy: str,
+                        term: str) -> None:
+        path = ps.target_file(self.public, target)
+        self.assertTrue(path.is_file(), target)
+        page = ps.load_page(self.public, path)
+        self.assertEqual([t for lv, t in page.headings() if lv == 1], [name])
+        table = page.find("table", "procedure-list")
+        self.assertIsNotNone(table, f"{target} has no table.procedure-list")
+        self.assertEqual([c.text for c in page.tables()[0].rows[0]],
+                         ps.CATALOGUE_HEADER)
+        wanted = sorted(i.id for i in self.content()
+                        if term in i.data.get(taxonomy, []))
+        self.assertEqual(self.table_ids(page), wanted)
+        count = page.find("p", "catalogue-count")
+        self.assertIsNotNone(count, "no p.catalogue-count")
+        self.assertEqual(count.norm(), f"{len(wanted)} procedure"
+                         + ("" if len(wanted) == 1 else "s"))
 
     def test_static_html_holds_the_content(self) -> None:
         """Scenario: Static HTML holds the content."""
@@ -811,12 +694,22 @@ class ShippedSiteTests(SiteCase):
                 self.assertEqual(len(data_print), 1)
                 self.assertEqual(len(data_copy), 1)
         for path, page in self.pages():
+            name = str(path.relative_to(self.public))
             for button in page.buttons():
-                with self.subTest(page=str(path.relative_to(self.public)),
-                                  button=button.norm()):
+                with self.subTest(page=name, button=button.norm()):
                     enhanced = ("data-print" in button.attrs
                                 or "data-copy-smiles" in button.attrs)
                     self.assertEqual("hidden" in button.attrs, enhanced)
+            catalogue = page.find("div", "catalogue")
+            for button in () if catalogue is None else catalogue.find_all(
+                    "button"):
+                with self.subTest(page=name, catalogue_button=button.norm()):
+                    hidden = [a for a in button.ancestors()
+                              if a.within(catalogue)
+                              and "data-catalogue-controls" in a.attrs
+                              and "hidden" in a.attrs]
+                    self.assertTrue(hidden, "the button is not inside a "
+                                    "hidden catalogue control")
 
     def test_printed_url_is_text_only(self) -> None:
         """Scenario: The URL is text only."""
@@ -846,37 +739,6 @@ class ShippedSiteTests(SiteCase):
 
     # --- site-search, static scenarios --------------------------------------
 
-    def test_search_page_wiring(self) -> None:
-        """Scenario: Search page wiring."""
-        path = self.public / "search" / "index.html"
-        self.assertTrue(path.is_file(), "search/index.html not published")
-        page = ps.load_page(self.public, path)
-        self.assertIn("/pagefind/pagefind-ui.css",
-                      [page.resolve(h) for h, _ in page.stylesheets()])
-        sources = [page.resolve(s) for s in page.script_sources() if s]
-        self.assertIn("/pagefind/pagefind-ui.js", sources)
-        bundles = [s for s in sources if s.startswith("/js/")
-                   and "PagefindUI" in ps.target_file(
-                       self.public, s).read_text(encoding="utf-8")]
-        self.assertEqual(len(bundles), 1, f"scripts are {sources}")
-        self.assertLess(sources.index("/pagefind/pagefind-ui.js"),
-                        sources.index(bundles[0]))
-        script = ps.target_file(self.public, bundles[0]).read_text(
-            encoding="utf-8")
-        for word in ("PagefindUI", "processTerm", "processResult",
-                     "triggerSearch"):
-            self.assertIn(word, script)
-        mounts = page.find_all(data_search=True)
-        self.assertEqual(len(mounts), 1)
-        self.assertEqual((mounts[0].norm(), mounts[0].elements()), ("", []))
-        fallback = page.find("noscript")
-        self.assertIsNotNone(fallback, "no noscript element")
-        self.assertIn("javascript", fallback.norm().lower())
-        targets = {l.target for l in page.links(fallback)}
-        self.assertTrue({"/procedures/", "/reaction_types/", "/tags/",
-                         "/authors/"} <= targets, targets)
-        self.assertEqual(page.indexed_bodies(), [])
-
     def test_metadata_is_indexed_and_chrome_is_not(self) -> None:
         """Scenario: Metadata inside the body, chrome outside."""
         navigation = " ".join(text for _, text in NAVIGATION)
@@ -899,23 +761,31 @@ class ShippedSiteTests(SiteCase):
 
     def test_filter_attributes_on_every_procedure_page(self) -> None:
         """Scenario: Filter attributes on every procedure page."""
-        labels = self.labels()
+        urls = set()
         for item, page in self.procedure_pages():
+            urls.add(page.url)
             with self.subTest(procedure=item.id):
-                found: dict[str, list[str]] = {}
-                for _node, key, text in page.filter_elements():
-                    found.setdefault(key, []).append(text)
-                expected = {
-                    "status": [item.data["status"]],
-                    "reaction type": [labels[s] for s
-                                      in item.data["reaction_types"]],
-                    "tag": item.tags,
-                    "author": item.data["authors"]}
-                self.assertEqual(
-                    {k: sorted(v) for k, v in found.items()},
-                    {k: sorted(v) for k, v in expected.items()})
-                for node, _key, _text in page.filter_elements():
-                    self.assertNotIn(node.tag, ("ul", "ol", "dl"))
+                filters = page.find_all(data_pagefind_filter=True)
+                sorts = page.find_all(data_pagefind_sort=True)
+                self.assertEqual(len(filters), 1)
+                self.assertEqual(len(sorts), 1)
+                self.assertIs(filters[0], sorts[0])
+                element = filters[0]
+                self.assertEqual(element.attrs["data-pagefind-filter"], "id")
+                self.assertEqual(element.attrs["data-pagefind-sort"], "id")
+                self.assertEqual(element.attrs.get("data-pagefind-meta"),
+                                 "id")
+                self.assertTrue(element.within(
+                    page.find("header", "procedure-header")))
+                self.assertEqual(element.norm(), item.id)
+        self.assertTrue(urls)
+        for path, page in self.pages():
+            if page.url not in urls:
+                with self.subTest(page=str(path.relative_to(self.public))):
+                    self.assertEqual(
+                        page.find_all(data_pagefind_filter=True), [])
+                    self.assertEqual(
+                        page.find_all(data_pagefind_sort=True), [])
 
     def test_smiles_index_value_of_the_markdown_seed(self) -> None:
         """Scenario: Index value."""

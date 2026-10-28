@@ -11,6 +11,7 @@ exercises the Org export and copies the demo collection instead.
 """
 
 import contextlib
+import datetime as dt
 import functools
 import hashlib
 import html as html_lib
@@ -42,9 +43,10 @@ TOOLS = REPO / "tools"
 FIXTURES = REPO / "tests" / "fixtures"
 EXPORT_FIXTURES = FIXTURES / "export"
 THEME_FIXTURES = FIXTURES / "theme"
+CATALOGUE_FIXTURES = FIXTURES / "catalogue"
 PAGEFIND_QUERY = REPO / "tests" / "js" / "pagefind-query.mjs"
 SEARCH_TERMS = REPO / "site" / "assets" / "js" / "search-terms.js"
-LIST_FILTER = REPO / "site" / "assets" / "js" / "list-filter.js"
+CATALOGUE_CORE = REPO / "site" / "assets" / "js" / "catalogue-core.js"
 PIPELINE = TOOLS / "pipeline.py"
 ORGSYNDB = TOOLS / "orgsyndb"
 HOOK = TOOLS / "hooks" / "pre-commit"
@@ -560,6 +562,16 @@ def put_theme_fixtures(sandbox: Sandbox, *names: str) -> list[Path]:
     return copied
 
 
+def put_catalogue_fixtures(sandbox: Sandbox) -> list[Path]:
+    """Copy the catalogue fixtures, tests/fixtures/catalogue/*.md, into
+    the sandbox's ``md/procedures/``."""
+    sources = sorted(CATALOGUE_FIXTURES.glob("OSDB-*.md"))
+    if not sources:
+        raise AssertionError("tests/fixtures/catalogue/ holds no procedure")
+    return [Path(shutil.copy2(source, sandbox.md_dir()))
+            for source in sources]
+
+
 class _ClassCase:
     """Adapts a test class to the ``addCleanup`` that make_sandbox calls."""
 
@@ -591,12 +603,15 @@ class ThemeBuildCase(unittest.TestCase):
     unless it sets ``DEMO``, and then calls ``require_exporter`` from
     ``require_tools``), the theme ``FIXTURES`` to copy into the sandbox,
     the build ``COMMAND`` (``build`` or ``pdf``) and extra environment
-    variables in ``ENV``. A build that fails does not error the class: it
-    fails every test on an assertion that shows the build output.
+    variables in ``ENV``. ``CATALOGUE`` adds the catalogue fixtures
+    (tests/fixtures/catalogue/) to the collection. A build that fails
+    does not error the class: it fails every test on an assertion that
+    shows the build output.
     """
 
     COLLECTION = TEST_COLLECTION
     FIXTURES: tuple[str, ...] = ()
+    CATALOGUE = False
     COMMAND = "build"
     LOCALE = "en"
     ENV: dict[str, str] = {}
@@ -619,6 +634,8 @@ class ThemeBuildCase(unittest.TestCase):
                                    collection=cls.COLLECTION)
         cls.sandbox.set_locale(cls.LOCALE)
         put_theme_fixtures(cls.sandbox, *cls.FIXTURES)
+        if cls.CATALOGUE:
+            put_catalogue_fixtures(cls.sandbox)
         cls.prepare()
         cls.result = cls.sandbox.build(
             cls.COMMAND, env=cls.sandbox.env(**cls.ENV))
@@ -683,6 +700,12 @@ class Content(NamedTuple):
         """The language code of the file name, or None."""
         return language_of(self.path.name)
 
+    def term_keys(self, taxonomy: str) -> list[str]:
+        """The taxonomy keys of the procedure's terms, in front-matter
+        order: slugs for reaction types, the lowercased term otherwise."""
+        return [term_key(taxonomy, term)
+                for term in self.data.get(taxonomy, [])]
+
     def page_file(self, public: Path) -> Path:
         """The procedure's page under ``public``."""
         return public / "procedures" / self.slug / "index.html"
@@ -726,6 +749,19 @@ def read_content(sandbox: Sandbox, locale: str | None) -> list[Content]:
                 chosen[item.id] = item
         found = list(chosen.values())
     return sorted(found, key=lambda item: (item.id, item.path.name))
+
+
+def term_key(taxonomy: str, term: str) -> str:
+    """The key of ``term`` in Hugo's taxonomy: the term as written,
+    lowercased. A reaction type's key is its vocabulary slug."""
+    return term if taxonomy == "reaction_types" else term.lower()
+
+
+def rfc3339(moment: dt.datetime) -> str:
+    """``2006-01-02T15:04:05Z07:00`` of an aware datetime: ``Z`` for
+    offset zero, else ``+HH:MM``."""
+    text = moment.isoformat(timespec="seconds")
+    return text[:-6] + "Z" if text.endswith("+00:00") else text
 
 
 class HelpDocument(NamedTuple):
@@ -1090,12 +1126,15 @@ class Page:
         return pairs
 
     def resolve(self, ref: str) -> str:
-        """The URL path ``ref`` resolves to from this page."""
+        """The URL path ``ref`` resolves to from this page, followed by
+        ``?`` and its query, still encoded, when it has one. A fragment
+        is dropped."""
         joined = urllib.parse.urljoin(_ORIGIN + self.url, ref)
         parts = urllib.parse.urlsplit(joined)
         if parts.netloc != "page.invalid":
             return joined
-        return urllib.parse.unquote(parts.path)
+        path = urllib.parse.unquote(parts.path)
+        return f"{path}?{parts.query}" if parts.query else path
 
     def links(self, scope: Node | None = None) -> list[Link]:
         return [Link(node, node.attrs["href"],
@@ -1178,6 +1217,47 @@ def squash(text: str) -> str:
     return "".join(unicodedata.normalize("NFKC", text).split())
 
 
+# --- catalogue pages --------------------------------------------------------
+
+CATALOGUE_HEADER = ["ID", "Procedure", "Reaction type", "Status", "Modified"]
+FACETS = ("type", "status", "tag", "author")
+TERM_PAGE = re.compile(r"^/(reaction_types|tags|authors)/[^/]+/$")
+
+
+def is_catalogue_url(url: str) -> bool:
+    """Whether the page at ``url`` is the catalogue or a term page."""
+    return url == "/procedures/" or TERM_PAGE.match(url) is not None
+
+
+def catalogue_rows(page: Page) -> list[Node]:
+    """The body rows of the page's ``table.procedure-list``."""
+    table = page.find("table", "procedure-list")
+    if table is None:
+        return []
+    body = table.find("tbody")
+    return [] if body is None else body.find_all("tr")
+
+
+def row_cells(row: Node) -> list[Node]:
+    """The ``td`` cells of a table row."""
+    return [c for c in row.elements() if c.tag == "td"]
+
+
+def facet_values(page: Page, facet: str) -> list[tuple[str, str]]:
+    """The ``(value, label)`` of each ``label.facet-value`` of the
+    catalogue facet ``facet``, in document order."""
+    group = page.find("details", "facet", data_facet=facet)
+    if group is None:
+        return []
+    found = []
+    for label in group.find_all("label", "facet-value"):
+        box = label.find("input")
+        text = label.find("span", "facet-label")
+        found.append((box.attrs.get("value", "") if box else "",
+                      "" if text is None else text.norm()))
+    return found
+
+
 # --- a local server and Pagefind searches -----------------------------------
 
 class _QuietHandler(SimpleHTTPRequestHandler):
@@ -1202,17 +1282,24 @@ def serve_directory(path: Path) -> Iterator[str]:
 
 def pagefind_search(public: Path, requests: list[dict[str, Any]],
                     search_terms: Path = SEARCH_TERMS,
-                    language: str = "en") -> dict[str, Any]:
+                    language: str = "en",
+                    catalogue_core: Path = CATALOGUE_CORE) -> dict[str, Any]:
     """Run searches with the built Pagefind bundle under Node.
 
-    Each request is ``{"term", "filters", "normalise"}``, run against the
-    index of ``language``. Returns the
-    parsed ``{"results": [[{"id", "title", "excerpt", "meta"}, ...], ...],
-    "filters": {...}}``, with one result list per request. Skips unless
-    node exists; a missing script or bundle fails on an assertion.
+    Each request is ``{"term", "filters", "normalise"}``, with an
+    optional ``"sort"``, run against the index of ``language``. A plain
+    Pagefind search of the term (normalised when the request says so)
+    gives the hits, each read with ``data()``. For a term that is not
+    null the catalogue searcher, ``OrgSynCatalogue.searcher`` of
+    ``catalogue_core``, also searches the raw term. Returns the parsed
+    ``{"results": [[{"id", "title", "excerpt", "meta"}, ...], ...],
+    "searched": [None | {"ids": [...]} | {"error": "..."}, ...],
+    "filters": {...}}``, with one result list and one searched entry per
+    request. Skips unless node exists; a missing script or bundle fails
+    on an assertion.
     """
     node = require_node()
-    for script in (PAGEFIND_QUERY, search_terms):
+    for script in (PAGEFIND_QUERY, search_terms, catalogue_core):
         if not script.is_file():
             raise AssertionError(f"{script.relative_to(REPO)} does not exist")
     bundle = public / "pagefind" / "pagefind.js"
@@ -1224,7 +1311,7 @@ def pagefind_search(public: Path, requests: list[dict[str, Any]],
         with serve_directory(public) as base:
             done = subprocess.run(
                 [node, str(PAGEFIND_QUERY), str(copy), f"{base}/pagefind/",
-                 str(search_terms), language],
+                 str(search_terms), str(catalogue_core), language],
                 input=json.dumps(requests), capture_output=True, text=True,
                 timeout=600)
     if done.returncode != 0:

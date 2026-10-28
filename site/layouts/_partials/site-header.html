@@ -1,16 +1,35 @@
+{{- /* The site header: the site title, the navigation and the search form,
+which submits q to /procedures/. On the catalogue and term pages the form
+is the catalogue's: catalogue.js drives its field, #catalogue-q, the page
+itself is its action, and on a term page its label names the scope. The
+link of the page itself carries aria-current="page"; the link of the
+section a page lies in carries aria-current="true". The tag and author
+directories and their term pages lie in /procedures/, as their facets
+do. */ -}}
+{{ $here := .RelPermalink -}}
+{{ $within := $here -}}
+{{ if or (hasPrefix $here "/tags/") (hasPrefix $here "/authors/") }}{{ $within = "/procedures/" }}{{ end -}}
+{{ $catalogue := or (eq .Kind "term") (and (eq .Kind "section") (eq .Section "procedures")) -}}
+{{ $action := cond $catalogue .RelPermalink "/procedures/" -}}
+{{ $label := T "search_label" -}}
+{{ $hint := T "search_placeholder" -}}
+{{ if eq .Kind "term" -}}
+{{ $facet := index (dict "reaction_types" "type" "tags" "tag" "authors" "author") .Data.Plural -}}
+{{ $label = T (printf "search_scope_%s" $facet) (partial "page-title.html" .) -}}
+{{ $hint = $label -}}
+{{ end -}}
 <header class="site-header">
 <a class="site-title" href="/">{{ site.Title }}</a>
 <nav aria-label="{{ T "nav_site" }}">
-{{- /* The link of the page itself carries aria-current="page"; the link
-of the section a page belongs to carries aria-current="true". The list by
-date belongs to the procedures. */ -}}
-{{ $here := .RelPermalink -}}
-{{ $within := cond (eq $here "/procedures-by-date/") "/procedures/" $here -}}
 <ul>
-{{ range slice (slice "/procedures/" "nav_procedures") (slice "/reaction_types/" "nav_reaction_types") (slice "/tags/" "nav_tags") (slice "/authors/" "nav_authors") (slice "/help/" "nav_help") -}}
+{{ range slice (slice "/procedures/" "nav_procedures") (slice "/reaction_types/" "nav_reaction_types") (slice "/help/" "nav_help") -}}
 {{ $url := index . 0 -}}
 <li><a href="{{ $url }}"{{ if eq $here $url }} aria-current="page"{{ else if hasPrefix $within $url }} aria-current="true"{{ end }}>{{ T (index . 1) }}</a></li>
 {{ end -}}
 </ul>
 </nav>
+<form class="site-search" role="search" method="get" action="{{ $action }}"{{ if $catalogue }} data-catalogue-search{{ end }}>
+<input type="search" name="q"{{ if $catalogue }} id="catalogue-q"{{ end }} aria-label="{{ $label }}" placeholder="{{ $hint }}">
+<button type="submit">{{ T "search_button" }}</button>
+</form>
 </header>

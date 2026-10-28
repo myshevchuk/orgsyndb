@@ -1,0 +1,37 @@
+{{- /* The Details block of a catalogue row: a dt/dd pair per field that is
+set, labelled as the metadata panel labels them (Product only when it
+differs from the title), and the structure image when structure_image is
+set, loaded lazily. Without the image there is no placeholder. */ -}}
+{{ $p := .Params -}}
+{{ $product := $p.product | default dict -}}
+<div class="row-details">
+<dl>
+{{ with $product.name }}{{ if ne . $.Title -}}
+<dt>{{ T "label_product" }}</dt>
+<dd>{{ . }}</dd>
+{{ end }}{{ end -}}
+{{ with $product.formula -}}
+<dt>{{ T "label_formula" }}</dt>
+<dd>{{ . | htmlEscape | replaceRE "([0-9]+)" "<sub>$1</sub>" | safeHTML }}</dd>
+{{ end -}}
+{{ if isset $product "mw" -}}
+<dt>{{ T "label_mw" }}</dt>
+<dd>{{ partial "decimal.html" $product.mw }} g/mol</dd>
+{{ end -}}
+{{ with $product.cas -}}
+<dt>{{ T "label_cas" }}</dt>
+<dd>{{ . }}</dd>
+{{ end -}}
+{{ if isset $p "yield_percent" -}}
+<dt>{{ T "label_yield" }}</dt>
+<dd>{{ partial "decimal.html" $p.yield_percent }} %</dd>
+{{ end -}}
+{{ if not .Date.IsZero -}}
+<dt>{{ T "label_created" }}</dt>
+<dd><time datetime="{{ .Date.Format "2006-01-02T15:04:05Z07:00" }}">{{ .Date.Format "2006-01-02" }}</time></dd>
+{{ end -}}
+</dl>
+{{ with $p.structure_image -}}
+<img class="row-structure" src="/{{ . }}" alt="{{ T "structure_of" $product.name }}" loading="lazy" decoding="async">
+{{ end -}}
+</div>

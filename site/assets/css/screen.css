@@ -1,7 +1,7 @@
-/* Screen only (linked with media="screen"): the dark colour scheme, the
-   Pagefind UI's variables, scrolling table regions, focus and hover
-   states. WeasyPrint never loads this file, and browsers do not apply it
-   when printing. */
+/* Screen only (linked with media="screen"): the dark colour scheme,
+   scrolling table regions, focus and hover states, and the desktop and
+   narrow-window layouts. WeasyPrint never loads this file, and browsers
+   do not apply it when printing. */
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #15171a;
@@ -23,16 +23,6 @@
   }
 }
 
-:root {
-  --pagefind-ui-scale: 0.9;
-  --pagefind-ui-primary: var(--link);
-  --pagefind-ui-text: var(--fg);
-  --pagefind-ui-background: var(--bg);
-  --pagefind-ui-border: var(--border);
-  --pagefind-ui-tag: var(--surface);
-  --pagefind-ui-font: var(--font-ui);
-}
-
 :focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
@@ -48,15 +38,18 @@ button:hover { border-color: var(--muted); }
    tables and use separate columns for browsing and procedure details.
    These rules live here so the A4 layout keeps its single-column flow. */
 /* On screen the whole interface is plain sans-serif; paper keeps the
-   text face of tokens.css. */
-html { font-family: var(--font-ui); }
+   text face of tokens.css. The scrollbar's gutter is kept on short pages
+   too, so the shell does not shift between pages. */
+html { font-family: var(--font-ui); scrollbar-gutter: stable; }
 body {
   max-width: 96rem;
   padding: 0 2.5rem;
 }
 
+/* The title and the navigation start the header row and the search form
+   ends it, on every page, so the row keeps its height and layout. */
 .site-header {
-  justify-content: space-between;
+  align-items: center;
   gap: var(--space-3) var(--space-5);
   padding: var(--space-4) 0;
 }
@@ -71,11 +64,11 @@ body {
 main { padding: var(--space-5) 0; }
 h1 { font-size: 2.25rem; }
 
+.site-search { margin-left: auto; }
+.site-search input, .site-search button { padding: 0.4rem 0.75rem; }
+
 .home-intro { margin-bottom: var(--space-5); }
 .lede { max-width: var(--measure); }
-.search-form { max-width: 60rem; }
-.search-form label { flex-basis: 100%; font-weight: 600; }
-.search-form input, .search-form button { padding: 0.6rem 0.75rem; }
 
 .home-layout {
   display: grid;
@@ -89,11 +82,18 @@ h1 { font-size: 2.25rem; }
   border-left: 1px solid var(--border);
   padding-left: var(--space-4);
 }
-.home-browse section + section { margin-top: var(--space-5); }
-.home-browse .term-list { list-style: none; padding: 0; }
-.home-browse .term-list li + li { margin-top: var(--space-2); }
-.home-browse .term-list--inline { gap: var(--space-2) var(--space-3); }
-.home-browse .term-list--inline li + li { margin-top: 0; }
+.recent-list, .browse-list { list-style: none; padding: 0; }
+.recent-list li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0 var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+.recent-list li + li, .browse-list li + li { margin-top: 0; }
+.recent-list a { min-width: 0; overflow-wrap: anywhere; }
+.browse-list li { padding: var(--space-1) 0; }
 
 .procedure-header {
   display: grid;
@@ -153,35 +153,77 @@ h1 { font-size: 2.25rem; }
   border-radius: 0;
 }
 
-/* Full-width table (layout 4): a head with the count, one tool row and
-   a plain table whose status reads as text. */
+/* Catalogue: the head with the count, then the facets as a sidebar
+   beside the results. Without the script the facets stay hidden and the
+   results take the whole width. */
 .list-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--space-3); }
-.list-head h1 { font-size: 1.75rem; margin-bottom: var(--space-4); }
-.list-count { color: var(--muted); font-size: 0.875rem; margin: 0; }
-.list-tools {
+.list-head h1 { margin-bottom: var(--space-3); }
+
+.catalogue-layout {
+  display: grid;
+  grid-template-columns: 15rem minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+.catalogue-facets, .catalogue-results { min-width: 0; }
+.catalogue-facets[hidden] + .catalogue-results { grid-column: 1 / -1; }
+.catalogue-facets h2 { font-size: 1rem; margin: 0 0 var(--space-2); }
+.facet { border-top: 1px solid var(--border); padding: var(--space-2) 0; font-size: 0.875rem; }
+.facet summary { cursor: pointer; font-weight: 600; padding: 0.2rem 0; }
+.facet-values { margin: var(--space-1) 0 var(--space-2); }
+.facet-value { cursor: pointer; padding: 0.1rem 0; }
+.facet-value input { margin: 0; }
+.facet-value input:disabled { cursor: default; }
+.facet-directory { margin: 0; font-size: 0.8125rem; }
+
+.catalogue-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-2) var(--space-3);
   margin-bottom: var(--space-3);
+  font-size: 0.875rem;
 }
-.list-search { flex: 0 1 44rem; margin: 0; }
-.list-search input, .list-search button { padding: 0.6rem 0.75rem; }
-.list-search button { padding-inline: 1.25rem; }
-.list-filters { display: flex; flex-wrap: wrap; gap: var(--space-2); font-size: 0.875rem; }
-.list-filters[hidden] { display: none; }
-.list-filters label { display: flex; align-items: center; gap: var(--space-2); color: var(--muted); }
-.list-filters select {
-  font: inherit;
-  color: var(--fg);
-  background: var(--bg);
+.facets-toggle { display: none; }
+.catalogue-active { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.catalogue-active li + li { margin-top: 0; }
+.catalogue-active button { border-radius: 1rem; padding: 0.15rem 0.7rem; }
+.catalogue-active button::after { content: " \00d7"; color: var(--muted); }
+.catalogue-select { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--muted); }
+.catalogue-select:first-of-type { margin-left: auto; }
+.catalogue-message {
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 0.25rem;
-  padding: 0.55rem 0.5rem;
+  padding: var(--space-2) var(--space-3);
 }
-.list-bar { display: flex; justify-content: flex-end; font-size: 0.875rem; }
-.list-bar .sort-links { margin-bottom: var(--space-2); }
+.catalogue-message button { margin-left: var(--space-2); }
+
+/* The Details view adds a block to the Procedure cell of the same rows. */
+.catalogue:not([data-view="details"]) .row-details { display: none; }
+.row-details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-2);
+}
+.row-details dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.1rem var(--space-3);
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.row-details dd { color: var(--fg); overflow-wrap: anywhere; }
+.row-structure {
+  width: 9rem;
+  padding: var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+}
+.catalogue[data-view="details"] .procedure-list td { vertical-align: top; }
 
 .procedure-list { width: 100%; font-size: 0.925rem; }
 .procedure-list th, .procedure-list td {
@@ -209,11 +251,6 @@ h1 { font-size: 2.25rem; }
 .procedure-list time { white-space: nowrap; }
 .procedure-content table { width: 100%; }
 
-/* Pagefind already provides a filter column. Let it use the desktop
-   canvas and prevent long result titles or SMILES from widening it. */
-.search { max-width: 80rem; }
-.search .pagefind-ui__result { min-width: 0; overflow-wrap: anywhere; }
-
 /* Help pages read like a procedure body: prose keeps a measure, code
    blocks and tables scroll in their own boxes. */
 .help-page :is(p, ul, ol, dl) { max-width: 78ch; }
@@ -225,22 +262,25 @@ pre { overflow-x: auto; }
   body { padding: 0 var(--space-4); }
   .home-layout { grid-template-columns: minmax(0, 1fr); }
   .home-browse {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-5);
     border-left: 0;
     border-top: 1px solid var(--border);
     padding: var(--space-4) 0 0;
   }
-  .home-browse section + section { margin-top: 0; }
   .procedure { grid-template-columns: minmax(0, 1fr) 16rem; column-gap: var(--space-5); }
 }
+/* Below 55rem the search form takes a line of its own under the title and
+   the navigation, and the facets wait behind the Filters button, above
+   the results. */
 @media (max-width: 55rem) {
+  .site-search { flex-basis: 100%; max-width: none; margin-left: 0; }
+  .catalogue-layout { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+  .facets-toggle { display: inline-block; }
+  .catalogue:not([data-facets-open]) .catalogue-facets { display: none; }
   .procedure { display: block; }
   .procedure-details { margin-bottom: var(--space-5); }
   .procedure-header { display: block; }
   .procedure-header .actions { margin-top: var(--space-3); }
 }
 @media (max-width: 35rem) {
-  .home-browse { grid-template-columns: minmax(0, 1fr); }
+  .catalogue-select:first-of-type { margin-left: 0; }
 }

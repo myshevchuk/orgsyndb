@@ -3,6 +3,7 @@ model, the CSS parser and the SMILES index. These are harness checks, not
 spec scenarios, so each docstring starts with "Harness:". Pure, no build.
 """
 
+import datetime as dt
 import unittest
 
 import pipeline_support as ps
@@ -47,6 +48,16 @@ class PageModelTests(unittest.TestCase):
         self.assertEqual(len(page.find_all("button", hidden=True)), 1)
         self.assertEqual(page.find_all("button", hidden=False), [])
 
+    def test_a_resolved_link_keeps_its_query(self) -> None:
+        """Harness: the query of a link target, without the fragment."""
+        page = ps.parse_page(
+            '<a href="?sort=modified">A</a>'
+            '<a href="../x/?status=draft&amp;author=a.+example#f">B</a>'
+            '<a href="/y/%C3%A4/">C</a>', "/procedures/")
+        self.assertEqual([link.target for link in page.links()],
+                         ["/procedures/?sort=modified",
+                          "/x/?status=draft&author=a.+example", "/y/ä/"])
+
     def test_following_skips_the_subtree(self) -> None:
         """Harness: the first element after a heading."""
         page = ps.parse_page(
@@ -54,6 +65,51 @@ class PageModelTests(unittest.TestCase):
             "</table>")
         self.assertEqual(
             page.following(page.heading("Two"), "table").attrs["id"], "b")
+
+
+class CatalogueHelperTests(unittest.TestCase):
+    def test_timestamps_are_written_as_rfc_3339(self) -> None:
+        """Harness: rfc3339 of an offset and of UTC."""
+        east = dt.timezone(dt.timedelta(hours=2))
+        self.assertEqual(
+            ps.rfc3339(dt.datetime(2026, 10, 24, 10, tzinfo=east)),
+            "2026-10-24T10:00:00+02:00")
+        self.assertEqual(
+            ps.rfc3339(dt.datetime(2026, 10, 24, 8, tzinfo=dt.UTC)),
+            "2026-10-24T08:00:00Z")
+
+    def test_term_keys_are_lowercased_but_slugs(self) -> None:
+        """Harness: the taxonomy key of a term."""
+        self.assertEqual(ps.term_key("authors", "Ä. Müller"), "ä. müller")
+        self.assertEqual(ps.term_key("tags", "sample-data"), "sample-data")
+        self.assertEqual(ps.term_key("reaction_types", "Hydrolysis"),
+                         "Hydrolysis")
+
+    def test_catalogue_urls(self) -> None:
+        """Harness: the pages that carry a catalogue."""
+        for url in ("/procedures/", "/tags/sample-data/",
+                    "/authors/a.-example/", "/reaction_types/hydrolysis/"):
+            self.assertTrue(ps.is_catalogue_url(url), url)
+        for url in ("/", "/tags/", "/authors/", "/reaction_types/",
+                    "/help/schema/", "/procedures/osdb-0001/"):
+            self.assertFalse(ps.is_catalogue_url(url), url)
+
+    def test_rows_cells_and_facet_values_of_a_catalogue(self) -> None:
+        """Harness: catalogue_rows, row_cells and facet_values."""
+        page = ps.parse_page(
+            '<details class="facet" data-facet="tag"><summary id="s">T'
+            '</summary><div role="group"><label class="facet-value">'
+            '<input type="checkbox" name="tag" value="a b">'
+            '<span class="facet-label">A B</span>'
+            '<span class="facet-count"></span></label></div></details>'
+            '<table class="procedure-list"><thead><tr><th>ID</th></tr>'
+            '</thead><tbody><tr data-id="x"><td>1<td>2</tr><tr><td>3</tr>'
+            '</tbody></table>')
+        rows = ps.catalogue_rows(page)
+        self.assertEqual([[c.norm() for c in ps.row_cells(r)]
+                          for r in rows], [["1", "2"], ["3"]])
+        self.assertEqual(ps.facet_values(page, "tag"), [("a b", "A B")])
+        self.assertEqual(ps.facet_values(page, "type"), [])
 
 
 class CssParserTests(unittest.TestCase):

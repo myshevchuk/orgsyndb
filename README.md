@@ -6,15 +6,17 @@ the owner writes Org files, and co-workers can write Markdown files. The
 build treats both formats alike.
 
 The finished site is static. Viewing it loads no fonts, analytics, or other
-resources from the internet. It has a light and dark theme, full-text
-search, browse pages, and an A4 print layout. Its interface is German by
-default and can be switched to English.
+resources from the internet. It has a light and dark theme, a procedure
+catalogue with full-text search and filters, browse directories, and an A4
+print layout. Its interface is German by default and can be switched to
+English.
 
-The browser layout is optimized for desktop work: full-width procedure
-tables with search and filters, recent procedures beside the browse links,
-and procedure details in a margin beside the readable procedure text.
-Narrow windows stack these panels; printing uses the separate
-single-column A4 layout.
+The browser layout is optimized for desktop work: catalogue filters in a
+sidebar beside a table that fills the available width, recently updated
+procedures beside the browse links, and procedure details in a margin
+beside the readable procedure text. Narrow windows stack these panels and
+put catalogue filters behind a **Filters** button; printing uses the
+separate single-column A4 layout.
 
 ## Application and collections
 
@@ -199,42 +201,96 @@ The built site provides these pages. Buttons and messages are named below
 as an English site shows them; the German site, the default, shows the
 German equivalents, such as **Kopieren** for **Copy**.
 
-- `/` introduces the collection, searches it, lists recent procedures, and
-  links reaction types and tags with their procedure counts.
-- `/procedures/` lists every procedure by ID.
-  `/procedures-by-date/` lists the same procedures by creation date, newest
-  first. Each page links to the other ordering. Both pages have a search
-  field and, with JavaScript, **Reaction type** and **Status** selects
-  that filter the table in place and update the entry count.
+The navigation links **Procedures**, **Reaction types** and **Help**.
+Every page has a search field in the same place in the header. Except on
+term pages, its placeholder is **Product, CAS, SMILES or keyword** and its
+accessible name is **Search procedures**.
+
+- `/` gives a short introduction and a **Recently updated** list of up to
+  five procedures, most recently modified first. **Browse** links to
+  **All procedures**, **Draft procedures**, **Reaction types**, **Tags**
+  and **Authors**, with counts of procedures or terms in use. **Draft
+  procedures** opens the catalogue with the draft status selected.
+  **All procedures, recently updated first** opens it sorted by modification
+  date.
+- `/procedures/` is the catalogue: search, filter, sort and read details
+  in one list. With no query or filters it lists every procedure by ID.
+  Its table shows **ID**, **Procedure**, **Reaction type**, **Status**
+  and **Modified**; follow an ID or title to read the procedure.
 - `/procedures/osdb-NNNN/` shows one procedure, including its metadata,
   structure image or on-screen placeholder, and eight body sections.
 - `/reaction_types/`, `/tags/`, and `/authors/` list the terms in each
-  category. Their term pages list the matching procedures. For example,
+  category with their procedure counts. Each term page is a catalogue
+  limited to that reaction type, tag or author. For example,
   `/reaction_types/esterification/`, `/tags/sample-data/`, and
-  `/authors/a.-example/` are term-page URLs.
-- `/search/` is the results page for the search fields on `/`,
-  `/procedures/`, and `/procedures-by-date/`. It provides full-text search
-  and filters, but the site navigation does not link to it.
+  `/authors/a.-example/` are term-page URLs. Search and filters stay within
+  that term. **Browse all procedures** removes the term restriction and
+  carries your query, other filters, sort and view to `/procedures/`.
+  You can reach the directories from **Browse**, the catalogue filters,
+  or a term page; procedure metadata links to the term pages.
 - `/help/` lists the guides and glossaries from the application's `docs/`
   directory. Each document has a page under `/help/<slug>/`. The index
   prefers the site's language where a document has both versions and links
   the other version as **English** or **Deutsch**. Documents that exist only
   in German remain available on an English site.
 
-Search finds a procedure by its ID, product name, CAS number, any part of
-its SMILES string, a tag, or a word in the procedure text. SMILES searches
-ignore punctuation and compare only letters and digits. A fragment may
-therefore match more than one compound. Results appear five at a time; use
-**Load more results** to continue.
+To find a procedure, type in the header search field. On `/procedures/` and
+term pages, this is the catalogue's only search field. Results update as you
+type; **Search** applies the query immediately. On other pages, submit the
+field to search in `/procedures/`. On a term page, the field searches only
+that term's procedures. Its placeholder and accessible name say so, for
+example **Search procedures with the tag cinnamate**. Full-text search uses
+the Pagefind index and finds procedures by ID, product name, CAS number (a
+chemical registry identifier), any part of a SMILES string (a text notation
+for a molecular structure), tag, or word in the procedure text. SMILES
+searches ignore punctuation and compare only letters and digits. A fragment
+may therefore match more than one compound. Search results contain
+procedures only; help pages are not indexed. Clearing the search field
+returns to browsing with your filters still applied.
 
-The Status, Reaction type, Tag, and Author filters each narrow a search term.
-Selecting two values in the same group requires a procedure to carry both,
-so selecting two reaction types produces no results. An empty search box
-lists nothing. Search needs the site over HTTP, from
-`orgsyndb serve` or another web server; it does not work when you
-open `public/index.html` through a `file:` URL. Without JavaScript, use the
-browse-page links shown on the search page. Search results contain procedures
-only; help pages are not indexed.
+Under **Filters**, each group of checkboxes is a facet: **Reaction type**,
+**Status**, **Tag** or **Author**. You can select several values in each
+group. Values within one facet combine with OR; different facets combine
+with AND. For example, selecting two reaction types and the status **draft**
+shows draft procedures of either reaction type. Filters also work with an
+empty search field. Each value's count includes the query and all other
+facets, leaving out that facet's own selections. Unselected values with
+zero matches are hidden; selected values stay visible and removable even
+at zero. The result count shows how many procedures match.
+
+Click a selection above the results to remove it, or use **Clear all** to
+remove the query and all selected filters. **Clear all** keeps your view
+and sort, except for **Relevance**. On a term page it also keeps the term
+restriction.
+
+Use **Sort by** to choose **ID**, **Title (A–Z)**, **Created (newest first)**
+or **Modified (newest first)**. During a query, **Relevance** is also
+available and is the default unless you have chosen another sort. Without
+a query, the default is **ID**. Under **View**, choose **Details** to add
+the product name when it differs from the title, formula, molecular
+weight, CAS number, yield, creation date and structure image where supplied.
+**Table** returns to the compact view; both views keep the same matches
+and order.
+
+To share a catalogue selection, copy its address. It records the query in
+`q`, filters in `type`, `status`, `tag` and `author` (repeated for multiple
+values), and the chosen `sort` and `view`. Reloading or following a shared
+link restores those choices; the browser's Back and Forward buttons
+restore earlier choices. Parameters that cannot be applied are reported
+and removed from the address.
+
+Search needs the site over HTTP, from `orgsyndb serve` or another web
+server; it does not work when you open `public/index.html` through a
+`file:` URL. If the index cannot be loaded, **Search unavailable** appears.
+Use **Show the list without the search** to remove the query and browse
+with your filters kept; browsing without a query needs no search index.
+
+Without JavaScript, `/procedures/` lists every procedure by ID, and term
+pages list every procedure of their term by ID. A note explains that
+search, filters and sorting need JavaScript and links to the reaction-type,
+tag and author directories. On a term page, submitting the header search
+reloads that page with the query; elsewhere it leads to the catalogue.
+In either case, the static list does not apply the query.
 
 On a procedure page, **Copy** copies the SMILES and briefly reports
 **Copied**. Clipboard access needs a secure context: `https:` or
@@ -246,7 +302,7 @@ reports **Selected: press Ctrl+C** instead.
 The site has one language, set by `locale` in the application's
 `site/hugo.toml`: `"de"` (the default) or `"en"`. It applies to every
 collection the application builds. The language decides the interface
-text, the reaction-type labels, the Pagefind search interface, the PDF
+text, the reaction-type labels, the catalogue's texts, the PDF
 page footer and the decimal separator, and it decides which file of a
 procedure is published. The interface strings are in `site/i18n/de.toml`
 and `site/i18n/en.toml`, and the German reaction-type labels are the

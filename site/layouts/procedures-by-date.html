@@ -1,6 +1,0 @@
-{{ define "main" -}}
-{{ $pages := sort (sort (where site.RegularPages "Section" "procedures") "Params.id") "Date" "desc" -}}
-{{ partial "list-tools.html" (dict "page" . "url" "/procedures-by-date/" "pages" $pages) -}}
-{{ partial "procedure-table.html" $pages -}}
-{{ end }}
-{{ define "scripts" }}{{ partial "list-filter-script.html" . }}{{ end }}

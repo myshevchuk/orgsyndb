@@ -6,33 +6,25 @@ its PDFs. Tests skip, naming the missing tool or cache, as the other
 integration tests do.
 """
 
+import catalogue_support as cs
 import pipeline_support as ps
 from pipeline_support import Page
 
 NAVIGATION = [("/procedures/", "Vorschriften"),
-              ("/reaction_types/", "Reaktionstypen"),
-              ("/tags/", "Schlagwörter"), ("/authors/", "Autoren"),
-              ("/help/", "Hilfe")]
+              ("/reaction_types/", "Reaktionstypen"), ("/help/", "Hilfe")]
 FOOTER = "OrgSynDB · interne Vorschriften"
 BANNER = "Beispieldaten – Mengenangaben nicht experimentell überprüft."
 PANEL_LABELS = ["ID", "Produkt", "Summenformel", "Molmasse", "CAS", "SMILES",
                 "Ansatzgröße", "Ausbeute", "Reaktionstyp", "Schlagwörter",
                 "Autoren", "Erstellt", "Geändert", "Vorstufen"]
-TITLES = {"procedures/index.html": "Alle Vorschriften",
-          "procedures-by-date/index.html": "Alle Vorschriften nach Datum",
+TITLES = {"procedures/index.html": "Vorschriften",
           "reaction_types/index.html": "Reaktionstypen",
           "tags/index.html": "Schlagwörter",
-          "authors/index.html": "Autoren", "search/index.html": "Suche",
-          "help/index.html": "Hilfe"}
+          "authors/index.html": "Autoren", "help/index.html": "Hilfe"}
 
 
-class GermanCase(ps.ThemeBuildCase):
+class GermanCase(cs.CatalogueCase):
     LOCALE = "de"
-
-    def page(self, relative: str) -> Page:
-        path = self.public / relative
-        self.assertTrue(path.is_file(), f"{relative} not built")
-        return ps.load_page(self.public, path)
 
 
 class GermanSiteTests(GermanCase):
@@ -56,8 +48,25 @@ class GermanSiteTests(GermanCase):
                                  "the header has a language switch")
                 self.assertEqual(page.find("footer", "site-footer").norm(),
                                  FOOTER)
+                self.check_header_search(page, header)
         self.assertFalse((self.public / "de").exists())
         self.assertFalse((self.public / "en").exists())
+
+    def check_header_search(self, page: Page, header: ps.Node) -> None:
+        """The German search form; on term pages its label names the
+        scope (checked with the catalogue)."""
+        forms = header.find_all("form")
+        self.assertEqual(len(forms), 1)
+        field = forms[0].find("input", name="q")
+        self.assertIsNotNone(field, "no input[name=q]")
+        if not ps.is_catalogue_url(page.url) or page.url == "/procedures/":
+            self.assertEqual(field.get("aria-label"),
+                             "Vorschriften durchsuchen")
+        else:
+            self.assertRegex(field.get("aria-label"),
+                             r"^Vorschriften .+ durchsuchen$")
+        buttons = forms[0].find_all("button")
+        self.assertEqual([b.norm() for b in buttons], ["Suchen"])
 
     def test_site_pages_have_german_titles(self) -> None:
         """Scenario: German page titles."""
@@ -115,8 +124,6 @@ class GermanSiteTests(GermanCase):
         reaction = page.links(pairs["Reaktionstyp"])
         self.assertEqual([(l.target, l.node.norm()) for l in reaction],
                          [("/reaction_types/acylation/", "Acylierung")])
-        self.assertEqual(reaction[0].node.get("data-pagefind-filter"),
-                         "Reaktionstyp")
         precursor = page.links(pairs["Vorstufen"])
         self.assertEqual([(l.target, l.node.norm()) for l in precursor],
                          [("/procedures/osdb-0001/", "OSDB-0001 Salicylsäure")])
@@ -135,13 +142,53 @@ class GermanSiteTests(GermanCase):
                 for slug in item.data["reaction_types"]}
         expected = sorted(labels[slug] for slug in used)
         self.assertIn("Veresterung", expected)
-        for relative in ("index.html", "reaction_types/index.html"):
-            page = self.page(relative)
-            shown = [l.node.norm() for l in page.links()
-                     if l.target.startswith("/reaction_types/")
-                     and l.target != "/reaction_types/"]
-            with self.subTest(page=relative):
-                self.assertEqual(shown, expected)
+        directory = self.page("reaction_types/index.html")
+        listed = [link.node.norm() for link in directory.links(
+            directory.find("ul", "term-list"))]
+        self.assertEqual(listed, expected)
+        facet = ps.facet_values(self.page("procedures/index.html"), "type")
+        self.assertEqual([label for _, label in facet], expected)
+        self.assertEqual(sorted(value for value, _ in facet), sorted(used))
+
+    def test_german_catalogue(self) -> None:
+        """Scenario: German catalogue and home page (catalogue)."""
+        page = self.page("procedures/index.html")
+        block = self.check_catalogue(page, fixed=None, heading="Vorschriften")
+        self.assertEqual(block.find("p", "catalogue-count").norm(),
+                         "8 Vorschriften")
+        self.check_controls(page)
+        statuses = page.find("details", "facet", data_facet="status")
+        self.assertIsNotNone(statuses, "no status facet")
+        self.assertEqual(
+            [label.norm() for label in
+             statuses.find_all("span", "facet-label")],
+            ["Entwurf", "geprüft", "zurückgezogen"])
+        self.assertEqual(self.table_ids(page), sorted(
+            item.id for item in self.content()))
+
+    def test_german_term_page(self) -> None:
+        """Scenario: German catalogue and home page (term page)."""
+        page = self.page("tags/cinnamate/index.html")
+        block = self.check_catalogue(page, fixed="tag", heading="cinnamate")
+        self.check_controls(page, fixed="tag")
+        scope = block.find("p", "catalogue-scope")
+        self.assertTrue(scope.norm().startswith(
+            "Nur Vorschriften mit dem Schlagwort cinnamate"), scope.norm())
+        links = page.links(scope)
+        self.assertEqual(
+            [(l.target, l.node.norm()) for l in links],
+            [("/procedures/", "Alle Vorschriften anzeigen"),
+             ("/tags/", "Alle Schlagwörter")])
+        self.assertIn("data-browse-all", links[0].node.attrs)
+
+    def test_german_home_page(self) -> None:
+        """Scenario: German catalogue and home page (home page)."""
+        page = self.page("index.html")
+        items = self.content()
+        self.check_home(page, items)
+        listed = [e.elements()[0].norm().split()[0]
+                  for e in page.find("ol", "recent-list").find_all("li")]
+        self.assertEqual(listed, [f"OSDB-000{n}" for n in range(1, 6)])
 
     def test_the_german_index_finds_german_words(self) -> None:
         """Scenario: German search index."""
@@ -149,20 +196,21 @@ class GermanSiteTests(GermanCase):
         out = ps.pagefind_search(self.public, [
             {"term": "Zimtsäure", "filters": None, "normalise": True},
             {"term": "Verseifung", "filters": None, "normalise": True},
-            {"term": None, "filters": {"Reaktionstyp": "Hydrolyse"},
-             "normalise": True},
         ], language="de")
-        ids = [sorted({hit["id"] for hit in results})
-               for results in out["results"]]
-        self.assertIn("OSDB-0008", ids[0])
-        self.assertEqual(ids[1], ["OSDB-0001", "OSDB-0008"])
-        self.assertEqual(ids[2], ["OSDB-0001", "OSDB-0008"])
-        self.assertEqual(sorted(out["filters"]),
-                         ["Autor", "Reaktionstyp", "Schlagwort", "Status"])
+        found = []
+        for entry in out["searched"]:
+            self.assertIsNotNone(entry)
+            self.assertNotIn("error", entry, str(entry))
+            found.append(entry["ids"])
+        self.assertIn("OSDB-0008", found[0])
+        self.assertEqual(sorted(found[1]), ["OSDB-0001", "OSDB-0008"])
+        self.assertEqual(list(out["filters"]), ["id"])
         titles = {item.title for item in self.content()}
         for results in out["results"]:
             for hit in results:
                 self.assertIn(hit["title"], titles)
+        self.assertEqual(sorted(hit["id"] for hit in out["results"][1]),
+                         ["OSDB-0001", "OSDB-0008"])
 
 
 class PartialTranslationTests(GermanCase):
@@ -191,7 +239,15 @@ class PartialTranslationTests(GermanCase):
         self.assertEqual(page.find("h1").norm(), "Salicylic acid")
         self.assertEqual(page.find("html").get("lang"), "de")
         home = self.page("index.html")
-        self.assertIn("Alle 9 Vorschriften", home.find("main").norm())
+        browse = home.find("ul", "browse-list")
+        self.assertIsNotNone(browse, "no ul.browse-list")
+        first = browse.find_all("li")[0]
+        self.assertEqual(first.elements()[0].norm(), "Alle Vorschriften")
+        self.assertEqual(first.find("span", "count").norm(), "(9)")
+        rows = ps.catalogue_rows(self.page("procedures/index.html"))
+        ids = [ps.row_cells(row)[0].norm() for row in rows]
+        self.assertEqual(len(ids), 9)
+        self.assertEqual(sorted(set(ids)), sorted(chosen))
 
     def test_a_variant_in_another_language_is_marked(self) -> None:
         """Scenario: A procedure in another language is marked."""

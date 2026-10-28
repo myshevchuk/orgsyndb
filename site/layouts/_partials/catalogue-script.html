@@ -1,0 +1,5 @@
+{{- /* The catalogue script of the catalogue and term pages: search-terms.js,
+catalogue-core.js and catalogue.js concatenated, minified, fingerprinted
+and deferred. */ -}}
+{{ $catalogue := slice (resources.Get "js/search-terms.js") (resources.Get "js/catalogue-core.js") (resources.Get "js/catalogue.js") | resources.Concat "js/catalogue.js" | minify | fingerprint -}}
+<script src="{{ $catalogue.RelPermalink }}" defer></script>

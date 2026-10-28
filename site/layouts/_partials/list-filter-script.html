@@ -1,2 +1,0 @@
-{{ $filter := resources.Get "js/list-filter.js" | minify | fingerprint -}}
-<script src="{{ $filter.RelPermalink }}" defer></script>

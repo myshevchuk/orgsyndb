@@ -11,16 +11,17 @@ The site SHALL be built in one language, named by `locale` in `site/hugo.toml`, 
 - **THEN** the shipped locale is `de` with no `languages` or `defaultContentLanguage` key, `site_language` returns `de`, `de` and `en` for the first three, and raises ValueError for the last two
 
 ### Requirement: Interface strings
-Every text that a layout shows SHALL come from the interface strings of the site's language, `site/i18n/de.toml` or `site/i18n/en.toml`, looked up with `T`; a page of `site/content/` names its title by a `title_key` front-matter value, a key of those files. The two files have the same keys, and every value is a non-empty string. The English strings are the texts that the site-theme, site-search and print-layout specs name; a German site shows the German string in their place. In particular a German site shows:
-- the skip link `Zum Inhalt springen`, the navigation `Vorschriften`, `Reaktionstypen`, `Schlagwörter`, `Autoren`, `Hilfe` (in a `nav` with `aria-label="Website"`), and the footer `OrgSynDB · interne Vorschriften`;
-- the page titles `Alle Vorschriften`, `Alle Vorschriften nach Datum`, `Reaktionstypen`, `Schlagwörter`, `Autoren`, `Suche` and `Hilfe`;
+Every text that a layout shows SHALL come from the interface strings of the site's language, `site/i18n/de.toml` or `site/i18n/en.toml`, looked up with `T`; a page of `site/content/` names its title by a `title_key` front-matter value, a key of those files. The two files have the same keys, and every value is a non-empty string. The English strings are the texts that the site-theme, site-catalogue and print-layout specs name; a German site shows the German string in their place. In particular a German site shows:
+- the skip link `Zum Inhalt springen`, the navigation `Vorschriften`, `Reaktionstypen`, `Hilfe` (in a `nav` with `aria-label="Website"`), the header search field labelled `Vorschriften durchsuchen` with the placeholder `Produkt, CAS, SMILES oder Stichwort` and the button `Suchen`, and the footer `OrgSynDB · interne Vorschriften`;
+- the page titles `Vorschriften`, `Reaktionstypen`, `Schlagwörter`, `Autoren` and `Hilfe`;
 - the panel labels `ID`, `Produkt`, `Summenformel`, `Molmasse`, `CAS`, `SMILES`, `Ansatzgröße`, `Ausbeute`, `Reaktionstyp`, `Schlagwörter`, `Autoren`, `Geprüft von`, `Erstellt`, `Geändert`, `Vorstufen`, `Verwendet in`;
 - the status `Entwurf`, `geprüft` or `zurückgezogen` for `draft`, `checked` or `retired`, while the badge class stays `badge--<status>`;
 - the banner `Beispieldaten – Mengenangaben nicht experimentell überprüft.`, the button `Drucken / Als PDF speichern`, the copy button `Kopieren` with the messages `Kopiert` and `Markiert: Strg+C drücken`, and the placeholder `Keine Strukturformel`;
-- the Pagefind filter names `Status`, `Reaktionstyp`, `Schlagwort` and `Autor`;
-- front-matter numbers (molecular weight, yield) with a decimal comma.
+- in the catalogue: the count `<n> Vorschriften` (`1 Vorschrift`) and `{shown} von {total} Vorschriften`; the heading and toggle `Filter`; the facets `Reaktionstyp`, `Status`, `Schlagwort` and `Autor`; the directory links `Alle Reaktionstypen`, `Alle Schlagwörter` and `Alle Autoren`; `Alles zurücksetzen`; `Sortieren nach` with `Relevanz`, `ID`, `Titel (A–Z)`, `Erstellt (neueste zuerst)` and `Geändert (neueste zuerst)`; `Ansicht` with `Tabelle` and `Details`; the script texts `Suche läuft …`, `Suche nicht verfügbar`, `Der Suchindex konnte nicht geladen werden; die Suche wurde nicht angewendet.`, `Liste ohne Suche anzeigen`, `Keine Vorschrift passt zu Suche und Filtern.`, `In der Adresse nicht berücksichtigt: {list}` and `{facet}: {value} entfernen`; the `noscript` note `Suche, Filter und Sortierung brauchen JavaScript. Ohne JavaScript zeigt diese Seite ihre Vorschriften nach ID. Weitere Listen gibt es nach Reaktionstyp, Schlagwort oder Autor.`; and on term pages `Nur Vorschriften des Reaktionstyps <label>`, `Nur Vorschriften mit dem Schlagwort <tag>` or `Nur Vorschriften von <author>`, with the link `Alle Vorschriften anzeigen`, and the header search field labelled `Vorschriften des Reaktionstyps <label> durchsuchen`, `Vorschriften mit dem Schlagwort <tag> durchsuchen` or `Vorschriften von <author> durchsuchen`;
+- on the home page: the lede `Die Synthesevorschriften der Arbeitsgruppe, in Org oder Markdown geschrieben und nach einem gemeinsamen Schema geprüft.`, the headings `Zuletzt geändert` and `Übersicht`, the link `Alle Vorschriften, zuletzt geänderte zuerst`, and the entries `Alle Vorschriften`, `Entwürfe`, `Reaktionstypen`, `Schlagwörter` and `Autoren`;
+- front-matter numbers (molecular weight, yield) with a decimal comma, and counts with German digit grouping.
 
-The site script holds no language: the copy button carries its messages in `data-copied` and `data-selected`.
+The site script holds no language: the copy button carries its messages in `data-copied` and `data-selected`, and the catalogue carries its texts in `data-text-*` attributes.
 
 #### Scenario: Both languages have every string
 - **WHEN** a test loads both i18n files, scans the layouts for `T "<key>"` and reads the `title_key` of every page of `site/content/`
@@ -29,25 +30,36 @@ The site script holds no language: the copy button carries its messages in `data
 #### Scenario: German page shell
 - **WHEN** a test scans every HTML page of a build of a copy of the test collection `tests/fixtures/collection/` in locale `de`
 - **THEN** each has `<html lang="de">`, the German skip link, exactly one `nav` in the site header with the German navigation, and the German footer, and `public/de/` and `public/en/` do not exist
+- **AND** every page has the header search with the button `Suchen`, labelled `Vorschriften durchsuchen` everywhere but on the term pages
 
 #### Scenario: German page titles
-- **WHEN** the same test reads the seven site pages
+- **WHEN** the same test reads the five site pages `/procedures/`, `/reaction_types/`, `/tags/`, `/authors/` and `/help/`
 - **THEN** their `h1` and `<title>` carry the German titles
 
 #### Scenario: German metadata panel
 - **WHEN** a test reads `public/procedures/osdb-0002/index.html` of that build
-- **THEN** its panel labels are, in order, `ID`, `Produkt`, `Summenformel`, `Molmasse`, `CAS`, `SMILES`, `Ansatzgröße`, `Ausbeute`, `Reaktionstyp`, `Schlagwörter`, `Autoren`, `Erstellt`, `Geändert`, `Vorstufen`, the molecular weight reads `180,16 g/mol`, the reaction type is a link to `/reaction_types/acylation/` reading `Acylierung` with `data-pagefind-filter="Reaktionstyp"`, and the status badge reads `Entwurf`
+- **THEN** its panel labels are, in order, `ID`, `Produkt`, `Summenformel`, `Molmasse`, `CAS`, `SMILES`, `Ansatzgröße`, `Ausbeute`, `Reaktionstyp`, `Schlagwörter`, `Autoren`, `Erstellt`, `Geändert`, `Vorstufen`, the molecular weight reads `180,16 g/mol`, the reaction type is a link to `/reaction_types/acylation/` reading `Acylierung`, and the status badge reads `Entwurf`
+
+#### Scenario: German catalogue and home page
+- **WHEN** a test reads `public/procedures/index.html`, `public/tags/cinnamate/index.html` and `public/index.html` of that build
+- **THEN** the catalogue's `h1` is `Vorschriften`, its count reads `8 Vorschriften`, its facets, sort and view options, `data-text-*` attributes and `noscript` note carry the German texts, and its status facet reads `Entwurf`, `geprüft` and `zurückgezogen`
+- **AND** the term page's scope reads `Nur Vorschriften mit dem Schlagwort cinnamate` with the link `Alle Vorschriften anzeigen`, and its header search field is labelled `Vorschriften mit dem Schlagwort cinnamate durchsuchen`
+- **AND** the home page has the German headings and entries, and, since every German variant has the same `lastmod`, its recent list is OSDB-0001 to OSDB-0005 in ID order
+
+#### Scenario: German catalogue in a browser
+- **WHEN** the orchestrator uses the catalogue of a German build in a browser (manual verification, tasks.md section 6)
+- **THEN** its counts, chips, loading text, empty-result and error messages, and the ignored-parameters notice are German
 
 ### Requirement: German reaction-type labels
-Every entry of `site/data/reaction_types.toml` SHALL have, besides `label`, a non-empty string `label_de`. A German site shows `label_de` wherever an English one shows `label`; an entry without `label_de` shows `label`. The reaction-type lists of the home page and of `/reaction_types/` are ordered by the shown label. The validator refuses, as a configuration error, a vocabulary with a `label_<language>` that is not a non-empty string.
+Every entry of `site/data/reaction_types.toml` SHALL have, besides `label`, a non-empty string `label_de`. A German site shows `label_de` wherever an English one shows `label`; an entry without `label_de` shows `label`. The reaction-type lists of `/reaction_types/` and of the catalogue's reaction-type facet are ordered by the shown label. The validator refuses, as a configuration error, a vocabulary with a `label_<language>` that is not a non-empty string.
 
 #### Scenario: Vocabulary with German labels
 - **WHEN** a test loads the shipped vocabulary, and runs the validator with a vocabulary whose entry has `label_de = " "`
 - **THEN** every shipped entry has a non-empty `label_de`, and the validator exits 2 naming `label_de`
 
 #### Scenario: German labels for reaction types
-- **WHEN** a test reads `public/reaction_types/aldol-condensation/index.html`, and the reaction-type lists of `public/index.html` and `public/reaction_types/index.html`, of a German build
-- **THEN** its `h1` is `Aldolkondensation` and its title `Aldolkondensation | OrgSynDB`
+- **WHEN** a test reads `public/reaction_types/aldol-condensation/index.html`, the reaction-type list of `public/reaction_types/index.html` and the reaction-type facet of `public/procedures/index.html`, of a German build
+- **THEN** the term page's `h1` is `Aldolkondensation` and its title `Aldolkondensation | OrgSynDB`
 - **AND** both lists show the German labels in alphabetical order
 
 ### Requirement: Procedure variants
@@ -91,7 +103,7 @@ For each procedure ID, the build SHALL publish exactly one variant: the file tag
 
 #### Scenario: Every procedure in every locale
 - **WHEN** a test removes `md/procedures/OSDB-0001-salicylic-acid.de.md` and `md/procedures/OSDB-0004-4-acetylbiphenyl.de.md` from a copy of the test collection, adds the baseline as `md/procedures/OSDB-0100-baseline.en.md`, and builds it in locale `de`
-- **THEN** nine procedures are published, OSDB-0001 from the untagged English file, OSDB-0100 from the `.en` file, and the German home page says `Alle 9 Vorschriften`
+- **THEN** nine procedures are published, OSDB-0001 from the untagged English file, OSDB-0100 from the `.en` file, the German home page's browse list gives `Alle Vorschriften` with the count `(9)`, and the catalogue lists nine rows, each ID once
 
 ### Requirement: The language field
 A procedure MAY carry the front-matter field `language`, `"de"` or `"en"`; any other value is an error. When the file name has a code, the field SHALL name the same language. A procedure page whose `language` differs from the site's carries `lang="<language>"` on `header.procedure-header` and on `article.procedure`.
@@ -119,8 +131,8 @@ A procedure in German SHALL meet the body-section rules of the procedure-schema 
 Pagefind SHALL index the procedure pages under the site's language.
 
 #### Scenario: German search index
-- **WHEN** a test queries the `de` index of a German build of a copy of the test collection `tests/fixtures/collection/` under Node
-- **THEN** `Verseifung` finds exactly OSDB-0001 and OSDB-0008, the filter `Reaktionstyp` = `Hydrolyse` finds the same two, the filter names are `Autor`, `Reaktionstyp`, `Schlagwort` and `Status`, and every result title is a published title
+- **WHEN** a test searches the `de` index of a German build of a copy of the test collection `tests/fixtures/collection/` under Node, through the catalogue's searcher and with plain Pagefind searches
+- **THEN** the searcher finds exactly OSDB-0001 and OSDB-0008 for `Verseifung` and finds OSDB-0008 for `Zimtsäure`, the filter names are exactly `id`, and every result title is a published title
 
 ### Requirement: Stubs in a language
 `tools/orgsyndb new` SHALL accept `--lang LANG`, where `LANG` is `de` or `en`; any other value is a usage error (exit 2) naming `--lang`. With `--lang`, it fills `templates/procedure.<LANG>.org` (or `.md` with `--md`), the English template for `en`, exactly as it fills the English template, and names the file `OSDB-NNNN-<slug>.<LANG>.org` or `.md`. Without `--lang` it behaves as before. The slug of a German title has `ä`, `ö`, `ü`, `ß` (and capitals) written out as `ae`, `oe`, `ue`, `ss` before the ASCII folding. The German templates carry the same keyword or anchor lines as the English ones, German comments and the German section headings. Once their placeholders are filled, the German Markdown template validates cleanly, and the German Org template passes the export's Org checks (org-export "Org sources and their problems").

@@ -1,11 +1,11 @@
-{{- /* The terms of a taxonomy, sorted by their display name in the current
-language: the vocabulary label for reaction types, so that German labels
-sort as German words, and the term name otherwise. Takes the taxonomy's
-plural name; returns a slice of dicts with the keys label and term. */ -}}
+{{- /* The terms of a taxonomy in use, sorted by their display name in the
+current language (page-title.html of the term page): the vocabulary label
+for reaction types, so that German labels sort as German words, the tag
+itself for tags and the name as written for authors. Takes the taxonomy's
+plural name; returns a slice of dicts with the keys label, key (the term's
+key in site.Taxonomies) and term (its weighted pages). */ -}}
 {{- $terms := slice -}}
-{{- range (index site.Taxonomies .).Alphabetical -}}
-{{- $label := .Name -}}
-{{- if eq $ "reaction_types" }}{{ $label = partial "reaction-type-label.html" .Name }}{{ end -}}
-{{- $terms = $terms | append (dict "label" $label "term" .) -}}
+{{- range $key, $term := index site.Taxonomies . -}}
+{{- $terms = $terms | append (dict "label" (partial "page-title.html" $term.Page) "key" $key "term" $term) -}}
 {{- end -}}
 {{- return sort $terms "label" -}}

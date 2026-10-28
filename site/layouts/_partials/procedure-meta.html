@@ -37,15 +37,15 @@ as separate words. */ -}}
 {{ end -}}
 {{ with .GetTerms "reaction_types" -}}
 <dt>{{ T "label_reaction_type" }}</dt>
-<dd>{{ range $i, $term := . }}{{ if $i }}, {{ end }}<a href="{{ $term.RelPermalink }}" data-pagefind-filter="{{ T "filter_reaction_type" }}">{{ partial "reaction-type-label.html" $term.Data.Term }}</a>{{ end }}</dd>
+<dd>{{ range $i, $term := . }}{{ if $i }}, {{ end }}<a href="{{ $term.RelPermalink }}">{{ partial "reaction-type-label.html" $term.Data.Term }}</a>{{ end }}</dd>
 {{ end -}}
 {{ with .GetTerms "tags" -}}
 <dt>{{ T "label_tags" }}</dt>
-<dd>{{ range $i, $term := . }}{{ if $i }}, {{ end }}<a href="{{ $term.RelPermalink }}" data-pagefind-filter="{{ T "filter_tag" }}">{{ $term.Data.Term }}</a>{{ end }}</dd>
+<dd>{{ range $i, $term := . }}{{ if $i }}, {{ end }}<a href="{{ $term.RelPermalink }}">{{ $term.Data.Term }}</a>{{ end }}</dd>
 {{ end -}}
 {{ with .GetTerms "authors" -}}
 <dt>{{ T "label_authors" }}</dt>
-<dd>{{ range $i, $term := . }}{{ if $i }}, {{ end }}<a href="{{ $term.RelPermalink }}" data-pagefind-filter="{{ T "filter_author" }}">{{ $term.Title }}</a>{{ end }}</dd>
+<dd>{{ range $i, $term := . }}{{ if $i }}, {{ end }}<a href="{{ $term.RelPermalink }}">{{ $term.Title }}</a>{{ end }}</dd>
 {{ end -}}
 {{ with $p.checked_by -}}
 <dt>{{ T "label_checked_by" }}</dt>

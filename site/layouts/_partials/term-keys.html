@@ -1,0 +1,12 @@
+{{- /* The taxonomy key of every term page: a dict from the RelPermalink of
+each reaction-type, tag and author term page to the term's key in
+site.Taxonomies, which is the term as written, lowercased. The catalogue's
+machine values are these keys. Call it with partialCached; it ignores its
+context. */ -}}
+{{- $keys := newScratch -}}
+{{- range $plural := slice "reaction_types" "tags" "authors" -}}
+{{- range $key, $pages := index site.Taxonomies $plural -}}
+{{- $keys.SetInMap "keys" $pages.Page.RelPermalink $key -}}
+{{- end -}}
+{{- end -}}
+{{- return $keys.Get "keys" | default dict -}}

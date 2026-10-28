@@ -4,7 +4,8 @@ import re
 import tomllib
 import unittest
 
-from support import FIXTURES, ValidatorTestCase, fixture_run, valid_set_run
+from support import (FIXTURES, REPO, STATIC_DIR, ValidatorTestCase,
+                     fixture_run, run_validator, valid_set_run)
 
 OPTIONAL_TOP = ["precursors", "structure_image", "checked_by", "references",
                 "ai_model"]
@@ -59,6 +60,57 @@ class BaselineTests(ValidatorTestCase):
     def test_baseline_is_valid(self) -> None:
         """Scenario: Baseline is valid."""
         self.assert_clean(fixture_run("baseline"))
+
+
+class CatalogueFixtureTests(ValidatorTestCase):
+    """The catalogue fixtures, tests/fixtures/catalogue/."""
+
+    def documents(self) -> list[dict]:
+        paths = sorted((FIXTURES / "catalogue").glob("OSDB-*.md"))
+        self.assertGreaterEqual(len(paths), 6)
+        return [load_front_matter(path) for path in paths]
+
+    def test_the_fixtures_validate(self) -> None:
+        """Harness: the catalogue fixtures validate cleanly."""
+        self.assert_clean(run_validator([
+            "--vocabulary", REPO / "site" / "data" / "reaction_types.toml",
+            "--static-dir", STATIC_DIR, FIXTURES / "catalogue"]))
+
+    def test_the_fixtures_cover_what_they_are_for(self) -> None:
+        """Harness: statuses, authors, tags, a missing CAS number, a
+        timestamp tie, number and case titles, no structure image."""
+        docs = self.documents()
+        self.assertEqual({d["status"] for d in docs},
+                         {"draft", "checked", "retired"})
+        checked = [d for d in docs if d["status"] == "checked"]
+        self.assertTrue(all(d.get("checked_by") for d in checked))
+        authors = {a for d in docs for a in d["authors"]}
+        self.assertIn("Ä. Müller", authors)
+        self.assertIn("A. Example", authors)
+        self.assertTrue(any(len(d["authors"]) > 1 for d in docs))
+        self.assertTrue(any(len(d["tags"]) > 2 for d in docs))
+        self.assertEqual(
+            {len(d["reaction_types"]) for d in docs}, {1})
+        self.assertEqual(
+            [d["id"] for d in docs if "cas" not in d["product"]],
+            ["OSDB-0922"])
+        self.assertFalse(any("structure_image" in d for d in docs))
+        ties = {}
+        for d in docs:
+            ties.setdefault(d["lastmod"].timestamp(), []).append(d)
+        tied = [group for group in ties.values() if len(group) == 2]
+        self.assertEqual(len(tied), 1)
+        newest = max(d["lastmod"] for d in docs)
+        collection = FIXTURES / "collection" / "md" / "procedures"
+        shipped = [load_front_matter(p) for p in collection.glob("*.md")]
+        self.assertGreater(tied[0][0]["lastmod"],
+                           max(d["lastmod"] for d in shipped))
+        self.assertEqual(tied[0][0]["lastmod"], newest)
+        titles = {d["title"] for d in docs}
+        self.assertTrue({"4-Methylbenzoic acid",
+                         "10-Undecenoic acid"} <= titles)
+        lowered = [t for t in titles if t.islower()]
+        self.assertTrue(any(t.capitalize() in titles for t in lowered))
 
 
 class CommittedInvalidFixtureTests(ValidatorTestCase):

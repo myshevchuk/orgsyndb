@@ -2,9 +2,7 @@
 
 ## Purpose
 Define the GitHub Actions workflow that builds the demo collection `examples/demo/` and publishes it with GitHub Pages.
-
 ## Requirements
-
 ### Requirement: Demo site workflow
 The repository SHALL ship `.github/workflows/demo-site.yml`, a GitHub Actions workflow that builds the demo collection and publishes it with GitHub Pages:
 - **Triggers.** It runs on a push to `main`, on pull requests and on manual dispatch (`workflow_dispatch`).
@@ -22,6 +20,6 @@ The workflow uses no secrets.
 - **AND** neither `pages: write` nor `id-token: write` occurs outside the `deploy` job, and the file contains no `secrets.`
 
 #### Scenario: Demo is published
-- **WHEN** the orchestrator opens the deployed site after the workflow's first run on `main` (manual verification, tasks.md section 3)
-- **THEN** the home page, a procedure page and a browse page load with their styles, and searching `aspirin` on the search page shows OSDB-0002 with a result link that opens its procedure page
+- **WHEN** the orchestrator opens the deployed site after the workflow's first run on `main` that includes the catalogue (manual verification after merge)
+- **THEN** the home page, a procedure page and a term page load with their styles, and searching `aspirin` from the header search shows OSDB-0002 in the catalogue, with a link that opens its procedure page
 

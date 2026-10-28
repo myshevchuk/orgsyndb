@@ -27,9 +27,16 @@ The following apply:
 ### Requirement: Page shell
 Every HTML page the theme renders SHALL contain, in this order:
 - a skip link `a.skip-link` with `href="#main"`;
-- a `header.site-header` with a `nav` element carrying `aria-label="Site"`. The nav links to `/procedures/`, `/reaction_types/`, `/tags/`, `/authors/` and `/help/`, with the texts `Procedures`, `Reaction types`, `Tags`, `Authors` and `Help`. No navigation link leads to `/search/`, the results page of the search forms (site-search spec). The header holds no other `nav`. The link whose URL is the page's own URL carries `aria-current="page"`; otherwise the link of the section the page lies in carries `aria-current="true"`, where `/procedures-by-date/` and every procedure page lie in `/procedures/`, and every term page lies in its taxonomy's page, and every help page lies in `/help/`. No other navigation link carries `aria-current`;
+- a `header.site-header` holding, in this order:
+  - `a.site-title`, linking `/` with the text `OrgSynDB`;
+  - a `nav` element carrying `aria-label="Site"`, which links, in this order, to `/procedures/`, `/reaction_types/` and `/help/`, with the texts `Procedures`, `Reaction types` and `Help`. The header holds no other `nav`;
+  - `form.site-search` with `role="search"` and `method="get"`, holding one `input` with `type="search"` and `name="q"`, and a `button` with `type="submit"` and the text `Search`. On the catalogue and term pages it is the catalogue's search form, with the `action`, attributes and texts that site-catalogue "Catalogue controls" gives. On every other page its `action` resolves to `/procedures/`, and its input carries `aria-label="Search procedures"` and the placeholder `Product, CAS, SMILES or keyword`;
 - exactly one `main` element with `id="main"`;
 - a `footer.site-footer` whose text is `OrgSynDB · internal procedures`.
+
+The navigation link whose URL is the page's own URL carries `aria-current="page"`. Otherwise the link of the section the page lies in carries `aria-current="true"`: every procedure page, `/tags/`, `/authors/` and their term pages lie in `/procedures/`; every reaction-type term page lies in `/reaction_types/`; every help page lies in `/help/`. No other navigation link carries `aria-current`. Every page has exactly one `input` with `name="q"`: the header's.
+
+On screen, the site title and the navigation sit at the start of the header row and the search form at its end, so that the header has the same height, and its title, navigation and search form the same positions, on every page at a given window width. Every page's `h1` has the same font size.
 
 These texts are those of an English site; a German site has the German texts that the localization spec gives.
 
@@ -42,15 +49,20 @@ Headings follow these rules:
 
 #### Scenario: Shell on every page
 - **WHEN** a test scans every HTML file under `public/` except files under `public/pagefind/`, after a theme build in locale `en`
-- **THEN** each has the skip link, the site header with the five navigation links, one `main#main`, the footer text, both `meta` elements, exactly one `h1`, and no heading-level jump greater than one
+- **THEN** each has the skip link, the site title, the site header with the three navigation links in order and then `form.site-search`, one `main#main`, the footer text, both `meta` elements, exactly one `h1`, no heading-level jump greater than one, and exactly one `input[name=q]`, the header's
+- **AND** on every page except `/procedures/` and the term pages the form's `action` resolves to `/procedures/` and its input has the stated `aria-label` and placeholder
 
 #### Scenario: Term titles use labels and tags
 - **WHEN** a test reads `public/reaction_types/aldol-condensation/index.html` and `public/tags/sample-data/index.html` after a theme build in locale `en`
 - **THEN** their `h1` texts are `Aldol condensation` and `sample-data`, and their `<title>` texts are `Aldol condensation | OrgSynDB` and `sample-data | OrgSynDB`
 
 #### Scenario: Current section in the navigation
-- **WHEN** a test scans the home page, both procedure lists, a procedure page, the tags page, a tag term page, the search page, the help index and a help page after a theme build
-- **THEN** the home page marks no navigation link, `/procedures/` marks its own link with `aria-current="page"`, `/procedures-by-date/` and the procedure page mark `/procedures/` with `aria-current="true"`, the tags page marks `/tags/` with `page` and the term page with `true`, the search page marks no navigation link, `/help/` marks its own link with `page`, and the help page `/help/schema/` marks `/help/` with `true`
+- **WHEN** a test scans the home page, `/procedures/`, a procedure page, the three taxonomy pages, a term page of each taxonomy, the help index and a help page after a theme build
+- **THEN** the home page marks no navigation link; `/procedures/` marks its own link with `aria-current="page"`; the procedure page, `/tags/`, `/authors/`, the tag term page and the author term page mark `/procedures/` with `aria-current="true"`; `/reaction_types/` marks its own link with `page` and its term page with `true`; `/help/` marks its own link with `page`; and the help page `/help/schema/` marks `/help/` with `true`
+
+#### Scenario: The header does not move between pages
+- **WHEN** the orchestrator measures the header and the `h1` of the home page, `/procedures/`, a term page, a procedure page and the help index in a browser at 1280 and at 500 CSS pixels (manual verification, tasks.md section 3)
+- **THEN** at each width the header has the same height, the site title, the navigation and the search form the same positions and sizes, and the `h1` the same font size on every page
 
 ### Requirement: Stylesheets by medium
 The theme SHALL build three stylesheets with Hugo Pipes functions available in the standard Hugo build (`resources.Get`, `resources.Concat`, `minify`, `fingerprint`), and link them from every page in this order:
@@ -59,14 +71,14 @@ The theme SHALL build three stylesheets with Hugo Pipes functions available in t
 3. **print**, from `site/assets/css/print.css`, with `media="print"`.
 
 Further rules:
-- The search page links `/pagefind/pagefind-ui.css` as well, and no page links any other stylesheet.
+- No page links any other stylesheet.
 - The string `prefers-color-scheme` occurs in `screen.css` and in no other source stylesheet.
 - No source stylesheet declares the `color-scheme` or `clip-path` property; `prefers-color-scheme` in a media query is not such a declaration.
 
 #### Scenario: Three links on every page
 - **WHEN** a test scans every HTML file under `public/` except files under `public/pagefind/`, after a theme build
-- **THEN** each has exactly the three site stylesheet links in order, with the stated `media` values, plus `pagefind-ui.css` on `search/index.html` only
-- **AND** each of the three site stylesheets resolves to a file under `public/css/`, and `pagefind-ui.css`, which the Pagefind bundle provides and which is exempt from that rule, resolves to `public/pagefind/pagefind-ui.css`
+- **THEN** each has exactly the three site stylesheet links in order, with the stated `media` values, and no other stylesheet link
+- **AND** each of the three resolves to a file under `public/css/`
 
 #### Scenario: Dark mode only on screen
 - **WHEN** a test reads the four source stylesheets
@@ -81,11 +93,11 @@ Both sets define `--bg`, `--fg`, `--muted`, `--border`, `--surface`, `--link`, `
 - at least 4.5:1 for each text pair: `--fg`/`--bg`, `--muted`/`--bg`, `--link`/`--bg`, `--fg`/`--surface`, `--muted`/`--surface`, `--link`/`--surface`, `--banner-fg`/`--banner-bg`, `--draft-fg`/`--draft-bg`, `--checked-fg`/`--checked-bg` and `--retired-fg`/`--retired-bg`;
 - at least 3:1 for `--focus`/`--bg`.
 
-`screen.css` sets Pagefind's UI variables `--pagefind-ui-primary`, `--pagefind-ui-text`, `--pagefind-ui-background`, `--pagefind-ui-border`, `--pagefind-ui-tag` and `--pagefind-ui-font` from these tokens.
+No stylesheet sets a `--pagefind-ui-` variable.
 
 #### Scenario: Contrast in both schemes
 - **WHEN** a test parses the custom properties of both sets from the source files and computes the WCAG relative-luminance contrast of each listed pair
-- **THEN** every token is defined in both sets, and every pair meets its threshold
+- **THEN** every token is defined in both sets, every pair meets its threshold, and no source stylesheet declares a property beginning with `--pagefind-ui-`
 
 ### Requirement: Measure and tables
 The screen layout SHALL prioritize desktop browsers with a shell up to 96rem wide, set in the system sans-serif stack; printed pages keep the text face of `tokens.css`. Running procedure paragraphs and lists SHALL keep a reading measure up to 78ch, while procedure tables SHALL use their available column width. Narrower windows SHALL stack the columns in document order, and wide tables SHALL scroll within their own containers. Every Markdown table SHALL be rendered by `site/layouts/_markup/render-table.html` as follows:
@@ -94,16 +106,16 @@ The screen layout SHALL prioritize desktop browsers with a shell up to 96rem wid
 - Every cell of a column whose header text is `CAS`, `MW (g/mol)`, `mmol` or `Equiv` carries `class="num"`.
 - A newline separates adjacent cells in the output.
 
-The screen stylesheet gives `.table-scroll` `overflow-x: auto`, so a wide table scrolls inside its own container. The base stylesheet gives `.num` cells `white-space: nowrap` and right alignment.
+The screen stylesheet gives `.table-scroll` `overflow-x: auto`, so a wide table scrolls inside its own container. The base stylesheet gives `.num` cells `white-space: nowrap` and right alignment. Below 55rem, the screen stylesheet gives `.home-layout` and `.catalogue-layout` the single column `minmax(0, 1fr)` and `.procedure` `display: block`.
 
 #### Scenario: Reagents tables are wrapped and marked
 - **WHEN** a test scans every procedure page after a theme build
 - **THEN** the table under the `Reagents` heading is the only child of a `div.table-scroll` with the three attributes, its header cells read `Reagent`, `CAS`, `MW (g/mol)`, `Amount`, `mmol` and `Equiv`, and exactly the cells of columns 2, 3, 5 and 6 carry `class="num"`
 
 #### Scenario: Desktop workspace
-- **WHEN** a browser displays the home page at 1280 CSS pixels or wider
-- **THEN** recent procedures and browse links occupy adjacent columns
-- **AND** the all-procedures table uses the available shell width
+- **WHEN** a browser displays the home page and `/procedures/` at 1280 CSS pixels or wider
+- **THEN** the home page shows the recent list and the browse list in adjacent columns
+- **AND** the catalogue shows the facets as a sidebar beside the results, and its table uses the remaining width
 
 #### Scenario: Procedure reference and text
 - **WHEN** a browser displays a procedure at 1280 CSS pixels or wider
@@ -116,9 +128,9 @@ The screen stylesheet gives `.table-scroll` `overflow-x: auto`, so a wide table 
 - **THEN** the details, structure and body retain their single-column order
 
 #### Scenario: Narrow windows stack the columns
-- **WHEN** a browser displays the home page and a procedure at 500 CSS pixels wide
-- **THEN** the home page shows recent procedures, then the browse lists one below the other, in a single column
-- **AND** the procedure page shows the details, structure and body in a single column, in that order
+- **WHEN** a test reads the declarations that `screen.css` applies to a window 500 CSS pixels wide
+- **THEN** `.home-layout` and `.catalogue-layout` have `grid-template-columns: minmax(0, 1fr)` and `.procedure` has `display: block`
+- **AND** a browser at that width shows the home page's recent list above its browse list, the catalogue's results with the facets behind the Filters toggle and the table scrolling in its own container, and a procedure's details, structure and body in a single column, in that order
 
 ### Requirement: Procedure page structure
 Each procedure page's `main` element SHALL contain, in document order:
@@ -216,77 +228,50 @@ Every `.svg` file under the demo collection's `static/structures/` SHALL be a ha
 - **WHEN** a test parses every `.svg` file under `examples/demo/static/structures/` with `xml.etree.ElementTree`
 - **THEN** at least one file exists, `osdb-0003.svg` among them, and each meets every rule above
 
-### Requirement: Procedure lists and their order
-The site SHALL publish two lists of all procedures, each a table with the column headers `ID`, `Procedure`, `Reaction type`, `Status`, `Created` and `Modified`, and one row per procedure. The `ID` and `Procedure` cells link to the procedure page, and the `Reaction type` cell shows the vocabulary label.
-- `/procedures/` lists the procedures by `id` ascending.
-- `/procedures-by-date/` lists them by `date` descending, and procedures with equal `date` by `id` ascending.
-
-Each list links to the other, and marks its own order's link with `aria-current="page"`. Neither needs JavaScript.
-
-Above its table, each list SHALL have, in this order:
-- the `h1`, followed by `p.list-count` with `role="status"`, `data-list-count`, the text `<n> entries` (`1 entry` for one) and a `data-filtered` attribute holding `{shown} of {total} entries`;
-- a search form with `role="search"`, `method="get"` and an `action` resolving to `/search/`, holding an `input` with `name="q"` and an `aria-label`, and a visible submit button;
-- `div.list-filters` with `data-list-filters` and `hidden`, holding a `select` with `data-filter="reaction-type"` whose options are `All` with an empty value followed by one option per reaction type in use, valued by its slug and labelled with its vocabulary label, and a `select` with `data-filter="status"` whose options are `All`, `draft`, `checked` and `retired`;
-- the sort links.
-
-Every row of a procedure table carries `data-reaction-types`, the procedure's reaction-type slugs joined by single spaces, and `data-status`, its status.
-
-On screen, each list is a full-width table: the tool row spans the shell with the search form on the left and the filters on the right, the sort links sit right-aligned above a table that uses the shell width, and the status column reads as plain text.
-
-#### Scenario: Both orders
-- **WHEN** a test scans `public/procedures/index.html` and `public/procedures-by-date/index.html` after a theme build, and computes both orders from the content files' front matter
-- **THEN** the IDs in the rows of each table equal the computed order, and each page has a link to the other page's URL and an `aria-current="page"` link to its own
-
-#### Scenario: List tools
-- **WHEN** a test scans `public/procedures/index.html` and `public/procedures-by-date/index.html` after a theme build
-- **THEN** each has the count, the search form, the hidden filters with the stated options and the sort links, every table row carries the two data attributes with the procedure's values, and the page loads `/js/list-filter.<hash>.js`
-
 ### Requirement: Home page
-The home page SHALL contain:
-- an introductory paragraph;
-- a search form with `role="search"`, `method="get"` and an `action` resolving to `/search/`, holding a labelled input with `name="q"` and a submit button. The button is visible and works without JavaScript: it carries no `hidden` attribute, and submitting loads `/search/?q=<term>`;
-- a `Recent procedures` heading followed by the procedure table of the first five procedures in the `/procedures-by-date/` order;
-- a `Browse by reaction type` heading followed by a list linking each reaction-type term page, with the vocabulary label and the procedure count;
-- a `Browse by tag` heading followed by a list linking each tag term page, with the tag and the count;
-- a link to `/procedures/`.
+The home page's `main` SHALL contain, in this order:
+- `div.home-intro`, holding the `h1` `OrgSynDB` and a `p.lede` with the text `The group's synthetic procedures, written in Org or Markdown and checked against one schema.`;
+- `div.home-layout`, holding:
+  - `section.home-recent`, with the `h2` `Recently updated`, then an `ol.recent-list` with one `li` per procedure for the first five published procedures, or all when there are fewer, ordered by `lastmod` as an instant, newest first, and by `id` ascending for equal instants. Each `li` holds an `a` linking the procedure page whose text is `<id> <title>`, then `<time datetime="<RFC 3339 lastmod>">YYYY-MM-DD</time>`. After the list, a `p` links `/procedures/?sort=modified` with the text `All procedures, recently updated first`;
+  - `section.home-browse`, with the `h2` `Browse`, then a `ul.browse-list` whose `li` entries hold, in this order, a link and then ` ` and a `span.count` reading `(<n>)`: `All procedures` to `/procedures/`, `n` the number of published procedures; `Draft procedures` to `/procedures/?status=draft`, `n` the number whose `status` is `draft`; `Reaction types` to `/reaction_types/`, `Tags` to `/tags/` and `Authors` to `/authors/`, each `n` the number of terms of that taxonomy in use.
+
+The counts are computed from the published procedures and written with the site language's digit grouping. The home page's `main` holds no form, no `input` and no procedure table.
 
 #### Scenario: Home page content
-- **WHEN** a test scans `public/index.html` after a theme build
-- **THEN** the form, with a `button` or `input` of `type="submit"` that has no `hidden` attribute, the five recent rows in the computed order, one reaction-type link per reaction type in use, with its label and count, one tag link per tag in use, with its count, and the link to `/procedures/` are present
+- **WHEN** a test scans `public/index.html` of a theme build that adds the catalogue fixtures to the test collection, in locale `en`
+- **THEN** the recent list holds the first five procedures in the computed order, each ID once, with the stated link texts and dates, and two fixtures whose `lastmod` is the same instant are ordered by ID
+- **AND** the browse list has the five entries in order, with the stated targets, and counts equal to those computed from the published content files
+- **AND** `main` has the link to `/procedures/?sort=modified`, and no `form`, `input` or `table`
 
 ### Requirement: Taxonomy and term pages
 For each taxonomy, `reaction_types`, `tags` and `authors`, the site SHALL publish:
-- **A taxonomy page.** It lists every term in use, linking the term page with the procedure count. The link text is the vocabulary label for reaction types, the tag for tags, and the author's name as written for authors.
-- **A term page per term.** Its `h1` is the same text, followed by the procedure table of exactly the procedures carrying that term, by `id` ascending.
+- **A taxonomy page.** It is a compact directory: its `h1` is `Reaction types`, `Tags` or `Authors`, followed by a `ul.term-list` with one `li` per term in use, ordered by the link text, holding a link to the term page and then ` ` and `span.count` reading `(<n>)`, `n` the term's procedure count. The link text is the vocabulary label for reaction types, the tag for tags, and the author's name as written for authors.
+- **A term page per term.** It is a catalogue page with the term as its fixed scope (site-catalogue "Catalogue pages" and "Fixed scope on term pages"). Its `h1` is the same text as the term's link.
 
-The taxonomy pages' `h1` texts are `Reaction types`, `Tags` and `Authors`.
+Each directory is linked from the home page's browse list, from its catalogue facet, and from the scope line of its term pages; the metadata panel's reaction-type, tag and author links lead to the term pages.
 
 #### Scenario: Every term page lists the right procedures
 - **WHEN** a test scans every term page under `public/reaction_types/`, `public/tags/` and `public/authors/` after a theme build, and computes each term's procedures from the content files' `reaction_types`, `tags` and `authors`
-- **THEN** each term in the front matter has a term page, its table rows are exactly that term's IDs in ascending order, and the taxonomy page links it with the correct count and text
+- **THEN** each term in the front matter has a term page, its catalogue table's rows are exactly that term's IDs in ascending order, and the taxonomy page links it with the correct count and text, in order
 
 ### Requirement: Content does not need JavaScript
-Every procedure, list, taxonomy, term and home page SHALL show all of its content without running JavaScript. Scripts add only these:
+Every procedure, catalogue, taxonomy, term, help and home page SHALL show all of its content without running JavaScript. Scripts add only these:
 - `site/assets/js/site.js` reveals and wires the print button (`window.print()`) and the SMILES copy button.
 - `site.js` replaces the print-facts URL with `location.href` when the protocol is `http:` or `https:`.
 - The copy button writes the SMILES string with the Clipboard API. When that fails or is unavailable, it selects the SMILES text instead.
-- The search page's scripts run the search, as in the site-search spec.
-- `site/assets/js/list-filter.js`, loaded by the two all-procedures lists only, reveals `div.list-filters`. When a select changes, it hides each table row whose `data-reaction-types` does not contain the selected reaction type or whose `data-status` differs from the selected status, an empty value matching every row, and sets the text of `p.list-count` from its `data-filtered` template, or back to the original text when neither filter is set. Its matching function is exposed as `globalThis.OrgSynListFilter.rowMatches(row, filters)`.
+- The catalogue script, on the catalogue and term pages, reveals the catalogue's controls and runs its search, filters, sorting and views (site-catalogue).
 
-The JavaScript-enhancement buttons, the print button (`data-print`) and the SMILES copy button (`data-copy-smiles`), carry `hidden` in the published HTML, and only the script reveals them. No other button is hidden: the home page's search submit button in particular stays visible and works without JavaScript.
+In the published HTML, the print button (`data-print`) and the SMILES copy button (`data-copy-smiles`) carry `hidden`, and only `site.js` reveals them. No other button carries `hidden`. Every button of a catalogue lies inside an element that carries `data-catalogue-controls` and `hidden`, which only the catalogue script reveals. The header search's submit button is visible and works without JavaScript.
 
 #### Scenario: Static HTML holds the content
 - **WHEN** a test scans every procedure page after a theme build, without running scripts
 - **THEN** the metadata values, the rendered body sections and the links are present in the HTML, every `button` with `data-print` or `data-copy-smiles` has the `hidden` attribute, and no other `button` on any page under `public/` has it
+- **AND** every `button` of a page's `div.catalogue` lies inside an element with `data-catalogue-controls` and `hidden`
 
 #### Scenario: Buttons work in a browser
-- **WHEN** the orchestrator opens a procedure page in a browser with JavaScript (manual verification, tasks.md section 9)
+- **WHEN** the orchestrator opens a procedure page in a browser with JavaScript (manual verification, tasks.md section 6)
 - **THEN** the print button is visible and opens the print dialog, the Copy button copies or selects the SMILES string, and with JavaScript disabled neither button is shown and the page is otherwise unchanged
-- **AND** with JavaScript disabled, the home page's Search button is visible and submitting the form loads `/search/?q=<term>`, which shows the `noscript` text
-
-#### Scenario: List filter matching
-- **WHEN** a Node test loads `site/assets/js/list-filter.js` and calls `rowMatches` with rows and filter values
-- **THEN** a row matches when each set filter equals its status or is one of its reaction types, and an empty filter matches every row
+- **AND** with JavaScript disabled, submitting the header search of a procedure page loads `/procedures/?q=<term>`, which shows the `noscript` note and every procedure by ID, and no catalogue control
 
 ### Requirement: Org and Markdown sources render alike
 A procedure SHALL render to the same HTML whichever source format it was written in. Two procedures with the same content, one exported from Org and one written in Markdown, give pages that are byte-identical once their IDs and slugs are replaced by a common placeholder.

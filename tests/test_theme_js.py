@@ -20,6 +20,15 @@ process.stdout.write(JSON.stringify(out));
 """
 
 
+KEYS_RUNNER = r"""
+const fs = require("fs");
+const vm = require("vm");
+vm.runInThisContext(fs.readFileSync(process.argv[1], "utf8"),
+                    { filename: process.argv[1] });
+process.stdout.write(JSON.stringify(Object.keys(globalThis.OrgSynSearch)));
+"""
+
+
 def call_search_terms(calls: list[tuple[str, Any]]) -> list[Any]:
     """Load search-terms.js as a classic script and make each call."""
     node = ps.require_node()
@@ -51,50 +60,13 @@ class NormalisedTermsTests(unittest.TestCase):
                                  for term, _ in cases])
         self.assertEqual(got, [want for _, want in cases])
 
-
-class CleanedResultTests(unittest.TestCase):
-    def test_only_the_smiles_index_is_removed(self) -> None:
-        """Scenario: Cleaned result."""
-        result = {"meta": {"id": "OSDB-0001", "smiles_index": "x y"},
-                  "excerpt": "e"}
-        got = call_search_terms([("cleanResult", result)])
-        self.assertEqual(got, [{"meta": {"id": "OSDB-0001"},
-                                "excerpt": "e"}])
-
-
-LIST_RUNNER = r"""
-const fs = require("fs");
-const vm = require("vm");
-vm.runInThisContext(fs.readFileSync(process.argv[1], "utf8"),
-                    { filename: process.argv[1] });
-const calls = JSON.parse(fs.readFileSync(0, "utf8"));
-const out = calls.map(([row, filters]) =>
-  globalThis.OrgSynListFilter.rowMatches(row, filters));
-process.stdout.write(JSON.stringify(out));
-"""
-
-
-class ListFilterTests(unittest.TestCase):
-    def test_rows_match_every_set_filter(self) -> None:
-        """Scenario: List filter matching (site-theme "List tools")."""
+    def test_only_normalise_term_is_defined(self) -> None:
+        """Scenario: Normalised terms (no other property)."""
         node = ps.require_node()
-        if not ps.LIST_FILTER.is_file():
-            raise AssertionError("site/assets/js/list-filter.js does not exist")
-        row = {"reactionTypes": "hydrolysis", "status": "draft"}
-        multi = {"reactionTypes": "acylation hydrolysis", "status": "checked"}
-        cases = [((row, {"reactionType": "", "status": ""}), True),
-                 ((row, {"reactionType": "hydrolysis", "status": ""}), True),
-                 ((row, {"reactionType": "hydro", "status": ""}), False),
-                 ((row, {"reactionType": "", "status": "checked"}), False),
-                 ((row, {"reactionType": "hydrolysis",
-                         "status": "draft"}), True),
-                 ((multi, {"reactionType": "acylation",
-                           "status": "checked"}), True),
-                 (({}, {"reactionType": "acylation", "status": ""}), False)]
+        self.assertTrue(SEARCH_TERMS.is_file(),
+                        "site/assets/js/search-terms.js does not exist")
         done = subprocess.run(
-            [node, "-e", LIST_RUNNER, str(ps.LIST_FILTER)],
-            input=json.dumps([call for call, _ in cases]),
+            [node, "-e", KEYS_RUNNER, str(SEARCH_TERMS)],
             capture_output=True, text=True, timeout=60)
         self.assertEqual(done.returncode, 0, done.stderr)
-        self.assertEqual(json.loads(done.stdout),
-                         [want for _, want in cases])
+        self.assertEqual(json.loads(done.stdout), ["normaliseTerm"])
