@@ -118,7 +118,7 @@ h1 { font-size: 2.25rem; }
    the text rows stay together. A rule closes the block. */
 .procedure-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(15rem, 21rem);
+  grid-template-columns: minmax(0, var(--measure-wide)) minmax(15rem, 21rem);
   grid-template-rows: repeat(4, auto) 1fr;
   column-gap: var(--space-5);
   align-items: start;
@@ -130,13 +130,14 @@ h1 { font-size: 2.25rem; }
 .procedure-header h1 { margin-bottom: var(--space-3); }
 .procedure-header .actions { margin-top: var(--space-4); }
 .procedure-header .structure { grid-column: 2; grid-row: 1 / -1; margin: 0; }
-/* Marginalia: the body takes the width beside a margin of details on
+/* Marginalia: the body is a column up to the wide measure, with a margin
+   of details right beside it; on a wider screen the spare width stays at
    the right. Its prose keeps a reading measure and its tables use the
    whole column. The details stay first in the document, so print,
    Pagefind and narrow windows keep their order. */
 .procedure {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(15rem, 21rem);
+  grid-template-columns: minmax(0, var(--measure-wide)) minmax(15rem, 21rem);
   grid-template-areas: "content details";
   column-gap: var(--space-5);
   align-items: start;
@@ -311,10 +312,19 @@ h1 { font-size: 2.25rem; }
   .catalogue-results[aria-busy="true"] tbody { transition-duration: 0s; }
 }
 
-/* Help pages read like a procedure body: prose keeps a measure, code
-   blocks and tables scroll in their own boxes. */
+/* Help pages read like a procedure body: prose keeps a measure, tables
+   and code blocks run up to the wide measure and scroll in their own
+   boxes beyond it. */
+.help-page { max-width: var(--measure-wide); }
 .help-page :is(p, ul, ol, dl) { max-width: 64ch; }
 pre { overflow-x: auto; }
+/* A code block is as wide as its longest line: at least the prose
+   measure, so that short ones line up with the text, at most the
+   column. */
+:is(.procedure-content, .help-page) pre {
+  width: fit-content;
+  min-width: min(100%, 64ch);
+}
 .help-list li + li { margin-top: var(--space-2); }
 
 /* A narrow browser window still has a complete reading order. */

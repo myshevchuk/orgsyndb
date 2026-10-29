@@ -1,5 +1,5 @@
 /* Design tokens for every medium: the light colour scheme, the font
-   stacks, the measure and the spacing scale. The dark scheme lives in
+   stacks, the measures and the spacing scale. The dark scheme lives in
    screen.css only, so that it can never reach paper. */
 :root {
   --bg: #ffffff;
@@ -24,6 +24,8 @@
   --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace;
 
   --measure: 70ch;
+  /* Tables and code blocks may run wider than prose, up to this. */
+  --measure-wide: 56rem;
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 1rem;
