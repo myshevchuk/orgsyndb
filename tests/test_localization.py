@@ -45,6 +45,15 @@ def replace(key: str, line: str):
     return support.replace_line(key, line)
 
 
+def yield_to(value: int | float | str) -> str:
+    """A ``products`` line: the baseline's product with another yield."""
+    return support.products_line(
+        f'compound = "ethyl-acetate", yield_percent = {value}')
+
+
+products_line = support.products_line
+
+
 @contextlib.contextmanager
 def root_of(files: dict[str, str]) -> Iterator[Path]:
     """A fresh content root holding ``files`` (name to text)."""
@@ -59,6 +68,13 @@ def root_of(files: dict[str, str]) -> Iterator[Path]:
 def run(files: dict[str, str]) -> support.Result:
     with root_of(files) as root:
         return fixture_run(root)
+
+
+def run_with_template_registry(files: dict[str, str]) -> support.Result:
+    """``run`` against a registry holding the compound template as
+    ``example-compound``, the compound the procedure templates name."""
+    with root_of(files) as root, support.template_registry() as registry:
+        return fixture_run(root, compounds=registry)
 
 
 class TranslatedFileTests(ValidatorTestCase):
@@ -114,7 +130,6 @@ class TranslatedFileTests(ValidatorTestCase):
             "OSDB-0100-baseline.md": baseline(),
             "OSDB-0100-baseline.de.md": germanised(baseline(
                 replace("title", 'title = "Essigsäureethylester"'),
-                replace("name", 'name = "Essigsäureethylester"'),
                 replace("hazards", 'hazards = ["Entzündbare Flüssigkeit"]'),
                 replace("scale", 'scale = "25,0 mmol"'),
                 replace("authors", 'authors = ["Ü. Example"]'))),
@@ -142,8 +157,8 @@ class TranslatedFileTests(ValidatorTestCase):
         file)."""
         result = run({"OSDB-0100-baseline.de.md": germanised(baseline()),
                       "OSDB-0100-baseline.en.md": baseline(
-                          replace("yield_percent", "yield_percent = 80"))})
-        problem = self.assert_one(result, "error", "yield_percent",
+                          replace("products", yield_to(80)))})
+        problem = self.assert_one(result, "error", "products",
                                   "OSDB-0100-baseline.de.md")
         self.assertTrue(problem.path.endswith("OSDB-0100-baseline.en.md"))
 
@@ -151,14 +166,17 @@ class TranslatedFileTests(ValidatorTestCase):
         """Scenario: A translation shares its ID and facts (a differing
         fact)."""
         for field, edit in (
-                ("yield_percent", replace("yield_percent",
-                                          "yield_percent = 80")),
+                ("products", replace("products", yield_to(80))),
+                ("products", replace("products", products_line(
+                    'compound = "ethanol", yield_percent = 85'))),
+                ("products", replace("products", products_line(
+                    'compound = "ethyl-acetate", yield_percent = 85',
+                    'compound = "ethanol", yield_percent = 10'))),
                 ("status", replace("status", 'status = "checked"')),
                 ("tags", replace("tags", 'tags = ["beispiel"]')),
-                ("product.mw", replace("mw", "mw = 88.1")),
-                ("precursors", support.insert_line(
-                    'precursors = ["OSDB-0100"]'))):
-            with self.subTest(field=field):
+                ("substrates", support.insert_line(
+                    'substrates = ["ethanol"]'))):
+            with self.subTest(field=field, edit=edit):
                 result = run({"OSDB-0100-baseline.md": baseline(),
                               "OSDB-0100-baseline.de.md":
                               germanised(baseline(edit))})
@@ -167,37 +185,45 @@ class TranslatedFileTests(ValidatorTestCase):
                 self.assertTrue(errors, result.stdout)
                 self.assertTrue(all(p.path.endswith(".de.md")
                                     for p in errors), result.stdout)
-                if field != "precursors":
-                    self.assertIn("OSDB-0100-baseline.md",
-                                  errors[0].message)
+                self.assertIn("OSDB-0100-baseline.md", errors[0].message)
+
+    def test_substrates_agree_by_value_and_order(self) -> None:
+        """Scenario: A translation shares its ID and facts (substrates)."""
+        pair = ('substrates = ["acetic-acid", "ethanol"]',
+                'substrates = ["ethanol", "acetic-acid"]')
+        self.assert_clean(run({
+            "OSDB-0100-baseline.md": baseline(
+                support.insert_line(pair[0])),
+            "OSDB-0100-baseline.de.md": germanised(baseline(
+                support.insert_line(pair[0])))}))
+        result = run({
+            "OSDB-0100-baseline.md": baseline(support.insert_line(pair[0])),
+            "OSDB-0100-baseline.de.md": germanised(baseline(
+                support.insert_line(pair[1])))})
+        problem = self.assert_one(result, "error", "substrates",
+                                  "OSDB-0100-baseline.md")
+        self.assertTrue(problem.path.endswith(".de.md"))
+        result = run({
+            "OSDB-0100-baseline.md": baseline(support.insert_line(pair[0])),
+            "OSDB-0100-baseline.de.md": germanised(baseline())})
+        self.assert_one(result, "error", "substrates",
+                        "OSDB-0100-baseline.md")
 
     def test_equal_numbers_of_either_type_agree(self) -> None:
         """Scenario: A translation shares its ID and facts (integer and
         float)."""
         self.assert_clean(run({
             "OSDB-0100-baseline.md": baseline(
-                replace("yield_percent", "yield_percent = 85"),
-                replace("mw", "mw = 88")),
+                replace("products", yield_to("85"))),
             "OSDB-0100-baseline.de.md": germanised(baseline(
-                replace("yield_percent", "yield_percent = 85.0"),
-                replace("mw", "mw = 88.0"))),
+                replace("products", yield_to("85.0")))),
         }))
         result = run({
             "OSDB-0100-baseline.md": baseline(),
             "OSDB-0100-baseline.de.md": germanised(baseline(
-                replace("yield_percent", "yield_percent = true")))})
-        self.assertIn(("yield_percent", "error"),
+                replace("products", yield_to("true"))))})
+        self.assertIn(("products[1].yield_percent", "error"),
                       [(p.field, p.severity) for p in result.problems])
-
-    def test_a_german_only_procedure_is_a_valid_precursor(self) -> None:
-        """Scenario: Precursors in any language."""
-        self.assert_clean(run({
-            "OSDB-0100-baseline.de.md": germanised(baseline()),
-            "OSDB-0101-next.md": baseline(
-                replace("id", 'id = "OSDB-0101"'),
-                replace("slug", 'slug = "osdb-0101"'),
-                support.insert_line('precursors = ["OSDB-0100"]')),
-        }))
 
     def test_scale_with_a_decimal_comma(self) -> None:
         """Scenario: Scale with a decimal comma."""
@@ -239,7 +265,9 @@ class GermanStubTests(unittest.TestCase):
         data = front_matter(stub.read_text(encoding="utf-8"))
         self.assertEqual(data["title"], "Ölsäure")
         self.assertEqual(data["date"], dt.datetime.fromisoformat(NOW))
-        checked = support.run_validator([stub.parent])
+        with support.template_registry() as registry:
+            checked = support.run_validator(
+                ["--compounds", registry, stub.parent])
         self.assertEqual((checked.returncode, checked.stdout), (0, ""),
                          checked.stderr)
 
@@ -273,7 +301,8 @@ class GermanTemplateTests(ValidatorTestCase):
         """Scenario: German templates."""
         text = GERMAN_MD_TEMPLATE.read_text(encoding="utf-8").replace(
             "OSDB-0000", "OSDB-0001").replace("osdb-0000", "osdb-0001")
-        self.assert_clean(run({"OSDB-0001-vorlage.de.md": text}))
+        self.assert_clean(run_with_template_registry(
+            {"OSDB-0001-vorlage.de.md": text}))
         headings = re.findall(r"(?m)^## (.+)$", text)
         self.assertEqual(headings, GERMAN_SECTIONS)
 
@@ -418,7 +447,7 @@ class SiteLanguageTests(unittest.TestCase):
         used = {tomllib.loads(page.read_text(encoding="utf-8").split(
                     "+++")[1]).get("title_key")
                 for page in (SITE / "content").rglob("*.md")} - {None}
-        self.assertEqual(len(used), 5)
+        self.assertEqual(len(used), 6)
         for path in LAYOUTS.rglob("*.html"):
             text = path.read_text(encoding="utf-8")
             used |= set(re.findall(r'\bT "([a-z_]+)"', text))

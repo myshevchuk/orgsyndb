@@ -9,14 +9,8 @@ status = "draft"
 reaction_types = ["esterification"]
 tags = ["sample-data"]
 scale = "25 mmol"
-yield_percent = 104.5
+products = [{ compound = "ethyl-acetate", yield_percent = 104.5 }]
 hazards = ["Flammable liquid"]
-
-[product]
-name = "Ethyl acetate"
-formula = "C4H8O2"
-mw = 88.11
-smiles = "CCOC(C)=O"
 +++
 
 ## Summary

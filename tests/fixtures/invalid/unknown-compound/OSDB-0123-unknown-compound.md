@@ -1,6 +1,6 @@
 +++
-id = "OSDB-0125"
-slug = "osdb-0125"
+id = "OSDB-0123"
+slug = "osdb-0123"
 title = "Ethyl Acetate"
 date = 2026-07-01T10:15:00+02:00
 lastmod = 2026-07-01T12:00:00+02:00
@@ -9,15 +9,8 @@ status = "draft"
 reaction_types = ["esterification"]
 tags = ["sample-data"]
 scale = "25 mmol"
-yield_percent = 85
+products = [{ compound = "no-such-compound", yield_percent = 85 }]
 hazards = ["Flammable liquid"]
-structure_image = "structures/osdb-0125.svg"
-
-[product]
-name = "Ethyl acetate"
-formula = "C4H8O2"
-mw = 88.11
-smiles = "CCOC(C)=O"
 +++
 
 ## Summary

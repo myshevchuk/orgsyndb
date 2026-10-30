@@ -3,6 +3,7 @@
 import copy
 import re
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -31,7 +32,18 @@ class SeedProcedureTests(unittest.TestCase):
         self.assertEqual(md.data.get("id"), "OSDB-0002")
         self.assertEqual(org.data.get("reaction_types"), ["hydrolysis"])
         self.assertEqual(md.data.get("reaction_types"), ["acylation"])
-        self.assertEqual(md.data.get("precursors"), ["OSDB-0001"])
+        self.assertEqual(
+            [e["compound"] for e in org.data.get("products", [])],
+            ["salicylic-acid"])
+        self.assertEqual(org.data.get("substrates"), ["methyl-salicylate"])
+        self.assertEqual(
+            [e["compound"] for e in md.data.get("products", [])],
+            ["acetylsalicylic-acid"])
+        self.assertEqual(md.data.get("substrates"),
+                         ["salicylic-acid", "acetic-anhydride"])
+        self.assertEqual(
+            set(md.data) & {"product", "yield_percent", "precursors",
+                            "structure_image"}, set())
 
 
 class SampleMarkingTests(unittest.TestCase):
@@ -57,6 +69,28 @@ class SampleQuantityTests(unittest.TestCase):
                 self.assertEqual(sup.quantity_violations(sample), [])
 
 
+class CompoundWeightTests(unittest.TestCase):
+    def test_compound_weights_agree_with_formulas(self) -> None:
+        """Scenario: Seed tables are consistent (compound weights)."""
+        registry = sup.read_registry(DEMO / "compounds")
+        self.assertTrue(registry, "the demo registry holds no compound")
+        for key, compound in registry.items():
+            with self.subTest(compound=key):
+                self.assertEqual(sup.compound_violations(key, compound), [])
+
+    def test_the_weight_checker_rejects_what_the_spec_forbids(self) -> None:
+        """Scenario: Seed tables are consistent (compound checker)."""
+        good = {"formula": "C7H6O3", "mw": 138.12, "cas": "69-72-7"}
+        self.assertEqual(sup.compound_violations("x", good), [])
+        for change in ({"mw": 138.2}, {"mw": 140.0}, {"cas": "69-72-8"},
+                       {"formula": "C7H6O"}):
+            with self.subTest(change=change):
+                self.assertNotEqual(
+                    sup.compound_violations("x", good | change), [])
+        boron = {"formula": "C6H7BO2", "mw": 121.93, "cas": "98-80-6"}
+        self.assertEqual(sup.compound_violations("boron", boron), [])
+
+
 class QuantityRuleCheckerTests(unittest.TestCase):
     """The checker must reject what the spec forbids, or the tests above
     would hold nothing."""
@@ -73,7 +107,6 @@ class QuantityRuleCheckerTests(unittest.TestCase):
                   "cat.", "cat."]]
         data = copy.deepcopy(sample.data)
         data["scale"] = "50 mmol"
-        data["product"] = {"formula": "C7H6O3", "mw": 138.12}
         return sample._replace(data=data, table=table)
 
     def test_a_consistent_table_has_no_violation(self) -> None:
@@ -95,8 +128,6 @@ class QuantityRuleCheckerTests(unittest.TestCase):
             "CAS digit": with_cell(1, 1, "119-36-9"),
             "second limiting": with_cell(2, 5, "1.0"),
             "scale": base._replace(data=base.data | {"scale": "60 mmol"}),
-            "product weight": base._replace(data=base.data | {
-                "product": {"formula": "C7H6O3", "mw": 140.0}}),
             "columns": base._replace(table=[["Reagent"]]),
         }
         for rule, sample in broken.items():
@@ -132,18 +163,28 @@ class QuantityRuleCheckerTests(unittest.TestCase):
 
 EXPECTED_SAMPLES = {
     "org/procedures/OSDB-0003-isopentyl-acetate.org": (
-        "OSDB-0003", "esterification", [], "C7H14O2", "123-92-2"),
+        "OSDB-0003", "esterification", "isopentyl-acetate",
+        ["isopentyl-alcohol", "acetic-acid"], "C7H14O2", "123-92-2"),
     "org/procedures/OSDB-0004-4-acetylbiphenyl.org": (
-        "OSDB-0004", "cross-coupling", [], "C14H12O", "92-91-1"),
+        "OSDB-0004", "cross-coupling", "4-acetylbiphenyl",
+        ["4-bromoacetophenone", "phenylboronic-acid"], "C14H12O",
+        "92-91-1"),
     "md/procedures/OSDB-0005-1-biphenyl-4-yl-ethanol.md": (
-        "OSDB-0005", "reduction", ["OSDB-0004"], "C14H14O", "3562-73-0"),
+        "OSDB-0005", "reduction", "1-biphenyl-4-yl-ethanol",
+        ["4-acetylbiphenyl"], "C14H14O", "3562-73-0"),
     "md/procedures/OSDB-0006-dibenzylideneacetone.md": (
-        "OSDB-0006", "aldol-condensation", [], "C17H14O", "538-58-9"),
+        "OSDB-0006", "aldol-condensation", "dibenzylideneacetone",
+        ["benzaldehyde", "acetone"], "C17H14O", "538-58-9"),
     "org/procedures/OSDB-0007-ethyl-cinnamate.org": (
-        "OSDB-0007", "olefination", [], "C11H12O2", "103-36-6"),
+        "OSDB-0007", "olefination", "ethyl-cinnamate",
+        ["benzaldehyde", "ethyl-triphenylphosphoranylidene-acetate"],
+        "C11H12O2", "103-36-6"),
     "md/procedures/OSDB-0008-cinnamic-acid.md": (
-        "OSDB-0008", "hydrolysis", ["OSDB-0007"], "C9H8O2", "140-10-3"),
+        "OSDB-0008", "hydrolysis", "cinnamic-acid", ["ethyl-cinnamate"],
+        "C9H8O2", "140-10-3"),
 }
+CHAINS = {("OSDB-0001", "OSDB-0002"), ("OSDB-0004", "OSDB-0005"),
+          ("OSDB-0007", "OSDB-0008")}
 LONG_SAMPLE = DEMO / "org" / "procedures" / "OSDB-0004-4-acetylbiphenyl.org"
 STRUCTURE_SAMPLE = (DEMO / "org" / "procedures"
                     / "OSDB-0003-isopentyl-acetate.org")
@@ -152,8 +193,9 @@ STRUCTURE_SAMPLE = (DEMO / "org" / "procedures"
 class ThemeSampleSetTests(unittest.TestCase):
     def test_set_counts_and_chains(self) -> None:
         """Scenario: Set, counts and chain."""
-        for relative, (ident, reaction, precursors, formula, cas) in (
-                EXPECTED_SAMPLES.items()):
+        registry = sup.read_registry(DEMO / "compounds")
+        for relative, (ident, reaction, product, substrates, formula,
+                       cas) in EXPECTED_SAMPLES.items():
             path = DEMO / relative
             with self.subTest(file=relative):
                 self.assertTrue(path.is_file(), f"{relative} is missing")
@@ -162,11 +204,12 @@ class ThemeSampleSetTests(unittest.TestCase):
                 self.assertEqual(sample.data.get("id"), ident)
                 self.assertEqual(sample.data.get("reaction_types"),
                                  [reaction])
-                self.assertEqual(sample.data.get("precursors", []),
-                                 precursors)
-                product = sample.data.get("product", {})
-                self.assertEqual(product.get("formula"), formula)
-                self.assertEqual(product.get("cas"), cas)
+                self.assertEqual(
+                    [e["compound"] for e in sample.data.get("products", [])],
+                    [product])
+                self.assertEqual(sample.data.get("substrates"), substrates)
+                self.assertEqual(registry[product].get("formula"), formula)
+                self.assertEqual(registry[product].get("cas"), cas)
         found = [s for s in samples() if s.language == "en"]
         self.assertEqual(
             sum(s.path.suffix == ".org" for s in found), 4,
@@ -177,33 +220,49 @@ class ThemeSampleSetTests(unittest.TestCase):
         self.assertGreaterEqual(
             len({r for s in found for r in s.data.get("reaction_types", [])}),
             5)
-        by_id = {s.data.get("id"): s for s in found}
+        makers = {e["compound"]: s for s in found
+                  for e in s.data.get("products", [])}
+        chains = set()
         for sample in found:
-            for precursor in sample.data.get("precursors", []):
-                with self.subTest(chain=f"{precursor} -> {sample.path.name}"):
-                    self.assertEqual(by_id[precursor].path.suffix, ".org")
-                    self.assertEqual(sample.path.suffix, ".md")
+            for key in sample.data.get("substrates", []):
+                if key in makers:
+                    maker = makers[key]
+                    chains.add((maker.data["id"], sample.data["id"]))
+                    with self.subTest(chain=f"{key} -> {sample.path.name}"):
+                        self.assertEqual(maker.path.suffix, ".org")
+                        self.assertEqual(sample.path.suffix, ".md")
+        self.assertEqual(chains, CHAINS)
+        made_and_used = [
+            s.data["id"] for s in found
+            if any(k in makers for k in s.data.get("substrates", []))
+            and any(e["compound"] in {c for o in found
+                                      for c in o.data.get("substrates", [])}
+                    for e in s.data.get("products", []))]
+        self.assertEqual(made_and_used, [], "a procedure needing both links")
         for sample in found:
             with self.subTest(sample=sample.path.name):
-                self.assertTrue(sup.cas_ok(
-                    sample.data.get("product", {}).get("cas", "")))
                 self.assertTrue(
                     set(sample.data.get("tags", [])) - {"sample-data"},
                     "no tag besides sample-data")
+        for key, compound in registry.items():
+            with self.subTest(compound=key):
+                self.assertTrue(sup.cas_ok(compound.get("cas", "")))
 
 
 class StructureImageSampleTests(unittest.TestCase):
     def test_isopentyl_acetate_sets_its_structure_image(self) -> None:
         """Scenario: Structure image is set."""
-        self.assertTrue(STRUCTURE_SAMPLE.is_file(),
-                        f"{STRUCTURE_SAMPLE.name} is missing")
-        sample = sup.read_org(STRUCTURE_SAMPLE)
-        self.assertEqual(sample.data.get("structure_image"),
-                         "structures/osdb-0003.svg")
+        compound = DEMO / "compounds" / "isopentyl-acetate.toml"
+        self.assertTrue(compound.is_file(), f"{compound.name} is missing")
+        self.assertEqual(
+            tomllib.loads(compound.read_text(encoding="utf-8")).get(
+                "structure_image"), "structures/isopentyl-acetate.svg")
         self.assertTrue((DEMO / "static" / "structures"
-                         / "osdb-0003.svg").is_file(),
-                        "examples/demo/static/structures/osdb-0003.svg is "
-                        "missing")
+                         / "isopentyl-acetate.svg").is_file(),
+                        "examples/demo/static/structures/"
+                        "isopentyl-acetate.svg is missing")
+        self.assertFalse((DEMO / "static" / "structures"
+                          / "osdb-0003.svg").exists())
 
 
 class LongSampleTests(unittest.TestCase):
@@ -238,15 +297,14 @@ class GermanSampleTests(unittest.TestCase):
                 english, german = read(original), read(translation)
                 self.assertEqual(german.language, "de")
                 for key in ("id", "status", "reaction_types", "tags",
-                            "yield_percent", "precursors",
-                            "structure_image", "authors"):
+                            "products", "substrates", "authors"):
                     self.assertEqual(german.data.get(key),
                                      english.data.get(key), key)
-                for key in ("formula", "mw", "smiles", "cas"):
-                    self.assertEqual(
-                        german.data.get("product", {}).get(key),
-                        english.data.get("product", {}).get(key), key)
-                self.assertTrue(german.data.get("product", {}).get("name"))
+                self.assertTrue(german.data.get("products"))
+                self.assertEqual(
+                    set(german.data) & {"product", "yield_percent",
+                                        "precursors", "structure_image"},
+                    set())
                 self.assertEqual(len(german.table), len(english.table))
 
     def test_the_german_long_sample_is_long(self) -> None:
@@ -271,8 +329,8 @@ ORG_SOURCE = """\
 #+HUGO_SLUG: osdb-0990
 #+HUGO_TAGS: sample-data first second
 #+HUGO_CUSTOM_FRONT_MATTER: :id "OSDB-0990"
-#+HUGO_CUSTOM_FRONT_MATTER: :yield_percent 70
-#+HUGO_CUSTOM_FRONT_MATTER: :product '((name . "Test") (formula . "C2H4"))
+#+HUGO_CUSTOM_FRONT_MATTER: :substrates '("water")
+#+HUGO_CUSTOM_FRONT_MATTER: :products '(((compound . "test") (yield_percent . 70)))
 
 * Summary
 A sample with /italic/ text, a C=O stretch and an E/Z ratio that
@@ -291,13 +349,10 @@ slug = "osdb-0990"
 title = "Test acetate"
 date = 2026-07-20T09:58:17+02:00
 lastmod = 2026-07-20T10:04:12+02:00
-yield_percent = 70
+substrates = ["water"]
+products = [{ compound = "test", yield_percent = 70 }]
 tags = ["sample-data", "first", "second"]
 ai_model = "model-x"
-
-[product]
-name = "Test"
-formula = "C2H4"
 +++
 
 ## Summary
@@ -345,7 +400,12 @@ class AgreementCheckerTests(unittest.TestCase):
             "summer date with +01:00": MD_SOURCE.replace(
                 "09:58:17+02:00", "09:58:17+01:00"),
             "extra front-matter key": MD_SOURCE.replace(
-                "yield_percent = 70\n", "yield_percent = 70\nscale = \"1\"\n"),
+                "substrates = [\"water\"]\n",
+                "substrates = [\"water\"]\nscale = \"1\"\n"),
+            "changed product yield": MD_SOURCE.replace(
+                "yield_percent = 70", "yield_percent = 71"),
+            "changed substrates": MD_SOURCE.replace(
+                'substrates = ["water"]', 'substrates = ["steam"]'),
         }
         for change, markdown in broken.items():
             with self.subTest(change=change):
@@ -396,8 +456,11 @@ class TestCollectionTests(unittest.TestCase):
         self.assertFalse((COLLECTION / "org").exists(), "org/ exists")
         copied = ["orgsyndb.toml", ".gitignore",
                   *sorted(f"static/{p}" for p in relative_files(
-                      DEMO / "static"))]
-        self.assertIn("static/structures/osdb-0003.svg", copied)
+                      DEMO / "static")),
+                  *sorted(f"compounds/{p}" for p in relative_files(
+                      DEMO / "compounds"))]
+        self.assertIn("static/structures/isopentyl-acetate.svg", copied)
+        self.assertIn("compounds/salicylic-acid.toml", copied)
         for relative in copied:
             with self.subTest(file=relative):
                 self.assertTrue((COLLECTION / relative).is_file(),
@@ -407,6 +470,9 @@ class TestCollectionTests(unittest.TestCase):
         self.assertEqual(
             {p for p in relative_files(COLLECTION / "static")},
             relative_files(DEMO / "static"), "static/ files")
+        self.assertEqual(
+            relative_files(COLLECTION / "compounds"),
+            relative_files(DEMO / "compounds"), "compounds/ files")
         names = {p.stem + ".md" if p.suffix == ".org" else p.name
                  for p in sample_files()}
         self.assertEqual(len(names), 16)

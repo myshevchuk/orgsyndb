@@ -171,7 +171,75 @@ class PlainCatalogueTests(cs.CatalogueCase):
         self.assertGreater(checked, 100)
 
 
-class CatalogueFixtureTests(cs.CatalogueCase):
+class DetailsChecks:
+    """The Details view's markup checks, shared by the build classes that
+    add procedures to the test collection. The class that uses them is a
+    ``CatalogueCase``."""
+
+    def expected_details(self, item: Content, registry: dict
+                         ) -> list[tuple[str, str]]:
+        locale = self.LOCALE
+        compounds = [registry[e["compound"]] for e in item.products]
+        names = [ps.shown_name(c, locale) for c in compounds]
+        found = []
+        if len(names) > 1:
+            found.append(("Products", ", ".join(names)))
+        elif names[0] != item.title:
+            found.append(("Product", names[0]))
+        if len(compounds) == 1:
+            compound = compounds[0]
+            found.append(("Formula", compound["formula"]))
+            found.append(("MW", f"{ps.number_text(compound['mw'], locale)}"
+                                " g/mol"))
+            if compound.get("cas"):
+                found.append(("CAS", compound["cas"]))
+        found.append(("Yield", ps.yield_text(item, registry, locale)))
+        found.append(("Created", item.data["date"].strftime("%Y-%m-%d")))
+        return found
+
+    def check_details(self, page: ps.Page, row: ps.Node, item: Content,
+                      registry: dict) -> None:
+        cell = ps.row_cells(row)[1]
+        link = page.links(cell)[0]
+        details = cell.find("div", "row-details")
+        self.assertIsNotNone(details, "no div.row-details")
+        self.assertGreater(page.index_of(details), page.index_of(link.node))
+        pairs = page.definition_pairs(details)
+        self.assertEqual([(p.label, p.definition.norm()) for p in pairs],
+                         self.expected_details(item, registry))
+        for pair in pairs:
+            if pair.label == "Formula":
+                formula = registry[item.products[0]["compound"]]["formula"]
+                self.assertEqual(
+                    [s.norm() for s in pair.definition.find_all("sub")],
+                    re.findall(r"[0-9]+", formula))
+            if pair.label == "Created":
+                moment = pair.definition.find("time")
+                self.assertIsNotNone(moment, "no time in Created")
+                self.assertEqual(moment.attrs.get("datetime"),
+                                 ps.rfc3339(item.data["date"]))
+        images = row.find_all("img")
+        first = next((registry[e["compound"]] for e in item.products
+                      if registry[e["compound"]].get("structure_image")),
+                     None)
+        if first is None:
+            self.assertEqual(images, [])
+            return
+        self.assertEqual(len(images), 1)
+        image = images[0]
+        self.assertTrue(image.within(details))
+        self.assertTrue(image.has_class("row-structure"))
+        self.assertEqual(page.resolve(image.attrs.get("src", "")),
+                         "/" + first["structure_image"])
+        self.assertTrue(ps.target_file(
+            self.public, "/" + first["structure_image"]).is_file())
+        self.assertEqual(image.attrs.get("alt"),
+                         f"Structure of {ps.shown_name(first, self.LOCALE)}")
+        self.assertEqual(image.attrs.get("loading"), "lazy")
+        self.assertEqual(image.attrs.get("decoding"), "async")
+
+
+class CatalogueFixtureTests(DetailsChecks, cs.CatalogueCase):
     """The test collection plus the catalogue fixtures."""
 
     CATALOGUE = True
@@ -213,69 +281,17 @@ class CatalogueFixtureTests(cs.CatalogueCase):
         """Scenario: Details markup."""
         page = self.page("procedures/index.html")
         by_id = {item.id: item for item in self.content()}
+        registry = ps.read_registry(self.sandbox)
         for row in ps.catalogue_rows(page):
             self.assertIn(row.attrs.get("data-id"), by_id)
             item = by_id[row.attrs["data-id"]]
             with self.subTest(procedure=item.id):
-                self.check_details(page, row, item)
+                self.check_details(page, row, item, registry)
         withheld = by_id["OSDB-0922"]
-        self.assertNotIn("cas", withheld.product)
+        self.assertNotIn("cas", registry[withheld.products[0]["compound"]])
         labels = [p.label for p in page.definition_pairs(
             page.find("tr", data_id="OSDB-0922").find("div", "row-details"))]
         self.assertNotIn("CAS", labels)
-
-    def expected_details(self, item: Content) -> list[tuple[str, str]]:
-        product = item.product
-        found = []
-        if product.get("name") and product["name"] != item.title:
-            found.append(("Product", product["name"]))
-        if product.get("formula"):
-            found.append(("Formula", product["formula"]))
-        if "mw" in product:
-            found.append(("MW", f"{product['mw']} g/mol"))
-        if product.get("cas"):
-            found.append(("CAS", product["cas"]))
-        if "yield_percent" in item.data:
-            found.append(("Yield", f"{item.data['yield_percent']} %"))
-        found.append(("Created", item.data["date"].strftime("%Y-%m-%d")))
-        return found
-
-    def check_details(self, page: ps.Page, row: ps.Node,
-                      item: Content) -> None:
-        cell = ps.row_cells(row)[1]
-        link = page.links(cell)[0]
-        details = cell.find("div", "row-details")
-        self.assertIsNotNone(details, "no div.row-details")
-        self.assertGreater(page.index_of(details), page.index_of(link.node))
-        pairs = page.definition_pairs(details)
-        self.assertEqual([(p.label, p.definition.norm()) for p in pairs],
-                         self.expected_details(item))
-        for pair in pairs:
-            if pair.label == "Formula":
-                self.assertEqual(
-                    [s.norm() for s in pair.definition.find_all("sub")],
-                    re.findall(r"[0-9]+", item.product["formula"]))
-            if pair.label == "Created":
-                moment = pair.definition.find("time")
-                self.assertIsNotNone(moment, "no time in Created")
-                self.assertEqual(moment.attrs.get("datetime"),
-                                 ps.rfc3339(item.data["date"]))
-        images = row.find_all("img")
-        if "structure_image" not in item.data:
-            self.assertEqual(images, [])
-            return
-        self.assertEqual(len(images), 1)
-        image = images[0]
-        self.assertTrue(image.within(details))
-        self.assertTrue(image.has_class("row-structure"))
-        self.assertEqual(page.resolve(image.attrs.get("src", "")),
-                         "/" + item.data["structure_image"])
-        self.assertTrue(ps.target_file(
-            self.public, "/" + item.data["structure_image"]).is_file())
-        self.assertEqual(image.attrs.get("alt"),
-                         f"Structure of {item.product['name']}")
-        self.assertEqual(image.attrs.get("loading"), "lazy")
-        self.assertEqual(image.attrs.get("decoding"), "async")
 
     def test_only_osdb_0003_has_a_row_image(self) -> None:
         """Scenario: Details markup (images)."""
@@ -322,6 +338,45 @@ class CatalogueFixtureTests(cs.CatalogueCase):
         self.assertNotIn("Checked by", labels)
         draft = self.page("procedures/osdb-0923/index.html")
         self.assertIsNone(draft.find("span", "sign-off"))
+
+
+class TwoProductDetailsTests(DetailsChecks, cs.CatalogueCase):
+    """The test collection plus the two-product fixture: the Details view
+    of a procedure with two products."""
+
+    FIXTURES = ("OSDB-0907-two-products.md",)
+
+    def test_details_markup(self) -> None:
+        """Scenario: Details markup (two products)."""
+        page = self.page("procedures/index.html")
+        registry = ps.read_registry(self.sandbox)
+        items = self.content()
+        self.assertEqual(len(items), 9)
+        row = page.find("tr", data_id="OSDB-0907")
+        self.assertIsNotNone(row, "no row for OSDB-0907")
+        pairs = [(p.label, p.definition.norm()) for p in
+                 page.definition_pairs(row.find("div", "row-details"))]
+        self.assertEqual(pairs, [
+            ("Products", "trans-Stilbene, cis-Stilbene"),
+            ("Yield", "45 % trans-Stilbene, 30 % cis-Stilbene"),
+            ("Created", "2026-10-20")])
+        images = row.find_all("img")
+        self.assertEqual(len(images), 1)
+        self.assertEqual(images[0].attrs.get("alt"),
+                         "Structure of trans-Stilbene")
+        self.assertEqual(page.resolve(images[0].attrs.get("src", "")),
+                         "/structures/trans-stilbene.svg")
+        for item in items:
+            with self.subTest(procedure=item.id):
+                self.check_details(
+                    page, page.find("tr", data_id=item.id), item, registry)
+
+    def test_the_first_product_with_an_image_decides(self) -> None:
+        """Scenario: Details markup (images)."""
+        page = self.page("procedures/index.html")
+        with_image = [row.attrs.get("data-id") for row in
+                      ps.catalogue_rows(page) if row.find_all("img")]
+        self.assertEqual(with_image, ["OSDB-0003", "OSDB-0907"])
 
 
 class AllCheckedHomeTests(cs.CatalogueCase):

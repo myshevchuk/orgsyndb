@@ -10,11 +10,11 @@
 #+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
 #+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("olefination")
 #+HUGO_CUSTOM_FRONT_MATTER: :scale "5 mmol"
-#+HUGO_CUSTOM_FRONT_MATTER: :yield_percent 80
+#+HUGO_CUSTOM_FRONT_MATTER: :substrates '("benzaldehyde" "ethyl-triphenylphosphoranylidene-acetate")
 #+HUGO_CUSTOM_FRONT_MATTER: :hazards '("Benzaldehyd: gesundheitsschädlich bei Verschlucken" "(Triphenylphosphoranyliden)essigsäureethylester: verursacht Haut-, Augen- und Atemwegsreizungen" "Heptan: leicht entzündbare Flüssigkeit und Dampf, kann bei Verschlucken und Eindringen in die Atemwege tödlich sein, kann Schläfrigkeit verursachen" "Triphenylphosphanoxid: gesundheitsschädlich bei Verschlucken")
 #+HUGO_CUSTOM_FRONT_MATTER: :references '("Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989.")
-# Die Produktangaben müssen allein auf der letzten Custom-Front-Matter-Zeile stehen.
-#+HUGO_CUSTOM_FRONT_MATTER: :product '((name . "(E)-Zimtsäureethylester") (formula . "C11H12O2") (mw . 176.21) (smiles . "CCOC(=O)/C=C/c1ccccc1") (cas . "103-36-6"))
+# Die Produktliste muss allein auf der letzten Custom-Front-Matter-Zeile stehen.
+#+HUGO_CUSTOM_FRONT_MATTER: :products '(((compound . "ethyl-cinnamate") (yield_percent . 80)))
 
 * Zusammenfassung
 (E)-Zimtsäureethylester durch lösungsmittelfreie Wittig-Olefinierung

@@ -9,7 +9,8 @@ status = "draft"
 reaction_types = ["esterification"]
 tags = ["sample-data", "fischer-esterification", "fragrance"]
 scale = "50 mmol"
-yield_percent = 70
+substrates = ["isopentyl-alcohol", "acetic-acid"]
+products = [{ compound = "isopentyl-acetate", yield_percent = 70 }]
 hazards = [
   "Isopentyl alcohol: flammable liquid and vapour, harmful if inhaled, causes skin and serious eye irritation",
   "Glacial acetic acid: flammable, causes severe skin burns and eye damage",
@@ -19,15 +20,7 @@ hazards = [
 references = [
   "Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989.",
 ]
-structure_image = "structures/osdb-0003.svg"
 ai_model = "claude-opus-5-5"
-
-[product]
-name = "Isopentyl acetate"
-formula = "C7H14O2"
-mw = 130.19
-smiles = "CC(C)CCOC(C)=O"
-cas = "123-92-2"
 +++
 
 ## Summary

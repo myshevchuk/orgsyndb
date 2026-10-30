@@ -9,7 +9,8 @@ status = "draft"
 reaction_types = ["olefination"]
 tags = ["sample-data", "wittig", "cinnamate"]
 scale = "5 mmol"
-yield_percent = 80
+substrates = ["benzaldehyde", "ethyl-triphenylphosphoranylidene-acetate"]
+products = [{ compound = "ethyl-cinnamate", yield_percent = 80 }]
 hazards = [
   "Benzaldehyd: gesundheitsschädlich bei Verschlucken",
   "(Triphenylphosphoranyliden)essigsäureethylester: verursacht Haut-, Augen- und Atemwegsreizungen",
@@ -20,13 +21,6 @@ references = [
   "Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989.",
 ]
 ai_model = "claude-opus-5-5"
-
-[product]
-name = "(E)-Zimtsäureethylester"
-formula = "C11H12O2"
-mw = 176.21
-smiles = "CCOC(=O)/C=C/c1ccccc1"
-cas = "103-36-6"
 +++
 
 ## Zusammenfassung

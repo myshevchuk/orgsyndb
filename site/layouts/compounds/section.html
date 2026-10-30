@@ -1,0 +1,42 @@
+{{- /* The compound directory at /compounds/: one table row per entry of
+the registry, ordered by shown name, with a link to the compound's page,
+the formula (each digit run in <sub>), the weight, the CAS number or an
+empty cell, and the numbers of published procedures that make the
+compound and that use it as a substrate. It needs no script. */ -}}
+{{ define "main" -}}
+<h1>{{ partial "page-title.html" . }}</h1>
+{{ $procedures := where site.RegularPages "Section" "procedures" -}}
+{{ $rows := slice -}}
+{{ range $key, $compound := site.Data.compounds -}}
+{{ $made := 0 -}}
+{{ range $procedures }}{{ if in (partial "product-keys.html" .) $key }}{{ $made = add $made 1 }}{{ end }}{{ end -}}
+{{ $used := len (where $procedures "Params.substrates" "intersect" (slice $key)) -}}
+{{ $rows = $rows | append (dict "key" $key "name" (partial "compound-name.html" $key) "compound" $compound "made" $made "used" $used) -}}
+{{ end -}}
+<div class="table-scroll" tabindex="0" role="region" aria-label="{{ T "table_compounds" }}">
+<table class="compound-table">
+<thead>
+<tr>
+<th scope="col">{{ T "col_compound" }}</th>
+<th scope="col">{{ T "label_formula" }}</th>
+<th scope="col" class="num">{{ T "label_mw" }}</th>
+<th scope="col">{{ T "label_cas" }}</th>
+<th scope="col" class="num">{{ T "label_made_by" }}</th>
+<th scope="col" class="num">{{ T "label_used_in" }}</th>
+</tr>
+</thead>
+<tbody>
+{{ range sort $rows "name" -}}
+<tr>
+<td><a href="/compounds/{{ .key }}/">{{ .name }}</a></td>
+<td>{{ .compound.formula | htmlEscape | replaceRE "([0-9]+)" "<sub>$1</sub>" | safeHTML }}</td>
+<td class="num">{{ partial "decimal.html" .compound.mw }} g/mol</td>
+<td>{{ .compound.cas }}</td>
+<td class="num">{{ lang.FormatNumber 0 .made }}</td>
+<td class="num">{{ lang.FormatNumber 0 .used }}</td>
+</tr>
+{{ end -}}
+</tbody>
+</table>
+</div>
+{{ end }}

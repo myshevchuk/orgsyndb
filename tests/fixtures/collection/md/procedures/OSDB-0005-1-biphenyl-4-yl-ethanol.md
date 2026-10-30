@@ -9,25 +9,18 @@ status = "draft"
 reaction_types = ["reduction"]
 tags = ["sample-data", "sodium-borohydride", "biphenyl"]
 scale = "5 mmol"
-yield_percent = 90
+substrates = ["4-acetylbiphenyl"]
+products = [{ compound = "1-biphenyl-4-yl-ethanol", yield_percent = 90 }]
 hazards = [
   "Sodium borohydride: in contact with water releases flammable hydrogen, toxic if swallowed, causes severe skin burns and eye damage, may damage fertility or the unborn child",
   "Ethanol: highly flammable liquid and vapour, causes serious eye irritation",
   "Hydrochloric acid, 1 M: may irritate skin and eyes",
   "Ethyl acetate: highly flammable liquid and vapour, may cause drowsiness",
 ]
-precursors = ["OSDB-0004"]
 references = [
   "Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989.",
 ]
 ai_model = "claude-opus-5-5"
-
-[product]
-name = "1-(Biphenyl-4-yl)ethanol"
-formula = "C14H14O"
-mw = 198.26
-smiles = "CC(O)c1ccc(cc1)-c1ccccc1"
-cas = "3562-73-0"
 +++
 
 ## Summary

@@ -10,11 +10,11 @@
 #+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
 #+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("hydrolysis")
 #+HUGO_CUSTOM_FRONT_MATTER: :scale "50 mmol"
-#+HUGO_CUSTOM_FRONT_MATTER: :yield_percent 80
+#+HUGO_CUSTOM_FRONT_MATTER: :substrates '("methyl-salicylate")
 #+HUGO_CUSTOM_FRONT_MATTER: :hazards '("Sodium hydroxide: causes severe skin burns and eye damage" "Concentrated hydrochloric acid: causes severe skin burns, irritating vapour" "Methyl salicylate: harmful if swallowed" "Salicylic acid: harmful if swallowed, causes serious eye damage")
 #+HUGO_CUSTOM_FRONT_MATTER: :references '("Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989.")
-# The product map must stay alone on the last custom front matter line.
-#+HUGO_CUSTOM_FRONT_MATTER: :product '((name . "Salicylic acid") (formula . "C7H6O3") (mw . 138.12) (smiles . "OC(=O)c1ccccc1O") (cas . "69-72-7"))
+# The products list must stay alone on the last custom front matter line.
+#+HUGO_CUSTOM_FRONT_MATTER: :products '(((compound . "salicylic-acid") (yield_percent . 80)))
 
 * Summary
 Salicylic acid by saponification of methyl salicylate (oil of

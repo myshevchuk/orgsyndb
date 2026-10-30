@@ -10,13 +10,12 @@
 #+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
 #+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("esterification")
 #+HUGO_CUSTOM_FRONT_MATTER: :scale "20 mmol"
-#+HUGO_CUSTOM_FRONT_MATTER: :yield_percent 70
 #+HUGO_CUSTOM_FRONT_MATTER: :hazards '("Acetic acid: flammable, causes severe skin burns" "Ethanol: highly flammable liquid")
-#+HUGO_CUSTOM_FRONT_MATTER: :precursors '("OSDB-0001")
+#+HUGO_CUSTOM_FRONT_MATTER: :substrates '("acetic-acid" "ethanol")
 #+HUGO_CUSTOM_FRONT_MATTER: :checked_by '("D. Example")
 #+HUGO_CUSTOM_FRONT_MATTER: :references '("Example, A. Fictitious Chem. 2020, 1, 1.")
-# The product map must stay alone on the last custom front matter line.
-#+HUGO_CUSTOM_FRONT_MATTER: :product '((name . "Ethyl acetate") (formula . "C4H8O2") (mw . 88.11) (smiles . "CCOC(C)=O") (cas . "141-78-6"))
+# The products list must stay alone on the last custom front matter line.
+#+HUGO_CUSTOM_FRONT_MATTER: :products '(((compound . "ethyl-acetate") (yield_percent . 70)))
 
 * Summary
 Ethyl acetate by Fischer esterification of acetic acid with ethanol.

@@ -9,14 +9,8 @@ status = "retired"
 reaction_types = ["hydrolysis"]
 tags = ["catalogue-check", "benzoic-acid"]
 scale = "5 mmol"
-yield_percent = 64.5
+products = [{ compound = "10-undecenoic-acid", yield_percent = 64.5 }]
 hazards = ["Sodium hydroxide: causes severe skin burns and eye damage"]
-
-[product]
-name = "10-Undecenoic acid"
-formula = "C11H20O2"
-mw = 184.28
-smiles = "C=CCCCCCCCCC(=O)O"
 +++
 
 ## Summary

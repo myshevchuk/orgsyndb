@@ -10,12 +10,11 @@
 #+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
 #+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("esterification")
 #+HUGO_CUSTOM_FRONT_MATTER: :scale "50 mmol"
-#+HUGO_CUSTOM_FRONT_MATTER: :yield_percent 70
+#+HUGO_CUSTOM_FRONT_MATTER: :substrates '("isopentyl-alcohol" "acetic-acid")
 #+HUGO_CUSTOM_FRONT_MATTER: :hazards '("Isopentylalkohol: entzündbare Flüssigkeit und Dampf, gesundheitsschädlich bei Einatmen, verursacht Hautreizungen und schwere Augenreizung" "Eisessig: entzündbar, verursacht schwere Verätzungen der Haut und schwere Augenschäden" "Konzentrierte Schwefelsäure: verursacht schwere Verätzungen der Haut und schwere Augenschäden" "Isopentylacetat: entzündbare Flüssigkeit und Dampf")
 #+HUGO_CUSTOM_FRONT_MATTER: :references '("Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989.")
-#+HUGO_CUSTOM_FRONT_MATTER: :structure_image "structures/osdb-0003.svg"
-# Die Produktangaben müssen allein auf der letzten Custom-Front-Matter-Zeile stehen.
-#+HUGO_CUSTOM_FRONT_MATTER: :product '((name . "Isopentylacetat") (formula . "C7H14O2") (mw . 130.19) (smiles . "CC(C)CCOC(C)=O") (cas . "123-92-2"))
+# Die Produktliste muss allein auf der letzten Custom-Front-Matter-Zeile stehen.
+#+HUGO_CUSTOM_FRONT_MATTER: :products '(((compound . "isopentyl-acetate") (yield_percent . 70)))
 
 * Zusammenfassung
 Isopentylacetat (3-Methylbutylacetat, „Bananenöl“) durch

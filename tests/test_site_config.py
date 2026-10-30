@@ -8,6 +8,7 @@ import tomllib
 import unittest
 from pathlib import Path
 
+import sample_support
 from pipeline_support import DEMO, ORGSYNDB, PIPELINE, REPO, pipeline
 
 HUGO_TOML = REPO / "site" / "hugo.toml"
@@ -92,6 +93,9 @@ class OverlayTests(unittest.TestCase):
             {"source": f"{collection}/build/content/help",
              "target": "content/help"},
             {"source": f"{collection}/static", "target": "static"},
+            {"source": f"{site}/data", "target": "data"},
+            {"source": f"{collection}/compounds",
+             "target": "data/compounds"},
         ]})
 
 
@@ -105,6 +109,21 @@ class DemoCollectionTests(unittest.TestCase):
         for path in ("org", "md", "site/static"):
             self.assertFalse((REPO / path).exists(), path)
 
+    def test_the_registry_holds_the_compounds_the_samples_name(self) -> None:
+        """Scenario: Samples live in the demo collection (registry)."""
+        named = set()
+        for sample in sample_support.sample_procedures(DEMO):
+            named |= set(sample_support.named_compounds(sample))
+        registry = DEMO / "compounds"
+        self.assertTrue(registry.is_dir(), "examples/demo/compounds is "
+                        "missing")
+        self.assertEqual(sorted(p.name for p in registry.iterdir()),
+                         sorted(f"{key}.toml" for key in named))
+        for path in sorted(registry.glob("*.toml")):
+            with self.subTest(compound=path.stem):
+                data = tomllib.loads(path.read_text(encoding="utf-8"))
+                self.assertTrue(data.get("name_de"), "no name_de")
+
 
 @unittest.skipUnless(shutil.which("git"), "git not found")
 class IgnoreRuleTests(unittest.TestCase):
@@ -113,7 +132,7 @@ class IgnoreRuleTests(unittest.TestCase):
                ".emacs-batch/elpa", ".tools/pagefind-1.5.2/pagefind"]
     TRACKED = ["examples/demo/org/procedures/OSDB-0001-salicylic-acid.org",
                "examples/demo/md/procedures/OSDB-0002-aspirin.md",
-               "examples/demo/static/structures/osdb-0003.svg",
+               "examples/demo/static/structures/isopentyl-acetate.svg",
                "site/hugo.toml", "site/.hugo_build.lock", "build/x",
                "tests/fixtures/export/build/x"]
 

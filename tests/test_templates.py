@@ -3,10 +3,12 @@
 
 import re
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
-from support import REPO, ValidatorTestCase, run_validator
+from support import (COMPOUND_TEMPLATE, REPO, ValidatorTestCase,
+                     run_validator, template_registry)
 
 MD_TEMPLATE = REPO / "templates" / "procedure.md"
 ORG_TEMPLATE = REPO / "templates" / "procedure.org"
@@ -36,23 +38,22 @@ class MarkdownTemplateTests(ValidatorTestCase):
             root.mkdir()
             (root / "OSDB-0001-template.md").write_text(
                 text, encoding="utf-8")
-            result = run_validator([root], cwd=Path(tmp))
+            with template_registry() as registry:
+                result = run_validator(["--compounds", registry, root],
+                                       cwd=Path(tmp))
         self.assert_clean(result)
 
-    def test_unsubstituted_markdown_template_is_rejected(self) -> None:
-        """Scenario: Unsubstituted Markdown template is rejected."""
+    def test_template_names_the_example_compound(self) -> None:
+        """Requirement: Markdown template (products and substrates)."""
         text = read_template(MD_TEMPLATE)
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "content"
-            root.mkdir()
-            (root / "OSDB-0000-template.md").write_text(
-                text, encoding="utf-8")
-            result = run_validator([root], cwd=Path(tmp))
-        self.assertEqual(result.returncode, 1, result.stderr)
-        ids = [p for p in result.problems
-               if p.field == "id" and p.severity == "error"
-               and "must be between OSDB-0001 and OSDB-9999" in p.message]
-        self.assertEqual(len(ids), 1, result.stdout)
+        front = tomllib.loads(text.split("+++\n")[1])
+        self.assertEqual([e["compound"] for e in front["products"]],
+                         ["example-compound"])
+        self.assertEqual(set(front) & {"product", "yield_percent",
+                                       "precursors", "structure_image"},
+                         set())
+        self.assertRegex(text, r'(?m)^#\s*substrates\s*=\s*\[[^\]]*'
+                         r'"example-compound"')
 
 
 class OrgTemplateTests(ValidatorTestCase):
@@ -67,16 +68,22 @@ class OrgTemplateTests(ValidatorTestCase):
         custom = "\n".join(
             ln for ln in lines
             if ln.upper().startswith("#+HUGO_CUSTOM_FRONT_MATTER:"))
-        for key in ["id", "authors", "status", "reaction_types", "product",
-                    "scale", "yield_percent", "hazards"]:
+        for key in ["id", "authors", "status", "reaction_types", "scale",
+                    "hazards", "products"]:
             self.assertIn(f":{key}", custom)
+        for old in ["product ", "yield_percent", "precursors",
+                    "structure_image"]:
+            self.assertNotIn(f":{old}", custom)
         self.assertIn("OSDB-0000", custom)
+        self.assertIn('(compound . "example-compound")', custom)
+        self.assertRegex(text, r'(?m)^# #\+HUGO_CUSTOM_FRONT_MATTER: '
+                         r""":substrates '\("example-compound"\)""")
         custom_lines = custom.splitlines()
         self.assertEqual(
-            re.findall(r":([A-Za-z_]+)", custom_lines[-1]), ["product"],
-            "product must be alone on the last custom front matter line")
+            re.findall(r":([A-Za-z_]+)", custom_lines[-1]), ["products"],
+            "products must be alone on the last custom front matter line")
         self.assertFalse(
-            any(":product" in ln for ln in custom_lines[:-1]))
+            any(":products" in ln for ln in custom_lines[:-1]))
         headings = [ln[2:].strip() for ln in lines if ln.startswith("* ")]
         positions = [headings.index(h) for h in CANON if h in headings]
         self.assertEqual(len(positions), len(CANON), headings)
@@ -86,6 +93,43 @@ class OrgTemplateTests(ValidatorTestCase):
                        "#+HUGO_BASE_DIR:", "#+HUGO_SECTION:"]:
             self.assertFalse(
                 any(ln.upper().startswith(prefix) for ln in lines), prefix)
+
+
+class CompoundTemplateTests(ValidatorTestCase):
+    REQUIRED = ["name", "formula", "mw", "smiles"]
+    OPTIONAL = ["name_de", "cas", "structure_image"]
+
+    def test_template_validates_as_a_registry_file(self) -> None:
+        """Scenario: Template validates."""
+        read_template(COMPOUND_TEMPLATE)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "content"
+            root.mkdir()
+            with template_registry() as registry:
+                result = run_validator(["--compounds", registry, root],
+                                       cwd=Path(tmp))
+        self.assert_clean(result)
+
+    def test_template_explains_every_key_and_sets_the_required_ones(
+            self) -> None:
+        """Requirement: Compound template."""
+        lines = read_template(COMPOUND_TEMPLATE).splitlines()
+        comments = [ln for ln in lines if ln.startswith("#")]
+        for key in self.REQUIRED:
+            with self.subTest(key=key):
+                self.assertTrue(any(re.match(rf"{key}\s*=", ln)
+                                    for ln in lines), "not set")
+                self.assertTrue(any(re.search(rf"\b{key}\b", ln)
+                                    for ln in comments), "not explained")
+        for key in self.OPTIONAL:
+            with self.subTest(key=key):
+                self.assertFalse(any(re.match(rf"{key}\s*=", ln)
+                                     for ln in lines), "is set")
+                self.assertTrue(any(re.match(rf"#\s*{key}\s*=", ln)
+                                    for ln in comments),
+                                "not shown commented out")
+                self.assertTrue(any(re.search(rf"\b{key}\b", ln)
+                                    for ln in comments))
 
 
 if __name__ == "__main__":

@@ -9,16 +9,9 @@ status = "checked"
 reaction_types = ["oxidation"]
 tags = ["catalogue-check", "benzoic-acid", "cinnamate"]
 scale = "10 mmol"
-yield_percent = 82
+products = [{ compound = "4-methylbenzoic-acid", yield_percent = 82 }]
 hazards = ["4-Xylene: flammable liquid and vapour"]
 checked_by = ["B. Example"]
-
-[product]
-name = "4-Methylbenzoic acid"
-formula = "C8H8O2"
-mw = 136.15
-smiles = "Cc1ccc(cc1)C(=O)O"
-cas = "99-94-5"
 +++
 
 ## Summary

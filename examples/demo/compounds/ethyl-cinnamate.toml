@@ -1,0 +1,6 @@
+name = "Ethyl (E)-cinnamate"
+name_de = "(E)-Zimtsäureethylester"
+formula = "C11H12O2"
+mw = 176.21
+smiles = "CCOC(=O)/C=C/c1ccccc1"
+cas = "103-36-6"

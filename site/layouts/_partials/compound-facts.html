@@ -1,0 +1,21 @@
+{{- /* The facts of a registry entry as dt/dd pairs, in this order: Formula
+(each digit run in <sub>), MW (<mw> g/mol, with the language's decimal
+separator), CAS when set, and SMILES as <code data-smiles> followed by
+its copy button, which site.js reveals. Takes the entry. The metadata
+panel and the compound page put the pairs in their own dl. */ -}}
+{{ with .formula -}}
+<dt>{{ T "label_formula" }}</dt>
+<dd>{{ . | htmlEscape | replaceRE "([0-9]+)" "<sub>$1</sub>" | safeHTML }}</dd>
+{{ end -}}
+{{ if isset . "mw" -}}
+<dt>{{ T "label_mw" }}</dt>
+<dd>{{ partial "decimal.html" .mw }} g/mol</dd>
+{{ end -}}
+{{ with .cas -}}
+<dt>{{ T "label_cas" }}</dt>
+<dd>{{ . }}</dd>
+{{ end -}}
+{{ with .smiles -}}
+<dt>{{ T "label_smiles" }}</dt>
+<dd><code data-smiles>{{ . }}</code> <button type="button" class="copy-button" data-copy-smiles data-copied="{{ T "copied" }}" data-selected="{{ T "selected" }}" data-pagefind-ignore hidden>{{ T "copy" }}</button></dd>
+{{ end -}}

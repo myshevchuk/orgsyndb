@@ -10,11 +10,11 @@
 #+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
 #+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("cross-coupling")
 #+HUGO_CUSTOM_FRONT_MATTER: :scale "10 mmol"
-#+HUGO_CUSTOM_FRONT_MATTER: :yield_percent 85
+#+HUGO_CUSTOM_FRONT_MATTER: :substrates '("4-bromoacetophenone" "phenylboronic-acid")
 #+HUGO_CUSTOM_FRONT_MATTER: :hazards '("4′-Bromoacetophenone: harmful if swallowed, causes skin and serious eye irritation" "Phenylboronic acid: harmful if swallowed" "Potassium carbonate: causes skin and serious eye irritation" "Tetra-n-butylammonium bromide: harmful if swallowed, causes serious eye irritation" "Palladium(II) acetate: causes serious eye damage, may cause an allergic skin reaction, very toxic to aquatic life" "Ethyl acetate: highly flammable liquid and vapour, may cause drowsiness")
 #+HUGO_CUSTOM_FRONT_MATTER: :references '("Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989." "Miyaura, N.; Suzuki, A. Palladium-Catalyzed Cross-Coupling Reactions of Organoboron Compounds. Chem. Rev. 1995, 95, 2457.")
-# The product map must stay alone on the last custom front matter line.
-#+HUGO_CUSTOM_FRONT_MATTER: :product '((name . "4-Acetylbiphenyl") (formula . "C14H12O") (mw . 196.25) (smiles . "CC(=O)c1ccc(cc1)-c1ccccc1") (cas . "92-91-1"))
+# The products list must stay alone on the last custom front matter line.
+#+HUGO_CUSTOM_FRONT_MATTER: :products '(((compound . "4-acetylbiphenyl") (yield_percent . 85)))
 
 * Summary
 4-Acetylbiphenyl (1-(biphenyl-4-yl)ethan-1-one) by a ligand-free Suzuki

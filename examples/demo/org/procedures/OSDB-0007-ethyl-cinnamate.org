@@ -10,11 +10,11 @@
 #+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
 #+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("olefination")
 #+HUGO_CUSTOM_FRONT_MATTER: :scale "5 mmol"
-#+HUGO_CUSTOM_FRONT_MATTER: :yield_percent 80
+#+HUGO_CUSTOM_FRONT_MATTER: :substrates '("benzaldehyde" "ethyl-triphenylphosphoranylidene-acetate")
 #+HUGO_CUSTOM_FRONT_MATTER: :hazards '("Benzaldehyde: harmful if swallowed" "Ethyl (triphenylphosphoranylidene)acetate: causes skin, eye and respiratory irritation" "Heptane: highly flammable liquid and vapour, may be fatal if swallowed and enters airways, may cause drowsiness" "Triphenylphosphine oxide: harmful if swallowed")
 #+HUGO_CUSTOM_FRONT_MATTER: :references '("Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989.")
-# The product map must stay alone on the last custom front matter line.
-#+HUGO_CUSTOM_FRONT_MATTER: :product '((name . "Ethyl (E)-cinnamate") (formula . "C11H12O2") (mw . 176.21) (smiles . "CCOC(=O)/C=C/c1ccccc1") (cas . "103-36-6"))
+# The products list must stay alone on the last custom front matter line.
+#+HUGO_CUSTOM_FRONT_MATTER: :products '(((compound . "ethyl-cinnamate") (yield_percent . 80)))
 
 * Summary
 Ethyl (E)-cinnamate by a solvent-free Wittig olefination of benzaldehyde

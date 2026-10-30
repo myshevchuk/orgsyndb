@@ -9,25 +9,18 @@ status = "draft"
 reaction_types = ["acylation"]
 tags = ["sample-data", "acetylation"]
 scale = "20 mmol"
-yield_percent = 75
+substrates = ["salicylic-acid", "acetic-anhydride"]
+products = [{ compound = "acetylsalicylic-acid", yield_percent = 75 }]
 hazards = [
   "Acetanhydrid: entzündbar, verursacht schwere Verätzungen der Haut und schwere Augenschäden, gesundheitsschädlich bei Einatmen",
   "Phosphorsäure, 85 %: verursacht schwere Verätzungen der Haut und schwere Augenschäden",
   "Salicylsäure: gesundheitsschädlich bei Verschlucken, verursacht schwere Augenschäden",
   "Acetylsalicylsäure: gesundheitsschädlich bei Verschlucken",
 ]
-precursors = ["OSDB-0001"]
 references = [
   "Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989.",
 ]
 ai_model = "claude-opus-5-5"
-
-[product]
-name = "Acetylsalicylsäure"
-formula = "C9H8O4"
-mw = 180.16
-smiles = "CC(=O)Oc1ccccc1C(=O)O"
-cas = "50-78-2"
 +++
 
 ## Zusammenfassung

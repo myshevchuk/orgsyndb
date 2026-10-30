@@ -9,15 +9,8 @@ status = "draft"
 reaction_types = ["reduction"]
 tags = ["catalogue-check", "cinnamate", "sodium-borohydride"]
 scale = "8 mmol"
-yield_percent = 90
+products = [{ compound = "cinnamyl-alcohol", yield_percent = 90 }]
 hazards = ["Sodium borohydride: releases flammable hydrogen with water"]
-
-[product]
-name = "Cinnamyl alcohol"
-formula = "C9H10O"
-mw = 134.18
-smiles = "OC/C=C/c1ccccc1"
-cas = "104-54-1"
 +++
 
 ## Summary

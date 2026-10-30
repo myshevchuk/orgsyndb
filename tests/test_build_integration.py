@@ -29,6 +29,8 @@ from pipeline_support import (FIXTURES, Sandbox, front_matter, make_sandbox,
 BASELINE = FIXTURES / "baseline" / "OSDB-0100-baseline.md"
 MISSING_TITLE = (FIXTURES / "invalid" / "missing-title"
                  / "OSDB-0101-missing-title.md")
+UNKNOWN_COMPOUND = (FIXTURES / "invalid" / "unknown-compound"
+                    / "OSDB-0123-unknown-compound.md")
 PROBLEM_LINE = re.compile(r"^.+?:[^:\s]+: (error|warning): ")
 SEEDS = ["OSDB-0001-salicylic-acid", "OSDB-0002-aspirin"]
 # The locale of the shipped site/hugo.toml.
@@ -68,9 +70,18 @@ class BuildTestCase(unittest.TestCase):
         if date is not None:
             text = apply(text, support.replace_line("date", f"date = {date}"),
                          support.replace_line("lastmod", f"lastmod = {date}"))
+        ps.put_compounds(self.sandbox, "ethyl-acetate")
         target = self.sandbox.md_dir() / BASELINE.name
         target.write_text(text, encoding="utf-8")
         return target
+
+    def add_missing_title(self, directory: Path | None = None) -> Path:
+        """Copy the missing-title fixture, with its compound, into
+        ``md/procedures/`` or ``directory``."""
+        ps.put_compounds(self.sandbox, "ethyl-acetate")
+        return Path(shutil.copy2(
+            MISSING_TITLE, self.sandbox.md_dir() if directory is None
+            else directory))
 
 
 class DemoBuildTestCase(BuildTestCase):
@@ -215,7 +226,7 @@ class BuildSubcommandTests(BuildTestCase):
         """Scenario: Validation error stops the build before Hugo."""
         self.assert_ok(self.build("build"))
         before = snapshot(self.public())
-        shutil.copy2(MISSING_TITLE, self.sandbox.md_dir())
+        self.add_missing_title()
         result = self.build("build")
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertEqual(snapshot(self.public()), before)
@@ -240,13 +251,63 @@ class ValidateSubcommandTests(BuildTestCase):
 
     def test_invalid_markdown_procedure_is_reported(self) -> None:
         """Scenario: Invalid Markdown procedure."""
-        shutil.copy2(MISSING_TITLE, self.sandbox.md_dir())
+        self.add_missing_title()
         result = self.build("validate")
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertTrue(any(
             ln.startswith("md/procedures/OSDB-0101-missing-title.md:"
                           "title: error:")
             for ln in result.stdout.splitlines()), result.stdout)
+
+
+class ValidateRegistryTests(BuildTestCase):
+    def test_registry_problem_is_reported_under_the_compounds_path(
+            self) -> None:
+        """Scenario: Seeds validate (the registry is checked)."""
+        path = self.sandbox.root / "compounds" / "salicylic-acid.toml"
+        path.write_text(path.read_text(encoding="utf-8").replace(
+            "mw = 138.12", "mw = 0"), encoding="utf-8")
+        result = self.build("validate")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        lines = problem_lines(result.stdout)
+        self.assertEqual(len(lines), 1, result.stdout)
+        self.assertTrue(lines[0].startswith(
+            "compounds/salicylic-acid.toml:mw: error: "), lines[0])
+        self.assertIn("must be greater than 0", lines[0])
+
+    def test_unknown_compound_is_reported(self) -> None:
+        """Scenario: Seeds validate (compounds are resolved)."""
+        shutil.copy2(UNKNOWN_COMPOUND, self.sandbox.md_dir())
+        result = self.build("validate")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertTrue(any(
+            ln.startswith("md/procedures/OSDB-0123-unknown-compound.md:"
+                          "products[1].compound: error:")
+            and 'unknown compound "no-such-compound"' in ln
+            for ln in result.stdout.splitlines()), result.stdout)
+
+    def test_structure_images_resolve_under_static(self) -> None:
+        """Scenario: Seeds validate (images are found under static)."""
+        (self.sandbox.root / "static" / "structures"
+         / "isopentyl-acetate.svg").unlink()
+        result = self.build("validate")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertTrue(any(
+            ln.startswith("compounds/isopentyl-acetate.toml:"
+                          "structure_image: error:") and "not found" in ln
+            for ln in result.stdout.splitlines()), result.stdout)
+
+    def test_missing_registry_directory_leaves_every_key_unknown(
+            self) -> None:
+        """Scenario: Seeds validate (a collection without compounds/)."""
+        shutil.rmtree(self.sandbox.root / "compounds")
+        result = self.build("validate")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        unknown = [ln for ln in problem_lines(result.stdout)
+                   if "unknown compound" in ln]
+        self.assertGreater(len(unknown), 0, result.stdout)
+        self.assertEqual(len(unknown), len(problem_lines(result.stdout)),
+                         result.stdout)
 
 
 class ShippedTreeValidationTests(DemoBuildTestCase):
@@ -365,7 +426,7 @@ class HookTests(BuildTestCase):
         for args in (("init", "-q"),
                      ("config", "core.hooksPath", hook.parent)):
             self.assertEqual(sandbox.git(*args).returncode, 0)
-        target = shutil.copy2(MISSING_TITLE, sandbox.md_dir())
+        target = self.add_missing_title()
         relative = Path(target).relative_to(sandbox.root)
         self.assertEqual(sandbox.git("add", "--", relative).returncode, 0)
         result = sandbox.git("commit", "-m", "add invalid procedure")
@@ -406,7 +467,7 @@ class HookTests(BuildTestCase):
                      ("add", "--", sandbox.root.name)):
             done = git(*args)
             self.assertEqual(done.returncode, 0, done.stderr)
-        target = shutil.copy2(MISSING_TITLE, sandbox.md_dir())
+        target = self.add_missing_title()
         relative = Path(target).relative_to(top)
         self.assertEqual(git("add", "--", relative).returncode, 0)
         result = git("commit", "-m", "add invalid procedure")

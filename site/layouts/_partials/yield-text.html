@@ -1,0 +1,10 @@
+{{- /* The yield of a procedure as the key facts write it. Takes its
+products, a slice of tables with compound and yield_percent: with one
+product, <n> %; with several, <n> % <name> for each in order, joined by
+", ", where <name> is the shown name (compound-name.html). Numbers carry
+the language's decimal separator. */ -}}
+{{- if eq (len .) 1 -}}
+{{ partial "decimal.html" (index . 0).yield_percent }} %
+{{- else -}}
+{{ range $i, $entry := . }}{{ if $i }}, {{ end }}{{ partial "decimal.html" $entry.yield_percent }} % {{ partial "compound-name.html" $entry.compound }}{{ end }}
+{{- end -}}

@@ -1,0 +1,7 @@
+name = "Isopentyl acetate"
+name_de = "Isopentylacetat"
+formula = "C7H14O2"
+mw = 130.19
+smiles = "CC(C)CCOC(C)=O"
+cas = "123-92-2"
+structure_image = "structures/isopentyl-acetate.svg"

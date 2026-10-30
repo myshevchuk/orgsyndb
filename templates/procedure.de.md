@@ -53,9 +53,13 @@ tags = ["change-me"]
 # eine Einheit.
 scale = "25 mmol"
 
-# Ausbeute in Prozent, eine Zahl von 0 bis 100, ohne Anführungszeichen
-# und ohne %.
-yield_percent = 85
+# Was die Vorschrift liefert: ein Eintrag in geschweiften Klammern je
+# Produkt, durch Kommas getrennt. compound ist der Schlüssel des
+# Produkts, der Name seiner Datei im Ordner compounds/ der Sammlung ohne
+# .toml; für eine neue Verbindung templates/compound.toml dorthin
+# kopieren. yield_percent ist seine Ausbeute in Prozent, eine Zahl von 0
+# bis 100, ohne Anführungszeichen und ohne %.
+products = [{ compound = "example-compound", yield_percent = 85 }]
 
 # Die wichtigsten Gefahren, mindestens eine, jeweils als kurzer Satz.
 hazards = ["Entzündbare Flüssigkeit"]
@@ -63,15 +67,10 @@ hazards = ["Entzündbare Flüssigkeit"]
 # Optionale Angaben. Um eine Zeile zu verwenden, das # am Zeilenanfang
 # löschen und den Wert ändern.
 
-# Nummern der Vorschriften, von denen diese ausgeht, z. B. die ihres
-# Ausgangsstoffs. Jede muss eine Vorschrift sein, die es auf der Website
-# gibt.
-# precursors = ["OSDB-0001"]
-
-# Bild der Strukturformel des Produkts, eine .svg- oder .png-Datei im
-# Ordner static/structures/ der Sammlung. Den Pfad mit structures/
-# beginnen.
-# structure_image = "structures/osdb-0001.svg"
+# Die Ausgangsstoffe, als Liste von Verbindungsschlüsseln wie dem in
+# products. Eine Vorschrift, die einen davon herstellt, wird von dieser
+# aus als ihre Vorstufe verlinkt.
+# substrates = ["example-compound"]
 
 # Wer die Vorschrift geprüft hat, als Liste von Namen.
 # checked_by = ["B. Example"]
@@ -82,21 +81,6 @@ hazards = ["Entzündbare Flüssigkeit"]
 # Name des KI-Modells, das beim Schreiben geholfen hat. Die Zeile ganz
 # weglassen, wenn keine KI beteiligt war.
 # ai_model = "example-model-1"
-
-# Angaben zum Produkt. Dieser Block muss als letzter stehen, direkt vor
-# der schließenden +++-Zeile.
-[product]
-# Name des Produkts.
-name = "Produktname"
-# Summenformel, z. B. "C4H8O2".
-formula = "C4H8O2"
-# Molmasse in g/mol, eine Zahl ohne Anführungszeichen, mit Dezimalpunkt.
-mw = 88.11
-# Strukturformel als SMILES.
-smiles = "CCOC(C)=O"
-# Optionale CAS-Nummer, z. B. "141-78-6". Das # löschen, um sie zu
-# verwenden.
-# cas = "141-78-6"
 +++
 
 ## Zusammenfassung

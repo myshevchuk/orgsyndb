@@ -1,0 +1,6 @@
+name = "Dibenzylideneacetone"
+name_de = "Dibenzylidenaceton"
+formula = "C17H14O"
+mw = 234.3
+smiles = "O=C(/C=C/c1ccccc1)/C=C/c1ccccc1"
+cas = "538-58-9"

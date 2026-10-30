@@ -149,6 +149,9 @@ h1 { font-size: 2.25rem; }
 .procedure-header h1 { margin-bottom: var(--space-3); }
 .procedure-header .actions { margin-top: var(--space-4); }
 .procedure-header .structure { grid-column: 2; grid-row: 1 / -1; margin: 0; }
+/* A further product's drawing goes below the first, in the rows after
+   the text. */
+.procedure-header .structure ~ .structure { grid-row: auto; margin-top: var(--space-3); }
 /* Marginalia: the body is a column up to the wide measure, with a margin
    of details right beside it; on a wider screen the spare width stays at
    the right. Its prose keeps a reading measure and its tables use the
@@ -286,17 +289,20 @@ h1 { font-size: 2.25rem; }
 }
 .catalogue[data-view="details"] .procedure-list td { vertical-align: top; }
 
-.procedure-list { width: 100%; font-size: 0.925rem; }
-.procedure-list th, .procedure-list td {
+/* The compound directory shares the catalogue table's rows. */
+.procedure-list, .compound-table { width: 100%; font-size: 0.925rem; }
+:is(.procedure-list, .compound-table) :is(th, td) {
   padding: 0.5rem 0.9rem;
   vertical-align: middle;
 }
-.procedure-list thead { background: var(--surface); }
-.procedure-list thead th { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-.procedure-list tbody tr:hover { background: var(--surface); }
+:is(.procedure-list, .compound-table) thead { background: var(--surface); }
+:is(.procedure-list, .compound-table) thead th { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+:is(.procedure-list, .compound-table) tbody tr:hover { background: var(--surface); }
 .procedure-list td:first-child a { color: var(--fg); text-decoration: none; }
-.procedure-list td:nth-child(2) a { text-decoration: none; }
-.procedure-list td:nth-child(2) a:hover { text-decoration: underline; }
+.procedure-list td:nth-child(2) a, .compound-table td:first-child a { text-decoration: none; }
+.procedure-list td:nth-child(2) a:hover, .compound-table td:first-child a:hover { text-decoration: underline; }
+.compound-table td:first-child { overflow-wrap: anywhere; }
+.compound-table td:nth-child(n+2) { white-space: nowrap; }
 .procedure-list td:nth-child(n+4) { color: var(--muted); }
 .procedure-list .badge {
   padding: 0;

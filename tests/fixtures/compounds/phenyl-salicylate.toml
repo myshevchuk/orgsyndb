@@ -1,0 +1,5 @@
+name = "Phenyl salicylate"
+formula = "C13H10O3"
+mw = 214.22
+smiles = "O=C(Oc1ccccc1)c1ccccc1O"
+cas = "118-55-8"

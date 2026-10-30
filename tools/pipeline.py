@@ -807,10 +807,12 @@ def hugo_overlay(site: Path, collection: Path, language: str) -> str:
     ``site`` is the application's Hugo project and ``collection`` the
     collection directory, both absolute; ``language`` is the site's
     language. The overlay sets ``defaultContentLanguage`` to it, the
-    publish and resource directories inside the collection, and four
+    publish and resource directories inside the collection, and six
     module mounts: the application's pages, the staged procedures of
     ``build/content/procedures/``, the staged help pages of
-    ``build/content/help/`` and the collection's static files.
+    ``build/content/help/``, the collection's static files, the
+    application's data, and the collection's ``compounds/`` as the data
+    entry ``compounds``.
     """
     site, collection = Path(site), Path(collection)
 
@@ -828,7 +830,9 @@ def hugo_overlay(site: Path, collection: Path, language: str) -> str:
             + mount(collection / "build" / STAGED, "content/procedures",
                     True)
             + mount(collection / "build" / HELP_STAGED, "content/help")
-            + mount(collection / "static", "static"))
+            + mount(collection / "static", "static")
+            + mount(site / "data", "data")
+            + mount(collection / "compounds", "data/compounds"))
 
 
 # --------------------------------------------------------------------------

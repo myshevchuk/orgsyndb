@@ -10,12 +10,11 @@
 #+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
 #+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("esterification")
 #+HUGO_CUSTOM_FRONT_MATTER: :scale "50 mmol"
-#+HUGO_CUSTOM_FRONT_MATTER: :yield_percent 70
+#+HUGO_CUSTOM_FRONT_MATTER: :substrates '("isopentyl-alcohol" "acetic-acid")
 #+HUGO_CUSTOM_FRONT_MATTER: :hazards '("Isopentyl alcohol: flammable liquid and vapour, harmful if inhaled, causes skin and serious eye irritation" "Glacial acetic acid: flammable, causes severe skin burns and eye damage" "Concentrated sulfuric acid: causes severe skin burns and eye damage" "Isopentyl acetate: flammable liquid and vapour")
 #+HUGO_CUSTOM_FRONT_MATTER: :references '("Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989.")
-#+HUGO_CUSTOM_FRONT_MATTER: :structure_image "structures/osdb-0003.svg"
-# The product map must stay alone on the last custom front matter line.
-#+HUGO_CUSTOM_FRONT_MATTER: :product '((name . "Isopentyl acetate") (formula . "C7H14O2") (mw . 130.19) (smiles . "CC(C)CCOC(C)=O") (cas . "123-92-2"))
+# The products list must stay alone on the last custom front matter line.
+#+HUGO_CUSTOM_FRONT_MATTER: :products '(((compound . "isopentyl-acetate") (yield_percent . 70)))
 
 * Summary
 Isopentyl acetate (3-methylbutyl acetate, "banana oil") by Fischer

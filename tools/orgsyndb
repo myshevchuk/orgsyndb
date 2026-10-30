@@ -6,7 +6,8 @@
 """OrgSynDB command-line program. Run ``orgsyndb help`` for usage.
 
 It builds a collection: a directory holding ``orgsyndb.toml``, whose
-procedures are in ``org/procedures/`` and ``md/procedures/``. Everything
+procedures are in ``org/procedures/`` and ``md/procedures/`` and whose
+compound registry is ``compounds/``. Everything
 a build generates goes into the collection's ``build/``, ``public/`` and
 ``pdf/``; the application directory holds only the fetched-tool caches
 ``.emacs-batch/`` and ``.tools/``. The logic lives in ``pipeline.py`` and
@@ -43,7 +44,8 @@ MARKER_TEXT = (
     "# md/procedures/, static files in static/. See the OrgSynDB README.\n"
     f"format = {FORMAT}\n")
 IGNORED = ("/build/", "/public/", "/pdf/")
-COLLECTION_DIRS = ("org/procedures", "md/procedures", "static/structures")
+COLLECTION_DIRS = ("org/procedures", "md/procedures", "compounds",
+                   "static/structures")
 OUTPUTS = ("build", "public", "pdf")
 APP_CACHES = (".emacs-batch", ".tools")
 CONTENT_ROOTS = ("build/export", "md/procedures")
@@ -244,6 +246,7 @@ def install_export(build: Path) -> None:
 def run_validator() -> int:
     step("validate: " + ", ".join(existing(CONTENT_ROOTS)))
     status = validate.main(["--static-dir", "static",
+                            "--compounds", "compounds",
                             *existing(CONTENT_ROOTS)])
     sys.stdout.flush()
     sys.stderr.flush()

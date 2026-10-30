@@ -1,0 +1,6 @@
+name = "Methyl salicylate"
+name_de = "Salicylsäuremethylester"
+formula = "C8H8O3"
+mw = 152.15
+smiles = "COC(=O)c1ccccc1O"
+cas = "119-36-8"

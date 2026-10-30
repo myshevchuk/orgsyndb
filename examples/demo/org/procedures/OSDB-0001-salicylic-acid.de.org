@@ -10,11 +10,11 @@
 #+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
 #+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("hydrolysis")
 #+HUGO_CUSTOM_FRONT_MATTER: :scale "50 mmol"
-#+HUGO_CUSTOM_FRONT_MATTER: :yield_percent 80
+#+HUGO_CUSTOM_FRONT_MATTER: :substrates '("methyl-salicylate")
 #+HUGO_CUSTOM_FRONT_MATTER: :hazards '("Natriumhydroxid: verursacht schwere Verätzungen der Haut und schwere Augenschäden" "Konzentrierte Salzsäure: verursacht schwere Verätzungen der Haut, reizende Dämpfe" "Methylsalicylat: gesundheitsschädlich bei Verschlucken" "Salicylsäure: gesundheitsschädlich bei Verschlucken, verursacht schwere Augenschäden")
 #+HUGO_CUSTOM_FRONT_MATTER: :references '("Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989.")
-# Die Produktangaben müssen allein auf der letzten Custom-Front-Matter-Zeile stehen.
-#+HUGO_CUSTOM_FRONT_MATTER: :product '((name . "Salicylsäure") (formula . "C7H6O3") (mw . 138.12) (smiles . "OC(=O)c1ccccc1O") (cas . "69-72-7"))
+# Die Produktliste muss allein auf der letzten Custom-Front-Matter-Zeile stehen.
+#+HUGO_CUSTOM_FRONT_MATTER: :products '(((compound . "salicylic-acid") (yield_percent . 80)))
 
 * Zusammenfassung
 Salicylsäure durch Verseifung von Methylsalicylat (Wintergrünöl) mit

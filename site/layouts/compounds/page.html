@@ -1,0 +1,42 @@
+{{- /* A compound page, made by content/compounds/_content.gotmpl for one
+entry of the registry, whose key is the compound parameter: the shown
+name; the structure figure when the entry sets structure_image; the
+facts (compound-facts.html); and, each only when it has an entry, the
+published procedures that make the compound, with its yield in each, and
+those that use it as a substrate, both by ID with their status badges.
+The page carries no data-pagefind-body, so the search index holds
+procedures only. */ -}}
+{{ define "main" -}}
+{{ $key := .Params.compound -}}
+{{ $compound := index site.Data.compounds $key -}}
+{{ $procedures := sort (where site.RegularPages "Section" "procedures") "Params.id" -}}
+<h1>{{ .Title }}</h1>
+{{ with $compound.structure_image -}}
+<figure class="structure"><img src="/{{ . }}" alt="{{ T "structure_of" $.Title }}"></figure>
+{{ end -}}
+<dl class="compound-facts">
+{{ partial "compound-facts.html" $compound -}}
+</dl>
+{{ $made := slice -}}
+{{ range $page := $procedures }}{{ range $page.Params.products }}{{ if eq .compound $key }}{{ $made = $made | append (dict "page" $page "yield" .yield_percent) }}{{ end }}{{ end }}{{ end -}}
+{{ with $made -}}
+<section class="compound-made-by" aria-labelledby="compound-made-by">
+<h2 id="compound-made-by">{{ T "label_made_by" }}</h2>
+<ul class="compound-procedures">
+{{ range . -}}
+<li><a href="{{ .page.RelPermalink }}">{{ .page.Params.id }} {{ .page.Title }}</a> · {{ partial "decimal.html" .yield }} % · <span class="badge badge--{{ .page.Params.status }}">{{ partial "status-label.html" .page.Params.status }}</span></li>
+{{ end -}}
+</ul>
+</section>
+{{ end -}}
+{{ with where $procedures "Params.substrates" "intersect" (slice $key) -}}
+<section class="compound-used-in" aria-labelledby="compound-used-in">
+<h2 id="compound-used-in">{{ T "label_used_in" }}</h2>
+<ul class="compound-procedures">
+{{ range . -}}
+<li><a href="{{ .RelPermalink }}">{{ .Params.id }} {{ .Title }}</a> · <span class="badge badge--{{ .Params.status }}">{{ partial "status-label.html" .Params.status }}</span></li>
+{{ end -}}
+</ul>
+</section>
+{{ end -}}
+{{ end }}

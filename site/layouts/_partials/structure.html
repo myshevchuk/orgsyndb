@@ -1,7 +1,16 @@
-{{- /* The structure image named by structure_image, relative to the
-collection's static/, or an empty slot that the print stylesheet hides. */ -}}
-{{ with .Params.structure_image -}}
-<figure class="structure"><img src="/{{ . }}" alt="{{ T "structure_of" $.Params.product.name }}"></figure>
-{{ else -}}
+{{- /* The structure figures: one figure.structure per product whose
+registry entry sets structure_image, a path relative to the collection's
+static/, in products order, with the shown name in its alt text; or,
+when none does, one empty slot that the print stylesheet hides. */ -}}
+{{ $found := false -}}
+{{ range $entry := .Params.products -}}
+{{ with index site.Data.compounds $entry.compound -}}
+{{ with .structure_image -}}
+{{ $found = true -}}
+<figure class="structure"><img src="/{{ . }}" alt="{{ T "structure_of" (partial "compound-name.html" $entry.compound) }}"></figure>
+{{ end -}}
+{{ end -}}
+{{ end -}}
+{{ if not $found -}}
 <figure class="structure structure--placeholder" data-pagefind-ignore><div class="structure__slot">{{ T "no_structure" }}</div></figure>
 {{ end -}}

@@ -9,7 +9,8 @@ status = "draft"
 reaction_types = ["cross-coupling"]
 tags = ["sample-data", "suzuki-coupling", "biphenyl"]
 scale = "10 mmol"
-yield_percent = 85
+substrates = ["4-bromoacetophenone", "phenylboronic-acid"]
+products = [{ compound = "4-acetylbiphenyl", yield_percent = 85 }]
 hazards = [
   "4′-Bromacetophenon: gesundheitsschädlich bei Verschlucken, verursacht Hautreizungen und schwere Augenreizung",
   "Phenylboronsäure: gesundheitsschädlich bei Verschlucken",
@@ -23,13 +24,6 @@ references = [
   "Miyaura, N.; Suzuki, A. Palladium-Catalyzed Cross-Coupling Reactions of Organoboron Compounds. Chem. Rev. 1995, 95, 2457.",
 ]
 ai_model = "claude-opus-5-5"
-
-[product]
-name = "4-Acetylbiphenyl"
-formula = "C14H12O"
-mw = 196.25
-smiles = "CC(=O)c1ccc(cc1)-c1ccccc1"
-cas = "92-91-1"
 +++
 
 ## Zusammenfassung

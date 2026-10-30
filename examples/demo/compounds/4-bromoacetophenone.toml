@@ -1,0 +1,6 @@
+name = "4′-Bromoacetophenone"
+name_de = "4′-Bromacetophenon"
+formula = "C8H7BrO"
+mw = 199.05
+smiles = "CC(=O)c1ccc(Br)cc1"
+cas = "99-90-1"

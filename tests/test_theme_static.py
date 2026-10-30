@@ -224,7 +224,7 @@ class StructureImageTests(unittest.TestCase):
         """Scenario: Shipped structure images."""
         files = sorted(SVG_DIR.glob("*.svg"))
         self.assertTrue(files, "site/static/structures has no .svg file")
-        self.assertIn("osdb-0003.svg", [f.name for f in files])
+        self.assertIn("isopentyl-acetate.svg", [f.name for f in files])
         for path in files:
             with self.subTest(file=path.name):
                 self.assertEqual(self.check(path), [])

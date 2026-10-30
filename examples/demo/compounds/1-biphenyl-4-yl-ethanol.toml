@@ -1,0 +1,6 @@
+name = "1-(Biphenyl-4-yl)ethanol"
+name_de = "1-(Biphenyl-4-yl)ethanol"
+formula = "C14H14O"
+mw = 198.26
+smiles = "CC(O)c1ccc(cc1)-c1ccccc1"
+cas = "3562-73-0"

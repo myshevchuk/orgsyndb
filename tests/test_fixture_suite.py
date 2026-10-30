@@ -4,11 +4,13 @@ import re
 import tomllib
 import unittest
 
-from support import (FIXTURES, REPO, STATIC_DIR, ValidatorTestCase,
-                     fixture_run, run_validator, valid_set_run)
+from support import (COMPOUNDS, FIXTURES, REPO, STATIC_DIR,
+                     ValidatorTestCase, fixture_run, run_validator,
+                     valid_set_run)
 
-OPTIONAL_TOP = ["precursors", "structure_image", "checked_by", "references",
-                "ai_model"]
+OPTIONAL_TOP = ["substrates", "checked_by", "references", "ai_model",
+                "description", "weight"]
+OPTIONAL_COMPOUND = ["name_de", "cas", "structure_image"]
 
 # case directory -> (field, message substring), from each case's scenario
 INVALID_CASES = {
@@ -19,10 +21,13 @@ INVALID_CASES = {
     "missing-title": ("title", "required field missing"),
     "unknown-reaction-type": (
         "reaction_types", 'unknown reaction type "esterfication"'),
-    "yield-out-of-range": ("yield_percent", "must be between 0 and 100"),
+    "yield-out-of-range": ("products[1].yield_percent",
+                           "must be between 0 and 100"),
     "date-as-string": ("date", "must be a TOML offset datetime"),
-    "missing-precursor": ("precursors", "OSDB-0999 not found"),
-    "missing-structure-image": ("structure_image", "not found"),
+    "unknown-compound": ("products[1].compound",
+                         'unknown compound "no-such-compound"'),
+    "unknown-substrate": ("substrates",
+                          'unknown compound "no-such-compound"'),
     "author-key": ("author", "use authors"),
     "subdirectory": ("file_name", "subdirectories are not supported"),
 }
@@ -31,6 +36,25 @@ INVALID_CASES = {
 def load_front_matter(path):
     text = path.read_text(encoding="utf-8")
     return tomllib.loads(text.split("+++\n")[1])
+
+
+def load_compound(path):
+    return tomllib.loads(path.read_text(encoding="utf-8"))
+
+
+def named_keys(path) -> set[str]:
+    """The compound keys a Markdown or Org fixture names, as products
+    or as substrates."""
+    text = path.read_text(encoding="utf-8")
+    if path.suffix == ".org":
+        keys = set(re.findall(r'\(compound \. "([^"]*)"\)', text))
+        for line in re.findall(r"^#\+HUGO_CUSTOM_FRONT_MATTER:.*:substrates"
+                               r" '\(([^)]*)\)", text, re.M):
+            keys |= set(re.findall(r'"([^"]*)"', line))
+        return keys
+    front = tomllib.loads(text.split("+++\n")[1])
+    keys = {entry["compound"] for entry in front["products"]}
+    return keys | set(front.get("substrates", []))
 
 
 class ValidSetTests(ValidatorTestCase):
@@ -46,7 +70,10 @@ class ValidSetTests(ValidatorTestCase):
         seen = set().union(*docs)
         for key in OPTIONAL_TOP:
             self.assertIn(key, seen)
-        self.assertTrue(any("cas" in d["product"] for d in docs))
+        self.assertTrue(any(len(d["products"]) == 2 for d in docs))
+        compounds = [load_compound(p) for p in COMPOUNDS.glob("*.toml")]
+        for key in OPTIONAL_COMPOUND:
+            self.assertTrue(any(key in c for c in compounds), key)
         offsets = {d["date"].utcoffset().total_seconds() for d in docs}
         self.assertIn(3600, offsets)
         self.assertIn(7200, offsets)
@@ -74,7 +101,8 @@ class CatalogueFixtureTests(ValidatorTestCase):
         """Harness: the catalogue fixtures validate cleanly."""
         self.assert_clean(run_validator([
             "--vocabulary", REPO / "site" / "data" / "reaction_types.toml",
-            "--static-dir", STATIC_DIR, FIXTURES / "catalogue"]))
+            "--static-dir", STATIC_DIR, "--compounds", COMPOUNDS,
+            FIXTURES / "catalogue"]))
 
     def test_the_fixtures_cover_what_they_are_for(self) -> None:
         """Harness: statuses, authors, tags, a missing CAS number, a
@@ -91,10 +119,14 @@ class CatalogueFixtureTests(ValidatorTestCase):
         self.assertTrue(any(len(d["tags"]) > 2 for d in docs))
         self.assertEqual(
             {len(d["reaction_types"]) for d in docs}, {1})
+        registry = {key: load_compound(COMPOUNDS / f"{key}.toml")
+                    for d in docs for key in [d["products"][0]["compound"]]}
         self.assertEqual(
-            [d["id"] for d in docs if "cas" not in d["product"]],
+            [d["id"] for d in docs
+             if "cas" not in registry[d["products"][0]["compound"]]],
             ["OSDB-0922"])
-        self.assertFalse(any("structure_image" in d for d in docs))
+        self.assertFalse(any("structure_image" in c
+                             for c in registry.values()))
         ties = {}
         for d in docs:
             ties.setdefault(d["lastmod"].timestamp(), []).append(d)
@@ -136,6 +168,64 @@ class DependentCheckTests(ValidatorTestCase):
         self.assertEqual(result.problems[0].field, "id")
         self.assertNotIn(":slug:", result.stdout)
         self.assertNotIn(":file_name:", result.stdout)
+
+
+class FixtureRegistryTests(ValidatorTestCase):
+    """The fixture registry, tests/fixtures/compounds/."""
+
+    def test_registry_validates(self) -> None:
+        """Harness: the fixture registry is valid."""
+        result = run_validator([
+            "--vocabulary", FIXTURES / "reaction_types.toml",
+            "--static-dir", STATIC_DIR, "--compounds", COMPOUNDS,
+            FIXTURES / "valid" / "md"])
+        self.assert_clean(result)
+
+    def test_registry_holds_the_named_compounds_and_no_others(self) -> None:
+        """Requirement: Fixture suite (the committed registry)."""
+        named: set[str] = set()
+        for path in sorted(FIXTURES.rglob("*")):
+            rel = path.relative_to(FIXTURES).as_posix()
+            if (path.suffix in (".md", ".org") and path.is_file()
+                    and not rel.startswith(("invalid/", "collection/"))):
+                named |= named_keys(path)
+        self.assertTrue({"ethyl-acetate", "ethanol"} <= named)
+        self.assertEqual({p.stem for p in COMPOUNDS.glob("*.toml")}, named)
+        self.assertEqual({p.name for p in COMPOUNDS.iterdir()},
+                         {f"{key}.toml" for key in named})
+
+    def test_ethyl_acetate_sets_every_optional_key(self) -> None:
+        """Requirement: Fixture suite (ethyl-acetate)."""
+        data = load_compound(COMPOUNDS / "ethyl-acetate.toml")
+        for key in OPTIONAL_COMPOUND:
+            self.assertIn(key, data)
+        self.assertEqual(data["structure_image"],
+                         "structures/ethyl-acetate.svg")
+        self.assertTrue((STATIC_DIR / "structures"
+                         / "ethyl-acetate.svg").is_file())
+
+    def test_committed_procedures_use_the_new_fields(self) -> None:
+        """Harness: no committed fixture keeps an old procedure field."""
+        old_md = re.compile(r"^(\[product\]|product\s*=|yield_percent\s*=|"
+                            r"precursors\s*=|structure_image\s*=)")
+        old_org = re.compile(r":(product|yield_percent|precursors|"
+                             r"structure_image)\s")
+        checked = 0
+        for path in sorted(FIXTURES.rglob("*")):
+            if path.suffix == ".md" and path.is_file():
+                head = path.read_text(encoding="utf-8").split("+++")[1]
+                bad = [ln for ln in head.splitlines() if old_md.match(ln)]
+            elif path.suffix == ".org" and path.is_file():
+                bad = [ln for ln in path.read_text(encoding="utf-8")
+                       .splitlines()
+                       if ln.startswith("#+HUGO_CUSTOM_FRONT_MATTER:")
+                       and old_org.search(ln)]
+            else:
+                continue
+            checked += 1
+            with self.subTest(path=path.relative_to(FIXTURES).as_posix()):
+                self.assertEqual(bad, [])
+        self.assertGreater(checked, 50)
 
 
 class FixtureHygieneTests(unittest.TestCase):

@@ -9,15 +9,8 @@ status = "draft"
 reaction_types = ["esterification"]
 tags = ["catalogue-check", "fragrance"]
 scale = "20 mmol"
-yield_percent = 78
+products = [{ compound = "methyl-benzoate", yield_percent = 78 }]
 hazards = ["Methanol: highly flammable liquid and vapour, toxic"]
-
-[product]
-name = "Methyl benzoate"
-formula = "C8H8O2"
-mw = 136.15
-smiles = "COC(=O)c1ccccc1"
-cas = "93-58-3"
 +++
 
 ## Summary

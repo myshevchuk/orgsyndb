@@ -1,12 +1,23 @@
-{{- /* The Precursors and Used in pairs of the metadata panel. Precursors are
-looked up by ID; "used in" is every procedure listing this one's ID among
-its precursors, by ID. A precursor ID without a page is shown as text. */ -}}
+{{- /* The Precursors and Used in pairs of the metadata panel, derived from
+the compounds procedures share: the precursors are the other published
+procedures that have a compound of this one's substrates among their
+products, and it is used in the other published procedures that have one
+of its products among their substrates. Both are ordered by ID. */ -}}
 {{ $id := .Params.id -}}
-{{ with .Params.precursors -}}
+{{ $procedures := sort (where site.RegularPages "Section" "procedures") "Params.id" -}}
+{{ $others := where $procedures "Params.id" "ne" $id -}}
+{{ with .Params.substrates -}}
+{{ $substrates := . -}}
+{{ $precursors := slice -}}
+{{ range $others }}{{ if intersect (partial "product-keys.html" .) $substrates }}{{ $precursors = $precursors | append . }}{{ end }}{{ end -}}
+{{ with $precursors -}}
 <dt>{{ T "label_precursors" }}</dt>
-<dd>{{ range $i, $ref := . }}{{ if $i }}, {{ end }}{{ with where site.RegularPages "Params.id" $ref }}{{ with index . 0 }}<a class="precursor" href="{{ .RelPermalink }}">{{ .Params.id }} {{ .Title }}</a>{{ end }}{{ else }}{{ $ref }}{{ end }}{{ end }}</dd>
+<dd>{{ range $i, $page := . }}{{ if $i }}, {{ end }}<a class="precursor" href="{{ $page.RelPermalink }}">{{ $page.Params.id }} {{ $page.Title }}</a>{{ end }}</dd>
 {{ end -}}
-{{ with where (where site.RegularPages "Section" "procedures") "Params.precursors" "intersect" (slice $id) -}}
+{{ end -}}
+{{ with partial "product-keys.html" . -}}
+{{ with where $others "Params.substrates" "intersect" . -}}
 <dt>{{ T "label_used_in" }}</dt>
-<dd>{{ range $i, $page := sort . "Params.id" }}{{ if $i }}, {{ end }}<a class="used-in" href="{{ $page.RelPermalink }}">{{ $page.Params.id }} {{ $page.Title }}</a>{{ end }}</dd>
+<dd>{{ range $i, $page := . }}{{ if $i }}, {{ end }}<a class="used-in" href="{{ $page.RelPermalink }}">{{ $page.Params.id }} {{ $page.Title }}</a>{{ end }}</dd>
+{{ end -}}
 {{ end -}}

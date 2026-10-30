@@ -10,17 +10,18 @@
 #+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
 #+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("esterification")
 #+HUGO_CUSTOM_FRONT_MATTER: :scale "25 mmol"
-#+HUGO_CUSTOM_FRONT_MATTER: :yield_percent 85
 #+HUGO_CUSTOM_FRONT_MATTER: :hazards '("Flammable liquid")
-# Optional fields: uncomment as needed, keeping them above the product line.
-# #+HUGO_CUSTOM_FRONT_MATTER: :precursors '("OSDB-0001")
-# #+HUGO_CUSTOM_FRONT_MATTER: :structure_image "structures/osdb-0001.svg"
+# Optional fields: uncomment as needed, keeping them above the products line.
+# The starting materials, as compound keys like the one in :products.
+# #+HUGO_CUSTOM_FRONT_MATTER: :substrates '("example-compound")
 # #+HUGO_CUSTOM_FRONT_MATTER: :checked_by '("B. Example")
 # #+HUGO_CUSTOM_FRONT_MATTER: :references '("Example, A. J. Fictitious Chem. 2020, 1, 1.")
-# The product map must stay alone on the last custom front matter line;
-# tomelr would otherwise put every later key inside the [product] table.
-# Add (cas . "141-78-6") to it when the CAS number is known.
-#+HUGO_CUSTOM_FRONT_MATTER: :product '((name . "Product name") (formula . "C4H8O2") (mw . 88.11) (smiles . "CCOC(C)=O"))
+# The products list must stay alone on the last custom front matter line;
+# tomelr would otherwise put every later key inside its last [[products]]
+# table. One ((compound . "key") (yield_percent . N)) entry per product:
+# the key names the compound's file in the collection's compounds/ folder,
+# without .toml, and the yield is in percent, from 0 to 100.
+#+HUGO_CUSTOM_FRONT_MATTER: :products '(((compound . "example-compound") (yield_percent . 85)))
 
 * Summary
 One or two sentences: what is made, from what, and how.

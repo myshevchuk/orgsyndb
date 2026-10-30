@@ -1,33 +1,25 @@
 {{- /* The metadata panel: one dt/dd pair per field that is set, in the
 canonical order, labelled in the page's language. It repeats nothing the
-procedure header shows: no ID, scale or yield, the product only when it
-differs from the title, and the checkers only when the status is not
-checked; index-terms.html keeps the ID and the product in the indexed
-text. A newline
-separates every </dt> from its <dd>, so that Pagefind indexes each label
-and value as separate words. */ -}}
+procedure header shows: no ID, scale or yield, and the checkers only when
+the status is not checked. Product, or Products for several, links each
+product's compound page; the compound's formula, weight, CAS number and
+SMILES follow only for a procedure with one product (compound-facts.html),
+and index-terms.html keeps every product's in the indexed text. Starting
+materials link the compounds of substrates. A newline separates every
+</dt> from its <dd>, so that Pagefind indexes each label and value as
+separate words. */ -}}
 {{ $p := .Params -}}
-{{ $product := $p.product | default dict -}}
 <dl class="metadata">
-{{ with $product.name }}{{ if ne . $.Title -}}
-<dt>{{ T "label_product" }}</dt>
-<dd>{{ . }}</dd>
+{{ with $p.products -}}
+<dt>{{ T (cond (eq (len .) 1) "label_product" "label_products") }}</dt>
+<dd>{{ range $i, $entry := . }}{{ if $i }}, {{ end }}{{ partial "compound-link.html" $entry.compound }}{{ end }}</dd>
+{{ if eq (len .) 1 }}{{ with index site.Data.compounds (index . 0).compound -}}
+{{ partial "compound-facts.html" . -}}
 {{ end }}{{ end -}}
-{{ with $product.formula -}}
-<dt>{{ T "label_formula" }}</dt>
-<dd>{{ . | htmlEscape | replaceRE "([0-9]+)" "<sub>$1</sub>" | safeHTML }}</dd>
 {{ end -}}
-{{ if isset $product "mw" -}}
-<dt>{{ T "label_mw" }}</dt>
-<dd>{{ partial "decimal.html" $product.mw }} g/mol</dd>
-{{ end -}}
-{{ with $product.cas -}}
-<dt>{{ T "label_cas" }}</dt>
-<dd>{{ . }}</dd>
-{{ end -}}
-{{ with $product.smiles -}}
-<dt>{{ T "label_smiles" }}</dt>
-<dd><code data-smiles>{{ . }}</code> <button type="button" class="copy-button" data-copy-smiles data-copied="{{ T "copied" }}" data-selected="{{ T "selected" }}" data-pagefind-ignore hidden>{{ T "copy" }}</button></dd>
+{{ with $p.substrates -}}
+<dt>{{ T "label_substrates" }}</dt>
+<dd>{{ range $i, $key := . }}{{ if $i }}, {{ end }}{{ partial "compound-link.html" $key }}{{ end }}</dd>
 {{ end -}}
 {{ with .GetTerms "reaction_types" -}}
 <dt>{{ T "label_reaction_type" }}</dt>

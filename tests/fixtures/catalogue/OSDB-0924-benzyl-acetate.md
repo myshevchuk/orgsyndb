@@ -9,15 +9,8 @@ status = "draft"
 reaction_types = ["esterification"]
 tags = ["catalogue-check", "fragrance", "fischer-esterification"]
 scale = "15 mmol"
-yield_percent = 71
+products = [{ compound = "benzyl-acetate", yield_percent = 71 }]
 hazards = ["Benzyl alcohol: harmful if swallowed"]
-
-[product]
-name = "Benzyl acetate"
-formula = "C9H10O2"
-mw = 150.17
-smiles = "CC(=O)OCc1ccccc1"
-cas = "140-11-4"
 +++
 
 ## Summary

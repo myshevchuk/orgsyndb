@@ -6,13 +6,15 @@
 """Validate OrgSynDB procedure files against the procedure schema.
 
 Content roots are directories of Markdown procedures with ``+++`` TOML
-front matter, such as an ox-hugo export directory. The validator reads
+front matter, such as an ox-hugo export directory. The compound
+registry is a directory of ``<key>.toml`` files, one per compound; the
+validator checks each of them and resolves the compound keys that
+procedures name against the compounds it defines. The validator reads
 no Org source: an Org procedure reaches it only as its export, and the
 export checks the Org source itself. Each problem is printed to stdout
 as ``<path>:<field>: <severity>: <message>``, followed by a summary line
-on stderr. The exit status is 0 when no error
-was found, 1 when at least one was, and 2 on a usage or configuration
-error.
+on stderr. The exit status is 0 when no error was found, 1 when at
+least one was, and 2 on a usage or configuration error.
 """
 
 import argparse
@@ -24,18 +26,22 @@ import sys
 import tomllib
 import zoneinfo
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, NamedTuple
 
 APP = Path(__file__).resolve().parent.parent
 DEFAULT_VOCABULARY = APP / "site" / "data" / "reaction_types.toml"
-# Structure images belong to a collection; run from its root.
+# Structure images and compounds belong to a collection; run from its
+# root.
 DEFAULT_STATIC_DIR = Path("static")
+DEFAULT_COMPOUNDS = Path("compounds")
 ZONE_NAME = "Europe/Berlin"
 
 ID_RE = re.compile(r"^OSDB-(\d{4})$")
 SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+# A compound file is named <key>.toml, the key shaped like a slug.
+COMPOUND_FILE_RE = re.compile(r"^([a-z0-9]+(?:-[a-z0-9]+)*)\.toml$")
 SCALE_RE = re.compile(r"^\d+([.,]\d+)?\s+\S+$")
 CAS_RE = re.compile(r"^(\d{2,7})-(\d{2})-(\d)$")
 STATUSES = ("draft", "checked", "retired")
@@ -54,11 +60,9 @@ SECTIONS_BY_LANGUAGE = {
            "Gefahren und Entsorgung", "Literatur"),
 }
 SECTIONS = SECTIONS_BY_LANGUAGE[DEFAULT_LANGUAGE]
-# Front-matter values that every variant of a procedure shares; the
-# dotted names are keys of the product table.
-SHARED_FIELDS = ("status", "reaction_types", "tags", "yield_percent",
-                 "precursors", "structure_image", "product.formula",
-                 "product.mw", "product.smiles", "product.cas")
+# Front-matter values that every variant of a procedure shares.
+SHARED_FIELDS = ("status", "reaction_types", "tags", "products",
+                 "substrates")
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 ERROR = "error"
@@ -201,6 +205,7 @@ class Context:
     vocabulary: frozenset[str]
     static_dir: Path
     zone: dt.tzinfo
+    compounds: frozenset[str] = frozenset()
 
 
 def check_string(name: str, value: object) -> list[Problem]:
@@ -306,9 +311,11 @@ def check_tags(value: object) -> list[Problem]:
             for tag in value if not SLUG_RE.match(tag)]
 
 
-def check_yield(value: object) -> list[Problem]:
-    """Check that ``yield_percent`` is a finite number from 0 to 100."""
-    name = "yield_percent"
+def check_yield(name: str, value: object) -> list[Problem]:
+    """Check that the yield ``value`` is a finite number from 0 to 100.
+
+    Problems are reported under ``name``.
+    """
     if not is_number(value):
         return [error(name, "must be a number, unquoted, e.g. 85")]
     if not math.isfinite(value) or not 0 <= value <= 100:
@@ -324,62 +331,107 @@ def check_scale(value: object) -> list[Problem]:
     return []
 
 
-def check_product(value: object) -> list[Problem]:
-    """Check the ``product`` table and its keys.
+def check_products(value: object,
+                   compounds: frozenset[str]) -> list[Problem]:
+    """Check the ``products`` array of tables against the registry.
 
-    Sub-field problems are reported under ``product.<key>``. When the
-    value is not a table, no sub-field is checked.
+    A problem inside the n-th table, counting from 1, is reported under
+    ``products[n].<key>``, and an entry that is not a table under
+    ``products[n]``; such an entry gets no sub-field checks. A
+    ``compound`` that is not a string is not looked up in
+    ``compounds``, the registry's keys. A key named by two tables is one
+    error under ``products``.
     """
-    if not isinstance(value, dict):
-        return [error("product", "must be a table ([product])")]
+    if not isinstance(value, list):
+        return [error("products", "must be an array of tables, e.g. "
+                      '[{ compound = "ethyl-acetate", yield_percent = 85 }]')]
+    if not value:
+        return [error("products", "must not be empty")]
     found: list[Problem] = []
-    for key in ("name", "formula"):
-        if key not in value:
-            found.append(error(f"product.{key}", "required field missing"))
+    keys: list[str] = []
+    for number, entry in enumerate(value, start=1):
+        prefix = f"products[{number}]"
+        if not isinstance(entry, dict):
+            found.append(error(prefix, "must be a table, e.g. "
+                               '{ compound = "ethyl-acetate", '
+                               "yield_percent = 85 }"))
+            continue
+        if "compound" not in entry:
+            found.append(error(f"{prefix}.compound",
+                               "required field missing"))
+        elif not isinstance(entry["compound"], str):
+            found.append(error(f"{prefix}.compound", "must be a string"))
         else:
-            found += check_string(f"product.{key}", value[key])
-    mw = value.get("mw")
-    if "mw" not in value:
-        found.append(error("product.mw", "required field missing"))
-    elif not is_number(mw):
-        found.append(error("product.mw", "must be a number in g/mol, "
-                           "unquoted, e.g. 88.11"))
-    elif not math.isfinite(mw) or mw <= 0:
-        found.append(error("product.mw", "must be greater than 0"))
-    if "smiles" not in value:
-        found.append(error("product.smiles", "required field missing"))
-    else:
-        found += check_string("product.smiles", value["smiles"])
-    if "cas" in value:
-        cas = value["cas"]
-        if not isinstance(cas, str) or not CAS_RE.match(cas):
-            found.append(error("product.cas", f"{cas!r} must have the "
-                               'form NNNNNNN-NN-N, e.g. "64-17-5"'))
-        elif not cas_check_digit_ok(cas):
-            found.append(error("product.cas", f'"{cas}" has a wrong check '
-                               "digit; check the number"))
-    for key in value:
-        if key not in ("name", "formula", "mw", "smiles", "cas"):
-            found.append(warning(f"product.{key}", "unknown field"))
+            keys.append(entry["compound"])
+            found += check_compound_key(f"{prefix}.compound",
+                                        entry["compound"], compounds)
+        if "yield_percent" not in entry:
+            found.append(error(f"{prefix}.yield_percent",
+                               "required field missing"))
+        else:
+            found += check_yield(f"{prefix}.yield_percent",
+                                 entry["yield_percent"])
+        for key in entry:
+            if key not in ("compound", "yield_percent"):
+                found.append(warning(f"{prefix}.{key}", "unknown field"))
+    found += [error("products", f"lists {key} twice")
+              for key in repeated(keys)]
     return found
 
 
-def check_precursors(value: object, ident: object) -> list[Problem]:
-    """Check the shape of ``precursors`` and that it omits ``ident``.
+def check_substrates(value: object, products: object,
+                     compounds: frozenset[str]) -> list[Problem]:
+    """Check ``substrates``: registry keys, none twice, none a product.
 
-    Existence is checked across files by ``check_cross_file``.
+    ``products`` is the procedure's ``products`` value; the compound
+    keys of its well-formed tables are the ones a substrate must not
+    repeat. ``compounds`` holds the registry's keys.
     """
-    name = "precursors"
+    name = "substrates"
     if not is_string_list(value):
-        return [error(name, 'must be a list of procedure ids, '
-                      'e.g. ["OSDB-0001"]')]
+        return [error(name, "must be a list of compound keys, "
+                      'e.g. ["ethanol"]')]
     found: list[Problem] = []
-    for entry in value:
-        if not is_valid_id(entry):
-            found.append(error(name, f'"{entry}" must match OSDB-NNNN, '
-                               "from OSDB-0001 to OSDB-9999"))
-        elif entry == ident:
-            found.append(error(name, f"{entry} lists the procedure itself"))
+    for key in value:
+        found += check_compound_key(name, key, compounds)
+    found += [error(name, f"lists {key} twice") for key in repeated(value)]
+    made = product_keys(products)
+    found += [error(name, f"{key} is also a product")
+              for key in dict.fromkeys(value) if key in made]
+    return found
+
+
+def check_compound_key(name: str, key: str,
+                       compounds: frozenset[str]) -> list[Problem]:
+    """Check that ``key`` is a key of the registry ``compounds``."""
+    if key not in compounds:
+        return [error(name, f'unknown compound "{key}"; the compound '
+                      f"registry has no {key}.toml")]
+    return []
+
+
+def product_keys(products: object) -> list[str]:
+    """Return the compound keys ``products`` names, in order.
+
+    Only entries that are tables with a string ``compound`` count; any
+    other value of ``products`` names none.
+    """
+    if not isinstance(products, list):
+        return []
+    return [entry["compound"] for entry in products
+            if isinstance(entry, dict)
+            and isinstance(entry.get("compound"), str)]
+
+
+def repeated(keys: Iterable[str]) -> list[str]:
+    """Return each entry of ``keys`` that occurs more than once, once,
+    in the order of its second occurrence."""
+    seen: set[str] = set()
+    found: list[str] = []
+    for key in keys:
+        if key in seen and key not in found:
+            found.append(key)
+        seen.add(key)
     return found
 
 
@@ -396,7 +448,7 @@ def check_structure_image(value: object, static_dir: Path) -> list[Problem]:
     if (not value.startswith("structures/") or ".." in parts
             or "\\" in value or len(parts) < 2 or not parts[-1]):
         return [error(name, f'"{value}" must be a relative path under '
-                      'structures/, e.g. "structures/osdb-0001.svg"')]
+                      'structures/, e.g. "structures/ethyl-acetate.svg"')]
     if not value.endswith((".svg", ".png")):
         return [error(name, f'"{value}" must end in .svg or .png')]
     if not (static_dir / value).is_file():
@@ -459,10 +511,10 @@ def check_extra_key(key: str, value: object) -> list[Problem]:
 
 
 REQUIRED_KEYS = ("id", "slug", "title", "date", "lastmod", "authors",
-                 "status", "reaction_types", "tags", "product", "scale",
-                 "yield_percent", "hazards")
-OPTIONAL_KEYS = ("precursors", "structure_image", "checked_by",
-                 "references", "ai_model", "language")
+                 "status", "reaction_types", "tags", "products", "scale",
+                 "hazards")
+OPTIONAL_KEYS = ("substrates", "checked_by", "references", "ai_model",
+                 "language")
 
 
 def check_fields(data: dict[str, Any], ctx: Context) -> list[Problem]:
@@ -503,21 +555,18 @@ def check_fields(data: dict[str, Any], ctx: Context) -> list[Problem]:
                 found += check_reaction_types(value, ctx.vocabulary)
             case "tags":
                 found += check_tags(value)
-            case "product":
-                found += check_product(value)
+            case "products":
+                found += check_products(value, ctx.compounds)
             case "scale":
                 found += check_scale(value)
-            case "yield_percent":
-                found += check_yield(value)
     for key in OPTIONAL_KEYS:
         if key not in data:
             continue
         value = data[key]
         match key:
-            case "precursors":
-                found += check_precursors(value, data.get("id"))
-            case "structure_image":
-                found += check_structure_image(value, ctx.static_dir)
+            case "substrates":
+                found += check_substrates(value, data.get("products"),
+                                          ctx.compounds)
             case "checked_by" | "references":
                 found += check_string_list(key, value, non_empty=False)
             case "ai_model":
@@ -665,20 +714,21 @@ class ContentFile:
         return language_of(self.name)
 
 
-def shared_value(data: dict[str, Any], name: str) -> object:
-    """Return the value of a ``SHARED_FIELDS`` entry, or None if unset."""
-    if name.startswith("product."):
-        product = data.get("product")
-        return (product.get(name.removeprefix("product."))
-                if isinstance(product, dict) else None)
-    return data.get(name)
-
-
 def same_value(mine: object, theirs: object) -> bool:
-    """Whether two shared-field values agree: numbers by value, so that
-    ``85`` and ``85.0`` match, and anything else by value and type."""
+    """Whether two shared-field values agree.
+
+    Numbers compare by value, so that ``85`` and ``85.0`` match; lists
+    compare entry by entry in order, and tables key by key, by the same
+    rule; anything else compares by value and type.
+    """
     if is_number(mine) and is_number(theirs):
         return mine == theirs
+    if isinstance(mine, list) and isinstance(theirs, list):
+        return len(mine) == len(theirs) and all(
+            same_value(a, b) for a, b in zip(mine, theirs))
+    if isinstance(mine, dict) and isinstance(theirs, dict):
+        return mine.keys() == theirs.keys() and all(
+            same_value(mine[key], theirs[key]) for key in mine)
     return mine == theirs and type(mine) is type(theirs)
 
 
@@ -710,8 +760,8 @@ def check_variants(holders: Sequence[ContentFile]) -> None:
                 f"{original.path}: {base_name(original.name)}."
                 f"{item.language}{Path(item.name).suffix}"))
         for name in SHARED_FIELDS:
-            mine = shared_value(item.data, name)
-            theirs = shared_value(original.data, name)
+            mine = item.data.get(name)
+            theirs = original.data.get(name)
             if not same_value(mine, theirs):
                 shown = "unset" if theirs is None else repr(theirs)
                 item.problems.append(error(
@@ -720,7 +770,7 @@ def check_variants(holders: Sequence[ContentFile]) -> None:
 
 
 def check_cross_file(files: Sequence[ContentFile]) -> None:
-    """Add duplicate-ID, variant and precursor-existence problems.
+    """Add duplicate-ID and variant problems.
 
     An ID may be used once per language code, and once without one; the
     files of one ID are variants, checked by ``check_variants``.
@@ -746,18 +796,130 @@ def check_cross_file(files: Sequence[ContentFile]) -> None:
                     "id", f"duplicate id {ident}, also used by {others}"))
         if not duplicated and len(holders) > 1:
             check_variants(holders)
-    for item in files:
-        if item.data is None:
+
+
+# --------------------------------------------------------------------------
+# Compound registry
+
+COMPOUND_REQUIRED_KEYS = ("name", "formula", "mw", "smiles")
+COMPOUND_OPTIONAL_KEYS = ("name_de", "cas", "structure_image")
+
+
+def check_mw(value: object) -> list[Problem]:
+    """Check that ``mw`` is a finite number greater than 0."""
+    if not is_number(value):
+        return [error("mw", "must be a number in g/mol, unquoted, "
+                      "e.g. 88.11")]
+    if not math.isfinite(value) or value <= 0:
+        return [error("mw", "must be greater than 0")]
+    return []
+
+
+def check_cas(value: object) -> list[Problem]:
+    """Check that ``cas`` has the CAS form and a valid check digit."""
+    if not isinstance(value, str) or not CAS_RE.match(value):
+        return [error("cas", f"{value!r} must have the form NNNNNNN-NN-N, "
+                      'e.g. "64-17-5"')]
+    if not cas_check_digit_ok(value):
+        return [error("cas", f'"{value}" has a wrong check digit; check '
+                      "the number")]
+    return []
+
+
+def check_compound(data: dict[str, Any], static_dir: Path) -> list[Problem]:
+    """Check the keys of one parsed compound file.
+
+    Problems are reported under the key's name. ``structure_image`` is
+    resolved against ``static_dir``. Keys outside the compound schema
+    are warnings.
+    """
+    found: list[Problem] = []
+    for key in COMPOUND_REQUIRED_KEYS:
+        if key not in data:
+            found.append(error(key, "required field missing"))
+        elif key == "mw":
+            found += check_mw(data[key])
+        else:
+            found += check_string(key, data[key])
+    for key in COMPOUND_OPTIONAL_KEYS:
+        if key not in data:
             continue
-        precursors = item.data.get("precursors")
-        if not is_string_list(precursors):
+        match key:
+            case "name_de":
+                found += check_string(key, data[key])
+            case "cas":
+                found += check_cas(data[key])
+            case "structure_image":
+                found += check_structure_image(data[key], static_dir)
+    for key in data:
+        if key not in COMPOUND_REQUIRED_KEYS + COMPOUND_OPTIONAL_KEYS:
+            found.append(warning(key, "unknown field"))
+    return found
+
+
+def read_compound(path: str) -> dict[str, Any] | Problem:
+    """Read and parse the compound file ``path`` as UTF-8 TOML.
+
+    Returns the parsed table, or a ``toml`` error when the file cannot
+    be read, is not UTF-8 or is not valid TOML.
+    """
+    try:
+        with open(path, encoding="utf-8-sig") as handle:
+            return tomllib.loads(handle.read())
+    except UnicodeDecodeError:
+        return error("toml", "file is not valid UTF-8")
+    except OSError as exc:
+        return error("toml", f"cannot read file: {exc.strerror}")
+    except tomllib.TOMLDecodeError as exc:
+        return error("toml", f"invalid TOML: {exc}")
+
+
+class Registry(NamedTuple):
+    """The outcome of examining a compound registry."""
+
+    compounds: frozenset[str]
+    problems: list[tuple[str, Problem]]
+    files: int
+
+
+def examine_registry(registry: str, static_dir: Path) -> Registry:
+    """Check every compound file of the directory ``registry``.
+
+    Returns the keys of the compounds the registry defines, the problems
+    found, each with the path ``registry`` joined with the entry name,
+    and the number of compound files examined. A file whose name begins
+    with ``.`` is skipped; a subdirectory, or any other file not named
+    ``<key>.toml``, is a ``file_name`` error and defines no compound,
+    and so does a file that does not parse. A ``registry`` that does not
+    exist defines no compound and draws no problem.
+    """
+    if not os.path.isdir(registry):
+        return Registry(frozenset(), [], 0)
+    keys: set[str] = set()
+    problems: list[tuple[str, Problem]] = []
+    files = 0
+    for name in sorted(os.listdir(registry)):
+        path = os.path.join(registry, name)
+        match = COMPOUND_FILE_RE.match(name)
+        if os.path.isdir(path):
+            problems.append((path, error(
+                "file_name", "subdirectories are not supported; move "
+                "its files to the top level")))
+        elif name.startswith("."):
             continue
-        for entry in precursors:
-            if (is_valid_id(entry) and entry != item.data.get("id")
-                    and entry not in by_id):
-                item.problems.append(error(
-                    "precursors", f"{entry} not found in any content "
-                    "root"))
+        elif match is None:
+            problems.append((path, error(
+                "file_name", "must be named <key>.toml, the key lowercase "
+                "and hyphenated, e.g. ethyl-acetate.toml")))
+        else:
+            files += 1
+            data = read_compound(path)
+            if isinstance(data, Problem):
+                problems.append((path, data))
+                continue
+            keys.add(match.group(1))
+            problems += [(path, p) for p in check_compound(data, static_dir)]
+    return Registry(frozenset(keys), problems, files)
 
 
 # --------------------------------------------------------------------------
@@ -894,6 +1056,12 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="DIR",
         help="directory that structure_image paths are relative to "
         "(default: static in the working directory)")
+    parser.add_argument(
+        "--compounds", default=str(DEFAULT_COMPOUNDS),
+        metavar="DIR",
+        help="compound registry, one <key>.toml file per compound "
+        "(default: compounds in the working directory; a missing "
+        "directory defines no compound)")
     return parser
 
 
@@ -911,9 +1079,16 @@ def report(problems: Iterable[tuple[str, Problem]], files: int) -> int:
     return 1 if errors else 0
 
 
-def run(content_roots: Sequence[str], ctx: Context) -> int:
-    """Validate the content roots and report; return the exit status."""
-    problems: list[tuple[str, Problem]] = []
+def run(content_roots: Sequence[str], registry: str, ctx: Context) -> int:
+    """Validate the compound ``registry`` and the content roots, report,
+    and return the exit status.
+
+    The procedures' compound keys resolve against the compounds the
+    registry defines, which replace those of ``ctx``.
+    """
+    examined = examine_registry(registry, ctx.static_dir)
+    ctx = replace(ctx, compounds=examined.compounds)
+    problems = list(examined.problems)
     content: list[ContentFile] = []
     for root in content_roots:
         for entry in discover(root, ".md"):
@@ -924,7 +1099,7 @@ def run(content_roots: Sequence[str], ctx: Context) -> int:
     check_cross_file(content)
     for item in content:
         problems += [(item.path, p) for p in item.problems]
-    return report(problems, len(content))
+    return report(problems, examined.files + len(content))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -939,12 +1114,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         for root in args.content_roots:
             if not os.path.isdir(root):
                 raise ConfigError(f"{root} is not a directory")
+        if (os.path.exists(args.compounds)
+                and not os.path.isdir(args.compounds)):
+            raise ConfigError(f"compound registry {args.compounds} is not "
+                              "a directory")
         ctx = Context(load_vocabulary(args.vocabulary), args.static_dir,
                       load_zone())
     except ConfigError as exc:
         print(f"validate.py: error: {exc}", file=sys.stderr)
         return 2
-    return run(args.content_roots, ctx)
+    return run(args.content_roots, args.compounds, ctx)
 
 
 if __name__ == "__main__":

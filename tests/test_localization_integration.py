@@ -10,7 +10,8 @@ import catalogue_support as cs
 import pipeline_support as ps
 from pipeline_support import Page
 
-NAVIGATION = [("/procedures/", "Vorschriften"), ("/help/", "Hilfe")]
+NAVIGATION = [("/procedures/", "Vorschriften"),
+              ("/compounds/", "Verbindungen"), ("/help/", "Hilfe")]
 TABS = [("/procedures/", "Alle Vorschriften"),
         ("/reaction_types/", "Reaktionstypen"), ("/tags/", "Schlagwörter"),
         ("/authors/", "Autoren")]
@@ -18,12 +19,13 @@ FOOTER = (r"^OrgSynDB · interne Vorschriften · Stand "
           r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}$")
 BANNER = "Beispieldaten – Mengenangaben nicht experimentell überprüft."
 PANEL_LABELS = ["Produkt", "Summenformel", "Molmasse", "CAS", "SMILES",
-                "Reaktionstyp", "Schlagwörter", "Autoren", "Erstellt",
-                "Geändert", "Vorstufen"]
+                "Ausgangsstoffe", "Reaktionstyp", "Schlagwörter", "Autoren",
+                "Erstellt", "Geändert", "Vorstufen"]
 TITLES = {"procedures/index.html": "Vorschriften",
           "reaction_types/index.html": "Reaktionstypen",
           "tags/index.html": "Schlagwörter",
-          "authors/index.html": "Autoren", "help/index.html": "Hilfe"}
+          "authors/index.html": "Autoren", "compounds/index.html":
+          "Verbindungen", "help/index.html": "Hilfe"}
 
 
 class GermanCase(cs.CatalogueCase):
@@ -132,6 +134,12 @@ class GermanSiteTests(GermanCase):
         pairs = {p.label: p.definition for p in page.definition_pairs(panel)}
         self.assertEqual(list(pairs), PANEL_LABELS)
         self.assertEqual(pairs["Produkt"].norm(), "Acetylsalicylsäure")
+        self.assertEqual(
+            [(page.resolve(l.attrs["href"]), l.norm())
+             for l in pairs["Produkt"].find_all("a", "compound")],
+            [("/compounds/acetylsalicylic-acid/", "Acetylsalicylsäure")])
+        self.assertEqual(pairs["Ausgangsstoffe"].norm(),
+                         "Salicylsäure, Essigsäureanhydrid")
         self.assertEqual(pairs["Molmasse"].norm(), "180,16 g/mol")
         key = page.find("dl", "key-facts")
         self.assertEqual([(p.label, p.definition.norm())
@@ -239,9 +247,7 @@ class PartialTranslationTests(GermanCase):
     def prepare(cls) -> None:
         for name in cls.REMOVED:
             (cls.sandbox.md_dir() / name).unlink()
-        baseline = ps.FIXTURES / "baseline" / "OSDB-0100-baseline.md"
-        (cls.sandbox.md_dir() / "OSDB-0100-baseline.en.md").write_text(
-            baseline.read_text(encoding="utf-8"), encoding="utf-8")
+        ps.put_baseline(cls.sandbox, "OSDB-0100-baseline.en.md")
 
     def test_every_procedure_is_published(self) -> None:
         """Scenario: Every procedure in every locale."""

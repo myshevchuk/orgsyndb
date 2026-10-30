@@ -1,0 +1,7 @@
+{{- /* The compound pages: one page per entry of site.Data.compounds, the
+collection's compound registry, at /compounds/<key>/. Its title is the
+compound's shown name (compound-name.html), and its compound parameter
+the key, through which compounds/page.html finds the entry. */ -}}
+{{ range $key, $compound := site.Data.compounds -}}
+{{ $.AddPage (dict "path" $key "kind" "page" "title" (partial "compound-name.html" $key) "params" (dict "compound" $key)) -}}
+{{ end -}}

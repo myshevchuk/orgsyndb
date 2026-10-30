@@ -9,21 +9,14 @@ status = "checked"
 reaction_types = ["esterification"]
 tags = ["sample-data"]
 scale = "25 mmol"
-yield_percent = 85
+substrates = ["acetic-acid"]
+products = [{ compound = "ethyl-acetate", yield_percent = 85 }, { compound = "ethanol", yield_percent = 10 }]
 hazards = ["Flammable liquid"]
 checked_by = ["B. Example"]
 references = ["Example, A. J. Fictitious Chem. 2020, 1, 1."]
 ai_model = "claude-sonnet-5-5"
-structure_image = "structures/osdb-0001.svg"
 description = "Fictitious esterification."
 weight = 10
-
-[product]
-name = "Ethyl acetate"
-formula = "C4H8O2"
-mw = 88.11
-smiles = "CCOC(C)=O"
-cas = "141-78-6"
 +++
 
 ## Summary

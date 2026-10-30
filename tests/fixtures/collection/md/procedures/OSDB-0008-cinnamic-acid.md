@@ -9,25 +9,18 @@ status = "draft"
 reaction_types = ["hydrolysis"]
 tags = ["sample-data", "saponification", "cinnamate"]
 scale = "3 mmol"
-yield_percent = 90
+substrates = ["ethyl-cinnamate"]
+products = [{ compound = "cinnamic-acid", yield_percent = 90 }]
 hazards = [
   "Sodium hydroxide: causes severe skin burns and eye damage",
   "Concentrated hydrochloric acid: causes severe skin burns and eye damage, may cause respiratory irritation",
   "Ethanol: highly flammable liquid and vapour, causes serious eye irritation",
   "Cinnamic acid: causes skin and serious eye irritation",
 ]
-precursors = ["OSDB-0007"]
 references = [
   "Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989.",
 ]
 ai_model = "claude-opus-5-5"
-
-[product]
-name = "(E)-Cinnamic acid"
-formula = "C9H8O2"
-mw = 148.16
-smiles = "OC(=O)/C=C/c1ccccc1"
-cas = "140-10-3"
 +++
 
 ## Summary

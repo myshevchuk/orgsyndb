@@ -1,0 +1,5 @@
+name = "4-Methylbenzoic acid"
+formula = "C8H8O2"
+mw = 136.15
+smiles = "Cc1ccc(cc1)C(=O)O"
+cas = "99-94-5"

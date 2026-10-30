@@ -6,7 +6,7 @@ its placeholder, short enough to show whole, says it is scoped. The
 link of the page itself carries aria-current="page"; the link of the
 section a page lies in carries aria-current="true". The three
 taxonomy directories and their term pages lie in /procedures/, as their
-facets do. */ -}}
+facets do, and every compound page lies in /compounds/. */ -}}
 {{ $here := .RelPermalink -}}
 {{ $within := $here -}}
 {{ if or (hasPrefix $here "/reaction_types/") (hasPrefix $here "/tags/") (hasPrefix $here "/authors/") }}{{ $within = "/procedures/" }}{{ end -}}
@@ -23,7 +23,7 @@ facets do. */ -}}
 <a class="site-title" href="/">{{ site.Title }}</a>
 <nav aria-label="{{ T "nav_site" }}">
 <ul>
-{{ range slice (slice "/procedures/" "nav_procedures") (slice "/help/" "nav_help") -}}
+{{ range slice (slice "/procedures/" "nav_procedures") (slice "/compounds/" "nav_compounds") (slice "/help/" "nav_help") -}}
 {{ $url := index . 0 -}}
 <li><a href="{{ $url }}"{{ if eq $here $url }} aria-current="page"{{ else if hasPrefix $within $url }} aria-current="true"{{ end }}>{{ T (index . 1) }}</a></li>
 {{ end -}}

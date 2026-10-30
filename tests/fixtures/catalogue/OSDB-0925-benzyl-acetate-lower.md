@@ -9,16 +9,9 @@ status = "checked"
 reaction_types = ["acylation"]
 tags = ["catalogue-check", "acetylation"]
 scale = "12 mmol"
-yield_percent = 88
+products = [{ compound = "benzyl-ethanoate", yield_percent = 88 }]
 hazards = ["Acetic anhydride: flammable, causes severe skin burns"]
 checked_by = ["A. Example"]
-
-[product]
-name = "Benzyl ethanoate"
-formula = "C9H10O2"
-mw = 150.17
-smiles = "CC(=O)OCc1ccccc1"
-cas = "140-11-4"
 +++
 
 ## Summary

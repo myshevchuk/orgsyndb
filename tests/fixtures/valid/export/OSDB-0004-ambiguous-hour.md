@@ -10,15 +10,9 @@ status = "draft"
 reaction_types = ["esterification"]
 tags = ["sample-data"]
 scale = "25 mmol"
-yield_percent = 85
+products = [{ compound = "propyl-acetate", yield_percent = 85 }]
 hazards = ["Flammable liquid"]
 ai_model = "claude-sonnet-5-5"
-
-[product]
-name = "Ethyl acetate"
-formula = "C4H8O2"
-mw = 88.11
-smiles = "CCOC(C)=O"
 +++
 
 ## Summary {#summary}

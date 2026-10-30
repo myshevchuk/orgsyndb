@@ -1,0 +1,7 @@
+name = "Ethyl acetate"
+name_de = "Ethylacetat"
+formula = "C4H8O2"
+mw = 88.11
+smiles = "CCOC(C)=O"
+cas = "141-78-6"
+structure_image = "structures/ethyl-acetate.svg"

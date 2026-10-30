@@ -9,7 +9,8 @@ status = "draft"
 reaction_types = ["aldol-condensation"]
 tags = ["sample-data", "claisen-schmidt"]
 scale = "10 mmol"
-yield_percent = 85
+substrates = ["benzaldehyde", "acetone"]
+products = [{ compound = "dibenzylideneacetone", yield_percent = 85 }]
 hazards = [
   "Benzaldehyde: harmful if swallowed",
   "Acetone: highly flammable liquid and vapour, causes serious eye irritation",
@@ -22,13 +23,6 @@ references = [
   "Conard, C. R.; Dolliver, M. A. Dibenzalacetone. Org. Synth. 1932, 12, 22.",
 ]
 ai_model = "claude-opus-5-5"
-
-[product]
-name = "Dibenzylideneacetone"
-formula = "C17H14O"
-mw = 234.30
-smiles = "O=C(/C=C/c1ccccc1)/C=C/c1ccccc1"
-cas = "538-58-9"
 +++
 
 ## Summary

@@ -9,7 +9,7 @@ status = "draft"
 reaction_types = ["esterification"]
 tags = ["banner-check"]
 scale = "20 mmol"
-yield_percent = 70
+products = [{ compound = "ethyl-acetate", yield_percent = 70 }]
 hazards = [
   "Acetic acid: flammable, causes severe skin burns",
 ]
@@ -17,13 +17,6 @@ references = [
   "Example, A. Fictitious Chem. 2020, 1, 1.",
 ]
 ai_model = "claude-sonnet-5-5"
-
-[product]
-name = "Ethyl acetate"
-formula = "C4H8O2"
-mw = 88.11
-smiles = "CCOC(C)=O"
-cas = "141-78-6"
 +++
 
 ## Summary

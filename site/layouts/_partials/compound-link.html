@@ -1,0 +1,4 @@
+{{- /* A compound key as an a.compound linking the compound's page,
+/compounds/<key>/, with its shown name (compound-name.html) as text. */ -}}
+<a class="compound" href="/compounds/{{ . }}/">{{ partial "compound-name.html" . }}</a>
+{{- /* The link ends the output: no newline follows it. */ -}}

@@ -1,15 +1,18 @@
 """Command-line behaviour of tools/validate.py (procedure-validation)."""
 
 import ast
+import shutil
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 import support
-from support import (FIXTURES, VALIDATOR, ValidatorTestCase,
-                     fixture_run, run_validator, valid_set_run,
-                     variant_root)
+from support import (BASELINE, COMPOUNDS, FIXTURES, STATIC_DIR, VALIDATOR,
+                     ValidatorTestCase, fixture_run, run_validator,
+                     valid_set_run, variant_root)
+
+COMPOUND_FILES = len(list(COMPOUNDS.glob("*.toml")))
 
 
 class CommandLineInterfaceTests(ValidatorTestCase):
@@ -57,27 +60,63 @@ class DefaultPathTests(ValidatorTestCase):
             "reaction_types", 'reaction_types = ["reductive-amination"]')
         with variant_root("OSDB-0100-baseline.md", edit) as root:
             with tempfile.TemporaryDirectory() as cwd:
-                result = run_validator([root], cwd=Path(cwd))
+                result = run_validator(
+                    ["--compounds", COMPOUNDS, "--static-dir", STATIC_DIR,
+                     root], cwd=Path(cwd))
         self.assertEqual([p for p in result.problems
                           if p.field == "reaction_types"], [],
                          result.stdout)
         self.assert_clean(result)
 
-    def test_default_static_directory_is_the_working_directorys(
+    def test_default_static_and_registry_are_the_working_directorys(
             self) -> None:
-        """Scenario: Default static directory is the working directory's."""
-        edit = support.insert_line(
-            'structure_image = "structures/osdb-0100.svg"')
-        with variant_root("OSDB-0100-baseline.md", edit) as root:
+        """Scenario: Default static and registry directories are the
+        working directory's."""
+        compound = (COMPOUNDS / "ethyl-acetate.toml").read_text(
+            encoding="utf-8")
+        self.assertIn('structure_image = "structures/ethyl-acetate.svg"',
+                      compound)
+        with variant_root("OSDB-0100-baseline.md") as root:
             with tempfile.TemporaryDirectory() as cwd:
-                structures = Path(cwd) / "static" / "structures"
+                collection = Path(cwd)
+                structures = collection / "static" / "structures"
                 structures.mkdir(parents=True)
-                (structures / "osdb-0100.svg").write_text("<svg/>\n")
-                result = run_validator([root], cwd=Path(cwd))
-                (structures / "osdb-0100.svg").unlink()
-                missing = run_validator([root], cwd=Path(cwd))
+                shutil.copy2(STATIC_DIR / "structures"
+                             / "ethyl-acetate.svg", structures)
+                (collection / "compounds").mkdir()
+                (collection / "compounds" / "ethyl-acetate.toml"
+                 ).write_text(compound, encoding="utf-8")
+                result = run_validator([root], cwd=collection)
+                (structures / "ethyl-acetate.svg").unlink()
+                missing_image = run_validator([root], cwd=collection)
+                (collection / "compounds" / "ethyl-acetate.toml").unlink()
+                missing_registry = run_validator([root], cwd=collection)
         self.assert_clean(result)
-        self.assert_one(missing, "error", "structure_image", "not found")
+        self.assert_one(missing_image, "error", "structure_image",
+                        "not found", path_suffix="ethyl-acetate.toml")
+        self.assert_one(missing_registry, "error", "products[1].compound",
+                        'unknown compound "ethyl-acetate"')
+
+    def test_missing_registry_defines_no_compound(self) -> None:
+        """Scenario: Missing registry."""
+        result = fixture_run(
+            "baseline", compounds=FIXTURES / "no-such-registry")
+        self.assert_one(result, "error", "products[1].compound",
+                        'unknown compound "ethyl-acetate"')
+
+    def test_compounds_option_names_the_registry(self) -> None:
+        """Requirement: Command-line interface (--compounds)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            registry = Path(tmp) / "registry"
+            registry.mkdir()
+            shutil.copy2(COMPOUNDS / "ethyl-acetate.toml", registry)
+            result = run_validator(
+                ["--vocabulary", FIXTURES / "reaction_types.toml",
+                 "--static-dir", STATIC_DIR, "--compounds", registry,
+                 BASELINE.parent])
+        self.assert_clean(result)
+        self.assertIn("validated 2 files: 0 errors, 0 warnings",
+                      result.stderr)
 
 
 class VocabularyErrorTests(ValidatorTestCase):
@@ -131,14 +170,14 @@ class ProblemReportFormatTests(ValidatorTestCase):
         self.assertEqual(len(lines), 1, result.stdout)
         self.assertRegex(
             lines[0],
-            r"^.+/OSDB-0110-yield-out-of-range\.md:yield_percent: "
-            r"error: .+$")
+            r"^.+/OSDB-0110-yield-out-of-range\.md:"
+            r"products\[1\]\.yield_percent: error: .+$")
 
     def test_summary_line_goes_to_stderr(self) -> None:
         """Scenario: Summary line."""
         result = valid_set_run()
-        self.assertIn("validated 4 files: 0 errors, 0 warnings",
-                      result.stderr)
+        self.assertIn(f"validated {4 + COMPOUND_FILES} files: "
+                      "0 errors, 0 warnings", result.stderr)
 
     def test_identical_input_gives_byte_identical_output(self) -> None:
         """Scenario: Deterministic output."""
@@ -194,7 +233,8 @@ class FileDiscoveryTests(ValidatorTestCase):
             (root / ".gitkeep").write_text("", encoding="utf-8")
             result = fixture_run(root)
         self.assert_clean(result)
-        self.assertIn("validated 1 files", result.stderr)
+        self.assertIn(f"validated {1 + COMPOUND_FILES} files",
+                      result.stderr)
 
 
 class FrontMatterParsingTests(ValidatorTestCase):

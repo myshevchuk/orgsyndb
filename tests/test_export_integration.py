@@ -18,8 +18,8 @@ from pipeline_support import (DEMO, FIXTURES, OX_HUGO_PIN, REPO, TOMELR_PIN,
                               Sandbox, body_of, front_matter, make_path,
                               make_sandbox, read_only_dir, snapshot)
 
-PRODUCT = {"name": "Propyl acetate", "formula": "C5H10O2", "mw": 102.13,
-           "smiles": "CCCOC(C)=O"}
+PRODUCTS = [{"compound": "propyl-acetate", "yield_percent": 85},
+            {"compound": "ethanol", "yield_percent": 10}]
 NOTES_WARNING = ("org/procedures/notes.txt:file_name: warning: "
                  "not a procedure file; ignored")
 PROBLEM_LINE = re.compile(r"^\S.*: (?:error|warning): ")
@@ -207,11 +207,12 @@ class ExportedFrontMatterTests(ExportTestCase):
         result = self.export(sandbox)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         data = front_matter(self.exported(sandbox, "OSDB-0901-table-first"))
-        for key in ("scale", "yield_percent", "hazards", "precursors"):
+        for key in ("scale", "hazards", "substrates"):
             self.assertIn(key, data)
         self.assertEqual(data["scale"], "25 mmol")
-        self.assertEqual(data["precursors"], ["OSDB-0001"])
-        self.assertEqual(data["product"], PRODUCT)
+        self.assertEqual(data["substrates"], ["acetic-acid"])
+        self.assertEqual(data["products"], PRODUCTS)
+        self.assertNotIn("product", data)
 
     def test_ai_model_is_mapped_and_author_is_absent(self) -> None:
         """Scenario: AI model mapping."""
@@ -559,6 +560,7 @@ class ExportedDateTests(ExportTestCase):
                 for key in ("date", "lastmod"):
                     self.assertEqual(got[key].isoformat(),
                                      want[key].isoformat())
+                self.assertEqual(got["products"], want["products"])
                 self.assertEqual("ai_model" in got, "ai_model" in want)
                 self.assertEqual(got.get("ai_model"), want.get("ai_model"))
             exported[stem] = got

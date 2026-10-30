@@ -19,6 +19,8 @@
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-28 Wed 21:37] -- metadata panel no longer repeats the ID
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-28 Wed 21:55] -- Understand the finished page
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-28 Wed 21:57] -- doc-writer pass line corrected from gpt-6 to the pinned run model
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-10-30 Fri 01:49] -- compound registry, products, starting materials and site pages
+#+AI_PASS: fact-check claude-opus-5-5 [2026-10-30 Fri 01:55] -- doc-writer pass line corrected from gpt-6 to the pinned run model
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -64,24 +66,33 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
     with single hyphens. The ~sample-data~ tag adds a warning banner on
     screen and on paper, so never use it for a real procedure.
   - ~#+HUGO_CUSTOM_FRONT_MATTER~ :: Repeated lines that supply the procedure
-    identifier, authors, status, reaction type, scale, yield, hazards, and
-    optional fields.
+    identifier, authors, status, reaction type, scale, products with their
+    yields, hazards, and optional fields.
 
-  The ~:product~ custom-front-matter line is an association list containing
-  the product name, formula, molecular weight, SMILES, and optional CAS
-  number. Keep this line last among the custom-front-matter lines. The
-  exporter also guards the table order so later metadata does not become
-  part of the product table.
+  Set ~:products~ to a quoted list with one entry per product. Each entry
+  contains its ~compound~ key and ~yield_percent~. A key is the name of a
+  file in the collection's ~compounds/~ without ~.toml~. Keep ~:products~
+  alone on the last custom-front-matter line. The exporter also keeps
+  table-valued metadata last so later fields do not become members of the
+  last ~[[products]]~ table.
 
-  To link a procedure to its starting-material procedures, add a custom
-  front-matter line before ~:product~:
+  Name starting materials in an optional ~:substrates~ line before
+  ~:products~. For example:
 
 #+begin_src org
-  #+HUGO_CUSTOM_FRONT_MATTER: :precursors '("OSDB-0007")
+  #+HUGO_CUSTOM_FRONT_MATTER: :substrates '("methyl-salicylate")
+  #+HUGO_CUSTOM_FRONT_MATTER: :products '(((compound . "salicylic-acid") (yield_percent . 80)))
 #+end_src
 
-  This page then shows the OSDB-0007 link under *Precursors*. The OSDB-0007
-  page automatically links back under *Used in*.
+  To add another product, add another entry of the form
+  ~((compound . "key") (yield_percent . N))~ inside the outer list. Every
+  yield is a number from 0 to 100 without quotes or ~%~. Do not list a key
+  twice in either list or list a product as a starting material.
+
+  The site links the starting materials to their compound pages. It derives
+  *Precursors* from other procedures that make those compounds and
+  *Used in* from procedures that start from your products. You do not write
+  these procedure links yourself; they work across procedure languages.
 
   Put all tags on the ~#+HUGO_TAGS~ line, separated by spaces:
 
@@ -89,23 +100,50 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   #+HUGO_TAGS: esterification fragrance
 #+end_src
 
-  To show a product structure, place an SVG or PNG file in
-  the collection's ~static/structures/~ and add this custom-front-matter line before
-  ~:product~:
-
-#+begin_src org
-  #+HUGO_CUSTOM_FRONT_MATTER: :structure_image "structures/osdb-NNNN.svg"
-#+end_src
-
-  A structure SVG uses black lines and text on a white background rectangle.
-  It includes a ~<title>~ and contains no scripts, external images, or other
-  external references. The white background keeps the drawing legible on
-  the site's dark colour scheme and on paper.
+  Product names, chemical data and structure images belong in the compound
+  registry described next, rather than in the procedure header.
 
   Use the template's quoting and list forms. For example, authors and hazards
   use quoted Lisp lists such as ~'("A. Example" "B. Example")~. Consult
   [[file:SCHEMA.md][docs/SCHEMA.md]] for the exact required values, optional fields, reaction
   vocabulary, and file-name rules.
+
+* Find or add the compounds
+
+  The /compound registry/ is the collection's ~compounds/~ folder. One
+  ~<key>.toml~ file describes each compound, shared by every procedure that
+  makes or uses it. Look for an existing entry first. The key identifies
+  the compound; the site does not compare structures to find duplicates.
+
+  For a new compound, copy
+  [[file:../templates/compound.toml][templates/compound.toml]] into ~compounds/~.
+  Choose a file name with lowercase letters and digits separated by single
+  hyphens, such as ~ethyl-acetate.toml~. Use ~ethyl-acetate~ as the key in
+  ~:products~ or ~:substrates~. Replace the stub's ~example-compound~ key
+  with the key you actually use. Creating a procedure stub does not create
+  compound records.
+
+  The compound file is TOML, even when your procedure is Org. It has no
+  ~+++~ lines or ~[product]~ heading. Fill in ~name~, ~formula~, ~mw~ in
+  g/mol, and ~smiles~, a text notation for molecular structures. Text uses
+  double quotes; molecular weight is a positive number without quotes.
+  The optional ~name_de~ supplies the name on a German site; without it,
+  that site uses ~name~. An English site always uses ~name~. You may also
+  add ~cas~, the CAS Registry Number, and ~structure_image~.
+
+  To show a structure, place an SVG or PNG file in the collection's
+  ~static/structures/~. Set ~structure_image~ in the compound file, for
+  example ~structure_image = "structures/isopentyl-acetate.svg"~ for
+  ~isopentyl-acetate~. A structure SVG uses black lines and text on a white
+  background rectangle. It includes a ~<title>~ and contains no scripts,
+  external images, or other external references. The white background
+  keeps the drawing legible on the site's dark colour scheme and on paper.
+
+  You may register a starting material even if no procedure makes it. A
+  compound that no procedure uses is also allowed. *Compounds* in the site
+  navigation opens ~/compounds/~. Each name links to a page with chemical
+  data, the structure when supplied, *Made by* procedures with yields and
+  status, and *Used in* procedures with status.
 
 * Understand the finished page
 
@@ -114,18 +152,26 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   block shows the procedure ID and a status badge above ~#+TITLE~. When
   ~:status~ is ~checked~ and ~:checked_by~ is set, the checkers' names
   follow the badge, so the line reads *checked by* followed by the names.
-  Under the title, ~:scale~ appears as *Scale* and ~:yield_percent~ as
-  *Yield*, each when set. The *Print / Save as PDF* button follows them.
+  Under the title, ~:scale~ appears as *Scale* and product yields as
+  *Yield*. One product shows only its percentage; several show a percentage
+  and compound name for each, in product order. The *Print / Save as PDF*
+  button follows them.
 
-  On a wide screen, the structure image sits to the right of the title,
-  above the metadata panel. In a narrow window it follows the print
-  button, before the panel. In print it also precedes the panel. Without
-  an image, the screen shows a *No structure image* placeholder, which is
-  omitted from printouts. A rule closes the title block on screen.
+  The page shows one structure figure per product whose compound has an
+  image, in product order. On a wide screen, the figures sit to the right
+  of the title, above the metadata panel. In a narrow window they follow
+  the print button, before the panel. In print they also precede the panel.
+  When no product has an image, the screen shows a *No structure image*
+  placeholder, which is omitted from printouts. A rule closes the title
+  block on screen.
 
-  The metadata panel shows the product fields, the product name only when
-  it differs from the title, then reaction type, tags, authors, checkers
-  when set for draft or retired procedures under *Checked by*, created
+  The metadata panel always links the product names to their compound
+  pages under *Product* or *Products*, even when a name equals the title.
+  For one product it also shows formula, molecular weight, CAS when set,
+  and SMILES. For several products, find those data on their compound
+  pages. *Starting materials* links the compounds in ~:substrates~.
+  The panel then shows reaction type, tags, authors, checkers when set for
+  draft or retired procedures under *Checked by*, created
   and modified times, and precursor or used-in links. Formula digits
   appear as subscripts. Molecular weight gains ~g/mol~, yield gains a
   percent sign, and SMILES has a *Copy* button. Reaction type, tag, and
@@ -247,7 +293,8 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   - It never evaluates source blocks.
   - It ignores file-local variables.
 
-  Check the Org sources and all exported or hand-written Markdown with:
+  Check the Org sources, all exported or hand-written Markdown and the
+  compound registry with:
 
 #+begin_src sh
   orgsyndb validate
@@ -255,8 +302,14 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
 
   ~orgsyndb validate~ runs the export first. If the export reports an Org
   error, validation stops there and does not start the Markdown validator.
-  Otherwise, errors fail validation and warnings do not. The schema explains
-  every field and the validator's exit statuses.
+  Otherwise, errors in procedures or compound records fail validation and
+  warnings do not. The command uses the collection's ~compounds/~ registry
+  and ~static/~ for images. A field such as ~products[1].yield_percent~
+  names the yield in the first product entry; counting starts at 1.
+  ~unknown compound~ means you must check the key and its registry file.
+  Registry problems name the compound file and its field, such as
+  ~compounds/ethyl-acetate.toml:mw~. The summary counts compound files too.
+  The schema explains every field and the validator's exit statuses.
 
   Build and preview the site with:
 
@@ -302,7 +355,7 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   fixed phrases, reusable sentences, and their English equivalents.
 
   A file without a code may use the English or the German headings. To
-  state its language, add a custom-front-matter line before ~:product~:
+  state its language, add a custom-front-matter line before ~:products~:
 
 #+begin_src org
   #+HUGO_CUSTOM_FRONT_MATTER: :language "de"
@@ -313,13 +366,15 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   the site carries a ~lang~ attribute.
 
   To translate a procedure, copy ~OSDB-0001-x.org~ to ~OSDB-0001-x.de.org~
-  and translate the title, the product ~name~, the hazards, the references
-  if needed, and the body. Set both timestamps to the time of the
-  translation. Leave ~:status~, ~:reaction_types~, ~#+HUGO_TAGS~,
-  ~:yield_percent~, ~:precursors~, ~:structure_image~ and the product's
-  ~formula~, ~mw~, ~smiles~ and ~cas~ unchanged: the validator compares
-  them with the original and reports each difference as an error. The
-  original and its translation may use different formats.
+  and translate the title, the hazards, the references if needed, and the
+  body. Set both timestamps to the time of the translation. Leave
+  ~:status~, ~:reaction_types~, ~#+HUGO_TAGS~,
+  ~:products~ and ~:substrates~ unchanged: the validator compares them
+  with the original and reports each difference as an error. Numeric yields
+  compare by value, so ~85~ and ~85.0~ agree. Compound names come from
+  ~name~ and ~name_de~ in the shared registry; add or edit ~name_de~ there
+  for the German name. The original and its translation may use different
+  formats.
 
   The export keeps the language code: ~OSDB-0001-x.de.org~ becomes
   ~build/export/OSDB-0001-x.de.md~. On a German site it is published at

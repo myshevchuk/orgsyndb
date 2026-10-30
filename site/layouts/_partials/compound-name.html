@@ -1,0 +1,10 @@
+{{- /* A compound key to the compound's shown name in the current language:
+name_de on a German site when the registry entry sets it, else name; the
+key itself when the registry has no entry. Returns the name as a plain
+string, so that each context that shows it escapes it once. */ -}}
+{{- $name := . -}}
+{{- with index site.Data.compounds . -}}
+{{- $name = .name -}}
+{{- if and (eq site.Language.Lang "de") .name_de }}{{ $name = .name_de }}{{ end -}}
+{{- end -}}
+{{- return $name -}}

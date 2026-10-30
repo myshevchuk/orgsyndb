@@ -140,25 +140,30 @@ class ShippedSearchTests(SearchBatchCase):
                      for item in items}
         cls.wintergreen = cls.ask("wintergreen")
         words, cls.missing_words = body_words(cls.sandbox)
+        registry = ps.read_registry(cls.sandbox)
         cls.lookups = {}
         for item in items:
-            product = item.product
-            wanted = [("name", product.get("name")),
-                      ("cas", product.get("cas")), ("id", item.id),
-                      ("word", words.get(item.id))]
+            compounds = [registry[e["compound"]] for e in item.products]
+            wanted = [("id", item.id), ("word", words.get(item.id))]
+            for compound in compounds:
+                wanted += [("name", ps.shown_name(compound, cls.LOCALE)),
+                           ("cas", compound.get("cas"))]
             wanted += [(f"tag {tag}", tag) for tag in item.tags]
             for kind, term in wanted:
                 if term:
                     cls.lookups[f"{item.id} {kind}: {term}"] = (
                         cls.ask(term), item.id)
         cls.parts = {}
+        cls.full = {}
         for item in items:
-            for part in substrings(item.product["smiles"]):
-                if part not in cls.parts:
-                    cls.parts[part] = (cls.ask(part), set())
-                cls.parts[part][1].add(item.id)
-        cls.full = {item.id: cls.ask(item.product["smiles"])
-                    for item in items}
+            for entry in item.products:
+                smiles = registry[entry["compound"]]["smiles"]
+                for part in substrings(smiles):
+                    if part not in cls.parts:
+                        cls.parts[part] = (cls.ask(part), set())
+                    cls.parts[part][1].add(item.id)
+                if smiles not in cls.full:
+                    cls.full[smiles] = cls.ask(smiles)
 
     def test_cas_numbers_are_separate_words(self) -> None:
         """Scenario: CAS numbers are separate words."""
@@ -205,14 +210,19 @@ class ShippedSearchTests(SearchBatchCase):
     def test_a_full_smiles_finds_exactly_the_containing_ones(self) -> None:
         """Scenario: Full SMILES is exact."""
         items = self.content()
-        for item in items:
-            key = ps.smiles_key(item.product["smiles"])
-            expected = sorted(
-                other.id for other in items
-                if key in ps.smiles_key(other.product["smiles"]))
-            with self.subTest(procedure=item.id):
-                self.assertEqual(sorted(self.found(self.full[item.id])),
-                                 expected)
+        registry = ps.read_registry(self.sandbox)
+
+        def keys(item: Content) -> list[str]:
+            return [ps.smiles_key(registry[e["compound"]]["smiles"])
+                    for e in item.products]
+
+        self.assertTrue(self.full)
+        for smiles, index in self.full.items():
+            key = ps.smiles_key(smiles)
+            expected = sorted(other.id for other in items
+                              if any(key in own for own in keys(other)))
+            with self.subTest(smiles=smiles):
+                self.assertEqual(sorted(self.found(index)), expected)
 
     def test_the_searcher_agrees_with_the_result_data(self) -> None:
         """Scenario: Same procedures in the same order as the result data."""
@@ -225,3 +235,31 @@ class ShippedSearchTests(SearchBatchCase):
             f"is not {self.ids(index)}"
             for index in searches if self.found(index) != self.ids(index)]
         self.assertEqual(different, [])
+
+
+class TwoProductSearchTests(ShippedSearchTests):
+    """The same searches with the two-product fixture added: both of its
+    products' names, CAS numbers and SMILES find it."""
+
+    FIXTURES = ("OSDB-0907-two-products.md",)
+
+    def test_both_products_find_the_procedure(self) -> None:
+        """Scenario: Name, CAS, tag, ID and body word (two products)."""
+        for kind, term in (("name", "trans-Stilbene"),
+                           ("name", "cis-Stilbene"), ("cas", "103-30-0"),
+                           ("cas", "645-49-8")):
+            with self.subTest(term=term):
+                index, ident = self.lookups[f"OSDB-0907 {kind}: {term}"]
+                self.assertEqual(ident, "OSDB-0907")
+                self.assertIn("OSDB-0907", self.found(index))
+
+    def test_the_index_value_follows_both_products(self) -> None:
+        """Scenario: Index value (two products)."""
+        page = ps.load_page(self.public, self.public / "procedures"
+                            / "osdb-0907" / "index.html")
+        index = page.find("span", data_smiles_index=True)
+        self.assertIsNotNone(index, "no SMILES index element")
+        self.assertEqual(
+            index.attrs["data-smiles-index"],
+            ps.smiles_suffixes("c1ccc(cc1)/C=C/c1ccccc1") + " "
+            + ps.smiles_suffixes(r"c1ccc(cc1)/C=C\c1ccccc1"))

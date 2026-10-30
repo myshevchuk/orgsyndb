@@ -10,17 +10,19 @@
 #+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
 #+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("esterification")
 #+HUGO_CUSTOM_FRONT_MATTER: :scale "25 mmol"
-#+HUGO_CUSTOM_FRONT_MATTER: :yield_percent 85
 #+HUGO_CUSTOM_FRONT_MATTER: :hazards '("Entzündbare Flüssigkeit")
 # Optionale Felder: bei Bedarf einkommentieren, immer oberhalb der Produktzeile.
-# #+HUGO_CUSTOM_FRONT_MATTER: :precursors '("OSDB-0001")
-# #+HUGO_CUSTOM_FRONT_MATTER: :structure_image "structures/osdb-0001.svg"
+# Die Ausgangsstoffe, als Verbindungsschlüssel wie der in :products.
+# #+HUGO_CUSTOM_FRONT_MATTER: :substrates '("example-compound")
 # #+HUGO_CUSTOM_FRONT_MATTER: :checked_by '("B. Example")
 # #+HUGO_CUSTOM_FRONT_MATTER: :references '("Example, A. J. Fictitious Chem. 2020, 1, 1.")
-# Die Produktangaben müssen allein auf der letzten Custom-Front-Matter-Zeile
-# stehen; sonst legt tomelr jeden späteren Schlüssel in die [product]-Tabelle.
-# (cas . "141-78-6") ergänzen, sobald die CAS-Nummer bekannt ist.
-#+HUGO_CUSTOM_FRONT_MATTER: :product '((name . "Produktname") (formula . "C4H8O2") (mw . 88.11) (smiles . "CCOC(C)=O"))
+# Die Produktliste muss allein auf der letzten Custom-Front-Matter-Zeile
+# stehen; sonst legt tomelr jeden späteren Schlüssel in ihre letzte
+# [[products]]-Tabelle. Je Produkt ein Eintrag
+# ((compound . "schlüssel") (yield_percent . N)): der Schlüssel benennt die
+# Datei der Verbindung im Ordner compounds/ der Sammlung ohne .toml, die
+# Ausbeute steht in Prozent, von 0 bis 100.
+#+HUGO_CUSTOM_FRONT_MATTER: :products '(((compound . "example-compound") (yield_percent . 85)))
 
 * Zusammenfassung
 Ein oder zwei Sätze: was woraus und wie hergestellt wird.

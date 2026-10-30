@@ -1,0 +1,5 @@
+name = "cis-Stilbene"
+formula = "C14H12"
+mw = 180.25
+smiles = 'c1ccc(cc1)/C=C\c1ccccc1'
+cas = "645-49-8"

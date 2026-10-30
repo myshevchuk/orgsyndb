@@ -50,8 +50,8 @@ The information block, called *front matter*, is everything between the two
 and are not shown on the website.
 
 Change the value after each equals sign. Keep text in double quotes. Keep
-numbers without quotes. Keep lists inside square brackets, with every entry
-in double quotes.
+numbers without quotes. Keep lists inside square brackets. Text entries
+use double quotes; each product entry uses curly braces, as shown below.
 
 Fill in these required fields:
 
@@ -68,45 +68,77 @@ Fill in these required fields:
   `change-me`. The `sample-data` tag adds a warning banner to the page and
   to printouts, so never use it for a real procedure.
 - `scale`: the amount of product made.
-- `yield_percent`: the isolated yield as a number without a percent sign.
 - `hazards`: short descriptions of the main hazards.
-- `[product]`: the product name, formula, molecular weight, and SMILES, the
-  text notation used for the product structure.
+- `products`: one or more compound keys, each with its isolated yield. A
+  key is the name of a file in `compounds/` without `.toml`; the next
+  section explains how to find or create it.
 
-The template also contains optional, commented fields for precursor
-procedures, a structure image, checkers, literature references, an AI model,
-and the product's CAS number. Delete the `#` at the start of an optional line
-when you need it. Leave the line commented when it does not apply.
+The template also contains optional, commented fields for starting
+materials (`substrates`), checkers, literature references and an AI model.
+Delete the `#` at the start of an optional line when you need it. Leave the
+line commented when it does not apply.
 
-Set `precursors` to the procedure numbers that make the starting material
-for this procedure. For example:
-
-```toml
-precursors = ["OSDB-0007"]
-```
-
-The page then links to OSDB-0007 under **Precursors**. The OSDB-0007 page
-automatically links back to this procedure under **Used in**.
-
-To show a product structure, place an SVG or PNG file in
-the collection's `static/structures/` and set a path such as:
+Name products and starting materials by their registry keys. For example,
+the demo's aspirin procedure uses:
 
 ```toml
-structure_image = "structures/osdb-NNNN.svg"
+substrates = ["salicylic-acid", "acetic-anhydride"]
+products = [{ compound = "acetylsalicylic-acid", yield_percent = 75 }]
 ```
 
-For an SVG, use black lines and text on a white background rectangle. Give
-the file a `<title>`, and do not include scripts, external images, or other
-external references. The site shows the image on a white panel in dark mode.
-Ask the owner to add or check the image if you do not work with SVG files.
+Give every product its own `compound` and `yield_percent` inside braces.
+Separate product entries with commas inside the square brackets. Yields
+are numbers from 0 to 100, without quotes or `%`. Do not list a key twice
+in either list or list a product as a starting material.
 
-Keep the `[product]` block last, immediately before the closing `+++`. TOML
-treats fields after `[product]` as part of that product block.
+The site links the starting materials to their compound pages. It derives
+**Precursors** from other procedures that make those compounds and
+**Used in** from procedures that start from your products. For example,
+the aspirin page links to OSDB-0001 because that procedure makes
+`salicylic-acid`. You do not enter these procedure links yourself.
 
 Write `date` and `lastmod` without quotes. Use Europe/Berlin local time and
 include `+01:00` in winter or `+02:00` in summer, as shown in the template.
 The [procedure schema](SCHEMA.md#front-matter-fields) gives the exact format
 and every allowed value.
+
+### Find or add the compounds
+
+The *compound registry* is the collection's `compounds/` folder. Each
+compound has one `<key>.toml` file containing its name and chemical data,
+shared by every procedure that makes or uses it. Look there for an existing
+entry before adding one. The key identifies the compound; the site does
+not compare structures to find duplicates.
+
+For a new compound, copy
+[`templates/compound.toml`](../templates/compound.toml) into `compounds/`.
+Choose a file name with lowercase letters and digits separated by single
+hyphens, such as `ethyl-acetate.toml`. Use `ethyl-acetate` as the key in
+your procedure. Replace the template's `example-compound` key in your
+procedure with the key you actually use. Creating a procedure stub does not
+create its compound records.
+
+Fill in `name`, `formula`, `mw` in g/mol, and `smiles`, the text notation
+for the structure. The optional `name_de` supplies the name on a German
+site; without it, that site uses `name`. An English site always uses `name`.
+You may also add `cas`, the CAS Registry Number, and `structure_image`.
+Keep text in quotes and molecular weight as a positive number without
+quotes. Compound files contain no `+++` lines or `[product]` heading.
+
+To show a structure, place an SVG or PNG file in the collection's
+`static/structures/` and set `structure_image` in the compound file, for
+example `structure_image = "structures/isopentyl-acetate.svg"` for
+`isopentyl-acetate`. For an SVG, use black lines and text on a white
+background rectangle. Give the file a `<title>`, and do not include scripts,
+external images, or other external references. The site shows the image on
+a white panel in dark mode. Ask the owner to add or check the image if you
+do not work with SVG files.
+
+You may register a starting material even if no procedure makes it. A
+compound that no procedure uses is also allowed. **Compounds** in the site
+navigation opens the directory at `/compounds/`. Each name links to a page
+with chemical data, the structure when supplied, **Made by** procedures
+with yields and status, and **Used in** procedures with status.
 
 ### How the fields appear on the page
 
@@ -115,20 +147,27 @@ default, shows them in German, such as **Kopieren** for **Copy**. The title
 block shows `id` and a `status` badge above the title. When `status` is
 `checked` and `checked_by` is set, the checkers' names follow the badge,
 so the line reads **checked by** followed by the names. Under the title,
-`scale` appears as **Scale** and `yield_percent` as **Yield**, each when
-set. The **Print / Save as PDF** button follows them.
+`scale` appears as **Scale** and the product yields as **Yield**. One
+product shows only its percentage; several show a percentage and compound
+name for each, in product order. The **Print / Save as PDF** button
+follows them.
 
-On a wide screen, the structure image sits to the right of the title,
-above the information panel. In a narrow window it follows the print
-button, before the panel. In print it also precedes the panel. Without
-an image, the screen shows a **No structure image** placeholder, which is
-omitted from printouts. A rule closes the title block on screen.
+The page shows one structure figure for each product whose compound has
+an image, in product order. On a wide screen, the figures sit to the right
+of the title, above the information panel. In a narrow window they follow
+the print button, before the panel. In print they also precede the panel.
+When no product has an image, the screen shows a **No structure image**
+placeholder, which is omitted from printouts. A rule closes the title
+block on screen.
 
-The information panel shows the product name when it differs from the
-title, then the formula, molecular weight, CAS number when present,
-SMILES, reaction type, tags, authors, checkers when present for draft or
-retired procedures under **Checked by**, created and modified times, and
-precursor or used-in links. Formula digits appear as subscripts.
+The information panel always links the product names to their compound
+pages under **Product** or **Products**, even when a name equals the title.
+For a single product it also shows formula, molecular weight, CAS number
+when present and SMILES. For several products, find those data on the
+compound pages. **Starting materials** links the compounds in `substrates`.
+The panel then shows reaction type, tags, authors, checkers when present
+for draft or retired procedures under **Checked by**, created and modified
+times, and precursor or used-in links. Formula digits appear as subscripts.
 Molecular weight gains `g/mol`, yield gains a percent sign, and SMILES has
 a **Copy** button. Reaction type, tag, and author values link to pages
 that list related procedures. The site title-cases author names for
@@ -178,7 +217,9 @@ its `md/procedures/`. Do not put it in a subfolder.
 
 If you do not have the collection, send the `.md` file to the owner. Tell the
 owner whether you used a procedure number they assigned or left the template
-number in place. The owner can then place, rename, and check it.
+number in place. The owner can then place, rename, and check it. Include
+any new compound files and structure images, or ask the owner to add their
+registry entries.
 
 ## 5. Check the file
 
@@ -191,7 +232,7 @@ orgsyndb validate
 ```
 
 The command exports the owner's Org procedures and then checks every
-procedure. Each problem has this form:
+procedure and every compound record. Each problem has this form:
 
 ```text
 path/to/file.md:field: error: message
@@ -202,15 +243,19 @@ Read each line from left to right:
 
 - The first part is the file to open.
 - The second part is the field or body section to inspect.
-- `error` means the procedure is invalid and the check fails.
+- `error` means a procedure or compound record is invalid and the check fails.
 - `warning` means the check can finish, but you should review and correct
   the problem.
 - The final text explains what is wrong.
 
-For example, a line naming `yield_percent` tells you to inspect that field
-near the top of the file. A line naming `body` tells you to inspect the
-section headings. Run the command again after correcting the file. The last
-line reports how many files, errors, and warnings were found.
+For example, `products[1].yield_percent` names the yield in the first
+product entry; product numbers start at 1. An `unknown compound` error
+means you must check the key and its file in `compounds/`. A message such
+as `compounds/ethyl-acetate.toml:mw` names a field in that compound file.
+A line naming `body` tells you to inspect the section headings. Run the
+command again after correcting the file. The last line reports how many
+files, errors, and warnings were found; its file count includes compound
+records.
 
 If a message is unclear, look up its field in the
 [procedure schema](SCHEMA.md). If you sent the file to the owner, the owner
@@ -267,10 +312,11 @@ phrases, reusable sentences, and their English equivalents.
 To translate an existing procedure, copy its file and add the language
 code before the extension, for example `OSDB-0002-aspirin.md` to
 `OSDB-0002-aspirin.de.md`. Keep the `id`, `slug`, `status`,
-`reaction_types`, `tags`, `yield_percent`, `precursors`,
-`structure_image` and the product's `formula`, `mw`, `smiles` and `cas`
-exactly as they are; the check reports any difference as an error.
-Translate the title, the product name, the hazards and the body, set
+`reaction_types`, `tags`, `products` and `substrates` as they are; the check
+reports any difference as an error. Numeric yields compare by value, so
+`85` and `85.0` agree. Compound names come from `name` and `name_de` in the
+shared registry; add or edit `name_de` there for the German name.
+Translate the title, the hazards and the body, set
 `date` and `lastmod` to the time of the translation, and use the section
 headings and Reagents columns of the new language, which the
 [procedure schema](SCHEMA.md#languages-and-variants) lists.

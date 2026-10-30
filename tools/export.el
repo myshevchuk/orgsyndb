@@ -94,6 +94,7 @@ ORG_ROOT STAGING_DIR")
 (defvar org-hugo-section)
 (declare-function org-hugo-export-to-md "ox-hugo")
 (declare-function tomelr-toml-table-p "tomelr")
+(declare-function tomelr-toml-table-array-p "tomelr")
 
 (defconst osdb-pins
   '((tomelr "https://github.com/kaushalmodi/tomelr"
@@ -145,14 +146,19 @@ tools/orgsyndb clean --all, then export again" name head commit)))
       (add-to-list 'load-path dir))))
 
 (defun osdb-table-entry-p (entry)
-  "Return non-nil when front-matter ENTRY has a TOML table as its value."
-  (and (consp entry) (cdr entry) (tomelr-toml-table-p (cdr entry))))
+  "Return non-nil when front-matter ENTRY has a table as its value.
+That is a TOML table or an array of TOML tables, which tomelr writes
+under a [KEY] or [[KEY]] header."
+  (and (consp entry) (cdr entry)
+       (or (tomelr-toml-table-p (cdr entry))
+           (tomelr-toml-table-array-p (cdr entry)))))
 
 (defun osdb-tables-last (args)
   "Move the table-valued entries of the front matter in ARGS last.
-ARGS are the arguments of `org-hugo--gen-front-matter'.  The relative
-order within each group is kept, so tomelr writes every table header
-after all plain keys."
+ARGS are the arguments of `org-hugo--gen-front-matter'.  An entry is
+table-valued when `osdb-table-entry-p' says so.  The relative order
+within each group is kept, so tomelr writes every table header after
+all plain keys."
   (let ((data (car args)))
     (cons (append (seq-remove #'osdb-table-entry-p data)
                   (seq-filter #'osdb-table-entry-p data))
@@ -161,7 +167,8 @@ after all plain keys."
 (defun osdb-setup ()
   "Load ox-hugo, check the functions the guard needs, and set options."
   (require 'ox-hugo)
-  (dolist (fn '(org-hugo--gen-front-matter tomelr-toml-table-p))
+  (dolist (fn '(org-hugo--gen-front-matter tomelr-toml-table-p
+                tomelr-toml-table-array-p))
     (unless (fboundp fn)
       (error "%s is not defined by the pinned ox-hugo and tomelr" fn)))
   (advice-add 'org-hugo--gen-front-matter :filter-args #'osdb-tables-last)

@@ -58,25 +58,20 @@ Every procedure SHALL carry a front-matter `slug` string equal to its `id` lower
 Every procedure SHALL carry, in its TOML front matter, each of the following keys with the stated type. A missing key is an error containing `required field missing`, and a value of the wrong TOML type is an error.
 - `id`: string
 - `slug`: string
-- `title`: non-empty string, the product name as shown in the heading
+- `title`: non-empty string, the procedure's heading, usually naming what it makes
 - `date`: offset datetime
 - `lastmod`: offset datetime
 - `authors`: non-empty list of non-empty strings
 - `status`: string
 - `reaction_types`: list of strings
 - `tags`: non-empty list of strings
-- `product`: table
+- `products`: array of tables (requirement "Products")
 - `scale`: string
-- `yield_percent`: number (TOML integer or float; never boolean)
 - `hazards`: non-empty list of non-empty strings
 
 #### Scenario: Missing title
 - **WHEN** a fixture run on `invalid/missing-title` examines `OSDB-0101-missing-title.md`, which has no `title` key
 - **THEN** it reports exactly one error, field `title`, containing `required field missing`
-
-#### Scenario: Yield given as a string
-- **WHEN** a variant run sets `yield_percent = "85"` under the file name `OSDB-0100-yield-not-number.md`
-- **THEN** it reports exactly one error, field `yield_percent`, containing `must be a number`
 
 #### Scenario: Empty hazards list
 - **WHEN** a variant run sets `hazards = []` under the file name `OSDB-0100-empty-hazards.md`
@@ -111,13 +106,6 @@ Every entry of `tags` SHALL be lowercase and hyphenated, matching `^[a-z0-9]+(-[
 - **WHEN** a variant run sets `tags = ["Sample Data"]` under the file name `OSDB-0100-bad-tag.md`
 - **THEN** it reports exactly one error, field `tags`, containing `must be lowercase and hyphenated`
 
-### Requirement: Yield range
-The `yield_percent` field SHALL be a finite number from 0 to 100 inclusive.
-
-#### Scenario: Yield above 100
-- **WHEN** a fixture run on `invalid/yield-out-of-range` examines `OSDB-0110-yield-out-of-range.md`, whose `yield_percent` is `104.5`
-- **THEN** it reports exactly one error, field `yield_percent`, containing `must be between 0 and 100`
-
 ### Requirement: Scale with unit
 The `scale` field SHALL be a string consisting of a number, whitespace, and a unit token, matching `^\d+([.,]\d+)?\s+\S+$` (e.g. `"25 mmol"` or `"2,5 mmol"`).
 
@@ -130,24 +118,6 @@ The `scale` field SHALL be a string consisting of a number, whitespace, and a un
 - **THEN** it exits 0 and prints nothing
 
 <!-- Reason: the vocabulary carries German labels. -->
-
-### Requirement: Product table
-The `product` table SHALL contain these keys:
-- `name`: non-empty string
-- `formula`: non-empty string
-- `mw`: finite number greater than 0, in g/mol
-- `smiles`: non-empty string
-- `cas`: optional string matching `^\d{2,7}-\d{2}-\d$` whose final check digit verifies
-
-Problems inside the table are reported under the dotted field name (`product.mw`). Any other key in the table is a warning containing `unknown field`.
-
-#### Scenario: Missing molecular weight
-- **WHEN** a variant run removes `mw` from the `product` table under the file name `OSDB-0100-product-missing-mw.md`
-- **THEN** it reports exactly one error, field `product.mw`, containing `required field missing`
-
-#### Scenario: CAS number with a wrong check digit
-- **WHEN** a variant run sets `cas = "64-17-4"` in the `product` table (the valid number is `64-17-5`) under the file name `OSDB-0100-bad-cas-check-digit.md`
-- **THEN** it reports exactly one error, field `product.cas`, containing `check digit`
 
 ### Requirement: Timestamps are offset datetimes in order
 The `date` and `lastmod` fields SHALL be TOML offset datetimes, and `lastmod` SHALL NOT be earlier than `date` when compared as instants. This comparison of exported instants is the authoritative ordering check. An offset that differs from the Europe/Berlin UTC offset in force at that instant is a warning, not an error.
@@ -167,36 +137,6 @@ The `date` and `lastmod` fields SHALL be TOML offset datetimes, and `lastmod` SH
 #### Scenario: Winter offset in summer
 - **WHEN** a fixture run on `warn/offset` examines `OSDB-0155-offset.md`, whose `date` is `2026-07-01T10:00:00+01:00` and `lastmod` is `2026-07-02T10:00:00+02:00`
 - **THEN** it reports exactly one warning, field `date`, containing `is not the Europe/Berlin offset`
-
-### Requirement: Precursors refer to existing procedures
-The optional `precursors` field SHALL be a list of procedure IDs. Each ID matches the identifier format, belongs to some procedure among the validated content roots, and is not the procedure's own `id`.
-
-#### Scenario: Precursor that does not exist
-- **WHEN** a fixture run on `invalid/missing-precursor` examines `OSDB-0123-missing-precursor.md`, whose `precursors` is `["OSDB-0999"]`
-- **THEN** it reports exactly one error, field `precursors`, containing `OSDB-0999 not found`
-
-#### Scenario: Procedure lists itself
-- **WHEN** a variant run sets `precursors = ["OSDB-0100"]` under the file name `OSDB-0100-self-precursor.md`
-- **THEN** it reports exactly one error, field `precursors`, containing `lists the procedure itself`
-
-#### Scenario: Precursor in another content root
-- **WHEN** the valid-set run examines `valid/md/OSDB-0002-*.md`, whose `precursors` is `["OSDB-0003"]`, where `OSDB-0003` is defined only in `valid/export`
-- **THEN** no line is printed for `precursors`
-
-### Requirement: Structure image path
-The optional `structure_image` field SHALL be a relative path beginning with `structures/` and ending in `.svg` or `.png`, with no `..` component, naming a file that exists under the static directory.
-
-#### Scenario: Image file missing
-- **WHEN** a fixture run on `invalid/missing-structure-image` examines `OSDB-0125-missing-structure-image.md`, whose `structure_image` is `"structures/osdb-0125.svg"`, absent from `tests/fixtures/static`
-- **THEN** it reports exactly one error, field `structure_image`, containing `not found`
-
-#### Scenario: Unsupported image type
-- **WHEN** a variant run sets `structure_image = "structures/osdb-0001.jpg"` under the file name `OSDB-0100-structure-image-wrong-type.md`
-- **THEN** it reports exactly one error, field `structure_image`, containing `must end in .svg or .png`
-
-#### Scenario: Image outside the structures directory
-- **WHEN** a variant run sets `structure_image = "osdb-0001.svg"` under the file name `OSDB-0100-structure-image-outside-structures.md`
-- **THEN** it reports exactly one error, field `structure_image`, containing `must be a relative path under structures/`
 
 ### Requirement: Other optional fields
 The optional fields SHALL have these shapes when present:
@@ -419,10 +359,11 @@ The rules for headings are:
 The file `templates/procedure.md` SHALL be a complete procedure using the placeholder ID `OSDB-0000` and slug `osdb-0000`. It satisfies the following:
 - Its front matter explains every field in TOML comments and shows the optional fields commented out.
 - Its body has the eight sections, a Reagents table with the header `Reagent | CAS | MW (g/mol) | Amount | mmol | Equiv`, and numbered lists under Procedure and Notes.
-- Once `OSDB-0000` is replaced by a real ID and `osdb-0000` by its lowercase form, it validates against the shipped vocabulary with no errors and no warnings.
+- Its `products` names the compound key `example-compound`, and its commented-out `substrates` line names the same key.
+- Once `OSDB-0000` is replaced by a real ID and `osdb-0000` by its lowercase form, it validates against the shipped vocabulary and a registry holding `templates/compound.toml` as `example-compound.toml` with no errors and no warnings.
 
 #### Scenario: Substituted Markdown template is clean
-- **WHEN** a test copies `templates/procedure.md` to a temporary directory as `OSDB-0001-template.md`, replacing every `OSDB-0000` with `OSDB-0001` and every `osdb-0000` with `osdb-0001`, and runs the validator on that directory with the default vocabulary
+- **WHEN** a test copies `templates/procedure.md` to a temporary directory as `OSDB-0001-template.md`, replacing every `OSDB-0000` with `OSDB-0001` and every `osdb-0000` with `osdb-0001`, copies `templates/compound.toml` into a temporary registry as `example-compound.toml`, and runs the validator on that directory with the default vocabulary and that registry
 - **THEN** it exits 0 and prints nothing to stdout
 
 #### Scenario: Unsubstituted Markdown template is rejected
@@ -433,8 +374,8 @@ The file `templates/procedure.md` SHALL be a complete procedure using the placeh
 The file `templates/procedure.org` SHALL be a complete Org procedure that satisfies the following:
 - It carries `#+CREATED` and `#+LAST_MODIFIED` in the required format.
 - It sets `#+HUGO_SLUG: osdb-0000` and `#+HUGO_TAGS`.
-- It sets the keys `id` (as `OSDB-0000`), `authors`, `status`, `reaction_types`, `product`, `scale`, `yield_percent` and `hazards` on repeated `#+HUGO_CUSTOM_FRONT_MATTER:` lines.
-- It sets `product` alone on the last `#+HUGO_CUSTOM_FRONT_MATTER:` line, because tomelr emits keys in order and every key after a `[product]` table header would parse as a member of that table.
+- It sets the keys `id` (as `OSDB-0000`), `authors`, `status`, `reaction_types`, `scale`, `hazards` and `products` on repeated `#+HUGO_CUSTOM_FRONT_MATTER:` lines, `products` naming the compound key `example-compound`, and shows a `substrates` line commented out.
+- It sets `products` alone on the last `#+HUGO_CUSTOM_FRONT_MATTER:` line, because tomelr emits keys in order and every key after a `[[products]]` table header would parse as a member of that table.
 - It has the eight body sections as top-level headings, in order.
 - It does not set `#+DATE`, `#+HUGO_LASTMOD`, `#+HUGO_AUTO_SET_LASTMOD`, `#+HUGO_DRAFT`, `#+HUGO_BASE_DIR` or `#+HUGO_SECTION`.
 
@@ -445,8 +386,8 @@ The file `templates/procedure.org` SHALL be a complete Org procedure that satisf
 #### Scenario: Org template carries the schema keywords and sections
 - **WHEN** a test reads `templates/procedure.org`
 - **THEN** it contains the line `#+HUGO_SLUG: osdb-0000` and a `#+HUGO_TAGS:` line
-- **AND** the `#+HUGO_CUSTOM_FRONT_MATTER:` lines together contain `:id`, `:authors`, `:status`, `:reaction_types`, `:product`, `:scale`, `:yield_percent` and `:hazards`
-- **AND** the last `#+HUGO_CUSTOM_FRONT_MATTER:` line contains `:product` and no other `:key`, and no earlier such line contains `:product`
+- **AND** the `#+HUGO_CUSTOM_FRONT_MATTER:` lines together contain `:id`, `:authors`, `:status`, `:reaction_types`, `:scale`, `:hazards` and `:products`
+- **AND** the last `#+HUGO_CUSTOM_FRONT_MATTER:` line contains `:products` and no other `:key`, and no earlier such line contains `:products`
 - **AND** its top-level headings, in order, include `* Summary`, `* Reagents`, `* Procedure`, `* Workup and Purification`, `* Characterization`, `* Notes`, `* Hazards and Waste Disposal` and `* References`
 - **AND** no line begins, case-insensitively, with `#+DATE:`, `#+HUGO_LASTMOD:`, `#+HUGO_AUTO_SET_LASTMOD:`, `#+HUGO_DRAFT:`, `#+HUGO_BASE_DIR:` or `#+HUGO_SECTION:`
 
@@ -484,4 +425,57 @@ Problems of this requirement follow those of "Org file-level keywords", in the o
 #### Scenario: Forbidden lines inside blocks are ignored
 - **WHEN** an ERT test examines a copy of `valid/org/OSDB-0003-propyl-acetate.org` with the lines `#+DATE: x`, `#+HUGO_CUSTOM_FRONT_MATTER: :date x`, `:EXPORT_DATE: x` and `:LOGBOOK:` added between a `#+begin_example` line and a `#+end_example` line
 - **THEN** it returns no problem
+
+### Requirement: Products
+The `products` field SHALL be a non-empty array of tables, one per product of the procedure, each holding:
+- `compound`: a string that is a key of the compound registry (compound-registry "Compound files");
+- `yield_percent`: a finite number from 0 to 100 inclusive (TOML integer or float; never boolean), the yield of that product.
+
+A problem inside the `n`-th table, counting from 1, is reported under `products[n].<key>`, and an entry that is not a table is an error under `products[n]` containing `must be a table`. Any other key in a table is a warning containing `unknown field`. The messages are:
+- an empty array: `products` containing `must not be empty`; a value that is not an array: `products` containing `must be an array of tables`;
+- a missing key: `required field missing`;
+- a `compound` that is not a registry key: `unknown compound "<key>"`;
+- a `yield_percent` that is not a number: `must be a number, unquoted, e.g. 85`; one outside the range: `<value> must be between 0 and 100`;
+- a key named by two tables: one error under `products` containing `lists <key> twice`.
+
+A procedure may have several products, each with its own yield.
+
+#### Scenario: Unknown compound
+- **WHEN** a fixture run on `invalid/unknown-compound` examines `OSDB-0123-unknown-compound.md`, whose only product names `no-such-compound`
+- **THEN** it reports exactly one error, field `products[1].compound`, containing `unknown compound "no-such-compound"`
+
+#### Scenario: Yield above 100
+- **WHEN** a fixture run on `invalid/yield-out-of-range` examines `OSDB-0110-yield-out-of-range.md`, whose only product has `yield_percent = 104.5`
+- **THEN** it reports exactly one error, field `products[1].yield_percent`, containing `must be between 0 and 100`
+
+#### Scenario: Yield given as a string
+- **WHEN** a variant run sets the product's `yield_percent = "85"` under the file name `OSDB-0100-yield-not-number.md`
+- **THEN** it reports exactly one error, field `products[1].yield_percent`, containing `must be a number`
+
+#### Scenario: Two products
+- **WHEN** a variant run adds a second product `{ compound = "ethanol", yield_percent = 10 }` under the file name `OSDB-0100-two-products.md`
+- **THEN** it exits 0 and prints nothing
+
+#### Scenario: A product listed twice
+- **WHEN** a variant run adds a second product naming the baseline's compound under the file name `OSDB-0100-product-twice.md`
+- **THEN** it reports exactly one error, field `products`, containing `lists ethyl-acetate twice`
+
+#### Scenario: No products
+- **WHEN** a variant run sets `products = []` under the file name `OSDB-0100-no-products.md`
+- **THEN** it reports exactly one error, field `products`, containing `must not be empty`
+
+### Requirement: Substrates
+The optional `substrates` field SHALL be a list of strings, the keys of the compounds the procedure starts from, each a key of the compound registry, none named twice and none among the procedure's own products. Problems are reported under `substrates`:
+- a value that is not a list of strings: `must be a list of compound keys, e.g. ["ethanol"]`;
+- a key not in the registry: `unknown compound "<key>"`;
+- a key named twice: `lists <key> twice`;
+- a key among the products: `<key> is also a product`.
+
+#### Scenario: Unknown substrate
+- **WHEN** a fixture run on `invalid/unknown-substrate` examines `OSDB-0124-unknown-substrate.md`, whose `substrates` is `["no-such-compound"]`
+- **THEN** it reports exactly one error, field `substrates`, containing `unknown compound "no-such-compound"`
+
+#### Scenario: A substrate that is also a product
+- **WHEN** a variant run sets `substrates = ["ethyl-acetate"]`, the baseline's product, under the file name `OSDB-0100-substrate-is-product.md`
+- **THEN** it reports exactly one error, field `substrates`, containing `ethyl-acetate is also a product`
 

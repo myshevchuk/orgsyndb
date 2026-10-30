@@ -48,8 +48,12 @@ tags = ["change-me"]
 # How much product the procedure makes: a number, a space, a unit.
 scale = "25 mmol"
 
-# Yield in percent, a number from 0 to 100, without quotes or %.
-yield_percent = 85
+# What the procedure makes: one entry in curly braces per product,
+# separated by commas. compound is the product's key, the name of its
+# file in the collection's compounds/ folder without .toml; copy
+# templates/compound.toml there to describe a new compound. yield_percent
+# is its yield in percent, a number from 0 to 100, without quotes or %.
+products = [{ compound = "example-compound", yield_percent = 85 }]
 
 # The main hazards, at least one, each as a short phrase.
 hazards = ["Flammable liquid"]
@@ -57,14 +61,10 @@ hazards = ["Flammable liquid"]
 # Optional information. To use a line, delete the # at its start and
 # change the value.
 
-# Procedure numbers this one starts from, e.g. its starting material.
-# Each must be a procedure that exists on the site.
-# precursors = ["OSDB-0001"]
-
-# Picture of the product's structure, an .svg or .png file placed in
-# the collection's static/structures/. Write the path starting with
-# structures/.
-# structure_image = "structures/osdb-0001.svg"
+# The starting materials, as a list of compound keys like the one in
+# products. A procedure that makes one of them is linked from this one
+# as its precursor.
+# substrates = ["example-compound"]
 
 # Who checked the procedure, as a list of names.
 # checked_by = ["B. Example"]
@@ -75,20 +75,6 @@ hazards = ["Flammable liquid"]
 # Name of the AI model that helped write the procedure. Leave this line
 # out entirely if no AI was involved.
 # ai_model = "example-model-1"
-
-# Details of the product. This block must stay last, just before the
-# closing +++ line.
-[product]
-# Name of the product.
-name = "Product name"
-# Molecular formula, e.g. "C4H8O2".
-formula = "C4H8O2"
-# Molecular weight in g/mol, a number without quotes.
-mw = 88.11
-# Structure written as SMILES.
-smiles = "CCOC(C)=O"
-# Optional CAS registry number, e.g. "141-78-6". Delete the # to use it.
-# cas = "141-78-6"
 +++
 
 ## Summary

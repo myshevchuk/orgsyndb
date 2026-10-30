@@ -1,0 +1,5 @@
+{{- /* The compound keys a procedure page names in its products, in order.
+Takes the page; returns a slice, empty when it sets no products. */ -}}
+{{- $keys := slice -}}
+{{- range .Params.products }}{{ $keys = $keys | append .compound }}{{ end -}}
+{{- return $keys -}}

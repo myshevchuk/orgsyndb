@@ -9,7 +9,8 @@ status = "draft"
 reaction_types = ["hydrolysis"]
 tags = ["sample-data", "saponification"]
 scale = "50 mmol"
-yield_percent = 80
+substrates = ["methyl-salicylate"]
+products = [{ compound = "salicylic-acid", yield_percent = 80 }]
 hazards = [
   "Natriumhydroxid: verursacht schwere Verätzungen der Haut und schwere Augenschäden",
   "Konzentrierte Salzsäure: verursacht schwere Verätzungen der Haut, reizende Dämpfe",
@@ -20,13 +21,6 @@ references = [
   "Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989.",
 ]
 ai_model = "claude-opus-5-5"
-
-[product]
-name = "Salicylsäure"
-formula = "C7H6O3"
-mw = 138.12
-smiles = "OC(=O)c1ccccc1O"
-cas = "69-72-7"
 +++
 
 ## Zusammenfassung

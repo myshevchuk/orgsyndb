@@ -6,6 +6,7 @@ temporary directory, and locate the repository from this file.
 
 import contextlib
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -20,6 +21,8 @@ VALIDATOR = REPO / "tools" / "validate.py"
 BASELINE = FIXTURES / "baseline" / "OSDB-0100-baseline.md"
 VOCABULARY = FIXTURES / "reaction_types.toml"
 STATIC_DIR = FIXTURES / "static"
+COMPOUNDS = FIXTURES / "compounds"
+COMPOUND_TEMPLATE = REPO / "templates" / "compound.toml"
 
 _LINE = re.compile(
     r"^(?P<path>.+?):(?P<field>[^:\s]+): "
@@ -74,10 +77,16 @@ def run_validator(args: Sequence[str | Path],
 
 
 def fixture_run(*roots: str | Path,
-                extra: Sequence[str | Path] = ()) -> Result:
-    """Fixture run: roots are relative to tests/fixtures/ unless absolute."""
+                extra: Sequence[str | Path] = (),
+                compounds: Path = COMPOUNDS) -> Result:
+    """Fixture run: roots are relative to tests/fixtures/ unless absolute.
+
+    ``compounds`` is the registry the run reads, the fixture registry
+    unless a registry variant names another.
+    """
     args: list[str | Path] = [
         "--vocabulary", VOCABULARY, "--static-dir", STATIC_DIR,
+        "--compounds", compounds,
     ]
     args += extra
     args += [FIXTURES / root for root in roots]
@@ -114,23 +123,23 @@ def remove_line(key: str) -> Edit:
 
 
 def insert_line(new_line: str) -> Edit:
-    """Insert a line among the top-level keys, before ``[product]``."""
-    def edit(text: str) -> str:
-        marker = "\n\n[product]\n"
-        if marker not in text:
-            raise AssertionError("baseline layout changed")
-        return text.replace(marker, f"\n{new_line}{marker}", 1)
-    return edit
-
-
-def insert_in_product(new_line: str) -> Edit:
-    """Insert a line at the end of the ``[product]`` table."""
+    """Insert a line among the top-level keys, before the closing ``+++``."""
     def edit(text: str) -> str:
         lines = text.split("\n")
         closing = [i for i, ln in enumerate(lines) if ln == "+++"][1]
         lines.insert(closing, new_line)
         return "\n".join(lines)
     return edit
+
+
+def products_line(*entries: str) -> str:
+    """The ``products`` line of a baseline variant, one entry per table.
+
+    Each entry is the inside of an inline table, such as
+    ``compound = "ethanol", yield_percent = 10``.
+    """
+    return "products = [" + ", ".join(
+        "{ " + entry + " }" for entry in entries) + "]"
 
 
 def swap_delimiters() -> Edit:
@@ -228,3 +237,42 @@ class ValidatorTestCase(unittest.TestCase):
         self.assert_ran(result)
         self.assertEqual(
             [ln for ln in result.stdout.splitlines() if needle in ln], [])
+
+
+@contextlib.contextmanager
+def registry_copy() -> Iterator[Path]:
+    """A fresh temporary copy of the fixture registry."""
+    with tempfile.TemporaryDirectory() as tmp:
+        registry = Path(tmp) / "compounds"
+        shutil.copytree(COMPOUNDS, registry)
+        yield registry
+
+
+def registry_variant_run(change: Callable[[Path], None]) -> Result:
+    """Registry variant run: ``change`` edits a copy of the registry, then
+    a fixture run on ``baseline`` reads that copy."""
+    with registry_copy() as registry:
+        change(registry)
+        return fixture_run("baseline", compounds=registry)
+
+
+def edit_compound(key: str, *edits: Edit) -> Callable[[Path], None]:
+    """A registry change applying text edits to ``<key>.toml``."""
+    def change(registry: Path) -> None:
+        path = registry / f"{key}.toml"
+        path.write_text(apply_edits(path.read_text(encoding="utf-8"),
+                                    edits), encoding="utf-8")
+    return change
+
+
+@contextlib.contextmanager
+def template_registry() -> Iterator[Path]:
+    """A temporary registry holding ``templates/compound.toml`` as
+    ``example-compound.toml``, the compound the procedure templates name."""
+    if not COMPOUND_TEMPLATE.is_file():
+        raise AssertionError("templates/compound.toml does not exist")
+    with tempfile.TemporaryDirectory() as tmp:
+        registry = Path(tmp) / "compounds"
+        registry.mkdir()
+        shutil.copy2(COMPOUND_TEMPLATE, registry / "example-compound.toml")
+        yield registry

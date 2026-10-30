@@ -15,6 +15,8 @@
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-28 Wed 21:37] -- Datenfeld ohne Nummer, Statusbezeichnungen groß
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-28 Wed 21:55] -- Die fertige Seite verstehen
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-28 Wed 21:57] -- doc-writer pass line corrected from gpt-6 to the pinned run model
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-10-30 Fri 01:50] -- Verbindungsregister, Produkte, Ausgangsstoffe und Seiten
+#+AI_PASS: fact-check claude-opus-5-5 [2026-10-30 Fri 01:55] -- doc-writer pass line corrected from gpt-6 to the pinned run model
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
@@ -72,29 +74,37 @@ bleiben auch in einer deutschen Vorschrift englisch.
     ~sample-data~ setzt einen Warnhinweis auf Bildschirm und Papier;
     verwenden Sie es nie für eine echte Vorschrift.
   - ~#+HUGO_CUSTOM_FRONT_MATTER~ :: Wiederholte Zeilen mit Nummer, Autoren,
-    Status, Reaktionstyp, Ansatzgröße, Ausbeute, Gefahren und optionalen
-    Feldern.
+    Status, Reaktionstyp, Ansatzgröße, Produkten mit ihren Ausbeuten,
+    Gefahren und optionalen Feldern.
 
-  Die Zeile ~:product~ ist eine Assoziationsliste mit Produktname,
-  Summenformel, Molmasse, SMILES und optional der CAS-Nummer. Sie bleibt
-  die letzte der Custom-Front-Matter-Zeilen. Der Export sichert die
-  Reihenfolge zusätzlich ab, damit spätere Angaben nicht in die
-  Produkttabelle geraten.
+  Setzen Sie ~:products~ auf eine gequotete Liste mit einem Eintrag pro
+  Produkt. Jeder Eintrag enthält den Schlüssel ~compound~ und
+  ~yield_percent~. Ein Schlüssel ist der Name einer Datei in ~compounds/~
+  der Sammlung ohne ~.toml~. ~:products~ steht allein auf der letzten
+  Custom-Front-Matter-Zeile. Der Export hält tabellenartige Metadaten
+  zusätzlich am Ende, damit spätere Felder nicht zur letzten Tabelle
+  ~[[products]]~ gehören.
 
-  Zahlen in diesen Zeilen, etwa ~:yield_percent 85~ oder ~(mw . 88.11)~,
-  schreiben Sie mit Dezimalpunkt. Die deutsche Seite zeigt sie mit
-  Dezimalkomma. Text wie ~:scale "2,5 mmol"~ darf ein Komma enthalten.
-
-  Um die Vorschriften zu verlinken, aus denen der Ausgangsstoff stammt,
-  fügen Sie vor ~:product~ eine Zeile ein:
+  Benennen Sie Ausgangsstoffe in einer optionalen Zeile ~:substrates~ vor
+  ~:products~. Zum Beispiel:
 
 #+begin_src org
-  #+HUGO_CUSTOM_FRONT_MATTER: :precursors '("OSDB-0007")
+  #+HUGO_CUSTOM_FRONT_MATTER: :substrates '("methyl-salicylate")
+  #+HUGO_CUSTOM_FRONT_MATTER: :products '(((compound . "salicylic-acid") (yield_percent . 80)))
 #+end_src
 
-  Die Seite verlinkt dann OSDB-0007 unter *Vorstufen*, und die Seite von
-  OSDB-0007 verlinkt automatisch unter *Verwendet in* zurück, auch wenn
-  OSDB-0007 nur auf Englisch vorliegt.
+  Für ein weiteres Produkt fügen Sie innerhalb der äußeren Liste einen
+  weiteren Eintrag ~((compound . "key") (yield_percent . N))~ hinzu.
+  Ausbeuten sind Zahlen von 0 bis 100 ohne Anführungszeichen oder ~%~,
+  mit Dezimalpunkt. Die deutsche Seite zeigt sie mit Dezimalkomma. Text wie
+  ~:scale "2,5 mmol"~ darf ein Komma enthalten. Nennen Sie keinen Schlüssel
+  doppelt in einer Liste und kein Produkt auch als Ausgangsstoff.
+
+  Die Website verlinkt die Ausgangsstoffe auf ihre Verbindungsseiten. Sie
+  leitet *Vorstufen* aus anderen Vorschriften ab, die diese Verbindungen
+  herstellen, und *Verwendet in* aus Vorschriften, die von Ihren Produkten
+  ausgehen. Diese Vorschriftenlinks tragen Sie nicht selbst ein; sie
+  funktionieren über Sprachgrenzen hinweg.
 
   Alle Schlagwörter stehen in der Zeile ~#+HUGO_TAGS~, durch Leerzeichen
   getrennt:
@@ -103,25 +113,57 @@ bleiben auch in einer deutschen Vorschrift englisch.
   #+HUGO_TAGS: esterification fragrance
 #+end_src
 
-  Für eine Strukturformel legen Sie eine SVG- oder PNG-Datei in
-  ~static/structures/~ der Sammlung ab und fügen vor ~:product~ diese Zeile
-  ein:
-
-#+begin_src org
-  #+HUGO_CUSTOM_FRONT_MATTER: :structure_image "structures/osdb-NNNN.svg"
-#+end_src
-
-  Ein Struktur-SVG verwendet schwarze Linien und Schrift auf einem weißen
-  Hintergrundrechteck. Es hat ein ~<title>~ und enthält keine Skripte,
-  externen Bilder oder anderen externen Verweise. Der weiße Hintergrund
-  hält die Zeichnung im dunklen Farbschema der Website und auf Papier
-  lesbar.
+  Produktnamen, chemische Daten und Strukturbilder gehören in das im
+  nächsten Abschnitt beschriebene Verbindungsregister.
 
   Verwenden Sie die Anführungs- und Listenformen der Vorlage. Autoren und
   Gefahren sind zum Beispiel gequotete Lisp-Listen wie
   ~'("A. Example" "B. Example")~. Die genauen Pflichtwerte, die optionalen
   Felder, die Reaktionstypen und die Regeln für Dateinamen stehen in
   [[file:SCHEMA.de.md][docs/SCHEMA.de.md]].
+
+* Verbindungen finden oder anlegen
+
+  Das /Verbindungsregister/ ist der Ordner ~compounds/~ der Sammlung.
+  Eine Datei ~<key>.toml~ beschreibt jede Verbindung. Alle Vorschriften,
+  die sie herstellen oder verwenden, teilen sich diese Daten. Suchen Sie
+  zuerst nach einem vorhandenen Eintrag. Der Schlüssel bestimmt die
+  Identität der Verbindung; die Website vergleicht keine Strukturen,
+  um doppelte Einträge zu erkennen.
+
+  Kopieren Sie für eine neue Verbindung
+  [[file:../templates/compound.toml][templates/compound.toml]] nach ~compounds/~. Wählen Sie einen Dateinamen aus Kleinbuchstaben und Ziffern
+  mit einzelnen Bindestrichen, etwa ~ethyl-acetate.toml~. In ~:products~
+  oder ~:substrates~ verwenden Sie ~ethyl-acetate~ als Schlüssel. Ersetzen
+  Sie den Vorlagenschlüssel ~example-compound~ durch den tatsächlich
+  verwendeten Schlüssel. Ein neues Vorschriftengerüst legt keine
+  Verbindungseinträge an.
+
+  Die Verbindungsdatei ist TOML, auch wenn Ihre Vorschrift Org ist. Sie hat
+  weder ~+++~-Zeilen noch eine Überschrift ~[product]~. Füllen Sie ~name~,
+  ~formula~, ~mw~ in g/mol und ~smiles~ aus. SMILES ist die Textschreibweise
+  der Strukturformel. Text steht in doppelten Anführungszeichen; die
+  Molmasse ist eine positive Zahl ohne Anführungszeichen und mit
+  Dezimalpunkt. Das optionale ~name_de~ liefert den Namen auf einer
+  deutschen Website; fehlt es, zeigt diese ~name~. Eine englische Website
+  verwendet immer ~name~. Optional sind auch ~cas~, die CAS-Registriernummer,
+  und ~structure_image~.
+
+  Für ein Strukturbild legen Sie eine SVG- oder PNG-Datei in
+  ~static/structures/~ der Sammlung ab. Setzen Sie ~structure_image~ in der
+  Verbindungsdatei, etwa ~structure_image = "structures/isopentyl-acetate.svg"~
+  für ~isopentyl-acetate~. Ein Struktur-SVG verwendet schwarze Linien und
+  Schrift auf einem weißen Hintergrundrechteck. Es hat ein ~<title>~ und
+  enthält keine Skripte, externen Bilder oder anderen externen Verweise.
+  Der weiße Hintergrund hält die Zeichnung im dunklen Farbschema der
+  Website und auf Papier lesbar.
+
+  Sie dürfen einen Ausgangsstoff registrieren, ohne dass eine Vorschrift
+  ihn herstellt. Auch eine Verbindung, die keine Vorschrift verwendet,
+  ist zulässig. *Verbindungen* in der Navigation öffnet ~/compounds/~.
+  Jeder Name verlinkt auf eine Seite mit chemischen Daten, dem Strukturbild,
+  sofern vorhanden, Vorschriften unter *Hergestellt nach* mit Ausbeute und
+  Status sowie Vorschriften unter *Verwendet in* mit Status.
 
 * Die fertige Seite verstehen
 
@@ -130,18 +172,25 @@ bleiben auch in einer deutschen Vorschrift englisch.
   /Zurückgezogen/. Wenn ~:status~ den Wert ~checked~ hat und ~:checked_by~
   ausgefüllt ist, folgen die Namen der Prüfenden auf das Abzeichen:
   *Geprüft von* und die Namen. Unter dem Titel erscheinen ~:scale~ als
-  *Ansatzgröße* und ~:yield_percent~ als *Ausbeute*, jeweils wenn
-  ausgefüllt. Darunter steht die Schaltfläche *Drucken / Als PDF speichern*.
+  *Ansatzgröße* und die Produktausbeuten als *Ausbeute*. Bei einem Produkt
+  steht nur die Prozentzahl, bei mehreren für jedes Produkt die Prozentzahl
+  mit dem Verbindungsnamen, in der Reihenfolge von ~:products~. Darunter
+  steht die Schaltfläche *Drucken / Als PDF speichern*.
 
-  Auf einem breiten Bildschirm steht das Strukturbild rechts neben dem
-  Titel, über dem Datenfeld. In einem schmalen Fenster folgt es auf die
-  Druckschaltfläche, vor dem Datenfeld. Auch im Ausdruck steht es vor dem
-  Datenfeld. Ohne Bild zeigt der Bildschirm den Platzhalter
-  *Keine Strukturformel*, der im Ausdruck fehlt. Eine Linie schließt den
-  Titelblock auf dem Bildschirm ab.
+  Die Seite zeigt für jedes Produkt mit Strukturbild eine Abbildung, in der
+  Reihenfolge von ~:products~. Auf einem breiten Bildschirm stehen die Bilder
+  rechts neben dem Titel, über dem Datenfeld. In einem schmalen Fenster
+  folgen sie auf die Druckschaltfläche, vor dem Datenfeld. Auch im Ausdruck
+  stehen sie vor dem Datenfeld. Hat kein Produkt ein Bild, erscheint der
+  Platzhalter *Keine Strukturformel*, der im Ausdruck fehlt. Eine Linie
+  schließt den Titelblock auf dem Bildschirm ab.
 
-  Das Datenfeld zeigt die Produktangaben, den Produktnamen nur, wenn er
-  vom Titel abweicht, Reaktionstyp, Schlagwörter, Autoren, bei Entwürfen
+  Das Datenfeld verlinkt die Produktnamen immer unter *Produkt* oder
+  *Produkte* auf ihre Verbindungsseiten, auch bei gleichem Namen wie im
+  Titel. Bei einem Produkt zeigt es außerdem Summenformel, Molmasse, CAS
+  falls vorhanden und SMILES. Bei mehreren Produkten finden Sie diese Daten
+  auf den Verbindungsseiten. *Ausgangsstoffe* verlinkt die Verbindungen aus
+  ~:substrates~. Es folgen Reaktionstyp, Schlagwörter, Autoren, bei Entwürfen
   und zurückgezogenen Vorschriften gegebenenfalls die Prüfenden unter
   *Geprüft von*, Erstellungs- und Änderungszeit und die Links zu Vorstufen
   und Folgevorschriften. Ziffern der Summenformel erscheinen tiefgestellt.
@@ -252,19 +301,20 @@ bleiben auch in einer deutschen Vorschrift englisch.
      Name bleibt gleich. Original und Übersetzung dürfen verschiedene
      Formate haben; neben ~OSDB-0002-x.md~ darf also ~OSDB-0002-x.de.org~
      stehen.
-  2. Übersetzen Sie ~#+TITLE~, den Produktnamen ~name~ in ~:product~,
-     ~:hazards~ und bei Bedarf ~:references~. ~:scale~, ~:authors~ und
-     ~:checked_by~ dürfen Sie anpassen.
+  2. Übersetzen Sie ~#+TITLE~, ~:hazards~ und bei Bedarf ~:references~.
+     ~:scale~, ~:authors~ und ~:checked_by~ dürfen Sie anpassen.
   3. Setzen Sie ~#+CREATED~ und ~#+LAST_MODIFIED~ auf den Zeitpunkt der
      Übersetzung. Das optionale ~#+AI_MODEL~ kann die Kennung des Modells
      enthalten, das beim Übersetzen geholfen hat; die Zeile darf fehlen.
      Steht im Original ~:language "en"~, ändern Sie es in ~"de"~ oder
      löschen Sie die Zeile.
   4. Lassen Sie ~#+HUGO_SLUG~, ~:id~, ~:status~, ~:reaction_types~,
-     ~#+HUGO_TAGS~, ~:yield_percent~, ~:precursors~, ~:structure_image~
-     sowie ~formula~, ~mw~, ~smiles~ und ~cas~ in ~:product~ genau wie im
-     Original. Der Validator vergleicht sie mit dem Original und meldet
-     jede Abweichung als Fehler.
+     ~#+HUGO_TAGS~, ~:products~ und ~:substrates~ wie im Original. Der
+     Validator vergleicht sie mit dem Original und meldet jede Abweichung
+     als Fehler. Zahlen werden nach ihrem Wert verglichen: ~85~ und ~85.0~
+     stimmen überein. Verbindungsnamen kommen aus ~name~ und ~name_de~ im
+     gemeinsamen Register. Tragen Sie den deutschen Namen dort in
+     ~name_de~ ein.
   5. Übersetzen Sie den Text, ersetzen Sie die englischen Überschriften
      und Tabellenspalten durch die deutschen und schreiben Sie
      Dezimalkommas. Richten Sie sich dabei nach dem
@@ -279,7 +329,7 @@ bleiben auch in einer deutschen Vorschrift englisch.
 
   Eine Datei ohne Kürzel darf die deutschen oder die englischen
   Überschriften verwenden. Um ihre Sprache anzugeben, fügen Sie vor
-  ~:product~ diese Zeile ein:
+  ~:products~ diese Zeile ein:
 
 #+begin_src org
   #+HUGO_CUSTOM_FRONT_MATTER: :language "de"
@@ -336,8 +386,8 @@ bleiben auch in einer deutschen Vorschrift englisch.
   - Er wertet nie Quellcodeblöcke aus.
   - Er ignoriert dateilokale Variablen.
 
-  Prüfen Sie die Org-Quellen und das gesamte exportierte oder von Hand
-  geschriebene Markdown mit:
+  Prüfen Sie die Org-Quellen, das gesamte exportierte oder von Hand
+  geschriebene Markdown und das Verbindungsregister mit:
 
 #+begin_src sh
   orgsyndb validate
@@ -345,8 +395,15 @@ bleiben auch in einer deutschen Vorschrift englisch.
 
   ~orgsyndb validate~ führt zuerst den Export aus. Meldet dieser einen
   Org-Fehler, endet die Prüfung dort und startet den Markdown-Validator
-  nicht. Sonst lassen Fehler die Prüfung scheitern, Warnungen nicht. Die
-  Meldungen sind englisch. Meldet der Validator für eine deutsche Datei
+  nicht. Sonst lassen Fehler in Vorschriften oder Verbindungseinträgen die
+  Prüfung scheitern, Warnungen nicht. Der Befehl verwendet ~compounds/~
+  und ~static/~ der Sammlung. Ein Feld wie ~products[1].yield_percent~
+  nennt die Ausbeute im ersten Produkteintrag; die Zählung beginnt bei 1.
+  Bei ~unknown compound~ prüfen Sie den Schlüssel und seine Registerdatei.
+  Registerprobleme nennen die Verbindungsdatei und ihr Feld, etwa
+  ~compounds/ethyl-acetate.toml:mw~. Die Zusammenfassung zählt auch
+  Verbindungsdateien. Die Meldungen sind englisch. Meldet der Validator für
+  eine deutsche Datei
   ~missing section "Summary"~, fehlt ihrem Namen das ~.de~. Die
   Schema-Referenz erklärt jedes Feld und die Rückgabewerte.
 

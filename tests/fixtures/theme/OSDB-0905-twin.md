@@ -9,24 +9,17 @@ status = "draft"
 reaction_types = ["esterification"]
 tags = ["sample-data", "twin-check"]
 scale = "20 mmol"
-yield_percent = 70
+substrates = ["acetic-acid", "ethanol"]
+products = [{ compound = "ethyl-acetate", yield_percent = 70 }]
 hazards = [
   "Acetic acid: flammable, causes severe skin burns",
   "Ethanol: highly flammable liquid",
 ]
-precursors = ["OSDB-0001"]
 checked_by = ["D. Example"]
 references = [
   "Example, A. Fictitious Chem. 2020, 1, 1.",
 ]
 ai_model = "example-model-1"
-
-[product]
-name = "Ethyl acetate"
-formula = "C4H8O2"
-mw = 88.11
-smiles = "CCOC(C)=O"
-cas = "141-78-6"
 +++
 
 ## Summary

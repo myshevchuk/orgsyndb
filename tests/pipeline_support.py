@@ -44,6 +44,8 @@ FIXTURES = REPO / "tests" / "fixtures"
 EXPORT_FIXTURES = FIXTURES / "export"
 THEME_FIXTURES = FIXTURES / "theme"
 CATALOGUE_FIXTURES = FIXTURES / "catalogue"
+FIXTURE_COMPOUNDS = FIXTURES / "compounds"
+FIXTURE_STATIC = FIXTURES / "static"
 PAGEFIND_QUERY = REPO / "tests" / "js" / "pagefind-query.mjs"
 SEARCH_TERMS = REPO / "site" / "assets" / "js" / "search-terms.js"
 CATALOGUE_CORE = REPO / "site" / "assets" / "js" / "catalogue-core.js"
@@ -540,8 +542,51 @@ def html_remote_fetches(html: str) -> list[str]:
 
 # --- theme fixtures and builds ---------------------------------------------
 
+def fixture_compound_keys(path: Path) -> list[str]:
+    """The compound keys a procedure fixture, Markdown or Org, names as
+    products or substrates, in order and without repeats."""
+    text = path.read_text(encoding="utf-8")
+    if path.suffix == ".org":
+        keys = re.findall(r'\(compound \. "([^"]*)"\)', text)
+        for line in re.findall(r"(?m)^#\+HUGO_CUSTOM_FRONT_MATTER:.*"
+                               r":substrates '\(([^)]*)\)", text):
+            keys += re.findall(r'"([^"]*)"', line)
+    else:
+        data = front_matter(text)
+        keys = [e["compound"] for e in data.get("products", [])]
+        keys += data.get("substrates", [])
+    return list(dict.fromkeys(keys))
+
+
+def put_compounds(sandbox: Sandbox, *keys: str) -> list[Path]:
+    """Copy fixture registry files into the sandbox collection's
+    ``compounds/``, with the structure images they name into
+    ``static/structures/``. A file the collection already holds is kept."""
+    copied = []
+    registry = sandbox.root / "compounds"
+    registry.mkdir(parents=True, exist_ok=True)
+    for key in keys:
+        source = FIXTURE_COMPOUNDS / f"{key}.toml"
+        if not source.is_file():
+            raise AssertionError(f"tests/fixtures/compounds/{key}.toml is "
+                                 "missing")
+        target = registry / source.name
+        if target.exists():
+            continue
+        copied.append(Path(shutil.copy2(source, target)))
+        image = tomllib.loads(source.read_text(encoding="utf-8")).get(
+            "structure_image")
+        if image:
+            destination = sandbox.root / "static" / image
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if not destination.exists():
+                shutil.copy2(FIXTURE_STATIC / image, destination)
+    return copied
+
+
 def put_theme_fixtures(sandbox: Sandbox, *names: str) -> list[Path]:
-    """Copy files of tests/fixtures/theme/ into the sandbox.
+    """Copy files of tests/fixtures/theme/ into the sandbox, with the
+    fixture-registry compounds they name.
 
     A ``.org`` file goes to ``org/procedures/`` and a ``.md`` file to
     ``md/procedures/``. Any other suffix is a mistake in the test.
@@ -559,17 +604,31 @@ def put_theme_fixtures(sandbox: Sandbox, *names: str) -> list[Path]:
         else:
             raise ValueError(f"no procedure directory for {name}")
         copied.append(Path(shutil.copy2(source, target)))
+        put_compounds(sandbox, *fixture_compound_keys(source))
     return copied
 
 
 def put_catalogue_fixtures(sandbox: Sandbox) -> list[Path]:
     """Copy the catalogue fixtures, tests/fixtures/catalogue/*.md, into
-    the sandbox's ``md/procedures/``."""
+    the sandbox's ``md/procedures/``, with their compounds."""
     sources = sorted(CATALOGUE_FIXTURES.glob("OSDB-*.md"))
     if not sources:
         raise AssertionError("tests/fixtures/catalogue/ holds no procedure")
+    for source in sources:
+        put_compounds(sandbox, *fixture_compound_keys(source))
     return [Path(shutil.copy2(source, sandbox.md_dir()))
             for source in sources]
+
+
+def put_baseline(sandbox: Sandbox, name: str = "OSDB-0100-baseline.md"
+                 ) -> Path:
+    """Copy the validator baseline into the sandbox's ``md/procedures/``
+    under ``name``, with its compound."""
+    source = FIXTURES / "baseline" / "OSDB-0100-baseline.md"
+    put_compounds(sandbox, *fixture_compound_keys(source))
+    target = sandbox.md_dir() / name
+    shutil.copyfile(source, target)
+    return target
 
 
 class _ClassCase:
@@ -692,8 +751,13 @@ class Content(NamedTuple):
         return list(self.data.get("tags", []))
 
     @property
-    def product(self) -> dict[str, Any]:
-        return self.data.get("product", {})
+    def products(self) -> list[dict[str, Any]]:
+        """The ``{compound, yield_percent}`` tables, in order."""
+        return list(self.data.get("products", []))
+
+    @property
+    def substrates(self) -> list[str]:
+        return list(self.data.get("substrates", []))
 
     @property
     def language(self) -> str | None:
@@ -805,6 +869,48 @@ def reaction_labels(root: Path, language: str = "en") -> dict[str, str]:
         .read_text(encoding="utf-8"))
     return {slug: entry.get(f"label_{language}", entry["label"])
             for slug, entry in data.items()}
+
+
+def read_registry(sandbox: Sandbox) -> dict[str, dict[str, Any]]:
+    """Each compound file of the sandbox collection's ``compounds/``, by
+    key."""
+    registry = sandbox.root / "compounds"
+    return {path.stem: tomllib.loads(path.read_text(encoding="utf-8"))
+            for path in sorted(registry.glob("*.toml"))}
+
+
+def shown_name(compound: dict[str, Any], locale: str) -> str:
+    """A compound's name on a site in ``locale``: ``name_de`` on a German
+    site when set, else ``name``."""
+    if locale == "de" and compound.get("name_de"):
+        return compound["name_de"]
+    return compound["name"]
+
+
+def number_text(value: int | float, locale: str) -> str:
+    """A front-matter number as the site shows it: with a decimal comma
+    on a German site."""
+    text = str(value)
+    return text.replace(".", ",") if locale == "de" else text
+
+
+def yield_text(item: "Content", registry: dict[str, dict[str, Any]],
+               locale: str) -> str:
+    """The ``Yield`` value of a procedure's key facts: ``<n> %`` for one
+    product, else ``<n> % <name>`` for each, joined by ``, ``."""
+    entries = item.products
+    if len(entries) == 1:
+        return f"{number_text(entries[0]['yield_percent'], locale)} %"
+    return ", ".join(
+        f"{number_text(entry['yield_percent'], locale)} % "
+        f"{shown_name(registry[entry['compound']], locale)}"
+        for entry in entries)
+
+
+def formula_html(formula: str) -> str:
+    """A formula with each digit run in ``<sub>``, as the theme writes
+    it."""
+    return re.sub(r"(\d+)", r"<sub>\1</sub>", formula)
 
 
 def smiles_key(smiles: str) -> str:

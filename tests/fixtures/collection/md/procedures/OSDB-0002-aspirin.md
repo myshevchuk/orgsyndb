@@ -9,25 +9,18 @@ status = "draft"
 reaction_types = ["acylation"]
 tags = ["sample-data", "acetylation"]
 scale = "20 mmol"
-yield_percent = 75
+substrates = ["salicylic-acid", "acetic-anhydride"]
+products = [{ compound = "acetylsalicylic-acid", yield_percent = 75 }]
 hazards = [
   "Acetic anhydride: flammable, causes severe skin burns and eye damage, harmful if inhaled",
   "Phosphoric acid, 85 %: causes severe skin burns and eye damage",
   "Salicylic acid: harmful if swallowed, causes serious eye damage",
   "Acetylsalicylic acid: harmful if swallowed",
 ]
-precursors = ["OSDB-0001"]
 references = [
   "Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989.",
 ]
 ai_model = "claude-opus-5-5"
-
-[product]
-name = "Acetylsalicylic acid"
-formula = "C9H8O4"
-mw = 180.16
-smiles = "CC(=O)Oc1ccccc1C(=O)O"
-cas = "50-78-2"
 +++
 
 ## Summary

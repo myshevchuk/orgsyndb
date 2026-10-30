@@ -22,8 +22,9 @@ TERMS = {
            "procedure": "Durchführung", "notes": "Anmerkungen",
            "catalyst": "kat.", "unverified": "nicht experimentell überprüft"},
 }
-WEIGHTS = {"C": 12.011, "H": 1.008, "N": 14.007, "O": 15.999, "Na": 22.990,
-           "P": 30.974, "S": 32.06, "Cl": 35.45, "K": 39.098, "Br": 79.904}
+WEIGHTS = {"B": 10.81, "C": 12.011, "H": 1.008, "N": 14.007, "O": 15.999,
+           "Na": 22.990, "P": 30.974, "S": 32.06, "Cl": 35.45, "K": 39.098,
+           "Br": 79.904}
 
 
 class Sample(NamedTuple):
@@ -171,6 +172,8 @@ def read_org(path: Path) -> Sample:
         else:
             keywords.setdefault(name, value)
     data["tags"] = keywords.get("HUGO_TAGS", "").split()
+    if "products" in data:
+        data["products"] = [alist_to_dict(entry) for entry in data["products"]]
     model = keywords.get("AI_MODEL")
     sections = org_sections(text)
     terms = TERMS[language_of(path)]
@@ -201,6 +204,19 @@ def sample_procedures(repo: Path) -> list[Sample]:
     return [s for s in found if "sample-data" in s.data.get("tags", [])]
 
 
+def named_compounds(sample: Sample) -> list[str]:
+    """The keys a sample names, products first, then substrates."""
+    products = sample.data.get("products", [])
+    return [entry["compound"] for entry in products] + list(
+        sample.data.get("substrates", []))
+
+
+def read_registry(registry: Path) -> dict[str, dict[str, Any]]:
+    """Each compound file of a registry directory, by key."""
+    return {path.stem: tomllib.loads(path.read_text(encoding="utf-8"))
+            for path in sorted(registry.glob("*.toml"))}
+
+
 # --- rules -----------------------------------------------------------------
 
 def cas_ok(cas: str) -> bool:
@@ -216,6 +232,22 @@ def formula_weight(formula: str) -> float:
     if "".join(e + n for e, n in parts) != formula:
         raise ValueError(f"cannot read formula {formula!r}")
     return sum(WEIGHTS[e] * int(n or 1) for e, n in parts)
+
+
+def compound_violations(key: str, compound: dict[str, Any]) -> list[str]:
+    """Return the sample-procedures rules a demo registry compound
+    breaks: its ``mw`` against its formula, and its CAS number."""
+    problems = []
+    try:
+        weight = formula_weight(compound.get("formula", ""))
+        if abs(float(compound.get("mw", "nan")) - weight) > 0.02:
+            problems.append(f"{key}: mw {compound.get('mw')} vs {weight:.2f}")
+    except ValueError as exc:
+        problems.append(f"{key}: {exc}")
+    if not cas_ok(compound.get("cas", "")):
+        problems.append(f"{key}: CAS {compound.get('cas')!r} fails the "
+                        "check digit")
+    return problems
 
 
 def quantity_violations(sample: Sample) -> list[str]:
@@ -254,13 +286,6 @@ def quantity_violations(sample: Sample) -> list[str]:
         sample.data.get("scale", "")))
     if scale and abs(number(scale.group(1)) - base) > 0.01 * base:
         problems.append(f"scale {scale.group(1)} mmol vs limiting {base:g}")
-    product = sample.data.get("product", {})
-    try:
-        weight = formula_weight(product.get("formula", ""))
-        if abs(float(product.get("mw", "nan")) - weight) > 0.02:
-            problems.append(f"product mw {product.get('mw')} vs {weight:.2f}")
-    except ValueError as exc:
-        problems.append(str(exc))
     return problems
 
 
