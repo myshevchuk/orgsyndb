@@ -1,0 +1,9 @@
+{{- /* The overall yield of a sequence as a whole percentage: the product
+of the yields of its steps (sequence-steps.html), rounded to the nearest
+whole number, halves up. Takes the slice of steps; returns an integer. The
+product is kept in percent, each step multiplying by its yield and dividing
+by 100, and rounded once: a product of whole-number yields that ends in
+.5 is then exact. */ -}}
+{{- $total := 100.0 -}}
+{{- range . }}{{ $total = div (mul $total (float .yield)) 100 }}{{ end -}}
+{{- return int (math.Round $total) -}}

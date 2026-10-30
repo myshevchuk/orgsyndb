@@ -304,26 +304,28 @@ h1 { font-size: 2.25rem; }
    the hue turns back so that coloured atoms keep their colour. A border
    would be inverted too, so the thumbnail's goes. */
 @media (prefers-color-scheme: dark) {
-  .structure img, .row-structure, .scope-structure {
+  .structure img, .row-structure, .scope-structure, .sequence-compound img {
     filter: invert(0.92) hue-rotate(180deg);
     mix-blend-mode: lighten;
   }
-  .row-structure, .scope-structure { border-color: transparent; }
+  .row-structure, .scope-structure, .sequence-compound img { border-color: transparent; }
 }
 .catalogue[data-view="details"] .procedure-list td { vertical-align: top; }
 
-/* The compound directory shares the catalogue table's rows. */
-.procedure-list, .compound-table { width: 100%; font-size: 0.925rem; }
-:is(.procedure-list, .compound-table) :is(th, td) {
+/* The compound and sequence directories share the catalogue table's
+   rows. */
+.procedure-list, .compound-table, .sequence-table { width: 100%; font-size: 0.925rem; }
+:is(.procedure-list, .compound-table, .sequence-table) :is(th, td) {
   padding: 0.5rem 0.9rem;
   vertical-align: middle;
 }
-:is(.procedure-list, .compound-table) thead { background: var(--surface); }
-:is(.procedure-list, .compound-table) thead th { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-:is(.procedure-list, .compound-table) tbody tr:hover { background: var(--surface); }
+:is(.procedure-list, .compound-table, .sequence-table) thead { background: var(--surface); }
+:is(.procedure-list, .compound-table, .sequence-table) thead th { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+:is(.procedure-list, .compound-table, .sequence-table) tbody tr:hover { background: var(--surface); }
 .procedure-list td:first-child a { color: var(--fg); text-decoration: none; }
-.procedure-list td:nth-child(2) a, .compound-table td:first-child a { text-decoration: none; }
-.procedure-list td:nth-child(2) a:hover, .compound-table td:first-child a:hover { text-decoration: underline; }
+.procedure-list td:nth-child(2) a, :is(.compound-table, .sequence-table) td:first-child a { text-decoration: none; }
+.procedure-list td:nth-child(2) a:hover, :is(.compound-table, .sequence-table) td:first-child a:hover { text-decoration: underline; }
+.sequence-table td:first-child { overflow-wrap: anywhere; }
 .compound-table td:first-child { overflow-wrap: anywhere; }
 .compound-table td:nth-child(n+2) { white-space: nowrap; }
 .procedure-list td:nth-child(n+4) { color: var(--muted); }
@@ -407,4 +409,13 @@ pre { overflow-x: auto; }
 }
 @media (max-width: 35rem) {
   .catalogue-select:first-of-type { margin-left: 0; }
+  /* The scheme runs down the page, its arrows pointing down. */
+  .sequence-scheme ol { flex-direction: column; align-items: flex-start; }
+  .sequence-step, .sequence-compound { max-width: none; align-items: flex-start; text-align: left; }
+  .sequence-step::before { content: "\2193"; content: "\2193" / ""; }
+  .sequence-compound + .sequence-compound::before {
+    left: 0;
+    top: calc(var(--space-3) / -2);
+    transform: translateY(-50%);
+  }
 }

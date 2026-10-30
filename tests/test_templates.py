@@ -2,13 +2,15 @@
 "Org template")."""
 
 import re
+import shutil
 import tempfile
 import tomllib
 import unittest
 from pathlib import Path
 
-from support import (COMPOUND_TEMPLATE, REPO, ValidatorTestCase,
-                     run_validator, template_registry)
+from pipeline_support import TEST_COLLECTION
+from support import (COMPOUND_TEMPLATE, REPO, SEQUENCE_TEMPLATE,
+                     ValidatorTestCase, run_validator, template_registry)
 
 MD_TEMPLATE = REPO / "templates" / "procedure.md"
 ORG_TEMPLATE = REPO / "templates" / "procedure.org"
@@ -130,6 +132,67 @@ class CompoundTemplateTests(ValidatorTestCase):
                                 "not shown commented out")
                 self.assertTrue(any(re.search(rf"\b{key}\b", ln)
                                     for ln in comments))
+
+
+class SequenceTemplateTests(ValidatorTestCase):
+    KEYS = ["id", "slug", "title", "date", "lastmod", "target", "steps"]
+
+    def front_matter(self) -> dict:
+        text = read_template(SEQUENCE_TEMPLATE)
+        self.assertTrue(text.startswith("+++\n"))
+        return tomllib.loads(text.split("+++\n")[1])
+
+    def test_template_validates_once_filled_in(self) -> None:
+        """Scenario: Template validates (sequence)."""
+        text = read_template(SEQUENCE_TEMPLATE).replace(
+            "SEQ-0000", "SEQ-0001").replace("seq-0000", "seq-0001")
+        with tempfile.TemporaryDirectory() as tmp:
+            collection = Path(tmp) / "collection"
+            shutil.copytree(TEST_COLLECTION, collection,
+                            ignore=shutil.ignore_patterns(
+                                "build", "public", "pdf"))
+            sequences = Path(tmp) / "sequences"
+            sequences.mkdir()
+            (sequences / "SEQ-0001-template.md").write_text(
+                text, encoding="utf-8")
+            result = run_validator(
+                ["--static-dir", collection / "static",
+                 "--compounds", collection / "compounds",
+                 "--sequences", sequences,
+                 collection / "md" / "procedures"], cwd=collection)
+        self.assert_clean(result)
+        self.assertIn("0 errors, 0 warnings", result.stderr)
+
+    def test_template_uses_the_placeholders(self) -> None:
+        """Requirement: Sequence template (the placeholder ID and slug)."""
+        data = self.front_matter()
+        self.assertEqual(data["id"], "SEQ-0000")
+        self.assertEqual(data["slug"], "seq-0000")
+
+    def test_template_names_the_procedures_and_the_target(self) -> None:
+        """Scenario: Template validates (the steps and the target)."""
+        data = self.front_matter()
+        self.assertEqual([step["procedure"] for step in data["steps"]],
+                         ["OSDB-0001", "OSDB-0002"])
+        self.assertEqual(data["target"], "acetylsalicylic-acid")
+        self.assertNotIn("authors", data)
+
+    def test_template_explains_every_key(self) -> None:
+        """Requirement: Sequence template (every key in a comment)."""
+        text = read_template(SEQUENCE_TEMPLATE)
+        front = text.split("+++\n")[1]
+        lines = front.splitlines()
+        comments = [ln for ln in lines if ln.startswith("#")]
+        for key in [*self.KEYS, "procedure", "entry"]:
+            with self.subTest(key=key):
+                self.assertTrue(any(re.search(rf"\b{key}\b", ln)
+                                    for ln in comments), "not explained")
+        for key in self.KEYS:
+            with self.subTest(key=key):
+                self.assertTrue(any(re.match(rf"{key}\s*=", ln)
+                                    for ln in lines), "not set")
+        self.assertFalse(any(re.match(r"#?\s*authors\s*=", ln)
+                             for ln in lines))
 
 
 if __name__ == "__main__":

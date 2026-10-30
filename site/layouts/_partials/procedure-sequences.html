@@ -1,0 +1,17 @@
+{{- /* The Sequences pair of the metadata panel: one a.sequence per
+published sequence that has the procedure page as one of its steps,
+linking its page with its title, by ID; nothing when there is none. The
+pair is left out of the search index, so that a sequence's title finds no
+procedure. */ -}}
+{{ $id := .Params.id -}}
+{{ $found := slice -}}
+{{ range sort (where site.RegularPages "Section" "sequences") "Params.id" -}}
+{{ $sequence := . -}}
+{{ $uses := false -}}
+{{ range .Params.steps }}{{ if eq .procedure $id }}{{ $uses = true }}{{ end }}{{ end -}}
+{{ if $uses }}{{ $found = $found | append $sequence }}{{ end -}}
+{{ end -}}
+{{ with $found -}}
+<dt data-pagefind-ignore>{{ T "label_sequences" }}</dt>
+<dd data-pagefind-ignore>{{ range $i, $page := . }}{{ if $i }}, {{ end }}<a class="sequence" href="{{ $page.RelPermalink }}">{{ $page.Title }}</a>{{ end }}</dd>
+{{ end -}}

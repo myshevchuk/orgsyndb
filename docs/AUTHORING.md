@@ -147,7 +147,9 @@ data, the structure when supplied, **Made by** procedures with yields and
 status, and **Used in** procedures with status. A general procedure appears
 under **Made by** once per entry that makes the compound, as
 `<ID> <title> · entry <n> · <yield> % · <status>`. **Used in** lists each
-procedure once, and the directory counts each procedure once.
+procedure once, and the directory counts each procedure once. After
+**Used in**, **Sequences** links the sequences that name this compound as their
+target, by sequence ID. It appears only when there are matching sequences.
 
 ### Write a general procedure
 
@@ -229,7 +231,9 @@ procedure, both lists include all entries, each compound once in order of first
 appearance. Precursor and used-in links also consider every entry. The panel
 then shows reaction type, tags, authors, checkers when present for draft or
 retired procedures under **Checked by**, created and modified times, and
-precursor or used-in links. Formula digits appear as subscripts. Molecular
+precursor or used-in links. When your procedure is a step of a sequence,
+**Sequences** follows **Used in** and links those sequences by title, ordered
+by sequence ID. Formula digits appear as subscripts. Molecular
 weight gains `g/mol`, yield gains a percent sign, and SMILES has a **Copy**
 button. Reaction type, tag, and author values link to pages that list related
 procedures. The site title-cases author names for display, so a name entered as
@@ -301,7 +305,8 @@ orgsyndb validate
 ```
 
 The command exports the owner's Org procedures and then checks every
-procedure and every compound record. Each problem has this form:
+procedure and compound record, plus sequences in `md/sequences/`. Each
+problem has this form:
 
 ```text
 path/to/file.md:field: error: message
@@ -312,7 +317,8 @@ Read each line from left to right:
 
 - The first part is the file to open.
 - The second part is the field or body section to inspect.
-- `error` means a procedure or compound record is invalid and the check fails.
+- `error` means a procedure, compound record or sequence is invalid and the
+  check fails.
 - `warning` means the check can finish, but you should review and correct
   the problem.
 - The final text explains what is wrong.
@@ -324,7 +330,7 @@ as `compounds/ethyl-acetate.toml:mw` names a field in that compound file.
 A line naming `body` tells you to inspect the section headings. Run the
 command again after correcting the file. The last line reports how many
 files, errors, and warnings were found; its file count includes compound
-records.
+records and sequence files, including language variants.
 
 For a general procedure, `scope[2].products[1].yield_percent` means the yield
 of the first product in entry 2. `must not be empty` under `scope` means you
@@ -333,6 +339,15 @@ need at least one entry. If a top-level field reports
 that line and put the data inside the relevant entries. A time error asks for a
 number followed by `min`, `h` or `d`; a temperature error asks for an unquoted
 number in °C.
+
+For a sequence, `steps[2].entry` names the scope entry selected for step 2.
+`must list at least two steps` requires a longer sequence; `not found in any
+content root` means a step's procedure ID is missing. `starts from none of the
+products of step 1` under `steps[2]` means that step 2 takes no product of step
+1 as a starting material. Check the order and the chosen scope entries.
+`is not a product of the last step` under `target` means the final step does
+not make the named target. The [sequence message table](SCHEMA.md#sequence-messages)
+explains the remaining errors.
 
 If a message is unclear, look up its field in the
 [procedure schema](SCHEMA.md). If you sent the file to the owner, the owner
@@ -355,6 +370,18 @@ serving http://127.0.0.1:8000/ (Ctrl-C to stop)
 Open <http://127.0.0.1:8000/> in a web browser on the same computer. The
 address is local to that computer. Press `Ctrl-C` in the terminal to stop the
 preview.
+
+The navigation is **Procedures**, **Compounds**, **Sequences**, **Help**.
+The home page's **Browse** list includes **Sequences** with a count. Open it
+or the navigation link to browse `/sequences/`, ordered by ID with linked
+titles and targets, step counts and overall yields. A sequence page shows
+its ID and title, **Steps** and **Overall yield**, a scheme, its linked
+procedures with entry numbers where needed, reaction type, yield and status,
+then your notes. The scheme shows starting materials, intermediates and target
+with registry structure images where available; a plus joins the first step's
+starting materials, and arrows show step number, reaction type and yield. It
+runs down the page in narrow windows. Sequence pages are absent from the
+procedure search index; use their links to find them.
 
 On a procedure page, choose **Print / Save as PDF** to open the browser's
 print dialog. The print layout is A4, complete, and black on white. Firefox
@@ -410,3 +437,67 @@ shared registry; add or edit `name_de` there for the German name. Translate the
 title, the hazards and the body, set `date` and `lastmod` to the time of the
 translation, and use the section headings and Reagents columns of the new
 language, which the [procedure schema](SCHEMA.md#languages-and-variants) lists.
+
+## 8. Write a synthesis sequence
+
+When you use several procedures in order to make a target compound, record
+that route as a **synthesis sequence**. Each step names the procedure you run
+and, for a general procedure, the scope entry you use. The site checks that
+the steps connect and calculates their overall yield.
+
+Copy [templates/sequence.md](../templates/sequence.md) into the collection's
+`md/sequences/`. `orgsyndb init` creates this folder. `orgsyndb new` creates
+procedure stubs, so copy the sequence template by hand. Ask the owner for a
+free `SEQ-NNNN` number from `0001` to `9999`. Replace `SEQ-0000` in `id` and
+`seq-0000` in `slug`; save as `SEQ-NNNN-short-slug.md`. Use lowercase letters,
+digits and single hyphens in the short slug. Sequences are Markdown files,
+even when their steps use Org procedures.
+
+Keep the two `+++` lines. Set `title` and give `date` and `lastmod` as
+unquoted datetimes with their UTC offsets, as for a procedure. `lastmod`
+must not precede `date`. Set `target` to the final compound's registry key and replace
+the template's steps with your procedures in execution order. This complete
+example is the demo's second sequence:
+
+```markdown
++++
+id = "SEQ-0002"
+slug = "seq-0002"
+title = "1-(Biphenyl-4-yl)ethanol from 4′-bromoacetophenone"
+date = 2026-10-23T10:05:00+02:00
+lastmod = 2026-10-23T10:20:00+02:00
+target = "1-biphenyl-4-yl-ethanol"
+steps = [{ procedure = "OSDB-0004" }, { procedure = "OSDB-0009", entry = 1 }]
++++
+
+## Notes
+
+The 4-acetylbiphenyl from step 1 is reduced in step 2 as entry 1 of the
+general procedure.
+```
+
+You need at least two steps. Each `procedure` must name an existing procedure.
+A general procedure requires `entry`, its scope entry number counted from 1.
+A specific procedure forbids `entry`. Each step after the first must start
+from a product of the previous step; for general procedures, use only the
+chosen entry's starting materials and products. The target must be a product
+of the last step. Do not add `authors`: the steps credit their procedures'
+authors. The body holds notes, such as which intermediate you dry or purify;
+it does not need a procedure's eight sections.
+
+The demo also includes
+[SEQ-0001, “Aspirin from oil of wintergreen”](../examples/demo/md/sequences/SEQ-0001-aspirin-from-wintergreen.md),
+OSDB-0001 → OSDB-0002, with an overall yield of 60 %. SEQ-0002 goes through
+entry 1 of OSDB-0009 and gives 77 %. These are sample data. Overall yield
+multiplies each step's yield of the product used by the next step and the
+last step's yield of the target. If several products carry on, it uses the
+first in product order. The displayed result rounds to a whole percent, with
+halves rounded up. Enter no yield in the sequence itself.
+
+To translate it, copy the file with `.de` or `.en` before `.md`. Keep the
+base name, `id`, `slug`, `target` and ordered `steps`; translate the title and
+notes and set the dates for that version. Both demo sequences have German
+variants. The site publishes one variant per ID: the site's language first,
+then an untagged file, then the other language. Run `orgsyndb validate` and
+restart `orgsyndb serve` to check the sequence and its links. The
+[schema reference](SCHEMA.md#synthesis-sequences) gives the exact rules.

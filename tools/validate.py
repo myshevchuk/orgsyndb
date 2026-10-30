@@ -9,9 +9,12 @@ Content roots are directories of Markdown procedures with ``+++`` TOML
 front matter, such as an ox-hugo export directory. The compound
 registry is a directory of ``<key>.toml`` files, one per compound; the
 validator checks each of them and resolves the compound keys that
-procedures name against the compounds it defines. The validator reads
-no Org source: an Org procedure reaches it only as its export, and the
-export checks the Org source itself. Each problem is printed to stdout
+procedures name against the compounds it defines. The sequences
+directory holds synthesis sequences, Markdown files whose steps name
+procedures of the content roots; the validator checks that each step
+exists and that the steps chain. The validator reads no Org source: an
+Org procedure reaches it only as its export, and the export checks the
+Org source itself. Each problem is printed to stdout
 as ``<path>:<field>: <severity>: <message>``, followed by a summary line
 on stderr. The exit status is 0 when no error was found, 1 when at
 least one was, and 2 on a usage or configuration error.
@@ -32,13 +35,13 @@ from typing import Any, NamedTuple
 
 APP = Path(__file__).resolve().parent.parent
 DEFAULT_VOCABULARY = APP / "site" / "data" / "reaction_types.toml"
-# Structure images and compounds belong to a collection; run from its
-# root.
+# Structure images, compounds and sequences belong to a collection; run
+# from its root.
 DEFAULT_STATIC_DIR = Path("static")
 DEFAULT_COMPOUNDS = Path("compounds")
+DEFAULT_SEQUENCES = Path("md") / "sequences"
 ZONE_NAME = "Europe/Berlin"
 
-ID_RE = re.compile(r"^OSDB-(\d{4})$")
 SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 # A compound file is named <key>.toml, the key shaped like a slug.
 COMPOUND_FILE_RE = re.compile(r"^([a-z0-9]+(?:-[a-z0-9]+)*)\.toml$")
@@ -66,6 +69,8 @@ SECTIONS = SECTIONS_BY_LANGUAGE[DEFAULT_LANGUAGE]
 # translation translates.
 SHARED_FIELDS = ("status", "reaction_types", "tags", "products",
                  "substrates", "scope", "scheme_image")
+# The front-matter values that every variant of a sequence shares.
+SEQUENCE_SHARED_FIELDS = ("target", "steps")
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 ERROR = "error"
@@ -74,6 +79,26 @@ WARNING = "warning"
 
 class ConfigError(Exception):
     """A usage or configuration problem that ends the run with status 2."""
+
+
+class Kind(NamedTuple):
+    """The naming rules of one kind of content file.
+
+    ``noun`` names the kind in messages, ``prefix`` is the letters
+    before the four digits of an ID, ``example`` a short slug that
+    file-name messages show, and ``shared`` the front-matter keys that
+    every variant of one ID must agree on.
+    """
+
+    noun: str
+    prefix: str
+    example: str
+    shared: tuple[str, ...]
+
+
+PROCEDURE = Kind("procedure", "OSDB", "ethyl-acetate", SHARED_FIELDS)
+SEQUENCE = Kind("sequence", "SEQ", "aspirin-from-wintergreen",
+                SEQUENCE_SHARED_FIELDS)
 
 
 class Problem(NamedTuple):
@@ -98,17 +123,20 @@ def warning(name: str, message: str) -> Problem:
 # Value predicates and small helpers
 
 
-def procedure_number(value: object) -> int | None:
-    """Return the number of an ``OSDB-NNNN`` string, or None if malformed."""
+def id_number(value: object, prefix: str = "OSDB") -> int | None:
+    """Return the number of the ID string VALUE, or None if malformed.
+
+    An ID is PREFIX, a hyphen and four digits, as in ``OSDB-0001``.
+    """
     if not isinstance(value, str):
         return None
-    match = ID_RE.match(value)
+    match = re.match(rf"^{prefix}-(\d{{4}})$", value)
     return int(match.group(1)) if match else None
 
 
-def is_valid_id(value: object) -> bool:
-    """Whether ``value`` is an ID string from OSDB-0001 to OSDB-9999."""
-    number = procedure_number(value)
+def is_valid_id(value: object, prefix: str = "OSDB") -> bool:
+    """Whether VALUE is an ID string from PREFIX-0001 to PREFIX-9999."""
+    number = id_number(value, prefix)
     return number is not None and number >= 1
 
 
@@ -236,6 +264,18 @@ def check_string_list(name: str, value: object,
     return []
 
 
+def check_lastmod(value: object, date: object,
+                  zone: dt.tzinfo) -> list[Problem]:
+    """Check ``lastmod`` VALUE: a datetime as for ``check_datetime``, and
+    not earlier than DATE when both are offset datetimes."""
+    found: list[Problem] = []
+    if is_offset_datetime(value) and is_offset_datetime(date) \
+            and value < date:
+        found.append(error("lastmod", f"{value.isoformat()} is earlier "
+                           f"than date {date.isoformat()}"))
+    return found + check_datetime("lastmod", value, zone)
+
+
 def check_datetime(name: str, value: object,
                    zone: dt.tzinfo) -> list[Problem]:
     """Check that ``value`` is an offset datetime with the Berlin offset.
@@ -253,24 +293,26 @@ def check_datetime(name: str, value: object,
     return []
 
 
-def check_id(value: object) -> list[Problem]:
-    """Check the ``id`` field's format and range."""
-    if procedure_number(value) is None:
-        return [error("id", f"{value!r} must match OSDB-NNNN "
-                      "(OSDB- and four digits)")]
-    if not is_valid_id(value):
-        return [error("id", "must be between OSDB-0001 and OSDB-9999")]
+def check_id(value: object, prefix: str = "OSDB") -> list[Problem]:
+    """Check the ``id`` field's format and range for IDs of PREFIX."""
+    if id_number(value, prefix) is None:
+        return [error("id", f"{value!r} must match {prefix}-NNNN "
+                      f"({prefix}- and four digits)")]
+    if not is_valid_id(value, prefix):
+        return [error("id", f"must be between {prefix}-0001 and "
+                      f"{prefix}-9999")]
     return []
 
 
-def check_slug(value: object, ident: object) -> list[Problem]:
-    """Check that ``slug`` is the lowercased ``id``.
+def check_slug(value: object, ident: object,
+               prefix: str = "OSDB") -> list[Problem]:
+    """Check that ``slug`` VALUE is the lowercased ``id`` IDENT.
 
-    The equality check runs only when ``ident`` is a valid ID.
+    The equality check runs only when IDENT is a valid ID of PREFIX.
     """
     if not isinstance(value, str):
         return [error("slug", "must be a string")]
-    if is_valid_id(ident):
+    if is_valid_id(ident, prefix):
         expected = str(ident).lower()
         if value != expected:
             return [error("slug",
@@ -635,13 +677,7 @@ def check_fields(data: dict[str, Any], ctx: Context) -> list[Problem]:
             case "date":
                 found += check_datetime(key, value, ctx.zone)
             case "lastmod":
-                date = data.get("date")
-                if is_offset_datetime(value) and is_offset_datetime(
-                        date) and value < date:
-                    found.append(error(
-                        key, f"{value.isoformat()} is earlier than date "
-                        f"{date.isoformat()}"))
-                found += check_datetime(key, value, ctx.zone)
+                found += check_lastmod(value, data.get("date"), ctx.zone)
             case "authors" | "hazards":
                 found += check_string_list(key, value, non_empty=True)
             case "status":
@@ -678,18 +714,18 @@ def check_fields(data: dict[str, Any], ctx: Context) -> list[Problem]:
     return found
 
 
-def file_name_pattern(suffix: str) -> re.Pattern[str]:
-    """Return the procedure file-name pattern for ``suffix``.
+def file_name_pattern(suffix: str, prefix: str = "OSDB") -> re.Pattern[str]:
+    """Return the file-name pattern for ``suffix`` and IDs of PREFIX.
 
-    Group 1 is the ID, group 2 the base name without the language code
-    and suffix, and group 3 the language code, if any.
+    Group 1 is the base name without the language code and suffix,
+    group 2 the ID, and group 3 the language code, if any.
     """
-    return re.compile(rf"^((OSDB-\d{{4}})-[a-z0-9]+(?:-[a-z0-9]+)*)"
+    return re.compile(rf"^(({prefix}-\d{{4}})-[a-z0-9]+(?:-[a-z0-9]+)*)"
                       rf"(?:\.([a-z]{{2}}))?{re.escape(suffix)}$")
 
 
 def language_of(name: str) -> str | None:
-    """Return the language code of a procedure file name, or None.
+    """Return the language code of a content file name, or None.
 
     That is the two-letter code before the suffix, as in
     ``OSDB-0001-ethyl-acetate.de.md``. The code is not checked against
@@ -707,23 +743,25 @@ def base_name(name: str) -> str:
     return stem
 
 
-def check_file_name(name: str, suffix: str,
-                    ident: object) -> list[Problem]:
-    """Check a procedure file name, and its prefix against ``ident``.
+def check_file_name(name: str, suffix: str, ident: object,
+                    kind: Kind = PROCEDURE) -> list[Problem]:
+    """Check the file NAME of a file of KIND, and its prefix against
+    the ID IDENT.
 
-    The agreement check runs only when ``ident`` is a valid ID; pass
+    The agreement check runs only when IDENT is a valid ID of KIND; pass
     None to skip it.
     """
-    match = file_name_pattern(suffix).match(name)
+    match = file_name_pattern(suffix, kind.prefix).match(name)
     if match is None:
-        return [error("file_name", f"must be named OSDB-NNNN-short-slug"
-                      f"{suffix}, e.g. OSDB-0001-ethyl-acetate{suffix}, or "
-                      f"OSDB-0001-ethyl-acetate.de{suffix} with a language")]
+        example = f"{kind.prefix}-0001-{kind.example}"
+        return [error("file_name", f"must be named {kind.prefix}-NNNN-"
+                      f"short-slug{suffix}, e.g. {example}{suffix}, or "
+                      f"{example}.de{suffix} with a language")]
     code = match.group(3)
     if code is not None and code not in LANGUAGES:
         return [error("file_name", f'unknown language code ".{code}"; '
                       f"use {' or '.join(LANGUAGES)}, or none")]
-    if is_valid_id(ident) and match.group(2) != ident:
+    if is_valid_id(ident, kind.prefix) and match.group(2) != ident:
         return [error("file_name", f"file name prefix {match.group(2)} "
                       f"does not match id {ident}")]
     return []
@@ -845,19 +883,24 @@ def same_value(mine: object, theirs: object) -> bool:
 
 def reference_variant(holders: Sequence[ContentFile]) -> ContentFile:
     """The variant the others of one ID are compared with: the file
-    without a language code, else the first in ``LANGUAGES`` order."""
+    without a language code, else the first in ``LANGUAGES`` order, and
+    a file with an unknown code last."""
     def rank(item: ContentFile) -> tuple[int, str]:
         lang = item.language
-        return (-1 if lang is None else LANGUAGES.index(lang), item.path)
+        if lang is None:
+            return (-1, item.path)
+        known = LANGUAGES.index(lang) if lang in LANGUAGES else None
+        return (len(LANGUAGES) if known is None else known, item.path)
     return min(holders, key=rank)
 
 
-def check_variants(holders: Sequence[ContentFile]) -> None:
+def check_variants(holders: Sequence[ContentFile],
+                   kind: Kind = PROCEDURE) -> None:
     """Check the variants of one ID against their reference variant.
 
-    ``holders`` are the parsed files sharing one ID, at most one per
+    HOLDERS are the parsed files of KIND sharing one ID, at most one per
     language code (or none). Each must have the reference's base name
-    and the same value, or absence, of every ``SHARED_FIELDS`` entry,
+    and the same value, or absence, of every key of ``kind.shared``,
     ``scope`` compared without the entries' notes.
     """
     original = reference_variant(holders)
@@ -871,7 +914,7 @@ def check_variants(holders: Sequence[ContentFile]) -> None:
                 "file_name", f"a variant must be named after "
                 f"{original.path}: {base_name(original.name)}."
                 f"{item.language}{Path(item.name).suffix}"))
-        for name in SHARED_FIELDS:
+        for name in kind.shared:
             mine = item.data.get(name)
             theirs = original.data.get(name)
             if name == "scope":
@@ -880,22 +923,38 @@ def check_variants(holders: Sequence[ContentFile]) -> None:
                 shown = "unset" if theirs is None else repr(theirs)
                 item.problems.append(error(
                     name, f"must equal the value in {original.path} "
-                    f"({shown}); the variants of a procedure share it"))
+                    f"({shown}); the variants of a {kind.noun} share it"))
 
 
-def check_cross_file(files: Sequence[ContentFile]) -> None:
-    """Add duplicate-ID and variant problems.
+def group_by_id(files: Iterable[ContentFile],
+                prefix: str = "OSDB") -> dict[str, list[ContentFile]]:
+    """Group the parsed FILES by their ``id``, a valid ID of PREFIX.
+
+    Files whose front matter did not parse, or whose ``id`` is not
+    valid, are left out. Each group keeps the order of FILES.
+    """
+    by_id: dict[str, list[ContentFile]] = {}
+    for item in files:
+        if item.data is not None and is_valid_id(item.data.get("id"),
+                                                 prefix):
+            by_id.setdefault(item.data["id"], []).append(item)
+    return by_id
+
+
+def check_cross_file(files: Sequence[ContentFile],
+                     kind: Kind = PROCEDURE) -> list[ContentFile]:
+    """Add duplicate-ID and variant problems to FILES, of KIND.
 
     An ID may be used once per language code, and once without one; the
     files of one ID are variants, checked by ``check_variants``.
     Files whose front matter did not parse contribute no ID and are not
     checked.
+
+    Return the files that stand for themselves: every file except the
+    variants compared with a reference variant, in the order of FILES.
     """
-    by_id: dict[str, list[ContentFile]] = {}
-    for item in files:
-        if item.data is not None and is_valid_id(item.data.get("id")):
-            by_id.setdefault(item.data["id"], []).append(item)
-    for ident, holders in by_id.items():
+    compared: list[ContentFile] = []
+    for ident, holders in group_by_id(files, kind.prefix).items():
         by_language: dict[str | None, list[ContentFile]] = {}
         for item in holders:
             by_language.setdefault(item.language, []).append(item)
@@ -909,7 +968,11 @@ def check_cross_file(files: Sequence[ContentFile]) -> None:
                 item.problems.append(error(
                     "id", f"duplicate id {ident}, also used by {others}"))
         if not duplicated and len(holders) > 1:
-            check_variants(holders)
+            check_variants(holders, kind)
+            original = reference_variant(holders)
+            compared += [item for item in holders if item is not original]
+    return [item for item in files
+            if not any(item is other for other in compared)]
 
 
 # --------------------------------------------------------------------------
@@ -1037,6 +1100,262 @@ def examine_registry(registry: str, static_dir: Path) -> Registry:
 
 
 # --------------------------------------------------------------------------
+# Synthesis sequences
+
+SEQUENCE_KEYS = ("id", "slug", "title", "date", "lastmod", "target",
+                 "steps")
+# Hugo would file a sequence carrying one of these under the procedures'
+# taxonomies, beside the procedures.
+TAXONOMY_KEYS = ("authors", "tags", "reaction_types")
+STEP_KEYS = ("procedure", "entry")
+
+
+class Run(NamedTuple):
+    """The compounds of one run of a procedure: of the procedure itself,
+    or of one entry of a general procedure."""
+
+    substrates: list[str]
+    products: list[str]
+
+
+def entry_count(data: dict[str, Any]) -> int:
+    """Return the number of scope entries of the procedure front matter
+    DATA, 0 when its ``scope`` is not an array."""
+    scope = data.get("scope")
+    return len(scope) if isinstance(scope, list) else 0
+
+
+def is_entry_number(value: object, count: int) -> bool:
+    """Whether VALUE is an integer from 1 to COUNT."""
+    return (isinstance(value, int) and not isinstance(value, bool)
+            and 1 <= value <= count)
+
+
+def step_run(step: object,
+             procedures: dict[str, dict[str, Any]]) -> Run | None:
+    """Return the run that the sequence step STEP names, or None.
+
+    PROCEDURES maps each procedure ID of the content roots to its front
+    matter. The run is that of the step's entry for a general procedure,
+    one with ``scope``, and that of the procedure otherwise. None means
+    the step names no run: it is not a table, its procedure is not
+    found, or its entry is missing, out of range or refused.
+    """
+    if not isinstance(step, dict) or not isinstance(step.get("procedure"),
+                                                    str):
+        return None
+    data = procedures.get(step["procedure"])
+    if data is None:
+        return None
+    source: object = data
+    if "scope" in data:
+        if not is_entry_number(step.get("entry"), entry_count(data)):
+            return None
+        source = data["scope"][step["entry"] - 1]
+    elif "entry" in step:
+        return None
+    if not isinstance(source, dict):
+        return None
+    substrates = source.get("substrates")
+    return Run(substrates if is_string_list(substrates) else [],
+               product_keys(source.get("products")))
+
+
+def check_step(prefix: str, step: object,
+               procedures: dict[str, dict[str, Any]]) -> list[Problem]:
+    """Check one sequence step, reporting under PREFIX, ``steps[n]``.
+
+    STEP must be a table whose ``procedure`` is a key of PROCEDURES,
+    which maps procedure IDs to front matter. ``entry`` is required for a
+    general procedure and must count one of its scope entries from 1; a
+    specific procedure refuses it. Other keys are warnings.
+    """
+    if not isinstance(step, dict):
+        return [error(prefix, 'must be a table, e.g. '
+                      '{ procedure = "OSDB-0001" }')]
+    found: list[Problem] = []
+    name = f"{prefix}.procedure"
+    ident = step.get("procedure")
+    data = None
+    if "procedure" not in step:
+        found.append(error(name, "required field missing"))
+    elif not isinstance(ident, str):
+        found.append(error(name, 'must be a string, e.g. "OSDB-0001"'))
+    elif ident not in procedures:
+        found.append(error(name, f"{ident} not found in any content root"))
+    else:
+        data = procedures[ident]
+    if data is not None:
+        name = f"{prefix}.entry"
+        count = entry_count(data)
+        if "scope" not in data:
+            if "entry" in step:
+                found.append(error(name, f"{ident} has no scope entries; "
+                                   "remove entry"))
+        elif "entry" not in step:
+            found.append(error(name, f"{ident} is a general procedure; "
+                               f"name one of its entries 1 to {count}"))
+        elif not is_entry_number(step["entry"], count):
+            found.append(error(name, f"must be between 1 and {count}, "
+                               "the number of an entry of "
+                               f"{ident}'s scope"))
+    found += [warning(f"{prefix}.{key}", "unknown field")
+              for key in step if key not in STEP_KEYS]
+    return found
+
+
+def check_steps(value: object,
+                procedures: dict[str, dict[str, Any]]) -> list[Problem]:
+    """Check ``steps``, an array of at least two step tables.
+
+    A problem in the n-th step, counting from 1, is reported under
+    ``steps[n]`` or ``steps[n].<key>`` (``check_step``); PROCEDURES maps
+    procedure IDs to front matter.
+    """
+    if not isinstance(value, list):
+        return [error("steps", "must be an array of tables, e.g. "
+                      '[{ procedure = "OSDB-0001" }, '
+                      '{ procedure = "OSDB-0002" }]')]
+    found: list[Problem] = []
+    if len(value) < 2:
+        found.append(error("steps", "must list at least two steps"))
+    for number, step in enumerate(value, start=1):
+        found += check_step(f"steps[{number}]", step, procedures)
+    return found
+
+
+def check_sequence_fields(data: dict[str, Any], ctx: Context,
+                          procedures: dict[str, dict[str, Any]]
+                          ) -> list[Problem]:
+    """Check every front-matter key of one sequence on its own.
+
+    DATA is the sequence's front matter; its ``target`` resolves against
+    the registry keys of CTX and its steps against PROCEDURES, which maps
+    procedure IDs to front matter. A missing key is an error and a key
+    outside the sequence schema a warning, except a procedure taxonomy
+    key (``TAXONOMY_KEYS``), which is an error. Continuity is not checked.
+    """
+    found: list[Problem] = []
+    for key in SEQUENCE_KEYS:
+        if key not in data:
+            found.append(error(key, "required field missing"))
+            continue
+        value = data[key]
+        match key:
+            case "id":
+                found += check_id(value, SEQUENCE.prefix)
+            case "slug":
+                found += check_slug(value, data.get("id"), SEQUENCE.prefix)
+            case "title":
+                found += check_string(key, value)
+            case "date":
+                found += check_datetime(key, value, ctx.zone)
+            case "lastmod":
+                found += check_lastmod(value, data.get("date"), ctx.zone)
+            case "target":
+                found += check_string(key, value) or check_compound_key(
+                    key, value, ctx.compounds)
+            case "steps":
+                found += check_steps(value, procedures)
+    found += [error(key, "must not be set; a sequence joins no procedure "
+                     "taxonomy") if key in TAXONOMY_KEYS
+              else warning(key, "unknown field")
+              for key in data if key not in SEQUENCE_KEYS]
+    return found
+
+
+def check_continuity(data: dict[str, Any],
+                     procedures: dict[str, dict[str, Any]],
+                     compounds: frozenset[str]) -> list[Problem]:
+    """Check that the steps of the sequence front matter DATA chain.
+
+    Each step after the first must take a product of the step before
+    it among its substrates, an error under ``steps[k+1]``, and a
+    ``target`` that is a key of the registry COMPOUNDS must be a product
+    of the last step. A step that names no run (``step_run``) is left
+    out of both checks. Nothing is checked unless ``steps`` holds at
+    least two tables.
+    """
+    steps = data.get("steps")
+    if not isinstance(steps, list) or sum(
+            isinstance(step, dict) for step in steps) < 2:
+        return []
+    runs = [step_run(step, procedures) for step in steps]
+    found: list[Problem] = []
+    for number in range(1, len(runs)):
+        before, this = runs[number - 1], runs[number]
+        if before is not None and this is not None and not any(
+                key in this.substrates for key in before.products):
+            found.append(error(
+                f"steps[{number + 1}]", "starts from none of the products "
+                f"of step {number} ({', '.join(before.products)})"))
+    target = data.get("target")
+    if isinstance(target, str) and target in compounds \
+            and runs[-1] is not None and target not in runs[-1].products:
+        found.append(error("target", f"{target} is not a product of the "
+                           f"last step, step {len(runs)}"))
+    return found
+
+
+def procedure_index(files: Iterable[ContentFile]
+                    ) -> dict[str, dict[str, Any]]:
+    """Map each valid procedure ID of FILES to the front matter of its
+    reference variant (``reference_variant``)."""
+    return {ident: reference_variant(holders).data
+            for ident, holders in group_by_id(files).items()}
+
+
+def examine_sequence(entry: Entry, ctx: Context,
+                     procedures: dict[str, dict[str, Any]]) -> ContentFile:
+    """Read and check one sequence file on its own.
+
+    The steps resolve against PROCEDURES, which maps procedure IDs to
+    front matter; continuity is checked separately.
+    """
+    item = ContentFile(entry.path, entry.name)
+    text = read_text(entry.path)
+    parsed = parse_front_matter(text) if isinstance(text, str) else text
+    if isinstance(parsed, Problem):
+        item.problems.append(parsed)
+        return item
+    item.data = parsed.data
+    item.problems += check_file_name(entry.name, ".md",
+                                     parsed.data.get("id"), SEQUENCE)
+    item.problems += check_sequence_fields(parsed.data, ctx, procedures)
+    return item
+
+
+def examine_sequences(directory: str, ctx: Context,
+                      procedures: dict[str, dict[str, Any]]
+                      ) -> tuple[list[tuple[str, Problem]], int]:
+    """Check every sequence file of DIRECTORY.
+
+    Returns the problems found, each with the path DIRECTORY joined with
+    the entry name, and the number of sequence files examined. Steps
+    resolve against PROCEDURES, which maps procedure IDs to front
+    matter, and targets against the registry keys of CTX. Continuity is
+    checked on the reference variant of each sequence only. A DIRECTORY
+    that does not exist holds no sequence.
+    """
+    if not os.path.isdir(directory):
+        return [], 0
+    problems: list[tuple[str, Problem]] = []
+    files: list[ContentFile] = []
+    for entry in discover(directory, ".md", SEQUENCE.noun):
+        if entry.problem is not None:
+            problems.append((entry.path, entry.problem))
+        else:
+            files.append(examine_sequence(entry, ctx, procedures))
+    for item in check_cross_file(files, SEQUENCE):
+        if item.data is not None:
+            item.problems += check_continuity(item.data, procedures,
+                                              ctx.compounds)
+    for item in files:
+        problems += [(item.path, p) for p in item.problems]
+    return problems, len(files)
+
+
+# --------------------------------------------------------------------------
 # I/O: configuration, discovery and reporting
 
 
@@ -1090,12 +1409,13 @@ class Entry(NamedTuple):
     problem: Problem | None
 
 
-def discover(root: str, suffix: str) -> list[Entry]:
-    """List the top-level procedure files of ``root``, sorted by name.
+def discover(root: str, suffix: str,
+             noun: str = PROCEDURE.noun) -> list[Entry]:
+    """List the top-level content files of ROOT, sorted by name.
 
-    Dotfiles and ``_index.md`` are omitted. A subdirectory or a file
-    without ``suffix`` is returned with the problem it raises instead of
-    as a procedure.
+    Dotfiles and ``_index.md`` are omitted. A subdirectory, an error, or
+    a file without SUFFIX, a warning that calls it not a NOUN file, is
+    returned with the problem it raises instead of as a content file.
     """
     found: list[Entry] = []
     for name in sorted(os.listdir(root)):
@@ -1108,7 +1428,7 @@ def discover(root: str, suffix: str) -> list[Entry]:
             continue
         elif not name.endswith(suffix):
             found.append(Entry(path, name, warning(
-                "file_name", "not a procedure file; ignored")))
+                "file_name", f"not a {noun} file; ignored")))
         else:
             found.append(Entry(path, name, None))
     return found
@@ -1152,7 +1472,8 @@ def build_parser() -> argparse.ArgumentParser:
     """Return the command-line parser."""
     parser = argparse.ArgumentParser(
         prog="validate.py",
-        description="Validate OrgSynDB procedures. Prints one "
+        description="Validate OrgSynDB procedures, compounds and "
+        "synthesis sequences. Prints one "
         "'<path>:<field>: <severity>: <message>' line per problem and "
         "exits 0 (no errors), 1 (errors found) or 2 (usage or "
         "configuration error).")
@@ -1176,6 +1497,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="compound registry, one <key>.toml file per compound "
         "(default: compounds in the working directory; a missing "
         "directory defines no compound)")
+    parser.add_argument(
+        "--sequences", default=str(DEFAULT_SEQUENCES), metavar="DIR",
+        help="directory of synthesis sequences, SEQ-NNNN-short-slug.md "
+        "files whose steps name procedures of the content roots "
+        "(default: md/sequences in the working directory; a missing "
+        "directory holds no sequence)")
     return parser
 
 
@@ -1193,12 +1520,14 @@ def report(problems: Iterable[tuple[str, Problem]], files: int) -> int:
     return 1 if errors else 0
 
 
-def run(content_roots: Sequence[str], registry: str, ctx: Context) -> int:
-    """Validate the compound ``registry`` and the content roots, report,
-    and return the exit status.
+def run(content_roots: Sequence[str], registry: str, sequences: str,
+        ctx: Context) -> int:
+    """Validate the compound REGISTRY, the CONTENT_ROOTS and the
+    SEQUENCES directory, report, and return the exit status.
 
-    The procedures' compound keys resolve against the compounds the
-    registry defines, which replace those of ``ctx``.
+    The compound keys of procedures and sequences resolve against the
+    compounds the registry defines, which replace those of CTX, and the
+    steps of the sequences against the procedures of the content roots.
     """
     examined = examine_registry(registry, ctx.static_dir)
     ctx = replace(ctx, compounds=examined.compounds)
@@ -1213,7 +1542,9 @@ def run(content_roots: Sequence[str], registry: str, ctx: Context) -> int:
     check_cross_file(content)
     for item in content:
         problems += [(item.path, p) for p in item.problems]
-    return report(problems, examined.files + len(content))
+    found, count = examine_sequences(sequences, ctx,
+                                     procedure_index(content))
+    return report(problems + found, examined.files + len(content) + count)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1232,12 +1563,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                 and not os.path.isdir(args.compounds)):
             raise ConfigError(f"compound registry {args.compounds} is not "
                               "a directory")
+        if (os.path.exists(args.sequences)
+                and not os.path.isdir(args.sequences)):
+            raise ConfigError(f"sequences directory {args.sequences} is "
+                              "not a directory")
         ctx = Context(load_vocabulary(args.vocabulary), args.static_dir,
                       load_zone())
     except ConfigError as exc:
         print(f"validate.py: error: {exc}", file=sys.stderr)
         return 2
-    return run(args.content_roots, args.compounds, ctx)
+    return run(args.content_roots, args.compounds, args.sequences, ctx)
 
 
 if __name__ == "__main__":

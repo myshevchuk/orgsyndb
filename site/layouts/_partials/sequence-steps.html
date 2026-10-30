@@ -1,0 +1,29 @@
+{{- /* The steps of a sequence page, as a slice with one dict per step, in
+order: page, the published procedure the step names; entry, its entry
+number for a general procedure, else nil; substrates and products, those
+of the procedure or of that entry; carried, the compound that carries on,
+which is the first of the products, in order, that the next step takes
+among its substrates, and for the last step the sequence's target; and
+yield, the step's yield_percent of that compound. Takes the sequence page;
+expects steps that the validator accepted. */ -}}
+{{- $procedures := where site.RegularPages "Section" "procedures" -}}
+{{- $runs := slice -}}
+{{- range .Params.steps -}}
+{{- $page := index (where $procedures "Params.id" .procedure) 0 -}}
+{{- $run := $page.Params -}}
+{{- with .entry }}{{ $run = index $page.Params.scope (sub . 1) }}{{ end -}}
+{{- $runs = $runs | append (dict "page" $page "entry" .entry "substrates" ($run.substrates | default slice) "products" $run.products) -}}
+{{- end -}}
+{{- $steps := slice -}}
+{{- range $i, $run := $runs -}}
+{{- $carried := $.Params.target -}}
+{{- if lt (add $i 1) (len $runs) -}}
+{{- $next := (index $runs (add $i 1)).substrates -}}
+{{- $carried = "" -}}
+{{- range $run.products }}{{ if and (not $carried) (in $next .compound) }}{{ $carried = .compound }}{{ end }}{{ end -}}
+{{- end -}}
+{{- $yield := 0 -}}
+{{- range $run.products }}{{ if eq .compound $carried }}{{ $yield = .yield_percent }}{{ end }}{{ end -}}
+{{- $steps = $steps | append (dict "page" $run.page "entry" $run.entry "substrates" $run.substrates "products" $run.products "carried" $carried "yield" $yield) -}}
+{{- end -}}
+{{- return $steps -}}

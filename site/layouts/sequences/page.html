@@ -1,0 +1,45 @@
+{{- /* A synthesis sequence page: the header with the ID, the title and
+the key facts, the number of steps and the overall yield
+(sequence-yield.html); the scheme, an ol of the first step's substrates
+and then, for each step, the step, with its reaction type and its yield
+of the compound that carries on, and that compound (sequence-steps.html);
+the steps, each linking its procedure with its entry for a general
+procedure, its reaction type, yield and status badge; and the body, the
+notes. A compound in the scheme shows its structure when the registry
+entry sets structure_image. A sequence whose language differs from the
+site's carries it on the header and the notes. The page carries no
+data-pagefind-body, so the search index holds procedures only. */ -}}
+{{ define "main" -}}
+{{ $steps := partialCached "sequence-steps.html" . .Path -}}
+{{ $lang := "" -}}
+{{ with .Params.language }}{{ if ne . site.Language.Lang }}{{ $lang = . }}{{ end }}{{ end -}}
+<header class="sequence-header"{{ with $lang }} lang="{{ . }}"{{ end }}>
+<p class="sequence-id">{{ .Params.id }}</p>
+<h1>{{ .Title }}</h1>
+<dl class="key-facts">
+<dt>{{ T "label_steps" }}</dt>
+<dd>{{ len $steps }}</dd>
+<dt>{{ T "label_overall_yield" }}</dt>
+<dd>{{ partialCached "sequence-yield.html" $steps .Path }} %</dd>
+</dl>
+</header>
+<figure class="sequence-scheme" aria-label="{{ T "scheme_of" .Title }}">
+<ol>
+{{ range (index $steps 0).substrates -}}
+<li class="sequence-compound">{{ partial "sequence-compound.html" . }}</li>
+{{ end -}}
+{{ range $i, $step := $steps -}}
+<li class="sequence-step"><span class="sequence-step__number">{{ T "sequence_step" (add $i 1) }}</span> <span class="sequence-step__type">{{ partial "reaction-type-label.html" (index $step.page.Params.reaction_types 0) }}</span> <span class="sequence-step__yield">{{ partial "decimal.html" $step.yield }} %</span></li>
+<li class="sequence-compound">{{ partial "sequence-compound.html" $step.carried }}</li>
+{{ end -}}
+</ol>
+</figure>
+<ol class="sequence-steps">
+{{ range $steps -}}
+<li><a href="{{ .page.RelPermalink }}">{{ .page.Params.id }} {{ .page.Title }}</a>{{ with .entry }} · {{ T "made_by_entry" . }}{{ end }} · {{ partial "reaction-type-label.html" (index .page.Params.reaction_types 0) }} · {{ partial "decimal.html" .yield }} % · <span class="badge badge--{{ .page.Params.status }}">{{ partial "status-label.html" .page.Params.status }}</span></li>
+{{ end -}}
+</ol>
+<div class="sequence-notes"{{ with $lang }} lang="{{ . }}"{{ end }}>
+{{ .Content }}
+</div>
+{{ end }}

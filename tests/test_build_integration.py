@@ -311,6 +311,83 @@ class ValidateRegistryTests(BuildTestCase):
                          result.stdout)
 
 
+class ValidateSequenceTests(BuildTestCase):
+    """validate passes ``--sequences md/sequences`` (build-script
+    "validate subcommand")."""
+
+    def broken_sequence(self, text_edit: tuple[str, str]) -> Path:
+        """Add a copy of the first sequence with one edit, as
+        ``md/sequences/SEQ-0003-broken.md``."""
+        source = (self.sandbox.root / "md" / "sequences"
+                  / "SEQ-0001-aspirin-from-wintergreen.md")
+        text = source.read_text(encoding="utf-8")
+        for old, new in (('id = "SEQ-0001"', 'id = "SEQ-0003"'),
+                         ('slug = "seq-0001"', 'slug = "seq-0003"'),
+                         text_edit):
+            self.assertEqual(text.count(old), 1, old)
+            text = text.replace(old, new)
+        target = source.parent / "SEQ-0003-broken.md"
+        target.write_text(text, encoding="utf-8")
+        return target
+
+    def test_the_sequences_of_the_collection_are_validated(self) -> None:
+        """Scenario: Seeds validate (the sequences are counted)."""
+        root = self.sandbox.root
+        sequences = list((root / "md" / "sequences").glob("SEQ-*.md"))
+        self.assertEqual(len(sequences), 4)
+        files = (len(list((root / "md" / "procedures").glob("*.md")))
+                 + len(list((root / "compounds").glob("*.toml")))
+                 + len(sequences))
+        result = self.build("validate")
+        self.assert_ok(result)
+        self.assertEqual(problem_lines(result.stdout), [])
+        self.assertIn(f"validated {files} files: 0 errors, 0 warnings",
+                      result.stderr)
+
+    def test_a_sequence_problem_is_reported_under_its_path(self) -> None:
+        """Scenario: Invalid Markdown procedure (for a sequence)."""
+        self.broken_sequence(('target = "acetylsalicylic-acid"',
+                              'target = "no-such-compound"'))
+        result = self.build("validate")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        lines = problem_lines(result.stdout)
+        self.assertEqual(len(lines), 1, result.stdout)
+        self.assertTrue(lines[0].startswith(
+            "md/sequences/SEQ-0003-broken.md:target: error: "), lines[0])
+        self.assertIn('unknown compound "no-such-compound"', lines[0])
+
+    def test_a_step_of_an_unknown_procedure_is_reported(self) -> None:
+        """Scenario: Invalid Markdown procedure (a step)."""
+        self.broken_sequence(('{ procedure = "OSDB-0002" }',
+                              '{ procedure = "OSDB-0999" }'))
+        result = self.build("validate")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertTrue(any(
+            ln.startswith("md/sequences/SEQ-0003-broken.md:"
+                          "steps[2].procedure: error:")
+            and "OSDB-0999 not found" in ln
+            for ln in result.stdout.splitlines()), result.stdout)
+
+    def test_a_collection_without_sequences_validates(self) -> None:
+        """Scenario: Seeds validate (a collection without
+        md/sequences/)."""
+        shutil.rmtree(self.sandbox.root / "md" / "sequences")
+        result = self.build("validate")
+        self.assert_ok(result)
+        self.assertEqual(problem_lines(result.stdout), [])
+
+    def test_an_invalid_sequence_stops_the_build_before_hugo(self) -> None:
+        """Scenario: Validation error stops the build before Hugo (a
+        sequence)."""
+        self.assert_ok(self.build("build"))
+        before = snapshot(self.public())
+        self.broken_sequence(('target = "acetylsalicylic-acid"',
+                              'target = "no-such-compound"'))
+        result = self.build("build")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertEqual(snapshot(self.public()), before)
+
+
 class ShippedTreeValidationTests(DemoBuildTestCase):
     def test_shipped_tree_validates_without_any_problem_line(self) -> None:
         """Scenario: Clean validation of the shipped tree."""
@@ -321,6 +398,11 @@ class ShippedTreeValidationTests(DemoBuildTestCase):
             list(self.sandbox.root.glob("org/procedures/OSDB-*.org"))
             or list(self.sandbox.root.glob("md/procedures/OSDB-*.md")),
             "no shipped procedures to validate")
+        self.assertEqual(
+            len(list(self.sandbox.root.glob("md/sequences/SEQ-*.md"))), 4,
+            "the demo's sequences")
+        self.assertRegex(result.stderr, r"validated \d+ files: 0 errors, "
+                         r"0 warnings")
 
 
 class ServeTests(BuildTestCase):

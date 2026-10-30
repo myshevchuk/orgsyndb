@@ -10,6 +10,7 @@ builds it in German after removing one German name.
 import re
 
 import pipeline_support as ps
+import sequence_support as ss
 import test_theme_integration as tti
 from pipeline_support import Content, Page
 
@@ -136,9 +137,13 @@ class CompoundSiteTests(CompoundCase):
             main = page.find("main")
             with self.subTest(compound=key):
                 parts = [main.find("h1"), main.find("dl", "compound-facts")]
-                for cls in ("compound-made-by", "compound-used-in"):
-                    wanted = (self.made_by(key) if cls == "compound-made-by"
-                              else self.used_in_by(key))
+                for cls in ("compound-made-by", "compound-used-in",
+                            "compound-sequences"):
+                    wanted = {
+                        "compound-made-by": self.made_by(key),
+                        "compound-used-in": self.used_in_by(key),
+                        "compound-sequences": ss.sequences_making(
+                            key, self.sequences())}[cls]
                     section = main.find("section", cls)
                     self.assertEqual(section is not None, bool(wanted), cls)
                     if section is not None:
@@ -202,6 +207,22 @@ class CompoundSiteTests(CompoundCase):
                             text += f" · {made} %"
                         self.assertEqual(
                             entry.norm(), f"{text} · {badge.norm()}")
+
+    def test_the_sequences_that_make_a_compound(self) -> None:
+        """Scenario: Links to the demo sequence (the compound pages)."""
+        sequences = self.sequences()
+        self.assertEqual([s.id for s in sequences], ["SEQ-0001", "SEQ-0002"])
+        for key in self.registry():
+            with self.subTest(compound=key):
+                ss.check_compound_sequences(
+                    self, self.compound_page(key), key, sequences, "en")
+        page = self.compound_page("acetylsalicylic-acid")
+        section = page.find("section", "compound-sequences")
+        self.assertEqual(
+            [(l.target, l.node.norm()) for l in page.links(section)],
+            [("/sequences/seq-0001/", "Aspirin from oil of wintergreen")])
+        self.assertLess(page.index_of(page.find("dl", "compound-facts")),
+                        page.index_of(section))
 
     def test_made_by_an_entry_of_a_general_procedure(self) -> None:
         """Scenario: Made by an entry of a general procedure."""
@@ -341,6 +362,13 @@ class GermanCompoundTests(CompoundCase):
         self.assertEqual(
             [li.norm() for li in made.find_all("li")],
             ["OSDB-0001 Salicylsäure · 80 % · Entwurf"])
+        aspirin = self.compound_page("acetylsalicylic-acid")
+        sequences = aspirin.find("section", "compound-sequences")
+        self.assertEqual([h.norm() for h in sequences.find_all("h2")],
+                         ["Synthesewege"])
+        self.assertEqual(
+            [(l.target, l.node.norm()) for l in aspirin.links(sequences)],
+            [("/sequences/seq-0001/", "Aspirin aus Wintergrünöl")])
         general = self.compound_page("1-biphenyl-4-yl-ethanol")
         self.assertEqual(
             [li.norm() for li in general.find(

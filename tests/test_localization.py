@@ -447,7 +447,7 @@ class SiteLanguageTests(unittest.TestCase):
         used = {tomllib.loads(page.read_text(encoding="utf-8").split(
                     "+++")[1]).get("title_key")
                 for page in (SITE / "content").rglob("*.md")} - {None}
-        self.assertEqual(len(used), 7)
+        self.assertEqual(len(used), 8)
         for path in LAYOUTS.rglob("*.html"):
             text = path.read_text(encoding="utf-8")
             used |= set(re.findall(r'\bT "([a-z_]+)"', text))
@@ -455,6 +455,21 @@ class SiteLanguageTests(unittest.TestCase):
                      if "status-label.html" in text}
         self.assertTrue(used)
         self.assertEqual(sorted(used - set(english)), [])
+
+    def test_the_sequence_strings_are_in_both_languages(self) -> None:
+        """Scenario: Interface strings (sequences)."""
+        german = set(self.strings("de").values())
+        english = set(self.strings("en").values())
+        self.assertTrue(
+            {"Synthesewege", "Stufen", "Gesamtausbeute", "Syntheseweg",
+             "Zielverbindung"} <= german, sorted(german))
+        self.assertTrue(
+            {"Sequences", "Steps", "Overall yield", "Sequence",
+             "Target"} <= english, sorted(english))
+        self.assertTrue(any(v.startswith("Stufe ") for v in german),
+                        "no Stufe <k> string")
+        self.assertTrue(any(v.startswith("Step ") for v in english),
+                        "no Step <k> string")
 
     def test_every_reaction_type_has_a_german_label(self) -> None:
         """Scenario: Vocabulary with German labels."""

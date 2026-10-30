@@ -1,7 +1,7 @@
 # Schema-Referenz für Vorschriften
 
-Diese Referenz legt fest, was gültige OrgSynDB-Vorschriften und
-Verbindungseinträge sind. Schlagen
+Diese Referenz legt fest, was gültige OrgSynDB-Vorschriften,
+Verbindungseinträge und Synthesewege sind. Schlagen
 Sie hier die genaue Schreibweise, den Typ und die Regel eines Feldes nach,
 oder die Bedeutung einer Meldung von `tools/validate.py` oder dem Befehl
 `orgsyndb export`. Die englische Fassung ist [SCHEMA.md](SCHEMA.md); bei
@@ -17,6 +17,8 @@ Eine Markdown-Vorschrift beginnt mit einem TOML-Datenblock (*Front
 Matter*), der zwischen einer öffnenden und einer schließenden `+++`-Zeile
 steht. Die öffnende `+++`-Zeile muss die erste Zeile der Datei sein. Der
 Text nach der schließenden `+++`-Zeile ist der Inhalt der Vorschrift.
+Synthesewege verwenden dieselben Begrenzungszeilen; ihr Text enthält
+Anmerkungen.
 
 In den Tabellen unten ist ein **String** Text in doppelten
 Anführungszeichen, ein **String-Array** eine durch Kommas getrennte Liste in
@@ -133,6 +135,9 @@ Ausgangsstoffe aller Einträge, jede Verbindung einmal in der Reihenfolge ihres
 ersten Auftretens. Das gilt auch für Datenfeld, Verbindungsverzeichnis,
 Katalogdetails und Suche einschließlich SMILES-Treffern.
 
+Das Datenfeld ergänzt nach **Verwendet in** die **Synthesewege**, in denen
+diese Vorschrift eine Stufe ist. Es verlinkt deren Titel, nach Nummer geordnet.
+
 ### Allgemeine Vorschriften und Einträge in scope
 
 Mit `scope` erfassen Sie Ausgangsstoffe, Produkte und Ausbeuten jeder Anwendung
@@ -240,6 +245,95 @@ UTF-8-TOML lesbare Datei erhält einen Fehler unter `toml` und definiert
 keine Verbindung; ein Syntaxfehler enthält `invalid TOML`. Ein fehlendes
 Pflichtfeld ergibt `required field missing`, unbekannte Felder ergeben
 Warnungen mit `unknown field`.
+
+Eine Verbindungsseite ergänzt nach **Verwendet in** den Abschnitt
+**Synthesewege**, wenn Synthesewege diese Verbindung als Ziel nennen. Die
+Liste verlinkt deren Titel, nach Nummer geordnet.
+
+## Synthesewege
+
+Ein Syntheseweg hält eine geordnete Folge von mindestens zwei Vorschriften
+fest. Schreiben Sie ihn in Markdown, auch wenn seine Stufen Org-Vorschriften
+verwenden. Kopieren Sie [templates/sequence.md](../templates/sequence.md) nach
+`md/sequences/` der Sammlung. `orgsyndb init` legt diesen Ordner an; ein
+fehlender Ordner enthält keine Synthesewege. `orgsyndb new` erzeugt
+Vorschriften, daher kopieren Sie die Vorlage für Synthesewege von Hand.
+
+Der Dateiname ist `SEQ-NNNN-short-slug.md`, optional mit `.de` oder `.en` vor
+`.md`. Der kurze Slug entspricht `[a-z0-9]+(-[a-z0-9]+)*`. Die Nummer im
+Dateinamen muss gleich `id` sein. Ersetzen Sie die Vorlagenwerte `SEQ-0000`
+und `seq-0000` durch eine freie Nummer von `SEQ-0001` bis `SEQ-9999` und ihre
+Kleinschreibung. Die Seite steht unter `/sequences/seq-NNNN/`.
+
+Der Validator liest nur die oberste Ebene. Unterordner sind Fehler;
+versteckte Dateien und `_index.md` überspringt er stillschweigend. Eine Datei
+ohne Endung `.md` ergibt `not a sequence file; ignored`; eine Markdown-Datei
+mit falschem Namen einen Fehler unter `file_name`.
+
+### Felder eines Synthesewegs
+
+Behalten Sie alle sieben Pflichtfelder zwischen den `+++`-Zeilen. Ersetzen
+Sie Ziel und Stufen der Vorlage durch Ihren Weg. Fügen Sie kein `authors`
+hinzu: Jede Stufe nennt die Autoren ihrer Vorschrift. Die Taxonomiefelder
+der Vorschriften, `authors`, `tags` und `reaction_types`, sind in einem
+Syntheseweg Fehler und halten den Build an: Hugo würde den Syntheseweg
+sonst unter den Vorschriften eines Autors, Schlagworts oder Reaktionstyps
+führen. Jedes andere Feld außerhalb dieses Schemas ergibt eine Warnung
+`unknown field`. Unbekannte Felder einer Stufe erscheinen unter
+`steps[n].<key>`.
+
+| Feld | TOML-Typ | Pflicht | Regel | Beispiel |
+|---|---|---|---|---|
+| `id` | String | Ja | `SEQ-0001` bis `SEQ-9999`; einmal je Sprachkürzel und einmal ohne Kürzel eindeutig. | `id = "SEQ-0001"` |
+| `slug` | String | Ja | Genau die `id` in Kleinbuchstaben. | `slug = "seq-0001"` |
+| `title` | Nicht leerer String | Ja | Seitentitel. | `title = "Aspirin aus Wintergrünöl"` |
+| `date` | Datum mit Zeitzonenversatz | Ja | Ohne Anführungszeichen; dieselben Regeln wie bei Vorschriften. | `date = 2026-10-23T09:15:00+02:00` |
+| `lastmod` | Datum mit Zeitzonenversatz | Ja | Dieselben Regeln wie für `date`; nicht früher als `date`. | `lastmod = 2026-10-23T09:40:00+02:00` |
+| `target` | String | Ja | Vorhandener Verbindungsschlüssel ohne `.toml`; ein Produkt der letzten Stufe. | `target = "acetylsalicylic-acid"` |
+| `steps` | Array von Tabellen | Ja | Mindestens zwei Stufen, in Ausführungsreihenfolge. | `steps = [{ procedure = "OSDB-0001" }, { procedure = "OSDB-0002" }]` |
+| `steps[n].procedure` | String | In jeder Stufe | Vorschriftennummer aus den geprüften Inhaltsverzeichnissen, aus Org exportiert oder in Markdown geschrieben. | `procedure = "OSDB-0009"` |
+| `steps[n].entry` | Ganzzahl | Nur bei allgemeinen Vorschriften | Eintragsnummer von 1 bis zur Zahl der Scope-Einträge; bei Einzelvorschriften verboten. Kein Wahrheitswert. | `entry = 1` |
+
+Schreiben Sie nach der schließenden `+++`-Zeile Anmerkungen, etwa unter
+`## Anmerkungen`. Die acht Textabschnitte einer Vorschrift sind nicht
+vorgeschrieben. [SEQ-0002 der
+Beispielsammlung](../examples/demo/md/sequences/SEQ-0002-biphenylyl-ethanol.de.md)
+zeigt eine Stufe mit einer allgemeinen Vorschrift:
+
+```toml
+target = "1-biphenyl-4-yl-ethanol"
+steps = [{ procedure = "OSDB-0004" }, { procedure = "OSDB-0009", entry = 1 }]
+```
+
+### Zusammenhang der Stufen, Fassungen und Ausbeute
+
+Jede Stufe nach der ersten muss mindestens ein Produkt der vorigen Stufe als
+Ausgangsstoff verwenden. Bei einer allgemeinen Vorschrift zählen nur die
+Ausgangsstoffe und Produkte des gewählten Eintrags. Das Ziel muss ein Produkt
+der letzten Stufe sein. Der Validator prüft diesen Zusammenhang nur an der
+Bezugsfassung: der Datei ohne Sprachkürzel, sonst `.de`, sonst `.en`. Dafür
+müssen mindestens zwei Stufentabellen vorliegen. Eine Stufe mit unbekannter
+Vorschrift oder fehlendem, ungültigem oder verbotenem Eintrag bleibt bei der
+Zusammenhangsprüfung unberücksichtigt. Die Zielprüfung setzt zusätzlich einen
+bekannten Verbindungsschlüssel voraus.
+
+Fassungen teilen Grundnamen, `id`, `slug`, `target` und die geordneten `steps`.
+Jedes Sprachkürzel und das Fehlen eines Kürzels darf je Nummer einmal
+vorkommen. Titel, Zeitangaben und Text dürfen sich unterscheiden. Abweichungen
+der gemeinsamen Felder sind Fehler an der anderen Fassung, die die
+Bezugsdatei nennen. Der Build veröffentlicht eine Fassung: die mit dem
+Sprachkürzel der Website, sonst die ohne Kürzel, sonst die andere Sprache.
+Er legt sie unter `build/content/sequences/` ab.
+
+Die Gesamtausbeute multipliziert die Ausbeuten der Produkte, die jeweils in
+die nächste Stufe eingehen, und die Ausbeute des Ziels in der letzten Stufe.
+Gehen mehrere Produkte weiter, zählt das erste in Produktreihenfolge. Die
+Anzeige rundet auf ganze Prozent, bei genau einem halben Prozent nach oben.
+Die Seite zeigt **Stufen** und **Gesamtausbeute**, ein Schema mit verlinkten
+Verbindungen und Stufen, eine Liste mit Vorschriftenlinks, gegebenenfalls
+Eintragsnummer, Reaktionstyp, Ausbeute und Status, danach die Anmerkungen.
+`/sequences/` listet Synthesewege nach Nummer mit Titel, Zielverbindung,
+Stufenzahl und Gesamtausbeute. Synthesewegseiten stehen nicht im Suchindex.
 
 ## Geduldete, abgelehnte und unbekannte Felder
 
@@ -510,7 +604,7 @@ eine deutsche Website zeigt sie mit Komma.
 Starten Sie den Validator mit mindestens einem Markdown-Verzeichnis:
 
 ```text
-tools/validate.py [--vocabulary FILE] [--static-dir DIR] [--compounds DIR] CONTENT_ROOT...
+tools/validate.py [--vocabulary FILE] [--static-dir DIR] [--compounds DIR] [--sequences DIR] CONTENT_ROOT...
 ```
 
 Jedes `CONTENT_ROOT` ist ein Verzeichnis mit Markdown-Vorschriften.
@@ -522,7 +616,14 @@ und löst die Schlüssel der Vorschriften gegen dieses Register auf. Ein
 fehlendes Registerverzeichnis ist leer: Jeder genannte Schlüssel ist dann
 unbekannt. Ein vorhandener Pfad, der kein Verzeichnis ist, ergibt einen
 Konfigurationsfehler. `orgsyndb validate` übergibt nach dem Org-Export
-`--static-dir static --compounds compounds` aus dem Hauptordner der Sammlung.
+`--static-dir static --compounds compounds --sequences md/sequences`
+aus dem Hauptordner der Sammlung.
+
+`--sequences` ist ohne Angabe `md/sequences` im aktuellen Verzeichnis. Ein
+fehlender Ordner enthält keine Synthesewege; ein vorhandener Pfad, der kein
+Verzeichnis ist, ergibt einen Konfigurationsfehler. Stufen verweisen auf
+Vorschriften aus den angegebenen Inhaltsverzeichnissen, Ziele auf das
+Verbindungsregister.
 
 Jedes Problem ist eine Zeile auf der Standardausgabe:
 
@@ -568,16 +669,17 @@ auf die Standardausgabe. Seine Felder können auch Org-Schlüsselwörter wie
 `#+CREATED`, Eigenschaften wie `#+PROPERTY` oder `:EXPORT_DATE:` und
 Schubladen wie `:LOGBOOK:` sein.
 
-Ein `error` bedeutet, dass eine Vorschrift oder ein Verbindungseintrag
-ungültig ist. Eine `warning`
+Ein `error` bedeutet, dass eine Vorschrift, ein Verbindungseintrag oder ein
+Syntheseweg ungültig ist. Eine `warning`
 bezeichnet ein Problem, das die Prüfung nicht scheitern lässt, etwa einen
 fehlenden Abschnitt oder ein unbekanntes Feld. Nach den Problemzeilen
 schreibt der Validator eine Zusammenfassung auf die Standardfehlerausgabe.
-Die Dateizahl umfasst Vorschriften und Verbindungsdateien. Für die
+Die Dateizahl umfasst Vorschriften, Verbindungsdateien und Synthesewegdateien,
+einschließlich aller Sprachfassungen. Für die
 Beispielsammlung einschließlich vorhandener Org-Exporte lautet sie:
 
 ```text
-validated 38 files: 0 errors, 0 warnings
+validated 42 files: 0 errors, 0 warnings
 ```
 
 Die ersten drei Zeilen sind echte Ausgaben des Validators. Die letzte
@@ -595,10 +697,38 @@ Der Rückgabewert sagt einem aufrufenden Befehl, ob die Prüfung gelungen ist:
 | Rückgabewert | Bedeutung |
 |---|---|
 | `0` | Kein Fehler gefunden. Warnungen können ausgegeben worden sein. |
-| `1` | Mindestens ein Fehler in einer Vorschrift oder Verbindungsdatei. |
+| `1` | Mindestens ein Fehler in einer Vorschrift, Verbindungsdatei oder einem Syntheseweg. |
 | `2` | Aufruf oder Konfiguration des Validators ist ungültig, etwa kein Verzeichnis, ein Verzeichnis, das keines ist, oder eine fehlende oder fehlerhafte Vokabulardatei. |
 
 Aufruf- und Konfigurationsfehler gehen auf die Standardfehlerausgabe und
 enthalten `validate.py: error:`. Der Validator unterdrückt Prüfungen, die
 von einem fehlenden oder fehlerhaften Wert abhängen, sodass ein Fehler
 meist keine Kette von Folgemeldungen auslöst.
+
+### Meldungen zu Synthesewegen
+
+Probleme nennen die Synthesewegdatei, etwa
+`md/sequences/SEQ-0002-biphenylyl-ethanol.de.md`, mit Feldern `steps[n]` oder
+`steps[n].<key>`; die Stufenzählung beginnt bei 1. Die Tabelle nennt die
+Meldung oder den kennzeichnenden Teil einer längeren Meldung. Datums- und
+TOML-Fehler folgen denselben Regeln wie bei Vorschriften.
+
+| Feld | Meldung | Korrektur |
+|---|---|---|
+| Jedes Pflichtfeld | `required field missing` | Das Feld aus der Feldtabelle ergänzen. |
+| `id` | `must match SEQ-NNNN` oder `must be between SEQ-0001 and SEQ-9999` | `SEQ-` und vier Ziffern von `0001` bis `9999` verwenden. |
+| `id` | `duplicate id <id>, also used by <path>` | Eine freie Nummer vergeben; je Sprachkürzel und einmal ohne Kürzel darf eine Datei sie teilen. |
+| `slug` | `must be "<value>" (the lowercased id)` | Die `id` in Kleinbuchstaben verwenden. |
+| `file_name` | `must be named SEQ-NNNN-short-slug.md` oder `does not match id <id>` | Dateinamen oder Nummer korrigieren. |
+| `target` | `unknown compound "<key>"` | Schlüssel korrigieren oder Registereintrag anlegen. |
+| `steps` | `must list at least two steps` | Genügend Stufen für einen Syntheseweg angeben. |
+| `steps` oder `steps[n]` | `must be an array of tables` oder `must be a table` | Die oben gezeigten TOML-Formen verwenden. |
+| `steps[n].procedure` | `<id> not found in any content root` | Vorhandene Vorschriftennummer verwenden; beim direkten Aufruf deren Verzeichnis mitgeben. |
+| `steps[n].entry` | `OSDB-NNNN is a general procedure; name one of its entries 1 to <count>` | Die gewählte Eintragsnummer ergänzen. |
+| `steps[n].entry` | `OSDB-NNNN has no scope entries; remove entry` | `entry` bei einer Einzelvorschrift entfernen. |
+| `steps[n].entry` | `must be between 1 and <count>, the number of an entry of OSDB-NNNN's scope` | Einen vorhandenen Eintrag als Ganzzahl ohne Anführungszeichen wählen. |
+| `steps[n]` | `starts from none of the products of step <k> (<keys>)` | Stufenreihenfolge und Ausgangsstoffe und Produkte der gewählten Einträge prüfen. |
+| `target` | `<key> is not a product of the last step, step N` | Ziel und letzte Vorschrift oder letzten Eintrag prüfen. |
+| `target` oder `steps` | `must equal the value in <path>` | In jeder Fassung dasselbe Ziel und dieselben geordneten Stufen verwenden. |
+| `authors`, `tags` oder `reaction_types` | `must not be set; a sequence joins no procedure taxonomy` | Feld entfernen; die Vorschriften der Stufen tragen diese Angaben. |
+| Jedes andere Feld | `unknown field` | Feld entfernen oder korrigieren. |

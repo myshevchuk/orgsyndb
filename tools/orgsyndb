@@ -6,8 +6,9 @@
 """OrgSynDB command-line program. Run ``orgsyndb help`` for usage.
 
 It builds a collection: a directory holding ``orgsyndb.toml``, whose
-procedures are in ``org/procedures/`` and ``md/procedures/`` and whose
-compound registry is ``compounds/``. Everything
+procedures are in ``org/procedures/`` and ``md/procedures/``, whose
+synthesis sequences are in ``md/sequences/`` and whose compound registry
+is ``compounds/``. Everything
 a build generates goes into the collection's ``build/``, ``public/`` and
 ``pdf/``; the application directory holds only the fetched-tool caches
 ``.emacs-batch/`` and ``.tools/``. The logic lives in ``pipeline.py`` and
@@ -44,11 +45,12 @@ MARKER_TEXT = (
     "# md/procedures/, static files in static/. See the OrgSynDB README.\n"
     f"format = {FORMAT}\n")
 IGNORED = ("/build/", "/public/", "/pdf/")
-COLLECTION_DIRS = ("org/procedures", "md/procedures", "compounds",
-                   "static/structures")
+COLLECTION_DIRS = ("org/procedures", "md/procedures", "md/sequences",
+                   "compounds", "static/structures")
 OUTPUTS = ("build", "public", "pdf")
 APP_CACHES = (".emacs-batch", ".tools")
 CONTENT_ROOTS = ("build/export", "md/procedures")
+SEQUENCE_ROOT = "md/sequences"
 ORG_ROOT = "org/procedures"
 
 REQUIRED_TOOLS = ("python3", "hugo", "weasyprint")
@@ -66,7 +68,8 @@ Options:
 Subcommands:
   export              check org/procedures/*.org, printing each problem,
                       and export them to build/export/
-  validate            export, then validate every procedure
+  validate            export, then validate every procedure, compound
+                      and sequence
   build               export, validate, build the site into public/ and
                       index it with Pagefind
   serve [--port N]    build, then serve public/ on http://127.0.0.1:N/
@@ -247,6 +250,7 @@ def run_validator() -> int:
     step("validate: " + ", ".join(existing(CONTENT_ROOTS)))
     status = validate.main(["--static-dir", "static",
                             "--compounds", "compounds",
+                            "--sequences", SEQUENCE_ROOT,
                             *existing(CONTENT_ROOTS)])
     sys.stdout.flush()
     sys.stderr.flush()
@@ -263,6 +267,11 @@ def run_build(collection: Path) -> list[tuple[Path, dict]]:
         pipeline.content_files(existing(CONTENT_ROOTS)), language)
     step(f"build: staging {len(chosen)} procedures for locale {language}")
     pipeline.stage_content(chosen, Path("build") / pipeline.STAGED)
+    sequences = pipeline.choose_variants(
+        pipeline.content_files(existing((SEQUENCE_ROOT,))), language)
+    step(f"build: staging {len(sequences)} sequences")
+    pipeline.stage_content(sequences,
+                           Path("build") / pipeline.SEQUENCES_STAGED)
     count = pipeline.stage_help(APP / "docs",
                                 Path("build") / pipeline.HELP_STAGED)
     step(f"build: staging {count} help pages from docs/")

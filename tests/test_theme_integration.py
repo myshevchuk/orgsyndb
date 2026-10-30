@@ -17,7 +17,8 @@ import urllib.parse
 
 import general_support as gs
 import pipeline_support as ps
-from pipeline_support import Content, Node, Page
+import sequence_support as ss
+from pipeline_support import Content, Node, Page, Sequence
 
 BANNER = "Sample data — quantities not experimentally verified."
 # The footer ends with the build time, YYYY-MM-DD HH:MM, in its time
@@ -28,7 +29,7 @@ ORIGIN = "http://127.0.0.1:8000"
 RFC3339 = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
                      r"(Z|[+-]\d{2}:\d{2})$")
 NAVIGATION = [("/procedures/", "Procedures"), ("/compounds/", "Compounds"),
-              ("/help/", "Help")]
+              ("/sequences/", "Sequences"), ("/help/", "Help")]
 TABS = [("/procedures/", "All procedures"),
         ("/general-procedures/", "General procedures"),
         ("/reaction_types/", "Reaction types"), ("/tags/", "Tags"),
@@ -41,7 +42,7 @@ REAGENT_HEADER = ["Reagent", "CAS", "MW (g/mol)", "Amount", "mmol", "Equiv"]
 PANEL_LABELS = ["Product", "Formula", "MW", "CAS", "SMILES",
                 "Starting materials", "Reaction type", "Tags", "Authors",
                 "Checked by", "Created", "Modified", "Precursors",
-                "Used in"]
+                "Used in", "Sequences"]
 FONT_SUFFIXES = (".woff", ".woff2", ".ttf", ".otf", ".eot")
 TAXONOMIES = {"reaction_types": "Reaction types", "tags": "Tags",
               "authors": "Authors"}
@@ -83,6 +84,15 @@ class SiteCase(ps.ThemeBuildCase):
     def registry(self) -> dict[str, dict]:
         return ps.read_registry(self.sandbox)
 
+    def sequences(self) -> list[Sequence]:
+        """The sequences the build published, one per ID."""
+        return ps.read_sequences(self.sandbox, self.LOCALE)
+
+    def sequences_of(self, item: Content) -> list[str]:
+        """The IDs of the sequences that have ``item`` as a step, by
+        ID."""
+        return [s.id for s in ss.sequences_of(item, self.sequences())]
+
     def precursors(self, item: Content) -> list[str]:
         """The IDs of the other published procedures that make a
         substrate of ``item``, by ID."""
@@ -117,7 +127,8 @@ class SiteCase(ps.ThemeBuildCase):
                   ("Created", data.get("date")),
                   ("Modified", data.get("lastmod")),
                   ("Precursors", self.precursors(item)),
-                  ("Used in", self.used_in(item))]
+                  ("Used in", self.used_in(item)),
+                  ("Sequences", self.sequences_of(item))]
         return [label for label, present in wanted if present]
 
 
@@ -395,7 +406,7 @@ class ShippedSiteTests(SiteCase):
             list(panel),
             ["Product", "Formula", "MW", "CAS", "SMILES",
              "Starting materials", "Reaction type", "Tags", "Authors",
-             "Created", "Modified", "Precursors"])
+             "Created", "Modified", "Precursors", "Sequences"])
         text = {label: pair.definition.norm()
                 for label, pair in panel.items()}
         product = panel["Product"].definition.find_all("a", "compound")
@@ -450,6 +461,10 @@ class ShippedSiteTests(SiteCase):
         precursor = panel["Precursors"].definition.find("a", "precursor")
         self.assertIsNotNone(precursor, "no a.precursor")
         self.assertEqual(precursor.norm(), "OSDB-0001 Salicylic acid")
+        sequence = panel["Sequences"].definition.find_all("a", "sequence")
+        self.assertEqual(
+            [(page.resolve(l.attrs["href"]), l.norm()) for l in sequence],
+            [("/sequences/seq-0001/", "Aspirin from oil of wintergreen")])
         for label, pair in panel.items():
             with self.subTest(label=label):
                 self.assertNotEqual(pair.gap, "")
@@ -712,7 +727,7 @@ class ShippedSiteTests(SiteCase):
         panel = self.panel(page)
         self.assertEqual(list(panel), [
             "Products", "Starting materials", "Reaction type", "Tags",
-            "Authors", "Created", "Modified", "Precursors"])
+            "Authors", "Created", "Modified", "Precursors", "Sequences"])
         self.assertEqual(
             [(page.resolve(l.attrs["href"]), l.norm())
              for l in panel["Products"].definition.find_all("a", "compound")],
@@ -733,6 +748,11 @@ class ShippedSiteTests(SiteCase):
             [l.norm() for l in
              panel["Precursors"].definition.find_all("a", "precursor")],
             ["OSDB-0004 4-Acetylbiphenyl"])
+        self.assertEqual(
+            [(page.resolve(l.attrs["href"]), l.norm()) for l in
+             panel["Sequences"].definition.find_all("a", "sequence")],
+            [("/sequences/seq-0002/",
+              "1-(Biphenyl-4-yl)ethanol from 4′-bromoacetophenone")])
         self.assertEqual(page.find_all("button", data_copy_smiles=True), [])
 
     def test_navigation_marks_the_current_section(self) -> None:
@@ -752,6 +772,9 @@ class ShippedSiteTests(SiteCase):
                  "compounds/index.html": {"/compounds/": "page"},
                  "compounds/salicylic-acid/index.html": {
                      "/compounds/": "true"},
+                 "sequences/index.html": {"/sequences/": "page"},
+                 "sequences/seq-0001/index.html": {"/sequences/": "true"},
+                 "sequences/seq-0002/index.html": {"/sequences/": "true"},
                  "help/index.html": {"/help/": "page"},
                  "help/schema/index.html": {"/help/": "true"}}
         for name, expected in cases.items():

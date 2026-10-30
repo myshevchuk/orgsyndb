@@ -12,7 +12,8 @@ import pipeline_support as ps
 from pipeline_support import Page
 
 NAVIGATION = [("/procedures/", "Vorschriften"),
-              ("/compounds/", "Verbindungen"), ("/help/", "Hilfe")]
+              ("/compounds/", "Verbindungen"),
+              ("/sequences/", "Synthesewege"), ("/help/", "Hilfe")]
 TABS = [("/procedures/", "Alle Vorschriften"),
         ("/general-procedures/", "Allgemeine Vorschriften"),
         ("/reaction_types/", "Reaktionstypen"), ("/tags/", "Schlagwörter"),
@@ -22,13 +23,14 @@ FOOTER = (r"^OrgSynDB · interne Vorschriften · Stand "
 BANNER = "Beispieldaten – Mengenangaben nicht experimentell überprüft."
 PANEL_LABELS = ["Produkt", "Summenformel", "Molmasse", "CAS", "SMILES",
                 "Ausgangsstoffe", "Reaktionstyp", "Schlagwörter", "Autoren",
-                "Erstellt", "Geändert", "Vorstufen"]
+                "Erstellt", "Geändert", "Vorstufen", "Synthesewege"]
 TITLES = {"procedures/index.html": "Vorschriften",
           "general-procedures/index.html": "Allgemeine Vorschriften",
           "reaction_types/index.html": "Reaktionstypen",
           "tags/index.html": "Schlagwörter",
           "authors/index.html": "Autoren", "compounds/index.html":
-          "Verbindungen", "help/index.html": "Hilfe"}
+          "Verbindungen", "sequences/index.html": "Synthesewege",
+          "help/index.html": "Hilfe"}
 
 
 class GermanCase(cs.CatalogueCase):
@@ -250,7 +252,8 @@ class GermanSiteTests(GermanCase):
         self.assertEqual(
             list(panel),
             ["Produkte", "Ausgangsstoffe", "Reaktionstyp", "Schlagwörter",
-             "Autoren", "Erstellt", "Geändert", "Vorstufen"])
+             "Autoren", "Erstellt", "Geändert", "Vorstufen",
+             "Synthesewege"])
 
     def test_german_term_page(self) -> None:
         """Scenario: German catalogue and home page (term page)."""

@@ -91,7 +91,7 @@ Each procedure has the one product its row names, with the yield its previous fr
 - **THEN** its `Procedure` section has at least 15 numbered items, its `Notes` section at least 6, and its Reagents table at least four rows whose `mmol` is not `cat.`, one of them with a `Reagent` cell of at least 40 characters
 
 ### Requirement: Demo collection
-The sample procedures SHALL form the demo collection `examples/demo/` of the application, a complete collection as the `collection` capability defines it, with the structure images in `examples/demo/static/structures/` and the compound registry in `examples/demo/compounds/`. The registry holds a file for every compound a sample names, as product or substrate, and no other file, and every compound sets `name_de`. Every path that this capability names under `org/procedures/` or `md/procedures/` is relative to `examples/demo/`. The application's own root holds no `org/`, `md/` or `site/static/` directory.
+The sample procedures SHALL form the demo collection `examples/demo/` of the application, a complete collection as the `collection` capability defines it, with the structure images in `examples/demo/static/structures/`, the compound registry in `examples/demo/compounds/` and the sequences in `examples/demo/md/sequences/`. The registry holds a file for every compound a sample names, as product or substrate, and no other file, and every compound sets `name_de`. Every path that this capability names under `org/procedures/` or `md/procedures/` is relative to `examples/demo/`. The application's own root holds no `org/`, `md/` or `site/static/` directory.
 
 #### Scenario: Samples live in the demo collection
 - **WHEN** a test inspects the application
@@ -107,7 +107,7 @@ Every sample procedure of the theme sample set, the seeds and the demo general p
 
 ### Requirement: Test collection
 The repository SHALL ship the test collection `tests/fixtures/collection/`, a complete collection as the `collection` capability defines it that holds every sample procedure of the demo collection, in either language, as a Markdown procedure, and that has no `org/` directory. The paths in this requirement are written out in full. The test collection meets all of the following:
-- **Copies.** `tests/fixtures/collection/orgsyndb.toml`, `tests/fixtures/collection/.gitignore` and every file under `tests/fixtures/collection/static/` and `tests/fixtures/collection/compounds/` are byte-identical to the demo collection's files at the same relative paths, and the test collection's `static/` and `compounds/` hold no other file.
+- **Copies.** `tests/fixtures/collection/orgsyndb.toml`, `tests/fixtures/collection/.gitignore` and every file under `tests/fixtures/collection/static/`, `tests/fixtures/collection/compounds/` and `tests/fixtures/collection/md/sequences/` are byte-identical to the demo collection's files at the same relative paths, and the test collection's `static/`, `compounds/` and `md/sequences/` hold no other file.
 - **File names.** `tests/fixtures/collection/md/procedures/` holds exactly one file for each sample procedure file of the demo collection, `examples/demo/org/procedures/<stem>.org` or `examples/demo/md/procedures/<stem>.md`, named `<stem>.md`, and no other file.
 - **Markdown samples.** The file for a Markdown sample is byte-identical to it.
 - **Converted samples.** The file for an Org sample is a hand-written Markdown procedure, in the form of the demo's Markdown samples, that agrees with its Org source as follows:
@@ -157,4 +157,15 @@ Its Reagents table describes entry 1 at the stated scale. Its `lastmod` is not l
 #### Scenario: The demo's general procedure
 - **WHEN** a test reads `examples/demo/md/procedures/OSDB-0009-benzylic-alcohols.md`, its German variant and the demo registry
 - **THEN** the procedure carries the stated scope, reaction type, tags, scale and scheme image, the image exists and meets the SVG rules, the German variant has the same `scope` and `scheme_image`, and the registry holds the three compounds with the stated values
+
+### Requirement: Demo sequences
+The demo collection SHALL ship two synthesis sequences, each in English and with a German variant (`.de`) sharing its `target` and `steps`:
+- `md/sequences/SEQ-0001-aspirin-from-wintergreen.md`: "Aspirin from oil of wintergreen", the steps OSDB-0001 and OSDB-0002, the target `acetylsalicylic-acid`; its notes say that the salicylic acid is dried before the acetylation;
+- `md/sequences/SEQ-0002-biphenylyl-ethanol.md`: "1-(Biphenyl-4-yl)ethanol from 4′-bromoacetophenone", the steps OSDB-0004 and entry 1 of OSDB-0009, the target `1-biphenyl-4-yl-ethanol`.
+
+Both validate cleanly with the demo's procedures and registry, and their German variants are written in German.
+
+#### Scenario: The demo's sequences
+- **WHEN** a test reads `examples/demo/md/sequences/` and validates a copy of the demo collection
+- **THEN** it holds exactly the two sequences and their `.de` variants with the stated steps and targets, and validation prints no problem line
 

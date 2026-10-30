@@ -314,6 +314,8 @@ class ScopeTableExportTests(ExportTestCase):
     def test_the_export_validates_against_the_registry(self) -> None:
         """Scenario: Scope table exports to front matter (validator)."""
         sandbox, _ = self.exported_scope()
+        # The demo's sequences name procedures this sandbox removed.
+        shutil.rmtree(sandbox.root / "md" / "sequences")
         ps.put_compounds(sandbox, "acetic-acid", "ethanol", "ethyl-acetate",
                          "propyl-acetate", "benzyl-acetate",
                          "methyl-benzoate")

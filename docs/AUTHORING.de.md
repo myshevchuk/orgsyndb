@@ -14,7 +14,8 @@ Die Website ist auf Deutsch, sofern die oder der Verantwortliche sie nicht
 auf Englisch umgestellt hat, und zeigt Vorschriften in jeder Sprache.
 Diese Anleitung beschreibt, wie Sie eine Vorschrift auf Deutsch schreiben
 (Abschnitte 1 bis 6) und wie Sie eine englische Vorschrift übersetzen
-(Abschnitt 7).
+(Abschnitt 7). Abschnitt 8 erklärt, wie Sie mehrere Vorschriften zu einem
+Syntheseweg verbinden.
 
 Genaue Schreibweisen, erlaubte Werte und Feldregeln stehen in der
 [Schema-Referenz](SCHEMA.de.md). Diese Anleitung erklärt die Arbeit der
@@ -181,6 +182,9 @@ Vorschrift steht unter **Hergestellt nach** einmal je Eintrag, der die
 Verbindung herstellt, als
 `<ID> <Titel> · Eintrag <n> · <Ausbeute> % · <Status>`. **Verwendet in** listet
 jede Vorschrift einmal; auch die Verzeichniszähler zählen sie nur einmal.
+Nach **Verwendet in** verlinkt **Synthesewege** die Wege, die diese Verbindung
+als Ziel nennen, nach Nummer geordnet. Der Abschnitt erscheint nur bei
+passenden Synthesewegen.
 
 ### Eine allgemeine Vorschrift schreiben
 
@@ -268,7 +272,9 @@ Einträge, jede Verbindung einmal in der Reihenfolge ihres ersten Auftretens.
 Auch Vorstufen- und Folgelinks berücksichtigen alle Einträge. Es folgen
 Reaktionstyp, Schlagwörter, Autoren, bei Entwürfen und zurückgezogenen
 Vorschriften gegebenenfalls die Prüfenden unter **Geprüft von**, Erstellungs-
-und Änderungszeit sowie die Links zu Vorstufen und Folgevorschriften. Ziffern
+und Änderungszeit sowie die Links zu Vorstufen und Folgevorschriften. Wenn
+Ihre Vorschrift eine Stufe eines Synthesewegs ist, folgt auf **Verwendet in**
+das Feld **Synthesewege** mit verlinkten Titeln, nach Nummer geordnet. Ziffern
 der Summenformel erscheinen tiefgestellt. Molmasse und Ausbeute erscheinen mit
 Dezimalkomma, mit `g/mol` und Prozentzeichen; neben SMILES steht eine
 Schaltfläche **Kopieren**. Reaktionstyp, Schlagwörter und Autoren verlinken auf
@@ -357,7 +363,9 @@ orgsyndb validate
 ```
 
 Der Befehl exportiert die Org-Vorschriften der Sammlung und prüft dann
-alle Vorschriften und Verbindungseinträge. Jedes Problem hat diese Form:
+alle Vorschriften und Verbindungseinträge sowie die Synthesewege in
+`md/sequences/`.
+Jedes Problem hat diese Form:
 
 ```text
 pfad/zur/datei.de.md:feld: error: Meldung
@@ -368,8 +376,8 @@ Lesen Sie jede Zeile von links nach rechts:
 
 - Der erste Teil ist die Datei, die Sie öffnen.
 - Der zweite Teil ist das Feld oder der Textabschnitt, den Sie ansehen.
-- `error` heißt, eine Vorschrift oder ein Verbindungseintrag ist ungültig
-  und die Prüfung schlägt fehl.
+- `error` heißt, eine Vorschrift, ein Verbindungseintrag oder ein Syntheseweg
+  ist ungültig und die Prüfung schlägt fehl.
 - `warning` heißt, die Prüfung läuft durch, aber Sie sollten das Problem
   ansehen und beheben.
 - Der Text am Ende sagt, was falsch ist. Die Meldungen sind englisch.
@@ -383,7 +391,8 @@ Abschnittsüberschriften; `missing section "Notes"` statt
 `missing section "Anmerkungen"` zeigt, dass der Dateiname kein `.de` hat
 und die Datei deshalb als englisch gilt. Führen Sie den Befehl nach der
 Korrektur erneut aus. Die letzte Zeile nennt die Zahl der Dateien, Fehler
-und Warnungen; die Dateizahl umfasst auch Verbindungseinträge.
+und Warnungen; die Dateizahl umfasst auch Verbindungseinträge und
+Synthesewegdateien, einschließlich der Sprachfassungen.
 
 Bei einer allgemeinen Vorschrift bedeutet `scope[2].products[1].yield_percent`
 die Ausbeute des ersten Produkts in Eintrag 2. `must not be empty` unter
@@ -392,6 +401,17 @@ die Ausbeute des ersten Produkts in Eintrag 2. `must not be empty` unter
 entfernen Sie die Zeile und tragen die Daten in den passenden Einträgen ein.
 Ein Zeitfehler verlangt eine Zahl mit `min`, `h` oder `d`, ein Temperaturfehler
 eine Zahl in °C ohne Anführungszeichen.
+
+Bei einem Syntheseweg nennt `steps[2].entry` den für Stufe 2 gewählten
+Scope-Eintrag. `must list at least two steps` verlangt mehr Stufen;
+`not found in any content root` bedeutet, dass eine Vorschriftennummer nicht
+gefunden wurde. `starts from none of the products of step 1` unter `steps[2]`
+heißt, dass Stufe 2 kein Produkt von Stufe 1 als Ausgangsstoff verwendet.
+Prüfen Sie die Reihenfolge und die gewählten Scope-Einträge.
+`is not a product of the last step` unter `target` heißt, dass die letzte
+Stufe das genannte Ziel nicht herstellt. Die
+[Meldungstabelle](SCHEMA.de.md#meldungen-zu-synthesewegen) erklärt die weiteren
+Fehler.
 
 Wenn eine Meldung unklar ist, schlagen Sie ihr Feld in der
 [Schema-Referenz](SCHEMA.de.md) nach. Wenn Sie die Datei verschickt haben,
@@ -415,6 +435,19 @@ serving http://127.0.0.1:8000/ (Ctrl-C to stop)
 Öffnen Sie <http://127.0.0.1:8000/> in einem Browser auf demselben
 Rechner. Die Adresse funktioniert nur auf diesem Rechner. Drücken Sie im
 Terminal `Strg+C`, um die Vorschau zu beenden.
+
+Die Navigation heißt **Vorschriften**, **Verbindungen**, **Synthesewege**,
+**Hilfe**. Die **Übersicht** der Startseite enthält **Synthesewege** mit einer
+Anzahl. Dieser Link und die Navigation öffnen `/sequences/`: nach Nummer
+geordnet, mit verlinkten Titeln und Zielen, Stufenzahl und Gesamtausbeute.
+Eine Synthesewegseite zeigt Nummer und Titel, **Stufen** und
+**Gesamtausbeute**, ein Schema, die verlinkten Vorschriften mit gegebenenfalls
+Eintragsnummer, Reaktionstyp, Ausbeute und Status, danach Ihre Anmerkungen.
+Das Schema zeigt Ausgangsstoffe, Zwischenprodukte und Ziel mit vorhandenen
+Strukturbildern aus dem Register. Ein Plus verbindet die Ausgangsstoffe der
+ersten Stufe; Pfeile nennen Stufennummer, Reaktionstyp und Ausbeute. In
+schmalen Fenstern verläuft das Schema nach unten. Synthesewegseiten fehlen
+im Suchindex für Vorschriften; verwenden Sie ihre Links.
 
 Auf einer Vorschriftenseite öffnet **Drucken / Als PDF speichern** den
 Druckdialog des Browsers. Das Drucklayout ist A4, vollständig und schwarz
@@ -475,3 +508,75 @@ also auf der deutschen Website das englische Original.
 Ändert sich später eine gemeinsame Angabe, etwa der Status, ändern Sie sie
 in beiden Dateien. Eine Vorschrift ohne deutsche Fassung erscheint auf der
 deutschen Website in ihrer vorhandenen Fassung.
+
+## 8. Einen Syntheseweg schreiben
+
+Wenn Sie mehrere Vorschriften nacheinander einsetzen, um eine Zielverbindung
+herzustellen, halten Sie diesen Weg als **Syntheseweg** fest. Jede Stufe nennt
+die Vorschrift und bei einer allgemeinen Vorschrift den gewählten
+Scope-Eintrag. Die Website prüft den Zusammenhang der Stufen und berechnet die
+Gesamtausbeute.
+
+Kopieren Sie [templates/sequence.md](../templates/sequence.md) nach
+`md/sequences/` der Sammlung. `orgsyndb init` legt diesen Ordner an.
+`orgsyndb new` erzeugt Vorschriftengerüste, daher kopieren Sie die
+Synthesewegvorlage von Hand. Fragen Sie nach einer freien `SEQ-NNNN`-Nummer
+von `0001` bis `9999`. Ersetzen Sie `SEQ-0000` in `id` und `seq-0000` in
+`slug`; speichern Sie als `SEQ-NNNN-short-slug.de.md`. Der kurze Slug besteht
+aus Kleinbuchstaben, Ziffern und einzelnen Bindestrichen. Synthesewege sind
+Markdown-Dateien, auch wenn ihre Stufen Org-Vorschriften verwenden.
+
+Behalten Sie die beiden `+++`-Zeilen. Setzen Sie `title` und schreiben Sie
+`date` und `lastmod` wie bei einer Vorschrift ohne Anführungszeichen und mit
+UTC-Versatz. `lastmod` darf nicht vor `date` liegen. Setzen Sie `target` auf
+den Registerschlüssel der Zielverbindung und ersetzen Sie die Stufen der
+Vorlage durch Ihre Vorschriften in Ausführungsreihenfolge. Dieses vollständige
+Beispiel ist der zweite Syntheseweg der Beispielsammlung:
+
+```markdown
++++
+id = "SEQ-0002"
+slug = "seq-0002"
+title = "1-(Biphenyl-4-yl)ethanol aus 4′-Bromacetophenon"
+date = 2026-10-23T10:05:00+02:00
+lastmod = 2026-10-23T10:20:00+02:00
+target = "1-biphenyl-4-yl-ethanol"
+steps = [{ procedure = "OSDB-0004" }, { procedure = "OSDB-0009", entry = 1 }]
++++
+
+## Anmerkungen
+
+Das 4-Acetylbiphenyl aus Stufe 1 wird in Stufe 2 als Eintrag 1 der
+allgemeinen Vorschrift reduziert.
+```
+
+Sie brauchen mindestens zwei Stufen. Jedes `procedure` nennt eine vorhandene
+Vorschriftennummer. Eine allgemeine Vorschrift verlangt `entry`, die
+Scope-Eintragsnummer ab 1. Bei einer Einzelvorschrift ist `entry` verboten.
+Jede Stufe nach der ersten muss ein Produkt der vorigen Stufe als
+Ausgangsstoff verwenden; bei allgemeinen Vorschriften zählen nur die
+Ausgangsstoffe und Produkte des gewählten Eintrags. Das Ziel muss ein Produkt
+der letzten Stufe sein. Fügen Sie kein `authors` hinzu: Die Stufen nennen die
+Autoren ihrer Vorschriften. Im Text stehen Anmerkungen, etwa zum Trocknen oder
+Reinigen eines Zwischenprodukts; die acht Vorschriftenabschnitte sind nicht
+nötig.
+
+Die Beispielsammlung enthält außerdem
+[SEQ-0001, „Aspirin aus Wintergrünöl“](../examples/demo/md/sequences/SEQ-0001-aspirin-from-wintergreen.de.md),
+OSDB-0001 → OSDB-0002, mit 60 % Gesamtausbeute. SEQ-0002 verwendet Eintrag 1
+von OSDB-0009 und ergibt 77 %. Dies sind Beispieldaten. Die Gesamtausbeute
+multipliziert die Ausbeuten der Produkte, die jeweils in die nächste Stufe
+eingehen, und die Ausbeute des Ziels in der letzten Stufe. Gehen mehrere
+Produkte weiter, zählt das erste in Produktreihenfolge. Die Anzeige rundet auf
+ganze Prozent, bei genau einem halben Prozent nach oben. Tragen Sie im
+Syntheseweg selbst keine Ausbeute ein.
+
+Für eine Übersetzung kopieren Sie die Datei mit `.de` oder `.en` vor `.md`.
+Behalten Sie Grundnamen, `id`, `slug`, `target` und die geordneten `steps`;
+übersetzen Sie Titel und Anmerkungen und setzen Sie die Zeitangaben für diese
+Fassung. Beide Beispielwege haben deutsche Fassungen. Die Website
+veröffentlicht je Nummer eine Fassung: zuerst die Sprache der Website, dann
+eine Datei ohne Kürzel, dann die andere Sprache. Prüfen Sie mit
+`orgsyndb validate` und starten Sie `orgsyndb serve` neu, um den Weg und seine
+Links anzusehen. Die [Schema-Referenz](SCHEMA.de.md#synthesewege) nennt die
+genauen Regeln.

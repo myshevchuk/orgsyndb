@@ -1,6 +1,7 @@
 # Procedure schema reference
 
-This reference defines valid OrgSynDB procedures and compound records.
+This reference defines valid OrgSynDB procedures, compound records and synthesis
+sequences.
 Use it to look up the exact spelling, type, and rule for a field, or to
 interpret a message from
 `tools/validate.py` or `orgsyndb export`.
@@ -10,7 +11,7 @@ A German version of this reference is [SCHEMA.de.md](SCHEMA.de.md).
 A Markdown procedure starts with TOML front matter. TOML is the metadata
 block between the opening and closing `+++` lines. The opening `+++` must be
 the first line of the file. Text after the closing `+++` is the procedure
-body.
+body. Sequences use the same front-matter delimiters; their body holds notes.
 
 In the tables below, a **string** is text in double quotes, an **array of
 strings** is a comma-separated list in square brackets, and a **table** is a
@@ -120,6 +121,9 @@ starting materials of every scope entry, each compound once in order of first
 appearance. This also applies to the metadata panel, compound directory,
 catalogue details and search, including SMILES matches.
 
+The panel adds **Sequences** after **Used in** when this procedure is a step
+of a sequence. It links those sequences by title, ordered by sequence ID.
+
 ### General procedures and scope entries
 
 Use `scope` to record the substrates, products and yields of each application
@@ -219,6 +223,89 @@ containing `must be named <key>.toml`, and defines no compound. A file that
 cannot be read as UTF-8 TOML gets a `toml` error and defines no compound;
 a parse error contains `invalid TOML`. A missing required field produces
 `required field missing`; unknown fields produce `unknown field` warnings.
+
+A compound page adds **Sequences** after **Used in** when any sequence names
+it as its target. The list links those sequences by title, ordered by ID.
+
+## Synthesis sequences
+
+A sequence records an ordered route through at least two procedures. Write it
+in Markdown, including when its steps refer to Org procedures. Copy
+[templates/sequence.md](../templates/sequence.md) into the collection's
+`md/sequences/`. `orgsyndb init` creates this directory; a missing directory
+holds no sequences. `orgsyndb new` creates procedures, so sequence files are
+copied by hand.
+
+Name the file `SEQ-NNNN-short-slug.md`, optionally with `.de` or `.en` before
+`.md`. The short slug matches `[a-z0-9]+(-[a-z0-9]+)*`. The filename's ID must
+equal `id`. `SEQ-0000` and `seq-0000` are template placeholders; replace them
+with an unused ID from `SEQ-0001` through `SEQ-9999` and its lowercase form.
+The page URL is `/sequences/seq-NNNN/`.
+
+The validator reads only the directory's top level. Subdirectories are errors;
+dotfiles and `_index.md` are skipped silently. A file without the `.md` suffix
+produces `not a sequence file; ignored`; a Markdown file with a malformed name
+is a `file_name` error.
+
+### Sequence fields
+
+Keep all seven required keys between the two `+++` lines. Replace the
+template's target and steps with your own. Do not add `authors`: each step
+credits its procedure's authors. The procedure taxonomy keys `authors`,
+`tags` and `reaction_types` are errors in a sequence, which stop the build:
+Hugo would otherwise list the sequence among the procedures of an author,
+tag or reaction type. Every other key outside this schema produces an
+`unknown field` warning. Unknown step keys produce a warning under
+`steps[n].<key>`.
+
+| Field | TOML type | Required | Rule | Example |
+|---|---|---|---|---|
+| `id` | String | Yes | `SEQ-0001` through `SEQ-9999`; unique once per language code and once without one. | `id = "SEQ-0001"` |
+| `slug` | String | Yes | Exactly the lowercase `id`. | `slug = "seq-0001"` |
+| `title` | Non-empty string | Yes | Page heading. | `title = "Aspirin from oil of wintergreen"` |
+| `date` | Offset datetime | Yes | Unquoted; the same date rules as procedures. | `date = 2026-10-23T09:15:00+02:00` |
+| `lastmod` | Offset datetime | Yes | The same rules as `date`; not earlier than `date`. | `lastmod = 2026-10-23T09:40:00+02:00` |
+| `target` | String | Yes | Existing compound key, without `.toml`; a product of the last step. | `target = "acetylsalicylic-acid"` |
+| `steps` | Array of tables | Yes | At least two steps, in execution order. | `steps = [{ procedure = "OSDB-0001" }, { procedure = "OSDB-0002" }]` |
+| `steps[n].procedure` | String | In every step | Procedure ID found in the validated content roots, whether exported from Org or written in Markdown. | `procedure = "OSDB-0009"` |
+| `steps[n].entry` | Integer | For general procedures only | Scope entry number from 1 through the number of entries; forbidden for a specific procedure. A boolean is not an integer. | `entry = 1` |
+
+Write notes after the closing `+++`, for example under `## Notes`. The eight
+procedure-body sections are not required for a sequence. The demo's
+[SEQ-0002](../examples/demo/md/sequences/SEQ-0002-biphenylyl-ethanol.md)
+shows a step through a general procedure:
+
+```toml
+target = "1-biphenyl-4-yl-ethanol"
+steps = [{ procedure = "OSDB-0004" }, { procedure = "OSDB-0009", entry = 1 }]
+```
+
+### Continuity, variants and yield
+
+Each step after the first must take at least one product of the previous step
+as a starting material. For a general procedure, only the chosen scope entry's
+substrates and products count. The target must be a product of the last step.
+The validator checks continuity on the reference sequence variant only: the
+untagged file, otherwise the `.de` file, otherwise `.en`. These checks require
+at least two step tables. A step with an unresolved procedure or an absent,
+invalid or forbidden entry is omitted from continuity checks. The target
+check also requires a known compound key.
+
+Variants share the base name, `id`, `slug`, `target` and ordered `steps`.
+Each language code, and the absence of a code, may occur once per ID. Title,
+dates and body may differ. Differences in shared fields are errors on the
+other variant, naming the reference file. The build publishes one variant:
+the one tagged with the site's language, else the untagged file, else the
+other language. It stages that file under `build/content/sequences/`.
+
+Overall yield multiplies each step's yield of the product carried into the
+next step and the final step's yield of the target. If several products carry
+on, the first in product order supplies that step's yield. Display rounds to a
+whole percent, with halves rounded up. The sequence page shows **Steps** and
+**Overall yield**, a scheme of linked compounds and steps, a list linking the
+procedures with entry numbers where needed, reaction type, yield and status,
+then the notes. `/sequences/` lists sequences by ID with title, target, step
+count and overall yield. Sequence pages are absent from the search index.
 
 ## Tolerated, rejected, and unknown keys
 
@@ -482,7 +569,7 @@ German site shows them with a comma.
 Run the validator with at least one Markdown content root:
 
 ```text
-tools/validate.py [--vocabulary FILE] [--static-dir DIR] [--compounds DIR] CONTENT_ROOT...
+tools/validate.py [--vocabulary FILE] [--static-dir DIR] [--compounds DIR] [--sequences DIR] CONTENT_ROOT...
 ```
 
 Each positional `CONTENT_ROOT` is a directory of Markdown procedures.
@@ -494,8 +581,13 @@ directory. The validator checks every compound file there and resolves
 procedure keys against that registry. A missing registry directory is empty,
 so every key a procedure names is unknown. An existing path that is not a
 directory is a configuration error. `orgsyndb validate` passes
-`--static-dir static --compounds compounds` from the collection root, after
-exporting Org sources.
+`--static-dir static --compounds compounds --sequences md/sequences`
+from the collection root, after exporting Org sources.
+
+`--sequences` defaults to `md/sequences` in the working directory. A missing
+directory holds no sequences; an existing path that is not a directory is a
+configuration error. Sequence steps resolve against procedures from the
+positional content roots, and targets resolve against the compound registry.
 
 Each problem is one line on standard output:
 
@@ -538,15 +630,16 @@ line format. Its fields can also be Org keywords such as `#+CREATED`,
 properties such as `#+PROPERTY` or `:EXPORT_DATE:`, and drawers such as
 `:LOGBOOK:`.
 
-An `error` means a procedure or compound record is invalid. A `warning`
+An `error` means a procedure, compound record or sequence is invalid. A `warning`
 identifies a problem that does not make validation fail, such as a missing
 body section or an
 unknown field. After the problem lines, the validator writes a summary to
-standard error. The file count includes compound files as well as
-procedures. For the demo collection, including existing Org exports:
+standard error. The file count includes procedures, compound files and
+sequence files, including all language variants. For the demo collection,
+including existing Org exports:
 
 ```text
-validated 38 files: 0 errors, 0 warnings
+validated 42 files: 0 errors, 0 warnings
 ```
 
 The first three lines below are real validator output. The last is the same
@@ -564,10 +657,38 @@ The exit status tells a calling command whether validation succeeded:
 | Exit status | Meaning |
 |---|---|
 | `0` | No errors were found. Warnings may still have been printed. |
-| `1` | At least one procedure or compound error was found. |
+| `1` | At least one procedure, compound or sequence error was found. |
 | `2` | The invocation or validator configuration is invalid, such as no root, a root that is not a directory, or a missing or malformed vocabulary file. |
 
 Usage and configuration failures are written to standard error and include
 `validate.py: error:`. The validator suppresses checks that depend on a
 missing or malformed value, so one mistake does not usually produce a chain
 of secondary messages.
+
+### Sequence messages
+
+Sequence problems use the sequence file's path, such as
+`md/sequences/SEQ-0002-biphenylyl-ethanol.md`, with fields `steps[n]` or
+`steps[n].<key>`; step numbering starts at 1. The table gives message text or
+the identifying part of a longer message. Date and TOML errors use the same
+rules as procedures.
+
+| Field | Message | What to correct |
+|---|---|---|
+| Any required key | `required field missing` | Add the key from the sequence field table. |
+| `id` | `must match SEQ-NNNN` or `must be between SEQ-0001 and SEQ-9999` | Use `SEQ-` and four digits from `0001` through `9999`. |
+| `id` | `duplicate id <id>, also used by <path>` | Assign a free ID; one file per language code, and one untagged file, may share it. |
+| `slug` | `must be "<value>" (the lowercased id)` | Use the lowercase `id`. |
+| `file_name` | `must be named SEQ-NNNN-short-slug.md` or `does not match id <id>` | Correct the file name or its ID. |
+| `target` | `unknown compound "<key>"` | Correct the key or add its registry entry. |
+| `steps` | `must list at least two steps` | Add enough steps to describe a sequence. |
+| `steps` or `steps[n]` | `must be an array of tables` or `must be a table` | Use the TOML forms shown above. |
+| `steps[n].procedure` | `<id> not found in any content root` | Use an existing procedure ID; include its directory in a direct validator call. |
+| `steps[n].entry` | `OSDB-NNNN is a general procedure; name one of its entries 1 to <count>` | Add the chosen scope entry number. |
+| `steps[n].entry` | `OSDB-NNNN has no scope entries; remove entry` | Remove `entry` for a specific procedure. |
+| `steps[n].entry` | `must be between 1 and <count>, the number of an entry of OSDB-NNNN's scope` | Choose an existing entry as an unquoted integer. |
+| `steps[n]` | `starts from none of the products of step <k> (<keys>)` | Check step order and the selected entries' starting materials and products. |
+| `target` | `<key> is not a product of the last step, step N` | Check the target and final procedure or entry. |
+| `target` or `steps` | `must equal the value in <path>` | Keep the same target and ordered steps in every variant. |
+| `authors`, `tags` or `reaction_types` | `must not be set; a sequence joins no procedure taxonomy` | Remove the key; the steps' procedures carry these. |
+| Any other key | `unknown field` | Remove or correct the key. |

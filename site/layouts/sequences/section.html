@@ -1,0 +1,30 @@
+{{- /* The sequence directory at /sequences/: one table row per published
+sequence, by ID, with a link to its page, its target's a.compound link,
+its number of steps and its overall yield (sequence-steps.html,
+sequence-yield.html). It needs no script. */ -}}
+{{ define "main" -}}
+<h1>{{ partial "page-title.html" . }}</h1>
+<div class="table-scroll" tabindex="0" role="region" aria-label="{{ T "table_sequences" }}">
+<table class="sequence-table">
+<thead>
+<tr>
+<th scope="col">{{ T "col_sequence" }}</th>
+<th scope="col">{{ T "col_target" }}</th>
+<th scope="col" class="num">{{ T "label_steps" }}</th>
+<th scope="col" class="num">{{ T "label_overall_yield" }}</th>
+</tr>
+</thead>
+<tbody>
+{{ range sort .Pages "Params.id" -}}
+{{ $steps := partialCached "sequence-steps.html" . .Path -}}
+<tr>
+<td><a href="{{ .RelPermalink }}">{{ .Title }}</a></td>
+<td>{{ partial "compound-link.html" .Params.target }}</td>
+<td class="num">{{ len $steps }}</td>
+<td class="num">{{ partialCached "sequence-yield.html" $steps .Path }} %</td>
+</tr>
+{{ end -}}
+</tbody>
+</table>
+</div>
+{{ end }}

@@ -22,6 +22,7 @@
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-30 Fri 01:49] -- compound registry, products, starting materials and site pages
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-30 Fri 01:55] -- doc-writer pass line corrected from gpt-6 to the pinned run model
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-30 Fri 08:17] -- general procedures, scope table, scheme images and catalogue
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-10-30 Fri 20:32] -- synthesis sequences, page links, navigation and validation
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -154,7 +155,9 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   *Used in* procedures with status. A general procedure appears under *Made by*
   once per entry that makes the compound, as
   ~<ID> <title> · entry <n> · <yield> % · <status>~. *Used in* lists each
-  procedure once; the directory also counts each procedure once.
+  procedure once; the directory also counts each procedure once. When a
+  sequence names this compound as its target, *Sequences* follows *Used in*
+  and links those sequences by title, ordered by sequence ID.
 
 * Write a general procedure
 
@@ -247,7 +250,9 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   appearance. Precursor and used-in links consider every entry. The panel then
   shows reaction type, tags, authors, checkers when set for draft or retired
   procedures under *Checked by*, created and modified times, and precursor or
-  used-in links. Formula digits appear as subscripts. Molecular weight gains
+  used-in links. When your procedure is a step of a sequence, *Sequences*
+  follows *Used in* and links those sequences by title, ordered by sequence
+  ID. Formula digits appear as subscripts. Molecular weight gains
   ~g/mol~, yield gains a percent sign, and SMILES has a *Copy* button. Reaction
   type, tag, and author values link to pages that list related procedures. The
   site title-cases author names for display, so ~van~ appears as ~Van~. The
@@ -388,8 +393,8 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   - It never evaluates source blocks.
   - It ignores file-local variables.
 
-  Check the Org sources, all exported or hand-written Markdown and the
-  compound registry with:
+  Check the Org sources, all exported or hand-written Markdown, the compound
+  registry and synthesis sequences in ~md/sequences/~ with:
 
 #+begin_src sh
   orgsyndb validate
@@ -397,13 +402,15 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
 
   ~orgsyndb validate~ runs the export first. If the export reports an Org
   error, validation stops there and does not start the Markdown validator.
-  Otherwise, errors in procedures or compound records fail validation and
-  warnings do not. The command uses the collection's ~compounds/~ registry and
-  ~static/~ for images. A field such as ~products[1].yield_percent~ names the
+  Otherwise, errors in procedures, compound records or sequences fail
+  validation and warnings do not. The command uses the collection's ~compounds/~ registry and
+  ~static/~ for images, and passes ~--sequences md/sequences~ to the
+  validator. A field such as ~products[1].yield_percent~ names the
   yield in the first product entry; counting starts at 1. ~unknown compound~
   means you must check the key and its registry file. Registry problems name
   the compound file and its field, such as ~compounds/ethyl-acetate.toml:mw~.
-  The summary counts compound files too. For scope entries, ~scope[2].time~
+  The summary counts compound and sequence files too, including language
+  variants. For scope entries, ~scope[2].time~
   means the time in entry 2; ~scope[2].products[1].yield_percent~ means that
   entry's first product yield. ~must not be empty~ under ~scope~ requires at
   least one entry. A top-level field with
@@ -411,6 +418,15 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   be moved into the relevant entries. Time errors ask for a number followed by
   ~min~, ~h~ or ~d~; temperature errors ask for an unquoted number in °C. The
   schema explains every field and the validator's exit statuses.
+
+  Sequence fields such as ~steps[2].entry~ name the chosen scope entry in
+  step 2. ~must list at least two steps~ requires a longer sequence;
+  ~not found in any content root~ means the procedure ID is missing.
+  ~starts from none of the products of step 1~ under ~steps[2]~ means that
+  step 2 takes no product of step 1 as a starting material. Check the order
+  and chosen scope entries. ~is not a product of the last step~ under
+  ~target~ means the final step does not make the named target. See the
+  [[file:SCHEMA.md][schema reference]] for the remaining sequence messages.
 
   Build and preview the site with:
 
@@ -421,6 +437,18 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   Open http://127.0.0.1:8000/ after the command prints that it is serving.
   The server is reachable only from the same machine. It has no live reload,
   so stop it with ~Ctrl-C~ and run it again after an edit.
+
+  The navigation is *Procedures*, *Compounds*, *Sequences*, *Help*. The home
+  page's *Browse* list includes *Sequences* with a count. That link and the
+  navigation open ~/sequences/~, ordered by ID with linked titles and targets,
+  step counts and overall yields. A sequence page shows its ID and title,
+  *Steps* and *Overall yield*, a scheme, the linked procedures with entry
+  numbers where needed, reaction type, yield and status, then your notes.
+  The scheme shows starting materials, intermediates and target with registry
+  structure images where available. A plus joins the first step's starting
+  materials; arrows show step number, reaction type and yield. In narrow
+  windows the scheme runs down the page. Sequence pages are absent from the
+  procedure search index; use their links to find them.
 
   On a procedure page, choose *Print / Save as PDF* to open the browser's
   print dialog. The print layout is complete A4 output in black on white.
@@ -495,3 +523,70 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   ~/procedures/osdb-0001/~ in place of ~OSDB-0001-x.org~, and ~orgsyndb pdf~
   prints it to ~pdf/OSDB-0001-x.de.pdf~ with a German page footer.
   [[file:SCHEMA.md][The procedure schema]] gives the exact rules.
+
+* Write a synthesis sequence in Markdown
+
+  To record a route through several procedures, write a /synthesis sequence/:
+  an ordered list of the procedures you run, with the chosen scope entry for
+  a general procedure. The site checks that the steps connect and calculates
+  the overall yield. Sequences are written in Markdown, even when all their
+  procedures are Org sources. There is no Org sequence export.
+
+  Copy [[file:../templates/sequence.md][templates/sequence.md]] into the collection's ~md/sequences/~.
+  ~orgsyndb init~ creates this directory. ~orgsyndb new~ creates procedure
+  stubs, so copy the sequence template by hand. Choose an unused ~SEQ-NNNN~
+  number from ~0001~ to ~9999~. Replace ~SEQ-0000~ in ~id~ and ~seq-0000~ in
+  ~slug~; save as ~SEQ-NNNN-short-slug.md~. Use lowercase letters, digits and
+  single hyphens for the short slug.
+
+  The information block is TOML, between two ~+++~ lines. Text values use
+  double quotes; ~entry~ is an unquoted integer. Fill ~title~, ~date~ and
+  ~lastmod~. Unlike Org timestamps, these dates are unquoted offset datetimes,
+  with ~+01:00~ in Berlin winter time or ~+02:00~ in summer. ~lastmod~ must
+  not precede ~date~. Set ~target~ to the final compound's registry key and
+  replace the template's steps with your procedures in execution order.
+  This is the demo's second sequence:
+
+#+begin_src markdown
+  +++
+  id = "SEQ-0002"
+  slug = "seq-0002"
+  title = "1-(Biphenyl-4-yl)ethanol from 4′-bromoacetophenone"
+  date = 2026-10-23T10:05:00+02:00
+  lastmod = 2026-10-23T10:20:00+02:00
+  target = "1-biphenyl-4-yl-ethanol"
+  steps = [{ procedure = "OSDB-0004" }, { procedure = "OSDB-0009", entry = 1 }]
+  +++
+
+  ## Notes
+
+  The 4-acetylbiphenyl from step 1 is reduced in step 2 as entry 1 of the
+  general procedure.
+#+end_src
+
+  Each step's ~procedure~ must name an existing procedure; at least two steps
+  are required. A general procedure requires ~entry~, its scope entry number
+  counted from 1. A specific procedure forbids ~entry~. Each step after the
+  first must start from a product of the previous step; for a general
+  procedure, use only the chosen entry's starting materials and products.
+  The target must be a product of the last step. Add no ~authors~: the steps
+  credit their procedures' authors. The Markdown body holds notes, such as
+  which intermediate is dried or purified. It needs none of the eight
+  procedure-body sections.
+
+  The demo also has
+  [[file:../examples/demo/md/sequences/SEQ-0001-aspirin-from-wintergreen.md][SEQ-0001, “Aspirin from oil of wintergreen”]],
+  OSDB-0001 → OSDB-0002, with an overall yield of 60 %. SEQ-0002 uses entry 1
+  of OSDB-0009 and gives 77 %. These are sample data. Overall yield multiplies
+  each step's yield of the product used by the next step and the last step's
+  yield of the target. If several products carry on, the first in product
+  order supplies the yield. The display rounds to a whole percent, with
+  halves rounded up. Enter no yield in the sequence itself.
+
+  For a translation, copy the file with ~.de~ or ~.en~ before ~.md~. Keep
+  the base name, ~id~, ~slug~, ~target~ and ordered ~steps~ the same;
+  translate the title and notes and set the dates for that version. Both
+  demo sequences have German variants. The site publishes one variant per
+  ID: the site's language first, then an untagged file, then the other
+  language. Run ~orgsyndb validate~ and restart ~orgsyndb serve~ to check
+  the sequence and its links. The [[file:SCHEMA.md][schema reference]] gives the full rules.

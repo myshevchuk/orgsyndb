@@ -245,7 +245,7 @@ class FixtureHygieneTests(unittest.TestCase):
             rel = path.relative_to(FIXTURES).as_posix()
             if rel.startswith(("invalid/duplicate-id/", "collection/")):
                 continue
-            match = re.search(r'^id = "(OSDB-[^"]*)"', path.read_text(
+            match = re.search(r'^id = "((?:OSDB|SEQ)-[^"]*)"', path.read_text(
                 encoding="utf-8"), re.M)
             if match is None:
                 continue

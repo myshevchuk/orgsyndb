@@ -22,6 +22,7 @@ tag = "tags"
 
 [permalinks.page]
 procedures = "/procedures/:slug/"
+sequences = "/sequences/:slug/"
 
 [markup.goldmark.renderer]
 unsafe = true

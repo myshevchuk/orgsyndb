@@ -425,10 +425,11 @@ class InitTests(ProgramTestCase):
             {"format": 1})
         self.assertEqual((target / ".gitignore").read_text(),
                          "/build/\n/public/\n/pdf/\n")
-        for name in ("org/procedures", "md/procedures", "compounds",
-                     "static/structures"):
+        for name in ("org/procedures", "md/procedures", "md/sequences",
+                     "compounds", "static/structures"):
             self.assertTrue((target / name).is_dir(), name)
         self.assertEqual(list((target / "compounds").iterdir()), [])
+        self.assertEqual(list((target / "md" / "sequences").iterdir()), [])
         result = self.run_real("-C", target, "new", "--md", "Ethyl acetate")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(),

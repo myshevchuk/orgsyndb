@@ -20,6 +20,9 @@ FIXTURES = REPO / "tests" / "fixtures"
 VALIDATOR = REPO / "tools" / "validate.py"
 BASELINE = FIXTURES / "baseline" / "OSDB-0100-baseline.md"
 GENERAL = FIXTURES / "general" / "OSDB-0140-general.md"
+SEQUENCES = FIXTURES / "sequences"
+SEQUENCE_BASELINE = SEQUENCES / "SEQ-0001-baseline.md"
+SEQUENCE_TEMPLATE = REPO / "templates" / "sequence.md"
 VOCABULARY = FIXTURES / "reaction_types.toml"
 STATIC_DIR = FIXTURES / "static"
 COMPOUNDS = FIXTURES / "compounds"
@@ -241,6 +244,85 @@ def general_variant_run(file_name: str, *edits: Edit) -> Result:
     as the only file of a fresh content root."""
     with general_variant_root(file_name, *edits) as root:
         return fixture_run(root)
+
+
+def sequence_fixture_run(*roots: str | Path, sequences: str | Path,
+                         extra: Sequence[str | Path] = (),
+                         compounds: Path = COMPOUNDS) -> Result:
+    """Sequence fixture run: a fixture run on ``roots`` and ``general``
+    with ``--sequences`` naming ``sequences``, relative to
+    tests/fixtures/ unless absolute."""
+    return fixture_run(
+        *roots, "general", compounds=compounds,
+        extra=["--sequences", FIXTURES / sequences, *extra])
+
+
+@contextlib.contextmanager
+def sequences_copy() -> Iterator[Path]:
+    """A fresh temporary copy of tests/fixtures/sequences/."""
+    with tempfile.TemporaryDirectory() as tmp:
+        directory = Path(tmp) / "sequences"
+        shutil.copytree(SEQUENCES, directory)
+        yield directory
+
+
+def sequence_variant_run(change: Callable[[Path], None]) -> Result:
+    """Sequence variant run: ``change`` edits a copy of
+    tests/fixtures/sequences/, then a sequence fixture run on
+    ``valid/md`` and ``sequences-procedures`` reads that copy."""
+    with sequences_copy() as directory:
+        change(directory)
+        return sequence_fixture_run(
+            "valid/md", "sequences-procedures", sequences=directory)
+
+
+def edit_sequence(name: str, *edits: Edit,
+                  rename: str | None = None) -> Callable[[Path], None]:
+    """A sequence change applying text edits to the sequence ``name``,
+    which is then moved to ``rename`` when that is given."""
+    def change(directory: Path) -> None:
+        path = directory / name
+        path.write_text(apply_edits(path.read_text(encoding="utf-8"),
+                                    edits), encoding="utf-8")
+        if rename is not None:
+            path.rename(directory / rename)
+    return change
+
+
+def add_sequence(file_name: str, *edits: Edit,
+                 source: str = "SEQ-0001-baseline.md"
+                 ) -> Callable[[Path], None]:
+    """A sequence change adding ``file_name``, a copy of the sequence
+    ``source`` with the text edits applied."""
+    def change(directory: Path) -> None:
+        text = (directory / source).read_text(encoding="utf-8")
+        (directory / file_name).write_text(apply_edits(text, edits),
+                                           encoding="utf-8")
+    return change
+
+
+def remove_sequence(name: str) -> Callable[[Path], None]:
+    """A sequence change deleting the sequence ``name``."""
+    def change(directory: Path) -> None:
+        (directory / name).unlink()
+    return change
+
+
+def add_file(name: str, text: str) -> Callable[[Path], None]:
+    """A sequence change writing the file ``name`` with ``text``."""
+    def change(directory: Path) -> None:
+        path = directory / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    return change
+
+
+def changes(*steps: Callable[[Path], None]) -> Callable[[Path], None]:
+    """The sequence changes ``steps`` made one after the other."""
+    def change(directory: Path) -> None:
+        for step in steps:
+            step(directory)
+    return change
 
 
 class ValidatorTestCase(unittest.TestCase):

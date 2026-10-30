@@ -847,6 +847,12 @@ def language_of(name: str) -> str | None:
     return match.group(1) if match else None
 
 
+def base_name(name: str) -> str:
+    """A file name without its suffix and its language code."""
+    stem = name.rsplit(".", 1)[0]
+    return stem.rsplit(".", 1)[0] if language_of(name) else stem
+
+
 def variant_rank(name: str, locale: str) -> tuple[int, str]:
     """Order of preference of a variant for a site in ``locale``: the
     file tagged with it, then the untagged file, then the others."""
@@ -871,6 +877,58 @@ def read_content(sandbox: Sandbox, locale: str | None) -> list[Content]:
             found.append(Content(path, front_matter(text), body_of(text)))
     if locale is not None:
         chosen: dict[str, Content] = {}
+        for item in found:
+            best = chosen.get(item.id)
+            if best is None or variant_rank(item.path.name, locale) < \
+                    variant_rank(best.path.name, locale):
+                chosen[item.id] = item
+        found = list(chosen.values())
+    return sorted(found, key=lambda item: (item.id, item.path.name))
+
+
+class Sequence(NamedTuple):
+    path: Path
+    data: dict[str, Any]
+    body: str
+
+    @property
+    def id(self) -> str:
+        return self.data["id"]
+
+    @property
+    def slug(self) -> str:
+        return self.data["slug"]
+
+    @property
+    def title(self) -> str:
+        return self.data["title"]
+
+    @property
+    def target(self) -> str:
+        return self.data["target"]
+
+    @property
+    def steps(self) -> list[dict[str, Any]]:
+        return list(self.data["steps"])
+
+    def page_file(self, public: Path) -> Path:
+        """The sequence's page under ``public``."""
+        return public / "sequences" / self.slug / "index.html"
+
+
+def read_sequences(sandbox: Sandbox, locale: str | None
+                   ) -> list[Sequence]:
+    """Front matter and body of the sequence files in the sandbox
+    collection's ``md/sequences/``, by ID: the variant published in
+    ``locale`` of each ID, or every file with None."""
+    found = []
+    directory = sandbox.root / "md" / "sequences"
+    if directory.is_dir():
+        for path in sorted(directory.glob("SEQ-*.md")):
+            text = path.read_text(encoding="utf-8")
+            found.append(Sequence(path, front_matter(text), body_of(text)))
+    if locale is not None:
+        chosen: dict[str, Sequence] = {}
         for item in found:
             best = chosen.get(item.id)
             if best is None or variant_rank(item.path.name, locale) < \

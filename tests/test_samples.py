@@ -547,6 +547,101 @@ def relative_files(root: Path) -> set[str]:
             for p in root.rglob("*") if p.is_file()}
 
 
+SEQUENCES = DEMO / "md" / "sequences"
+DEMO_SEQUENCES = {
+    "SEQ-0001-aspirin-from-wintergreen": {
+        "id": "SEQ-0001", "slug": "seq-0001",
+        "title": "Aspirin from oil of wintergreen",
+        "title_de": "Aspirin aus Wintergrünöl",
+        "target": "acetylsalicylic-acid",
+        "steps": [{"procedure": "OSDB-0001"}, {"procedure": "OSDB-0002"}],
+        "notes": "dried before the acetylation"},
+    "SEQ-0002-biphenylyl-ethanol": {
+        "id": "SEQ-0002", "slug": "seq-0002",
+        "title": "1-(Biphenyl-4-yl)ethanol from 4′-bromoacetophenone",
+        "title_de": "1-(Biphenyl-4-yl)ethanol aus 4′-Bromacetophenon",
+        "target": "1-biphenyl-4-yl-ethanol",
+        "steps": [{"procedure": "OSDB-0004"},
+                  {"procedure": "OSDB-0009", "entry": 1}],
+        "notes": None},
+}
+
+
+def read_sequence(path: Path) -> tuple[dict, str]:
+    """Front matter and body of a sequence file."""
+    text = path.read_text(encoding="utf-8")
+    _, front, body = text.split("+++\n", 2)
+    return tomllib.loads(front), body
+
+
+class DemoSequenceTests(unittest.TestCase):
+    def test_the_demo_holds_two_sequences_and_their_variants(self) -> None:
+        """Scenario: The demo's sequences."""
+        self.assertEqual(
+            sorted(p.name for p in SEQUENCES.glob("*")),
+            sorted(f"{stem}{suffix}" for stem in DEMO_SEQUENCES
+                   for suffix in (".md", ".de.md")))
+
+    def test_each_sequence_has_the_stated_title_target_and_steps(
+            self) -> None:
+        """Scenario: The demo's sequences (the English files)."""
+        for stem, wanted in DEMO_SEQUENCES.items():
+            path = SEQUENCES / f"{stem}.md"
+            with self.subTest(sequence=stem):
+                self.assertTrue(path.is_file(), f"{path.name} is missing")
+                data, body = read_sequence(path)
+                for key in ("id", "slug", "title", "target", "steps"):
+                    self.assertEqual(data.get(key), wanted[key], key)
+                self.assertNotIn("authors", data)
+                self.assertTrue(body.strip())
+                if wanted["notes"]:
+                    self.assertIn(wanted["notes"], " ".join(body.split()))
+
+    def test_the_german_variants_share_target_and_steps(self) -> None:
+        """Scenario: The demo's sequences (the German variants)."""
+        for stem, wanted in DEMO_SEQUENCES.items():
+            path = SEQUENCES / f"{stem}.de.md"
+            with self.subTest(sequence=stem):
+                self.assertTrue(path.is_file(), f"{path.name} is missing")
+                data, body = read_sequence(path)
+                english, english_body = read_sequence(
+                    SEQUENCES / f"{stem}.md")
+                self.assertEqual(data["title"], wanted["title_de"])
+                for key in ("id", "slug", "target", "steps"):
+                    self.assertEqual(data.get(key), wanted[key], key)
+                self.assertTrue(body.strip())
+                self.assertNotEqual(body, english_body)
+                self.assertNotIn("## Notes", body)
+
+    def test_dates_are_berlin_offset_datetimes(self) -> None:
+        """Requirement: Demo sequences (dates like the samples')."""
+        files = sorted(SEQUENCES.glob("*.md"))
+        self.assertEqual(len(files), 4)
+        for path in files:
+            data, _ = read_sequence(path)
+            with self.subTest(file=path.name):
+                for key in ("date", "lastmod"):
+                    value = data[key]
+                    self.assertIsNotNone(value.tzinfo)
+                    self.assertIn(value.utcoffset().total_seconds(),
+                                  (3600, 7200))
+                self.assertGreaterEqual(data["lastmod"], data["date"])
+
+    def test_the_steps_name_samples_of_the_demo(self) -> None:
+        """Requirement: Demo sequences (they validate with the demo's
+        procedures)."""
+        samples = {s.data["id"]: s for s in sup.sample_procedures(DEMO)}
+        for stem in DEMO_SEQUENCES:
+            data, _ = read_sequence(SEQUENCES / f"{stem}.md")
+            for step in data["steps"]:
+                with self.subTest(sequence=stem, step=step):
+                    sample = samples[step["procedure"]]
+                    entries = sample.data.get("scope")
+                    self.assertEqual("entry" in step, entries is not None)
+                    if entries is not None:
+                        self.assertLessEqual(step["entry"], len(entries))
+
+
 class TestCollectionTests(unittest.TestCase):
     def test_the_collection_mirrors_the_demo(self) -> None:
         """Scenario: The test collection mirrors the demo."""
@@ -571,6 +666,20 @@ class TestCollectionTests(unittest.TestCase):
         self.assertEqual(
             relative_files(COLLECTION / "compounds"),
             relative_files(DEMO / "compounds"), "compounds/ files")
+        sequences = relative_files(DEMO / "md" / "sequences")
+        self.assertEqual(len(sequences), 4, "the demo's sequences")
+        for relative in sorted(sequences):
+            with self.subTest(file=relative):
+                self.assertTrue(
+                    (COLLECTION / "md" / "sequences" / relative).is_file(),
+                    f"md/sequences/{relative} is missing")
+                self.assertEqual(
+                    (COLLECTION / "md" / "sequences" / relative
+                     ).read_bytes(),
+                    (DEMO / "md" / "sequences" / relative).read_bytes())
+        self.assertEqual(
+            relative_files(COLLECTION / "md" / "sequences"), sequences,
+            "md/sequences/ files")
         names = {p.stem + ".md" if p.suffix == ".org" else p.name
                  for p in sample_files()}
         self.assertEqual(len(names), 18)

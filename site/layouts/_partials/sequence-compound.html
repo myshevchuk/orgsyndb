@@ -1,0 +1,5 @@
+{{- /* A compound of a sequence scheme, given its key: its structure image,
+when the registry entry sets structure_image, with the alt text naming its
+shown name, then its a.compound link (compound-link.html). */ -}}
+{{ with index site.Data.compounds . }}{{ with .structure_image }}<img src="/{{ . }}" alt="{{ T "structure_of" (partial "compound-name.html" $) }}"> {{ end }}{{ end }}{{ partial "compound-link.html" . }}
+{{- /* The link ends the output: no newline follows it. */ -}}

@@ -2,7 +2,8 @@
 procedures (lastmod newest first, ID ascending for equal instants), the
 first five drafts by ID, which the catalogue lists first under
 ?status=draft, when there are any, and the browse list with the
-collection's totals, the compounds of its registry among them. */ -}}
+collection's totals, the compounds of its registry and the published
+sequences among them. */ -}}
 {{ define "main" -}}
 {{ $procedures := where site.RegularPages "Section" "procedures" -}}
 {{ $drafts := sort (where $procedures "Params.status" "draft") "Params.id" -}}
@@ -39,7 +40,8 @@ collection's totals, the compounds of its registry among them. */ -}}
   (slice "/reaction_types/" (T "title_reaction_types") (len site.Taxonomies.reaction_types))
   (slice "/tags/" (T "title_tags") (len site.Taxonomies.tags))
   (slice "/authors/" (T "title_authors") (len site.Taxonomies.authors))
-  (slice "/compounds/" (T "title_compounds") (len (site.Data.compounds | default dict))) -}}
+  (slice "/compounds/" (T "title_compounds") (len (site.Data.compounds | default dict)))
+  (slice "/sequences/" (T "title_sequences") (len (where site.RegularPages "Section" "sequences"))) -}}
 <li><a href="{{ index . 0 }}">{{ index . 1 }}</a> <span class="count">({{ lang.FormatNumber 0 (index . 2) }})</span></li>
 {{ end -}}
 </ul>
