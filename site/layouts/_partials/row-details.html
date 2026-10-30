@@ -1,16 +1,17 @@
 {{- /* The Details block of a catalogue row: a dt/dd pair per field that is
 set, labelled as the metadata panel labels them. Product, or Products for
-several, gives the shown names as text, and is left out for one product
-named like the title; Formula, MW and CAS follow only for one product.
-The structure image is that of the first product whose compound sets
-structure_image, loaded lazily; without one there is no placeholder. */ -}}
+several, gives the shown names of product-keys.html as text, and is left
+out for one product named like the title; Formula, MW and CAS follow only
+for one product. Yield is that of the key facts. The structure image is
+that of the first product whose compound sets structure_image, loaded
+lazily; without one there is no placeholder. */ -}}
 {{ $p := .Params -}}
-{{ $products := $p.products | default slice -}}
+{{ $products := partial "product-keys.html" . -}}
 <div class="row-details">
 <dl>
 {{ with $products -}}
 {{ $names := slice -}}
-{{ range . }}{{ $names = $names | append (partial "compound-name.html" .compound) }}{{ end -}}
+{{ range . }}{{ $names = $names | append (partial "compound-name.html" .) }}{{ end -}}
 {{ if gt (len $names) 1 -}}
 <dt>{{ T "label_products" }}</dt>
 <dd>{{ delimit $names ", " }}</dd>
@@ -18,7 +19,7 @@ structure_image, loaded lazily; without one there is no placeholder. */ -}}
 <dt>{{ T "label_product" }}</dt>
 <dd>{{ index $names 0 }}</dd>
 {{ end -}}
-{{ if eq (len .) 1 }}{{ with index site.Data.compounds (index . 0).compound -}}
+{{ if eq (len .) 1 }}{{ with index site.Data.compounds (index . 0) -}}
 {{ with .formula -}}
 <dt>{{ T "label_formula" }}</dt>
 <dd>{{ . | htmlEscape | replaceRE "([0-9]+)" "<sub>$1</sub>" | safeHTML }}</dd>
@@ -33,7 +34,7 @@ structure_image, loaded lazily; without one there is no placeholder. */ -}}
 {{ end -}}
 {{ end }}{{ end -}}
 <dt>{{ T "label_yield" }}</dt>
-<dd>{{ partial "yield-text.html" . }}</dd>
+<dd>{{ with $p.scope }}{{ partial "yield-range.html" . }}{{ else }}{{ partial "yield-text.html" $p.products }}{{ end }}</dd>
 {{ end -}}
 {{ if not .Date.IsZero -}}
 <dt>{{ T "label_created" }}</dt>
@@ -41,7 +42,7 @@ structure_image, loaded lazily; without one there is no placeholder. */ -}}
 {{ end -}}
 </dl>
 {{ $image := "" -}}
-{{ range $entry := $products }}{{ with index site.Data.compounds $entry.compound }}{{ if and (not $image) .structure_image }}{{ $image = dict "src" .structure_image "name" (partial "compound-name.html" $entry.compound) }}{{ end }}{{ end }}{{ end -}}
+{{ range $key := $products }}{{ with index site.Data.compounds $key }}{{ if and (not $image) .structure_image }}{{ $image = dict "src" .structure_image "name" (partial "compound-name.html" $key) }}{{ end }}{{ end }}{{ end -}}
 {{ with $image -}}
 <img class="row-structure" src="/{{ .src }}" alt="{{ T "structure_of" .name }}" loading="lazy" decoding="async">
 {{ end -}}

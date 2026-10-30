@@ -1,0 +1,6 @@
+name = "1-(4-Bromophenyl)ethanol"
+name_de = "1-(4-Bromphenyl)ethanol"
+formula = "C8H9BrO"
+mw = 201.06
+smiles = "CC(O)c1ccc(Br)cc1"
+cas = "5391-88-8"

@@ -29,6 +29,26 @@ class CompoundCase(tti.SiteCase):
                        if key in [e["compound"] for e in i.products]),
                       key=lambda i: i.id)
 
+    def made_by_entries(self, key: str) -> list[tuple[Content, int | None,
+                                                     int | float]]:
+        """The ``Made by`` list of a compound: for each procedure by ID
+        its yield of the compound, or for a general procedure each entry
+        that makes it, in entry order, with the entry's number and
+        yield."""
+        found = []
+        for item in self.made_by(key):
+            if not item.is_general:
+                found.append((item, None, next(
+                    e["yield_percent"] for e in item.products
+                    if e["compound"] == key)))
+                continue
+            for number, entry in enumerate(item.scope, 1):
+                for product in entry["products"]:
+                    if product["compound"] == key:
+                        found.append((item, number,
+                                      product["yield_percent"]))
+        return found
+
     def used_in_by(self, key: str) -> list[Content]:
         return sorted((i for i in self.content() if key in i.substrates),
                       key=lambda i: i.id)
@@ -153,16 +173,17 @@ class CompoundSiteTests(CompoundCase):
         for key in self.registry():
             page = self.compound_page(key)
             with self.subTest(compound=key):
-                for cls, items in (("compound-made-by", self.made_by(key)),
-                                   ("compound-used-in",
-                                    self.used_in_by(key))):
+                for cls, items in (
+                        ("compound-made-by", self.made_by_entries(key)),
+                        ("compound-used-in",
+                         [(i, None, None) for i in self.used_in_by(key)])):
                     section = page.find("section", cls)
                     if not items:
                         self.assertIsNone(section, cls)
                         continue
                     entries = section.find("ul").find_all("li")
                     self.assertEqual(len(entries), len(items))
-                    for entry, item in zip(entries, items):
+                    for entry, (item, number, made) in zip(entries, items):
                         link = entry.elements()[0]
                         self.assertEqual(link.tag, "a")
                         self.assertEqual(page.resolve(link.attrs["href"]),
@@ -175,13 +196,34 @@ class CompoundSiteTests(CompoundCase):
                                       badge.classes)
                         self.assertEqual(badge.norm(), item.data["status"])
                         text = f"{item.id} {item.title}"
+                        if number is not None:
+                            text += f" · entry {number}"
                         if cls == "compound-made-by":
-                            entry_yield = next(
-                                e["yield_percent"] for e in item.products
-                                if e["compound"] == key)
-                            text += f" · {entry_yield} %"
+                            text += f" · {made} %"
                         self.assertEqual(
                             entry.norm(), f"{text} · {badge.norm()}")
+
+    def test_made_by_an_entry_of_a_general_procedure(self) -> None:
+        """Scenario: Made by an entry of a general procedure."""
+        page = self.compound_page("1-biphenyl-4-yl-ethanol")
+        made = page.find("section", "compound-made-by")
+        self.assertEqual(
+            [li.norm() for li in made.find_all("li")],
+            ["OSDB-0005 1-(Biphenyl-4-yl)ethanol · 90 % · draft",
+             "OSDB-0009 Secondary benzylic alcohols by sodium borohydride "
+             "reduction · entry 1 · 90 % · draft"])
+        self.assertIsNone(page.find("section", "compound-used-in"))
+        acetylbiphenyl = self.compound_page("4-acetylbiphenyl")
+        used = acetylbiphenyl.find("section", "compound-used-in")
+        self.assertEqual(
+            [li.norm() for li in used.find_all("li")],
+            ["OSDB-0005 1-(Biphenyl-4-yl)ethanol · draft",
+             "OSDB-0009 Secondary benzylic alcohols by sodium borohydride "
+             "reduction · draft"])
+        for key in ("acetophenone", "1-phenylethanol",
+                    "1-4-bromophenyl-ethanol"):
+            self.assertTrue((self.public / "compounds" / key
+                             / "index.html").is_file(), key)
 
     def test_compound_pages_are_not_indexed(self) -> None:
         """Scenario: Compound pages are not indexed."""
@@ -299,6 +341,13 @@ class GermanCompoundTests(CompoundCase):
         self.assertEqual(
             [li.norm() for li in made.find_all("li")],
             ["OSDB-0001 Salicylsäure · 80 % · Entwurf"])
+        general = self.compound_page("1-biphenyl-4-yl-ethanol")
+        self.assertEqual(
+            [li.norm() for li in general.find(
+                "section", "compound-made-by").find_all("li")],
+            ["OSDB-0005 1-(Biphenyl-4-yl)ethanol · 90 % · Entwurf",
+             "OSDB-0009 Sekundäre Benzylalkohole durch Reduktion mit "
+             "Natriumborhydrid · Eintrag 1 · 90 % · Entwurf"])
         directory = ps.load_page(self.public, self.public / "compounds"
                                  / "index.html")
         table = directory.find("table", "compound-table")

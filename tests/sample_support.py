@@ -204,11 +204,36 @@ def sample_procedures(repo: Path) -> list[Sample]:
     return [s for s in found if "sample-data" in s.data.get("tags", [])]
 
 
+def product_keys(data: dict[str, Any]) -> list[str]:
+    """The compound keys of a procedure's products: its own, or for a
+    general procedure those of all the entries of its scope, each once,
+    in order of first appearance."""
+    entries = [e for entry in data.get("scope", [])
+               for e in entry["products"]]
+    entries += data.get("products", [])
+    return list(dict.fromkeys(e["compound"] for e in entries))
+
+
+def substrate_keys(data: dict[str, Any]) -> list[str]:
+    """The compound keys of a procedure's substrates, over its scope for
+    a general procedure."""
+    keys = [key for entry in data.get("scope", [])
+            for key in entry["substrates"]]
+    return list(dict.fromkeys(keys + list(data.get("substrates", []))))
+
+
+def scope_without_notes(data: dict[str, Any]) -> list[dict[str, Any]] | None:
+    """The entries of a procedure's scope without their ``note``, or
+    None for a specific procedure."""
+    if "scope" not in data:
+        return None
+    return [{k: v for k, v in entry.items() if k != "note"}
+            for entry in data["scope"]]
+
+
 def named_compounds(sample: Sample) -> list[str]:
     """The keys a sample names, products first, then substrates."""
-    products = sample.data.get("products", [])
-    return [entry["compound"] for entry in products] + list(
-        sample.data.get("substrates", []))
+    return product_keys(sample.data) + substrate_keys(sample.data)
 
 
 def read_registry(registry: Path) -> dict[str, dict[str, Any]]:

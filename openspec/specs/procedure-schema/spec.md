@@ -65,7 +65,7 @@ Every procedure SHALL carry, in its TOML front matter, each of the following key
 - `status`: string
 - `reaction_types`: list of strings
 - `tags`: non-empty list of strings
-- `products`: array of tables (requirement "Products")
+- `products`: array of tables (requirement "Products"), except in a general procedure, which carries `scope` instead (general-procedures "Scope entries")
 - `scale`: string
 - `hazards`: non-empty list of non-empty strings
 
@@ -478,4 +478,11 @@ The optional `substrates` field SHALL be a list of strings, the keys of the comp
 #### Scenario: A substrate that is also a product
 - **WHEN** a variant run sets `substrates = ["ethyl-acetate"]`, the baseline's product, under the file name `OSDB-0100-substrate-is-product.md`
 - **THEN** it reports exactly one error, field `substrates`, containing `ethyl-acetate is also a product`
+
+### Requirement: Scheme image
+The optional `scheme_image` field SHALL name an image of the procedure's reaction scheme, with the rules of compound-registry "Structure image path": a relative path beginning with `structures/` and ending in `.svg` or `.png`, with no `..` component, naming a file that exists under the static directory, the wrong prefix or suffix leaving existence unchecked. Problems are reported under `scheme_image` with that requirement's messages.
+
+#### Scenario: Scheme image missing
+- **WHEN** a general variant run sets `scheme_image = "structures/missing.svg"` under the file name `OSDB-0140-missing-scheme.md`
+- **THEN** it reports exactly one error, field `scheme_image`, containing `not found`
 

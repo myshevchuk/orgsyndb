@@ -126,6 +126,7 @@ class ShippedSearchTests(SearchBatchCase):
     sorted_by_id: int
     by_id: dict[str, int]
     wintergreen: int
+    biphenyl: int
     lookups: dict[str, tuple[int, str]]
     missing_words: list[str]
     parts: dict[str, tuple[int, set[str]]]
@@ -139,6 +140,7 @@ class ShippedSearchTests(SearchBatchCase):
                                       normalise=False)
                      for item in items}
         cls.wintergreen = cls.ask("wintergreen")
+        cls.biphenyl = cls.ask("ccc(cc1)-c1")
         words, cls.missing_words = body_words(cls.sandbox)
         registry = ps.read_registry(cls.sandbox)
         cls.lookups = {}
@@ -223,6 +225,17 @@ class ShippedSearchTests(SearchBatchCase):
                               if any(key in own for own in keys(other)))
             with self.subTest(smiles=smiles):
                 self.assertEqual(sorted(self.found(index)), expected)
+
+    def test_a_smiles_fragment_finds_the_general_procedure_too(self) -> None:
+        """Scenario: SMILES substring in the catalogue (biphenyl)."""
+        registry = ps.read_registry(self.sandbox)
+        key = ps.smiles_key("ccc(cc1)-c1")
+        expected = sorted(
+            item.id for item in self.content()
+            if any(key in ps.smiles_key(registry[e["compound"]]["smiles"])
+                   for e in item.products))
+        self.assertEqual(expected, ["OSDB-0004", "OSDB-0005", "OSDB-0009"])
+        self.assertEqual(sorted(self.found(self.biphenyl)), expected)
 
     def test_the_searcher_agrees_with_the_result_data(self) -> None:
         """Scenario: Same procedures in the same order as the result data."""

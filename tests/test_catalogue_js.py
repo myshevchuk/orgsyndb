@@ -41,11 +41,12 @@ Promise.resolve(body(request.data)).then(
 """
 
 KNOWN = {"type": ["hydrolysis", "acylation"],
+         "kind": ["specific", "general"],
          "status": ["draft", "checked", "retired"],
          "tag": ["sample-data", "cinnamate"],
          "author": ["a. example", "ä. müller"]}
-DEFAULT_STATE = {"q": "", "type": [], "status": [], "tag": [], "author": [],
-                 "sort": None, "view": "table"}
+DEFAULT_STATE = {"q": "", "type": [], "kind": [], "status": [], "tag": [],
+                 "author": [], "sort": None, "view": "table"}
 
 
 def evaluate(code: str, data: Any = None) -> Any:
@@ -106,9 +107,10 @@ class ParseTests(unittest.TestCase):
         ps.require_node()
         [[got, ignored]] = self.parse(
             "?q=+acid+&type=acylation&type=hydrolysis&type=acylation"
-            "&tag=nope&tag=&sort=title&view=details&page=2&q=x")
+            "&kind=general&tag=nope&tag=&sort=title&view=details&page=2&q=x")
         self.assertEqual(got, state(q="acid", type=["hydrolysis", "acylation"],
-                                    sort="title", view="details"))
+                                    kind=["general"], sort="title",
+                                    view="details"))
         self.assertEqual(ignored, [["tag", "nope"], ["tag", ""],
                                    ["page", "2"], ["q", "x"]])
 
@@ -169,6 +171,22 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(ignored, [["type", "Hydrolysis"], ["type", ""],
                                    ["status", "published"]])
 
+    def test_kind_values_are_read_in_the_order_of_known(self) -> None:
+        """Scenario: Reading an address (kind values)."""
+        ps.require_node()
+        [[got, ignored]] = self.parse(
+            "?kind=general&kind=other&kind=specific&kind=general&kind=")
+        self.assertEqual(got, state(kind=["specific", "general"]))
+        self.assertEqual(ignored, [["kind", "other"], ["kind", ""]])
+
+    def test_the_kind_is_fixed_on_the_general_procedures_page(self) -> None:
+        """Scenario: The fixed facet is not read from the address (kind)."""
+        ps.require_node()
+        [[got, ignored]] = self.parse("?kind=general&status=draft&kind=x",
+                                      fixed="kind")
+        self.assertEqual(got, state(status=["draft"]))
+        self.assertEqual(ignored, [["kind", "general"], ["kind", "x"]])
+
     def test_the_fixed_facet_is_not_read_from_the_address(self) -> None:
         """Scenario: The fixed facet is not read from the address."""
         ps.require_node()
@@ -219,13 +237,15 @@ class SerializeTests(unittest.TestCase):
         """Scenario: Canonical addresses (order of the parameters)."""
         ps.require_node()
         full = state(q="x", type=["hydrolysis", "acylation"],
+                     kind=["specific", "general"],
                      status=["retired"], tag=["sample-data", "cinnamate"],
                      author=["a. example", "ä. müller"], sort="title",
                      view="details")
         [got] = self.serialize(full)
         self.assertEqual(
             got,
-            "?q=x&type=hydrolysis&type=acylation&status=retired"
+            "?q=x&type=hydrolysis&type=acylation&kind=specific"
+            "&kind=general&status=retired"
             "&tag=sample-data&tag=cinnamate&author=a.+example"
             "&author=%C3%A4.+m%C3%BCller&sort=title&view=details")
 
@@ -237,6 +257,8 @@ class SerializeTests(unittest.TestCase):
                              state(q="a&b=c d"))
         self.assertEqual(got, ["", "", "?status=draft", "?view=details",
                                "?q=a%26b%3Dc+d"])
+        [kind] = self.serialize(state(kind=["general"]))
+        self.assertEqual(kind, "?kind=general")
 
     def test_known_states_survive_a_round_trip(self) -> None:
         """Scenario: Canonical addresses (round trip)."""
@@ -249,6 +271,8 @@ class SerializeTests(unittest.TestCase):
             state(type=["hydrolysis", "acylation"], tag=["sample-data"],
                   author=["a. example", "ä. müller"], view="details"),
             state(q="50-78-2", author=["ä. müller"], sort="modified"),
+            state(kind=["general"]),
+            state(q="x", kind=["specific", "general"], status=["draft"]),
         ]
         for original, (text, parsed, ignored, again) in zip(
                 states, self.round_trip(*states)):
@@ -359,10 +383,11 @@ class ActiveAndSortTests(unittest.TestCase):
 def record(ident: str, title: str, created: str, modified: str,
            type: list[str] | None = None, status: str = "draft",
            tag: list[str] | None = None,
-           author: list[str] | None = None) -> dict[str, Any]:
+           author: list[str] | None = None,
+           kind: str = "specific") -> dict[str, Any]:
     return {"id": ident, "title": title, "created": created,
-            "modified": modified, "type": type or [], "status": status,
-            "tag": tag or [], "author": author or []}
+            "modified": modified, "type": type or [], "kind": kind,
+            "status": status, "tag": tag or [], "author": author or []}
 
 
 STAMP = "2026-01-01T00:00:00Z"
@@ -373,17 +398,19 @@ SIX = [
     record("OSDB-0002", "Aspirin", STAMP, STAMP, ["acylation"], "draft",
            ["sample-data", "acetylation"], ["a. example", "c. example"]),
     record("OSDB-0003", "Isopentyl acetate", STAMP, STAMP,
-           ["esterification"], "checked", ["fragrance"], ["ä. müller"]),
+           ["esterification"], "checked", ["fragrance"], ["ä. müller"],
+           "general"),
     record("OSDB-0004", "Cinnamic acid", STAMP, STAMP, ["hydrolysis"],
            "retired", ["cinnamate", "saponification"],
            ["ä. müller", "a. example"]),
     record("OSDB-0005", "Cinnamoyl chloride", STAMP, STAMP, ["acylation"],
            "checked", ["cinnamate"], ["b. example"]),
     record("OSDB-0006", "Cinnamyl alcohol", STAMP, STAMP, ["reduction"],
-           "draft", ["cinnamate", "sample-data"], ["ä. müller"]),
+           "draft", ["cinnamate", "sample-data"], ["ä. müller"], "general"),
 ]
 ALL_VALUES = {
     "type": ["hydrolysis", "acylation", "esterification", "reduction"],
+    "kind": ["specific", "general"],
     "status": ["draft", "checked", "retired"],
     "tag": ["sample-data", "saponification", "acetylation", "fragrance",
             "cinnamate"],
@@ -423,6 +450,8 @@ class SelectTests(unittest.TestCase):
         self.assertEqual(got["ids"], ids(1, 2, 3, 4, 5, 6))
         self.assertEqual(got["counts"]["status"],
                          {"draft": 3, "checked": 2, "retired": 1})
+        self.assertEqual(got["counts"]["kind"],
+                         {"specific": 4, "general": 2})
         self.assertEqual(got["counts"]["type"],
                          {"hydrolysis": 2, "acylation": 2,
                           "esterification": 1, "reduction": 1})
@@ -445,6 +474,26 @@ class SelectTests(unittest.TestCase):
                 self.assertEqual(select(both, state(type=wanted), None)["ids"],
                                  expected)
 
+    def test_the_kind_facet_selects_and_counts(self) -> None:
+        """Scenario: OR within a facet, AND across facets (kind)."""
+        ps.require_node()
+        general = select(SIX, state(kind=["general"]), None)
+        self.assertEqual(general["ids"], ids(3, 6))
+        self.assertEqual(general["counts"]["kind"],
+                         {"specific": 4, "general": 2})
+        self.assertEqual(general["counts"]["type"],
+                         {"hydrolysis": 0, "acylation": 0,
+                          "esterification": 1, "reduction": 1})
+        both = select(SIX, state(kind=["specific", "general"]), None)
+        self.assertEqual(both["ids"], ids(1, 2, 3, 4, 5, 6))
+        narrowed = select(SIX, state(kind=["specific"], status=["checked"]),
+                          None)
+        self.assertEqual(narrowed["ids"], ids(5))
+        self.assertEqual(narrowed["counts"]["kind"],
+                         {"specific": 1, "general": 1})
+        self.assertEqual(narrowed["counts"]["status"],
+                         {"draft": 2, "checked": 1, "retired": 1})
+
     def test_counts_leave_out_the_facets_own_selections(self) -> None:
         """Scenario: Counts leave out the facet's own selections."""
         ps.require_node()
@@ -454,6 +503,7 @@ class SelectTests(unittest.TestCase):
         self.assertEqual(got["counts"], {
             "type": {"hydrolysis": 1, "acylation": 1, "esterification": 0,
                      "reduction": 1},
+            "kind": {"specific": 1, "general": 0},
             "status": {"draft": 0, "checked": 0, "retired": 1},
             "tag": {"sample-data": 1, "saponification": 2, "acetylation": 0,
                     "fragrance": 0, "cinnamate": 1},
@@ -471,7 +521,7 @@ class SelectTests(unittest.TestCase):
         self.assertEqual(got["counts"]["tag"],
                          {"sample-data": 1, "saponification": 2,
                           "acetylation": 0, "fragrance": 0, "cinnamate": 1})
-        for facet in ("status", "author"):
+        for facet in ("status", "author", "kind"):
             self.assertEqual(set(got["counts"][facet].values()), {0}, facet)
         unknown = select(SIX, state(tag=["no-such-tag"]), None)
         self.assertEqual(unknown["ids"], [])
@@ -489,6 +539,8 @@ class SelectTests(unittest.TestCase):
         self.assertEqual(got["counts"]["type"],
                          {"hydrolysis": 1, "acylation": 0,
                           "esterification": 1, "reduction": 1})
+        self.assertEqual(got["counts"]["kind"],
+                         {"specific": 1, "general": 2})
         empty = select(SIX, {**chosen, "q": "nothing"}, [])
         self.assertEqual(empty["ids"], [])
         self.assertEqual({facet: sorted(values)
@@ -525,6 +577,7 @@ class SelectTests(unittest.TestCase):
         self.assertEqual(counts["type"],
                          {"hydrolysis": 1, "acylation": 1,
                           "esterification": 0, "reduction": 0})
+        self.assertEqual(counts["kind"], {"specific": 2, "general": 0})
         plain = select(records, DEFAULT_STATE, None)
         self.assertEqual(plain["ids"], ids(1, 2, 3, 4, 5, 6))
         self.assertEqual(plain["counts"]["status"],

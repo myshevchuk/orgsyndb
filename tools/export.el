@@ -10,7 +10,8 @@
 ;; When any problem is an error, it exits 1 without installing, loading
 ;; or exporting anything.  Otherwise it exports every source to
 ;; STAGING_DIR/<stem>.md with the date, lastmod and ai_model that
-;; osdb-org.el chose.  ox-hugo and tomelr are cloned with git into
+;; osdb-org.el chose, and with the `scope' its table named scope gives,
+;; which is left out of the exported body.  ox-hugo and tomelr are cloned with git into
 ;; <app>/.emacs-batch/elpa/ at pinned commits on first use, and every run
 ;; that exports checks the installed checkouts against the pins.  Needs
 ;; Emacs 29.1 or later; package.el is not used.  Temporary files go to
@@ -164,6 +165,34 @@ all plain keys."
                   (seq-filter #'osdb-table-entry-p data))
           (cdr args))))
 
+(defvar osdb-scope nil
+  "The scope entries of the source being exported, or nil for none.
+Each entry is an alist as `osdb-org-scope' returns it.")
+
+(defun osdb-add-scope (args)
+  "Add `osdb-scope' to the front matter in ARGS under the key `scope'.
+ARGS are the arguments of `org-hugo--gen-front-matter'.  When
+`osdb-scope' is nil, ARGS are returned unchanged."
+  (if osdb-scope
+      (cons (append (car args) (list (cons 'scope osdb-scope)))
+            (cdr args))
+    args))
+
+(defun osdb-remove-scope-table ()
+  "Delete the table named scope and its `#+NAME' line from this buffer.
+Return the entries of `scope' that the table gives, as `osdb-org-scope'
+returns them; nil when the buffer has no such table."
+  (pcase-let ((`(,_problems ,entries ,start ,end)
+               (osdb-org-scope (buffer-string))))
+    (when start
+      (save-excursion
+        (goto-char (point-min))
+        (forward-line start)
+        (let ((from (point)))
+          (forward-line (- end start))
+          (delete-region from (point)))))
+    entries))
+
 (defun osdb-setup ()
   "Load ox-hugo, check the functions the guard needs, and set options."
   (require 'ox-hugo)
@@ -172,6 +201,9 @@ all plain keys."
     (unless (fboundp fn)
       (error "%s is not defined by the pinned ox-hugo and tomelr" fn)))
   (advice-add 'org-hugo--gen-front-matter :filter-args #'osdb-tables-last)
+  ;; Outermost, so that `scope' is in place before the tables move last.
+  (advice-add 'org-hugo--gen-front-matter :filter-args #'osdb-add-scope
+              '((depth . -90)))
   (setq org-export-with-author nil
         org-html-with-latex 'verbatim
         org-export-with-sub-superscripts '{}
@@ -181,7 +213,8 @@ all plain keys."
 
 (defun osdb-export-source (source staging)
   "Export SOURCE to STAGING/<stem>.md and return the file name.
-SOURCE is a plist of `osdb-org-examine'."
+SOURCE is a plist of `osdb-org-examine'.  The source file itself is
+read and left unchanged."
   (let ((file (plist-get source :path))
         (stem (plist-get source :stem))
         (ai-model (plist-get source :ai-model))
@@ -194,23 +227,25 @@ SOURCE is a plist of `osdb-org-examine'."
       (setq default-directory (file-name-directory file))
       (let ((coding-system-for-read 'utf-8-auto))
         (insert-file-contents file))
-      (org-mode)
-      (goto-char (point-min))
-      ;; Org replaces the extension of the export file name, so a
-      ;; bare stem such as OSDB-0001-x.de would lose its language code.
-      (insert "#+DATE: " (plist-get source :date) "\n"
-              "#+HUGO_LASTMOD: " (plist-get source :lastmod) "\n"
-              "#+EXPORT_FILE_NAME: " stem ".md\n")
-      (when ai-model
-        (insert "#+HUGO_CUSTOM_FRONT_MATTER: :ai_model "
-                (prin1-to-string ai-model) "\n"))
-      ;; ox-hugo takes the date from the CLOSED line of the heading at
-      ;; point; at the buffer start there is none.
-      (goto-char (point-min))
-      ;; Org draws reference IDs from `random'; seeding it with the
-      ;; stem makes the anchors a function of this file alone.
-      (random stem)
-      (org-hugo-export-to-md))))
+      ;; The page renders the scope table from the front matter.
+      (let ((osdb-scope (osdb-remove-scope-table)))
+        (org-mode)
+        (goto-char (point-min))
+        ;; Org replaces the extension of the export file name, so a
+        ;; bare stem such as OSDB-0001-x.de would lose its language code.
+        (insert "#+DATE: " (plist-get source :date) "\n"
+                "#+HUGO_LASTMOD: " (plist-get source :lastmod) "\n"
+                "#+EXPORT_FILE_NAME: " stem ".md\n")
+        (when ai-model
+          (insert "#+HUGO_CUSTOM_FRONT_MATTER: :ai_model "
+                  (prin1-to-string ai-model) "\n"))
+        ;; ox-hugo takes the date from the CLOSED line of the heading at
+        ;; point; at the buffer start there is none.
+        (goto-char (point-min))
+        ;; Org draws reference IDs from `random'; seeding it with the
+        ;; stem makes the anchors a function of this file alone.
+        (random stem)
+        (org-hugo-export-to-md)))))
 
 (defun osdb-report (problems)
   "Print PROBLEMS, (PATH . PROBLEM) pairs, to stdout, one line each.

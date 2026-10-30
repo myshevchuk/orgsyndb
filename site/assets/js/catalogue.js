@@ -1,6 +1,6 @@
-// The catalogue on /procedures/ and the term pages, as a progressive
-// enhancement: without it the page is its full table by ID. It runs after
-// search-terms.js and catalogue-core.js, in one bundle.
+// The catalogue on /procedures/, /general-procedures/ and the term pages,
+// as a progressive enhancement: without it the page is its full table by
+// ID. It runs after search-terms.js and catalogue-core.js, in one bundle.
 //
 // - Reveals every [data-catalogue-controls] element of div.catalogue, and
 //   drives the search field #catalogue-q of the site header's form.
@@ -29,7 +29,7 @@
   const root = document.querySelector("[data-catalogue]");
   if (!root || !core) return;
 
-  const FACETS = ["type", "status", "tag", "author"];
+  const FACETS = ["type", "kind", "status", "tag", "author"];
   const DELAY = 250;
   const fixed = root.dataset.fixed || null;
   const language = document.documentElement.lang || undefined;
@@ -84,6 +84,7 @@
       created: row.dataset.created || "",
       modified: row.dataset.modified || "",
       type: keysOf(row, "type"),
+      kind: row.dataset.kind ? [row.dataset.kind] : [],
       status: row.dataset.status ? [row.dataset.status] : [],
       tag: keysOf(row, "tag"),
       author: keysOf(row, "author"),

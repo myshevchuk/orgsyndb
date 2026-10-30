@@ -4,6 +4,7 @@ import re
 import tomllib
 import unittest
 
+from pipeline_support import org_scope_rows
 from support import (COMPOUNDS, FIXTURES, REPO, STATIC_DIR,
                      ValidatorTestCase, fixture_run, run_validator,
                      valid_set_run)
@@ -44,17 +45,24 @@ def load_compound(path):
 
 def named_keys(path) -> set[str]:
     """The compound keys a Markdown or Org fixture names, as products
-    or as substrates."""
+    or as substrates, at the top level or in the entries of its scope."""
     text = path.read_text(encoding="utf-8")
     if path.suffix == ".org":
         keys = set(re.findall(r'\(compound \. "([^"]*)"\)', text))
         for line in re.findall(r"^#\+HUGO_CUSTOM_FRONT_MATTER:.*:substrates"
                                r" '\(([^)]*)\)", text, re.M):
             keys |= set(re.findall(r'"([^"]*)"', line))
+        for row in org_scope_rows(text):
+            keys |= set(row.get("products", "").split())
+            keys |= set(row.get("substrates", "").split())
         return keys
     front = tomllib.loads(text.split("+++\n")[1])
-    keys = {entry["compound"] for entry in front["products"]}
-    return keys | set(front.get("substrates", []))
+    keys = {entry["compound"] for entry in front.get("products", [])}
+    keys |= set(front.get("substrates", []))
+    for entry in front.get("scope", []):
+        keys |= {product["compound"] for product in entry["products"]}
+        keys |= set(entry["substrates"])
+    return keys
 
 
 class ValidSetTests(ValidatorTestCase):

@@ -19,6 +19,7 @@ REPO = Path(__file__).resolve().parent.parent
 FIXTURES = REPO / "tests" / "fixtures"
 VALIDATOR = REPO / "tools" / "validate.py"
 BASELINE = FIXTURES / "baseline" / "OSDB-0100-baseline.md"
+GENERAL = FIXTURES / "general" / "OSDB-0140-general.md"
 VOCABULARY = FIXTURES / "reaction_types.toml"
 STATIC_DIR = FIXTURES / "static"
 COMPOUNDS = FIXTURES / "compounds"
@@ -180,10 +181,34 @@ def apply_edits(text: str, edits: Sequence[Edit]) -> str:
     return text
 
 
+def replace_text(old: str, new: str) -> Edit:
+    """Replace the one occurrence of ``old`` in the text by ``new``."""
+    def edit(text: str) -> str:
+        if text.count(old) != 1:
+            raise AssertionError(f"the text has no unique {old!r}")
+        return text.replace(old, new, 1)
+    return edit
+
+
+def replace_block(key: str, new_text: str) -> Edit:
+    """Replace the top-level assignment of ``key``, which may span
+    several lines and ends at a line that closes its array, by
+    ``new_text``."""
+    def edit(text: str) -> str:
+        pattern = re.compile(
+            rf"^{re.escape(key)} = \[.*?^\]$|^{re.escape(key)}\s*=.*$",
+            re.M | re.S)
+        found = pattern.search(text)
+        if found is None:
+            raise AssertionError(f"the text has no assignment of {key}")
+        return text[:found.start()] + new_text + text[found.end():]
+    return edit
+
+
 @contextlib.contextmanager
-def variant_root(file_name: str, *edits: Edit) -> Iterator[Path]:
-    """Write the edited baseline as the only file of a fresh root."""
-    text = apply_edits(BASELINE.read_text(encoding="utf-8"), edits)
+def _edited_root(source: Path, file_name: str,
+                 edits: Sequence[Edit]) -> Iterator[Path]:
+    text = apply_edits(source.read_text(encoding="utf-8"), edits)
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp) / "content"
         root.mkdir()
@@ -191,9 +216,30 @@ def variant_root(file_name: str, *edits: Edit) -> Iterator[Path]:
         yield root
 
 
+def variant_root(file_name: str, *edits: Edit
+                 ) -> contextlib.AbstractContextManager[Path]:
+    """Write the edited baseline as the only file of a fresh root."""
+    return _edited_root(BASELINE, file_name, edits)
+
+
 def variant_run(file_name: str, *edits: Edit) -> Result:
     """Variant run: the edited baseline under ``file_name``."""
     with variant_root(file_name, *edits) as root:
+        return fixture_run(root)
+
+
+def general_variant_root(file_name: str, *edits: Edit
+                         ) -> contextlib.AbstractContextManager[Path]:
+    """Write the edited general baseline as the only file of a fresh
+    root."""
+    return _edited_root(GENERAL, file_name, edits)
+
+
+def general_variant_run(file_name: str, *edits: Edit) -> Result:
+    """General variant run: the edited general baseline,
+    ``tests/fixtures/general/OSDB-0140-general.md``, under ``file_name``,
+    as the only file of a fresh content root."""
+    with general_variant_root(file_name, *edits) as root:
         return fixture_run(root)
 
 

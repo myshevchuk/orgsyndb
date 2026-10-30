@@ -1,12 +1,12 @@
 {{- /* The tabs of the Procedures section, at the start of main on the
-catalogue, the taxonomy pages and the term pages: all procedures and the
-three directories. The tab of the page itself carries
+catalogue, /general-procedures/, the taxonomy pages and the term pages:
+all procedures, the general procedures and the three directories. The tab of the page itself carries
 aria-current="page"; on a term page the tab of its taxonomy carries
 aria-current="true". */ -}}
 {{ $here := .RelPermalink -}}
 <nav class="section-tabs" aria-label="{{ T "nav_procedures" }}">
 <ul>
-{{ range slice (slice "/procedures/" "home_all_procedures") (slice "/reaction_types/" "title_reaction_types") (slice "/tags/" "title_tags") (slice "/authors/" "title_authors") -}}
+{{ range slice (slice "/procedures/" "home_all_procedures") (slice "/general-procedures/" "title_general_procedures") (slice "/reaction_types/" "title_reaction_types") (slice "/tags/" "title_tags") (slice "/authors/" "title_authors") -}}
 {{ $url := index . 0 -}}
 <li><a href="{{ $url }}"{{ if eq $here $url }} aria-current="page"{{ else if and (ne $url "/procedures/") (hasPrefix $here $url) }} aria-current="true"{{ end }}>{{ T (index . 1) }}</a></li>
 {{ end -}}

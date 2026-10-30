@@ -106,7 +106,7 @@ Two further rules apply:
 
 #### Scenario: SMILES substring in the catalogue
 - **WHEN** the orchestrator searches `c1ccccc1O`, `ccc(cc1)-c1`, `O=C(/C=C/c1`, `CCOC(=O)/C=C` and `OC(=O)/C=C/c1` on `/procedures/` in a browser (manual verification, tasks.md section 6)
-- **THEN** they show exactly OSDB-0001; OSDB-0004 and OSDB-0005; OSDB-0006; OSDB-0007; and OSDB-0007 and OSDB-0008, the sets whose normalised SMILES contain the normalised query
+- **THEN** they show exactly OSDB-0001; OSDB-0004, OSDB-0005 and OSDB-0009; OSDB-0006; OSDB-0007; and OSDB-0007 and OSDB-0008, the sets whose normalised SMILES contain the normalised query
 - **AND** the page shows no SMILES index text
 
 ### Requirement: Node stays optional

@@ -1,5 +1,11 @@
-{{- /* The compound keys a procedure page names in its products, in order.
-Takes the page; returns a slice, empty when it sets no products. */ -}}
+{{- /* The compound keys a procedure page names as its products: those of
+products, in order, or for a general procedure those of every entry of
+scope, each once, in order of first appearance. Takes the page; returns a
+slice, empty when it names no product. */ -}}
 {{- $keys := slice -}}
+{{- with .Params.scope -}}
+{{- range . }}{{ range .products }}{{ if not (in $keys .compound) }}{{ $keys = $keys | append .compound }}{{ end }}{{ end }}{{ end -}}
+{{- else -}}
 {{- range .Params.products }}{{ $keys = $keys | append .compound }}{{ end -}}
+{{- end -}}
 {{- return $keys -}}

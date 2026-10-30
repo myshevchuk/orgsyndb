@@ -53,11 +53,15 @@ Change the value after each equals sign. Keep text in double quotes. Keep
 numbers without quotes. Keep lists inside square brackets. Text entries
 use double quotes; each product entry uses curly braces, as shown below.
 
+The template describes a **specific procedure**, one run. For a shared
+method applied to several substrates, use a **general procedure**, as
+explained below.
+
 Fill in these required fields:
 
 - `id` and `slug`: leave the values supplied by `new`, or use the number the
   owner gave you.
-- `title`: the product name shown at the top of the page.
+- `title`: the product name or general method shown at the top of the page.
 - `date`: when the procedure was first written.
 - `lastmod`: when the procedure was last changed. Update it after every
   later edit.
@@ -67,11 +71,13 @@ Fill in these required fields:
 - `tags`: useful lowercase search terms. Replace the template's
   `change-me`. The `sample-data` tag adds a warning banner to the page and
   to printouts, so never use it for a real procedure.
-- `scale`: the amount of product made.
+- `scale`: the amount of product made, or the typical scale of a general
+  procedure.
 - `hazards`: short descriptions of the main hazards.
-- `products`: one or more compound keys, each with its isolated yield. A
-  key is the name of a file in `compounds/` without `.toml`; the next
-  section explains how to find or create it.
+- `products`: required for a specific procedure; for a general procedure, use
+  `scope` instead, as explained below. List one or more compound keys, each
+  with its isolated yield. A key is the name of a file in `compounds/` without
+  `.toml`; the next section explains how to find or create it.
 
 The template also contains optional, commented fields for starting
 materials (`substrates`), checkers, literature references and an AI model.
@@ -134,46 +140,109 @@ external images, or other external references. The site shows the image on
 a white panel in dark mode. Ask the owner to add or check the image if you
 do not work with SVG files.
 
-You may register a starting material even if no procedure makes it. A
-compound that no procedure uses is also allowed. **Compounds** in the site
-navigation opens the directory at `/compounds/`. Each name links to a page
-with chemical data, the structure when supplied, **Made by** procedures
-with yields and status, and **Used in** procedures with status.
+You may register a starting material even if no procedure makes it. A compound
+that no procedure uses is also allowed. **Compounds** in the site navigation
+opens the directory at `/compounds/`. Each name links to a page with chemical
+data, the structure when supplied, **Made by** procedures with yields and
+status, and **Used in** procedures with status. A general procedure appears
+under **Made by** once per entry that makes the compound, as
+`<ID> <title> · entry <n> · <yield> % · <status>`. **Used in** lists each
+procedure once, and the directory counts each procedure once.
+
+### Write a general procedure
+
+When one method covers several substrates, write it once as a **general
+procedure**. Put each application of the method in `scope`, a list of entries
+with starting materials, products and yields. Its presence makes the procedure
+general; you do not add a `kind` field.
+
+Remove the template's top-level `products` and `substrates` lines. Keep all
+other required fields, including `scale` for the typical scale. Inside the
+front matter, write an array of tables in braces. This excerpt uses the three
+entries of the demo's general procedure:
+
+```toml
+scale = "10 mmol"
+scope = [
+  { substrates = ["4-acetylbiphenyl"], time = "30 min", products = [{ compound = "1-biphenyl-4-yl-ethanol", yield_percent = 90 }] },
+  { substrates = ["acetophenone"], time = "20 min", products = [{ compound = "1-phenylethanol", yield_percent = 85 }] },
+  { substrates = ["4-bromoacetophenone"], scale = "5 mmol", time = "30 min", products = [{ compound = "1-4-bromophenyl-ethanol", yield_percent = 88 }] },
+]
+```
+
+Each entry requires non-empty `substrates` and `products`. Products use the
+same `compound` and `yield_percent` fields as above. Entries are numbered from
+1 in their order. Within each entry, do not repeat a key or list a product as a
+starting material. A compound may be a starting material in one entry and a
+product in another.
+
+You may add `scale`, `time`, `temperature` and `note` to an entry. Write a time
+as a number followed by `min`, `h` or `d`, such as `"30 min"`. Write
+temperature as an unquoted number in °C, such as `temperature = 80`, without a
+unit. `scale` follows the usual number-and-unit rule; `note` is non-empty text.
+Keep the eight body sections and describe the shared method there. The complete
+[OSDB-0009
+example](../examples/demo/md/procedures/OSDB-0009-benzylic-alcohols.md) reduces
+three aryl methyl ketones with sodium borohydride. It is the ninth procedure in
+the demo, which contains sample data rather than verified experimental results.
+
+To show the overall reaction, place an SVG or PNG under `static/structures/`
+and set this optional procedure field:
+
+```toml
+scheme_image = "structures/aryl-ketone-reduction.svg"
+```
+
+The path must start with `structures/`, contain no `..` component and name an
+existing `.svg` or `.png` file under `static/`. Any procedure may use
+`scheme_image`; it replaces product structures in the title block. A general
+procedure without it shows the **No structure image** placeholder.
 
 ### How the fields appear on the page
 
-The labels below are those of an English site; a German site, the
-default, shows them in German, such as **Kopieren** for **Copy**. The title
-block shows `id` and a `status` badge above the title. When `status` is
-`checked` and `checked_by` is set, the checkers' names follow the badge,
-so the line reads **checked by** followed by the names. Under the title,
-`scale` appears as **Scale** and the product yields as **Yield**. One
-product shows only its percentage; several show a percentage and compound
-name for each, in product order. The **Print / Save as PDF** button
-follows them.
+The labels below are those of an English site; a German site, the default,
+shows them in German, such as **Kopieren** for **Copy**. The title block shows
+`id` and a `status` badge above the title. When `status` is `checked` and
+`checked_by` is set, the checkers' names follow the badge, so the line reads
+**checked by** followed by the names. Under the title, `scale` appears as
+**Scale** and the product yields as **Yield**. For a specific procedure, one
+product shows only its percentage; several show a percentage and compound name
+for each, in product order. The **Print / Save as PDF** button follows them.
+For a general procedure, **Scale** is the typical top-level scale and **Yield**
+is the range over all products of all entries, `<min>–<max> %`, or one
+percentage when all yields are equal.
 
-The page shows one structure figure for each product whose compound has
-an image, in product order. On a wide screen, the figures sit to the right
-of the title, above the information panel. In a narrow window they follow
-the print button, before the panel. In print they also precede the panel.
-When no product has an image, the screen shows a **No structure image**
-placeholder, which is omitted from printouts. A rule closes the title
-block on screen.
+Without `scheme_image`, a specific procedure shows one structure figure for
+each product whose compound has an image, in product order. On a wide screen,
+the figures sit to the right of the title, above the information panel. In a
+narrow window they follow the print button, before the panel. In print they
+also precede the panel. When neither a scheme nor product figures are shown,
+the screen shows a **No structure image** placeholder, which is omitted from
+printouts. A rule closes the title block on screen.
 
-The information panel always links the product names to their compound
-pages under **Product** or **Products**, even when a name equals the title.
-For a single product it also shows formula, molecular weight, CAS number
-when present and SMILES. For several products, find those data on the
-compound pages. **Starting materials** links the compounds in `substrates`.
-The panel then shows reaction type, tags, authors, checkers when present
-for draft or retired procedures under **Checked by**, created and modified
-times, and precursor or used-in links. Formula digits appear as subscripts.
-Molecular weight gains `g/mol`, yield gains a percent sign, and SMILES has
-a **Copy** button. Reaction type, tag, and author values link to pages
-that list related procedures. The site title-cases author names for
-display, so a name entered as `van` appears as `Van`. The eight body
-sections appear beside the panel on a wide screen and after it in a
-narrow window or in print.
+The information panel always links the product names to their compound pages
+under **Product** or **Products**, even when a name equals the title. For a
+single product it also shows formula, molecular weight, CAS number when present
+and SMILES. For several products, find those data on the compound pages.
+**Starting materials** links the compounds in `substrates`. For a general
+procedure, both lists include all entries, each compound once in order of first
+appearance. Precursor and used-in links also consider every entry. The panel
+then shows reaction type, tags, authors, checkers when present for draft or
+retired procedures under **Checked by**, created and modified times, and
+precursor or used-in links. Formula digits appear as subscripts. Molecular
+weight gains `g/mol`, yield gains a percent sign, and SMILES has a **Copy**
+button. Reaction type, tag, and author values link to pages that list related
+procedures. The site title-cases author names for display, so a name entered as
+`van` appears as `Van`. The eight body sections appear beside the panel on a
+wide screen and after it in a narrow window or in print.
+
+A general procedure adds **Scope** before **Summary**, with one row per entry.
+**Entry**, **Starting materials**, **Products** and **Yield** always appear.
+**Scale**, **Time**, **Temperature** and **Note** appear only when some entry
+sets them; an unset value leaves an empty cell. Starting materials and products
+link to compound pages, and products show small structure images when their
+registry records have them. For example, entry 1 of OSDB-0009 makes the same
+alcohol as OSDB-0005, so that compound's page lists both routes.
 
 ## 3. Write the procedure
 
@@ -257,6 +326,14 @@ command again after correcting the file. The last line reports how many
 files, errors, and warnings were found; its file count includes compound
 records.
 
+For a general procedure, `scope[2].products[1].yield_percent` means the yield
+of the first product in entry 2. `must not be empty` under `scope` means you
+need at least one entry. If a top-level field reports
+`a general procedure lists them in scope; move <key> into its entries`, remove
+that line and put the data inside the relevant entries. A time error asks for a
+number followed by `min`, `h` or `d`; a temperature error asks for an unquoted
+number in °C.
+
 If a message is unclear, look up its field in the
 [procedure schema](SCHEMA.md). If you sent the file to the owner, the owner
 can run the same check and send you the messages.
@@ -287,6 +364,19 @@ WeasyPrint-generated PDFs contain.
 The preview does not update while it is running. After an edit, stop it and
 run `orgsyndb serve` again.
 
+To find your general procedure, open **Procedures** and use the **Kind**
+filter: **Specific procedure** or **General procedure**. The tabs are **All
+procedures**, **General procedures**, **Reaction types**, **Tags** and
+**Authors**. **General procedures** opens `/general-procedures/`, a catalogue
+limited to general procedures. Its header search is labelled **Search general
+procedures** and searches within that list. **Only general procedures · Browse
+all procedures** links back to the full catalogue. **Clear all** keeps this
+restriction; **Browse all procedures** removes it while carrying your query,
+other filters, sort and view. The address parameter `kind=general` selects the
+same kind in the full catalogue. Without JavaScript, the general-procedures
+page still lists its procedures by ID. Catalogue **Details** includes products
+from every entry and shows the yield range.
+
 ## 7. Write in German or translate a procedure
 
 The site shows one language, German unless the owner has set it to
@@ -309,14 +399,14 @@ Use the [German procedure style guide](STYLE.de.md) for the wording and the
 [German organic-synthesis glossary](GLOSSARY.de.md) for terms, fixed
 phrases, reusable sentences, and their English equivalents.
 
-To translate an existing procedure, copy its file and add the language
-code before the extension, for example `OSDB-0002-aspirin.md` to
-`OSDB-0002-aspirin.de.md`. Keep the `id`, `slug`, `status`,
-`reaction_types`, `tags`, `products` and `substrates` as they are; the check
-reports any difference as an error. Numeric yields compare by value, so
+To translate an existing procedure, copy its file and add the language code
+before the extension, for example `OSDB-0002-aspirin.md` to
+`OSDB-0002-aspirin.de.md`. Keep the `id`, `slug`, `status`, `reaction_types`,
+`tags`, `products`, `substrates` and `scheme_image` as they are. Keep `scope`
+and its entry order, translating only each entry's `note`. The check reports
+differences in the shared fields as errors. Numeric yields compare by value, so
 `85` and `85.0` agree. Compound names come from `name` and `name_de` in the
-shared registry; add or edit `name_de` there for the German name.
-Translate the title, the hazards and the body, set
-`date` and `lastmod` to the time of the translation, and use the section
-headings and Reagents columns of the new language, which the
-[procedure schema](SCHEMA.md#languages-and-variants) lists.
+shared registry; add or edit `name_de` there for the German name. Translate the
+title, the hazards and the body, set `date` and `lastmod` to the time of the
+translation, and use the section headings and Reagents columns of the new
+language, which the [procedure schema](SCHEMA.md#languages-and-variants) lists.

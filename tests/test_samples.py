@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 import sample_support as sup
+import test_theme_static as tts
 from pipeline_support import DEMO, FIXTURES, REPO
 
 ORG_SEED = DEMO / "org" / "procedures" / "OSDB-0001-salicylic-acid.org"
@@ -184,7 +185,28 @@ EXPECTED_SAMPLES = {
         "C9H8O2", "140-10-3"),
 }
 CHAINS = {("OSDB-0001", "OSDB-0002"), ("OSDB-0004", "OSDB-0005"),
-          ("OSDB-0007", "OSDB-0008")}
+          ("OSDB-0004", "OSDB-0009"), ("OSDB-0007", "OSDB-0008")}
+GENERAL_SAMPLE = "md/procedures/OSDB-0009-benzylic-alcohols.md"
+GENERAL_SCOPE = [
+    {"substrates": ["4-acetylbiphenyl"], "time": "30 min",
+     "products": [{"compound": "1-biphenyl-4-yl-ethanol",
+                   "yield_percent": 90}]},
+    {"substrates": ["acetophenone"], "time": "20 min",
+     "products": [{"compound": "1-phenylethanol", "yield_percent": 85}]},
+    {"substrates": ["4-bromoacetophenone"], "time": "30 min",
+     "scale": "5 mmol",
+     "products": [{"compound": "1-4-bromophenyl-ethanol",
+                   "yield_percent": 88}]},
+]
+GENERAL_COMPOUNDS = {
+    "acetophenone": ["Acetophenone", "Acetophenon", "C8H8O", 120.15,
+                     "CC(=O)c1ccccc1", "98-86-2"],
+    "1-phenylethanol": ["1-Phenylethanol", "1-Phenylethanol", "C8H10O",
+                        122.17, "CC(O)c1ccccc1", "98-85-1"],
+    "1-4-bromophenyl-ethanol": [
+        "1-(4-Bromophenyl)ethanol", "1-(4-Bromphenyl)ethanol", "C8H9BrO",
+        201.06, "CC(O)c1ccc(Br)cc1", "5391-88-8"],
+}
 LONG_SAMPLE = DEMO / "org" / "procedures" / "OSDB-0004-4-acetylbiphenyl.org"
 STRUCTURE_SAMPLE = (DEMO / "org" / "procedures"
                     / "OSDB-0003-isopentyl-acetate.org")
@@ -215,16 +237,16 @@ class ThemeSampleSetTests(unittest.TestCase):
             sum(s.path.suffix == ".org" for s in found), 4,
             "number of Org samples")
         self.assertEqual(
-            sum(s.path.suffix == ".md" for s in found), 4,
+            sum(s.path.suffix == ".md" for s in found), 5,
             "number of Markdown samples")
         self.assertGreaterEqual(
             len({r for s in found for r in s.data.get("reaction_types", [])}),
             5)
-        makers = {e["compound"]: s for s in found
-                  for e in s.data.get("products", [])}
+        makers = {key: s for s in found
+                  for key in sup.product_keys(s.data)}
         chains = set()
         for sample in found:
-            for key in sample.data.get("substrates", []):
+            for key in sup.substrate_keys(sample.data):
                 if key in makers:
                     maker = makers[key]
                     chains.add((maker.data["id"], sample.data["id"]))
@@ -232,12 +254,11 @@ class ThemeSampleSetTests(unittest.TestCase):
                         self.assertEqual(maker.path.suffix, ".org")
                         self.assertEqual(sample.path.suffix, ".md")
         self.assertEqual(chains, CHAINS)
+        used = {c for o in found for c in sup.substrate_keys(o.data)}
         made_and_used = [
             s.data["id"] for s in found
-            if any(k in makers for k in s.data.get("substrates", []))
-            and any(e["compound"] in {c for o in found
-                                      for c in o.data.get("substrates", [])}
-                    for e in s.data.get("products", []))]
+            if any(k in makers for k in sup.substrate_keys(s.data))
+            and any(k in used for k in sup.product_keys(s.data))]
         self.assertEqual(made_and_used, [], "a procedure needing both links")
         for sample in found:
             with self.subTest(sample=sample.path.name):
@@ -286,7 +307,7 @@ class LongSampleTests(unittest.TestCase):
 class GermanSampleTests(unittest.TestCase):
     def test_every_sample_has_a_german_translation(self) -> None:
         """Scenario: Every sample has a German translation."""
-        for relative in EXPECTED_SAMPLES:
+        for relative in [*EXPECTED_SAMPLES, GENERAL_SAMPLE]:
             original = DEMO / relative
             translation = original.with_suffix(".de" + original.suffix)
             with self.subTest(file=translation.name):
@@ -297,10 +318,13 @@ class GermanSampleTests(unittest.TestCase):
                 english, german = read(original), read(translation)
                 self.assertEqual(german.language, "de")
                 for key in ("id", "status", "reaction_types", "tags",
-                            "products", "substrates", "authors"):
+                            "products", "substrates", "authors",
+                            "scheme_image"):
                     self.assertEqual(german.data.get(key),
                                      english.data.get(key), key)
-                self.assertTrue(german.data.get("products"))
+                self.assertEqual(sup.scope_without_notes(german.data),
+                                 sup.scope_without_notes(english.data))
+                self.assertTrue(sup.product_keys(german.data))
                 self.assertEqual(
                     set(german.data) & {"product", "yield_percent",
                                         "precursors", "structure_image"},
@@ -319,6 +343,80 @@ class GermanSampleTests(unittest.TestCase):
 
         self.assertGreaterEqual(numbered(terms["procedure"]), 15)
         self.assertGreaterEqual(numbered(terms["notes"]), 6)
+
+
+class DemoGeneralProcedureTests(unittest.TestCase):
+    """Scenario: The demo's general procedure."""
+
+    def read(self, suffix: str) -> sup.Sample:
+        path = (DEMO / "md" / "procedures"
+                / f"OSDB-0009-benzylic-alcohols{suffix}.md")
+        self.assertTrue(path.is_file(), f"{path.name} is missing")
+        return sup.read_markdown(path)
+
+    def test_the_procedure_carries_the_stated_scope(self) -> None:
+        """Scenario: The demo's general procedure (the procedure)."""
+        for suffix in ("", ".de"):
+            sample = self.read(suffix)
+            data = sample.data
+            with self.subTest(variant=suffix or "en"):
+                self.assertEqual(data["id"], "OSDB-0009")
+                self.assertEqual(data["reaction_types"], ["reduction"])
+                self.assertEqual(data["tags"],
+                                 ["sample-data", "sodium-borohydride"])
+                self.assertEqual(data["scale"], "10 mmol")
+                self.assertEqual(data["scheme_image"],
+                                 "structures/aryl-ketone-reduction.svg")
+                self.assertNotIn("products", data)
+                self.assertNotIn("substrates", data)
+                self.assertEqual(sup.scope_without_notes(data),
+                                 GENERAL_SCOPE)
+                notes = [entry.get("note") for entry in data["scope"]]
+                self.assertEqual([n is None for n in notes],
+                                 [True, True, False])
+                self.assertTrue(notes[2].strip())
+
+    def test_the_scheme_image_is_safe_svg(self) -> None:
+        """Scenario: The demo's general procedure (the image)."""
+        path = DEMO / "static" / "structures" / "aryl-ketone-reduction.svg"
+        self.assertTrue(path.is_file(), f"{path.name} is missing")
+        check = tts.StructureImageTests(
+            "test_every_shipped_image_is_safe_svg").check
+        self.assertEqual(check(path), [])
+
+    def test_the_registry_holds_the_three_compounds(self) -> None:
+        """Scenario: The demo's general procedure (the compounds)."""
+        keys = ["name", "name_de", "formula", "mw", "smiles", "cas"]
+        registry = sup.read_registry(DEMO / "compounds")
+        for key, values in GENERAL_COMPOUNDS.items():
+            with self.subTest(compound=key):
+                self.assertIn(key, registry)
+                self.assertEqual(list(registry[key]), keys)
+                self.assertEqual(list(registry[key].values()), values)
+
+    def test_the_reagents_table_describes_entry_one(self) -> None:
+        """Requirement: Demo general procedure (the Reagents table)."""
+        for suffix in ("", ".de"):
+            sample = self.read(suffix)
+            with self.subTest(variant=suffix or "en"):
+                self.assertEqual(sup.quantity_violations(sample), [])
+                limiting = sample.table[1]
+                self.assertEqual(limiting[0], "4-Acetylbiphenyl")
+                self.assertEqual(sup.number(limiting[4]), 10.0)
+
+    def test_it_is_not_among_the_newest(self) -> None:
+        """Requirement: Demo general procedure (lastmod)."""
+        def modified(sample: sup.Sample):
+            if sample.path.suffix == ".md":
+                return sample.data["lastmod"]
+            keywords = sup.read_org_keywords(sample.path)
+            return sup.berlin_instants(keywords["LAST_MODIFIED"])[-1]
+
+        general = modified(self.read(""))
+        others = [modified(s) for s in samples()
+                  if s.language == "en" and s.data["id"] != "OSDB-0009"]
+        self.assertEqual(len(others), 8)
+        self.assertLessEqual(general, min(others))
 
 
 ORG_SOURCE = """\
@@ -475,15 +573,16 @@ class TestCollectionTests(unittest.TestCase):
             relative_files(DEMO / "compounds"), "compounds/ files")
         names = {p.stem + ".md" if p.suffix == ".org" else p.name
                  for p in sample_files()}
-        self.assertEqual(len(names), 16)
+        self.assertEqual(len(names), 18)
         self.assertEqual(
             relative_files(COLLECTION / "md" / "procedures"), names)
-        for path in sample_files():
-            if path.suffix == ".md":
-                with self.subTest(file=path.name):
-                    self.assertEqual(
-                        (COLLECTION / "md" / "procedures"
-                         / path.name).read_bytes(), path.read_bytes())
+        markdown = [p for p in sample_files() if p.suffix == ".md"]
+        self.assertEqual(len(markdown), 10)
+        for path in markdown:
+            with self.subTest(file=path.name):
+                self.assertEqual(
+                    (COLLECTION / "md" / "procedures"
+                     / path.name).read_bytes(), path.read_bytes())
 
     def test_converted_samples_agree_with_their_org_sources(self) -> None:
         """Scenario: Converted samples agree with their Org sources."""

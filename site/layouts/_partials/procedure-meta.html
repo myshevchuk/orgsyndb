@@ -1,23 +1,25 @@
 {{- /* The metadata panel: one dt/dd pair per field that is set, in the
 canonical order, labelled in the page's language. It repeats nothing the
 procedure header shows: no ID, scale or yield, and the checkers only when
-the status is not checked. Product, or Products for several, links each
-product's compound page; the compound's formula, weight, CAS number and
-SMILES follow only for a procedure with one product (compound-facts.html),
-and index-terms.html keeps every product's in the indexed text. Starting
-materials link the compounds of substrates. A newline separates every
+the status is not checked. Product, or Products for several, links the
+compound page of each product (product-keys.html, which for a general
+procedure takes them from every entry); the compound's formula, weight,
+CAS number and SMILES follow only for a procedure with one product
+(compound-facts.html), and index-terms.html keeps every product's in the
+indexed text. Starting materials link the compounds of
+substrate-keys.html. A newline separates every
 </dt> from its <dd>, so that Pagefind indexes each label and value as
 separate words. */ -}}
 {{ $p := .Params -}}
 <dl class="metadata">
-{{ with $p.products -}}
+{{ with partial "product-keys.html" . -}}
 <dt>{{ T (cond (eq (len .) 1) "label_product" "label_products") }}</dt>
-<dd>{{ range $i, $entry := . }}{{ if $i }}, {{ end }}{{ partial "compound-link.html" $entry.compound }}{{ end }}</dd>
-{{ if eq (len .) 1 }}{{ with index site.Data.compounds (index . 0).compound -}}
+<dd>{{ range $i, $key := . }}{{ if $i }}, {{ end }}{{ partial "compound-link.html" $key }}{{ end }}</dd>
+{{ if eq (len .) 1 }}{{ with index site.Data.compounds (index . 0) -}}
 {{ partial "compound-facts.html" . -}}
 {{ end }}{{ end -}}
 {{ end -}}
-{{ with $p.substrates -}}
+{{ with partial "substrate-keys.html" . -}}
 <dt>{{ T "label_substrates" }}</dt>
 <dd>{{ range $i, $key := . }}{{ if $i }}, {{ end }}{{ partial "compound-link.html" $key }}{{ end }}</dd>
 {{ end -}}

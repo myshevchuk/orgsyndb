@@ -7,12 +7,14 @@ integration tests do.
 """
 
 import catalogue_support as cs
+import general_support as gs
 import pipeline_support as ps
 from pipeline_support import Page
 
 NAVIGATION = [("/procedures/", "Vorschriften"),
               ("/compounds/", "Verbindungen"), ("/help/", "Hilfe")]
 TABS = [("/procedures/", "Alle Vorschriften"),
+        ("/general-procedures/", "Allgemeine Vorschriften"),
         ("/reaction_types/", "Reaktionstypen"), ("/tags/", "Schlagwörter"),
         ("/authors/", "Autoren")]
 FOOTER = (r"^OrgSynDB · interne Vorschriften · Stand "
@@ -22,6 +24,7 @@ PANEL_LABELS = ["Produkt", "Summenformel", "Molmasse", "CAS", "SMILES",
                 "Ausgangsstoffe", "Reaktionstyp", "Schlagwörter", "Autoren",
                 "Erstellt", "Geändert", "Vorstufen"]
 TITLES = {"procedures/index.html": "Vorschriften",
+          "general-procedures/index.html": "Allgemeine Vorschriften",
           "reaction_types/index.html": "Reaktionstypen",
           "tags/index.html": "Schlagwörter",
           "authors/index.html": "Autoren", "compounds/index.html":
@@ -75,6 +78,11 @@ class GermanSiteTests(GermanCase):
                              "Vorschriften durchsuchen")
             self.assertEqual(field.get("placeholder"),
                              "Produkt, CAS, SMILES oder Stichwort")
+        elif page.url == "/general-procedures/":
+            self.assertEqual(field.get("aria-label"),
+                             "Allgemeine Vorschriften durchsuchen")
+            self.assertEqual(field.get("placeholder"),
+                             "Diese Vorschriften durchsuchen")
         else:
             self.assertRegex(field.get("aria-label"),
                              r"^Vorschriften .+ durchsuchen$")
@@ -112,7 +120,7 @@ class GermanSiteTests(GermanCase):
     def test_the_german_variants_are_published(self) -> None:
         """Scenario: Choosing the variant to publish (test collection)."""
         published = self.content()
-        self.assertEqual(len(published), 8)
+        self.assertEqual(len(published), 9)
         for item in published:
             with self.subTest(procedure=item.id):
                 self.assertEqual(item.language, "de")
@@ -179,7 +187,7 @@ class GermanSiteTests(GermanCase):
         page = self.page("procedures/index.html")
         block = self.check_catalogue(page, fixed=None, heading="Vorschriften")
         self.assertEqual(block.find("p", "catalogue-count").norm(),
-                         "8 Vorschriften")
+                         "9 Vorschriften")
         self.check_controls(page)
         statuses = page.find("details", "facet", data_facet="status")
         self.assertIsNotNone(statuses, "no status facet")
@@ -189,6 +197,60 @@ class GermanSiteTests(GermanCase):
             ["Entwurf", "Geprüft", "Zurückgezogen"])
         self.assertEqual(self.table_ids(page), sorted(
             item.id for item in self.content()))
+
+    def test_german_general_procedures_view(self) -> None:
+        """Scenario: German page titles (the general procedures)."""
+        page = self.page("general-procedures/index.html")
+        self.assertEqual(page.find("h1").norm(), "Allgemeine Vorschriften")
+        self.assertEqual(page.title(), "Allgemeine Vorschriften | OrgSynDB")
+        self.check_general_view(page, self.content())
+        scope = page.find("p", "catalogue-scope")
+        self.assertEqual(
+            scope.norm(),
+            "Nur allgemeine Vorschriften · Alle Vorschriften anzeigen")
+        everything = self.page("procedures/index.html")
+        self.assertEqual(
+            [label for _, label in ps.facet_values(everything, "kind")],
+            ["Einzelvorschrift", "Allgemeine Vorschrift"])
+        self.assertEqual(
+            everything.find("details", "facet", data_facet="kind")
+            .find("summary").norm(), "Art")
+
+    def test_german_page_of_a_general_procedure(self) -> None:
+        """Scenario: German metadata panel (a general procedure)."""
+        item = {i.id: i for i in self.content()}["OSDB-0009"]
+        page = self.page("procedures/osdb-0009/index.html")
+        registry = ps.read_registry(self.sandbox)
+        table = gs.check_scope_table(self, page, item, registry, "de",
+                                     "Zusammenfassung")
+        rows = [[c.norm() for c in r.elements() if c.tag in ("td", "th")]
+                for r in table.find_all("tr")]
+        self.assertEqual(rows[0], [
+            "Eintrag", "Ausgangsstoffe", "Produkte", "Ausbeute",
+            "Ansatzgröße", "Zeit", "Anmerkung"])
+        self.assertEqual(rows[3][:3], [
+            "3", "4′-Bromacetophenon", "1-(4-Bromphenyl)ethanol"])
+        self.assertEqual(rows[3][6], item.scope[2]["note"])
+        self.assertTrue(rows[3][6].startswith("Das Produkt schmilzt"))
+        gs.check_key_facts(self, page, item, registry, "de")
+        key = page.find("dl", "key-facts")
+        self.assertEqual([(p.label, p.definition.norm())
+                          for p in page.definition_pairs(key)],
+                         [("Ansatzgröße", "10 mmol"),
+                          ("Ausbeute", "85–90 %")])
+        gs.check_scheme_figure(self, page, item,
+                               "structures/aryl-ketone-reduction.svg", "de")
+        self.assertEqual(
+            page.find("header", "procedure-header").find("img")
+            .attrs.get("alt"),
+            "Schema von Sekundäre Benzylalkohole durch Reduktion mit "
+            "Natriumborhydrid")
+        panel = {p.label: p.definition
+                 for p in page.definition_pairs(page.find("dl", "metadata"))}
+        self.assertEqual(
+            list(panel),
+            ["Produkte", "Ausgangsstoffe", "Reaktionstyp", "Schlagwörter",
+             "Autoren", "Erstellt", "Geändert", "Vorstufen"])
 
     def test_german_term_page(self) -> None:
         """Scenario: German catalogue and home page (term page)."""
@@ -252,7 +314,7 @@ class PartialTranslationTests(GermanCase):
     def test_every_procedure_is_published(self) -> None:
         """Scenario: Every procedure in every locale."""
         chosen = {item.id: item.path.name for item in self.content()}
-        self.assertEqual(len(chosen), 9)
+        self.assertEqual(len(chosen), 10)
         self.assertEqual(chosen["OSDB-0001"], "OSDB-0001-salicylic-acid.md")
         self.assertEqual(chosen["OSDB-0100"], "OSDB-0100-baseline.en.md")
         self.assertEqual(chosen["OSDB-0002"], "OSDB-0002-aspirin.de.md")
@@ -264,10 +326,10 @@ class PartialTranslationTests(GermanCase):
         self.assertIsNotNone(browse, "no ul.browse-list")
         first = browse.find_all("li")[0]
         self.assertEqual(first.elements()[0].norm(), "Alle Vorschriften")
-        self.assertEqual(first.find("span", "count").norm(), "(9)")
+        self.assertEqual(first.find("span", "count").norm(), "(10)")
         rows = ps.catalogue_rows(self.page("procedures/index.html"))
         ids = [ps.row_cells(row)[0].norm() for row in rows]
-        self.assertEqual(len(ids), 9)
+        self.assertEqual(len(ids), 10)
         self.assertEqual(sorted(set(ids)), sorted(chosen))
 
     def test_a_variant_in_another_language_is_marked(self) -> None:
@@ -291,8 +353,74 @@ class PartialTranslationTests(GermanCase):
         english = self.page("procedures/osdb-0004/index.html")
         used_in = [(l.target, l.node.norm()) for l in english.links()
                    if l.node.has_class("used-in")]
-        self.assertEqual(used_in, [("/procedures/osdb-0005/",
-                                    "OSDB-0005 1-(Biphenyl-4-yl)ethanol")])
+        self.assertEqual(
+            used_in,
+            [("/procedures/osdb-0005/",
+              "OSDB-0005 1-(Biphenyl-4-yl)ethanol"),
+             ("/procedures/osdb-0009/",
+              "OSDB-0009 Sekundäre Benzylalkohole durch Reduktion mit "
+              "Natriumborhydrid")])
+
+
+class GermanGeneralFixtureTests(GermanCase):
+    """The test collection plus the general baseline, built in German:
+    numbers with a decimal comma in the scope table and the key facts."""
+
+    @classmethod
+    def prepare(cls) -> None:
+        ps.put_general_fixture(cls.sandbox)
+
+    def item(self) -> ps.Content:
+        return {i.id: i for i in self.content()}["OSDB-0140"]
+
+    def test_the_scope_table_writes_decimal_commas(self) -> None:
+        """Requirement: Scope table on the page (decimal separator)."""
+        page = self.page("procedures/osdb-0140/index.html")
+        registry = ps.read_registry(self.sandbox)
+        table = gs.check_scope_table(self, page, self.item(), registry, "de",
+                                     "Summary")
+        rows = [[c.norm() for c in r.elements() if c.tag in ("td", "th")]
+                for r in table.find_all("tr")]
+        self.assertEqual(rows[0], [
+            "Eintrag", "Ausgangsstoffe", "Produkte", "Ausbeute",
+            "Ansatzgröße", "Zeit", "Temperatur", "Anmerkung"])
+        self.assertEqual(rows[1][1:5], [
+            "Essigsäure, Ethanol", "Ethylacetat", "85 %", "20 mmol"])
+        self.assertEqual(rows[1][5:7], ["2 h", "80 °C"])
+        self.assertEqual(rows[2][3], "78 %, 64,5 %")
+        self.assertEqual(rows[3][3], "72,5 %")
+        self.assertEqual(
+            [(i.attrs.get("alt"), page.resolve(i.attrs["src"]))
+             for i in table.find_all("img", "scope-structure")],
+            [("Strukturformel von Ethylacetat",
+              "/structures/ethyl-acetate.svg")])
+
+    def test_the_key_facts_write_the_range_with_a_decimal_comma(
+            self) -> None:
+        """Requirement: Procedure page structure (German range)."""
+        page = self.page("procedures/osdb-0140/index.html")
+        key = page.find("dl", "key-facts")
+        self.assertEqual([(p.label, p.definition.norm())
+                          for p in page.definition_pairs(key)],
+                         [("Ansatzgröße", "25 mmol"),
+                          ("Ausbeute", "64,5–85 %")])
+
+    def test_the_placeholder_is_german(self) -> None:
+        """Scenario: Scheme image of a general procedure (German)."""
+        page = self.page("procedures/osdb-0140/index.html")
+        figure = page.find("header", "procedure-header").find(
+            "figure", "structure")
+        self.assertTrue(figure.has_class("structure--placeholder"))
+        self.assertEqual(figure.find("div", "structure__slot").norm(),
+                         "Keine Strukturformel")
+
+    def test_the_compound_page_names_the_entry_in_german(self) -> None:
+        """Requirement: Compound pages (German entries)."""
+        page = self.page("compounds/propyl-acetate/index.html")
+        made = page.find("section", "compound-made-by")
+        self.assertEqual(
+            [li.norm() for li in made.find_all("li")],
+            ["OSDB-0140 Acetate Esters · Eintrag 2 · 64,5 % · Entwurf"])
 
 
 class GermanPdfTests(GermanCase):

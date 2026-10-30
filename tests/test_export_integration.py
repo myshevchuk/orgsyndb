@@ -245,6 +245,112 @@ class ExportedFrontMatterTests(ExportTestCase):
                         tzinfo=dt.timezone(dt.timedelta(hours=2))))
 
 
+SCOPE_FIXTURE = "OSDB-0909-scope-table"
+SCOPE = [
+    {"substrates": ["acetic-acid", "ethanol"],
+     "products": [{"compound": "ethyl-acetate", "yield_percent": 45.5},
+                  {"compound": "propyl-acetate", "yield_percent": 30}],
+     "time": "2 h", "temperature": 80, "note": "Reflux"},
+    {"substrates": ["acetic-acid"],
+     "products": [{"compound": "benzyl-acetate", "yield_percent": 78}],
+     "temperature": 25, "note": "Stir only"},
+    {"substrates": ["ethanol"],
+     "products": [{"compound": "methyl-benzoate", "yield_percent": 72.5}],
+     "time": "30 min", "temperature": 60.5, "note": "Two phases"},
+]
+
+
+class ScopeTableExportTests(ExportTestCase):
+    def exported_scope(self) -> tuple[ps.Sandbox, str]:
+        sandbox = self.sandbox()
+        self.only_sources(sandbox, f"{SCOPE_FIXTURE}.org")
+        result = self.export(sandbox)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return sandbox, self.exported(sandbox, SCOPE_FIXTURE)
+
+    def test_scope_table_exports_to_front_matter(self) -> None:
+        """Scenario: Scope table exports to front matter."""
+        _, text = self.exported_scope()
+        data = front_matter(text)
+        self.assertEqual(data["scope"], SCOPE)
+        self.assertEqual([type(e["products"][0]["yield_percent"])
+                          for e in data["scope"]],
+                         [float, int, float])
+        self.assertNotIn("time", data["scope"][1])
+        for key in ("products", "substrates", "product"):
+            self.assertNotIn(key, data)
+        self.assertEqual(data["scale"], "25 mmol")
+
+    def test_each_entry_writes_its_products_last(self) -> None:
+        """Scenario: Scope table exports to front matter (products
+        last)."""
+        _, text = self.exported_scope()
+        head = text.split("\n+++\n")[0]
+        blocks = head.split("[[scope]]")[1:]
+        self.assertEqual(len(blocks), 3)
+        for block in blocks:
+            first = block.index("[[scope.products]]")
+            for key in ("substrates", "time", "temperature", "note"):
+                if f"\n{key} = " in block:
+                    self.assertLess(block.index(f"\n{key} = "), first, key)
+
+    def test_the_body_holds_neither_the_table_nor_its_name(self) -> None:
+        """Scenario: Scope table exports to front matter (the body)."""
+        _, text = self.exported_scope()
+        body = body_of(text)
+        self.assertNotIn("#+NAME", body.upper())
+        self.assertNotIn("table--scope", body)
+        for cell in ("ethyl-acetate propyl-acetate", "45,5 30", "Stir only",
+                     "Two phases", "yield_percent", "temperature"):
+            self.assertNotIn(cell, body)
+        self.assertIn("A fictitious general procedure whose scope is a "
+                      "table.", body)
+        self.assertIn("Acetic acid", body)
+        self.assertIn("64-19-7", body)
+        separators = [line for line in body.splitlines()
+                      if re.fullmatch(r"\|-+(\|-+)*\|", line)]
+        self.assertEqual(len(separators), 1, separators)
+
+    def test_the_export_validates_against_the_registry(self) -> None:
+        """Scenario: Scope table exports to front matter (validator)."""
+        sandbox, _ = self.exported_scope()
+        ps.put_compounds(sandbox, "acetic-acid", "ethanol", "ethyl-acetate",
+                         "propyl-acetate", "benzyl-acetate",
+                         "methyl-benzoate")
+        checked = sandbox.validator("build/export")
+        self.assertEqual(checked.returncode, 0,
+                         checked.stdout + checked.stderr)
+        self.assertEqual(checked.stdout, "")
+
+    def test_a_malformed_table_stops_the_export(self) -> None:
+        """Scenario: Malformed scope tables (the program)."""
+        sandbox = self.sandbox()
+        self.only_sources(sandbox, f"{SCOPE_FIXTURE}.org")
+        source = sandbox.root / "org" / "procedures" / (
+            f"{SCOPE_FIXTURE}.org")
+        lines, inside = [], False
+        for line in source.read_text(encoding="utf-8").split("\n"):
+            if line == "#+NAME: scope":
+                inside = True
+            elif inside and line.startswith("|-"):
+                line = line[:-1] + "+---|"
+            elif inside and line.startswith("|"):
+                line += " solvent |" if "substrates" in line else " x |"
+            else:
+                inside = False
+            lines.append(line)
+        source.write_text("\n".join(lines), encoding="utf-8")
+        result = self.export(sandbox)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(
+            report_lines(result.stdout),
+            [f"org/procedures/{SCOPE_FIXTURE}.org:scope: error: "
+             '"solvent" is not a scope column'])
+        self.assertIn("the Org sources have errors", result.stderr)
+        self.assertFalse((sandbox.export_dir() / f"{SCOPE_FIXTURE}.md")
+                         .exists())
+
+
 class BodyOptionTests(ExportTestCase):
     def body(self, sandbox: Sandbox, **kwargs) -> str:
         self.only_sources(sandbox, "OSDB-0902-literal-text.org")

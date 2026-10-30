@@ -30,11 +30,11 @@ Every HTML page the theme renders SHALL contain, in this order:
 - a `header.site-header` holding, in this order:
   - `a.site-title`, linking `/` with the text `OrgSynDB`;
   - a `nav` element carrying `aria-label="Site"`, which links, in this order, to `/procedures/`, `/compounds/` and `/help/`, with the texts `Procedures`, `Compounds` and `Help`. The header holds no other `nav`;
-  - `form.site-search` with `role="search"` and `method="get"`, holding one `input` with `type="search"` and `name="q"`, and a `button` with `type="submit"` and the text `Search`. On the catalogue and term pages it is the catalogue's search form, with the `action`, attributes and texts that site-catalogue "Catalogue controls" gives. On every other page its `action` resolves to `/procedures/`, and its input carries `aria-label="Search procedures"` and the placeholder `Product, CAS, SMILES or keyword`;
+  - `form.site-search` with `role="search"` and `method="get"`, holding one `input` with `type="search"` and `name="q"`, and a `button` with `type="submit"` and the text `Search`. On the catalogue, the term pages and `/general-procedures/` it is the catalogue's search form, with the `action`, attributes and texts that site-catalogue "Catalogue controls" gives. On every other page its `action` resolves to `/procedures/`, and its input carries `aria-label="Search procedures"` and the placeholder `Product, CAS, SMILES or keyword`;
 - exactly one `main` element with `id="main"`;
 - a `footer.site-footer` whose text is `OrgSynDB · internal procedures · built <time>`, where `<time>` is a `time` element whose `datetime` is the time the site was built, as an RFC 3339 date-time, and whose text is that time as `YYYY-MM-DD HH:MM`. Every page of one build shows the same time.
 
-The navigation link whose URL is the page's own URL carries `aria-current="page"`. Otherwise the link of the section the page lies in carries `aria-current="true"`: every procedure page, `/reaction_types/`, `/tags/`, `/authors/` and their term pages lie in `/procedures/`; every compound page lies in `/compounds/`; every help page lies in `/help/`. No other navigation link carries `aria-current`. Every page has exactly one `input` with `name="q"`: the header's.
+The navigation link whose URL is the page's own URL carries `aria-current="page"`. Otherwise the link of the section the page lies in carries `aria-current="true"`: every procedure page, `/general-procedures/`, `/reaction_types/`, `/tags/`, `/authors/` and their term pages lie in `/procedures/`; every compound page lies in `/compounds/`; every help page lies in `/help/`. No other navigation link carries `aria-current`. Every page has exactly one `input` with `name="q"`: the header's.
 
 On screen, the site title and the navigation sit at the start of the header row and the search form at its end, so that the header has the same height, and its title, navigation and search form the same positions, on every page at a given window width. Every page's `h1` has the same font size.
 
@@ -50,7 +50,7 @@ Headings follow these rules:
 #### Scenario: Shell on every page
 - **WHEN** a test scans every HTML file under `public/` except files under `public/pagefind/`, after a theme build in locale `en`
 - **THEN** each has the skip link, the site title, the site header with the three navigation links in order and then `form.site-search`, one `main#main`, the footer text with its `time`, the same on every page, both `meta` elements, exactly one `h1`, no heading-level jump greater than one, and exactly one `input[name=q]`, the header's
-- **AND** on every page except `/procedures/` and the term pages the form's `action` resolves to `/procedures/` and its input has the stated `aria-label` and placeholder
+- **AND** on every page except `/procedures/`, `/general-procedures/` and the term pages the form's `action` resolves to `/procedures/` and its input has the stated `aria-label` and placeholder
 
 #### Scenario: Term titles use labels and tags
 - **WHEN** a test reads `public/reaction_types/aldol-condensation/index.html` and `public/tags/sample-data/index.html` after a theme build in locale `en`
@@ -139,7 +139,7 @@ Each procedure page's `main` element SHALL contain, in document order:
 2. `header.procedure-header`, holding:
    - `p.procedure-id`, containing the ID in an element with `data-pagefind-meta="id"`, then the status badge `span.badge.badge--<status>` whose text is the status, then, when the status is `checked` and the procedure sets `checked_by`, the sign-off `span.sign-off` with the text `by <names>`, the names joined by `, `, so that the line reads `OSDB-0921 checked by B. Example`;
    - the `h1` with the title;
-   - `dl.key-facts`, holding a `dt`/`dd` pair `Scale` and a pair `Yield`, with whitespace after each `</dt>`. With one product the `Yield` value is `<n> %`; with several it lists every product as `<n> % <name>`, in `products` order, joined by `, `, where `<name>` is the compound's shown name (localization "German compound names");
+   - `dl.key-facts`, holding a `dt`/`dd` pair `Scale` and a pair `Yield`, with whitespace after each `</dt>`. With one product the `Yield` value is `<n> %`; with several it lists every product as `<n> % <name>`, in `products` order, joined by `, `, where `<name>` is the compound's shown name (localization "German compound names"). For a general procedure the `Yield` value is the range of the yields of all its entries' products, `<min>–<max> %`, or `<n> %` when they are all equal;
    - the print facts of the print-layout spec;
    - `p.actions`, holding `button.print-button` with `type="button"`, the attribute `data-print`, the text `Print / Save as PDF` and the attribute `hidden`;
    - the structure figures of the requirement "Structure image slot";
@@ -160,6 +160,10 @@ Each procedure page's `main` element SHALL contain, in document order:
 #### Scenario: Yields of two products
 - **WHEN** a test scans `procedures/osdb-0907/index.html` after a theme build that adds the two-product fixture `tests/fixtures/theme/OSDB-0907-two-products.md`, with `scale = "10 mmol"` and the products `trans-stilbene` at 45 % and `cis-stilbene` at 30 %, to the test collection, with the compound files it names copied from the fixture registry `tests/fixtures/compounds/`
 - **THEN** its key facts are `Scale` `10 mmol` and `Yield` `45 % trans-Stilbene, 30 % cis-Stilbene`
+
+#### Scenario: Yields of a general procedure
+- **WHEN** a test scans the page of the test collection's general procedure after a theme build in locale `en`
+- **THEN** its `Yield` key fact is the range from the lowest to the highest yield of its entries' products, written `<min>–<max> %`
 
 ### Requirement: Metadata panel
 The metadata panel SHALL be a `dl.metadata`, the first element of the details wrapper at the start of `article.procedure`. It holds one `dt`/`dd` pair per field, with these labels in this order, each pair present only when the field is set. The panel repeats nothing the procedure header shows: the ID is in the header's ID line, the scale and yields are its key facts, and the checkers of a checked procedure are its sign-off. A compound's name is its shown name (localization "German compound names").
@@ -207,9 +211,9 @@ A procedure's precursors SHALL be the other published procedures that have among
 - **AND** no other `a.precursor` or `a.used-in` exists
 
 #### Scenario: The shipped chains
-- **WHEN** the same test reads the pages of OSDB-0001, 0002, 0004, 0005, 0007 and 0008
-- **THEN** OSDB-0002, 0005 and 0008 each have one `a.precursor`, to OSDB-0001, 0004 and 0007 respectively
-- **AND** OSDB-0001, 0004 and 0007 each have one `a.used-in`, back to OSDB-0002, 0005 and 0008 respectively
+- **WHEN** the same test reads the pages of OSDB-0001, 0002, 0004, 0005, 0007, 0008 and 0009
+- **THEN** OSDB-0002, 0005, 0008 and 0009 each have one `a.precursor`, to OSDB-0001, 0004, 0007 and 0004 respectively
+- **AND** OSDB-0001 and 0007 each have one `a.used-in`, back to OSDB-0002 and 0008, and OSDB-0004 has two, to OSDB-0005 and OSDB-0009
 
 #### Scenario: A second route
 - **WHEN** a test scans the pages of OSDB-0001, OSDB-0002 and OSDB-0908 after a theme build that adds `tests/fixtures/theme/OSDB-0908-second-route.md`, which makes `salicylic-acid` and names no substrate the demo procedures make, with the compound files it names copied from the fixture registry
@@ -227,7 +231,7 @@ A procedure page SHALL carry exactly one `p.sample-banner` with `role="note"` an
 - **THEN** `procedures/osdb-0906/index.html` has no `p.sample-banner`
 
 ### Requirement: Structure image slot
-A procedure header SHALL end with one `figure.structure` per product whose compound sets `structure_image`, in `products` order, each holding an `img` whose `src` resolves to the published copy of the collection's `static/<structure_image>`, and whose `alt` is `Structure of <name>`, the compound's shown name. When no product's compound sets one, the header ends with a `figure.structure.structure--placeholder` holding `div.structure__slot` with the text `No structure image`. The print stylesheet hides the placeholder.
+A procedure that sets `scheme_image` (procedure-schema "Scheme image") SHALL end its header with one `figure.structure` holding an `img` whose `src` resolves to the published copy of the collection's `static/<scheme_image>` and whose `alt` is `Scheme of <title>`. Otherwise a specific procedure's header SHALL end with one `figure.structure` per product whose compound sets `structure_image`, in `products` order, each holding an `img` whose `src` resolves to the published copy of the collection's `static/<structure_image>`, and whose `alt` is `Structure of <name>`, the compound's shown name. When no product's compound sets one, and always for a general procedure without `scheme_image`, the header ends with a `figure.structure.structure--placeholder` holding `div.structure__slot` with the text `No structure image`. The print stylesheet hides the placeholder.
 
 #### Scenario: Image and placeholder
 - **WHEN** a test scans `procedures/osdb-0003/index.html` and `procedures/osdb-0002/index.html` after a theme build
@@ -237,6 +241,10 @@ A procedure header SHALL end with one `figure.structure` per product whose compo
 #### Scenario: One figure per product with an image
 - **WHEN** a test scans `procedures/osdb-0907/index.html` after the two-product build of the requirement "Procedure page structure", in which only `trans-stilbene` sets `structure_image`
 - **THEN** its header ends with exactly one `figure.structure`, holding an `img` with `alt` `Structure of trans-Stilbene`, and has no placeholder
+
+#### Scenario: Scheme image of a general procedure
+- **WHEN** a test scans the page of the test collection's general procedure, which sets `scheme_image`, and the page of the fixture `tests/fixtures/general/OSDB-0140-general.md`, which does not, after a theme build that adds the latter
+- **THEN** the first header ends with one figure whose `img` has the `alt` `Scheme of <title>` and the second with the placeholder, although its products' compounds set structure images
 
 ### Requirement: Structure images are safe SVG
 Every `.svg` file under the demo collection's `static/structures/` SHALL be a hand-written SVG that meets all of the following:
@@ -332,16 +340,16 @@ A text without a notes list is returned unchanged. On screen, the note an addres
 - **THEN** its body has links `Note 1` and `Note 2` to `#note-1` and `#note-2`, and the first two items of the list after the `Notes` heading hold the elements with those IDs
 
 ### Requirement: Procedure section tabs
-The catalogue at `/procedures/`, the taxonomy pages `/reaction_types/`, `/tags/` and `/authors/`, and every term page SHALL have, as the first element of `main`, a `nav.section-tabs` carrying `aria-label="Procedures"`. It holds a `ul` whose `li` entries each hold one link, in this order: `/procedures/` with the text `All procedures`, `/reaction_types/` with `Reaction types`, `/tags/` with `Tags` and `/authors/` with `Authors`. The link whose URL is the page's own URL carries `aria-current="page"`; on a term page the link of its taxonomy carries `aria-current="true"`. No other tab carries `aria-current`, and no other page has a `nav.section-tabs`.
+The catalogue at `/procedures/`, the general-procedures view `/general-procedures/`, the taxonomy pages `/reaction_types/`, `/tags/` and `/authors/`, and every term page SHALL have, as the first element of `main`, a `nav.section-tabs` carrying `aria-label="Procedures"`. It holds a `ul` whose `li` entries each hold one link, in this order: `/procedures/` with the text `All procedures`, `/general-procedures/` with `General procedures`, `/reaction_types/` with `Reaction types`, `/tags/` with `Tags` and `/authors/` with `Authors`. The link whose URL is the page's own URL carries `aria-current="page"`; on a term page the link of its taxonomy carries `aria-current="true"`. No other tab carries `aria-current`, and no other page has a `nav.section-tabs`.
 
 On screen the tabs form one row above the page's `h1`, wrapping on narrow windows, and the current tab is marked by more than colour alone.
 
 These texts are those of an English site; a German site has the German texts that the localization spec gives.
 
 #### Scenario: Tabs on the listing pages
-- **WHEN** a test scans `/procedures/`, the three taxonomy pages and every term page after a theme build in locale `en`
-- **THEN** each page's `main` begins with `nav.section-tabs` carrying `aria-label="Procedures"`, whose links are the four stated targets and texts in order
-- **AND** `/procedures/` and each taxonomy page mark their own tab with `aria-current="page"`, each term page marks its taxonomy's tab with `aria-current="true"`, and no other tab carries `aria-current`
+- **WHEN** a test scans `/procedures/`, `/general-procedures/`, the three taxonomy pages and every term page after a theme build in locale `en`
+- **THEN** each page's `main` begins with `nav.section-tabs` carrying `aria-label="Procedures"`, whose links are the five stated targets and texts in order
+- **AND** `/procedures/`, `/general-procedures/` and each taxonomy page mark their own tab with `aria-current="page"`, each term page marks its taxonomy's tab with `aria-current="true"`, and no other tab carries `aria-current`
 
 #### Scenario: No tabs elsewhere
 - **WHEN** a test scans every other HTML file under `public/` except files under `public/pagefind/`, after the same build
@@ -356,7 +364,7 @@ The site SHALL publish, for every compound of the registry, a page at `/compound
 - the `h1` with that name;
 - when the compound sets `structure_image`, a `figure.structure` holding an `img` whose `src` resolves to the published image and whose `alt` is `Structure of <name>`; otherwise no figure and no placeholder;
 - a `dl.compound-facts` with the pairs `Formula`, `MW`, `CAS` (only when set) and `SMILES`, written as the metadata panel writes them, the SMILES with its copy button, and whitespace after each `</dt>`;
-- `section.compound-made-by`, only when some published procedure has the compound among its products, with the `h2` `Made by` and a `ul` holding one `li` per such procedure, by ID: an `a` linking the procedure page with the text `<ID> <title>`, then ` · `, the yield of this compound in that procedure as `<n> %`, then ` · ` and the procedure's status badge;
+- `section.compound-made-by`, only when some published procedure has the compound among its products, with the `h2` `Made by` and a `ul` holding one `li` per such procedure, by ID, or, for a general procedure, one per entry that makes the compound, in entry order: an `a` linking the procedure page with the text `<ID> <title>`, then, for a general procedure, ` · entry <n>`, then ` · `, the yield of this compound in that procedure or entry as `<n> %`, then ` · ` and the procedure's status badge;
 - `section.compound-used-in`, only when some published procedure has the compound among its `substrates`, with the `h2` `Used in` and a `ul` holding one `li` per such procedure, by ID: an `a` linking the procedure page with the text `<ID> <title>`, then ` · ` and its status badge.
 
 A compound page carries no `data-pagefind-body`, so the search index holds procedures only, and it loads no script but `site.js`.
@@ -369,6 +377,10 @@ A compound page carries no `data-pagefind-body`, so the search index holds proce
 - **WHEN** a test reads the pages of `salicylic-acid` and `methyl-salicylate` after the same build
 - **THEN** the first's `Made by` list holds OSDB-0001 with `80 %` and its `Used in` list holds OSDB-0002
 - **AND** the second has no `section.compound-made-by`, and its `Used in` list holds OSDB-0001
+
+#### Scenario: Made by an entry of a general procedure
+- **WHEN** a test reads the page of `1-biphenyl-4-yl-ethanol` after the same build
+- **THEN** its `Made by` list holds OSDB-0005 with `90 %`, and the demo's general procedure with ` · entry 1 · ` and that entry's yield
 
 #### Scenario: Compound pages are not indexed
 - **WHEN** a test scans every compound page after the same build

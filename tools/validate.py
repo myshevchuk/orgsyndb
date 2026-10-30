@@ -43,6 +43,7 @@ SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 # A compound file is named <key>.toml, the key shaped like a slug.
 COMPOUND_FILE_RE = re.compile(r"^([a-z0-9]+(?:-[a-z0-9]+)*)\.toml$")
 SCALE_RE = re.compile(r"^\d+([.,]\d+)?\s+\S+$")
+TIME_RE = re.compile(r"\d+([.,]\d+)?\s+(min|h|d)")
 CAS_RE = re.compile(r"^(\d{2,7})-(\d{2})-(\d)$")
 STATUSES = ("draft", "checked", "retired")
 # The languages a procedure may be written in. A file name may carry one
@@ -60,9 +61,11 @@ SECTIONS_BY_LANGUAGE = {
            "Gefahren und Entsorgung", "Literatur"),
 }
 SECTIONS = SECTIONS_BY_LANGUAGE[DEFAULT_LANGUAGE]
-# Front-matter values that every variant of a procedure shares.
+# Front-matter values that every variant of a procedure shares. Each
+# entry of ``scope`` is compared without its ``note``, which a
+# translation translates.
 SHARED_FIELDS = ("status", "reaction_types", "tags", "products",
-                 "substrates")
+                 "substrates", "scope", "scheme_image")
 WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 ERROR = "error"
@@ -323,34 +326,55 @@ def check_yield(name: str, value: object) -> list[Problem]:
     return []
 
 
-def check_scale(value: object) -> list[Problem]:
-    """Check that ``scale`` is a number, whitespace and a unit."""
+def check_scale(value: object, name: str = "scale") -> list[Problem]:
+    """Check that the scale ``value`` is a number, whitespace and a unit.
+
+    Problems are reported under ``name``.
+    """
     if not isinstance(value, str) or not SCALE_RE.match(value):
-        return [error("scale", f"{value!r} must be a number followed by "
+        return [error(name, f"{value!r} must be a number followed by "
                       'a unit, e.g. "25 mmol"')]
     return []
 
 
-def check_products(value: object,
-                   compounds: frozenset[str]) -> list[Problem]:
-    """Check the ``products`` array of tables against the registry.
+def check_time(name: str, value: object) -> list[Problem]:
+    """Check that the time ``value`` is a number, whitespace and one of
+    the units ``min``, ``h`` and ``d``, reporting under ``name``."""
+    if not isinstance(value, str) or not TIME_RE.fullmatch(value):
+        shown = f'"{value}"' if isinstance(value, str) else repr(value)
+        return [error(name, f"{shown} must be a number followed by min, "
+                      'h or d, e.g. "2 h"')]
+    return []
 
-    A problem inside the n-th table, counting from 1, is reported under
-    ``products[n].<key>``, and an entry that is not a table under
-    ``products[n]``; such an entry gets no sub-field checks. A
-    ``compound`` that is not a string is not looked up in
+
+def check_temperature(name: str, value: object) -> list[Problem]:
+    """Check that the temperature ``value`` is a finite number, reporting
+    under ``name``."""
+    if not is_number(value) or not math.isfinite(value):
+        return [error(name, "must be a number in °C, unquoted, e.g. 80")]
+    return []
+
+
+def check_products(value: object, compounds: frozenset[str],
+                   name: str = "products") -> list[Problem]:
+    """Check the products array of tables ``value`` against the registry.
+
+    Problems are reported under ``name``: one inside the n-th table,
+    counting from 1, under ``<name>[n].<key>``, and an entry that is not
+    a table under ``<name>[n]``; such an entry gets no sub-field checks.
+    A ``compound`` that is not a string is not looked up in
     ``compounds``, the registry's keys. A key named by two tables is one
-    error under ``products``.
+    error under ``name``.
     """
     if not isinstance(value, list):
-        return [error("products", "must be an array of tables, e.g. "
+        return [error(name, "must be an array of tables, e.g. "
                       '[{ compound = "ethyl-acetate", yield_percent = 85 }]')]
     if not value:
-        return [error("products", "must not be empty")]
+        return [error(name, "must not be empty")]
     found: list[Problem] = []
     keys: list[str] = []
     for number, entry in enumerate(value, start=1):
-        prefix = f"products[{number}]"
+        prefix = f"{name}[{number}]"
         if not isinstance(entry, dict):
             found.append(error(prefix, "must be a table, e.g. "
                                '{ compound = "ethyl-acetate", '
@@ -374,23 +398,27 @@ def check_products(value: object,
         for key in entry:
             if key not in ("compound", "yield_percent"):
                 found.append(warning(f"{prefix}.{key}", "unknown field"))
-    found += [error("products", f"lists {key} twice")
-              for key in repeated(keys)]
+    found += [error(name, f"lists {key} twice") for key in repeated(keys)]
     return found
 
 
 def check_substrates(value: object, products: object,
-                     compounds: frozenset[str]) -> list[Problem]:
-    """Check ``substrates``: registry keys, none twice, none a product.
+                     compounds: frozenset[str], name: str = "substrates",
+                     non_empty: bool = False) -> list[Problem]:
+    """Check the substrates ``value``: registry keys, none twice, none a
+    product.
 
-    ``products`` is the procedure's ``products`` value; the compound
-    keys of its well-formed tables are the ones a substrate must not
-    repeat. ``compounds`` holds the registry's keys.
+    ``products`` is the products value of the same procedure or scope
+    entry; the compound keys of its well-formed tables are the ones a
+    substrate must not repeat. ``compounds`` holds the registry's keys.
+    Problems are reported under ``name``. With ``non_empty`` an empty
+    list is an error.
     """
-    name = "substrates"
     if not is_string_list(value):
         return [error(name, "must be a list of compound keys, "
                       'e.g. ["ethanol"]')]
+    if non_empty and not value:
+        return [error(name, "must not be empty")]
     found: list[Problem] = []
     for key in value:
         found += check_compound_key(name, key, compounds)
@@ -408,6 +436,60 @@ def check_compound_key(name: str, key: str,
         return [error(name, f'unknown compound "{key}"; the compound '
                       f"registry has no {key}.toml")]
     return []
+
+
+def check_scope(value: object, compounds: frozenset[str]) -> list[Problem]:
+    """Check ``scope``, the entries of a general procedure.
+
+    ``value`` must be a non-empty array of tables. A problem in the n-th
+    entry, counting from 1, is reported under ``scope[n].<key>``, one in
+    its m-th product under ``scope[n].products[m].<key>``, and an entry
+    that is not a table under ``scope[n]``. Each entry's ``substrates``
+    and ``products`` are checked as the top-level fields are, against
+    that entry alone and the registry keys ``compounds``; an entry key
+    other than these two, ``scale``, ``time``, ``temperature`` and
+    ``note`` is a warning.
+    """
+    if not isinstance(value, list):
+        return [error("scope", "must be an array of tables, e.g. "
+                      '[{ substrates = ["ethanol"], products = '
+                      '[{ compound = "ethyl-acetate", yield_percent = 85 }] '
+                      "}]")]
+    if not value:
+        return [error("scope", "must not be empty")]
+    found: list[Problem] = []
+    for number, entry in enumerate(value, start=1):
+        prefix = f"scope[{number}]"
+        if not isinstance(entry, dict):
+            found.append(error(prefix, "must be a table, e.g. "
+                               '{ substrates = ["ethanol"], products = '
+                               '[{ compound = "ethyl-acetate", '
+                               "yield_percent = 85 }] }"))
+            continue
+        for key in ("substrates", "products"):
+            if key not in entry:
+                found.append(error(f"{prefix}.{key}",
+                                   "required field missing"))
+        for key, item in entry.items():
+            name = f"{prefix}.{key}"
+            match key:
+                case "substrates":
+                    found += check_substrates(item, entry.get("products"),
+                                              compounds, name,
+                                              non_empty=True)
+                case "products":
+                    found += check_products(item, compounds, name)
+                case "scale":
+                    found += check_scale(item, name)
+                case "time":
+                    found += check_time(name, item)
+                case "temperature":
+                    found += check_temperature(name, item)
+                case "note":
+                    found += check_string(name, item)
+                case _:
+                    found.append(warning(name, "unknown field"))
+    return found
 
 
 def product_keys(products: object) -> list[str]:
@@ -435,13 +517,14 @@ def repeated(keys: Iterable[str]) -> list[str]:
     return found
 
 
-def check_structure_image(value: object, static_dir: Path) -> list[Problem]:
-    """Check ``structure_image``'s form, then that the file exists.
+def check_structure_image(value: object, static_dir: Path,
+                          name: str = "structure_image") -> list[Problem]:
+    """Check the image path ``value``'s form, then that the file exists
+    under ``static_dir``.
 
-    The existence check runs only when the path has an allowed prefix
-    and suffix.
+    Problems are reported under ``name``. The existence check runs only
+    when the path has an allowed prefix and suffix.
     """
-    name = "structure_image"
     if not isinstance(value, str):
         return [error(name, "must be a string")]
     parts = value.split("/")
@@ -513,19 +596,31 @@ def check_extra_key(key: str, value: object) -> list[Problem]:
 REQUIRED_KEYS = ("id", "slug", "title", "date", "lastmod", "authors",
                  "status", "reaction_types", "tags", "products", "scale",
                  "hazards")
-OPTIONAL_KEYS = ("substrates", "checked_by", "references", "ai_model",
-                 "language")
+OPTIONAL_KEYS = ("substrates", "scope", "scheme_image", "checked_by",
+                 "references", "ai_model", "language")
+# The top-level keys that a general procedure, one with ``scope``, lists
+# in its entries instead.
+ENTRY_KEYS = ("products", "substrates")
 
 
 def check_fields(data: dict[str, Any], ctx: Context) -> list[Problem]:
     """Check every front-matter key of one content file on its own.
 
     Covers required and optional fields, the ``lastmod >= date``
-    ordering, and keys outside the schema. Checks that need other files
-    or the file name are not included.
+    ordering, and keys outside the schema. A procedure with ``scope``
+    needs no ``products``, and its top-level ``products`` or
+    ``substrates`` are errors. Checks that need other files or the file
+    name are not included.
     """
     found: list[Problem] = []
+    general = "scope" in data
+    if general:
+        found += [error(key, "a general procedure lists them in scope; "
+                        f"move {key} into its entries")
+                  for key in ENTRY_KEYS if key in data]
     for key in REQUIRED_KEYS:
+        if general and key in ENTRY_KEYS:
+            continue
         if key not in data:
             found.append(error(key, "required field missing"))
             continue
@@ -560,13 +655,17 @@ def check_fields(data: dict[str, Any], ctx: Context) -> list[Problem]:
             case "scale":
                 found += check_scale(value)
     for key in OPTIONAL_KEYS:
-        if key not in data:
+        if key not in data or general and key in ENTRY_KEYS:
             continue
         value = data[key]
         match key:
             case "substrates":
                 found += check_substrates(value, data.get("products"),
                                           ctx.compounds)
+            case "scope":
+                found += check_scope(value, ctx.compounds)
+            case "scheme_image":
+                found += check_structure_image(value, ctx.static_dir, key)
             case "checked_by" | "references":
                 found += check_string_list(key, value, non_empty=False)
             case "ai_model":
@@ -714,6 +813,18 @@ class ContentFile:
         return language_of(self.name)
 
 
+def without_notes(scope: object) -> object:
+    """Return ``scope`` with the ``note`` of each table entry left out.
+
+    Any other value, and any entry that is not a table, is returned as
+    it is.
+    """
+    if not isinstance(scope, list):
+        return scope
+    return [{k: v for k, v in entry.items() if k != "note"}
+            if isinstance(entry, dict) else entry for entry in scope]
+
+
 def same_value(mine: object, theirs: object) -> bool:
     """Whether two shared-field values agree.
 
@@ -746,7 +857,8 @@ def check_variants(holders: Sequence[ContentFile]) -> None:
 
     ``holders`` are the parsed files sharing one ID, at most one per
     language code (or none). Each must have the reference's base name
-    and the same value, or absence, of every ``SHARED_FIELDS`` entry.
+    and the same value, or absence, of every ``SHARED_FIELDS`` entry,
+    ``scope`` compared without the entries' notes.
     """
     original = reference_variant(holders)
     assert original.data is not None
@@ -762,6 +874,8 @@ def check_variants(holders: Sequence[ContentFile]) -> None:
         for name in SHARED_FIELDS:
             mine = item.data.get(name)
             theirs = original.data.get(name)
+            if name == "scope":
+                mine, theirs = without_notes(mine), without_notes(theirs)
             if not same_value(mine, theirs):
                 shown = "unset" if theirs is None else repr(theirs)
                 item.problems.append(error(

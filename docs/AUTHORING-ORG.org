@@ -21,6 +21,7 @@
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-28 Wed 21:57] -- doc-writer pass line corrected from gpt-6 to the pinned run model
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-30 Fri 01:49] -- compound registry, products, starting materials and site pages
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-30 Fri 01:55] -- doc-writer pass line corrected from gpt-6 to the pinned run model
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-10-30 Fri 08:17] -- general procedures, scope table, scheme images and catalogue
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -48,10 +49,14 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
 
 * Understand the template header
 
+  The template describes a /specific procedure/, one run. For a shared
+  method applied to several substrates, use a /general procedure/, as
+  explained below.
+
   Org keyword lines start at column zero. Keep every required keyword once,
   and do not indent it.
 
-  - ~#+TITLE~ :: The product name shown as the page title.
+  - ~#+TITLE~ :: The product name or general method shown as the page title.
   - ~#+CREATED~ :: When the procedure was first written, as an inactive Org
     timestamp.
   - ~#+LAST_MODIFIED~ :: When the procedure was last changed. Update this by
@@ -69,11 +74,11 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
     identifier, authors, status, reaction type, scale, products with their
     yields, hazards, and optional fields.
 
-  Set ~:products~ to a quoted list with one entry per product. Each entry
-  contains its ~compound~ key and ~yield_percent~. A key is the name of a
-  file in the collection's ~compounds/~ without ~.toml~. Keep ~:products~
-  alone on the last custom-front-matter line. The exporter also keeps
-  table-valued metadata last so later fields do not become members of the
+  For a specific procedure, set ~:products~ to a quoted list with one entry per
+  product. Each entry contains its ~compound~ key and ~yield_percent~. A key is
+  the name of a file in the collection's ~compounds/~ without ~.toml~. Keep
+  ~:products~ alone on the last custom-front-matter line. The exporter also
+  keeps table-valued metadata last so later fields do not become members of the
   last ~[[products]]~ table.
 
   Name starting materials in an optional ~:substrates~ line before
@@ -108,6 +113,9 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   [[file:SCHEMA.md][docs/SCHEMA.md]] for the exact required values, optional fields, reaction
   vocabulary, and file-name rules.
 
+  For a general procedure, replace the top-level ~:products~ and ~:substrates~
+  with a named scope table, as shown below. Keep ~:scale~ as the typical scale.
+
 * Find or add the compounds
 
   The /compound registry/ is the collection's ~compounds/~ folder. One
@@ -141,44 +149,118 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
 
   You may register a starting material even if no procedure makes it. A
   compound that no procedure uses is also allowed. *Compounds* in the site
-  navigation opens ~/compounds/~. Each name links to a page with chemical
-  data, the structure when supplied, *Made by* procedures with yields and
-  status, and *Used in* procedures with status.
+  navigation opens ~/compounds/~. Each name links to a page with chemical data,
+  the structure when supplied, *Made by* procedures with yields and status, and
+  *Used in* procedures with status. A general procedure appears under *Made by*
+  once per entry that makes the compound, as
+  ~<ID> <title> · entry <n> · <yield> % · <status>~. *Used in* lists each
+  procedure once; the directory also counts each procedure once.
+
+* Write a general procedure
+
+  When one method covers several substrates, write it once as a /general
+  procedure/. Its ~scope~ records each application of the method, with its
+  starting materials, products and yields. The presence of ~scope~ makes the
+  procedure general; do not add a ~kind~ field.
+
+  Remove the template's top-level ~:products~ and ~:substrates~ lines. Keep all
+  other required fields, including ~:scale~ for the typical scale. Write one
+  Org table directly after ~#+NAME: scope~, anywhere outside a block. The table
+  name is case-insensitive. The first row names the columns; follow it with a
+  separator line and one row per entry. This excerpt from the export fixture
+  shows an entry with two products:
+
+#+begin_src org
+  #+NAME: scope
+  | substrates          | products                     | yield_percent | time   | temperature | note       |
+  |---------------------+------------------------------+---------------+--------+-------------+------------|
+  | acetic-acid ethanol | ethyl-acetate propyl-acetate | 45,5 30       | 2 h    | 80          | Reflux     |
+  | acetic-acid         | benzyl-acetate               | 78            |        | 25          | Stir only  |
+  | ethanol             | methyl-benzoate              | 72,5          | 30 min | 60,5        | Two phases |
+#+end_src
+
+  The required columns are ~substrates~, ~products~ and ~yield_percent~.
+  Separate compound keys by spaces, and give one yield per product, in product
+  order, also separated by spaces. Yields are numbers from 0 to 100 without
+  ~%~. Each entry needs at least one starting material and product. Within an
+  entry, do not repeat a key or list a product as a starting material. A
+  compound may be a starting material in one entry and a product in another.
+  Entries are numbered from 1 in row order.
+
+  Optional columns are ~scale~, ~time~, ~temperature~ and ~note~. Scale is text
+  with a number and unit, such as ~5 mmol~. Time is a number followed by ~min~,
+  ~h~ or ~d~, such as ~30 min~. Temperature is one number in °C, without a
+  unit. Note is text. Numbers in the table may use a decimal comma, as ~45,5~
+  does above. An empty cell leaves its key unset; required entry fields are
+  still checked by validation. Keep column names English in every language.
+
+  Export writes ~scope~ front matter and removes the table and its ~#+NAME~
+  line from the exported body. Keep the eight body headings and describe the
+  shared method there. The complete
+  [[file:../tests/fixtures/export/OSDB-0909-scope-table.org][Org fixture]]
+  shows this table in a procedure. The demo's ninth procedure,
+  [[file:../examples/demo/md/procedures/OSDB-0009-benzylic-alcohols.md][OSDB-0009]],
+  shows the same scope data format in Markdown for three aryl methyl ketones
+  reduced with sodium borohydride. These are sample data, not experimentally
+  verified procedures.
+
+  To show the overall reaction, place an SVG or PNG under ~static/structures/~
+  and add:
+
+#+begin_src org
+  #+HUGO_CUSTOM_FRONT_MATTER: :scheme_image "structures/aryl-ketone-reduction.svg"
+#+end_src
+
+  The path must start with ~structures/~, contain no ~..~ component and name an
+  existing ~.svg~ or ~.png~ file under ~static/~. Any procedure may set
+  ~scheme_image~; it replaces product structures in the title block. A general
+  procedure without it shows *No structure image*.
 
 * Understand the finished page
 
-  The labels below are those of an English site; a German site, the
-  default, shows them in German, such as *Kopieren* for *Copy*. The title
-  block shows the procedure ID and a status badge above ~#+TITLE~. When
-  ~:status~ is ~checked~ and ~:checked_by~ is set, the checkers' names
-  follow the badge, so the line reads *checked by* followed by the names.
-  Under the title, ~:scale~ appears as *Scale* and product yields as
-  *Yield*. One product shows only its percentage; several show a percentage
-  and compound name for each, in product order. The *Print / Save as PDF*
-  button follows them.
+  The labels below are those of an English site; a German site, the default,
+  shows them in German, such as *Kopieren* for *Copy*. The title block shows
+  the procedure ID and a status badge above ~#+TITLE~. When ~:status~ is
+  ~checked~ and ~:checked_by~ is set, the checkers' names follow the badge, so
+  the line reads *checked by* followed by the names. Under the title, ~:scale~
+  appears as *Scale* and product yields as *Yield*. For a specific procedure,
+  one product shows only its percentage; several show a percentage and compound
+  name for each, in product order. The *Print / Save as PDF* button follows
+  them. A general procedure shows the typical top-level scale and the yield
+  range over all products of all entries, ~<min>–<max> %~, or one percentage
+  when all yields are equal.
 
-  The page shows one structure figure per product whose compound has an
-  image, in product order. On a wide screen, the figures sit to the right
-  of the title, above the metadata panel. In a narrow window they follow
-  the print button, before the panel. In print they also precede the panel.
-  When no product has an image, the screen shows a *No structure image*
-  placeholder, which is omitted from printouts. A rule closes the title
-  block on screen.
+  Without ~scheme_image~, a specific procedure shows one structure figure per
+  product whose compound has an image, in product order. On a wide screen, the
+  figures sit to the right of the title, above the metadata panel. In a narrow
+  window they follow the print button, before the panel. In print they also
+  precede the panel. When neither a scheme nor product figures are shown, the
+  screen shows a *No structure image* placeholder, which is omitted from
+  printouts. A rule closes the title block on screen.
 
-  The metadata panel always links the product names to their compound
-  pages under *Product* or *Products*, even when a name equals the title.
-  For one product it also shows formula, molecular weight, CAS when set,
-  and SMILES. For several products, find those data on their compound
-  pages. *Starting materials* links the compounds in ~:substrates~.
-  The panel then shows reaction type, tags, authors, checkers when set for
-  draft or retired procedures under *Checked by*, created
-  and modified times, and precursor or used-in links. Formula digits
-  appear as subscripts. Molecular weight gains ~g/mol~, yield gains a
-  percent sign, and SMILES has a *Copy* button. Reaction type, tag, and
-  author values link to pages that list related procedures. The site
-  title-cases author names for display, so ~van~ appears as ~Van~. The
-  eight body sections appear beside the panel on a wide screen and after
-  it in a narrow window or in print.
+  The metadata panel always links the product names to their compound pages
+  under *Product* or *Products*, even when a name equals the title. For one
+  product it also shows formula, molecular weight, CAS when set, and SMILES.
+  For several products, find those data on their compound pages. *Starting
+  materials* links the compounds in ~:substrates~. For a general procedure,
+  both lists include all entries, each compound once in order of first
+  appearance. Precursor and used-in links consider every entry. The panel then
+  shows reaction type, tags, authors, checkers when set for draft or retired
+  procedures under *Checked by*, created and modified times, and precursor or
+  used-in links. Formula digits appear as subscripts. Molecular weight gains
+  ~g/mol~, yield gains a percent sign, and SMILES has a *Copy* button. Reaction
+  type, tag, and author values link to pages that list related procedures. The
+  site title-cases author names for display, so ~van~ appears as ~Van~. The
+  eight body sections appear beside the panel on a wide screen and after it in
+  a narrow window or in print.
+
+  A general procedure adds *Scope* before *Summary*, one row per entry. The
+  columns *Entry*, *Starting materials*, *Products* and *Yield* always appear.
+  *Scale*, *Time*, *Temperature* and *Note* appear only when some entry sets
+  the field; unset values leave empty cells. Compounds link to their pages, and
+  products show small structure images when their registry records have them.
+  Entry 1 of OSDB-0009 makes the same alcohol as OSDB-0005, so its compound
+  page lists both routes.
 
 * Use exact timestamps
 
@@ -260,10 +342,23 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
 #+end_src
 
   Before exporting anything, the command checks Org file names, the required
-  file-level keywords, and routes that could set the exported dates, AI
-  model, or file name. It reports each problem as
+  file-level keywords, the named scope table, and routes that could set the
+  exported dates, AI model, or file name. It reports each problem as
   ~<path>:<field>: error|warning: <message>~, the same line format as the
   validator. An error stops the export and leaves ~build/export/~ unchanged.
+
+  A malformed scope table reports field ~scope~ and stops export. These
+  messages identify the source problem; row numbers start at 1 after the
+  separator:
+
+  | Message | Correction |
+  |---------+------------|
+  | ~appears more than once~ | Keep one table named ~scope~. |
+  | ~"<name>" is not a scope column~ | Use one of the seven column names. |
+  | ~column "<name>" missing~ | Add the required column. |
+  | ~column "<name>" appears more than once~ | Keep the column once. |
+  | ~row <n>: <p> products but <y> yields~ | Give one yield per product in order. |
+  | ~row <n>: "<cell>" is not a number~ | Write a numeric yield or temperature without units. |
 
   Export runs Emacs in an isolated batch environment. It does not load or
   write the owner's Emacs configuration. On the first run it fetches pinned
@@ -303,13 +398,19 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   ~orgsyndb validate~ runs the export first. If the export reports an Org
   error, validation stops there and does not start the Markdown validator.
   Otherwise, errors in procedures or compound records fail validation and
-  warnings do not. The command uses the collection's ~compounds/~ registry
-  and ~static/~ for images. A field such as ~products[1].yield_percent~
-  names the yield in the first product entry; counting starts at 1.
-  ~unknown compound~ means you must check the key and its registry file.
-  Registry problems name the compound file and its field, such as
-  ~compounds/ethyl-acetate.toml:mw~. The summary counts compound files too.
-  The schema explains every field and the validator's exit statuses.
+  warnings do not. The command uses the collection's ~compounds/~ registry and
+  ~static/~ for images. A field such as ~products[1].yield_percent~ names the
+  yield in the first product entry; counting starts at 1. ~unknown compound~
+  means you must check the key and its registry file. Registry problems name
+  the compound file and its field, such as ~compounds/ethyl-acetate.toml:mw~.
+  The summary counts compound files too. For scope entries, ~scope[2].time~
+  means the time in entry 2; ~scope[2].products[1].yield_percent~ means that
+  entry's first product yield. ~must not be empty~ under ~scope~ requires at
+  least one entry. A top-level field with
+  ~a general procedure lists them in scope; move <key> into its entries~ must
+  be moved into the relevant entries. Time errors ask for a number followed by
+  ~min~, ~h~ or ~d~; temperature errors ask for an unquoted number in °C. The
+  schema explains every field and the validator's exit statuses.
 
   Build and preview the site with:
 
@@ -325,6 +426,18 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   print dialog. The print layout is complete A4 output in black on white.
   Firefox omits the running header and page numbers that WeasyPrint adds to
   PDFs created by ~orgsyndb pdf~.
+
+  To find general procedures, use the catalogue's *Kind* filter: *Specific
+  procedure* or *General procedure*. Its tabs are *All procedures*, *General
+  procedures*, *Reaction types*, *Tags* and *Authors*. *General procedures*
+  opens ~/general-procedures/~, a catalogue restricted to general procedures,
+  with the header search labelled *Search general procedures*. *Only general
+  procedures · Browse all procedures* links to the full catalogue. *Clear all*
+  keeps the restriction; *Browse all procedures* removes it and carries the
+  query, other filters, sort and view. In the full catalogue, ~kind=general~ in
+  the address selects this kind. Without JavaScript the general-procedures page
+  still lists its procedures by ID. Catalogue *Details* includes all entries'
+  products and the yield range.
 
 * Write in German or translate
 
@@ -355,7 +468,8 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   fixed phrases, reusable sentences, and their English equivalents.
 
   A file without a code may use the English or the German headings. To
-  state its language, add a custom-front-matter line before ~:products~:
+  state its language, add a custom-front-matter line, before ~:products~
+  in a specific procedure:
 
 #+begin_src org
   #+HUGO_CUSTOM_FRONT_MATTER: :language "de"
@@ -365,16 +479,16 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   it when it is missing. A page whose procedure is in another language than
   the site carries a ~lang~ attribute.
 
-  To translate a procedure, copy ~OSDB-0001-x.org~ to ~OSDB-0001-x.de.org~
-  and translate the title, the hazards, the references if needed, and the
-  body. Set both timestamps to the time of the translation. Leave
-  ~:status~, ~:reaction_types~, ~#+HUGO_TAGS~,
-  ~:products~ and ~:substrates~ unchanged: the validator compares them
-  with the original and reports each difference as an error. Numeric yields
-  compare by value, so ~85~ and ~85.0~ agree. Compound names come from
-  ~name~ and ~name_de~ in the shared registry; add or edit ~name_de~ there
-  for the German name. The original and its translation may use different
-  formats.
+  To translate a procedure, copy ~OSDB-0001-x.org~ to ~OSDB-0001-x.de.org~ and
+  translate the title, the hazards, the references if needed, and the body. Set
+  both timestamps to the time of the translation. Leave ~:status~,
+  ~:reaction_types~, ~#+HUGO_TAGS~, ~:products~, ~:substrates~ and
+  ~:scheme_image~ unchanged. Keep the scope table's entry order and all values
+  except ~note~, which you translate. The validator compares the shared fields
+  with the original and reports differences as errors. Numeric yields compare
+  by value, so ~85~ and ~85.0~ agree. Compound names come from ~name~ and
+  ~name_de~ in the shared registry; add or edit ~name_de~ there for the German
+  name. The original and its translation may use different formats.
 
   The export keeps the language code: ~OSDB-0001-x.de.org~ becomes
   ~build/export/OSDB-0001-x.de.md~. On a German site it is published at

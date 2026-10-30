@@ -79,6 +79,7 @@ In the scenarios, "the exported `date`" is the `date` of the source that `osdb-o
 The export of each Org source `<stem>.org` SHALL be a file `<stem>.md` with `+++` TOML front matter that meets all of the following:
 - `date`, `lastmod`, `ai_model`, `slug` and the absence of `author` follow the procedure-schema mapping.
 - Every key whose value is a table or an array of tables, such as `products`, is written after all other keys, whatever its position among the source's `#+HUGO_CUSTOM_FRONT_MATTER:` lines.
+- `scope`, for a source with a table named `scope`, as general-procedures "Org scope table" states.
 - Every other front-matter key and value is ox-hugo's own output.
 
 The export adds its own `#+DATE`, `#+HUGO_LASTMOD`, `#+EXPORT_FILE_NAME` and, for a source whose `#+AI_MODEL` names a model, `#+HUGO_CUSTOM_FRONT_MATTER: :ai_model` lines at the top of an in-memory copy of the source. It exports with point at the beginning of that buffer, so that no heading's `CLOSED` timestamp is taken as the date. The source itself can set none of these values (procedure-schema "Exported values come only from the file-level keywords").
@@ -222,10 +223,11 @@ When the collection has no Org sources, as the build-script spec defines them, `
 - **Checks.** Each source that was read is checked in this order:
   1. its file name, against procedure-schema "Procedure file names", except that the `OSDB-NNNN` prefix is not compared with an `id`;
   2. the keywords `#+CREATED`, `#+LAST_MODIFIED` and `#+AI_MODEL`, and the ordering of the two timestamps, against procedure-schema "Org file-level keywords";
-  3. the routes that procedure-schema "Exported values come only from the file-level keywords" forbids.
+  3. the routes that procedure-schema "Exported values come only from the file-level keywords" forbids;
+  4. the table named `scope`, against general-procedures "Org scope table".
 
   A file name that breaks the pattern gives the error `must be named OSDB-NNNN-short-slug.org, e.g. OSDB-0001-ethyl-acetate.org, or OSDB-0001-ethyl-acetate.de.org with a language`. A code other than `de` or `en` gives the error `unknown language code ".<code>"; use de or en, or none`.
-- **Report.** Each problem is one line on stdout of the form `<path>:<field>: <severity>: <message>`. `<path>` is `ORG_ROOT` as given, joined with the entry name by a single `/`. `<field>` is `file_name`, `front_matter`, a keyword including `#+`, or a property or drawer name including its colons, such as `:EXPORT_DATE:`. `<severity>` is `error` or `warning`. Lines are sorted by path and, within one path, follow the check order. Emacs's stdout holds exactly these lines, each ended by a newline, and nothing else. Every other message, including Org's and ox-hugo's, goes to stderr.
+- **Report.** Each problem is one line on stdout of the form `<path>:<field>: <severity>: <message>`. `<path>` is `ORG_ROOT` as given, joined with the entry name by a single `/`. `<field>` is `file_name`, `front_matter`, `scope`, a keyword including `#+`, or a property or drawer name including its colons, such as `:EXPORT_DATE:`. `<severity>` is `error` or `warning`. Lines are sorted by path and, within one path, follow the check order. Emacs's stdout holds exactly these lines, each ended by a newline, and nothing else. Every other message, including Org's and ox-hugo's, goes to stderr.
 - **Outcome.** When any line is an error, it exits 1 after printing every line, having installed, checked and loaded no package and written nothing into `STAGING_DIR`. Warnings alone do not stop the export. When `ORG_ROOT` holds no Org source, it exits 0 after printing its lines, without installing or loading any package.
 
 `tools/orgsyndb export` handles `org/procedures` as follows:

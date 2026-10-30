@@ -69,11 +69,15 @@ Dezimalpunkt, also `88.11`, nicht `88,11`. Listen stehen in eckigen
 Klammern. Texteinträge stehen in doppelten Anführungszeichen;
 Produkteinträge stehen in geschweiften Klammern, wie unten gezeigt.
 
+Die Vorlage beschreibt eine **Einzelvorschrift**, also einen einzelnen
+Ansatz. Für eine gemeinsame Methode mit mehreren Substraten verwenden Sie
+stattdessen eine **allgemeine Vorschrift**, wie unten erklärt.
+
 Füllen Sie diese Pflichtfelder aus:
 
 - `id` und `slug`: die Werte von `new` stehen lassen oder die Nummer
   verwenden, die Sie bekommen haben.
-- `title`: der Produktname, der oben auf der Seite steht.
+- `title`: der Produktname oder die allgemeine Methode als Seitentitel.
 - `date`: wann die Vorschrift zuerst geschrieben wurde.
 - `lastmod`: wann die Vorschrift zuletzt geändert wurde. Nach jeder
   späteren Änderung aktualisieren.
@@ -89,13 +93,15 @@ Füllen Sie diese Pflichtfelder aus:
   `change-me` der Vorlage. Das Schlagwort `sample-data` setzt einen
   Warnhinweis auf die Seite und auf Ausdrucke; verwenden Sie es nie für
   eine echte Vorschrift.
-- `scale`: wie viel Produkt die Vorschrift liefert, etwa `"2,5 mmol"`.
-  Hier ist ein Dezimalkomma erlaubt, weil der Wert Text ist.
+- `scale`: wie viel Produkt die Vorschrift liefert, bei einer allgemeinen
+  Vorschrift die typische Ansatzgröße, etwa `"2,5 mmol"`. Hier ist ein
+  Dezimalkomma erlaubt, weil der Wert Text ist.
 - `hazards`: kurze Beschreibungen der wichtigsten Gefahren.
-- `products`: ein oder mehrere Verbindungsschlüssel, jeder mit seiner
-  isolierten Ausbeute. Ein Schlüssel ist der Name einer Datei in
-  `compounds/` ohne `.toml`. Der nächste Abschnitt erklärt, wie Sie den
-  passenden Eintrag finden oder anlegen.
+- `products`: Pflicht bei einer Einzelvorschrift; bei einer allgemeinen
+  Vorschrift verwenden Sie stattdessen `scope`, wie unten erklärt. Nennen Sie
+  ein oder mehrere Verbindungsschlüssel, jeden mit seiner isolierten Ausbeute.
+  Ein Schlüssel ist der Name einer Datei in `compounds/` ohne `.toml`. Der
+  nächste Abschnitt erklärt, wie Sie den passenden Eintrag finden oder anlegen.
 
 Die Vorlage enthält außerdem auskommentierte, optionale Felder für
 Ausgangsstoffe (`substrates`), Prüfende, Literaturangaben und ein KI-Modell.
@@ -166,48 +172,120 @@ Bitten Sie die Verantwortliche oder den Verantwortlichen, das Bild
 hinzuzufügen oder zu prüfen, wenn Sie nicht mit SVG-Dateien arbeiten.
 
 Sie dürfen einen Ausgangsstoff registrieren, ohne dass eine Vorschrift ihn
-herstellt. Auch eine Verbindung, die keine Vorschrift verwendet, ist
-zulässig. **Verbindungen** in der Navigation öffnet das Verzeichnis unter
-`/compounds/`. Jeder Name verlinkt auf eine Seite mit chemischen Daten,
-dem Strukturbild, sofern vorhanden, Vorschriften unter **Hergestellt nach**
-mit Ausbeute und Status sowie Vorschriften unter **Verwendet in** mit Status.
+herstellt. Auch eine Verbindung, die keine Vorschrift verwendet, ist zulässig.
+**Verbindungen** in der Navigation öffnet das Verzeichnis unter `/compounds/`.
+Jeder Name verlinkt auf eine Seite mit chemischen Daten, dem Strukturbild,
+sofern vorhanden, Vorschriften unter **Hergestellt nach** mit Ausbeute und
+Status sowie Vorschriften unter **Verwendet in** mit Status. Eine allgemeine
+Vorschrift steht unter **Hergestellt nach** einmal je Eintrag, der die
+Verbindung herstellt, als
+`<ID> <Titel> · Eintrag <n> · <Ausbeute> % · <Status>`. **Verwendet in** listet
+jede Vorschrift einmal; auch die Verzeichniszähler zählen sie nur einmal.
+
+### Eine allgemeine Vorschrift schreiben
+
+Wenn eine Methode mehrere Substrate abdeckt, schreiben Sie sie einmal als
+**allgemeine Vorschrift**. Erfassen Sie jede Anwendung der Methode in `scope`,
+einer Liste von Einträgen mit Ausgangsstoffen, Produkten und Ausbeuten. Dieses
+Feld macht die Vorschrift allgemein; ein Feld `kind` tragen Sie nicht ein.
+
+Entfernen Sie `products` und `substrates` auf oberster Ebene aus der Vorlage.
+Behalten Sie die übrigen Pflichtfelder, einschließlich `scale` für die typische
+Ansatzgröße. Schreiben Sie im Datenblock ein Array von Tabellen in geschweiften
+Klammern. Dieser Ausschnitt verwendet die drei Einträge der allgemeinen
+Beispielvorschrift:
+
+```toml
+scale = "10 mmol"
+scope = [
+  { substrates = ["4-acetylbiphenyl"], time = "30 min", products = [{ compound = "1-biphenyl-4-yl-ethanol", yield_percent = 90 }] },
+  { substrates = ["acetophenone"], time = "20 min", products = [{ compound = "1-phenylethanol", yield_percent = 85 }] },
+  { substrates = ["4-bromoacetophenone"], scale = "5 mmol", time = "30 min", products = [{ compound = "1-4-bromophenyl-ethanol", yield_percent = 88 }] },
+]
+```
+
+Jeder Eintrag braucht nicht leere `substrates` und `products`. Produkte
+verwenden dieselben Felder `compound` und `yield_percent` wie oben. Die
+Einträge sind in ihrer Reihenfolge ab 1 nummeriert. Nennen Sie innerhalb eines
+Eintrags keinen Schlüssel doppelt und kein Produkt auch als Ausgangsstoff. Eine
+Verbindung darf Ausgangsstoff in einem Eintrag und Produkt in einem anderen
+sein.
+
+Optional sind `scale`, `time`, `temperature` und `note` je Eintrag. Eine Zeit
+besteht aus Zahl und `min`, `h` oder `d`, etwa `"30 min"`. Eine Temperatur ist
+eine Zahl in °C ohne Anführungszeichen und Einheit, etwa `temperature = 80`.
+`scale` folgt der üblichen Regel für Zahl und Einheit; `note` ist nicht leerer
+Text. TOML-Zahlen behalten den Dezimalpunkt. Behalten Sie die acht
+Textabschnitte und beschreiben Sie darin die gemeinsame Methode. Die
+vollständige [Beispielvorschrift
+OSDB-0009](../examples/demo/md/procedures/OSDB-0009-benzylic-alcohols.de.md)
+reduziert drei Arylmethylketone mit Natriumborhydrid. Sie ist die neunte
+Vorschrift der Sammlung und enthält Beispieldaten, keine experimentell
+überprüften Ergebnisse.
+
+Um die Gesamtreaktion zu zeigen, legen Sie ein SVG oder PNG unter
+`static/structures/` ab und setzen dieses optionale Vorschriftenfeld:
+
+```toml
+scheme_image = "structures/aryl-ketone-reduction.svg"
+```
+
+Der Pfad beginnt mit `structures/`, enthält kein `..` und benennt eine
+vorhandene `.svg`- oder `.png`-Datei unter `static/`. Jede Vorschrift darf
+`scheme_image` verwenden; es ersetzt die Produktstrukturen im Titelblock. Ohne
+dieses Feld zeigt eine allgemeine Vorschrift **Keine Strukturformel**.
 
 ### So erscheinen die Felder auf der Seite
 
-Der Titelblock zeigt über dem Titel die `id` und ein Statusabzeichen.
-Wenn `status` den Wert `checked` hat und `checked_by` ausgefüllt ist,
-folgen die Namen der Prüfenden auf das Abzeichen: **Geprüft von** und die
-Namen. Unter dem Titel erscheinen `scale` als **Ansatzgröße** und
-die Produktausbeuten als **Ausbeute**. Bei einem Produkt steht nur die
+Der Titelblock zeigt über dem Titel die `id` und ein Statusabzeichen. Wenn
+`status` den Wert `checked` hat und `checked_by` ausgefüllt ist, folgen die
+Namen der Prüfenden auf das Abzeichen: **Geprüft von** und die Namen. Unter dem
+Titel erscheinen `scale` als **Ansatzgröße** und die Produktausbeuten als
+**Ausbeute**. Bei einer Einzelvorschrift mit einem Produkt steht nur die
 Prozentzahl, bei mehreren für jedes Produkt die Prozentzahl mit dem
-Verbindungsnamen, in der Reihenfolge von `products`. Darunter steht
-die Schaltfläche **Drucken / Als PDF speichern**.
+Verbindungsnamen, in der Reihenfolge von `products`. Darunter steht die
+Schaltfläche **Drucken / Als PDF speichern**. Bei einer allgemeinen Vorschrift
+nennt **Ansatzgröße** den typischen Wert auf oberster Ebene und **Ausbeute**
+die Spanne aller Produkte aller Einträge, `<min>–<max> %`, bei gleichen
+Ausbeuten nur eine Prozentzahl.
 
-Die Seite zeigt für jedes Produkt mit Strukturbild eine Abbildung, in der
-Reihenfolge von `products`. Auf einem breiten Bildschirm stehen die Bilder
-rechts neben dem Titel, über dem Datenfeld. In einem schmalen Fenster
-folgen sie auf die Druckschaltfläche, vor dem Datenfeld. Auch im Ausdruck
-stehen sie vor dem Datenfeld. Hat kein Produkt ein Bild, erscheint der
-Platzhalter **Keine Strukturformel**, der im Ausdruck fehlt. Eine Linie
-schließt den Titelblock auf dem Bildschirm ab.
+Ohne `scheme_image` zeigt eine Einzelvorschrift für jedes Produkt mit
+Strukturbild eine Abbildung, in der Reihenfolge von `products`. Auf einem
+breiten Bildschirm stehen die Bilder rechts neben dem Titel, über dem
+Datenfeld. In einem schmalen Fenster folgen sie auf die Druckschaltfläche, vor
+dem Datenfeld. Auch im Ausdruck stehen sie vor dem Datenfeld. Fehlen sowohl
+Schema als auch Produktbilder, erscheint der Platzhalter **Keine
+Strukturformel**, der im Ausdruck fehlt. Eine Linie schließt den Titelblock auf
+dem Bildschirm ab.
 
 Das Datenfeld verlinkt die Produktnamen immer unter **Produkt** oder
-**Produkte** auf ihre Verbindungsseiten, auch bei gleichem Namen wie im
-Titel. Bei einem Produkt zeigt es außerdem Summenformel, Molmasse,
-gegebenenfalls die CAS-Nummer und SMILES. Bei mehreren Produkten finden
-Sie diese Daten auf den Verbindungsseiten. **Ausgangsstoffe** verlinkt die
-Verbindungen aus `substrates`. Es folgen Reaktionstyp, Schlagwörter,
-Autoren, bei Entwürfen und zurückgezogenen Vorschriften gegebenenfalls
-die Prüfenden unter **Geprüft von**,
-Erstellungs- und Änderungszeit sowie die Links zu Vorstufen und
-Folgevorschriften. Ziffern der Summenformel erscheinen tiefgestellt.
-Molmasse und Ausbeute erscheinen mit Dezimalkomma, mit `g/mol` und
-Prozentzeichen; neben SMILES steht eine Schaltfläche **Kopieren**.
-Reaktionstyp, Schlagwörter und Autoren verlinken auf Seiten mit verwandten
-Vorschriften. Autorennamen werden mit großem Anfangsbuchstaben angezeigt,
-aus `van` wird also `Van`. Die acht Abschnitte des Textes stehen auf einem
-breiten Bildschirm neben dem Datenfeld, in einem schmalen Fenster und im
-Ausdruck danach.
+**Produkte** auf ihre Verbindungsseiten, auch bei gleichem Namen wie im Titel.
+Bei einem Produkt zeigt es außerdem Summenformel, Molmasse, gegebenenfalls die
+CAS-Nummer und SMILES. Bei mehreren Produkten finden Sie diese Daten auf den
+Verbindungsseiten. **Ausgangsstoffe** verlinkt die Verbindungen aus
+`substrates`. Bei einer allgemeinen Vorschrift umfassen beide Listen alle
+Einträge, jede Verbindung einmal in der Reihenfolge ihres ersten Auftretens.
+Auch Vorstufen- und Folgelinks berücksichtigen alle Einträge. Es folgen
+Reaktionstyp, Schlagwörter, Autoren, bei Entwürfen und zurückgezogenen
+Vorschriften gegebenenfalls die Prüfenden unter **Geprüft von**, Erstellungs-
+und Änderungszeit sowie die Links zu Vorstufen und Folgevorschriften. Ziffern
+der Summenformel erscheinen tiefgestellt. Molmasse und Ausbeute erscheinen mit
+Dezimalkomma, mit `g/mol` und Prozentzeichen; neben SMILES steht eine
+Schaltfläche **Kopieren**. Reaktionstyp, Schlagwörter und Autoren verlinken auf
+Seiten mit verwandten Vorschriften. Autorennamen werden mit großem
+Anfangsbuchstaben angezeigt, aus `van` wird also `Van`. Die acht Abschnitte des
+Textes stehen auf einem breiten Bildschirm neben dem Datenfeld, in einem
+schmalen Fenster und im Ausdruck danach.
+
+Bei einer allgemeinen Vorschrift steht **Anwendungsbereich** vor
+**Zusammenfassung**, mit einer Zeile je Eintrag. **Eintrag**,
+**Ausgangsstoffe**, **Produkte** und **Ausbeute** erscheinen immer.
+**Ansatzgröße**, **Zeit**, **Temperatur** und **Anmerkung** erscheinen nur,
+wenn mindestens ein Eintrag das Feld setzt; sonst bleibt die jeweilige Zelle
+leer. Ausgangsstoffe und Produkte verlinken auf ihre Verbindungsseiten;
+Produkte zeigen kleine Strukturbilder, wenn diese im Register hinterlegt sind.
+Eintrag 1 von OSDB-0009 stellt denselben Alkohol wie OSDB-0005 her, sodass die
+Verbindungsseite beide Wege nennt.
 
 ## 3. Die Vorschrift schreiben
 
@@ -307,6 +385,14 @@ und die Datei deshalb als englisch gilt. Führen Sie den Befehl nach der
 Korrektur erneut aus. Die letzte Zeile nennt die Zahl der Dateien, Fehler
 und Warnungen; die Dateizahl umfasst auch Verbindungseinträge.
 
+Bei einer allgemeinen Vorschrift bedeutet `scope[2].products[1].yield_percent`
+die Ausbeute des ersten Produkts in Eintrag 2. `must not be empty` unter
+`scope` verlangt mindestens einen Eintrag. Meldet ein Feld auf oberster Ebene
+`a general procedure lists them in scope; move <key> into its entries`,
+entfernen Sie die Zeile und tragen die Daten in den passenden Einträgen ein.
+Ein Zeitfehler verlangt eine Zahl mit `min`, `h` oder `d`, ein Temperaturfehler
+eine Zahl in °C ohne Anführungszeichen.
+
 Wenn eine Meldung unklar ist, schlagen Sie ihr Feld in der
 [Schema-Referenz](SCHEMA.de.md) nach. Wenn Sie die Datei verschickt haben,
 kann die oder der Verantwortliche dieselbe Prüfung ausführen und Ihnen die
@@ -338,6 +424,21 @@ die mit WeasyPrint erzeugten PDFs enthalten.
 Die Vorschau aktualisiert sich nicht von selbst. Beenden Sie sie nach
 einer Änderung und starten Sie `orgsyndb serve` erneut.
 
+Um Ihre allgemeine Vorschrift zu finden, öffnen Sie **Vorschriften** und
+verwenden den Filter **Art**: **Einzelvorschrift** oder **Allgemeine
+Vorschrift**. Die Reiter heißen **Alle Vorschriften**, **Allgemeine
+Vorschriften**, **Reaktionstypen**, **Schlagwörter** und **Autoren**.
+**Allgemeine Vorschriften** öffnet `/general-procedures/`, den auf diese Art
+begrenzten Katalog. Die Suche im Kopf heißt **Allgemeine Vorschriften
+durchsuchen** und bleibt innerhalb dieser Liste. **Nur allgemeine Vorschriften
+· Alle Vorschriften anzeigen** führt zum gesamten Katalog. **Alles
+zurücksetzen** behält die Beschränkung; **Alle Vorschriften anzeigen** hebt sie
+auf und übernimmt Suchtext, andere Filter, Sortierung und Ansicht. Im gesamten
+Katalog wählt der Adressparameter `kind=general` dieselbe Art. Ohne JavaScript
+zeigt die Seite weiterhin ihre Vorschriften nach Nummer. Die Ansicht
+**Details** berücksichtigt Produkte aller Einträge und zeigt die
+Ausbeutespanne.
+
 ## 7. Eine englische Vorschrift übersetzen
 
 Dateien mit derselben Nummer sind Fassungen einer Vorschrift. Die Website
@@ -355,12 +456,14 @@ also auf der deutschen Website das englische Original.
 3. Setzen Sie `date` und `lastmod` auf den Zeitpunkt der Übersetzung.
    Steht im Original `language = "en"`, ändern Sie es in `"de"` oder
    löschen Sie die Zeile.
-4. Lassen Sie `id`, `slug`, `status`, `reaction_types`, `tags`, `products`
-   und `substrates` wie im Original. Die Prüfung meldet jede Abweichung
-   als Fehler unter dem jeweiligen Feldnamen. Zahlen werden nach ihrem
-   Wert verglichen: `85` und `85.0` stimmen überein. Verbindungsnamen
-   kommen aus `name` und `name_de` im gemeinsamen Register. Tragen Sie
-   den deutschen Verbindungsnamen dort in `name_de` ein.
+4. Lassen Sie `id`, `slug`, `status`, `reaction_types`, `tags`, `products` und
+   `substrates` sowie `scheme_image` wie im Original. Behalten Sie `scope` und
+   die Reihenfolge seiner Einträge; übersetzen Sie darin nur `note`. Die
+   Prüfung meldet Abweichungen der gemeinsamen Felder als Fehler unter dem
+   jeweiligen Feldnamen. Zahlen werden nach ihrem Wert verglichen: `85` und
+   `85.0` stimmen überein. Verbindungsnamen kommen aus `name` und `name_de` im
+   gemeinsamen Register. Tragen Sie den deutschen Verbindungsnamen dort in
+   `name_de` ein.
 
 5. Übersetzen Sie den Text, ersetzen Sie die englischen Überschriften und
    Tabellenspalten durch die deutschen aus Abschnitt 3 und schreiben Sie

@@ -1,8 +1,12 @@
-{{- /* The catalogue: the heading and count, the scope line on a term page,
-the noscript note, the facets, the toolbar, the message and the procedure
-table. Its search form is the site header's (site-header.html). Takes a dict with page (the page shown), pages
-(its procedures, by ID) and fixed (the facet a term page fixes: type, tag
-or author; "" on /procedures/). Every control lies in an element carrying
+{{- /* The catalogue: the heading and count, the scope line on a term page
+and on /general-procedures/, the noscript note, the facets, the toolbar,
+the message and the procedure table. Its search form is the site header's
+(site-header.html). Takes a dict with page (the page shown), pages (its
+procedures, by ID) and fixed (the facet the page fixes: type, tag or
+author on a term page, whose term is its only value; kind on
+/general-procedures/, whose only value is general; "" on /procedures/).
+The kind and status facets list their literals in a fixed order, the
+others the terms in use. Every control lies in an element carrying
 data-catalogue-controls and hidden, which catalogue.js reveals; without
 it the page is the table and the note. The texts the script shows are
 data-text-* attributes of div.catalogue. */ -}}
@@ -10,6 +14,7 @@ data-text-* attributes of div.catalogue. */ -}}
 {{ $fixed := .fixed -}}
 {{ $count := len .pages -}}
 {{ $plurals := dict "type" "reaction_types" "tag" "tags" "author" "authors" -}}
+{{ $kinds := slice "specific" "general" -}}
 {{ $keys := partialCached "term-keys.html" "term keys" -}}
 <div class="catalogue" data-catalogue{{ with $fixed }} data-fixed="{{ . }}"{{ end }} data-text-searching="{{ T "catalogue_searching" }}" data-text-unavailable="{{ T "catalogue_unavailable" }}" data-text-error="{{ T "catalogue_error" }}" data-text-error-action="{{ T "catalogue_error_action" }}" data-text-empty="{{ T "catalogue_empty" }}" data-text-ignored="{{ T "catalogue_ignored" }}" data-text-remove="{{ T "catalogue_remove" }}">
 <div class="list-head">
@@ -25,16 +30,20 @@ data-text-* attributes of div.catalogue. */ -}}
 <div class="catalogue-layout">
 <div class="catalogue-facets" id="catalogue-facets" data-catalogue-controls hidden>
 <h2>{{ T "catalogue_filters" }}</h2>
-{{ range $facet := slice "type" "status" "tag" "author" -}}
+{{ range $facet := slice "type" "kind" "status" "tag" "author" -}}
 {{ $values := slice -}}
-{{ if eq $facet $fixed -}}
+{{ if and (eq $facet "kind") (eq $fixed "kind") -}}
+{{ $values = slice (dict "key" "general" "label" (T "kind_general")) -}}
+{{ else if eq $facet "kind" -}}
+{{ range $kinds }}{{ $values = $values | append (dict "key" . "label" (T (printf "kind_%s" .))) }}{{ end -}}
+{{ else if eq $facet $fixed -}}
 {{ $values = slice (dict "key" (index $keys $page.RelPermalink) "label" (partial "page-title.html" $page)) -}}
 {{ else if eq $facet "status" -}}
 {{ range slice "draft" "checked" "retired" }}{{ $values = $values | append (dict "key" . "label" (partial "status-label.html" .)) }}{{ end -}}
 {{ else -}}
 {{ $values = partial "terms-by-label.html" (index $plurals $facet) -}}
 {{ end -}}
-<details class="facet" data-facet="{{ $facet }}"{{ if eq $facet $fixed }} data-fixed{{ end }}{{ if or (eq $facet "type") (eq $facet "status") (eq $facet $fixed) }} open{{ end }}>
+<details class="facet" data-facet="{{ $facet }}"{{ if eq $facet $fixed }} data-fixed{{ end }}{{ if or (eq $facet "type") (eq $facet "kind") (eq $facet "status") (eq $facet $fixed) }} open{{ end }}>
 <summary id="facet-{{ $facet }}">{{ T (printf "facet_%s" $facet) }}</summary>
 <div class="facet-values" role="group" aria-labelledby="facet-{{ $facet }}">
 {{ range $values -}}

@@ -15,6 +15,7 @@ import tomllib
 import unittest
 import urllib.parse
 
+import general_support as gs
 import pipeline_support as ps
 from pipeline_support import Content, Node, Page
 
@@ -29,6 +30,7 @@ RFC3339 = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
 NAVIGATION = [("/procedures/", "Procedures"), ("/compounds/", "Compounds"),
               ("/help/", "Help")]
 TABS = [("/procedures/", "All procedures"),
+        ("/general-procedures/", "General procedures"),
         ("/reaction_types/", "Reaction types"), ("/tags/", "Tags"),
         ("/authors/", "Authors")]
 SECTIONS = ["Summary", "Reagents", "Procedure", "Workup and Purification",
@@ -43,8 +45,13 @@ PANEL_LABELS = ["Product", "Formula", "MW", "CAS", "SMILES",
 FONT_SUFFIXES = (".woff", ".woff2", ".ttf", ".otf", ".eot")
 TAXONOMIES = {"reaction_types": "Reaction types", "tags": "Tags",
               "authors": "Authors"}
-SHIPPED_CHAINS = [("OSDB-0001", "OSDB-0002"), ("OSDB-0004", "OSDB-0005"),
-                  ("OSDB-0007", "OSDB-0008")]
+# The precursor of each procedure that has one, and the procedures that
+# each used-in link leads to.
+SHIPPED_PRECURSORS = {"OSDB-0002": "OSDB-0001", "OSDB-0005": "OSDB-0004",
+                      "OSDB-0008": "OSDB-0007", "OSDB-0009": "OSDB-0004"}
+SHIPPED_USED_IN = {"OSDB-0001": ["OSDB-0002"],
+                   "OSDB-0004": ["OSDB-0005", "OSDB-0009"],
+                   "OSDB-0007": ["OSDB-0008"]}
 
 
 class SiteCase(ps.ThemeBuildCase):
@@ -311,7 +318,7 @@ class ShippedSiteTests(SiteCase):
 
     def test_header_and_body_are_in_order(self) -> None:
         """Scenario: Header and body in order."""
-        for slug in ("osdb-0002", "osdb-0001"):
+        for slug in ("osdb-0002", "osdb-0001", "osdb-0009"):
             path = self.public / "procedures" / slug / "index.html"
             with self.subTest(page=slug):
                 self.assertTrue(path.is_file())
@@ -503,7 +510,9 @@ class ShippedSiteTests(SiteCase):
             with self.subTest(procedure=item.id):
                 pairs = self.panel(page)
                 shown = list(pairs)
-                positions = [PANEL_LABELS.index(label) for label in shown]
+                positions = [PANEL_LABELS.index(
+                    "Product" if label == "Products" else label)
+                    for label in shown]
                 self.assertEqual(positions, sorted(set(positions)))
                 self.assertEqual(shown, self.expected_labels(item))
                 for label, pair in pairs.items():
@@ -544,23 +553,27 @@ class ShippedSiteTests(SiteCase):
 
     def test_the_shipped_chains(self) -> None:
         """Scenario: The shipped chains."""
-        for first, second in SHIPPED_CHAINS:
-            for ident, relation, other in ((first, "used-in", second),
-                                           (second, "precursor", first)):
-                path = (self.public / "procedures" / ident.lower()
-                        / "index.html")
-                with self.subTest(procedure=ident, relation=relation):
-                    self.assertTrue(path.is_file(), f"{ident} not built")
-                    page = ps.load_page(self.public, path)
-                    links = [l for l in page.links()
-                             if l.node.has_class(relation)]
-                    self.assertEqual([l.target for l in links],
-                                     [f"/procedures/{other.lower()}/"])
-                    other_relation = ("precursor" if relation == "used-in"
-                                      else "used-in")
-                    self.assertEqual(
-                        [l for l in page.links()
-                         if l.node.has_class(other_relation)], [])
+        for ident in ("OSDB-0001", "OSDB-0002", "OSDB-0004", "OSDB-0005",
+                      "OSDB-0007", "OSDB-0008", "OSDB-0009"):
+            path = (self.public / "procedures" / ident.lower()
+                    / "index.html")
+            with self.subTest(procedure=ident):
+                self.assertTrue(path.is_file(), f"{ident} not built")
+                page = ps.load_page(self.public, path)
+                precursors = [l.target for l in page.links()
+                              if l.node.has_class("precursor")]
+                used_in = [l.target for l in page.links()
+                           if l.node.has_class("used-in")]
+                self.assertEqual(
+                    precursors,
+                    [f"/procedures/{SHIPPED_PRECURSORS[ident].lower()}/"]
+                    if ident in SHIPPED_PRECURSORS else [])
+                self.assertEqual(
+                    used_in,
+                    [f"/procedures/{other.lower()}/"
+                     for other in SHIPPED_USED_IN.get(ident, [])])
+                self.assertFalse(precursors and used_in,
+                                 "needs both a precursor and a used-in link")
 
     def test_every_sample_shows_the_banner(self) -> None:
         """Scenario: Every sample shows the banner."""
@@ -610,12 +623,126 @@ class ShippedSiteTests(SiteCase):
         self.assertEqual(slot.norm(), "No structure image")
         self.assertEqual(page.find_all("img"), [])
 
+    # --- general procedures --------------------------------------------
+
+    def general_items(self) -> list[Content]:
+        return [item for item in self.content() if item.is_general]
+
+    def test_scope_table_of_a_general_procedure(self) -> None:
+        """Scenario: Scope table of a general procedure."""
+        general = self.general_items()
+        self.assertEqual([item.id for item in general], ["OSDB-0009"])
+        registry = self.registry()
+        page = self.page_of(general[0])
+        table = gs.check_scope_table(self, page, general[0], registry, "en",
+                                     "Summary")
+        rows = [[c.norm() for c in r.elements() if c.tag in ("td", "th")]
+                for r in table.find_all("tr")]
+        self.assertEqual(rows[0], [
+            "Entry", "Starting materials", "Products", "Yield", "Scale",
+            "Time", "Note"])
+        self.assertEqual(rows[1], [
+            "1", "4-Acetylbiphenyl", "1-(Biphenyl-4-yl)ethanol", "90 %", "",
+            "30 min", ""])
+        self.assertEqual(rows[2], [
+            "2", "Acetophenone", "1-Phenylethanol", "85 %", "", "20 min",
+            ""])
+        self.assertEqual(rows[3][:6], [
+            "3", "4′-Bromoacetophenone", "1-(4-Bromophenyl)ethanol",
+            "88 %", "5 mmol", "30 min"])
+        self.assertEqual(rows[3][6], general[0].scope[2]["note"])
+        links = page.links(table)
+        self.assertEqual(
+            [l.target for l in links],
+            ["/compounds/4-acetylbiphenyl/",
+             "/compounds/1-biphenyl-4-yl-ethanol/",
+             "/compounds/acetophenone/", "/compounds/1-phenylethanol/",
+             "/compounds/4-bromoacetophenone/",
+             "/compounds/1-4-bromophenyl-ethanol/"])
+        for link in links:
+            self.assertTrue(ps.target_file(self.public, link.target)
+                            .is_file(), link.target)
+
+    def test_no_scope_table_on_a_specific_procedure(self) -> None:
+        """Scenario: No scope table on a specific procedure."""
+        checked = 0
+        for item, page in self.procedure_pages():
+            if item.is_general:
+                continue
+            checked += 1
+            with self.subTest(procedure=item.id):
+                self.assertIsNone(page.find("section", "scope"))
+                self.assertIsNone(page.find("table", "scope-table"))
+        self.assertEqual(checked, 8)
+
+    def test_yields_of_a_general_procedure(self) -> None:
+        """Scenario: Yields of a general procedure."""
+        item = self.by_id()["OSDB-0009"]
+        page = self.page_of(item)
+        gs.check_key_facts(self, page, item, self.registry(), "en")
+        key = page.find("header", "procedure-header").find("dl", "key-facts")
+        self.assertEqual(
+            [(p.label, p.definition.norm())
+             for p in page.definition_pairs(key)],
+            [("Scale", "10 mmol"), ("Yield", "85–90 %")])
+        for pair in page.definition_pairs(key):
+            self.assertNotEqual(pair.gap, "")
+            self.assertEqual(pair.gap.strip(), "")
+
+    def test_scheme_image_of_the_demo_general_procedure(self) -> None:
+        """Scenario: Scheme image of a general procedure (the collection's
+        procedure)."""
+        item = self.by_id()["OSDB-0009"]
+        page = self.page_of(item)
+        gs.check_scheme_figure(self, page, item,
+                               "structures/aryl-ketone-reduction.svg", "en")
+        image = page.find("header", "procedure-header").find("img")
+        self.assertEqual(
+            image.attrs.get("alt"),
+            "Scheme of Secondary benzylic alcohols by sodium borohydride "
+            "reduction")
+        self.assertTrue((self.public / "structures"
+                         / "aryl-ketone-reduction.svg").is_file())
+
+    def test_panel_and_links_of_a_general_procedure(self) -> None:
+        """Requirement: General procedures (products and substrates over
+        every entry)."""
+        item = self.by_id()["OSDB-0009"]
+        page = self.page_of(item)
+        panel = self.panel(page)
+        self.assertEqual(list(panel), [
+            "Products", "Starting materials", "Reaction type", "Tags",
+            "Authors", "Created", "Modified", "Precursors"])
+        self.assertEqual(
+            [(page.resolve(l.attrs["href"]), l.norm())
+             for l in panel["Products"].definition.find_all("a", "compound")],
+            [("/compounds/1-biphenyl-4-yl-ethanol/",
+              "1-(Biphenyl-4-yl)ethanol"),
+             ("/compounds/1-phenylethanol/", "1-Phenylethanol"),
+             ("/compounds/1-4-bromophenyl-ethanol/",
+              "1-(4-Bromophenyl)ethanol")])
+        self.assertEqual(
+            [(page.resolve(l.attrs["href"]), l.norm())
+             for l in panel["Starting materials"].definition.find_all(
+                 "a", "compound")],
+            [("/compounds/4-acetylbiphenyl/", "4-Acetylbiphenyl"),
+             ("/compounds/acetophenone/", "Acetophenone"),
+             ("/compounds/4-bromoacetophenone/", "4′-Bromoacetophenone")])
+        self.assertEqual(list(panel), self.expected_labels(item))
+        self.assertEqual(
+            [l.norm() for l in
+             panel["Precursors"].definition.find_all("a", "precursor")],
+            ["OSDB-0004 4-Acetylbiphenyl"])
+        self.assertEqual(page.find_all("button", data_copy_smiles=True), [])
+
     def test_navigation_marks_the_current_section(self) -> None:
         """Scenario: Current section in the navigation."""
         within = {"/procedures/": "true"}
         cases = {"index.html": {},
                  "procedures/index.html": {"/procedures/": "page"},
                  "procedures/osdb-0001/index.html": within,
+                 "general-procedures/index.html": within,
+                 "procedures/osdb-0009/index.html": within,
                  "tags/index.html": within,
                  "authors/index.html": within,
                  "reaction_types/index.html": within,
@@ -638,7 +765,9 @@ class ShippedSiteTests(SiteCase):
 
     def listing_pages(self) -> dict[str, dict[str, str]]:
         """The pages that carry the tabs, with the tabs they mark."""
-        cases = {"procedures/index.html": {"/procedures/": "page"}}
+        cases = {"procedures/index.html": {"/procedures/": "page"},
+                 "general-procedures/index.html":
+                 {"/general-procedures/": "page"}}
         for taxonomy in TAXONOMIES:
             cases[f"{taxonomy}/index.html"] = {f"/{taxonomy}/": "page"}
             terms = sorted((self.public / taxonomy).glob("*/index.html"))
@@ -1018,6 +1147,146 @@ class FixtureSiteTests(SiteCase):
         difference = "".join(difflib.unified_diff(
             org.splitlines(True), markdown.splitlines(True), n=0))
         self.assertEqual(org, markdown, difference[:2000])
+
+
+class GeneralFixtureSiteTests(SiteCase):
+    """The test collection plus the general baseline
+    ``tests/fixtures/general/OSDB-0140-general.md``, which sets no
+    scheme image and whose products' compounds include one with a
+    structure image."""
+
+    @classmethod
+    def prepare(cls) -> None:
+        ps.put_general_fixture(cls.sandbox)
+
+    def item(self) -> Content:
+        return self.by_id()["OSDB-0140"]
+
+    def test_a_general_procedure_without_a_scheme_shows_the_placeholder(
+            self) -> None:
+        """Scenario: Scheme image of a general procedure (the
+        placeholder)."""
+        page = self.page_of(self.item())
+        header = page.find("header", "procedure-header")
+        figures = header.find_all("figure", "structure")
+        self.assertEqual(len(figures), 1)
+        self.assertIs(header.elements()[-1], figures[0])
+        self.assertTrue(figures[0].has_class("structure--placeholder"))
+        slot = figures[0].find("div", "structure__slot")
+        self.assertIsNotNone(slot, "no div.structure__slot")
+        self.assertEqual(slot.norm(), "No structure image")
+        self.assertEqual(header.find_all("img"), [])
+        registry = self.registry()
+        self.assertTrue(registry["ethyl-acetate"].get("structure_image"),
+                        "no product sets a structure image")
+        demo = self.page_of(self.by_id()["OSDB-0009"])
+        figure = demo.find("header", "procedure-header").find(
+            "figure", "structure")
+        self.assertFalse(figure.has_class("structure--placeholder"))
+        self.assertEqual(figure.find("img").attrs.get("alt"),
+                         "Scheme of " + self.by_id()["OSDB-0009"].title)
+
+    def test_the_scope_table_with_every_column_and_an_image(self) -> None:
+        """Scenario: Scope table of a general procedure (the fixture)."""
+        item = self.item()
+        page = self.page_of(item)
+        table = gs.check_scope_table(self, page, item, self.registry(),
+                                     "en", "Summary")
+        rows = [[c.norm() for c in r.elements() if c.tag in ("td", "th")]
+                for r in table.find_all("tr")]
+        self.assertEqual(rows, [
+            ["Entry", "Starting materials", "Products", "Yield", "Scale",
+             "Time", "Temperature", "Note"],
+            ["1", "Acetic acid, Ethanol", "Ethyl acetate", "85 %",
+             "20 mmol", "2 h", "80 °C", "Reflux."],
+            ["2", "Acetic acid", "Benzyl acetate, Propyl acetate",
+             "78 %, 64.5 %", "", "", "", ""],
+            ["3", "Ethanol", "Methyl benzoate", "72.5 %", "", "", "", ""]])
+        images = table.find_all("img", "scope-structure")
+        self.assertEqual([(i.attrs.get("alt"), page.resolve(i.attrs["src"]))
+                          for i in images],
+                         [("Structure of Ethyl acetate",
+                           "/structures/ethyl-acetate.svg")])
+        self.assertTrue((self.public / "structures"
+                         / "ethyl-acetate.svg").is_file())
+
+    def test_the_yield_is_the_range_of_all_entries(self) -> None:
+        """Scenario: Yields of a general procedure (the fixture)."""
+        item = self.item()
+        page = self.page_of(item)
+        key = page.find("header", "procedure-header").find("dl", "key-facts")
+        self.assertEqual(
+            [(p.label, p.definition.norm())
+             for p in page.definition_pairs(key)],
+            [("Scale", "25 mmol"), ("Yield", "64.5–85 %")])
+
+    def test_the_panel_names_the_union_over_the_entries(self) -> None:
+        """Requirement: General procedures (panel, union in order of first
+        appearance)."""
+        item = self.item()
+        page = self.page_of(item)
+        panel = self.panel(page)
+        self.assertEqual(list(panel), self.expected_labels(item))
+        self.assertEqual(
+            panel["Products"].definition.norm(),
+            "Ethyl acetate, Benzyl acetate, Propyl acetate, "
+            "Methyl benzoate")
+        self.assertEqual(panel["Starting materials"].definition.norm(),
+                         "Acetic acid, Ethanol")
+        for link in page.links(panel["Products"].definition):
+            self.assertTrue(ps.target_file(self.public, link.target)
+                            .is_file(), link.target)
+
+    def test_the_index_follows_the_union_of_the_entries(self) -> None:
+        """Requirement: General procedures (index terms and SMILES
+        index)."""
+        item = self.item()
+        page = self.page_of(item)
+        registry = self.registry()
+        article = page.find("article", "procedure")
+        terms = ["OSDB-0140"]
+        for key in ("ethyl-acetate", "benzyl-acetate", "propyl-acetate",
+                    "methyl-benzoate"):
+            compound = registry[key]
+            terms += [compound["name"], compound["formula"],
+                      compound["cas"], compound["smiles"]]
+        self.assertEqual(article.find("span", "index-terms").norm(),
+                         " ".join(terms))
+        self.assertEqual(
+            article.find("span", data_smiles_index=True)
+            .attrs["data-smiles-index"],
+            " ".join(ps.smiles_suffixes(registry[key]["smiles"])
+                     for key in ("ethyl-acetate", "benzyl-acetate",
+                                 "propyl-acetate", "methyl-benzoate")))
+
+    def test_the_compound_pages_name_the_entry(self) -> None:
+        """Requirement: Compound pages (entries of a general procedure)."""
+        cases = {
+            "ethyl-acetate": ["OSDB-0140 Acetate Esters · entry 1 · 85 % · "
+                              "draft"],
+            "benzyl-acetate": ["OSDB-0140 Acetate Esters · entry 2 · 78 % · "
+                               "draft"],
+            "propyl-acetate": ["OSDB-0140 Acetate Esters · entry 2 · "
+                               "64.5 % · draft"],
+            "methyl-benzoate": ["OSDB-0140 Acetate Esters · entry 3 · "
+                                "72.5 % · draft"]}
+        for key, expected in cases.items():
+            page = ps.load_page(self.public, self.public / "compounds" / key
+                                / "index.html")
+            made = page.find("section", "compound-made-by")
+            with self.subTest(compound=key):
+                self.assertIsNotNone(made, "no section.compound-made-by")
+                self.assertEqual([li.norm() for li in made.find_all("li")],
+                                 expected)
+        used = ps.load_page(self.public, self.public / "compounds"
+                            / "acetic-acid" / "index.html").find(
+            "section", "compound-used-in")
+        self.assertIn("OSDB-0140 Acetate Esters · draft",
+                      [li.norm() for li in used.find_all("li")])
+        self.assertEqual(
+            [li.norm() for li in used.find_all("li")].count(
+                "OSDB-0140 Acetate Esters · draft"), 1,
+            "once for each procedure, however many entries use it")
 
 
 class QuotedTitleSiteTests(SiteCase):

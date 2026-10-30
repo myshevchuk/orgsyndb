@@ -1,16 +1,22 @@
-{{- /* The key facts under the title: the scale and the yield (yield-text.html),
-each when it is set, or nothing when neither is. A newline separates each
-</dt> from its <dd>, as in the metadata panel. */ -}}
+{{- /* The key facts under the title: the scale and the yield, each when it
+is set, or nothing when neither is. The yield is that of yield-text.html,
+or for a general procedure the range of yield-range.html. A newline
+separates each </dt> from its <dd>, as in the metadata panel. */ -}}
 {{ $p := .Params -}}
-{{ if or $p.scale $p.products -}}
+{{ if or $p.scale $p.products $p.scope -}}
 <dl class="key-facts">
 {{ with $p.scale -}}
 <dt>{{ T "label_scale" }}</dt>
 <dd>{{ . }}</dd>
 {{ end -}}
+{{ with $p.scope -}}
+<dt>{{ T "label_yield" }}</dt>
+<dd>{{ partial "yield-range.html" . }}</dd>
+{{ else -}}
 {{ with $p.products -}}
 <dt>{{ T "label_yield" }}</dt>
 <dd>{{ partial "yield-text.html" . }}</dd>
+{{ end -}}
 {{ end -}}
 </dl>
 {{ end -}}

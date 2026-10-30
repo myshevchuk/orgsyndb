@@ -17,6 +17,7 @@
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-28 Wed 21:57] -- doc-writer pass line corrected from gpt-6 to the pinned run model
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-30 Fri 01:50] -- Verbindungsregister, Produkte, Ausgangsstoffe und Seiten
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-30 Fri 01:55] -- doc-writer pass line corrected from gpt-6 to the pinned run model
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-10-30 Fri 08:17] -- Allgemeine Vorschriften, Scope-Tabelle, Reaktionsschemata und Katalog
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
@@ -53,10 +54,14 @@ bleiben auch in einer deutschen Vorschrift englisch.
 
 * Den Kopf der Vorlage verstehen
 
+  Die Vorlage beschreibt eine /Einzelvorschrift/, also einen einzelnen
+  Ansatz. Für eine gemeinsame Methode mit mehreren Substraten verwenden
+  Sie eine /allgemeine Vorschrift/, wie unten erklärt.
+
   Org-Schlüsselwortzeilen beginnen in der ersten Spalte. Behalten Sie jedes
   Pflicht-Schlüsselwort genau einmal und rücken Sie es nicht ein.
 
-  - ~#+TITLE~ :: Der Produktname als Seitentitel.
+  - ~#+TITLE~ :: Der Produktname oder die allgemeine Methode als Seitentitel.
   - ~#+CREATED~ :: Wann die Vorschrift zuerst geschrieben wurde, als
     inaktiver Org-Zeitstempel.
   - ~#+LAST_MODIFIED~ :: Wann die Vorschrift zuletzt geändert wurde.
@@ -77,9 +82,9 @@ bleiben auch in einer deutschen Vorschrift englisch.
     Status, Reaktionstyp, Ansatzgröße, Produkten mit ihren Ausbeuten,
     Gefahren und optionalen Feldern.
 
-  Setzen Sie ~:products~ auf eine gequotete Liste mit einem Eintrag pro
-  Produkt. Jeder Eintrag enthält den Schlüssel ~compound~ und
-  ~yield_percent~. Ein Schlüssel ist der Name einer Datei in ~compounds/~
+  Bei einer Einzelvorschrift setzen Sie ~:products~ auf eine gequotete Liste
+  mit einem Eintrag pro Produkt. Jeder Eintrag enthält den Schlüssel ~compound~
+  und ~yield_percent~. Ein Schlüssel ist der Name einer Datei in ~compounds/~
   der Sammlung ohne ~.toml~. ~:products~ steht allein auf der letzten
   Custom-Front-Matter-Zeile. Der Export hält tabellenartige Metadaten
   zusätzlich am Ende, damit spätere Felder nicht zur letzten Tabelle
@@ -122,6 +127,10 @@ bleiben auch in einer deutschen Vorschrift englisch.
   Felder, die Reaktionstypen und die Regeln für Dateinamen stehen in
   [[file:SCHEMA.de.md][docs/SCHEMA.de.md]].
 
+  Ersetzen Sie bei einer allgemeinen Vorschrift ~:products~ und ~:substrates~
+  auf oberster Ebene durch eine benannte Scope-Tabelle, wie unten gezeigt.
+  Behalten Sie ~:scale~ als typische Ansatzgröße.
+
 * Verbindungen finden oder anlegen
 
   Das /Verbindungsregister/ ist der Ordner ~compounds/~ der Sammlung.
@@ -158,49 +167,133 @@ bleiben auch in einer deutschen Vorschrift englisch.
   Der weiße Hintergrund hält die Zeichnung im dunklen Farbschema der
   Website und auf Papier lesbar.
 
-  Sie dürfen einen Ausgangsstoff registrieren, ohne dass eine Vorschrift
-  ihn herstellt. Auch eine Verbindung, die keine Vorschrift verwendet,
-  ist zulässig. *Verbindungen* in der Navigation öffnet ~/compounds/~.
-  Jeder Name verlinkt auf eine Seite mit chemischen Daten, dem Strukturbild,
-  sofern vorhanden, Vorschriften unter *Hergestellt nach* mit Ausbeute und
-  Status sowie Vorschriften unter *Verwendet in* mit Status.
+  Sie dürfen einen Ausgangsstoff registrieren, ohne dass eine Vorschrift ihn
+  herstellt. Auch eine Verbindung, die keine Vorschrift verwendet, ist
+  zulässig. *Verbindungen* in der Navigation öffnet ~/compounds/~. Jeder Name
+  verlinkt auf eine Seite mit chemischen Daten, dem Strukturbild, sofern
+  vorhanden, Vorschriften unter *Hergestellt nach* mit Ausbeute und Status
+  sowie Vorschriften unter *Verwendet in* mit Status. Eine allgemeine
+  Vorschrift steht unter *Hergestellt nach* einmal je Eintrag, der die
+  Verbindung herstellt, als
+  ~<ID> <Titel> · Eintrag <n> · <Ausbeute> % · <Status>~. *Verwendet in* listet
+  jede Vorschrift einmal; auch das Verzeichnis zählt sie nur einmal.
+
+* Eine allgemeine Vorschrift schreiben
+
+  Wenn eine Methode mehrere Substrate abdeckt, schreiben Sie sie einmal als
+  /allgemeine Vorschrift/. Ihr ~scope~ erfasst jede Anwendung mit
+  Ausgangsstoffen, Produkten und Ausbeuten. Dieses Feld macht die Vorschrift
+  allgemein; tragen Sie kein Feld ~kind~ ein.
+
+  Entfernen Sie die Zeilen ~:products~ und ~:substrates~ auf oberster Ebene aus
+  der Vorlage. Behalten Sie die übrigen Pflichtfelder, einschließlich ~:scale~
+  für die typische Ansatzgröße. Schreiben Sie eine Org-Tabelle unmittelbar nach
+  ~#+NAME: scope~, außerhalb von Blöcken. Groß- und Kleinschreibung des
+  Tabellennamens spielt keine Rolle. Die erste Zeile benennt die Spalten;
+  danach folgen eine Trennlinie und eine Zeile je Eintrag. Dieser Ausschnitt
+  aus der Export-Beispieldatei zeigt einen Eintrag mit zwei Produkten, mit
+  übersetzten Anmerkungen:
+
+#+begin_src org
+  #+NAME: scope
+  | substrates          | products                     | yield_percent | time   | temperature | note        |
+  |---------------------+------------------------------+---------------+--------+-------------+-------------|
+  | acetic-acid ethanol | ethyl-acetate propyl-acetate | 45,5 30       | 2 h    | 80          | Rückfluss   |
+  | acetic-acid         | benzyl-acetate               | 78            |        | 25          | Nur rühren  |
+  | ethanol             | methyl-benzoate              | 72,5          | 30 min | 60,5        | Zwei Phasen |
+#+end_src
+
+  Pflichtspalten sind ~substrates~, ~products~ und ~yield_percent~. Trennen Sie
+  Verbindungsschlüssel durch Leerzeichen. Geben Sie eine Ausbeute je Produkt
+  an, in Produktreihenfolge und ebenfalls durch Leerzeichen getrennt. Ausbeuten
+  sind Zahlen von 0 bis 100 ohne ~%~. Jeder Eintrag braucht mindestens einen
+  Ausgangsstoff und ein Produkt. Nennen Sie darin keinen Schlüssel doppelt und
+  kein Produkt auch als Ausgangsstoff. Eine Verbindung darf Ausgangsstoff in
+  einem Eintrag und Produkt in einem anderen sein. Die Einträge sind in
+  Zeilenreihenfolge ab 1 nummeriert.
+
+  Optional sind die Spalten ~scale~, ~time~, ~temperature~ und ~note~. Die
+  Ansatzgröße ist Text mit Zahl und Einheit, etwa ~5 mmol~. Eine Zeit besteht
+  aus Zahl und ~min~, ~h~ oder ~d~, etwa ~30 min~. Eine Temperatur ist eine
+  Zahl in °C ohne Einheit. Eine Anmerkung ist Text. Zahlen in der Tabelle
+  dürfen ein Dezimalkomma haben, wie ~45,5~ oben. Eine leere Zelle lässt ihr
+  Feld ungesetzt; Pflichtfelder je Eintrag prüft weiterhin der Validator. Die
+  Spaltennamen bleiben in jeder Sprache englisch.
+
+  Der Export schreibt ~scope~ in den Datenblock und entfernt die Tabelle samt
+  ~#+NAME~ aus dem Text. Behalten Sie die acht Textüberschriften und
+  beschreiben Sie darin die gemeinsame Methode. Die vollständige
+  [[file:../tests/fixtures/export/OSDB-0909-scope-table.org][Org-Beispieldatei]]
+  zeigt diese Tabelle in einer Vorschrift. Die neunte Vorschrift der
+  Beispielsammlung,
+  [[file:../examples/demo/md/procedures/OSDB-0009-benzylic-alcohols.de.md][OSDB-0009]],
+  zeigt das Datenformat in Markdown für die Reduktion dreier Arylmethylketone
+  mit Natriumborhydrid. Dies sind Beispieldaten, keine experimentell
+  überprüften Vorschriften.
+
+  Für ein Schema der Gesamtreaktion legen Sie ein SVG oder PNG unter
+  ~static/structures/~ ab und ergänzen:
+
+#+begin_src org
+  #+HUGO_CUSTOM_FRONT_MATTER: :scheme_image "structures/aryl-ketone-reduction.svg"
+#+end_src
+
+  Der Pfad beginnt mit ~structures/~, enthält kein ~..~ und benennt eine
+  vorhandene ~.svg~- oder ~.png~-Datei unter ~static/~. Jede Vorschrift darf
+  ~scheme_image~ setzen; es ersetzt die Produktstrukturen im Titelblock. Ohne
+  dieses Feld zeigt eine allgemeine Vorschrift *Keine Strukturformel*.
 
 * Die fertige Seite verstehen
 
   Der Titelblock zeigt über ~#+TITLE~ die Vorschriftennummer und ein
   Statusabzeichen, auf einer deutschen Website /Entwurf/, /Geprüft/ oder
   /Zurückgezogen/. Wenn ~:status~ den Wert ~checked~ hat und ~:checked_by~
-  ausgefüllt ist, folgen die Namen der Prüfenden auf das Abzeichen:
-  *Geprüft von* und die Namen. Unter dem Titel erscheinen ~:scale~ als
-  *Ansatzgröße* und die Produktausbeuten als *Ausbeute*. Bei einem Produkt
-  steht nur die Prozentzahl, bei mehreren für jedes Produkt die Prozentzahl
-  mit dem Verbindungsnamen, in der Reihenfolge von ~:products~. Darunter
-  steht die Schaltfläche *Drucken / Als PDF speichern*.
+  ausgefüllt ist, folgen die Namen der Prüfenden auf das Abzeichen: *Geprüft
+  von* und die Namen. Unter dem Titel erscheinen ~:scale~ als *Ansatzgröße* und
+  die Produktausbeuten als *Ausbeute*. Bei einer Einzelvorschrift mit einem
+  Produkt steht nur die Prozentzahl, bei mehreren für jedes Produkt die
+  Prozentzahl mit dem Verbindungsnamen, in der Reihenfolge von ~:products~.
+  Darunter steht die Schaltfläche *Drucken / Als PDF speichern*. Eine
+  allgemeine Vorschrift zeigt die typische Ansatzgröße auf oberster Ebene und
+  die Ausbeutespanne aller Produkte aller Einträge, ~<min>–<max> %~, bei
+  gleichen Ausbeuten nur eine Prozentzahl.
 
-  Die Seite zeigt für jedes Produkt mit Strukturbild eine Abbildung, in der
-  Reihenfolge von ~:products~. Auf einem breiten Bildschirm stehen die Bilder
-  rechts neben dem Titel, über dem Datenfeld. In einem schmalen Fenster
-  folgen sie auf die Druckschaltfläche, vor dem Datenfeld. Auch im Ausdruck
-  stehen sie vor dem Datenfeld. Hat kein Produkt ein Bild, erscheint der
-  Platzhalter *Keine Strukturformel*, der im Ausdruck fehlt. Eine Linie
-  schließt den Titelblock auf dem Bildschirm ab.
+  Ohne ~scheme_image~ zeigt eine Einzelvorschrift für jedes Produkt mit
+  Strukturbild eine Abbildung, in der Reihenfolge von ~:products~. Auf einem
+  breiten Bildschirm stehen die Bilder rechts neben dem Titel, über dem
+  Datenfeld. In einem schmalen Fenster folgen sie auf die Druckschaltfläche,
+  vor dem Datenfeld. Auch im Ausdruck stehen sie vor dem Datenfeld. Fehlen
+  sowohl Schema als auch Produktbilder, erscheint der Platzhalter *Keine
+  Strukturformel*, der im Ausdruck fehlt. Eine Linie schließt den Titelblock
+  auf dem Bildschirm ab.
 
-  Das Datenfeld verlinkt die Produktnamen immer unter *Produkt* oder
-  *Produkte* auf ihre Verbindungsseiten, auch bei gleichem Namen wie im
-  Titel. Bei einem Produkt zeigt es außerdem Summenformel, Molmasse, CAS
-  falls vorhanden und SMILES. Bei mehreren Produkten finden Sie diese Daten
-  auf den Verbindungsseiten. *Ausgangsstoffe* verlinkt die Verbindungen aus
-  ~:substrates~. Es folgen Reaktionstyp, Schlagwörter, Autoren, bei Entwürfen
-  und zurückgezogenen Vorschriften gegebenenfalls die Prüfenden unter
-  *Geprüft von*, Erstellungs- und Änderungszeit und die Links zu Vorstufen
-  und Folgevorschriften. Ziffern der Summenformel erscheinen tiefgestellt.
-  Molmasse und Ausbeute erscheinen mit Dezimalkomma, ~g/mol~ und
-  Prozentzeichen; neben SMILES steht eine Schaltfläche *Kopieren*.
-  Reaktionstyp, Schlagwörter und Autoren verlinken auf Seiten mit
-  verwandten Vorschriften. Autorennamen werden mit großem Anfangsbuchstaben
-  angezeigt, aus ~van~ wird ~Van~. Die acht Abschnitte des Textes stehen
-  auf einem breiten Bildschirm neben dem Datenfeld, in einem schmalen
-  Fenster und im Ausdruck danach.
+  Das Datenfeld verlinkt die Produktnamen immer unter *Produkt* oder *Produkte*
+  auf ihre Verbindungsseiten, auch bei gleichem Namen wie im Titel. Bei einem
+  Produkt zeigt es außerdem Summenformel, Molmasse, CAS falls vorhanden und
+  SMILES. Bei mehreren Produkten finden Sie diese Daten auf den
+  Verbindungsseiten. *Ausgangsstoffe* verlinkt die Verbindungen aus
+  ~:substrates~. Bei einer allgemeinen Vorschrift umfassen beide Listen alle
+  Einträge, jede Verbindung einmal in der Reihenfolge ihres ersten Auftretens.
+  Auch Vorstufen- und Folgelinks berücksichtigen alle Einträge. Es folgen
+  Reaktionstyp, Schlagwörter, Autoren, bei Entwürfen und zurückgezogenen
+  Vorschriften gegebenenfalls die Prüfenden unter *Geprüft von*, Erstellungs-
+  und Änderungszeit und die Links zu Vorstufen und Folgevorschriften. Ziffern
+  der Summenformel erscheinen tiefgestellt. Molmasse und Ausbeute erscheinen
+  mit Dezimalkomma, ~g/mol~ und Prozentzeichen; neben SMILES steht eine
+  Schaltfläche *Kopieren*. Reaktionstyp, Schlagwörter und Autoren verlinken auf
+  Seiten mit verwandten Vorschriften. Autorennamen werden mit großem
+  Anfangsbuchstaben angezeigt, aus ~van~ wird ~Van~. Die acht Abschnitte des
+  Textes stehen auf einem breiten Bildschirm neben dem Datenfeld, in einem
+  schmalen Fenster und im Ausdruck danach.
+
+  Bei einer allgemeinen Vorschrift steht *Anwendungsbereich* vor
+  *Zusammenfassung*, mit einer Zeile je Eintrag. *Eintrag*, *Ausgangsstoffe*,
+  *Produkte* und *Ausbeute* erscheinen immer. *Ansatzgröße*, *Zeit*,
+  *Temperatur* und *Anmerkung* erscheinen nur, wenn mindestens ein Eintrag das
+  Feld setzt; ungesetzte Werte lassen leere Zellen. Verbindungen verlinken auf
+  ihre Seiten, und Produkte zeigen kleine Strukturbilder, sofern im Register
+  vorhanden. Eintrag 1 von OSDB-0009 stellt denselben Alkohol wie OSDB-0005
+  her, sodass die Verbindungsseite beide Wege nennt.
 
 * Genaue Zeitstempel verwenden
 
@@ -309,12 +402,13 @@ bleiben auch in einer deutschen Vorschrift englisch.
      Steht im Original ~:language "en"~, ändern Sie es in ~"de"~ oder
      löschen Sie die Zeile.
   4. Lassen Sie ~#+HUGO_SLUG~, ~:id~, ~:status~, ~:reaction_types~,
-     ~#+HUGO_TAGS~, ~:products~ und ~:substrates~ wie im Original. Der
-     Validator vergleicht sie mit dem Original und meldet jede Abweichung
-     als Fehler. Zahlen werden nach ihrem Wert verglichen: ~85~ und ~85.0~
-     stimmen überein. Verbindungsnamen kommen aus ~name~ und ~name_de~ im
-     gemeinsamen Register. Tragen Sie den deutschen Namen dort in
-     ~name_de~ ein.
+     ~#+HUGO_TAGS~, ~:products~, ~:substrates~ und ~:scheme_image~ wie im
+     Original. Behalten Sie die Reihenfolge und Werte der Scope-Tabelle;
+     übersetzen Sie darin nur ~note~. Der Validator vergleicht die gemeinsamen
+     Felder mit dem Original und meldet Abweichungen als Fehler. Zahlen werden
+     nach ihrem Wert verglichen: ~85~ und ~85.0~ stimmen überein.
+     Verbindungsnamen kommen aus ~name~ und ~name_de~ im gemeinsamen Register.
+     Tragen Sie den deutschen Namen dort in ~name_de~ ein.
   5. Übersetzen Sie den Text, ersetzen Sie die englischen Überschriften
      und Tabellenspalten durch die deutschen und schreiben Sie
      Dezimalkommas. Richten Sie sich dabei nach dem
@@ -328,8 +422,8 @@ bleiben auch in einer deutschen Vorschrift englisch.
   anderen Sprache bekannt, trägt ihre Seite ein ~lang~-Attribut.
 
   Eine Datei ohne Kürzel darf die deutschen oder die englischen
-  Überschriften verwenden. Um ihre Sprache anzugeben, fügen Sie vor
-  ~:products~ diese Zeile ein:
+  Überschriften verwenden. Um ihre Sprache anzugeben, fügen Sie diese
+  Custom-Front-Matter-Zeile ein, bei einer Einzelvorschrift vor ~:products~:
 
 #+begin_src org
   #+HUGO_CUSTOM_FRONT_MATTER: :language "de"
@@ -347,11 +441,25 @@ bleiben auch in einer deutschen Vorschrift englisch.
 #+end_src
 
   Vor dem Export prüft der Befehl die Org-Dateinamen, die nötigen
-  Schlüsselwörter auf Dateiebene und Wege, über die sich die exportierten
-  Datumsangaben, das KI-Modell oder der Dateiname setzen ließen. Jedes
-  Problem erscheint als ~<pfad>:<feld>: error|warning: <meldung>~, also in
-  derselben Zeilenform wie beim Validator. Ein Fehler bricht den Export ab
-  und lässt ~build/export/~ unverändert.
+  Schlüsselwörter auf Dateiebene, die benannte Scope-Tabelle und Wege, über die
+  sich die exportierten Datumsangaben, das KI-Modell oder der Dateiname setzen
+  ließen. Jedes Problem erscheint als
+  ~<pfad>:<feld>: error|warning: <meldung>~, also in derselben Zeilenform wie
+  beim Validator. Ein Fehler bricht den Export ab und lässt ~build/export/~
+  unverändert.
+
+  Fehlerhafte Scope-Tabellen brechen den Export mit dem Feld ~scope~ ab. Die
+  Meldungen nennen das Problem der Quelle; die Zeilenzählung beginnt nach der
+  Trennlinie bei 1:
+
+  | Meldung | Korrektur |
+  |---------+-----------|
+  | ~appears more than once~ | Nur eine Tabelle namens ~scope~ behalten. |
+  | ~"<name>" is not a scope column~ | Einen der sieben Spaltennamen verwenden. |
+  | ~column "<name>" missing~ | Die Pflichtspalte ergänzen. |
+  | ~column "<name>" appears more than once~ | Die Spalte nur einmal behalten. |
+  | ~row <n>: <p> products but <y> yields~ | Eine Ausbeute je Produkt in dessen Reihenfolge angeben. |
+  | ~row <n>: "<cell>" is not a number~ | Ausbeute oder Temperatur als Zahl ohne Einheit schreiben. |
 
   Der Export startet Emacs in einer abgeschotteten Batch-Umgebung. Er lädt
   und schreibt keine Emacs-Konfiguration der Nutzerin oder des Nutzers.
@@ -407,6 +515,14 @@ bleiben auch in einer deutschen Vorschrift englisch.
   ~missing section "Summary"~, fehlt ihrem Namen das ~.de~. Die
   Schema-Referenz erklärt jedes Feld und die Rückgabewerte.
 
+  ~scope[2].time~ nennt die Zeit in Eintrag 2;
+  ~scope[2].products[1].yield_percent~ nennt dessen erste Produktausbeute.
+  ~must not be empty~ unter ~scope~ verlangt mindestens einen Eintrag. Bei
+  ~a general procedure lists them in scope; move <key> into its entries~
+  verschieben Sie das Feld von der obersten Ebene in die passenden Einträge.
+  Zeitfehler verlangen eine Zahl mit ~min~, ~h~ oder ~d~; Temperaturfehler eine
+  Zahl in °C ohne Anführungszeichen.
+
   Bauen und betrachten Sie die Website mit:
 
 #+begin_src sh
@@ -424,3 +540,17 @@ bleiben auch in einer deutschen Vorschrift englisch.
   die WeasyPrint in die PDFs von ~orgsyndb pdf~ setzt. Dort heißt die PDF
   einer deutschen Vorschrift ~pdf/OSDB-0001-x.de.pdf~ und trägt die
   Fußzeile ~Seite N von M~.
+
+  Im Katalog wählen Sie im Filter *Art* zwischen *Einzelvorschrift* und
+  *Allgemeine Vorschrift*. Die Reiter heißen *Alle Vorschriften*, *Allgemeine
+  Vorschriften*, *Reaktionstypen*, *Schlagwörter* und *Autoren*. *Allgemeine
+  Vorschriften* öffnet ~/general-procedures/~, den auf diese Art begrenzten
+  Katalog. Die Suche im Kopf heißt *Allgemeine Vorschriften durchsuchen* und
+  bleibt innerhalb dieser Liste. *Nur allgemeine Vorschriften · Alle
+  Vorschriften anzeigen* führt zum gesamten Katalog. *Alles zurücksetzen*
+  behält die Beschränkung; *Alle Vorschriften anzeigen* hebt sie auf und
+  übernimmt Suchtext, andere Filter, Sortierung und Ansicht. Im gesamten
+  Katalog wählt der Adressparameter ~kind=general~ dieselbe Art. Ohne
+  JavaScript zeigt die Seite weiterhin ihre Vorschriften nach Nummer. Die
+  Ansicht *Details* berücksichtigt Produkte aller Einträge und zeigt die
+  Ausbeutespanne.

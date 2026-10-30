@@ -30,17 +30,60 @@ class PlainCatalogueTests(cs.CatalogueCase):
         page = self.page("procedures/index.html")
         block = self.check_catalogue(page, fixed=None, heading="Procedures")
         count = block.find("p", "catalogue-count")
-        self.assertEqual(count.norm(), "8 procedures")
+        self.assertEqual(count.norm(), "9 procedures")
         self.assertEqual(count.attrs.get("data-filtered"),
                          "{shown} of {total} procedures")
         items = self.content()
-        self.assertEqual(len(items), 8)
+        self.assertEqual(len(items), 9)
         self.check_rows(page, items)
         self.assertEqual(self.table_ids(page),
                          sorted({item.id for item in items}))
 
+    def test_the_general_procedures_view_lists_the_general_ones(
+            self) -> None:
+        """Scenario: The view lists the general procedures."""
+        page = self.page("general-procedures/index.html")
+        self.check_general_view(page, self.content())
+        self.assertEqual(self.table_ids(page), ["OSDB-0009"])
+        block = page.find("div", "catalogue")
+        self.assertEqual(block.attrs.get("data-fixed"), "kind")
+        self.assertEqual(block.find("p", "catalogue-count").norm(),
+                         "1 procedure")
+        form = page.find("header", "site-header").find("form")
+        field = form.find("input", name="q")
+        self.assertEqual(field.get("aria-label"),
+                         "Search general procedures")
+        self.assertEqual(field.get("placeholder"), "Search these procedures")
+        self.assertEqual(page.resolve(form.attrs.get("action", "")),
+                         "/general-procedures/")
+
+    def test_the_kind_facet_of_the_catalogue(self) -> None:
+        """Scenario: Controls in the HTML (the kind facet)."""
+        page = self.page("procedures/index.html")
+        self.assertEqual(
+            [g.attrs.get("data-facet")
+             for g in page.find_all("details", "facet")],
+            ["type", "kind", "status", "tag", "author"])
+        group = page.find("details", "facet", data_facet="kind")
+        self.assertIn("open", group.attrs)
+        self.assertNotIn("data-fixed", group.attrs)
+        self.assertEqual(group.find("summary").norm(), "Kind")
+        self.assertEqual(ps.facet_values(page, "kind"), [
+            ("specific", "Specific procedure"),
+            ("general", "General procedure")])
+        self.assertEqual(
+            [b.attrs.get("name") for b in group.find_all("input")],
+            ["kind", "kind"])
+        self.assertEqual(group.find_all("a"), [])
+
+    def test_term_pages_carry_the_kind_facet_too(self) -> None:
+        """Scenario: Controls in the HTML (term pages)."""
+        page = self.page("tags/cinnamate/index.html")
+        self.assertEqual(ps.facet_values(page, "kind"), [
+            ("specific", "Specific procedure"),
+            ("general", "General procedure")])
+
     def test_term_pages_are_catalogue_pages(self) -> None:
-        """Scenario: Term pages are catalogue pages."""
         items = self.content()
         seen = 0
         for taxonomy, facet in TERM_FACET.items():
@@ -193,7 +236,10 @@ class DetailsChecks:
                                 " g/mol"))
             if compound.get("cas"):
                 found.append(("CAS", compound["cas"]))
-        found.append(("Yield", ps.yield_text(item, registry, locale)))
+        # The Yield of a general procedure's Details block is not fixed
+        # by the specification: only its label is checked (None).
+        found.append(("Yield", None if item.is_general
+                      else ps.yield_text(item, registry, locale)))
         found.append(("Created", item.data["date"].strftime("%Y-%m-%d")))
         return found
 
@@ -205,8 +251,13 @@ class DetailsChecks:
         self.assertIsNotNone(details, "no div.row-details")
         self.assertGreater(page.index_of(details), page.index_of(link.node))
         pairs = page.definition_pairs(details)
-        self.assertEqual([(p.label, p.definition.norm()) for p in pairs],
-                         self.expected_details(item, registry))
+        wanted = self.expected_details(item, registry)
+        self.assertEqual([p.label for p in pairs], [l for l, _ in wanted])
+        for pair, (label, value) in zip(pairs, wanted):
+            if value is None:
+                self.assertNotEqual(pair.definition.norm(), "", label)
+            else:
+                self.assertEqual(pair.definition.norm(), value, label)
         for pair in pairs:
             if pair.label == "Formula":
                 formula = registry[item.products[0]["compound"]]["formula"]
@@ -247,9 +298,9 @@ class CatalogueFixtureTests(DetailsChecks, cs.CatalogueCase):
     def test_the_fixtures_are_published_with_the_collection(self) -> None:
         """Harness: the build holds the shipped and the fixture procedures."""
         ids = [item.id for item in self.content()]
-        self.assertEqual(len(ids), 14)
+        self.assertEqual(len(ids), 15)
         self.assertEqual(sorted(set(ids)), sorted(ids))
-        self.assertEqual(sorted(ids)[8:],
+        self.assertEqual(sorted(ids)[9:],
                          [f"OSDB-092{n}" for n in range(1, 7)])
 
     def test_rows_carry_the_records(self) -> None:
@@ -265,6 +316,7 @@ class CatalogueFixtureTests(DetailsChecks, cs.CatalogueCase):
                 self.assertEqual(row.attrs.get("data-title"), item.title)
                 self.assertEqual(row.attrs.get("data-status"),
                                  item.data["status"])
+                self.assertEqual(row.attrs.get("data-kind"), item.kind)
                 for facet, taxonomy in cs.FACET_TAXONOMY.items():
                     self.assertEqual(
                         json.loads(row.attrs[f"data-{facet}"]),
@@ -276,6 +328,12 @@ class CatalogueFixtureTests(DetailsChecks, cs.CatalogueCase):
         authors = json.loads(page.find("tr", data_id="OSDB-0921")
                              .attrs["data-author"])
         self.assertEqual(authors, ["ä. müller", "a. example"])
+        kinds = {row.attrs["data-id"]: row.attrs["data-kind"]
+                 for row in rows}
+        self.assertEqual(
+            sorted(i for i, kind in kinds.items() if kind == "general"),
+            ["OSDB-0009"])
+        self.assertEqual(set(kinds.values()), {"specific", "general"})
 
     def test_details_markup(self) -> None:
         """Scenario: Details markup."""
@@ -316,14 +374,14 @@ class CatalogueFixtureTests(DetailsChecks, cs.CatalogueCase):
         self.assertEqual(tied["OSDB-0921"], tied["OSDB-0922"])
         counts = [entry.find("span", "count").norm() for entry in
                   page.find("ul", "browse-list").find_all("li")]
-        self.assertEqual(counts[0], "(14)")
+        self.assertEqual(counts[0], "(15)")
         unchecked = page.find("section", "home-unchecked")
         self.assertEqual(
             [entry.elements()[0].norm().split()[0] for entry in
              unchecked.find("ol", "unchecked-list").find_all("li")],
             [f"OSDB-000{n}" for n in range(1, 6)])
         self.assertEqual(unchecked.find("p").find("span", "count").norm(),
-                         "(11)")
+                         "(12)")
 
 
     def test_the_sign_off_of_a_checked_procedure(self) -> None:
@@ -351,7 +409,7 @@ class TwoProductDetailsTests(DetailsChecks, cs.CatalogueCase):
         page = self.page("procedures/index.html")
         registry = ps.read_registry(self.sandbox)
         items = self.content()
-        self.assertEqual(len(items), 9)
+        self.assertEqual(len(items), 10)
         row = page.find("tr", data_id="OSDB-0907")
         self.assertIsNotNone(row, "no row for OSDB-0907")
         pairs = [(p.label, p.definition.norm()) for p in

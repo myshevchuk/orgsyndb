@@ -69,6 +69,10 @@ beschriebenes Pflicht-Array muss mindestens einen Eintrag haben. Jeder
 Eintrag in einem String-Array muss Text enthalten, der nicht nur aus
 Leerraum besteht.
 
+Eine Vorschrift mit `scope` ist eine **allgemeine Vorschrift**: eine Methode
+für mehrere Substrate. Ohne `scope` ist sie eine **Einzelvorschrift**. Die
+Website leitet die Art aus `scope` ab; legen Sie kein Feld `kind` an.
+
 ### Pflichtfelder
 
 | Feld | Bedeutung | TOML-Typ | Pflicht | Regel | Beispiel |
@@ -82,8 +86,8 @@ Leerraum besteht.
 | `status` | Der Bearbeitungsstand. | String | Ja | Genau `draft`, `checked` oder `retired`. Eine deutsche Website zeigt *Entwurf*, *geprüft* oder *zurückgezogen*. | `status = "draft"` |
 | `reaction_types` | Die festgelegte Reaktionsklasse. | String-Array | Ja | Genau ein Kürzel aus dem Reaktionstyp-Vokabular. | `reaction_types = ["esterification"]` |
 | `tags` | Suchbegriffe. | Nicht leeres String-Array | Ja | Jedes Schlagwort besteht aus Kleinbuchstaben oder Ziffern mit einzelnen Bindestrichen zwischen den Gruppen. | `tags = ["acid-catalysed"]` |
-| `products` | Die hergestellten Verbindungen mit ihren Ausbeuten. | Nicht leeres Array von Tabellen | Ja | Jeder Eintrag enthält `compound` und `yield_percent`, wie unten beschrieben. | `products = [{ compound = "ethyl-acetate", yield_percent = 85 }]` |
-| `scale` | Wie viel Produkt die Vorschrift liefert. | String | Ja | Eine Zahl, Leerraum und eine Einheit. Die Zahl darf einen Dezimalpunkt oder ein Dezimalkomma haben. Die Einheiten sind nicht festgelegt. | `scale = "2,5 mmol"` |
+| `products` | Die hergestellten Verbindungen mit ihren Ausbeuten. | Nicht leeres Array von Tabellen | Nur ohne `scope` | Jeder Eintrag enthält `compound` und `yield_percent`, wie unten beschrieben. | `products = [{ compound = "ethyl-acetate", yield_percent = 85 }]` |
+| `scale` | Wie viel Produkt die Vorschrift liefert; bei einer allgemeinen Vorschrift die typische Ansatzgröße. | String | Ja | Eine Zahl, Leerraum und eine Einheit. Die Zahl darf einen Dezimalpunkt oder ein Dezimalkomma haben. Die Einheiten sind nicht festgelegt. | `scale = "2,5 mmol"` |
 | `hazards` | Die wichtigsten Gefahren. | Nicht leeres Array nicht leerer Strings | Ja | Mindestens eine kurze Beschreibung. | `hazards = ["Entzündbare Flüssigkeit"]` |
 
 Ein Datum mit anderem Versatz als dem Berliner bezeichnet trotzdem einen
@@ -94,9 +98,9 @@ einschließlich ihres Versatzes.
 
 ### Produkte und Ausgangsstoffe
 
-`products` enthält eine Tabelle pro Produkt. Jeder Verbindungsschlüssel darf
-im Array nur einmal vorkommen. Eine Vorschrift darf mehrere Produkte haben,
-jedes mit einer eigenen Ausbeute.
+Bei einer Einzelvorschrift enthält `products` auf oberster Ebene eine Tabelle
+pro Produkt. Jeder Verbindungsschlüssel darf im Array nur einmal vorkommen.
+Eine Vorschrift darf mehrere Produkte haben, jedes mit einer eigenen Ausbeute.
 
 | Feld | Bedeutung | TOML-Typ | Pflicht | Regel | Beispiel |
 |---|---|---|---|---|---|
@@ -114,17 +118,57 @@ Sie dürfen auch TOML-Tabellenüberschriften `[[products]]` verwenden, wie der
 Org-Export. Diese Tabellen stehen nach allen Feldern der obersten Ebene:
 Felder nach einer Tabellenüberschrift gehören zu dieser Tabelle.
 
-Das optionale Array `substrates` benennt die Ausgangsstoffe durch ihre
-Verbindungsschlüssel. Es darf leer sein. Jeder Schlüssel muss im Register
-vorkommen, darf nur einmal genannt werden und darf nicht auch unter den
-Produkten stehen.
+Bei einer Einzelvorschrift benennt das optionale Array `substrates` die
+Ausgangsstoffe durch ihre Verbindungsschlüssel. Es darf leer sein. Jeder
+Schlüssel muss im Register vorkommen, darf nur einmal genannt werden und darf
+nicht auch unter den Produkten stehen.
 
-Die Website leitet **Vorstufen** aus den anderen veröffentlichten
-Vorschriften ab, die einen dieser Ausgangsstoffe herstellen. Unter
-**Verwendet in** stehen Vorschriften, die eines der Produkte dieser
-Vorschrift als Ausgangsstoff verwenden. Beide Listen sind nach
-Vorschriftennummer geordnet und funktionieren über Sprachgrenzen hinweg.
-Sie tragen dafür keine Vorschriftennummern ein.
+Die Website leitet **Vorstufen** aus den anderen veröffentlichten Vorschriften
+ab, die einen dieser Ausgangsstoffe herstellen. Unter **Verwendet in** stehen
+Vorschriften, die eines der Produkte dieser Vorschrift als Ausgangsstoff
+verwenden. Beide Listen sind nach Vorschriftennummer geordnet und funktionieren
+über Sprachgrenzen hinweg. Sie tragen dafür keine Vorschriftennummern ein. Bei
+einer allgemeinen Vorschrift berücksichtigt die Website alle Produkte und
+Ausgangsstoffe aller Einträge, jede Verbindung einmal in der Reihenfolge ihres
+ersten Auftretens. Das gilt auch für Datenfeld, Verbindungsverzeichnis,
+Katalogdetails und Suche einschließlich SMILES-Treffern.
+
+### Allgemeine Vorschriften und Einträge in scope
+
+Mit `scope` erfassen Sie Ausgangsstoffe, Produkte und Ausbeuten jeder Anwendung
+einer gemeinsamen Methode. Es ist ein nicht leeres Array von Tabellen. Die
+Einträge sind in ihrer Reihenfolge ab 1 nummeriert. Lassen Sie `products` und
+`substrates` auf oberster Ebene ganz weg, auch leere Arrays. `scale` bleibt
+dort Pflicht und nennt die typische Ansatzgröße.
+
+| Feld | Bedeutung | TOML-Typ | Pflicht je Eintrag | Regel | Beispiel |
+|---|---|---|---|---|---|
+| `scope[n].substrates` | Ausgangsstoffe dieses Eintrags. | Nicht leeres String-Array | Ja | Registerschlüssel; keine Wiederholungen und kein Produkt desselben Eintrags. | `substrates = ["acetophenone"]` |
+| `scope[n].products` | Produkte und ihre isolierten Ausbeuten. | Nicht leeres Array von Tabellen | Ja | Dieselben Regeln wie für `products` auf oberster Ebene, mit `compound` und `yield_percent` je Produkt. | `products = [{ compound = "1-phenylethanol", yield_percent = 85 }]` |
+| `scope[n].scale` | Ansatzgröße dieses Eintrags. | String | Nein | Dieselbe Regel für Zahl und Einheit wie bei `scale` auf oberster Ebene. | `scale = "5 mmol"` |
+| `scope[n].time` | Reaktionszeit dieses Eintrags. | String | Nein | Eine Zahl, Leerraum und genau `min`, `h` oder `d`; Dezimalpunkt oder Dezimalkomma sind erlaubt. | `time = "30 min"` |
+| `scope[n].temperature` | Temperatur dieses Eintrags in °C. | Ganz- oder Gleitkommazahl | Nein | Endlich, ohne Anführungszeichen, kein Wahrheitswert. Keine Einheit anhängen. | `temperature = 80` |
+| `scope[n].note` | Anmerkung zu diesem Eintrag. | Nicht leerer String | Nein | Darf nicht leer sein, wenn vorhanden; darf übersetzt werden. | `note = "Rückfluss"` |
+
+Jeder Eintrag wird für sich geprüft. Eine Verbindung darf Ausgangsstoff in
+einem Eintrag und Produkt in einem anderen sein. Schreiben Sie `scope` in
+Markdown als Array von Tabellen in geschweiften Klammern. Die
+[Beispielvorschrift
+OSDB-0009](../examples/demo/md/procedures/OSDB-0009-benzylic-alcohols.de.md)
+zeigt drei Einträge. In Org verwenden Sie die [benannte
+Tabelle](#org-tabelle-scope).
+
+Auf der Vorschriftenseite steht **Anwendungsbereich** vor **Zusammenfassung**.
+Die Spalten heißen **Eintrag**, **Ausgangsstoffe**, **Produkte** und
+**Ausbeute**. **Ansatzgröße**, **Zeit**, **Temperatur** und **Anmerkung**
+erscheinen nur, wenn mindestens ein Eintrag das Feld setzt. Verbindungsnamen
+verlinken auf ihre Seiten; Produkte mit Strukturbild zeigen kleine Bilder. Die
+Angaben unter dem Titel nennen die typische Ansatzgröße und die Ausbeutespanne
+aller Produkte aller Einträge, `<min>–<max> %`, bei gleichen Ausbeuten nur eine
+Prozentzahl. Unter **Hergestellt nach** nennt eine Verbindungsseite jeden
+Eintrag, der sie herstellt:
+`<ID> <Titel> · Eintrag <n> · <Ausbeute> % · <Status>`. **Verwendet in** und
+Verzeichniszähler zählen jede Vorschrift nur einmal.
 
 ### Optionale Felder
 
@@ -132,7 +176,9 @@ Lassen Sie ein optionales Feld weg, wenn es nicht zutrifft.
 
 | Feld | Bedeutung | TOML-Typ | Pflicht | Regel | Beispiel |
 |---|---|---|---|---|---|
-| `substrates` | Die Ausgangsstoffe. | String-Array | Nein | Schlüssel im Register, ohne Wiederholungen und ohne einen der Produktschlüssel. | `substrates = ["ethanol"]` |
+| `substrates` | Die Ausgangsstoffe einer Einzelvorschrift; mit `scope` auf oberster Ebene verboten. | String-Array | Nein | Schlüssel im Register, ohne Wiederholungen und ohne einen der Produktschlüssel. | `substrates = ["ethanol"]` |
+| `scope` | Die Einträge einer allgemeinen Vorschrift. | Nicht leeres Array von Tabellen | Nein | Regeln oben; verbietet `products` und `substrates` auf oberster Ebene. | Siehe OSDB-0009. |
+| `scheme_image` | Reaktionsschema im Titelblock anstelle der Produktstrukturen. | String | Nein | Relativer Pfad unter `structures/`, ohne `..`, mit `.svg` oder `.png`, unter dem Verzeichnis für statische Dateien vorhanden. Ohne dieses Feld zeigt eine allgemeine Vorschrift den Platzhalter. | `scheme_image = "structures/aryl-ketone-reduction.svg"` |
 | `checked_by` | Wer die Vorschrift geprüft hat. | Array nicht leerer Strings | Nein | Das Array darf leer sein, ein Eintrag aber nicht. | `checked_by = ["B. Example"]` |
 | `references` | Literaturangaben als Metadaten. | Array nicht leerer Strings | Nein | Das Array darf leer sein, ein Eintrag aber nicht. | `references = ["Example, A. J. Fictitious Chem. 2020, 1, 1."]` |
 | `ai_model` | Das KI-Modell, das beim Schreiben geholfen hat. | Nicht leerer String | Nein | Weglassen, wenn keine KI beteiligt war. Der Wert `"none"` ist ein Fehler. | `ai_model = "example-model-1"` |
@@ -180,9 +226,10 @@ Er prüft weder die Schreibweise der Summenformel noch die Gültigkeit des
 SMILES, noch ob die Molmasse zur Summenformel passt.
 
 Das Argument `--static-dir` bestimmt, wo der Validator das `structure_image`
-einer Verbindung sucht. Ohne Angabe nimmt er `static` im aktuellen
-Verzeichnis. `orgsyndb validate` übergibt das `static/` der Sammlung.
-Bei falschem Pfadanfang oder falscher Endung entfällt die Existenzprüfung.
+einer Verbindung oder das `scheme_image` einer Vorschrift sucht. Ohne Angabe
+nimmt er `static` im aktuellen Verzeichnis. `orgsyndb validate` übergibt das
+`static/` der Sammlung. Bei falschem Pfadanfang oder falscher Endung entfällt
+die Existenzprüfung.
 
 Das Register hat keine Unterverzeichnisse. Ein Unterverzeichnis ist ein
 Fehler unter `file_name` mit `subdirectories are not supported`.
@@ -258,8 +305,9 @@ Die Org-Vorlage bildet außerdem `#+TITLE` auf `title`, `#+HUGO_SLUG` auf
 `#+HUGO_CUSTOM_FRONT_MATTER`-Zeilen liefern die übrigen Felder. Der Export
 darf kein Feld `author` enthalten.
 
-Setzen Sie `products` allein auf die letzte Custom-Front-Matter-Zeile.
-`substrates` und alle anderen benutzerdefinierten Felder stehen davor:
+Bei einer Einzelvorschrift setzen Sie `products` allein auf die letzte
+Custom-Front-Matter-Zeile. `substrates` und alle anderen benutzerdefinierten
+Felder stehen davor:
 
 ```org
 #+HUGO_CUSTOM_FRONT_MATTER: :substrates '("ethanol")
@@ -289,6 +337,46 @@ file name itself`. Die Fehler für `#+HUGO_CUSTOM_FRONT_MATTER` lauten `must
 not set :date; the export writes it from #+CREATED`, `must not set
 :lastmod; the export writes it from #+LAST_MODIFIED` und `must not set
 :ai_model; the export writes it from #+AI_MODEL`.
+
+### Org-Tabelle scope
+
+Entfernen Sie bei einer allgemeinen Vorschrift die Custom-Front-Matter-Zeilen
+`:products` und `:substrates` auf oberster Ebene. Schreiben Sie eine
+Org-Tabelle unmittelbar nach `#+NAME: scope`, außerhalb von Blöcken. Groß- und
+Kleinschreibung des Tabellennamens spielt keine Rolle. Die erste Zeile benennt
+die Spalten, gefolgt von einer Trennlinie und einer Zeile je Eintrag.
+`substrates`, `products` und `yield_percent` sind Pflichtspalten; `scale`,
+`time`, `temperature` und `note` sind optional. Die Spaltennamen bleiben
+englisch.
+
+Trennen Sie Verbindungsschlüssel in `substrates` und `products` durch
+Leerzeichen. In `yield_percent` steht eine Zahl je Produkt, in derselben
+Reihenfolge und durch Leerzeichen getrennt. `temperature` enthält eine Zahl.
+Zahlen dürfen ein Dezimalkomma haben, etwa `45,5`. Text in `scale`, `time` und
+`note` wird am Rand von Leerraum befreit. Eine leere Zelle lässt das Feld
+ungesetzt; Pflichtfelder je Eintrag prüft weiterhin der Validator.
+
+Die [Org-Beispieldatei](../tests/fixtures/export/OSDB-0909-scope-table.org)
+zeigt drei Einträge, darunter einen mit zwei Produkten. Der Export schreibt
+`scope` in den Datenblock und entfernt die Tabelle samt `#+NAME` aus dem Text.
+Je Eintrag stehen `products` nach den anderen Feldern, damit diese nicht zur
+letzten Produkttabelle gehören. Ein Reaktionsschema setzen Sie so:
+
+```org
+#+HUGO_CUSTOM_FRONT_MATTER: :scheme_image "structures/aryl-ketone-reduction.svg"
+```
+
+Fehlerhafte Tabellen brechen den Export mit dem Feld `scope` ab. Die
+Zeilenzählung beginnt nach der Trennlinie bei 1:
+
+| Meldung | Korrektur |
+|---|---|
+| `appears more than once` | Nur eine Tabelle namens `scope` behalten. |
+| `"<name>" is not a scope column` | Einen der sieben Spaltennamen oben verwenden. |
+| `column "<name>" missing` | Die genannte Pflichtspalte ergänzen. |
+| `column "<name>" appears more than once` | Die genannte Spalte nur einmal behalten. |
+| `row <n>: <p> products but <y> yields` | Eine Ausbeute je Produkt in dessen Reihenfolge angeben. |
+| `row <n>: "<cell>" is not a number` | Ausbeute oder Temperatur als Zahl ohne Einheit schreiben. |
 
 ## Reaktionstypen
 
@@ -322,8 +410,9 @@ Validator ab.
 
 ## Abschnitte des Textes
 
-Jede Vorschrift auf Deutsch hat diese acht Abschnitte in dieser
-Reihenfolge:
+Jede Vorschrift auf Deutsch, auch eine allgemeine Vorschrift, hat diese acht
+Abschnitte in dieser Reihenfolge. Die Website fügt die Tabelle des
+Anwendungsbereichs davor ein:
 
 1. Zusammenfassung
 2. Reagenzien
@@ -377,19 +466,22 @@ Die Fassungen einer Vorschrift
 
 - haben denselben Grundnamen, den Dateinamen ohne Kürzel und Endung;
 - haben dieselbe `id` und denselben `slug`;
-- haben denselben Wert, oder dasselbe Fehlen, von `status`,
-  `reaction_types`, `tags`, `products` und `substrates`;
+- haben denselben Wert, oder dasselbe Fehlen, von `status`, `reaction_types`,
+  `tags`, `products`, `substrates`, `scope` und `scheme_image`;
+- dürfen `note` in jedem Eintrag von `scope` übersetzen; alle anderen Werte von
+  `scope` und die Reihenfolge der Einträge müssen übereinstimmen;
 - dürfen sich in allen übrigen Feldern und im Text unterscheiden: `title`,
   `scale`, `hazards`, `references`, `authors`, `checked_by`, `ai_model`,
   `language`, `date` und `lastmod`.
 
-Der Validator vergleicht jede Fassung mit einer Bezugsfassung: der Datei
-ohne Kürzel, sonst der `.de`-Datei. Jede Abweichung ist ein Fehler an der
-anderen Fassung, der die Bezugsfassung nennt. Ein geänderter
-Produktschlüssel oder eine geänderte Ausbeute erscheint unter `products`,
-eine geänderte Liste der Ausgangsstoffe unter `substrates`. Zahlen werden
-nach ihrem Wert verglichen: `85` und `85.0` stimmen überein. Bei anderen
-Werten müssen Wert und Typ übereinstimmen.
+Der Validator vergleicht jede Fassung mit einer Bezugsfassung: der Datei ohne
+Kürzel, sonst der `.de`-Datei. Jede Abweichung ist ein Fehler an der anderen
+Fassung, der die Bezugsfassung nennt. Ein geänderter Produktschlüssel oder eine
+geänderte Ausbeute erscheint unter `products`, eine geänderte Liste der
+Ausgangsstoffe unter `substrates`. Abweichungen in `scope` erscheinen unter
+`scope`, ohne Vergleich der Anmerkungen; ein geänderter Schemapfad unter
+`scheme_image`. Zahlen werden nach ihrem Wert verglichen: `85` und `85.0`
+stimmen überein. Bei anderen Werten müssen Wert und Typ übereinstimmen.
 
 Verbindungsnamen kommen aus dem Register, unabhängig von der Sprache der
 Vorschrift. Eine deutsche Website verwendet `name_de`, wenn vorhanden,
@@ -406,12 +498,12 @@ Abschnittsnamen gelten. Ist die veröffentlichte Fassung in einer anderen
 Sprache als die Website, kennzeichnet ihre Seite die Vorschrift mit einem
 `lang`-Attribut.
 
-Die Reagenzientabelle einer deutschen Vorschrift hat die Spalten
-**Reagenz**, **CAS**, **M (g/mol)**, **Menge**, **mmol** und **Äquiv.**;
-ein Katalysator hat `kat.` in **mmol** und **Äquiv.** Deutscher Text
-schreibt Dezimalkommas. Produktausbeuten in `products` und `mw` in
-Verbindungsdateien bleiben in jeder Sprache TOML-Zahlen mit Dezimalpunkt; eine
-deutsche Website zeigt sie mit Komma.
+Die Reagenzientabelle einer deutschen Vorschrift hat die Spalten **Reagenz**,
+**CAS**, **M (g/mol)**, **Menge**, **mmol** und **Äquiv.**; ein Katalysator hat
+`kat.` in **mmol** und **Äquiv.** Deutscher Text schreibt Dezimalkommas.
+Produktausbeuten in `products` oder `scope`, Temperaturen in `scope` und `mw`
+in Verbindungsdateien bleiben in jeder Sprache TOML-Zahlen mit Dezimalpunkt;
+eine deutsche Website zeigt sie mit Komma.
 
 ## Meldungen des Validators lesen
 
@@ -445,6 +537,23 @@ den Pfad der Verbindungsdatei und den Feldnamen, etwa
 `compounds/ethyl-acetate.toml:mw`. Weitere mögliche Felder sind `file_name`,
 `front_matter`, `toml` und `body`. Die Meldungen sind englisch.
 
+Felder eines Eintrags heißen `scope[n].<key>`, Produktfelder darin
+`scope[n].products[m].<key>`. Beide Zählungen beginnen bei 1. Ein Eintrag, der
+keine Tabelle ist, erscheint unter `scope[n]`. Ein unbekanntes Feld in einem
+Eintrag ergibt eine Warnung `unknown field` unter dem vollen Feldnamen.
+
+| Feld | Meldung | Bedeutung |
+|---|---|---|
+| `products` oder `substrates` | `a general procedure lists them in scope; move <key> into its entries` | Feld auf oberster Ebene entfernen und Daten den passenden Einträgen zuordnen. |
+| `scope` | `must not be empty` | Mindestens einen Eintrag angeben. |
+| `scope` oder `scope[n]` | `must be an array of tables` oder `must be a table` | TOML-Form korrigieren; die Meldung zeigt auch ein Beispiel. |
+| `scope[n].time` | `"<value>" must be a number followed by min, h or d, e.g. "2 h"` | Eine Zahl mit einer der drei Einheiten angeben. |
+| `scope[n].temperature` | `must be a number in °C, unquoted, e.g. 80` | Anführungszeichen und Einheit entfernen; eine endliche Zahl verwenden. |
+
+Fehlende Pflichtfelder, doppelte Schlüssel, unbekannte Verbindungen und
+ungültige Ausbeuten verwenden die folgenden Produkt- und Ausgangsstoffmeldungen
+unter dem jeweiligen Feld in `scope`.
+
 Bei `products` bedeutet `must not be empty`, dass Sie mindestens einen
 Eintrag angeben müssen. `must be an array of tables` oder
 `must be a table` bezeichnet eine falsche TOML-Form. `required field missing` nennt ein fehlendes Feld.
@@ -468,7 +577,7 @@ Die Dateizahl umfasst Vorschriften und Verbindungsdateien. Für die
 Beispielsammlung einschließlich vorhandener Org-Exporte lautet sie:
 
 ```text
-validated 33 files: 0 errors, 0 warnings
+validated 38 files: 0 errors, 0 warnings
 ```
 
 Die ersten drei Zeilen sind echte Ausgaben des Validators. Die letzte

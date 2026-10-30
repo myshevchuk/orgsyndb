@@ -1,0 +1,44 @@
+#+TITLE: Scope Table Fixture
+#+CREATED: [2026-10-20 Tue 09:30:00]
+#+LAST_MODIFIED: [2026-10-20 Tue 10:15:00]
+#+HUGO_SLUG: osdb-0909
+#+HUGO_TAGS: sample-data
+#+HUGO_CUSTOM_FRONT_MATTER: :id "OSDB-0909" :authors '("A. Example")
+#+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
+#+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("esterification")
+#+HUGO_CUSTOM_FRONT_MATTER: :scale "25 mmol"
+#+HUGO_CUSTOM_FRONT_MATTER: :hazards '("Flammable liquid")
+
+* Summary
+A fictitious general procedure whose scope is a table.
+
+#+NAME: scope
+| substrates | products | yield_percent | time | temperature | note |
+|---+---+---+---+---+---|
+| acetic-acid ethanol | ethyl-acetate propyl-acetate | 45,5 30 | 2 h | 80 | Reflux |
+| acetic-acid | benzyl-acetate | 78 |  | 25 | Stir only |
+| ethanol | methyl-benzoate | 72,5 | 30 min | 60,5 | Two phases |
+
+* Reagents
+| Reagent | CAS | MW (g/mol) | Amount | mmol | Equiv |
+|---|---|---|---|---|---|
+| Acetic acid | 64-19-7 | 60.05 | 1.5 g | 25 | 1.0 |
+
+* Procedure
+1. Combine the reagents.
+2. Heat for the time the scope table gives.
+
+* Workup and Purification
+Wash, dry and concentrate.
+
+* Characterization
+Colourless liquid.
+
+* Notes
+1. Fictitious procedure.
+
+* Hazards and Waste Disposal
+Collect organic waste separately.
+
+* References
+None.

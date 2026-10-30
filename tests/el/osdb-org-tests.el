@@ -843,6 +843,187 @@ is a field and a message.")
                "\n"))
    nil))
 
+;;;; general-procedures: the Org scope table
+
+(defconst osdb-org-test-scope-name "OSDB-0909-scope-table.org"
+  "The file name of the source whose table named scope the tests edit.")
+
+(defun osdb-org-test-scope-source ()
+  "Return the text of the export fixture with the scope table."
+  (osdb-org-test-read
+   (osdb-org-test-fixture (concat "export/" osdb-org-test-scope-name))))
+
+(defun osdb-org-test-map-scope (text function)
+  "Rewrite the table named scope in TEXT row by row.
+FUNCTION is called with the list of the cells of a row, as strings
+without surrounding spaces, and the row's index: 0 for the header, 1 for
+the separator line, whose cells are \"---\", and 2 and up for the entries.
+It returns the new list of cells.  Signal an error when TEXT has no such
+table."
+  (let ((lines (split-string text "\n"))
+        (inside nil)
+        (index 0)
+        (found nil)
+        (result nil))
+    (dolist (line lines)
+      (cond
+       ((and (not inside) (not found)
+             (string= (downcase (string-trim line)) "#+name: scope"))
+        (setq inside t found t index 0)
+        (push line result))
+       ((and inside (string-prefix-p "|" line))
+        (let* ((cells (if (string-prefix-p "|-" line)
+                          (make-list (length (split-string line "[+]")) "---")
+                        (mapcar #'string-trim
+                                (split-string (string-trim line "|" "|")
+                                              "|"))))
+               (new (funcall function cells index)))
+          (push (if (= index 1)
+                    (concat "|" (mapconcat #'identity new "+") "|")
+                  (concat "| " (mapconcat #'identity new " | ") " |"))
+                result)
+          (setq index (1+ index))))
+       (t (setq inside nil)
+          (push line result))))
+    (unless found (error "Fixture has no table named scope"))
+    (mapconcat #'identity (nreverse result) "\n")))
+
+(defun osdb-org-test-scope-lines (text expected)
+  "Examine the scope fixture with TEXT, expecting the errors EXPECTED.
+Each element of EXPECTED is the message of an error on the field scope."
+  (osdb-org-test-assert-lines
+   osdb-org-test-scope-name text
+   (mapcar (lambda (message) (list "scope" message)) expected)))
+
+(ert-deftest osdb-org-test-scope-table-passes-the-org-checks ()
+  "Scenario: Scope table exports to front matter (the Org checks)."
+  (osdb-org-test-require)
+  (let ((source (osdb-org-test-sole-source
+                 osdb-org-test-scope-name (osdb-org-test-scope-source))))
+    (should (equal (plist-get source :stem) "OSDB-0909-scope-table"))))
+
+(ert-deftest osdb-org-test-scope-column-outside-the-seven ()
+  "Scenario: Malformed scope tables (a column solvent)."
+  (osdb-org-test-require)
+  (osdb-org-test-scope-lines
+   (osdb-org-test-map-scope
+    (osdb-org-test-scope-source)
+    (lambda (cells index)
+      (append cells (list (pcase index (0 "solvent") (1 "---") (_ "x"))))))
+   '("\"solvent\" is not a scope column")))
+
+(ert-deftest osdb-org-test-scope-required-column-missing ()
+  "Scenario: Malformed scope tables (no products column)."
+  (osdb-org-test-require)
+  (osdb-org-test-scope-lines
+   (osdb-org-test-map-scope
+    (osdb-org-test-scope-source)
+    (lambda (cells _index) (append (list (nth 0 cells)) (nthcdr 2 cells))))
+   '("column \"products\" missing")))
+
+(ert-deftest osdb-org-test-scope-yields-differ-from-products ()
+  "Scenario: Malformed scope tables (a first row with one yield)."
+  (osdb-org-test-require)
+  (osdb-org-test-scope-lines
+   (osdb-org-test-map-scope
+    (osdb-org-test-scope-source)
+    (lambda (cells index)
+      (if (= index 2)
+          (append (seq-take cells 2) (list "45") (nthcdr 3 cells))
+        cells)))
+   '("row 1: 2 products but 1 yields")))
+
+(ert-deftest osdb-org-test-scope-temperature-that-is-not-a-number ()
+  "Scenario: Malformed scope tables (a temperature hot)."
+  (osdb-org-test-require)
+  (osdb-org-test-scope-lines
+   (osdb-org-test-map-scope
+    (osdb-org-test-scope-source)
+    (lambda (cells index)
+      (if (= index 2)
+          (append (seq-take cells 4) (list "hot") (nthcdr 5 cells))
+        cells)))
+   '("row 1: \"hot\" is not a number")))
+
+(ert-deftest osdb-org-test-scope-table-given-twice ()
+  "Scenario: Malformed scope tables (a second table)."
+  (osdb-org-test-require)
+  (osdb-org-test-scope-lines
+   (concat (osdb-org-test-scope-source)
+           "\n#+NAME: scope\n| substrates | products | yield_percent |\n"
+           "|---+---+---|\n| ethanol | ethyl-acetate | 85 |\n")
+   '("appears more than once")))
+
+(ert-deftest osdb-org-test-scope-name-is-compared-without-case ()
+  "Requirement: Org scope table (the name is case-insensitive)."
+  (osdb-org-test-require)
+  (osdb-org-test-scope-lines
+   (concat (osdb-org-test-scope-source)
+           "\n#+name: Scope\n| substrates | products | yield_percent |\n"
+           "|---+---+---|\n| ethanol | ethyl-acetate | 85 |\n")
+   '("appears more than once")))
+
+(ert-deftest osdb-org-test-scope-rows-are-counted-after-the-separator ()
+  "Requirement: Org scope table (rows are counted from 1)."
+  (osdb-org-test-require)
+  (osdb-org-test-scope-lines
+   (osdb-org-test-map-scope
+    (osdb-org-test-scope-source)
+    (lambda (cells index)
+      (pcase index
+        (3 (append (seq-take cells 2) (list "78 5") (nthcdr 3 cells)))
+        (4 (append (seq-take cells 2) (list (nth 2 cells))
+                   (list (nth 3 cells)) (list "warm") (nthcdr 5 cells)))
+        (_ cells))))
+   '("row 2: 1 products but 2 yields" "row 3: \"warm\" is not a number")))
+
+(ert-deftest osdb-org-test-scope-yield-that-is-not-a-number ()
+  "Requirement: Org scope table (a yield that is not a number)."
+  (osdb-org-test-require)
+  (osdb-org-test-scope-lines
+   (osdb-org-test-map-scope
+    (osdb-org-test-scope-source)
+    (lambda (cells index)
+      (if (= index 3)
+          (append (seq-take cells 2) (list "many") (nthcdr 3 cells))
+        cells)))
+   '("row 2: \"many\" is not a number")))
+
+(ert-deftest osdb-org-test-scope-problems-follow-the-other-checks ()
+  "Requirement: Org sources and their problems (check order)."
+  (osdb-org-test-require)
+  (let ((name "osdb-0909-scope-table.org"))
+    (osdb-org-test-assert-lines
+     name
+     (osdb-org-test-map-scope
+      (osdb-org-test-set-keyword (osdb-org-test-scope-source) "CREATED"
+                                 "[2026-10-20 Tue 09:30]")
+      (lambda (cells _index) (append (list (nth 0 cells)) (nthcdr 2 cells))))
+     '(("file_name"
+        "must be named OSDB-NNNN-short-slug.org, e.g. OSDB-0001-ethyl-acetate.org, or OSDB-0001-ethyl-acetate.de.org with a language")
+       ("#+CREATED"
+        "\"[2026-10-20 Tue 09:30]\" must have the form [YYYY-MM-DD Day hh:mm:ss]")
+       ("scope" "column \"products\" missing")))))
+
+(ert-deftest osdb-org-test-scope-table-in-a-block-is-not-a-table ()
+  "Requirement: Org scope table (anywhere outside blocks)."
+  (osdb-org-test-require)
+  (osdb-org-test-assert-lines
+   osdb-org-test-scope-name
+   (concat (osdb-org-test-scope-source)
+           "\n#+begin_example\n#+NAME: scope\n| substrates |\n"
+           "|---|\n| x |\n#+end_example\n")
+   nil))
+
+(ert-deftest osdb-org-test-source-without-a-scope-table-has-no-scope-problem ()
+  "Requirement: Org scope table (only a table named scope counts)."
+  (osdb-org-test-require)
+  (osdb-org-test-propyl-lines
+   (osdb-org-test-add-under-first-heading
+    (osdb-org-test-propyl)
+    "#+NAME: other\n| a | b |\n|---+---|\n| 1 | 2 |")
+   nil))
+
 ;;;; Templates
 
 (defun osdb-org-test-filled-template (template name)

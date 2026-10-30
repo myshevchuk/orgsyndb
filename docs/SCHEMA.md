@@ -59,6 +59,10 @@ non-whitespace text. A required array described as non-empty must contain at
 least one entry. Each entry in an array of strings must contain
 non-whitespace text.
 
+A procedure with `scope` is a **general procedure**: one method applied to
+several substrates. A procedure without `scope` is a **specific procedure**.
+The site derives the kind from `scope`; do not add a `kind` field.
+
 ### Required top-level fields
 
 | Field | Meaning | TOML type | Required | Value rule | Example |
@@ -72,8 +76,8 @@ non-whitespace text.
 | `status` | The procedure's workflow state. | String | Yes | Must be exactly `draft`, `checked`, or `retired`. | `status = "draft"` |
 | `reaction_types` | The controlled reaction category. | Array of strings | Yes | Must contain exactly one slug from the reaction-type vocabulary. | `reaction_types = ["esterification"]` |
 | `tags` | Search terms for the procedure. | Non-empty array of strings | Yes | Every tag must contain lowercase letters or digits, with single hyphens between groups. | `tags = ["acid-catalysed"]` |
-| `products` | The compounds made and their yields. | Non-empty array of tables | Yes | Every entry must contain `compound` and `yield_percent`, as described below. | `products = [{ compound = "ethyl-acetate", yield_percent = 85 }]` |
-| `scale` | The amount of product the procedure makes. | String | Yes | Must contain a number, whitespace, and a unit token. The number may have a decimal point or a decimal comma. The unit vocabulary is not restricted. | `scale = "25 mmol"` |
+| `products` | The compounds made and their yields. | Non-empty array of tables | Only without `scope` | Every entry must contain `compound` and `yield_percent`, as described below. | `products = [{ compound = "ethyl-acetate", yield_percent = 85 }]` |
+| `scale` | The amount of product the procedure makes; the typical scale for a general procedure. | String | Yes | Must contain a number, whitespace, and a unit token. The number may have a decimal point or a decimal comma. The unit vocabulary is not restricted. | `scale = "25 mmol"` |
 | `hazards` | The main hazards. | Non-empty array of non-empty strings | Yes | Must contain at least one short description. | `hazards = ["Flammable liquid"]` |
 
 A date with a non-Berlin offset is still an exact instant, so it produces a
@@ -83,9 +87,9 @@ offset, or a bare date is an error. The validator compares `date` and
 
 ### Products and starting materials
 
-`products` contains one table per product. Each compound key must occur only
-once in the array. A procedure may have several products, each with its own
-yield.
+For a specific procedure, top-level `products` contains one table per product.
+Each compound key must occur only once in the array. A procedure may have
+several products, each with its own yield.
 
 | Field | Meaning | TOML type | Required | Value rule | Example |
 |---|---|---|---|---|---|
@@ -102,15 +106,51 @@ You may also use TOML's `[[products]]` table headings, as the Org export
 does. Keep those tables after all top-level fields: keys after a table
 heading belong to that table.
 
-The optional `substrates` array names the starting materials by compound
-key. It may be empty. Every key must exist in the registry, must occur only
-once, and must not also occur among the procedure's products.
+For a specific procedure, the optional `substrates` array names the starting
+materials by compound key. It may be empty. Every key must exist in the
+registry, must occur only once, and must not also occur among the procedure's
+products.
 
-The site derives **Precursors** from other published procedures that make
-one of these starting materials. It derives **Used in** from procedures
-that use one of this procedure's products as a starting material. Both lists
-are ordered by procedure ID and work across procedure languages. You do not
-write procedure IDs for these links.
+The site derives **Precursors** from other published procedures that make one
+of these starting materials. It derives **Used in** from procedures that use
+one of this procedure's products as a starting material. Both lists are ordered
+by procedure ID and work across procedure languages. You do not write procedure
+IDs for these links. For a general procedure, the site uses the products and
+starting materials of every scope entry, each compound once in order of first
+appearance. This also applies to the metadata panel, compound directory,
+catalogue details and search, including SMILES matches.
+
+### General procedures and scope entries
+
+Use `scope` to record the substrates, products and yields of each application
+of a shared method. It must be a non-empty array of tables, numbered from 1 in
+their order. Omit top-level `products` and `substrates` entirely, even empty
+arrays. Top-level `scale` remains required and gives the typical scale.
+
+| Field | Meaning | TOML type | Required in each entry | Value rule | Example |
+|---|---|---|---|---|---|
+| `scope[n].substrates` | Starting materials for this entry. | Non-empty array of strings | Yes | Registry keys; none repeated or among this entry's products. | `substrates = ["acetophenone"]` |
+| `scope[n].products` | Products and their isolated yields. | Non-empty array of tables | Yes | The same rules as top-level `products`, including `compound` and `yield_percent` in each product. | `products = [{ compound = "1-phenylethanol", yield_percent = 85 }]` |
+| `scope[n].scale` | This entry's scale. | String | No | The same number-and-unit rule as top-level `scale`. | `scale = "5 mmol"` |
+| `scope[n].time` | This entry's reaction time. | String | No | A number, whitespace and exactly `min`, `h` or `d`; a decimal point or comma is allowed. | `time = "30 min"` |
+| `scope[n].temperature` | This entry's temperature in °C. | Integer or float | No | Must be finite, unquoted and not a boolean. Do not add a unit. | `temperature = 80` |
+| `scope[n].note` | A comment on this entry. | Non-empty string | No | Must not be empty when present; may be translated. | `note = "Reflux"` |
+
+Each entry is checked on its own. A compound may be a substrate of one entry
+and a product of another. In Markdown, write `scope` as an array of inline
+tables; the demo's
+[OSDB-0009](../examples/demo/md/procedures/OSDB-0009-benzylic-alcohols.md)
+shows three entries. For Org, use the [named scope table](#org-scope-table).
+
+On the procedure page, **Scope** precedes **Summary**. Its columns are
+**Entry**, **Starting materials**, **Products** and **Yield**. **Scale**,
+**Time**, **Temperature** and **Note** appear only when some entry sets that
+field. Compound names link to compound pages, and products with structure
+images show small images. The key facts show the typical scale and the yield
+range over all products of all entries, `<min>–<max> %`, or one percentage when
+all yields are equal. A compound page's **Made by** list names each entry that
+makes it: `<ID> <title> · entry <n> · <yield> % · <status>`. **Used in** and
+directory counts include each procedure only once.
 
 ### Optional top-level fields
 
@@ -118,7 +158,9 @@ Omit an optional field when it does not apply.
 
 | Field | Meaning | TOML type | Required | Value rule | Example |
 |---|---|---|---|---|---|
-| `substrates` | The starting materials. | Array of strings | No | Registry keys, with no duplicates and none among the products. | `substrates = ["ethanol"]` |
+| `substrates` | The starting materials of a specific procedure; forbidden at top level with `scope`. | Array of strings | No | Registry keys, with no duplicates and none among the products. | `substrates = ["ethanol"]` |
+| `scope` | The entries of a general procedure. | Non-empty array of tables | No | Entry rules above; forbids top-level `products` and `substrates`. | See OSDB-0009. |
+| `scheme_image` | A reaction-scheme image in the title block, replacing product structures. | String | No | Relative path under `structures/`, no `..` component, `.svg` or `.png`, existing under the static directory. A general procedure without it shows the placeholder. | `scheme_image = "structures/aryl-ketone-reduction.svg"` |
 | `checked_by` | People who checked the procedure. | Array of non-empty strings | No | The array may be empty, but an entry may not be an empty string. | `checked_by = ["B. Example"]` |
 | `references` | Literature references stored as metadata. | Array of non-empty strings | No | The array may be empty, but an entry may not be an empty string. | `references = ["Example, A. J. Fictitious Chem. 2020, 1, 1."]` |
 | `ai_model` | The model that assisted with the procedure. | Non-empty string | No | Omit the field when no AI assisted. The value `"none"` is an error. | `ai_model = "example-model-1"` |
@@ -164,10 +206,11 @@ The validator checks that `formula` and `smiles` are non-empty strings. It
 does not check chemical formula syntax, SMILES validity, or whether the
 molecular weight agrees with the formula.
 
-The `--static-dir` argument controls where the validator resolves a
-compound's `structure_image`. Without it, the validator uses `static` in
-the current directory. `orgsyndb validate` passes the collection's `static/`.
-A path with the wrong prefix or suffix is not checked for existence.
+The `--static-dir` argument controls where the validator resolves a compound's
+`structure_image` or a procedure's `scheme_image`. Without it, the validator
+uses `static` in the current directory. `orgsyndb validate` passes the
+collection's `static/`. A path with the wrong prefix or suffix is not checked
+for existence.
 
 The registry has no subdirectories. A subdirectory is a `file_name` error
 containing `subdirectories are not supported`. Dotfiles are skipped
@@ -239,8 +282,8 @@ and `#+HUGO_TAGS` to `tags`. Repeated
 `#+HUGO_CUSTOM_FRONT_MATTER` lines supply the other schema fields. The
 export must not contain an `author` key.
 
-Set `products` alone on the last custom-front-matter line. Put `substrates`
-and every other custom field before it:
+For a specific procedure, set `products` alone on the last custom-front-matter
+line. Put `substrates` and every other custom field before it:
 
 ```org
 #+HUGO_CUSTOM_FRONT_MATTER: :substrates '("ethanol")
@@ -269,6 +312,43 @@ front-matter errors are `must not set :date; the export writes it from
 #+CREATED`, `must not set :lastmod; the export writes it from
 #+LAST_MODIFIED`, and `must not set :ai_model; the export writes it from
 #+AI_MODEL`.
+
+### Org scope table
+
+For a general procedure, remove the top-level `:products` and `:substrates`
+custom-front-matter lines. Write one Org table directly after `#+NAME: scope`,
+anywhere outside a block. The table name is case-insensitive. The first row
+names the columns, followed by a separator line and one row per entry.
+`substrates`, `products` and `yield_percent` are required columns; `scale`,
+`time`, `temperature` and `note` are optional. Column names stay English.
+
+In `substrates` and `products`, separate compound keys with spaces. Give one
+number per product in `yield_percent`, separated by spaces in product order.
+`temperature` holds one number. Numbers may use a decimal comma, such as
+`45,5`. The text in `scale`, `time` and `note` is trimmed. An empty cell leaves
+its key unset; required entry fields are still checked by validation.
+
+The [Org fixture](../tests/fixtures/export/OSDB-0909-scope-table.org) shows
+three entries, including one with two products. Export writes `scope` into the
+front matter and removes the table and its `#+NAME` line from the body. It puts
+each entry's `products` after its other keys so later fields do not become
+members of the last product table. Set a scheme image with:
+
+```org
+#+HUGO_CUSTOM_FRONT_MATTER: :scheme_image "structures/aryl-ketone-reduction.svg"
+```
+
+Malformed scope tables stop export, with field `scope`. Rows count from 1 after
+the separator:
+
+| Message | What to correct |
+|---|---|
+| `appears more than once` | Keep only one table named `scope`. |
+| `"<name>" is not a scope column` | Use one of the seven column names above. |
+| `column "<name>" missing` | Add the named required column. |
+| `column "<name>" appears more than once` | Keep the named column once. |
+| `row <n>: <p> products but <y> yields` | Supply one yield for each product, in order. |
+| `row <n>: "<cell>" is not a number` | Use a numeric yield or temperature, without units. |
 
 ## Reaction-type vocabulary
 
@@ -302,7 +382,8 @@ missing, and the validator refuses an empty `label_de`.
 
 ## Procedure body sections
 
-Every procedure body has these eight sections in this order:
+Every procedure body, including a general procedure, has these eight sections
+in this order. The site adds the scope table before them:
 
 1. Summary
 2. Reagents
@@ -362,17 +443,20 @@ The variants of a procedure:
 - have the same base name, the file name without code and suffix;
 - have the same `id` and `slug`;
 - have the same value, or the same absence, of `status`, `reaction_types`,
-  `tags`, `products` and `substrates`;
+  `tags`, `products`, `substrates`, `scope` and `scheme_image`;
+- may translate each scope entry's `note`; all other scope values and the entry
+  order must agree;
 - may differ in every other field and in the body: `title`, `scale`,
   `hazards`, `references`, `authors`, `checked_by`, `ai_model`, `language`,
   `date` and `lastmod`.
 
-The validator compares each variant with a reference variant: the file
-without a code, else the `.de` file. Each difference is an error on the
-other variant that names the reference. A changed product key or yield is
-reported under `products`; a changed starting-material list is reported
-under `substrates`. Numbers compare by value, so `85` and `85.0` agree;
-other values compare by both value and type.
+The validator compares each variant with a reference variant: the file without
+a code, else the `.de` file. Each difference is an error on the other variant
+that names the reference. A changed product key or yield is reported under
+`products`; a changed starting-material list is reported under `substrates`. A
+scope difference is reported under `scope`, ignoring entry notes; a scheme-path
+difference is reported under `scheme_image`. Numbers compare by value, so `85`
+and `85.0` agree; other values compare by both value and type.
 
 Compound names come from the registry, independently of the procedure's
 language. A German site uses `name_de` when present, otherwise `name`;
@@ -387,11 +471,11 @@ picks the section names that a file without a code is checked against.
 When the published variant's language differs from the site's, its page
 marks the procedure with a `lang` attribute.
 
-A German Reagents table has the columns **Reagenz**, **CAS**,
-**M (g/mol)**, **Menge**, **mmol** and **Äquiv.**, and German text uses
-decimal commas. Product yields in `products` and `mw` in compound files
-stay TOML numbers with a decimal point in every language; a German site
-shows them with a comma.
+A German Reagents table has the columns **Reagenz**, **CAS**, **M (g/mol)**,
+**Menge**, **mmol** and **Äquiv.**, and German text uses decimal commas.
+Product yields in `products` or `scope`, scope temperatures and `mw` in
+compound files stay TOML numbers with a decimal point in every language; a
+German site shows them with a comma.
 
 ## Reading validator output
 
@@ -425,6 +509,22 @@ entry is reported under `products[n]`. Compound problems use the compound
 file's path and field name, for example `compounds/ethyl-acetate.toml:mw`.
 Other possible fields are `file_name`, `front_matter`, `toml` and `body`.
 
+Scope fields use `scope[n].<key>`, and a product within an entry uses
+`scope[n].products[m].<key>`. Both indices start at 1. A non-table scope entry
+is reported under `scope[n]`. An unknown key in an entry produces an
+`unknown field` warning at its full field name.
+
+| Field | Message | Meaning |
+|---|---|---|
+| `products` or `substrates` | `a general procedure lists them in scope; move <key> into its entries` | Remove the top-level field and put its data in the relevant entries. |
+| `scope` | `must not be empty` | Supply at least one entry. |
+| `scope` or `scope[n]` | `must be an array of tables` or `must be a table` | Correct the TOML shape. The message also gives an example. |
+| `scope[n].time` | `"<value>" must be a number followed by min, h or d, e.g. "2 h"` | Supply a number and one of the three units. |
+| `scope[n].temperature` | `must be a number in °C, unquoted, e.g. 80` | Remove quotes and units; use a finite number. |
+
+Missing required scope fields, duplicate keys, unknown compounds and invalid
+yields use the product and substrate messages below, under the scope field.
+
 For `products`, `must not be empty` means you need at least one entry;
 `must be an array of tables` or `must be a table` identifies the wrong TOML
 shape. `required field missing` names an omitted key. An unknown compound
@@ -446,7 +546,7 @@ standard error. The file count includes compound files as well as
 procedures. For the demo collection, including existing Org exports:
 
 ```text
-validated 33 files: 0 errors, 0 warnings
+validated 38 files: 0 errors, 0 warnings
 ```
 
 The first three lines below are real validator output. The last is the same

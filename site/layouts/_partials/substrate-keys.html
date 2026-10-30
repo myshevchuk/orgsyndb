@@ -1,0 +1,11 @@
+{{- /* The compound keys a procedure page names as its starting materials:
+substrates, or for a general procedure the substrates of every entry of
+scope, each once, in order of first appearance. Takes the page; returns a
+slice, empty when it names none. */ -}}
+{{- $keys := slice -}}
+{{- with .Params.scope -}}
+{{- range . }}{{ range .substrates }}{{ if not (in $keys .) }}{{ $keys = $keys | append . }}{{ end }}{{ end }}{{ end -}}
+{{- else -}}
+{{- range .Params.substrates }}{{ $keys = $keys | append . }}{{ end -}}
+{{- end -}}
+{{- return $keys -}}

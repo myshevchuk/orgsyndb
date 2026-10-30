@@ -1,0 +1,14 @@
+{{- /* The yield of a general procedure as the key facts write it. Takes its
+scope, a slice of entries each with products: the range of the yields of
+all their products, <min>–<max> %, or <n> % when they are all equal.
+Numbers carry the language's decimal separator. */ -}}
+{{- $yields := slice -}}
+{{- range . }}{{ range .products }}{{ $yields = $yields | append (float .yield_percent) }}{{ end }}{{ end -}}
+{{- $yields = sort $yields -}}
+{{- $low := index $yields 0 -}}
+{{- $high := index $yields (sub (len $yields) 1) -}}
+{{- if eq $low $high -}}
+{{ partial "decimal.html" $low }} %
+{{- else -}}
+{{ partial "decimal.html" $low }}–{{ partial "decimal.html" $high }} %
+{{- end -}}

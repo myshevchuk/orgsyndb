@@ -1,0 +1,8 @@
+{{- /* /general-procedures/: the catalogue of the published general
+procedures, those with scope, with the kind facet fixed to general. */ -}}
+{{ define "main" -}}
+{{ partial "section-tabs.html" . -}}
+{{ $general := where (where site.RegularPages "Section" "procedures") "Params.scope" "!=" nil -}}
+{{ partial "catalogue.html" (dict "page" . "pages" (sort $general "Params.id") "fixed" "kind") -}}
+{{ end }}
+{{ define "scripts" }}{{ partial "catalogue-script.html" . }}{{ end }}

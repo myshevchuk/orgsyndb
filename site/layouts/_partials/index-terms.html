@@ -1,13 +1,13 @@
 {{- /* The ID and the product terms for the search index: the metadata
 panel shows no ID, and a product's formula, CAS number and SMILES only
 for a procedure with one product, so this hidden element keeps them in
-the indexed text. Its text is the ID, then for each product in order its
-shown name, its formula, its CAS number when set and its SMILES, all
+the indexed text. Its text is the ID, then for each product of
+product-keys.html in order its shown name, its formula, its CAS number when set and its SMILES, all
 separated by single spaces. */ -}}
 {{ $terms := slice .Params.id -}}
-{{ range .Params.products -}}
-{{ $terms = $terms | append (partial "compound-name.html" .compound) -}}
-{{ with index site.Data.compounds .compound -}}
+{{ range partial "product-keys.html" . -}}
+{{ $terms = $terms | append (partial "compound-name.html" .) -}}
+{{ with index site.Data.compounds . -}}
 {{ $terms = $terms | append .formula -}}
 {{ with .cas }}{{ $terms = $terms | append . }}{{ end -}}
 {{ $terms = $terms | append .smiles -}}

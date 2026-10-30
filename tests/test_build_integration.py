@@ -17,6 +17,7 @@ import shutil
 import signal
 import subprocess
 import threading
+import time
 import unittest
 import urllib.request
 from pathlib import Path
@@ -358,11 +359,16 @@ class ServeTests(BuildTestCase):
         threading.Thread(target=pump, daemon=True).start()
         expected = f"serving http://127.0.0.1:{port}/ (Ctrl-C to stop)"
         seen = []
+        deadline = time.monotonic() + 600
         while True:
             try:
-                line = lines.get(timeout=600).rstrip("\n")
+                line = lines.get(timeout=1).rstrip("\n")
             except queue.Empty:
-                self.fail("no serving line:\n" + "\n".join(seen))
+                if self.process.poll() is not None:
+                    self.fail("serve exited early:\n" + "\n".join(seen))
+                if time.monotonic() > deadline:
+                    self.fail("no serving line:\n" + "\n".join(seen))
+                continue
             seen.append(line)
             if line == expected:
                 break

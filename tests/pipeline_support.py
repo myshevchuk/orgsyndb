@@ -44,6 +44,7 @@ FIXTURES = REPO / "tests" / "fixtures"
 EXPORT_FIXTURES = FIXTURES / "export"
 THEME_FIXTURES = FIXTURES / "theme"
 CATALOGUE_FIXTURES = FIXTURES / "catalogue"
+GENERAL_FIXTURES = FIXTURES / "general"
 FIXTURE_COMPOUNDS = FIXTURES / "compounds"
 FIXTURE_STATIC = FIXTURES / "static"
 PAGEFIND_QUERY = REPO / "tests" / "js" / "pagefind-query.mjs"
@@ -542,19 +543,45 @@ def html_remote_fetches(html: str) -> list[str]:
 
 # --- theme fixtures and builds ---------------------------------------------
 
+def org_scope_rows(text: str) -> list[dict[str, str]]:
+    """The rows of the table named ``scope`` in an Org source, each a
+    map from a column name to its stripped cell text, in order."""
+    lines = text.split("\n")
+    start = next((i for i, line in enumerate(lines)
+                  if line.strip().lower() == "#+name: scope"), None)
+    if start is None:
+        return []
+    table = []
+    for line in lines[start + 1:]:
+        if not line.strip().startswith("|"):
+            break
+        table.append(line.strip())
+    cells = [[cell.strip() for cell in line.strip("|").split("|")]
+             for line in table if not line.startswith("|-")]
+    header = cells[0]
+    return [dict(zip(header, row)) for row in cells[1:]]
+
+
 def fixture_compound_keys(path: Path) -> list[str]:
     """The compound keys a procedure fixture, Markdown or Org, names as
-    products or substrates, in order and without repeats."""
+    products or substrates, at the top level or in the entries of its
+    scope, in order and without repeats."""
     text = path.read_text(encoding="utf-8")
     if path.suffix == ".org":
         keys = re.findall(r'\(compound \. "([^"]*)"\)', text)
         for line in re.findall(r"(?m)^#\+HUGO_CUSTOM_FRONT_MATTER:.*"
                                r":substrates '\(([^)]*)\)", text):
             keys += re.findall(r'"([^"]*)"', line)
+        for row in org_scope_rows(text):
+            keys += row.get("products", "").split()
+            keys += row.get("substrates", "").split()
     else:
         data = front_matter(text)
         keys = [e["compound"] for e in data.get("products", [])]
         keys += data.get("substrates", [])
+        for entry in data.get("scope", []):
+            keys += [e["compound"] for e in entry["products"]]
+            keys += entry["substrates"]
     return list(dict.fromkeys(keys))
 
 
@@ -618,6 +645,15 @@ def put_catalogue_fixtures(sandbox: Sandbox) -> list[Path]:
         put_compounds(sandbox, *fixture_compound_keys(source))
     return [Path(shutil.copy2(source, sandbox.md_dir()))
             for source in sources]
+
+
+def put_general_fixture(sandbox: Sandbox) -> Path:
+    """Copy the general baseline, tests/fixtures/general/
+    OSDB-0140-general.md, into the sandbox's ``md/procedures/``, with
+    its compounds."""
+    source = GENERAL_FIXTURES / "OSDB-0140-general.md"
+    put_compounds(sandbox, *fixture_compound_keys(source))
+    return Path(shutil.copy2(source, sandbox.md_dir()))
 
 
 def put_baseline(sandbox: Sandbox, name: str = "OSDB-0100-baseline.md"
@@ -751,13 +787,42 @@ class Content(NamedTuple):
         return list(self.data.get("tags", []))
 
     @property
+    def scope(self) -> list[dict[str, Any]]:
+        """The entries of a general procedure's ``scope``, in order;
+        empty for a specific procedure."""
+        return list(self.data.get("scope", []))
+
+    @property
+    def is_general(self) -> bool:
+        return "scope" in self.data
+
+    @property
     def products(self) -> list[dict[str, Any]]:
-        """The ``{compound, yield_percent}`` tables, in order."""
-        return list(self.data.get("products", []))
+        """The ``{compound, yield_percent}`` tables, in order: those of a
+        specific procedure, or of a general procedure the first table of
+        each compound over its entries, in order of first appearance."""
+        if not self.is_general:
+            return list(self.data.get("products", []))
+        found: dict[str, dict[str, Any]] = {}
+        for entry in self.scope:
+            for product in entry["products"]:
+                found.setdefault(product["compound"], product)
+        return list(found.values())
 
     @property
     def substrates(self) -> list[str]:
-        return list(self.data.get("substrates", []))
+        """The substrates of a specific procedure, or of a general one
+        those of all its entries, each once, in order of first
+        appearance."""
+        if not self.is_general:
+            return list(self.data.get("substrates", []))
+        return list(dict.fromkeys(
+            key for entry in self.scope for key in entry["substrates"]))
+
+    @property
+    def kind(self) -> str:
+        """The catalogue's ``kind``: ``general`` or ``specific``."""
+        return "general" if self.is_general else "specific"
 
     @property
     def language(self) -> str | None:
@@ -897,7 +962,17 @@ def number_text(value: int | float, locale: str) -> str:
 def yield_text(item: "Content", registry: dict[str, dict[str, Any]],
                locale: str) -> str:
     """The ``Yield`` value of a procedure's key facts: ``<n> %`` for one
-    product, else ``<n> % <name>`` for each, joined by ``, ``."""
+    product, else ``<n> % <name>`` for each, joined by ``, ``; for a
+    general procedure the range ``<min>–<max> %`` of all its entries'
+    yields, or ``<n> %`` when they are all equal."""
+    if item.is_general:
+        yields = [product["yield_percent"] for entry in item.scope
+                  for product in entry["products"]]
+        low, high = min(yields), max(yields)
+        if low == high:
+            return f"{number_text(low, locale)} %"
+        return (f"{number_text(low, locale)}–"
+                f"{number_text(high, locale)} %")
     entries = item.products
     if len(entries) == 1:
         return f"{number_text(entries[0]['yield_percent'], locale)} %"
@@ -1326,13 +1401,15 @@ def squash(text: str) -> str:
 # --- catalogue pages --------------------------------------------------------
 
 CATALOGUE_HEADER = ["ID", "Procedure", "Reaction type", "Status", "Modified"]
-FACETS = ("type", "status", "tag", "author")
+FACETS = ("type", "kind", "status", "tag", "author")
 TERM_PAGE = re.compile(r"^/(reaction_types|tags|authors)/[^/]+/$")
 
 
 def is_catalogue_url(url: str) -> bool:
-    """Whether the page at ``url`` is the catalogue or a term page."""
-    return url == "/procedures/" or TERM_PAGE.match(url) is not None
+    """Whether the page at ``url`` is the catalogue, the general
+    procedures' view or a term page."""
+    return (url in ("/procedures/", "/general-procedures/")
+            or TERM_PAGE.match(url) is not None)
 
 
 def catalogue_rows(page: Page) -> list[Node]:

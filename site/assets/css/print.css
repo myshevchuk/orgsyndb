@@ -37,6 +37,7 @@ a { color: #000; text-decoration: none; }
 .catalogue-facets, .catalogue-toolbar, .catalogue-message,
 .catalogue:not([data-view="details"]) .row-details { display: none; }
 .row-structure { width: 25mm; border: none; padding: 0; }
+.scope-structure { display: block; width: 15mm; height: auto; border: none; padding: 0; }
 .print-only { display: block; }
 .print-facts { font-family: var(--font-ui); font-size: 8.5pt; }
 

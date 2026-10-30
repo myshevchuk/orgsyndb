@@ -4,8 +4,8 @@
 
 ;; Reads the Org procedure sources of a directory and decides what the
 ;; export does with them: which entries are sources, which problems they
-;; have, and the `date', `lastmod' and `ai_model' each source is exported
-;; with.  tools/export.el loads this file; tests/el/osdb-org-tests.el
+;; have, the `date', `lastmod' and `ai_model' each source is exported
+;; with, and the `scope' its table named scope gives.  tools/export.el loads this file; tests/el/osdb-org-tests.el
 ;; tests it.
 ;;
 ;; Loading it defines functions and constants and does nothing else.  It
@@ -66,6 +66,15 @@ All but `AI_MODEL' are required.")
     ("lastmod" . "#+LAST_MODIFIED")
     ("ai_model" . "#+AI_MODEL"))
   "Custom front-matter keys the export writes, with their keyword.")
+
+(defconst osdb-org-scope-columns
+  '("substrates" "products" "yield_percent" "scale" "time" "temperature"
+    "note")
+  "The columns of a scope table, in the order an entry writes its keys.
+The first three are required.")
+
+(defconst osdb-org-number-regexp "\\`-?[0-9]+\\(?:[.,][0-9]+\\)?\\'"
+  "A number in a scope table cell, with a decimal point or comma.")
 
 (defconst osdb-org-routes-message
   "the export sets date, lastmod, ai_model and the export file name itself"
@@ -425,6 +434,169 @@ block header arguments."
             problems))
     (nreverse problems)))
 
+;;;; The scope table
+
+(defun osdb-org--table-cells (line)
+  "Return the cells of the Org table row LINE, trimmed, in order."
+  (let ((inner (string-remove-prefix "|" (string-trim line))))
+    (mapcar #'string-trim
+            (split-string (string-remove-suffix "|" inner) "|"))))
+
+(defun osdb-org--scope-tables (text)
+  "Return the tables named scope in the Org TEXT, outside blocks, in order.
+A table is named scope when the line just before its first row is
+`#+NAME: scope', the keyword and the name in any case.  Each element is
+\(START END ROWS): START is the index, counted from 0, of the `#+NAME'
+line, END the index of the line after the table's last row, and ROWS
+the table's lines, without a CR before their LF.  Blocks are those of
+`osdb-org--outside-lines'."
+  (let ((lines (vconcat (mapcar (lambda (line)
+                                  (string-remove-suffix "\r" line))
+                                (split-string text "\n"))))
+        (index 0)
+        (in-block nil)
+        (found nil))
+    (while (< index (length lines))
+      (let ((line (aref lines index))
+            (case-fold-search t))
+        (cond
+         (in-block
+          (setq in-block (not (string-match-p "\\`[ \t]*#\\+end_" line))))
+         ((string-match-p "\\`[ \t]*#\\+begin_" line)
+          (setq in-block t))
+         ((and (string-match-p "\\`[ \t]*#\\+name:[ \t]*scope[ \t]*\\'" line)
+               (< (1+ index) (length lines))
+               (string-match-p "\\`[ \t]*|" (aref lines (1+ index))))
+          (let ((end (1+ index)))
+            (while (and (< end (length lines))
+                        (string-match-p "\\`[ \t]*|" (aref lines end)))
+              (setq end (1+ end)))
+            (push (list index end
+                        (append (substring lines (1+ index) end) nil))
+                  found)
+            (setq index (1- end))))))
+      (setq index (1+ index)))
+    (nreverse found)))
+
+(defun osdb-org--scope-number (cell)
+  "Return the number the scope table CELL holds, or nil when it holds none.
+A decimal comma reads as a decimal point.  A cell without a decimal
+part gives an integer."
+  (when (string-match-p osdb-org-number-regexp cell)
+    (string-to-number (string-replace "," "." cell))))
+
+(defun osdb-org--scope-header-problems (header)
+  "Return the problems of the scope table HEADER, a list of column names.
+They are, in order: each column outside `osdb-org-scope-columns', each
+column named twice, and each required column missing."
+  (let* ((names (cl-remove-duplicates header :test #'equal :from-end t))
+         (known (lambda (name) (member name osdb-org-scope-columns))))
+    (append
+     (mapcar (lambda (name)
+               (osdb-org--error
+                "scope" (format "\"%s\" is not a scope column" name)))
+             (cl-remove-if known names))
+     (mapcar (lambda (name)
+               (osdb-org--error
+                "scope" (format "column \"%s\" appears more than once" name)))
+             (cl-remove-if-not (lambda (name)
+                                 (and (funcall known name)
+                                      (> (cl-count name header :test #'equal)
+                                         1)))
+                               names))
+     (mapcar (lambda (name)
+               (osdb-org--error "scope" (format "column \"%s\" missing" name)))
+             (cl-remove-if (lambda (name) (member name header))
+                           (take 3 osdb-org-scope-columns))))))
+
+(defun osdb-org--scope-entry (number header cells)
+  "Read the scope table row NUMBER, counted from 1, as an entry.
+HEADER names the columns, and CELLS are the row's cells.  Return
+\(PROBLEMS . ENTRY): the row's errors, and the entry as an alist of
+symbols to values, its keys in `osdb-org-scope-columns' order except
+that `products' comes last and `yield_percent' is folded into it.  An
+empty cell sets no key; a missing cell is empty."
+  (let ((row (cl-mapcar #'cons header
+                        (append cells (make-list (length header) ""))))
+        (problems nil)
+        (entry nil))
+    (let ((products (split-string (or (cdr (assoc "products" row)) "")))
+          (yields (split-string (or (cdr (assoc "yield_percent" row)) ""))))
+      (unless (= (length products) (length yields))
+        (push (osdb-org--error "scope" (format "row %d: %d products but %d \
+yields" number (length products) (length yields)))
+              problems))
+      (dolist (column osdb-org-scope-columns)
+        (let ((cell (cdr (assoc column row))))
+          (pcase column
+            ((guard (or (null cell) (string-empty-p cell))))
+            ("substrates"
+             (push (cons 'substrates (split-string cell)) entry))
+            ("products")
+            ("yield_percent"
+             (dolist (yield yields)
+               (unless (osdb-org--scope-number yield)
+                 (push (osdb-org--error "scope" (format "row %d: \"%s\" is \
+not a number" number yield))
+                       problems))))
+            ("temperature"
+             (if (osdb-org--scope-number cell)
+                 (push (cons 'temperature (osdb-org--scope-number cell))
+                       entry)
+               (push (osdb-org--error "scope" (format "row %d: \"%s\" is \
+not a number" number cell))
+                     problems)))
+            (_ (push (cons (intern column) cell) entry)))))
+      (when products
+        (push (cons 'products
+                    (cl-mapcar (lambda (compound yield)
+                                 (list (cons 'compound compound)
+                                       (cons 'yield_percent
+                                             (and yield
+                                                  (osdb-org--scope-number
+                                                   yield)))))
+                               products
+                               (append yields
+                                       (make-list (length products) nil))))
+              entry)))
+    (cons (nreverse problems) (nreverse entry))))
+
+(defun osdb-org-scope (text)
+  "Read the table named scope in the Org TEXT.
+Return (PROBLEMS ENTRIES START END).  PROBLEMS are errors on the field
+`scope', in the order of the rules of the scope table.  ENTRIES are the
+entries of `scope', each an alist as `osdb-org--scope-entry' returns it,
+or nil when there is a problem or no such table.  START is the index of
+the table's `#+NAME' line and END that of the line after its last row,
+counted from 0 as `osdb-org--scope-tables' counts them; both are nil
+when TEXT has no table named scope.  Only the first such table is read;
+a second is a problem.  The first row of the table names the columns,
+and every further row that is not a separator line is an entry."
+  (let ((tables (osdb-org--scope-tables text)))
+    (if (null tables)
+        (list nil nil nil nil)
+      (pcase-let* ((`(,start ,end ,lines) (car tables))
+                   (rows (cl-remove-if
+                          (lambda (line)
+                            (string-match-p "\\`[ \t]*|-" line))
+                          lines))
+                   (header (and rows (osdb-org--table-cells (car rows))))
+                   (problems (append
+                              (when (cdr tables)
+                                (list (osdb-org--error
+                                       "scope" "appears more than once")))
+                              (osdb-org--scope-header-problems header)))
+                   (entries nil))
+        (unless problems
+          (cl-loop for cells in (mapcar #'osdb-org--table-cells (cdr rows))
+                   for number from 1
+                   do (pcase-let ((`(,found . ,entry)
+                                   (osdb-org--scope-entry
+                                    number header cells)))
+                        (setq problems (append problems found))
+                        (push entry entries))))
+        (list problems (unless problems (nreverse entries)) start end)))))
+
 ;;;; One source
 
 (defun osdb-org-check-file-name (name)
@@ -519,7 +691,8 @@ the source plist of `osdb-org-examine', or nil when there is a problem."
         (list (list (cons path text)))
       (pcase-let* ((`(,lint ,created ,last-modified ,ai-model)
                     (osdb-org-lint text zone))
-                   (problems (append (osdb-org-check-file-name name) lint)))
+                   (problems (append (osdb-org-check-file-name name) lint
+                                     (car (osdb-org-scope text)))))
         (if problems
             (list (mapcar (lambda (problem) (cons path problem)) problems))
           (let ((chosen (osdb-org-export-instants created last-modified)))

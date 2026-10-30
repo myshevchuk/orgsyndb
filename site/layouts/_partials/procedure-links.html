@@ -2,21 +2,26 @@
 the compounds procedures share: the precursors are the other published
 procedures that have a compound of this one's substrates among their
 products, and it is used in the other published procedures that have one
-of its products among their substrates. Both are ordered by ID. */ -}}
+of its products among their substrates. Products and substrates are
+those of product-keys.html and substrate-keys.html, over every entry of a
+general procedure. Both are ordered by ID. */ -}}
 {{ $id := .Params.id -}}
 {{ $procedures := sort (where site.RegularPages "Section" "procedures") "Params.id" -}}
 {{ $others := where $procedures "Params.id" "ne" $id -}}
-{{ with .Params.substrates -}}
+{{ with partial "substrate-keys.html" . -}}
 {{ $substrates := . -}}
 {{ $precursors := slice -}}
-{{ range $others }}{{ if intersect (partial "product-keys.html" .) $substrates }}{{ $precursors = $precursors | append . }}{{ end }}{{ end -}}
+{{ range $others }}{{ if intersect (partialCached "product-keys.html" . .Path) $substrates }}{{ $precursors = $precursors | append . }}{{ end }}{{ end -}}
 {{ with $precursors -}}
 <dt>{{ T "label_precursors" }}</dt>
 <dd>{{ range $i, $page := . }}{{ if $i }}, {{ end }}<a class="precursor" href="{{ $page.RelPermalink }}">{{ $page.Params.id }} {{ $page.Title }}</a>{{ end }}</dd>
 {{ end -}}
 {{ end -}}
 {{ with partial "product-keys.html" . -}}
-{{ with where $others "Params.substrates" "intersect" . -}}
+{{ $products := . -}}
+{{ $users := slice -}}
+{{ range $others }}{{ if intersect (partialCached "substrate-keys.html" . .Path) $products }}{{ $users = $users | append . }}{{ end }}{{ end -}}
+{{ with $users -}}
 <dt>{{ T "label_used_in" }}</dt>
 <dd>{{ range $i, $page := . }}{{ if $i }}, {{ end }}<a class="used-in" href="{{ $page.RelPermalink }}">{{ $page.Params.id }} {{ $page.Title }}</a>{{ end }}</dd>
 {{ end -}}

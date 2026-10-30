@@ -165,6 +165,29 @@ h1 { font-size: 2.25rem; }
   align-items: start;
 }
 .procedure-content { grid-area: content; }
+/* A general procedure's scope heads the content column, above the body;
+   the details beside them span both, and the body's row takes any height
+   they need beyond the two. */
+.procedure:has(> .scope) {
+  grid-template-areas: "scope details" "content details";
+  grid-template-rows: auto 1fr;
+}
+.procedure > .scope { grid-area: scope; }
+.scope h2 { margin-top: 0; }
+.scope-table { width: 100%; }
+/* Numbers and their units stay on one line; names and notes wrap. */
+.scope-table .num, .scope-scale, .scope-time { white-space: nowrap; }
+.scope-product { display: inline-block; vertical-align: top; }
+.scope-structure {
+  display: block;
+  width: 6rem;
+  height: auto;
+  margin-bottom: var(--space-1);
+  padding: var(--space-1);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+}
 .procedure-details {
   grid-area: details;
   display: flex;
@@ -281,11 +304,11 @@ h1 { font-size: 2.25rem; }
    the hue turns back so that coloured atoms keep their colour. A border
    would be inverted too, so the thumbnail's goes. */
 @media (prefers-color-scheme: dark) {
-  .structure img, .row-structure {
+  .structure img, .row-structure, .scope-structure {
     filter: invert(0.92) hue-rotate(180deg);
     mix-blend-mode: lighten;
   }
-  .row-structure { border-color: transparent; }
+  .row-structure, .scope-structure { border-color: transparent; }
 }
 .catalogue[data-view="details"] .procedure-list td { vertical-align: top; }
 

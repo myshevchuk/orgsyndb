@@ -1,13 +1,23 @@
-{{- /* The structure figures: one figure.structure per product whose
-registry entry sets structure_image, a path relative to the collection's
-static/, in products order, with the shown name in its alt text; or,
-when none does, one empty slot that the print stylesheet hides. */ -}}
+{{- /* The structure figures: for a procedure that sets scheme_image, one
+figure.structure with the scheme, its alt text naming the title;
+otherwise, for a specific procedure, one figure.structure per product
+whose registry entry sets structure_image, in products order, with the
+shown name in its alt text. Image paths are relative to the collection's
+static/. When no figure results, and always for a general procedure
+without a scheme, it is one empty slot that the print stylesheet hides. */ -}}
 {{ $found := false -}}
+{{ with .Params.scheme_image -}}
+{{ $found = true -}}
+<figure class="structure"><img src="/{{ . }}" alt="{{ T "scheme_of" $.Title }}"></figure>
+{{ else -}}
+{{ if not .Params.scope -}}
 {{ range $entry := .Params.products -}}
 {{ with index site.Data.compounds $entry.compound -}}
 {{ with .structure_image -}}
 {{ $found = true -}}
 <figure class="structure"><img src="/{{ . }}" alt="{{ T "structure_of" (partial "compound-name.html" $entry.compound) }}"></figure>
+{{ end -}}
+{{ end -}}
 {{ end -}}
 {{ end -}}
 {{ end -}}

@@ -5,6 +5,7 @@ spec scenarios, so each docstring starts with "Harness:". Pure, no build.
 
 import datetime as dt
 import unittest
+from pathlib import Path
 
 import pipeline_support as ps
 
@@ -87,8 +88,9 @@ class CatalogueHelperTests(unittest.TestCase):
 
     def test_catalogue_urls(self) -> None:
         """Harness: the pages that carry a catalogue."""
-        for url in ("/procedures/", "/tags/sample-data/",
-                    "/authors/a.-example/", "/reaction_types/hydrolysis/"):
+        for url in ("/procedures/", "/general-procedures/",
+                    "/tags/sample-data/", "/authors/a.-example/",
+                    "/reaction_types/hydrolysis/"):
             self.assertTrue(ps.is_catalogue_url(url), url)
         for url in ("/", "/tags/", "/authors/", "/reaction_types/",
                     "/help/schema/", "/procedures/osdb-0001/"):
@@ -110,6 +112,55 @@ class CatalogueHelperTests(unittest.TestCase):
                           for r in rows], [["1", "2"], ["3"]])
         self.assertEqual(ps.facet_values(page, "tag"), [("a b", "A B")])
         self.assertEqual(ps.facet_values(page, "type"), [])
+
+
+class GeneralHelperTests(unittest.TestCase):
+    """The helpers that read general procedures."""
+
+    SCOPE = [
+        {"substrates": ["a", "b"],
+         "products": [{"compound": "x", "yield_percent": 85}]},
+        {"substrates": ["b", "c"],
+         "products": [{"compound": "y", "yield_percent": 64.5},
+                      {"compound": "x", "yield_percent": 70}]},
+    ]
+
+    def content(self, scope: list[dict] | None = None) -> ps.Content:
+        return ps.Content(Path("OSDB-0001-x.md"),
+                          {"scope": scope or self.SCOPE}, "")
+
+    def test_products_and_substrates_are_the_union_in_order(self) -> None:
+        """Harness: the union over the entries of a scope."""
+        item = self.content()
+        self.assertTrue(item.is_general)
+        self.assertEqual([e["compound"] for e in item.products], ["x", "y"])
+        self.assertEqual(item.products[0]["yield_percent"], 85)
+        self.assertEqual(item.substrates, ["a", "b", "c"])
+        self.assertEqual(item.kind, "general")
+        specific = ps.Content(Path("OSDB-0002-x.md"), {"products": [
+            {"compound": "x", "yield_percent": 5}]}, "")
+        self.assertEqual((specific.kind, specific.substrates), ("specific",
+                                                                []))
+
+    def test_the_yield_of_a_general_procedure_is_a_range(self) -> None:
+        """Harness: the range of the yields, with a decimal comma in
+        German."""
+        item = self.content()
+        self.assertEqual(ps.yield_text(item, {}, "en"), "64.5–85 %")
+        self.assertEqual(ps.yield_text(item, {}, "de"), "64,5–85 %")
+        equal = self.content([{"substrates": ["a"], "products": [
+            {"compound": "x", "yield_percent": 85},
+            {"compound": "y", "yield_percent": 85.0}]}])
+        self.assertEqual(ps.yield_text(equal, {}, "en"), "85 %")
+
+    def test_the_scope_table_of_an_org_source_is_read(self) -> None:
+        """Harness: the rows of the table named scope."""
+        text = ("* S\n#+name: Scope\n| substrates | products |\n"
+                "|---+---|\n| a b | x |\n|  | y |\n\n| other |\n")
+        self.assertEqual(ps.org_scope_rows(text),
+                         [{"substrates": "a b", "products": "x"},
+                          {"substrates": "", "products": "y"}])
+        self.assertEqual(ps.org_scope_rows("* S\n| a |\n"), [])
 
 
 class CssParserTests(unittest.TestCase):

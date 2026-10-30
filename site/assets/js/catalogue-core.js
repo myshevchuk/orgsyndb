@@ -3,15 +3,16 @@
 // globalThis.OrgSynSearch from search-terms.js, loaded before it; the
 // catalogue script bundles both, and the tests load them under Node.
 //
-// A state is {q, type, status, tag, author, sort, view}: q a string, the
-// four facets arrays of machine values, sort null or one of SORTS, view
-// "table" or "details". A record is {id, title, created, modified, type,
-// status, tag, author}, with RFC 3339 timestamps and the facets' values
-// (status may be a single string). No function changes its arguments.
+// A state is {q, type, kind, status, tag, author, sort, view}: q a
+// string, the five facets arrays of machine values, sort null or one of
+// SORTS, view "table" or "details". A record is {id, title, created,
+// modified, type, kind, status, tag, author}, with RFC 3339 timestamps and
+// the facets' values (kind and status may be a single string). No function changes its arguments.
 //
 // parse(search, known, fixed): {state, ignored} of a query string. known
 //   maps each facet to the values the page knows, in the page's order;
-//   fixed is the facet a term page fixes, or null. ignored lists the
+//   fixed is the facet a term page or the general procedures' page
+//   fixes, or null. ignored lists the
 //   [name, value] pairs not applied, in address order.
 // serialize(state): the canonical query string, "" for the default state.
 // active(state): whether the query leaves a term after normalisation.
@@ -32,7 +33,7 @@
 (function () {
   "use strict";
 
-  const FACETS = ["type", "status", "tag", "author"];
+  const FACETS = ["type", "kind", "status", "tag", "author"];
   const SORTS = ["relevance", "id", "title", "created", "modified"];
   const VIEWS = ["table", "details"];
 
@@ -55,7 +56,7 @@
     const first = params.find(([name]) => name === "q");
     const state = {
       q: first ? first[1].trim() : "",
-      type: [], status: [], tag: [], author: [],
+      type: [], kind: [], status: [], tag: [], author: [],
       sort: null, view: "table",
     };
     const chosen = Object.fromEntries(FACETS.map((f) => [f, new Set()]));

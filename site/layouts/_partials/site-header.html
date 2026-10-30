@@ -1,22 +1,27 @@
 {{- /* The site header: the site title, the navigation and the search form,
-which submits q to /procedures/. On the catalogue and term pages the form
-is the catalogue's: catalogue.js drives its field, #catalogue-q, the page
-itself is its action, and on a term page its label names the scope while
-its placeholder, short enough to show whole, says it is scoped. The
-link of the page itself carries aria-current="page"; the link of the
-section a page lies in carries aria-current="true". The three
-taxonomy directories and their term pages lie in /procedures/, as their
-facets do, and every compound page lies in /compounds/. */ -}}
+which submits q to /procedures/. On the catalogue, the term pages and
+/general-procedures/ the form is the catalogue's: catalogue.js drives its
+field, #catalogue-q, the page itself is its action, and on a term page and
+on /general-procedures/ its label names the scope while its placeholder,
+short enough to show whole, says it is scoped. The link of the page
+itself carries aria-current="page"; the link of the section a page lies
+in carries aria-current="true". /general-procedures/, the three taxonomy
+directories and their term pages lie in /procedures/, as their facets
+do, and every compound page lies in /compounds/. */ -}}
 {{ $here := .RelPermalink -}}
 {{ $within := $here -}}
-{{ if or (hasPrefix $here "/reaction_types/") (hasPrefix $here "/tags/") (hasPrefix $here "/authors/") }}{{ $within = "/procedures/" }}{{ end -}}
-{{ $catalogue := or (eq .Kind "term") (and (eq .Kind "section") (eq .Section "procedures")) -}}
+{{ $general := and (eq .Kind "section") (eq .Section "general-procedures") -}}
+{{ if or $general (hasPrefix $here "/reaction_types/") (hasPrefix $here "/tags/") (hasPrefix $here "/authors/") }}{{ $within = "/procedures/" }}{{ end -}}
+{{ $catalogue := or (eq .Kind "term") $general (and (eq .Kind "section") (eq .Section "procedures")) -}}
 {{ $action := cond $catalogue .RelPermalink "/procedures/" -}}
 {{ $label := T "search_label" -}}
 {{ $hint := T "search_placeholder" -}}
 {{ if eq .Kind "term" -}}
 {{ $facet := index (dict "reaction_types" "type" "tags" "tag" "authors" "author") .Data.Plural -}}
 {{ $label = T (printf "search_scope_%s" $facet) (partial "page-title.html" .) -}}
+{{ $hint = T "search_scope_placeholder" -}}
+{{ else if $general -}}
+{{ $label = T "search_scope_kind" -}}
 {{ $hint = T "search_scope_placeholder" -}}
 {{ end -}}
 <header class="site-header">

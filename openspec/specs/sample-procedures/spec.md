@@ -69,16 +69,16 @@ The repository SHALL ship, besides the two seeds, these six sample procedures:
 | `md/procedures/OSDB-0008-cinnamic-acid.md` | `cinnamic-acid`, (E)-cinnamic acid (C9H8O2, CAS `140-10-3`), by saponification of ethyl (E)-cinnamate with aqueous sodium hydroxide in ethanol, then acidification with hydrochloric acid | `hydrolysis` | `ethyl-cinnamate` |
 
 Each procedure has the one product its row names, with the yield its previous front matter gave. The full set meets the following:
-- **Counts.** There are exactly four Org and four Markdown sample procedures without a language code, with at least five distinct reaction types among them. Their German variants are not counted.
+- **Counts.** There are exactly four Org and five Markdown sample procedures without a language code, the general procedure of the requirement "Demo general procedure" among the Markdown ones, with at least five distinct reaction types among them. Their German variants are not counted.
 - **Compound CAS.** Every compound of the demo registry has a `cas` that resolves to that compound on PubChem. The orchestrator checks this during review, because the tests cannot reach the network.
 - **Tags.** Every sample has at least one tag besides `sample-data`.
 - **Structure image.** The compound `isopentyl-acetate` sets `structure_image = "structures/isopentyl-acetate.svg"`.
-- **Chains.** Besides the seeds' OSDB-0001 → OSDB-0002 through `salicylic-acid`, OSDB-0004 → OSDB-0005 through `4-acetylbiphenyl` and OSDB-0007 → OSDB-0008 through `ethyl-cinnamate` are chains: the first procedure makes the compound and the second starts from it. Each chain leads from an Org procedure to a Markdown one. No other compound is both made by one sample and a substrate of another, and no procedure needs both a precursor and a used-in link.
+- **Chains.** Besides the seeds' OSDB-0001 → OSDB-0002 through `salicylic-acid`, OSDB-0004 → OSDB-0005 and OSDB-0004 → OSDB-0009 through `4-acetylbiphenyl`, and OSDB-0007 → OSDB-0008 through `ethyl-cinnamate`, are chains: the first procedure makes the compound and the second starts from it. Each chain leads from an Org procedure to a Markdown one. No other compound is both made by one sample and a substrate of another, and no procedure needs both a precursor and a used-in link.
 - **Long sample.** OSDB-0004 is the long sample: at least 15 numbered steps under `Procedure` and at least 6 numbered notes under `Notes`. Its Reagents table holds at least four non-catalyst rows, and the longest cell text of its `Reagent` column has at least 40 characters.
 
 #### Scenario: Set, counts and chain
 - **WHEN** a test reads every sample procedure
-- **THEN** the files above exist with those IDs, reaction types, products and substrates, there are four Org and four Markdown samples without a language code, and at least five distinct reaction types
+- **THEN** the files above exist with those IDs, reaction types, products and substrates, there are four Org and five Markdown samples without a language code, and at least five distinct reaction types
 - **AND** in every chain the procedure making the compound is an Org file and the one starting from it a Markdown file
 - **AND** every compound of the demo registry has a `cas` that passes the check-digit rule, and every sample has a tag besides `sample-data`
 
@@ -98,7 +98,7 @@ The sample procedures SHALL form the demo collection `examples/demo/` of the app
 - **THEN** `examples/demo/orgsyndb.toml` exists, `examples/demo/org/procedures/OSDB-0001-salicylic-acid.org` and `examples/demo/md/procedures/OSDB-0002-aspirin.md` exist, the demo registry's file names are exactly the keys the samples name, each with `.toml`, and neither `org/`, `md/` nor `site/static/` exists at the application root
 
 ### Requirement: German sample translations
-Every sample procedure of the theme sample set and the seeds SHALL have a German variant beside it, in the same format, named with `.de` before the suffix (for example `org/procedures/OSDB-0001-salicylic-acid.de.org` and `md/procedures/OSDB-0002-aspirin.de.md`). Each translation meets the localization spec, carries the same `authors` as its original, has a Reagents table with as many rows as the original's, and writes decimal commas in its text and table. The German long sample has at least 15 numbered steps under `Durchführung` and at least 6 numbered notes under `Anmerkungen`.
+Every sample procedure of the theme sample set, the seeds and the demo general procedure SHALL have a German variant beside it, in the same format, named with `.de` before the suffix (for example `org/procedures/OSDB-0001-salicylic-acid.de.org` and `md/procedures/OSDB-0002-aspirin.de.md`). Each translation meets the localization spec, carries the same `authors` as its original, has a Reagents table with as many rows as the original's, and writes decimal commas in its text and table. The German long sample has at least 15 numbered steps under `Durchführung` and at least 6 numbered notes under `Anmerkungen`.
 
 #### Scenario: Every sample has a German translation
 - **WHEN** a test reads each sample and its `.de` twin
@@ -122,7 +122,7 @@ Integration tests that build, validate, serve or print a collection and do not e
 #### Scenario: The test collection mirrors the demo
 - **WHEN** a test lists `tests/fixtures/collection/` and compares it with `examples/demo/`
 - **THEN** `orgsyndb.toml`, `.gitignore` and every file under `static/` and `compounds/` are byte-identical to the demo's, `static/structures/isopentyl-acetate.svg` and `compounds/salicylic-acid.toml` among them, and no `org/` directory exists
-- **AND** `md/procedures/` holds exactly the 16 file names derived from the demo's sample procedure files, and the file for each of the eight Markdown samples is byte-identical to it
+- **AND** `md/procedures/` holds exactly the 18 file names derived from the demo's sample procedure files, and the file for each of the ten Markdown sample files is byte-identical to it
 
 #### Scenario: Converted samples agree with their Org sources
 - **WHEN** a test reads each of the eight Org samples of the demo collection, in either language, and its file in `tests/fixtures/collection/md/procedures/`
@@ -139,4 +139,22 @@ Integration tests that build, validate, serve or print a collection and do not e
 #### Scenario: The suite runs without Emacs
 - **WHEN** the orchestrator runs `python3 -m pytest tests` with a `PATH` that holds no `emacs` but every other tool the suite uses, with the ox-hugo and Pagefind caches present (manual verification, tasks.md section 5)
 - **THEN** the suite passes, and every skipped test exercises the Org export and skips with a reason that names `emacs`
+
+### Requirement: Demo general procedure
+The demo collection SHALL ship the general procedure `md/procedures/OSDB-0009-benzylic-alcohols.md`: secondary benzylic alcohols by sodium borohydride reduction of aryl methyl ketones in ethanol, a textbook teaching-laboratory reaction, with `reaction_types = ["reduction"]`, the tags `sample-data` and `sodium-borohydride`, `scale = "10 mmol"`, and a `scheme_image` naming a file under `static/structures/` that meets site-theme "Structure images are safe SVG". Its scope has three entries, in this order:
+1. `substrates = ["4-acetylbiphenyl"]`, product `1-biphenyl-4-yl-ethanol` at 90 %, `time = "30 min"`;
+2. `substrates = ["acetophenone"]`, product `1-phenylethanol` at 85 %, `time = "20 min"`;
+3. `substrates = ["4-bromoacetophenone"]`, product `1-4-bromophenyl-ethanol` at 88 %, `time = "30 min"`, `scale = "5 mmol"` and a `note`.
+
+Its Reagents table describes entry 1 at the stated scale. Its `lastmod` is not later than that of any other sample, so that it does not enter the home page's recent list ahead of them. The demo registry holds, besides the compounds the other samples name:
+
+| key | name | name_de | formula | mw | smiles | cas |
+|---|---|---|---|---|---|---|
+| `acetophenone` | Acetophenone | Acetophenon | C8H8O | 120.15 | `CC(=O)c1ccccc1` | `98-86-2` |
+| `1-phenylethanol` | 1-Phenylethanol | 1-Phenylethanol | C8H10O | 122.17 | `CC(O)c1ccccc1` | `98-85-1` |
+| `1-4-bromophenyl-ethanol` | 1-(4-Bromophenyl)ethanol | 1-(4-Bromphenyl)ethanol | C8H9BrO | 201.06 | `CC(O)c1ccc(Br)cc1` | `5391-88-8` |
+
+#### Scenario: The demo's general procedure
+- **WHEN** a test reads `examples/demo/md/procedures/OSDB-0009-benzylic-alcohols.md`, its German variant and the demo registry
+- **THEN** the procedure carries the stated scope, reaction type, tags, scale and scheme image, the image exists and meets the SVG rules, the German variant has the same `scope` and `scheme_image`, and the registry holds the three compounds with the stated values
 

@@ -39,11 +39,15 @@ TEXTS: dict[str, dict[str, Any]] = {
         "search_scope": {
             "type": "Search procedures of the reaction type {term}",
             "tag": "Search procedures with the tag {term}",
-            "author": "Search procedures by {term}"},
+            "author": "Search procedures by {term}",
+            "kind": "Search general procedures"},
         "scoped_placeholder": "Search these procedures",
         "filters": "Filters",
-        "facets": {"type": "Reaction type", "status": "Status",
-                   "tag": "Tag", "author": "Author"},
+        "facets": {"type": "Reaction type", "kind": "Kind",
+                   "status": "Status", "tag": "Tag", "author": "Author"},
+        "kinds": {"specific": "Specific procedure",
+                  "general": "General procedure"},
+        "general_heading": "General procedures",
         "directories": {"type": "All reaction types", "tag": "All tags",
                         "author": "All authors"},
         "clear": "Clear all",
@@ -67,7 +71,8 @@ TEXTS: dict[str, dict[str, Any]] = {
             "remove": "Remove {facet}: {value}"},
         "scope": {"type": "Only procedures of the reaction type {term}",
                   "tag": "Only procedures with the tag {term}",
-                  "author": "Only procedures by {term}"},
+                  "author": "Only procedures by {term}",
+                  "kind": "Only general procedures"},
         "browse_all": "Browse all procedures",
         "home_title": "Synthetic procedures",
         "lede": "The group's procedures, written in Org or Markdown to "
@@ -96,11 +101,16 @@ TEXTS: dict[str, dict[str, Any]] = {
         "search_scope": {
             "type": "Vorschriften des Reaktionstyps {term} durchsuchen",
             "tag": "Vorschriften mit dem Schlagwort {term} durchsuchen",
-            "author": "Vorschriften von {term} durchsuchen"},
+            "author": "Vorschriften von {term} durchsuchen",
+            "kind": "Allgemeine Vorschriften durchsuchen"},
         "scoped_placeholder": "Diese Vorschriften durchsuchen",
         "filters": "Filter",
-        "facets": {"type": "Reaktionstyp", "status": "Status",
-                   "tag": "Schlagwort", "author": "Autor"},
+        "facets": {"type": "Reaktionstyp", "kind": "Art",
+                   "status": "Status", "tag": "Schlagwort",
+                   "author": "Autor"},
+        "kinds": {"specific": "Einzelvorschrift",
+                  "general": "Allgemeine Vorschrift"},
+        "general_heading": "Allgemeine Vorschriften",
         "directories": {"type": "Alle Reaktionstypen",
                         "tag": "Alle Schlagwörter", "author": "Alle Autoren"},
         "clear": "Alles zurücksetzen",
@@ -124,7 +134,8 @@ TEXTS: dict[str, dict[str, Any]] = {
             "remove": "{facet}: {value} entfernen"},
         "scope": {"type": "Nur Vorschriften des Reaktionstyps {term}",
                   "tag": "Nur Vorschriften mit dem Schlagwort {term}",
-                  "author": "Nur Vorschriften von {term}"},
+                  "author": "Nur Vorschriften von {term}",
+                  "kind": "Nur allgemeine Vorschriften"},
         "browse_all": "Alle Vorschriften anzeigen",
         "home_title": "Synthesevorschriften",
         "lede": "Die Vorschriften der Arbeitsgruppe, in Org oder Markdown "
@@ -178,8 +189,8 @@ class CatalogueCase(ps.ThemeBuildCase):
         the three statuses) with its display label."""
         labels = self.labels()
         found: dict[str, dict[str, str]] = {
-            "type": {}, "status": dict(self.texts["status"]), "tag": {},
-            "author": {}}
+            "type": {}, "kind": dict(self.texts["kinds"]),
+            "status": dict(self.texts["status"]), "tag": {}, "author": {}}
         for item in self.content():
             for slug in item.data["reaction_types"]:
                 found["type"][slug] = labels[slug]
@@ -291,6 +302,48 @@ class CatalogueCase(ps.ThemeBuildCase):
         else:
             self.assertEqual(len(cells), 5)
 
+    def check_general_view(self, page: Page, items: list[Content]) -> None:
+        """``/general-procedures/``: a catalogue page whose rows are the
+        general procedures, with the ``kind`` facet fixed to ``general``
+        (general-procedures "General procedures view")."""
+        texts = self.texts
+        block = self.check_catalogue(page, fixed="kind",
+                                     heading=texts["general_heading"])
+        self.check_controls(page, fixed="kind")
+        general = [item for item in items if item.is_general]
+        self.assertTrue(general, "the build has no general procedure")
+        self.assertEqual(page.title(),
+                         f"{texts['general_heading']} | OrgSynDB")
+        self.assertEqual(self.table_ids(page),
+                         sorted(item.id for item in general))
+        self.check_rows(page, general)
+        scope = block.find("p", "catalogue-scope")
+        self.assertEqual(
+            scope.norm(), f"{texts['scope']['kind']} · {texts['browse_all']}")
+        links = page.links(scope)
+        self.assertEqual([(l.target, l.node.norm()) for l in links],
+                         [("/procedures/", texts["browse_all"])])
+        self.assertIn("data-browse-all", links[0].node.attrs)
+        fixed = page.find("details", "facet", data_facet="kind")
+        self.assertIn("data-fixed", fixed.attrs)
+        self.assertIn("open", fixed.attrs)
+        boxes = fixed.find_all("input")
+        self.assertEqual(len(boxes), 1)
+        self.assertEqual(
+            {k: boxes[0].attrs.get(k) for k in ("type", "name", "value")},
+            {"type": "checkbox", "name": "kind", "value": "general"})
+        self.assertIn("checked", boxes[0].attrs)
+        self.assertIn("disabled", boxes[0].attrs)
+        self.assertEqual(ps.facet_values(page, "kind"),
+                         [("general", texts["kinds"]["general"])])
+        everything = self.page("procedures/index.html")
+        for other in ps.FACETS:
+            if other != "kind":
+                self.assertEqual(ps.facet_values(page, other),
+                                 ps.facet_values(everything, other), other)
+                group = page.find("details", "facet", data_facet=other)
+                self.assertNotIn("data-fixed", group.attrs)
+
     # --- controls --------------------------------------------------------
 
     def check_controls(self, page: Page, *, fixed: str | None = None
@@ -379,7 +432,7 @@ class CatalogueCase(ps.ThemeBuildCase):
         self.assertEqual(values.attrs.get("role"), "group")
         self.assertEqual(values.attrs.get("aria-labelledby"),
                          summary.attrs["id"])
-        opens = facet in ("type", "status") or facet == fixed
+        opens = facet in ("type", "kind", "status") or facet == fixed
         self.assertEqual("open" in group.attrs, opens)
         if facet == fixed:
             self.assertIn("data-fixed", group.attrs)
@@ -410,11 +463,12 @@ class CatalogueCase(ps.ThemeBuildCase):
     def assert_facet_values(self, page: Page, facet: str,
                             expected: dict[str, str]) -> None:
         """The facet lists exactly ``expected`` (value to label): the
-        statuses in their fixed order, other values ordered by label.
+        kinds and statuses in their fixed order, other values ordered by
+        label.
         Order is checked among ASCII labels only, as collation of other
         letters is Hugo's."""
         shown = ps.facet_values(page, facet)
-        if facet == "status":
+        if facet in ("kind", "status"):
             self.assertEqual(shown, [(k, v) for k, v in expected.items()])
             return
         self.assertEqual(sorted(shown), sorted(expected.items()))

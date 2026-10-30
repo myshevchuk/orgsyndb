@@ -3,7 +3,10 @@ entry of the registry, whose key is the compound parameter: the shown
 name; the structure figure when the entry sets structure_image; the
 facts (compound-facts.html); and, each only when it has an entry, the
 published procedures that make the compound, with its yield in each, and
-those that use it as a substrate, both by ID with their status badges.
+those that use it as a substrate (substrate-keys.html), both by ID with
+their status badges. A general procedure is listed under Made by once per
+entry that makes the compound, in entry order, with the entry's number,
+and under Used in once.
 The page carries no data-pagefind-body, so the search index holds
 procedures only. */ -}}
 {{ define "main" -}}
@@ -18,18 +21,26 @@ procedures only. */ -}}
 {{ partial "compound-facts.html" $compound -}}
 </dl>
 {{ $made := slice -}}
-{{ range $page := $procedures }}{{ range $page.Params.products }}{{ if eq .compound $key }}{{ $made = $made | append (dict "page" $page "yield" .yield_percent) }}{{ end }}{{ end }}{{ end -}}
+{{ range $page := $procedures -}}
+{{ with $page.Params.scope -}}
+{{ range $i, $entry := . }}{{ range $entry.products }}{{ if eq .compound $key }}{{ $made = $made | append (dict "page" $page "entry" (add $i 1) "yield" .yield_percent) }}{{ end }}{{ end }}{{ end -}}
+{{ else -}}
+{{ range $page.Params.products }}{{ if eq .compound $key }}{{ $made = $made | append (dict "page" $page "yield" .yield_percent) }}{{ end }}{{ end -}}
+{{ end -}}
+{{ end -}}
 {{ with $made -}}
 <section class="compound-made-by" aria-labelledby="compound-made-by">
 <h2 id="compound-made-by">{{ T "label_made_by" }}</h2>
 <ul class="compound-procedures">
 {{ range . -}}
-<li><a href="{{ .page.RelPermalink }}">{{ .page.Params.id }} {{ .page.Title }}</a> · {{ partial "decimal.html" .yield }} % · <span class="badge badge--{{ .page.Params.status }}">{{ partial "status-label.html" .page.Params.status }}</span></li>
+<li><a href="{{ .page.RelPermalink }}">{{ .page.Params.id }} {{ .page.Title }}</a>{{ with .entry }} · {{ T "made_by_entry" . }}{{ end }} · {{ partial "decimal.html" .yield }} % · <span class="badge badge--{{ .page.Params.status }}">{{ partial "status-label.html" .page.Params.status }}</span></li>
 {{ end -}}
 </ul>
 </section>
 {{ end -}}
-{{ with where $procedures "Params.substrates" "intersect" (slice $key) -}}
+{{ $used := slice -}}
+{{ range $procedures }}{{ if in (partialCached "substrate-keys.html" . .Path) $key }}{{ $used = $used | append . }}{{ end }}{{ end -}}
+{{ with $used -}}
 <section class="compound-used-in" aria-labelledby="compound-used-in">
 <h2 id="compound-used-in">{{ T "label_used_in" }}</h2>
 <ul class="compound-procedures">

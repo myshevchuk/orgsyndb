@@ -1,0 +1,57 @@
+{{- /* The scope of a general procedure, between the metadata panel and the
+body: section.scope with its heading and table.scope-table, one row per
+entry of scope, in order. The columns are the entry number, the starting
+materials, the products and their yields, then scale, time, temperature
+and note, each of these four only when some entry sets it; an entry
+without it has an empty cell. Starting materials and products link their
+compound pages with their shown names, joined by ", "; each product whose
+compound sets structure_image shows it first, loaded lazily. Yields are
+<n> % in product order, the temperature <t> °C, numbers with the
+language's decimal separator. Takes the page; a page without scope gives
+nothing. */ -}}
+{{ with .Params.scope -}}
+{{ $entries := . -}}
+{{ $columns := slice -}}
+{{ range slice "scale" "time" "temperature" "note" -}}
+{{ $key := . -}}
+{{ $set := false -}}
+{{ range $entries }}{{ if isset . $key }}{{ $set = true }}{{ end }}{{ end -}}
+{{ if $set }}{{ $columns = $columns | append $key }}{{ end -}}
+{{ end -}}
+<section class="scope" aria-labelledby="scope-heading">
+<h2 id="scope-heading">{{ T "scope_heading" }}</h2>
+<div class="table-scroll" tabindex="0" role="region" aria-label="{{ T "scope_heading" }}">
+<table class="scope-table">
+<thead>
+<tr>
+<th scope="col" class="num">{{ T "col_entry" }}</th>
+<th scope="col">{{ T "label_substrates" }}</th>
+<th scope="col">{{ T "label_products" }}</th>
+<th scope="col" class="num">{{ T "label_yield" }}</th>
+{{ range $columns -}}
+<th scope="col"{{ if eq . "temperature" }} class="num"{{ end }}>{{ T (printf "col_%s" .) }}</th>
+{{ end -}}
+</tr>
+</thead>
+<tbody>
+{{ range $i, $entry := $entries -}}
+<tr>
+<td class="num">{{ add $i 1 }}</td>
+<td>{{ range $j, $key := $entry.substrates }}{{ if $j }}, {{ end }}{{ partial "compound-link.html" $key }}{{ end }}</td>
+<td>{{ range $j, $product := $entry.products }}{{ if $j }}, {{ end }}<span class="scope-product">{{ with index site.Data.compounds $product.compound }}{{ with .structure_image }}<img class="scope-structure" src="/{{ . }}" alt="{{ T "structure_of" (partial "compound-name.html" $product.compound) }}" loading="lazy" decoding="async"> {{ end }}{{ end }}{{ partial "compound-link.html" $product.compound }}</span>{{ end }}</td>
+<td class="num">{{ range $j, $product := $entry.products }}{{ if $j }}, {{ end }}{{ partial "decimal.html" $product.yield_percent }} %{{ end }}</td>
+{{ range $columns -}}
+{{ $value := index $entry . -}}
+{{ if eq . "temperature" -}}
+<td class="num">{{ if isset $entry "temperature" }}{{ partial "decimal.html" $value }} °C{{ end }}</td>
+{{ else -}}
+<td class="scope-{{ . }}">{{ with $value }}{{ . }}{{ end }}</td>
+{{ end -}}
+{{ end -}}
+</tr>
+{{ end -}}
+</tbody>
+</table>
+</div>
+</section>
+{{ end -}}

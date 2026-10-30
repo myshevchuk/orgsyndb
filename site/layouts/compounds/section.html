@@ -2,15 +2,17 @@
 the registry, ordered by shown name, with a link to the compound's page,
 the formula (each digit run in <sub>), the weight, the CAS number or an
 empty cell, and the numbers of published procedures that make the
-compound and that use it as a substrate. It needs no script. */ -}}
+compound and that use it as a substrate, over every entry of a general
+procedure, each procedure counted once. It needs no script. */ -}}
 {{ define "main" -}}
 <h1>{{ partial "page-title.html" . }}</h1>
 {{ $procedures := where site.RegularPages "Section" "procedures" -}}
 {{ $rows := slice -}}
 {{ range $key, $compound := site.Data.compounds -}}
 {{ $made := 0 -}}
-{{ range $procedures }}{{ if in (partial "product-keys.html" .) $key }}{{ $made = add $made 1 }}{{ end }}{{ end -}}
-{{ $used := len (where $procedures "Params.substrates" "intersect" (slice $key)) -}}
+{{ range $procedures }}{{ if in (partialCached "product-keys.html" . .Path) $key }}{{ $made = add $made 1 }}{{ end }}{{ end -}}
+{{ $used := 0 -}}
+{{ range $procedures }}{{ if in (partialCached "substrate-keys.html" . .Path) $key }}{{ $used = add $used 1 }}{{ end }}{{ end -}}
 {{ $rows = $rows | append (dict "key" $key "name" (partial "compound-name.html" $key) "compound" $compound "made" $made "used" $used) -}}
 {{ end -}}
 <div class="table-scroll" tabindex="0" role="region" aria-label="{{ T "table_compounds" }}">

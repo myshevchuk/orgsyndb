@@ -368,7 +368,7 @@ def org_stems(org_root: str) -> list[str]:
 
 # The field and severity of a problem line, after its path.
 ORG_ERROR_RE = re.compile(
-    r"(?:file_name|front_matter|#\+[A-Za-z_]+|:[^:\s]+:): error: ")
+    r"(?:file_name|front_matter|scope|#\+[A-Za-z_]+|:[^:\s]+:): error: ")
 
 
 def org_error_reported(report: str, paths: Iterable[str]) -> bool:
