@@ -1,6 +1,7 @@
 {{- /* A reaction-type, tag or author term page: the catalogue of the
 term's procedures, with the term as its fixed facet. */ -}}
 {{ define "main" -}}
+{{ partial "section-tabs.html" . -}}
 {{ $fixed := index (dict "reaction_types" "type" "tags" "tag" "authors" "author") .Data.Plural -}}
 {{ partial "catalogue.html" (dict "page" . "pages" (sort .Pages "Params.id") "fixed" $fixed) -}}
 {{ end }}

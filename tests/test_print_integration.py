@@ -22,7 +22,7 @@ TEXTS = {
            "chrome": ["Skip to content", "Print / Save as PDF",
                       "No structure image", "Search procedures",
                       "OrgSynDB · internal procedures"],
-           "navigation": ("Reaction types", "Help"),
+           "navigation": ("Procedures", "Help"),
            "page": "Page {} of {}", "procedure": "Procedure",
            "reagents": "Reagents"},
     "de": {"banner": "Beispieldaten – Mengenangaben nicht experimentell "
@@ -30,7 +30,7 @@ TEXTS = {
            "chrome": ["Zum Inhalt springen", "Drucken / Als PDF speichern",
                       "Keine Strukturformel", "Vorschriften durchsuchen",
                       "OrgSynDB · interne Vorschriften"],
-           "navigation": ("Reaktionstypen", "Hilfe"),
+           "navigation": ("Vorschriften", "Hilfe"),
            "page": "Seite {} von {}", "procedure": "Durchführung",
            "reagents": "Reagenzien"},
 }

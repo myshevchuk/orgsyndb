@@ -1,4 +1,5 @@
 {{ define "main" -}}
+{{ partial "section-tabs.html" . -}}
 <h1>{{ partial "page-title.html" . }}</h1>
 <ul class="term-list">
 {{ range partial "terms-by-label.html" .Data.Plural -}}

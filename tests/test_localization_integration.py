@@ -10,8 +10,10 @@ import catalogue_support as cs
 import pipeline_support as ps
 from pipeline_support import Page
 
-NAVIGATION = [("/procedures/", "Vorschriften"),
-              ("/reaction_types/", "Reaktionstypen"), ("/help/", "Hilfe")]
+NAVIGATION = [("/procedures/", "Vorschriften"), ("/help/", "Hilfe")]
+TABS = [("/procedures/", "Alle Vorschriften"),
+        ("/reaction_types/", "Reaktionstypen"), ("/tags/", "Schlagwörter"),
+        ("/authors/", "Autoren")]
 FOOTER = (r"^OrgSynDB · interne Vorschriften · Stand "
           r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}$")
 BANNER = "Beispieldaten – Mengenangaben nicht experimentell überprüft."
@@ -47,6 +49,12 @@ class GermanSiteTests(GermanCase):
                 self.assertEqual(links, NAVIGATION)
                 self.assertEqual(len(header.find_all("nav")), 1,
                                  "the header has a language switch")
+                tabs = page.find("nav", "section-tabs")
+                if tabs is not None:
+                    self.assertEqual(tabs.attrs.get("aria-label"),
+                                     "Vorschriften")
+                    self.assertEqual([(l.target, l.node.norm())
+                                      for l in page.links(tabs)], TABS)
                 self.assertRegex(page.find("footer", "site-footer").norm(),
                                  FOOTER)
                 self.check_header_search(page, header)
@@ -185,8 +193,7 @@ class GermanSiteTests(GermanCase):
         links = page.links(scope)
         self.assertEqual(
             [(l.target, l.node.norm()) for l in links],
-            [("/procedures/", "Alle Vorschriften anzeigen"),
-             ("/tags/", "Alle Schlagwörter")])
+            [("/procedures/", "Alle Vorschriften anzeigen")])
         self.assertIn("data-browse-all", links[0].node.attrs)
 
     def test_german_home_page(self) -> None:

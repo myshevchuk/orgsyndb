@@ -26,8 +26,10 @@ FOOTER = re.compile(r"OrgSynDB · internal procedures · built "
 ORIGIN = "http://127.0.0.1:8000"
 RFC3339 = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
                      r"(Z|[+-]\d{2}:\d{2})$")
-NAVIGATION = [("/procedures/", "Procedures"),
-              ("/reaction_types/", "Reaction types"), ("/help/", "Help")]
+NAVIGATION = [("/procedures/", "Procedures"), ("/help/", "Help")]
+TABS = [("/procedures/", "All procedures"),
+        ("/reaction_types/", "Reaction types"), ("/tags/", "Tags"),
+        ("/authors/", "Authors")]
 SECTIONS = ["Summary", "Reagents", "Procedure", "Workup and Purification",
             "Characterization", "Notes", "Hazards and Waste Disposal",
             "References"]
@@ -573,11 +575,10 @@ class ShippedSiteTests(SiteCase):
                  "procedures/osdb-0001/index.html": within,
                  "tags/index.html": within,
                  "authors/index.html": within,
+                 "reaction_types/index.html": within,
                  "tags/sample-data/index.html": within,
                  "authors/a.-example/index.html": within,
-                 "reaction_types/index.html": {"/reaction_types/": "page"},
-                 "reaction_types/hydrolysis/index.html": {
-                     "/reaction_types/": "true"},
+                 "reaction_types/hydrolysis/index.html": within,
                  "help/index.html": {"/help/": "page"},
                  "help/schema/index.html": {"/help/": "true"}}
         for name, expected in cases.items():
@@ -588,6 +589,43 @@ class ShippedSiteTests(SiteCase):
                           for l in page.links(nav)
                           if "aria-current" in l.node.attrs}
                 self.assertEqual(marked, expected)
+
+    def listing_pages(self) -> dict[str, dict[str, str]]:
+        """The pages that carry the tabs, with the tabs they mark."""
+        cases = {"procedures/index.html": {"/procedures/": "page"}}
+        for taxonomy in TAXONOMIES:
+            cases[f"{taxonomy}/index.html"] = {f"/{taxonomy}/": "page"}
+            terms = sorted((self.public / taxonomy).glob("*/index.html"))
+            self.assertTrue(terms, f"no {taxonomy} term pages")
+            for path in terms:
+                cases[str(path.relative_to(self.public))] = {
+                    f"/{taxonomy}/": "true"}
+        return cases
+
+    def test_tabs_on_the_listing_pages(self) -> None:
+        """Scenario: Tabs on the listing pages."""
+        for name, expected in self.listing_pages().items():
+            with self.subTest(page=name):
+                page = ps.load_page(self.public, self.public / name)
+                tabs = page.find("main").elements()[0]
+                self.assertEqual((tabs.tag, tabs.classes,
+                                  tabs.attrs.get("aria-label")),
+                                 ("nav", ["section-tabs"], "Procedures"))
+                links = page.links(tabs)
+                self.assertEqual([(l.target, l.node.norm()) for l in links],
+                                 TABS)
+                marked = {l.target: l.node.attrs["aria-current"]
+                          for l in links if "aria-current" in l.node.attrs}
+                self.assertEqual(marked, expected)
+
+    def test_no_tabs_elsewhere(self) -> None:
+        """Scenario: No tabs elsewhere."""
+        listing = set(self.listing_pages())
+        for path, page in self.pages():
+            name = str(path.relative_to(self.public))
+            if name not in listing:
+                with self.subTest(page=name):
+                    self.assertIsNone(page.find("nav", "section-tabs"))
 
     def help_lists(self, page: Page) -> dict[str, Node]:
         """The ul.help-list after each h2 of a help index, by heading."""

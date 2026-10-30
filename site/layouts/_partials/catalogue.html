@@ -17,7 +17,7 @@ data-text-* attributes of div.catalogue. */ -}}
 <p class="catalogue-count" role="status" data-catalogue-count data-filtered="{{ T "catalogue_filtered" }}">{{ if eq $count 1 }}{{ T "catalogue_count_one" }}{{ else }}{{ T "catalogue_count" (dict "Count" (lang.FormatNumber 0 $count)) }}{{ end }}</p>
 </div>
 {{ with $fixed -}}
-<p class="catalogue-scope">{{ T (printf "scope_%s" .) (partial "page-title.html" $page) }} · <a href="/procedures/" data-browse-all>{{ T "browse_all" }}</a> · <a href="/{{ index $plurals . }}/">{{ T (printf "facet_all_%s" .) }}</a></p>
+<p class="catalogue-scope">{{ T (printf "scope_%s" .) (partial "page-title.html" $page) }} · <a href="/procedures/" data-browse-all>{{ T "browse_all" }}</a></p>
 {{ end -}}
 <noscript>
 <p class="catalogue-noscript">{{ T "catalogue_noscript" (dict "reaction_types" "/reaction_types/" "tags" "/tags/" "authors" "/authors/") | safeHTML }}</p>

@@ -12,8 +12,9 @@ The site SHALL be built in one language, named by `locale` in `site/hugo.toml`, 
 
 ### Requirement: Interface strings
 Every text that a layout shows SHALL come from the interface strings of the site's language, `site/i18n/de.toml` or `site/i18n/en.toml`, looked up with `T`; a page of `site/content/` names its title by a `title_key` front-matter value, a key of those files. The two files have the same keys, and every value is a non-empty string. The English strings are the texts that the site-theme, site-catalogue and print-layout specs name; a German site shows the German string in their place. In particular a German site shows:
-- the skip link `Zum Inhalt springen`, the navigation `Vorschriften`, `Reaktionstypen`, `Hilfe` (in a `nav` with `aria-label="Website"`), the header search field labelled `Vorschriften durchsuchen` with the placeholder `Produkt, CAS, SMILES oder Stichwort` and the button `Suchen`, and the footer `OrgSynDB · interne Vorschriften · Stand <time>`;
+- the skip link `Zum Inhalt springen`, the navigation `Vorschriften`, `Hilfe` (in a `nav` with `aria-label="Website"`), the header search field labelled `Vorschriften durchsuchen` with the placeholder `Produkt, CAS, SMILES oder Stichwort` and the button `Suchen`, and the footer `OrgSynDB · interne Vorschriften · Stand <time>`;
 - the page titles `Vorschriften`, `Reaktionstypen`, `Schlagwörter`, `Autoren` and `Hilfe`;
+- the section tabs `Alle Vorschriften`, `Reaktionstypen`, `Schlagwörter` and `Autoren` (in a `nav` with `aria-label="Vorschriften"`);
 - the panel and key-fact labels `Produkt`, `Summenformel`, `Molmasse`, `CAS`, `SMILES`, `Ansatzgröße`, `Ausbeute`, `Reaktionstyp`, `Schlagwörter`, `Autoren`, `Geprüft von`, `Erstellt`, `Geändert`, `Vorstufen`, `Verwendet in`, and the sign-off `von <names>`;
 - the status `Entwurf`, `Geprüft` or `Zurückgezogen` for `draft`, `checked` or `retired`, while the badge class stays `badge--<status>`;
 - the banner `Beispieldaten – Mengenangaben nicht experimentell überprüft.`, the button `Drucken / Als PDF speichern`, the copy button `Kopieren` with the messages `Kopiert` and `Markiert: Strg+C drücken`, and the placeholder `Keine Strukturformel`;
@@ -29,7 +30,7 @@ The site script holds no language: the copy button carries its messages in `data
 
 #### Scenario: German page shell
 - **WHEN** a test scans every HTML page of a build of a copy of the test collection `tests/fixtures/collection/` in locale `de`
-- **THEN** each has `<html lang="de">`, the German skip link, exactly one `nav` in the site header with the German navigation, and the German footer, and `public/de/` and `public/en/` do not exist
+- **THEN** each has `<html lang="de">`, the German skip link, exactly one `nav` in the site header with the German navigation, the German section tabs where the page has them, and the German footer, and `public/de/` and `public/en/` do not exist
 - **AND** every page has the header search with the button `Suchen`, labelled `Vorschriften durchsuchen` everywhere but on the term pages
 
 #### Scenario: German page titles
@@ -43,7 +44,7 @@ The site script holds no language: the copy button carries its messages in `data
 #### Scenario: German catalogue and home page
 - **WHEN** a test reads `public/procedures/index.html`, `public/tags/cinnamate/index.html` and `public/index.html` of that build
 - **THEN** the catalogue's `h1` is `Vorschriften`, its count reads `8 Vorschriften`, its facets, sort and view options, `data-text-*` attributes and `noscript` note carry the German texts, and its status facet reads `Entwurf`, `Geprüft` and `Zurückgezogen`
-- **AND** the term page's scope reads `Nur Vorschriften mit dem Schlagwort cinnamate` with the link `Alle Vorschriften anzeigen`, and its header search field is labelled `Vorschriften mit dem Schlagwort cinnamate durchsuchen` with the placeholder `Diese Vorschriften durchsuchen`
+- **AND** the term page's scope reads `Nur Vorschriften mit dem Schlagwort cinnamate` with the only link `Alle Vorschriften anzeigen`, and its header search field is labelled `Vorschriften mit dem Schlagwort cinnamate durchsuchen` with the placeholder `Diese Vorschriften durchsuchen`
 - **AND** the home page has the German `h1`, headings, entries and links, and, since every German variant has the same `lastmod`, its recent list is OSDB-0001 to OSDB-0005 in ID order
 
 #### Scenario: German catalogue in a browser

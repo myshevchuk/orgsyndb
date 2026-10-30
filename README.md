@@ -201,7 +201,7 @@ The built site provides these pages. Buttons and messages are named below
 as an English site shows them; the German site, the default, shows the
 German equivalents, such as **Kopieren** for **Copy**.
 
-The navigation links **Procedures**, **Reaction types** and **Help**.
+The navigation links **Procedures** and **Help**.
 Every page has a search field in the same place in the header. Except on
 term pages, its placeholder is **Product, CAS, SMILES or keyword** and its
 accessible name is **Search procedures**.
@@ -235,14 +235,21 @@ accessible name is **Search procedures**.
   the note is highlighted on screen. A reference to a missing note stays
   plain text.
 - `/reaction_types/`, `/tags/`, and `/authors/` list the terms in each
-  category with their procedure counts. Each term page is a catalogue
-  limited to that reaction type, tag or author. For example,
+  category with their procedure counts. The catalogue, these directories
+  and every term page open with a row of tabs: **All procedures**,
+  **Reaction types**, **Tags** and **Authors**. The current tab is marked;
+  a term page marks its directory's tab. All these pages mark
+  **Procedures** as the current section in the site navigation.
+  Each term page is a catalogue limited to that reaction type, tag or
+  author. For example,
   `/reaction_types/esterification/`, `/tags/sample-data/`, and
   `/authors/a.-example/` are term-page URLs. Search and filters stay within
-  that term. **Browse all procedures** removes the term restriction and
-  carries your query, other filters, sort and view to `/procedures/`.
-  You can reach the directories from **Browse**, the catalogue filters,
-  or a term page; procedure metadata links to the term pages.
+  that term. The line stating the term restriction links only to
+  **Browse all procedures**, which removes the restriction and carries
+  your query, other filters, sort and view to `/procedures/`.
+  You can reach the directories from the tabs, the home page's **Browse**
+  links or the catalogue filters. On a term page, use its directory's tab
+  to return to the directory. Procedure metadata links to the term pages.
 - `/help/` lists the guides and glossaries from the application's `docs/`
   directory. Each document has a page under `/help/<slug>/`. The index
   prefers the site's language where a document has both versions and links

@@ -1,5 +1,6 @@
 {{- /* The catalogue at /procedures/: every published procedure. */ -}}
 {{ define "main" -}}
+{{ partial "section-tabs.html" . -}}
 {{ partial "catalogue.html" (dict "page" . "pages" (sort .Pages "Params.id") "fixed" "") -}}
 {{ end }}
 {{ define "scripts" }}{{ partial "catalogue-script.html" . }}{{ end }}

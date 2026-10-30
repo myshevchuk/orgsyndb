@@ -31,7 +31,7 @@ body { max-width: none; padding: 0; }
 a { color: #000; text-decoration: none; }
 
 .site-header, .site-footer, .skip-link, .actions, button, .site-search,
-.structure--placeholder { display: none; }
+.section-tabs, .structure--placeholder { display: none; }
 /* A printed catalogue is its list as shown: no facets or toolbar, and the
    Details block only in the Details view. */
 .catalogue-facets, .catalogue-toolbar, .catalogue-message,

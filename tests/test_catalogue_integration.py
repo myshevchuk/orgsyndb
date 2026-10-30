@@ -90,17 +90,13 @@ class PlainCatalogueTests(cs.CatalogueCase):
                 self.check_controls(page, fixed=facet)
                 scope = block.find("p", "catalogue-scope")
                 sentence = texts["scope"][facet].format(term=name)
-                directory = texts["directories"][facet]
-                self.assertEqual(
-                    scope.norm(),
-                    f"{sentence} · {texts['browse_all']} · {directory}")
+                self.assertEqual(scope.norm(),
+                                 f"{sentence} · {texts['browse_all']}")
                 links = page.links(scope)
                 self.assertEqual(
                     [(l.target, l.node.norm()) for l in links],
-                    [("/procedures/", texts["browse_all"]),
-                     (cs.DIRECTORIES[facet], directory)])
+                    [("/procedures/", texts["browse_all"])])
                 self.assertIn("data-browse-all", links[0].node.attrs)
-                self.assertNotIn("data-browse-all", links[1].node.attrs)
                 fixed = page.find("details", "facet", data_facet=facet)
                 self.assertIn("data-fixed", fixed.attrs)
                 self.assertIn("open", fixed.attrs)
