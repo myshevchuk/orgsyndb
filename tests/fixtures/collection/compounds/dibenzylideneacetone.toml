@@ -4,3 +4,7 @@ formula = "C17H14O"
 mw = 234.3
 smiles = "O=C(/C=C/c1ccccc1)/C=C/c1ccccc1"
 cas = "538-58-9"
+item_number = "CH-0013"
+short_name = "dba"
+chemical_class = ["ketones"]
+in_house = true

@@ -19,6 +19,8 @@
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-30 Fri 01:55] -- doc-writer pass line corrected from gpt-6 to the pinned run model
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-30 Fri 08:17] -- Allgemeine Vorschriften, Scope-Tabelle, Reaktionsschemata und Katalog
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-30 Fri 20:32] -- Synthesewege, Seitenlinks, Navigation und Validierung
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-10-31 Sat 11:12] -- Verbindungsfelder der Sammlung und Schlusskommentar der Vorlage
+#+AI_PASS: fact-check claude-opus-5-5 [2026-10-31 Sat 11:30] -- doc-writer pass line corrected from gpt-6 to the pinned run model
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
@@ -158,6 +160,16 @@ bleiben auch in einer deutschen Vorschrift englisch.
   deutschen Website; fehlt es, zeigt diese ~name~. Eine englische Website
   verwendet immer ~name~. Optional sind auch ~cas~, die CAS-Registriernummer,
   und ~structure_image~.
+
+  Prüfen Sie die ~orgsyndb.toml~ Ihrer Sammlung auf weitere Felder unter
+  ~[[fields.compound]]~. Bei ~required = true~ muss jede Verbindung das
+  Feld setzen. Tragen Sie die deklarierten Felder beim Schlusskommentar der
+  Vorlage als weitere Zeilen ~key = value~ in der Verbindungsdatei ein.
+  Die [[file:../examples/demo/orgsyndb.toml][Einstellungen der Beispielsammlung]] verlangen ~item_number~ und
+  ~chemical_class~: Wählen Sie eine noch nicht vergebene Artikelnummer aus
+  ~CH-~ und vier Ziffern und eine nicht leere Liste von Wertschlüsseln aus
+  [[file:../examples/demo/vocabularies/chemical-classes.toml][vocabularies/chemical-classes.toml]]. Die
+  [[file:SCHEMA.de.md][Schema-Referenz]] nennt Feldtypen, Regeln und Validatormeldungen.
 
   Für ein Strukturbild legen Sie eine SVG- oder PNG-Datei in
   ~static/structures/~ der Sammlung ab. Setzen Sie ~structure_image~ in der

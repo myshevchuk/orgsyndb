@@ -101,6 +101,22 @@ class CompoundTemplateTests(ValidatorTestCase):
     REQUIRED = ["name", "formula", "mw", "smiles"]
     OPTIONAL = ["name_de", "cas", "structure_image"]
 
+    def test_template_ends_with_a_note_on_declared_fields(self) -> None:
+        """Scenario: Template validates (the closing comment names
+        orgsyndb.toml)."""
+        lines = read_template(COMPOUND_TEMPLATE).rstrip("\n").split("\n")
+        self.assertTrue(lines[-1].startswith("#"),
+                        "the template does not end with a comment line")
+        block = []
+        for line in reversed(lines):
+            if not line.startswith("#"):
+                break
+            block.append(line)
+        text = " ".join(reversed(block))
+        self.assertIn("orgsyndb.toml", text)
+        self.assertNotIn("structure_image", text,
+                         "the closing block is the structure_image one")
+
     def test_template_validates_as_a_registry_file(self) -> None:
         """Scenario: Template validates."""
         read_template(COMPOUND_TEMPLATE)

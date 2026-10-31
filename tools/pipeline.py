@@ -2,7 +2,8 @@
 
 The Org source names the export needs, the recoverable replacement of
 ``build/export/``, next-ID allocation, slugs, template filling, the Hugo
-overlay, PDF jobs and the Pagefind download. File discovery comes from
+overlay, the site's field data, PDF jobs and the Pagefind download.
+File discovery and the reading of the collection settings come from
 ``validate.py`` in the same directory. No Org source is read here: of
 ``org/procedures/`` only the entry names are, and Emacs examines and
 exports the sources. Messages printed to stderr name the program
@@ -43,6 +44,8 @@ PREVIOUS = ".export-previous"
 STAGED = Path("content") / "procedures"
 SEQUENCES_STAGED = Path("content") / "sequences"
 HELP_STAGED = Path("content") / "help"
+# The field data Hugo reads as site.Data.collection.fields, under build/.
+FIELDS_STAGED = Path("data") / "fields.json"
 
 PAGEFIND_VERSION = "1.5.2"
 PAGEFIND_TARBALL = (f"pagefind-v{PAGEFIND_VERSION}-x86_64-unknown-linux-"
@@ -803,19 +806,66 @@ def stage_help(docs: Path, target: Path) -> int:
     return len(staged)
 
 
+def fields_data(settings: Path, language: str) -> dict[str, Any]:
+    """Return the field data that the site reads for the collection whose
+    settings file is SETTINGS, in the site's LANGUAGE.
+
+    The result is a table whose one key, ``compound``, lists a table per
+    declared compound field, in declared order: its ``key``, ``type``
+    and ``column``; its ``label`` as LANGUAGE shows it; the ``unit`` of
+    a number field that declares one; and for a choice field
+    ``multiple`` and ``values``, which maps every value of the field's
+    vocabulary to its shown ``label`` and its ``path``, the shown labels
+    of its ancestors, outermost first, then its own. A German label
+    replaces the English one on a German site where one is given. A
+    SETTINGS that does not exist gives ``{"compound": []}``. Raises
+    ``validate.ConfigError`` when the declarations or their
+    vocabularies break a rule of ``validate.load_fields``.
+    """
+    def shown(label: str, label_de: str | None) -> str:
+        return label_de if language == "de" and label_de else label
+
+    def path(terms: dict[str, validate.Term], value: str) -> list[str]:
+        labels = []
+        current: str | None = value
+        while current is not None:
+            labels.insert(0, shown(terms[current].label,
+                                   terms[current].label_de))
+            current = terms[current].parent
+        return labels
+
+    compound = []
+    for field in validate.load_fields(Path(settings), must_exist=False):
+        entry: dict[str, Any] = {
+            "key": field.key, "type": field.type,
+            "label": shown(field.label, field.label_de),
+            "column": field.column}
+        if field.unit is not None:
+            entry["unit"] = field.unit
+        if field.type == "choice":
+            entry["multiple"] = field.multiple
+            entry["values"] = {
+                value: {"label": shown(term.label, term.label_de),
+                        "path": path(field.terms, value)}
+                for value, term in field.terms.items()}
+        compound.append(entry)
+    return {"compound": compound}
+
+
 def hugo_overlay(site: Path, collection: Path, language: str) -> str:
     """Return the Hugo configuration overlay for building ``collection``.
 
     ``site`` is the application's Hugo project and ``collection`` the
     collection directory, both absolute; ``language`` is the site's
     language. The overlay sets ``defaultContentLanguage`` to it, the
-    publish and resource directories inside the collection, and seven
+    publish and resource directories inside the collection, and eight
     module mounts: the application's pages, the staged procedures of
     ``build/content/procedures/``, the staged help pages of
     ``build/content/help/``, the collection's static files, the
     application's data, the collection's ``compounds/`` as the data
-    entry ``compounds``, and the staged sequences of
-    ``build/content/sequences/``.
+    entry ``compounds``, the staged sequences of
+    ``build/content/sequences/``, and the staged ``build/data/`` as the
+    data entry ``collection``.
     """
     site, collection = Path(site), Path(collection)
 
@@ -837,7 +887,9 @@ def hugo_overlay(site: Path, collection: Path, language: str) -> str:
             + mount(site / "data", "data")
             + mount(collection / "compounds", "data/compounds")
             + mount(collection / "build" / SEQUENCES_STAGED,
-                    "content/sequences", "/SEQ-*.md"))
+                    "content/sequences", "/SEQ-*.md")
+            + mount(collection / "build" / FIELDS_STAGED.parent,
+                    "data/collection"))
 
 
 # --------------------------------------------------------------------------

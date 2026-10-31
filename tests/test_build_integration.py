@@ -388,6 +388,58 @@ class ValidateSequenceTests(BuildTestCase):
         self.assertEqual(snapshot(self.public()), before)
 
 
+class FieldDataStagingTests(BuildTestCase):
+    def fields_json(self) -> dict:
+        path = self.sandbox.root / "build" / "data" / "fields.json"
+        self.assertTrue(path.is_file(), "build/data/fields.json is missing")
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def expected(self) -> dict:
+        language = ps.pipeline().site_language(self.sandbox.app / "site")
+        return ps.pipeline_function("fields_data")(
+            self.sandbox.root / "orgsyndb.toml", language)
+
+    def test_field_data_is_staged(self) -> None:
+        """Scenario: Field data is staged."""
+        self.assert_ok(self.build("build"))
+        data = self.fields_json()
+        self.assertEqual(data, self.expected())
+        self.assertEqual(
+            [f["key"] for f in data["compound"]],
+            ["item_number", "short_name", "chemical_class", "stock",
+             "in_house"])
+        self.assertEqual(data["compound"][0]["label"], "Artikelnr.")
+
+    def test_a_second_build_stages_the_changed_declarations(self) -> None:
+        """Requirement: build subcommand (the field data is written on
+        every build)."""
+        self.assert_ok(self.build("build"))
+        path = self.sandbox.root / "orgsyndb.toml"
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count('label_de = "Kurzname"'), 1)
+        path.write_text(text.replace('label_de = "Kurzname"',
+                                     'label_de = "Kurzbezeichnung"'),
+                        encoding="utf-8")
+        self.assert_ok(self.build("build"))
+        data = self.fields_json()
+        self.assertEqual(data, self.expected())
+        self.assertEqual(data["compound"][1]["label"], "Kurzbezeichnung")
+
+    def test_a_declaration_error_stops_the_build_before_staging(
+            self) -> None:
+        """Requirement: build subcommand (validation precedes the
+        staging)."""
+        path = self.sandbox.root / "orgsyndb.toml"
+        text = path.read_text(encoding="utf-8")
+        path.write_text(text.replace('type = "number"', 'type = "date"'),
+                        encoding="utf-8")
+        result = self.build("build")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("validate.py: error:", result.stderr)
+        self.assertFalse((self.sandbox.root / "build" / "data").exists())
+        self.assertFalse((self.sandbox.root / "public").exists())
+
+
 class ShippedTreeValidationTests(DemoBuildTestCase):
     def test_shipped_tree_validates_without_any_problem_line(self) -> None:
         """Scenario: Clean validation of the shipped tree."""

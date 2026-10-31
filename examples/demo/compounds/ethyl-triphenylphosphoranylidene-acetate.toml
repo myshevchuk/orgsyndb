@@ -4,3 +4,7 @@ formula = "C22H21O2P"
 mw = 348.38
 smiles = "CCOC(=O)C=P(c1ccccc1)(c1ccccc1)c1ccccc1"
 cas = "1099-45-2"
+item_number = "CH-0015"
+chemical_class = ["organophosphorus-compounds", "esters"]
+stock = 12.5
+in_house = false

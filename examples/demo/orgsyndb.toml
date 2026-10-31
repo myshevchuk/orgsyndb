@@ -1,3 +1,43 @@
 # OrgSynDB collection: procedures in org/procedures/ and
 # md/procedures/, static files in static/. See the OrgSynDB README.
 format = 1
+
+[[fields.compound]]
+key = "item_number"
+type = "text"
+label = "Item no."
+label_de = "Artikelnr."
+required = true
+unique = true
+pattern = 'CH-\d{4}'
+column = true
+
+[[fields.compound]]
+key = "short_name"
+type = "text"
+label = "Short name"
+label_de = "Kurzname"
+
+[[fields.compound]]
+key = "chemical_class"
+type = "choice"
+label = "Chemical class"
+label_de = "Stoffklasse"
+vocabulary = "chemical-classes"
+required = true
+multiple = true
+column = true
+
+[[fields.compound]]
+key = "stock"
+type = "number"
+label = "Stock"
+label_de = "Bestand"
+unit = "g"
+min = 0
+
+[[fields.compound]]
+key = "in_house"
+type = "boolean"
+label = "Made in house"
+label_de = "Eigene Herstellung"

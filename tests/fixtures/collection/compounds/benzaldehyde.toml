@@ -4,3 +4,7 @@ formula = "C7H6O"
 mw = 106.12
 smiles = "O=Cc1ccccc1"
 cas = "100-52-7"
+item_number = "CH-0011"
+chemical_class = ["aldehydes"]
+stock = 500
+in_house = false

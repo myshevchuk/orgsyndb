@@ -131,6 +131,17 @@ You may also add `cas`, the CAS Registry Number, and `structure_image`.
 Keep text in quotes and molecular weight as a positive number without
 quotes. Compound files contain no `+++` lines or `[product]` heading.
 
+Check your collection's `orgsyndb.toml` for further fields under
+`[[fields.compound]]`. A declaration with `required = true` means every
+compound must supply that field. At the template's closing note, add the
+declared fields as further `key = value` lines in the compound file. The
+[demo settings](../examples/demo/orgsyndb.toml) require `item_number` and
+`chemical_class`: choose an unused item number with `CH-` followed by four
+digits and a non-empty list of value keys from
+[`vocabularies/chemical-classes.toml`](../examples/demo/vocabularies/chemical-classes.toml).
+The [field reference](SCHEMA.md#collection-field-declarations) gives the
+types, rules and validator messages.
+
 To show a structure, place an SVG or PNG file in the collection's
 `static/structures/` and set `structure_image` in the compound file, for
 example `structure_image = "structures/isopentyl-acetate.svg"` for

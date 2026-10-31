@@ -1,12 +1,17 @@
 {{- /* The compound directory at /compounds/: one table row per entry of
 the registry, ordered by shown name, with a link to the compound's page,
 the formula (each digit run in <sub>), the weight, the CAS number or an
-empty cell, and the numbers of published procedures that make the
-compound and that use it as a substrate, over every entry of a general
-procedure, each procedure counted once. It needs no script. */ -}}
+empty cell, one cell for each declared field with column = true, in
+declared order, holding the entry's value as field-value.html writes it
+for the directory or nothing when the entry does not set it, and the
+numbers of published procedures that make the compound and that use it
+as a substrate, over every entry of a general procedure, each procedure
+counted once. The header and body cells of a number field carry the
+class num. It needs no script. */ -}}
 {{ define "main" -}}
 <h1>{{ partial "page-title.html" . }}</h1>
 {{ $procedures := where site.RegularPages "Section" "procedures" -}}
+{{ $columns := where site.Data.collection.fields.compound "column" true -}}
 {{ $rows := slice -}}
 {{ range $key, $compound := site.Data.compounds -}}
 {{ $made := 0 -}}
@@ -23,17 +28,23 @@ procedure, each procedure counted once. It needs no script. */ -}}
 <th scope="col">{{ T "label_formula" }}</th>
 <th scope="col" class="num">{{ T "label_mw" }}</th>
 <th scope="col">{{ T "label_cas" }}</th>
+{{ range $columns -}}
+<th scope="col"{{ if eq .type "number" }} class="num"{{ end }}>{{ .label }}</th>
+{{ end -}}
 <th scope="col" class="num">{{ T "label_made_by" }}</th>
 <th scope="col" class="num">{{ T "label_used_in" }}</th>
 </tr>
 </thead>
 <tbody>
-{{ range sort $rows "name" -}}
+{{ range $row := sort $rows "name" -}}
 <tr>
 <td><a href="/compounds/{{ .key }}/">{{ .name }}</a></td>
 <td>{{ .compound.formula | htmlEscape | replaceRE "([0-9]+)" "<sub>$1</sub>" | safeHTML }}</td>
 <td class="num">{{ partial "decimal.html" .compound.mw }} g/mol</td>
 <td>{{ .compound.cas }}</td>
+{{ range $columns -}}
+<td{{ if eq .type "number" }} class="num"{{ end }}>{{ if isset $row.compound .key }}{{ partial "field-value.html" (dict "field" . "value" (index $row.compound .key) "page" false) }}{{ end }}</td>
+{{ end -}}
 <td class="num">{{ lang.FormatNumber 0 .made }}</td>
 <td class="num">{{ lang.FormatNumber 0 .used }}</td>
 </tr>

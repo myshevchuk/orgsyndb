@@ -5,3 +5,6 @@ mw = 130.19
 smiles = "CC(C)CCOC(C)=O"
 cas = "123-92-2"
 structure_image = "structures/isopentyl-acetate.svg"
+item_number = "CH-0016"
+chemical_class = ["esters"]
+in_house = true

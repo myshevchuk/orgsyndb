@@ -578,11 +578,11 @@ class CollectionGeneralProcedureTests(ValidatorTestCase):
                 self.assertTrue(path.is_file(), f"{path.name} is missing")
                 text = path.read_text(encoding="utf-8")
                 data = tomllib.loads(text)
-                self.assertEqual(list(data), keys)
-                self.assertEqual(list(data.values()), values)
+                self.assertEqual(list(data)[:len(keys)], keys)
+                self.assertEqual(list(data.values())[:len(keys)], values)
                 self.assertEqual(
-                    [line.split(" = ")[0] for line in text.splitlines()],
-                    keys)
+                    [line.split(" = ")[0]
+                     for line in text.splitlines()][:len(keys)], keys)
 
     def test_the_scheme_image_is_part_of_the_collection(self) -> None:
         """Harness: the scheme image exists in the test collection."""
@@ -607,6 +607,7 @@ class CollectionGeneralProcedureTests(ValidatorTestCase):
         """Harness: the collection's procedures and compounds are valid."""
         result = support.run_validator([
             "--vocabulary", REPO / "site" / "data" / "reaction_types.toml",
+            "--settings", TEST_COLLECTION / "orgsyndb.toml",
             "--static-dir", TEST_COLLECTION / "static",
             "--compounds", TEST_COLLECTION / "compounds",
             TEST_COLLECTION / "md" / "procedures"])

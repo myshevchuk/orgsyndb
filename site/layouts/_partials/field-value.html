@@ -1,0 +1,26 @@
+{{- /* A compound's value of one declared field as plain text in the
+current language: a text as it is; a number with the language's decimal
+separator (decimal.html), followed by a space and the field's unit when
+it declares one; a boolean as Yes or No; a choice as each value's path,
+its labels joined by " › ", when page is true, else as each value's own
+label, several values joined by ", " in the compound's order. Takes a
+dict of field, an entry of site.Data.collection.fields.compound, value
+and page. Returns a string, so that the caller escapes it once. */ -}}
+{{- $field := .field -}}
+{{- $text := "" -}}
+{{- if eq $field.type "text" -}}
+{{- $text = .value -}}
+{{- else if eq $field.type "number" -}}
+{{- $text = string (partial "decimal.html" .value) -}}
+{{- with $field.unit }}{{ $text = printf "%s %s" $text . }}{{ end -}}
+{{- else if eq $field.type "boolean" -}}
+{{- $text = cond .value (T "boolean_yes") (T "boolean_no") -}}
+{{- else -}}
+{{- $parts := slice -}}
+{{- range cond $field.multiple .value (slice .value) -}}
+{{- $entry := index $field.values . -}}
+{{- $parts = $parts | append (cond $.page (delimit $entry.path " › ") $entry.label) -}}
+{{- end -}}
+{{- $text = delimit $parts ", " -}}
+{{- end -}}
+{{- return (string $text) -}}

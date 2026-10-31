@@ -23,6 +23,8 @@
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-30 Fri 01:55] -- doc-writer pass line corrected from gpt-6 to the pinned run model
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-30 Fri 08:17] -- general procedures, scope table, scheme images and catalogue
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-30 Fri 20:32] -- synthesis sequences, page links, navigation and validation
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-10-31 Sat 11:12] -- collection compound fields and the template's closing note
+#+AI_PASS: fact-check claude-opus-5-5 [2026-10-31 Sat 11:30] -- doc-writer pass line corrected from gpt-6 to the pinned run model
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -139,6 +141,15 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   The optional ~name_de~ supplies the name on a German site; without it,
   that site uses ~name~. An English site always uses ~name~. You may also
   add ~cas~, the CAS Registry Number, and ~structure_image~.
+
+  Check your collection's ~orgsyndb.toml~ for further fields under
+  ~[[fields.compound]]~. A declaration with ~required = true~ means every
+  compound must supply that field. At the template's closing note, add the
+  declared fields as further ~key = value~ lines in the compound file. The
+  [[file:../examples/demo/orgsyndb.toml][demo settings]] require ~item_number~ and ~chemical_class~: choose an
+  unused item number with ~CH-~ followed by four digits and a non-empty list
+  of value keys from [[file:../examples/demo/vocabularies/chemical-classes.toml][vocabularies/chemical-classes.toml]]. The
+  [[file:SCHEMA.md][schema reference]] gives the field types, rules and validator messages.
 
   To show a structure, place an SVG or PNG file in the collection's
   ~static/structures/~. Set ~structure_image~ in the compound file, for

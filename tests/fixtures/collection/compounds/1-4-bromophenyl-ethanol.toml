@@ -4,3 +4,6 @@ formula = "C8H9BrO"
 mw = 201.06
 smiles = "CC(O)c1ccc(Br)cc1"
 cas = "5391-88-8"
+item_number = "CH-0001"
+chemical_class = ["alcohols", "aryl-halides"]
+in_house = true

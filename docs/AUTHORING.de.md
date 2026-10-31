@@ -162,6 +162,18 @@ Anführungszeichen, die Molmasse als positive Zahl ohne Anführungszeichen
 und mit Dezimalpunkt. Verbindungsdateien enthalten weder `+++`-Zeilen noch
 eine Überschrift `[product]`.
 
+Prüfen Sie die `orgsyndb.toml` Ihrer Sammlung auf weitere Felder unter
+`[[fields.compound]]`. Bei `required = true` muss jede Verbindung das
+Feld setzen. Tragen Sie die deklarierten Felder beim Schlusskommentar der
+Vorlage als weitere Zeilen `key = value` in der Verbindungsdatei ein. Die
+[Einstellungen der Beispielsammlung](../examples/demo/orgsyndb.toml)
+verlangen `item_number` und `chemical_class`: Wählen Sie eine noch nicht
+vergebene Artikelnummer aus `CH-` und vier Ziffern und eine nicht leere
+Liste von Wertschlüsseln aus
+[`vocabularies/chemical-classes.toml`](../examples/demo/vocabularies/chemical-classes.toml).
+Die [Feldreferenz](SCHEMA.de.md#felddeklarationen-der-sammlung) nennt
+Typen, Regeln und Validatormeldungen.
+
 Für ein Strukturbild legen Sie eine SVG- oder PNG-Datei in
 `static/structures/` der Sammlung ab. Setzen Sie `structure_image` in der
 Verbindungsdatei, etwa `structure_image = "structures/isopentyl-acetate.svg"`

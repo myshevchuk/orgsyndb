@@ -4,3 +4,7 @@ formula = "C8H7BrO"
 mw = 199.05
 smiles = "CC(=O)c1ccc(Br)cc1"
 cas = "99-90-1"
+item_number = "CH-0005"
+chemical_class = ["aryl-ketones", "aryl-halides"]
+stock = 100
+in_house = false

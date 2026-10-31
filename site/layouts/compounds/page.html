@@ -1,7 +1,8 @@
 {{- /* A compound page, made by content/compounds/_content.gotmpl for one
 entry of the registry, whose key is the compound parameter: the shown
 name; the structure figure when the entry sets structure_image; the
-facts (compound-facts.html); and, each only when it has an entry, the
+facts (compound-facts.html), followed by the declared fields the entry
+sets (compound-fields.html); and, each only when it has an entry, the
 published procedures that make the compound, with its yield in each, and
 those that use it as a substrate (substrate-keys.html), both by ID with
 their status badges, and the published sequences whose target it is, by
@@ -20,6 +21,7 @@ procedures only. */ -}}
 {{ end -}}
 <dl class="compound-facts">
 {{ partial "compound-facts.html" $compound -}}
+{{ partial "compound-fields.html" $compound -}}
 </dl>
 {{ $made := slice -}}
 {{ range $page := $procedures -}}

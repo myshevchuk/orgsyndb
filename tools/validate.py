@@ -12,7 +12,10 @@ validator checks each of them and resolves the compound keys that
 procedures name against the compounds it defines. The sequences
 directory holds synthesis sequences, Markdown files whose steps name
 procedures of the content roots; the validator checks that each step
-exists and that the steps chain. The validator reads no Org source: an
+exists and that the steps chain. The collection's settings file
+declares further compound fields, whose values each compound file is
+checked against, and names the vocabularies of its choice fields. The
+validator reads no Org source: an
 Org procedure reaches it only as its export, and the export checks the
 Org source itself. Each problem is printed to stdout
 as ``<path>:<field>: <severity>: <message>``, followed by a summary line
@@ -40,6 +43,7 @@ DEFAULT_VOCABULARY = APP / "site" / "data" / "reaction_types.toml"
 DEFAULT_STATIC_DIR = Path("static")
 DEFAULT_COMPOUNDS = Path("compounds")
 DEFAULT_SEQUENCES = Path("md") / "sequences"
+DEFAULT_SETTINGS = Path("orgsyndb.toml")
 ZONE_NAME = "Europe/Berlin"
 
 SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -48,6 +52,22 @@ COMPOUND_FILE_RE = re.compile(r"^([a-z0-9]+(?:-[a-z0-9]+)*)\.toml$")
 SCALE_RE = re.compile(r"^\d+([.,]\d+)?\s+\S+$")
 TIME_RE = re.compile(r"\d+([.,]\d+)?\s+(min|h|d)")
 CAS_RE = re.compile(r"^(\d{2,7})-(\d{2})-(\d)$")
+# The collection settings file: the format it is written in, and its
+# top-level keys.
+SETTINGS_FORMAT = 1
+SETTINGS_KEYS = ("format", "fields")
+FIELD_KEY_RE = re.compile(r"^[a-z][a-z0-9]*(_[a-z0-9]+)*$")
+FIELD_TYPES = ("text", "number", "boolean", "choice")
+# The keys of a field declaration: those every type takes, and those
+# only the named type takes.
+FIELD_OPTIONS = ("key", "type", "label", "label_de", "required", "column")
+TYPE_OPTIONS = {
+    "text": ("pattern", "unique"),
+    "number": ("min", "max", "unit", "unique"),
+    "boolean": (),
+    "choice": ("vocabulary", "multiple"),
+}
+TERM_KEYS = ("label", "label_de", "parent")
 STATUSES = ("draft", "checked", "retired")
 # The languages a procedure may be written in. A file name may carry one
 # of them before its suffix, as in OSDB-0001-x.de.md; the files of one ID
@@ -237,6 +257,7 @@ class Context:
     static_dir: Path
     zone: dt.tzinfo
     compounds: frozenset[str] = frozenset()
+    fields: tuple[Declaration, ...] = ()
 
 
 def check_string(name: str, value: object) -> list[Problem]:
@@ -1003,12 +1024,160 @@ def check_cas(value: object) -> list[Problem]:
     return []
 
 
-def check_compound(data: dict[str, Any], static_dir: Path) -> list[Problem]:
+class Term(NamedTuple):
+    """One value of a collection vocabulary.
+
+    ``label`` is the value's name on an English site and ``label_de``
+    its name on a German site, or None when the vocabulary gives none.
+    ``parent`` is the value it is filed under, or None for a top-level
+    value.
+    """
+
+    label: str
+    label_de: str | None
+    parent: str | None
+
+
+class Declaration(NamedTuple):
+    """A compound field that a collection declares, its defaults applied.
+
+    ``type`` is one of FIELD_TYPES. An option the type does not take
+    holds None, or False for a boolean option: ``pattern`` and
+    ``unique`` belong to a text field, ``minimum``, ``maximum``,
+    ``unit`` and ``unique`` to a number field, and ``vocabulary``,
+    ``multiple`` and ``terms`` to a choice field. ``pattern`` is
+    compiled; ``terms`` maps every value of the field's vocabulary, in
+    file order, to its entry.
+    """
+
+    key: str
+    type: str
+    label: str
+    label_de: str | None
+    required: bool
+    column: bool
+    unique: bool
+    pattern: re.Pattern[str] | None
+    minimum: int | float | None
+    maximum: int | float | None
+    unit: str | None
+    vocabulary: str | None
+    multiple: bool
+    terms: dict[str, Term]
+
+
+def check_choice(field: Declaration, value: object) -> list[Problem]:
+    """Check VALUE of the choice FIELD against the field's vocabulary.
+
+    A field declared ``multiple`` takes a non-empty list of strings,
+    any other a string. Each distinct string outside the vocabulary
+    draws one ``unknown value`` error, in list order, and each value
+    the list repeats one ``repeats`` error.
+    """
+    name = field.key
+    source = f"vocabularies/{field.vocabulary}.toml"
+
+    def unknown(entry: str) -> Problem:
+        return error(name, f'unknown value "{entry}"; see {source} for '
+                     "the allowed values")
+
+    if not field.multiple:
+        if not isinstance(value, str):
+            return [error(name, "must be a string")]
+        return [] if value in field.terms else [unknown(value)]
+    if not is_string_list(value):
+        return [error(name, "must be a list of strings, e.g. "
+                      f'["{next(iter(field.terms))}"]')]
+    if not value:
+        return [error(name, "must not be empty")]
+    found = [unknown(entry) for entry in dict.fromkeys(value)
+             if entry not in field.terms]
+    return found + [error(name, f'repeats "{entry}"')
+                    for entry in repeated(value)]
+
+
+def check_field_value(field: Declaration, value: object) -> list[Problem]:
+    """Check VALUE, set by a compound file, against the declared FIELD.
+
+    Problems are reported under the field's key. A value of the wrong
+    type draws that one error and no other.
+    """
+    name = field.key
+    match field.type:
+        case "text":
+            found = check_string(name, value)
+            if (not found and field.pattern is not None
+                    and not field.pattern.fullmatch(value)):
+                found.append(error(name, "must match the pattern "
+                                   f"{field.pattern.pattern}"))
+            return found
+        case "number":
+            if not is_number(value) or not math.isfinite(value):
+                return [error(name, "must be a number, unquoted")]
+            if field.minimum is not None and value < field.minimum:
+                return [error(name, f"must be at least {field.minimum}")]
+            if field.maximum is not None and value > field.maximum:
+                return [error(name, f"must be at most {field.maximum}")]
+            return []
+        case "boolean":
+            if not isinstance(value, bool):
+                return [error(name, "must be true or false, unquoted")]
+            return []
+        case _:
+            return check_choice(field, value)
+
+
+def check_declared(data: dict[str, Any],
+                   fields: Iterable[Declaration]) -> list[Problem]:
+    """Check the values that the parsed compound file DATA sets for the
+    declared FIELDS; a missing value is an error only for a field
+    declared ``required``."""
+    found: list[Problem] = []
+    for field in fields:
+        if field.key in data:
+            found += check_field_value(field, data[field.key])
+        elif field.required:
+            found.append(error(field.key, "required field missing"))
+    return found
+
+
+def check_unique(fields: Iterable[Declaration],
+                 parsed: Sequence[tuple[str, str, dict[str, Any]]]
+                 ) -> list[tuple[str, Problem]]:
+    """Compare the values of the FIELDS declared ``unique`` across the
+    compound files PARSED, each given as its path, its key and its
+    table.
+
+    Only a value that passes the checks of its field is compared. Each
+    file that sets a value some other file also sets gets an error,
+    with its path, that names the keys of the other compounds.
+    """
+    problems: list[tuple[str, Problem]] = []
+    for field in fields:
+        if not field.unique:
+            continue
+        holders: dict[object, list[tuple[str, str]]] = {}
+        for path, key, data in parsed:
+            if (field.key in data
+                    and not check_field_value(field, data[field.key])):
+                holders.setdefault(data[field.key], []).append((path, key))
+        for value, owners in holders.items():
+            shown = f'"{value}"' if isinstance(value, str) else str(value)
+            for path, key in owners if len(owners) > 1 else ():
+                others = ", ".join(k for _, k in owners if k != key)
+                problems.append((path, error(
+                    field.key, f"{shown} is also set by {others}")))
+    return problems
+
+
+def check_compound(data: dict[str, Any], static_dir: Path,
+                   fields: Sequence[Declaration] = ()) -> list[Problem]:
     """Check the keys of one parsed compound file.
 
     Problems are reported under the key's name. ``structure_image`` is
-    resolved against ``static_dir``. Keys outside the compound schema
-    are warnings.
+    resolved against ``static_dir``. The keys of the declared FIELDS are
+    checked against their declarations; any other key outside the
+    compound schema is a warning.
     """
     found: list[Problem] = []
     for key in COMPOUND_REQUIRED_KEYS:
@@ -1028,8 +1197,11 @@ def check_compound(data: dict[str, Any], static_dir: Path) -> list[Problem]:
                 found += check_cas(data[key])
             case "structure_image":
                 found += check_structure_image(data[key], static_dir)
+    found += check_declared(data, fields)
+    declared = {field.key for field in fields}
     for key in data:
-        if key not in COMPOUND_REQUIRED_KEYS + COMPOUND_OPTIONAL_KEYS:
+        if (key not in COMPOUND_REQUIRED_KEYS + COMPOUND_OPTIONAL_KEYS
+                and key not in declared):
             found.append(warning(key, "unknown field"))
     return found
 
@@ -1059,20 +1231,24 @@ class Registry(NamedTuple):
     files: int
 
 
-def examine_registry(registry: str, static_dir: Path) -> Registry:
+def examine_registry(registry: str, static_dir: Path,
+                     fields: Sequence[Declaration] = ()) -> Registry:
     """Check every compound file of the directory ``registry``.
 
-    Returns the keys of the compounds the registry defines, the problems
-    found, each with the path ``registry`` joined with the entry name,
-    and the number of compound files examined. A file whose name begins
-    with ``.`` is skipped; a subdirectory, or any other file not named
-    ``<key>.toml``, is a ``file_name`` error and defines no compound,
-    and so does a file that does not parse. A ``registry`` that does not
-    exist defines no compound and draws no problem.
+    Each file is checked against the compound schema and the declared
+    FIELDS, and the values of the fields declared ``unique`` are
+    compared across the files. Returns the keys of the compounds the
+    registry defines, the problems found, each with the path
+    ``registry`` joined with the entry name, and the number of compound
+    files examined. A file whose name begins with ``.`` is skipped; a
+    subdirectory, or any other file not named ``<key>.toml``, is a
+    ``file_name`` error and defines no compound, and so does a file that
+    does not parse. A ``registry`` that does not exist defines no
+    compound and draws no problem.
     """
     if not os.path.isdir(registry):
         return Registry(frozenset(), [], 0)
-    keys: set[str] = set()
+    parsed: list[tuple[str, str, dict[str, Any]]] = []
     problems: list[tuple[str, Problem]] = []
     files = 0
     for name in sorted(os.listdir(registry)):
@@ -1094,9 +1270,11 @@ def examine_registry(registry: str, static_dir: Path) -> Registry:
             if isinstance(data, Problem):
                 problems.append((path, data))
                 continue
-            keys.add(match.group(1))
-            problems += [(path, p) for p in check_compound(data, static_dir)]
-    return Registry(frozenset(keys), problems, files)
+            parsed.append((path, match.group(1), data))
+            problems += [(path, p)
+                         for p in check_compound(data, static_dir, fields)]
+    problems += check_unique(fields, parsed)
+    return Registry(frozenset(key for _, key, _ in parsed), problems, files)
 
 
 # --------------------------------------------------------------------------
@@ -1392,6 +1570,267 @@ def load_vocabulary(path: Path) -> frozenset[str]:
     return frozenset(data)
 
 
+def read_config(path: Path) -> dict[str, Any]:
+    """Read and parse the configuration file PATH as UTF-8 TOML.
+
+    Raises ConfigError, its message beginning with PATH, when the file
+    does not exist, cannot be read, is not UTF-8 or is not valid TOML.
+    """
+    try:
+        return tomllib.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise ConfigError(f"{path}: file not found") from None
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ConfigError(f"{path}: cannot read it: {exc}") from None
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError(f"{path}: not valid TOML: {exc}") from None
+
+
+def read_settings(path: Path) -> dict[str, Any]:
+    """Read the collection settings file PATH and return its table.
+
+    The file must parse as TOML to a table holding ``format``, the
+    integer SETTINGS_FORMAT, and no top-level key outside SETTINGS_KEYS.
+    Nothing inside ``fields`` is checked. Raises ConfigError, its
+    message beginning with PATH, when the file breaks any of this or
+    cannot be read as UTF-8 TOML.
+    """
+    data = read_config(path)
+    unknown = sorted(set(data) - set(SETTINGS_KEYS))
+    if unknown:
+        raise ConfigError(f"{path}: unknown key {', '.join(unknown)}; only "
+                          f"{' and '.join(SETTINGS_KEYS)} are allowed")
+    value = data.get("format")
+    if type(value) is not int or value != SETTINGS_FORMAT:
+        shown = "missing" if value is None else repr(value)
+        raise ConfigError(f"{path}: format is {shown}; this OrgSynDB reads "
+                          f"format = {SETTINGS_FORMAT}")
+    return data
+
+
+def load_terms(path: Path) -> dict[str, Term]:
+    """Load the collection vocabulary PATH and return its values, in file
+    order, each with its entry.
+
+    Raises ConfigError, its message beginning with PATH, when the file
+    cannot be read as UTF-8 TOML, holds no value, or breaks a rule of a
+    vocabulary: every value a lowercase hyphenated slug whose entry is a
+    table with a non-empty string ``label``, an optional non-empty
+    string ``label_de`` and an optional ``parent`` that is another value
+    of the file, no other key, and no value its own ancestor.
+    """
+    data = read_config(path)
+    if not data:
+        raise ConfigError(f"{path}: the vocabulary has no value")
+    terms: dict[str, Term] = {}
+    for value, entry in data.items():
+        where = f"{path}: value {value!r}"
+        if not SLUG_RE.match(value):
+            raise ConfigError(f"{where} is not a lowercase hyphenated "
+                              "slug")
+        label = entry.get("label") if isinstance(entry, dict) else None
+        if not isinstance(label, str) or not label.strip():
+            raise ConfigError(f"{where} must be a table with a non-empty "
+                              "label")
+        unknown = sorted(set(entry) - set(TERM_KEYS))
+        if unknown:
+            raise ConfigError(f"{where} holds the unknown key "
+                              f"{', '.join(unknown)}; only "
+                              f"{', '.join(TERM_KEYS)} are allowed")
+        label_de = entry.get("label_de")
+        if "label_de" in entry and (not isinstance(label_de, str)
+                                    or not label_de.strip()):
+            raise ConfigError(f"{where}: label_de must be a non-empty "
+                              "string")
+        parent = entry.get("parent")
+        if "parent" in entry and (not isinstance(parent, str)
+                                  or parent not in data):
+            raise ConfigError(f"{where}: parent {parent!r} is not a value "
+                              "of this vocabulary")
+        terms[value] = Term(label, label_de, parent)
+    for value in terms:
+        current = terms[value].parent
+        for _ in terms:
+            if current is None:
+                break
+            if current == value:
+                raise ConfigError(f"{path}: value {value!r} is its own "
+                                  "ancestor; its parent entries form a "
+                                  "loop")
+            current = terms[current].parent
+    return terms
+
+
+def declared_string(entry: dict[str, Any], option: str, where: str,
+                    required: bool = False) -> str | None:
+    """Return the non-empty string that the declaration ENTRY sets for
+    OPTION, or None when it sets none and REQUIRED is false.
+
+    Raises ConfigError, its message beginning with WHERE, when the value
+    is missing but REQUIRED, or is not a non-empty string.
+    """
+    if option not in entry:
+        if required:
+            raise ConfigError(f"{where}: {option} missing")
+        return None
+    value = entry[option]
+    if not isinstance(value, str) or not value.strip():
+        raise ConfigError(f"{where}: {option} must be a non-empty string")
+    return value
+
+
+def declared_flag(entry: dict[str, Any], option: str, where: str) -> bool:
+    """Return the boolean that the declaration ENTRY sets for OPTION,
+    False when it sets none; raise ConfigError, its message beginning
+    with WHERE, when the value is not a boolean."""
+    value = entry.get(option, False)
+    if not isinstance(value, bool):
+        raise ConfigError(f"{where}: {option} must be true or false, "
+                          "unquoted")
+    return value
+
+
+def declared_bound(entry: dict[str, Any], option: str,
+                   where: str) -> int | float | None:
+    """Return the finite number that the declaration ENTRY sets for
+    OPTION, None when it sets none; raise ConfigError, its message
+    beginning with WHERE, when the value is not a finite number."""
+    value = entry.get(option)
+    if value is not None and (not is_number(value)
+                              or not math.isfinite(value)):
+        raise ConfigError(f"{where}: {option} must be a finite number, "
+                          "unquoted")
+    return value
+
+
+def read_declaration(entry: dict[str, Any], number: int, settings: Path,
+                     taken: Iterable[str],
+                     vocabularies: dict[str, dict[str, Term]]
+                     ) -> Declaration:
+    """Check the declaration ENTRY, the NUMBERth table of
+    ``fields.compound`` in the settings file SETTINGS, and return it.
+
+    TAKEN holds the keys of the declarations before it. A vocabulary
+    the declaration names is read from ``vocabularies/`` beside
+    SETTINGS, unless VOCABULARIES, a cache from vocabulary name to its
+    values that this call extends, already holds it. Raises ConfigError
+    when the declaration breaks a rule of a field declaration or its
+    vocabulary breaks one of a vocabulary; the message names SETTINGS or
+    the vocabulary file, the field's key once it is valid, and the
+    offending key or value.
+    """
+    where = f"{settings}: declaration {number} of fields.compound"
+    if "key" not in entry:
+        raise ConfigError(f"{where}: key missing")
+    key = entry["key"]
+    if not isinstance(key, str) or not FIELD_KEY_RE.match(key):
+        raise ConfigError(f"{where}: key {key!r} must be lowercase letters "
+                          "and digits, words joined by single underscores, "
+                          "starting with a letter, e.g. item_number")
+    if key in COMPOUND_REQUIRED_KEYS + COMPOUND_OPTIONAL_KEYS:
+        raise ConfigError(f"{where}: key {key!r} is a built-in compound "
+                          "key")
+    if key.endswith("_de"):
+        raise ConfigError(f"{where}: key {key!r} ends in _de, which is "
+                          "reserved")
+    if key in taken:
+        raise ConfigError(f"{where}: key {key!r} is declared twice")
+    where = f"{settings}: field {key}"
+    if "type" not in entry:
+        raise ConfigError(f"{where}: type missing; it is one of "
+                          f"{', '.join(FIELD_TYPES)}")
+    kind = entry["type"]
+    if kind not in FIELD_TYPES:
+        raise ConfigError(f"{where}: type {kind!r} is not one of "
+                          f"{', '.join(FIELD_TYPES)}")
+    for option in entry:
+        if option in FIELD_OPTIONS + TYPE_OPTIONS[kind]:
+            continue
+        if any(option in options for options in TYPE_OPTIONS.values()):
+            raise ConfigError(f"{where}: a {kind} field does not take "
+                              f"{option}")
+        raise ConfigError(f"{where}: unknown key {option}")
+    pattern = entry.get("pattern")
+    if pattern is not None:
+        if not isinstance(pattern, str):
+            raise ConfigError(f"{where}: pattern must be a string")
+        try:
+            pattern = re.compile(pattern)
+        except (re.error, OverflowError, RecursionError) as exc:
+            raise ConfigError(f"{where}: pattern {entry['pattern'][:60]!r} "
+                              "is not a valid Python regular expression: "
+                              f"{exc}") from None
+    minimum = declared_bound(entry, "min", where)
+    maximum = declared_bound(entry, "max", where)
+    if minimum is not None and maximum is not None and minimum > maximum:
+        raise ConfigError(f"{where}: min {minimum} is greater than max "
+                          f"{maximum}")
+    name = entry.get("vocabulary")
+    terms: dict[str, Term] = {}
+    if kind == "choice":
+        if name is None:
+            raise ConfigError(f"{where}: vocabulary missing; a choice "
+                              "field names a file vocabularies/<name>.toml")
+        if not isinstance(name, str) or not SLUG_RE.match(name):
+            raise ConfigError(f"{where}: vocabulary {name!r} must be the "
+                              "lowercase hyphenated name of a file "
+                              "vocabularies/<name>.toml, without .toml")
+        if name not in vocabularies:
+            path = settings.parent / "vocabularies" / f"{name}.toml"
+            if not path.is_file():
+                raise ConfigError(f"{where}: vocabulary file {path} not "
+                                  "found")
+            vocabularies[name] = load_terms(path)
+        terms = vocabularies[name]
+    return Declaration(
+        key=key, type=kind,
+        label=declared_string(entry, "label", where, required=True),
+        label_de=declared_string(entry, "label_de", where),
+        required=declared_flag(entry, "required", where),
+        column=declared_flag(entry, "column", where),
+        unique=declared_flag(entry, "unique", where), pattern=pattern,
+        minimum=minimum, maximum=maximum,
+        unit=declared_string(entry, "unit", where), vocabulary=name,
+        multiple=declared_flag(entry, "multiple", where), terms=terms)
+
+
+def load_fields(path: Path,
+                must_exist: bool = True) -> tuple[Declaration, ...]:
+    """Load the compound fields that the collection settings file PATH
+    declares, in declared order.
+
+    A settings file without ``fields`` declares no field, and so does a
+    PATH that does not exist when MUST_EXIST is false. Vocabularies
+    resolve against ``vocabularies/`` beside PATH, and only those a
+    declaration names are read. Raises ConfigError when PATH is missing
+    though MUST_EXIST, when it breaks a rule of read_settings, or when
+    ``fields`` is not a table whose only key, ``compound``, holds an
+    array of tables that read_declaration accepts.
+    """
+    if not must_exist and not path.exists():
+        return ()
+    fields = read_settings(path).get("fields", {})
+    if not isinstance(fields, dict):
+        raise ConfigError(f"{path}: fields must be a table holding the "
+                          "declarations [[fields.compound]]")
+    unknown = sorted(set(fields) - {"compound"})
+    if unknown:
+        raise ConfigError(f"{path}: unknown key "
+                          f"{', '.join(f'fields.{k}' for k in unknown)}; "
+                          "only fields.compound is allowed")
+    entries = fields.get("compound", [])
+    if not isinstance(entries, list) or not all(
+            isinstance(entry, dict) for entry in entries):
+        raise ConfigError(f"{path}: fields.compound must be an array of "
+                          "tables, each written [[fields.compound]]")
+    declared: list[Declaration] = []
+    vocabularies: dict[str, dict[str, Term]] = {}
+    for number, entry in enumerate(entries, start=1):
+        declared.append(read_declaration(
+            entry, number, path, [d.key for d in declared], vocabularies))
+    return tuple(declared)
+
+
 def load_zone() -> dt.tzinfo:
     """Return the Europe/Berlin zone, or raise ConfigError."""
     try:
@@ -1487,6 +1926,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="reaction-type vocabulary (default: "
         "<app>/site/data/reaction_types.toml)")
     parser.add_argument(
+        "--settings", type=Path, default=None, metavar="FILE",
+        help="collection settings file, whose field declarations the "
+        "compound files are checked against; its vocabularies are read "
+        "from vocabularies/ beside it (default: orgsyndb.toml in the "
+        "working directory; a missing default file declares no field)")
+    parser.add_argument(
         "--static-dir", type=Path, default=DEFAULT_STATIC_DIR,
         metavar="DIR",
         help="directory that structure_image paths are relative to "
@@ -1529,7 +1974,7 @@ def run(content_roots: Sequence[str], registry: str, sequences: str,
     compounds the registry defines, which replace those of CTX, and the
     steps of the sequences against the procedures of the content roots.
     """
-    examined = examine_registry(registry, ctx.static_dir)
+    examined = examine_registry(registry, ctx.static_dir, ctx.fields)
     ctx = replace(ctx, compounds=examined.compounds)
     problems = list(examined.problems)
     content: list[ContentFile] = []
@@ -1567,8 +2012,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 and not os.path.isdir(args.sequences)):
             raise ConfigError(f"sequences directory {args.sequences} is "
                               "not a directory")
+        fields = load_fields(args.settings or DEFAULT_SETTINGS,
+                             must_exist=args.settings is not None)
         ctx = Context(load_vocabulary(args.vocabulary), args.static_dir,
-                      load_zone())
+                      load_zone(), fields=fields)
     except ConfigError as exc:
         print(f"validate.py: error: {exc}", file=sys.stderr)
         return 2

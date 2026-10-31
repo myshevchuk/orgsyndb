@@ -4,3 +4,6 @@ formula = "C8H10O"
 mw = 122.17
 smiles = "CC(O)c1ccccc1"
 cas = "98-85-1"
+item_number = "CH-0003"
+chemical_class = ["alcohols"]
+in_house = true

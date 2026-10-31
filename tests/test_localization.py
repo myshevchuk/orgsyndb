@@ -471,6 +471,14 @@ class SiteLanguageTests(unittest.TestCase):
         self.assertTrue(any(v.startswith("Step ") for v in english),
                         "no Step <k> string")
 
+    def test_the_boolean_strings_are_in_both_languages(self) -> None:
+        """Scenario: Interface strings (declared fields)."""
+        english, german = self.strings("en"), self.strings("de")
+        self.assertIn("Yes", english.values())
+        self.assertIn("No", english.values())
+        self.assertIn("Ja", german.values())
+        self.assertIn("Nein", german.values())
+
     def test_every_reaction_type_has_a_german_label(self) -> None:
         """Scenario: Vocabulary with German labels."""
         data = tomllib.loads((SITE / "data" / "reaction_types.toml")

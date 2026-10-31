@@ -1,0 +1,9 @@
+# Storage places of the field fixtures.
+
+[cabinet]
+label = "Cabinet"
+label_de = "Schrank"
+
+[fridge]
+label = "Fridge"
+label_de = "Kühlschrank"

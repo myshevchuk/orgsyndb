@@ -6,6 +6,7 @@ A missing tools/orgsyndb fails them, because it is a deliverable.
 """
 
 import ast
+import json
 import os
 import py_compile
 import shutil
@@ -266,6 +267,75 @@ class ValidateArgumentTests(ProgramTestCase):
                 self.assertFalse((sandbox.root / "build").exists())
 
 
+class ValidateSettingsTests(ProgramTestCase):
+    """validate passes ``--settings orgsyndb.toml`` (build-script
+    "validate subcommand")."""
+
+    PREFIX = ["--settings", "orgsyndb.toml", "--static-dir", "static",
+              "--compounds", "compounds", "--sequences", "md/sequences"]
+
+    def recorded_arguments(self, sandbox, command: str = "validate"
+                           ) -> tuple[Run, list[str]]:
+        """Run ``command`` with a copy of the validator that reports the
+        arguments it was given on stderr, as a line ``ARGV <JSON>``."""
+        script = sandbox.app / "tools" / "validate.py"
+        script.write_text(script.read_text(encoding="utf-8") + (
+            "\n\nimport json as _json\nimport sys as _sys\n"
+            "_real_main = main\n\n\n"
+            "def main(argv=None):\n"
+            "    print('ARGV ' + _json.dumps(list(argv)), file=_sys.stderr)\n"
+            "    return _real_main(argv)\n"), encoding="utf-8")
+        result = sandbox.build(command)
+        lines = [ln for ln in result.stderr.splitlines()
+                 if ln.startswith("ARGV ")]
+        self.assertEqual(len(lines), 1, result.stderr)
+        return result, json.loads(lines[0][len("ARGV "):])
+
+    def test_validate_passes_the_settings_file(self) -> None:
+        """Scenario: Seeds validate (the settings file is passed)."""
+        sandbox = make_sandbox(self)
+        result, arguments = self.recorded_arguments(sandbox)
+        self.assertEqual(arguments[:len(self.PREFIX)], self.PREFIX)
+        roots = arguments[len(self.PREFIX):]
+        self.assertEqual(roots[-1], "md/procedures")
+        self.assertLessEqual(set(roots), {"build/export", "md/procedures"})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_a_broken_declaration_is_the_validators_configuration_error(
+            self) -> None:
+        """Scenario: Declarations do not stop other subcommands (validate
+        does reach the validator)."""
+        sandbox = make_sandbox(self)
+        path = sandbox.root / "orgsyndb.toml"
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count('type = "number"'), 1)
+        path.write_text(text.replace('type = "number"', 'type = "date"'),
+                        encoding="utf-8")
+        result = sandbox.build("validate")
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertEqual([ln for ln in result.stdout.splitlines()
+                          if ": error: " in ln or ": warning: " in ln], [])
+        self.assertIn("validate.py: error:", result.stderr)
+        self.assertIn("stock", result.stderr)
+        self.assertNotIn("orgsyndb: error:", result.stderr)
+
+    def test_a_declared_value_is_checked_by_validate(self) -> None:
+        """Scenario: Seeds validate (the declared fields are checked)."""
+        sandbox = make_sandbox(self)
+        path = sandbox.root / "compounds" / "acetone.toml"
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count("in_house = false"), 1)
+        path.write_text(text.replace("in_house = false",
+                                     'in_house = "no"'), encoding="utf-8")
+        result = sandbox.build("validate")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        lines = [ln for ln in result.stdout.splitlines() if ": error: " in ln]
+        self.assertEqual(len(lines), 1, result.stdout)
+        self.assertTrue(lines[0].startswith(
+            "compounds/acetone.toml:in_house: error: "), lines[0])
+        self.assertIn("must be true or false", lines[0])
+
+
 class CleanTests(ProgramTestCase):
     def test_clean_keeps_sources_and_caches_and_clean_all_removes_them(
             self) -> None:
@@ -359,6 +429,46 @@ class MarkerTests(ProgramTestCase):
         result = self.run_real("-C", directory, "validate")
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn("title", result.stderr)
+
+    def test_unknown_key_beside_fields_is_refused(self) -> None:
+        """Scenario: Unknown key (beside `fields`)."""
+        directory = self.collection_with(
+            'format = 1\ntitle = "X"\n\n[[fields.compound]]\n'
+            'key = "item_number"\n')
+        result = self.run_real("-C", directory, "validate")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("orgsyndb.toml", result.stderr)
+        self.assertIn("title", result.stderr)
+        self.assertFalse((directory / "build").exists())
+
+    def test_declarations_do_not_stop_clean(self) -> None:
+        """Scenario: Declarations do not stop other subcommands."""
+        directory = self.collection_with(
+            'format = 1\n\n[[fields.compound]]\nkey = "item_number"\n')
+        result = self.run_real("-C", directory, "clean")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr.count("error"), 0, result.stderr)
+
+    def test_declarations_do_not_stop_new(self) -> None:
+        """Scenario: Declarations do not stop other subcommands (new)."""
+        directory = self.temp_dir() / "a collection"
+        self.assertEqual(self.run_real("init", directory).returncode, 0)
+        with (directory / "orgsyndb.toml").open("a", encoding="utf-8") as f:
+            f.write('\n[[fields.compound]]\nkey = "item_number"\n'
+                    'type = "nonsense"\n')
+        result = self.run_real("-C", directory, "new", "--md",
+                               "Ethyl acetate")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(),
+                         "md/procedures/OSDB-0001-ethyl-acetate.md")
+
+    def test_fields_alone_is_accepted_by_the_marker_check(self) -> None:
+        """Requirement: Collection layout (`fields` beside `format`)."""
+        directory = self.collection_with(
+            'format = 1\n\n[[fields.compound]]\nkey = "x"\n'
+            'type = "text"\nlabel = "X"\n')
+        result = self.run_real("-C", directory, "clean")
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_malformed_markers_are_refused(self) -> None:
         """Scenario: Unknown format (missing, mistyped, invalid TOML)."""
@@ -466,5 +576,9 @@ class InitTests(ProgramTestCase):
         self.assertEqual(self.run_real("init", target).returncode, 0)
         self.assertEqual((DEMO / ".gitignore").read_text(),
                          (target / ".gitignore").read_text())
-        for path in (DEMO / "orgsyndb.toml", target / "orgsyndb.toml"):
-            self.assertEqual(tomllib.loads(path.read_text()), {"format": 1})
+        self.assertEqual(tomllib.loads(
+            (target / "orgsyndb.toml").read_text()), {"format": 1})
+        demo = tomllib.loads((DEMO / "orgsyndb.toml").read_text())
+        self.assertEqual(sorted(demo), ["fields", "format"])
+        self.assertEqual(demo["format"], 1)
+        self.assertIsInstance(demo["fields"], dict)

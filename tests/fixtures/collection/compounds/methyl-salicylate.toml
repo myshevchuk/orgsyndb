@@ -4,3 +4,5 @@ formula = "C8H8O3"
 mw = 152.15
 smiles = "COC(=O)c1ccccc1O"
 cas = "119-36-8"
+item_number = "CH-0018"
+chemical_class = ["esters", "phenols"]

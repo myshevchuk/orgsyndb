@@ -34,7 +34,7 @@ Every compound file SHALL hold a TOML table with these keys:
 - `cas`: optional string matching `^\d{2,7}-\d{2}-\d$` whose final check digit verifies;
 - `structure_image`: optional, as the requirement "Structure image path" states.
 
-A missing required key is an error containing `required field missing`, and a value of the wrong type is an error. Any other key is a warning containing `unknown field`. Problems are reported on the compound file's path, under the key's name. The messages for `mw`, `cas` and `structure_image` are those the validator gave for the same checks of a procedure's former `product` table and `structure_image`: `must be a number in g/mol, unquoted, e.g. 88.11`, `must be greater than 0`, `must have the form NNNNNNN-NN-N, e.g. "64-17-5"`, `has a wrong check digit; check the number`, and those of the requirement below.
+A missing required key is an error containing `required field missing`, and a value of the wrong type is an error. A compound file may also set the fields its collection declares, which compound-fields "Field values" checks. Any other key is a warning containing `unknown field`. Problems are reported on the compound file's path, under the key's name. The messages for `mw`, `cas` and `structure_image` are those the validator gave for the same checks of a procedure's former `product` table and `structure_image`: `must be a number in g/mol, unquoted, e.g. 88.11`, `must be greater than 0`, `must have the form NNNNNNN-NN-N, e.g. "64-17-5"`, `has a wrong check digit; check the number`, and those of the requirement below.
 
 #### Scenario: Missing formula
 - **WHEN** a registry variant run removes `formula` from `ethyl-acetate.toml`
@@ -56,6 +56,10 @@ A missing required key is an error containing `required field missing`, and a va
 - **WHEN** a registry variant run adds `smile = "CCOC(C)=O"` to `ethyl-acetate.toml`
 - **THEN** it reports exactly one warning, field `smile`, containing `unknown field`
 
+#### Scenario: A declared field is not unknown
+- **WHEN** a field-declaration run adds `item_number = "CH-0001"` to `ethyl-acetate.toml`, with settings that declare the text field `item_number`
+- **THEN** it reports no problem on `ethyl-acetate.toml`
+
 ### Requirement: Structure image path
 The optional `structure_image` of a compound SHALL be a relative path beginning with `structures/` and ending in `.svg` or `.png`, with no `..` component, naming a file that exists under the static directory. A path with the wrong prefix or suffix is not checked for existence.
 
@@ -72,9 +76,10 @@ The optional `structure_image` of a compound SHALL be a relative path beginning 
 - **THEN** it reports exactly one error, field `structure_image`, containing `must be a relative path under structures/`
 
 ### Requirement: Compound template
-The file `templates/compound.toml` SHALL be a complete compound file that explains every key in TOML comments, sets every required key, and shows `name_de`, `cas` and `structure_image` commented out. Copied into a registry under a valid key, it validates with no error and no warning.
+The file `templates/compound.toml` SHALL be a complete compound file that explains every key in TOML comments, sets every required key, and shows `name_de`, `cas` and `structure_image` commented out. It ends with comment lines saying that the fields a collection declares in its `orgsyndb.toml` are written below as further keys of the same form. Copied into a registry under a valid key, it validates with no error and no warning.
 
 #### Scenario: Template validates
 - **WHEN** a test copies `templates/compound.toml` into an empty temporary registry as `example-compound.toml` and runs the validator with that registry on an empty content root
 - **THEN** it exits 0 and prints nothing to stdout
+- **AND** the template's last comment block names `orgsyndb.toml`
 

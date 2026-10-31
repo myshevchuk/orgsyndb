@@ -243,12 +243,200 @@ die nicht `<key>.toml` heißt, ist ein Fehler unter `file_name` mit
 `must be named <key>.toml` und definiert keine Verbindung. Eine nicht als
 UTF-8-TOML lesbare Datei erhält einen Fehler unter `toml` und definiert
 keine Verbindung; ein Syntaxfehler enthält `invalid TOML`. Ein fehlendes
-Pflichtfeld ergibt `required field missing`, unbekannte Felder ergeben
+Pflichtfeld ergibt `required field missing`. Eine Verbindung darf auch die
+von ihrer Sammlung deklarierten Felder setzen. Nur Schlüssel, die weder zu
+den eingebauten Feldern noch zu diesen Deklarationen gehören, ergeben
 Warnungen mit `unknown field`.
 
 Eine Verbindungsseite ergänzt nach **Verwendet in** den Abschnitt
 **Synthesewege**, wenn Synthesewege diese Verbindung als Ziel nennen. Die
 Liste verlinkt deren Titel, nach Nummer geordnet.
+
+## Felddeklarationen der Sammlung
+
+Um weitere Angaben wie Artikelnummern oder Stoffklassen zu erfassen,
+deklarieren Sie Verbindungsfelder in der `orgsyndb.toml` der Sammlung.
+Diese UTF-8-TOML-Datei muss `format = 1` als Ganzzahl enthalten. Als
+einziger weiterer Schlüssel auf oberster Ebene ist `fields` erlaubt,
+eine Tabelle, deren einziger erlaubter Schlüssel `compound` ist. Ohne
+`fields` deklariert die Sammlung keine weiteren Felder.
+
+Schreiben Sie eine Tabelle `[[fields.compound]]` je Feld, in der
+gewünschten Anzeigereihenfolge. Eine einzelne Tabelle `[fields.compound]`
+ist ungültig. Diese Deklaration stammt aus den
+[Einstellungen der Beispielsammlung](../examples/demo/orgsyndb.toml):
+
+```toml
+format = 1
+
+[[fields.compound]]
+key = "item_number"
+type = "text"
+label = "Item no."
+label_de = "Artikelnr."
+required = true
+unique = true
+pattern = 'CH-\d{4}'
+column = true
+```
+
+### Schlüssel einer Deklaration
+
+| Schlüssel | TOML-Typ | Pflicht oder Vorgabe | Regel |
+|---|---|---|---|
+| `key` | String | Pflicht | Entspricht `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`: Kleinbuchstaben und Ziffern, Wörter durch einzelne Unterstriche verbunden, beginnend mit einem Buchstaben. Darf nur einmal deklariert sein, nicht auf `_de` enden und kein eingebauter Schlüssel sein: `name`, `name_de`, `formula`, `mw`, `smiles`, `cas` oder `structure_image`. |
+| `type` | String | Pflicht | `text`, `number`, `boolean` oder `choice`. |
+| `label` | Nicht leerer String | Pflicht | Der Feldname auf einer englischen Website. |
+| `label_de` | Nicht leerer String | Optional | Der Feldname auf einer deutschen Website; fehlt er, verwendet sie `label`. |
+| `required` | Wahrheitswert | `false` | Bei `true` muss jede Verbindung das Feld setzen. |
+| `column` | Wahrheitswert | `false` | Bei `true` zeigt das Verbindungsverzeichnis das Feld als Spalte. |
+
+Nur die folgenden zusätzlichen Schlüssel sind je nach Typ erlaubt. Eine
+Deklaration mit `boolean` nimmt keinen davon an.
+
+| Schlüssel | Feldtyp | TOML-Typ | Pflicht oder Vorgabe | Regel |
+|---|---|---|---|---|
+| `pattern` | `text` | String | Optional | Ein gültiger regulärer Ausdruck in Python, dem der ganze Wert entsprechen muss. |
+| `unique` | `text`, `number` | Wahrheitswert | `false` | Zwei Verbindungen dürfen nicht denselben gültigen Wert setzen. |
+| `min` | `number` | Ganz- oder Gleitkommazahl | Optional | Endliche untere Grenze, einschließlich; darf `max` nicht überschreiten, wenn beide gesetzt sind. Ein Wahrheitswert ist keine Zahl. |
+| `max` | `number` | Ganz- oder Gleitkommazahl | Optional | Endliche obere Grenze, einschließlich. Ein Wahrheitswert ist keine Zahl. |
+| `unit` | `number` | Nicht leerer String | Optional | Steht nach der Zahl, durch ein Leerzeichen getrennt. |
+| `vocabulary` | `choice` | String | Pflicht | Benennt `vocabularies/<name>.toml` neben `orgsyndb.toml`, ohne Verzeichnis und Endung. Der Name entspricht `[a-z0-9]+(-[a-z0-9]+)*`. |
+| `multiple` | `choice` | Wahrheitswert | `false` | Bei `true` setzt die Verbindung eine nicht leere Liste verschiedener Werte statt eines einzelnen Strings. |
+
+Die Beispielsammlung deklariert außerdem `short_name` als Text,
+`chemical_class` als Pflichtauswahl mit `multiple = true` und
+`column = true`, `stock` als Zahl mit `min = 0` und `unit = "g"` sowie
+`in_house` als Wahrheitswert.
+
+### Vokabulare
+
+Ein Vokabular enthält die erlaubten Werte eines Auswahlfeldes. Speichern
+Sie es als UTF-8-TOML in `vocabularies/<name>.toml` neben der
+Einstellungsdatei. Der Dateiname ohne `.toml` und jeder Wertschlüssel auf
+oberster Ebene müssen `[a-z0-9]+(-[a-z0-9]+)*` entsprechen: Kleinbuchstaben
+und Ziffern mit einzelnen Bindestrichen zwischen den Gruppen. Jeder Wert
+ist eine Tabelle mit diesen Schlüsseln und keinen weiteren:
+
+| Schlüssel | TOML-Typ | Pflicht | Regel |
+|---|---|---|---|
+| `label` | Nicht leerer String | Ja | Der Name des Werts auf einer englischen Website. |
+| `label_de` | Nicht leerer String | Nein | Der Name des Werts auf einer deutschen Website; fehlt er, verwendet sie `label`. |
+| `parent` | String | Nein | Ein anderer Wertschlüssel derselben Datei, unter dem dieser Wert eingeordnet ist. |
+
+Ein Vokabular muss mindestens einen Wert enthalten. Wer `parent` folgt,
+muss schließlich einen Wert ohne übergeordneten Wert erreichen; kein Wert
+darf sein eigener Vorfahr sein. Die Zahl der Ebenen ist unbegrenzt.
+Verbindungen dürfen Werte auf jeder Ebene wählen. Der Aufbau entspricht
+dem Reaktionstyp-Vokabular, ergänzt um `parent`.
+
+Das
+[Vokabular der Beispielsammlung](../examples/demo/vocabularies/chemical-classes.toml)
+enthält etwa:
+
+```toml
+[carbonyl-compounds]
+label = "Carbonyl compounds"
+label_de = "Carbonylverbindungen"
+
+[acid-derivatives]
+label = "Carboxylic acid derivatives"
+label_de = "Carbonsäurederivate"
+parent = "carbonyl-compounds"
+
+[esters]
+label = "Esters"
+label_de = "Ester"
+parent = "acid-derivatives"
+```
+
+Die Sammlung darf `vocabularies/` weglassen, wenn kein Feld es benötigt.
+`init` legt das Verzeichnis nicht an.
+
+### Verbindungswerte und Meldungen
+
+Setzen Sie jedes deklarierte Feld als normalen Schlüssel auf oberster
+Ebene in der Verbindungsdatei, neben `name`, `cas` und den anderen
+eingebauten Feldern. Die `methyl-salicylate.toml` der Beispielsammlung
+setzt etwa:
+
+```toml
+item_number = "CH-0018"
+chemical_class = ["esters", "phenols"]
+```
+
+Das Vokabular der Beispielsammlung definiert beide Auswahlwerte.
+`item_number` und `chemical_class` sind dort Pflichtfelder. Eine neu
+hinzugefügte Verbindung muss daher beide setzen und eine noch nicht
+vergebene Artikelnummer verwenden. Der Schlusskommentar der
+Verbindungsvorlage fordert dazu auf, die von Ihrer Sammlung deklarierten
+Felder als weitere Zeilen derselben Form einzutragen.
+
+Wertprobleme sind Fehler am Pfad der Verbindungsdatei, unter dem Schlüssel
+des deklarierten Feldes:
+
+| Feldtyp oder Regel | Meldung | Bedeutung |
+|---|---|---|
+| `required = true` | `required field missing` | Das Feld in jeder Verbindung setzen. |
+| `text`, einzelnes `choice` | `must be a string` | Den Wert in Anführungszeichen setzen. |
+| `text` | `must not be empty` | Nicht leeren Text angeben. |
+| `text` mit `pattern` | `must match the pattern <pattern>` | Der ganze String muss dem deklarierten Muster entsprechen. |
+| `number` | `must be a number, unquoted` | Eine endliche TOML-Ganz- oder Gleitkommazahl ohne Anführungszeichen oder Einheit angeben; ein Wahrheitswert ist keine Zahl. |
+| `number` mit `min` | `must be at least <min>` | Den Wert auf die untere Grenze oder darüber erhöhen. |
+| `number` mit `max` | `must be at most <max>` | Den Wert auf die obere Grenze oder darunter verringern. |
+| `boolean` | `must be true or false, unquoted` | `true` oder `false` ohne Anführungszeichen verwenden. |
+| `choice` | `unknown value "<v>"; see vocabularies/<name>.toml for the allowed values` | Einen Wertschlüssel aus dem genannten Vokabular verwenden, auf beliebiger Ebene. |
+| `choice` mit `multiple = true` | `must be a list of strings, e.g. ["<a value>"]` | Eine Liste von Wertschlüsseln in Anführungszeichen angeben. Das Beispiel nennt einen Wert aus dem Vokabular. |
+| `choice` mit `multiple = true` | `must not be empty` | Mindestens einen Auswahlwert angeben. |
+| `choice` mit `multiple = true` | `repeats "<v>"` | Den wiederholten Wert entfernen. |
+| `unique = true` | `"<value>" is also set by <other compound keys>` | Einen Wert verwenden, den keine andere Verbindung setzt. Zahlen stehen in der Meldung ohne Anführungszeichen. |
+
+Ein Wert mit falschem Typ ergibt nur diesen Typfehler. Leerer Text mit
+einem Muster ergibt nur `must not be empty`. Eine Auswahlliste ergibt
+eine Meldung `unknown value` je unbekanntem String. Die
+Eindeutigkeitsprüfung vergleicht Werte, die ihre Feldprüfung bestehen,
+und meldet jede Verbindung, die denselben Wert setzt.
+
+### Konfigurationsfehler
+
+Der Validator lehnt Einstellungen oder Vokabulare ab, die eine der
+obigen Regeln verletzen. Dazu zählen ungültige reguläre Ausdrücke, nicht
+endliche Grenzen, `min` größer als `max`, doppelte Deklarationen,
+fehlende Vokabulardateien und Schleifen der übergeordneten Werte. Eine
+mit `--settings` ausdrücklich benannte Datei muss vorhanden sein.
+Einstellungs- und Vokabulardateien müssen als UTF-8-TOML lesbar sein.
+
+Dies sind Konfigurationsfehler: Rückgabewert 2, keine Standardausgabe
+und `validate.py: error: ...` auf der Standardfehlerausgabe. Die Meldungen
+nennen die Einstellungs- oder Vokabulardatei, den Feldschlüssel, sofern
+gültig, und den beanstandeten Schlüssel oder Wert. Eine Option für einen
+anderen Typ ergibt etwa `a number field does not take pattern`; eine
+unbekannte Option ergibt `unknown key <key>`. Ein unbekannter Schlüssel
+auf oberster Ebene der Einstellungen ergibt
+`unknown key <key>; only format and fields are allowed`.
+
+Vor einem Befehl prüft das Build-Programm nur das TOML der
+Einstellungsdatei, `format` und die Schlüssel auf oberster Ebene. Der
+Validator prüft die Deklarationen und Vokabulare. Eine fehlerhafte
+Deklaration verhindert daher weder `clean` noch `new`.
+
+### Anzeige auf der Website
+
+Verbindungsseiten zeigen gesetzte Felder nach Summenformel, Molmasse,
+CAS und SMILES, in Deklarationsreihenfolge und mit den Feldnamen in der
+Sprache der Website. Text erscheint wie eingetragen. Zahlen verwenden
+das Dezimalzeichen der Website und die deklarierte Einheit, etwa
+`12,5 g` auf einer deutschen Website. Wahrheitswerte erscheinen als
+**Yes** oder **No**, auf Deutsch als **Ja** oder **Nein**.
+
+Ein Auswahlwert auf einer Verbindungsseite zeigt die Namen seiner
+übergeordneten Werte und seinen eigenen Namen, verbunden durch ` › `,
+etwa **Carbonylverbindungen › Carbonsäurederivate › Ester**. Mehrere
+Auswahlwerte sind durch `, ` getrennt, in der Reihenfolge der Verbindung.
+Das Verbindungsverzeichnis ergänzt Felder mit `column = true` nach CAS,
+in Deklarationsreihenfolge. Es zeigt nur den eigenen Namen jedes
+Auswahlwerts, lässt ungesetzte Werte als leere Zellen und richtet
+Zahlenspalten rechtsbündig aus.
 
 ## Synthesewege
 
@@ -359,8 +547,9 @@ Jedes andere Feld der obersten Ebene ergibt die Warnung `unknown field`,
 auch Tippfehler wie `checkedby` und die Felder `product`, `yield_percent`
 auf oberster Ebene, `precursors` und `structure_image`. Ein unbekanntes Feld
 in einem Eintrag von `products` ergibt etwa `products[1].colour` als Warnung.
-Unbekannte Registerfelder ergeben Warnungen an der Verbindungsdatei unter
-dem jeweiligen Feldnamen.
+Registerfelder sind nur dann unbekannt, wenn sie weder zu den eingebauten
+Verbindungsfeldern noch zu den Deklarationen der Sammlung gehören. Sie
+ergeben Warnungen an der Verbindungsdatei unter dem jeweiligen Feldnamen.
 
 ## Org-Schlüsselwörter auf Dateiebene
 
@@ -604,7 +793,7 @@ eine deutsche Website zeigt sie mit Komma.
 Starten Sie den Validator mit mindestens einem Markdown-Verzeichnis:
 
 ```text
-tools/validate.py [--vocabulary FILE] [--static-dir DIR] [--compounds DIR] [--sequences DIR] CONTENT_ROOT...
+tools/validate.py [--vocabulary FILE] [--settings FILE] [--static-dir DIR] [--compounds DIR] [--sequences DIR] CONTENT_ROOT...
 ```
 
 Jedes `CONTENT_ROOT` ist ein Verzeichnis mit Markdown-Vorschriften.
@@ -616,8 +805,16 @@ und löst die Schlüssel der Vorschriften gegen dieses Register auf. Ein
 fehlendes Registerverzeichnis ist leer: Jeder genannte Schlüssel ist dann
 unbekannt. Ein vorhandener Pfad, der kein Verzeichnis ist, ergibt einen
 Konfigurationsfehler. `orgsyndb validate` übergibt nach dem Org-Export
-`--static-dir static --compounds compounds --sequences md/sequences`
+`--settings orgsyndb.toml --static-dir static --compounds compounds --sequences md/sequences`
 aus dem Hauptordner der Sammlung.
+
+`--settings` benennt die `orgsyndb.toml` der Sammlung. Ohne diese Option
+verwendet der Validator `orgsyndb.toml` im aktuellen Verzeichnis; fehlt
+diese Vorgabedatei, sind keine weiteren Felder deklariert. Eine mit
+`--settings` ausdrücklich benannte Datei muss vorhanden sein. Der
+Validator prüft die Deklarationen und sucht deren Vokabulare ausgehend
+vom Verzeichnis der Einstellungsdatei. Danach prüft er die Werte jeder
+Verbindung gegen die Deklarationen.
 
 `--sequences` ist ohne Angabe `md/sequences` im aktuellen Verzeichnis. Ein
 fehlender Ordner enthält keine Synthesewege; ein vorhandener Pfad, der kein
@@ -698,12 +895,13 @@ Der Rückgabewert sagt einem aufrufenden Befehl, ob die Prüfung gelungen ist:
 |---|---|
 | `0` | Kein Fehler gefunden. Warnungen können ausgegeben worden sein. |
 | `1` | Mindestens ein Fehler in einer Vorschrift, Verbindungsdatei oder einem Syntheseweg. |
-| `2` | Aufruf oder Konfiguration des Validators ist ungültig, etwa kein Verzeichnis, ein Verzeichnis, das keines ist, oder eine fehlende oder fehlerhafte Vokabulardatei. |
+| `2` | Aufruf oder Konfiguration des Validators ist ungültig, etwa kein Verzeichnis, ein Verzeichnis, das keines ist, eine fehlende ausdrücklich benannte Einstellungsdatei, ungültige Einstellungen oder Deklarationen oder eine fehlende oder fehlerhafte Vokabulardatei. |
 
 Aufruf- und Konfigurationsfehler gehen auf die Standardfehlerausgabe und
-enthalten `validate.py: error:`. Der Validator unterdrückt Prüfungen, die
-von einem fehlenden oder fehlerhaften Wert abhängen, sodass ein Fehler
-meist keine Kette von Folgemeldungen auslöst.
+enthalten `validate.py: error:`; die Standardausgabe bleibt leer. Der
+Validator unterdrückt Prüfungen, die von einem fehlenden oder fehlerhaften
+Wert abhängen, sodass ein Fehler meist keine Kette von Folgemeldungen
+auslöst.
 
 ### Meldungen zu Synthesewegen
 

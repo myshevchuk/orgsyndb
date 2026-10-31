@@ -4,3 +4,6 @@ formula = "C11H12O2"
 mw = 176.21
 smiles = "CCOC(=O)/C=C/c1ccccc1"
 cas = "103-36-6"
+item_number = "CH-0014"
+chemical_class = ["esters"]
+in_house = true

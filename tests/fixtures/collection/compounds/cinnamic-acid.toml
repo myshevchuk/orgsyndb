@@ -4,3 +4,6 @@ formula = "C9H8O2"
 mw = 148.16
 smiles = "OC(=O)/C=C/c1ccccc1"
 cas = "140-10-3"
+item_number = "CH-0012"
+chemical_class = ["carboxylic-acids"]
+in_house = true

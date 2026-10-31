@@ -1,0 +1,12 @@
+{{- /* The fields a collection declares (site.Data.collection.fields) that
+a registry entry sets, as dt/dd pairs in declared order: the field's
+label, then its value as field-value.html writes it on a compound page.
+Takes the entry. The compound page puts the pairs in its dl after those
+of compound-facts.html. */ -}}
+{{ $compound := . -}}
+{{ range site.Data.collection.fields.compound -}}
+{{ if isset $compound .key -}}
+<dt>{{ .label }}</dt>
+<dd>{{ partial "field-value.html" (dict "field" . "value" (index $compound .key) "page" true) }}</dd>
+{{ end -}}
+{{ end -}}

@@ -20,13 +20,13 @@ stderr as ``orgsyndb: error: <message>``.
 import argparse
 import functools
 import http.server
+import json
 import os
 import re
 import shutil
 import subprocess
 import sys
 import time
-import tomllib
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
@@ -39,11 +39,10 @@ import validate  # noqa: E402
 
 PROG = "orgsyndb"
 MARKER = "orgsyndb.toml"
-FORMAT = 1
 MARKER_TEXT = (
     "# OrgSynDB collection: procedures in org/procedures/ and\n"
     "# md/procedures/, static files in static/. See the OrgSynDB README.\n"
-    f"format = {FORMAT}\n")
+    f"format = {validate.SETTINGS_FORMAT}\n")
 IGNORED = ("/build/", "/public/", "/pdf/")
 COLLECTION_DIRS = ("org/procedures", "md/procedures", "md/sequences",
                    "compounds", "static/structures")
@@ -131,23 +130,13 @@ def run(command: Sequence[str | Path], **kwargs) -> None:
 
 
 def check_marker(directory: Path) -> None:
-    """Raise Failure unless ``directory/orgsyndb.toml`` is format 1."""
-    path = directory / MARKER
+    """Raise Failure unless ``directory/orgsyndb.toml`` is a settings file
+    of format 1 whose top-level keys are known; the field declarations
+    it holds are left to the validator."""
     try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError) as exc:
-        raise Failure(f"{path}: cannot read it: {exc}") from None
-    except tomllib.TOMLDecodeError as exc:
-        raise Failure(f"{path}: not valid TOML: {exc}") from None
-    unknown = sorted(set(data) - {"format"})
-    if unknown:
-        raise Failure(f"{path}: unknown key {', '.join(unknown)}; only "
-                      "format is allowed")
-    value = data.get("format")
-    if type(value) is not int or value != FORMAT:
-        shown = "missing" if value is None else repr(value)
-        raise Failure(f"{path}: format is {shown}; this OrgSynDB reads "
-                      f"format = {FORMAT}")
+        validate.read_settings(directory / MARKER)
+    except validate.ConfigError as exc:
+        raise Failure(str(exc)) from None
 
 
 def find_collection(option: str | None) -> Path:
@@ -248,7 +237,8 @@ def install_export(build: Path) -> None:
 
 def run_validator() -> int:
     step("validate: " + ", ".join(existing(CONTENT_ROOTS)))
-    status = validate.main(["--static-dir", "static",
+    status = validate.main(["--settings", MARKER,
+                            "--static-dir", "static",
                             "--compounds", "compounds",
                             "--sequences", SEQUENCE_ROOT,
                             *existing(CONTENT_ROOTS)])
@@ -277,6 +267,11 @@ def run_build(collection: Path) -> list[tuple[Path, dict]]:
     step(f"build: staging {count} help pages from docs/")
     step("build: hugo")
     pipeline.remove_tree(Path("public"))
+    fields = Path("build") / pipeline.FIELDS_STAGED
+    fields.parent.mkdir(parents=True, exist_ok=True)
+    fields.write_text(json.dumps(
+        pipeline.fields_data(collection / MARKER, language),
+        ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     config = collection / "build" / "hugo-config"
     (config / "_default").mkdir(parents=True, exist_ok=True)
     (config / "_default" / "hugo.toml").write_text(

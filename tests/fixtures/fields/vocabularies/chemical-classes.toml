@@ -1,0 +1,20 @@
+# Chemical classes of the field fixtures; ketones and esters are
+# filed under carbonyl-compounds.
+
+[carbonyl-compounds]
+label = "Carbonyl compounds"
+label_de = "Carbonylverbindungen"
+
+[ketones]
+label = "Ketones"
+label_de = "Ketone"
+parent = "carbonyl-compounds"
+
+[esters]
+label = "Esters"
+label_de = "Ester"
+parent = "carbonyl-compounds"
+
+[alcohols]
+label = "Alcohols"
+label_de = "Alkohole"

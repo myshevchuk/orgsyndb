@@ -7,8 +7,9 @@ import unittest
 from pathlib import Path
 
 from support import (COMPOUNDS, FIXTURES, ValidatorTestCase, edit_compound,
-                     fixture_run, registry_copy, registry_variant_run,
-                     remove_line, replace_line, run_validator)
+                     edit_field_compound, field_variant_run, fixture_run,
+                     registry_copy, registry_variant_run, remove_line,
+                     replace_line, run_validator)
 
 COMPOUND_FILES = len(list(COMPOUNDS.glob("*.toml")))
 EDITED = "ethyl-acetate.toml"
@@ -236,6 +237,23 @@ class CompoundFieldTests(ValidatorTestCase):
         result = registry_variant_run(edit_compound(
             "ethyl-acetate", append_line('smile = "CCOC(C)=O"')))
         self.assert_one(result, "warning", "smile", "unknown field",
+                        path_suffix=EDITED)
+
+
+    def test_a_declared_field_is_not_unknown(self) -> None:
+        """Scenario: A declared field is not unknown."""
+        result = field_variant_run(edit_field_compound(
+            "ethyl-acetate", append_line('item_number = "CH-0001"')))
+        self.assert_clean(result)
+        self.assertEqual(
+            [p for p in result.problems if p.path.endswith(EDITED)], [])
+
+    def test_a_key_is_unknown_unless_a_settings_file_declares_it(
+            self) -> None:
+        """Requirement: Compound fields (any other key is a warning)."""
+        result = registry_variant_run(edit_compound(
+            "ethyl-acetate", append_line('item_number = "CH-0001"')))
+        self.assert_one(result, "warning", "item_number", "unknown field",
                         path_suffix=EDITED)
 
 

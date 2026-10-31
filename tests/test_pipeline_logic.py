@@ -3,6 +3,7 @@ PDF job naming and the helper module's shape (build-script)."""
 
 import ast
 import datetime as dt
+import json
 import locale
 import os
 import re
@@ -15,8 +16,9 @@ import zoneinfo
 from pathlib import Path
 
 import support
-from pipeline_support import (GIT_QUIET, PIPELINE, REPO, Run, captured,
-                              front_matter, pipeline, snapshot)
+from pipeline_support import (FIXTURES, GIT_QUIET, PIPELINE, REPO, Run,
+                              TEST_COLLECTION, captured, front_matter,
+                              pipeline, pipeline_function, snapshot)
 
 NOW = "2026-10-19T17:42:05+02:00"
 SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -417,6 +419,236 @@ class NoteLinkTests(unittest.TestCase):
             self.assertEqual(
                 (target / "OSDB-0001-x.md").read_text(encoding="utf-8"),
                 LINKED_RESULT)
+
+
+FIELDS_SETTINGS = FIXTURES / "fields" / "orgsyndb.toml"
+TEST_SETTINGS = TEST_COLLECTION / "orgsyndb.toml"
+
+
+def fixture_fields(language: str) -> list[dict]:
+    """The field data of the ``fields/`` fixtures that the contract
+    states, in ``language``: ``en`` or ``de``."""
+    german = language == "de"
+
+    def shown(english: str, deutsch: str | None = None) -> str:
+        return deutsch if german and deutsch is not None else english
+
+    def values(entries: dict[str, tuple[str, ...]]) -> dict[str, dict]:
+        return {key: {"label": path[-1], "path": list(path)}
+                for key, path in entries.items()}
+
+    carbonyl = shown("Carbonyl compounds", "Carbonylverbindungen")
+    return [
+        {"key": "item_number", "type": "text", "column": True,
+         "label": shown("Item no.", "Artikelnr.")},
+        {"key": "short_name", "type": "text", "column": False,
+         "label": "Short name"},
+        {"key": "stock", "type": "number", "column": False,
+         "label": shown("Stock", "Bestand"), "unit": "g"},
+        {"key": "in_house", "type": "boolean", "column": False,
+         "label": shown("Made in house", "Eigene Herstellung")},
+        {"key": "chemical_class", "type": "choice", "column": True,
+         "label": shown("Chemical class", "Stoffklasse"),
+         "multiple": True,
+         "values": values({
+             "carbonyl-compounds": (carbonyl,),
+             "ketones": (carbonyl, shown("Ketones", "Ketone")),
+             "esters": (carbonyl, shown("Esters", "Ester")),
+             "alcohols": (shown("Alcohols", "Alkohole"),)})},
+        {"key": "storage", "type": "choice", "column": False,
+         "label": shown("Storage", "Lagerung"), "multiple": False,
+         "values": values({
+             "cabinet": (shown("Cabinet", "Schrank"),),
+             "fridge": (shown("Fridge", "K\u00fchlschrank"),)})},
+    ]
+
+
+class FieldDataTests(unittest.TestCase):
+    """compound-fields "Field data for the site"."""
+
+    def settings(self, text: str,
+                 vocabularies: dict[str, str] | None = None) -> Path:
+        """An ``orgsyndb.toml`` holding ``text``, beside the
+        ``vocabularies`` (name to text) in a temporary collection."""
+        root = make_repo(self)
+        (root / "orgsyndb.toml").write_text(text, encoding="utf-8")
+        (root / "vocabularies").mkdir()
+        for name, content in (vocabularies or {}).items():
+            (root / "vocabularies" / f"{name}.toml").write_text(
+                content, encoding="utf-8")
+        return root / "orgsyndb.toml"
+
+    def test_field_data_in_both_languages(self) -> None:
+        """Scenario: Field data in both languages."""
+        fields_data = pipeline_function("fields_data")
+        for language in ("en", "de"):
+            with self.subTest(language=language):
+                data = fields_data(FIELDS_SETTINGS, language)
+                self.assertEqual(list(data), ["compound"])
+                self.assertEqual([f["key"] for f in data["compound"]],
+                                 ["item_number", "short_name", "stock",
+                                  "in_house", "chemical_class", "storage"])
+                self.assertEqual(data["compound"],
+                                 fixture_fields(language))
+
+    def test_the_stated_values_of_the_scenario(self) -> None:
+        """Scenario: Field data in both languages (the stated values)."""
+        fields_data = pipeline_function("fields_data")
+        english = {f["key"]: f for f in
+                   fields_data(FIELDS_SETTINGS, "en")["compound"]}
+        german = {f["key"]: f for f in
+                  fields_data(FIELDS_SETTINGS, "de")["compound"]}
+        self.assertEqual(english["stock"]["unit"], "g")
+        self.assertIs(english["chemical_class"]["multiple"], True)
+        self.assertIs(english["chemical_class"]["column"], True)
+        self.assertIs(english["storage"]["multiple"], False)
+        self.assertEqual(
+            english["chemical_class"]["values"]["ketones"],
+            {"label": "Ketones",
+             "path": ["Carbonyl compounds", "Ketones"]})
+        self.assertEqual(
+            german["chemical_class"]["values"]["ketones"],
+            {"label": "Ketone", "path": ["Carbonylverbindungen", "Ketone"]})
+        self.assertEqual(english["short_name"]["label"], "Short name")
+        self.assertEqual(german["short_name"]["label"], "Short name")
+
+    def test_a_field_carries_only_the_keys_its_type_has(self) -> None:
+        """Requirement: Field data for the site (these keys and no
+        other)."""
+        data = pipeline_function("fields_data")(FIELDS_SETTINGS, "en")
+        keys = {field["key"]: set(field) for field in data["compound"]}
+        base = {"key", "type", "column", "label"}
+        self.assertEqual(keys["item_number"], base)
+        self.assertEqual(keys["short_name"], base)
+        self.assertEqual(keys["in_house"], base)
+        self.assertEqual(keys["stock"], base | {"unit"})
+        self.assertEqual(keys["chemical_class"],
+                         base | {"multiple", "values"})
+        self.assertEqual(keys["storage"], base | {"multiple", "values"})
+
+    def test_a_number_without_a_unit_has_no_unit_key(self) -> None:
+        """Requirement: Field data for the site (`unit`: only for a number
+        field that declares one)."""
+        path = self.settings(
+            'format = 1\n\n[[fields.compound]]\nkey = "count"\n'
+            'type = "number"\nlabel = "Count"\nmin = 0\nmax = 9\n')
+        data = pipeline_function("fields_data")(path, "en")
+        self.assertEqual(data, {"compound": [
+            {"key": "count", "type": "number", "label": "Count",
+             "column": False}]})
+
+    def test_the_result_is_json(self) -> None:
+        """Requirement: Field data for the site (the JSON that the build
+        stages)."""
+        fields_data = pipeline_function("fields_data")
+        for language in ("en", "de"):
+            data = fields_data(FIELDS_SETTINGS, language)
+            self.assertEqual(json.loads(json.dumps(data)), data)
+
+    def test_labels_fall_back_to_the_english_one(self) -> None:
+        """Requirement: Field data for the site (labels, `label_de`
+        absent)."""
+        path = self.settings(
+            'format = 1\n\n[[fields.compound]]\nkey = "kind"\n'
+            'type = "choice"\nlabel = "Kind"\nvocabulary = "kinds"\n',
+            {"kinds": '[top]\nlabel = "Top"\nlabel_de = "Oben"\n\n'
+                      '[middle]\nlabel = "Middle"\nparent = "top"\n\n'
+                      '[bottom]\nlabel = "Bottom"\nlabel_de = "Unten"\n'
+                      'parent = "middle"\n'})
+        data = pipeline_function("fields_data")(path, "de")
+        (field,) = data["compound"]
+        self.assertEqual(field["label"], "Kind")
+        self.assertEqual(field["values"], {
+            "top": {"label": "Oben", "path": ["Oben"]},
+            "middle": {"label": "Middle", "path": ["Oben", "Middle"]},
+            "bottom": {"label": "Unten",
+                       "path": ["Oben", "Middle", "Unten"]}})
+
+    def test_a_value_is_listed_at_every_level(self) -> None:
+        """Requirement: Field data for the site (`values` holds every
+        value of the vocabulary)."""
+        data = pipeline_function("fields_data")(TEST_SETTINGS, "de")
+        fields = {f["key"]: f for f in data["compound"]}
+        classes = fields["chemical_class"]["values"]
+        self.assertEqual(len(classes), 13)
+        self.assertEqual(
+            classes["aryl-ketones"],
+            {"label": "Arylketone",
+             "path": ["Carbonylverbindungen", "Ketone", "Arylketone"]})
+        self.assertEqual(
+            classes["anhydrides"]["path"],
+            ["Carbonylverbindungen", "Carbons\u00e4urederivate",
+             "Anhydride"])
+        self.assertEqual(classes["alcohols"]["path"], ["Alkohole"])
+
+    def test_the_test_collection_field_data(self) -> None:
+        """Scenario: Field data in both languages (the test
+        collection)."""
+        data = pipeline_function("fields_data")(TEST_SETTINGS, "en")
+        self.assertEqual(
+            [(f["key"], f["type"], f["column"])
+             for f in data["compound"]],
+            [("item_number", "text", True), ("short_name", "text", False),
+             ("chemical_class", "choice", True), ("stock", "number", False),
+             ("in_house", "boolean", False)])
+        self.assertEqual(data["compound"][3]["unit"], "g")
+        self.assertEqual(
+            data["compound"][2]["values"]["aryl-ketones"]["path"],
+            ["Carbonyl compounds", "Ketones", "Aryl ketones"])
+
+    def test_no_settings_file(self) -> None:
+        """Scenario: No settings file."""
+        fields_data = pipeline_function("fields_data")
+        with tempfile.TemporaryDirectory(prefix="no settings ") as tmp:
+            missing = Path(tmp) / "orgsyndb.toml"
+            for language in ("en", "de"):
+                self.assertEqual(fields_data(missing, language),
+                                 {"compound": []})
+
+    def test_a_settings_file_that_declares_no_field(self) -> None:
+        """Requirement: Field data for the site (declares no field)."""
+        path = self.settings("format = 1\n")
+        self.assertEqual(pipeline_function("fields_data")(path, "en"),
+                         {"compound": []})
+
+    def test_a_broken_declaration_is_a_configuration_error(self) -> None:
+        """Requirement: Field data for the site (a rule of the
+        declarations)."""
+        fields_data = pipeline_function("fields_data")
+        error = pipeline().validate.ConfigError
+        head = "format = 1\n\n[[fields.compound]]\n"
+        cases = {
+            "no label": head + 'key = "x"\ntype = "text"\n',
+            "built-in key": head + (
+                'key = "cas"\ntype = "text"\nlabel = "CAS"\n'),
+            "unknown option": head + (
+                'key = "x"\ntype = "text"\nlabel = "X"\nfacet = true\n'),
+            "a single table": (
+                'format = 1\n\n[fields.compound]\nkey = "x"\n'
+                'type = "text"\nlabel = "X"\n')}
+        for name, text in cases.items():
+            with self.subTest(case=name):
+                path = self.settings(text)
+                with self.assertRaises(error):
+                    fields_data(path, "en")
+
+    def test_a_broken_vocabulary_is_a_configuration_error(self) -> None:
+        """Requirement: Field data for the site (a rule of the
+        vocabularies)."""
+        fields_data = pipeline_function("fields_data")
+        error = pipeline().validate.ConfigError
+        text = ('format = 1\n\n[[fields.compound]]\nkey = "kind"\n'
+                'type = "choice"\nlabel = "Kind"\nvocabulary = "kinds"\n')
+        cases = {
+            "missing": {},
+            "no label": {"kinds": "[top]\nlabel_de = 'Oben'\n"},
+            "cycle": {"kinds": '[a]\nlabel = "A"\nparent = "a"\n'},
+            "empty": {"kinds": ""}}
+        for name, vocabularies in cases.items():
+            with self.subTest(case=name):
+                path = self.settings(text, vocabularies)
+                with self.assertRaises(error):
+                    fields_data(path, "en")
 
 
 class HelperModuleTests(unittest.TestCase):

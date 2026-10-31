@@ -4,3 +4,7 @@ formula = "C3H6O"
 mw = 58.08
 smiles = "CC(C)=O"
 cas = "67-64-1"
+item_number = "CH-0008"
+chemical_class = ["ketones"]
+stock = 5000
+in_house = false

@@ -37,3 +37,9 @@ smiles = "CCOC(C)=O"
 # placed in the collection's static/structures/ folder. Write the path starting with
 # structures/. Optional; delete the # to use it.
 # structure_image = "structures/example-compound.svg"
+
+# Your collection may keep more about each compound, such as an item
+# number or a chemical class. The collection's orgsyndb.toml lists
+# these fields, each under [[fields.compound]] with its key and type.
+# Write each one below as a further line of the same form, e.g.
+# item_number = "CH-0021".

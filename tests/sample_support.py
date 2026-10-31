@@ -450,3 +450,97 @@ def agreement_differences(org: Path, markdown: Path) -> list[str]:
         if got != want:
             out.append(f"section {name} reads {got!r}, not {want!r}")
     return out
+
+
+# --- the demo's compound fields ---------------------------------------------
+
+DEMO_DECLARATIONS = [
+    {"key": "item_number", "type": "text", "required": True,
+     "unique": True, "pattern": r"CH-\d{4}", "column": True},
+    {"key": "short_name", "type": "text"},
+    {"key": "chemical_class", "type": "choice", "required": True,
+     "multiple": True, "column": True, "vocabulary": "chemical-classes"},
+    {"key": "stock", "type": "number", "unit": "g", "min": 0},
+    {"key": "in_house", "type": "boolean"},
+]
+
+
+def vocabulary_depth(vocabulary: dict[str, dict[str, Any]],
+                     value: str) -> int:
+    """The number of ancestors of ``value`` in ``vocabulary``."""
+    depth = 0
+    while "parent" in vocabulary[value]:
+        value = vocabulary[value]["parent"]
+        depth += 1
+    return depth
+
+
+def field_violations(collection: Path) -> list[str]:
+    """Return the rules of sample-procedures "Demo collection" that the
+    declarations, the vocabulary and the compounds' values of
+    ``collection`` break."""
+    problems: list[str] = []
+    try:
+        settings = tomllib.loads(
+            (collection / "orgsyndb.toml").read_text(encoding="utf-8"))
+        declared = settings["fields"]["compound"]
+    except (OSError, KeyError, tomllib.TOMLDecodeError) as exc:
+        return [f"orgsyndb.toml declares no compound field: {exc!r}"]
+    labels = [(d.get("label"), d.get("label_de")) for d in declared]
+    bare = [{k: v for k, v in d.items() if k not in ("label", "label_de")}
+            for d in declared]
+    if bare != DEMO_DECLARATIONS:
+        problems.append(f"declarations are {bare}")
+    for key, pair in zip((d.get("key") for d in declared), labels):
+        for label in pair:
+            if not isinstance(label, str) or not label.strip():
+                problems.append(f"{key}: missing label or label_de")
+    names = sorted(p.name for p in (collection / "vocabularies").glob("*"))
+    if names != ["chemical-classes.toml"]:
+        problems.append(f"vocabularies/ holds {names}")
+    try:
+        vocabulary = tomllib.loads((collection / "vocabularies"
+                                    / "chemical-classes.toml"
+                                    ).read_text(encoding="utf-8"))
+        for value, entry in vocabulary.items():
+            if not str(entry.get("label_de", "")).strip():
+                problems.append(f"{value}: no label_de")
+            if entry.get("parent", value) not in vocabulary:
+                problems.append(f"{value}: parent is not a value")
+        depths = [vocabulary_depth(vocabulary, v) for v in vocabulary]
+    except (OSError, KeyError, RecursionError, tomllib.TOMLDecodeError) as exc:
+        return problems + [f"chemical-classes.toml: {exc!r}"]
+    if max(depths, default=0) < 2:
+        problems.append("no value has two ancestors")
+    registry = read_registry(collection / "compounds")
+    classes = [c.get("chemical_class") for c in registry.values()]
+    for key, compound in registry.items():
+        for field in ("item_number", "chemical_class"):
+            if field not in compound:
+                problems.append(f"{key}: sets no {field}")
+        value = compound.get("chemical_class")
+        if not isinstance(value, list) or not set(value) <= set(vocabulary):
+            problems.append(f"{key}: chemical_class is {value!r}")
+    numbers = [c.get("item_number") for c in registry.values()]
+    if len(set(numbers)) != len(numbers) or not all(
+            isinstance(n, str) and re.fullmatch(r"CH-\d{4}", n)
+            for n in numbers):
+        problems.append(f"item numbers are {numbers}")
+    if not any(isinstance(c, list) and len(c) == 2 for c in classes):
+        problems.append("no compound sets two chemical classes")
+    if not any(isinstance(c, list) and any(
+            vocabulary_depth(vocabulary, v) == 2 for v in c if v in vocabulary)
+            for c in classes):
+        problems.append("no compound sets a class with two ancestors")
+    for field in ("short_name", "stock"):
+        count = sum(field in c for c in registry.values())
+        if count == 0 or count == len(registry):
+            problems.append(f"{count} compounds set {field}")
+    stocks = [c["stock"] for c in registry.values() if "stock" in c]
+    if all(float(s).is_integer() for s in stocks):
+        problems.append("every stock is a whole number")
+    flags = [c.get("in_house") for c in registry.values()]
+    for wanted in (True, False, None):
+        if wanted not in flags:
+            problems.append(f"no compound has in_house {wanted!r}")
+    return problems

@@ -327,7 +327,11 @@ h1 { font-size: 2.25rem; }
 .procedure-list td:nth-child(2) a:hover, :is(.compound-table, .sequence-table) td:first-child a:hover { text-decoration: underline; }
 .sequence-table td:first-child { overflow-wrap: anywhere; }
 .compound-table td:first-child { overflow-wrap: anywhere; }
-.compound-table td:nth-child(n+2) { white-space: nowrap; }
+/* Formula, weight, CAS and the numbers stay on one line; the columns of
+   declared fields may wrap. */
+.compound-table td:is(:nth-child(2), :nth-child(3), :nth-child(4), .num) {
+  white-space: nowrap;
+}
 .procedure-list td:nth-child(n+4) { color: var(--muted); }
 .procedure-list .badge {
   padding: 0;

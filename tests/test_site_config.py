@@ -98,6 +98,8 @@ class OverlayTests(unittest.TestCase):
              "target": "data/compounds"},
             {"source": f"{collection}/build/content/sequences",
              "target": "content/sequences", "files": ["/SEQ-*.md"]},
+            {"source": f"{collection}/build/data",
+             "target": "data/collection"},
         ]})
 
 

@@ -7,14 +7,17 @@ configuration", localization "German compound names").
 builds it in German after removing one German name.
 """
 
+import json
 import re
 
+import field_support as fs
 import pipeline_support as ps
 import sequence_support as ss
 import test_theme_integration as tti
 from pipeline_support import Content, Page
 
 FACT_LABELS = ["Formula", "MW", "CAS", "SMILES"]
+SEPARATOR = fs.PATH_SEPARATOR
 
 
 class CompoundCase(tti.SiteCase):
@@ -57,6 +60,20 @@ class CompoundCase(tti.SiteCase):
     def shown(self, key: str) -> str:
         return ps.shown_name(self.registry()[key], self.LOCALE)
 
+    def fields(self) -> list[fs.Field]:
+        """The fields the collection declares, in the site's language."""
+        return fs.read_fields(self.sandbox.root / "orgsyndb.toml",
+                              self.LOCALE)
+
+    def declared_pairs(self, key: str) -> list[tuple[str, str]]:
+        """The label and value of each declared field the compound sets
+        that its page shows after the built-in facts, in order, as read
+        from the page."""
+        page = self.compound_page(key)
+        pairs = page.definition_pairs(page.find("dl", "compound-facts"))
+        built_in = 3 + bool(self.registry()[key].get("cas"))
+        return [(p.label, p.definition.norm()) for p in pairs[built_in:]]
+
 
 class CompoundSiteTests(CompoundCase):
     """The test collection, built in English."""
@@ -83,10 +100,14 @@ class CompoundSiteTests(CompoundCase):
         facts = page.find("main").find("dl", "compound-facts")
         self.assertIsNotNone(facts, "no dl.compound-facts")
         pairs = page.definition_pairs(facts)
+        declared = fs.shown(self.fields(), compound, self.LOCALE, page=True)
         wanted = [label for label in FACT_LABELS
                   if label != "CAS" or compound.get("cas")]
+        wanted += [field.label for field, _ in declared]
         self.assertEqual([p.label for p in pairs], wanted)
         values = {p.label: p.definition for p in pairs}
+        for field, text in declared:
+            self.assertEqual(values[field.label].norm(), text, field.key)
         self.assertEqual(values["Formula"].norm(), compound["formula"])
         self.assertEqual(
             [s.norm() for s in values["Formula"].find_all("sub")],
@@ -129,6 +150,52 @@ class CompoundSiteTests(CompoundCase):
                         page.index_of(figures[0]))
         self.assertLess(page.index_of(figures[0]),
                         page.index_of(main.find("dl", "compound-facts")))
+
+    def test_declared_fields_follow_the_built_in_facts(self) -> None:
+        """Scenario: Declared fields in English."""
+        classes = {
+            "carboxylic": "Carbonyl compounds" + SEPARATOR
+                          + "Carboxylic acids",
+            "esters": SEPARATOR.join(
+                ["Carbonyl compounds", "Carboxylic acid derivatives",
+                 "Esters"]),
+        }
+        expected = {
+            "acetylsalicylic-acid": [
+                ("Item no.", "CH-0010"), ("Short name", "ASA"),
+                ("Chemical class",
+                 f"{classes['carboxylic']}, {classes['esters']}"),
+                ("Made in house", "Yes")],
+            "acetic-acid": [
+                ("Item no.", "CH-0006"), ("Short name", "AcOH"),
+                ("Chemical class", classes["carboxylic"]),
+                ("Stock", "2500 g"), ("Made in house", "No")],
+            "ethyl-triphenylphosphoranylidene-acetate": [
+                ("Item no.", "CH-0015"),
+                ("Chemical class", f"Organophosphorus compounds, "
+                                   f"{classes['esters']}"),
+                ("Stock", "12.5 g"), ("Made in house", "No")],
+            "methyl-salicylate": [
+                ("Item no.", "CH-0018"),
+                ("Chemical class", f"{classes['esters']}, Phenols")],
+            "4-bromoacetophenone": [
+                ("Item no.", "CH-0005"),
+                ("Chemical class", SEPARATOR.join(
+                    ["Carbonyl compounds", "Ketones", "Aryl ketones"])
+                 + ", Aryl halides"),
+                ("Stock", "100 g"), ("Made in house", "No")],
+        }
+        for key, pairs in expected.items():
+            with self.subTest(compound=key):
+                self.assertEqual(self.declared_pairs(key), pairs)
+
+    def test_every_compound_sets_an_item_number(self) -> None:
+        """Scenario: Declared fields in English (a required field)."""
+        for key, compound in self.registry().items():
+            with self.subTest(compound=key):
+                self.assertEqual(
+                    self.declared_pairs(key)[0],
+                    ("Item no.", compound["item_number"]))
 
     def test_the_parts_come_in_order(self) -> None:
         """Scenario: A page per compound (order of the parts)."""
@@ -280,8 +347,11 @@ class CompoundSiteTests(CompoundCase):
         self.assertEqual(len(tables), 1)
         model = next(m for m in page.tables() if m.node is tables[0])
         self.assertEqual([c.text for c in model.rows[0]],
-                         ["Compound", "Formula", "MW", "CAS", "Made by",
-                          "Used in"])
+                         ["Compound", "Formula", "MW", "CAS", "Item no.",
+                          "Chemical class", "Made by", "Used in"])
+        columns = [f for f in self.fields() if f.column]
+        self.assertEqual([f.key for f in columns],
+                         ["item_number", "chemical_class"])
         registry = self.registry()
         names = {self.shown(key): key for key in registry}
         self.assertEqual(len(names), len(registry), "names are not unique")
@@ -290,7 +360,7 @@ class CompoundSiteTests(CompoundCase):
         listed = []
         for row in rows:
             cells = [c for c in row.elements() if c.tag in ("td", "th")]
-            self.assertEqual(len(cells), 6)
+            self.assertEqual(len(cells), 8)
             link = page.links(cells[0])[0]
             key = names[link.node.norm()]
             listed.append(link.node.norm())
@@ -304,12 +374,34 @@ class CompoundSiteTests(CompoundCase):
                 self.assertEqual(cells[2].norm(),
                                  f"{compound['mw']} g/mol")
                 self.assertEqual(cells[3].norm(), compound.get("cas", ""))
-                self.assertEqual(cells[4].norm(),
+                texts = {f.key: text for f, text in fs.shown(
+                    columns, compound, self.LOCALE, page=False)}
+                for cell, field in zip(cells[4:6], columns):
+                    self.assertEqual(cell.norm(), texts.get(field.key, ""),
+                                     field.key)
+                self.assertEqual(cells[6].norm(),
                                  str(len(self.made_by(key))))
-                self.assertEqual(cells[5].norm(),
+                self.assertEqual(cells[7].norm(),
                                  str(len(self.used_in_by(key))))
         self.assertEqual(listed, sorted(names))
         self.assertEqual(len(set(listed)), len(listed))
+
+    def test_the_directory_writes_a_choice_as_its_own_labels(self) -> None:
+        """Scenario: Every compound is listed (the column fields)."""
+        page = ps.load_page(self.public, self.public / "compounds"
+                            / "index.html")
+        model = next(m for m in page.tables()
+                     if m.node.has_class("compound-table"))
+        rows = {r[0].text: r for r in model.rows[1:]}
+        self.assertEqual(
+            [c.text for c in rows["Acetylsalicylic acid"][4:6]],
+            ["CH-0010", "Carboxylic acids, Esters"])
+        self.assertEqual(
+            [c.text for c in rows[self.shown("4-bromoacetophenone")][4:6]],
+            ["CH-0005", "Aryl ketones, Aryl halides"])
+        self.assertEqual(
+            [c.text for c in rows["Benzaldehyde"][4:6]],
+            ["CH-0011", "Aldehydes"])
 
 
 class GermanCompoundTests(CompoundCase):
@@ -347,7 +439,8 @@ class GermanCompoundTests(CompoundCase):
         page = self.compound_page("salicylic-acid")
         facts = page.find("dl", "compound-facts")
         self.assertEqual([p.label for p in page.definition_pairs(facts)],
-                         ["Summenformel", "Molmasse", "CAS", "SMILES"])
+                         ["Summenformel", "Molmasse", "CAS", "SMILES",
+                          "Artikelnr.", "Stoffklasse", "Eigene Herstellung"])
         values = {p.label: p.definition.norm()
                   for p in page.definition_pairs(facts)}
         self.assertEqual(values["Molmasse"], "138,12 g/mol")
@@ -382,10 +475,196 @@ class GermanCompoundTests(CompoundCase):
         model = next(m for m in directory.tables() if m.node is table)
         self.assertEqual([c.text for c in model.rows[0]],
                          ["Verbindung", "Summenformel", "Molmasse", "CAS",
-                          "Hergestellt nach", "Verwendet in"])
+                          "Artikelnr.", "Stoffklasse", "Hergestellt nach",
+                          "Verwendet in"])
         row = next(m for m in model.rows[1:]
                    if m[0].text == "Salicylsäure")
         self.assertEqual(row[2].text, "138,12 g/mol")
+        self.assertEqual([c.text for c in row[4:6]],
+                         ["CH-0020", "Carbonsäuren, Phenole"])
+
+    def test_declared_fields_in_german(self) -> None:
+        """Scenario: Declared fields in German."""
+        carbonyl = "Carbonylverbindungen"
+        expected = {
+            "acetic-acid": [
+                ("Artikelnr.", "CH-0006"), ("Kurzname", "AcOH"),
+                ("Stoffklasse", f"{carbonyl}{SEPARATOR}Carbonsäuren"),
+                ("Bestand", "2500 g"), ("Eigene Herstellung", "Nein")],
+            "ethyl-triphenylphosphoranylidene-acetate": [
+                ("Artikelnr.", "CH-0015"),
+                ("Stoffklasse", "Organophosphorverbindungen, " + SEPARATOR
+                 .join([carbonyl, "Carbonsäurederivate", "Ester"])),
+                ("Bestand", "12,5 g"), ("Eigene Herstellung", "Nein")],
+            "salicylic-acid": [
+                ("Artikelnr.", "CH-0020"),
+                ("Stoffklasse", f"{carbonyl}{SEPARATOR}Carbonsäuren, "
+                                "Phenole"),
+                ("Eigene Herstellung", "Ja")],
+            "methyl-salicylate": [
+                ("Artikelnr.", "CH-0018"),
+                ("Stoffklasse", SEPARATOR.join(
+                    [carbonyl, "Carbonsäurederivate", "Ester"])
+                 + ", Phenole")],
+        }
+        for key, pairs in expected.items():
+            with self.subTest(compound=key):
+                self.assertEqual(self.declared_pairs(key), pairs)
+
+    def test_every_declared_value_reads_as_the_fields_say(self) -> None:
+        """Scenario: Declared fields in German (every compound)."""
+        fields = self.fields()
+        self.assertEqual([f.label for f in fields],
+                         ["Artikelnr.", "Kurzname", "Stoffklasse",
+                          "Bestand", "Eigene Herstellung"])
+        for key, compound in self.registry().items():
+            with self.subTest(compound=key):
+                self.assertEqual(
+                    self.declared_pairs(key),
+                    [(f.label, text) for f, text in fs.shown(
+                        fields, compound, "de", page=True)])
+
+
+class NumberAndBooleanColumnTests(CompoundCase):
+    """The test collection in English, with `column = true` added to the
+    declarations of `stock` and `in_house`."""
+
+    @classmethod
+    def prepare(cls) -> None:
+        path = cls.sandbox.root / "orgsyndb.toml"
+        text = path.read_text(encoding="utf-8")
+        for key in ("stock", "in_house"):
+            anchor = f'key = "{key}"\n'
+            assert text.count(anchor) == 1, key
+            text = text.replace(anchor, anchor + "column = true\n")
+        path.write_text(text, encoding="utf-8")
+
+    def directory(self):
+        page = ps.load_page(self.public, self.public / "compounds"
+                            / "index.html")
+        table = page.find("table", "compound-table")
+        return next(m for m in page.tables() if m.node is table)
+
+    def test_the_columns_follow_the_chemical_class(self) -> None:
+        """Scenario: Number and boolean columns."""
+        model = self.directory()
+        self.assertEqual([c.text for c in model.rows[0]],
+                         ["Compound", "Formula", "MW", "CAS", "Item no.",
+                          "Chemical class", "Stock", "Made in house",
+                          "Made by", "Used in"])
+        header = model.rows[0]
+        self.assertIn("num", header[6].classes)
+        self.assertNotIn("num", header[7].classes)
+        for row in model.rows[1:]:
+            with self.subTest(compound=row[0].text):
+                self.assertEqual(len(row), 10)
+                self.assertIn("num", row[6].classes)
+                self.assertNotIn("num", row[7].classes)
+
+    def test_the_cells_of_a_number_and_a_boolean(self) -> None:
+        """Scenario: Number and boolean columns (the cells)."""
+        rows = {r[0].text: r for r in self.directory().rows[1:]}
+        cells = {name: [c.text for c in row[6:8]]
+                 for name, row in rows.items()}
+        self.assertEqual(
+            cells["Ethyl (triphenylphosphoranylidene)acetate"],
+            ["12.5 g", "No"])
+        self.assertEqual(cells["Acetic acid"], ["2500 g", "No"])
+        self.assertEqual(cells["Salicylic acid"], ["", "Yes"])
+        self.assertEqual(cells["Methyl salicylate"], ["", ""])
+
+    def test_every_cell_follows_the_registry(self) -> None:
+        """Scenario: Number and boolean columns (every compound)."""
+        registry = self.registry()
+        names = {self.shown(key): key for key in registry}
+        columns = [f for f in self.fields() if f.column]
+        self.assertEqual([f.key for f in columns],
+                         ["item_number", "chemical_class", "stock",
+                          "in_house"])
+        for row in self.directory().rows[1:]:
+            compound = registry[names[row[0].text]]
+            texts = {f.key: text for f, text in fs.shown(
+                columns, compound, "en", page=False)}
+            with self.subTest(compound=row[0].text):
+                self.assertEqual([c.text for c in row[4:8]],
+                                 [texts.get(f.key, "") for f in columns])
+
+
+class MarkupFieldTests(CompoundCase):
+    """The test collection in English, with markup characters in the
+    label and in a value of `short_name`."""
+
+    LABEL = "Name <b>&</b>"
+    VALUE = "<i>Me</i>2CO & co"
+
+    @classmethod
+    def prepare(cls) -> None:
+        settings = cls.sandbox.root / "orgsyndb.toml"
+        text = settings.read_text(encoding="utf-8")
+        assert text.count('label = "Short name"') == 1
+        settings.write_text(text.replace(
+            'label = "Short name"', f'label = "{cls.LABEL}"'),
+            encoding="utf-8")
+        acetone = cls.sandbox.root / "compounds" / "acetone.toml"
+        text = acetone.read_text(encoding="utf-8")
+        assert "short_name" not in text
+        acetone.write_text(text + f'short_name = "{cls.VALUE}"\n',
+                           encoding="utf-8")
+
+    def test_markup_in_a_label_or_a_value_is_text(self) -> None:
+        """Scenario: Markup in a label or a value is text."""
+        page = self.compound_page("acetone")
+        facts = page.find("main").find("dl", "compound-facts")
+        pairs = {p.label: p for p in page.definition_pairs(facts)}
+        self.assertIn(self.LABEL, pairs, sorted(pairs))
+        self.assertEqual(pairs[self.LABEL].term.text(), self.LABEL)
+        self.assertEqual(pairs[self.LABEL].definition.text().strip(),
+                         self.VALUE)
+        self.assertEqual(facts.find_all("b"), [])
+        self.assertEqual(facts.find_all("i"), [])
+
+
+class NoFieldsTests(CompoundCase):
+    """The test collection in English, with an `orgsyndb.toml` that
+    declares no field. Its compounds keep the keys, which the validator
+    reports as warnings and the build tolerates."""
+
+    @classmethod
+    def prepare(cls) -> None:
+        (cls.sandbox.root / "orgsyndb.toml").write_text(
+            "format = 1\n", encoding="utf-8")
+
+    def test_the_field_data_is_empty(self) -> None:
+        """Scenario: No settings file (the staged data)."""
+        path = self.sandbox.root / "build" / "data" / "fields.json"
+        self.assertTrue(path.is_file(), "build/data/fields.json is missing")
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8")),
+                         {"compound": []})
+
+    def test_the_pages_show_the_built_in_facts_only(self) -> None:
+        """Requirement: Compound pages (one pair for each field the
+        collection declares)."""
+        for key, compound in self.registry().items():
+            page = self.compound_page(key)
+            facts = page.find("main").find("dl", "compound-facts")
+            with self.subTest(compound=key):
+                self.assertEqual(
+                    [p.label for p in page.definition_pairs(facts)],
+                    [label for label in FACT_LABELS
+                     if label != "CAS" or compound.get("cas")])
+
+    def test_the_directory_has_no_declared_column(self) -> None:
+        """Requirement: Compound directory (a column for each column
+        field)."""
+        page = ps.load_page(self.public, self.public / "compounds"
+                            / "index.html")
+        table = page.find("table", "compound-table")
+        model = next(m for m in page.tables() if m.node is table)
+        self.assertEqual([c.text for c in model.rows[0]],
+                         ["Compound", "Formula", "MW", "CAS", "Made by",
+                          "Used in"])
+        for row in model.rows[1:]:
+            self.assertEqual(len(row), 6)
 
 
 class FallbackNameTests(CompoundCase):
@@ -427,7 +706,8 @@ class MarkupNameTests(CompoundCase):
     def prepare(cls) -> None:
         (cls.sandbox.root / "compounds" / "dimethylurea.toml").write_text(
             f'name = "{cls.NAME}"\nformula = "C3H8N2O"\nmw = 88.11\n'
-            'smiles = "CNC(=O)NC"\n', encoding="utf-8")
+            'smiles = "CNC(=O)NC"\nitem_number = "CH-0099"\n'
+            'chemical_class = ["ketones"]\n', encoding="utf-8")
 
     def test_a_name_is_escaped_once(self) -> None:
         """Scenario: A page per compound (a name with markup characters)."""

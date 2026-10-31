@@ -27,6 +27,7 @@ VOCABULARY = FIXTURES / "reaction_types.toml"
 STATIC_DIR = FIXTURES / "static"
 COMPOUNDS = FIXTURES / "compounds"
 COMPOUND_TEMPLATE = REPO / "templates" / "compound.toml"
+FIELDS = FIXTURES / "fields"
 
 _LINE = re.compile(
     r"^(?P<path>.+?):(?P<field>[^:\s]+): "
@@ -404,3 +405,102 @@ def template_registry() -> Iterator[Path]:
         registry.mkdir()
         shutil.copy2(COMPOUND_TEMPLATE, registry / "example-compound.toml")
         yield registry
+
+
+def append_text(line: str) -> Edit:
+    """A text edit appending ``line`` and a newline to a file."""
+    return lambda text: text + line + "\n"
+
+
+def insert_after(anchor: str, line: str) -> Edit:
+    """A text edit inserting ``line`` on the line after the unique line
+    ``anchor``."""
+    def edit(text: str) -> str:
+        if text.count(f"{anchor}\n") != 1:
+            raise AssertionError(f"the text has no unique line {anchor!r}")
+        return text.replace(f"{anchor}\n", f"{anchor}\n{line}\n", 1)
+    return edit
+
+
+def declaration(key: str, type_: str, label: str, *lines: str) -> str:
+    """The text of one ``[[fields.compound]]`` table, after a blank
+    line, with the extra assignment ``lines``."""
+    body = "".join(f"{line}\n" for line in lines)
+    return (f'\n[[fields.compound]]\nkey = "{key}"\ntype = "{type_}"\n'
+            f'label = "{label}"\n{body}')
+
+
+class FieldCopy(NamedTuple):
+    """The temporary copies of a field-declaration run."""
+    settings: Path
+    vocabularies: Path
+    registry: Path
+
+
+@contextlib.contextmanager
+def fields_copy() -> Iterator[FieldCopy]:
+    """Fresh temporary copies of ``tests/fixtures/fields/`` and of the
+    fixture registry."""
+    with tempfile.TemporaryDirectory() as tmp:
+        fields = Path(tmp) / "fields"
+        shutil.copytree(FIELDS, fields)
+        registry = Path(tmp) / "compounds"
+        shutil.copytree(COMPOUNDS, registry)
+        yield FieldCopy(fields / "orgsyndb.toml", fields / "vocabularies",
+                        registry)
+
+
+FieldChange = Callable[[FieldCopy], None]
+
+
+def field_variant_run(*steps: FieldChange,
+                      extra: Sequence[str | Path] = ()) -> Result:
+    """Field-declaration run: each of ``steps`` edits the copies, then a
+    fixture run on ``baseline`` reads the registry copy and, through
+    ``--settings``, the copy of ``orgsyndb.toml``."""
+    with fields_copy() as copy:
+        for step in steps:
+            step(copy)
+        return fixture_run(
+            "baseline", compounds=copy.registry,
+            extra=["--settings", copy.settings, *extra])
+
+
+def edit_settings(*edits: Edit) -> FieldChange:
+    """A field change applying text edits to ``orgsyndb.toml``."""
+    def change(copy: FieldCopy) -> None:
+        copy.settings.write_text(
+            apply_edits(copy.settings.read_text(encoding="utf-8"), edits),
+            encoding="utf-8")
+    return change
+
+
+def edit_field_compound(key: str, *edits: Edit) -> FieldChange:
+    """A field change applying text edits to the registry copy's
+    ``<key>.toml``."""
+    def change(copy: FieldCopy) -> None:
+        edit_compound(key, *edits)(copy.registry)
+    return change
+
+
+def edit_vocabulary(name: str, *edits: Edit) -> FieldChange:
+    """A field change applying text edits to ``vocabularies/<name>.toml``
+    of the fields copy."""
+    def change(copy: FieldCopy) -> None:
+        path = copy.vocabularies / f"{name}.toml"
+        path.write_text(
+            apply_edits(path.read_text(encoding="utf-8"), edits),
+            encoding="utf-8")
+    return change
+
+
+def write_vocabulary(name: str, content: str | bytes) -> FieldChange:
+    """A field change writing ``vocabularies/<name>.toml`` of the fields
+    copy, replacing or adding the file."""
+    def change(copy: FieldCopy) -> None:
+        path = copy.vocabularies / f"{name}.toml"
+        if isinstance(content, bytes):
+            path.write_bytes(content)
+        else:
+            path.write_text(content, encoding="utf-8")
+    return change

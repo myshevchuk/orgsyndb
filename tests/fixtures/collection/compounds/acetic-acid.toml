@@ -4,3 +4,8 @@ formula = "C2H4O2"
 mw = 60.05
 smiles = "CC(=O)O"
 cas = "64-19-7"
+item_number = "CH-0006"
+short_name = "AcOH"
+chemical_class = ["carboxylic-acids"]
+stock = 2500
+in_house = false

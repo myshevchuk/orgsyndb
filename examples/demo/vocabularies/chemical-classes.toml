@@ -1,0 +1,62 @@
+# Chemical classes of the demo collection, in three levels. A value
+# is filed under its parent; label_de is the name on the German
+# site.
+
+[carbonyl-compounds]
+label = "Carbonyl compounds"
+label_de = "Carbonylverbindungen"
+
+[aldehydes]
+label = "Aldehydes"
+label_de = "Aldehyde"
+parent = "carbonyl-compounds"
+
+[ketones]
+label = "Ketones"
+label_de = "Ketone"
+parent = "carbonyl-compounds"
+
+[aryl-ketones]
+label = "Aryl ketones"
+label_de = "Arylketone"
+parent = "ketones"
+
+[carboxylic-acids]
+label = "Carboxylic acids"
+label_de = "Carbonsäuren"
+parent = "carbonyl-compounds"
+
+[acid-derivatives]
+label = "Carboxylic acid derivatives"
+label_de = "Carbonsäurederivate"
+parent = "carbonyl-compounds"
+
+[esters]
+label = "Esters"
+label_de = "Ester"
+parent = "acid-derivatives"
+
+[anhydrides]
+label = "Anhydrides"
+label_de = "Anhydride"
+parent = "acid-derivatives"
+
+[alcohols]
+label = "Alcohols"
+label_de = "Alkohole"
+
+[phenols]
+label = "Phenols"
+label_de = "Phenole"
+
+[aryl-halides]
+label = "Aryl halides"
+label_de = "Arylhalogenide"
+
+[organoboron-compounds]
+label = "Organoboron compounds"
+label_de = "Organoborverbindungen"
+
+[organophosphorus-compounds]
+label = "Organophosphorus compounds"
+label_de = "Organophosphorverbindungen"

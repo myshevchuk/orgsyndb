@@ -391,8 +391,9 @@ class DemoGeneralProcedureTests(unittest.TestCase):
         for key, values in GENERAL_COMPOUNDS.items():
             with self.subTest(compound=key):
                 self.assertIn(key, registry)
-                self.assertEqual(list(registry[key]), keys)
-                self.assertEqual(list(registry[key].values()), values)
+                self.assertEqual(list(registry[key])[:len(keys)], keys)
+                self.assertEqual(
+                    list(registry[key].values())[:len(keys)], values)
 
     def test_the_reagents_table_describes_entry_one(self) -> None:
         """Requirement: Demo general procedure (the Reagents table)."""
@@ -642,6 +643,49 @@ class DemoSequenceTests(unittest.TestCase):
                         self.assertLessEqual(step["entry"], len(entries))
 
 
+class DemoFieldTests(unittest.TestCase):
+    def test_the_demo_declares_its_fields(self) -> None:
+        """Scenario: The demo declares its fields."""
+        self.assertEqual(sup.field_violations(DEMO), [])
+
+    def test_the_demo_vocabulary_is_the_only_one(self) -> None:
+        """Scenario: The demo declares its fields (the vocabulary)."""
+        directory = DEMO / "vocabularies"
+        self.assertTrue(directory.is_dir(), "examples/demo/vocabularies "
+                        "is missing")
+        self.assertEqual(sorted(p.name for p in directory.iterdir()),
+                         ["chemical-classes.toml"])
+        vocabulary = tomllib.loads(
+            (directory / "chemical-classes.toml").read_text(
+                encoding="utf-8"))
+        self.assertEqual(
+            sorted(vocabulary),
+            sorted(["carbonyl-compounds", "aldehydes", "ketones",
+                    "aryl-ketones", "carboxylic-acids", "acid-derivatives",
+                    "esters", "anhydrides", "alcohols", "phenols",
+                    "aryl-halides", "organoboron-compounds",
+                    "organophosphorus-compounds"]))
+
+    def test_the_demo_values_are_the_stated_ones(self) -> None:
+        """Scenario: The demo declares its fields (the values)."""
+        registry = sup.read_registry(DEMO / "compounds")
+        numbers = {key: compound.get("item_number")
+                   for key, compound in registry.items()}
+        self.assertEqual(
+            list(numbers.values()),
+            [f"CH-{n:04d}" for n in range(1, len(registry) + 1)])
+        self.assertEqual(registry["acetic-acid"]["short_name"], "AcOH")
+        self.assertEqual(registry["phenylboronic-acid"]["stock"], 25)
+        self.assertEqual(
+            registry["ethyl-triphenylphosphoranylidene-acetate"]["stock"],
+            12.5)
+        self.assertEqual(registry["methyl-salicylate"]["chemical_class"],
+                         ["esters", "phenols"])
+        self.assertNotIn("in_house", registry["methyl-salicylate"])
+        self.assertIs(registry["acetone"]["in_house"], False)
+        self.assertIs(registry["salicylic-acid"]["in_house"], True)
+
+
 class TestCollectionTests(unittest.TestCase):
     def test_the_collection_mirrors_the_demo(self) -> None:
         """Scenario: The test collection mirrors the demo."""
@@ -651,9 +695,12 @@ class TestCollectionTests(unittest.TestCase):
                   *sorted(f"static/{p}" for p in relative_files(
                       DEMO / "static")),
                   *sorted(f"compounds/{p}" for p in relative_files(
-                      DEMO / "compounds"))]
+                      DEMO / "compounds")),
+                  *sorted(f"vocabularies/{p}" for p in relative_files(
+                      DEMO / "vocabularies"))]
         self.assertIn("static/structures/isopentyl-acetate.svg", copied)
         self.assertIn("compounds/salicylic-acid.toml", copied)
+        self.assertIn("vocabularies/chemical-classes.toml", copied)
         for relative in copied:
             with self.subTest(file=relative):
                 self.assertTrue((COLLECTION / relative).is_file(),
@@ -666,6 +713,9 @@ class TestCollectionTests(unittest.TestCase):
         self.assertEqual(
             relative_files(COLLECTION / "compounds"),
             relative_files(DEMO / "compounds"), "compounds/ files")
+        self.assertEqual(
+            relative_files(COLLECTION / "vocabularies"),
+            relative_files(DEMO / "vocabularies"), "vocabularies/ files")
         sequences = relative_files(DEMO / "md" / "sequences")
         self.assertEqual(len(sequences), 4, "the demo's sequences")
         for relative in sorted(sequences):

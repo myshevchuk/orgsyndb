@@ -585,10 +585,34 @@ def fixture_compound_keys(path: Path) -> list[str]:
     return list(dict.fromkeys(keys))
 
 
+def required_field_lines(sandbox: Sandbox, registry: Path) -> str:
+    """The lines that give a fixture compound a valid value for each
+    field that the sandbox collection's ``orgsyndb.toml`` declares
+    required: a fresh ``CH-9nnn`` for ``item_number`` and one class for
+    ``chemical_class``. The fixture registry sets no declared field."""
+    data = tomllib.loads(
+        (sandbox.root / "orgsyndb.toml").read_text(encoding="utf-8"))
+    lines = ""
+    for field in data.get("fields", {}).get("compound", []):
+        if not field.get("required"):
+            continue
+        if field["key"] == "item_number":
+            number = 9000 + len(list(registry.glob("*.toml")))
+            lines += f'item_number = "CH-{number:04d}"\n'
+        elif field["key"] == "chemical_class":
+            lines += 'chemical_class = ["alcohols"]\n'
+        else:
+            raise AssertionError(f"put_compounds cannot set the required "
+                                 f"field {field['key']}")
+    return lines
+
+
 def put_compounds(sandbox: Sandbox, *keys: str) -> list[Path]:
     """Copy fixture registry files into the sandbox collection's
     ``compounds/``, with the structure images they name into
-    ``static/structures/``. A file the collection already holds is kept."""
+    ``static/structures/``. A file the collection already holds is kept.
+    Where the collection declares required fields, each copy also sets
+    them."""
     copied = []
     registry = sandbox.root / "compounds"
     registry.mkdir(parents=True, exist_ok=True)
@@ -601,6 +625,8 @@ def put_compounds(sandbox: Sandbox, *keys: str) -> list[Path]:
         if target.exists():
             continue
         copied.append(Path(shutil.copy2(source, target)))
+        with target.open("a", encoding="utf-8") as handle:
+            handle.write(required_field_lines(sandbox, registry))
         image = tomllib.loads(source.read_text(encoding="utf-8")).get(
             "structure_image")
         if image:

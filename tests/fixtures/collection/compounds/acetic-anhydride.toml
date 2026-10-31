@@ -4,3 +4,8 @@ formula = "C4H6O3"
 mw = 102.09
 smiles = "CC(=O)OC(C)=O"
 cas = "108-24-7"
+item_number = "CH-0007"
+short_name = "Ac2O"
+chemical_class = ["anhydrides"]
+stock = 1000
+in_house = false

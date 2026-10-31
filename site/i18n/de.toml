@@ -135,6 +135,8 @@ copy = "Kopieren"
 copied = "Kopiert"
 selected = "Markiert: Strg+C drücken"
 decimal_separator = ","
+boolean_yes = "Ja"
+boolean_no = "Nein"
 
 structure_of = "Strukturformel von {{ . }}"
 scheme_of = "Schema von {{ . }}"

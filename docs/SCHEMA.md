@@ -222,10 +222,187 @@ silently. Any other file not named `<key>.toml` is a `file_name` error
 containing `must be named <key>.toml`, and defines no compound. A file that
 cannot be read as UTF-8 TOML gets a `toml` error and defines no compound;
 a parse error contains `invalid TOML`. A missing required field produces
-`required field missing`; unknown fields produce `unknown field` warnings.
+`required field missing`. A compound may also set fields declared by its
+collection. Only keys outside the built-in fields and those declarations
+produce `unknown field` warnings.
 
 A compound page adds **Sequences** after **Used in** when any sequence names
 it as its target. The list links those sequences by title, ordered by ID.
+
+## Collection field declarations
+
+To record extra data such as item numbers or chemical classes, declare
+compound fields in the collection's `orgsyndb.toml`. This UTF-8 TOML file
+must contain `format = 1` as an integer. Its only other allowed top-level
+key is `fields`, a table whose only allowed key is `compound`. Without
+`fields`, the collection declares no extra fields.
+
+Write one `[[fields.compound]]` table per field, in the order you want the
+site to show them. A single `[fields.compound]` table is invalid. For
+example, this declaration comes from the
+[demo settings](../examples/demo/orgsyndb.toml):
+
+```toml
+format = 1
+
+[[fields.compound]]
+key = "item_number"
+type = "text"
+label = "Item no."
+label_de = "Artikelnr."
+required = true
+unique = true
+pattern = 'CH-\d{4}'
+column = true
+```
+
+### Declaration keys
+
+| Key | TOML type | Required or default | Rule |
+|---|---|---|---|
+| `key` | String | Required | Matches `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`: lowercase letters and digits, words joined by single underscores, starting with a letter. Must be declared once, must not end in `_de`, and must not be a built-in key: `name`, `name_de`, `formula`, `mw`, `smiles`, `cas` or `structure_image`. |
+| `type` | String | Required | One of `text`, `number`, `boolean` or `choice`. |
+| `label` | Non-empty string | Required | The field's name on an English site. |
+| `label_de` | Non-empty string | Optional | The field's name on a German site; without it, the site uses `label`. |
+| `required` | Boolean | `false` | When `true`, every compound must set the field. |
+| `column` | Boolean | `false` | When `true`, the compound directory shows the field as a column. |
+
+Only the following additional keys are allowed for each type. A `boolean`
+declaration takes none of them.
+
+| Key | Field type | TOML type | Required or default | Rule |
+|---|---|---|---|---|
+| `pattern` | `text` | String | Optional | A valid Python regular expression that the whole value must match. |
+| `unique` | `text`, `number` | Boolean | `false` | No two compounds may set the same valid value. |
+| `min` | `number` | Integer or float | Optional | Finite inclusive lower bound; must not exceed `max` when both are set. A boolean is not a number. |
+| `max` | `number` | Integer or float | Optional | Finite inclusive upper bound. A boolean is not a number. |
+| `unit` | `number` | Non-empty string | Optional | Written after the number, separated by a space. |
+| `vocabulary` | `choice` | String | Required | Names `vocabularies/<name>.toml` beside `orgsyndb.toml`, without the directory or extension. The name matches `[a-z0-9]+(-[a-z0-9]+)*`. |
+| `multiple` | `choice` | Boolean | `false` | When `true`, the compound supplies a non-empty list of distinct values instead of one string. |
+
+The demo also declares `short_name` as text, `chemical_class` as a required
+choice with `multiple = true` and `column = true`, `stock` as a number with
+`min = 0` and `unit = "g"`, and `in_house` as a boolean.
+
+### Vocabularies
+
+A vocabulary lists the values a choice field accepts. Store it as UTF-8
+TOML in `vocabularies/<name>.toml`, beside the settings file. The file name
+without `.toml` and each top-level value key must match
+`[a-z0-9]+(-[a-z0-9]+)*`: lowercase letters and digits with single hyphens
+between groups. Each value is a table with these keys and no others:
+
+| Key | TOML type | Required | Rule |
+|---|---|---|---|
+| `label` | Non-empty string | Yes | The value's name on an English site. |
+| `label_de` | Non-empty string | No | The value's name on a German site; without it, the site uses `label`. |
+| `parent` | String | No | Another value key in the same file, under which this value is filed. |
+
+A vocabulary must contain at least one value. Following `parent` must
+eventually reach a value without a parent; a value must never be its own
+ancestor. There is no limit on the number of levels, and compounds may
+choose values at any level. The shape is the same as the reaction-type
+vocabulary, with the addition of `parent`.
+
+For example, the
+[demo vocabulary](../examples/demo/vocabularies/chemical-classes.toml)
+contains:
+
+```toml
+[carbonyl-compounds]
+label = "Carbonyl compounds"
+label_de = "Carbonylverbindungen"
+
+[acid-derivatives]
+label = "Carboxylic acid derivatives"
+label_de = "Carbonsäurederivate"
+parent = "carbonyl-compounds"
+
+[esters]
+label = "Esters"
+label_de = "Ester"
+parent = "acid-derivatives"
+```
+
+The collection may omit `vocabularies/` when no field needs it. `init` does
+not create the directory.
+
+### Compound values and messages
+
+Set each declared field as a plain top-level key in the compound file,
+alongside `name`, `cas` and the other built-in fields. For example, the
+demo's `methyl-salicylate.toml` sets:
+
+```toml
+item_number = "CH-0018"
+chemical_class = ["esters", "phenols"]
+```
+
+The demo vocabulary defines both choices. Its `item_number` and
+`chemical_class` fields are required, so a compound added to that
+collection must set both and use an unused item number. The compound
+template's closing note tells you to add the fields your collection
+declares as further lines of the same form.
+
+Value problems are errors on the compound file's path, under the declared
+field's key:
+
+| Field type or rule | Message | Meaning |
+|---|---|---|
+| `required = true` | `required field missing` | Set the field in every compound. |
+| `text`, single `choice` | `must be a string` | Put the value in quotes. |
+| `text` | `must not be empty` | Supply non-empty text. |
+| `text` with `pattern` | `must match the pattern <pattern>` | The whole string must match the declared pattern. |
+| `number` | `must be a number, unquoted` | Supply a finite TOML integer or float, without quotes or units; a boolean is not a number. |
+| `number` with `min` | `must be at least <min>` | Increase the value to the inclusive lower bound or above. |
+| `number` with `max` | `must be at most <max>` | Reduce the value to the inclusive upper bound or below. |
+| `boolean` | `must be true or false, unquoted` | Use `true` or `false` without quotes. |
+| `choice` | `unknown value "<v>"; see vocabularies/<name>.toml for the allowed values` | Use a value key from the named vocabulary, at any level. |
+| `choice` with `multiple = true` | `must be a list of strings, e.g. ["<a value>"]` | Supply a list of quoted value keys. The example uses a value from the vocabulary. |
+| `choice` with `multiple = true` | `must not be empty` | Supply at least one choice. |
+| `choice` with `multiple = true` | `repeats "<v>"` | Remove the repeated value. |
+| `unique = true` | `"<value>" is also set by <other compound keys>` | Use a value no other compound sets. For numbers, the message shows the value without quotes. |
+
+A value of the wrong type produces only that type error. Empty text with a
+pattern produces only `must not be empty`. A list of choices produces one
+`unknown value` error per unknown string. Uniqueness checks compare values
+that pass their field's checks and report every compound sharing a value.
+
+### Configuration errors
+
+The validator rejects settings or vocabularies that break any rule above,
+including invalid regular expressions, non-finite bounds, `min` greater
+than `max`, duplicate declarations, missing vocabulary files and parent
+loops. A file explicitly named by `--settings` must exist. Settings and
+vocabulary files must be readable UTF-8 TOML.
+
+These are configuration errors: exit status 2, nothing on standard output,
+and `validate.py: error: ...` on standard error. Messages identify the
+settings or vocabulary file, the field key when valid, and the offending
+key or value. An option for another type produces a message such as
+`a number field does not take pattern`; an unknown option produces
+`unknown key <key>`. An unknown top-level settings key produces
+`unknown key <key>; only format and fields are allowed`.
+
+The build program checks only the settings file's TOML, `format` and
+top-level keys before running a command. The validator checks the
+declarations and vocabularies, so a broken declaration does not prevent
+`clean` or `new`.
+
+### Display on the site
+
+Compound pages show set fields after Formula, MW, CAS and SMILES, in
+declaration order, using the field labels in the site's language. Text
+appears as written. Numbers use the site's decimal separator and the
+declared unit, such as `12,5 g` on a German site. Booleans show **Yes** or
+**No**, or **Ja** or **Nein** in German.
+
+A choice on a compound page shows the labels of its ancestors and its own
+label joined by ` › `, such as **Carbonyl compounds › Carboxylic acid
+derivatives › Esters**. Multiple choices are separated by `, ` in the
+compound's order. The compound directory adds fields with `column = true`
+after CAS, in declaration order. It shows only each choice's own label,
+leaves unset values as empty cells, and aligns number columns to the right.
 
 ## Synthesis sequences
 
@@ -331,8 +508,9 @@ Any other top-level key produces an `unknown field` warning. This includes
 misspellings such as `checkedby` and the fields `product`, top-level
 `yield_percent`, `precursors` and `structure_image`. An unknown key in a
 `products` entry produces a warning such as `products[1].colour`. Unknown
-fields in a compound record produce warnings on its file under the field
-name.
+fields in a compound record are keys outside both the built-in compound
+fields and the collection's declarations. They produce warnings on its
+file under the field name.
 
 ## Org file-level keywords
 
@@ -569,7 +747,7 @@ German site shows them with a comma.
 Run the validator with at least one Markdown content root:
 
 ```text
-tools/validate.py [--vocabulary FILE] [--static-dir DIR] [--compounds DIR] [--sequences DIR] CONTENT_ROOT...
+tools/validate.py [--vocabulary FILE] [--settings FILE] [--static-dir DIR] [--compounds DIR] [--sequences DIR] CONTENT_ROOT...
 ```
 
 Each positional `CONTENT_ROOT` is a directory of Markdown procedures.
@@ -581,8 +759,15 @@ directory. The validator checks every compound file there and resolves
 procedure keys against that registry. A missing registry directory is empty,
 so every key a procedure names is unknown. An existing path that is not a
 directory is a configuration error. `orgsyndb validate` passes
-`--static-dir static --compounds compounds --sequences md/sequences`
+`--settings orgsyndb.toml --static-dir static --compounds compounds --sequences md/sequences`
 from the collection root, after exporting Org sources.
+
+`--settings` names the collection's `orgsyndb.toml`. Without the option,
+the validator uses `orgsyndb.toml` in the working directory; a missing
+default declares no extra fields. A file explicitly named by `--settings`
+must exist. The validator checks the declarations and resolves their
+vocabularies relative to the settings file's directory, then checks each
+compound's values against them.
 
 `--sequences` defaults to `md/sequences` in the working directory. A missing
 directory holds no sequences; an existing path that is not a directory is a
@@ -658,12 +843,12 @@ The exit status tells a calling command whether validation succeeded:
 |---|---|
 | `0` | No errors were found. Warnings may still have been printed. |
 | `1` | At least one procedure, compound or sequence error was found. |
-| `2` | The invocation or validator configuration is invalid, such as no root, a root that is not a directory, or a missing or malformed vocabulary file. |
+| `2` | The invocation or validator configuration is invalid, such as no root, a root that is not a directory, a missing explicitly named settings file, invalid settings or declarations, or a missing or malformed vocabulary file. |
 
 Usage and configuration failures are written to standard error and include
-`validate.py: error:`. The validator suppresses checks that depend on a
-missing or malformed value, so one mistake does not usually produce a chain
-of secondary messages.
+`validate.py: error:`; standard output is empty. The validator suppresses
+checks that depend on a missing or malformed value, so one mistake does
+not usually produce a chain of secondary messages.
 
 ### Sequence messages
 

@@ -4,3 +4,7 @@ formula = "C8H8O"
 mw = 120.15
 smiles = "CC(=O)c1ccccc1"
 cas = "98-86-2"
+item_number = "CH-0009"
+chemical_class = ["aryl-ketones"]
+stock = 500
+in_house = false

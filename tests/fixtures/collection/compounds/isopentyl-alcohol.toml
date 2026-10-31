@@ -4,3 +4,7 @@ formula = "C5H12O"
 mw = 88.15
 smiles = "CC(C)CCO"
 cas = "123-51-3"
+item_number = "CH-0017"
+chemical_class = ["alcohols"]
+stock = 1000
+in_house = false

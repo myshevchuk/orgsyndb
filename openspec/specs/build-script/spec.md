@@ -77,7 +77,7 @@ For a missing tool it prints `orgsyndb: error: <tool> not found; install it with
 - **THEN** it exits 1, stderr contains `orgsyndb.toml` and no `not found`, and the fake `sudo` was never invoked
 
 ### Requirement: validate subcommand
-`tools/orgsyndb validate` SHALL take no arguments. It runs `export`, then the validator with the arguments `--static-dir static --compounds compounds --sequences md/sequences build/export md/procedures` and the collection as working directory, leaving out any content root whose directory does not exist. It prints the validator's stdout and stderr unchanged and exits with the validator's status. The problem lines of the Org sources come from the export step, on stdout, in the same form; when the Org sources have an error, `validate` stops there with exit 1 and the validator does not run. Any argument is a usage error; other directories are validated by running `tools/validate.py` directly.
+`tools/orgsyndb validate` SHALL take no arguments. It runs `export`, then the validator with the arguments `--settings orgsyndb.toml --static-dir static --compounds compounds --sequences md/sequences build/export md/procedures` and the collection as working directory, leaving out any content root whose directory does not exist. It prints the validator's stdout and stderr unchanged and exits with the validator's status. The problem lines of the Org sources come from the export step, on stdout, in the same form; when the Org sources have an error, `validate` stops there with exit 1 and the validator does not run. Any argument is a usage error; other directories are validated by running `tools/validate.py` directly.
 
 #### Scenario: Seeds validate
 - **WHEN** an integration test runs `tools/orgsyndb -C <collection> validate` on a copy of the test collection `tests/fixtures/collection/`
@@ -95,7 +95,7 @@ For a missing tool it prints `orgsyndb: error: <tool> not found; install it with
 `tools/orgsyndb build` SHALL perform these steps in order:
 1. Run `export`.
 2. Validate as `validate` does without arguments, stopping with exit 1 on any validation error while tolerating warnings.
-3. Remove `public/`, and write the Hugo overlay `build/hugo-config/_default/hugo.toml` (site-build "Hugo configuration").
+3. Remove `public/`, write the field data `build/data/fields.json`, the JSON form of `pipeline.fields_data(<collection>/orgsyndb.toml, <language>)` for the site's language (compound-fields "Field data for the site"), and write the Hugo overlay `build/hugo-config/_default/hugo.toml` (site-build "Hugo configuration").
 4. Run `hugo --source <app>/site --configDir <collection>/build/hugo-config --minify --quiet --noBuildLock`.
 5. Obtain the Pagefind binary, and run it with `--site <collection>/public --quiet`.
 
@@ -108,6 +108,10 @@ A failing step stops the command with exit 1.
 #### Scenario: Second build without changes
 - **WHEN** an integration test runs `tools/orgsyndb -C <collection> build` twice on a copy of the demo collection without changing any source
 - **THEN** both runs exit 0, and `build/export/` is not empty and holds identical bytes after each
+
+#### Scenario: Field data is staged
+- **WHEN** an integration test runs `tools/orgsyndb -C <collection> build` on a copy of the test collection
+- **THEN** it exits 0, and `build/data/fields.json` parses as JSON to `pipeline.fields_data` of the copy's `orgsyndb.toml` for the language `pipeline.site_language` reports
 
 ### Requirement: serve subcommand
 `tools/orgsyndb serve [--port N]` SHALL run `build`, bind `127.0.0.1:<N>`, print the line `serving http://127.0.0.1:<N>/ (Ctrl-C to stop)` once the port is bound, and then serve the collection's `public/` with the standard library's HTTP server until interrupted. Every response carries `Cache-Control: no-cache`, so a browser revalidates each file and shows a new build instead of cached pages of an earlier one. The default port is 8000; a port outside 1–65535 or not a number is a usage error. It never binds an address other than `127.0.0.1`.
