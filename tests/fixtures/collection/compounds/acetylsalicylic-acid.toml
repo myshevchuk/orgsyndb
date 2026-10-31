@@ -8,3 +8,4 @@ item_number = "CH-0010"
 short_name = "ASA"
 chemical_class = ["carboxylic-acids", "esters"]
 in_house = true
+group = "final-products"

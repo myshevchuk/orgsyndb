@@ -90,7 +90,8 @@ class CatalogueHelperTests(unittest.TestCase):
         """Harness: the pages that carry a catalogue."""
         for url in ("/procedures/", "/general-procedures/", "/compounds/",
                     "/tags/sample-data/", "/authors/a.-example/",
-                    "/reaction_types/hydrolysis/"):
+                    "/reaction_types/hydrolysis/",
+                    "/compounds/group/purchased/"):
             self.assertTrue(ps.is_catalogue_url(url), url)
         for url in ("/", "/tags/", "/authors/", "/reaction_types/",
                     "/help/schema/", "/procedures/osdb-0001/",

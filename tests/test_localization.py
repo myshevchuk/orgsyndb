@@ -505,6 +505,24 @@ class SiteLanguageTests(unittest.TestCase):
                 any(v.endswith(ending) and "{" in v and "{shown}" not in v
                     for v in values), f"no <n>{ending} string")
 
+    def test_the_compound_tab_strings_are_in_both_languages(self) -> None:
+        """Scenario: Interface strings (the compound tabs)."""
+        german = set(self.strings("de").values())
+        english = set(self.strings("en").values())
+        self.assertIn("Alle Verbindungen", german)
+        self.assertIn("All compounds", english)
+        self.assertIn(
+            "Suche und Filter brauchen JavaScript. Ohne JavaScript zeigt "
+            "diese Seite alle Verbindungen dieses Reiters.", german)
+        self.assertIn(
+            "Search and filters need JavaScript. Without it, this page "
+            "lists every compound of this tab.", english)
+        for values, start in ((german, "Verbindungen durchsuchen: "),
+                              (english, "Search compounds: ")):
+            self.assertTrue(
+                any(v.startswith(start) and len(v) > len(start)
+                    for v in values), f"no {start!r}<label> string")
+
     def test_every_reaction_type_has_a_german_label(self) -> None:
         """Scenario: Vocabulary with German labels."""
         data = tomllib.loads((SITE / "data" / "reaction_types.toml")

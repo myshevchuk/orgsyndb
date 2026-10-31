@@ -3,6 +3,7 @@
 checks of the values a compound file sets, driven through field-declaration
 runs (procedure-validation "Fixture suite")."""
 
+import shutil
 import unittest
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from support import (COMPOUNDS, FIELDS, FIXTURES, STATIC_DIR, Result,
                      field_variant_run, fields_copy, fixture_run,
                      insert_after, replace_text, run_validator,
                      write_vocabulary)
+from support import FieldChange, FieldCopy
 from support import VOCABULARY as VOCABULARY_FILE
 
 COMPOUND_FILES = len(list(COMPOUNDS.glob("*.toml")))
@@ -128,6 +130,40 @@ class FieldDeclarationTests(FieldTestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "")
 
+    def test_tabs_on_a_choice_field(self) -> None:
+        """Scenario: Tabs on a choice field."""
+        self.assert_clean(field_variant_run(edit_settings(
+            insert_after('key = "storage"', "tabs = true"))))
+
+    def test_tabs_may_sit_on_a_single_or_a_multiple_choice(self) -> None:
+        """Requirement: Field declarations (`tabs` for `choice`, one
+        field)."""
+        for key in ("chemical_class", "storage"):
+            with self.subTest(key=key):
+                self.assert_clean(field_variant_run(edit_settings(
+                    insert_after(f'key = "{key}"', "tabs = true"))))
+
+    def test_tabs_may_be_written_as_false_on_every_field(self) -> None:
+        """Requirement: Field declarations (`tabs` defaults to false, and
+        only a field with `tabs = true` counts against the limit of
+        one)."""
+        self.assert_clean(field_variant_run(edit_settings(
+            insert_after('key = "chemical_class"', "tabs = false"),
+            insert_after('key = "storage"', "tabs = false"))))
+
+    def test_one_tabs_field_beside_a_field_with_tabs_false(self) -> None:
+        """Requirement: Field declarations (at most one field declares
+        `tabs = true`)."""
+        self.assert_clean(field_variant_run(edit_settings(
+            insert_after('key = "chemical_class"', "tabs = false"),
+            insert_after('key = "storage"', "tabs = true"))))
+
+    def test_tabs_may_share_a_field_with_facet(self) -> None:
+        """Requirement: Field declarations (`tabs` beside `facet`)."""
+        self.assert_clean(field_variant_run(edit_settings(
+            insert_after('key = "storage"', "facet = true"),
+            insert_after('key = "storage"', "tabs = true"))))
+
     def test_facet_and_search_may_be_written_as_false(self) -> None:
         """Requirement: Field declarations (facet and search default to
         false)."""
@@ -168,14 +204,16 @@ class DeclarationErrorTests(FieldTestCase):
         cases = {
             "item_number": ["min = 0", "max = 1", 'unit = "g"',
                             'vocabulary = "storage"', "multiple = true",
-                            "facet = true"],
+                            "facet = true", "tabs = true"],
             "short_name": ["min = 0", 'unit = "g"', "multiple = true",
-                           "facet = true"],
+                           "facet = true", "tabs = true"],
             "stock": ["pattern = '.'", 'vocabulary = "storage"',
-                      "multiple = true", "facet = true", "search = true"],
+                      "multiple = true", "facet = true", "search = true",
+                      "tabs = true"],
             "in_house": ["unique = true", "pattern = '.'", 'unit = "g"',
                          "min = 0", "max = 1", "multiple = true",
-                         'vocabulary = "storage"', "search = true"],
+                         'vocabulary = "storage"', "search = true",
+                         "tabs = true"],
             "storage": ["unique = true", "pattern = '.'", 'unit = "g"',
                         "min = 0", "max = 1", "search = true"],
             "chemical_class": ["search = true"],
@@ -192,8 +230,9 @@ class DeclarationErrorTests(FieldTestCase):
     def test_an_unknown_option(self) -> None:
         """Scenario: An unknown option."""
         result = field_variant_run(edit_settings(
-            insert_after('key = "chemical_class"', "tabs = true")))
-        self.assert_configuration_error(result, "chemical_class", "tabs")
+            insert_after('key = "chemical_class"', "sortable = true")))
+        self.assert_configuration_error(result, "chemical_class",
+                                        "sortable")
 
     def test_a_facet_or_a_search_where_the_type_does_not_take_it(
             self) -> None:
@@ -203,6 +242,46 @@ class DeclarationErrorTests(FieldTestCase):
                 result = field_variant_run(edit_settings(
                     insert_after(f'key = "{key}"', f"{option} = true")))
                 self.assert_configuration_error(result, key, option)
+
+    def test_two_tabs_fields(self) -> None:
+        """Scenario: Two tabs fields."""
+        result = field_variant_run(edit_settings(
+            insert_after('key = "storage"', "tabs = true"),
+            insert_after('key = "chemical_class"', "tabs = true")))
+        self.assert_configuration_error(result, "orgsyndb.toml", "tabs")
+
+    def test_two_tabs_fields_are_refused_whichever_pair(self) -> None:
+        """Requirement: Declaration errors are configuration errors (more
+        than one declaration sets `tabs = true`)."""
+        extra = declaration("group", "choice", "Group",
+                            'vocabulary = "storage"', "tabs = true")
+        for keys in (("chemical_class", "storage"),
+                     ("storage", "chemical_class")):
+            with self.subTest(keys=keys):
+                result = field_variant_run(edit_settings(*(
+                    insert_after(f'key = "{key}"', "tabs = true")
+                    for key in keys)))
+                self.assert_configuration_error(result, "tabs")
+        with self.subTest(pair="declared last"):
+            result = field_variant_run(edit_settings(
+                insert_after('key = "storage"', "tabs = true"),
+                append_text(extra)))
+            self.assert_configuration_error(result, "tabs")
+
+    def test_tabs_where_the_type_does_not_take_them(self) -> None:
+        """Scenario: Tabs where the type does not take them."""
+        result = field_variant_run(edit_settings(
+            insert_after('key = "in_house"', "tabs = true")))
+        self.assert_configuration_error(result, "in_house", "tabs")
+
+    def test_tabs_must_be_a_boolean(self) -> None:
+        """Requirement: Declaration errors are configuration errors (a
+        value of the wrong type)."""
+        for option in ('tabs = "yes"', "tabs = 1"):
+            with self.subTest(option=option):
+                result = field_variant_run(edit_settings(
+                    insert_after('key = "storage"', option)))
+                self.assert_configuration_error(result, "storage", "tabs")
 
     def test_facet_and_search_must_be_booleans(self) -> None:
         """Requirement: Declaration errors are configuration errors (a
@@ -236,7 +315,7 @@ class DeclarationErrorTests(FieldTestCase):
 
     def test_options_of_later_changes_are_unknown(self) -> None:
         """Requirement: Field declarations (no other key)."""
-        for option in ("tabs = true", "help = 'x'"):
+        for option in ("sortable = true", "help = 'x'"):
             with self.subTest(option=option):
                 result = field_variant_run(edit_settings(
                     insert_after('key = "stock"', option)))
@@ -893,6 +972,47 @@ class FieldValueTests(FieldTestCase):
             set_value('stock = "5"'))
         self.assert_one(result, "error", "stock", "must be a number",
                         path_suffix=EDITED)
+
+
+def add_compound(key: str, source: str = "ethanol") -> FieldChange:
+    """A field change adding ``<key>.toml``, a copy of ``<source>.toml``,
+    to the registry copy."""
+    def change(copy: FieldCopy) -> None:
+        shutil.copyfile(copy.registry / f"{source}.toml",
+                        copy.registry / f"{key}.toml")
+    return change
+
+
+class TabPathTests(FieldTestCase):
+    def test_a_compound_named_like_the_tabs_field(self) -> None:
+        """Scenario: A compound named like the tabs field."""
+        result = field_variant_run(
+            edit_settings(insert_after('key = "storage"', "tabs = true")),
+            add_compound("storage"))
+        self.assert_errors(result, "file_name", "tabs", 1)
+        self.assertTrue(result.problems[0].path.endswith("storage.toml"),
+                        result.stdout)
+
+    def test_a_compound_named_like_a_field_without_tabs(self) -> None:
+        """Requirement: Tab paths (a field without `tabs` refuses
+        nothing)."""
+        self.assert_clean(field_variant_run(add_compound("storage")))
+
+    def test_a_tabs_field_refuses_only_its_own_key(self) -> None:
+        """Requirement: Tab paths (only the tabs field's key is
+        refused)."""
+        self.assert_clean(field_variant_run(
+            edit_settings(insert_after('key = "storage"', "tabs = true")),
+            add_compound("cabinet")))
+
+    def test_a_compound_named_like_another_field_beside_tabs(
+            self) -> None:
+        """Requirement: Tab paths (another field's key is not refused)."""
+        self.assert_clean(field_variant_run(
+            edit_settings(insert_after('key = "storage"', "tabs = true"),
+                          append_text(declaration(
+                              "ketones", "boolean", "Ketones"))),
+            add_compound("ketones")))
 
 
 class DeclaredKeyTests(FieldTestCase):

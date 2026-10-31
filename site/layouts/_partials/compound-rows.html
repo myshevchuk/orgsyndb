@@ -1,0 +1,48 @@
+{{- /* Returns the records of the compound catalogue's rows: one dict per
+entry of the registry, ordered by shown name, holding key, the entry's
+key; name, its shown name (compound-name.html); compound, the entry;
+made and used, the numbers of published procedures that make the
+compound and that use it as a substrate, over every entry of a general
+procedure, each procedure counted once; text, the name, name_de,
+formula, CAS number, SMILES and the values of the text fields with
+search = true that the entry sets, joined by single spaces; and values,
+for each field declared with facet = true or tabs = true, a slice of
+machine values: "true" or "false" for a boolean, each value set and
+each of its ancestors, once, for a choice; empty when the entry does
+not set the field. The records are the same on every page of a build,
+so a caller may call this with partialCached. */ -}}
+{{ $procedures := where site.RegularPages "Section" "procedures" -}}
+{{ $fields := site.Data.collection.fields.compound -}}
+{{ $searched := where $fields "search" true -}}
+{{ $filed := slice -}}
+{{ range $fields }}{{ if or .facet .tabs }}{{ $filed = $filed | append . }}{{ end }}{{ end -}}
+{{ $rows := slice -}}
+{{ range $key, $compound := site.Data.compounds -}}
+{{ $made := 0 -}}
+{{ range $procedures }}{{ if in (partialCached "product-keys.html" . .Path) $key }}{{ $made = add $made 1 }}{{ end }}{{ end -}}
+{{ $used := 0 -}}
+{{ range $procedures }}{{ if in (partialCached "substrate-keys.html" . .Path) $key }}{{ $used = add $used 1 }}{{ end }}{{ end -}}
+{{ $words := slice $compound.name -}}
+{{ with $compound.name_de }}{{ $words = $words | append . }}{{ end -}}
+{{ $words = $words | append $compound.formula -}}
+{{ with $compound.cas }}{{ $words = $words | append . }}{{ end -}}
+{{ $words = $words | append $compound.smiles -}}
+{{ range $searched }}{{ with index $compound .key }}{{ $words = $words | append . }}{{ end }}{{ end -}}
+{{ $values := dict -}}
+{{ range $filed -}}
+{{ $set := slice -}}
+{{ if isset $compound .key -}}
+{{ $value := index $compound .key -}}
+{{ if eq .type "boolean" -}}
+{{ $set = slice (cond $value "true" "false") -}}
+{{ else -}}
+{{ $field := . -}}
+{{ range $chosen := cond .multiple $value (slice $value) }}{{ range (index $field.values $chosen).ancestors }}{{ $set = $set | append . }}{{ end }}{{ $set = $set | append $chosen }}{{ end -}}
+{{ $set = uniq $set -}}
+{{ end -}}
+{{ end -}}
+{{ $values = merge $values (dict .key $set) -}}
+{{ end -}}
+{{ $rows = $rows | append (dict "key" $key "name" (partial "compound-name.html" $key) "compound" $compound "made" $made "used" $used "text" (delimit $words " ") "values" $values) -}}
+{{ end -}}
+{{ return sort $rows "name" -}}

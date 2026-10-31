@@ -83,6 +83,9 @@ compounds_noscript = "Suche und Filter brauchen JavaScript. Ohne JavaScript zeig
 compounds_empty = "Keine Verbindung passt zu Suche und Filtern."
 search_compounds = "Verbindungen durchsuchen"
 search_compounds_placeholder = "Name, Summenformel, CAS oder SMILES"
+compounds_all = "Alle Verbindungen"
+search_compounds_tab = "Verbindungen durchsuchen: {{ . }}"
+compounds_tab_noscript = "Suche und Filter brauchen JavaScript. Ohne JavaScript zeigt diese Seite alle Verbindungen dieses Reiters."
 
 table_procedures = "Vorschriften"
 table_compounds = "Verbindungen"

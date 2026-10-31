@@ -7,3 +7,4 @@ cas = "3562-73-0"
 item_number = "CH-0002"
 chemical_class = ["alcohols"]
 in_house = true
+group = "final-products"

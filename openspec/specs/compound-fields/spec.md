@@ -13,12 +13,16 @@ A collection SHALL declare the fields its compounds carry beyond those of compou
 - For `text`: `pattern`, an optional string holding a Python regular expression that the whole value matches; `unique`, an optional boolean, default `false`, under which no two compounds set the same value; and `search`, an optional boolean, default `false`, under which the compound catalogue's search matches the field's values.
 - For `number`: `min` and `max`, optional finite numbers (TOML integer or float, never boolean) bounding the value inclusively, `min` not greater than `max`; `unit`, an optional non-empty string written after the value; and `unique` as for `text`.
 - For `boolean`: `facet`, an optional boolean, default `false`, under which the compound catalogue offers the field as a filter.
-- For `choice`: `vocabulary`, required, the name of a vocabulary of the collection (requirement "Vocabularies"); `multiple`, an optional boolean, default `false`, under which a compound sets a list of values rather than one; and `facet` as for `boolean`.
+- For `choice`: `vocabulary`, required, the name of a vocabulary of the collection (requirement "Vocabularies"); `multiple`, an optional boolean, default `false`, under which a compound sets a list of values rather than one; `facet` as for `boolean`; and `tabs`, an optional boolean, default `false`, under which the compound directory is divided into tabs by the field's top-level values (site-catalogue "Compound tabs"). At most one field of a collection declares `tabs = true`.
 
 A declaration holds no other key, and no key that its type does not take.
 
 #### Scenario: The fixture declarations are accepted
 - **WHEN** a field-declaration run makes no change
+- **THEN** it exits 0 and prints nothing to stdout
+
+#### Scenario: Tabs on a choice field
+- **WHEN** a field-declaration run adds `tabs = true` to the declaration of `storage`
 - **THEN** it exits 0 and prints nothing to stdout
 
 #### Scenario: Facets and search where the types take them
@@ -42,6 +46,7 @@ The validator SHALL exit with status 2, print nothing to stdout, and write `vali
 - `fields` is not a table or holds a key other than `compound`, or `fields.compound` is not an array of tables;
 - a declaration lacks `key`, `type` or `label`, has a value of the wrong type, or holds a key that is unknown or that its type does not take;
 - a `key` breaks its pattern, names a compound-registry key or a key the compound catalogue reserves, ends in `_de`, or is declared twice;
+- more than one declaration sets `tabs = true`;
 - a `pattern` is not a valid Python regular expression, `min` or `max` is not finite, or `min` is greater than `max`;
 - the vocabulary a `choice` field names does not exist or cannot be read as UTF-8 TOML;
 - a vocabulary has a key that is not a slug, an entry that is not a table with a non-empty string `label`, an empty or non-string `label_de`, a `parent` that is not one of its values, a value that is its own ancestor, an entry key other than `label`, `label_de` and `parent`, or no value.
@@ -53,12 +58,20 @@ The message names the settings file or the vocabulary file, the field's key when
 - **THEN** it exits 2, stdout is empty, and stderr contains `validate.py: error:`, `stock` and `pattern`
 
 #### Scenario: An unknown option
-- **WHEN** a field-declaration run adds `tabs = true` to the declaration of `chemical_class`
-- **THEN** it exits 2, stdout is empty, and stderr contains `chemical_class` and `tabs`
+- **WHEN** a field-declaration run adds `sortable = true` to the declaration of `chemical_class`
+- **THEN** it exits 2, stdout is empty, and stderr contains `chemical_class` and `sortable`
 
 #### Scenario: A facet or a search where the type does not take it
 - **WHEN** a field-declaration run adds `facet = true` to the declaration of `short_name`; and, separately, adds `search = true` to the declaration of `stock`
 - **THEN** each exits 2, and stderr contains `short_name` and `facet`, and `stock` and `search`, respectively
+
+#### Scenario: Two tabs fields
+- **WHEN** a field-declaration run adds `tabs = true` to the declarations of `storage` and `chemical_class`
+- **THEN** it exits 2, and stderr contains `tabs`
+
+#### Scenario: Tabs where the type does not take them
+- **WHEN** a field-declaration run adds `tabs = true` to the declaration of `in_house`
+- **THEN** it exits 2, and stderr contains `in_house` and `tabs`
 
 #### Scenario: A key the catalogue reserves
 - **WHEN** a field-declaration run adds a declaration with `key = "title"`, `type = "text"` and `label = "Title"`
@@ -150,6 +163,7 @@ A value of the wrong type draws that one error and no other. A choice may name a
 - `label`: the field's shown label, its `label_de` on a German site when it declares one, and its `label` otherwise;
 - `unit`: only for a `number` field that declares one, as declared;
 - `multiple`: only for a `choice` field, as declared, with its default;
+- `tabs`: only for a `choice` field, as declared, with its default;
 - `values`: only for a `choice` field, a table holding every value of its vocabulary under the value's key, each a table of `label`, the value's shown label, chosen as the field's is; `path`, the shown labels of the value's ancestors, outermost first, followed by its own; and `ancestors`, the keys of its ancestors, outermost first;
 - `order`: only for a `choice` field, the keys of every value of its vocabulary, each top-level value in file order followed by the values filed under it, in the same order, recursively.
 
@@ -160,7 +174,7 @@ A settings file that does not exist, or that declares no field, gives `{"compoun
 - **THEN** each lists the six fixture fields in declared order with the stated keys, `stock` has the `unit` `g`, `chemical_class` has `multiple` `true` and `column` `true`, and `storage` has `multiple` `false`
 - **AND** in `en` the value `ketones` of `chemical_class` has the label `Ketones` and the path `["Carbonyl compounds", "Ketones"]`, and in `de` the label `Ketone` and the path `["Carbonylverbindungen", "Ketone"]`
 - **AND** `short_name`, which declares no `label_de`, has the label `Short name` in both
-- **AND** `item_number` and `short_name` have `search` `false`, `in_house`, `chemical_class` and `storage` have `facet` `false`, the value `ketones` has the `ancestors` `["carbonyl-compounds"]` and `alcohols` none, and the `order` of `chemical_class` is `["carbonyl-compounds", "ketones", "esters", "alcohols"]`
+- **AND** `item_number` and `short_name` have `search` `false`, `in_house`, `chemical_class` and `storage` have `facet` `false`, `chemical_class` and `storage` have `tabs` `false`, the value `ketones` has the `ancestors` `["carbonyl-compounds"]` and `alcohols` none, and the `order` of `chemical_class` is `["carbonyl-compounds", "ketones", "esters", "alcohols"]`
 
 #### Scenario: Depth-first order
 - **WHEN** a test calls `fields_data` on a copy of the fixture settings whose `vocabularies/chemical-classes.toml` lists, in this order, `esters` under `carbonyl-compounds`, `alcohols`, `carbonyl-compounds`, `ketones` under `carbonyl-compounds`, and `aryl-ketones` under `ketones`
@@ -188,4 +202,11 @@ The site SHALL name a declared field by its shown label (requirement "Field data
 #### Scenario: Markup in a label or a value is text
 - **WHEN** a test builds a copy of the test collection in locale `en` after setting the `label` of `short_name` in its `orgsyndb.toml` to `Name <b>&</b>` and the `short_name` of `acetone` to `<i>Me</i>2CO & co`
 - **THEN** the facts of the page of `acetone` hold a `dt` whose text is `Name <b>&</b>` and a `dd` whose text is `<i>Me</i>2CO & co`, and no `b` or `i` element
+
+### Requirement: Tab paths
+When a field of a collection declares `tabs = true`, the validator SHALL report an error on every compound file whose key equals the field's key, under the field `file_name`, containing `tabs`, because the field's key names the directory of the tab pages (site-catalogue "Compound tabs").
+
+#### Scenario: A compound named like the tabs field
+- **WHEN** a field-declaration run adds `tabs = true` to the declaration of `storage` and adds `storage.toml`, a copy of `ethanol.toml`, to the registry
+- **THEN** it reports exactly one error, on the path ending `storage.toml`, field `file_name`, containing `tabs`
 

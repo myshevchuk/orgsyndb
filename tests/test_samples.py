@@ -648,13 +648,14 @@ class DemoFieldTests(unittest.TestCase):
         """Scenario: The demo declares its fields."""
         self.assertEqual(sup.field_violations(DEMO), [])
 
-    def test_the_demo_vocabulary_is_the_only_one(self) -> None:
-        """Scenario: The demo declares its fields (the vocabulary)."""
+    def test_the_demo_vocabularies_are_the_only_ones(self) -> None:
+        """Scenario: The demo declares its fields (the vocabularies)."""
         directory = DEMO / "vocabularies"
         self.assertTrue(directory.is_dir(), "examples/demo/vocabularies "
                         "is missing")
         self.assertEqual(sorted(p.name for p in directory.iterdir()),
-                         ["chemical-classes.toml"])
+                         ["chemical-classes.toml",
+                          "inventory-groups.toml"])
         vocabulary = tomllib.loads(
             (directory / "chemical-classes.toml").read_text(
                 encoding="utf-8"))
@@ -665,6 +666,37 @@ class DemoFieldTests(unittest.TestCase):
                     "esters", "anhydrides", "alcohols", "phenols",
                     "aryl-halides", "organoboron-compounds",
                     "organophosphorus-compounds"]))
+
+    def test_the_inventory_groups_of_the_demo(self) -> None:
+        """Scenario: The demo declares its fields (inventory-groups)."""
+        path = DEMO / "vocabularies" / "inventory-groups.toml"
+        self.assertTrue(path.is_file(), f"{path.name} is missing")
+        vocabulary = tomllib.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            [(value, entry.get("parent"), entry.get("label"),
+              entry.get("label_de"))
+             for value, entry in vocabulary.items()],
+            sup.INVENTORY_GROUPS)
+
+    def test_the_demo_group_field(self) -> None:
+        """Scenario: The demo declares its fields (group)."""
+        settings = tomllib.loads(
+            (DEMO / "orgsyndb.toml").read_text(encoding="utf-8"))
+        declared = settings["fields"]["compound"]
+        self.assertEqual(
+            [d["key"] for d in declared],
+            ["item_number", "short_name", "chemical_class", "stock",
+             "in_house", "group"])
+        group = declared[-1]
+        self.assertEqual(
+            {k: group.get(k) for k in ("type", "label", "label_de",
+                                       "vocabulary", "required", "facet",
+                                       "tabs")},
+            {"type": "choice", "label": "Group", "label_de": "Gruppe",
+             "vocabulary": "inventory-groups", "required": True,
+             "facet": True, "tabs": True})
+        self.assertEqual([d["key"] for d in declared if d.get("tabs")],
+                         ["group"])
 
     def test_the_demo_values_are_the_stated_ones(self) -> None:
         """Scenario: The demo declares its fields (the values)."""
@@ -685,6 +717,31 @@ class DemoFieldTests(unittest.TestCase):
         self.assertIs(registry["acetone"]["in_house"], False)
         self.assertIs(registry["salicylic-acid"]["in_house"], True)
 
+    def test_the_demo_groups_of_the_compounds(self) -> None:
+        """Scenario: The demo declares its fields (the group values)."""
+        registry = sup.read_registry(DEMO / "compounds")
+        wanted = {
+            "reagents": ["acetic-acid", "acetic-anhydride",
+                         "ethyl-triphenylphosphoranylidene-acetate",
+                         "phenylboronic-acid"],
+            "starting-materials": ["acetone", "acetophenone",
+                                   "benzaldehyde", "4-bromoacetophenone",
+                                   "isopentyl-alcohol",
+                                   "methyl-salicylate"],
+            "intermediates": ["salicylic-acid", "4-acetylbiphenyl",
+                              "ethyl-cinnamate"],
+            "final-products": ["acetylsalicylic-acid", "isopentyl-acetate",
+                               "1-biphenyl-4-yl-ethanol",
+                               "dibenzylideneacetone", "cinnamic-acid",
+                               "1-phenylethanol",
+                               "1-4-bromophenyl-ethanol"]}
+        self.assertEqual(
+            {group: sorted(key for key, c in registry.items()
+                           if c.get("group") == group)
+             for group in wanted},
+            {group: sorted(keys) for group, keys in wanted.items()})
+        self.assertEqual(len(registry), 20)
+
 
 class TestCollectionTests(unittest.TestCase):
     def test_the_collection_mirrors_the_demo(self) -> None:
@@ -701,6 +758,7 @@ class TestCollectionTests(unittest.TestCase):
         self.assertIn("static/structures/isopentyl-acetate.svg", copied)
         self.assertIn("compounds/salicylic-acid.toml", copied)
         self.assertIn("vocabularies/chemical-classes.toml", copied)
+        self.assertIn("vocabularies/inventory-groups.toml", copied)
         for relative in copied:
             with self.subTest(file=relative):
                 self.assertTrue((COLLECTION / relative).is_file(),

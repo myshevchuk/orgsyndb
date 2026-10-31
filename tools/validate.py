@@ -65,7 +65,7 @@ TYPE_OPTIONS = {
     "text": ("pattern", "unique", "search"),
     "number": ("min", "max", "unit", "unique"),
     "boolean": ("facet",),
-    "choice": ("vocabulary", "multiple", "facet"),
+    "choice": ("vocabulary", "multiple", "facet", "tabs"),
 }
 # The keys no field may take, because the compound catalogue names its
 # rows' record keys and its address parameters with them.
@@ -1049,10 +1049,12 @@ class Declaration(NamedTuple):
     holds None, or False for a boolean option: ``pattern``, ``unique``
     and ``search`` belong to a text field, ``minimum``, ``maximum``,
     ``unit`` and ``unique`` to a number field, ``facet`` to a boolean
-    field, and ``vocabulary``, ``multiple``, ``terms`` and ``facet`` to a
-    choice field. ``facet`` makes the field a filter of the compound
-    catalogue, and ``search`` adds its values to the text that the
-    compound catalogue searches. ``pattern`` is
+    field, and ``vocabulary``, ``multiple``, ``terms``, ``facet`` and
+    ``tabs`` to a choice field. ``facet`` makes the field a filter of the
+    compound catalogue, ``search`` adds its values to the text that the
+    compound catalogue searches, and ``tabs`` divides the compound
+    catalogue into tab pages by the field's top-level values, whose
+    directory the field's key names. ``pattern`` is
     compiled; ``terms`` maps every value of the field's vocabulary, in
     file order, to its entry.
     """
@@ -1073,6 +1075,7 @@ class Declaration(NamedTuple):
     terms: dict[str, Term]
     facet: bool
     search: bool
+    tabs: bool
 
 
 def check_choice(field: Declaration, value: object) -> list[Problem]:
@@ -1246,10 +1249,12 @@ def examine_registry(registry: str, static_dir: Path,
 
     Each file is checked against the compound schema and the declared
     FIELDS, and the values of the fields declared ``unique`` are
-    compared across the files. Returns the keys of the compounds the
-    registry defines, the problems found, each with the path
-    ``registry`` joined with the entry name, and the number of compound
-    files examined. A file whose name begins with ``.`` is skipped; a
+    compared across the files. A file whose key equals the key of the
+    field declared ``tabs`` is a ``file_name`` error, since that key
+    names the directory of the tab pages. Returns the keys of the
+    compounds the registry defines, the problems found, each with the
+    path ``registry`` joined with the entry name, and the number of
+    compound files examined. A file whose name begins with ``.`` is skipped; a
     subdirectory, or any other file not named ``<key>.toml``, is a
     ``file_name`` error and defines no compound, and so does a file that
     does not parse. A ``registry`` that does not exist defines no
@@ -1257,6 +1262,7 @@ def examine_registry(registry: str, static_dir: Path,
     """
     if not os.path.isdir(registry):
         return Registry(frozenset(), [], 0)
+    tabs = {field.key for field in fields if field.tabs}
     parsed: list[tuple[str, str, dict[str, Any]]] = []
     problems: list[tuple[str, Problem]] = []
     files = 0
@@ -1280,6 +1286,11 @@ def examine_registry(registry: str, static_dir: Path,
                 problems.append((path, data))
                 continue
             parsed.append((path, match.group(1), data))
+            if match.group(1) in tabs:
+                problems.append((path, error(
+                    "file_name", f"{match.group(1)} is the key of the field "
+                    "declared tabs = true, which names the directory of "
+                    "the compound tab pages; rename the file")))
             problems += [(path, p)
                          for p in check_compound(data, static_dir, fields)]
     problems += check_unique(fields, parsed)
@@ -1806,7 +1817,8 @@ def read_declaration(entry: dict[str, Any], number: int, settings: Path,
         unit=declared_string(entry, "unit", where), vocabulary=name,
         multiple=declared_flag(entry, "multiple", where), terms=terms,
         facet=declared_flag(entry, "facet", where),
-        search=declared_flag(entry, "search", where))
+        search=declared_flag(entry, "search", where),
+        tabs=declared_flag(entry, "tabs", where))
 
 
 def load_fields(path: Path,
@@ -1818,9 +1830,10 @@ def load_fields(path: Path,
     PATH that does not exist when MUST_EXIST is false. Vocabularies
     resolve against ``vocabularies/`` beside PATH, and only those a
     declaration names are read. Raises ConfigError when PATH is missing
-    though MUST_EXIST, when it breaks a rule of read_settings, or when
+    though MUST_EXIST, when it breaks a rule of read_settings, when
     ``fields`` is not a table whose only key, ``compound``, holds an
-    array of tables that read_declaration accepts.
+    array of tables that read_declaration accepts, or when more than one
+    declaration sets ``tabs = true``.
     """
     if not must_exist and not path.exists():
         return ()
@@ -1843,6 +1856,10 @@ def load_fields(path: Path,
     for number, entry in enumerate(entries, start=1):
         declared.append(read_declaration(
             entry, number, path, [d.key for d in declared], vocabularies))
+    tabs = [d.key for d in declared if d.tabs]
+    if len(tabs) > 1:
+        raise ConfigError(f"{path}: fields {', '.join(tabs)} each set tabs "
+                          "= true; at most one field may")
     return tuple(declared)
 
 

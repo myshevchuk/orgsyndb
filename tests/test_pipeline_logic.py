@@ -452,7 +452,7 @@ def fixture_fields(language: str) -> list[dict]:
          "label": shown("Made in house", "Eigene Herstellung")},
         {"key": "chemical_class", "type": "choice", "column": True,
          "facet": False, "label": shown("Chemical class", "Stoffklasse"),
-         "multiple": True,
+         "multiple": True, "tabs": False,
          "values": values({
              "carbonyl-compounds": (carbonyl,),
              "ketones": (carbonyl, shown("Ketones", "Ketone")),
@@ -463,7 +463,7 @@ def fixture_fields(language: str) -> list[dict]:
          "order": ["carbonyl-compounds", "ketones", "esters", "alcohols"]},
         {"key": "storage", "type": "choice", "column": False,
          "facet": False, "label": shown("Storage", "Lagerung"),
-         "multiple": False,
+         "multiple": False, "tabs": False,
          "values": values({
              "cabinet": (shown("Cabinet", "Schrank"),),
              "fridge": (shown("Fridge", "K\u00fchlschrank"),)}, {}),
@@ -526,6 +526,8 @@ class FieldDataTests(unittest.TestCase):
             self.assertIs(fields["short_name"]["search"], False)
             for key in ("in_house", "chemical_class", "storage"):
                 self.assertIs(fields[key]["facet"], False, key)
+            for key in ("chemical_class", "storage"):
+                self.assertIs(fields[key]["tabs"], False, key)
             self.assertEqual(
                 fields["chemical_class"]["values"]["alcohols"]["ancestors"],
                 [])
@@ -543,7 +545,7 @@ class FieldDataTests(unittest.TestCase):
         self.assertEqual(keys["short_name"], base | {"search"})
         self.assertEqual(keys["in_house"], base | {"facet"})
         self.assertEqual(keys["stock"], base | {"unit"})
-        choice = base | {"facet", "multiple", "values", "order"}
+        choice = base | {"facet", "multiple", "tabs", "values", "order"}
         self.assertEqual(keys["chemical_class"], choice)
         self.assertEqual(keys["storage"], choice)
 
@@ -578,7 +580,65 @@ class FieldDataTests(unittest.TestCase):
         self.assertEqual(flags, {
             "item_number": (None, True), "short_name": (None, True),
             "chemical_class": (True, None), "stock": (None, None),
-            "in_house": (True, None)})
+            "in_house": (True, None), "group": (True, None)})
+
+    def test_tabs_is_taken_as_declared(self) -> None:
+        """Requirement: Field data for the site (`tabs`, as declared)."""
+        path = self.settings(
+            'format = 1\n\n[[fields.compound]]\nkey = "kind"\n'
+            'type = "choice"\nlabel = "Kind"\nvocabulary = "kinds"\n'
+            'tabs = true\n\n[[fields.compound]]\nkey = "other"\n'
+            'type = "choice"\nlabel = "Other"\nvocabulary = "kinds"\n'
+            'tabs = false\n\n[[fields.compound]]\nkey = "plain"\n'
+            'type = "choice"\nlabel = "Plain"\nvocabulary = "kinds"\n'
+            '\n[[fields.compound]]\nkey = "flag"\ntype = "boolean"\n'
+            'label = "Flag"\n\n[[fields.compound]]\nkey = "note"\n'
+            'type = "text"\nlabel = "Note"\n\n'
+            '[[fields.compound]]\nkey = "count"\ntype = "number"\n'
+            'label = "Count"\n',
+            {"kinds": '[top]\nlabel = "Top"\n'})
+        data = pipeline_function("fields_data")(path, "en")
+        by_key = {f["key"]: f for f in data["compound"]}
+        self.assertIs(by_key["kind"]["tabs"], True)
+        self.assertIs(by_key["other"]["tabs"], False)
+        self.assertIs(by_key["plain"]["tabs"], False)
+        for key in ("flag", "note", "count"):
+            self.assertNotIn("tabs", by_key[key], key)
+
+    def test_the_test_collection_tabs_field(self) -> None:
+        """Requirement: Field data for the site (`tabs` of the test
+        collection)."""
+        for language in ("en", "de"):
+            with self.subTest(language=language):
+                data = pipeline_function("fields_data")(
+                    TEST_SETTINGS, language)
+                tabs = {f["key"]: f.get("tabs") for f in data["compound"]}
+                self.assertEqual(tabs, {
+                    "item_number": None, "short_name": None,
+                    "chemical_class": False, "stock": None,
+                    "in_house": None, "group": True})
+
+    def test_the_test_collection_group_field(self) -> None:
+        """Requirement: Field data for the site (the `group` field of the
+        test collection)."""
+        data = pipeline_function("fields_data")(TEST_SETTINGS, "de")
+        group = {f["key"]: f for f in data["compound"]}["group"]
+        self.assertEqual(
+            (group["type"], group["label"], group["column"],
+             group["multiple"], group["facet"], group["tabs"]),
+            ("choice", "Gruppe", False, False, True, True))
+        self.assertEqual(
+            group["order"],
+            ["purchased", "starting-materials", "reagents", "synthesised",
+             "intermediates", "final-products"])
+        self.assertEqual(
+            group["values"]["reagents"],
+            {"label": "Reagenzien", "path": ["Zugekauft", "Reagenzien"],
+             "ancestors": ["purchased"]})
+        self.assertEqual(
+            group["values"]["synthesised"],
+            {"label": "Selbst hergestellt",
+             "path": ["Selbst hergestellt"], "ancestors": []})
 
     def test_a_number_without_a_unit_has_no_unit_key(self) -> None:
         """Requirement: Field data for the site (`unit`: only for a number
@@ -650,7 +710,7 @@ class FieldDataTests(unittest.TestCase):
              for f in data["compound"]],
             [("item_number", "text", True), ("short_name", "text", False),
              ("chemical_class", "choice", True), ("stock", "number", False),
-             ("in_house", "boolean", False)])
+             ("in_house", "boolean", False), ("group", "choice", False)])
         self.assertEqual(data["compound"][3]["unit"], "g")
         self.assertEqual(
             data["compound"][2]["values"]["aryl-ketones"]["path"],
@@ -725,13 +785,20 @@ class FieldDataTests(unittest.TestCase):
             "built-in key": head + (
                 'key = "cas"\ntype = "text"\nlabel = "CAS"\n'),
             "unknown option": head + (
+                'key = "x"\ntype = "text"\nlabel = "X"\nsortable = true\n'),
+            "tabs on a text field": head + (
                 'key = "x"\ntype = "text"\nlabel = "X"\ntabs = true\n'),
+            "two tabs fields": head + (
+                'key = "x"\ntype = "choice"\nlabel = "X"\n'
+                'vocabulary = "kinds"\ntabs = true\n\n'
+                '[[fields.compound]]\nkey = "y"\ntype = "choice"\n'
+                'label = "Y"\nvocabulary = "kinds"\ntabs = true\n'),
             "a single table": (
                 'format = 1\n\n[fields.compound]\nkey = "x"\n'
                 'type = "text"\nlabel = "X"\n')}
         for name, text in cases.items():
             with self.subTest(case=name):
-                path = self.settings(text)
+                path = self.settings(text, {"kinds": '[top]\nlabel = "T"\n'})
                 with self.assertRaises(error):
                     fields_data(path, "en")
 

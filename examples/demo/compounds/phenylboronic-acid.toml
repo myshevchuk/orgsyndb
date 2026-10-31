@@ -9,3 +9,4 @@ short_name = "PhB(OH)2"
 chemical_class = ["organoboron-compounds"]
 stock = 25
 in_house = false
+group = "reagents"

@@ -22,6 +22,7 @@
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-31 Sat 11:12] -- Verbindungsfelder der Sammlung und Schlusskommentar der Vorlage
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-31 Sat 11:30] -- doc-writer pass line corrected from gpt-6 to the pinned run model
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-31 Sat 12:20] -- Einleitung zum Verbindungskatalog
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-10-31 Sat 16:26] -- Pflichtfeld group für Verbindungen der Beispielsammlung
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
@@ -166,10 +167,13 @@ bleiben auch in einer deutschen Vorschrift englisch.
   ~[[fields.compound]]~. Bei ~required = true~ muss jede Verbindung das
   Feld setzen. Tragen Sie die deklarierten Felder beim Schlusskommentar der
   Vorlage als weitere Zeilen ~key = value~ in der Verbindungsdatei ein.
-  Die [[file:../examples/demo/orgsyndb.toml][Einstellungen der Beispielsammlung]] verlangen ~item_number~ und
-  ~chemical_class~: Wählen Sie eine noch nicht vergebene Artikelnummer aus
-  ~CH-~ und vier Ziffern und eine nicht leere Liste von Wertschlüsseln aus
-  [[file:../examples/demo/vocabularies/chemical-classes.toml][vocabularies/chemical-classes.toml]]. Die
+  Die [[file:../examples/demo/orgsyndb.toml][Einstellungen der Beispielsammlung]] verlangen ~item_number~,
+  ~chemical_class~ und ~group~. Wählen Sie eine noch nicht vergebene
+  Artikelnummer aus ~CH-~ und vier Ziffern und eine nicht leere Liste von
+  Wertschlüsseln aus
+  [[file:../examples/demo/vocabularies/chemical-classes.toml][vocabularies/chemical-classes.toml]]. Setzen Sie ~group~ auf einen Wert aus
+  [[file:../examples/demo/vocabularies/inventory-groups.toml][vocabularies/inventory-groups.toml]]: ~starting-materials~, ~reagents~,
+  ~intermediates~ oder ~final-products~. Die
   [[file:SCHEMA.de.md][Schema-Referenz]] nennt Feldtypen, Regeln und Validatormeldungen.
 
   Für ein Strukturbild legen Sie eine SVG- oder PNG-Datei in

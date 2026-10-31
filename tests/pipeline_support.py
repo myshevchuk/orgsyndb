@@ -588,8 +588,9 @@ def fixture_compound_keys(path: Path) -> list[str]:
 def required_field_lines(sandbox: Sandbox, registry: Path) -> str:
     """The lines that give a fixture compound a valid value for each
     field that the sandbox collection's ``orgsyndb.toml`` declares
-    required: a fresh ``CH-9nnn`` for ``item_number`` and one class for
-    ``chemical_class``. The fixture registry sets no declared field."""
+    required: a fresh ``CH-9nnn`` for ``item_number``, one class for
+    ``chemical_class`` and ``reagents`` for ``group``. The fixture
+    registry sets no declared field."""
     data = tomllib.loads(
         (sandbox.root / "orgsyndb.toml").read_text(encoding="utf-8"))
     lines = ""
@@ -601,6 +602,8 @@ def required_field_lines(sandbox: Sandbox, registry: Path) -> str:
             lines += f'item_number = "CH-{number:04d}"\n'
         elif field["key"] == "chemical_class":
             lines += 'chemical_class = ["alcohols"]\n'
+        elif field["key"] == "group":
+            lines += 'group = "reagents"\n'
         else:
             raise AssertionError(f"put_compounds cannot set the required "
                                  f"field {field['key']}")
@@ -1487,14 +1490,16 @@ def squash(text: str) -> str:
 CATALOGUE_HEADER = ["ID", "Procedure", "Reaction type", "Status", "Modified"]
 FACETS = ("type", "kind", "status", "tag", "author")
 TERM_PAGE = re.compile(r"^/(reaction_types|tags|authors)/[^/]+/$")
+COMPOUND_TAB_PAGE = re.compile(r"^/compounds/[a-z][a-z0-9_]*/[^/]+/$")
 
 
 def is_catalogue_url(url: str) -> bool:
     """Whether the page at ``url`` carries a catalogue: the procedure
-    catalogue, the general procedures' view, a term page or the compound
-    catalogue."""
+    catalogue, the general procedures' view, a term page, the compound
+    catalogue or one of its tab pages."""
     return (url in ("/procedures/", "/general-procedures/", "/compounds/")
-            or TERM_PAGE.match(url) is not None)
+            or TERM_PAGE.match(url) is not None
+            or COMPOUND_TAB_PAGE.match(url) is not None)
 
 
 def catalogue_rows(page: Page) -> list[Node]:

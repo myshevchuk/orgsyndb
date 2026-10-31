@@ -55,12 +55,16 @@ sequences, each with a German translation:
 - SEQ-0002, “1-(Biphenyl-4-yl)ethanol from 4′-bromoacetophenone”:
   OSDB-0004 → entry 1 of OSDB-0009, with an overall yield of 77 %.
 
-The demo also declares five compound fields: `item_number`, `short_name`,
-`chemical_class`, `stock` and `in_house`. Its chemical-class vocabulary has
-13 values on three levels. Every compound sets an item number and at least
-one chemical class; the compound directory shows both as columns. You can
-filter it by chemical class and whether a compound is made in house, and
-search by item number or short name as well as the compound's chemical data.
+The demo also declares six compound fields: `item_number`, `short_name`,
+`chemical_class`, `stock`, `in_house` and `group`. Its chemical-class
+vocabulary has 13 values on three levels. Every compound sets an item number
+and at least one chemical class; the compound directory shows both as
+columns. You can filter it by chemical class, group and whether a compound
+is made in house, and search by item number or short name as well as the
+compound's chemical data.
+Every compound also sets `group` from the `inventory-groups` vocabulary.
+This field divides the directory into **Purchased** and **Synthesised**
+tab pages, each listing ten compounds.
 
 You can explore the same collection on the [live demo site](https://myshevchuk.github.io/orgsyndb/).
 
@@ -258,6 +262,14 @@ in the compound directory. Use `search = true` on a `text` field to include
 its values in that directory's search. Both options default to `false`;
 using either on another field type is a configuration error.
 
+To divide the directory into tab pages, set `tabs = true` on one `choice`
+field. It uses the vocabulary's top-level values, whether or not the field
+also has `facet = true`. The option defaults to `false`; using it on another
+type or setting it to `true` on more than one field is a configuration error.
+Tab pages live at `/compounds/<field key>/<value>/`. A compound must not use
+the tabs field's key as its own key, since that key names the tab-page
+directory; a collision is a `file_name` error containing `tabs`.
+
 Field keys must not be built-in compound keys (`name`, `name_de`, `formula`,
 `mw`, `smiles`, `cas`, `structure_image`) or end in `_de`. The catalogue also
 reserves `id`, `title`, `created`, `modified`, `text`, `q`, `sort` and `view`
@@ -320,13 +332,17 @@ example, the demo's `methyl-salicylate.toml` includes:
 ```toml
 item_number = "CH-0018"
 chemical_class = ["esters", "phenols"]
+group = "starting-materials"
 ```
 
 `multiple = true` requires a non-empty list of distinct vocabulary values.
 The full demo vocabulary also defines `phenols`. When adding a compound to
-the demo, supply both fields and choose an unused item number. The closing
-note in the compound template reminds you to add the fields your collection
-declares. The [field reference](docs/SCHEMA.md#collection-field-declarations)
+the demo, supply all three fields and choose an unused item number. Set
+`group` to `starting-materials`, `reagents`, `intermediates` or
+`final-products` from
+[`vocabularies/inventory-groups.toml`](examples/demo/vocabularies/inventory-groups.toml).
+The closing note in the compound template reminds you to add the fields
+your collection declares. The [field reference](docs/SCHEMA.md#collection-field-declarations)
 lists declaration options, vocabulary rules and validation messages.
 
 Compound pages show every declared field the compound sets, after SMILES,
@@ -443,9 +459,9 @@ German equivalents, such as **Kopieren** for **Copy**.
 The navigation links **Procedures**, **Compounds**, **Sequences** and **Help**
 (**Vorschriften**, **Verbindungen**, **Synthesewege** and **Hilfe** on a German
 site). Every page has a search field in the same place in the header. Except
-on term pages, `/general-procedures/` and `/compounds/`, its placeholder is
-**Product, CAS, SMILES or keyword** and its accessible name is **Search
-procedures**.
+on term pages, `/general-procedures/`, `/compounds/` and its tab pages, its
+placeholder is **Product, CAS, SMILES or keyword** and its accessible name is
+**Search procedures**.
 
 - `/` opens with **Synthetic procedures** and a short introduction.
   **Recently updated** lists up to five procedures, most recently modified
@@ -526,6 +542,24 @@ procedures**.
   it as a starting material. Each general procedure counts once, considering
   all its entries.
 
+  When a field declares `tabs = true`, the directory and its tab pages begin
+  with a row of tabs, styled like the procedure tabs. **All compounds** links
+  to `/compounds/`. It is followed by one tab per top-level vocabulary value
+  used by a compound, directly or through a value filed under it, in vocabulary
+  order and labelled with the value's label. The current page's tab is marked.
+  Without a tabs field, there are no compound tabs or tab pages.
+
+  Each tab page at `/compounds/<field key>/<value>/` uses the value's label as
+  its heading and title. It lists compounds that set that value or a value
+  filed under it, in name order, with its own count, filters and search. The
+  demo has `/compounds/group/purchased/` and `/compounds/group/synthesised/`.
+  With `multiple = true`, a compound appears in every tab its values lead to.
+  On a tab page, the tabs field's own filter, when enabled, leaves out the
+  tab's value and moves the values below it up one level. Filters with no
+  values to list are omitted. The header search is labelled
+  **Search compounds: \<label\>** and works within that tab. Tab links carry
+  no query or filters. Without JavaScript, a tab page shows its whole list.
+
   **Filters** offers one filter per field declared with `facet = true`, in
   declaration order. A choice filter shows values used by compounds and their
   ancestors as an indented tree. It follows vocabulary-file order, with each
@@ -590,11 +624,11 @@ procedures**.
 To find a procedure, type in the header search field. On `/procedures/`,
 `/general-procedures/` and term pages, this is the catalogue's only search
 field. Results update as you type; **Search** applies the query immediately. On
-`/compounds/`, the field searches compounds as described in its entry above.
-On other pages, including individual compound pages, submit the field to
-search in `/procedures/`. On a term page, the field searches only that term's
-procedures. Its placeholder is **Search these procedures**; its accessible
-name identifies the term, for example **Search
+`/compounds/` and its tab pages, the field searches compounds as described in
+its entry above. On other pages, including individual compound pages, submit
+the field to search in `/procedures/`. On a term page, the field searches
+only that term's procedures. Its placeholder is **Search these procedures**;
+its accessible name identifies the term, for example **Search
 procedures with the tag cinnamate**. On `/general-procedures/`, the placeholder
 is **Search these procedures** and the accessible name **Search general
 procedures**. Full-text search uses the Pagefind index and finds procedures by
@@ -860,10 +894,11 @@ directories.
 
 Before Hugo runs, the build writes `build/data/fields.json` with labels in
 the site's language. It includes `facet` for boolean and choice fields,
-`search` for text fields, and each choice value's `ancestors` (the keys of
-its ancestors) and the vocabulary's `order`, with each parent followed by
-its descendants in file order. The overlay mounts `build/data/` as collection data,
-available to the theme as `site.Data.collection.fields`.
+`tabs` for choice fields, `search` for text fields, and each choice value's
+`ancestors` (the keys of its ancestors) and the vocabulary's `order`, with
+each parent followed by its descendants in file order. The overlay mounts
+`build/data/` as collection data, available to the theme as
+`site.Data.collection.fields`.
 
 It runs Hugo without a build lock, so nothing is written under the
 application's `site/`.

@@ -26,6 +26,7 @@
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-31 Sat 11:12] -- collection compound fields and the template's closing note
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-31 Sat 11:30] -- doc-writer pass line corrected from gpt-6 to the pinned run model
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-31 Sat 12:20] -- compound catalogue introduction
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-10-31 Sat 16:26] -- demo compound group requirement
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -147,9 +148,12 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   ~[[fields.compound]]~. A declaration with ~required = true~ means every
   compound must supply that field. At the template's closing note, add the
   declared fields as further ~key = value~ lines in the compound file. The
-  [[file:../examples/demo/orgsyndb.toml][demo settings]] require ~item_number~ and ~chemical_class~: choose an
-  unused item number with ~CH-~ followed by four digits and a non-empty list
-  of value keys from [[file:../examples/demo/vocabularies/chemical-classes.toml][vocabularies/chemical-classes.toml]]. The
+  [[file:../examples/demo/orgsyndb.toml][demo settings]] require ~item_number~, ~chemical_class~ and ~group~.
+  Choose an unused item number with ~CH-~ followed by four digits and a
+  non-empty list of value keys from
+  [[file:../examples/demo/vocabularies/chemical-classes.toml][vocabularies/chemical-classes.toml]]. Set ~group~ to one value from
+  [[file:../examples/demo/vocabularies/inventory-groups.toml][vocabularies/inventory-groups.toml]]: ~starting-materials~, ~reagents~,
+  ~intermediates~ or ~final-products~. The
   [[file:SCHEMA.md][schema reference]] gives the field types, rules and validator messages.
 
   To show a structure, place an SVG or PNG file in the collection's

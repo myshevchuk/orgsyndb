@@ -8,3 +8,4 @@ item_number = "CH-0008"
 chemical_class = ["ketones"]
 stock = 5000
 in_house = false
+group = "starting-materials"

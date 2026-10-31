@@ -2,13 +2,18 @@
 "Compound pages" and "Compound directory", site-build "Hugo
 configuration", localization "German compound names").
 
-``CompoundSiteTests`` builds the test collection in English;
+``CompoundSiteTests`` builds the test collection in English, with the
+compound tabs and their pages (site-catalogue "Compound tabs");
 ``GermanCompoundTests`` builds it in German, and ``FallbackNameTests``
 builds it in German after removing one German name.
+``ChemicalClassTabsTests``, ``TabsFieldNotAFacetTests`` and
+``NoTabsFieldTests`` build modified copies of the collection for the
+tab scenarios that say so.
 """
 
 import json
 import re
+from typing import NamedTuple
 
 import catalogue_support as cs
 import field_support as fs
@@ -16,6 +21,23 @@ import pipeline_support as ps
 import sequence_support as ss
 import test_theme_integration as tti
 from pipeline_support import Content, Page
+
+PURCHASED = ["acetic-acid", "acetic-anhydride",
+             "ethyl-triphenylphosphoranylidene-acetate",
+             "phenylboronic-acid", "acetone", "acetophenone",
+             "benzaldehyde", "4-bromoacetophenone", "isopentyl-alcohol",
+             "methyl-salicylate"]
+SYNTHESISED = ["salicylic-acid", "4-acetylbiphenyl", "ethyl-cinnamate",
+               "acetylsalicylic-acid", "isopentyl-acetate",
+               "1-biphenyl-4-yl-ethanol", "dibenzylideneacetone",
+               "cinnamic-acid", "1-phenylethanol", "1-4-bromophenyl-ethanol"]
+
+
+class Tab(NamedTuple):
+    """A tab page: the key of the tabs field and a top-level value."""
+    field: str
+    value: str
+
 
 FACT_LABELS = ["Formula", "MW", "CAS", "SMILES"]
 SEPARATOR = fs.PATH_SEPARATOR
@@ -30,7 +52,11 @@ CATALOGUE_TEXTS = {
            "remove": "Remove {facet}: {value}", "filters": "Filters",
            "clear": "Clear all", "label": "Search compounds",
            "placeholder": "Name, formula, CAS or SMILES",
-           "button": "Search"},
+           "button": "Search", "all": "All compounds",
+           "tab_noscript": "Search and filters need JavaScript. Without "
+                           "it, this page lists every compound of this "
+                           "tab.",
+           "tab_label": "Search compounds: {label}"},
     "de": {"heading": "Verbindungen", "many": "{n} Verbindungen",
            "one": "1 Verbindung",
            "filtered": "{shown} von {total} Verbindungen",
@@ -42,7 +68,11 @@ CATALOGUE_TEXTS = {
            "clear": "Alles zurücksetzen", "label": "Verbindungen "
            "durchsuchen",
            "placeholder": "Name, Summenformel, CAS oder SMILES",
-           "button": "Suchen"},
+           "button": "Suchen", "all": "Alle Verbindungen",
+           "tab_noscript": "Suche und Filter brauchen JavaScript. Ohne "
+                           "JavaScript zeigt diese Seite alle "
+                           "Verbindungen dieses Reiters.",
+           "tab_label": "Verbindungen durchsuchen: {label}"},
 }
 
 
@@ -100,6 +130,87 @@ class CompoundCase(tti.SiteCase):
         built_in = 3 + bool(self.registry()[key].get("cas"))
         return [(p.label, p.definition.norm()) for p in pairs[built_in:]]
 
+    # --- the compound tabs (site-catalogue "Compound tabs") -------------
+
+    def tabs_field(self) -> fs.Field | None:
+        """The field the collection declares with ``tabs = true``."""
+        found = [f for f in self.fields() if f.tabs]
+        self.assertLessEqual(len(found), 1, "two tabs fields")
+        return found[0] if found else None
+
+    def tab_values(self) -> list[str]:
+        """The values that have a tab page, in tab order."""
+        return fs.tab_values(self.tabs_field(), self.registry())
+
+    def tab_label(self, tab: Tab) -> str:
+        field = next(f for f in self.fields() if f.key == tab.field)
+        return field.paths[tab.value][-1]
+
+    def tab_url(self, tab: Tab) -> str:
+        return f"/compounds/{tab.field}/{tab.value}/"
+
+    def tab_page(self, tab: Tab) -> Page:
+        path = (self.public / "compounds" / tab.field / tab.value
+                / "index.html")
+        self.assertTrue(path.is_file(), f"{self.tab_url(tab)} was not built")
+        return ps.load_page(self.public, path)
+
+    def tab_rows(self, tab: Tab) -> list[str]:
+        """The keys of the compounds on a tab page, by shown name."""
+        field = self.tabs_field()
+        return sorted(
+            fs.tab_compounds(field, self.registry(), tab.value),
+            key=self.shown)
+
+    def check_compound_tabs(self, page: Page, current: Tab | None) -> None:
+        """The compound tabs open ``main`` of ``page``: the tab of
+        ``current``, or ``All compounds`` for none, is the page's own."""
+        texts = CATALOGUE_TEXTS[self.LOCALE]
+        field = self.tabs_field()
+        self.assertIsNotNone(field, "the collection declares no tabs")
+        nav = page.find("main").elements()[0]
+        self.assertEqual((nav.tag, nav.classes, nav.attrs.get("aria-label")),
+                         ("nav", ["section-tabs"], field.label))
+        self.assertEqual(len(page.find_all("nav", "section-tabs")), 1)
+        lists = nav.find_all("ul")
+        self.assertEqual(len(lists), 1)
+        entries = lists[0].find_all("li")
+        for entry in entries:
+            self.assertEqual(len(entry.find_all("a")), 1, entry.norm())
+        wanted = [("/compounds/", texts["all"])] + [
+            (self.tab_url(Tab(field.key, v)), field.paths[v][-1])
+            for v in self.tab_values()]
+        links = page.links(nav)
+        self.assertEqual([(l.target, l.node.norm()) for l in links], wanted)
+        self.assertEqual(len(entries), len(wanted))
+        own = "/compounds/" if current is None else self.tab_url(current)
+        marked = {l.target: l.node.attrs["aria-current"]
+                  for l in links if "aria-current" in l.node.attrs}
+        self.assertEqual(marked, {own: "page"})
+
+    def check_no_compound_tabs(self, page: Page) -> None:
+        self.assertEqual(page.find_all("nav", "section-tabs"), [])
+
+    def check_tab_page(self, tab: Tab, *, facets: bool = True) -> Page:
+        """Everything the contract states of the tab page of ``tab``: the
+        tabs, the catalogue, the rows, the title and the section."""
+        page = self.tab_page(tab)
+        self.check_compound_tabs(page, tab)
+        if facets:
+            self.check_compound_catalogue(page, tab)
+        self.check_compound_rows(page, tab)
+        main = page.find("main")
+        self.assertEqual([h.norm() for h in main.find_all("h1")],
+                         [self.tab_label(tab)])
+        self.assertEqual(page.title(), f"{self.tab_label(tab)} | OrgSynDB")
+        self.assertEqual(page.find_all(data_pagefind_body=True), [])
+        nav = page.find("header", "site-header").find("nav")
+        marked = {l.target: l.node.attrs["aria-current"]
+                  for l in page.links(nav) if "aria-current" in l.node.attrs}
+        self.assertEqual(marked, {"/compounds/": "true"})
+        self.check_compound_header_search(page, tab)
+        return page
+
     # --- the compound catalogue (site-catalogue "Compound catalogue") ----
 
     def catalogue_page(self) -> ps.Page:
@@ -112,12 +223,18 @@ class CompoundCase(tti.SiteCase):
         self.assertIsNotNone(table, "no table.compound-table")
         return [row for row in table.find_all("tr") if row.find("td")]
 
-    def check_compound_catalogue(self, page: ps.Page) -> ps.Node:
+    def check_compound_catalogue(self, page: ps.Page,
+                                 tab: Tab | None = None) -> ps.Node:
         """The elements, attributes and texts of ``div.catalogue`` up to
         the table, and the facets with their values and depths, for the
-        collection the build holds. Returns the ``div.catalogue``."""
+        collection the build holds, on ``/compounds/`` or, with ``tab``,
+        on that tab page. Returns the ``div.catalogue``."""
         texts = CATALOGUE_TEXTS[self.LOCALE]
         main = page.find("main")
+        if self.tabs_field() is None:
+            self.check_no_compound_tabs(page)
+        else:
+            self.check_compound_tabs(page, tab)
         blocks = main.find_all("div", "catalogue")
         self.assertEqual(len(blocks), 1, "not one div.catalogue")
         block = blocks[0]
@@ -136,7 +253,10 @@ class CompoundCase(tti.SiteCase):
         rows = self.catalogue_rows(page)
         head = block.find("div", "list-head")
         self.assertEqual([h.norm() for h in head.find_all("h1")],
-                         [texts["heading"]])
+                         [texts["heading"] if tab is None
+                          else self.tab_label(tab)])
+        if tab is not None:
+            self.assertEqual(len(rows), len(self.tab_rows(tab)))
         count = head.find("p", "catalogue-count")
         self.assertIsNotNone(count, "no p.catalogue-count")
         self.assertEqual(count.attrs.get("role"), "status")
@@ -147,7 +267,8 @@ class CompoundCase(tti.SiteCase):
                                                  n=len(rows)))
         note = block.find("noscript").find("p", "catalogue-noscript")
         self.assertIsNotNone(note, "no p.catalogue-noscript")
-        self.assertEqual(note.norm(), texts["noscript"])
+        self.assertEqual(note.norm(), texts["noscript" if tab is None
+                                            else "tab_noscript"])
         facet_fields = [f for f in self.fields() if f.facet]
         layout = block.find("div", "catalogue-layout")
         expected = [("div", ["catalogue-results"])]
@@ -156,9 +277,9 @@ class CompoundCase(tti.SiteCase):
         self.assertEqual([(n.tag, n.classes[:1]) for n in layout.elements()],
                          expected)
         if facet_fields:
-            self.check_compound_facets(page, block, facet_fields)
+            self.check_compound_facets(page, block, facet_fields, tab)
         self.check_compound_results(page, block, bool(facet_fields))
-        self.check_compound_header_search(page)
+        self.check_compound_header_search(page, tab)
         scripts = [page.resolve(src) for src in page.script_sources() if src]
         loaded = [src for src in scripts if cs.CATALOGUE_SCRIPT.match(src)]
         self.assertEqual(len(loaded), 1, f"scripts {scripts}")
@@ -168,7 +289,8 @@ class CompoundCase(tti.SiteCase):
         return block
 
     def check_compound_facets(self, page: ps.Page, block: ps.Node,
-                              facet_fields: list[fs.Field]) -> None:
+                              facet_fields: list[fs.Field],
+                              tab: Tab | None = None) -> None:
         texts = CATALOGUE_TEXTS[self.LOCALE]
         facets = block.find("div", "catalogue-facets")
         self.assertEqual(facets.attrs.get("id"), "catalogue-facets")
@@ -196,8 +318,13 @@ class CompoundCase(tti.SiteCase):
                 self.assertEqual(values.attrs.get("aria-labelledby"),
                                  summary.attrs["id"])
                 labels = values.find_all("label", "facet-value")
-                entries = fs.facet_entries(field, registry, self.LOCALE)
-                self.assertGreater(len(entries), 1)
+                if tab is None:
+                    entries = fs.facet_entries(field, registry, self.LOCALE)
+                else:
+                    entries = fs.tab_facet_entries(
+                        field, self.tabs_field(), tab.value, registry,
+                        self.LOCALE)
+                self.assertGreater(len(entries), 1 if tab is None else 0)
                 self.assertEqual(len(labels), len(entries))
                 for label, (value, text, depth) in zip(labels, entries):
                     self.check_compound_facet_value(
@@ -271,8 +398,11 @@ class CompoundCase(tti.SiteCase):
         self.assertEqual(block.find_all("form"), [],
                          "a form inside div.catalogue")
 
-    def check_compound_header_search(self, page: ps.Page) -> None:
+    def check_compound_header_search(self, page: ps.Page,
+                                     tab: Tab | None = None) -> None:
         texts = CATALOGUE_TEXTS[self.LOCALE]
+        label = texts["label"] if tab is None else texts[
+            "tab_label"].format(label=self.tab_label(tab))
         forms = page.find("header", "site-header").find_all("form")
         self.assertEqual(len(forms), 1, "not one form in the site header")
         form = forms[0]
@@ -282,14 +412,15 @@ class CompoundCase(tti.SiteCase):
         self.assertEqual(form.attrs.get("role"), "search")
         self.assertEqual(form.attrs.get("method", "").lower(), "get")
         self.assertEqual(page.resolve(form.attrs.get("action", "")),
-                         "/compounds/")
+                         "/compounds/" if tab is None
+                         else self.tab_url(tab))
         fields = form.find_all("input")
         self.assertEqual(len(fields), 1)
         self.assertEqual(
             {k: fields[0].attrs.get(k) for k in
              ("type", "name", "id", "aria-label", "placeholder")},
             {"type": "search", "name": "q", "id": "catalogue-q",
-             "aria-label": texts["label"],
+             "aria-label": label,
              "placeholder": texts["placeholder"]})
         buttons = form.find_all("button")
         self.assertEqual(len(buttons), 1)
@@ -297,15 +428,18 @@ class CompoundCase(tti.SiteCase):
                          ("submit", texts["button"]))
         self.assertEqual(len(page.find_all("input", name="q")), 1)
 
-    def check_compound_rows(self, page: ps.Page) -> dict[str, ps.Node]:
+    def check_compound_rows(self, page: ps.Page, tab: Tab | None = None
+                            ) -> dict[str, ps.Node]:
         """The rows' ``data-`` attributes against the registry and the
-        field data; returns the rows by compound key."""
+        field data, for every compound or, with ``tab``, for those on
+        that tab page; returns the rows by compound key."""
         registry = self.registry()
         fields = self.fields()
         facet_fields = [f for f in fields if f.facet]
         rows = self.catalogue_rows(page)
-        self.assertEqual([r.attrs.get("data-id") for r in rows],
-                         sorted(registry, key=lambda k: self.shown(k)))
+        keys = sorted(registry, key=self.shown) if tab is None \
+            else self.tab_rows(tab)
+        self.assertEqual([r.attrs.get("data-id") for r in rows], keys)
         found = {}
         for row in rows:
             key = row.attrs["data-id"]
@@ -416,25 +550,30 @@ class CompoundSiteTests(CompoundCase):
                 ("Item no.", "CH-0010"), ("Short name", "ASA"),
                 ("Chemical class",
                  f"{classes['carboxylic']}, {classes['esters']}"),
-                ("Made in house", "Yes")],
+                ("Made in house", "Yes"),
+                ("Group", "Synthesised" + SEPARATOR + "Final products")],
             "acetic-acid": [
                 ("Item no.", "CH-0006"), ("Short name", "AcOH"),
                 ("Chemical class", classes["carboxylic"]),
-                ("Stock", "2500 g"), ("Made in house", "No")],
+                ("Stock", "2500 g"), ("Made in house", "No"),
+                ("Group", "Purchased" + SEPARATOR + "Reagents")],
             "ethyl-triphenylphosphoranylidene-acetate": [
                 ("Item no.", "CH-0015"),
                 ("Chemical class", f"Organophosphorus compounds, "
                                    f"{classes['esters']}"),
-                ("Stock", "12.5 g"), ("Made in house", "No")],
+                ("Stock", "12.5 g"), ("Made in house", "No"),
+                ("Group", "Purchased" + SEPARATOR + "Reagents")],
             "methyl-salicylate": [
                 ("Item no.", "CH-0018"),
-                ("Chemical class", f"{classes['esters']}, Phenols")],
+                ("Chemical class", f"{classes['esters']}, Phenols"),
+                ("Group", "Purchased" + SEPARATOR + "Starting materials")],
             "4-bromoacetophenone": [
                 ("Item no.", "CH-0005"),
                 ("Chemical class", SEPARATOR.join(
                     ["Carbonyl compounds", "Ketones", "Aryl ketones"])
                  + ", Aryl halides"),
-                ("Stock", "100 g"), ("Made in house", "No")],
+                ("Stock", "100 g"), ("Made in house", "No"),
+                ("Group", "Purchased" + SEPARATOR + "Starting materials")],
         }
         for key, pairs in expected.items():
             with self.subTest(compound=key):
@@ -665,7 +804,8 @@ class CompoundSiteTests(CompoundCase):
         self.assertEqual([(g.attrs.get("data-facet"),
                            g.find("summary").norm()) for g in groups],
                          [("chemical_class", "Chemical class"),
-                          ("in_house", "Made in house")])
+                          ("in_house", "Made in house"),
+                          ("group", "Group")])
 
     def test_the_rows_carry_their_values(self) -> None:
         """Scenario: The compound catalogue in the HTML (the rows)."""
@@ -760,6 +900,156 @@ class CompoundSiteTests(CompoundCase):
         form)."""
         self.check_compound_header_search(self.catalogue_page())
 
+    # --- the compound tabs ---------------------------------------------
+
+    def test_the_tab_pages_are_the_top_level_values(self) -> None:
+        """Scenario: Tabs in the HTML (no other tab page)."""
+        group = self.public / "compounds" / "group"
+        self.assertEqual(
+            sorted(p.name for p in group.iterdir()),
+            ["purchased", "synthesised"])
+        self.assertEqual(
+            sorted(p.parent.name for p in group.glob("*/index.html")),
+            ["purchased", "synthesised"])
+        self.assertEqual(self.tab_values(), ["purchased", "synthesised"])
+
+    def test_the_compound_tabs_open_the_catalogue_and_both_tab_pages(
+            self) -> None:
+        """Scenario: Tabs in the HTML (the tabs)."""
+        self.check_compound_tabs(self.catalogue_page(), None)
+        for value, label in (("purchased", "Purchased"),
+                             ("synthesised", "Synthesised")):
+            page = self.tab_page(Tab("group", value))
+            with self.subTest(tab=value):
+                self.check_compound_tabs(page, Tab("group", value))
+                tabs = page.find("main").elements()[0]
+                self.assertEqual(
+                    [(l.target, l.node.norm()) for l in page.links(tabs)],
+                    [("/compounds/", "All compounds"),
+                     ("/compounds/group/purchased/", "Purchased"),
+                     ("/compounds/group/synthesised/", "Synthesised")])
+                self.assertEqual(tabs.attrs.get("aria-label"), "Group")
+                self.assertEqual(page.find("h1").norm(), label)
+
+    def test_the_catalogue_page_marks_its_own_tab(self) -> None:
+        """Scenario: Tabs in the HTML (the page's own link)."""
+        page = self.catalogue_page()
+        tabs = page.find("main").elements()[0]
+        marked = {l.target: l.node.attrs["aria-current"]
+                  for l in page.links(tabs)
+                  if "aria-current" in l.node.attrs}
+        self.assertEqual(marked, {"/compounds/": "page"})
+
+    def test_the_purchased_page_lists_the_purchased_compounds(self) -> None:
+        """Scenario: Tabs in the HTML (the Purchased page's rows, h1,
+        count and facets)."""
+        tab = Tab("group", "purchased")
+        page = self.check_tab_page(tab)
+        self.assertEqual(
+            [r.attrs["data-id"] for r in self.catalogue_rows(page)],
+            sorted(PURCHASED, key=self.shown))
+        self.assertEqual(page.find("h1").norm(), "Purchased")
+        self.assertEqual(page.find("p", "catalogue-count").norm(),
+                         "10 compounds")
+        self.assertEqual(ps.facet_values(page, "group"),
+                         [("starting-materials", "Starting materials"),
+                          ("reagents", "Reagents")])
+        group = page.find("details", "facet", data_facet="group")
+        depths = [DEPTH.match(ps.squash(label.attrs["style"])).group(1)
+                  for label in group.find_all("label", "facet-value")]
+        self.assertEqual(depths, ["0", "0"])
+        self.assertEqual(ps.facet_values(page, "in_house"),
+                         [("false", "No")])
+
+    def test_the_purchased_page_filters_by_what_its_rows_carry(self) -> None:
+        """Scenario: Tabs in the HTML (the chemical_class facet)."""
+        page = self.tab_page(Tab("group", "purchased"))
+        carried = {value for key in PURCHASED
+                   for value in fs.values_set(
+                       next(f for f in self.fields()
+                            if f.key == "chemical_class"),
+                       self.registry()[key])}
+        listed = {value for value, _ in
+                  ps.facet_values(page, "chemical_class")}
+        self.assertEqual(listed, carried)
+        self.assertIn("organoboron-compounds", listed)
+
+    def test_the_synthesised_page_lists_the_synthesised_compounds(
+            self) -> None:
+        """Scenario: Tabs in the HTML (the Synthesised page)."""
+        page = self.check_tab_page(Tab("group", "synthesised"))
+        self.assertEqual(
+            [r.attrs["data-id"] for r in self.catalogue_rows(page)],
+            sorted(SYNTHESISED, key=self.shown))
+        self.assertEqual(page.find("p", "catalogue-count").norm(),
+                         "10 compounds")
+        self.assertEqual(ps.facet_values(page, "group"),
+                         [("intermediates", "Intermediates"),
+                          ("final-products", "Final products")])
+        self.assertEqual(ps.facet_values(page, "in_house"),
+                         [("true", "Yes")])
+        self.assertEqual(
+            [value for value, _ in ps.facet_values(page, "chemical_class")],
+            ["carbonyl-compounds", "ketones", "aryl-ketones",
+             "carboxylic-acids", "acid-derivatives", "esters", "alcohols",
+             "phenols", "aryl-halides"])
+
+    def test_a_row_of_a_tab_carries_the_tabs_own_value(self) -> None:
+        """Requirement: Compound tabs (the rows as the catalogue's)."""
+        rows = {r.attrs["data-id"]: r for r in self.catalogue_rows(
+            self.tab_page(Tab("group", "purchased")))}
+        self.assertEqual(
+            sorted(json.loads(rows["acetone"].attrs["data-group"])),
+            ["purchased", "starting-materials"])
+        self.assertEqual(
+            sorted(json.loads(rows["acetic-acid"].attrs["data-group"])),
+            ["purchased", "reagents"])
+
+    def test_the_catalogue_lists_every_compound_beside_its_tabs(
+            self) -> None:
+        """Scenario: Tabs in the HTML (the catalogue keeps all rows)."""
+        page = self.catalogue_page()
+        self.assertEqual(len(self.catalogue_rows(page)), 20)
+        self.assertEqual(
+            ps.facet_values(page, "group"),
+            [("purchased", "Purchased"),
+             ("starting-materials", "Starting materials"),
+             ("reagents", "Reagents"), ("synthesised", "Synthesised"),
+             ("intermediates", "Intermediates"),
+             ("final-products", "Final products")])
+        self.assertEqual(
+            page.find("p", "catalogue-noscript").norm(),
+            "Search and filters need JavaScript. Without it, this page "
+            "lists every compound.")
+
+    def test_a_compound_page_has_no_compound_tabs(self) -> None:
+        """Requirement: Compound tabs (only the catalogue and its tab
+        pages open with the tabs)."""
+        for key in ("acetone", "salicylic-acid"):
+            with self.subTest(compound=key):
+                self.assertEqual(
+                    self.compound_page(key).find_all("nav", "section-tabs"),
+                    [])
+
+    def test_the_header_marks_compounds_on_a_tab_page(self) -> None:
+        """Scenario: Tabs in the HTML (the Compounds link)."""
+        for value in ("purchased", "synthesised"):
+            page = self.tab_page(Tab("group", value))
+            nav = page.find("header", "site-header").find("nav")
+            with self.subTest(tab=value):
+                self.assertEqual(
+                    {l.target: l.node.attrs["aria-current"]
+                     for l in page.links(nav)
+                     if "aria-current" in l.node.attrs},
+                    {"/compounds/": "true"})
+
+    def test_a_tab_page_is_not_indexed(self) -> None:
+        """Requirement: Compound tabs (no data-pagefind-body)."""
+        for value in ("purchased", "synthesised"):
+            page = self.tab_page(Tab("group", value))
+            with self.subTest(tab=value):
+                self.assertEqual(page.find_all(data_pagefind_body=True), [])
+
 
 class GermanCompoundTests(CompoundCase):
     """The test collection, built in German."""
@@ -803,7 +1093,8 @@ class GermanCompoundTests(CompoundCase):
         self.assertEqual([(g.attrs.get("data-facet"),
                            g.find("summary").norm()) for g in groups],
                          [("chemical_class", "Stoffklasse"),
-                          ("in_house", "Eigene Herstellung")])
+                          ("in_house", "Eigene Herstellung"),
+                          ("group", "Gruppe")])
         self.assertEqual(ps.facet_values(page, "in_house"),
                          [("true", "Ja"), ("false", "Nein")])
         classes = dict(ps.facet_values(page, "chemical_class"))
@@ -818,6 +1109,40 @@ class GermanCompoundTests(CompoundCase):
                          "Filter")
         self.assertEqual(block.find("div", "catalogue-facets").find("h2")
                          .norm(), "Filter")
+    def test_tabs_in_german(self) -> None:
+        """Scenario: Tabs in German."""
+        page = self.tab_page(Tab("group", "purchased"))
+        tabs = page.find("main").elements()[0]
+        self.assertEqual([l.node.norm() for l in page.links(tabs)],
+                         ["Alle Verbindungen", "Zugekauft",
+                          "Selbst hergestellt"])
+        self.assertEqual(tabs.attrs.get("aria-label"), "Gruppe")
+        self.assertEqual(page.find("main").find("h1").norm(), "Zugekauft")
+        field = page.find("header", "site-header").find("input", name="q")
+        self.assertEqual(field.get("aria-label"),
+                         "Verbindungen durchsuchen: Zugekauft")
+        self.assertEqual(
+            page.find("p", "catalogue-noscript").norm(),
+            "Suche und Filter brauchen JavaScript. Ohne JavaScript zeigt "
+            "diese Seite alle Verbindungen dieses Reiters.")
+
+    def test_the_german_tab_pages(self) -> None:
+        """Scenario: Tabs in German (every part of both tab pages)."""
+        self.check_compound_tabs(self.catalogue_page(), None)
+        for value in ("purchased", "synthesised"):
+            with self.subTest(tab=value):
+                page = self.check_tab_page(Tab("group", value))
+                self.assertEqual(
+                    page.find("p", "catalogue-count").norm(),
+                    "10 Verbindungen")
+                self.assertEqual(
+                    page.find("details", "facet", data_facet="group")
+                    .find("summary").norm(), "Gruppe")
+        self.assertEqual(
+            ps.facet_values(self.tab_page(Tab("group", "purchased")),
+                            "group"),
+            [("starting-materials", "Ausgangsstoffe"),
+             ("reagents", "Reagenzien")])
 
     def test_the_german_rows(self) -> None:
         """Scenario: The compound catalogue in the HTML (a German
@@ -850,7 +1175,8 @@ class GermanCompoundTests(CompoundCase):
         facts = page.find("dl", "compound-facts")
         self.assertEqual([p.label for p in page.definition_pairs(facts)],
                          ["Summenformel", "Molmasse", "CAS", "SMILES",
-                          "Artikelnr.", "Stoffklasse", "Eigene Herstellung"])
+                          "Artikelnr.", "Stoffklasse", "Eigene Herstellung",
+                          "Gruppe"])
         values = {p.label: p.definition.norm()
                   for p in page.definition_pairs(facts)}
         self.assertEqual(values["Molmasse"], "138,12 g/mol")
@@ -900,22 +1226,27 @@ class GermanCompoundTests(CompoundCase):
             "acetic-acid": [
                 ("Artikelnr.", "CH-0006"), ("Kurzname", "AcOH"),
                 ("Stoffklasse", f"{carbonyl}{SEPARATOR}Carbonsäuren"),
-                ("Bestand", "2500 g"), ("Eigene Herstellung", "Nein")],
+                ("Bestand", "2500 g"), ("Eigene Herstellung", "Nein"),
+                ("Gruppe", f"Zugekauft{SEPARATOR}Reagenzien")],
             "ethyl-triphenylphosphoranylidene-acetate": [
                 ("Artikelnr.", "CH-0015"),
                 ("Stoffklasse", "Organophosphorverbindungen, " + SEPARATOR
                  .join([carbonyl, "Carbonsäurederivate", "Ester"])),
-                ("Bestand", "12,5 g"), ("Eigene Herstellung", "Nein")],
+                ("Bestand", "12,5 g"), ("Eigene Herstellung", "Nein"),
+                ("Gruppe", f"Zugekauft{SEPARATOR}Reagenzien")],
             "salicylic-acid": [
                 ("Artikelnr.", "CH-0020"),
                 ("Stoffklasse", f"{carbonyl}{SEPARATOR}Carbonsäuren, "
                                 "Phenole"),
-                ("Eigene Herstellung", "Ja")],
+                ("Eigene Herstellung", "Ja"),
+                ("Gruppe", f"Selbst hergestellt{SEPARATOR}"
+                           "Zwischenprodukte")],
             "methyl-salicylate": [
                 ("Artikelnr.", "CH-0018"),
                 ("Stoffklasse", SEPARATOR.join(
                     [carbonyl, "Carbonsäurederivate", "Ester"])
-                 + ", Phenole")],
+                 + ", Phenole"),
+                ("Gruppe", f"Zugekauft{SEPARATOR}Ausgangsstoffe")],
         }
         for key, pairs in expected.items():
             with self.subTest(compound=key):
@@ -926,13 +1257,204 @@ class GermanCompoundTests(CompoundCase):
         fields = self.fields()
         self.assertEqual([f.label for f in fields],
                          ["Artikelnr.", "Kurzname", "Stoffklasse",
-                          "Bestand", "Eigene Herstellung"])
+                          "Bestand", "Eigene Herstellung", "Gruppe"])
         for key, compound in self.registry().items():
             with self.subTest(compound=key):
                 self.assertEqual(
                     self.declared_pairs(key),
                     [(f.label, text) for f, text in fs.shown(
                         fields, compound, "de", page=True)])
+
+
+class ChemicalClassTabsTests(CompoundCase):
+    """The test collection in English, with `tabs = true` moved from
+    `group` to `chemical_class` and an unused top-level class
+    `heterocycles` added."""
+
+    TABS = ["carbonyl-compounds", "alcohols", "phenols", "aryl-halides",
+            "organoboron-compounds", "organophosphorus-compounds"]
+
+    @classmethod
+    def prepare(cls) -> None:
+        path = cls.sandbox.root / "orgsyndb.toml"
+        text = path.read_text(encoding="utf-8")
+        assert text.count("tabs = true\n") == 1
+        text = text.replace("tabs = true\n", "")
+        anchor = 'vocabulary = "chemical-classes"\n'
+        assert text.count(anchor) == 1
+        path.write_text(text.replace(anchor, anchor + "tabs = true\n"),
+                        encoding="utf-8")
+        vocabulary = (cls.sandbox.root / "vocabularies"
+                      / "chemical-classes.toml")
+        vocabulary.write_text(
+            vocabulary.read_text(encoding="utf-8")
+            + '\n[heterocycles]\nlabel = "Heterocycles"\n'
+            'label_de = "Heterocyclen"\n', encoding="utf-8")
+
+    def test_the_tab_pages_are_the_top_level_values_in_use(self) -> None:
+        """Scenario: Tabs by a multiple-valued field."""
+        self.assertEqual(self.tab_values(), self.TABS)
+        directory = self.public / "compounds" / "chemical_class"
+        self.assertEqual(sorted(p.name for p in directory.iterdir()),
+                         sorted(self.TABS))
+        self.assertFalse((directory / "heterocycles").exists())
+        page = self.catalogue_page()
+        self.check_compound_tabs(page, None)
+        tabs = page.find("main").elements()[0]
+        self.assertEqual(
+            [(l.target, l.node.norm()) for l in page.links(tabs)],
+            [("/compounds/", "All compounds"),
+             ("/compounds/chemical_class/carbonyl-compounds/",
+              "Carbonyl compounds"),
+             ("/compounds/chemical_class/alcohols/", "Alcohols"),
+             ("/compounds/chemical_class/phenols/", "Phenols"),
+             ("/compounds/chemical_class/aryl-halides/", "Aryl halides"),
+             ("/compounds/chemical_class/organoboron-compounds/",
+              "Organoboron compounds"),
+             ("/compounds/chemical_class/organophosphorus-compounds/",
+              "Organophosphorus compounds")])
+        self.assertEqual(tabs.attrs.get("aria-label"), "Chemical class")
+
+    def test_the_group_tab_pages_are_gone(self) -> None:
+        """Scenario: Tabs by a multiple-valued field (no group
+        directory)."""
+        self.assertFalse((self.public / "compounds" / "group").exists())
+
+    def test_a_compound_lies_in_several_tabs(self) -> None:
+        """Scenario: Tabs by a multiple-valued field (a compound in two
+        tabs)."""
+        for value in ("carbonyl-compounds", "aryl-halides"):
+            with self.subTest(tab=value):
+                rows = [r.attrs["data-id"] for r in self.catalogue_rows(
+                    self.tab_page(Tab("chemical_class", value)))]
+                self.assertIn("4-bromoacetophenone", rows)
+        rows = [r.attrs["data-id"] for r in self.catalogue_rows(
+            self.tab_page(Tab("chemical_class", "alcohols")))]
+        self.assertNotIn("4-bromoacetophenone", rows)
+
+    def test_the_tabs_own_value_leaves_its_facet(self) -> None:
+        """Scenario: Tabs by a multiple-valued field (the facet of the
+        carbonyl-compounds page)."""
+        page = self.tab_page(Tab("chemical_class", "carbonyl-compounds"))
+        group = page.find("details", "facet", data_facet="chemical_class")
+        depths = {label.find("input").attrs["value"]: int(DEPTH.match(
+            ps.squash(label.attrs["style"])).group(1))
+            for label in group.find_all("label", "facet-value")}
+        self.assertNotIn("carbonyl-compounds", depths)
+        self.assertEqual(depths["aryl-ketones"], 1)
+        self.assertEqual(depths["aryl-halides"], 0)
+        self.assertEqual(depths["ketones"], 0)
+        self.assertEqual(depths["esters"], 1)
+        self.assertNotIn("alcohols", depths)
+
+    def test_a_facet_without_values_is_left_out(self) -> None:
+        """Requirement: Compound tabs (a facet with no value to list on
+        the page is left out)."""
+        page = self.tab_page(Tab("chemical_class", "organoboron-compounds"))
+        self.assertEqual(
+            [g.attrs.get("data-facet")
+             for g in page.find_all("details", "facet")],
+            ["in_house", "group"])
+
+    def test_every_tab_page_follows_the_contract(self) -> None:
+        """Scenario: Tabs by a multiple-valued field (every page)."""
+        for value in self.TABS:
+            with self.subTest(tab=value):
+                # The facet of the one-class organoboron tab has no value
+                # left once its own is dropped.
+                self.check_tab_page(
+                    Tab("chemical_class", value),
+                    facets=value != "organoboron-compounds")
+
+
+class TabsFieldNotAFacetTests(CompoundCase):
+    """The test collection in English, without the `facet = true` line of
+    the declaration of `group`."""
+
+    @classmethod
+    def prepare(cls) -> None:
+        path = cls.sandbox.root / "orgsyndb.toml"
+        text = path.read_text(encoding="utf-8")
+        old = ('vocabulary = "inventory-groups"\nrequired = true\n'
+               'facet = true\n')
+        assert text.count(old) == 1
+        path.write_text(text.replace(
+            old, 'vocabulary = "inventory-groups"\nrequired = true\n'),
+            encoding="utf-8")
+
+    def test_a_tabs_field_that_is_not_a_facet(self) -> None:
+        """Scenario: A tabs field that is not a facet."""
+        page = self.tab_page(Tab("group", "purchased"))
+        self.assertEqual(
+            [r.attrs["data-id"] for r in self.catalogue_rows(page)],
+            sorted(PURCHASED, key=self.shown))
+        self.assertEqual(page.find("p", "catalogue-count").norm(),
+                         "10 compounds")
+        self.assertEqual(page.find_all("details", "facet",
+                                       data_facet="group"), [])
+        self.assertEqual(
+            [g.attrs["data-facet"]
+             for g in page.find_all("details", "facet")],
+            ["chemical_class", "in_house"])
+
+    def test_the_tab_pages_still_follow_the_contract(self) -> None:
+        """Scenario: A tabs field that is not a facet (both pages)."""
+        for value in ("purchased", "synthesised"):
+            with self.subTest(tab=value):
+                self.check_tab_page(Tab("group", value))
+
+    def test_the_catalogue_keeps_its_tabs(self) -> None:
+        """Scenario: A tabs field that is not a facet (the catalogue)."""
+        page = self.catalogue_page()
+        self.check_compound_catalogue(page)
+        self.assertEqual(page.find_all("details", "facet",
+                                       data_facet="group"), [])
+
+
+class NoTabsFieldTests(CompoundCase):
+    """The test collection in English, without the `tabs = true` line of
+    its `orgsyndb.toml`."""
+
+    @classmethod
+    def prepare(cls) -> None:
+        path = cls.sandbox.root / "orgsyndb.toml"
+        text = path.read_text(encoding="utf-8")
+        assert text.count("tabs = true\n") == 1
+        path.write_text(text.replace("tabs = true\n", ""),
+                        encoding="utf-8")
+
+    def test_the_catalogue_has_no_tabs_and_there_is_no_tab_page(
+            self) -> None:
+        """Scenario: A collection without a tabs field."""
+        page = self.catalogue_page()
+        self.assertIsNone(page.find("nav", "section-tabs"))
+        self.assertFalse((self.public / "compounds" / "group").exists())
+        self.assertEqual(
+            [n.tag for n in page.find("main").elements()[:1]], ["div"])
+        self.assertEqual(page.find("main").elements()[0].classes[:1],
+                         ["catalogue"])
+
+    def test_the_catalogue_is_unchanged(self) -> None:
+        """Scenario: A collection without a tabs field (the catalogue)."""
+        page = self.catalogue_page()
+        block = self.check_compound_catalogue(page)
+        self.assertEqual(block.find("p", "catalogue-count").norm(),
+                         "20 compounds")
+        self.check_compound_rows(page)
+        self.assertEqual(
+            [g.attrs["data-facet"] for g in page.find_all("details",
+                                                          "facet")],
+            ["chemical_class", "in_house", "group"])
+
+    def test_no_page_has_compound_tabs(self) -> None:
+        """Scenario: A collection without a tabs field (every page)."""
+        for path in sorted(self.public.rglob("index.html")):
+            if "pagefind" in path.parts:
+                continue
+            page = ps.load_page(self.public, path)
+            if page.url.startswith("/compounds/"):
+                with self.subTest(page=page.url):
+                    self.assertIsNone(page.find("nav", "section-tabs"))
 
 
 class NumberAndBooleanColumnTests(CompoundCase):
@@ -1031,7 +1553,7 @@ class NoFacetFieldTests(CompoundCase):
         path = cls.sandbox.root / "orgsyndb.toml"
         lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
         kept = [ln for ln in lines if ln.strip() != "facet = true"]
-        assert len(kept) == len(lines) - 2, "not two facet lines"
+        assert len(kept) == len(lines) - 3, "not three facet lines"
         path.write_text("".join(kept), encoding="utf-8")
 
     def test_the_catalogue_has_no_facets(self) -> None:
@@ -1175,7 +1697,8 @@ class MarkupNameTests(CompoundCase):
         (cls.sandbox.root / "compounds" / "dimethylurea.toml").write_text(
             f'name = "{cls.NAME}"\nformula = "C3H8N2O"\nmw = 88.11\n'
             'smiles = "CNC(=O)NC"\nitem_number = "CH-0099"\n'
-            'chemical_class = ["ketones"]\n', encoding="utf-8")
+            'chemical_class = ["ketones"]\ngroup = "reagents"\n',
+            encoding="utf-8")
 
     def test_a_name_is_escaped_once(self) -> None:
         """Scenario: A page per compound (a name with markup characters)."""

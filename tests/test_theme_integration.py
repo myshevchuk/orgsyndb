@@ -34,6 +34,8 @@ TABS = [("/procedures/", "All procedures"),
         ("/general-procedures/", "General procedures"),
         ("/reaction_types/", "Reaction types"), ("/tags/", "Tags"),
         ("/authors/", "Authors")]
+COMPOUND_TAB_PAGES = {"/compounds/group/purchased/": "Purchased",
+                      "/compounds/group/synthesised/": "Synthesised"}
 SECTIONS = ["Summary", "Reagents", "Procedure", "Workup and Purification",
             "Characterization", "Notes", "Hazards and Waste Disposal",
             "References"]
@@ -272,6 +274,15 @@ class ShippedSiteTests(SiteCase):
                               fields[0].attrs.get("aria-label"),
                               fields[0].attrs.get("placeholder")),
                              ("catalogue-q", "Search compounds",
+                              "Name, formula, CAS or SMILES"))
+        if page.url in COMPOUND_TAB_PAGES:
+            self.assertEqual(page.resolve(form.attrs.get("action", "")),
+                             page.url)
+            self.assertEqual((fields[0].attrs.get("id"),
+                              fields[0].attrs.get("aria-label"),
+                              fields[0].attrs.get("placeholder")),
+                             ("catalogue-q", "Search compounds: "
+                              + COMPOUND_TAB_PAGES[page.url],
                               "Name, formula, CAS or SMILES"))
         buttons = form.find_all("button")
         self.assertEqual(len(buttons), 1)
@@ -780,6 +791,10 @@ class ShippedSiteTests(SiteCase):
                  "compounds/index.html": {"/compounds/": "page"},
                  "compounds/salicylic-acid/index.html": {
                      "/compounds/": "true"},
+                 "compounds/group/purchased/index.html": {
+                     "/compounds/": "true"},
+                 "compounds/group/synthesised/index.html": {
+                     "/compounds/": "true"},
                  "sequences/index.html": {"/sequences/": "page"},
                  "sequences/seq-0001/index.html": {"/sequences/": "true"},
                  "sequences/seq-0002/index.html": {"/sequences/": "true"},
@@ -827,11 +842,20 @@ class ShippedSiteTests(SiteCase):
     def test_no_tabs_elsewhere(self) -> None:
         """Scenario: No tabs elsewhere."""
         listing = set(self.listing_pages())
+        compound = {"compounds/index.html"} | {
+            f"{url.strip('/')}/index.html" for url in COMPOUND_TAB_PAGES}
+        built = set()
         for path, page in self.pages():
             name = str(path.relative_to(self.public))
-            if name not in listing:
+            built.add(name)
+            if name in compound:
+                with self.subTest(page=name):
+                    self.assertEqual(
+                        len(page.find_all("nav", "section-tabs")), 1)
+            elif name not in listing:
                 with self.subTest(page=name):
                     self.assertIsNone(page.find("nav", "section-tabs"))
+        self.assertLessEqual(compound, built)
 
     def help_lists(self, page: Page) -> dict[str, Node]:
         """The ul.help-list after each h2 of a help index, by heading."""

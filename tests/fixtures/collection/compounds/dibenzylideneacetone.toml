@@ -8,3 +8,4 @@ item_number = "CH-0013"
 short_name = "dba"
 chemical_class = ["ketones"]
 in_house = true
+group = "final-products"

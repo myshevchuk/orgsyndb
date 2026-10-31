@@ -815,10 +815,11 @@ def fields_data(settings: Path, language: str) -> dict[str, Any]:
     and ``column``; its ``label`` as LANGUAGE shows it; ``facet`` for a
     boolean or choice field and ``search`` for a text field; the
     ``unit`` of a number field that declares one; and for a choice field
-    ``multiple``, ``values`` and ``order``. ``values`` maps every value
-    of the field's vocabulary to its shown ``label``, its ``path``, the
-    shown labels of its ancestors, outermost first, then its own, and
-    its ``ancestors``, the keys of its ancestors, outermost first.
+    ``multiple``, ``tabs``, ``values`` and ``order``. ``values`` maps
+    every value of the field's vocabulary to its shown ``label``, its
+    ``path``, the shown labels of its ancestors, outermost first, then
+    its own, and its ``ancestors``, the keys of its ancestors, outermost
+    first.
     ``order`` lists every value's key depth first: each top-level value
     in file order, followed by the values filed under it in the same
     order, recursively. A German label replaces the English one on a
@@ -860,6 +861,7 @@ def fields_data(settings: Path, language: str) -> dict[str, Any]:
             entry["unit"] = field.unit
         if field.type == "choice":
             entry["multiple"] = field.multiple
+            entry["tabs"] = field.tabs
             labels = {value: shown(term.label, term.label_de)
                       for value, term in field.terms.items()}
             entry["values"] = {}

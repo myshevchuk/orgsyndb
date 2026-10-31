@@ -7,3 +7,4 @@ cas = "92-91-1"
 item_number = "CH-0004"
 chemical_class = ["aryl-ketones"]
 in_house = true
+group = "intermediates"

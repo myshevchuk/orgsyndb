@@ -9,3 +9,4 @@ short_name = "Ac2O"
 chemical_class = ["anhydrides"]
 stock = 1000
 in_house = false
+group = "reagents"

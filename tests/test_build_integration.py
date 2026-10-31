@@ -407,7 +407,7 @@ class FieldDataStagingTests(BuildTestCase):
         self.assertEqual(
             [f["key"] for f in data["compound"]],
             ["item_number", "short_name", "chemical_class", "stock",
-             "in_house"])
+             "in_house", "group"])
         self.assertEqual(data["compound"][0]["label"], "Artikelnr.")
 
     def test_a_second_build_stages_the_changed_declarations(self) -> None:

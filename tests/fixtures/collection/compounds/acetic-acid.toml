@@ -9,3 +9,4 @@ short_name = "AcOH"
 chemical_class = ["carboxylic-acids"]
 stock = 2500
 in_house = false
+group = "reagents"

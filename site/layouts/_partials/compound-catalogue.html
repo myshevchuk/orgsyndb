@@ -1,0 +1,126 @@
+{{- /* The compound catalogue, on /compounds/ and on each of its tab pages:
+the heading and count, the noscript note, the facets, the toolbar, the
+message and the compound table. Takes a dict with page (the page shown),
+rows (the records of compound-rows.html that the page lists, by shown
+name) and, on a tab page only, tab (a dict of field, the field data of
+the field declared with tabs = true, and value, the key of the tab's
+top-level value). Its search form is the site header's
+(site-header.html), and catalogue.js matches the query against each
+row's data-text in the page. Every control lies in an element carrying
+data-catalogue-controls and hidden, which catalogue.js reveals; without
+it the page is the table and the note.
+
+The table has one row per record, with a link to the compound's page,
+the formula (each digit run in <sub>), the weight, the CAS number or an
+empty cell, one cell for each declared field with column = true, in
+declared order, holding the entry's value as field-value.html writes it
+for the directory or nothing when the entry does not set it, and the
+numbers of procedures that make the compound and that use it. The header
+and body cells of a number field carry the class num. Each row carries
+data-id, data-title, data-text and data-<key> for each facet field, the
+record's values as a JSON array.
+
+There is one facet per field declared with facet = true, in declared
+order, listing the values some row carries: a boolean true, then false;
+a choice in its depth-first order, each label.facet-value carrying
+--depth, the number of the value's ancestors. On a tab page the facet of
+the tabs field leaves out the tab's value and gives a value filed under
+it one depth step less, and a facet with no value to list is left out;
+a page left without a facet has no div.catalogue-facets and no
+button.facets-toggle. */ -}}
+{{ $page := .page -}}
+{{ $rows := .rows -}}
+{{ $tab := .tab -}}
+{{ $fields := site.Data.collection.fields.compound -}}
+{{ $columns := where $fields "column" true -}}
+{{ $facetFields := where $fields "facet" true -}}
+{{ $facets := slice -}}
+{{ range $field := $facetFields -}}
+{{ $carried := slice -}}
+{{ range $rows }}{{ range index .values $field.key }}{{ $carried = $carried | append . }}{{ end }}{{ end -}}
+{{ $entries := slice -}}
+{{ if eq $field.type "boolean" -}}
+{{ range slice (slice "true" "boolean_yes") (slice "false" "boolean_no") }}{{ if in $carried (index . 0) }}{{ $entries = $entries | append (dict "key" (index . 0) "label" (T (index . 1))) }}{{ end }}{{ end -}}
+{{ else -}}
+{{ $own := "" -}}
+{{ if and $tab (eq $field.key $tab.field.key) }}{{ $own = $tab.value }}{{ end -}}
+{{ range $field.order -}}
+{{ if and (in $carried .) (ne . $own) -}}
+{{ $value := index $field.values . -}}
+{{ $depth := len $value.ancestors -}}
+{{ if and $own (in $value.ancestors $own) }}{{ $depth = sub $depth 1 }}{{ end -}}
+{{ $entries = $entries | append (dict "key" . "label" $value.label "depth" $depth) -}}
+{{ end -}}
+{{ end -}}
+{{ end -}}
+{{ if or $entries (not $tab) }}{{ $facets = $facets | append (dict "field" $field "entries" $entries) }}{{ end -}}
+{{ end -}}
+{{ $count := len $rows -}}
+<div class="catalogue" data-catalogue data-search="text" data-text-empty="{{ T "compounds_empty" }}" data-text-ignored="{{ T "catalogue_ignored" }}" data-text-remove="{{ T "catalogue_remove" }}">
+<div class="list-head">
+<h1>{{ partial "page-title.html" $page }}</h1>
+<p class="catalogue-count" role="status" data-catalogue-count data-filtered="{{ T "compounds_filtered" }}">{{ if eq $count 1 }}{{ T "compounds_count_one" }}{{ else }}{{ T "compounds_count" (dict "Count" (lang.FormatNumber 0 $count)) }}{{ end }}</p>
+</div>
+<noscript>
+<p class="catalogue-noscript">{{ if $tab }}{{ T "compounds_tab_noscript" }}{{ else }}{{ T "compounds_noscript" }}{{ end }}</p>
+</noscript>
+<div class="catalogue-layout">
+{{ with $facets -}}
+<div class="catalogue-facets" id="catalogue-facets" data-catalogue-controls hidden>
+<h2>{{ T "catalogue_filters" }}</h2>
+{{ range . -}}
+{{ $field := .field -}}
+<details class="facet" data-facet="{{ $field.key }}" open>
+<summary id="facet-{{ $field.key }}">{{ $field.label }}</summary>
+<div class="facet-values" role="group" aria-labelledby="facet-{{ $field.key }}">
+{{ range .entries -}}
+<label class="facet-value"{{ if isset . "depth" }} style="--depth: {{ .depth }}"{{ end }}><input type="checkbox" name="{{ $field.key }}" value="{{ .key }}"> <span class="facet-label">{{ .label }}</span> <span class="facet-count"></span></label>
+{{ end -}}
+</div>
+</details>
+{{ end -}}
+</div>
+{{ end -}}
+<div class="catalogue-results">
+<div class="catalogue-toolbar" data-catalogue-controls hidden>
+{{ with $facets }}<button type="button" class="facets-toggle" aria-controls="catalogue-facets" aria-expanded="false">{{ T "catalogue_filters" }}</button>
+{{ end -}}
+<ul class="catalogue-active"></ul>
+<button type="button" class="clear-all">{{ T "catalogue_clear" }}</button>
+</div>
+<p class="catalogue-message" data-catalogue-message role="status" hidden></p>
+<div class="table-scroll" tabindex="0" role="region" aria-label="{{ T "table_compounds" }}">
+<table class="compound-table">
+<thead>
+<tr>
+<th scope="col">{{ T "col_compound" }}</th>
+<th scope="col">{{ T "label_formula" }}</th>
+<th scope="col" class="num">{{ T "label_mw" }}</th>
+<th scope="col">{{ T "label_cas" }}</th>
+{{ range $columns -}}
+<th scope="col"{{ if eq .type "number" }} class="num"{{ end }}>{{ .label }}</th>
+{{ end -}}
+<th scope="col" class="num">{{ T "label_made_by" }}</th>
+<th scope="col" class="num">{{ T "label_used_in" }}</th>
+</tr>
+</thead>
+<tbody>
+{{ range $row := $rows -}}
+<tr data-id="{{ .key }}" data-title="{{ .name }}" data-text="{{ .text }}"{{ range $facetFields }} {{ printf "data-%s=\"%s\"" .key (index $row.values .key | jsonify | htmlEscape) | safeHTMLAttr }}{{ end }}>
+<td><a href="/compounds/{{ .key }}/">{{ .name }}</a></td>
+<td>{{ .compound.formula | htmlEscape | replaceRE "([0-9]+)" "<sub>$1</sub>" | safeHTML }}</td>
+<td class="num">{{ partial "decimal.html" .compound.mw }} g/mol</td>
+<td>{{ .compound.cas }}</td>
+{{ range $columns -}}
+<td{{ if eq .type "number" }} class="num"{{ end }}>{{ if isset $row.compound .key }}{{ partial "field-value.html" (dict "field" . "value" (index $row.compound .key) "page" false) }}{{ end }}</td>
+{{ end -}}
+<td class="num">{{ lang.FormatNumber 0 .made }}</td>
+<td class="num">{{ lang.FormatNumber 0 .used }}</td>
+</tr>
+{{ end -}}
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>

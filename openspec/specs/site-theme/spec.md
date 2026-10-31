@@ -30,11 +30,11 @@ Every HTML page the theme renders SHALL contain, in this order:
 - a `header.site-header` holding, in this order:
   - `a.site-title`, linking `/` with the text `OrgSynDB`;
   - a `nav` element carrying `aria-label="Site"`, which links, in this order, to `/procedures/`, `/compounds/`, `/sequences/` and `/help/`, with the texts `Procedures`, `Compounds`, `Sequences` and `Help`. The header holds no other `nav`;
-  - `form.site-search` with `role="search"` and `method="get"`, holding one `input` with `type="search"` and `name="q"`, and a `button` with `type="submit"` and the text `Search`. On the catalogue, the term pages and `/general-procedures/` it is the catalogue's search form, with the `action`, attributes and texts that site-catalogue "Catalogue controls" gives, and on `/compounds/` it is the compound catalogue's, as site-catalogue "Compound catalogue" gives. On every other page its `action` resolves to `/procedures/`, and its input carries `aria-label="Search procedures"` and the placeholder `Product, CAS, SMILES or keyword`;
+  - `form.site-search` with `role="search"` and `method="get"`, holding one `input` with `type="search"` and `name="q"`, and a `button` with `type="submit"` and the text `Search`. On the catalogue, the term pages and `/general-procedures/` it is the catalogue's search form, with the `action`, attributes and texts that site-catalogue "Catalogue controls" gives, and on `/compounds/` and its tab pages it is the compound catalogue's, as site-catalogue "Compound catalogue" and "Compound tabs" give. On every other page its `action` resolves to `/procedures/`, and its input carries `aria-label="Search procedures"` and the placeholder `Product, CAS, SMILES or keyword`;
 - exactly one `main` element with `id="main"`;
 - a `footer.site-footer` whose text is `OrgSynDB · internal procedures · built <time>`, where `<time>` is a `time` element whose `datetime` is the time the site was built, as an RFC 3339 date-time, and whose text is that time as `YYYY-MM-DD HH:MM`. Every page of one build shows the same time.
 
-The navigation link whose URL is the page's own URL carries `aria-current="page"`. Otherwise the link of the section the page lies in carries `aria-current="true"`: every procedure page, `/general-procedures/`, `/reaction_types/`, `/tags/`, `/authors/` and their term pages lie in `/procedures/`; every compound page lies in `/compounds/`; every sequence page lies in `/sequences/`; every help page lies in `/help/`. No other navigation link carries `aria-current`. Every page has exactly one `input` with `name="q"`: the header's.
+The navigation link whose URL is the page's own URL carries `aria-current="page"`. Otherwise the link of the section the page lies in carries `aria-current="true"`: every procedure page, `/general-procedures/`, `/reaction_types/`, `/tags/`, `/authors/` and their term pages lie in `/procedures/`; every compound page and every compound tab page lies in `/compounds/`; every sequence page lies in `/sequences/`; every help page lies in `/help/`. No other navigation link carries `aria-current`. Every page has exactly one `input` with `name="q"`: the header's.
 
 On screen, the site title and the navigation sit at the start of the header row and the search form at its end, so that the header has the same height, and its title, navigation and search form the same positions, on every page at a given window width. Every page's `h1` has the same font size.
 
@@ -50,7 +50,7 @@ Headings follow these rules:
 #### Scenario: Shell on every page
 - **WHEN** a test scans every HTML file under `public/` except files under `public/pagefind/`, after a theme build in locale `en`
 - **THEN** each has the skip link, the site title, the site header with the four navigation links in order and then `form.site-search`, one `main#main`, the footer text with its `time`, the same on every page, both `meta` elements, exactly one `h1`, no heading-level jump greater than one, and exactly one `input[name=q]`, the header's
-- **AND** on every page except `/procedures/`, `/general-procedures/`, `/compounds/` and the term pages the form's `action` resolves to `/procedures/` and its input has the stated `aria-label` and placeholder
+- **AND** on every page except `/procedures/`, `/general-procedures/`, `/compounds/`, its tab pages and the term pages the form's `action` resolves to `/procedures/` and its input has the stated `aria-label` and placeholder
 
 #### Scenario: Term titles use labels and tags
 - **WHEN** a test reads `public/reaction_types/aldol-condensation/index.html` and `public/tags/sample-data/index.html` after a theme build in locale `en`
@@ -341,9 +341,9 @@ A text without a notes list is returned unchanged. On screen, the note an addres
 - **THEN** its body has links `Note 1` and `Note 2` to `#note-1` and `#note-2`, and the first two items of the list after the `Notes` heading hold the elements with those IDs
 
 ### Requirement: Procedure section tabs
-The catalogue at `/procedures/`, the general-procedures view `/general-procedures/`, the taxonomy pages `/reaction_types/`, `/tags/` and `/authors/`, and every term page SHALL have, as the first element of `main`, a `nav.section-tabs` carrying `aria-label="Procedures"`. It holds a `ul` whose `li` entries each hold one link, in this order: `/procedures/` with the text `All procedures`, `/general-procedures/` with `General procedures`, `/reaction_types/` with `Reaction types`, `/tags/` with `Tags` and `/authors/` with `Authors`. The link whose URL is the page's own URL carries `aria-current="page"`; on a term page the link of its taxonomy carries `aria-current="true"`. No other tab carries `aria-current`, and no other page has a `nav.section-tabs`.
+The catalogue at `/procedures/`, the general-procedures view `/general-procedures/`, the taxonomy pages `/reaction_types/`, `/tags/` and `/authors/`, and every term page SHALL have, as the first element of `main`, a `nav.section-tabs` carrying `aria-label="Procedures"`. It holds a `ul` whose `li` entries each hold one link, in this order: `/procedures/` with the text `All procedures`, `/general-procedures/` with `General procedures`, `/reaction_types/` with `Reaction types`, `/tags/` with `Tags` and `/authors/` with `Authors`. The link whose URL is the page's own URL carries `aria-current="page"`; on a term page the link of its taxonomy carries `aria-current="true"`. No other tab carries `aria-current`. Apart from these pages, only `/compounds/` and its tab pages have a `nav.section-tabs`, the compound tabs of site-catalogue "Compound tabs", and no other page has one.
 
-On screen the tabs form one row above the page's `h1`, wrapping on narrow windows, and the current tab is marked by more than colour alone.
+On screen the tabs, these and the compound tabs alike, form one row above the page's `h1`, wrapping on narrow windows, and the current tab is marked by more than colour alone.
 
 These texts are those of an English site; a German site has the German texts that the localization spec gives.
 
@@ -353,8 +353,8 @@ These texts are those of an English site; a German site has the German texts tha
 - **AND** `/procedures/`, `/general-procedures/` and each taxonomy page mark their own tab with `aria-current="page"`, each term page marks its taxonomy's tab with `aria-current="true"`, and no other tab carries `aria-current`
 
 #### Scenario: No tabs elsewhere
-- **WHEN** a test scans every other HTML file under `public/` except files under `public/pagefind/`, after the same build
-- **THEN** none has a `nav.section-tabs`
+- **WHEN** a test scans every other HTML file under `public/` except files under `public/pagefind/`, `/compounds/` and its tab pages, after the same build
+- **THEN** none has a `nav.section-tabs`, and `/compounds/` and its tab pages have exactly one, the compound tabs
 
 #### Scenario: Tabs in a browser
 - **WHEN** the orchestrator opens `/procedures/`, `/tags/` and a reaction-type term page in a browser at 1280 and at 500 CSS pixels, light and dark (manual verification, tasks.md section 3)

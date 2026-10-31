@@ -135,10 +135,13 @@ Check your collection's `orgsyndb.toml` for further fields under
 `[[fields.compound]]`. A declaration with `required = true` means every
 compound must supply that field. At the template's closing note, add the
 declared fields as further `key = value` lines in the compound file. The
-[demo settings](../examples/demo/orgsyndb.toml) require `item_number` and
-`chemical_class`: choose an unused item number with `CH-` followed by four
-digits and a non-empty list of value keys from
+[demo settings](../examples/demo/orgsyndb.toml) require `item_number`,
+`chemical_class` and `group`. Choose an unused item number with `CH-`
+followed by four digits and a non-empty list of value keys from
 [`vocabularies/chemical-classes.toml`](../examples/demo/vocabularies/chemical-classes.toml).
+Set `group` to one value from
+[`vocabularies/inventory-groups.toml`](../examples/demo/vocabularies/inventory-groups.toml):
+`starting-materials`, `reagents`, `intermediates` or `final-products`.
 The [field reference](SCHEMA.md#collection-field-declarations) gives the
 types, rules and validator messages.
 

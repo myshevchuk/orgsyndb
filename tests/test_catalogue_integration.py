@@ -202,6 +202,24 @@ class PlainCatalogueTests(cs.CatalogueCase):
         self.assertNotIn("pagefind-ui", page.source)
         self.assertEqual(len(page.find_all("input", name="q")), 1)
 
+    def test_the_compound_tab_pages_share_the_script(self) -> None:
+        """Scenario: Script wiring (the compound tab pages)."""
+        procedures = self.page("procedures/index.html")
+        wanted = [procedures.resolve(s) for s in procedures.script_sources()
+                  if s and "/js/catalogue" in procedures.resolve(s)]
+        self.assertEqual(len(wanted), 1)
+        for value in ("purchased", "synthesised"):
+            relative = f"compounds/group/{value}/index.html"
+            page = self.page(relative)
+            found = [page.resolve(s) for s in page.script_sources()
+                     if s and "/js/catalogue" in page.resolve(s)]
+            with self.subTest(page=relative):
+                self.assertEqual(found, wanted)
+                self.assertRegex(found[0], cs.CATALOGUE_SCRIPT)
+                self.assertNotIn("pagefind-ui", page.source)
+                self.assertEqual(len(page.find_all("input", name="q")), 1)
+                self.assertIsNotNone(page.find("div", "catalogue"))
+
     def test_links_and_assets_resolve_under_a_prefix(self) -> None:
         """Scenario: Links and assets under a prefix."""
         base = f"http://127.0.0.1{PREFIX.rstrip('/')}"

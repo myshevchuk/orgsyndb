@@ -1,0 +1,20 @@
+{{- /* The compound tabs, at the start of main on /compounds/ and on each of
+its tab pages, when a field declares tabs = true: a nav.section-tabs
+labelled with that field's shown label, linking All compounds to
+/compounds/, then each value of compound-tab-values.html to its tab page
+/compounds/<field key>/<value>/ with the value's shown label. The tab of
+the page itself carries aria-current="page". Renders nothing when no
+field declares tabs = true. */ -}}
+{{ $here := .RelPermalink -}}
+{{ with where site.Data.collection.fields.compound "tabs" true -}}
+{{ $field := index . 0 -}}
+<nav class="section-tabs" aria-label="{{ $field.label }}">
+<ul>
+<li><a href="/compounds/"{{ if eq $here "/compounds/" }} aria-current="page"{{ end }}>{{ T "compounds_all" }}</a></li>
+{{ range partialCached "compound-tab-values.html" "compound tab values" -}}
+{{ $url := printf "/compounds/%s/%s/" $field.key . -}}
+<li><a href="{{ $url }}"{{ if eq $here $url }} aria-current="page"{{ end }}>{{ (index $field.values .).label }}</a></li>
+{{ end -}}
+</ul>
+</nav>
+{{ end -}}

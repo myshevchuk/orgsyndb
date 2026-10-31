@@ -282,11 +282,17 @@ option on another type is a configuration error.
 | `vocabulary` | `choice` | String | Required | Names `vocabularies/<name>.toml` beside `orgsyndb.toml`, without the directory or extension. The name matches `[a-z0-9]+(-[a-z0-9]+)*`. |
 | `multiple` | `choice` | Boolean | `false` | When `true`, the compound supplies a non-empty list of distinct values instead of one string. |
 | `facet` | `boolean`, `choice` | Boolean | `false` | When `true`, the compound catalogue offers the field as a filter. |
+| `tabs` | `choice` | Boolean | `false` | When `true`, divides the compound directory into tab pages by the vocabulary's top-level values. At most one field may set `tabs = true`; it may also be a facet. |
 
 The demo also declares `short_name` as text with `search = true`,
 `chemical_class` as a required choice with `multiple = true`, `column = true`
-and `facet = true`, `stock` as a number with `min = 0` and `unit = "g"`, and
-`in_house` as a boolean with `facet = true`.
+and `facet = true`, `stock` as a number with `min = 0` and `unit = "g"`,
+`in_house` as a boolean with `facet = true`, and finally `group` as a required
+choice with `facet = true`, `tabs = true` and
+`vocabulary = "inventory-groups"`.
+The `group` labels are **Group** and **Gruppe**. Its vocabulary places
+`starting-materials` and `reagents` under `purchased`, and `intermediates`
+and `final-products` under `synthesised`.
 
 ### Vocabularies
 
@@ -340,13 +346,16 @@ demo's `methyl-salicylate.toml` sets:
 ```toml
 item_number = "CH-0018"
 chemical_class = ["esters", "phenols"]
+group = "starting-materials"
 ```
 
-The demo vocabulary defines both choices. Its `item_number` and
-`chemical_class` fields are required, so a compound added to that
-collection must set both and use an unused item number. The compound
-template's closing note tells you to add the fields your collection
-declares as further lines of the same form.
+The chemical-class vocabulary defines both classes. The demo requires
+`item_number`, `chemical_class` and `group`, so a compound added to that
+collection must set all three and use an unused item number. Set `group`
+to `starting-materials`, `reagents`, `intermediates` or `final-products`
+from [`vocabularies/inventory-groups.toml`](../examples/demo/vocabularies/inventory-groups.toml).
+The compound template's closing note tells you to add the fields your
+collection declares as further lines of the same form.
 
 Value problems are errors on the compound file's path, under the declared
 field's key:
@@ -372,6 +381,12 @@ pattern produces only `must not be empty`. A list of choices produces one
 `unknown value` error per unknown string. Uniqueness checks compare values
 that pass their field's checks and report every compound sharing a value.
 
+A compound whose key equals the key of the field with `tabs = true`
+produces a `file_name` error containing `tabs`. The field's key names the
+directory of the tab pages at `/compounds/<field key>/<value>/`; rename the
+compound file to use another key. Only a one-word field key can collide:
+compound keys use hyphens between words, while field keys use underscores.
+
 ### Configuration errors
 
 The validator rejects settings or vocabularies that break any rule above,
@@ -387,6 +402,11 @@ key or value. An option for another type produces a message such as
 `a number field does not take pattern`; an unknown option produces
 `unknown key <key>`. An unknown top-level settings key produces
 `unknown key <key>; only format and fields are allowed`.
+
+Setting `tabs = true` on more than one field is a configuration error:
+`fields a, b each set tabs = true; at most one field may`, where `a, b`
+are the field keys. Using `tabs` on a type other than `choice` is also a
+configuration error, as with other type-specific options.
 
 The build program checks only the settings file's TOML, `format` and
 top-level keys before running a command. The validator checks the
@@ -407,6 +427,31 @@ derivatives › Esters**. Multiple choices are separated by `, ` in the
 compound's order. The compound directory adds fields with `column = true`
 after CAS, in declaration order. It shows only each choice's own label,
 leaves unset values as empty cells, and aligns number columns to the right.
+
+When a field declares `tabs = true`, `/compounds/` and each tab page begin
+with a row of tabs, styled like the procedure tabs. **All compounds**
+(**Alle Verbindungen** in German) links to `/compounds/`. The remaining
+tabs use the labels of the vocabulary's top-level values, in vocabulary
+order, including only values some compound uses directly or through a
+value filed under them. The current page's tab is marked. A collection
+without a tabs field has no compound tabs or tab pages.
+
+A tab page lives at `/compounds/<field key>/<value>/`, with the value's
+label as its heading and title. It lists compounds that set the value or
+a value filed under it, in name order, whether or not the tabs field is
+a facet. Its count, filters and search work within that list, as on
+`/compounds/`. With `multiple = true`, a compound appears in every tab its
+values lead to. The demo's **Purchased** and **Synthesised** pages are
+`/compounds/group/purchased/` and `/compounds/group/synthesised/`, each with
+ten compounds.
+
+On a tab page, filters list only values carried by its compounds. When the
+tabs field is also a facet, its filter leaves out the tab's value and moves
+values filed under it up one level. With a multiple-valued tabs field, the
+compounds' other values remain in the filter. A filter with no values to
+list is omitted. The header search is labelled **Search compounds:
+\<label\>** (**Verbindungen durchsuchen: \<label\>** in German). Tab links
+carry no query or filters. Without JavaScript, a tab page shows its whole list.
 
 At `/compounds/`, the directory is a searchable, filterable catalogue of
 every registry entry. Rows stay in order of the name shown in the site's
@@ -430,9 +475,9 @@ The header's **Search compounds** field matches English and German names,
 formula, CAS number, SMILES and values of text fields with `search = true`.
 Every query word must match a substring, ignoring case and characters other
 than letters and digits. Searches such as `50-78-2`, `salicyl` and
-`c1ccccc1O` work without a Pagefind index. On other pages, including compound
-pages, the header searches procedures; compound pages remain outside the
-procedure search index.
+`c1ccccc1O` work without a Pagefind index. Outside these catalogues, including
+individual compound pages, the header searches procedures; compound pages
+remain outside the procedure search index.
 
 The address preserves the query and selections, for example
 `/compounds/?q=ester&chemical_class=esters&in_house=true`. Parameters the page

@@ -167,10 +167,13 @@ Prüfen Sie die `orgsyndb.toml` Ihrer Sammlung auf weitere Felder unter
 Feld setzen. Tragen Sie die deklarierten Felder beim Schlusskommentar der
 Vorlage als weitere Zeilen `key = value` in der Verbindungsdatei ein. Die
 [Einstellungen der Beispielsammlung](../examples/demo/orgsyndb.toml)
-verlangen `item_number` und `chemical_class`: Wählen Sie eine noch nicht
-vergebene Artikelnummer aus `CH-` und vier Ziffern und eine nicht leere
-Liste von Wertschlüsseln aus
+verlangen `item_number`, `chemical_class` und `group`. Wählen Sie eine noch
+nicht vergebene Artikelnummer aus `CH-` und vier Ziffern und eine nicht
+leere Liste von Wertschlüsseln aus
 [`vocabularies/chemical-classes.toml`](../examples/demo/vocabularies/chemical-classes.toml).
+Setzen Sie `group` auf einen Wert aus
+[`vocabularies/inventory-groups.toml`](../examples/demo/vocabularies/inventory-groups.toml):
+`starting-materials`, `reagents`, `intermediates` oder `final-products`.
 Die [Feldreferenz](SCHEMA.de.md#felddeklarationen-der-sammlung) nennt
 Typen, Regeln und Validatormeldungen.
 

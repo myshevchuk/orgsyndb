@@ -7,3 +7,4 @@ cas = "69-72-7"
 item_number = "CH-0020"
 chemical_class = ["carboxylic-acids", "phenols"]
 in_house = true
+group = "intermediates"

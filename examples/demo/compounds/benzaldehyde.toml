@@ -8,3 +8,4 @@ item_number = "CH-0011"
 chemical_class = ["aldehydes"]
 stock = 500
 in_house = false
+group = "starting-materials"

@@ -1,7 +1,18 @@
-{{- /* The compound pages: one page per entry of site.Data.compounds, the
-collection's compound registry, at /compounds/<key>/. Its title is the
-compound's shown name (compound-name.html), and its compound parameter
-the key, through which compounds/page.html finds the entry. */ -}}
+{{- /* The compound pages and the compound tab pages. A compound page is
+made for each entry of site.Data.compounds, the collection's compound
+registry, at /compounds/<key>/; its title is the compound's shown name
+(compound-name.html), and its compound parameter the key, through which
+compounds/page.html finds the entry. When a field declares tabs = true,
+a tab page is made for each value of compound-tab-values.html at
+/compounds/<field key>/<value>/, with the layout tab
+(compounds/tab.html); its title is the value's shown label, and its tab
+parameter the value's key. */ -}}
 {{ range $key, $compound := site.Data.compounds -}}
 {{ $.AddPage (dict "path" $key "kind" "page" "title" (partial "compound-name.html" $key) "params" (dict "compound" $key)) -}}
+{{ end -}}
+{{ with where site.Data.collection.fields.compound "tabs" true -}}
+{{ $field := index . 0 -}}
+{{ range partial "compound-tab-values.html" . -}}
+{{ $.AddPage (dict "path" (printf "%s/%s" $field.key .) "kind" "page" "layout" "tab" "title" (index $field.values .).label "params" (dict "tab" .)) -}}
+{{ end -}}
 {{ end -}}

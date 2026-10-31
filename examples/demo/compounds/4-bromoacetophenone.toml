@@ -8,3 +8,4 @@ item_number = "CH-0005"
 chemical_class = ["aryl-ketones", "aryl-halides"]
 stock = 100
 in_house = false
+group = "starting-materials"

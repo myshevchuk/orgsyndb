@@ -83,6 +83,9 @@ compounds_noscript = "Search and filters need JavaScript. Without it, this page 
 compounds_empty = "No compounds match the search and filters."
 search_compounds = "Search compounds"
 search_compounds_placeholder = "Name, formula, CAS or SMILES"
+compounds_all = "All compounds"
+search_compounds_tab = "Search compounds: {{ . }}"
+compounds_tab_noscript = "Search and filters need JavaScript. Without it, this page lists every compound of this tab."
 
 table_procedures = "Procedures"
 table_compounds = "Compounds"

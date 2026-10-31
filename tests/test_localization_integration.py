@@ -18,6 +18,9 @@ TABS = [("/procedures/", "Alle Vorschriften"),
         ("/general-procedures/", "Allgemeine Vorschriften"),
         ("/reaction_types/", "Reaktionstypen"), ("/tags/", "Schlagwörter"),
         ("/authors/", "Autoren")]
+COMPOUND_TABS = [("/compounds/", "Alle Verbindungen"),
+                 ("/compounds/group/purchased/", "Zugekauft"),
+                 ("/compounds/group/synthesised/", "Selbst hergestellt")]
 FOOTER = (r"^OrgSynDB · interne Vorschriften · Stand "
           r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}$")
 BANNER = "Beispieldaten – Mengenangaben nicht experimentell überprüft."
@@ -57,7 +60,14 @@ class GermanSiteTests(GermanCase):
                 self.assertEqual(len(header.find_all("nav")), 1,
                                  "the header has a language switch")
                 tabs = page.find("nav", "section-tabs")
-                if tabs is not None:
+                if page.url in dict(COMPOUND_TABS):
+                    self.assertIsNotNone(tabs, "no compound tabs")
+                    self.assertEqual(tabs.attrs.get("aria-label"),
+                                     "Gruppe")
+                    self.assertEqual([(l.target, l.node.norm())
+                                      for l in page.links(tabs)],
+                                     COMPOUND_TABS)
+                elif tabs is not None:
                     self.assertEqual(tabs.attrs.get("aria-label"),
                                      "Vorschriften")
                     self.assertEqual([(l.target, l.node.norm())
@@ -85,6 +95,14 @@ class GermanSiteTests(GermanCase):
                              "Verbindungen durchsuchen")
             self.assertEqual(field.get("placeholder"),
                              "Name, Summenformel, CAS oder SMILES")
+        elif page.url in dict(COMPOUND_TABS):
+            self.assertEqual(field.get("aria-label"),
+                             "Verbindungen durchsuchen: "
+                             + dict(COMPOUND_TABS)[page.url])
+            self.assertEqual(field.get("placeholder"),
+                             "Name, Summenformel, CAS oder SMILES")
+            self.assertEqual(
+                page.resolve(forms[0].attrs.get("action", "")), page.url)
         elif page.url == "/general-procedures/":
             self.assertEqual(field.get("aria-label"),
                              "Allgemeine Vorschriften durchsuchen")

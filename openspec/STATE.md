@@ -20,10 +20,6 @@ leaves this file then.
   several pages.
 - **Synthesis sequences written in Org.** Sequences are Markdown only;
   an Org source would need the export to handle `org/sequences/`.
-- **Compound tabs.** One declared choice field divides the compound
-  directory into tabs: a static page per top-level value of its
-  vocabulary, with that value fixed as a term page fixes its term, and
-  the lower levels of the hierarchy left as filters within a tab.
 - **Procedure fields.** A collection declares custom front-matter
   fields for its procedures, beside those for compounds, with the same
   types and checks; the metadata panel shows them.

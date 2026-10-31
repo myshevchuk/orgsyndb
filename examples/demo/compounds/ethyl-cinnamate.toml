@@ -7,3 +7,4 @@ cas = "103-36-6"
 item_number = "CH-0014"
 chemical_class = ["esters"]
 in_house = true
+group = "intermediates"

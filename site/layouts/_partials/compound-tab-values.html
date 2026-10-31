@@ -1,0 +1,17 @@
+{{- /* Returns the values of the field declared with tabs = true that have a
+tab page: the top-level values of its vocabulary, in the field data's
+order, that some entry of the registry sets or that are an ancestor of a
+value some entry sets. Returns an empty slice when no field declares
+tabs = true. */ -}}
+{{ $tabs := slice -}}
+{{ with where site.Data.collection.fields.compound "tabs" true -}}
+{{ $field := index . 0 -}}
+{{ $used := slice -}}
+{{ range $compound := site.Data.compounds -}}
+{{ with index $compound $field.key -}}
+{{ range $chosen := cond $field.multiple . (slice .) }}{{ $used = $used | append (index $field.values $chosen).ancestors | append $chosen }}{{ end -}}
+{{ end -}}
+{{ end -}}
+{{ range $field.order }}{{ if and (not (index $field.values .).ancestors) (in $used .) }}{{ $tabs = $tabs | append . }}{{ end }}{{ end -}}
+{{ end -}}
+{{ return $tabs -}}

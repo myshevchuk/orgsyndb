@@ -31,6 +31,7 @@ class Field(NamedTuple):
     ancestors: dict[str, tuple[str, ...]] = {}
     # every value of the vocabulary, depth first, children in file order
     order: tuple[str, ...] = ()
+    tabs: bool = False
 
 
 def _label(entry: dict[str, Any], language: str, key: str = "label"
@@ -98,7 +99,7 @@ def read_fields(settings: Path, language: str) -> list[Field]:
             entry.get("column", False), entry.get("unit"),
             entry.get("multiple", False), paths,
             entry.get("facet", False), entry.get("search", False),
-            ancestors, order))
+            ancestors, order, entry.get("tabs", False)))
     return fields
 
 
@@ -158,6 +159,42 @@ def facet_entries(field: Field, registry: dict[str, dict[str, Any]],
                 (("true", yes), ("false", no)) if value in used]
     return [(value, field.paths[value][-1], len(field.ancestors[value]))
             for value in field.order if value in used]
+
+
+def tab_values(field: Field, registry: dict[str, dict[str, Any]]
+               ) -> list[str]:
+    """The top-level values of the tabs ``field`` that have a tab page
+    (site-catalogue "Compound tabs"): those that some compound sets or
+    that are an ancestor of a value some compound sets, in the field's
+    order."""
+    used = {v for compound in registry.values()
+            for v in values_set(field, compound)}
+    return [v for v in field.order if not field.ancestors[v] and v in used]
+
+
+def tab_compounds(field: Field, registry: dict[str, dict[str, Any]],
+                  value: str) -> dict[str, dict[str, Any]]:
+    """The compounds on the tab page of ``value``: those that set it or a
+    value filed under it in the tabs ``field``."""
+    return {key: compound for key, compound in registry.items()
+            if value in values_set(field, compound)}
+
+
+def tab_facet_entries(field: Field, tabs: Field, value: str,
+                      registry: dict[str, dict[str, Any]], locale: str
+                      ) -> list[tuple[str, str, int | None]]:
+    """The ``(value, label, depth)`` that the facet of ``field`` lists on
+    the tab page of ``value`` of the tabs field ``tabs``: the values that
+    some row of the page carries; on the tabs field's own facet, without
+    the tab's value, and with the depth of a value filed under it one
+    less."""
+    entries = facet_entries(
+        field, tab_compounds(tabs, registry, value), locale)
+    if field.key != tabs.key:
+        return entries
+    return [(found, label,
+             depth - 1 if value in field.ancestors[found] else depth)
+            for found, label, depth in entries if found != value]
 
 
 def search_text(fields: list[Field], compound: dict[str, Any]) -> str:

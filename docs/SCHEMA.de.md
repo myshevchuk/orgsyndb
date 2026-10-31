@@ -306,11 +306,17 @@ Option bei einem anderen Typ ist ein Konfigurationsfehler.
 | `vocabulary` | `choice` | String | Pflicht | Benennt `vocabularies/<name>.toml` neben `orgsyndb.toml`, ohne Verzeichnis und Endung. Der Name entspricht `[a-z0-9]+(-[a-z0-9]+)*`. |
 | `multiple` | `choice` | Wahrheitswert | `false` | Bei `true` setzt die Verbindung eine nicht leere Liste verschiedener Werte statt eines einzelnen Strings. |
 | `facet` | `boolean`, `choice` | Wahrheitswert | `false` | Bei `true` bietet der Verbindungskatalog das Feld als Filter an. |
+| `tabs` | `choice` | Wahrheitswert | `false` | Bei `true` teilt das Feld das Verbindungsverzeichnis nach den Werten der obersten Vokabularebene in Reiterseiten auf. Höchstens ein Feld darf `tabs = true` setzen; es darf zugleich als Filter dienen. |
 
 Die Beispielsammlung deklariert außerdem `short_name` als Text mit
 `search = true`, `chemical_class` als Pflichtauswahl mit `multiple = true`,
 `column = true` und `facet = true`, `stock` als Zahl mit `min = 0` und
-`unit = "g"` sowie `in_house` als Wahrheitswert mit `facet = true`.
+`unit = "g"`, `in_house` als Wahrheitswert mit `facet = true` und zuletzt
+`group` als Pflichtauswahl mit `facet = true`, `tabs = true` und
+`vocabulary = "inventory-groups"`. Die Feldnamen von `group` sind **Group**
+und **Gruppe**. Das Vokabular ordnet `starting-materials` und `reagents`
+unter `purchased` ein, `intermediates` und `final-products` unter
+`synthesised`.
 
 ### Vokabulare
 
@@ -366,14 +372,17 @@ setzt etwa:
 ```toml
 item_number = "CH-0018"
 chemical_class = ["esters", "phenols"]
+group = "starting-materials"
 ```
 
-Das Vokabular der Beispielsammlung definiert beide Auswahlwerte.
-`item_number` und `chemical_class` sind dort Pflichtfelder. Eine neu
-hinzugefügte Verbindung muss daher beide setzen und eine noch nicht
-vergebene Artikelnummer verwenden. Der Schlusskommentar der
-Verbindungsvorlage fordert dazu auf, die von Ihrer Sammlung deklarierten
-Felder als weitere Zeilen derselben Form einzutragen.
+Das Stoffklassen-Vokabular definiert beide Stoffklassen. Die Beispielsammlung
+verlangt `item_number`, `chemical_class` und `group`. Eine neu hinzugefügte
+Verbindung muss daher alle drei setzen und eine noch nicht vergebene
+Artikelnummer verwenden. Setzen Sie `group` auf `starting-materials`,
+`reagents`, `intermediates` oder `final-products` aus
+[`vocabularies/inventory-groups.toml`](../examples/demo/vocabularies/inventory-groups.toml).
+Der Schlusskommentar der Verbindungsvorlage fordert dazu auf, die von Ihrer
+Sammlung deklarierten Felder als weitere Zeilen derselben Form einzutragen.
 
 Wertprobleme sind Fehler am Pfad der Verbindungsdatei, unter dem Schlüssel
 des deklarierten Feldes:
@@ -400,6 +409,14 @@ eine Meldung `unknown value` je unbekanntem String. Die
 Eindeutigkeitsprüfung vergleicht Werte, die ihre Feldprüfung bestehen,
 und meldet jede Verbindung, die denselben Wert setzt.
 
+Ist der Verbindungsschlüssel zugleich der Schlüssel des Felds mit
+`tabs = true`, ergibt das einen Fehler unter `file_name`, der `tabs`
+enthält. Der Feldschlüssel benennt das Verzeichnis der Reiterseiten unter
+`/compounds/<field key>/<value>/`. Wählen Sie für die Verbindungsdatei einen
+anderen Schlüssel. Nur ein Feldschlüssel aus einem Wort kann
+kollidieren: Verbindungsschlüssel trennen Wörter mit Bindestrichen,
+Feldschlüssel mit Unterstrichen.
+
 ### Konfigurationsfehler
 
 Der Validator lehnt Einstellungen oder Vokabulare ab, die eine der
@@ -417,6 +434,12 @@ anderen Typ ergibt etwa `a number field does not take pattern`; eine
 unbekannte Option ergibt `unknown key <key>`. Ein unbekannter Schlüssel
 auf oberster Ebene der Einstellungen ergibt
 `unknown key <key>; only format and fields are allowed`.
+
+Setzen mehrere Felder `tabs = true`, ist das ein Konfigurationsfehler:
+`fields a, b each set tabs = true; at most one field may`, wobei `a, b`
+für die Feldschlüssel stehen. Auch `tabs` bei einem anderen Typ als
+`choice` ist ein Konfigurationsfehler, wie bei anderen typabhängigen
+Optionen.
 
 Vor einem Befehl prüft das Build-Programm nur das TOML der
 Einstellungsdatei, `format` und die Schlüssel auf oberster Ebene. Der
@@ -440,6 +463,34 @@ Das Verbindungsverzeichnis ergänzt Felder mit `column = true` nach CAS,
 in Deklarationsreihenfolge. Es zeigt nur den eigenen Namen jedes
 Auswahlwerts, lässt ungesetzte Werte als leere Zellen und richtet
 Zahlenspalten rechtsbündig aus.
+
+Deklariert ein Feld `tabs = true`, beginnen `/compounds/` und jede
+Reiterseite mit einer Reiterzeile, wie im Bereich **Vorschriften**.
+**Alle Verbindungen** (auf Englisch **All compounds**) verlinkt
+`/compounds/`. Danach folgen die Namen der Werte auf der obersten
+Vokabularebene in Vokabularreihenfolge. Ein Wert erscheint nur, wenn eine
+Verbindung ihn oder einen darunter eingeordneten Wert verwendet. Der
+Reiter der aktuellen Seite ist markiert. Ohne ein Feld mit `tabs = true`
+hat die Sammlung weder Verbindungsreiter noch Reiterseiten.
+
+Eine Reiterseite liegt unter `/compounds/<field key>/<value>/`; Überschrift
+und Seitentitel sind der Name des Werts. Sie listet nach Namen geordnet
+die Verbindungen, die diesen Wert oder einen darunter eingeordneten Wert
+setzen. Das gilt auch, wenn das Feld nicht als Filter dient. Anzahl, Filter
+und Suche beziehen sich auf diese Liste und funktionieren wie unter
+`/compounds/`. Bei `multiple = true` erscheint eine Verbindung in jedem
+Reiter, zu dem ihre Werte gehören. Die Beispielsammlung hat die Seiten
+**Zugekauft** unter `/compounds/group/purchased/` und **Selbst hergestellt**
+unter `/compounds/group/synthesised/`, mit jeweils zehn Verbindungen.
+
+Auf einer Reiterseite zeigen die Filter nur Werte ihrer Verbindungen.
+Dient das Feld mit `tabs = true` zugleich als Filter, lässt dieser den
+Wert des Reiters weg und rückt die darunter eingeordneten Werte um eine
+Ebene nach oben. Bei Mehrfachauswahl bleiben die anderen Werte der
+Verbindungen im Filter. Ein Filter ohne Werte entfällt. Die Suche im Kopf
+heißt **Verbindungen durchsuchen: \<label\>** (auf Englisch **Search compounds:
+\<label\>**). Reiterlinks übernehmen weder Suchtext noch Filter. Ohne
+JavaScript zeigt eine Reiterseite ihre vollständige Liste.
 
 Unter `/compounds/` ist das Verzeichnis ein durchsuchbarer, filterbarer
 Katalog aller Registereinträge. Die Zeilen bleiben nach dem angezeigten
@@ -467,9 +518,9 @@ und deutsche Namen, Summenformel, CAS-Nummer, SMILES und Werte von Textfeldern
 mit `search = true`. Jedes Suchwort muss als Teil einer Zeichenfolge
 vorkommen. Dabei zählen weder Groß- und Kleinschreibung noch Zeichen außer
 Buchstaben und Ziffern. Suchangaben wie `50-78-2`, `salicyl` und `c1ccccc1O`
-funktionieren ohne Pagefind-Index. Auf anderen Seiten, auch auf
-Verbindungsseiten, durchsucht das Feld Vorschriften; Verbindungsseiten
-bleiben außerhalb des Suchindex für Vorschriften.
+funktionieren ohne Pagefind-Index. Außerhalb dieser Kataloge, auch auf
+einzelnen Verbindungsseiten, durchsucht das Feld Vorschriften;
+Verbindungsseiten bleiben außerhalb des Suchindex für Vorschriften.
 
 Die Adresse hält Suchtext und Auswahl fest, etwa
 `/compounds/?q=ester&chemical_class=esters&in_house=true`. Parameter, die die

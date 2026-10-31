@@ -7,3 +7,4 @@ cas = "140-10-3"
 item_number = "CH-0012"
 chemical_class = ["carboxylic-acids"]
 in_house = true
+group = "final-products"

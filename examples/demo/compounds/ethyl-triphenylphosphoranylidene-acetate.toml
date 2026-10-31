@@ -8,3 +8,4 @@ item_number = "CH-0015"
 chemical_class = ["organophosphorus-compounds", "esters"]
 stock = 12.5
 in_house = false
+group = "reagents"

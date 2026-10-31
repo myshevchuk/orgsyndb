@@ -1,0 +1,31 @@
+# Inventory groups of the demo collection: what the group buys and what
+# it makes, in two levels. A value is filed under its parent; label_de
+# is the name on the German site.
+
+[purchased]
+label = "Purchased"
+label_de = "Zugekauft"
+
+[starting-materials]
+label = "Starting materials"
+label_de = "Ausgangsstoffe"
+parent = "purchased"
+
+[reagents]
+label = "Reagents"
+label_de = "Reagenzien"
+parent = "purchased"
+
+[synthesised]
+label = "Synthesised"
+label_de = "Selbst hergestellt"
+
+[intermediates]
+label = "Intermediates"
+label_de = "Zwischenprodukte"
+parent = "synthesised"
+
+[final-products]
+label = "Final products"
+label_de = "Endprodukte"
+parent = "synthesised"

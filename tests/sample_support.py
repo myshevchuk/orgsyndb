@@ -464,7 +464,24 @@ DEMO_DECLARATIONS = [
      "vocabulary": "chemical-classes"},
     {"key": "stock", "type": "number", "unit": "g", "min": 0},
     {"key": "in_house", "type": "boolean", "facet": True},
+    {"key": "group", "type": "choice", "required": True, "facet": True,
+     "tabs": True, "vocabulary": "inventory-groups"},
 ]
+DEMO_LABELS = {"group": ("Group", "Gruppe")}
+# The values of inventory-groups.toml in file order, each with its parent
+# and its English and German labels.
+INVENTORY_GROUPS = [
+    ("purchased", None, "Purchased", "Zugekauft"),
+    ("starting-materials", "purchased", "Starting materials",
+     "Ausgangsstoffe"),
+    ("reagents", "purchased", "Reagents", "Reagenzien"),
+    ("synthesised", None, "Synthesised", "Selbst hergestellt"),
+    ("intermediates", "synthesised", "Intermediates", "Zwischenprodukte"),
+    ("final-products", "synthesised", "Final products", "Endprodukte"),
+]
+PURCHASED_GROUPS = ("starting-materials", "reagents")
+GROUP_VALUES = ("starting-materials", "reagents", "intermediates",
+                "final-products")
 
 
 def vocabulary_depth(vocabulary: dict[str, dict[str, Any]],
@@ -497,32 +514,52 @@ def field_violations(collection: Path) -> list[str]:
         for label in pair:
             if not isinstance(label, str) or not label.strip():
                 problems.append(f"{key}: missing label or label_de")
+        if key in DEMO_LABELS and pair != DEMO_LABELS[key]:
+            problems.append(f"{key}: labels are {pair}")
     names = sorted(p.name for p in (collection / "vocabularies").glob("*"))
-    if names != ["chemical-classes.toml"]:
+    if names != ["chemical-classes.toml", "inventory-groups.toml"]:
         problems.append(f"vocabularies/ holds {names}")
+    vocabularies = {}
     try:
-        vocabulary = tomllib.loads((collection / "vocabularies"
-                                    / "chemical-classes.toml"
-                                    ).read_text(encoding="utf-8"))
-        for value, entry in vocabulary.items():
-            if not str(entry.get("label_de", "")).strip():
-                problems.append(f"{value}: no label_de")
-            if entry.get("parent", value) not in vocabulary:
-                problems.append(f"{value}: parent is not a value")
+        for name in ("chemical-classes", "inventory-groups"):
+            vocabularies[name] = tomllib.loads(
+                (collection / "vocabularies" / f"{name}.toml"
+                 ).read_text(encoding="utf-8"))
+            for value, entry in vocabularies[name].items():
+                if not str(entry.get("label_de", "")).strip():
+                    problems.append(f"{name}/{value}: no label_de")
+                if entry.get("parent", value) not in vocabularies[name]:
+                    problems.append(f"{name}/{value}: parent is not a "
+                                    "value")
+        vocabulary = vocabularies["chemical-classes"]
         depths = [vocabulary_depth(vocabulary, v) for v in vocabulary]
     except (OSError, KeyError, RecursionError, tomllib.TOMLDecodeError) as exc:
-        return problems + [f"chemical-classes.toml: {exc!r}"]
+        return problems + [f"vocabularies: {exc!r}"]
+    groups = [(value, entry.get("parent"), entry.get("label"),
+               entry.get("label_de"))
+              for value, entry in vocabularies["inventory-groups"].items()]
+    if groups != INVENTORY_GROUPS:
+        problems.append(f"inventory-groups holds {groups}")
     if max(depths, default=0) < 2:
         problems.append("no value has two ancestors")
     registry = read_registry(collection / "compounds")
     classes = [c.get("chemical_class") for c in registry.values()]
     for key, compound in registry.items():
-        for field in ("item_number", "chemical_class"):
+        for field in ("item_number", "chemical_class", "group"):
             if field not in compound:
                 problems.append(f"{key}: sets no {field}")
         value = compound.get("chemical_class")
         if not isinstance(value, list) or not set(value) <= set(vocabulary):
             problems.append(f"{key}: chemical_class is {value!r}")
+    held = [c.get("group") for c in registry.values()]
+    for value in GROUP_VALUES:
+        if value not in held:
+            problems.append(f"no compound has group {value!r}")
+    if not set(held) <= set(GROUP_VALUES):
+        problems.append(f"groups are {held}")
+    purchased = sum(g in PURCHASED_GROUPS for g in held)
+    if (purchased, len(held) - purchased) != (10, 10):
+        problems.append(f"{purchased} purchased of {len(held)} compounds")
     numbers = [c.get("item_number") for c in registry.values()]
     if len(set(numbers)) != len(numbers) or not all(
             isinstance(n, str) and re.fullmatch(r"CH-\d{4}", n)

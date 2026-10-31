@@ -8,3 +8,4 @@ item_number = "CH-0017"
 chemical_class = ["alcohols"]
 stock = 1000
 in_house = false
+group = "starting-materials"

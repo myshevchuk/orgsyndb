@@ -45,3 +45,13 @@ type = "boolean"
 label = "Made in house"
 label_de = "Eigene Herstellung"
 facet = true
+
+[[fields.compound]]
+key = "group"
+type = "choice"
+label = "Group"
+label_de = "Gruppe"
+vocabulary = "inventory-groups"
+required = true
+facet = true
+tabs = true
