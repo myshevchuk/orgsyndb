@@ -80,6 +80,11 @@ class GermanSiteTests(GermanCase):
                              "Vorschriften durchsuchen")
             self.assertEqual(field.get("placeholder"),
                              "Produkt, CAS, SMILES oder Stichwort")
+        elif page.url == "/compounds/":
+            self.assertEqual(field.get("aria-label"),
+                             "Verbindungen durchsuchen")
+            self.assertEqual(field.get("placeholder"),
+                             "Name, Summenformel, CAS oder SMILES")
         elif page.url == "/general-procedures/":
             self.assertEqual(field.get("aria-label"),
                              "Allgemeine Vorschriften durchsuchen")

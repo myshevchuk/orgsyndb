@@ -433,33 +433,41 @@ def fixture_fields(language: str) -> list[dict]:
     def shown(english: str, deutsch: str | None = None) -> str:
         return deutsch if german and deutsch is not None else english
 
-    def values(entries: dict[str, tuple[str, ...]]) -> dict[str, dict]:
-        return {key: {"label": path[-1], "path": list(path)}
+    def values(entries: dict[str, tuple[str, ...]],
+               ancestors: dict[str, list[str]]) -> dict[str, dict]:
+        return {key: {"label": path[-1], "path": list(path),
+                      "ancestors": ancestors.get(key, [])}
                 for key, path in entries.items()}
 
     carbonyl = shown("Carbonyl compounds", "Carbonylverbindungen")
     return [
         {"key": "item_number", "type": "text", "column": True,
-         "label": shown("Item no.", "Artikelnr.")},
+         "search": False, "label": shown("Item no.", "Artikelnr.")},
         {"key": "short_name", "type": "text", "column": False,
-         "label": "Short name"},
+         "search": False, "label": "Short name"},
         {"key": "stock", "type": "number", "column": False,
          "label": shown("Stock", "Bestand"), "unit": "g"},
         {"key": "in_house", "type": "boolean", "column": False,
+         "facet": False,
          "label": shown("Made in house", "Eigene Herstellung")},
         {"key": "chemical_class", "type": "choice", "column": True,
-         "label": shown("Chemical class", "Stoffklasse"),
+         "facet": False, "label": shown("Chemical class", "Stoffklasse"),
          "multiple": True,
          "values": values({
              "carbonyl-compounds": (carbonyl,),
              "ketones": (carbonyl, shown("Ketones", "Ketone")),
              "esters": (carbonyl, shown("Esters", "Ester")),
-             "alcohols": (shown("Alcohols", "Alkohole"),)})},
+             "alcohols": (shown("Alcohols", "Alkohole"),)},
+             {"ketones": ["carbonyl-compounds"],
+              "esters": ["carbonyl-compounds"]}),
+         "order": ["carbonyl-compounds", "ketones", "esters", "alcohols"]},
         {"key": "storage", "type": "choice", "column": False,
-         "label": shown("Storage", "Lagerung"), "multiple": False,
+         "facet": False, "label": shown("Storage", "Lagerung"),
+         "multiple": False,
          "values": values({
              "cabinet": (shown("Cabinet", "Schrank"),),
-             "fridge": (shown("Fridge", "K\u00fchlschrank"),)})},
+             "fridge": (shown("Fridge", "K\u00fchlschrank"),)}, {}),
+         "order": ["cabinet", "fridge"]},
     ]
 
 
@@ -505,12 +513,25 @@ class FieldDataTests(unittest.TestCase):
         self.assertEqual(
             english["chemical_class"]["values"]["ketones"],
             {"label": "Ketones",
-             "path": ["Carbonyl compounds", "Ketones"]})
+             "path": ["Carbonyl compounds", "Ketones"],
+             "ancestors": ["carbonyl-compounds"]})
         self.assertEqual(
             german["chemical_class"]["values"]["ketones"],
-            {"label": "Ketone", "path": ["Carbonylverbindungen", "Ketone"]})
+            {"label": "Ketone", "path": ["Carbonylverbindungen", "Ketone"],
+             "ancestors": ["carbonyl-compounds"]})
         self.assertEqual(english["short_name"]["label"], "Short name")
         self.assertEqual(german["short_name"]["label"], "Short name")
+        for fields in (english, german):
+            self.assertIs(fields["item_number"]["search"], False)
+            self.assertIs(fields["short_name"]["search"], False)
+            for key in ("in_house", "chemical_class", "storage"):
+                self.assertIs(fields[key]["facet"], False, key)
+            self.assertEqual(
+                fields["chemical_class"]["values"]["alcohols"]["ancestors"],
+                [])
+            self.assertEqual(
+                fields["chemical_class"]["order"],
+                ["carbonyl-compounds", "ketones", "esters", "alcohols"])
 
     def test_a_field_carries_only_the_keys_its_type_has(self) -> None:
         """Requirement: Field data for the site (these keys and no
@@ -518,13 +539,46 @@ class FieldDataTests(unittest.TestCase):
         data = pipeline_function("fields_data")(FIELDS_SETTINGS, "en")
         keys = {field["key"]: set(field) for field in data["compound"]}
         base = {"key", "type", "column", "label"}
-        self.assertEqual(keys["item_number"], base)
-        self.assertEqual(keys["short_name"], base)
-        self.assertEqual(keys["in_house"], base)
+        self.assertEqual(keys["item_number"], base | {"search"})
+        self.assertEqual(keys["short_name"], base | {"search"})
+        self.assertEqual(keys["in_house"], base | {"facet"})
         self.assertEqual(keys["stock"], base | {"unit"})
-        self.assertEqual(keys["chemical_class"],
-                         base | {"multiple", "values"})
-        self.assertEqual(keys["storage"], base | {"multiple", "values"})
+        choice = base | {"facet", "multiple", "values", "order"}
+        self.assertEqual(keys["chemical_class"], choice)
+        self.assertEqual(keys["storage"], choice)
+
+    def test_facet_and_search_are_taken_as_declared(self) -> None:
+        """Requirement: Field data for the site (`facet` and `search`, as
+        declared)."""
+        path = self.settings(
+            'format = 1\n\n[[fields.compound]]\nkey = "tag"\n'
+            'type = "text"\nlabel = "Tag"\nsearch = true\n\n'
+            '[[fields.compound]]\nkey = "note"\ntype = "text"\n'
+            'label = "Note"\n\n[[fields.compound]]\nkey = "flag"\n'
+            'type = "boolean"\nlabel = "Flag"\nfacet = true\n\n'
+            '[[fields.compound]]\nkey = "kind"\ntype = "choice"\n'
+            'label = "Kind"\nvocabulary = "kinds"\nfacet = true\n',
+            {"kinds": '[top]\nlabel = "Top"\n'})
+        data = pipeline_function("fields_data")(path, "en")
+        by_key = {f["key"]: f for f in data["compound"]}
+        self.assertIs(by_key["tag"]["search"], True)
+        self.assertIs(by_key["note"]["search"], False)
+        self.assertIs(by_key["flag"]["facet"], True)
+        self.assertIs(by_key["kind"]["facet"], True)
+        self.assertNotIn("facet", by_key["tag"])
+        self.assertNotIn("search", by_key["flag"])
+        self.assertNotIn("search", by_key["kind"])
+
+    def test_the_test_collection_facets_and_searches(self) -> None:
+        """Requirement: Field data for the site (`facet` and `search` of
+        the test collection)."""
+        data = pipeline_function("fields_data")(TEST_SETTINGS, "en")
+        flags = {f["key"]: (f.get("facet"), f.get("search"))
+                 for f in data["compound"]}
+        self.assertEqual(flags, {
+            "item_number": (None, True), "short_name": (None, True),
+            "chemical_class": (True, None), "stock": (None, None),
+            "in_house": (True, None)})
 
     def test_a_number_without_a_unit_has_no_unit_key(self) -> None:
         """Requirement: Field data for the site (`unit`: only for a number
@@ -559,10 +613,12 @@ class FieldDataTests(unittest.TestCase):
         (field,) = data["compound"]
         self.assertEqual(field["label"], "Kind")
         self.assertEqual(field["values"], {
-            "top": {"label": "Oben", "path": ["Oben"]},
-            "middle": {"label": "Middle", "path": ["Oben", "Middle"]},
+            "top": {"label": "Oben", "path": ["Oben"], "ancestors": []},
+            "middle": {"label": "Middle", "path": ["Oben", "Middle"],
+                       "ancestors": ["top"]},
             "bottom": {"label": "Unten",
-                       "path": ["Oben", "Middle", "Unten"]}})
+                       "path": ["Oben", "Middle", "Unten"],
+                       "ancestors": ["top", "middle"]}})
 
     def test_a_value_is_listed_at_every_level(self) -> None:
         """Requirement: Field data for the site (`values` holds every
@@ -574,12 +630,16 @@ class FieldDataTests(unittest.TestCase):
         self.assertEqual(
             classes["aryl-ketones"],
             {"label": "Arylketone",
-             "path": ["Carbonylverbindungen", "Ketone", "Arylketone"]})
+             "path": ["Carbonylverbindungen", "Ketone", "Arylketone"],
+             "ancestors": ["carbonyl-compounds", "ketones"]})
         self.assertEqual(
             classes["anhydrides"]["path"],
             ["Carbonylverbindungen", "Carbons\u00e4urederivate",
              "Anhydride"])
+        self.assertEqual(classes["anhydrides"]["ancestors"],
+                         ["carbonyl-compounds", "acid-derivatives"])
         self.assertEqual(classes["alcohols"]["path"], ["Alkohole"])
+        self.assertEqual(classes["alcohols"]["ancestors"], [])
 
     def test_the_test_collection_field_data(self) -> None:
         """Scenario: Field data in both languages (the test
@@ -595,6 +655,49 @@ class FieldDataTests(unittest.TestCase):
         self.assertEqual(
             data["compound"][2]["values"]["aryl-ketones"]["path"],
             ["Carbonyl compounds", "Ketones", "Aryl ketones"])
+        self.assertEqual(
+            data["compound"][2]["values"]["aryl-ketones"]["ancestors"],
+            ["carbonyl-compounds", "ketones"])
+
+    def test_a_vocabulary_listed_out_of_order(self) -> None:
+        """Scenario: Depth-first order."""
+        path = self.settings(
+            'format = 1\n\n[[fields.compound]]\nkey = "chemical_class"\n'
+            'type = "choice"\nlabel = "Chemical class"\n'
+            'vocabulary = "chemical-classes"\n',
+            {"chemical-classes": (
+                '[esters]\nlabel = "Esters"\nparent = "carbonyl-compounds"'
+                '\n\n[alcohols]\nlabel = "Alcohols"\n\n'
+                '[carbonyl-compounds]\nlabel = "Carbonyl compounds"\n\n'
+                '[ketones]\nlabel = "Ketones"\n'
+                'parent = "carbonyl-compounds"\n\n'
+                '[aryl-ketones]\nlabel = "Aryl ketones"\n'
+                'parent = "ketones"\n')})
+        (field,) = pipeline_function("fields_data")(path, "en")["compound"]
+        self.assertEqual(field.get("order"), [
+            "alcohols", "carbonyl-compounds", "esters", "ketones",
+            "aryl-ketones"])
+        values = field["values"]
+        self.assertEqual(values["aryl-ketones"].get("ancestors"),
+                         ["carbonyl-compounds", "ketones"])
+        self.assertEqual(values["esters"].get("ancestors"),
+                         ["carbonyl-compounds"])
+        self.assertEqual(values["alcohols"].get("ancestors"), [])
+
+    def test_the_order_holds_every_value_once(self) -> None:
+        """Requirement: Field data for the site (`order`: the keys of
+        every value)."""
+        data = pipeline_function("fields_data")(TEST_SETTINGS, "en")
+        field = {f["key"]: f for f in data["compound"]}["chemical_class"]
+        self.assertEqual(len(field["order"]), len(set(field["order"])))
+        self.assertEqual(set(field["order"]), set(field["values"]))
+        for key in field["order"]:
+            ancestors = field["values"][key]["ancestors"]
+            position = field["order"].index(key)
+            for ancestor in ancestors:
+                self.assertLess(field["order"].index(ancestor), position)
+        self.assertEqual(field["order"].index("aryl-ketones"),
+                         field["order"].index("ketones") + 1)
 
     def test_no_settings_file(self) -> None:
         """Scenario: No settings file."""
@@ -622,7 +725,7 @@ class FieldDataTests(unittest.TestCase):
             "built-in key": head + (
                 'key = "cas"\ntype = "text"\nlabel = "CAS"\n'),
             "unknown option": head + (
-                'key = "x"\ntype = "text"\nlabel = "X"\nfacet = true\n'),
+                'key = "x"\ntype = "text"\nlabel = "X"\ntabs = true\n'),
             "a single table": (
                 'format = 1\n\n[fields.compound]\nkey = "x"\n'
                 'type = "text"\nlabel = "X"\n')}

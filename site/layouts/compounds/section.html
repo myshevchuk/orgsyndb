@@ -1,25 +1,107 @@
-{{- /* The compound directory at /compounds/: one table row per entry of
-the registry, ordered by shown name, with a link to the compound's page,
-the formula (each digit run in <sub>), the weight, the CAS number or an
-empty cell, one cell for each declared field with column = true, in
-declared order, holding the entry's value as field-value.html writes it
-for the directory or nothing when the entry does not set it, and the
-numbers of published procedures that make the compound and that use it
-as a substrate, over every entry of a general procedure, each procedure
-counted once. The header and body cells of a number field carry the
-class num. It needs no script. */ -}}
+{{- /* The compound catalogue at /compounds/: the heading and count, the
+noscript note, the facets when the collection declares a field with
+facet = true, the toolbar, the message and the compound table. Its search
+form is the site header's (site-header.html), and catalogue.js matches
+the query against each row's data-text in the page. Every control lies
+in an element carrying data-catalogue-controls and hidden, which
+catalogue.js reveals; without it the page is the table and the note.
+
+The table has one row per entry of the registry, ordered by shown name,
+with a link to the compound's page, the formula (each digit run in
+<sub>), the weight, the CAS number or an empty cell, one cell for each
+declared field with column = true, in declared order, holding the entry's
+value as field-value.html writes it for the directory or nothing when the
+entry does not set it, and the numbers of published procedures that make
+the compound and that use it as a substrate, over every entry of a
+general procedure, each procedure counted once. The header and body cells
+of a number field carry the class num.
+
+Each row carries its record for the catalogue script: data-id, the key;
+data-title, the shown name; data-text, the name, name_de, formula, CAS
+number, SMILES and the values of the text fields with search = true that
+the entry sets, joined by single spaces; and data-<key> for each facet
+field, a JSON array of machine values: "true" or "false" for a boolean,
+each value set and each of its ancestors, once, for a choice. A facet
+lists the values some row carries: a boolean true, then false; a choice
+in its depth-first order, each label.facet-value carrying --depth, the
+number of the value's ancestors. */ -}}
 {{ define "main" -}}
-<h1>{{ partial "page-title.html" . }}</h1>
 {{ $procedures := where site.RegularPages "Section" "procedures" -}}
-{{ $columns := where site.Data.collection.fields.compound "column" true -}}
+{{ $fields := site.Data.collection.fields.compound -}}
+{{ $columns := where $fields "column" true -}}
+{{ $facets := where $fields "facet" true -}}
+{{ $searched := where $fields "search" true -}}
 {{ $rows := slice -}}
 {{ range $key, $compound := site.Data.compounds -}}
 {{ $made := 0 -}}
 {{ range $procedures }}{{ if in (partialCached "product-keys.html" . .Path) $key }}{{ $made = add $made 1 }}{{ end }}{{ end -}}
 {{ $used := 0 -}}
 {{ range $procedures }}{{ if in (partialCached "substrate-keys.html" . .Path) $key }}{{ $used = add $used 1 }}{{ end }}{{ end -}}
-{{ $rows = $rows | append (dict "key" $key "name" (partial "compound-name.html" $key) "compound" $compound "made" $made "used" $used) -}}
+{{ $words := slice $compound.name -}}
+{{ with $compound.name_de }}{{ $words = $words | append . }}{{ end -}}
+{{ $words = $words | append $compound.formula -}}
+{{ with $compound.cas }}{{ $words = $words | append . }}{{ end -}}
+{{ $words = $words | append $compound.smiles -}}
+{{ range $searched }}{{ with index $compound .key }}{{ $words = $words | append . }}{{ end }}{{ end -}}
+{{ $values := dict -}}
+{{ range $facets -}}
+{{ $set := slice -}}
+{{ if isset $compound .key -}}
+{{ $value := index $compound .key -}}
+{{ if eq .type "boolean" -}}
+{{ $set = slice (cond $value "true" "false") -}}
+{{ else -}}
+{{ $field := . -}}
+{{ range $chosen := cond .multiple $value (slice $value) }}{{ range (index $field.values $chosen).ancestors }}{{ $set = $set | append . }}{{ end }}{{ $set = $set | append $chosen }}{{ end -}}
+{{ $set = uniq $set -}}
 {{ end -}}
+{{ end -}}
+{{ $values = merge $values (dict .key $set) -}}
+{{ end -}}
+{{ $rows = $rows | append (dict "key" $key "name" (partial "compound-name.html" $key) "compound" $compound "made" $made "used" $used "text" (delimit $words " ") "values" $values) -}}
+{{ end -}}
+{{ $rows = sort $rows "name" -}}
+{{ $count := len $rows -}}
+<div class="catalogue" data-catalogue data-search="text" data-text-empty="{{ T "compounds_empty" }}" data-text-ignored="{{ T "catalogue_ignored" }}" data-text-remove="{{ T "catalogue_remove" }}">
+<div class="list-head">
+<h1>{{ partial "page-title.html" . }}</h1>
+<p class="catalogue-count" role="status" data-catalogue-count data-filtered="{{ T "compounds_filtered" }}">{{ if eq $count 1 }}{{ T "compounds_count_one" }}{{ else }}{{ T "compounds_count" (dict "Count" (lang.FormatNumber 0 $count)) }}{{ end }}</p>
+</div>
+<noscript>
+<p class="catalogue-noscript">{{ T "compounds_noscript" }}</p>
+</noscript>
+<div class="catalogue-layout">
+{{ with $facets -}}
+<div class="catalogue-facets" id="catalogue-facets" data-catalogue-controls hidden>
+<h2>{{ T "catalogue_filters" }}</h2>
+{{ range $field := . -}}
+{{ $carried := slice -}}
+{{ range $rows }}{{ range index .values $field.key }}{{ $carried = $carried | append . }}{{ end }}{{ end -}}
+{{ $entries := slice -}}
+{{ if eq $field.type "boolean" -}}
+{{ range slice (slice "true" "boolean_yes") (slice "false" "boolean_no") }}{{ if in $carried (index . 0) }}{{ $entries = $entries | append (dict "key" (index . 0) "label" (T (index . 1))) }}{{ end }}{{ end -}}
+{{ else -}}
+{{ range $field.order }}{{ if in $carried . }}{{ $value := index $field.values . }}{{ $entries = $entries | append (dict "key" . "label" $value.label "depth" (len $value.ancestors)) }}{{ end }}{{ end -}}
+{{ end -}}
+<details class="facet" data-facet="{{ $field.key }}" open>
+<summary id="facet-{{ $field.key }}">{{ $field.label }}</summary>
+<div class="facet-values" role="group" aria-labelledby="facet-{{ $field.key }}">
+{{ range $entries -}}
+<label class="facet-value"{{ if isset . "depth" }} style="--depth: {{ .depth }}"{{ end }}><input type="checkbox" name="{{ $field.key }}" value="{{ .key }}"> <span class="facet-label">{{ .label }}</span> <span class="facet-count"></span></label>
+{{ end -}}
+</div>
+</details>
+{{ end -}}
+</div>
+{{ end -}}
+<div class="catalogue-results">
+<div class="catalogue-toolbar" data-catalogue-controls hidden>
+{{ with $facets }}<button type="button" class="facets-toggle" aria-controls="catalogue-facets" aria-expanded="false">{{ T "catalogue_filters" }}</button>
+{{ end -}}
+<ul class="catalogue-active"></ul>
+<button type="button" class="clear-all">{{ T "catalogue_clear" }}</button>
+</div>
+<p class="catalogue-message" data-catalogue-message role="status" hidden></p>
 <div class="table-scroll" tabindex="0" role="region" aria-label="{{ T "table_compounds" }}">
 <table class="compound-table">
 <thead>
@@ -36,8 +118,8 @@ class num. It needs no script. */ -}}
 </tr>
 </thead>
 <tbody>
-{{ range $row := sort $rows "name" -}}
-<tr>
+{{ range $row := $rows -}}
+<tr data-id="{{ .key }}" data-title="{{ .name }}" data-text="{{ .text }}"{{ range $facets }} {{ printf "data-%s=\"%s\"" .key (index $row.values .key | jsonify | htmlEscape) | safeHTMLAttr }}{{ end }}>
 <td><a href="/compounds/{{ .key }}/">{{ .name }}</a></td>
 <td>{{ .compound.formula | htmlEscape | replaceRE "([0-9]+)" "<sub>$1</sub>" | safeHTML }}</td>
 <td class="num">{{ partial "decimal.html" .compound.mw }} g/mol</td>
@@ -52,4 +134,8 @@ class num. It needs no script. */ -}}
 </tbody>
 </table>
 </div>
+</div>
+</div>
+</div>
 {{ end }}
+{{ define "scripts" }}{{ partial "catalogue-script.html" . }}{{ end }}

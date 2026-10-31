@@ -186,7 +186,8 @@ hinzuzufügen oder zu prüfen, wenn Sie nicht mit SVG-Dateien arbeiten.
 
 Sie dürfen einen Ausgangsstoff registrieren, ohne dass eine Vorschrift ihn
 herstellt. Auch eine Verbindung, die keine Vorschrift verwendet, ist zulässig.
-**Verbindungen** in der Navigation öffnet das Verzeichnis unter `/compounds/`.
+**Verbindungen** in der Navigation öffnet den Katalog unter `/compounds/`,
+den Sie filtern und durchsuchen können.
 Jeder Name verlinkt auf eine Seite mit chemischen Daten, dem Strukturbild,
 sofern vorhanden, Vorschriften unter **Hergestellt nach** mit Ausbeute und
 Status sowie Vorschriften unter **Verwendet in** mit Status. Eine allgemeine

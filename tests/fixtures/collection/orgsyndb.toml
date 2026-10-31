@@ -11,12 +11,14 @@ required = true
 unique = true
 pattern = 'CH-\d{4}'
 column = true
+search = true
 
 [[fields.compound]]
 key = "short_name"
 type = "text"
 label = "Short name"
 label_de = "Kurzname"
+search = true
 
 [[fields.compound]]
 key = "chemical_class"
@@ -27,6 +29,7 @@ vocabulary = "chemical-classes"
 required = true
 multiple = true
 column = true
+facet = true
 
 [[fields.compound]]
 key = "stock"
@@ -41,3 +44,4 @@ key = "in_house"
 type = "boolean"
 label = "Made in house"
 label_de = "Eigene Herstellung"
+facet = true

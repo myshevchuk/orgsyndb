@@ -21,6 +21,7 @@
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-30 Fri 20:32] -- Synthesewege, Seitenlinks, Navigation und Validierung
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-31 Sat 11:12] -- Verbindungsfelder der Sammlung und Schlusskommentar der Vorlage
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-31 Sat 11:30] -- doc-writer pass line corrected from gpt-6 to the pinned run model
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-10-31 Sat 12:20] -- Einleitung zum Verbindungskatalog
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
@@ -182,7 +183,8 @@ bleiben auch in einer deutschen Vorschrift englisch.
 
   Sie dürfen einen Ausgangsstoff registrieren, ohne dass eine Vorschrift ihn
   herstellt. Auch eine Verbindung, die keine Vorschrift verwendet, ist
-  zulässig. *Verbindungen* in der Navigation öffnet ~/compounds/~. Jeder Name
+  zulässig. *Verbindungen* in der Navigation öffnet den Katalog unter
+  ~/compounds/~, den Sie filtern und durchsuchen können. Jeder Name
   verlinkt auf eine Seite mit chemischen Daten, dem Strukturbild, sofern
   vorhanden, Vorschriften unter *Hergestellt nach* mit Ausbeute und Status
   sowie Vorschriften unter *Verwendet in* mit Status. Eine allgemeine

@@ -254,35 +254,39 @@ required = true
 unique = true
 pattern = 'CH-\d{4}'
 column = true
+search = true
 ```
 
 ### Declaration keys
 
 | Key | TOML type | Required or default | Rule |
 |---|---|---|---|
-| `key` | String | Required | Matches `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`: lowercase letters and digits, words joined by single underscores, starting with a letter. Must be declared once, must not end in `_de`, and must not be a built-in key: `name`, `name_de`, `formula`, `mw`, `smiles`, `cas` or `structure_image`. |
+| `key` | String | Required | Matches `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`: lowercase letters and digits, words joined by single underscores, starting with a letter. Must be declared once, must not end in `_de`, and must not be a built-in key: `name`, `name_de`, `formula`, `mw`, `smiles`, `cas` or `structure_image`. The catalogue also reserves `id`, `title`, `created`, `modified`, `text`, `q`, `sort` and `view` for its rows and address. |
 | `type` | String | Required | One of `text`, `number`, `boolean` or `choice`. |
 | `label` | Non-empty string | Required | The field's name on an English site. |
 | `label_de` | Non-empty string | Optional | The field's name on a German site; without it, the site uses `label`. |
 | `required` | Boolean | `false` | When `true`, every compound must set the field. |
 | `column` | Boolean | `false` | When `true`, the compound directory shows the field as a column. |
 
-Only the following additional keys are allowed for each type. A `boolean`
-declaration takes none of them.
+Only the following additional keys are allowed for each type. Using an
+option on another type is a configuration error.
 
 | Key | Field type | TOML type | Required or default | Rule |
 |---|---|---|---|---|
 | `pattern` | `text` | String | Optional | A valid Python regular expression that the whole value must match. |
+| `search` | `text` | Boolean | `false` | When `true`, the compound catalogue's search matches the field's values. |
 | `unique` | `text`, `number` | Boolean | `false` | No two compounds may set the same valid value. |
 | `min` | `number` | Integer or float | Optional | Finite inclusive lower bound; must not exceed `max` when both are set. A boolean is not a number. |
 | `max` | `number` | Integer or float | Optional | Finite inclusive upper bound. A boolean is not a number. |
 | `unit` | `number` | Non-empty string | Optional | Written after the number, separated by a space. |
 | `vocabulary` | `choice` | String | Required | Names `vocabularies/<name>.toml` beside `orgsyndb.toml`, without the directory or extension. The name matches `[a-z0-9]+(-[a-z0-9]+)*`. |
 | `multiple` | `choice` | Boolean | `false` | When `true`, the compound supplies a non-empty list of distinct values instead of one string. |
+| `facet` | `boolean`, `choice` | Boolean | `false` | When `true`, the compound catalogue offers the field as a filter. |
 
-The demo also declares `short_name` as text, `chemical_class` as a required
-choice with `multiple = true` and `column = true`, `stock` as a number with
-`min = 0` and `unit = "g"`, and `in_house` as a boolean.
+The demo also declares `short_name` as text with `search = true`,
+`chemical_class` as a required choice with `multiple = true`, `column = true`
+and `facet = true`, `stock` as a number with `min = 0` and `unit = "g"`, and
+`in_house` as a boolean with `facet = true`.
 
 ### Vocabularies
 
@@ -403,6 +407,38 @@ derivatives › Esters**. Multiple choices are separated by `, ` in the
 compound's order. The compound directory adds fields with `column = true`
 after CAS, in declaration order. It shows only each choice's own label,
 leaves unset values as empty cells, and aligns number columns to the right.
+
+At `/compounds/`, the directory is a searchable, filterable catalogue of
+every registry entry. Rows stay in order of the name shown in the site's
+language. Fields declared with `facet = true` appear as filters in
+declaration order. A choice filter lists values used by compounds and their
+ancestors as an indented tree, in vocabulary-file order with each parent's
+descendants immediately after it. Selecting a parent also matches compounds
+filed under its descendants: **Carbonyl compounds** includes ketones and
+esters. Boolean filters offer **Yes** and **No** (**Ja** and **Nein** in
+German), each only when some compound sets it.
+
+Selections within one filter combine with OR; different filters combine
+with AND. Each value's count includes the search and every other filter,
+excluding its own filter's selections. Selected values appear as small
+buttons (chips) that remove a selection. **Clear all** clears the query and
+selections. The catalogue shows a total count, or **{shown} of {total}
+compounds** while filtering. With no facet fields, it has no filter column
+but keeps the count and search.
+
+The header's **Search compounds** field matches English and German names,
+formula, CAS number, SMILES and values of text fields with `search = true`.
+Every query word must match a substring, ignoring case and characters other
+than letters and digits. Searches such as `50-78-2`, `salicyl` and
+`c1ccccc1O` work without a Pagefind index. On other pages, including compound
+pages, the header searches procedures; compound pages remain outside the
+procedure search index.
+
+The address preserves the query and selections, for example
+`/compounds/?q=ester&chemical_class=esters&in_house=true`. Parameters the page
+cannot apply are named in a notice and removed from the address. Search and
+filters need JavaScript. Without it, the page shows the complete table and a
+note explaining this.
 
 ## Synthesis sequences
 

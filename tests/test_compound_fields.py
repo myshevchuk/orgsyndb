@@ -19,6 +19,8 @@ EDITED = "ethyl-acetate.toml"
 VOCABULARY = "chemical-classes"
 BUILT_IN_KEYS = ("name", "name_de", "formula", "mw", "smiles", "cas",
                  "structure_image")
+RESERVED_KEYS = ("id", "title", "created", "modified", "text", "q", "sort",
+                 "view")
 
 
 def set_value(line: str, compound: str = "ethyl-acetate"):
@@ -115,6 +117,34 @@ class FieldDeclarationTests(FieldTestCase):
             write_vocabulary("Bad_Name", b"\xff\xfe"))
         self.assert_clean(result)
 
+    def test_facets_and_search_where_the_types_take_them(self) -> None:
+        """Scenario: Facets and search where the types take them."""
+        result = field_variant_run(edit_settings(
+            insert_after('key = "chemical_class"', "facet = true"),
+            insert_after('key = "storage"', "facet = true"),
+            insert_after('key = "in_house"', "facet = true"),
+            insert_after('key = "item_number"', "search = true"),
+            insert_after('key = "short_name"', "search = true")))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_facet_and_search_may_be_written_as_false(self) -> None:
+        """Requirement: Field declarations (facet and search default to
+        false)."""
+        result = field_variant_run(edit_settings(
+            insert_after('key = "chemical_class"', "facet = false"),
+            insert_after('key = "in_house"', "facet = false"),
+            insert_after('key = "short_name"', "search = false")))
+        self.assert_clean(result)
+
+    def test_a_facet_choice_may_hold_one_value_or_many(self) -> None:
+        """Requirement: Field declarations (facet on a single and on a
+        multiple choice)."""
+        for key in ("chemical_class", "storage"):
+            with self.subTest(key=key):
+                self.assert_clean(field_variant_run(edit_settings(
+                    insert_after(f'key = "{key}"', "facet = true"))))
+
     def test_two_fields_may_share_a_vocabulary(self) -> None:
         """Requirement: Vocabularies (one vocabulary, two fields)."""
         result = field_variant_run(
@@ -137,15 +167,18 @@ class DeclarationErrorTests(FieldTestCase):
         that its type does not take)."""
         cases = {
             "item_number": ["min = 0", "max = 1", 'unit = "g"',
-                            'vocabulary = "storage"', "multiple = true"],
-            "short_name": ["min = 0", 'unit = "g"', "multiple = true"],
+                            'vocabulary = "storage"', "multiple = true",
+                            "facet = true"],
+            "short_name": ["min = 0", 'unit = "g"', "multiple = true",
+                           "facet = true"],
             "stock": ["pattern = '.'", 'vocabulary = "storage"',
-                      "multiple = true"],
+                      "multiple = true", "facet = true", "search = true"],
             "in_house": ["unique = true", "pattern = '.'", 'unit = "g"',
                          "min = 0", "max = 1", "multiple = true",
-                         'vocabulary = "storage"'],
+                         'vocabulary = "storage"', "search = true"],
             "storage": ["unique = true", "pattern = '.'", 'unit = "g"',
-                        "min = 0", "max = 1"],
+                        "min = 0", "max = 1", "search = true"],
+            "chemical_class": ["search = true"],
         }
         for key, lines in cases.items():
             for line in lines:
@@ -159,12 +192,51 @@ class DeclarationErrorTests(FieldTestCase):
     def test_an_unknown_option(self) -> None:
         """Scenario: An unknown option."""
         result = field_variant_run(edit_settings(
-            insert_after('key = "chemical_class"', "facet = true")))
-        self.assert_configuration_error(result, "chemical_class", "facet")
+            insert_after('key = "chemical_class"', "tabs = true")))
+        self.assert_configuration_error(result, "chemical_class", "tabs")
+
+    def test_a_facet_or_a_search_where_the_type_does_not_take_it(
+            self) -> None:
+        """Scenario: A facet or a search where the type does not take it."""
+        for key, option in (("short_name", "facet"), ("stock", "search")):
+            with self.subTest(key=key, option=option):
+                result = field_variant_run(edit_settings(
+                    insert_after(f'key = "{key}"', f"{option} = true")))
+                self.assert_configuration_error(result, key, option)
+
+    def test_facet_and_search_must_be_booleans(self) -> None:
+        """Requirement: Declaration errors are configuration errors (a
+        value of the wrong type)."""
+        for key, option in (("chemical_class", 'facet = "yes"'),
+                            ("in_house", "facet = 1"),
+                            ("item_number", 'search = "yes"'),
+                            ("short_name", "search = 1")):
+            with self.subTest(key=key, option=option):
+                result = field_variant_run(edit_settings(
+                    insert_after(f'key = "{key}"', option)))
+                self.assert_configuration_error(
+                    result, key, option.split(" =")[0])
+
+    def test_a_key_the_catalogue_reserves(self) -> None:
+        """Scenario: A key the catalogue reserves."""
+        result = field_variant_run(edit_settings(append_text(
+            declaration("title", "text", "Title"))))
+        self.assert_configuration_error(result, "title")
+
+    def test_every_reserved_key_is_refused(self) -> None:
+        """Requirement: Field declarations (the keys the compound
+        catalogue reserves)."""
+        for key in RESERVED_KEYS:
+            for type_ in ("text", "boolean"):
+                with self.subTest(key=key, type=type_):
+                    result = field_variant_run(edit_settings(append_text(
+                        declaration(key, type_, "Reserved"))))
+                    self.assert_configuration_error(
+                        result, "orgsyndb.toml", key)
 
     def test_options_of_later_changes_are_unknown(self) -> None:
         """Requirement: Field declarations (no other key)."""
-        for option in ("tabs = true", "search = true", "help = 'x'"):
+        for option in ("tabs = true", "help = 'x'"):
             with self.subTest(option=option):
                 result = field_variant_run(edit_settings(
                     insert_after('key = "stock"', option)))

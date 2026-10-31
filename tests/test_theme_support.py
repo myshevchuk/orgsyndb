@@ -88,12 +88,13 @@ class CatalogueHelperTests(unittest.TestCase):
 
     def test_catalogue_urls(self) -> None:
         """Harness: the pages that carry a catalogue."""
-        for url in ("/procedures/", "/general-procedures/",
+        for url in ("/procedures/", "/general-procedures/", "/compounds/",
                     "/tags/sample-data/", "/authors/a.-example/",
                     "/reaction_types/hydrolysis/"):
             self.assertTrue(ps.is_catalogue_url(url), url)
         for url in ("/", "/tags/", "/authors/", "/reaction_types/",
-                    "/help/schema/", "/procedures/osdb-0001/"):
+                    "/help/schema/", "/procedures/osdb-0001/",
+                    "/compounds/acetone/", "/sequences/"):
             self.assertFalse(ps.is_catalogue_url(url), url)
 
     def test_rows_cells_and_facet_values_of_a_catalogue(self) -> None:

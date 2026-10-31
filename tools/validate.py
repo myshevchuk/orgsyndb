@@ -62,11 +62,15 @@ FIELD_TYPES = ("text", "number", "boolean", "choice")
 # only the named type takes.
 FIELD_OPTIONS = ("key", "type", "label", "label_de", "required", "column")
 TYPE_OPTIONS = {
-    "text": ("pattern", "unique"),
+    "text": ("pattern", "unique", "search"),
     "number": ("min", "max", "unit", "unique"),
-    "boolean": (),
-    "choice": ("vocabulary", "multiple"),
+    "boolean": ("facet",),
+    "choice": ("vocabulary", "multiple", "facet"),
 }
+# The keys no field may take, because the compound catalogue names its
+# rows' record keys and its address parameters with them.
+RESERVED_FIELD_KEYS = ("id", "title", "created", "modified", "text", "q",
+                       "sort", "view")
 TERM_KEYS = ("label", "label_de", "parent")
 STATUSES = ("draft", "checked", "retired")
 # The languages a procedure may be written in. A file name may carry one
@@ -1042,10 +1046,13 @@ class Declaration(NamedTuple):
     """A compound field that a collection declares, its defaults applied.
 
     ``type`` is one of FIELD_TYPES. An option the type does not take
-    holds None, or False for a boolean option: ``pattern`` and
-    ``unique`` belong to a text field, ``minimum``, ``maximum``,
-    ``unit`` and ``unique`` to a number field, and ``vocabulary``,
-    ``multiple`` and ``terms`` to a choice field. ``pattern`` is
+    holds None, or False for a boolean option: ``pattern``, ``unique``
+    and ``search`` belong to a text field, ``minimum``, ``maximum``,
+    ``unit`` and ``unique`` to a number field, ``facet`` to a boolean
+    field, and ``vocabulary``, ``multiple``, ``terms`` and ``facet`` to a
+    choice field. ``facet`` makes the field a filter of the compound
+    catalogue, and ``search`` adds its values to the text that the
+    compound catalogue searches. ``pattern`` is
     compiled; ``terms`` maps every value of the field's vocabulary, in
     file order, to its entry.
     """
@@ -1064,6 +1071,8 @@ class Declaration(NamedTuple):
     vocabulary: str | None
     multiple: bool
     terms: dict[str, Term]
+    facet: bool
+    search: bool
 
 
 def check_choice(field: Declaration, value: object) -> list[Problem]:
@@ -1730,6 +1739,10 @@ def read_declaration(entry: dict[str, Any], number: int, settings: Path,
     if key in COMPOUND_REQUIRED_KEYS + COMPOUND_OPTIONAL_KEYS:
         raise ConfigError(f"{where}: key {key!r} is a built-in compound "
                           "key")
+    if key in RESERVED_FIELD_KEYS:
+        raise ConfigError(f"{where}: key {key!r} is reserved by the "
+                          "compound catalogue; the reserved keys are "
+                          f"{', '.join(RESERVED_FIELD_KEYS)}")
     if key.endswith("_de"):
         raise ConfigError(f"{where}: key {key!r} ends in _de, which is "
                           "reserved")
@@ -1791,7 +1804,9 @@ def read_declaration(entry: dict[str, Any], number: int, settings: Path,
         unique=declared_flag(entry, "unique", where), pattern=pattern,
         minimum=minimum, maximum=maximum,
         unit=declared_string(entry, "unit", where), vocabulary=name,
-        multiple=declared_flag(entry, "multiple", where), terms=terms)
+        multiple=declared_flag(entry, "multiple", where), terms=terms,
+        facet=declared_flag(entry, "facet", where),
+        search=declared_flag(entry, "search", where))
 
 
 def load_fields(path: Path,

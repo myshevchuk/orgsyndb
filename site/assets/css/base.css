@@ -138,7 +138,7 @@ main { padding: var(--space-3) 0 var(--space-5); }
 .catalogue-scope { color: var(--muted); }
 .facet-values { display: flex; flex-direction: column; gap: 0.15rem; }
 .facet-value { display: flex; align-items: baseline; gap: var(--space-2); }
-.facet-label { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.facet-label { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; hyphens: auto; }
 .facet-count { color: var(--muted); font-variant-numeric: tabular-nums; }
 .catalogue-active { list-style: none; margin: 0; padding: 0; }
 .row-details dl { margin: var(--space-1) 0 0; }

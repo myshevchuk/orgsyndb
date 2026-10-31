@@ -1,25 +1,35 @@
-// The catalogue on /procedures/, /general-procedures/ and the term pages,
-// as a progressive enhancement: without it the page is its full table by
-// ID. It runs after search-terms.js and catalogue-core.js, in one bundle.
+// The catalogue on /procedures/, /general-procedures/, the term pages and
+// /compounds/, as a progressive enhancement: without it the page is its
+// full table. It runs after search-terms.js and catalogue-core.js, in one
+// bundle.
 //
 // - Reveals every [data-catalogue-controls] element of div.catalogue, and
 //   drives the search field #catalogue-q of the site header's form.
-// - Reads its records from the table rows, its known facet values from the
-//   facet checkboxes and its fixed facet from data-fixed, and its state
+// - Takes its facets from the data-facet of each details.facet, in page
+//   order; its records from the table rows (data-id, data-title,
+//   data-created, data-modified, data-text, and data-<facet> as a JSON
+//   array or a single value); its known facet values from the facet
+//   checkboxes; its fixed facet from data-fixed; the sorts and views it
+//   offers from the options of #catalogue-sort and #catalogue-view, no
+//   sort and only the table where a select is missing; and its state
 //   from the address with OrgSynCatalogue.parse. Parameters it could not
 //   apply are named in the message, and the address is replaced with the
 //   canonical one.
 // - On each change of state it renders: hides the rows that do not match,
 //   re-appends the others in order, fills the facet counts, the chips, the
-//   count and the message, and sets the controls. Only the latest render
-//   applies a search result.
-// - Imports the Pagefind bundle, ../pagefind/pagefind.js resolved against
-//   this script's URL, only while the query is active, and runs each
-//   distinct normalised query once per page view.
+//   count and the message, and sets the controls. A facet the page did not
+//   render open opens while one of its values is selected. Only the latest
+//   render applies a search result.
+// - On a catalogue with data-search="text" the query matches the rows'
+//   text with OrgSynCatalogue.match, at once. Elsewhere it imports the
+//   Pagefind bundle, ../pagefind/pagefind.js resolved against this
+//   script's URL, only while the query is active, and runs each distinct
+//   normalised query once per page view.
 // - Typing changes the query 250 ms after the last keystroke; a run of
 //   edits makes one history entry. Every other change pushes one. Back and
 //   Forward render the address they reach.
-// - Below 55rem the Filters button shows and hides the facets.
+// - Below 55rem the Filters button, where the page has one, shows and
+//   hides the facets.
 (() => {
   "use strict";
 
@@ -29,9 +39,9 @@
   const root = document.querySelector("[data-catalogue]");
   if (!root || !core) return;
 
-  const FACETS = ["type", "kind", "status", "tag", "author"];
   const DELAY = 250;
   const fixed = root.dataset.fixed || null;
+  const inPage = root.dataset.search === "text";
   const language = document.documentElement.lang || undefined;
   const text = (name) => root.getAttribute(`data-text-${name}`) || "";
   const fill = (template, values) => template.replace(
@@ -54,50 +64,31 @@
   const clearAll = root.querySelector(".clear-all");
   const sortSelect = root.querySelector("#catalogue-sort");
   const viewSelect = root.querySelector("#catalogue-view");
-  const relevance = sortSelect.querySelector('option[value="relevance"]');
+  const relevance = sortSelect
+    && sortSelect.querySelector('option[value="relevance"]');
   const message = root.querySelector("[data-catalogue-message]");
   const count = root.querySelector("[data-catalogue-count]");
   const countText = count.textContent;
   const browseAll = root.querySelector("[data-browse-all]");
   const browseURL = browseAll ? new URL(browseAll.href) : null;
-  const body = root.querySelector("table.procedure-list tbody");
-
-  // --- records and facet values ------------------------------------------
-
-  const keysOf = (row, name) => {
-    try {
-      const value = JSON.parse(row.dataset[name] || "[]");
-      return Array.isArray(value) ? value : [];
-    } catch {
-      return [];
-    }
+  const body = root.querySelector(".catalogue-results table tbody");
+  const offered = {
+    sorts: sortSelect ? Array.from(sortSelect.options, (o) => o.value) : [],
+    views: viewSelect ? Array.from(viewSelect.options, (o) => o.value)
+      : ["table"],
   };
-  const rows = new Map();
-  const records = [];
-  for (const row of body.rows) {
-    const id = row.dataset.id;
-    if (!id || rows.has(id)) continue;
-    rows.set(id, row);
-    records.push({
-      id,
-      title: row.dataset.title || "",
-      created: row.dataset.created || "",
-      modified: row.dataset.modified || "",
-      type: keysOf(row, "type"),
-      kind: row.dataset.kind ? [row.dataset.kind] : [],
-      status: row.dataset.status ? [row.dataset.status] : [],
-      tag: keysOf(row, "tag"),
-      author: keysOf(row, "author"),
-    });
-  }
 
-  // Per facet: its name and, per value, the checkbox, its label element,
-  // its count element and its display label.
+  // --- facets, records and facet values ----------------------------------
+
+  // Per facet, in page order: its details element, whether the page
+  // rendered it open, its name and, per value, the checkbox, its label
+  // element, its count element and its display label.
   const groups = {};
   for (const details of root.querySelectorAll("details.facet[data-facet]")) {
     const summary = details.querySelector("summary");
     groups[details.dataset.facet] = {
       details,
+      rendered: details.open,
       name: summary ? summary.textContent.trim() : details.dataset.facet,
       values: Array.from(details.querySelectorAll("label.facet-value"),
         (label) => {
@@ -113,11 +104,41 @@
         }),
     };
   }
+  const facets = Object.keys(groups);
   const known = {};
-  for (const facet of FACETS) {
-    const group = groups[facet];
-    known[facet] = facet === fixed || !group ? []
-      : Array.from(new Set(group.values.map((item) => item.value)));
+  for (const facet of facets) {
+    known[facet] = facet === fixed ? []
+      : Array.from(new Set(groups[facet].values.map((item) => item.value)));
+  }
+
+  // The values of a row's facet attribute: a JSON array, or else the
+  // attribute as a single value.
+  const valuesOf = (row, facet) => {
+    const raw = row.getAttribute(`data-${facet}`);
+    if (!raw) return [];
+    try {
+      const value = JSON.parse(raw);
+      if (Array.isArray(value)) return value.map(String);
+    } catch {
+      // Not JSON: a single value.
+    }
+    return [raw];
+  };
+  const rows = new Map();
+  const records = [];
+  for (const row of body.rows) {
+    const id = row.dataset.id;
+    if (!id || rows.has(id)) continue;
+    rows.set(id, row);
+    const record = {
+      id,
+      title: row.dataset.title || "",
+      created: row.dataset.created || "",
+      modified: row.dataset.modified || "",
+      text: row.dataset.text || "",
+    };
+    for (const facet of facets) record[facet] = valuesOf(row, facet);
+    records.push(record);
   }
   const labelOf = (facet, value) => {
     const item = groups[facet].values.find((entry) => entry.value === value);
@@ -132,12 +153,12 @@
   let runEntry = false;
 
   const filtering = () => state.q.trim() !== ""
-    || FACETS.some((facet) => state[facet].length > 0);
+    || facets.some((facet) => state[facet].length > 0);
 
   // Reads the state from the address, names what it ignored and makes the
   // address canonical.
   const fromAddress = () => {
-    const read = core.parse(location.search, known, fixed);
+    const read = core.parse(location.search, known, fixed, offered);
     state = read.state;
     notice = read.ignored.length === 0 ? "" : fill(text("ignored"), {
       list: read.ignored.map(([name, value]) => `${name}=${value}`)
@@ -248,9 +269,8 @@
   const syncControls = (setField) => {
     if (setField) field.value = state.q;
     const chosen = [];
-    for (const facet of FACETS) {
+    for (const facet of facets) {
       const group = groups[facet];
-      if (!group) continue;
       for (const item of group.values) {
         if (facet === fixed) {
           item.input.checked = true;
@@ -260,18 +280,18 @@
         }
       }
       if (facet === fixed) continue;
-      if ((facet === "tag" || facet === "author") && state[facet].length) {
-        group.details.open = true;
-      }
+      if (!group.rendered && state[facet].length) group.details.open = true;
       for (const value of state[facet]) chosen.push([facet, value]);
     }
-    if (core.active(state)) {
-      if (!relevance.parentNode) sortSelect.prepend(relevance);
-    } else {
-      relevance.remove();
+    if (relevance) {
+      if (!core.active(state)) {
+        relevance.remove();
+      } else if (!relevance.parentNode) {
+        sortSelect.prepend(relevance);
+      }
     }
-    sortSelect.value = core.sortOf(state);
-    viewSelect.value = state.view;
+    if (sortSelect) sortSelect.value = core.sortOf(state);
+    if (viewSelect) viewSelect.value = state.view;
     root.dataset.view = state.view;
 
     // Rebuilt only when the selections change: a query edit applied as the
@@ -280,8 +300,8 @@
     if (chipKey !== shownChips) {
       shownChips = chipKey;
       chips.replaceChildren(...chosen.map(([facet, value], index) => {
-      const name = groups[facet].name;
-      const label = labelOf(facet, value);
+        const name = groups[facet].name;
+        const label = labelOf(facet, value);
         const button = document.createElement("button");
         button.type = "button";
         button.textContent = `${name}: ${label}`;
@@ -322,10 +342,8 @@
         focused.focus({ preventScroll: true });
       }
     }
-    for (const facet of FACETS) {
-      const group = groups[facet];
-      if (!group) continue;
-      for (const item of group.values) {
+    for (const facet of facets) {
+      for (const item of groups[facet].values) {
         const n = facet === fixed ? ids.length
           : (counts[facet] && counts[facet][item.value]) || 0;
         item.count.textContent = format(n);
@@ -362,6 +380,11 @@
       show(core.select(records, state, null, language));
       return;
     }
+    if (inPage) {
+      show(core.select(records, state, core.match(records, state.q),
+        language));
+      return;
+    }
     results.setAttribute("aria-busy", "true");
     count.textContent = text("searching");
     setMessage([notice], null);
@@ -390,8 +413,8 @@
     runEntry = false;
   });
 
-  for (const facet of FACETS) {
-    if (facet === fixed || !groups[facet]) continue;
+  for (const facet of facets) {
+    if (facet === fixed) continue;
     for (const item of groups[facet].values) {
       item.input.addEventListener("change", () => {
         const on = item.input.checked;
@@ -411,19 +434,25 @@
     change((current) => core.withQuery(current, ""), true);
     field.focus();
   });
-  sortSelect.addEventListener("change", () => {
-    const sort = sortSelect.value;
-    change((current) => Object.assign({}, current, { sort }), false);
-  });
-  viewSelect.addEventListener("change", () => {
-    const view = viewSelect.value;
-    change((current) => Object.assign({}, current, { view }), false);
-  });
-  toggle.addEventListener("click", () => {
-    const open = toggle.getAttribute("aria-expanded") !== "true";
-    toggle.setAttribute("aria-expanded", String(open));
-    root.toggleAttribute("data-facets-open", open);
-  });
+  if (sortSelect) {
+    sortSelect.addEventListener("change", () => {
+      const sort = sortSelect.value;
+      change((current) => Object.assign({}, current, { sort }), false);
+    });
+  }
+  if (viewSelect) {
+    viewSelect.addEventListener("change", () => {
+      const view = viewSelect.value;
+      change((current) => Object.assign({}, current, { view }), false);
+    });
+  }
+  if (toggle) {
+    toggle.addEventListener("click", () => {
+      const open = toggle.getAttribute("aria-expanded") !== "true";
+      toggle.setAttribute("aria-expanded", String(open));
+      root.toggleAttribute("data-facets-open", open);
+    });
+  }
 
   window.addEventListener("popstate", () => {
     window.clearTimeout(typing);

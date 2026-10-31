@@ -30,7 +30,7 @@ Every HTML page the theme renders SHALL contain, in this order:
 - a `header.site-header` holding, in this order:
   - `a.site-title`, linking `/` with the text `OrgSynDB`;
   - a `nav` element carrying `aria-label="Site"`, which links, in this order, to `/procedures/`, `/compounds/`, `/sequences/` and `/help/`, with the texts `Procedures`, `Compounds`, `Sequences` and `Help`. The header holds no other `nav`;
-  - `form.site-search` with `role="search"` and `method="get"`, holding one `input` with `type="search"` and `name="q"`, and a `button` with `type="submit"` and the text `Search`. On the catalogue, the term pages and `/general-procedures/` it is the catalogue's search form, with the `action`, attributes and texts that site-catalogue "Catalogue controls" gives. On every other page its `action` resolves to `/procedures/`, and its input carries `aria-label="Search procedures"` and the placeholder `Product, CAS, SMILES or keyword`;
+  - `form.site-search` with `role="search"` and `method="get"`, holding one `input` with `type="search"` and `name="q"`, and a `button` with `type="submit"` and the text `Search`. On the catalogue, the term pages and `/general-procedures/` it is the catalogue's search form, with the `action`, attributes and texts that site-catalogue "Catalogue controls" gives, and on `/compounds/` it is the compound catalogue's, as site-catalogue "Compound catalogue" gives. On every other page its `action` resolves to `/procedures/`, and its input carries `aria-label="Search procedures"` and the placeholder `Product, CAS, SMILES or keyword`;
 - exactly one `main` element with `id="main"`;
 - a `footer.site-footer` whose text is `OrgSynDB · internal procedures · built <time>`, where `<time>` is a `time` element whose `datetime` is the time the site was built, as an RFC 3339 date-time, and whose text is that time as `YYYY-MM-DD HH:MM`. Every page of one build shows the same time.
 
@@ -50,7 +50,7 @@ Headings follow these rules:
 #### Scenario: Shell on every page
 - **WHEN** a test scans every HTML file under `public/` except files under `public/pagefind/`, after a theme build in locale `en`
 - **THEN** each has the skip link, the site title, the site header with the four navigation links in order and then `form.site-search`, one `main#main`, the footer text with its `time`, the same on every page, both `meta` elements, exactly one `h1`, no heading-level jump greater than one, and exactly one `input[name=q]`, the header's
-- **AND** on every page except `/procedures/`, `/general-procedures/` and the term pages the form's `action` resolves to `/procedures/` and its input has the stated `aria-label` and placeholder
+- **AND** on every page except `/procedures/`, `/general-procedures/`, `/compounds/` and the term pages the form's `action` resolves to `/procedures/` and its input has the stated `aria-label` and placeholder
 
 #### Scenario: Term titles use labels and tags
 - **WHEN** a test reads `public/reaction_types/aldol-condensation/index.html` and `public/tags/sample-data/index.html` after a theme build in locale `en`
@@ -390,7 +390,7 @@ A compound page carries no `data-pagefind-body`, so the search index holds proce
 - **THEN** none has an element with `data-pagefind-body`, and the image of `isopentyl-acetate` resolves to `public/structures/isopentyl-acetate.svg`
 
 ### Requirement: Compound directory
-The page `/compounds/` SHALL hold the `h1` `Compounds`, then a `table.compound-table` with the header cells `Compound`, `Formula`, `MW` and `CAS`, then one header cell for each field the collection declares with `column = true`, in declared order, holding the field's shown label, then `Made by` and `Used in`, and one body row per compound of the registry, ordered by shown name. A row holds a link to the compound's page with its shown name, the formula with each digit run in `<sub>`, `<mw> g/mol`, the CAS number or an empty cell, for each column field the compound's value written as compound-fields "Field display" states or an empty cell when the compound does not set it, and the numbers of published procedures that make it and that use it. The header and body cells of a `number` field carry the class `num`. The directory holds no form and needs no JavaScript.
+The page `/compounds/` SHALL be the compound catalogue (site-catalogue "Compound catalogue"), whose results end with a `table.compound-table` with the header cells `Compound`, `Formula`, `MW` and `CAS`, then one header cell for each field the collection declares with `column = true`, in declared order, holding the field's shown label, then `Made by` and `Used in`, and one body row per compound of the registry, ordered by shown name. A row holds a link to the compound's page with its shown name, the formula with each digit run in `<sub>`, `<mw> g/mol`, the CAS number or an empty cell, for each column field the compound's value written as compound-fields "Field display" states or an empty cell when the compound does not set it, and the numbers of published procedures that make it and that use it. The header and body cells of a `number` field carry the class `num`. Without JavaScript the page shows the complete table and no control.
 
 #### Scenario: Every compound is listed
 - **WHEN** a test scans `public/compounds/index.html` after a theme build in locale `en`

@@ -153,9 +153,10 @@ do not work with SVG files.
 
 You may register a starting material even if no procedure makes it. A compound
 that no procedure uses is also allowed. **Compounds** in the site navigation
-opens the directory at `/compounds/`. Each name links to a page with chemical
-data, the structure when supplied, **Made by** procedures with yields and
-status, and **Used in** procedures with status. A general procedure appears
+opens the catalogue at `/compounds/`, which you can filter and search.
+Each name links to a page with chemical data, the structure when supplied,
+**Made by** procedures with yields and status, and **Used in** procedures
+with status. A general procedure appears
 under **Made by** once per entry that makes the compound, as
 `<ID> <title> · entry <n> · <yield> % · <status>`. **Used in** lists each
 procedure once, and the directory counts each procedure once. After

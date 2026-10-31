@@ -186,6 +186,22 @@ class PlainCatalogueTests(cs.CatalogueCase):
             with self.subTest(word=word):
                 self.assertIn(word, script)
 
+    def test_the_compound_catalogue_shares_the_script(self) -> None:
+        """Scenario: Script wiring (the compound catalogue)."""
+        scripts = {}
+        for relative in ("procedures/index.html", "compounds/index.html"):
+            page = self.page(relative)
+            found = [page.resolve(s) for s in page.script_sources()
+                     if s and "/js/catalogue" in page.resolve(s)]
+            self.assertEqual(len(found), 1, relative)
+            self.assertRegex(found[0], cs.CATALOGUE_SCRIPT)
+            scripts[relative] = found[0]
+        self.assertEqual(scripts["procedures/index.html"],
+                         scripts["compounds/index.html"])
+        page = self.page("compounds/index.html")
+        self.assertNotIn("pagefind-ui", page.source)
+        self.assertEqual(len(page.find_all("input", name="q")), 1)
+
     def test_links_and_assets_resolve_under_a_prefix(self) -> None:
         """Scenario: Links and assets under a prefix."""
         base = f"http://127.0.0.1{PREFIX.rstrip('/')}"

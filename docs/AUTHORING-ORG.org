@@ -25,6 +25,7 @@
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-30 Fri 20:32] -- synthesis sequences, page links, navigation and validation
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-31 Sat 11:12] -- collection compound fields and the template's closing note
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-31 Sat 11:30] -- doc-writer pass line corrected from gpt-6 to the pinned run model
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-10-31 Sat 12:20] -- compound catalogue introduction
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -161,7 +162,8 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
 
   You may register a starting material even if no procedure makes it. A
   compound that no procedure uses is also allowed. *Compounds* in the site
-  navigation opens ~/compounds/~. Each name links to a page with chemical data,
+  navigation opens the catalogue at ~/compounds/~, which you can filter and
+  search. Each name links to a page with chemical data,
   the structure when supplied, *Made by* procedures with yields and status, and
   *Used in* procedures with status. A general procedure appears under *Made by*
   once per entry that makes the compound, as

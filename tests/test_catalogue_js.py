@@ -12,11 +12,12 @@ site's script.
 import json
 import re
 import subprocess
+import tomllib
 import unittest
 from typing import Any
 
 import pipeline_support as ps
-from pipeline_support import CATALOGUE_CORE, SEARCH_TERMS
+from pipeline_support import CATALOGUE_CORE, SEARCH_TERMS, TEST_COLLECTION
 
 RUNNER = r"""
 const fs = require("fs");
@@ -47,6 +48,14 @@ KNOWN = {"type": ["hydrolysis", "acylation"],
          "author": ["a. example", "ä. müller"]}
 DEFAULT_STATE = {"q": "", "type": [], "kind": [], "status": [], "tag": [],
                  "author": [], "sort": None, "view": "table"}
+FUNCTIONS = ("parse", "serialize", "active", "sortOf", "withQuery", "clear",
+             "select", "searcher", "match")
+COMPOUND_KNOWN = {"chemical_class": ["carbonyl-compounds", "esters",
+                                     "phenols"],
+                  "in_house": ["true", "false"]}
+COMPOUND_OFFERED = {"sorts": [], "views": ["table"]}
+COMPOUND_STATE = {"q": "", "chemical_class": [], "in_house": [],
+                  "sort": None, "view": "table"}
 
 
 def evaluate(code: str, data: Any = None) -> Any:
@@ -71,6 +80,11 @@ def state(**changes: Any) -> dict[str, Any]:
     return {**DEFAULT_STATE, **changes}
 
 
+def compound_state(**changes: Any) -> dict[str, Any]:
+    """The default state of the compound catalogue with ``changes``."""
+    return {**COMPOUND_STATE, **changes}
+
+
 class ClassicScriptTests(unittest.TestCase):
     def test_the_core_is_a_classic_script_without_the_dom(self) -> None:
         """Scenario: A classic script without the DOM."""
@@ -84,13 +98,10 @@ class ClassicScriptTests(unittest.TestCase):
         self.assertNotRegex(code, r"\b(document|window|location)\b")
         names = evaluate("""
             const core = OrgSynCatalogue;
-            return ["parse", "serialize", "active", "sortOf", "withQuery",
-                    "clear", "select", "searcher"].map(
-              (name) => [name, typeof core[name]]);
-        """)
-        self.assertEqual(names, [[name, "function"] for name in (
-            "parse", "serialize", "active", "sortOf", "withQuery", "clear",
-            "select", "searcher")])
+            return data.map((name) => [name, typeof core[name]]);
+        """, list(FUNCTIONS))
+        self.assertEqual(names, [[name, "function"] for name in FUNCTIONS])
+        self.assertEqual(len(FUNCTIONS), 9)
 
 
 class ParseTests(unittest.TestCase):
@@ -196,6 +207,156 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(ignored, [["tag", "cinnamate"]])
 
 
+class PageFacetParseTests(unittest.TestCase):
+    """The facets, sorts and views that a page names to ``parse``."""
+
+    def parse(self, search: str, known: dict[str, list[str]],
+              offered: dict[str, list[str]] | None = None,
+              fixed: str | None = None) -> dict[str, Any]:
+        return evaluate("""
+            const core = OrgSynCatalogue;
+            const result = data.offered === null
+              ? core.parse(data.search, data.known, data.fixed)
+              : core.parse(data.search, data.known, data.fixed,
+                           data.offered);
+            return {state: result.state, keys: Object.keys(result.state),
+                    ignored: result.ignored,
+                    address: core.serialize(result.state)};
+        """, {"search": search, "known": known, "offered": offered,
+              "fixed": fixed})
+
+    def test_the_state_lists_the_facets_of_known_in_their_order(
+            self) -> None:
+        """Requirement: Catalogue address (the state's keys)."""
+        ps.require_node()
+        got = self.parse("", KNOWN)
+        self.assertEqual(got["keys"], ["q", "type", "kind", "status", "tag",
+                                       "author", "sort", "view"])
+        reordered = {"status": KNOWN["status"], "author": KNOWN["author"],
+                     "type": KNOWN["type"]}
+        got = self.parse("?type=acylation&status=draft&author=a.+example",
+                         reordered)
+        self.assertEqual(got["keys"], ["q", "status", "author", "type",
+                                       "sort", "view"])
+        self.assertEqual(
+            got["address"],
+            "?status=draft&author=a.+example&type=acylation")
+
+    def test_the_facets_and_offers_of_a_compound_catalogue(self) -> None:
+        """Scenario: The facets and offers of a compound catalogue."""
+        ps.require_node()
+        got = self.parse(
+            "?in_house=true&q=ester&chemical_class=esters&type=hydrolysis"
+            "&sort=title&view=details", COMPOUND_KNOWN, COMPOUND_OFFERED)
+        self.assertEqual(got["keys"], ["q", "chemical_class", "in_house",
+                                       "sort", "view"])
+        self.assertEqual(got["state"], compound_state(
+            q="ester", chemical_class=["esters"], in_house=["true"]))
+        self.assertEqual(got["ignored"], [["type", "hydrolysis"],
+                                          ["sort", "title"],
+                                          ["view", "details"]])
+        self.assertEqual(got["address"],
+                         "?q=ester&chemical_class=esters&in_house=true")
+
+    def test_compound_values_are_read_in_the_order_of_known(self) -> None:
+        """Requirement: Catalogue address (facets)."""
+        ps.require_node()
+        got = self.parse(
+            "?chemical_class=phenols&chemical_class=nope"
+            "&chemical_class=carbonyl-compounds&chemical_class=phenols"
+            "&in_house=false&in_house=true&in_house=maybe",
+            COMPOUND_KNOWN, COMPOUND_OFFERED)
+        self.assertEqual(got["state"], compound_state(
+            chemical_class=["carbonyl-compounds", "phenols"],
+            in_house=["true", "false"]))
+        self.assertEqual(got["ignored"], [["chemical_class", "nope"],
+                                          ["in_house", "maybe"]])
+
+    def test_the_names_of_other_catalogues_are_not_facets(self) -> None:
+        """Requirement: Catalogue address (other names)."""
+        ps.require_node()
+        got = self.parse("?status=draft&tag=cinnamate&kind=general",
+                         COMPOUND_KNOWN, COMPOUND_OFFERED)
+        self.assertEqual(got["state"], COMPOUND_STATE)
+        self.assertEqual(got["ignored"], [["status", "draft"],
+                                          ["tag", "cinnamate"],
+                                          ["kind", "general"]])
+
+    def test_a_page_offers_only_some_sorts(self) -> None:
+        """Requirement: Catalogue address (sort, when the page offers
+        it)."""
+        ps.require_node()
+        offered = {"sorts": ["id", "title"], "views": ["table", "details"]}
+        cases = [("?sort=title", "title", []), ("?sort=id", "id", []),
+                 ("?sort=created", None, [["sort", "created"]]),
+                 ("?sort=modified", None, [["sort", "modified"]]),
+                 ("?q=acid&sort=relevance", None, [["sort", "relevance"]]),
+                 ("?sort=created&sort=title", None,
+                  [["sort", "created"], ["sort", "title"]])]
+        for search, sort, ignored in cases:
+            with self.subTest(search=search):
+                got = self.parse(search, KNOWN, offered)
+                self.assertEqual(got["state"]["sort"], sort)
+                self.assertEqual(got["ignored"], ignored)
+
+    def test_a_page_that_offers_relevance_takes_it_with_a_query(
+            self) -> None:
+        """Requirement: Catalogue address (relevance while the query is
+        active, when offered)."""
+        ps.require_node()
+        offered = {"sorts": ["relevance", "id"], "views": ["table"]}
+        got = self.parse("?q=acid&sort=relevance", KNOWN, offered)
+        self.assertEqual(got["state"]["sort"], "relevance")
+        self.assertEqual(got["ignored"], [])
+        got = self.parse("?sort=relevance", KNOWN, offered)
+        self.assertEqual(got["state"]["sort"], None)
+        self.assertEqual(got["ignored"], [["sort", "relevance"]])
+
+    def test_a_page_offers_only_some_views(self) -> None:
+        """Requirement: Catalogue address (view, when the page offers
+        it)."""
+        ps.require_node()
+        got = self.parse("?view=details", KNOWN,
+                         {"sorts": ["id"], "views": ["table"]})
+        self.assertEqual(got["state"]["view"], "table")
+        self.assertEqual(got["ignored"], [["view", "details"]])
+        got = self.parse("?view=table&view=details", KNOWN,
+                         {"sorts": ["id"], "views": ["table"]})
+        self.assertEqual(got["ignored"], [["view", "details"]])
+        got = self.parse("?view=details", KNOWN,
+                         {"sorts": [], "views": ["table", "details"]})
+        self.assertEqual(got["state"]["view"], "details")
+
+    def test_a_page_offering_nothing_keeps_the_address_to_facets(
+            self) -> None:
+        """Requirement: Catalogue address (a page that offers no sort)."""
+        ps.require_node()
+        got = self.parse("?sort=id&sort=title&sort=relevance&view=table",
+                         COMPOUND_KNOWN, COMPOUND_OFFERED)
+        self.assertEqual(got["state"], COMPOUND_STATE)
+        self.assertEqual(got["ignored"], [["sort", "id"], ["sort", "title"],
+                                          ["sort", "relevance"]])
+
+    def test_omitted_offers_are_every_sort_and_both_views(self) -> None:
+        """Requirement: Catalogue address (offered omitted)."""
+        ps.require_node()
+        for sort in ("id", "title", "created", "modified"):
+            got = self.parse(f"?sort={sort}&view=details", KNOWN)
+            self.assertEqual(got["state"]["sort"], sort)
+            self.assertEqual(got["state"]["view"], "details")
+            self.assertEqual(got["ignored"], [])
+
+    def test_the_fixed_facet_of_a_compound_catalogue(self) -> None:
+        """Requirement: Catalogue address (the fixed facet, any
+        facet)."""
+        ps.require_node()
+        got = self.parse("?in_house=true&chemical_class=esters",
+                         COMPOUND_KNOWN, COMPOUND_OFFERED,
+                         fixed="chemical_class")
+        self.assertEqual(got["state"], compound_state(in_house=["true"]))
+        self.assertEqual(got["ignored"], [["chemical_class", "esters"]])
+
+
 class SerializeTests(unittest.TestCase):
     def serialize(self, *states: dict[str, Any]) -> list[Any]:
         return evaluate("""
@@ -259,6 +420,57 @@ class SerializeTests(unittest.TestCase):
                                "?q=a%26b%3Dc+d"])
         [kind] = self.serialize(state(kind=["general"]))
         self.assertEqual(kind, "?kind=general")
+
+    def test_compound_states_serialize_in_their_own_order(self) -> None:
+        """Requirement: Catalogue address (the state's facets, in the
+        state's order)."""
+        ps.require_node()
+        chosen = {"q": " ester ", "in_house": ["true"],
+                  "chemical_class": ["esters", "phenols"], "sort": None,
+                  "view": "table"}
+        got = self.serialize(
+            compound_state(q="ester", chemical_class=["esters"],
+                           in_house=["true"]),
+            chosen, COMPOUND_STATE)
+        self.assertEqual(got, [
+            "?q=ester&chemical_class=esters&in_house=true",
+            "?q=ester&in_house=true&chemical_class=esters"
+            "&chemical_class=phenols", ""])
+
+    def test_a_state_without_facets_serializes(self) -> None:
+        """Requirement: Catalogue address (a state of q, sort and
+        view)."""
+        ps.require_node()
+        got = self.serialize({"q": "a b", "sort": "title", "view": "details"},
+                             {"q": "", "sort": None, "view": "table"})
+        self.assertEqual(got, ["?q=a+b&sort=title&view=details", ""])
+
+    def test_compound_states_survive_a_round_trip(self) -> None:
+        """Requirement: Catalogue address (round trip, the facets of
+        known)."""
+        ps.require_node()
+        states = [
+            compound_state(), compound_state(q="ester"),
+            compound_state(chemical_class=["carbonyl-compounds", "phenols"]),
+            compound_state(q="C(=O)O 50-78-2", in_house=["false"],
+                           chemical_class=["esters"]),
+            compound_state(in_house=["true", "false"])]
+        got = evaluate("""
+            const core = OrgSynCatalogue;
+            return data.states.map((s) => {
+              const text = core.serialize(s);
+              const parsed = core.parse(text, data.known, null,
+                                        data.offered);
+              return [text, parsed.state, parsed.ignored,
+                      core.serialize(parsed.state)];
+            });
+        """, {"states": states, "known": COMPOUND_KNOWN,
+              "offered": COMPOUND_OFFERED})
+        for original, (text, parsed, ignored, again) in zip(states, got):
+            with self.subTest(address=text):
+                self.assertEqual(parsed, original)
+                self.assertEqual(ignored, [])
+                self.assertEqual(again, text)
 
     def test_known_states_survive_a_round_trip(self) -> None:
         """Scenario: Canonical addresses (round trip)."""
@@ -379,6 +591,43 @@ class ActiveAndSortTests(unittest.TestCase):
                                state(view="details"),
                                state(view="details")])
 
+    def test_page_facets_survive_every_change(self) -> None:
+        """Scenario: Page facets through every change."""
+        ps.require_node()
+        full = {"q": "ester", "chemical_class": ["esters"],
+                "in_house": ["true"], "sort": None, "view": "table"}
+        bare = {"q": "ester", "sort": None, "view": "table"}
+        got = evaluate("""
+            const core = OrgSynCatalogue;
+            const out = [];
+            for (const input of data) {
+              const before = JSON.stringify(input);
+              const queried = core.withQuery(input, "ketone");
+              const cleared = core.clear(input);
+              out.push({queried, cleared,
+                        queriedKeys: Object.keys(queried),
+                        clearedKeys: Object.keys(cleared),
+                        inputKeys: Object.keys(input),
+                        unchanged: JSON.stringify(input) === before});
+            }
+            return out;
+        """, [full, bare])
+        with_facets, without = got
+        self.assertEqual(with_facets["queried"], {**full, "q": "ketone"})
+        self.assertEqual(with_facets["cleared"], {
+            "q": "", "chemical_class": [], "in_house": [], "sort": None,
+            "view": "table"})
+        self.assertEqual(without["queried"], {**bare, "q": "ketone"})
+        self.assertEqual(without["cleared"],
+                         {"q": "", "sort": None, "view": "table"})
+        for result in got:
+            self.assertEqual(result["queriedKeys"], result["inputKeys"])
+            self.assertEqual(result["clearedKeys"], result["inputKeys"])
+            self.assertTrue(result["unchanged"])
+        self.assertEqual(without["inputKeys"], ["q", "sort", "view"])
+        self.assertEqual(without["queriedKeys"], ["q", "sort", "view"])
+        self.assertEqual(without["clearedKeys"], ["q", "sort", "view"])
+
 
 def record(ident: str, title: str, created: str, modified: str,
            type: list[str] | None = None, status: str = "draft",
@@ -442,12 +691,14 @@ class SelectTests(unittest.TestCase):
         self.assertEqual(second["ids"], ids(1, 2))
         self.assertEqual(third["ids"], ids(4))
 
-    def test_nothing_selected_lists_every_record_by_id(self) -> None:
-        """Scenario: OR within a facet, AND across facets (no selection)."""
+    def test_nothing_selected_lists_every_record_in_its_order(self) -> None:
+        """Scenario: The order of the records (no selection, no sort)."""
         ps.require_node()
         shuffled = [SIX[i] for i in (3, 0, 5, 2, 1, 4)]
         got = select(shuffled, DEFAULT_STATE, None)
-        self.assertEqual(got["ids"], ids(1, 2, 3, 4, 5, 6))
+        self.assertEqual(got["ids"], ids(4, 1, 6, 3, 2, 5))
+        by_id = select(shuffled, state(sort="id"), None)
+        self.assertEqual(by_id["ids"], ids(1, 2, 3, 4, 5, 6))
         self.assertEqual(got["counts"]["status"],
                          {"draft": 3, "checked": 2, "retired": 1})
         self.assertEqual(got["counts"]["kind"],
@@ -461,6 +712,84 @@ class SelectTests(unittest.TestCase):
         self.assertEqual(got["counts"]["author"],
                          {"a. example": 3, "b. example": 2,
                           "c. example": 1, "ä. müller": 3})
+
+    def test_the_facets_that_a_page_names(self) -> None:
+        """Scenario: Facets that a page names."""
+        ps.require_node()
+        records = [
+            {"id": "a", "title": "A", "text": "",
+             "chemical_class": ["esters", "acid-derivatives",
+                                "carbonyl-compounds"],
+             "in_house": "true"},
+            {"id": "b", "title": "B", "text": "",
+             "chemical_class": ["ketones", "carbonyl-compounds"],
+             "in_house": "false"},
+            {"id": "c", "title": "C", "text": "",
+             "chemical_class": ["alcohols"], "in_house": "true"},
+            {"id": "d", "title": "D", "text": "", "chemical_class": []}]
+        first = select(records, compound_state(
+            chemical_class=["carbonyl-compounds"]), None)
+        self.assertEqual(first["ids"], ["a", "b"])
+        self.assertEqual(first["counts"], {
+            "chemical_class": {"esters": 1, "acid-derivatives": 1,
+                               "carbonyl-compounds": 2, "ketones": 1,
+                               "alcohols": 1},
+            "in_house": {"true": 1, "false": 1}})
+        second = select(records, compound_state(
+            chemical_class=["carbonyl-compounds"], in_house=["true"]), None)
+        self.assertEqual(second["ids"], ["a"])
+        self.assertEqual(second["counts"], {
+            "chemical_class": {"esters": 1, "acid-derivatives": 1,
+                               "carbonyl-compounds": 1, "ketones": 0,
+                               "alcohols": 1},
+            "in_house": {"true": 1, "false": 1}})
+
+    def test_a_value_and_its_ancestor_on_one_record(self) -> None:
+        """Scenario: A value and its ancestor on one record."""
+        ps.require_node()
+        records = [
+            {"id": "a", "title": "A", "text": "",
+             "chemical_class": ["ketones", "carbonyl-compounds",
+                                "carbonyl-compounds"]},
+            {"id": "b", "title": "B", "text": "",
+             "chemical_class": ["esters", "carbonyl-compounds"]}]
+        got = select(records, {"q": "", "chemical_class": [], "sort": None,
+                               "view": "table"}, None)
+        self.assertEqual(got["ids"], ["a", "b"])
+        self.assertEqual(got["counts"], {"chemical_class": {
+            "ketones": 1, "carbonyl-compounds": 2, "esters": 1}})
+
+    def test_a_missing_facet_key_holds_no_value(self) -> None:
+        """Requirement: Catalogue core functions (a missing key holding no
+        value)."""
+        ps.require_node()
+        records = [{"id": "a", "title": "A", "text": "",
+                    "in_house": "true"},
+                   {"id": "b", "title": "B", "text": ""}]
+        got = select(records, {"q": "", "in_house": [], "sort": None,
+                               "view": "table"}, None)
+        self.assertEqual(got["ids"], ["a", "b"])
+        self.assertEqual(got["counts"], {"in_house": {"true": 1}})
+        chosen = select(records, {"q": "", "in_house": ["true"],
+                                  "sort": None, "view": "table"}, None)
+        self.assertEqual(chosen["ids"], ["a"])
+
+    def test_the_counts_name_only_the_facets_of_the_state(self) -> None:
+        """Requirement: Facet matching and counts (the state's facets)."""
+        ps.require_node()
+        got = select(SIX, {"q": "", "status": [], "sort": None,
+                           "view": "table"}, None)
+        self.assertEqual(list(got["counts"]), ["status"])
+        self.assertEqual(got["counts"]["status"],
+                         {"draft": 3, "checked": 2, "retired": 1})
+        self.assertEqual(got["ids"], ids(1, 2, 3, 4, 5, 6))
+        bare = select(SIX, {"q": "", "sort": None, "view": "table"}, None)
+        self.assertEqual(bare["counts"], {})
+        self.assertEqual(bare["ids"], ids(1, 2, 3, 4, 5, 6))
+        stray = select(SIX, {"q": "", "status": ["draft"], "sort": None,
+                             "view": "table"}, None)
+        self.assertEqual(stray["ids"], ids(1, 2, 6))
+        self.assertEqual(list(stray["counts"]), ["status"])
 
     def test_a_record_with_two_values_matches_either(self) -> None:
         """Scenario: OR within a facet, AND across facets (two values)."""
@@ -701,6 +1030,157 @@ class SortOrderTests(unittest.TestCase):
         if swedish_z_first:
             self.assertEqual(self.ordered(titles, "title", "sv"),
                              ids(3, 5, 4, 1, 2))
+
+
+class RecordOrderTests(unittest.TestCase):
+    def test_the_order_of_the_records(self) -> None:
+        """Scenario: The order of the records."""
+        ps.require_node()
+        records = [{"id": key, "title": key.upper()} for key in "bca"]
+        plain = {"q": "", "sort": None, "view": "table"}
+        self.assertEqual(select(records, plain, None)["ids"],
+                         ["b", "c", "a"])
+        self.assertEqual(select(records, {**plain, "sort": "id"},
+                                None)["ids"], ["a", "b", "c"])
+
+    def test_filters_keep_the_order_of_the_records(self) -> None:
+        """Requirement: Sort orders (the order of records, filtered)."""
+        ps.require_node()
+        records = [
+            {"id": key, "title": key, "in_house": flag}
+            for key, flag in (("d", "true"), ("b", "false"), ("e", "true"),
+                              ("a", "true"), ("c", "false"))]
+        chosen = {"q": "", "in_house": ["true"], "sort": None,
+                  "view": "table"}
+        self.assertEqual(select(records, chosen, None)["ids"],
+                         ["d", "e", "a"])
+        self.assertEqual(
+            select(records, {**chosen, "sort": "title"}, None)["ids"],
+            ["a", "d", "e"])
+
+    def test_records_repeating_an_id_keep_the_first_position(self) -> None:
+        """Requirement: Facet matching and counts (the first of equal
+        IDs)."""
+        ps.require_node()
+        records = [{"id": key, "title": key} for key in "cbcab"]
+        plain = {"q": "", "sort": None, "view": "table"}
+        self.assertEqual(select(records, plain, None)["ids"],
+                         ["c", "b", "a"])
+
+    def test_an_active_query_still_orders_by_relevance(self) -> None:
+        """Requirement: Sort orders (no sort and an active query)."""
+        ps.require_node()
+        records = [{"id": key, "title": key} for key in "abc"]
+        got = select(records, {"q": "x", "sort": None, "view": "table"},
+                     ["c", "a"])
+        self.assertEqual(got["ids"], ["c", "a"])
+
+
+def compound_text(key: str) -> str:
+    """The text the compound catalogue searches for compound ``key`` of
+    the test collection: its names, formula, CAS number, SMILES and
+    searchable text fields, joined by single spaces."""
+    compound = tomllib.loads((TEST_COLLECTION / "compounds"
+                              / f"{key}.toml").read_text(encoding="utf-8"))
+    parts = [compound["name"], compound.get("name_de"), compound["formula"],
+             compound.get("cas"), compound["smiles"],
+             compound.get("item_number"), compound.get("short_name")]
+    return " ".join(part for part in parts if part)
+
+
+def match(records: list[dict[str, Any]], q: str) -> list[str]:
+    return evaluate("""
+        return OrgSynCatalogue.match(data.records, data.q);
+    """, {"records": records, "q": q})
+
+
+class MatchTests(unittest.TestCase):
+    KEYS = ("acetylsalicylic-acid", "salicylic-acid", "acetone",
+            "ethyl-cinnamate")
+
+    def records(self) -> list[dict[str, Any]]:
+        return [{"id": key, "title": key, "text": compound_text(key)}
+                for key in self.KEYS]
+
+    def test_substrings_of_names_numbers_and_smiles(self) -> None:
+        """Scenario: Substrings of names, numbers and SMILES."""
+        ps.require_node()
+        acetylsalicylic, salicylic, ethyl = (
+            ["acetylsalicylic-acid"], ["salicylic-acid"],
+            ["ethyl-cinnamate"])
+        cases = [
+            ("salicyl", ["acetylsalicylic-acid", "salicylic-acid"]),
+            ("ACID acetyl", acetylsalicylic),
+            ("50-78-2", acetylsalicylic),
+            ("c1ccccc1C(=O)O", acetylsalicylic),
+            ("c1ccccc1O", salicylic),
+            ("zimt", ethyl),
+            ("ASA", acetylsalicylic),
+            ("--", [])]
+        records = self.records()
+        for q, wanted in cases:
+            with self.subTest(q=q):
+                self.assertEqual(match(records, q), wanted)
+
+    def test_every_word_must_be_contained(self) -> None:
+        """Requirement: Compound text search (every word)."""
+        ps.require_node()
+        records = self.records()
+        self.assertEqual(match(records, "acid zimt"), [])
+        self.assertEqual(match(records, "aceton 67-64-1"), ["acetone"])
+        self.assertEqual(match(records, "  ethyl   cinnamate  "),
+                         ["ethyl-cinnamate"])
+
+    def test_words_and_texts_are_compared_in_lower_case(self) -> None:
+        """Requirement: Compound text search (lower case)."""
+        ps.require_node()
+        records = [{"id": "a", "title": "A", "text": "Äther CH-0010 AcOH"},
+                   {"id": "b", "title": "B", "text": "ketone"}]
+        for q in ("ÄTHER", "äther", "ch-0010", "ACOH", "aCoH"):
+            with self.subTest(q=q):
+                self.assertEqual(match(records, q), ["a"])
+        self.assertEqual(match(records, "KETONE"), ["b"])
+
+    def test_the_text_is_normalised_like_the_query(self) -> None:
+        """Requirement: Compound text search (the text normalised by
+        normaliseTerm)."""
+        ps.require_node()
+        records = [{"id": "a", "title": "A",
+                    "text": "Ethyl (E)-cinnamate CCOC(=O)/C=C/c1ccccc1"}]
+        for q in ("(E)-cinnamate", "ecinnamate", "CCOC(=O)/C=C", "e-cinn"):
+            with self.subTest(q=q):
+                self.assertEqual(match(records, q), ["a"])
+
+    def test_results_keep_the_order_of_the_records_once_each(self) -> None:
+        """Requirement: Compound text search (the order of records, each
+        once)."""
+        ps.require_node()
+        records = [{"id": key, "title": key, "text": "acid " + key}
+                   for key in ("c", "a", "b", "a", "c", "d")]
+        self.assertEqual(match(records, "acid"), ["c", "a", "b", "d"])
+        self.assertEqual(match(list(reversed(records)), "acid"),
+                         ["d", "c", "a", "b"])
+
+    def test_a_query_without_a_word_matches_nothing(self) -> None:
+        """Requirement: Compound text search (the empty normalised
+        query)."""
+        ps.require_node()
+        records = self.records()
+        for q in ("", "   ", "--", "()-", "\t"):
+            with self.subTest(q=q):
+                self.assertEqual(match(records, q), [])
+
+    def test_match_changes_no_argument(self) -> None:
+        """Requirement: Catalogue core functions (arguments unchanged)."""
+        ps.require_node()
+        records = list(reversed(self.records()))
+        before, after, found = evaluate("""
+            const before = JSON.stringify(data.records);
+            const found = OrgSynCatalogue.match(data.records, "acid");
+            return [before, JSON.stringify(data.records), found];
+        """, {"records": records})
+        self.assertEqual(after, before)
+        self.assertEqual(found, ["salicylic-acid", "acetylsalicylic-acid"])
 
 
 STUB = r"""

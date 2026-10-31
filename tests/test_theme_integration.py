@@ -265,6 +265,14 @@ class ShippedSiteTests(SiteCase):
                               fields[0].attrs.get("placeholder")),
                              ("Search procedures",
                               "Product, CAS, SMILES or keyword"))
+        if page.url == "/compounds/":
+            self.assertEqual(page.resolve(form.attrs.get("action", "")),
+                             "/compounds/")
+            self.assertEqual((fields[0].attrs.get("id"),
+                              fields[0].attrs.get("aria-label"),
+                              fields[0].attrs.get("placeholder")),
+                             ("catalogue-q", "Search compounds",
+                              "Name, formula, CAS or SMILES"))
         buttons = form.find_all("button")
         self.assertEqual(len(buttons), 1)
         self.assertEqual((buttons[0].attrs.get("type"), buttons[0].norm()),

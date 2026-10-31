@@ -1490,9 +1490,10 @@ TERM_PAGE = re.compile(r"^/(reaction_types|tags|authors)/[^/]+/$")
 
 
 def is_catalogue_url(url: str) -> bool:
-    """Whether the page at ``url`` is the catalogue, the general
-    procedures' view or a term page."""
-    return (url in ("/procedures/", "/general-procedures/")
+    """Whether the page at ``url`` carries a catalogue: the procedure
+    catalogue, the general procedures' view, a term page or the compound
+    catalogue."""
+    return (url in ("/procedures/", "/general-procedures/", "/compounds/")
             or TERM_PAGE.match(url) is not None)
 
 

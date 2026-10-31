@@ -479,6 +479,32 @@ class SiteLanguageTests(unittest.TestCase):
         self.assertIn("Ja", german.values())
         self.assertIn("Nein", german.values())
 
+    def test_the_compound_catalogue_strings_are_in_both_languages(
+            self) -> None:
+        """Scenario: Interface strings (the compound catalogue)."""
+        german = set(self.strings("de").values())
+        english = set(self.strings("en").values())
+        wanted_german = {
+            "1 Verbindung", "{shown} von {total} Verbindungen",
+            "Verbindungen durchsuchen",
+            "Name, Summenformel, CAS oder SMILES",
+            "Suche und Filter brauchen JavaScript. Ohne JavaScript zeigt "
+            "diese Seite alle Verbindungen.",
+            "Keine Verbindung passt zu Suche und Filtern."}
+        wanted_english = {
+            "1 compound", "{shown} of {total} compounds",
+            "Search compounds", "Name, formula, CAS or SMILES",
+            "Search and filters need JavaScript. Without it, this page "
+            "lists every compound.",
+            "No compounds match the search and filters."}
+        self.assertEqual(sorted(wanted_german - german), [])
+        self.assertEqual(sorted(wanted_english - english), [])
+        for values, ending in ((german, " Verbindungen"),
+                               (english, " compounds")):
+            self.assertTrue(
+                any(v.endswith(ending) and "{" in v and "{shown}" not in v
+                    for v in values), f"no <n>{ending} string")
+
     def test_every_reaction_type_has_a_german_label(self) -> None:
         """Scenario: Vocabulary with German labels."""
         data = tomllib.loads((SITE / "data" / "reaction_types.toml")

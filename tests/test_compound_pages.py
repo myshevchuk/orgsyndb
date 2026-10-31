@@ -10,6 +10,7 @@ builds it in German after removing one German name.
 import json
 import re
 
+import catalogue_support as cs
 import field_support as fs
 import pipeline_support as ps
 import sequence_support as ss
@@ -18,6 +19,31 @@ from pipeline_support import Content, Page
 
 FACT_LABELS = ["Formula", "MW", "CAS", "SMILES"]
 SEPARATOR = fs.PATH_SEPARATOR
+DEPTH = re.compile(r"^--depth:(\d+);?$")
+CATALOGUE_TEXTS = {
+    "en": {"heading": "Compounds", "many": "{n} compounds",
+           "one": "1 compound", "filtered": "{shown} of {total} compounds",
+           "noscript": "Search and filters need JavaScript. Without it, "
+                       "this page lists every compound.",
+           "empty": "No compounds match the search and filters.",
+           "ignored": "Ignored in the address: {list}",
+           "remove": "Remove {facet}: {value}", "filters": "Filters",
+           "clear": "Clear all", "label": "Search compounds",
+           "placeholder": "Name, formula, CAS or SMILES",
+           "button": "Search"},
+    "de": {"heading": "Verbindungen", "many": "{n} Verbindungen",
+           "one": "1 Verbindung",
+           "filtered": "{shown} von {total} Verbindungen",
+           "noscript": "Suche und Filter brauchen JavaScript. Ohne "
+                       "JavaScript zeigt diese Seite alle Verbindungen.",
+           "empty": "Keine Verbindung passt zu Suche und Filtern.",
+           "ignored": "In der Adresse nicht berücksichtigt: {list}",
+           "remove": "{facet}: {value} entfernen", "filters": "Filter",
+           "clear": "Alles zurücksetzen", "label": "Verbindungen "
+           "durchsuchen",
+           "placeholder": "Name, Summenformel, CAS oder SMILES",
+           "button": "Suchen"},
+}
 
 
 class CompoundCase(tti.SiteCase):
@@ -73,6 +99,231 @@ class CompoundCase(tti.SiteCase):
         pairs = page.definition_pairs(page.find("dl", "compound-facts"))
         built_in = 3 + bool(self.registry()[key].get("cas"))
         return [(p.label, p.definition.norm()) for p in pairs[built_in:]]
+
+    # --- the compound catalogue (site-catalogue "Compound catalogue") ----
+
+    def catalogue_page(self) -> ps.Page:
+        path = self.public / "compounds" / "index.html"
+        self.assertTrue(path.is_file(), "compounds/ was not built")
+        return ps.load_page(self.public, path)
+
+    def catalogue_rows(self, page: ps.Page) -> list[ps.Node]:
+        table = page.find("table", "compound-table")
+        self.assertIsNotNone(table, "no table.compound-table")
+        return [row for row in table.find_all("tr") if row.find("td")]
+
+    def check_compound_catalogue(self, page: ps.Page) -> ps.Node:
+        """The elements, attributes and texts of ``div.catalogue`` up to
+        the table, and the facets with their values and depths, for the
+        collection the build holds. Returns the ``div.catalogue``."""
+        texts = CATALOGUE_TEXTS[self.LOCALE]
+        main = page.find("main")
+        blocks = main.find_all("div", "catalogue")
+        self.assertEqual(len(blocks), 1, "not one div.catalogue")
+        block = blocks[0]
+        self.assertIn("data-catalogue", block.attrs)
+        self.assertEqual(block.attrs.get("data-search"), "text")
+        self.assertNotIn("data-fixed", block.attrs)
+        self.assertEqual(block.attrs.get("data-text-empty"), texts["empty"])
+        self.assertEqual(block.attrs.get("data-text-ignored"),
+                         texts["ignored"])
+        self.assertEqual(block.attrs.get("data-text-remove"),
+                         texts["remove"])
+        self.assertEqual(
+            [(n.tag, n.classes[:1]) for n in block.elements()],
+            [("div", ["list-head"]), ("noscript", []),
+             ("div", ["catalogue-layout"])])
+        rows = self.catalogue_rows(page)
+        head = block.find("div", "list-head")
+        self.assertEqual([h.norm() for h in head.find_all("h1")],
+                         [texts["heading"]])
+        count = head.find("p", "catalogue-count")
+        self.assertIsNotNone(count, "no p.catalogue-count")
+        self.assertEqual(count.attrs.get("role"), "status")
+        self.assertIn("data-catalogue-count", count.attrs)
+        self.assertEqual(count.attrs.get("data-filtered"), texts["filtered"])
+        self.assertEqual(count.norm(), texts["one" if len(rows) == 1
+                                             else "many"].format(
+                                                 n=len(rows)))
+        note = block.find("noscript").find("p", "catalogue-noscript")
+        self.assertIsNotNone(note, "no p.catalogue-noscript")
+        self.assertEqual(note.norm(), texts["noscript"])
+        facet_fields = [f for f in self.fields() if f.facet]
+        layout = block.find("div", "catalogue-layout")
+        expected = [("div", ["catalogue-results"])]
+        if facet_fields:
+            expected.insert(0, ("div", ["catalogue-facets"]))
+        self.assertEqual([(n.tag, n.classes[:1]) for n in layout.elements()],
+                         expected)
+        if facet_fields:
+            self.check_compound_facets(page, block, facet_fields)
+        self.check_compound_results(page, block, bool(facet_fields))
+        self.check_compound_header_search(page)
+        scripts = [page.resolve(src) for src in page.script_sources() if src]
+        loaded = [src for src in scripts if cs.CATALOGUE_SCRIPT.match(src)]
+        self.assertEqual(len(loaded), 1, f"scripts {scripts}")
+        script = next(n for n in page.find_all("script")
+                      if page.resolve(n.attrs.get("src", "")) == loaded[0])
+        self.assertIn("defer", script.attrs)
+        return block
+
+    def check_compound_facets(self, page: ps.Page, block: ps.Node,
+                              facet_fields: list[fs.Field]) -> None:
+        texts = CATALOGUE_TEXTS[self.LOCALE]
+        facets = block.find("div", "catalogue-facets")
+        self.assertEqual(facets.attrs.get("id"), "catalogue-facets")
+        self.assertIn("data-catalogue-controls", facets.attrs)
+        self.assertIn("hidden", facets.attrs)
+        heading = facets.find("h2")
+        self.assertIsNotNone(heading, "no h2 in the facets")
+        self.assertEqual(heading.norm(), texts["filters"])
+        groups = facets.find_all("details", "facet")
+        self.assertEqual([g.attrs.get("data-facet") for g in groups],
+                         [f.key for f in facet_fields])
+        self.assertLess(page.index_of(heading), page.index_of(groups[0]))
+        registry = self.registry()
+        for group, field in zip(groups, facet_fields):
+            with self.subTest(facet=field.key):
+                self.assertIn("open", group.attrs)
+                parts = group.elements()
+                self.assertEqual([p.tag for p in parts[:2]],
+                                 ["summary", "div"])
+                summary, values = parts[0], parts[1]
+                self.assertTrue(summary.attrs.get("id"),
+                                "summary without an id")
+                self.assertEqual(summary.norm(), field.label)
+                self.assertEqual(values.attrs.get("role"), "group")
+                self.assertEqual(values.attrs.get("aria-labelledby"),
+                                 summary.attrs["id"])
+                labels = values.find_all("label", "facet-value")
+                entries = fs.facet_entries(field, registry, self.LOCALE)
+                self.assertGreater(len(entries), 1)
+                self.assertEqual(len(labels), len(entries))
+                for label, (value, text, depth) in zip(labels, entries):
+                    self.check_compound_facet_value(
+                        page, label, field, value, text, depth)
+
+    def check_compound_facet_value(self, page: ps.Page, label: ps.Node,
+                                   field: fs.Field, value: str, text: str,
+                                   depth: int | None) -> None:
+        box = label.find("input")
+        self.assertIsNotNone(box, f"{value}: no input")
+        self.assertEqual(
+            {k: box.attrs.get(k) for k in ("type", "name", "value")},
+            {"type": "checkbox", "name": field.key, "value": value})
+        name = label.find("span", "facet-label")
+        self.assertIsNotNone(name, f"{value}: no span.facet-label")
+        self.assertEqual(name.norm(), text)
+        count = label.find("span", "facet-count")
+        self.assertIsNotNone(count, f"{value}: no span.facet-count")
+        self.assertEqual(count.norm(), "")
+        order = [page.index_of(n) for n in (box, name, count)]
+        self.assertEqual(order, sorted(order))
+        if depth is not None:
+            found = DEPTH.match(ps.squash(label.attrs.get("style", "")))
+            self.assertIsNotNone(
+                found, f"{value}: style {label.attrs.get('style')!r}")
+            self.assertEqual(int(found.group(1)), depth, value)
+
+    def check_compound_results(self, page: ps.Page, block: ps.Node,
+                               faceted: bool) -> None:
+        texts = CATALOGUE_TEXTS[self.LOCALE]
+        results = block.find("div", "catalogue-results")
+        toolbar = results.find("div", "catalogue-toolbar")
+        self.assertIsNotNone(toolbar, "no div.catalogue-toolbar")
+        self.assertIn("data-catalogue-controls", toolbar.attrs)
+        self.assertIn("hidden", toolbar.attrs)
+        toggle = toolbar.find("button", "facets-toggle")
+        if faceted:
+            self.assertIsNotNone(toggle, "no button.facets-toggle")
+            self.assertEqual(
+                {k: toggle.attrs.get(k) for k in
+                 ("type", "aria-controls", "aria-expanded")},
+                {"type": "button", "aria-controls": "catalogue-facets",
+                 "aria-expanded": "false"})
+            self.assertEqual(toggle.norm(), texts["filters"])
+        else:
+            self.assertIsNone(toggle, "a button.facets-toggle without facets")
+        active = toolbar.find("ul", "catalogue-active")
+        self.assertIsNotNone(active, "no ul.catalogue-active")
+        self.assertEqual((active.norm(), active.find_all("li")), ("", []))
+        clear = toolbar.find("button", "clear-all")
+        self.assertIsNotNone(clear, "no button.clear-all")
+        self.assertEqual((clear.attrs.get("type"), clear.norm()),
+                         ("button", texts["clear"]))
+        order = ([toggle] if faceted else []) + [active, clear]
+        positions = [page.index_of(n) for n in order]
+        self.assertEqual(positions, sorted(positions))
+        self.assertEqual(toolbar.find_all("select"), [])
+        self.assertEqual(block.find_all("select"), [], "a sort or view")
+        message = results.find("p", "catalogue-message")
+        self.assertIsNotNone(message, "no p.catalogue-message")
+        self.assertIn("data-catalogue-message", message.attrs)
+        self.assertEqual(message.attrs.get("role"), "status")
+        self.assertIn("hidden", message.attrs)
+        self.assertEqual(message.norm(), "")
+        table = results.find("table", "compound-table")
+        self.assertIsNotNone(table, "no table.compound-table in the results")
+        self.assertEqual(block.find_all("table"), [table])
+        positions = [page.index_of(n) for n in (toolbar, message, table)]
+        self.assertEqual(positions, sorted(positions))
+        self.assertEqual(len(set(positions)), 3)
+        self.assertEqual(block.find_all("form"), [],
+                         "a form inside div.catalogue")
+
+    def check_compound_header_search(self, page: ps.Page) -> None:
+        texts = CATALOGUE_TEXTS[self.LOCALE]
+        forms = page.find("header", "site-header").find_all("form")
+        self.assertEqual(len(forms), 1, "not one form in the site header")
+        form = forms[0]
+        self.assertTrue(form.has_class("site-search"))
+        self.assertIn("data-catalogue-search", form.attrs)
+        self.assertNotIn("hidden", form.attrs)
+        self.assertEqual(form.attrs.get("role"), "search")
+        self.assertEqual(form.attrs.get("method", "").lower(), "get")
+        self.assertEqual(page.resolve(form.attrs.get("action", "")),
+                         "/compounds/")
+        fields = form.find_all("input")
+        self.assertEqual(len(fields), 1)
+        self.assertEqual(
+            {k: fields[0].attrs.get(k) for k in
+             ("type", "name", "id", "aria-label", "placeholder")},
+            {"type": "search", "name": "q", "id": "catalogue-q",
+             "aria-label": texts["label"],
+             "placeholder": texts["placeholder"]})
+        buttons = form.find_all("button")
+        self.assertEqual(len(buttons), 1)
+        self.assertEqual((buttons[0].attrs.get("type"), buttons[0].norm()),
+                         ("submit", texts["button"]))
+        self.assertEqual(len(page.find_all("input", name="q")), 1)
+
+    def check_compound_rows(self, page: ps.Page) -> dict[str, ps.Node]:
+        """The rows' ``data-`` attributes against the registry and the
+        field data; returns the rows by compound key."""
+        registry = self.registry()
+        fields = self.fields()
+        facet_fields = [f for f in fields if f.facet]
+        rows = self.catalogue_rows(page)
+        self.assertEqual([r.attrs.get("data-id") for r in rows],
+                         sorted(registry, key=lambda k: self.shown(k)))
+        found = {}
+        for row in rows:
+            key = row.attrs["data-id"]
+            found[key] = row
+            compound = registry[key]
+            with self.subTest(compound=key):
+                self.assertEqual(row.attrs.get("data-title"),
+                                 self.shown(key))
+                self.assertEqual(row.attrs.get("data-text"),
+                                 fs.search_text(fields, compound))
+                for field in facet_fields:
+                    raw = row.attrs.get(f"data-{field.key}")
+                    self.assertIsNotNone(raw, f"no data-{field.key}")
+                    listed = json.loads(raw)
+                    wanted = fs.values_set(field, compound)
+                    self.assertEqual(len(listed), len(set(listed)), raw)
+                    self.assertEqual(sorted(listed), sorted(wanted), raw)
+        return found
 
 
 class CompoundSiteTests(CompoundCase):
@@ -342,7 +593,6 @@ class CompoundSiteTests(CompoundCase):
                          ["Compounds"])
         self.assertEqual(page.title(), "Compounds | OrgSynDB")
         self.assertEqual(main.find_all("form"), [])
-        self.assertEqual(main.find_all("input"), [])
         tables = main.find_all("table", "compound-table")
         self.assertEqual(len(tables), 1)
         model = next(m for m in page.tables() if m.node is tables[0])
@@ -403,6 +653,113 @@ class CompoundSiteTests(CompoundCase):
             [c.text for c in rows["Benzaldehyde"][4:6]],
             ["CH-0011", "Aldehydes"])
 
+    def test_the_compound_catalogue_in_the_html(self) -> None:
+        """Scenario: The compound catalogue in the HTML."""
+        page = self.catalogue_page()
+        block = self.check_compound_catalogue(page)
+        self.assertEqual(
+            block.find("p", "catalogue-count").norm(), "20 compounds")
+        self.assertEqual(len(self.registry()), 20)
+        facets = block.find("div", "catalogue-facets")
+        groups = facets.find_all("details", "facet")
+        self.assertEqual([(g.attrs.get("data-facet"),
+                           g.find("summary").norm()) for g in groups],
+                         [("chemical_class", "Chemical class"),
+                          ("in_house", "Made in house")])
+
+    def test_the_rows_carry_their_values(self) -> None:
+        """Scenario: The compound catalogue in the HTML (the rows)."""
+        page = self.catalogue_page()
+        rows = self.check_compound_rows(page)
+        self.assertEqual(len(rows), 20)
+        classes = json.loads(
+            rows["4-bromoacetophenone"].attrs["data-chemical_class"])
+        self.assertEqual(
+            sorted(classes),
+            sorted(["aryl-ketones", "ketones", "carbonyl-compounds",
+                    "aryl-halides"]))
+        self.assertEqual(len(classes), 4)
+
+    def test_the_facet_values_and_their_depths(self) -> None:
+        """Scenario: The compound catalogue in the HTML (the facet
+        values, labels, order and depths)."""
+        page = self.catalogue_page()
+        group = page.find("details", "facet", data_facet="chemical_class")
+        shown = [(box.attrs["value"], label.find("span", "facet-label")
+                  .norm(), DEPTH.match(ps.squash(label.attrs["style"]))
+                  .group(1))
+                 for label in group.find_all("label", "facet-value")
+                 for box in [label.find("input")]]
+        self.assertEqual(shown, [
+            ("carbonyl-compounds", "Carbonyl compounds", "0"),
+            ("aldehydes", "Aldehydes", "1"),
+            ("ketones", "Ketones", "1"),
+            ("aryl-ketones", "Aryl ketones", "2"),
+            ("carboxylic-acids", "Carboxylic acids", "1"),
+            ("acid-derivatives", "Carboxylic acid derivatives", "1"),
+            ("esters", "Esters", "2"),
+            ("anhydrides", "Anhydrides", "2"),
+            ("alcohols", "Alcohols", "0"),
+            ("phenols", "Phenols", "0"),
+            ("aryl-halides", "Aryl halides", "0"),
+            ("organoboron-compounds", "Organoboron compounds", "0"),
+            ("organophosphorus-compounds", "Organophosphorus compounds",
+             "0")])
+
+    def test_a_boolean_facet_lists_true_then_false(self) -> None:
+        """Requirement: Compound catalogue (facet values of a boolean
+        field)."""
+        page = self.catalogue_page()
+        self.assertEqual(ps.facet_values(page, "in_house"),
+                         [("true", "Yes"), ("false", "No")])
+        group = page.find("details", "facet", data_facet="in_house")
+        for label in group.find_all("label", "facet-value"):
+            self.assertEqual(label.find("input").attrs.get("type"),
+                             "checkbox")
+        rows = self.catalogue_rows(page)
+        registry = self.registry()
+        for row in rows:
+            compound = registry[row.attrs["data-id"]]
+            wanted = ([] if "in_house" not in compound
+                      else ["true" if compound["in_house"] else "false"])
+            self.assertEqual(json.loads(row.attrs["data-in_house"]), wanted)
+
+    def test_a_choice_value_is_listed_when_a_compound_sets_it_or_below(
+            self) -> None:
+        """Requirement: Compound catalogue (facet values of a choice
+        field)."""
+        page = self.catalogue_page()
+        listed = {value for value, _ in
+                  ps.facet_values(page, "chemical_class")}
+        field = next(f for f in self.fields() if f.key == "chemical_class")
+        sets = {v for c in self.registry().values()
+                for v in c.get("chemical_class", [])}
+        wanted = set(sets)
+        for value in sets:
+            wanted |= set(field.ancestors[value])
+        self.assertEqual(listed, wanted)
+        self.assertIn("carbonyl-compounds", listed)
+        self.assertNotIn("carbonyl-compounds", sets)
+
+    def test_the_search_texts(self) -> None:
+        """Scenario: The compound catalogue in the HTML (data-text)."""
+        rows = self.check_compound_rows(self.catalogue_page())
+        text = rows["acetylsalicylic-acid"].attrs["data-text"]
+        self.assertEqual(
+            text, "Acetylsalicylic acid Acetylsalicylsäure C9H8O4 50-78-2 "
+                  "CC(=O)Oc1ccccc1C(=O)O CH-0010 ASA")
+        text = rows["salicylic-acid"].attrs["data-text"]
+        self.assertEqual(
+            text, "Salicylic acid Salicylsäure C7H6O3 69-72-7 "
+                  "OC(=O)c1ccccc1O CH-0020")
+        for key, row in rows.items():
+            self.assertNotIn("  ", row.attrs["data-text"], key)
+
+    def test_the_header_search_searches_compounds(self) -> None:
+        """Scenario: The compound catalogue in the HTML (the header's
+        form)."""
+        self.check_compound_header_search(self.catalogue_page())
+
 
 class GermanCompoundTests(CompoundCase):
     """The test collection, built in German."""
@@ -433,6 +790,59 @@ class GermanCompoundTests(CompoundCase):
                     if p.label == "Produkt")
         self.assertEqual([l.norm() for l in pair.definition.find_all("a")],
                          ["Salicylsäure"])
+
+
+    def test_the_german_compound_catalogue(self) -> None:
+        """Scenario: German page shell (the compound catalogue)."""
+        page = self.catalogue_page()
+        block = self.check_compound_catalogue(page)
+        self.assertEqual(
+            block.find("p", "catalogue-count").norm(), "20 Verbindungen")
+        self.assertEqual(page.find("main").find("h1").norm(), "Verbindungen")
+        groups = block.find_all("details", "facet")
+        self.assertEqual([(g.attrs.get("data-facet"),
+                           g.find("summary").norm()) for g in groups],
+                         [("chemical_class", "Stoffklasse"),
+                          ("in_house", "Eigene Herstellung")])
+        self.assertEqual(ps.facet_values(page, "in_house"),
+                         [("true", "Ja"), ("false", "Nein")])
+        classes = dict(ps.facet_values(page, "chemical_class"))
+        self.assertEqual(classes["ketones"], "Ketone")
+        self.assertEqual(classes["carbonyl-compounds"],
+                         "Carbonylverbindungen")
+        self.assertEqual(classes["acid-derivatives"],
+                         "Carbonsäurederivate")
+        self.assertEqual(block.find("button", "clear-all").norm(),
+                         "Alles zurücksetzen")
+        self.assertEqual(block.find("button", "facets-toggle").norm(),
+                         "Filter")
+        self.assertEqual(block.find("div", "catalogue-facets").find("h2")
+                         .norm(), "Filter")
+
+    def test_the_german_rows(self) -> None:
+        """Scenario: The compound catalogue in the HTML (a German
+        site's rows)."""
+        rows = self.check_compound_rows(self.catalogue_page())
+        self.assertEqual(rows["salicylic-acid"].attrs["data-title"],
+                         "Salicylsäure")
+        self.assertEqual(
+            rows["salicylic-acid"].attrs["data-text"],
+            "Salicylic acid Salicylsäure C7H6O3 69-72-7 OC(=O)c1ccccc1O "
+            "CH-0020")
+
+    def test_the_german_header_search(self) -> None:
+        """Scenario: German page shell (the header search on
+        /compounds/)."""
+        page = self.catalogue_page()
+        form = page.find("header", "site-header").find("form")
+        field = form.find("input", name="q")
+        self.assertEqual(
+            (field.get("aria-label"), field.get("placeholder"),
+             form.find("button").norm()),
+            ("Verbindungen durchsuchen",
+             "Name, Summenformel, CAS oder SMILES", "Suchen"))
+        self.assertEqual(page.resolve(form.attrs.get("action", "")),
+                         "/compounds/")
 
     def test_german_labels_on_compound_pages(self) -> None:
         """Scenario: German page shell (compound pages)."""
@@ -588,6 +998,64 @@ class NumberAndBooleanColumnTests(CompoundCase):
             with self.subTest(compound=row[0].text):
                 self.assertEqual([c.text for c in row[4:8]],
                                  [texts.get(f.key, "") for f in columns])
+
+
+class AncestorBesideValueTests(CompoundCase):
+    """The test collection in English, with acetone setting
+    `carbonyl-compounds` beside `ketones`."""
+
+    @classmethod
+    def prepare(cls) -> None:
+        path = cls.sandbox.root / "compounds" / "acetone.toml"
+        text = path.read_text(encoding="utf-8")
+        old = 'chemical_class = ["ketones"]'
+        assert text.count(old) == 1
+        path.write_text(text.replace(
+            old, 'chemical_class = ["carbonyl-compounds", "ketones"]'),
+            encoding="utf-8")
+
+    def test_a_value_set_beside_its_ancestor(self) -> None:
+        """Scenario: A value set beside its ancestor."""
+        rows = self.check_compound_rows(self.catalogue_page())
+        listed = json.loads(rows["acetone"].attrs["data-chemical_class"])
+        self.assertEqual(sorted(listed), ["carbonyl-compounds", "ketones"])
+        self.assertEqual(len(listed), 2)
+
+
+class NoFacetFieldTests(CompoundCase):
+    """The test collection in English, without a `facet = true` line in
+    its `orgsyndb.toml`."""
+
+    @classmethod
+    def prepare(cls) -> None:
+        path = cls.sandbox.root / "orgsyndb.toml"
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+        kept = [ln for ln in lines if ln.strip() != "facet = true"]
+        assert len(kept) == len(lines) - 2, "not two facet lines"
+        path.write_text("".join(kept), encoding="utf-8")
+
+    def test_the_catalogue_has_no_facets(self) -> None:
+        """Scenario: A collection without facet fields."""
+        page = self.catalogue_page()
+        block = self.check_compound_catalogue(page)
+        self.assertEqual(page.find_all("div", "catalogue-facets"), [])
+        self.assertEqual(page.find_all("button", "facets-toggle"), [])
+        self.assertEqual(page.find_all("details", "facet"), [])
+        self.assertEqual(
+            block.find("p", "catalogue-count").norm(), "20 compounds")
+        for tag, name in (("ul", "catalogue-active"),
+                          ("button", "clear-all"),
+                          ("p", "catalogue-message"),
+                          ("table", "compound-table")):
+            with self.subTest(element=f"{tag}.{name}"):
+                self.assertIsNotNone(block.find(tag, name))
+        self.check_compound_header_search(page)
+
+    def test_the_rows_keep_their_text(self) -> None:
+        """Scenario: A collection without facet fields (the rows)."""
+        rows = self.check_compound_rows(self.catalogue_page())
+        self.assertEqual(len(rows), 20)
+        self.assertEqual(rows["acetone"].attrs["data-title"], "Acetone")
 
 
 class MarkupFieldTests(CompoundCase):

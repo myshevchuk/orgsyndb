@@ -812,27 +812,39 @@ def fields_data(settings: Path, language: str) -> dict[str, Any]:
 
     The result is a table whose one key, ``compound``, lists a table per
     declared compound field, in declared order: its ``key``, ``type``
-    and ``column``; its ``label`` as LANGUAGE shows it; the ``unit`` of
-    a number field that declares one; and for a choice field
-    ``multiple`` and ``values``, which maps every value of the field's
-    vocabulary to its shown ``label`` and its ``path``, the shown labels
-    of its ancestors, outermost first, then its own. A German label
-    replaces the English one on a German site where one is given. A
-    SETTINGS that does not exist gives ``{"compound": []}``. Raises
-    ``validate.ConfigError`` when the declarations or their
-    vocabularies break a rule of ``validate.load_fields``.
+    and ``column``; its ``label`` as LANGUAGE shows it; ``facet`` for a
+    boolean or choice field and ``search`` for a text field; the
+    ``unit`` of a number field that declares one; and for a choice field
+    ``multiple``, ``values`` and ``order``. ``values`` maps every value
+    of the field's vocabulary to its shown ``label``, its ``path``, the
+    shown labels of its ancestors, outermost first, then its own, and
+    its ``ancestors``, the keys of its ancestors, outermost first.
+    ``order`` lists every value's key depth first: each top-level value
+    in file order, followed by the values filed under it in the same
+    order, recursively. A German label replaces the English one on a
+    German site where one is given. A SETTINGS that does not exist gives
+    ``{"compound": []}``. Raises ``validate.ConfigError`` when the
+    declarations or their vocabularies break a rule of
+    ``validate.load_fields``.
     """
     def shown(label: str, label_de: str | None) -> str:
         return label_de if language == "de" and label_de else label
 
-    def path(terms: dict[str, validate.Term], value: str) -> list[str]:
-        labels = []
-        current: str | None = value
+    def ancestors(terms: dict[str, validate.Term], value: str) -> list[str]:
+        keys = []
+        current = terms[value].parent
         while current is not None:
-            labels.insert(0, shown(terms[current].label,
-                                   terms[current].label_de))
+            keys.insert(0, current)
             current = terms[current].parent
-        return labels
+        return keys
+
+    def below(terms: dict[str, validate.Term],
+              parent: str | None) -> list[str]:
+        order = []
+        for value, term in terms.items():
+            if term.parent == parent:
+                order += [value, *below(terms, value)]
+        return order
 
     compound = []
     for field in validate.load_fields(Path(settings), must_exist=False):
@@ -840,14 +852,24 @@ def fields_data(settings: Path, language: str) -> dict[str, Any]:
             "key": field.key, "type": field.type,
             "label": shown(field.label, field.label_de),
             "column": field.column}
+        if field.type in ("boolean", "choice"):
+            entry["facet"] = field.facet
+        if field.type == "text":
+            entry["search"] = field.search
         if field.unit is not None:
             entry["unit"] = field.unit
         if field.type == "choice":
             entry["multiple"] = field.multiple
-            entry["values"] = {
-                value: {"label": shown(term.label, term.label_de),
-                        "path": path(field.terms, value)}
-                for value, term in field.terms.items()}
+            labels = {value: shown(term.label, term.label_de)
+                      for value, term in field.terms.items()}
+            entry["values"] = {}
+            for value in field.terms:
+                keys = ancestors(field.terms, value)
+                entry["values"][value] = {
+                    "label": labels[value],
+                    "path": [labels[key] for key in [*keys, value]],
+                    "ancestors": keys}
+            entry["order"] = below(field.terms, None)
         compound.append(entry)
     return {"compound": compound}
 

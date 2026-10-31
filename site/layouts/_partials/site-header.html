@@ -1,9 +1,11 @@
 {{- /* The site header: the site title, the navigation and the search form,
-which submits q to /procedures/. On the catalogue, the term pages and
-/general-procedures/ the form is the catalogue's: catalogue.js drives its
-field, #catalogue-q, the page itself is its action, and on a term page and
-on /general-procedures/ its label names the scope while its placeholder,
-short enough to show whole, says it is scoped. The link of the page
+which submits q to /procedures/. On the catalogue, the term pages,
+/general-procedures/ and the compound catalogue /compounds/ the form is
+the catalogue's: catalogue.js drives its field, #catalogue-q, the page
+itself is its action, on a term page and on /general-procedures/ its
+label names the scope while its placeholder, short enough to show whole,
+says it is scoped, and on /compounds/ its label and placeholder name
+compounds and what their search matches. The link of the page
 itself carries aria-current="page"; the link of the section a page lies
 in carries aria-current="true". /general-procedures/, the three taxonomy
 directories and their term pages lie in /procedures/, as their facets
@@ -13,7 +15,8 @@ do, every compound page lies in /compounds/ and every sequence page in
 {{ $within := $here -}}
 {{ $general := and (eq .Kind "section") (eq .Section "general-procedures") -}}
 {{ if or $general (hasPrefix $here "/reaction_types/") (hasPrefix $here "/tags/") (hasPrefix $here "/authors/") }}{{ $within = "/procedures/" }}{{ end -}}
-{{ $catalogue := or (eq .Kind "term") $general (and (eq .Kind "section") (eq .Section "procedures")) -}}
+{{ $compounds := and (eq .Kind "section") (eq .Section "compounds") -}}
+{{ $catalogue := or (eq .Kind "term") $general $compounds (and (eq .Kind "section") (eq .Section "procedures")) -}}
 {{ $action := cond $catalogue .RelPermalink "/procedures/" -}}
 {{ $label := T "search_label" -}}
 {{ $hint := T "search_placeholder" -}}
@@ -24,6 +27,9 @@ do, every compound page lies in /compounds/ and every sequence page in
 {{ else if $general -}}
 {{ $label = T "search_scope_kind" -}}
 {{ $hint = T "search_scope_placeholder" -}}
+{{ else if $compounds -}}
+{{ $label = T "search_compounds" -}}
+{{ $hint = T "search_compounds_placeholder" -}}
 {{ end -}}
 <header class="site-header">
 <a class="site-title" href="/">{{ site.Title }}</a>

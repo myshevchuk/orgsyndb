@@ -242,12 +242,15 @@ h1 { font-size: 2.25rem; }
   align-items: start;
 }
 .catalogue-facets, .catalogue-results { min-width: 0; }
-.catalogue-facets[hidden] + .catalogue-results { grid-column: 1 / -1; }
+.catalogue-facets[hidden] + .catalogue-results,
+.catalogue-results:first-child { grid-column: 1 / -1; }
 .catalogue-facets h2 { font-size: 1rem; margin: 0 0 var(--space-2); }
 .facet { border-top: 1px solid var(--border); padding: var(--space-2) 0; font-size: 0.875rem; }
 .facet summary { cursor: pointer; font-weight: 600; padding: 0.2rem 0; }
 .facet-values { margin: var(--space-1) 0 var(--space-2); }
 .facet-value { cursor: pointer; padding: 0.1rem 0; }
+/* A value of a vocabulary sits one step in for each of its ancestors. */
+label.facet-value { margin-inline-start: calc(var(--depth, 0) * 1.25rem); }
 .facet-value input { margin: 0; }
 .facet-value input:disabled { cursor: default; }
 .facet-directory { margin: 0; font-size: 0.8125rem; }
@@ -326,9 +329,12 @@ h1 { font-size: 2.25rem; }
 .procedure-list td:nth-child(2) a, :is(.compound-table, .sequence-table) td:first-child a { text-decoration: none; }
 .procedure-list td:nth-child(2) a:hover, :is(.compound-table, .sequence-table) td:first-child a:hover { text-decoration: underline; }
 .sequence-table td:first-child { overflow-wrap: anywhere; }
-.compound-table td:first-child { overflow-wrap: anywhere; }
-/* Formula, weight, CAS and the numbers stay on one line; the columns of
-   declared fields may wrap. */
+/* Beside the facets the table is narrow: long words break between
+   syllables, the header cells may wrap, and formula, weight, CAS and the
+   numbers stay on one line. */
+.compound-table :is(th, td) { hyphens: auto; hyphenate-limit-chars: 12 5 5; }
+.compound-table td:first-child { overflow-wrap: break-word; }
+.compound-table th, .compound-table th.num { white-space: normal; }
 .compound-table td:is(:nth-child(2), :nth-child(3), :nth-child(4), .num) {
   white-space: nowrap;
 }

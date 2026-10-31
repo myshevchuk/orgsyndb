@@ -129,6 +129,31 @@ class NarrowWindowTests(unittest.TestCase):
                     "block")
 
 
+class FacetIndentTests(unittest.TestCase):
+    def test_a_choice_value_is_indented_by_its_depth(self) -> None:
+        """Requirement: Compound catalogue (the screen stylesheet
+        indents a facet value by --depth)."""
+        indents = ("margin-left", "margin-inline-start", "padding-left",
+                   "padding-inline-start", "text-indent")
+        found = [decl for decl in css("screen.css")
+                 if decl.prop in indents and "var(--depth" in decl.value
+                 and any(".facet-value" in selector
+                         for selector in ps.selectors_of(decl))]
+        self.assertTrue(
+            found, "screen.css indents no .facet-value by var(--depth)")
+
+    def test_results_without_facets_span_the_grid(self) -> None:
+        """Requirement: Compound catalogue (without facet fields the
+        results take the whole catalogue layout)."""
+        found = [decl for decl in css("screen.css")
+                 if decl.prop == "grid-column"
+                 and decl.value.replace(" ", "") == "1/-1"
+                 and any(".catalogue-results:first-child" in selector
+                         for selector in ps.selectors_of(decl))]
+        self.assertTrue(found, "screen.css leaves results without facets "
+                        "in the facet column")
+
+
 class RowDetailsTests(unittest.TestCase):
     def test_details_show_only_in_the_details_view(self) -> None:
         """Requirement: Details view (screen stylesheet)."""

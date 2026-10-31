@@ -278,13 +278,14 @@ required = true
 unique = true
 pattern = 'CH-\d{4}'
 column = true
+search = true
 ```
 
 ### Schlüssel einer Deklaration
 
 | Schlüssel | TOML-Typ | Pflicht oder Vorgabe | Regel |
 |---|---|---|---|
-| `key` | String | Pflicht | Entspricht `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`: Kleinbuchstaben und Ziffern, Wörter durch einzelne Unterstriche verbunden, beginnend mit einem Buchstaben. Darf nur einmal deklariert sein, nicht auf `_de` enden und kein eingebauter Schlüssel sein: `name`, `name_de`, `formula`, `mw`, `smiles`, `cas` oder `structure_image`. |
+| `key` | String | Pflicht | Entspricht `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`: Kleinbuchstaben und Ziffern, Wörter durch einzelne Unterstriche verbunden, beginnend mit einem Buchstaben. Darf nur einmal deklariert sein, nicht auf `_de` enden und kein eingebauter Schlüssel sein: `name`, `name_de`, `formula`, `mw`, `smiles`, `cas` oder `structure_image`. Der Katalog reserviert außerdem `id`, `title`, `created`, `modified`, `text`, `q`, `sort` und `view` für seine Zeilen und die Adresse. |
 | `type` | String | Pflicht | `text`, `number`, `boolean` oder `choice`. |
 | `label` | Nicht leerer String | Pflicht | Der Feldname auf einer englischen Website. |
 | `label_de` | Nicht leerer String | Optional | Der Feldname auf einer deutschen Website; fehlt er, verwendet sie `label`. |
@@ -292,22 +293,24 @@ column = true
 | `column` | Wahrheitswert | `false` | Bei `true` zeigt das Verbindungsverzeichnis das Feld als Spalte. |
 
 Nur die folgenden zusätzlichen Schlüssel sind je nach Typ erlaubt. Eine
-Deklaration mit `boolean` nimmt keinen davon an.
+Option bei einem anderen Typ ist ein Konfigurationsfehler.
 
 | Schlüssel | Feldtyp | TOML-Typ | Pflicht oder Vorgabe | Regel |
 |---|---|---|---|---|
 | `pattern` | `text` | String | Optional | Ein gültiger regulärer Ausdruck in Python, dem der ganze Wert entsprechen muss. |
+| `search` | `text` | Wahrheitswert | `false` | Bei `true` berücksichtigt die Suche im Verbindungskatalog die Werte des Felds. |
 | `unique` | `text`, `number` | Wahrheitswert | `false` | Zwei Verbindungen dürfen nicht denselben gültigen Wert setzen. |
 | `min` | `number` | Ganz- oder Gleitkommazahl | Optional | Endliche untere Grenze, einschließlich; darf `max` nicht überschreiten, wenn beide gesetzt sind. Ein Wahrheitswert ist keine Zahl. |
 | `max` | `number` | Ganz- oder Gleitkommazahl | Optional | Endliche obere Grenze, einschließlich. Ein Wahrheitswert ist keine Zahl. |
 | `unit` | `number` | Nicht leerer String | Optional | Steht nach der Zahl, durch ein Leerzeichen getrennt. |
 | `vocabulary` | `choice` | String | Pflicht | Benennt `vocabularies/<name>.toml` neben `orgsyndb.toml`, ohne Verzeichnis und Endung. Der Name entspricht `[a-z0-9]+(-[a-z0-9]+)*`. |
 | `multiple` | `choice` | Wahrheitswert | `false` | Bei `true` setzt die Verbindung eine nicht leere Liste verschiedener Werte statt eines einzelnen Strings. |
+| `facet` | `boolean`, `choice` | Wahrheitswert | `false` | Bei `true` bietet der Verbindungskatalog das Feld als Filter an. |
 
-Die Beispielsammlung deklariert außerdem `short_name` als Text,
-`chemical_class` als Pflichtauswahl mit `multiple = true` und
-`column = true`, `stock` als Zahl mit `min = 0` und `unit = "g"` sowie
-`in_house` als Wahrheitswert.
+Die Beispielsammlung deklariert außerdem `short_name` als Text mit
+`search = true`, `chemical_class` als Pflichtauswahl mit `multiple = true`,
+`column = true` und `facet = true`, `stock` als Zahl mit `min = 0` und
+`unit = "g"` sowie `in_house` als Wahrheitswert mit `facet = true`.
 
 ### Vokabulare
 
@@ -437,6 +440,42 @@ Das Verbindungsverzeichnis ergänzt Felder mit `column = true` nach CAS,
 in Deklarationsreihenfolge. Es zeigt nur den eigenen Namen jedes
 Auswahlwerts, lässt ungesetzte Werte als leere Zellen und richtet
 Zahlenspalten rechtsbündig aus.
+
+Unter `/compounds/` ist das Verzeichnis ein durchsuchbarer, filterbarer
+Katalog aller Registereinträge. Die Zeilen bleiben nach dem angezeigten
+Namen in der Sprache der Website geordnet. Felder mit `facet = true`
+erscheinen als Filter in Deklarationsreihenfolge. Ein Auswahlfilter zeigt
+die von Verbindungen verwendeten Werte und deren übergeordnete Werte als
+eingerückten Baum. Er folgt der Reihenfolge in der Vokabulardatei; alle
+untergeordneten Werte stehen unmittelbar nach dem zugehörigen übergeordneten
+Wert. Wählen Sie einen übergeordneten Wert, erfasst der Filter auch
+Verbindungen unter dessen untergeordneten Werten: **Carbonylverbindungen**
+schließt Ketone und Ester ein. Filter für Wahrheitswerte bieten **Ja** und
+**Nein** (auf Englisch **Yes** und **No**) jeweils nur an, wenn eine
+Verbindung den Wert setzt.
+
+Ausgewählte Werte innerhalb eines Filters sind mit ODER verknüpft,
+verschiedene Filter mit UND. Die Anzahl neben einem Wert berücksichtigt
+die Suche und alle anderen Filter, jedoch nicht die Auswahl im eigenen
+Filter. Ausgewählte Werte erscheinen als einzeln entfernbare Schaltflächen;
+**Alles zurücksetzen** löscht Suchtext und Auswahl. Der Katalog zeigt die
+Gesamtzahl oder beim Filtern **{shown} von {total} Verbindungen**. Ohne
+Felder mit `facet = true` entfällt die Filterspalte; Anzahl und Suche bleiben.
+
+Das Suchfeld **Verbindungen durchsuchen** im Kopf berücksichtigt englische
+und deutsche Namen, Summenformel, CAS-Nummer, SMILES und Werte von Textfeldern
+mit `search = true`. Jedes Suchwort muss als Teil einer Zeichenfolge
+vorkommen. Dabei zählen weder Groß- und Kleinschreibung noch Zeichen außer
+Buchstaben und Ziffern. Suchangaben wie `50-78-2`, `salicyl` und `c1ccccc1O`
+funktionieren ohne Pagefind-Index. Auf anderen Seiten, auch auf
+Verbindungsseiten, durchsucht das Feld Vorschriften; Verbindungsseiten
+bleiben außerhalb des Suchindex für Vorschriften.
+
+Die Adresse hält Suchtext und Auswahl fest, etwa
+`/compounds/?q=ester&chemical_class=esters&in_house=true`. Parameter, die die
+Seite nicht anwenden kann, nennt sie in einem Hinweis und entfernt sie aus
+der Adresse. Suche und Filter brauchen JavaScript. Ohne JavaScript zeigt
+die Seite die vollständige Tabelle und einen entsprechenden Hinweis.
 
 ## Synthesewege
 

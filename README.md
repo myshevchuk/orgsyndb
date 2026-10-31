@@ -58,7 +58,9 @@ sequences, each with a German translation:
 The demo also declares five compound fields: `item_number`, `short_name`,
 `chemical_class`, `stock` and `in_house`. Its chemical-class vocabulary has
 13 values on three levels. Every compound sets an item number and at least
-one chemical class; the compound directory shows both as columns.
+one chemical class; the compound directory shows both as columns. You can
+filter it by chemical class and whether a compound is made in house, and
+search by item number or short name as well as the compound's chemical data.
 
 You can explore the same collection on the [live demo site](https://myshevchuk.github.io/orgsyndb/).
 
@@ -251,6 +253,16 @@ English `label`; `label_de` supplies the German label. The types are `text`,
 must supply the field, and `column = true` to show it in the compound
 directory. Both default to `false`.
 
+Use `facet = true` on a `boolean` or `choice` field to offer it as a filter
+in the compound directory. Use `search = true` on a `text` field to include
+its values in that directory's search. Both options default to `false`;
+using either on another field type is a configuration error.
+
+Field keys must not be built-in compound keys (`name`, `name_de`, `formula`,
+`mw`, `smiles`, `cas`, `structure_image`) or end in `_de`. The catalogue also
+reserves `id`, `title`, `created`, `modified`, `text`, `q`, `sort` and `view`
+for its rows and address; do not use these as field keys.
+
 For example, these two declarations come from the
 [demo settings](examples/demo/orgsyndb.toml):
 
@@ -264,6 +276,7 @@ required = true
 unique = true
 pattern = 'CH-\d{4}'
 column = true
+search = true
 
 [[fields.compound]]
 key = "chemical_class"
@@ -274,6 +287,7 @@ vocabulary = "chemical-classes"
 required = true
 multiple = true
 column = true
+facet = true
 ```
 
 The item number must match the whole pattern and be unique across the
@@ -428,9 +442,10 @@ German equivalents, such as **Kopieren** for **Copy**.
 
 The navigation links **Procedures**, **Compounds**, **Sequences** and **Help**
 (**Vorschriften**, **Verbindungen**, **Synthesewege** and **Hilfe** on a German
-site). Every page has a search field in the same place in the header. Except on term pages and
-`/general-procedures/`, its placeholder is **Product, CAS, SMILES or keyword**
-and its accessible name is **Search procedures**.
+site). Every page has a search field in the same place in the header. Except
+on term pages, `/general-procedures/` and `/compounds/`, its placeholder is
+**Product, CAS, SMILES or keyword** and its accessible name is **Search
+procedures**.
 
 - `/` opens with **Synthetic procedures** and a short introduction.
   **Recently updated** lists up to five procedures, most recently modified
@@ -504,12 +519,40 @@ and its accessible name is **Search procedures**.
   the tabs, the home page's **Browse** links or the catalogue filters. On a
   term page, use its directory's tab to return to the directory. Procedure
   metadata links to the term pages.
-- `/compounds/` lists every registry entry, including compounds no procedure
-  names, ordered by its name in the site's language. The table shows the linked
-  name, formula, molecular weight, CAS when supplied, and counts of published
-  procedures that make it and that use it as a starting material. Each general
-  procedure counts once, considering all its entries. The directory works
-  without JavaScript.
+- `/compounds/` is a searchable, filterable catalogue of every registry entry,
+  including compounds no procedure names, ordered by its name in the site's
+  language. The table shows the linked name, formula, molecular weight, CAS
+  when supplied, and counts of published procedures that make it and that use
+  it as a starting material. Each general procedure counts once, considering
+  all its entries.
+
+  **Filters** offers one filter per field declared with `facet = true`, in
+  declaration order. A choice filter shows values used by compounds and their
+  ancestors as an indented tree. It follows vocabulary-file order, with each
+  parent's descendants immediately after it. Selecting **Carbonyl compounds**
+  also selects compounds filed under ketones and esters. A boolean filter
+  offers **Yes** and **No**, each only when some compound sets it. Selections
+  within one filter combine with OR; different filters combine with AND.
+  Each value's count includes the search and every other filter, excluding
+  its own filter's selections. Selected values appear as small buttons
+  (chips) that remove a selection. **Clear all** clears the query and
+  selections. The count shows the total, or **{shown} of {total} compounds**
+  while filtering. Without facet fields, there is no filter column; the count
+  and search remain.
+
+  The header search is labelled **Search compounds**, with the placeholder
+  **Name, formula, CAS or SMILES**. It matches English and German names,
+  formula, CAS number, SMILES and values of text fields declared with
+  `search = true`. Each query word must match a substring; matching ignores
+  case and characters other than letters and digits. For example, `50-78-2`,
+  `salicyl` and `c1ccccc1O` work. This search runs in the page without the
+  Pagefind index. Rows keep their name order while searching or filtering.
+
+  The address preserves the query and filters, for example
+  `/compounds/?q=ester&chemical_class=esters&in_house=true`. Parameters the
+  page cannot apply are named in a notice and removed from the address.
+  Search and filters need JavaScript; without it, the complete table remains
+  visible with a note explaining this.
 - `/compounds/<key>/` shows the compound's name, structure image when supplied,
   formula, molecular weight, CAS when supplied and SMILES with **Copy**. **Made
   by** lists procedures with their yields and status; **Used in** lists
@@ -547,9 +590,11 @@ and its accessible name is **Search procedures**.
 To find a procedure, type in the header search field. On `/procedures/`,
 `/general-procedures/` and term pages, this is the catalogue's only search
 field. Results update as you type; **Search** applies the query immediately. On
-other pages, submit the field to search in `/procedures/`. On a term page, the
-field searches only that term's procedures. Its placeholder is **Search these
-procedures**; its accessible name identifies the term, for example **Search
+`/compounds/`, the field searches compounds as described in its entry above.
+On other pages, including individual compound pages, submit the field to
+search in `/procedures/`. On a term page, the field searches only that term's
+procedures. Its placeholder is **Search these procedures**; its accessible
+name identifies the term, for example **Search
 procedures with the tag cinnamate**. On `/general-procedures/`, the placeholder
 is **Search these procedures** and the accessible name **Search general
 procedures**. Full-text search uses the Pagefind index and finds procedures by
@@ -801,7 +846,7 @@ These directories are generated and must not be committed. The collection's
 
 | Directory | Where | Contents |
 |---|---|---|
-| `build/` | collection | Org exports, selected procedure and sequence variants under `content/`, field declarations and vocabulary labels and paths in `data/fields.json`, the generated Hugo configuration overlay, Hugo's resource cache, temporary export data, and `export.log`. |
+| `build/` | collection | Org exports, selected procedure and sequence variants under `content/`, field declarations with facet and search settings and vocabulary labels, paths, ancestors and tree order in `data/fields.json`, the generated Hugo configuration overlay, Hugo's resource cache, temporary export data, and `export.log`. |
 | `public/` | collection | The complete static website and Pagefind index. |
 | `pdf/` | collection | One generated PDF per procedure. |
 | `.emacs-batch/` | application | The application's own ox-hugo and tomelr installations. |
@@ -814,7 +859,10 @@ from `build/content/sequences/` as sequence pages, and sets the output
 directories.
 
 Before Hugo runs, the build writes `build/data/fields.json` with labels in
-the site's language. The overlay mounts `build/data/` as collection data,
+the site's language. It includes `facet` for boolean and choice fields,
+`search` for text fields, and each choice value's `ancestors` (the keys of
+its ancestors) and the vocabulary's `order`, with each parent followed by
+its descendants in file order. The overlay mounts `build/data/` as collection data,
 available to the theme as `site.Data.collection.fields`.
 
 It runs Hugo without a build lock, so nothing is written under the
