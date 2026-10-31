@@ -20,3 +20,24 @@ leaves this file then.
   several pages.
 - **Synthesis sequences written in Org.** Sequences are Markdown only;
   an Org source would need the export to handle `org/sequences/`.
+- **Faceted compound directory.** The choice fields a collection
+  declares for its compounds become filters on `/compounds/`, through
+  a catalogue core whose facets come from the page rather than a fixed
+  list, which the procedure catalogue then shares. Selecting a value of
+  a hierarchical vocabulary also selects the compounds filed under its
+  descendants. The header search on `/compounds/` matches names,
+  formulas, CAS numbers, SMILES and the text fields declared
+  searchable.
+- **Compound tabs.** One declared choice field divides the compound
+  directory into tabs: a static page per top-level value of its
+  vocabulary, with that value fixed as a term page fixes its term, and
+  the lower levels of the hierarchy left as filters within a tab.
+- **Procedure fields.** A collection declares custom front-matter
+  fields for its procedures, beside those for compounds, with the same
+  types and checks; the metadata panel shows them.
+- **Reaction types as a collection vocabulary.** The reaction types
+  move from the application's `site/data/reaction_types.toml` into the
+  collection's vocabularies, so each collection names its own.
+- **Compound fields beyond compound views.** A declared compound field
+  can be shown where a procedure names the compound, such as an item
+  number or a short name beside a product or starting material.
