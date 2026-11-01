@@ -61,7 +61,9 @@ vocabulary has 13 values on three levels. Every compound sets an item number
 and at least one chemical class; the compound directory shows both as
 columns. You can filter it by chemical class, group and whether a compound
 is made in house, and search by item number or short name as well as the
-compound's chemical data.
+compound's chemical data. The demo sets `beside = true` on `item_number`
+and `short_name`, so compound links read, for example,
+**Acetic anhydride (CH-0007, Ac2O)**.
 Every compound also sets `group` from the `inventory-groups` vocabulary.
 This field divides the directory into **Purchased** and **Synthesised**
 tab pages, each listing ten compounds.
@@ -276,6 +278,15 @@ in the compound directory. Use `search = true` on a `text` field to include
 its values in that directory's search. Both options default to `false`;
 using either on another field type is a configuration error.
 
+Use `beside = true` on a `text` or `number` field to show its set values
+after compound links in the metadata panel, general-procedure scope tables,
+sequence schemes and sequence-directory targets. Values follow one space
+in muted parentheses, in declaration order, separated by `, `; numbers use
+the site's decimal separator and unit. The link text stays the compound's
+name; a compound with no such values gets no note. The option defaults to
+`false` and requires an unquoted boolean. A `boolean` or `choice` field,
+or any procedure field, rejects it.
+
 To divide the directory into tab pages, set `tabs = true` on one `choice`
 field. It uses the vocabulary's top-level values, whether or not the field
 also has `facet = true`. The option defaults to `false`; using it on another
@@ -303,6 +314,7 @@ unique = true
 pattern = 'CH-\d{4}'
 column = true
 search = true
+beside = true
 
 [[fields.compound]]
 key = "chemical_class"

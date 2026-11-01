@@ -20,6 +20,3 @@ leaves this file then.
   several pages.
 - **Synthesis sequences written in Org.** Sequences are Markdown only;
   an Org source would need the export to handle `org/sequences/`.
-- **Compound fields beyond compound views.** A declared compound field
-  can be shown where a procedure names the compound, such as an item
-  number or a short name beside a product or starting material.

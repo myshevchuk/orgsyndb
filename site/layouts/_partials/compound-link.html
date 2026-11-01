@@ -1,4 +1,19 @@
 {{- /* A compound key as an a.compound linking the compound's page,
-/compounds/<key>/, with its shown name (compound-name.html) as text. */ -}}
+/compounds/<key>/, with its shown name (compound-name.html) as text.
+When the registry entry sets fields of site.Data.collection.fields.compound
+declared beside, one space and a span.compound-beside follow the link,
+holding "(", those values in declared order as field-value.html writes
+them on a compound page, joined by ", ", and ")". */ -}}
 <a class="compound" href="/compounds/{{ . }}/">{{ partial "compound-name.html" . }}</a>
-{{- /* The link ends the output: no newline follows it. */ -}}
+{{- with index site.Data.compounds . -}}
+{{- $compound := . -}}
+{{- $values := slice -}}
+{{- range site.Data.collection.fields.compound -}}
+{{- if and .beside (isset $compound .key) -}}
+{{- $values = $values | append (partial "field-value.html" (dict "field" . "value" (index $compound .key) "page" true)) -}}
+{{- end -}}
+{{- end -}}
+{{- with $values }} <span class="compound-beside">({{ string (delimit . ", ") }})</span>{{ end -}}
+{{- end -}}
+{{- /* The link, or the note after it, ends the output: no newline
+follows it. */ -}}

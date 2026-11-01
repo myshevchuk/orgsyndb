@@ -461,8 +461,9 @@ def agreement_differences(org: Path, markdown: Path) -> list[str]:
 DEMO_DECLARATIONS = [
     {"key": "item_number", "type": "text", "required": True,
      "unique": True, "pattern": r"CH-\d{4}", "column": True,
-     "search": True},
-    {"key": "short_name", "type": "text", "search": True},
+     "search": True, "beside": True},
+    {"key": "short_name", "type": "text", "search": True,
+     "beside": True},
     {"key": "chemical_class", "type": "choice", "required": True,
      "multiple": True, "column": True, "facet": True,
      "vocabulary": "chemical-classes"},

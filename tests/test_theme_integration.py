@@ -456,7 +456,8 @@ class ShippedSiteTests(SiteCase):
                          ["Acetylsalicylic acid"])
         self.assertEqual(page.resolve(product[0].attrs["href"]),
                          "/compounds/acetylsalicylic-acid/")
-        self.assertEqual(text["Product"], "Acetylsalicylic acid")
+        self.assertEqual(text["Product"],
+                         self.linked("acetylsalicylic-acid"))
         self.assertEqual(text["Formula"], "C9H8O4")
         self.assertEqual(len(panel["Formula"].definition.find_all("sub")), 3)
         self.assertEqual(text["MW"], "180.16 g/mol")
@@ -479,8 +480,10 @@ class ShippedSiteTests(SiteCase):
                           "/compounds/acetic-anhydride/"])
         self.assertEqual([l.norm() for l in links],
                          ["Salicylic acid", "Acetic anhydride"])
-        self.assertEqual(text["Starting materials"],
-                         "Salicylic acid, Acetic anhydride")
+        self.assertEqual(
+            text["Starting materials"],
+            ", ".join(self.linked(key)
+                      for key in ("salicylic-acid", "acetic-anhydride")))
         for label, texts in (("Reaction type", ["Acylation"]),
                              ("Tags", ["sample-data", "acetylation"]),
                              ("Authors", ["A. Example", "C. Example"])):
@@ -511,6 +514,68 @@ class ShippedSiteTests(SiteCase):
             with self.subTest(label=label):
                 self.assertNotEqual(pair.gap, "")
                 self.assertEqual(pair.gap.strip(), "")
+
+    def test_notes_after_every_compound_link(self) -> None:
+        """Scenario: Notes after every compound link. Every page is
+        scanned, a superset of the procedure pages, the sequence pages
+        and the sequence directory, so that a stray note or link shows
+        too."""
+        beside = [f.key for f in self.compound_fields() if f.beside]
+        self.assertEqual(beside, ["item_number", "short_name"])
+        noted: dict[str, int] = {}
+        for path, page in self.pages():
+            where = path.relative_to(self.public).as_posix()
+            notes = self.check_notes(page, page.root)
+            self.assertEqual(
+                [n.text() for n in page.find_all("span", "compound-beside")],
+                [note for note in notes if note is not None], where)
+            noted[where] = len(notes)
+        for where in ("procedures/osdb-0002/index.html",
+                      "procedures/osdb-0009/index.html",
+                      "sequences/seq-0001/index.html",
+                      "sequences/seq-0002/index.html",
+                      "sequences/index.html"):
+            with self.subTest(page=where):
+                self.assertGreater(noted[where], 0)
+
+    def test_notes_in_each_place_a_compound_is_linked(self) -> None:
+        """Scenario: Notes after every compound link (the metadata panel,
+        the scope table, the sequence scheme and the sequence
+        directory)."""
+        registry, fields = self.registry(), self.compound_fields()
+        page = self.page_of(self.by_id()["OSDB-0002"])
+        panel = self.panel(page)
+        for label in ("Product", "Starting materials"):
+            with self.subTest(label=label):
+                notes = self.check_notes(page, panel[label].definition)
+                self.assertTrue(notes and all(notes), notes)
+        page = self.page_of(self.by_id()["OSDB-0009"])
+        table = page.find("table", "scope-table")
+        notes = self.check_notes(page, table)
+        self.assertTrue(notes and all(notes), notes)
+        sequence = self.sequences()[0]
+        page = ps.load_page(self.public, sequence.page_file(self.public))
+        scheme = page.find("figure", "sequence-scheme")
+        notes = self.check_notes(page, scheme)
+        self.assertTrue(notes and all(notes), notes)
+        page = ps.load_page(self.public,
+                            self.public / "sequences" / "index.html")
+        table = page.find("table", "sequence-table")
+        notes = self.check_notes(page, table)
+        self.assertEqual(len(notes), len(self.sequences()))
+        self.assertEqual(
+            [n.text() for n in table.find_all("span", "compound-beside")],
+            [fs.beside_note(fields, registry[s.target], "en")
+             for s in self.sequences()])
+
+    def test_the_starting_materials_of_the_markdown_seed_have_notes(
+            self) -> None:
+        """Scenario: Notes after every compound link (the stated
+        value)."""
+        page = self.page_of(self.by_id()["OSDB-0002"])
+        self.assertEqual(
+            self.panel(page)["Starting materials"].definition.norm(),
+            "Salicylic acid (CH-0020), Acetic anhydride (CH-0007, Ac2O)")
 
     def test_key_facts_of_the_markdown_seed(self) -> None:
         """Scenario: Key facts and sign-off (the Markdown seed)."""
@@ -726,22 +791,25 @@ class ShippedSiteTests(SiteCase):
         self.assertEqual([item.id for item in general], ["OSDB-0009"])
         registry = self.registry()
         page = self.page_of(general[0])
-        table = gs.check_scope_table(self, page, general[0], registry, "en",
-                                     "Summary")
+        table = gs.check_scope_table(
+            self, page, general[0], registry, self.compound_fields(), "en",
+            "Summary")
         rows = [[c.norm() for c in r.elements() if c.tag in ("td", "th")]
                 for r in table.find_all("tr")]
         self.assertEqual(rows[0], [
             "Entry", "Starting materials", "Products", "Yield", "Scale",
             "Time", "Note"])
         self.assertEqual(rows[1], [
-            "1", "4-Acetylbiphenyl", "1-(Biphenyl-4-yl)ethanol", "90 %", "",
-            "30 min", ""])
-        self.assertEqual(rows[2], [
-            "2", "Acetophenone", "1-Phenylethanol", "85 %", "", "20 min",
+            "1", self.linked("4-acetylbiphenyl"),
+            self.linked("1-biphenyl-4-yl-ethanol"), "90 %", "", "30 min",
             ""])
+        self.assertEqual(rows[2], [
+            "2", self.linked("acetophenone"), self.linked("1-phenylethanol"),
+            "85 %", "", "20 min", ""])
         self.assertEqual(rows[3][:6], [
-            "3", "4′-Bromoacetophenone", "1-(4-Bromophenyl)ethanol",
-            "88 %", "5 mmol", "30 min"])
+            "3", self.linked("4-bromoacetophenone"),
+            self.linked("1-4-bromophenyl-ethanol"), "88 %", "5 mmol",
+            "30 min"])
         self.assertEqual(rows[3][6], general[0].scope[2]["note"])
         links = page.links(table)
         self.assertEqual(
@@ -1312,18 +1380,23 @@ class GeneralFixtureSiteTests(SiteCase):
         """Scenario: Scope table of a general procedure (the fixture)."""
         item = self.item()
         page = self.page_of(item)
-        table = gs.check_scope_table(self, page, item, self.registry(),
-                                     "en", "Summary")
+        table = gs.check_scope_table(
+            self, page, item, self.registry(), self.compound_fields(), "en",
+            "Summary")
         rows = [[c.norm() for c in r.elements() if c.tag in ("td", "th")]
                 for r in table.find_all("tr")]
         self.assertEqual(rows, [
             ["Entry", "Starting materials", "Products", "Yield", "Scale",
              "Time", "Temperature", "Note"],
-            ["1", "Acetic acid, Ethanol", "Ethyl acetate", "85 %",
-             "20 mmol", "2 h", "80 °C", "Reflux."],
-            ["2", "Acetic acid", "Benzyl acetate, Propyl acetate",
+            ["1", f"{self.linked('acetic-acid')}, {self.linked('ethanol')}",
+             self.linked("ethyl-acetate"), "85 %", "20 mmol", "2 h",
+             "80 °C", "Reflux."],
+            ["2", self.linked("acetic-acid"),
+             f"{self.linked('benzyl-acetate')}, "
+             f"{self.linked('propyl-acetate')}",
              "78 %, 64.5 %", "", "", "", ""],
-            ["3", "Ethanol", "Methyl benzoate", "72.5 %", "", "", "", ""]])
+            ["3", self.linked("ethanol"), self.linked("methyl-benzoate"),
+             "72.5 %", "", "", "", ""]])
         images = table.find_all("img", "scope-structure")
         self.assertEqual([(i.attrs.get("alt"), page.resolve(i.attrs["src"]))
                           for i in images],
@@ -1351,10 +1424,13 @@ class GeneralFixtureSiteTests(SiteCase):
         self.assertEqual(list(panel), self.expected_labels(item))
         self.assertEqual(
             panel["Products"].definition.norm(),
-            "Ethyl acetate, Benzyl acetate, Propyl acetate, "
-            "Methyl benzoate")
-        self.assertEqual(panel["Starting materials"].definition.norm(),
-                         "Acetic acid, Ethanol")
+            ", ".join(self.linked(key) for key in (
+                "ethyl-acetate", "benzyl-acetate", "propyl-acetate",
+                "methyl-benzoate")))
+        self.assertEqual(
+            panel["Starting materials"].definition.norm(),
+            ", ".join(self.linked(key)
+                      for key in ("acetic-acid", "ethanol")))
         for link in page.links(panel["Products"].definition):
             self.assertTrue(ps.target_file(self.public, link.target)
                             .is_file(), link.target)
@@ -1463,8 +1539,10 @@ class TwoProductSiteTests(SiteCase):
                           for l in links],
                          [("/compounds/trans-stilbene/", "trans-Stilbene"),
                           ("/compounds/cis-stilbene/", "cis-Stilbene")])
-        self.assertEqual(panel["Products"].definition.norm(),
-                         "trans-Stilbene, cis-Stilbene")
+        self.assertEqual(
+            panel["Products"].definition.norm(),
+            ", ".join(self.linked(key)
+                      for key in ("trans-stilbene", "cis-stilbene")))
         self.assertEqual(self.expected_labels(
             self.by_id()["OSDB-0907"]), list(panel))
 
@@ -1580,7 +1658,7 @@ class SecondRouteSiteTests(SiteCase):
                             / "osdb-0908" / "index.html")
         panel = self.panel(page)
         self.assertEqual(panel["Starting materials"].definition.norm(),
-                         "Phenyl salicylate")
+                         self.linked("phenyl-salicylate"))
         self.assertEqual(
             [page.resolve(l.attrs["href"]) for l in
              panel["Starting materials"].definition.find_all("a")],

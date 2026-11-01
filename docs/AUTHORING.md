@@ -281,6 +281,16 @@ procedures. The site title-cases author names for display, so a name entered as
 `van` appears as `Van`. The eight body sections appear beside the panel on a
 wide screen and after it in a narrow window or in print.
 
+After each product or starting-material link, the panel shows any values
+that the compound sets for fields the collection declares with `beside = true`.
+The link text stays the compound's name. One space and a muted note in
+parentheses follow it, for example **Acetic anhydride (CH-0007, Ac2O)** in the
+demo. Values appear without labels, in declaration order, separated by `, `,
+as on the compound page; numbers use the site's decimal separator and unit.
+A compound with none of these values gets no note. Procedure search finds
+these values because the panel is indexed. The yield line, catalogue
+**Details**, image alt texts and page titles carry no note.
+
 The panel shows each declared procedure field you set in declaration order,
 before **Created** and after **Checked by** when that label is present.
 The demo shows **Lab notebook**, **Project**, **Working time** and
@@ -294,8 +304,9 @@ A general procedure adds **Scope** before **Summary**, with one row per entry.
 **Scale**, **Time**, **Temperature** and **Note** appear only when some entry
 sets them; an unset value leaves an empty cell. Starting materials and products
 link to compound pages, and products show small structure images when their
-registry records have them. For example, entry 1 of OSDB-0009 makes the same
-alcohol as OSDB-0005, so that compound's page lists both routes.
+registry records have them. The compound links carry the same notes as the
+panel. For example, entry 1 of OSDB-0009 makes the same alcohol as OSDB-0005,
+so that compound's page lists both routes.
 
 ## 3. Write the procedure
 
@@ -427,10 +438,12 @@ titles and targets, step counts and overall yields. A sequence page shows
 its ID and title, **Steps** and **Overall yield**, a scheme, its linked
 procedures with entry numbers where needed, reaction type, yield and status,
 then your notes. The scheme shows starting materials, intermediates and target
-with registry structure images where available; a plus joins the first step's
-starting materials, and arrows show step number, reaction type and yield. It
-runs down the page in narrow windows. Sequence pages are absent from the
-procedure search index; use their links to find them.
+with registry structure images where available. Compound links in the scheme
+and the directory's targets carry the same notes as the panel.
+A plus joins the first step's starting materials, and arrows show step
+number, reaction type and yield. It runs down the page in narrow windows.
+Sequence pages are absent from the procedure search index; use their links
+to find them.
 
 On a procedure page, choose **Print / Save as PDF** to open the browser's
 print dialog. The print layout is A4, complete, and black on white. Firefox

@@ -129,6 +129,22 @@ class FieldDeclarationTests(FieldTestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "")
 
+    def test_beside_on_a_text_and_a_number_field(self) -> None:
+        """Scenario: Beside on a text and a number field."""
+        result = field_variant_run(edit_settings(
+            insert_after('key = "item_number"', "beside = true"),
+            insert_after('key = "short_name"', "beside = true"),
+            insert_after('key = "stock"', "beside = true")))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_beside_may_be_written_as_false(self) -> None:
+        """Requirement: Field declarations (`beside` defaults to
+        false)."""
+        self.assert_clean(field_variant_run(edit_settings(
+            insert_after('key = "item_number"', "beside = false"),
+            insert_after('key = "stock"', "beside = false"))))
+
     def test_tabs_on_a_choice_field(self) -> None:
         """Scenario: Tabs on a choice field."""
         self.assert_clean(field_variant_run(edit_settings(
@@ -212,10 +228,11 @@ class DeclarationErrorTests(FieldTestCase):
             "in_house": ["unique = true", "pattern = '.'", 'unit = "g"',
                          "min = 0", "max = 1", "multiple = true",
                          'vocabulary = "storage"', "search = true",
-                         "tabs = true"],
+                         "tabs = true", "beside = true"],
             "storage": ["unique = true", "pattern = '.'", 'unit = "g"',
-                        "min = 0", "max = 1", "search = true"],
-            "chemical_class": ["search = true"],
+                        "min = 0", "max = 1", "search = true",
+                        "beside = true"],
+            "chemical_class": ["search = true", "beside = true"],
         }
         for key, lines in cases.items():
             for line in lines:
@@ -241,6 +258,34 @@ class DeclarationErrorTests(FieldTestCase):
                 result = field_variant_run(edit_settings(
                     insert_after(f'key = "{key}"', f"{option} = true")))
                 self.assert_configuration_error(result, key, option)
+
+    def test_beside_where_the_type_does_not_take_it(self) -> None:
+        """Scenario: Beside where the type does not take it."""
+        for key in ("in_house", "storage"):
+            with self.subTest(key=key):
+                result = field_variant_run(edit_settings(
+                    insert_after(f'key = "{key}"', "beside = true")))
+                self.assert_configuration_error(result, key, "beside")
+
+    def test_beside_is_refused_where_written_as_false(self) -> None:
+        """Requirement: Field declarations (a declaration holds no key
+        that its type does not take, whatever its value)."""
+        for key in ("in_house", "storage", "chemical_class"):
+            with self.subTest(key=key):
+                result = field_variant_run(edit_settings(
+                    insert_after(f'key = "{key}"', "beside = false")))
+                self.assert_configuration_error(result, key, "beside")
+
+    def test_beside_must_be_a_boolean(self) -> None:
+        """Requirement: Declaration errors are configuration errors (a
+        value of the wrong type)."""
+        for key in ("item_number", "stock"):
+            for option in ('beside = "yes"', "beside = 1"):
+                with self.subTest(key=key, option=option):
+                    result = field_variant_run(edit_settings(
+                        insert_after(f'key = "{key}"', option)))
+                    self.assert_configuration_error(
+                        result, key, "beside")
 
     def test_two_tabs_fields(self) -> None:
         """Scenario: Two tabs fields."""

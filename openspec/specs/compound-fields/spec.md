@@ -12,6 +12,7 @@ A collection SHALL declare the fields its compounds carry beyond those of compou
 - `column`: optional boolean, default `false`. When `true`, the compound directory shows the field as a column (site-theme "Compound directory").
 - For `text`: `pattern`, an optional string holding a Python regular expression that the whole value matches; `unique`, an optional boolean, default `false`, under which no two compounds set the same value; and `search`, an optional boolean, default `false`, under which the compound catalogue's search matches the field's values.
 - For `number`: `min` and `max`, optional finite numbers (TOML integer or float, never boolean) bounding the value inclusively, `min` not greater than `max`; `unit`, an optional non-empty string written after the value; and `unique` as for `text`.
+- For `text` and `number` alike: `beside`, an optional boolean, default `false`, under which the site writes the compound's value after every link to the compound (requirement "Values beside compound links").
 - For `boolean`: `facet`, an optional boolean, default `false`, under which the compound catalogue offers the field as a filter.
 - For `choice`: `vocabulary`, required, the name of a vocabulary of the collection (requirement "Vocabularies"); `multiple`, an optional boolean, default `false`, under which a compound sets a list of values rather than one; `facet` as for `boolean`; and `tabs`, an optional boolean, default `false`, under which the compound directory is divided into tabs by the field's top-level values (site-catalogue "Compound tabs"). At most one field of a collection declares `tabs = true`.
 
@@ -23,6 +24,10 @@ A declaration holds no other key, and no key that its type does not take.
 
 #### Scenario: Tabs on a choice field
 - **WHEN** a field-declaration run adds `tabs = true` to the declaration of `storage`
+- **THEN** it exits 0 and prints nothing to stdout
+
+#### Scenario: Beside on a text and a number field
+- **WHEN** a field-declaration run adds `beside = true` to the declarations of `item_number`, `short_name` and `stock`
 - **THEN** it exits 0 and prints nothing to stdout
 
 #### Scenario: Facets and search where the types take them
@@ -64,6 +69,10 @@ The message names the settings file or the vocabulary file, the field's key when
 #### Scenario: A facet or a search where the type does not take it
 - **WHEN** a field-declaration run adds `facet = true` to the declaration of `short_name`; and, separately, adds `search = true` to the declaration of `stock`
 - **THEN** each exits 2, and stderr contains `short_name` and `facet`, and `stock` and `search`, respectively
+
+#### Scenario: Beside where the type does not take it
+- **WHEN** a field-declaration run adds `beside = true` to the declaration of `in_house`; and, separately, to the declaration of `storage`
+- **THEN** each exits 2, stdout is empty, and stderr contains `validate.py: error:` and, respectively, `in_house` and `beside`, and `storage` and `beside`
 
 #### Scenario: Two tabs fields
 - **WHEN** a field-declaration run adds `tabs = true` to the declarations of `storage` and `chemical_class`
@@ -164,6 +173,7 @@ A value of the wrong type draws that one error and no other. A choice may name a
 - `key`, `type` and `column`, as declared, `column` with its default;
 - `facet`: only for a `boolean` or `choice` field, as declared, with its default;
 - `search`: only for a `text` field, as declared, with its default;
+- `beside`: only for a `text` or `number` field, as declared, with its default;
 - `label`: the field's shown label, its `label_de` on a German site when it declares one, and its `label` otherwise;
 - `unit`: only for a `number` field that declares one, as declared;
 - `multiple`: only for a `choice` field, as declared, with its default;
@@ -179,6 +189,7 @@ A settings file that does not exist, or that declares no field, gives `{"compoun
 - **AND** in `en` the value `ketones` of `chemical_class` has the label `Ketones` and the path `["Carbonyl compounds", "Ketones"]`, and in `de` the label `Ketone` and the path `["Carbonylverbindungen", "Ketone"]`
 - **AND** `short_name`, which declares no `label_de`, has the label `Short name` in both
 - **AND** `item_number` and `short_name` have `search` `false`, `in_house`, `chemical_class` and `storage` have `facet` `false`, `chemical_class` and `storage` have `tabs` `false`, the value `ketones` has the `ancestors` `["carbonyl-compounds"]` and `alcohols` none, and the `order` of `chemical_class` is `["carbonyl-compounds", "ketones", "esters", "alcohols"]`
+- **AND** `item_number`, `short_name` and `stock` have `beside` `false`, and `in_house`, `chemical_class` and `storage` have no `beside`
 
 #### Scenario: Depth-first order
 - **WHEN** a test calls `fields_data` on a copy of the fixture settings whose `vocabularies/chemical-classes.toml` lists, in this order, `esters` under `carbonyl-compounds`, `alcohols`, `carbonyl-compounds`, `ketones` under `carbonyl-compounds`, and `aryl-ketones` under `ketones`
@@ -213,4 +224,25 @@ When a field of a collection declares `tabs = true`, the validator SHALL report 
 #### Scenario: A compound named like the tabs field
 - **WHEN** a field-declaration run adds `tabs = true` to the declaration of `storage` and adds `storage.toml`, a copy of `ethanol.toml`, to the registry
 - **THEN** it reports exactly one error, on the path ending `storage.toml`, field `file_name`, containing `tabs`
+
+### Requirement: Values beside compound links
+Wherever the site writes an `a.compound`, the link to a compound's page, it SHALL follow the link with the values of the compound's fields declared `beside = true` (requirement "Field declarations") that the compound sets: one space, then a `span.compound-beside` whose text is `(`, those values in declared order, each written as the requirement "Field display" writes a value on a compound page and joined by `, `, then `)`, escaped once. A compound that sets no such field, and every compound of a collection that declares none, has no `span.compound-beside` after its link. The link's own text stays the compound's shown name. The `a.compound` links are those of the metadata panel's `Product` or `Products` and `Starting materials` (site-theme "Metadata panel"), the scope table (general-procedures "Scope table on the page"), the sequence scheme and the sequence directory (synthesis-sequences "Sequence pages"). No other text that names a compound carries the values: not the key facts, the catalogue's details view, an image's `alt` or a page's title. `site/assets/css/base.css` gives `.compound-beside` the colour `var(--muted)`.
+
+#### Scenario: Notes after every compound link
+- **WHEN** a test scans every procedure page, every sequence page and `public/sequences/index.html` after a theme build in locale `en`
+- **THEN** each `a.compound` whose compound sets a field the test collection's `orgsyndb.toml` declares with `beside = true` is followed by a text node holding one space and then a `span.compound-beside` whose text is computed as stated from the registry and the field data, each other `a.compound` is followed by no `span.compound-beside`, and each link's text is its compound's shown name
+- **AND** the `Starting materials` value of `procedures/osdb-0002/index.html` reads `Salicylic acid (CH-0020), Acetic anhydride (CH-0007, Ac2O)`
+
+#### Scenario: A number beside a German link
+- **WHEN** a test builds a copy of the test collection in locale `de` after adding `beside = true` to the declaration of `stock` in its `orgsyndb.toml`, and reads `procedures/osdb-0007/index.html`
+- **THEN** the `a.compound` to `ethyl-triphenylphosphoranylidene-acetate` in its `Ausgangsstoffe` value is followed by a `span.compound-beside` with the text `(CH-0015, 12,5 g)`
+
+#### Scenario: Markup in a value, and a compound without one
+- **WHEN** a test builds a copy of the test collection in locale `en` after removing `beside = true` from the declaration of `item_number` in its `orgsyndb.toml` and setting the `short_name` of `acetone` to `<i>Me</i>2CO & co`, and reads `procedures/osdb-0006/index.html` and `procedures/osdb-0002/index.html`
+- **THEN** the `a.compound` to `acetone` in the `Starting materials` value of OSDB-0006 is followed by a `span.compound-beside` whose text is `(<i>Me</i>2CO & co)`, and the value holds no `i` element
+- **AND** the `Starting materials` value of OSDB-0002 reads `Salicylic acid, Acetic anhydride (Ac2O)`, and no `span.compound-beside` follows the `a.compound` to `salicylic-acid`, which sets no `short_name`
+
+#### Scenario: The note is muted
+- **WHEN** a test reads `site/assets/css/base.css`
+- **THEN** a rule whose selector is `.compound-beside` sets `color: var(--muted)`
 

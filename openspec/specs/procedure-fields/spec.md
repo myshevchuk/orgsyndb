@@ -5,7 +5,7 @@ Define the fields a collection declares for its procedures in its settings file:
 ## Requirements
 ### Requirement: Procedure field declarations
 A collection SHALL declare the fields its procedures carry beyond the procedure schema in its `orgsyndb.toml`, as the array of tables `fields.procedure`, one table per field, in the order the site shows them. A collection whose `fields` holds no `procedure` declares no procedure field. A declaration holds the keys of a compound field declaration (compound-fields "Field declarations"), with the same meanings, defaults, types and vocabularies, except:
-- it takes neither `column`, nor `search`, nor `tabs`;
+- it takes neither `column`, nor `search`, nor `tabs`, nor `beside`;
 - for a `boolean` or `choice` field, `facet = true` makes the field a filter of the procedure catalogues (site-catalogue "Catalogue controls");
 - `required` and `unique` concern procedures, not compounds: under `required` every procedure sets the field, and under `unique` no two procedures set the same value;
 - its `key` matches `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`, does not end in `_de`, no other declaration of `fields.procedure` has it, and it is none of these reserved keys:
@@ -28,11 +28,11 @@ A procedure field and a compound field may have the same key. The vocabularies a
 - **THEN** it exits 0 and prints nothing to stdout
 
 ### Requirement: Procedure declaration errors are configuration errors
-The validator SHALL exit with status 2, print nothing to stdout, and write `validate.py: error:` and a message to stderr when its settings file breaks a rule of the requirement "Procedure field declarations", as compound-fields "Declaration errors are configuration errors" states for the compound declarations. In particular this holds when `fields.procedure` is not an array of tables; when a declaration lacks `key`, `type` or `label`, has a value of the wrong type, or holds a key that is unknown, that its type does not take, or that is `column`, `search` or `tabs`; when a `key` breaks its pattern, ends in `_de`, is reserved or is declared twice in `fields.procedure`; and when a `pattern`, a bound or a vocabulary breaks the rules of the compound declarations. The message names the settings file or the vocabulary file, the field's key when the declaration has a valid one, and the offending key or value; a message about a declaration's `key` also names `fields.procedure`.
+The validator SHALL exit with status 2, print nothing to stdout, and write `validate.py: error:` and a message to stderr when its settings file breaks a rule of the requirement "Procedure field declarations", as compound-fields "Declaration errors are configuration errors" states for the compound declarations. In particular this holds when `fields.procedure` is not an array of tables; when a declaration lacks `key`, `type` or `label`, has a value of the wrong type, or holds a key that is unknown, that its type does not take, or that is `column`, `search`, `tabs` or `beside`; when a `key` breaks its pattern, ends in `_de`, is reserved or is declared twice in `fields.procedure`; and when a `pattern`, a bound or a vocabulary breaks the rules of the compound declarations. The message names the settings file or the vocabulary file, the field's key when the declaration has a valid one, and the offending key or value; a message about a declaration's `key` also names `fields.procedure`.
 
 #### Scenario: Options a procedure field does not take
-- **WHEN** a procedure-field run adds `column = true` to the declaration of `notebook`; separately, adds `search = true` to the declaration of `notebook`; and separately, adds `tabs = true` to the declaration of `project`
-- **THEN** each exits 2, stdout is empty, and stderr contains `validate.py: error:` and, respectively, `notebook` and `column`, `notebook` and `search`, and `project` and `tabs`
+- **WHEN** a procedure-field run adds `column = true` to the declaration of `notebook`; separately, adds `search = true` to the declaration of `notebook`; separately, adds `tabs = true` to the declaration of `project`; and separately, adds `beside = true` to the declaration of `working_time`
+- **THEN** each exits 2, stdout is empty, and stderr contains `validate.py: error:` and, respectively, `notebook` and `column`, `notebook` and `search`, `project` and `tabs`, and `working_time` and `beside`
 
 #### Scenario: Reserved keys
 - **WHEN** a procedure-field run adds a declaration with `type = "text"`, `label = "X"` and, in three separate runs, `key = "status"`, `key = "layout"` and `key = "tag"`

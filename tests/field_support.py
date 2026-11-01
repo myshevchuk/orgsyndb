@@ -9,10 +9,12 @@ from the code under test.
 """
 
 import tomllib
+import unittest
 from pathlib import Path
 from typing import Any, NamedTuple
 
 import pipeline_support as ps
+from pipeline_support import Node, Page
 
 BOOLEANS = {"en": ("Yes", "No"), "de": ("Ja", "Nein")}
 PATH_SEPARATOR = " › "
@@ -33,6 +35,7 @@ class Field(NamedTuple):
     # every value of the vocabulary, depth first, children in file order
     order: tuple[str, ...] = ()
     tabs: bool = False
+    beside: bool = False
 
 
 def _label(entry: dict[str, Any], language: str, key: str = "label"
@@ -101,7 +104,8 @@ def read_fields(settings: Path, language: str,
             entry.get("column", False), entry.get("unit"),
             entry.get("multiple", False), paths,
             entry.get("facet", False), entry.get("search", False),
-            ancestors, order, entry.get("tabs", False)))
+            ancestors, order, entry.get("tabs", False),
+            entry.get("beside", False)))
     return fields
 
 
@@ -127,6 +131,80 @@ def value_text(field: Field, value: Any, locale: str, *,
     return ", ".join(
         PATH_SEPARATOR.join(field.paths[v]) if page else field.paths[v][-1]
         for v in values)
+
+
+def beside_note(fields: list[Field], compound: dict[str, Any],
+                locale: str) -> str | None:
+    """The text of the ``span.compound-beside`` that follows a link to
+    ``compound`` (compound-fields "Values beside compound links"): the
+    values of the ``beside`` fields it sets, each as a compound page
+    writes it, in declared order, joined by ``, `` and put in
+    parentheses; ``None`` when it sets none."""
+    values = [text for field, text in shown(fields, compound, locale,
+                                            page=True) if field.beside]
+    return f"({', '.join(values)})" if values else None
+
+
+def named(key: str, registry: dict[str, dict[str, Any]],
+          fields: list[Field], locale: str) -> str:
+    """How the text of a container reads where the compound ``key`` is
+    linked: its shown name, a space and its note when it has one."""
+    name = ps.shown_name(registry[key], locale)
+    note = beside_note(fields, registry[key], locale)
+    return name if note is None else f"{name} {note}"
+
+
+def link_to(page: Page, scope: Node, key: str) -> Node:
+    """The ``a.compound`` below ``scope`` that links the page of the
+    compound ``key``."""
+    (link,) = [node for node in scope.find_all("a", "compound")
+               if page.resolve(node.attrs["href"]) == f"/compounds/{key}/"]
+    return link
+
+
+def after_link(link: Node) -> list[Node | str]:
+    """The children of the parent of ``link`` that come after it."""
+    siblings = link.parent.children
+    return siblings[siblings.index(link) + 1:]
+
+
+def check_beside_notes(case: unittest.TestCase, page: Page, scope: Node,
+                       registry: dict[str, dict[str, Any]],
+                       fields: list[Field], locale: str
+                       ) -> list[str | None]:
+    """Every ``a.compound`` below ``scope`` has the text of its
+    compound's shown name; and it is followed, inside its parent, by
+    one space and the note of ``beside_note`` as a
+    ``span.compound-beside`` holding text only when its compound sets a
+    ``beside`` field, and by no such span otherwise. Returns the note
+    each link should have, ``None`` for none, in document order."""
+    links = scope.find_all("a", "compound")
+    notes: list[str | None] = []
+    for link in links:
+        key = page.resolve(link.attrs["href"]).removeprefix(
+            "/compounds/").removesuffix("/")
+        with case.subTest(page=page.url, compound=key):
+            case.assertEqual(link.text(),
+                             ps.shown_name(registry[key], locale))
+            after = after_link(link)
+            note = beside_note(fields, registry[key], locale)
+            notes.append(note)
+            if note is None:
+                for node in after[:2]:
+                    case.assertFalse(
+                        isinstance(node, Node)
+                        and node.has_class("compound-beside"),
+                        "a note follows a link without one")
+                continue
+            case.assertGreaterEqual(len(after), 2, "no note follows")
+            case.assertEqual(after[0], " ")
+            span = after[1]
+            case.assertIsInstance(span, Node)
+            case.assertEqual(span.tag, "span")
+            case.assertTrue(span.has_class("compound-beside"), span.classes)
+            case.assertEqual(span.elements(), [])
+            case.assertEqual(span.text(), note)
+    return notes
 
 
 def shown(fields: list[Field], compound: dict[str, Any], locale: str, *,
@@ -221,11 +299,32 @@ def search_text(fields: list[Field], compound: dict[str, Any]) -> str:
 
 
 class ProcedureFieldsMixin:
-    """Procedure-field helpers for a build case: the declarations of the
-    sandbox collection and what the site shows of them."""
+    """Field helpers for a build case: the declarations of the sandbox
+    collection and what the site shows of them, and the notes beside
+    its compound links."""
 
     sandbox: ps.Sandbox
     LOCALE: str
+
+    def compound_fields(self) -> list[Field]:
+        """The compound fields the sandbox collection declares, in the
+        site's language."""
+        return read_fields(self.sandbox.root / "orgsyndb.toml",
+                           self.LOCALE)
+
+    def linked(self, key: str) -> str:
+        """How the text of a container reads where the compound ``key``
+        is linked in the sandbox build: see ``named``."""
+        return named(key, ps.read_registry(self.sandbox),
+                     self.compound_fields(), self.LOCALE)
+
+    def check_notes(self, page: Page, scope: Node) -> list[str | None]:
+        """Check the links below ``scope`` of ``page`` and their notes
+        in the sandbox build: see ``check_beside_notes``."""
+        assert isinstance(self, unittest.TestCase)
+        return check_beside_notes(
+            self, page, scope, ps.read_registry(self.sandbox),
+            self.compound_fields(), self.LOCALE)
 
     def procedure_fields(self) -> list[Field]:
         """The procedure fields the sandbox collection declares, in the

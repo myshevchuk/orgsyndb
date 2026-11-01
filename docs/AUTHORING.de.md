@@ -331,6 +331,18 @@ Anfangsbuchstaben angezeigt, aus `van` wird also `Van`. Die acht Abschnitte des
 Textes stehen auf einem breiten Bildschirm neben dem Datenfeld, in einem
 schmalen Fenster und im Ausdruck danach.
 
+Nach jedem Produkt- oder Ausgangsstofflink zeigt das Datenfeld die Werte,
+die die Verbindung für Felder mit der Deklaration `beside = true` setzt.
+Der Linktext bleibt der Verbindungsname. Nach einem Leerzeichen folgt ein
+Zusatz in Klammern und gedeckter Farbe, in der Beispielsammlung etwa
+**Essigsäureanhydrid (CH-0007, Ac2O)**. Die Werte stehen ohne Feldnamen in
+Deklarationsreihenfolge, durch `, ` getrennt, wie auf der Verbindungsseite;
+Zahlen verwenden das Dezimalzeichen der Website und ihre Einheit.
+Setzt eine Verbindung keinen dieser Werte, entfällt der Zusatz.
+Die Vorschriftensuche findet diese Werte, weil das Datenfeld indexiert wird.
+Die Ausbeutezeile, die Katalogansicht **Details**, Alternativtexte von Bildern
+und Seitentitel tragen keinen Zusatz.
+
 Das Datenfeld zeigt jedes gesetzte deklarierte Vorschriftenfeld in
 Deklarationsreihenfolge vor **Erstellt**, nach **Geprüft von**, sofern diese
 Angabe erscheint. In der Beispielsammlung sind das **Laborjournal**,
@@ -346,6 +358,7 @@ Bei einer allgemeinen Vorschrift steht **Anwendungsbereich** vor
 wenn mindestens ein Eintrag das Feld setzt; sonst bleibt die jeweilige Zelle
 leer. Ausgangsstoffe und Produkte verlinken auf ihre Verbindungsseiten;
 Produkte zeigen kleine Strukturbilder, wenn diese im Register hinterlegt sind.
+Die Verbindungslinks tragen dieselben Zusätze wie im Datenfeld.
 Eintrag 1 von OSDB-0009 stellt denselben Alkohol wie OSDB-0005 her, sodass die
 Verbindungsseite beide Wege nennt.
 
@@ -500,10 +513,12 @@ Eine Synthesewegseite zeigt Nummer und Titel, **Stufen** und
 **Gesamtausbeute**, ein Schema, die verlinkten Vorschriften mit gegebenenfalls
 Eintragsnummer, Reaktionstyp, Ausbeute und Status, danach Ihre Anmerkungen.
 Das Schema zeigt Ausgangsstoffe, Zwischenprodukte und Ziel mit vorhandenen
-Strukturbildern aus dem Register. Ein Plus verbindet die Ausgangsstoffe der
-ersten Stufe; Pfeile nennen Stufennummer, Reaktionstyp und Ausbeute. In
-schmalen Fenstern verläuft das Schema nach unten. Synthesewegseiten fehlen
-im Suchindex für Vorschriften; verwenden Sie ihre Links.
+Strukturbildern aus dem Register. Die Verbindungslinks im Schema und die
+Ziele im Synthesewegverzeichnis tragen dieselben Zusätze wie im Datenfeld.
+Ein Plus verbindet die Ausgangsstoffe der ersten Stufe; Pfeile nennen
+Stufennummer, Reaktionstyp und Ausbeute. In schmalen Fenstern verläuft das
+Schema nach unten. Synthesewegseiten fehlen im Suchindex für Vorschriften;
+verwenden Sie ihre Links.
 
 Auf einer Vorschriftenseite öffnet **Drucken / Als PDF speichern** den
 Druckdialog des Browsers. Das Drucklayout ist A4, vollständig und schwarz

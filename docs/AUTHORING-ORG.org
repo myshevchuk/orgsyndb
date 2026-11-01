@@ -31,6 +31,7 @@
 #+AI_PASS: fact-check claude-opus-5-5 [2026-11-01 Sun 12:54] -- schema link searches the heading text, not an Org custom ID
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-01 Sun 16:42] -- collection reaction-type keys in German procedures
 #+AI_PASS: fact-check claude-opus-5-5 [2026-11-01 Sun 16:55] -- doc-writer pass line corrected from gpt-6 to the pinned run model; schema links without a search, which help pages drop
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-01 Sun 21:54] -- notes after compound links
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -312,6 +313,17 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   eight body sections appear beside the panel on a wide screen and after it in
   a narrow window or in print.
 
+  After each product or starting-material link, the panel shows any values
+  that the compound sets for fields the collection declares with ~beside = true~.
+  The link text stays the compound's name. One space and a muted note in
+  parentheses follow it, for example *Acetic anhydride (CH-0007, Ac2O)* in the
+  demo. Values appear without labels, in declaration order, separated by a
+  comma and a space, as on the compound page. Numbers use the site's decimal
+  separator and unit.
+  A compound with none of these values gets no note. Procedure search finds
+  these values because the panel is indexed. The yield line, catalogue
+  *Details*, image alt texts and page titles carry no note.
+
   The panel shows each declared procedure field you set in declaration
   order, before *Created* and after *Checked by* when that label is present.
   The demo shows *Lab notebook*, *Project*, *Working time* and
@@ -329,6 +341,7 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   *Scale*, *Time*, *Temperature* and *Note* appear only when some entry sets
   the field; unset values leave empty cells. Compounds link to their pages, and
   products show small structure images when their registry records have them.
+  The compound links carry the same notes as the panel.
   Entry 1 of OSDB-0009 makes the same alcohol as OSDB-0005, so its compound
   page lists both routes.
 
@@ -510,10 +523,12 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   *Steps* and *Overall yield*, a scheme, the linked procedures with entry
   numbers where needed, reaction type, yield and status, then your notes.
   The scheme shows starting materials, intermediates and target with registry
-  structure images where available. A plus joins the first step's starting
-  materials; arrows show step number, reaction type and yield. In narrow
-  windows the scheme runs down the page. Sequence pages are absent from the
-  procedure search index; use their links to find them.
+  structure images where available. Compound links in the scheme and the
+  directory's targets carry the same notes as the panel.
+  A plus joins the first step's starting materials; arrows show step
+  number, reaction type and yield. In narrow windows the scheme runs down
+  the page. Sequence pages are absent from the procedure search index; use
+  their links to find them.
 
   On a procedure page, choose *Print / Save as PDF* to open the browser's
   print dialog. The print layout is complete A4 output in black on white.

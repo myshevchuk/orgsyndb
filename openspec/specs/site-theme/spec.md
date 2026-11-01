@@ -167,12 +167,12 @@ Each procedure page's `main` element SHALL contain, in document order:
 
 ### Requirement: Metadata panel
 The metadata panel SHALL be a `dl.metadata`, the first element of the details wrapper at the start of `article.procedure`. It holds one `dt`/`dd` pair per field, with these labels in this order, each pair present only when the field is set. The panel repeats nothing the procedure header shows: the ID is in the header's ID line, the scale and yields are its key facts, and the checkers of a checked procedure are its sign-off. A compound's name is its shown name (localization "German compound names").
-- `Product`, or `Products` when the procedure has several: one `a.compound` per product, in `products` order, linking `/compounds/<key>/` with the compound's name as text, joined by `, `;
+- `Product`, or `Products` when the procedure has several: one `a.compound` per product, in `products` order, linking `/compounds/<key>/` with the compound's name as text, each followed by its note of compound-fields "Values beside compound links" when it has one, joined by `, `;
 - `Formula`, only when the procedure has one product: the compound's formula, where each digit run is wrapped in `<sub>`;
 - `MW`, likewise, as `<mw> g/mol`;
 - `CAS`, likewise, when the compound sets it;
 - `SMILES`, likewise, as a `<code data-smiles>` with the string, followed by `button.copy-button` with `type="button"`, `data-copy-smiles`, the text `Copy` and `hidden`;
-- `Starting materials`: one `a.compound` per entry of `substrates`, in its order, linking the compound's page with its name as text, joined by `, `;
+- `Starting materials`: one `a.compound` per entry of `substrates`, in its order, linking the compound's page with its name as text, each followed by its note as for `Product`, joined by `, `;
 - `Reaction type`, as a link to the term page whose text is the vocabulary label;
 - `Tags`, as one link per tag to its term page, with the tag as text;
 - `Authors`, as one link per author to the author's term page, with the name as text;

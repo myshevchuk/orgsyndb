@@ -167,13 +167,16 @@ class GermanSiteTests(GermanCase):
         panel = page.find("dl", "metadata")
         pairs = {p.label: p.definition for p in page.definition_pairs(panel)}
         self.assertEqual(list(pairs), PANEL_LABELS)
-        self.assertEqual(pairs["Produkt"].norm(), "Acetylsalicylsäure")
+        self.assertEqual(pairs["Produkt"].norm(),
+                         self.linked("acetylsalicylic-acid"))
         self.assertEqual(
             [(page.resolve(l.attrs["href"]), l.norm())
              for l in pairs["Produkt"].find_all("a", "compound")],
             [("/compounds/acetylsalicylic-acid/", "Acetylsalicylsäure")])
-        self.assertEqual(pairs["Ausgangsstoffe"].norm(),
-                         "Salicylsäure, Essigsäureanhydrid")
+        self.assertEqual(
+            pairs["Ausgangsstoffe"].norm(),
+            ", ".join(self.linked(key)
+                      for key in ("salicylic-acid", "acetic-anhydride")))
         self.assertEqual(pairs["Molmasse"].norm(), "180,16 g/mol")
         key = page.find("dl", "key-facts")
         self.assertEqual([(p.label, p.definition.norm())
@@ -273,15 +276,17 @@ class GermanSiteTests(GermanCase):
         item = {i.id: i for i in self.content()}["OSDB-0009"]
         page = self.page("procedures/osdb-0009/index.html")
         registry = ps.read_registry(self.sandbox)
-        table = gs.check_scope_table(self, page, item, registry, "de",
-                                     "Zusammenfassung")
+        table = gs.check_scope_table(
+            self, page, item, registry, self.compound_fields(), "de",
+            "Zusammenfassung")
         rows = [[c.norm() for c in r.elements() if c.tag in ("td", "th")]
                 for r in table.find_all("tr")]
         self.assertEqual(rows[0], [
             "Eintrag", "Ausgangsstoffe", "Produkte", "Ausbeute",
             "Ansatzgröße", "Zeit", "Anmerkung"])
         self.assertEqual(rows[3][:3], [
-            "3", "4′-Bromacetophenon", "1-(4-Bromphenyl)ethanol"])
+            "3", self.linked("4-bromoacetophenone"),
+            self.linked("1-4-bromophenyl-ethanol")])
         self.assertEqual(rows[3][6], item.scope[2]["note"])
         self.assertTrue(rows[3][6].startswith("Das Produkt schmilzt"))
         gs.check_key_facts(self, page, item, registry, "de")
@@ -437,15 +442,17 @@ class GermanGeneralFixtureTests(GermanCase):
         """Requirement: Scope table on the page (decimal separator)."""
         page = self.page("procedures/osdb-0140/index.html")
         registry = ps.read_registry(self.sandbox)
-        table = gs.check_scope_table(self, page, self.item(), registry, "de",
-                                     "Summary")
+        table = gs.check_scope_table(
+            self, page, self.item(), registry, self.compound_fields(), "de",
+            "Summary")
         rows = [[c.norm() for c in r.elements() if c.tag in ("td", "th")]
                 for r in table.find_all("tr")]
         self.assertEqual(rows[0], [
             "Eintrag", "Ausgangsstoffe", "Produkte", "Ausbeute",
             "Ansatzgröße", "Zeit", "Temperatur", "Anmerkung"])
         self.assertEqual(rows[1][1:5], [
-            "Essigsäure, Ethanol", "Ethylacetat", "85 %", "20 mmol"])
+            f"{self.linked('acetic-acid')}, {self.linked('ethanol')}",
+            self.linked("ethyl-acetate"), "85 %", "20 mmol"])
         self.assertEqual(rows[1][5:7], ["2 h", "80 °C"])
         self.assertEqual(rows[2][3], "78 %, 64,5 %")
         self.assertEqual(rows[3][3], "72,5 %")

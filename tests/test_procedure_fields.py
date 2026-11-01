@@ -220,18 +220,20 @@ class ProcedureDeclarationErrorTests(ProcedureFieldTestCase):
     def test_options_a_procedure_field_does_not_take(self) -> None:
         """Scenario: Options a procedure field does not take."""
         for key, option in (("notebook", "column"), ("notebook", "search"),
-                            ("project", "tabs")):
+                            ("project", "tabs"),
+                            ("working_time", "beside")):
             with self.subTest(key=key, option=option):
                 result = procedure_field_run(edit_procedure_settings(
                     insert_after(f'key = "{key}"', f"{option} = true")))
                 self.assert_configuration_error(result, key, option)
 
-    def test_no_declaration_takes_column_search_or_tabs(self) -> None:
+    def test_no_declaration_takes_column_search_tabs_or_beside(
+            self) -> None:
         """Requirement: Procedure field declarations (it takes neither
-        `column`, nor `search`, nor `tabs`)."""
+        `column`, nor `search`, nor `tabs`, nor `beside`)."""
         for key in ("notebook", "working_time", "inert_atmosphere",
                     "project"):
-            for option in ("column", "search", "tabs"):
+            for option in ("column", "search", "tabs", "beside"):
                 with self.subTest(key=key, option=option):
                     result = procedure_field_run(edit_procedure_settings(
                         insert_after(f'key = "{key}"',

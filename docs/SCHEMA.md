@@ -255,6 +255,7 @@ unique = true
 pattern = 'CH-\d{4}'
 column = true
 search = true
+beside = true
 ```
 
 ### Declaration keys
@@ -278,6 +279,7 @@ option on another type is a configuration error.
 |---|---|---|---|---|
 | `pattern` | `text` | String | Optional | A valid Python regular expression that the whole value must match. |
 | `search` | `text` | Boolean | `false` | When `true`, the compound catalogue's search matches the field's values. |
+| `beside` | `text`, `number` | Boolean | `false` | When `true`, set values follow compound links; see [Display on the site](#display-on-the-site). |
 | `unique` | `text`, `number` | Boolean | `false` | No two compounds may set the same valid value. |
 | `min` | `number` | Integer or float | Optional | Finite inclusive lower bound; must not exceed `max` when both are set. A boolean is not a number. |
 | `max` | `number` | Integer or float | Optional | Finite inclusive upper bound. A boolean is not a number. |
@@ -287,7 +289,8 @@ option on another type is a configuration error.
 | `facet` | `boolean`, `choice` | Boolean | `false` | When `true`, the compound catalogue offers the field as a filter. |
 | `tabs` | `choice` | Boolean | `false` | When `true`, divides the compound directory into tab pages by the vocabulary's top-level values. At most one field may set `tabs = true`; it may also be a facet. |
 
-The demo also declares `short_name` as text with `search = true`,
+The demo sets `beside = true` on `item_number` and `short_name`.
+It also declares `short_name` as text with `search = true`,
 `chemical_class` as a required choice with `multiple = true`, `column = true`
 and `facet = true`, `stock` as a number with `min = 0` and `unit = "g"`,
 `in_house` as a boolean with `facet = true`, and finally `group` as a required
@@ -324,7 +327,8 @@ facet = true
 
 Use the declaration keys, types and defaults above, with these changes:
 
-- `column`, `search` and `tabs` are never allowed, even with `false`.
+- `column`, `search`, `tabs` and `beside` are never allowed, even with
+  `false`.
 - `required = true` requires the field on every procedure, including general
   procedures. The default is `false`.
 - `unique = true`, available for `text` and `number`, forbids the same valid
@@ -490,6 +494,11 @@ key or value. An option for another type produces a message such as
 `unknown key <key>`. An unknown top-level settings key produces
 `unknown key <key>; only format and fields are allowed`.
 
+Using `beside` on a `boolean` or `choice` field produces
+`a boolean field does not take beside` or `a choice field does not take beside`.
+A non-boolean value on a `text` or `number` field produces
+`beside must be true or false, unquoted`.
+
 Setting `tabs = true` on more than one field is a configuration error:
 `fields a, b each set tabs = true; at most one field may`, where `a, b`
 are the field keys. Using `tabs` on a type other than `choice` is also a
@@ -504,7 +513,7 @@ declarations, with these additional messages:
 
 | Problem | Message or identifying text |
 |---|---|
-| Withheld option | `a procedure field does not take column` (or `search`, `tabs`) |
+| Withheld option | `a procedure field does not take column` (or `search`, `tabs`, `beside`) |
 | Procedure-schema key | `declaration 5 of fields.procedure: key 'status' is a key of the procedure schema` |
 | Hugo key | `declaration 5 of fields.procedure: key 'layout' is a front-matter key that Hugo reads` |
 | Catalogue key | `declaration 5 of fields.procedure: key 'tag' is reserved by the procedure catalogue; the reserved keys are tag, created, text, q, sort, view` |
@@ -546,6 +555,20 @@ declaration order, using the field labels in the site's language. Text
 appears as written. Numbers use the site's decimal separator and the
 declared unit, such as `12,5 g` on a German site. Booleans show **Yes** or
 **No**, or **Ja** or **Nein** in German.
+
+To show identifiers or short names beside compound links, set
+`beside = true` on their `text` or `number` declarations. The metadata panel's
+**Product**/**Products** and **Starting materials**, a general procedure's
+scope table, a sequence page's scheme and the sequence directory's target
+show these values after each compound link. The link text stays the
+compound's name. One space separates the link from a muted note in
+parentheses, such as **Acetic anhydride (CH-0007, Ac2O)** in the demo.
+The note contains only values the compound sets, in declaration order,
+without labels and separated by `, `. Each value appears as on the compound
+page, including the site's decimal separator and unit for numbers.
+A compound with none of these values gets no note. Key facts, the catalogue's
+**Details** view, image alt texts and page titles carry no note.
+The metadata panel is indexed, so procedure search also finds these values.
 
 A choice on a compound page shows the labels of its ancestors and its own
 label joined by ` › `, such as **Carbonyl compounds › Carboxylic acid

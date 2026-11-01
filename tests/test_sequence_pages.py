@@ -13,6 +13,7 @@ The links from the compound pages are also checked in
 
 import json
 
+import field_support as fs
 import pipeline_support as ps
 import sequence_support as ss
 import support
@@ -40,7 +41,8 @@ class SequenceCase(tti.SiteCase):
     def check_page(self, sequence: Sequence) -> None:
         ss.check_sequence_page(
             self, self.sequence_page(sequence), sequence, self.by_id(),
-            self.registry(), self.vocabulary(), self.LOCALE)
+            self.registry(), self.compound_fields(), self.vocabulary(),
+            self.LOCALE)
 
     def directory(self) -> Page:
         path = self.public / "sequences" / "index.html"
@@ -78,6 +80,13 @@ class SequenceCase(tti.SiteCase):
                     [(f"/compounds/{sequence.target}/", ps.shown_name(
                         registry[sequence.target], self.LOCALE))])
                 self.assertTrue(targets[0].node.has_class("compound"))
+                self.assertEqual(
+                    self.check_notes(page, cells[1]),
+                    [fs.beside_note(self.compound_fields(),
+                                    registry[sequence.target],
+                                    self.LOCALE)])
+                self.assertEqual(cells[1].norm(),
+                                 self.linked(sequence.target))
                 self.assertEqual(cells[2].norm(), str(len(facts)))
                 self.assertEqual(cells[3].norm(),
                                  f"{ss.overall_yield(facts)} %")
@@ -141,11 +150,12 @@ class SequenceSiteTests(SequenceCase):
         self.assertEqual([n.classes[0] for n in items], [
             "sequence-compound", "sequence-step", "sequence-compound",
             "sequence-step", "sequence-compound"])
-        self.assertEqual(items[0].norm(), "Methyl salicylate")
+        self.assertEqual(items[0].norm(), self.linked("methyl-salicylate"))
         self.assertTrue(items[1].norm().startswith("Step 1"))
-        self.assertEqual(items[2].norm(), "Salicylic acid")
+        self.assertEqual(items[2].norm(), self.linked("salicylic-acid"))
         self.assertTrue(items[3].norm().startswith("Step 2"))
-        self.assertEqual(items[4].norm(), "Acetylsalicylic acid")
+        self.assertEqual(items[4].norm(),
+                         self.linked("acetylsalicylic-acid"))
         self.assertIn("Hydrolysis", items[1].norm())
         self.assertIn("80 %", items[1].norm())
         self.assertIn("Acylation", items[3].norm())
@@ -409,9 +419,9 @@ class IntermediateSiteTests(SequenceCase):
         self.assertEqual([n.classes[0] for n in items], [
             "sequence-step", "sequence-compound", "sequence-step",
             "sequence-compound"])
-        self.assertEqual(items[1].norm(), "trans-Stilbene")
+        self.assertEqual(items[1].norm(), self.linked("trans-stilbene"))
         self.assertIn("45 %", items[0].norm())
-        self.assertEqual(items[3].norm(), "Ethyl acetate")
+        self.assertEqual(items[3].norm(), self.linked("ethyl-acetate"))
         images = scheme.find_all("img")
         self.assertEqual(
             [(page.resolve(i.attrs.get("src", "")), i.attrs.get("alt"))

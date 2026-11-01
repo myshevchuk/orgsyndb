@@ -27,6 +27,7 @@
 #+AI_PASS: fact-check claude-opus-5-5 [2026-11-01 Sun 12:54] -- schema link searches the heading text, not an Org custom ID
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-01 Sun 16:42] -- Reaktionstyp-Kürzel aus der Sammlung
 #+AI_PASS: fact-check claude-opus-5-5 [2026-11-01 Sun 16:55] -- doc-writer pass line corrected from gpt-6 to the pinned run model; schema links without a search, which help pages drop
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-01 Sun 21:54] -- Zusätze nach Verbindungslinks
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
@@ -354,6 +355,19 @@ Datei, um die erlaubten Reaktionstypen zu ändern. Die
   Textes stehen auf einem breiten Bildschirm neben dem Datenfeld, in einem
   schmalen Fenster und im Ausdruck danach.
 
+  Nach jedem Produkt- oder Ausgangsstofflink zeigt das Datenfeld die Werte,
+  die die Verbindung für Felder mit der Deklaration ~beside = true~ setzt.
+  Der Linktext bleibt der Verbindungsname. Nach einem Leerzeichen folgt ein
+  Zusatz in Klammern und gedeckter Farbe, in der Beispielsammlung etwa
+  *Essigsäureanhydrid (CH-0007, Ac2O)*. Die Werte stehen ohne Feldnamen in
+  Deklarationsreihenfolge, durch Komma und Leerzeichen getrennt.
+  Jeder Wert erscheint wie auf der Verbindungsseite; Zahlen verwenden das
+  Dezimalzeichen der Website und ihre Einheit.
+  Setzt eine Verbindung keinen dieser Werte, entfällt der Zusatz.
+  Die Vorschriftensuche findet diese Werte, weil das Datenfeld indexiert wird.
+  Die Ausbeutezeile, die Katalogansicht *Details*, Alternativtexte von Bildern
+  und Seitentitel tragen keinen Zusatz.
+
   Das Datenfeld zeigt jedes gesetzte deklarierte Vorschriftenfeld in
   Deklarationsreihenfolge vor *Erstellt*, nach *Geprüft von*, sofern diese
   Angabe erscheint. In der Beispielsammlung sind das *Laborjournal*,
@@ -372,7 +386,8 @@ Datei, um die erlaubten Reaktionstypen zu ändern. Die
   *Temperatur* und *Anmerkung* erscheinen nur, wenn mindestens ein Eintrag das
   Feld setzt; ungesetzte Werte lassen leere Zellen. Verbindungen verlinken auf
   ihre Seiten, und Produkte zeigen kleine Strukturbilder, sofern im Register
-  vorhanden. Eintrag 1 von OSDB-0009 stellt denselben Alkohol wie OSDB-0005
+  vorhanden. Die Verbindungslinks tragen dieselben Zusätze wie im Datenfeld.
+  Eintrag 1 von OSDB-0009 stellt denselben Alkohol wie OSDB-0005
   her, sodass die Verbindungsseite beide Wege nennt.
 
 * Genaue Zeitstempel verwenden
@@ -638,9 +653,11 @@ Datei, um die erlaubten Reaktionstypen zu ändern. Die
   ein Schema, die verlinkten Vorschriften mit gegebenenfalls Eintragsnummer,
   Reaktionstyp, Ausbeute und Status, danach Ihre Anmerkungen. Das Schema zeigt
   Ausgangsstoffe, Zwischenprodukte und Ziel mit vorhandenen Strukturbildern
-  aus dem Register. Ein Plus verbindet die Ausgangsstoffe der ersten Stufe;
-  Pfeile nennen Stufennummer, Reaktionstyp und Ausbeute. In schmalen Fenstern
-  verläuft das Schema nach unten. Synthesewegseiten fehlen im Suchindex für
+  aus dem Register. Die Verbindungslinks im Schema und die Ziele im
+  Synthesewegverzeichnis tragen dieselben Zusätze wie im Datenfeld.
+  Ein Plus verbindet die Ausgangsstoffe der ersten Stufe; Pfeile nennen
+  Stufennummer, Reaktionstyp und Ausbeute. In schmalen Fenstern verläuft
+  das Schema nach unten. Synthesewegseiten fehlen im Suchindex für
   Vorschriften; verwenden Sie ihre Links.
 
   Auf einer Vorschriftenseite öffnet *Drucken / Als PDF speichern* den

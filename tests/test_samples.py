@@ -649,6 +649,18 @@ class DemoFieldTests(unittest.TestCase):
         """Scenario: The demo declares its fields."""
         self.assertEqual(sup.field_violations(DEMO), [])
 
+    def test_the_demo_declares_beside_on_two_fields(self) -> None:
+        """Scenario: The demo declares its fields (`beside` on
+        `item_number` and `short_name`, and on no other)."""
+        settings = tomllib.loads(
+            (DEMO / "orgsyndb.toml").read_text(encoding="utf-8"))
+        self.assertEqual(
+            {d["key"]: d.get("beside")
+             for d in settings["fields"]["compound"]},
+            {"item_number": True, "short_name": True,
+             "chemical_class": None, "stock": None, "in_house": None,
+             "group": None})
+
     def test_the_demo_vocabularies_are_the_only_ones(self) -> None:
         """Scenario: The demo declares its fields (the vocabularies)."""
         directory = DEMO / "vocabularies"
@@ -874,6 +886,17 @@ class ProcedureFieldCheckerTests(unittest.TestCase):
                 self.assertTrue(
                     any(expected in line for line in violations),
                     violations)
+
+    def test_a_missing_beside_is_rejected(self) -> None:
+        """Scenario: The demo declares its fields (checker, no
+        `beside`)."""
+        root = self.collection()
+        path = root / "orgsyndb.toml"
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count("beside = true\n"), 2)
+        path.write_text(text.replace("beside = true\n", "", 1),
+                        encoding="utf-8")
+        self.assertNotEqual(sup.field_violations(root), [])
 
     def test_a_missing_declaration_is_rejected(self) -> None:
         """Scenario: The demo declares its fields (checker, no

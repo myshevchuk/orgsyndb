@@ -12,6 +12,7 @@ unique = true
 pattern = 'CH-\d{4}'
 column = true
 search = true
+beside = true
 
 [[fields.compound]]
 key = "short_name"
@@ -19,6 +20,7 @@ type = "text"
 label = "Short name"
 label_de = "Kurzname"
 search = true
+beside = true
 
 [[fields.compound]]
 key = "chemical_class"

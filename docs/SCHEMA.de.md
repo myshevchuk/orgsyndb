@@ -280,6 +280,7 @@ unique = true
 pattern = 'CH-\d{4}'
 column = true
 search = true
+beside = true
 ```
 
 ### Schlüssel einer Deklaration
@@ -304,6 +305,7 @@ Option bei einem anderen Typ ist ein Konfigurationsfehler.
 |---|---|---|---|---|
 | `pattern` | `text` | String | Optional | Ein gültiger regulärer Ausdruck in Python, dem der ganze Wert entsprechen muss. |
 | `search` | `text` | Wahrheitswert | `false` | Bei `true` berücksichtigt die Suche im Verbindungskatalog die Werte des Felds. |
+| `beside` | `text`, `number` | Wahrheitswert | `false` | Bei `true` stehen gesetzte Werte nach Verbindungslinks; siehe [Anzeige auf der Website](#anzeige-auf-der-website). |
 | `unique` | `text`, `number` | Wahrheitswert | `false` | Zwei Verbindungen dürfen nicht denselben gültigen Wert setzen. |
 | `min` | `number` | Ganz- oder Gleitkommazahl | Optional | Endliche untere Grenze, einschließlich; darf `max` nicht überschreiten, wenn beide gesetzt sind. Ein Wahrheitswert ist keine Zahl. |
 | `max` | `number` | Ganz- oder Gleitkommazahl | Optional | Endliche obere Grenze, einschließlich. Ein Wahrheitswert ist keine Zahl. |
@@ -313,7 +315,8 @@ Option bei einem anderen Typ ist ein Konfigurationsfehler.
 | `facet` | `boolean`, `choice` | Wahrheitswert | `false` | Bei `true` bietet der Verbindungskatalog das Feld als Filter an. |
 | `tabs` | `choice` | Wahrheitswert | `false` | Bei `true` teilt das Feld das Verbindungsverzeichnis nach den Werten der obersten Vokabularebene in Reiterseiten auf. Höchstens ein Feld darf `tabs = true` setzen; es darf zugleich als Filter dienen. |
 
-Die Beispielsammlung deklariert außerdem `short_name` als Text mit
+Die Beispielsammlung setzt `beside = true` bei `item_number` und
+`short_name`. Sie deklariert außerdem `short_name` als Text mit
 `search = true`, `chemical_class` als Pflichtauswahl mit `multiple = true`,
 `column = true` und `facet = true`, `stock` als Zahl mit `min = 0` und
 `unit = "g"`, `in_house` als Wahrheitswert mit `facet = true` und zuletzt
@@ -351,7 +354,8 @@ facet = true
 Es gelten die obigen Deklarationsschlüssel, Typen und Vorgaben, mit diesen
 Änderungen:
 
-- `column`, `search` und `tabs` sind nie erlaubt, auch nicht mit `false`.
+- `column`, `search`, `tabs` und `beside` sind nie erlaubt, auch nicht mit
+  `false`.
 - `required = true` verlangt das Feld in jeder Vorschrift, auch in allgemeinen
   Vorschriften. Die Vorgabe ist `false`.
 - `unique = true` ist für `text` und `number` verfügbar und verbietet denselben
@@ -533,6 +537,11 @@ unbekannte Option ergibt `unknown key <key>`. Ein unbekannter Schlüssel
 auf oberster Ebene der Einstellungen ergibt
 `unknown key <key>; only format and fields are allowed`.
 
+Bei einem Feld vom Typ `boolean` oder `choice` ergibt `beside` die Meldung
+`a boolean field does not take beside` oder `a choice field does not take beside`.
+Ein Wert, der bei `text` oder `number` kein Wahrheitswert ist, ergibt
+`beside must be true or false, unquoted`.
+
 Setzen mehrere Felder `tabs = true`, ist das ein Konfigurationsfehler:
 `fields a, b each set tabs = true; at most one field may`, wobei `a, b`
 für die Feldschlüssel stehen. Auch `tabs` bei einem anderen Typ als
@@ -548,7 +557,7 @@ für Verbindungsdeklarationen, ergänzt um diese Meldungen:
 
 | Problem | Meldung oder kennzeichnender Text |
 |---|---|
-| Nicht erlaubte Option | `a procedure field does not take column` (oder `search`, `tabs`) |
+| Nicht erlaubte Option | `a procedure field does not take column` (oder `search`, `tabs`, `beside`) |
 | Schlüssel des Vorschriftenschemas | `declaration 5 of fields.procedure: key 'status' is a key of the procedure schema` |
 | Hugo-Schlüssel | `declaration 5 of fields.procedure: key 'layout' is a front-matter key that Hugo reads` |
 | Katalogschlüssel | `declaration 5 of fields.procedure: key 'tag' is reserved by the procedure catalogue; the reserved keys are tag, created, text, q, sort, view` |
@@ -596,6 +605,22 @@ Sprache der Website. Text erscheint wie eingetragen. Zahlen verwenden
 das Dezimalzeichen der Website und die deklarierte Einheit, etwa
 `12,5 g` auf einer deutschen Website. Wahrheitswerte erscheinen als
 **Yes** oder **No**, auf Deutsch als **Ja** oder **Nein**.
+
+Um Kennungen oder Kurznamen neben Verbindungslinks anzuzeigen, setzen Sie
+`beside = true` bei deren Deklarationen vom Typ `text` oder `number`.
+Die Werte stehen nach den Verbindungslinks unter **Produkt**/**Produkte**
+und **Ausgangsstoffe** im Datenfeld, in der Tabelle zum Anwendungsbereich
+einer allgemeinen Vorschrift, im Schema einer Synthesewegseite und beim
+Ziel im Synthesewegverzeichnis. Der Linktext bleibt der Verbindungsname.
+Nach einem Leerzeichen folgt ein Zusatz in Klammern und gedeckter Farbe,
+in der Beispielsammlung etwa **Essigsäureanhydrid (CH-0007, Ac2O)**.
+Er enthält nur gesetzte Werte in Deklarationsreihenfolge, ohne Feldnamen,
+durch `, ` getrennt. Jeder Wert erscheint wie auf der Verbindungsseite,
+Zahlen also mit dem Dezimalzeichen der Website und ihrer Einheit.
+Setzt eine Verbindung keinen dieser Werte, entfällt der Zusatz.
+Die Angaben unter dem Titel, die Katalogansicht **Details**, Alternativtexte
+von Bildern und Seitentitel tragen keinen Zusatz. Das Datenfeld wird indexiert;
+daher findet die Vorschriftensuche auch diese Werte.
 
 Ein Auswahlwert auf einer Verbindungsseite zeigt die Namen seiner
 übergeordneten Werte und seinen eigenen Namen, verbunden durch ` › `,

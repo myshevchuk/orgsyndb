@@ -13,6 +13,7 @@ import unittest
 from fractions import Fraction
 from typing import Any, NamedTuple
 
+import field_support as fs
 import pipeline_support as ps
 from pipeline_support import Content, Node, Page, Sequence
 
@@ -109,9 +110,11 @@ def sequences_making(key: str, sequences: list[Sequence]
 def check_sequence_page(case: unittest.TestCase, page: Page,
                         sequence: Sequence, by_id: dict[str, Content],
                         registry: dict[str, dict[str, Any]],
-                        labels: dict[str, str], locale: str) -> None:
+                        fields: list[fs.Field], labels: dict[str, str],
+                        locale: str) -> None:
     """The page of ``sequence``: its parts in order, header, key facts,
-    scheme, steps and body."""
+    scheme, steps and body. The compound links of the scheme carry the
+    notes the compound ``fields`` give them."""
     texts = TEXTS[locale]
     facts = step_facts(sequence, by_id)
     main = page.find("main")
@@ -134,7 +137,8 @@ def check_sequence_page(case: unittest.TestCase, page: Page,
     case.assertTrue(header.find("h1") is not None, "the h1 is not in "
                     "the header")
     check_key_facts(case, page, header, facts, texts)
-    check_scheme(case, page, figure, facts, registry, labels, locale)
+    check_scheme(case, page, figure, facts, registry, fields, labels,
+                 locale)
     check_steps(case, page, steps, facts, registry, labels, locale)
     check_body(case, page, sequence, steps)
     case.assertEqual(page.find_all(data_pagefind_body=True), [],
@@ -155,7 +159,8 @@ def check_key_facts(case: unittest.TestCase, page: Page, header: Node,
 def check_scheme(case: unittest.TestCase, page: Page, figure: Node,
                  facts: list[StepFacts],
                  registry: dict[str, dict[str, Any]],
-                 labels: dict[str, str], locale: str) -> None:
+                 fields: list[fs.Field], labels: dict[str, str],
+                 locale: str) -> None:
     """The scheme: an ``ol`` of the first step's substrates, then for
     each step the step and the compound that carries on."""
     texts = TEXTS[locale]
@@ -172,7 +177,7 @@ def check_scheme(case: unittest.TestCase, page: Page, figure: Node,
             case.assertTrue(item.has_class(f"sequence-{kind}"), item.classes)
             if kind == "compound":
                 check_compound_item(case, page, item, what, registry,
-                                    locale)
+                                    fields, locale)
             else:
                 fact = facts[what - 1]
                 parts = [texts["step"].format(k=what),
@@ -186,11 +191,14 @@ def check_scheme(case: unittest.TestCase, page: Page, figure: Node,
 
 def check_compound_item(case: unittest.TestCase, page: Page, item: Node,
                         key: str, registry: dict[str, dict[str, Any]],
-                        locale: str) -> None:
+                        fields: list[fs.Field], locale: str) -> None:
     compound = registry[key]
     name = ps.shown_name(compound, locale)
     links = item.find_all("a", "compound")
     case.assertEqual(len(links), 1, "not one a.compound")
+    case.assertEqual(fs.check_beside_notes(case, page, item, registry,
+                                           fields, locale),
+                     [fs.beside_note(fields, compound, locale)])
     case.assertEqual(page.resolve(links[0].attrs.get("href", "")),
                      f"/compounds/{key}/")
     case.assertEqual(links[0].norm(), name)

@@ -198,6 +198,9 @@ main { padding: var(--space-3) 0 var(--space-5); }
 .metadata dd { margin: 0; overflow-wrap: anywhere; }
 .metadata code { font-size: 0.95em; }
 
+/* The values a compound link carries after it (compound-link.html). */
+.compound-beside { color: var(--muted); }
+
 /* Compound page: the facts read as the metadata panel's label pairs,
    without its box, and the procedures that make and use the compound as
    plain lists. */

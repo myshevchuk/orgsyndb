@@ -20,7 +20,7 @@ import field_support as fs
 import pipeline_support as ps
 import sequence_support as ss
 import test_theme_integration as tti
-from pipeline_support import Content, Page
+from pipeline_support import Content, Node, Page
 
 PURCHASED = ["acetic-acid", "acetic-anhydride",
              "ethyl-triphenylphosphoranylidene-acetate",
@@ -1582,7 +1582,8 @@ class NoFacetFieldTests(CompoundCase):
 
 class MarkupFieldTests(CompoundCase):
     """The test collection in English, with markup characters in the
-    label and in a value of `short_name`."""
+    label and in a value of `short_name`, and `beside = true` removed
+    from `item_number`."""
 
     LABEL = "Name <b>&</b>"
     VALUE = "<i>Me</i>2CO & co"
@@ -1592,9 +1593,13 @@ class MarkupFieldTests(CompoundCase):
         settings = cls.sandbox.root / "orgsyndb.toml"
         text = settings.read_text(encoding="utf-8")
         assert text.count('label = "Short name"') == 1
-        settings.write_text(text.replace(
-            'label = "Short name"', f'label = "{cls.LABEL}"'),
-            encoding="utf-8")
+        text = text.replace('label = "Short name"',
+                            f'label = "{cls.LABEL}"')
+        head, tail = text.split('key = "item_number"\n')
+        assert tail.index("beside = true\n") < tail.index("[[fields")
+        settings.write_text(
+            head + 'key = "item_number"\n'
+            + tail.replace("beside = true\n", "", 1), encoding="utf-8")
         acetone = cls.sandbox.root / "compounds" / "acetone.toml"
         text = acetone.read_text(encoding="utf-8")
         assert "short_name" not in text
@@ -1612,6 +1617,43 @@ class MarkupFieldTests(CompoundCase):
                          self.VALUE)
         self.assertEqual(facts.find_all("b"), [])
         self.assertEqual(facts.find_all("i"), [])
+
+    def starting_materials(self, ident: str) -> tuple[Page, Node]:
+        """The page of the procedure ``ident`` and the value of its
+        `Starting materials` pair."""
+        page = ps.load_page(self.public, self.public / "procedures"
+                            / ident.lower() / "index.html")
+        pair = self.panel(page)["Starting materials"]
+        return page, pair.definition
+
+    def test_markup_in_a_value_beside_a_link_is_text(self) -> None:
+        """Scenario: Markup in a value, and a compound without one. The
+        build's other change, the label of `short_name`, shows on the
+        compound pages only, and so touches no note."""
+        page, materials = self.starting_materials("OSDB-0006")
+        after = fs.after_link(fs.link_to(page, materials, "acetone"))
+        self.assertGreaterEqual(len(after), 2, "no note follows the link")
+        self.assertEqual(after[0], " ")
+        self.assertEqual((after[1].tag, after[1].classes),
+                         ("span", ["compound-beside"]))
+        self.assertEqual(after[1].text(), f"({self.VALUE})")
+        self.assertEqual(after[1].elements(), [])
+        self.assertEqual(materials.find_all("i"), [])
+        self.assertEqual(materials.find_all("b"), [])
+        self.assertEqual(self.check_notes(page, materials),
+                         [None, f"({self.VALUE})"])
+
+    def test_a_compound_without_a_value_beside_has_no_note(self) -> None:
+        """Scenario: Markup in a value, and a compound without one (the
+        procedure without markup, and the link without a note)."""
+        page, materials = self.starting_materials("OSDB-0002")
+        self.assertEqual(materials.norm(),
+                         "Salicylic acid, Acetic anhydride (Ac2O)")
+        after = fs.after_link(fs.link_to(page, materials, "salicylic-acid"))
+        self.assertEqual(after[0], ", ")
+        self.assertEqual(after[1].tag, "a")
+        self.assertEqual(self.check_notes(page, materials),
+                         [None, "(Ac2O)"])
 
 
 class NoFieldsTests(CompoundCase):
@@ -1658,12 +1700,19 @@ class NoFieldsTests(CompoundCase):
 
 
 class FallbackNameTests(CompoundCase):
-    """The test collection in German, with one German name removed."""
+    """The test collection in German, with one German name removed and
+    `beside = true` added to the declaration of `stock`."""
 
     LOCALE = "de"
 
     @classmethod
     def prepare(cls) -> None:
+        settings = cls.sandbox.root / "orgsyndb.toml"
+        text = settings.read_text(encoding="utf-8")
+        anchor = 'key = "stock"\n'
+        assert text.count(anchor) == 1
+        settings.write_text(text.replace(anchor, anchor + "beside = true\n"),
+                            encoding="utf-8")
         path = cls.sandbox.root / "compounds" / "acetone.toml"
         text = path.read_text(encoding="utf-8")
         kept = [ln for ln in text.splitlines()
@@ -1684,6 +1733,23 @@ class FallbackNameTests(CompoundCase):
             procedure.find("dl", "metadata")) if p.label == "Ausgangsstoffe")
         self.assertEqual([l.norm() for l in materials.definition.find_all(
             "a")], ["Benzaldehyd", "Acetone"])
+
+    def test_a_number_beside_a_german_link(self) -> None:
+        """Scenario: A number beside a German link. The build also drops
+        the German name of acetone, which OSDB-0007 does not take."""
+        page = ps.load_page(self.public, self.public / "procedures"
+                            / "osdb-0007" / "index.html")
+        materials = next(p for p in page.definition_pairs(
+            page.find("dl", "metadata")) if p.label == "Ausgangsstoffe")
+        after = fs.after_link(fs.link_to(
+            page, materials.definition,
+            "ethyl-triphenylphosphoranylidene-acetate"))
+        self.assertGreaterEqual(len(after), 2, "no note follows the link")
+        self.assertEqual(after[0], " ")
+        self.assertEqual((after[1].tag, after[1].classes),
+                         ("span", ["compound-beside"]))
+        self.assertEqual(after[1].text(), "(CH-0015, 12,5 g)")
+        self.check_notes(page, materials.definition)
 
 
 class MarkupNameTests(CompoundCase):

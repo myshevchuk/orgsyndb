@@ -64,8 +64,8 @@ FIELD_TYPES = ("text", "number", "boolean", "choice")
 # only the named type takes.
 FIELD_OPTIONS = ("key", "type", "label", "label_de", "required", "column")
 TYPE_OPTIONS = {
-    "text": ("pattern", "unique", "search"),
-    "number": ("min", "max", "unit", "unique"),
+    "text": ("pattern", "unique", "search", "beside"),
+    "number": ("min", "max", "unit", "unique", "beside"),
     "boolean": ("facet",),
     "choice": ("vocabulary", "multiple", "facet", "tabs"),
 }
@@ -74,7 +74,7 @@ TYPE_OPTIONS = {
 RESERVED_FIELD_KEYS = ("id", "title", "created", "modified", "text", "q",
                        "sort", "view")
 # The options a procedure field does not take.
-PROCEDURE_WITHHELD_OPTIONS = ("column", "search", "tabs")
+PROCEDURE_WITHHELD_OPTIONS = ("column", "search", "tabs", "beside")
 # The front-matter keys Hugo reads for itself, beyond those the procedure
 # schema already names, and the weight it reads for each taxonomy.
 HUGO_FRONT_MATTER_KEYS = (
@@ -1088,17 +1088,18 @@ class Declaration(NamedTuple):
     defaults applied.
 
     ``type`` is one of FIELD_TYPES. An option the type does not take
-    holds None, or False for a boolean option: ``pattern``, ``unique``
-    and ``search`` belong to a text field, ``minimum``, ``maximum``,
-    ``unit`` and ``unique`` to a number field, ``facet`` to a boolean
-    field, and ``vocabulary``, ``multiple``, ``terms``, ``facet`` and
-    ``tabs`` to a choice field. ``facet`` makes the field a filter of the
-    compound catalogue, ``search`` adds its values to the text that the
-    compound catalogue searches, and ``tabs`` divides the compound
-    catalogue into tab pages by the field's top-level values, whose
-    directory the field's key names. ``pattern`` is
-    compiled; ``terms`` maps every value of the field's vocabulary, in
-    file order, to its entry.
+    holds None, or False for a boolean option: ``pattern``, ``unique``,
+    ``search`` and ``beside`` belong to a text field, ``minimum``,
+    ``maximum``, ``unit``, ``unique`` and ``beside`` to a number field,
+    ``facet`` to a boolean field, and ``vocabulary``, ``multiple``,
+    ``terms``, ``facet`` and ``tabs`` to a choice field. ``facet`` makes
+    the field a filter of the compound catalogue, ``search`` adds its
+    values to the text that the compound catalogue searches, ``beside``
+    has the site write the compound's value after every link to the
+    compound, and ``tabs`` divides the compound catalogue into tab pages
+    by the field's top-level values, whose directory the field's key
+    names. ``pattern`` is compiled; ``terms`` maps every value of the
+    field's vocabulary, in file order, to its entry.
     """
 
     key: str
@@ -1118,6 +1119,7 @@ class Declaration(NamedTuple):
     facet: bool
     search: bool
     tabs: bool
+    beside: bool
 
 
 def check_choice(field: Declaration, value: object) -> list[Problem]:
@@ -1884,7 +1886,8 @@ def read_declaration(entry: dict[str, Any], number: int, settings: Path,
         multiple=declared_flag(entry, "multiple", where), terms=terms,
         facet=declared_flag(entry, "facet", where),
         search=declared_flag(entry, "search", where),
-        tabs=declared_flag(entry, "tabs", where))
+        tabs=declared_flag(entry, "tabs", where),
+        beside=declared_flag(entry, "beside", where))
 
 
 def load_fields(path: Path, must_exist: bool = True) -> Fields:

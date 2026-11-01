@@ -8,6 +8,7 @@ The functions take the test case, so that a failure reports through it.
 import unittest
 from typing import Any
 
+import field_support as fs
 import pipeline_support as ps
 from pipeline_support import Content, Node, Page
 
@@ -51,12 +52,13 @@ def expected_header(item: Content, locale: str) -> list[str]:
 
 
 def check_scope_table(case: unittest.TestCase, page: Page, item: Content,
-                      registry: dict[str, dict], locale: str,
-                      first_heading: str) -> Node:
+                      registry: dict[str, dict], fields: list[fs.Field],
+                      locale: str, first_heading: str) -> Node:
     """The ``section.scope`` of the page of the general procedure
     ``item``: its place, its heading, its header cells and, for each
-    entry, its cells. ``first_heading`` is the text of the body's first
-    heading. Returns the table."""
+    entry, its cells, the compound links with the notes the compound
+    ``fields`` give them. ``first_heading`` is the text of the body's
+    first heading. Returns the table."""
     texts = TEXTS[locale]
     article = page.find("article", "procedure")
     case.assertIsNotNone(article, "no article.procedure")
@@ -87,13 +89,14 @@ def check_scope_table(case: unittest.TestCase, page: Page, item: Content,
         with case.subTest(entry=number):
             case.assertEqual(len(cells), len(header))
             check_scope_row(case, page, cells, entry, number, keys,
-                            registry, locale)
+                            registry, fields, locale)
     return table
 
 
 def check_scope_row(case: unittest.TestCase, page: Page, cells: list[Node],
                     entry: dict[str, Any], number: int, keys: list[str],
-                    registry: dict[str, dict], locale: str) -> None:
+                    registry: dict[str, dict], fields: list[fs.Field],
+                    locale: str) -> None:
     texts = TEXTS[locale]
     case.assertEqual(cells[0].norm(), str(number))
     names = [ps.shown_name(registry[key], locale)
@@ -104,7 +107,11 @@ def check_scope_row(case: unittest.TestCase, page: Page, cells: list[Node],
                       for key, name in zip(entry["substrates"], names)])
     for link in links:
         case.assertTrue(link.node.has_class("compound"))
-    case.assertEqual(cells[1].norm(), ", ".join(names))
+    case.assertEqual(
+        cells[1].norm(),
+        ", ".join(fs.named(key, registry, fields, locale)
+                  for key in entry["substrates"]))
+    fs.check_beside_notes(case, page, cells[1], registry, fields, locale)
     expected: list[tuple[str, str]] = []
     product_names = []
     for product in entry["products"]:
@@ -133,7 +140,11 @@ def check_scope_row(case: unittest.TestCase, page: Page, cells: list[Node],
                      alts)
     case.assertEqual([l.node.norm() for l in page.links(cells[2])],
                      product_names)
-    case.assertEqual(cells[2].norm(), ", ".join(product_names))
+    case.assertEqual(
+        cells[2].norm(),
+        ", ".join(fs.named(p["compound"], registry, fields, locale)
+                  for p in entry["products"]))
+    fs.check_beside_notes(case, page, cells[2], registry, fields, locale)
     case.assertEqual(
         cells[3].norm(),
         ", ".join(f"{ps.number_text(p['yield_percent'], locale)} %"

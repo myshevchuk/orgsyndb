@@ -816,18 +816,19 @@ def fields_data(settings: Path, language: str) -> dict[str, Any]:
     The result is a table of two keys. ``compound`` lists a table per
     declared compound field, in declared order: its ``key``, ``type``
     and ``column``; its ``label`` as LANGUAGE shows it; ``facet`` for a
-    boolean or choice field and ``search`` for a text field; the
-    ``unit`` of a number field that declares one; and for a choice field
-    ``multiple``, ``tabs``, ``values`` and ``order``. ``procedure``
-    lists a table per declared procedure field, in declared order, with
-    the same keys except ``column``, ``search`` and ``tabs``.
-    ``values`` maps every value of the field's vocabulary to its shown
-    ``label``, its ``path``, the shown labels of its ancestors,
-    outermost first, then its own, and its ``ancestors``, the keys of
-    its ancestors, outermost first. ``order`` lists every value's key
-    depth first: each top-level value in file order, followed by the
-    values filed under it in the same order, recursively. A German
-    label replaces the English one on a German site where one is given.
+    boolean or choice field, ``search`` for a text field and ``beside``
+    for a text or number field; the ``unit`` of a number field that
+    declares one; and for a choice field ``multiple``, ``tabs``,
+    ``values`` and ``order``. ``procedure`` lists a table per declared
+    procedure field, in declared order, with the same keys except
+    ``column``, ``search``, ``tabs`` and ``beside``. ``values`` maps
+    every value of the field's vocabulary to its shown ``label``, its
+    ``path``, the shown labels of its ancestors, outermost first, then
+    its own, and its ``ancestors``, the keys of its ancestors,
+    outermost first. ``order`` lists every value's key depth first:
+    each top-level value in file order, followed by the values filed
+    under it in the same order, recursively. A German label replaces
+    the English one on a German site where one is given.
     A SETTINGS that does not exist gives ``{"compound": [],
     "procedure": []}``. Raises ``validate.ConfigError`` when the
     declarations or their vocabularies break a rule of
@@ -863,6 +864,8 @@ def fields_data(settings: Path, language: str) -> dict[str, Any]:
             entry["facet"] = field.facet
         if compound and field.type == "text":
             entry["search"] = field.search
+        if compound and field.type in ("text", "number"):
+            entry["beside"] = field.beside
         if field.unit is not None:
             entry["unit"] = field.unit
         if field.type == "choice":

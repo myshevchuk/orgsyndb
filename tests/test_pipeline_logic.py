@@ -445,11 +445,13 @@ def fixture_fields(language: str) -> list[dict]:
     carbonyl = shown("Carbonyl compounds", "Carbonylverbindungen")
     return [
         {"key": "item_number", "type": "text", "column": True,
-         "search": False, "label": shown("Item no.", "Artikelnr.")},
+         "search": False, "beside": False,
+         "label": shown("Item no.", "Artikelnr.")},
         {"key": "short_name", "type": "text", "column": False,
-         "search": False, "label": "Short name"},
+         "search": False, "beside": False, "label": "Short name"},
         {"key": "stock", "type": "number", "column": False,
-         "label": shown("Stock", "Bestand"), "unit": "g"},
+         "beside": False, "label": shown("Stock", "Bestand"),
+         "unit": "g"},
         {"key": "in_house", "type": "boolean", "column": False,
          "facet": False,
          "label": shown("Made in house", "Eigene Herstellung")},
@@ -561,6 +563,10 @@ class FieldDataTests(unittest.TestCase):
         for fields in (english, german):
             self.assertIs(fields["item_number"]["search"], False)
             self.assertIs(fields["short_name"]["search"], False)
+            for key in ("item_number", "short_name", "stock"):
+                self.assertIs(fields[key]["beside"], False, key)
+            for key in ("in_house", "chemical_class", "storage"):
+                self.assertNotIn("beside", fields[key], key)
             for key in ("in_house", "chemical_class", "storage"):
                 self.assertIs(fields[key]["facet"], False, key)
             for key in ("chemical_class", "storage"):
@@ -578,10 +584,10 @@ class FieldDataTests(unittest.TestCase):
         data = pipeline_function("fields_data")(FIELDS_SETTINGS, "en")
         keys = {field["key"]: set(field) for field in data["compound"]}
         base = {"key", "type", "column", "label"}
-        self.assertEqual(keys["item_number"], base | {"search"})
-        self.assertEqual(keys["short_name"], base | {"search"})
+        self.assertEqual(keys["item_number"], base | {"search", "beside"})
+        self.assertEqual(keys["short_name"], base | {"search", "beside"})
         self.assertEqual(keys["in_house"], base | {"facet"})
-        self.assertEqual(keys["stock"], base | {"unit"})
+        self.assertEqual(keys["stock"], base | {"unit", "beside"})
         choice = base | {"facet", "multiple", "tabs", "values", "order"}
         self.assertEqual(keys["chemical_class"], choice)
         self.assertEqual(keys["storage"], choice)
@@ -607,6 +613,40 @@ class FieldDataTests(unittest.TestCase):
         self.assertNotIn("facet", by_key["tag"])
         self.assertNotIn("search", by_key["flag"])
         self.assertNotIn("search", by_key["kind"])
+
+    def test_beside_is_taken_as_declared(self) -> None:
+        """Requirement: Field data for the site (`beside`, as declared,
+        for a text and a number field only)."""
+        path = self.settings(
+            'format = 1\n\n[[fields.compound]]\nkey = "tag"\n'
+            'type = "text"\nlabel = "Tag"\nbeside = true\n\n'
+            '[[fields.compound]]\nkey = "note"\ntype = "text"\n'
+            'label = "Note"\n\n[[fields.compound]]\nkey = "count"\n'
+            'type = "number"\nlabel = "Count"\nbeside = true\n\n'
+            '[[fields.compound]]\nkey = "mass"\ntype = "number"\n'
+            'label = "Mass"\nbeside = false\n\n'
+            '[[fields.compound]]\nkey = "flag"\ntype = "boolean"\n'
+            'label = "Flag"\n\n[[fields.compound]]\nkey = "kind"\n'
+            'type = "choice"\nlabel = "Kind"\nvocabulary = "kinds"\n',
+            {"kinds": '[top]\nlabel = "Top"\n'})
+        data = pipeline_function("fields_data")(path, "en")
+        by_key = {f["key"]: f for f in data["compound"]}
+        self.assertIs(by_key["tag"]["beside"], True)
+        self.assertIs(by_key["note"]["beside"], False)
+        self.assertIs(by_key["count"]["beside"], True)
+        self.assertIs(by_key["mass"]["beside"], False)
+        for key in ("flag", "kind"):
+            self.assertNotIn("beside", by_key[key], key)
+
+    def test_the_test_collection_besides(self) -> None:
+        """Requirement: Field data for the site (`beside` of the test
+        collection)."""
+        data = pipeline_function("fields_data")(TEST_SETTINGS, "en")
+        self.assertEqual(
+            {f["key"]: f.get("beside") for f in data["compound"]},
+            {"item_number": True, "short_name": True,
+             "chemical_class": None, "stock": False, "in_house": None,
+             "group": None})
 
     def test_the_test_collection_facets_and_searches(self) -> None:
         """Requirement: Field data for the site (`facet` and `search` of
@@ -686,7 +726,7 @@ class FieldDataTests(unittest.TestCase):
         data = pipeline_function("fields_data")(path, "en")
         self.assertEqual(data, {"compound": [
             {"key": "count", "type": "number", "label": "Count",
-             "column": False}], "procedure": []})
+             "column": False, "beside": False}], "procedure": []})
 
     def test_the_result_is_json(self) -> None:
         """Requirement: Field data for the site (the JSON that the build

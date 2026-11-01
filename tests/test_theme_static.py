@@ -175,6 +175,17 @@ class RowDetailsTests(unittest.TestCase):
             "screen.css never shows .row-details in the details view")
 
 
+class CompoundBesideStyleTests(unittest.TestCase):
+    def test_the_note_is_muted(self) -> None:
+        """Scenario: The note is muted."""
+        found = [decl for decl in css("base.css")
+                 if decl.prop == "color"
+                 and ".compound-beside" in ps.selectors_of(decl)]
+        self.assertTrue(found, "base.css has no rule for .compound-beside")
+        self.assertIn("var(--muted)",
+                      [ps.plain_value(decl.value) for decl in found])
+
+
 class ContrastFunctionTests(unittest.TestCase):
     """The helpers must reproduce known WCAG values, or the test above
     would hold nothing."""
