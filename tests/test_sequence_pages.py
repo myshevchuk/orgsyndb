@@ -32,7 +32,7 @@ class SequenceCase(tti.SiteCase):
         return ps.load_page(self.public, path)
 
     def vocabulary(self) -> dict[str, str]:
-        return ps.reaction_labels(self.sandbox.app, self.LOCALE)
+        return ps.reaction_labels(self.sandbox.root, self.LOCALE)
 
     def by_sequence(self, ident: str) -> Sequence:
         return next(s for s in self.sequences() if s.id == ident)

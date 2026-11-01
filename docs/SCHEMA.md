@@ -75,7 +75,7 @@ The site derives the kind from `scope`; do not add a `kind` field.
 | `lastmod` | When the procedure was last changed. | Offset datetime | Yes | Must be unquoted, must not be earlier than `date`, and should use the Europe/Berlin offset in force at that instant. | `lastmod = 2026-10-19T17:42:05+02:00` |
 | `authors` | Everyone who wrote the procedure. | Non-empty array of non-empty strings | Yes | Must contain at least one name. | `authors = ["A. Example"]` |
 | `status` | The procedure's workflow state. | String | Yes | Must be exactly `draft`, `checked`, or `retired`. | `status = "draft"` |
-| `reaction_types` | The controlled reaction category. | Array of strings | Yes | Must contain exactly one slug from the reaction-type vocabulary. | `reaction_types = ["esterification"]` |
+| `reaction_types` | The controlled reaction category. | Array of strings | Yes | Must contain exactly one slug from the collection's `vocabularies/reaction-types.toml`. | `reaction_types = ["esterification"]` |
 | `tags` | Search terms for the procedure. | Non-empty array of strings | Yes | Every tag must contain lowercase letters or digits, with single hyphens between groups. | `tags = ["acid-catalysed"]` |
 | `products` | The compounds made and their yields. | Non-empty array of tables | Only without `scope` | Every entry must contain `compound` and `yield_percent`, as described below. | `products = [{ compound = "ethyl-acetate", yield_percent = 85 }]` |
 | `scale` | The amount of product the procedure makes; the typical scale for a general procedure. | String | Yes | Must contain a number, whitespace, and a unit token. The number may have a decimal point or a decimal comma. The unit vocabulary is not restricted. | `scale = "25 mmol"` |
@@ -420,8 +420,9 @@ label_de = "Ester"
 parent = "acid-derivatives"
 ```
 
-The collection may omit `vocabularies/` when no field needs it. `init` does
-not create the directory.
+The collection may omit `vocabularies/` when no field needs it and the
+collection needs no reaction types. `init` creates the directory with the
+starter `reaction-types.toml`; add vocabularies for declared fields as needed.
 
 ### Compound values and messages
 
@@ -849,10 +850,16 @@ the separator:
 
 ## Reaction-type vocabulary
 
-`reaction_types` contains exactly one slug from this table. The slug is the
-value written in front matter, in every language. The label is the name
-an English site shows, and the German label the name a German site
-shows.
+`reaction_types` contains exactly one slug, a key such as `esterification`,
+from your collection's `vocabularies/reaction-types.toml`, beside
+`orgsyndb.toml`. Use the same slug in front matter in every language. Edit
+this file to add, rename or remove reaction types. A procedure still naming
+a renamed or removed slug fails validation.
+
+`orgsyndb init DIR` copies the starter list from
+[`templates/reaction-types.toml`](../templates/reaction-types.toml) into this
+file unless it already exists; an existing file stays unchanged. This table
+lists the starter values and their names on English and German sites:
 
 | Slug | Label | German label |
 |---|---|---|
@@ -872,10 +879,28 @@ shows.
 | `reduction` | Reduction | Reduktion |
 | `reductive-amination` | Reductive amination | Reduktive Aminierung |
 
-The vocabulary is stored in `site/data/reaction_types.toml`. Each entry is
-a lowercase, hyphenated slug whose table contains a non-empty `label` and
-a non-empty `label_de`. The site shows `label` where `label_de` is
-missing, and the validator refuses an empty `label_de`.
+The file must be UTF-8 TOML and contain at least one value. Each top-level
+key must match `[a-z0-9]+(-[a-z0-9]+)*`: lowercase letters and digits with
+single hyphens between groups. Its table must contain a non-empty string
+`label` and may contain a non-empty string `label_de`. No other key is
+allowed. Reaction types form one level and do not take `parent`.
+
+An English site shows `label`. A German site shows `label_de`, or `label`
+when `label_de` is absent; an empty `label_de` is invalid. The
+`/reaction_types/` list and the catalogue's reaction-type filter sort by the
+displayed label.
+
+Without the file, the collection has no reaction types. Each procedure then
+reports `unknown reaction type "<v>"; see vocabularies/reaction-types.toml
+for the allowed values`. A collection containing only compounds still
+validates. A declared compound or procedure choice field may name
+`vocabulary = "reaction-types"`; in that case the file must exist, and its
+absence is a configuration error.
+
+An existing file that breaks a vocabulary rule is a configuration error.
+The validator exits 2 and writes `validate.py: error: ...` naming the file
+and, where applicable, the offending value and key. Both `orgsyndb validate`
+and `build` fail on such an error.
 
 ## Procedure body sections
 
@@ -986,16 +1011,14 @@ German site shows them with a comma.
 Run the validator with at least one Markdown content root:
 
 ```text
-tools/validate.py [--vocabulary FILE] [--settings FILE] [--static-dir DIR] [--compounds DIR] [--sequences DIR] CONTENT_ROOT...
+tools/validate.py [--settings FILE] [--static-dir DIR] [--compounds DIR] [--sequences DIR] CONTENT_ROOT...
 ```
 
 Each positional `CONTENT_ROOT` is a directory of Markdown procedures.
-If omitted, `--vocabulary` defaults to the application's
-`site/data/reaction_types.toml`, resolved from the script's location rather
-than from the current directory, and `--static-dir` defaults to `static` in
-the current directory. `--compounds` defaults to `compounds` in the current
-directory. The validator checks every compound file there and resolves
-procedure keys against that registry. A missing registry directory is empty,
+`--static-dir` defaults to `static` in the current directory.
+`--compounds` defaults to `compounds` in the current directory. The
+validator checks every compound file there and resolves procedure keys
+against that registry. A missing registry directory is empty,
 so every key a procedure names is unknown. An existing path that is not a
 directory is a configuration error. `orgsyndb validate` passes
 `--settings orgsyndb.toml --static-dir static --compounds compounds --sequences md/sequences`
@@ -1008,6 +1031,11 @@ must exist. The validator checks the declarations and resolves their
 vocabularies relative to the settings file's directory, then checks each
 compound's and each procedure's values against its declarations. Org
 procedures reach this check as Markdown exports.
+
+The validator also reads `vocabularies/reaction-types.toml` beside the
+settings file, even when the default settings file is absent. Without
+`--settings`, this is `vocabularies/reaction-types.toml` in the working
+directory. There is no command-line option for choosing a vocabulary file.
 
 `--sequences` defaults to `md/sequences` in the working directory. A missing
 directory holds no sequences; an existing path that is not a directory is a

@@ -255,9 +255,11 @@ class StubTests(unittest.TestCase):
         self.assertEqual(data["lastmod"], moment)
         self.assertEqual(data["id"], "OSDB-0001")
         self.assertNotIn("ai_model", data)
-        with support.template_registry() as registry:
+        with support.template_registry() as registry, \
+                support.starter_settings() as settings:
             checked = support.run_validator(
-                ["--compounds", registry, stub.parent])
+                ["--compounds", registry, "--settings", settings,
+                 stub.parent])
         self.assertEqual(checked.returncode, 0, checked.stderr)
         self.assertEqual(checked.stdout, "")
 

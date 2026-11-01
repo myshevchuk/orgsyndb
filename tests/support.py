@@ -23,7 +23,10 @@ GENERAL = FIXTURES / "general" / "OSDB-0140-general.md"
 SEQUENCES = FIXTURES / "sequences"
 SEQUENCE_BASELINE = SEQUENCES / "SEQ-0001-baseline.md"
 SEQUENCE_TEMPLATE = REPO / "templates" / "sequence.md"
-VOCABULARY = FIXTURES / "reaction_types.toml"
+SETTINGS_DIR = FIXTURES / "settings"
+SETTINGS = SETTINGS_DIR / "orgsyndb.toml"
+REACTION_TYPES = SETTINGS_DIR / "vocabularies" / "reaction-types.toml"
+STARTER_REACTION_TYPES = REPO / "templates" / "reaction-types.toml"
 STATIC_DIR = FIXTURES / "static"
 COMPOUNDS = FIXTURES / "compounds"
 COMPOUND_TEMPLATE = REPO / "templates" / "compound.toml"
@@ -84,14 +87,17 @@ def run_validator(args: Sequence[str | Path],
 
 def fixture_run(*roots: str | Path,
                 extra: Sequence[str | Path] = (),
-                compounds: Path = COMPOUNDS) -> Result:
+                compounds: Path = COMPOUNDS,
+                settings: Path = SETTINGS) -> Result:
     """Fixture run: roots are relative to tests/fixtures/ unless absolute.
 
     ``compounds`` is the registry the run reads, the fixture registry
-    unless a registry variant names another.
+    unless a registry variant names another; ``settings`` is the
+    settings file, whose directory holds the reaction types, the fixture
+    settings file unless a variant names another.
     """
     args: list[str | Path] = [
-        "--vocabulary", VOCABULARY, "--static-dir", STATIC_DIR,
+        "--settings", settings, "--static-dir", STATIC_DIR,
         "--compounds", compounds,
     ]
     args += extra
@@ -408,6 +414,83 @@ def template_registry() -> Iterator[Path]:
         yield registry
 
 
+@contextlib.contextmanager
+def starter_settings() -> Iterator[Path]:
+    """A temporary settings file ``orgsyndb.toml`` holding ``format = 1``,
+    beside a ``vocabularies/reaction-types.toml`` that copies the starter
+    vocabulary ``templates/reaction-types.toml``."""
+    if not STARTER_REACTION_TYPES.is_file():
+        raise AssertionError("templates/reaction-types.toml does not exist")
+    with tempfile.TemporaryDirectory() as tmp:
+        directory = Path(tmp) / "collection"
+        (directory / "vocabularies").mkdir(parents=True)
+        (directory / "orgsyndb.toml").write_text("format = 1\n",
+                                                 encoding="utf-8")
+        shutil.copyfile(STARTER_REACTION_TYPES,
+                        directory / "vocabularies" / REACTION_TYPES.name)
+        yield directory / "orgsyndb.toml"
+
+
+class SettingsCopy(NamedTuple):
+    """The temporary copy of a settings variant run."""
+    settings: Path
+    vocabularies: Path
+
+
+@contextlib.contextmanager
+def settings_copy() -> Iterator[SettingsCopy]:
+    """A fresh temporary copy of ``tests/fixtures/settings/``."""
+    with tempfile.TemporaryDirectory() as tmp:
+        directory = Path(tmp) / "settings"
+        shutil.copytree(SETTINGS_DIR, directory)
+        yield SettingsCopy(directory / "orgsyndb.toml",
+                           directory / "vocabularies")
+
+
+SettingsChange = Callable[[SettingsCopy], None]
+
+
+def settings_variant_run(*steps: SettingsChange,
+                         roots: Sequence[str | Path] = ("baseline",)
+                         ) -> Result:
+    """Settings variant run: each of ``steps`` edits a copy of
+    ``tests/fixtures/settings/``, then a fixture run on ``roots`` reads
+    that copy through ``--settings``."""
+    with settings_copy() as copy:
+        for step in steps:
+            step(copy)
+        return fixture_run(*roots, settings=copy.settings)
+
+
+def edit_reaction_types(*edits: Edit) -> SettingsChange:
+    """A settings change applying text edits to
+    ``vocabularies/reaction-types.toml``."""
+    def change(copy: SettingsCopy) -> None:
+        path = copy.vocabularies / REACTION_TYPES.name
+        path.write_text(
+            apply_edits(path.read_text(encoding="utf-8"), edits),
+            encoding="utf-8")
+    return change
+
+
+def delete_reaction_types() -> SettingsChange:
+    """A settings change deleting ``vocabularies/reaction-types.toml``."""
+    def change(copy: SettingsCopy) -> None:
+        (copy.vocabularies / REACTION_TYPES.name).unlink()
+    return change
+
+
+def write_reaction_types(content: str | bytes) -> SettingsChange:
+    """A settings change writing ``vocabularies/reaction-types.toml``."""
+    def change(copy: SettingsCopy) -> None:
+        path = copy.vocabularies / REACTION_TYPES.name
+        if isinstance(content, bytes):
+            path.write_bytes(content)
+        else:
+            path.write_text(content, encoding="utf-8")
+    return change
+
+
 def append_text(line: str) -> Edit:
     """A text edit appending ``line`` and a newline to a file."""
     return lambda text: text + line + "\n"
@@ -440,11 +523,14 @@ class FieldCopy(NamedTuple):
 
 @contextlib.contextmanager
 def fields_copy() -> Iterator[FieldCopy]:
-    """Fresh temporary copies of ``tests/fixtures/fields/`` and of the
-    fixture registry."""
+    """Fresh temporary copies of ``tests/fixtures/fields/``, with the
+    fixture reaction types in its ``vocabularies/``, and of the fixture
+    registry."""
     with tempfile.TemporaryDirectory() as tmp:
         fields = Path(tmp) / "fields"
         shutil.copytree(FIELDS, fields)
+        shutil.copyfile(REACTION_TYPES,
+                        fields / "vocabularies" / REACTION_TYPES.name)
         registry = Path(tmp) / "compounds"
         shutil.copytree(COMPOUNDS, registry)
         yield FieldCopy(fields / "orgsyndb.toml", fields / "vocabularies",
@@ -463,8 +549,8 @@ def field_variant_run(*steps: FieldChange,
         for step in steps:
             step(copy)
         return fixture_run(
-            "baseline", compounds=copy.registry,
-            extra=["--settings", copy.settings, *extra])
+            "baseline", compounds=copy.registry, settings=copy.settings,
+            extra=extra)
 
 
 def edit_settings(*edits: Edit) -> FieldChange:
@@ -492,6 +578,14 @@ def edit_vocabulary(name: str, *edits: Edit) -> FieldChange:
         path.write_text(
             apply_edits(path.read_text(encoding="utf-8"), edits),
             encoding="utf-8")
+    return change
+
+
+def delete_vocabulary(name: str) -> FieldChange:
+    """A field change deleting ``vocabularies/<name>.toml`` of the
+    fields copy."""
+    def change(copy: FieldCopy) -> None:
+        (copy.vocabularies / f"{name}.toml").unlink()
     return change
 
 
@@ -525,12 +619,15 @@ class ProcedureFieldCopy(NamedTuple):
 
 @contextlib.contextmanager
 def procedure_fields_copy() -> Iterator[ProcedureFieldCopy]:
-    """Fresh temporary copies of ``tests/fixtures/procedure-fields/`` and
-    of the fixture registry, and a fresh content root holding the
-    baseline as its only file."""
+    """Fresh temporary copies of ``tests/fixtures/procedure-fields/``,
+    with the fixture reaction types in its ``vocabularies/``, and of the
+    fixture registry, and a fresh content root holding the baseline as
+    its only file."""
     with tempfile.TemporaryDirectory() as tmp:
         fields = Path(tmp) / "procedure-fields"
         shutil.copytree(PROCEDURE_FIELDS, fields)
+        shutil.copyfile(REACTION_TYPES,
+                        fields / "vocabularies" / REACTION_TYPES.name)
         registry = Path(tmp) / "compounds"
         shutil.copytree(COMPOUNDS, registry)
         content = Path(tmp) / "content"
@@ -554,7 +651,7 @@ def procedure_field_run(*steps: ProcedureFieldChange,
             step(copy)
         return fixture_run(
             copy.content, compounds=copy.registry,
-            extra=["--settings", copy.settings, *extra])
+            settings=copy.settings, extra=extra)
 
 
 def edit_procedure_settings(*edits: Edit) -> ProcedureFieldChange:
@@ -576,6 +673,13 @@ def edit_procedure_vocabulary(name: str, *edits: Edit
         path.write_text(
             apply_edits(path.read_text(encoding="utf-8"), edits),
             encoding="utf-8")
+    return change
+
+
+def delete_procedure_vocabulary(name: str) -> ProcedureFieldChange:
+    """A procedure-field change deleting ``vocabularies/<name>.toml``."""
+    def change(copy: ProcedureFieldCopy) -> None:
+        (copy.vocabularies / f"{name}.toml").unlink()
     return change
 
 

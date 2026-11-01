@@ -39,7 +39,7 @@ authors = ["A. Example"]
 status = "draft"
 
 # Die Art der Reaktion: genau ein Eintrag. Die erlaubten Werte stehen in
-# site/data/reaction_types.toml, zum Beispiel "esterification"
+# vocabularies/reaction-types.toml, zum Beispiel "esterification"
 # (Veresterung), "reduction" (Reduktion) oder "cross-coupling"
 # (Kreuzkupplung).
 reaction_types = ["esterification"]

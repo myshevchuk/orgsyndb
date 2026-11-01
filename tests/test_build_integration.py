@@ -444,6 +444,73 @@ class FieldDataStagingTests(BuildTestCase):
         self.assertFalse((self.sandbox.root / "public").exists())
 
 
+class ReactionTypeDataStagingTests(BuildTestCase):
+    def reaction_types_json(self) -> dict:
+        path = self.sandbox.root / "build" / "data" / "reaction_types.json"
+        self.assertTrue(path.is_file(),
+                        "build/data/reaction_types.json is missing")
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def expected(self) -> dict:
+        language = ps.pipeline().site_language(self.sandbox.app / "site")
+        return ps.pipeline_function("reaction_types_data")(
+            self.sandbox.root / "orgsyndb.toml", language)
+
+    def test_reaction_type_data_is_staged(self) -> None:
+        """Scenario: Reaction-type data is staged."""
+        self.assert_ok(self.build("build"))
+        data = self.reaction_types_json()
+        self.assertEqual(data, self.expected())
+        self.assertEqual(data["aldol-condensation"],
+                         {"label": "Aldolkondensation"})
+
+    def test_a_second_build_stages_the_changed_reaction_types(self) -> None:
+        """Requirement: build subcommand (the reaction-type data is
+        written on every build)."""
+        self.assert_ok(self.build("build"))
+        path = self.sandbox.root / "vocabularies" / "reaction-types.toml"
+        text = path.read_text(encoding="utf-8")
+        self.assertEqual(text.count('label_de = "Veresterung"'), 1)
+        path.write_text(text.replace('label_de = "Veresterung"',
+                                     'label_de = "Esterbildung"'),
+                        encoding="utf-8")
+        self.assert_ok(self.build("build"))
+        data = self.reaction_types_json()
+        self.assertEqual(data, self.expected())
+        self.assertEqual(data["esterification"], {"label": "Esterbildung"})
+
+    def test_a_broken_vocabulary_stops_the_build_before_staging(
+            self) -> None:
+        """Requirement: build subcommand (validation precedes the
+        staging)."""
+        path = self.sandbox.root / "vocabularies" / "reaction-types.toml"
+        path.write_text(path.read_text(encoding="utf-8").replace(
+            "[reduction]\n", '[reduction]\nparent = "esterification"\n'),
+            encoding="utf-8")
+        result = self.build("build")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("validate.py: error:", result.stderr)
+        self.assertIn("reaction-types.toml", result.stderr)
+        self.assertFalse((self.sandbox.root / "build" / "data").exists())
+        self.assertFalse((self.sandbox.root / "public").exists())
+
+    def test_a_collection_without_reaction_types_fails_validation(
+            self) -> None:
+        """Requirement: Reaction-type vocabulary (a missing file leaves
+        every procedure's reaction type unknown)."""
+        (self.sandbox.root / "vocabularies" / "reaction-types.toml").unlink()
+        result = self.build("build")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertNotIn("validate.py: error:", result.stderr)
+        lines = problem_lines(result.stdout)
+        self.assertTrue(lines, result.stdout)
+        for line in lines:
+            self.assertIn(":reaction_types: error: unknown reaction type",
+                          line)
+            self.assertIn("vocabularies/reaction-types.toml", line)
+        self.assertFalse((self.sandbox.root / "public").exists())
+
+
 class ShippedTreeValidationTests(DemoBuildTestCase):
     def test_shipped_tree_validates_without_any_problem_line(self) -> None:
         """Scenario: Clean validation of the shipped tree."""

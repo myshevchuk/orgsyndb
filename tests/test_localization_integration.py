@@ -208,7 +208,7 @@ class GermanSiteTests(GermanCase):
         page = self.page("reaction_types/aldol-condensation/index.html")
         self.assertEqual(page.find("h1").norm(), "Aldolkondensation")
         self.assertEqual(page.title(), "Aldolkondensation | OrgSynDB")
-        labels = ps.reaction_labels(self.sandbox.app, "de")
+        labels = ps.reaction_labels(self.sandbox.root, "de")
         used = {slug for item in self.content()
                 for slug in item.data["reaction_types"]}
         expected = sorted(labels[slug] for slug in used)

@@ -86,7 +86,7 @@ Website leitet die Art aus `scope` ab; legen Sie kein Feld `kind` an.
 | `lastmod` | Wann die Vorschrift zuletzt geändert wurde. | Datum mit Zeitzonenversatz | Ja | Ohne Anführungszeichen, nicht früher als `date`, mit dem zu diesem Zeitpunkt geltenden Versatz von Europe/Berlin. | `lastmod = 2026-10-19T17:42:05+02:00` |
 | `authors` | Alle, die die Vorschrift geschrieben haben. | Nicht leeres Array nicht leerer Strings | Ja | Mindestens ein Name. | `authors = ["A. Example"]` |
 | `status` | Der Bearbeitungsstand. | String | Ja | Genau `draft`, `checked` oder `retired`. Eine deutsche Website zeigt *Entwurf*, *geprüft* oder *zurückgezogen*. | `status = "draft"` |
-| `reaction_types` | Die festgelegte Reaktionsklasse. | String-Array | Ja | Genau ein Kürzel aus dem Reaktionstyp-Vokabular. | `reaction_types = ["esterification"]` |
+| `reaction_types` | Die festgelegte Reaktionsklasse. | String-Array | Ja | Genau ein Kürzel aus `vocabularies/reaction-types.toml` der Sammlung. | `reaction_types = ["esterification"]` |
 | `tags` | Suchbegriffe. | Nicht leeres String-Array | Ja | Jedes Schlagwort besteht aus Kleinbuchstaben oder Ziffern mit einzelnen Bindestrichen zwischen den Gruppen. | `tags = ["acid-catalysed"]` |
 | `products` | Die hergestellten Verbindungen mit ihren Ausbeuten. | Nicht leeres Array von Tabellen | Nur ohne `scope` | Jeder Eintrag enthält `compound` und `yield_percent`, wie unten beschrieben. | `products = [{ compound = "ethyl-acetate", yield_percent = 85 }]` |
 | `scale` | Wie viel Produkt die Vorschrift liefert; bei einer allgemeinen Vorschrift die typische Ansatzgröße. | String | Ja | Eine Zahl, Leerraum und eine Einheit. Die Zahl darf einen Dezimalpunkt oder ein Dezimalkomma haben. Die Einheiten sind nicht festgelegt. | `scale = "2,5 mmol"` |
@@ -455,8 +455,10 @@ label_de = "Ester"
 parent = "acid-derivatives"
 ```
 
-Die Sammlung darf `vocabularies/` weglassen, wenn kein Feld es benötigt.
-`init` legt das Verzeichnis nicht an.
+Die Sammlung darf `vocabularies/` weglassen, wenn kein Feld es benötigt und
+die Sammlung keine Reaktionstypen braucht. `init` legt das Verzeichnis mit
+der Startliste `reaction-types.toml` an. Ergänzen Sie Vokabulare für
+deklarierte Felder nach Bedarf.
 
 ### Verbindungswerte und Meldungen
 
@@ -923,9 +925,18 @@ Zeilenzählung beginnt nach der Trennlinie bei 1:
 
 ## Reaktionstypen
 
-`reaction_types` enthält genau ein Kürzel aus dieser Tabelle. Das Kürzel
-ist der Wert im Datenblock, in jeder Sprache. Die Bezeichnungen sind die
-Namen, die eine englische und eine deutsche Website zeigen.
+`reaction_types` enthält genau ein Kürzel, einen Schlüssel wie
+`esterification`, aus `vocabularies/reaction-types.toml` Ihrer Sammlung
+neben `orgsyndb.toml`. Verwenden Sie in jeder Sprache dasselbe Kürzel im
+Datenblock. Bearbeiten Sie diese Datei, um Reaktionstypen hinzuzufügen,
+umzubenennen oder zu entfernen. Eine Vorschrift, die noch ein umbenanntes
+oder entferntes Kürzel nennt, besteht die Prüfung nicht.
+
+`orgsyndb init DIR` kopiert die Startliste aus
+[`templates/reaction-types.toml`](../templates/reaction-types.toml) in diese
+Datei, sofern sie noch nicht vorhanden ist. Eine vorhandene Datei bleibt
+unverändert. Diese Tabelle zeigt die Startwerte mit ihren Bezeichnungen auf
+englischen und deutschen Websites:
 
 | Kürzel | Englisch | Deutsch |
 |---|---|---|
@@ -945,11 +956,32 @@ Namen, die eine englische und eine deutsche Website zeigen.
 | `reduction` | Reduction | Reduktion |
 | `reductive-amination` | Reductive amination | Reduktive Aminierung |
 
-Das Vokabular steht in `site/data/reaction_types.toml`. Jeder Eintrag ist
-ein Kürzel aus Kleinbuchstaben und Bindestrichen, dessen Tabelle ein nicht
-leeres `label` und ein nicht leeres `label_de` enthält. Fehlt `label_de`,
-zeigt eine deutsche Website `label`; ein leeres `label_de` lehnt der
-Validator ab.
+Die Datei muss UTF-8-TOML sein und mindestens einen Wert enthalten. Jeder
+Schlüssel auf oberster Ebene muss `[a-z0-9]+(-[a-z0-9]+)*` entsprechen:
+Kleinbuchstaben und Ziffern mit einzelnen Bindestrichen zwischen den
+Gruppen. Seine Tabelle muss einen nicht leeren String `label` enthalten
+und darf einen nicht leeren String `label_de` enthalten. Andere Schlüssel
+sind nicht erlaubt. Reaktionstypen haben nur eine Ebene und erlauben kein
+`parent`.
+
+Eine englische Website zeigt `label`. Eine deutsche Website zeigt
+`label_de`, bei fehlendem `label_de` stattdessen `label`; ein leeres
+`label_de` ist ungültig. Die Liste unter `/reaction_types/` und der
+Reaktionstypfilter des Katalogs sortieren nach der angezeigten Bezeichnung.
+
+Ohne die Datei hat die Sammlung keine Reaktionstypen. Jede Vorschrift
+meldet dann `unknown reaction type "<v>"; see
+vocabularies/reaction-types.toml for the allowed values`. Eine Sammlung,
+die nur Verbindungen enthält, besteht die Prüfung weiterhin. Ein
+deklariertes Auswahlfeld für Verbindungen oder Vorschriften darf
+`vocabulary = "reaction-types"` nennen. Dann muss die Datei vorhanden
+sein; ihr Fehlen ist ein Konfigurationsfehler.
+
+Eine vorhandene Datei, die eine Vokabularregel verletzt, ist ein
+Konfigurationsfehler. Der Validator endet mit Rückgabewert 2 und schreibt
+`validate.py: error: ...` mit dem Dateinamen und gegebenenfalls dem
+betroffenen Wert und Schlüssel. Sowohl `orgsyndb validate` als auch
+`build` scheitern bei einem solchen Fehler.
 
 ## Abschnitte des Textes
 
@@ -1060,15 +1092,14 @@ eine deutsche Website zeigt sie mit Komma.
 Starten Sie den Validator mit mindestens einem Markdown-Verzeichnis:
 
 ```text
-tools/validate.py [--vocabulary FILE] [--settings FILE] [--static-dir DIR] [--compounds DIR] [--sequences DIR] CONTENT_ROOT...
+tools/validate.py [--settings FILE] [--static-dir DIR] [--compounds DIR] [--sequences DIR] CONTENT_ROOT...
 ```
 
 Jedes `CONTENT_ROOT` ist ein Verzeichnis mit Markdown-Vorschriften.
-Ohne Angabe ist `--vocabulary` die Datei `site/data/reaction_types.toml` der
-Anwendung, ausgehend vom Ort des Skripts und nicht vom aktuellen
-Verzeichnis. `--static-dir` ist `static` und `--compounds` ist `compounds`
-im aktuellen Verzeichnis. Der Validator prüft dort jede Verbindungsdatei
-und löst die Schlüssel der Vorschriften gegen dieses Register auf. Ein
+Ohne Angabe ist `--static-dir` gleich `static` und `--compounds` gleich
+`compounds` im aktuellen Verzeichnis. Der Validator prüft dort jede
+Verbindungsdatei und löst die Schlüssel der Vorschriften gegen dieses
+Register auf. Ein
 fehlendes Registerverzeichnis ist leer: Jeder genannte Schlüssel ist dann
 unbekannt. Ein vorhandener Pfad, der kein Verzeichnis ist, ergibt einen
 Konfigurationsfehler. `orgsyndb validate` übergibt nach dem Org-Export
@@ -1083,6 +1114,11 @@ Validator prüft die Deklarationen und sucht deren Vokabulare ausgehend
 vom Verzeichnis der Einstellungsdatei. Danach prüft er die Werte jeder
 Verbindung und jeder Vorschrift gegen die jeweiligen Deklarationen.
 Org-Vorschriften erreichen diese Prüfung als Markdown-Exporte.
+
+Der Validator liest außerdem `vocabularies/reaction-types.toml` neben der
+Einstellungsdatei, auch wenn die Vorgabedatei fehlt. Ohne `--settings` ist
+dies `vocabularies/reaction-types.toml` im aktuellen Verzeichnis. Es gibt
+keine Kommandozeilenoption zur Wahl einer Vokabulardatei.
 
 `--sequences` ist ohne Angabe `md/sequences` im aktuellen Verzeichnis. Ein
 fehlender Ordner enthält keine Synthesewege; ein vorhandener Pfad, der kein

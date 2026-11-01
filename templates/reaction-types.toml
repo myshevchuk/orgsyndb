@@ -1,8 +1,9 @@
-# Controlled vocabulary for the reaction_types front-matter field.
-# Each table name is a reaction-type slug (lowercase, hyphenated); its
-# label is the name shown on the English site, and label_de the name on
-# the German site (label when label_de is missing). A procedure's
-# reaction_types must hold exactly one of these slugs.
+# The reaction types of this collection. A procedure names exactly one
+# of them in reaction_types. Each table name is a reaction-type slug
+# (lowercase, hyphenated); its label is the name shown on an English
+# site, and label_de the name on a German site (label when label_de is
+# missing). Add, rename or remove reaction types to suit the collection;
+# the validator reports a procedure whose reaction type is not listed.
 
 [acylation]
 label = "Acylation"

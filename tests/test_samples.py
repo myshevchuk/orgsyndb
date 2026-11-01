@@ -656,7 +656,8 @@ class DemoFieldTests(unittest.TestCase):
                         "is missing")
         self.assertEqual(sorted(p.name for p in directory.iterdir()),
                          ["chemical-classes.toml",
-                          "inventory-groups.toml", "projects.toml"])
+                          "inventory-groups.toml", "projects.toml",
+                          "reaction-types.toml"])
         vocabulary = tomllib.loads(
             (directory / "chemical-classes.toml").read_text(
                 encoding="utf-8"))
@@ -667,6 +668,23 @@ class DemoFieldTests(unittest.TestCase):
                     "esters", "anhydrides", "alcohols", "phenols",
                     "aryl-halides", "organoboron-compounds",
                     "organophosphorus-compounds"]))
+
+    def test_the_reaction_types_of_the_demo(self) -> None:
+        """Scenario: The demo declares its fields (reaction-types)."""
+        path = DEMO / "vocabularies" / "reaction-types.toml"
+        starter = REPO / "templates" / "reaction-types.toml"
+        self.assertTrue(path.is_file(), f"{path.name} is missing")
+        self.assertTrue(starter.is_file(), "templates/reaction-types.toml "
+                        "is missing")
+        self.assertEqual(path.read_bytes(), starter.read_bytes())
+        values = tomllib.loads(path.read_text(encoding="utf-8"))
+        for value, entry in values.items():
+            with self.subTest(value=value):
+                self.assertTrue(entry.get("label_de", "").strip())
+        named = {r for sample in samples()
+                 for r in sample.data.get("reaction_types", [])}
+        self.assertTrue(named)
+        self.assertLessEqual(named, set(values))
 
     def test_the_inventory_groups_of_the_demo(self) -> None:
         """Scenario: The demo declares its fields (inventory-groups)."""

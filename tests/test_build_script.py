@@ -547,6 +547,45 @@ class InitTests(ProgramTestCase):
                          "md/procedures/OSDB-0001-ethyl-acetate.md")
         stub = target / "md" / "procedures" / "OSDB-0001-ethyl-acetate.md"
         self.assertTrue(stub.is_file())
+        starter = REPO / "templates" / "reaction-types.toml"
+        written = target / "vocabularies" / "reaction-types.toml"
+        self.assertTrue(written.is_file(), "vocabularies/reaction-types.toml "
+                        "was not written")
+        self.assertEqual(written.read_bytes(), starter.read_bytes())
+        data = tomllib.loads(stub.read_text(encoding="utf-8").split(
+            "+++\n")[1])
+        self.assertEqual(len(data["reaction_types"]), 1)
+        self.assertIn(data["reaction_types"][0], tomllib.loads(
+            written.read_text(encoding="utf-8")))
+
+    def test_a_new_collection_validates_its_first_stub(self) -> None:
+        """Scenario: New collection takes a procedure (the stub
+        validates)."""
+        target = self.temp_dir() / "new collection"
+        self.assertEqual(self.run_real("init", target).returncode, 0)
+        result = self.run_real("-C", target, "new", "--md", "Ethyl acetate")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        (target / "compounds" / "example-compound.toml").write_bytes(
+            (REPO / "templates" / "compound.toml").read_bytes())
+        result = self.run_real("-C", target, "validate")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("reaction_types", result.stdout)
+        self.assertNotIn("unknown reaction type", result.stdout)
+        self.assertNotIn("validate.py: error:", result.stderr)
+
+    def test_existing_reaction_types_are_kept(self) -> None:
+        """Scenario: Existing reaction types are kept."""
+        target = self.temp_dir() / "collection"
+        (target / "vocabularies").mkdir(parents=True)
+        own = '[photolysis]\nlabel = "Photolysis"\n'
+        path = target / "vocabularies" / "reaction-types.toml"
+        path.write_text(own, encoding="utf-8")
+        result = self.run_real("init", target)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(tomllib.loads(
+            (target / "orgsyndb.toml").read_text(encoding="utf-8")),
+            {"format": 1})
+        self.assertEqual(path.read_text(encoding="utf-8"), own)
 
     def test_existing_collection_is_refused(self) -> None:
         """Scenario: Existing collection is refused."""
@@ -577,6 +616,12 @@ class InitTests(ProgramTestCase):
         self.assertEqual(self.run_real("init", target).returncode, 0)
         self.assertEqual((DEMO / ".gitignore").read_text(),
                          (target / ".gitignore").read_text())
+        written = target / "vocabularies" / "reaction-types.toml"
+        self.assertTrue(written.is_file(), "vocabularies/reaction-types.toml "
+                        "was not written")
+        demo_types = DEMO / "vocabularies" / "reaction-types.toml"
+        self.assertTrue(demo_types.is_file(), f"{demo_types} is missing")
+        self.assertEqual(demo_types.read_bytes(), written.read_bytes())
         self.assertEqual(tomllib.loads(
             (target / "orgsyndb.toml").read_text()), {"format": 1})
         demo = tomllib.loads((DEMO / "orgsyndb.toml").read_text())

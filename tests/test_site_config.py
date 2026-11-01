@@ -62,6 +62,9 @@ class HugoConfigurationTests(unittest.TestCase):
             self.assertNotIn(key, config)
         self.assertFalse((REPO / "site" / "static").exists(),
                          "the overlay's static mount hides site/static/")
+        self.assertFalse((REPO / "site" / "data").exists(),
+                         "every data entry of the site comes from the "
+                         "collection")
 
     def test_configuration_names_no_host(self) -> None:
         """Scenario: Configuration parses to the contract (no host)."""
@@ -86,6 +89,7 @@ class OverlayTests(unittest.TestCase):
         self.assertEqual(overlay["resourceDir"],
                          f"{collection}/build/hugo-resources")
         files = ["/OSDB-*.md"]
+        self.assertEqual(len(overlay["module"]["mounts"]), 7)
         self.assertEqual(overlay["module"], {"mounts": [
             {"source": f"{site}/content", "target": "content"},
             {"source": f"{collection}/build/content/procedures",
@@ -93,7 +97,6 @@ class OverlayTests(unittest.TestCase):
             {"source": f"{collection}/build/content/help",
              "target": "content/help"},
             {"source": f"{collection}/static", "target": "static"},
-            {"source": f"{site}/data", "target": "data"},
             {"source": f"{collection}/compounds",
              "target": "data/compounds"},
             {"source": f"{collection}/build/content/sequences",

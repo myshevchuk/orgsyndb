@@ -5,8 +5,9 @@ import tomllib
 import unittest
 
 from pipeline_support import org_scope_rows
-from support import (COMPOUNDS, FIXTURES, REPO, STATIC_DIR,
-                     ValidatorTestCase, fixture_run, run_validator,
+from support import (COMPOUNDS, FIXTURES, REACTION_TYPES, SETTINGS,
+                     SETTINGS_DIR, STATIC_DIR, ValidatorTestCase,
+                     fixture_run, run_validator, starter_settings,
                      valid_set_run)
 
 OPTIONAL_TOP = ["substrates", "checked_by", "references", "ai_model",
@@ -107,10 +108,10 @@ class CatalogueFixtureTests(ValidatorTestCase):
 
     def test_the_fixtures_validate(self) -> None:
         """Harness: the catalogue fixtures validate cleanly."""
-        self.assert_clean(run_validator([
-            "--vocabulary", REPO / "site" / "data" / "reaction_types.toml",
-            "--static-dir", STATIC_DIR, "--compounds", COMPOUNDS,
-            FIXTURES / "catalogue"]))
+        with starter_settings() as settings:
+            self.assert_clean(run_validator([
+                "--settings", settings, "--static-dir", STATIC_DIR,
+                "--compounds", COMPOUNDS, FIXTURES / "catalogue"]))
 
     def test_the_fixtures_cover_what_they_are_for(self) -> None:
         """Harness: statuses, authors, tags, a missing CAS number, a
@@ -184,9 +185,8 @@ class FixtureRegistryTests(ValidatorTestCase):
     def test_registry_validates(self) -> None:
         """Harness: the fixture registry is valid."""
         result = run_validator([
-            "--vocabulary", FIXTURES / "reaction_types.toml",
-            "--static-dir", STATIC_DIR, "--compounds", COMPOUNDS,
-            FIXTURES / "valid" / "md"])
+            "--settings", SETTINGS, "--static-dir", STATIC_DIR,
+            "--compounds", COMPOUNDS, FIXTURES / "valid" / "md"])
         self.assert_clean(result)
 
     def test_registry_holds_the_named_compounds_and_no_others(self) -> None:
@@ -234,6 +234,27 @@ class FixtureRegistryTests(ValidatorTestCase):
             with self.subTest(path=path.relative_to(FIXTURES).as_posix()):
                 self.assertEqual(bad, [])
         self.assertGreater(checked, 50)
+
+
+class FixtureSettingsTests(unittest.TestCase):
+    def test_the_fixture_settings_match_their_description(self) -> None:
+        """Scenario: The fixture settings match their description."""
+        self.assertEqual(
+            tomllib.loads(SETTINGS.read_text(encoding="utf-8")),
+            {"format": 1})
+        self.assertEqual(
+            tomllib.loads(REACTION_TYPES.read_text(encoding="utf-8")),
+            {"esterification": {"label": "Esterification"},
+             "reduction": {"label": "Reduction"}})
+        self.assertEqual(
+            [p.name for p in (SETTINGS_DIR / "vocabularies").iterdir()],
+            ["reaction-types.toml"])
+        self.assertEqual(
+            sorted(p.name for p in SETTINGS_DIR.iterdir()),
+            ["orgsyndb.toml", "vocabularies"])
+        for name in ("reaction_types.toml", "bad-vocabulary.toml"):
+            with self.subTest(name=name):
+                self.assertFalse((FIXTURES / name).exists())
 
 
 class FixtureHygieneTests(unittest.TestCase):

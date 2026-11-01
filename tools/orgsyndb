@@ -267,11 +267,15 @@ def run_build(collection: Path) -> list[tuple[Path, dict]]:
     step(f"build: staging {count} help pages from docs/")
     step("build: hugo")
     pipeline.remove_tree(Path("public"))
-    fields = Path("build") / pipeline.FIELDS_STAGED
-    fields.parent.mkdir(parents=True, exist_ok=True)
-    fields.write_text(json.dumps(
-        pipeline.fields_data(collection / MARKER, language),
-        ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    for staged, data in (
+            (pipeline.FIELDS_STAGED,
+             pipeline.fields_data(collection / MARKER, language)),
+            (pipeline.REACTION_TYPES_STAGED,
+             pipeline.reaction_types_data(collection / MARKER, language))):
+        path = Path("build") / staged
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2)
+                        + "\n", encoding="utf-8")
     config = collection / "build" / "hugo-config"
     (config / "_default").mkdir(parents=True, exist_ok=True)
     (config / "_default" / "hugo.toml").write_text(
@@ -411,6 +415,11 @@ def cmd_init(option: str | None, args: Sequence[str]) -> int:
                     "\n"):
                 handle.write("\n")
             handle.write("".join(f"{line}\n" for line in missing))
+    reaction_types = target / validate.REACTION_TYPES
+    if not reaction_types.exists():
+        reaction_types.parent.mkdir(exist_ok=True)
+        shutil.copyfile(pipeline.TEMPLATES / "reaction-types.toml",
+                        reaction_types)
     # The marker comes last, so that a failed init can simply be rerun.
     with open(target / MARKER, "x", encoding="utf-8") as handle:
         handle.write(MARKER_TEXT)

@@ -89,11 +89,11 @@ The `status` field SHALL be exactly one of `draft`, `checked` or `retired`. Hugo
 - **THEN** it reports exactly one error, field `status`, containing `must be one of draft, checked, retired`
 
 ### Requirement: Controlled reaction type
-The `reaction_types` field SHALL be a list of exactly one string, and that string SHALL be a key of the reaction-type vocabulary file.
+The `reaction_types` field SHALL be a list of exactly one string, and that string SHALL be a reaction type of the collection, a value of its `vocabularies/reaction-types.toml` (reaction-types "Reaction-type vocabulary"). A string that is not gets an error whose message contains `unknown reaction type "<v>"` and `vocabularies/reaction-types.toml`.
 
 #### Scenario: Reaction type outside the vocabulary
 - **WHEN** a fixture run on `invalid/unknown-reaction-type` examines `OSDB-0111-unknown-reaction-type.md`, whose `reaction_types` is `["esterfication"]`
-- **THEN** it reports exactly one error, field `reaction_types`, containing `unknown reaction type "esterfication"`
+- **THEN** it reports exactly one error, field `reaction_types`, containing `unknown reaction type "esterfication"` and `vocabularies/reaction-types.toml`
 
 #### Scenario: Two reaction types
 - **WHEN** a variant run sets `reaction_types = ["esterification", "reduction"]`, both in the fixture vocabulary, under the file name `OSDB-0100-two-reaction-types.md`
@@ -182,20 +182,6 @@ Front-matter keys outside the schema SHALL be handled as follows:
 #### Scenario: A declared key is no unknown field
 - **WHEN** a procedure-field run (procedure-fields "Procedure field fixture") sets `working_time = 2.5` in `OSDB-0100-baseline.md`, and a variant run sets the same key under the file name `OSDB-0100-undeclared.md`
 - **THEN** the first exits 0 and prints nothing to stdout, and the second reports exactly one warning, field `working_time`, containing `unknown field`
-
-### Requirement: Reaction-type vocabulary file
-The file `site/data/reaction_types.toml` SHALL map each reaction-type slug, as a top-level key matching `^[a-z0-9]+(-[a-z0-9]+)*$`, to a table containing a non-empty string `label` and, for each site language other than English, a non-empty string `label_<language>` (`label_de`). Its entries include at least `acylation`, `aldol-condensation`, `cross-coupling`, `esterification`, `olefination`, `protection`, `reduction` and `reductive-amination`.
-
-#### Scenario: Shipped vocabulary is well formed and complete
-- **WHEN** a test loads `site/data/reaction_types.toml` with `tomllib`
-- **THEN** every top-level key matches the slug pattern and maps to a table whose `label` and `label_de` are non-empty strings
-- **AND** the keys include `acylation`, `aldol-condensation`, `cross-coupling`, `esterification`, `olefination`, `protection`, `reduction` and `reductive-amination`
-
-#### Scenario: Validator accepts the shipped vocabulary
-- **WHEN** the validator runs with its default vocabulary on an empty temporary content root
-- **THEN** it exits 0 and prints nothing to stdout
-
-<!-- Reason: German procedures have German section names. -->
 
 ### Requirement: Org file-level keywords
 Every Org procedure source SHALL carry each of the file-level keywords `#+CREATED` and `#+LAST_MODIFIED` exactly once, and MAY carry the file-level keyword `#+AI_MODEL` at most once. A keyword line is a line made of optional spaces or tabs, `#+`, a name of ASCII letters and underscores, matched case-insensitively, a `:` and the value. The value is trimmed of spaces, tabs and CRs. A line whose text after optional spaces or tabs begins with `#+begin_`, in any case, opens a block. The block runs to the next line that begins the same way with `#+end_`, and no line from the opening line to the closing line is a keyword line. The following rules apply to the values:
@@ -362,18 +348,22 @@ The rules for headings are:
 
 ### Requirement: Markdown template
 The file `templates/procedure.md` SHALL be a complete procedure using the placeholder ID `OSDB-0000` and slug `osdb-0000`. It satisfies the following:
-- Its front matter explains every field in TOML comments and shows the optional fields commented out.
+- Its front matter explains every field in TOML comments and shows the optional fields commented out. The comment on `reaction_types` names `vocabularies/reaction-types.toml` as the list of allowed values, and no line of the template names `site/data`.
 - Its body has the eight sections, a Reagents table with the header `Reagent | CAS | MW (g/mol) | Amount | mmol | Equiv`, and numbered lists under Procedure and Notes.
 - Its `products` names the compound key `example-compound`, and its commented-out `substrates` line names the same key.
-- Once `OSDB-0000` is replaced by a real ID and `osdb-0000` by its lowercase form, it validates against the shipped vocabulary and a registry holding `templates/compound.toml` as `example-compound.toml` with no errors and no warnings.
+- Once `OSDB-0000` is replaced by a real ID and `osdb-0000` by its lowercase form, it validates with no errors and no warnings in a collection whose reaction types are `templates/reaction-types.toml` (reaction-types "Starter reaction types") and whose registry holds `templates/compound.toml` as `example-compound.toml`.
 
 #### Scenario: Substituted Markdown template is clean
-- **WHEN** a test copies `templates/procedure.md` to a temporary directory as `OSDB-0001-template.md`, replacing every `OSDB-0000` with `OSDB-0001` and every `osdb-0000` with `osdb-0001`, copies `templates/compound.toml` into a temporary registry as `example-compound.toml`, and runs the validator on that directory with the default vocabulary and that registry
+- **WHEN** a test copies `templates/procedure.md` to a temporary directory as `OSDB-0001-template.md`, replacing every `OSDB-0000` with `OSDB-0001` and every `osdb-0000` with `osdb-0001`, copies `templates/compound.toml` into a temporary registry as `example-compound.toml`, writes a settings file `orgsyndb.toml` holding `format = 1` beside a `vocabularies/reaction-types.toml` copied from `templates/reaction-types.toml`, and runs the validator on that directory with that registry and `--settings` naming that settings file
 - **THEN** it exits 0 and prints nothing to stdout
 
 #### Scenario: Unsubstituted Markdown template is rejected
 - **WHEN** a test copies `templates/procedure.md` unchanged to a temporary directory as `OSDB-0000-template.md` and runs the validator on it
 - **THEN** the exit status is 1, and stdout contains an error with field `id` containing `must be between OSDB-0001 and OSDB-9999`
+
+#### Scenario: The templates name the collection's reaction types
+- **WHEN** a test reads `templates/procedure.md` and `templates/procedure.de.md`
+- **THEN** each contains `vocabularies/reaction-types.toml` in a comment line before its `reaction_types` line, and neither contains `site/data`
 
 ### Requirement: Org template
 The file `templates/procedure.org` SHALL be a complete Org procedure that satisfies the following:

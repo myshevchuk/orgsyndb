@@ -10,9 +10,11 @@ from pathlib import Path
 
 from pipeline_support import TEST_COLLECTION
 from support import (COMPOUND_TEMPLATE, REPO, SEQUENCE_TEMPLATE,
-                     ValidatorTestCase, run_validator, template_registry)
+                     ValidatorTestCase, run_validator, starter_settings,
+                     template_registry)
 
 MD_TEMPLATE = REPO / "templates" / "procedure.md"
+MD_TEMPLATE_DE = REPO / "templates" / "procedure.de.md"
 ORG_TEMPLATE = REPO / "templates" / "procedure.org"
 CANON = ["Summary", "Reagents", "Procedure", "Workup and Purification",
          "Characterization", "Notes", "Hazards and Waste Disposal",
@@ -40,10 +42,46 @@ class MarkdownTemplateTests(ValidatorTestCase):
             root.mkdir()
             (root / "OSDB-0001-template.md").write_text(
                 text, encoding="utf-8")
+            with template_registry() as registry, \
+                    starter_settings() as settings:
+                result = run_validator(
+                    ["--compounds", registry, "--settings", settings,
+                     root], cwd=Path(tmp))
+        self.assert_clean(result)
+
+    def test_unsubstituted_markdown_template_is_rejected(self) -> None:
+        """Scenario: Unsubstituted Markdown template is rejected."""
+        text = read_template(MD_TEMPLATE)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "content"
+            root.mkdir()
+            (root / "OSDB-0000-template.md").write_text(
+                text, encoding="utf-8")
             with template_registry() as registry:
                 result = run_validator(["--compounds", registry, root],
                                        cwd=Path(tmp))
-        self.assert_clean(result)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn(
+            ("id", "error"),
+            [(p.field, p.severity) for p in result.problems
+             if "must be between OSDB-0001 and OSDB-9999" in p.message])
+
+    def test_the_templates_name_the_collections_reaction_types(
+            self) -> None:
+        """Scenario: The templates name the collection's reaction
+        types."""
+        for path in (MD_TEMPLATE, MD_TEMPLATE_DE):
+            with self.subTest(template=path.name):
+                text = read_template(path)
+                self.assertNotIn("site/data", text)
+                lines = text.splitlines()
+                at = next(i for i, line in enumerate(lines)
+                          if re.match(r"reaction_types\s*=", line))
+                self.assertTrue(
+                    any(line.startswith("#")
+                        and "vocabularies/reaction-types.toml" in line
+                        for line in lines[:at]),
+                    "no comment before reaction_types names the file")
 
     def test_template_names_the_example_compound(self) -> None:
         """Requirement: Markdown template (products and substrates)."""

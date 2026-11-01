@@ -6,10 +6,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from support import (COMPOUNDS, FIXTURES, ValidatorTestCase, edit_compound,
-                     edit_field_compound, field_variant_run, fixture_run,
-                     registry_copy, registry_variant_run, remove_line,
-                     replace_line, run_validator)
+from support import (COMPOUNDS, FIXTURES, SETTINGS, ValidatorTestCase,
+                     edit_compound, edit_field_compound, field_variant_run,
+                     fixture_run, registry_copy, registry_variant_run,
+                     remove_line, replace_line, run_validator)
 
 COMPOUND_FILES = len(list(COMPOUNDS.glob("*.toml")))
 EDITED = "ethyl-acetate.toml"
@@ -127,7 +127,7 @@ class CompoundFileTests(ValidatorTestCase):
             edit_compound("ethyl-acetate", replace_line("mw", "mw = 0"))(
                 registry)
             result = run_validator(
-                ["--vocabulary", FIXTURES / "reaction_types.toml",
+                ["--settings", SETTINGS,
                  "--static-dir", FIXTURES / "static",
                  "--compounds", registry, FIXTURES / "baseline"])
         self.assert_one(result, "error", "mw", "must be greater than 0")
@@ -321,7 +321,7 @@ class StructureImageTests(ValidatorTestCase):
                     'structure_image = "structures/ethyl-acetate.png"'))(
                     registry)
                 result = run_validator(
-                    ["--vocabulary", FIXTURES / "reaction_types.toml",
+                    ["--settings", SETTINGS,
                      "--static-dir", static, "--compounds", registry,
                      FIXTURES / "baseline"])
         self.assert_clean(result)

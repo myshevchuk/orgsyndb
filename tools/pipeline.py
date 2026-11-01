@@ -2,7 +2,8 @@
 
 The Org source names the export needs, the recoverable replacement of
 ``build/export/``, next-ID allocation, slugs, template filling, the Hugo
-overlay, the site's field data, PDF jobs and the Pagefind download.
+overlay, the site's field and reaction-type data, PDF jobs and the
+Pagefind download.
 File discovery and the reading of the collection settings come from
 ``validate.py`` in the same directory. No Org source is read here: of
 ``org/procedures/`` only the entry names are, and Emacs examines and
@@ -44,8 +45,10 @@ PREVIOUS = ".export-previous"
 STAGED = Path("content") / "procedures"
 SEQUENCES_STAGED = Path("content") / "sequences"
 HELP_STAGED = Path("content") / "help"
-# The field data Hugo reads as site.Data.collection.fields, under build/.
+# The field and reaction-type data Hugo reads as site.Data.collection,
+# under build/.
 FIELDS_STAGED = Path("data") / "fields.json"
+REACTION_TYPES_STAGED = Path("data") / "reaction_types.json"
 
 PAGEFIND_VERSION = "1.5.2"
 PAGEFIND_TARBALL = (f"pagefind-v{PAGEFIND_VERSION}-x86_64-unknown-linux-"
@@ -883,20 +886,39 @@ def fields_data(settings: Path, language: str) -> dict[str, Any]:
             "procedure": [describe(f, False) for f in fields.procedure]}
 
 
+def reaction_types_data(settings: Path,
+                        language: str) -> dict[str, dict[str, str]]:
+    """Return the reaction-type data that the site reads for the
+    collection whose settings file is SETTINGS, in the site's LANGUAGE.
+
+    The result maps every reaction type of the collection, the values of
+    ``vocabularies/reaction-types.toml`` beside SETTINGS in file order,
+    to a table holding only ``label``: the value's German label when
+    LANGUAGE is ``de`` and the value has one, its English label
+    otherwise. A collection without that file gives an empty table.
+    Raises ``validate.ConfigError`` when the file breaks a rule of
+    ``validate.load_reaction_types``.
+    """
+    return {value: {"label": term.label_de if language == "de"
+                    and term.label_de else term.label}
+            for value, term in validate.load_reaction_types(
+                Path(settings)).items()}
+
+
 def hugo_overlay(site: Path, collection: Path, language: str) -> str:
     """Return the Hugo configuration overlay for building ``collection``.
 
     ``site`` is the application's Hugo project and ``collection`` the
     collection directory, both absolute; ``language`` is the site's
     language. The overlay sets ``defaultContentLanguage`` to it, the
-    publish and resource directories inside the collection, and eight
+    publish and resource directories inside the collection, and seven
     module mounts: the application's pages, the staged procedures of
     ``build/content/procedures/``, the staged help pages of
     ``build/content/help/``, the collection's static files, the
-    application's data, the collection's ``compounds/`` as the data
-    entry ``compounds``, the staged sequences of
-    ``build/content/sequences/``, and the staged ``build/data/`` as the
-    data entry ``collection``.
+    collection's ``compounds/`` as the data entry ``compounds``, the
+    staged sequences of ``build/content/sequences/``, and the staged
+    ``build/data/`` as the data entry ``collection``. The site has no
+    data entry but these two.
     """
     site, collection = Path(site), Path(collection)
 
@@ -915,7 +937,6 @@ def hugo_overlay(site: Path, collection: Path, language: str) -> str:
                     "/OSDB-*.md")
             + mount(collection / "build" / HELP_STAGED, "content/help")
             + mount(collection / "static", "static")
-            + mount(site / "data", "data")
             + mount(collection / "compounds", "data/compounds")
             + mount(collection / "build" / SEQUENCES_STAGED,
                     "content/sequences", "/SEQ-*.md")

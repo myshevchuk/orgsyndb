@@ -550,8 +550,9 @@ def field_violations(collection: Path) -> list[str]:
             problems.append(f"{key}: labels are {pair}")
     names = sorted(p.name for p in (collection / "vocabularies").glob("*"))
     if names != ["chemical-classes.toml", "inventory-groups.toml",
-                 "projects.toml"]:
+                 "projects.toml", "reaction-types.toml"]:
         problems.append(f"vocabularies/ holds {names}")
+    problems += reaction_type_violations(collection)
     vocabularies = {}
     try:
         for name in ("chemical-classes", "inventory-groups", "projects"):
@@ -617,6 +618,41 @@ def field_violations(collection: Path) -> list[str]:
             problems.append(f"no compound has in_house {wanted!r}")
     return problems + procedure_field_violations(
         collection, settings, vocabularies["projects"])
+
+
+STARTER_REACTION_TYPES = (Path(__file__).resolve().parent.parent
+                          / "templates" / "reaction-types.toml")
+
+
+def reaction_type_violations(collection: Path) -> list[str]:
+    """Return the rules of sample-procedures "Demo collection" that
+    ``collection``'s ``vocabularies/reaction-types.toml`` breaks: it is
+    byte-identical to the starter vocabulary ``templates/reaction-types.toml``,
+    every value has a ``label_de``, and every reaction type that a sample
+    procedure names is one of its values."""
+    path = collection / "vocabularies" / "reaction-types.toml"
+    try:
+        data = path.read_bytes()
+        values = tomllib.loads(data.decode("utf-8"))
+        starter = STARTER_REACTION_TYPES.read_bytes()
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        return [f"reaction-types.toml: {exc!r}"]
+    problems = []
+    if data != starter:
+        problems.append("reaction-types.toml is not the starter vocabulary")
+    for value, entry in values.items():
+        if not str(entry.get("label_de", "")).strip():
+            problems.append(f"reaction-types/{value}: no label_de")
+    paths = [*sorted((collection / "org" / "procedures").glob("OSDB-*.org")),
+             *sorted((collection / "md" / "procedures").glob("OSDB-*.md"))]
+    for procedure in paths:
+        sample = read_org(procedure) if procedure.suffix == ".org" \
+            else read_markdown(procedure)
+        for named in sample.data.get("reaction_types", []):
+            if named not in values:
+                problems.append(f"{procedure.name}: reaction type {named!r} "
+                                "is not a value")
+    return problems
 
 
 def procedure_values(collection: Path) -> dict[str, list[dict[str, Any]]]:

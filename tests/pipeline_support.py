@@ -1013,11 +1013,13 @@ def help_documents(app: Path) -> list[HelpDocument]:
     return found
 
 
-def reaction_labels(root: Path, language: str = "en") -> dict[str, str]:
-    """Reaction-type slug to label in ``language``, from the application
-    at ``root``."""
+def reaction_labels(collection: Path,
+                    language: str = "en") -> dict[str, str]:
+    """Reaction-type slug to label in ``language``, from the
+    ``vocabularies/reaction-types.toml`` of the collection at
+    ``collection``."""
     data = tomllib.loads(
-        (root / "site" / "data" / "reaction_types.toml")
+        (collection / "vocabularies" / "reaction-types.toml")
         .read_text(encoding="utf-8"))
     return {slug: entry.get(f"label_{language}", entry["label"])
             for slug, entry in data.items()}

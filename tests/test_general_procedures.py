@@ -7,7 +7,7 @@ import tomllib
 import unittest
 
 import support
-from pipeline_support import REPO, TEST_COLLECTION
+from pipeline_support import TEST_COLLECTION
 from support import (COMPOUNDS, GENERAL, STATIC_DIR, ValidatorTestCase,
                      apply_edits, fixture_run, general_variant_run,
                      insert_line, remove_line, replace_block, replace_text)
@@ -606,7 +606,6 @@ class CollectionGeneralProcedureTests(ValidatorTestCase):
     def test_the_collection_validates(self) -> None:
         """Harness: the collection's procedures and compounds are valid."""
         result = support.run_validator([
-            "--vocabulary", REPO / "site" / "data" / "reaction_types.toml",
             "--settings", TEST_COLLECTION / "orgsyndb.toml",
             "--static-dir", TEST_COLLECTION / "static",
             "--compounds", TEST_COLLECTION / "compounds",

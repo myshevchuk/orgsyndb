@@ -15,9 +15,11 @@ procedures of the content roots; the validator checks that each step
 exists and that the steps chain. The collection's settings file
 declares further compound and procedure fields, whose values each
 compound file and each procedure is checked against, and names the
-vocabularies of its choice fields. The validator reads no Org source:
-an Org procedure reaches it only as its export, and the export checks
-the Org source itself. Each problem is printed to stdout
+vocabularies of its choice fields. The collection's reaction types are
+the vocabulary ``vocabularies/reaction-types.toml`` beside the settings
+file; a collection without that file has none. The validator reads no
+Org source: an Org procedure reaches it only as its export, and the
+export checks the Org source itself. Each problem is printed to stdout
 as ``<path>:<field>: <severity>: <message>``, followed by a summary line
 on stderr. The exit status is 0 when no error was found, 1 when at
 least one was, and 2 on a usage or configuration error.
@@ -36,14 +38,14 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, NamedTuple
 
-APP = Path(__file__).resolve().parent.parent
-DEFAULT_VOCABULARY = APP / "site" / "data" / "reaction_types.toml"
 # Structure images, compounds and sequences belong to a collection; run
 # from its root.
 DEFAULT_STATIC_DIR = Path("static")
 DEFAULT_COMPOUNDS = Path("compounds")
 DEFAULT_SEQUENCES = Path("md") / "sequences"
 DEFAULT_SETTINGS = Path("orgsyndb.toml")
+# The collection's reaction types, beside its settings file.
+REACTION_TYPES = Path("vocabularies") / "reaction-types.toml"
 ZONE_NAME = "Europe/Berlin"
 
 SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -282,7 +284,7 @@ class Fields(NamedTuple):
 class Context:
     """Settings shared by the checks of one run."""
 
-    vocabulary: frozenset[str]
+    reaction_types: frozenset[str]
     static_dir: Path
     zone: dt.tzinfo
     compounds: frozenset[str] = frozenset()
@@ -379,17 +381,18 @@ def check_status(value: object) -> list[Problem]:
 
 
 def check_reaction_types(value: object,
-                         vocabulary: frozenset[str]) -> list[Problem]:
-    """Check that ``reaction_types`` holds one slug from the vocabulary."""
+                         allowed: frozenset[str]) -> list[Problem]:
+    """Check that VALUE, a ``reaction_types`` field, is a list holding
+    exactly one of the collection's reaction types, ALLOWED."""
     name = "reaction_types"
     if not is_string_list(value):
         return [error(name, "must be a list of strings, "
                       'e.g. ["esterification"]')]
     if len(value) != 1:
         return [error(name, "must contain exactly one reaction type")]
-    if value[0] not in vocabulary:
+    if value[0] not in allowed:
         return [error(name, f'unknown reaction type "{value[0]}"; see '
-                      "site/data/reaction_types.toml for the allowed "
+                      f"{REACTION_TYPES.as_posix()} for the allowed "
                       "values")]
     return []
 
@@ -737,7 +740,7 @@ def check_fields(data: dict[str, Any], ctx: Context) -> list[Problem]:
             case "status":
                 found += check_status(value)
             case "reaction_types":
-                found += check_reaction_types(value, ctx.vocabulary)
+                found += check_reaction_types(value, ctx.reaction_types)
             case "tags":
                 found += check_tags(value)
             case "products":
@@ -1597,39 +1600,6 @@ def examine_sequences(directory: str, ctx: Context,
 # I/O: configuration, discovery and reporting
 
 
-def load_vocabulary(path: Path) -> frozenset[str]:
-    """Load the reaction-type vocabulary and return its slugs.
-
-    Raises ConfigError when the file is missing, is not TOML, has a key
-    that is not a slug, or has an entry without a non-empty ``label``.
-    """
-    try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        raise ConfigError(f"vocabulary file {path} not found") from None
-    except (OSError, UnicodeDecodeError) as exc:
-        raise ConfigError(f"cannot read vocabulary file {path}: "
-                          f"{exc}") from None
-    except tomllib.TOMLDecodeError as exc:
-        raise ConfigError(f"vocabulary file {path} is not valid TOML: "
-                          f"{exc}") from None
-    for key, entry in data.items():
-        if not SLUG_RE.match(key):
-            raise ConfigError(f"vocabulary file {path}: key {key!r} is "
-                              "not a lowercase hyphenated slug")
-        label = entry.get("label") if isinstance(entry, dict) else None
-        if not isinstance(label, str) or not label.strip():
-            raise ConfigError(f"vocabulary file {path}: entry {key!r} "
-                              "must be a table with a non-empty label")
-        for lang in LANGUAGES:
-            name = f"label_{lang}"
-            if name in entry and (not isinstance(entry[name], str)
-                                  or not entry[name].strip()):
-                raise ConfigError(f"vocabulary file {path}: entry "
-                                  f"{key!r} has an empty {name}")
-    return frozenset(data)
-
-
 def read_config(path: Path) -> dict[str, Any]:
     """Read and parse the configuration file PATH as UTF-8 TOML.
 
@@ -1718,6 +1688,29 @@ def load_terms(path: Path) -> dict[str, Term]:
                                   "ancestor; its parent entries form a "
                                   "loop")
             current = terms[current].parent
+    return terms
+
+
+def load_reaction_types(settings: Path) -> dict[str, Term]:
+    """Load the reaction types of the collection whose settings file is
+    SETTINGS and return them as load_terms does.
+
+    They are the vocabulary ``vocabularies/reaction-types.toml`` beside
+    SETTINGS, whether or not SETTINGS exists. A file that does not exist
+    gives no reaction type. Raises ConfigError, its message naming the
+    file, when the file breaks a rule of load_terms, and also when a
+    value takes ``parent``, the message then naming the value and
+    ``parent``: the reaction types form a single level.
+    """
+    path = Path(settings).parent / REACTION_TYPES
+    if not path.exists():
+        return {}
+    terms = load_terms(path)
+    for value, term in terms.items():
+        if term.parent is not None:
+            raise ConfigError(f"{path}: value {value!r} takes parent "
+                              f"{term.parent!r}; reaction types form a "
+                              "single level and take no parent")
     return terms
 
 
@@ -2035,17 +2028,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="directory of procedure Markdown files with +++ TOML front "
         "matter, such as an export directory (at least one)")
     parser.add_argument(
-        "--vocabulary", type=Path, default=DEFAULT_VOCABULARY,
-        metavar="FILE",
-        help="reaction-type vocabulary (default: "
-        "<app>/site/data/reaction_types.toml)")
-    parser.add_argument(
         "--settings", type=Path, default=None, metavar="FILE",
         help="collection settings file, whose field declarations the "
         "compound files and the procedures are checked against; its "
-        "vocabularies are read from vocabularies/ beside it (default: "
-        "orgsyndb.toml in the working directory; a missing default file "
-        "declares no field)")
+        "vocabularies, the reaction types in "
+        "vocabularies/reaction-types.toml among them, are read from "
+        "vocabularies/ beside it, whether or not the file exists "
+        "(default: orgsyndb.toml in the working directory; a missing "
+        "default file declares no field)")
     parser.add_argument(
         "--static-dir", type=Path, default=DEFAULT_STATIC_DIR,
         metavar="DIR",
@@ -2135,10 +2125,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 and not os.path.isdir(args.sequences)):
             raise ConfigError(f"sequences directory {args.sequences} is "
                               "not a directory")
-        fields = load_fields(args.settings or DEFAULT_SETTINGS,
-                             must_exist=args.settings is not None)
-        ctx = Context(load_vocabulary(args.vocabulary), args.static_dir,
-                      load_zone(), fields=fields)
+        settings = args.settings or DEFAULT_SETTINGS
+        fields = load_fields(settings, must_exist=args.settings is not None)
+        ctx = Context(frozenset(load_reaction_types(settings)),
+                      args.static_dir, load_zone(), fields=fields)
     except ConfigError as exc:
         print(f"validate.py: error: {exc}", file=sys.stderr)
         return 2

@@ -25,14 +25,21 @@
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-31 Sat 16:26] -- Pflichtfeld group für Verbindungen der Beispielsammlung
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-01 Sun 12:50] -- Vorschriftenfelder: Kopf, Typumwandlung, fertige Seite und Übersetzungen
 #+AI_PASS: fact-check claude-opus-5-5 [2026-11-01 Sun 12:54] -- schema link searches the heading text, not an Org custom ID
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-01 Sun 16:42] -- Reaktionstyp-Kürzel aus der Sammlung
+#+AI_PASS: fact-check claude-opus-5-5 [2026-11-01 Sun 16:55] -- doc-writer pass line corrected from gpt-6 to the pinned run model; schema links without a search, which help pages drop
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
 Vorschriften. Die Website hat eine Sprache, festgelegt durch ~locale~ in
 ~site/hugo.toml~ der Anwendung: ~"de"~ (voreingestellt) oder ~"en"~. Sie
-zeigt jede Vorschrift, in welcher Sprache auch immer. Org-Schlüsselwörter, Feldnamen, Statuswerte,
-Reaktionstyp-Kürzel, Schlagwörter und die Wochentage der Zeitstempel
+zeigt jede Vorschrift, in welcher Sprache auch immer. Org-Schlüsselwörter,
+Feldnamen, Statuswerte, Schlagwörter und die Wochentage der Zeitstempel
 bleiben auch in einer deutschen Vorschrift englisch.
+
+Reaktionstyp-Kürzel übernehmen Sie in jeder Sprache unverändert aus
+~vocabularies/reaction-types.toml~ Ihrer Sammlung. Bearbeiten Sie diese
+Datei, um die erlaubten Reaktionstypen zu ändern. Die
+[[file:SCHEMA.de.md][Schema-Referenz]] erklärt das Format und die Startliste.
 
 * Mit einem erzeugten Gerüst beginnen
 
@@ -109,7 +116,7 @@ bleiben auch in einer deutschen Vorschrift englisch.
   Laborjournalverweis muss ~[A-Z]{2}-\d+/\d+~ entsprechen und noch unvergeben
   sein; die Arbeitszeit steht in Stunden und ist mindestens null.
   Projektschlüssel kommen aus [[file:../examples/demo/vocabularies/projects.toml][projects.toml]]. Die
-  [[file:SCHEMA.de.md::Felddeklarationen für Vorschriften][Feldreferenz]] nennt alle Regeln.
+  [[file:SCHEMA.de.md][Feldreferenz]] nennt alle Regeln.
 
   Der Export mit ox-hugo/tomelr hat eine Grenze bei der Typumwandlung: Er
   schreibt Strings ohne Anführungszeichen, wenn sie ~true~ oder ~false~

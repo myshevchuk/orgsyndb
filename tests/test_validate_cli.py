@@ -8,11 +8,24 @@ import unittest
 from pathlib import Path
 
 import support
-from support import (BASELINE, COMPOUNDS, FIXTURES, STATIC_DIR, VALIDATOR,
-                     ValidatorTestCase, declaration, fixture_run,
-                     run_validator, valid_set_run, variant_root)
+from support import (BASELINE, COMPOUNDS, FIXTURES, REACTION_TYPES, SETTINGS,
+                     STATIC_DIR, VALIDATOR, ValidatorTestCase, append_text,
+                     declaration, delete_reaction_types, edit_reaction_types,
+                     fields_copy, fixture_run, replace_text, run_validator,
+                     settings_variant_run, valid_set_run, variant_root,
+                     write_reaction_types)
 
 COMPOUND_FILES = len(list(COMPOUNDS.glob("*.toml")))
+VALID_MD_FILES = len(list((FIXTURES / "valid" / "md").glob("*.md")))
+
+
+def with_reaction_types(directory: Path) -> Path:
+    """Put a copy of the fixture reaction types into the
+    ``vocabularies/`` of ``directory``, a collection's root."""
+    (directory / "vocabularies").mkdir(exist_ok=True)
+    shutil.copyfile(REACTION_TYPES,
+                    directory / "vocabularies" / REACTION_TYPES.name)
+    return directory
 
 
 class CommandLineInterfaceTests(ValidatorTestCase):
@@ -28,6 +41,14 @@ class CommandLineInterfaceTests(ValidatorTestCase):
                                 FIXTURES / "valid" / "md"])
         self.assertEqual(result.returncode, 2, result.stdout)
         self.assertIn("--org-root", result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_vocabulary_option_is_refused(self) -> None:
+        """Scenario: Vocabulary option is refused."""
+        result = run_validator(
+            ["--vocabulary", REACTION_TYPES, FIXTURES / "valid" / "md"])
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("--vocabulary", result.stderr)
         self.assertEqual(result.stdout, "")
 
     def test_root_that_is_not_a_directory_is_a_usage_error(self) -> None:
@@ -53,21 +74,6 @@ class CommandLineInterfaceTests(ValidatorTestCase):
 
 
 class DefaultPathTests(ValidatorTestCase):
-    def test_default_vocabulary_resolves_from_the_script_location(
-            self) -> None:
-        """Scenario: Run from an unrelated working directory."""
-        edit = support.replace_line(
-            "reaction_types", 'reaction_types = ["reductive-amination"]')
-        with variant_root("OSDB-0100-baseline.md", edit) as root:
-            with tempfile.TemporaryDirectory() as cwd:
-                result = run_validator(
-                    ["--compounds", COMPOUNDS, "--static-dir", STATIC_DIR,
-                     root], cwd=Path(cwd))
-        self.assertEqual([p for p in result.problems
-                          if p.field == "reaction_types"], [],
-                         result.stdout)
-        self.assert_clean(result)
-
     def test_default_static_and_registry_are_the_working_directorys(
             self) -> None:
         """Scenario: Default static and registry directories are the
@@ -78,7 +84,7 @@ class DefaultPathTests(ValidatorTestCase):
                       compound)
         with variant_root("OSDB-0100-baseline.md") as root:
             with tempfile.TemporaryDirectory() as cwd:
-                collection = Path(cwd)
+                collection = with_reaction_types(Path(cwd))
                 structures = collection / "static" / "structures"
                 structures.mkdir(parents=True)
                 shutil.copy2(STATIC_DIR / "structures"
@@ -113,7 +119,7 @@ class DefaultPathTests(ValidatorTestCase):
                 "format = 1\n" + settings, encoding="utf-8")
             result = run_validator(
                 ["--compounds", COMPOUNDS, "--static-dir", STATIC_DIR,
-                 FIXTURES / "baseline"], cwd=Path(cwd))
+                 FIXTURES / "baseline"], cwd=with_reaction_types(Path(cwd)))
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertEqual(len(result.problems), COMPOUND_FILES,
                          result.stdout)
@@ -131,25 +137,38 @@ class DefaultPathTests(ValidatorTestCase):
         """Requirement: Command-line interface (--settings)."""
         settings = declaration("item_number", "text", "Item no.",
                                "required = true")
-        with tempfile.TemporaryDirectory() as cwd:
+        with tempfile.TemporaryDirectory() as cwd, fields_copy() as copy:
             (Path(cwd) / "orgsyndb.toml").write_text(
                 "format = 1\n" + settings, encoding="utf-8")
             result = run_validator(
-                ["--settings", FIXTURES / "fields" / "orgsyndb.toml",
-                 "--compounds", COMPOUNDS, "--static-dir", STATIC_DIR,
-                 FIXTURES / "baseline"], cwd=Path(cwd))
+                ["--settings", copy.settings, "--compounds", COMPOUNDS,
+                 "--static-dir", STATIC_DIR, FIXTURES / "baseline"],
+                cwd=Path(cwd))
         self.assert_clean(result)
 
     def test_a_missing_default_settings_file_declares_no_field(
             self) -> None:
-        """Requirement: Default paths resolve from the script location (a
+        """Requirement: Default paths come from the working directory (a
         settings file that does not exist, `--settings` omitted)."""
+        with tempfile.TemporaryDirectory() as cwd:
+            with_reaction_types(Path(cwd))
+            self.assertFalse((Path(cwd) / "orgsyndb.toml").exists())
+            result = run_validator(
+                ["--compounds", COMPOUNDS, "--static-dir", STATIC_DIR,
+                 FIXTURES / "baseline"], cwd=Path(cwd))
+        self.assert_clean(result)
+
+    def test_an_empty_working_directory_has_no_reaction_types(self) -> None:
+        """Requirement: Default paths come from the working directory
+        (without `--settings`, the reaction types are the working
+        directory's)."""
         with tempfile.TemporaryDirectory() as cwd:
             self.assertEqual(list(Path(cwd).iterdir()), [])
             result = run_validator(
                 ["--compounds", COMPOUNDS, "--static-dir", STATIC_DIR,
                  FIXTURES / "baseline"], cwd=Path(cwd))
-        self.assert_clean(result)
+        self.assert_one(result, "error", "reaction_types",
+                        'unknown reaction type "esterification"')
 
     def test_compounds_option_names_the_registry(self) -> None:
         """Requirement: Command-line interface (--compounds)."""
@@ -158,55 +177,130 @@ class DefaultPathTests(ValidatorTestCase):
             registry.mkdir()
             shutil.copy2(COMPOUNDS / "ethyl-acetate.toml", registry)
             result = run_validator(
-                ["--vocabulary", FIXTURES / "reaction_types.toml",
-                 "--static-dir", STATIC_DIR, "--compounds", registry,
-                 BASELINE.parent])
+                ["--settings", SETTINGS, "--static-dir", STATIC_DIR,
+                 "--compounds", registry, BASELINE.parent])
         self.assert_clean(result)
         self.assertIn("validated 2 files: 0 errors, 0 warnings",
                       result.stderr)
 
 
 class VocabularyErrorTests(ValidatorTestCase):
+    def assert_configuration_error(self, result: support.Result,
+                                   *needles: str) -> None:
+        """Exit status 2, nothing on stdout, and a message on stderr that
+        begins ``validate.py: error:`` and contains every needle."""
+        self.assertEqual(result.returncode, 2,
+                         f"stdout={result.stdout!r} "
+                         f"stderr={result.stderr!r}")
+        self.assertEqual(result.stdout, "")
+        self.assertIn("validate.py: error:", result.stderr)
+        for needle in needles:
+            with self.subTest(needle=needle):
+                self.assertIn(needle, result.stderr)
+
+    def run_on_valid_md(self, *steps: support.SettingsChange
+                        ) -> support.Result:
+        return settings_variant_run(*steps, roots=["valid/md"])
+
     def test_entry_without_label_is_a_configuration_error(self) -> None:
         """Scenario: Entry without a label."""
-        result = run_validator(
-            ["--vocabulary", FIXTURES / "bad-vocabulary.toml",
-             FIXTURES / "valid" / "md"])
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("label", result.stderr)
+        result = self.run_on_valid_md(edit_reaction_types(replace_text(
+            'label = "Reduction"', 'note = "no label"')))
+        self.assertEqual(result.returncode, 2, result.stderr)
         self.assertEqual(result.stdout, "")
+        for needle in ("reaction-types.toml", "reduction", "label"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, result.stderr)
 
-    def test_missing_vocabulary_file_is_a_configuration_error(self) -> None:
+    def test_missing_vocabulary_file_is_no_configuration_error(
+            self) -> None:
         """Scenario: Missing vocabulary file."""
-        result = run_validator(
-            ["--vocabulary", FIXTURES / "no-such-vocabulary.toml",
-             FIXTURES / "valid" / "md"])
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("validate.py: error:", result.stderr)
+        result = self.run_on_valid_md(delete_reaction_types())
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertNotIn("validate.py: error:", result.stderr)
+        self.assertEqual(len(result.stdout.splitlines()), VALID_MD_FILES)
+        self.assertEqual(len(result.problems), VALID_MD_FILES, result.stdout)
+        for problem in result.problems:
+            self.assertEqual(problem.field, "reaction_types", result.stdout)
+            self.assertIn("unknown reaction type", problem.message)
 
     def test_vocabulary_that_is_not_toml_is_a_configuration_error(
             self) -> None:
-        """Requirement: Vocabulary file errors (not valid TOML)."""
-        with tempfile.TemporaryDirectory() as tmp:
-            bad = Path(tmp) / "vocabulary.toml"
-            bad.write_text("[esterification\nlabel = 1\n")
-            result = run_validator(
-                ["--vocabulary", bad, FIXTURES / "valid" / "md"])
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("validate.py: error:", result.stderr)
-        self.assertEqual(result.stdout, "")
+        """Scenario: Not TOML."""
+        result = self.run_on_valid_md(
+            edit_reaction_types(append_text("[reduction")))
+        self.assert_configuration_error(result, "reaction-types.toml")
+
+    def test_vocabulary_that_is_not_utf_8_is_a_configuration_error(
+            self) -> None:
+        """Requirement: Vocabulary file errors are configuration errors
+        (cannot be read as UTF-8)."""
+        result = self.run_on_valid_md(write_reaction_types(
+            b'[esterification]\nlabel = "Caf\xe9"\n'))
+        self.assert_configuration_error(result, "reaction-types.toml")
 
     def test_vocabulary_key_that_is_not_a_slug_is_a_configuration_error(
             self) -> None:
-        """Requirement: Vocabulary file errors (top-level key not a slug)."""
+        """Requirement: Vocabulary file errors are configuration errors
+        (a top-level key that is not a slug)."""
+        result = self.run_on_valid_md(edit_reaction_types(
+            append_text('\n[Bad_Key]\nlabel = "Bad"')))
+        self.assert_configuration_error(
+            result, "reaction-types.toml", "Bad_Key")
+
+    def test_a_value_that_is_not_a_table_is_a_configuration_error(
+            self) -> None:
+        """Requirement: Vocabulary file errors are configuration errors
+        (an entry that is not a table)."""
+        result = self.run_on_valid_md(write_reaction_types(
+            'reduction = "Reduction"\n'))
+        self.assert_configuration_error(
+            result, "reaction-types.toml", "reduction")
+
+    def test_a_label_that_is_empty_is_a_configuration_error(self) -> None:
+        """Requirement: Vocabulary file errors are configuration errors
+        (a label that is not a non-empty string)."""
+        for label in ('""', '" "', "5"):
+            with self.subTest(label=label):
+                result = self.run_on_valid_md(edit_reaction_types(
+                    replace_text('label = "Reduction"',
+                                 f"label = {label}")))
+                self.assert_configuration_error(
+                    result, "reaction-types.toml", "reduction", "label")
+
+    def test_a_label_de_that_is_not_a_string_is_a_configuration_error(
+            self) -> None:
+        """Requirement: Vocabulary file errors are configuration errors
+        (an empty or non-string label_de)."""
+        for label_de in ('""', "5", "true"):
+            with self.subTest(label_de=label_de):
+                result = self.run_on_valid_md(edit_reaction_types(
+                    replace_text('label = "Reduction"',
+                                 f'label = "Reduction"\nlabel_de = '
+                                 f"{label_de}")))
+                self.assert_configuration_error(
+                    result, "reaction-types.toml", "reduction", "label_de")
+
+    def test_a_vocabulary_without_a_value_is_a_configuration_error(
+            self) -> None:
+        """Requirement: Vocabulary file errors are configuration errors
+        (no value)."""
+        for content in ("", "# Nothing here yet.\n"):
+            with self.subTest(content=content):
+                result = self.run_on_valid_md(write_reaction_types(content))
+                self.assert_configuration_error(
+                    result, "reaction-types.toml")
+
+    def test_a_broken_vocabulary_stops_a_run_without_procedures(
+            self) -> None:
+        """Requirement: Vocabulary file errors are configuration errors
+        (the file is read whatever the content roots hold)."""
         with tempfile.TemporaryDirectory() as tmp:
-            bad = Path(tmp) / "vocabulary.toml"
-            bad.write_text('[Bad_Key]\nlabel = "Bad"\n')
-            result = run_validator(
-                ["--vocabulary", bad, FIXTURES / "valid" / "md"])
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("validate.py: error:", result.stderr)
-        self.assertEqual(result.stdout, "")
+            empty = Path(tmp) / "content"
+            empty.mkdir()
+            result = settings_variant_run(
+                write_reaction_types("[reduction\n"), roots=[empty])
+        self.assert_configuration_error(result, "reaction-types.toml")
 
 
 class ProblemReportFormatTests(ValidatorTestCase):

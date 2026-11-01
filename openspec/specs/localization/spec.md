@@ -57,11 +57,11 @@ The site script holds no language: the copy button carries its messages in `data
 - **THEN** its counts, chips, loading text, empty-result and error messages, and the ignored-parameters notice are German
 
 ### Requirement: German reaction-type labels
-Every entry of `site/data/reaction_types.toml` SHALL have, besides `label`, a non-empty string `label_de`. A German site shows `label_de` wherever an English one shows `label`; an entry without `label_de` shows `label`. The reaction-type lists of `/reaction_types/` and of the catalogue's reaction-type facet are ordered by the shown label. The validator refuses, as a configuration error, a vocabulary with a `label_<language>` that is not a non-empty string.
+A German site SHALL show a reaction type's `label_de`, from the collection's `vocabularies/reaction-types.toml`, wherever an English site shows its `label`, and its `label` where the value has no `label_de` (reaction-types "Reaction-type data for the site"). Every value of the starter vocabulary `templates/reaction-types.toml` has a `label_de` (reaction-types "Starter reaction types"). The reaction-type lists of `/reaction_types/` and of the catalogue's reaction-type facet are ordered by the shown label. The validator refuses, as a configuration error, a reaction-type vocabulary whose `label_de` is not a non-empty string.
 
 #### Scenario: Vocabulary with German labels
-- **WHEN** a test loads the shipped vocabulary, and runs the validator with a vocabulary whose entry has `label_de = " "`
-- **THEN** every shipped entry has a non-empty `label_de`, and the validator exits 2 naming `label_de`
+- **WHEN** a test loads `templates/reaction-types.toml`, and makes a settings variant run on `baseline` that adds `label_de = " "` to the value `esterification` of `vocabularies/reaction-types.toml`
+- **THEN** every value of the starter vocabulary has a non-empty `label_de`, and the run exits 2 naming `label_de`
 
 #### Scenario: German labels for reaction types
 - **WHEN** a test reads `public/reaction_types/aldol-condensation/index.html`, the reaction-type list of `public/reaction_types/index.html` and the reaction-type facet of `public/procedures/index.html`, of a German build

@@ -35,7 +35,7 @@ A vocabulary SHALL be the file `vocabularies/<name>.toml` in the directory of th
 - `label_de`: optional non-empty string, its name on a German site, which shows `label` when it is absent;
 - `parent`: optional, another value of the same vocabulary, under which this value is filed.
 
-Following `parent` from any value ends at a value without one, a top-level value; the values passed on the way are the value's ancestors, and no value is its own ancestor. An entry holds no other key, and a vocabulary has at least one value. A vocabulary that no declaration names is not read.
+Following `parent` from any value ends at a value without one, a top-level value; the values passed on the way are the value's ancestors, and no value is its own ancestor. An entry holds no other key, and a vocabulary has at least one value. A vocabulary that no declaration names is not read, apart from `reaction-types`, the collection's reaction types, which the validator always reads (reaction-types "Reaction-type vocabulary").
 
 #### Scenario: Values at every level
 - **WHEN** a field-declaration run sets `chemical_class = ["carbonyl-compounds", "ketones"]` and `storage = "fridge"` in `ethyl-acetate.toml`

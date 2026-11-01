@@ -1,7 +1,7 @@
 """Synthesis sequences in the validator (synthesis-sequences "Sequence
 files", "Sequence fields" and "Sequence continuity", procedure-validation
-"Command-line interface", "Default paths resolve from the script
-location", "Problem report format" and "Fixture suite").
+"Command-line interface", "Default paths come from the working
+directory", "Problem report format" and "Fixture suite").
 
 The sequence fixtures are tests/fixtures/sequences/ (the baseline
 ``SEQ-0001-baseline.md`` and ``SEQ-0002-general-entry.md``, whose first
@@ -18,7 +18,7 @@ import unittest
 from pathlib import Path
 
 from support import (COMPOUNDS, FIXTURES, SEQUENCE_BASELINE, SEQUENCES,
-                     STATIC_DIR, VOCABULARY, ValidatorTestCase, add_file,
+                     SETTINGS, STATIC_DIR, ValidatorTestCase, add_file,
                      add_sequence, changes, edit_sequence, fixture_run,
                      insert_line, remove_line, remove_sequence,
                      replace_line, replace_text, run_validator,
@@ -171,8 +171,8 @@ class FileNameTests(ValidatorTestCase):
 
 
 class OptionTests(ValidatorTestCase):
-    ARGS = ["--vocabulary", "reaction_types.toml", "--static-dir", "static",
-            "--compounds", "compounds"]
+    ARGS = ["--settings", "settings/orgsyndb.toml", "--static-dir",
+            "static", "--compounds", "compounds"]
 
     def test_problems_carry_the_sequences_argument_as_given(self) -> None:
         """Requirement: Problem report format (the path of a sequence)."""
@@ -186,7 +186,7 @@ class OptionTests(ValidatorTestCase):
 
     def test_the_default_is_md_sequences_of_the_working_directory(
             self) -> None:
-        """Requirement: Default paths resolve from the script location
+        """Requirement: Default paths come from the working directory
         (--sequences)."""
         source = (FIXTURES / "sequences-invalid" / "file-name"
                   / "SEQ-0002-mismatch.md")
@@ -195,7 +195,7 @@ class OptionTests(ValidatorTestCase):
             (cwd / "md" / "sequences").mkdir(parents=True)
             shutil.copy2(source, cwd / "md" / "sequences")
             result = run_validator(
-                ["--vocabulary", VOCABULARY, "--static-dir", STATIC_DIR,
+                ["--settings", SETTINGS, "--static-dir", STATIC_DIR,
                  "--compounds", COMPOUNDS, FIXTURES / "valid" / "md",
                  FIXTURES / "general"], cwd=cwd)
         self.assert_one(result, "error", "file_name",
@@ -203,7 +203,7 @@ class OptionTests(ValidatorTestCase):
                         path_suffix="md/sequences/SEQ-0002-mismatch.md")
 
     def test_a_missing_default_directory_holds_no_sequence(self) -> None:
-        """Requirement: Default paths resolve from the script location
+        """Requirement: Default paths come from the working directory
         (a missing directory)."""
         result = fixture_run("valid/md", "general")
         self.assert_clean(result)
@@ -211,7 +211,7 @@ class OptionTests(ValidatorTestCase):
                       result.stderr)
 
     def test_a_missing_named_directory_holds_no_sequence(self) -> None:
-        """Requirement: Default paths resolve from the script location
+        """Requirement: Default paths come from the working directory
         (--sequences names a missing directory)."""
         result = sequence_fixture_run(
             "valid/md", sequences="sequences-invalid/no-such-directory")

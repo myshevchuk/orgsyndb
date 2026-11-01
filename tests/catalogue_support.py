@@ -180,7 +180,7 @@ class CatalogueCase(fs.ProcedureFieldsMixin, ps.ThemeBuildCase):
 
     def labels(self) -> dict[str, str]:
         """Reaction-type slug to label in the build's language."""
-        return ps.reaction_labels(self.sandbox.app, self.LOCALE)
+        return ps.reaction_labels(self.sandbox.root, self.LOCALE)
 
     def page(self, relative: str) -> Page:
         """The page at ``public/<relative>``, failing when absent."""

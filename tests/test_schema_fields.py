@@ -122,9 +122,11 @@ class ReactionTypeTests(ValidatorTestCase):
     def test_reaction_type_outside_the_vocabulary_is_rejected(self) -> None:
         """Scenario: Reaction type outside the vocabulary."""
         result = fixture_run("invalid/unknown-reaction-type")
-        self.assert_one(result, "error", "reaction_types",
-                        'unknown reaction type "esterfication"',
-                        path_suffix="OSDB-0111-unknown-reaction-type.md")
+        problem = self.assert_one(
+            result, "error", "reaction_types",
+            'unknown reaction type "esterfication"',
+            path_suffix="OSDB-0111-unknown-reaction-type.md")
+        self.assertIn("vocabularies/reaction-types.toml", problem.message)
 
     def test_two_reaction_types_are_rejected(self) -> None:
         """Scenario: Two reaction types."""

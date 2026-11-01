@@ -37,7 +37,7 @@ authors = ["A. Example"]
 status = "draft"
 
 # The kind of reaction: exactly one entry. Allowed values are listed in
-# site/data/reaction_types.toml, for example "esterification",
+# vocabularies/reaction-types.toml, for example "esterification",
 # "reduction" or "cross-coupling".
 reaction_types = ["esterification"]
 

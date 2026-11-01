@@ -87,9 +87,11 @@ Füllen Sie diese Pflichtfelder aus:
   (`"checked"`) oder zurückgezogen (`"retired"`) ist. Der Wert bleibt
   englisch; die deutsche Seite zeigt *Entwurf*, *Geprüft* oder
   *Zurückgezogen*.
-- `reaction_types`: genau ein Reaktionstyp, als englisches Kürzel wie
-  `"esterification"`. Die [Schema-Referenz](SCHEMA.de.md#reaktionstypen)
-  listet die Kürzel mit ihren deutschen Bezeichnungen.
+- `reaction_types`: genau ein Kürzel aus
+  `vocabularies/reaction-types.toml` Ihrer Sammlung, etwa
+  `"esterification"`. Bearbeiten Sie diese Datei, um die erlaubten
+  Reaktionstypen zu ändern. Die [Schema-Referenz](SCHEMA.de.md#reaktionstypen)
+  erklärt das Format und zeigt die Startliste mit deutschen Bezeichnungen.
 - `tags`: nützliche Suchbegriffe in Kleinbuchstaben. Ersetzen Sie das
   `change-me` der Vorlage. Das Schlagwort `sample-data` setzt einen
   Warnhinweis auf die Seite und auf Ausdrucke; verwenden Sie es nie für

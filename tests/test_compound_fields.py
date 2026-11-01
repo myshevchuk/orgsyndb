@@ -14,7 +14,6 @@ from support import (COMPOUNDS, FIELDS, FIXTURES, STATIC_DIR, Result,
                      insert_after, replace_text, run_validator,
                      write_vocabulary)
 from support import FieldChange, FieldCopy
-from support import VOCABULARY as VOCABULARY_FILE
 
 COMPOUND_FILES = len(list(COMPOUNDS.glob("*.toml")))
 EDITED = "ethyl-acetate.toml"
@@ -687,9 +686,9 @@ class VocabularyErrorTests(FieldTestCase):
             settings = elsewhere / "orgsyndb.toml"
             settings.write_bytes(copy.settings.read_bytes())
             result = run_validator(
-                ["--vocabulary", VOCABULARY_FILE, "--static-dir",
-                 STATIC_DIR, "--compounds", copy.registry, "--settings",
-                 settings, FIXTURES / "baseline"], cwd=collection)
+                ["--static-dir", STATIC_DIR, "--compounds", copy.registry,
+                 "--settings", settings, FIXTURES / "baseline"],
+                cwd=collection)
         self.assert_configuration_error(result, "chemical-classes")
 
 

@@ -74,7 +74,7 @@ class SiteCase(fs.ProcedureFieldsMixin, ps.ThemeBuildCase):
         return {item.id: item for item in self.content()}
 
     def labels(self) -> dict[str, str]:
-        return ps.reaction_labels(self.sandbox.app)
+        return ps.reaction_labels(self.sandbox.root)
 
     def order_by_id(self) -> list[Content]:
         return sorted(self.content(), key=lambda item: item.id)
