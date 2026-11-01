@@ -28,6 +28,7 @@ STATIC_DIR = FIXTURES / "static"
 COMPOUNDS = FIXTURES / "compounds"
 COMPOUND_TEMPLATE = REPO / "templates" / "compound.toml"
 FIELDS = FIXTURES / "fields"
+PROCEDURE_FIELDS = FIXTURES / "procedure-fields"
 
 _LINE = re.compile(
     r"^(?P<path>.+?):(?P<field>[^:\s]+): "
@@ -503,4 +504,112 @@ def write_vocabulary(name: str, content: str | bytes) -> FieldChange:
             path.write_bytes(content)
         else:
             path.write_text(content, encoding="utf-8")
+    return change
+
+
+def procedure_declaration(key: str, type_: str, label: str,
+                          *lines: str) -> str:
+    """The text of one ``[[fields.procedure]]`` table, after a blank
+    line, with the extra assignment ``lines``."""
+    return declaration(key, type_, label, *lines).replace(
+        "[[fields.compound]]", "[[fields.procedure]]")
+
+
+class ProcedureFieldCopy(NamedTuple):
+    """The temporary copies of a procedure-field run."""
+    settings: Path
+    vocabularies: Path
+    registry: Path
+    content: Path
+
+
+@contextlib.contextmanager
+def procedure_fields_copy() -> Iterator[ProcedureFieldCopy]:
+    """Fresh temporary copies of ``tests/fixtures/procedure-fields/`` and
+    of the fixture registry, and a fresh content root holding the
+    baseline as its only file."""
+    with tempfile.TemporaryDirectory() as tmp:
+        fields = Path(tmp) / "procedure-fields"
+        shutil.copytree(PROCEDURE_FIELDS, fields)
+        registry = Path(tmp) / "compounds"
+        shutil.copytree(COMPOUNDS, registry)
+        content = Path(tmp) / "content"
+        content.mkdir()
+        shutil.copyfile(BASELINE, content / BASELINE.name)
+        yield ProcedureFieldCopy(fields / "orgsyndb.toml",
+                                 fields / "vocabularies", registry,
+                                 content)
+
+
+ProcedureFieldChange = Callable[[ProcedureFieldCopy], None]
+
+
+def procedure_field_run(*steps: ProcedureFieldChange,
+                        extra: Sequence[str | Path] = ()) -> Result:
+    """Procedure-field run: each of ``steps`` edits the copies, then a
+    fixture run on the content root reads the registry copy and, through
+    ``--settings``, the copy of ``orgsyndb.toml``."""
+    with procedure_fields_copy() as copy:
+        for step in steps:
+            step(copy)
+        return fixture_run(
+            copy.content, compounds=copy.registry,
+            extra=["--settings", copy.settings, *extra])
+
+
+def edit_procedure_settings(*edits: Edit) -> ProcedureFieldChange:
+    """A procedure-field change applying text edits to
+    ``orgsyndb.toml``."""
+    def change(copy: ProcedureFieldCopy) -> None:
+        copy.settings.write_text(
+            apply_edits(copy.settings.read_text(encoding="utf-8"), edits),
+            encoding="utf-8")
+    return change
+
+
+def edit_procedure_vocabulary(name: str, *edits: Edit
+                              ) -> ProcedureFieldChange:
+    """A procedure-field change applying text edits to
+    ``vocabularies/<name>.toml``."""
+    def change(copy: ProcedureFieldCopy) -> None:
+        path = copy.vocabularies / f"{name}.toml"
+        path.write_text(
+            apply_edits(path.read_text(encoding="utf-8"), edits),
+            encoding="utf-8")
+    return change
+
+
+def edit_procedure(name: str, *edits: Edit) -> ProcedureFieldChange:
+    """A procedure-field change applying text edits to the file ``name``
+    of the content root."""
+    def change(copy: ProcedureFieldCopy) -> None:
+        path = copy.content / name
+        path.write_text(
+            apply_edits(path.read_text(encoding="utf-8"), edits),
+            encoding="utf-8")
+    return change
+
+
+def add_procedure(name: str, *edits: Edit,
+                  source: str | Path = BASELINE.name
+                  ) -> ProcedureFieldChange:
+    """A procedure-field change adding ``name`` to the content root: a
+    copy of ``source``, a file of the content root named alone or a path,
+    with the text edits applied."""
+    def change(copy: ProcedureFieldCopy) -> None:
+        path = Path(source)
+        if not path.is_absolute():
+            path = copy.content / path
+        (copy.content / name).write_text(
+            apply_edits(path.read_text(encoding="utf-8"), edits),
+            encoding="utf-8")
+    return change
+
+
+def edit_registry_compound(*edits: Edit, key: str = "ethyl-acetate"
+                           ) -> ProcedureFieldChange:
+    """A procedure-field change applying text edits to the registry
+    copy's ``<key>.toml``."""
+    def change(copy: ProcedureFieldCopy) -> None:
+        edit_compound(key, *edits)(copy.registry)
     return change

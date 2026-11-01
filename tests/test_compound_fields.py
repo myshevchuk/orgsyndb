@@ -485,6 +485,20 @@ class DeclarationErrorTests(FieldTestCase):
             'type = "text"\nlabel = "Item no."\n'))
         self.assert_configuration_error(result, "fields.compound")
 
+    def test_a_misspelt_entity_under_fields(self) -> None:
+        """Scenario: A misspelt entity under fields."""
+        result = field_variant_run(edit_settings(append_text(
+            '\n[[fields.reagent]]\nkey = "lot"\ntype = "text"\n'
+            'label = "Lot"')))
+        self.assert_configuration_error(result, "fields.reagent")
+
+    def test_fields_procedure_is_an_entity_of_its_own(self) -> None:
+        """Requirement: Declaration errors are configuration errors
+        (`fields` may hold `procedure`)."""
+        self.assert_clean(field_variant_run(edit_settings(append_text(
+            '\n[[fields.procedure]]\nkey = "lot"\ntype = "text"\n'
+            'label = "Lot"'))))
+
     def test_fields_must_be_a_table_of_compound_declarations(self) -> None:
         """Requirement: Declaration errors are configuration errors
         (`fields`)."""
@@ -492,8 +506,8 @@ class DeclarationErrorTests(FieldTestCase):
             "fields is a number": ("format = 1\nfields = 5\n", "fields"),
             "fields is a list": ("format = 1\nfields = []\n", "fields"),
             "another entity": (
-                'format = 1\n\n[fields.procedure]\nkey = "x"\n',
-                "procedure"),
+                'format = 1\n\n[fields.reagent]\nkey = "x"\n',
+                "reagent"),
             "next to compound": (
                 'format = 1\n\n[fields]\ncompound = []\nother = 1\n',
                 "other"),

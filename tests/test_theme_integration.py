@@ -15,6 +15,7 @@ import tomllib
 import unittest
 import urllib.parse
 
+import field_support as fs
 import general_support as gs
 import pipeline_support as ps
 import sequence_support as ss
@@ -57,8 +58,17 @@ SHIPPED_USED_IN = {"OSDB-0001": ["OSDB-0002"],
                    "OSDB-0007": ["OSDB-0008"]}
 
 
-class SiteCase(ps.ThemeBuildCase):
+class SiteCase(fs.ProcedureFieldsMixin, ps.ThemeBuildCase):
     """Helpers shared by the build classes."""
+
+    def canonical_labels(self) -> list[str]:
+        """The panel's labels in their canonical order, the declared
+        procedure fields' shown labels standing between ``Checked by``
+        and ``Created``."""
+        at = PANEL_LABELS.index("Created")
+        return [*PANEL_LABELS[:at],
+                *(field.label for field in self.procedure_fields()),
+                *PANEL_LABELS[at:]]
 
     def by_id(self) -> dict[str, Content]:
         return {item.id: item for item in self.content()}
@@ -115,6 +125,8 @@ class SiteCase(ps.ThemeBuildCase):
         data = item.data
         single = len(item.products) == 1
         compound = self.registry()[item.products[0]["compound"]]
+        declared = [(label, True)
+                    for label, _ in self.declared_pairs(data)]
         wanted = [("Product" if single else "Products", True),
                   ("Formula", single),
                   ("MW", single),
@@ -126,6 +138,7 @@ class SiteCase(ps.ThemeBuildCase):
                   ("Authors", data.get("authors")),
                   ("Checked by", data.get("checked_by")
                    and data.get("status") != "checked"),
+                  *declared,
                   ("Created", data.get("date")),
                   ("Modified", data.get("lastmod")),
                   ("Precursors", self.precursors(item)),
@@ -425,9 +438,19 @@ class ShippedSiteTests(SiteCase):
             list(panel),
             ["Product", "Formula", "MW", "CAS", "SMILES",
              "Starting materials", "Reaction type", "Tags", "Authors",
+             "Lab notebook", "Project", "Working time", "Inert atmosphere",
              "Created", "Modified", "Precursors", "Sequences"])
         text = {label: pair.definition.norm()
                 for label, pair in panel.items()}
+        self.assertEqual(
+            [text[label] for label in ("Lab notebook", "Project",
+                                       "Working time", "Inert atmosphere")],
+            ["AE-1/2", "Teaching › First-year practical", "2.5 h", "No"])
+        self.assertEqual(
+            [(label, text[label]) for label in panel
+             if label in ("Lab notebook", "Project", "Working time",
+                          "Inert atmosphere")],
+            self.declared_pairs(self.by_id()["OSDB-0002"].data))
         product = panel["Product"].definition.find_all("a", "compound")
         self.assertEqual([l.norm() for l in product],
                          ["Acetylsalicylic acid"])
@@ -544,7 +567,8 @@ class ShippedSiteTests(SiteCase):
             with self.subTest(procedure=item.id):
                 pairs = self.panel(page)
                 shown = list(pairs)
-                positions = [PANEL_LABELS.index(
+                canonical = self.canonical_labels()
+                positions = [canonical.index(
                     "Product" if label == "Products" else label)
                     for label in shown]
                 self.assertEqual(positions, sorted(set(positions)))
@@ -552,6 +576,40 @@ class ShippedSiteTests(SiteCase):
                 for label, pair in pairs.items():
                     self.assertNotEqual(pair.gap, "", label)
                     self.assertEqual(pair.gap.strip(), "", label)
+
+    def test_declared_fields_are_written_as_on_a_compound_page(
+            self) -> None:
+        """Scenario: Panel labels follow the canonical order on every
+        page (the written values)."""
+        for item, page in self.procedure_pages():
+            with self.subTest(procedure=item.id):
+                declared = {label for label, _ in
+                            self.declared_pairs(item.data)}
+                self.assertEqual(
+                    [(label, pair.definition.norm())
+                     for label, pair in self.panel(page).items()
+                     if label in declared],
+                    self.declared_pairs(item.data))
+                self.assertTrue(declared, "the procedure sets no field")
+
+    def test_a_field_a_procedure_does_not_set_is_not_shown(self) -> None:
+        """Requirement: Metadata panel (each pair present only when the
+        field is set)."""
+        by_id = self.by_id()
+        third = self.panel(self.page_of(by_id["OSDB-0003"]))
+        self.assertEqual(third["Working time"].definition.norm(), "4 h")
+        self.assertNotIn("Inert atmosphere", third)
+        eighth = self.panel(self.page_of(by_id["OSDB-0008"]))
+        self.assertEqual(eighth["Lab notebook"].definition.norm(),
+                         "AE-2/12")
+        self.assertEqual(eighth["Project"].definition.norm(),
+                         "Research › Cinnamates")
+        for label in ("Working time", "Inert atmosphere"):
+            self.assertNotIn(label, eighth)
+        fourth = self.panel(self.page_of(by_id["OSDB-0004"]))
+        self.assertEqual(fourth["Inert atmosphere"].definition.norm(),
+                         "Yes")
+        self.assertEqual(fourth["Working time"].definition.norm(), "6 h")
 
     def test_precursor_and_used_in_links_resolve_both_ways(self) -> None:
         """Scenario: Links resolve in both directions."""
@@ -746,7 +804,16 @@ class ShippedSiteTests(SiteCase):
         panel = self.panel(page)
         self.assertEqual(list(panel), [
             "Products", "Starting materials", "Reaction type", "Tags",
-            "Authors", "Created", "Modified", "Precursors", "Sequences"])
+            "Authors", "Lab notebook", "Project", "Working time",
+            "Inert atmosphere", "Created", "Modified", "Precursors",
+            "Sequences"])
+        self.assertEqual(
+            [(label, panel[label].definition.norm())
+             for label in ("Lab notebook", "Project", "Working time",
+                           "Inert atmosphere")],
+            [("Lab notebook", "CE-3/1"),
+             ("Project", "Teaching › Advanced practical"),
+             ("Working time", "3.5 h"), ("Inert atmosphere", "No")])
         self.assertEqual(
             [(page.resolve(l.attrs["href"]), l.norm())
              for l in panel["Products"].definition.find_all("a", "compound")],

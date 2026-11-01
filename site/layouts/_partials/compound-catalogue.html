@@ -38,21 +38,9 @@ button.facets-toggle. */ -}}
 {{ range $field := $facetFields -}}
 {{ $carried := slice -}}
 {{ range $rows }}{{ range index .values $field.key }}{{ $carried = $carried | append . }}{{ end }}{{ end -}}
-{{ $entries := slice -}}
-{{ if eq $field.type "boolean" -}}
-{{ range slice (slice "true" "boolean_yes") (slice "false" "boolean_no") }}{{ if in $carried (index . 0) }}{{ $entries = $entries | append (dict "key" (index . 0) "label" (T (index . 1))) }}{{ end }}{{ end -}}
-{{ else -}}
 {{ $own := "" -}}
 {{ if and $tab (eq $field.key $tab.field.key) }}{{ $own = $tab.value }}{{ end -}}
-{{ range $field.order -}}
-{{ if and (in $carried .) (ne . $own) -}}
-{{ $value := index $field.values . -}}
-{{ $depth := len $value.ancestors -}}
-{{ if and $own (in $value.ancestors $own) }}{{ $depth = sub $depth 1 }}{{ end -}}
-{{ $entries = $entries | append (dict "key" . "label" $value.label "depth" $depth) -}}
-{{ end -}}
-{{ end -}}
-{{ end -}}
+{{ $entries := partial "field-facet-entries.html" (dict "field" $field "carried" $carried "own" $own) -}}
 {{ if or $entries (not $tab) }}{{ $facets = $facets | append (dict "field" $field "entries" $entries) }}{{ end -}}
 {{ end -}}
 {{ $count := len $rows -}}
@@ -69,15 +57,7 @@ button.facets-toggle. */ -}}
 <div class="catalogue-facets" id="catalogue-facets" data-catalogue-controls hidden>
 <h2>{{ T "catalogue_filters" }}</h2>
 {{ range . -}}
-{{ $field := .field -}}
-<details class="facet" data-facet="{{ $field.key }}" open>
-<summary id="facet-{{ $field.key }}">{{ $field.label }}</summary>
-<div class="facet-values" role="group" aria-labelledby="facet-{{ $field.key }}">
-{{ range .entries -}}
-<label class="facet-value"{{ if isset . "depth" }} style="--depth: {{ .depth }}"{{ end }}><input type="checkbox" name="{{ $field.key }}" value="{{ .key }}"> <span class="facet-label">{{ .label }}</span> <span class="facet-count"></span></label>
-{{ end -}}
-</div>
-</details>
+{{ partial "field-facet.html" . -}}
 {{ end -}}
 </div>
 {{ end -}}

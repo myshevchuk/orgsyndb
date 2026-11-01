@@ -9,6 +9,10 @@ status = "draft"
 reaction_types = ["olefination"]
 tags = ["sample-data", "wittig", "cinnamate"]
 scale = "5 mmol"
+notebook = "AE-2/11"
+project = "cinnamates"
+working_time = 5
+inert_atmosphere = true
 substrates = ["benzaldehyde", "ethyl-triphenylphosphoranylidene-acetate"]
 products = [{ compound = "ethyl-cinnamate", yield_percent = 80 }]
 hazards = [

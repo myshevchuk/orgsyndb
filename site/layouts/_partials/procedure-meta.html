@@ -7,11 +7,14 @@ procedure takes them from every entry); the compound's formula, weight,
 CAS number and SMILES follow only for a procedure with one product
 (compound-facts.html), and index-terms.html keeps every product's in the
 indexed text. Starting materials link the compounds of
-substrate-keys.html. Precursors and Used in (procedure-links.html)
-and the Sequences the procedure is a step of (procedure-sequences.html)
-end the panel. A newline separates every
-</dt> from its <dd>, so that Pagefind indexes each label and value as
-separate words. */ -}}
+substrate-keys.html. The procedure fields the collection declares
+(site.Data.collection.fields.procedure) that the procedure sets follow
+Checked by, in declared order, each labelled with its shown label and
+its value written as on a compound page (field-value.html). Precursors
+and Used in (procedure-links.html) and the Sequences the procedure is a
+step of (procedure-sequences.html) end the panel. A newline separates
+every </dt> from its <dd>, so that Pagefind indexes each label and
+value as separate words. */ -}}
 {{ $p := .Params -}}
 <dl class="metadata">
 {{ with partial "product-keys.html" . -}}
@@ -41,6 +44,12 @@ separate words. */ -}}
 <dt>{{ T "label_checked_by" }}</dt>
 <dd>{{ delimit . ", " }}</dd>
 {{ end }}{{ end -}}
+{{ range site.Data.collection.fields.procedure -}}
+{{ if isset $p .key -}}
+<dt>{{ .label }}</dt>
+<dd>{{ partial "field-value.html" (dict "field" . "value" (index $p .key) "page" true) }}</dd>
+{{ end -}}
+{{ end -}}
 {{ if not .Date.IsZero -}}
 <dt>{{ T "label_created" }}</dt>
 <dd><time datetime="{{ .Date.Format "2006-01-02T15:04:05Z07:00" }}">{{ .Date.Format "2006-01-02 15:04" }}</time></dd>

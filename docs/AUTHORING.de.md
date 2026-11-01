@@ -109,6 +109,35 @@ Ausgangsstoffe (`substrates`), Prüfende, Literaturangaben und ein KI-Modell.
 Löschen Sie das `#` am Zeilenanfang, wenn Sie ein Feld brauchen. Lassen Sie
 die Zeile auskommentiert, wenn es nicht zutrifft.
 
+Prüfen Sie `orgsyndb.toml` auf Felder unter `[[fields.procedure]]`. Das sind
+zusätzliche Vorschriftenangaben Ihrer Sammlung, etwa ein Laborjournalverweis
+oder ein Projekt. Ergänzen Sie sie als Zeilen `key = value` im Datenblock,
+vor jeder Tabelle. Die Aspirin-Vorschrift der Beispielsammlung setzt nach
+`scale` etwa:
+
+```toml
+notebook = "AE-1/2"
+project = "first-year-practical"
+working_time = 2.5
+inert_atmosphere = false
+```
+
+Text und Auswahlschlüssel stehen in doppelten Anführungszeichen. Zahlen und
+`true` oder `false` stehen ohne Anführungszeichen; Zahlen haben einen
+Dezimalpunkt und keine Einheit. Eine Auswahl verwendet Schlüssel aus der
+deklarierten Datei in `vocabularies/`; `multiple = true` verlangt eine nicht
+leere Liste verschiedener Schlüssel. Ein Feld mit `required = true` muss
+gesetzt sein, auch in einer allgemeinen Vorschrift. Bei `unique = true`
+darf keine andere Vorschrift denselben Wert verwenden. In der
+Beispielsammlung sind alle vier Felder optional; ein Laborjournalverweis
+muss `[A-Z]{2}-\d+/\d+` entsprechen, etwa `AE-1/2`, und noch unvergeben sein.
+Die Arbeitszeit steht in Stunden und muss mindestens null sein.
+Projektschlüssel stehen in
+[`projects.toml`](../examples/demo/vocabularies/projects.toml), darunter
+`first-year-practical` unter `teaching`. Die
+[Feldreferenz](SCHEMA.de.md#felddeklarationen-für-vorschriften) nennt die genauen
+Regeln.
+
 Benennen Sie Produkte und Ausgangsstoffe durch ihre Schlüssel im Register.
 Die Aspirin-Vorschrift der Beispielsammlung verwendet zum Beispiel:
 
@@ -287,8 +316,9 @@ Verbindungsseiten. **Ausgangsstoffe** verlinkt die Verbindungen aus
 Einträge, jede Verbindung einmal in der Reihenfolge ihres ersten Auftretens.
 Auch Vorstufen- und Folgelinks berücksichtigen alle Einträge. Es folgen
 Reaktionstyp, Schlagwörter, Autoren, bei Entwürfen und zurückgezogenen
-Vorschriften gegebenenfalls die Prüfenden unter **Geprüft von**, Erstellungs-
-und Änderungszeit sowie die Links zu Vorstufen und Folgevorschriften. Wenn
+Vorschriften gegebenenfalls die Prüfenden unter **Geprüft von**, deklarierte
+Vorschriftenfelder, Erstellungs- und Änderungszeit sowie die Links zu
+Vorstufen und Folgevorschriften. Wenn
 Ihre Vorschrift eine Stufe eines Synthesewegs ist, folgt auf **Verwendet in**
 das Feld **Synthesewege** mit verlinkten Titeln, nach Nummer geordnet. Ziffern
 der Summenformel erscheinen tiefgestellt. Molmasse und Ausbeute erscheinen mit
@@ -298,6 +328,14 @@ Seiten mit verwandten Vorschriften. Autorennamen werden mit großem
 Anfangsbuchstaben angezeigt, aus `van` wird also `Van`. Die acht Abschnitte des
 Textes stehen auf einem breiten Bildschirm neben dem Datenfeld, in einem
 schmalen Fenster und im Ausdruck danach.
+
+Das Datenfeld zeigt jedes gesetzte deklarierte Vorschriftenfeld in
+Deklarationsreihenfolge vor **Erstellt**, nach **Geprüft von**, sofern diese
+Angabe erscheint. In der Beispielsammlung sind das **Laborjournal**,
+**Projekt**, **Arbeitszeit** und **Schutzgas**. Auswahlwerte verwenden die
+Namen aus dem Vokabular, etwa **Lehre › Grundpraktikum**. Arbeitszeit erscheint
+als `2,5 h`, Wahrheitswerte als **Ja** oder **Nein**. Die Katalogsuche findet
+diese angezeigten Werte.
 
 Bei einer allgemeinen Vorschrift steht **Anwendungsbereich** vor
 **Zusammenfassung**, mit einer Zeile je Eintrag. **Eintrag**,
@@ -488,6 +526,15 @@ zeigt die Seite weiterhin ihre Vorschriften nach Nummer. Die Ansicht
 **Details** berücksichtigt Produkte aller Einträge und zeigt die
 Ausbeutespanne.
 
+Die deklarierten Wahrheits- und Auswahlfelder Ihrer Sammlung mit
+`facet = true` erscheinen ebenfalls als Filter zwischen **Status** und
+**Schlagwort**, auch auf Reaktionstyp-, Schlagwort-, Autoren- und allgemeinen
+Vorschriftenseiten. In der Beispielsammlung verwenden Sie **Projekt** und
+**Schutzgas**. **Lehre** schließt die Praktika ein, **Forschung** die Biaryle
+und Zimtsäurederivate. Jeder Katalog bietet Werte der gesamten Sammlung an.
+Die Auswahl lässt sich über die Adresse weitergeben, etwa
+`/procedures/?project=research&inert_atmosphere=true`.
+
 ## 7. Eine englische Vorschrift übersetzen
 
 Dateien mit derselben Nummer sind Fassungen einer Vorschrift. Die Website
@@ -506,7 +553,10 @@ also auf der deutschen Website das englische Original.
    Steht im Original `language = "en"`, ändern Sie es in `"de"` oder
    löschen Sie die Zeile.
 4. Lassen Sie `id`, `slug`, `status`, `reaction_types`, `tags`, `products` und
-   `substrates` sowie `scheme_image` wie im Original. Behalten Sie `scope` und
+   `substrates` sowie `scheme_image` wie im Original. Wiederholen Sie jedes
+   deklarierte Vorschriftenfeld mit demselben Wert, oder lassen Sie es in
+   beiden Fassungen weg. Übersetzen Sie diese Werte nicht; die deutschen
+   Feldnamen kommen aus `label_de`. Behalten Sie `scope` und
    die Reihenfolge seiner Einträge; übersetzen Sie darin nur `note`. Die
    Prüfung meldet Abweichungen der gemeinsamen Felder als Fehler unter dem
    jeweiligen Feldnamen. Zahlen werden nach ihrem Wert verglichen: `85` und

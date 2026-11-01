@@ -7,8 +7,7 @@ procedure, each procedure counted once; text, the name, name_de,
 formula, CAS number, SMILES and the values of the text fields with
 search = true that the entry sets, joined by single spaces; and values,
 for each field declared with facet = true or tabs = true, a slice of
-machine values: "true" or "false" for a boolean, each value set and
-each of its ancestors, once, for a choice; empty when the entry does
+machine values (field-machine-values.html); empty when the entry does
 not set the field. The records are the same on every page of a build,
 so a caller may call this with partialCached. */ -}}
 {{ $procedures := where site.RegularPages "Section" "procedures" -}}
@@ -30,18 +29,7 @@ so a caller may call this with partialCached. */ -}}
 {{ range $searched }}{{ with index $compound .key }}{{ $words = $words | append . }}{{ end }}{{ end -}}
 {{ $values := dict -}}
 {{ range $filed -}}
-{{ $set := slice -}}
-{{ if isset $compound .key -}}
-{{ $value := index $compound .key -}}
-{{ if eq .type "boolean" -}}
-{{ $set = slice (cond $value "true" "false") -}}
-{{ else -}}
-{{ $field := . -}}
-{{ range $chosen := cond .multiple $value (slice $value) }}{{ range (index $field.values $chosen).ancestors }}{{ $set = $set | append . }}{{ end }}{{ $set = $set | append $chosen }}{{ end -}}
-{{ $set = uniq $set -}}
-{{ end -}}
-{{ end -}}
-{{ $values = merge $values (dict .key $set) -}}
+{{ $values = merge $values (dict .key (partial "field-machine-values.html" (dict "field" . "record" $compound))) -}}
 {{ end -}}
 {{ $rows = $rows | append (dict "key" $key "name" (partial "compound-name.html" $key) "compound" $compound "made" $made "used" $used "text" (delimit $words " ") "values" $values) -}}
 {{ end -}}

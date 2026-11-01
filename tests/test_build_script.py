@@ -308,8 +308,9 @@ class ValidateSettingsTests(ProgramTestCase):
         sandbox = make_sandbox(self)
         path = sandbox.root / "orgsyndb.toml"
         text = path.read_text(encoding="utf-8")
-        self.assertEqual(text.count('type = "number"'), 1)
-        path.write_text(text.replace('type = "number"', 'type = "date"'),
+        old = 'type = "number"\nlabel = "Stock"'
+        self.assertEqual(text.count(old), 1)
+        path.write_text(text.replace(old, 'type = "date"\nlabel = "Stock"'),
                         encoding="utf-8")
         result = sandbox.build("validate")
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)

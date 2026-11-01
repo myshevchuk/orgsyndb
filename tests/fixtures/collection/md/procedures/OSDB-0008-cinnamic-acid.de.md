@@ -9,6 +9,8 @@ status = "draft"
 reaction_types = ["hydrolysis"]
 tags = ["sample-data", "saponification", "cinnamate"]
 scale = "3 mmol"
+notebook = "AE-2/12"
+project = "cinnamates"
 substrates = ["ethyl-cinnamate"]
 products = [{ compound = "cinnamic-acid", yield_percent = 90 }]
 hazards = [

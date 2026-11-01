@@ -10,6 +10,7 @@
 #+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
 #+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("hydrolysis")
 #+HUGO_CUSTOM_FRONT_MATTER: :scale "50 mmol"
+#+HUGO_CUSTOM_FRONT_MATTER: :notebook "AE-1/1" :project "first-year-practical" :working_time 3 :inert_atmosphere false
 #+HUGO_CUSTOM_FRONT_MATTER: :substrates '("methyl-salicylate")
 #+HUGO_CUSTOM_FRONT_MATTER: :hazards '("Sodium hydroxide: causes severe skin burns and eye damage" "Concentrated hydrochloric acid: causes severe skin burns, irritating vapour" "Methyl salicylate: harmful if swallowed" "Salicylic acid: harmful if swallowed, causes serious eye damage")
 #+HUGO_CUSTOM_FRONT_MATTER: :references '("Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989.")

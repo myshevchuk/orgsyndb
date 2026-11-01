@@ -9,6 +9,9 @@ status = "draft"
 reaction_types = ["aldol-condensation"]
 tags = ["sample-data", "claisen-schmidt"]
 scale = "10 mmol"
+notebook = "CE-1/4"
+project = "first-year-practical"
+working_time = 2
 substrates = ["benzaldehyde", "acetone"]
 products = [{ compound = "dibenzylideneacetone", yield_percent = 85 }]
 hazards = [

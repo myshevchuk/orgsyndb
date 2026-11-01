@@ -9,6 +9,10 @@ status = "draft"
 reaction_types = ["cross-coupling"]
 tags = ["sample-data", "suzuki-coupling", "biphenyl"]
 scale = "10 mmol"
+notebook = "AE-2/7"
+project = "biaryls"
+working_time = 6
+inert_atmosphere = true
 substrates = ["4-bromoacetophenone", "phenylboronic-acid"]
 products = [{ compound = "4-acetylbiphenyl", yield_percent = 85 }]
 hazards = [

@@ -10,13 +10,15 @@ import re
 import shutil
 import subprocess
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
 import pipeline_support as ps
-from pipeline_support import (DEMO, FIXTURES, OX_HUGO_PIN, REPO, TOMELR_PIN,
-                              Sandbox, body_of, front_matter, make_path,
-                              make_sandbox, read_only_dir, snapshot)
+from pipeline_support import (DEMO, FIXTURES, OX_HUGO_PIN, REPO,
+                              TEST_COLLECTION, TOMELR_PIN, Sandbox, body_of,
+                              front_matter, make_path, make_sandbox,
+                              read_only_dir, snapshot)
 
 PRODUCTS = [{"compound": "propyl-acetate", "yield_percent": 85},
             {"compound": "ethanol", "yield_percent": 10}]
@@ -243,6 +245,95 @@ class ExportedFrontMatterTests(ExportTestCase):
             data["lastmod"],
             dt.datetime(2026, 10, 19, 21, 0, 7,
                         tzinfo=dt.timezone(dt.timedelta(hours=2))))
+
+
+class DeclaredFieldExportTests(ExportTestCase):
+    """procedure-fields "Declared fields in Org sources"."""
+
+    ORG_SEED = "org/procedures/OSDB-0001-salicylic-acid"
+
+    def declared_keys(self) -> list[str]:
+        """The keys of the procedure fields the test collection
+        declares."""
+        settings = tomllib.loads(
+            (TEST_COLLECTION / "orgsyndb.toml").read_text(encoding="utf-8"))
+        return [d["key"] for d in settings["fields"]["procedure"]]
+
+    def replace_value(self, path: Path, key: str, value: str) -> None:
+        """Set the value of ``:<key> "..."`` on the
+        ``#+HUGO_CUSTOM_FRONT_MATTER:`` line of the Org source ``path``
+        that holds it, and fail where the source holds no such value."""
+        text = path.read_text(encoding="utf-8")
+        pattern = re.compile(
+            rf'^(#\+HUGO_CUSTOM_FRONT_MATTER:.*?:{key} )"[^"]*"',
+            re.M)
+        self.assertEqual(
+            len(pattern.findall(text)), 1,
+            f'{path.name} has no #+HUGO_CUSTOM_FRONT_MATTER: line with '
+            f':{key} "..."')
+        path.write_text(
+            pattern.sub(lambda found: f'{found.group(1)}"{value}"',
+                        text, count=1), encoding="utf-8")
+
+    def test_org_values_reach_the_export_with_their_types(self) -> None:
+        """Scenario: Org values reach the export with their types."""
+        sandbox = self.sandbox()
+        result = self.export(sandbox)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        stems = sorted(path.stem for path in
+                       (sandbox.root / "org" / "procedures").glob("*.org"))
+        self.assertEqual(len(stems), 8)
+        keys = self.declared_keys()
+        self.assertEqual(
+            keys, ["notebook", "project", "working_time",
+                   "inert_atmosphere"])
+        for stem in stems:
+            got = front_matter(self.exported(sandbox, stem))
+            want_path = TEST_COLLECTION / "md" / "procedures" / f"{stem}.md"
+            self.assertTrue(want_path.is_file(), f"{want_path.name} is "
+                            "missing from the test collection")
+            want = front_matter(want_path.read_text(encoding="utf-8"))
+            with self.subTest(stem=stem):
+                self.assertEqual({k for k in got if k in keys},
+                                 {k for k in want if k in keys})
+                for key in keys:
+                    if key not in want:
+                        continue
+                    with self.subTest(stem=stem, key=key):
+                        self.assertEqual(got[key], want[key])
+                        self.assertIs(type(got[key]), type(want[key]))
+
+    def test_a_quoted_integer_is_no_text(self) -> None:
+        """Scenario: A quoted integer is no text."""
+        sandbox = self.sandbox()
+        projects = sandbox.root / "vocabularies" / "projects.toml"
+        self.assertTrue(projects.is_file(),
+                        "examples/demo/vocabularies/projects.toml is "
+                        "missing")
+        with projects.open("a", encoding="utf-8") as handle:
+            handle.write('\n[2027]\nlabel = "2027"\n')
+        for suffix in (".org", ".de.org"):
+            path = sandbox.root / f"{self.ORG_SEED}{suffix}"
+            self.replace_value(path, "notebook", "1234")
+            self.replace_value(path, "project", "2027")
+        result = sandbox.build("validate")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        data = front_matter(self.exported(sandbox, "OSDB-0001-salicylic-acid"))
+        self.assertIs(type(data.get("notebook")), int)
+        self.assertEqual(data["notebook"], 1234)
+        self.assertIs(type(data.get("project")), int)
+        self.assertEqual(data["project"], 2027)
+        lines = [line for line in result.stdout.splitlines()
+                 if line.startswith(
+                     "build/export/OSDB-0001-salicylic-acid.md:")]
+        for key in ("notebook", "project"):
+            with self.subTest(field=key):
+                found = [line for line in lines
+                         if line.startswith(
+                             "build/export/OSDB-0001-salicylic-acid.md:"
+                             f"{key}: error: ")]
+                self.assertEqual(len(found), 1, result.stdout)
+                self.assertIn("must be a string", found[0])
 
 
 SCOPE_FIXTURE = "OSDB-0909-scope-table"

@@ -9,6 +9,10 @@ status = "draft"
 reaction_types = ["reduction"]
 tags = ["sample-data", "sodium-borohydride", "biphenyl"]
 scale = "5 mmol"
+notebook = "AE-2/8"
+project = "biaryls"
+working_time = 1.5
+inert_atmosphere = false
 substrates = ["4-acetylbiphenyl"]
 products = [{ compound = "1-biphenyl-4-yl-ethanol", yield_percent = 90 }]
 hazards = [

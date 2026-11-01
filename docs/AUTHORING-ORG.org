@@ -27,6 +27,8 @@
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-31 Sat 11:30] -- doc-writer pass line corrected from gpt-6 to the pinned run model
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-31 Sat 12:20] -- compound catalogue introduction
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-31 Sat 16:26] -- demo compound group requirement
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-01 Sun 12:50] -- procedure fields: header, typing limit, finished page and translations
+#+AI_PASS: fact-check claude-opus-5-5 [2026-11-01 Sun 12:54] -- schema link searches the heading text, not an Org custom ID
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -78,6 +80,37 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   - ~#+HUGO_CUSTOM_FRONT_MATTER~ :: Repeated lines that supply the procedure
     identifier, authors, status, reaction type, scale, products with their
     yields, hazards, and optional fields.
+
+  Check ~orgsyndb.toml~ for fields under ~[[fields.procedure]]~, the extra
+  procedure details your collection records. Add a
+  ~#+HUGO_CUSTOM_FRONT_MATTER:~ line before ~:products~, which stays last.
+  The demo's salicylic-acid procedure sets this line after ~:scale~:
+
+#+begin_src org
+  #+HUGO_CUSTOM_FRONT_MATTER: :notebook "AE-1/1" :project "first-year-practical" :working_time 3 :inert_atmosphere false
+#+end_src
+
+  Double-quote text and choice keys; leave numbers and ~true~ or ~false~
+  unquoted. Numbers use a decimal point and no unit. A multiple choice uses
+  a quoted list, such as ~:techniques '("reflux" "distillation")~ when the
+  collection declares that field and those vocabulary values.
+  ~required = true~ requires a value on every procedure, including general
+  procedures. ~unique = true~ requires a value no other procedure uses;
+  translations of one procedure count as one. The demo's four fields are
+  optional. Its notebook reference must match ~[A-Z]{2}-\d+/\d+~ and be
+  unused; working time is in hours and at least zero. Project keys come from
+  [[file:../examples/demo/vocabularies/projects.toml][projects.toml]]. See [[file:SCHEMA.md::Procedure field declarations][the field reference]] for all rules.
+
+  The export with ox-hugo/tomelr has a typing limit: it writes strings
+  without quotes if they read ~true~ or ~false~, have the form of a date or
+  date-time (~2026-01-01~, ~2026-01-01T10:00:00+01:00~), or are integers
+  consisting of an optional sign followed by digits and underscores
+  (~1234~, ~-7~, ~7_000~, ~0012~). Quoting the source does not prevent this,
+  including inside lists. Such values cannot be text or choice keys in Org,
+  including entries of a multiple choice. Validation reports ~must be a string~,
+  or the exported front matter fails to parse; unquoted ~0012~ is invalid
+  TOML. Choose field patterns and vocabulary keys that avoid these forms if
+  you use Org sources. Markdown sources have no such limit.
 
   For a specific procedure, set ~:products~ to a quoted list with one entry per
   product. Each entry contains its ~compound~ key and ~yield_percent~. A key is
@@ -266,8 +299,9 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   both lists include all entries, each compound once in order of first
   appearance. Precursor and used-in links consider every entry. The panel then
   shows reaction type, tags, authors, checkers when set for draft or retired
-  procedures under *Checked by*, created and modified times, and precursor or
-  used-in links. When your procedure is a step of a sequence, *Sequences*
+  procedures under *Checked by*, declared procedure fields, created and
+  modified times, and precursor or used-in links. When your procedure is a
+  step of a sequence, *Sequences*
   follows *Used in* and links those sequences by title, ordered by sequence
   ID. Formula digits appear as subscripts. Molecular weight gains
   ~g/mol~, yield gains a percent sign, and SMILES has a *Copy* button. Reaction
@@ -275,6 +309,18 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   site title-cases author names for display, so ~van~ appears as ~Van~. The
   eight body sections appear beside the panel on a wide screen and after it in
   a narrow window or in print.
+
+  The panel shows each declared procedure field you set in declaration
+  order, before *Created* and after *Checked by* when that label is present.
+  The demo shows *Lab notebook*, *Project*, *Working time* and
+  *Inert atmosphere*. Choices use vocabulary labels, such as
+  *Teaching › First-year practical*. Working time appears as ~3 h~, and
+  booleans as *Yes* or *No*. A German site uses the declared German labels,
+  decimal commas and *Ja* or *Nein*. Catalogue search finds these displayed
+  values. Fields declared with ~facet = true~ offer filters between *Status*
+  and *Tag* in procedure catalogues, including term and general-procedure
+  pages. The demo offers *Project* and *Inert atmosphere*; choosing a parent
+  project includes procedures under its descendants.
 
   A general procedure adds *Scope* before *Summary*, one row per entry. The
   columns *Entry*, *Starting materials*, *Products* and *Yield* always appear.
@@ -528,8 +574,11 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   translate the title, the hazards, the references if needed, and the body. Set
   both timestamps to the time of the translation. Leave ~:status~,
   ~:reaction_types~, ~#+HUGO_TAGS~, ~:products~, ~:substrates~ and
-  ~:scheme_image~ unchanged. Keep the scope table's entry order and all values
-  except ~note~, which you translate. The validator compares the shared fields
+  ~:scheme_image~ unchanged. Repeat every declared procedure field with the
+  same value, or omit it in both variants. Do not translate these values;
+  German field labels come from ~label_de~. Keep the scope table's entry
+  order and all values except ~note~, which you translate. The validator
+  compares the shared fields
   with the original and reports differences as errors. Numeric yields compare
   by value, so ~85~ and ~85.0~ agree. Compound names come from ~name~ and
   ~name_de~ in the shared registry; add or edit ~name_de~ there for the German

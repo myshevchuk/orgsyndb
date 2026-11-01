@@ -10,6 +10,7 @@
 #+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
 #+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("esterification")
 #+HUGO_CUSTOM_FRONT_MATTER: :scale "50 mmol"
+#+HUGO_CUSTOM_FRONT_MATTER: :notebook "AE-1/3" :project "first-year-practical" :working_time 4
 #+HUGO_CUSTOM_FRONT_MATTER: :substrates '("isopentyl-alcohol" "acetic-acid")
 #+HUGO_CUSTOM_FRONT_MATTER: :hazards '("Isopentylalkohol: entzündbare Flüssigkeit und Dampf, gesundheitsschädlich bei Einatmen, verursacht Hautreizungen und schwere Augenreizung" "Eisessig: entzündbar, verursacht schwere Verätzungen der Haut und schwere Augenschäden" "Konzentrierte Schwefelsäure: verursacht schwere Verätzungen der Haut und schwere Augenschäden" "Isopentylacetat: entzündbare Flüssigkeit und Dampf")
 #+HUGO_CUSTOM_FRONT_MATTER: :references '("Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989.")

@@ -2,6 +2,7 @@
 
 import copy
 import re
+import shutil
 import tempfile
 import tomllib
 import unittest
@@ -655,7 +656,7 @@ class DemoFieldTests(unittest.TestCase):
                         "is missing")
         self.assertEqual(sorted(p.name for p in directory.iterdir()),
                          ["chemical-classes.toml",
-                          "inventory-groups.toml"])
+                          "inventory-groups.toml", "projects.toml"])
         vocabulary = tomllib.loads(
             (directory / "chemical-classes.toml").read_text(
                 encoding="utf-8"))
@@ -677,6 +678,56 @@ class DemoFieldTests(unittest.TestCase):
               entry.get("label_de"))
              for value, entry in vocabulary.items()],
             sup.INVENTORY_GROUPS)
+
+    def test_the_projects_of_the_demo(self) -> None:
+        """Scenario: The demo declares its fields (projects)."""
+        path = DEMO / "vocabularies" / "projects.toml"
+        self.assertTrue(path.is_file(), f"{path.name} is missing")
+        vocabulary = tomllib.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            [(value, entry.get("parent"), entry.get("label"),
+              entry.get("label_de"))
+             for value, entry in vocabulary.items()],
+            sup.PROJECTS)
+
+    def test_the_demo_procedure_fields(self) -> None:
+        """Scenario: The demo declares its fields (the procedure
+        fields)."""
+        settings = tomllib.loads(
+            (DEMO / "orgsyndb.toml").read_text(encoding="utf-8"))
+        self.assertEqual(list(settings["fields"]),
+                         ["compound", "procedure"])
+        declared = settings["fields"]["procedure"]
+        self.assertEqual(
+            [d["key"] for d in declared],
+            ["notebook", "project", "working_time", "inert_atmosphere"])
+        self.assertEqual(
+            [{k: v for k, v in d.items() if k not in ("label", "label_de")}
+             for d in declared], sup.DEMO_PROCEDURE_DECLARATIONS)
+        self.assertEqual(
+            {d["key"]: (d.get("label"), d.get("label_de"))
+             for d in declared}, sup.DEMO_PROCEDURE_LABELS)
+        self.assertEqual([d["key"] for d in declared
+                          if d.get("required")], [])
+
+    def test_the_demo_procedure_values(self) -> None:
+        """Scenario: The demo declares its fields (the procedures'
+        values)."""
+        values = sup.procedure_values(DEMO)
+        self.assertEqual(len(values), 9)
+        for number, variants in values.items():
+            with self.subTest(procedure=number):
+                self.assertEqual(len(variants), 2)
+                self.assertEqual(variants[0], variants[1])
+                self.assertIn("notebook", variants[0])
+                self.assertIn("project", variants[0])
+        self.assertEqual(
+            values["OSDB-0002"],
+            [{"notebook": "AE-1/2", "project": "first-year-practical",
+              "working_time": 2.5, "inert_atmosphere": False}] * 2)
+        self.assertEqual(
+            {v[0]["project"] for v in values.values()},
+            set(sup.PROJECT_VALUES))
 
     def test_the_demo_group_field(self) -> None:
         """Scenario: The demo declares its fields (group)."""
@@ -741,6 +792,80 @@ class DemoFieldTests(unittest.TestCase):
              for group in wanted},
             {group: sorted(keys) for group, keys in wanted.items()})
         self.assertEqual(len(registry), 20)
+
+
+class ProcedureFieldCheckerTests(unittest.TestCase):
+    """The checker must reject what the spec forbids, or the demo tests
+    above would hold nothing."""
+
+    def collection(self) -> Path:
+        """A temporary copy of the test collection."""
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name) / "collection"
+        shutil.copytree(COLLECTION, root)
+        return root
+
+    def edit(self, root: Path, old: str, new: str, *,
+             variants: tuple[str, ...] = (".md", ".de.md")) -> None:
+        """Replace ``old`` by ``new`` in the ``variants`` of
+        OSDB-0001."""
+        for suffix in variants:
+            path = (root / "md" / "procedures"
+                    / f"OSDB-0001-salicylic-acid{suffix}")
+            text = path.read_text(encoding="utf-8")
+            self.assertEqual(text.count(old), 1, old)
+            path.write_text(text.replace(old, new), encoding="utf-8")
+
+    def test_the_test_collection_meets_the_demo_rules(self) -> None:
+        """Scenario: The demo declares its fields (as mirrored in the
+        test collection)."""
+        self.assertEqual(sup.field_violations(COLLECTION), [])
+
+    def test_each_rule_is_enforced(self) -> None:
+        """Scenario: The demo declares its fields (checker, rejected)."""
+        cases = {
+            "variants that disagree": (
+                'notebook = "AE-1/1"', 'notebook = "AE-1/9"',
+                (".de.md",), "variants set"),
+            "a notebook that breaks its pattern": (
+                'notebook = "AE-1/1"', 'notebook = "AE1/1"',
+                (".md", ".de.md"), "notebook is"),
+            "a project outside the demo's set": (
+                'project = "first-year-practical"',
+                'project = "teaching"', (".md", ".de.md"), "project is"),
+            "a quoted working time": (
+                "working_time = 3", 'working_time = "3"',
+                (".md", ".de.md"), "working_time is"),
+            "a flag that is no boolean": (
+                "inert_atmosphere = false", 'inert_atmosphere = "false"',
+                (".md", ".de.md"), "inert_atmosphere is"),
+            "a notebook set twice": (
+                'notebook = "AE-1/1"', 'notebook = "AE-1/2"',
+                (".md", ".de.md"), "notebooks are"),
+            "no notebook": (
+                'notebook = "AE-1/1"\n', "", (".md", ".de.md"),
+                "sets no notebook"),
+        }
+        for name, case in cases.items():
+            old, new, variants, expected = case
+            with self.subTest(case=name):
+                root = self.collection()
+                self.edit(root, old, new, variants=variants)
+                violations = sup.field_violations(root)
+                self.assertTrue(
+                    any(expected in line for line in violations),
+                    violations)
+
+    def test_a_missing_declaration_is_rejected(self) -> None:
+        """Scenario: The demo declares its fields (checker, no
+        declaration)."""
+        root = self.collection()
+        path = root / "orgsyndb.toml"
+        text = path.read_text(encoding="utf-8")
+        path.write_text(text[:text.index("[[fields.procedure]]")],
+                        encoding="utf-8")
+        self.assertNotEqual(sup.field_violations(root), [])
 
 
 class TestCollectionTests(unittest.TestCase):

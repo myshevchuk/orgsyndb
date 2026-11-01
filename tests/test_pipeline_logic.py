@@ -422,6 +422,7 @@ class NoteLinkTests(unittest.TestCase):
 
 
 FIELDS_SETTINGS = FIXTURES / "fields" / "orgsyndb.toml"
+PROCEDURE_SETTINGS = FIXTURES / "procedure-fields" / "orgsyndb.toml"
 TEST_SETTINGS = TEST_COLLECTION / "orgsyndb.toml"
 
 
@@ -471,6 +472,39 @@ def fixture_fields(language: str) -> list[dict]:
     ]
 
 
+def fixture_procedure_fields(language: str) -> list[dict]:
+    """The procedure field data of the ``procedure-fields/`` fixtures
+    that the contract states, in ``language``: ``en`` or ``de``."""
+    german = language == "de"
+
+    def shown(english: str, deutsch: str) -> str:
+        return deutsch if german else english
+
+    teaching = shown("Teaching", "Lehre")
+    practical = shown("First-year practical", "Grundpraktikum")
+    return [
+        {"key": "notebook", "type": "text",
+         "label": shown("Lab notebook", "Laborjournal")},
+        {"key": "working_time", "type": "number",
+         "label": shown("Working time", "Arbeitszeit"), "unit": "h"},
+        {"key": "inert_atmosphere", "type": "boolean",
+         "label": "Inert atmosphere", "facet": False},
+        {"key": "project", "type": "choice",
+         "label": shown("Project", "Projekt"), "facet": False,
+         "multiple": False,
+         "values": {
+             "teaching": {"label": teaching, "path": [teaching],
+                          "ancestors": []},
+             "first-year-practical": {
+                 "label": practical, "path": [teaching, practical],
+                 "ancestors": ["teaching"]},
+             "research": {"label": shown("Research", "Forschung"),
+                          "path": [shown("Research", "Forschung")],
+                          "ancestors": []}},
+         "order": ["teaching", "first-year-practical", "research"]},
+    ]
+
+
 class FieldDataTests(unittest.TestCase):
     """compound-fields "Field data for the site"."""
 
@@ -492,7 +526,8 @@ class FieldDataTests(unittest.TestCase):
         for language in ("en", "de"):
             with self.subTest(language=language):
                 data = fields_data(FIELDS_SETTINGS, language)
-                self.assertEqual(list(data), ["compound"])
+                self.assertEqual(list(data), ["compound", "procedure"])
+                self.assertEqual(data["procedure"], [])
                 self.assertEqual([f["key"] for f in data["compound"]],
                                  ["item_number", "short_name", "stock",
                                   "in_house", "chemical_class", "storage"])
@@ -649,7 +684,7 @@ class FieldDataTests(unittest.TestCase):
         data = pipeline_function("fields_data")(path, "en")
         self.assertEqual(data, {"compound": [
             {"key": "count", "type": "number", "label": "Count",
-             "column": False}]})
+             "column": False}], "procedure": []})
 
     def test_the_result_is_json(self) -> None:
         """Requirement: Field data for the site (the JSON that the build
@@ -766,13 +801,13 @@ class FieldDataTests(unittest.TestCase):
             missing = Path(tmp) / "orgsyndb.toml"
             for language in ("en", "de"):
                 self.assertEqual(fields_data(missing, language),
-                                 {"compound": []})
+                                 {"compound": [], "procedure": []})
 
     def test_a_settings_file_that_declares_no_field(self) -> None:
         """Requirement: Field data for the site (declares no field)."""
         path = self.settings("format = 1\n")
         self.assertEqual(pipeline_function("fields_data")(path, "en"),
-                         {"compound": []})
+                         {"compound": [], "procedure": []})
 
     def test_a_broken_declaration_is_a_configuration_error(self) -> None:
         """Requirement: Field data for the site (a rule of the
@@ -795,6 +830,18 @@ class FieldDataTests(unittest.TestCase):
                 'label = "Y"\nvocabulary = "kinds"\ntabs = true\n'),
             "a single table": (
                 'format = 1\n\n[fields.compound]\nkey = "x"\n'
+                'type = "text"\nlabel = "X"\n'),
+            "a misspelt entity": (
+                'format = 1\n\n[[fields.reagent]]\nkey = "lot"\n'
+                'type = "text"\nlabel = "Lot"\n'),
+            "a reserved procedure key": (
+                'format = 1\n\n[[fields.procedure]]\nkey = "status"\n'
+                'type = "text"\nlabel = "Status"\n'),
+            "a procedure column": (
+                'format = 1\n\n[[fields.procedure]]\nkey = "x"\n'
+                'type = "text"\nlabel = "X"\ncolumn = true\n'),
+            "a procedure single table": (
+                'format = 1\n\n[fields.procedure]\nkey = "x"\n'
                 'type = "text"\nlabel = "X"\n')}
         for name, text in cases.items():
             with self.subTest(case=name):
@@ -818,6 +865,148 @@ class FieldDataTests(unittest.TestCase):
             with self.subTest(case=name):
                 path = self.settings(text, vocabularies)
                 with self.assertRaises(error):
+                    fields_data(path, "en")
+
+
+class ProcedureFieldDataTests(unittest.TestCase):
+    """procedure-fields "Procedure field data"."""
+
+    settings = FieldDataTests.settings
+
+    def test_procedure_field_data_in_both_languages(self) -> None:
+        """Scenario: Procedure field data in both languages."""
+        fields_data = pipeline_function("fields_data")
+        for language in ("en", "de"):
+            with self.subTest(language=language):
+                data = fields_data(PROCEDURE_SETTINGS, language)
+                self.assertEqual(list(data), ["compound", "procedure"])
+                self.assertEqual(data["compound"], [])
+                self.assertEqual(
+                    [f["key"] for f in data["procedure"]],
+                    ["notebook", "working_time", "inert_atmosphere",
+                     "project"])
+                self.assertEqual(data["procedure"],
+                                 fixture_procedure_fields(language))
+
+    def test_the_stated_values_of_the_scenario(self) -> None:
+        """Scenario: Procedure field data in both languages (the stated
+        values)."""
+        fields_data = pipeline_function("fields_data")
+        english = {f["key"]: f for f in
+                   fields_data(PROCEDURE_SETTINGS, "en")["procedure"]}
+        german = {f["key"]: f for f in
+                  fields_data(PROCEDURE_SETTINGS, "de")["procedure"]}
+        for fields in (english, german):
+            self.assertEqual(fields["working_time"]["unit"], "h")
+            self.assertIs(fields["project"]["multiple"], False)
+            self.assertIs(fields["project"]["facet"], False)
+            self.assertIs(fields["inert_atmosphere"]["facet"], False)
+            self.assertEqual(fields["inert_atmosphere"]["label"],
+                             "Inert atmosphere")
+            self.assertEqual(
+                fields["project"]["order"],
+                ["teaching", "first-year-practical", "research"])
+            for field in fields.values():
+                for key in ("column", "search", "tabs"):
+                    self.assertNotIn(key, field)
+        self.assertEqual(
+            english["project"]["values"]["first-year-practical"],
+            {"label": "First-year practical",
+             "path": ["Teaching", "First-year practical"],
+             "ancestors": ["teaching"]})
+        self.assertEqual(
+            german["project"]["values"]["first-year-practical"],
+            {"label": "Grundpraktikum",
+             "path": ["Lehre", "Grundpraktikum"],
+             "ancestors": ["teaching"]})
+
+    def test_a_field_carries_only_the_keys_its_type_has(self) -> None:
+        """Requirement: Procedure field data (these keys and no
+        other)."""
+        data = pipeline_function("fields_data")(PROCEDURE_SETTINGS, "en")
+        keys = {field["key"]: set(field) for field in data["procedure"]}
+        base = {"key", "type", "label"}
+        self.assertEqual(keys["notebook"], base)
+        self.assertEqual(keys["working_time"], base | {"unit"})
+        self.assertEqual(keys["inert_atmosphere"], base | {"facet"})
+        self.assertEqual(
+            keys["project"],
+            base | {"facet", "multiple", "values", "order"})
+
+    def test_facet_and_multiple_are_taken_as_declared(self) -> None:
+        """Requirement: Procedure field data (`facet`, `multiple`, as
+        declared)."""
+        path = self.settings(
+            'format = 1\n\n[[fields.procedure]]\nkey = "flag"\n'
+            'type = "boolean"\nlabel = "Flag"\nfacet = true\n\n'
+            '[[fields.procedure]]\nkey = "note"\ntype = "text"\n'
+            'label = "Note"\n\n[[fields.procedure]]\nkey = "category"\n'
+            'type = "choice"\nlabel = "Category"\nvocabulary = "kinds"\n'
+            'facet = true\nmultiple = true\n\n'
+            '[[fields.procedure]]\nkey = "count"\ntype = "number"\n'
+            'label = "Count"\nmin = 0\n',
+            {"kinds": '[top]\nlabel = "Top"\n'})
+        data = pipeline_function("fields_data")(path, "en")
+        by_key = {f["key"]: f for f in data["procedure"]}
+        self.assertIs(by_key["flag"]["facet"], True)
+        self.assertIs(by_key["category"]["facet"], True)
+        self.assertIs(by_key["category"]["multiple"], True)
+        self.assertNotIn("facet", by_key["note"])
+        self.assertEqual(set(by_key["count"]),
+                         {"key", "type", "label"})
+        self.assertEqual(data["compound"], [])
+
+    def test_the_test_collection_procedure_fields(self) -> None:
+        """Requirement: Procedure field data (the test collection)."""
+        for language in ("en", "de"):
+            with self.subTest(language=language):
+                data = pipeline_function("fields_data")(
+                    TEST_SETTINGS, language)
+                self.assertEqual(
+                    [f["key"] for f in data["procedure"]],
+                    ["notebook", "project", "working_time",
+                     "inert_atmosphere"])
+                by_key = {f["key"]: f for f in data["procedure"]}
+                self.assertEqual(
+                    by_key["project"]["order"],
+                    ["teaching", "first-year-practical",
+                     "advanced-practical", "research", "biaryls",
+                     "cinnamates"])
+                self.assertIs(by_key["project"]["facet"], True)
+                self.assertIs(by_key["inert_atmosphere"]["facet"], True)
+                self.assertEqual(by_key["working_time"]["unit"], "h")
+                self.assertNotIn("facet", by_key["notebook"])
+                self.assertEqual(len(data["compound"]), 6)
+        german = pipeline_function("fields_data")(TEST_SETTINGS, "de")
+        self.assertEqual(
+            [f["label"] for f in german["procedure"]],
+            ["Laborjournal", "Projekt", "Arbeitszeit", "Schutzgas"])
+
+    def test_the_result_is_json(self) -> None:
+        """Requirement: Procedure field data (the JSON that the build
+        stages)."""
+        fields_data = pipeline_function("fields_data")
+        for language in ("en", "de"):
+            data = fields_data(PROCEDURE_SETTINGS, language)
+            self.assertEqual(json.loads(json.dumps(data)), data)
+
+    def test_a_broken_procedure_vocabulary_is_a_configuration_error(
+            self) -> None:
+        """Requirement: Procedure field data (a rule of the procedure
+        declarations or the vocabularies)."""
+        fields_data = pipeline_function("fields_data")
+        error = pipeline().validate.ConfigError
+        text = ('format = 1\n\n[[fields.procedure]]\nkey = "category"\n'
+                'type = "choice"\nlabel = "Category"\n'
+                'vocabulary = "kinds"\n')
+        cases = {
+            "missing": {},
+            "cycle": {"kinds": '[a]\nlabel = "A"\nparent = "a"\n'},
+            "empty": {"kinds": ""}}
+        for name, vocabularies in cases.items():
+            with self.subTest(case=name):
+                path = self.settings(text, vocabularies)
+                with self.assertRaisesRegex(error, "kinds"):
                     fields_data(path, "en")
 
 

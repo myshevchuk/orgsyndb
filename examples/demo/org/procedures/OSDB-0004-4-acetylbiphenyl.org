@@ -10,6 +10,7 @@
 #+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
 #+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("cross-coupling")
 #+HUGO_CUSTOM_FRONT_MATTER: :scale "10 mmol"
+#+HUGO_CUSTOM_FRONT_MATTER: :notebook "AE-2/7" :project "biaryls" :working_time 6 :inert_atmosphere true
 #+HUGO_CUSTOM_FRONT_MATTER: :substrates '("4-bromoacetophenone" "phenylboronic-acid")
 #+HUGO_CUSTOM_FRONT_MATTER: :hazards '("4′-Bromoacetophenone: harmful if swallowed, causes skin and serious eye irritation" "Phenylboronic acid: harmful if swallowed" "Potassium carbonate: causes skin and serious eye irritation" "Tetra-n-butylammonium bromide: harmful if swallowed, causes serious eye irritation" "Palladium(II) acetate: causes serious eye damage, may cause an allergic skin reaction, very toxic to aquatic life" "Ethyl acetate: highly flammable liquid and vapour, may cause drowsiness")
 #+HUGO_CUSTOM_FRONT_MATTER: :references '("Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989." "Miyaura, N.; Suzuki, A. Palladium-Catalyzed Cross-Coupling Reactions of Organoboron Compounds. Chem. Rev. 1995, 95, 2457.")

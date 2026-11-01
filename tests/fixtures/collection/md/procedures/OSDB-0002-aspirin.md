@@ -9,6 +9,10 @@ status = "draft"
 reaction_types = ["acylation"]
 tags = ["sample-data", "acetylation"]
 scale = "20 mmol"
+notebook = "AE-1/2"
+project = "first-year-practical"
+working_time = 2.5
+inert_atmosphere = false
 substrates = ["salicylic-acid", "acetic-anhydride"]
 products = [{ compound = "acetylsalicylic-acid", yield_percent = 75 }]
 hazards = [

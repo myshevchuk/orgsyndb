@@ -9,6 +9,10 @@ status = "draft"
 reaction_types = ["reduction"]
 tags = ["sample-data", "sodium-borohydride"]
 scale = "10 mmol"
+notebook = "CE-3/1"
+project = "advanced-practical"
+working_time = 3.5
+inert_atmosphere = false
 scheme_image = "structures/aryl-ketone-reduction.svg"
 scope = [
   { substrates = ["4-acetylbiphenyl"], time = "30 min", products = [{ compound = "1-biphenyl-4-yl-ethanol", yield_percent = 90 }] },

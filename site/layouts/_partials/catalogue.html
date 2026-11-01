@@ -6,9 +6,14 @@ procedures, by ID) and fixed (the facet the page fixes: type, tag or
 author on a term page, whose term is its only value; kind on
 /general-procedures/, whose only value is general; "" on /procedures/).
 The kind and status facets list their literals in a fixed order, the
-others the terms in use. Every control lies in an element carrying
-data-catalogue-controls and hidden, which catalogue.js reveals; without
-it the page is the table and the note. The texts the script shows are
+others the terms in use. Between status and tag, each procedure field
+declared with facet = true has a facet, in declared order, listing the
+values that some published procedure of the collection carries,
+whatever the page: a boolean true, then false; a choice in its
+depth-first order, with each value's ancestors, each label.facet-value
+carrying --depth, the number of the value's ancestors. Every control
+lies in an element carrying data-catalogue-controls and hidden, which
+catalogue.js reveals; without it the page is the table and the note. The texts the script shows are
 data-text-* attributes of div.catalogue. */ -}}
 {{ $page := .page -}}
 {{ $fixed := .fixed -}}
@@ -30,7 +35,20 @@ data-text-* attributes of div.catalogue. */ -}}
 <div class="catalogue-layout">
 <div class="catalogue-facets" id="catalogue-facets" data-catalogue-controls hidden>
 <h2>{{ T "catalogue_filters" }}</h2>
-{{ range $facet := slice "type" "kind" "status" "tag" "author" -}}
+{{ $procedures := where site.RegularPages "Section" "procedures" -}}
+{{ $declared := dict -}}
+{{ $facetKeys := slice "type" "kind" "status" -}}
+{{ range $field := where site.Data.collection.fields.procedure "facet" true -}}
+{{ $carried := slice -}}
+{{ range $procedures }}{{ range partial "field-machine-values.html" (dict "field" $field "record" .Params) }}{{ $carried = $carried | append . }}{{ end }}{{ end -}}
+{{ $declared = merge $declared (dict $field.key (dict "field" $field "entries" (partial "field-facet-entries.html" (dict "field" $field "carried" $carried "own" "")))) -}}
+{{ $facetKeys = $facetKeys | append $field.key -}}
+{{ end -}}
+{{ $facetKeys = $facetKeys | append "tag" "author" -}}
+{{ range $facet := $facetKeys -}}
+{{ with index $declared $facet -}}
+{{ partial "field-facet.html" . -}}
+{{ else -}}
 {{ $values := slice -}}
 {{ if and (eq $facet "kind") (eq $fixed "kind") -}}
 {{ $values = slice (dict "key" "general" "label" (T "kind_general")) -}}
@@ -54,6 +72,7 @@ data-text-* attributes of div.catalogue. */ -}}
 <p class="facet-directory"><a href="/{{ . }}/">{{ T (printf "facet_all_%s" $facet) }}</a></p>
 {{ end -}}
 </details>
+{{ end -}}
 {{ end -}}
 </div>
 <div class="catalogue-results">

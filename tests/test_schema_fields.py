@@ -4,9 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from support import (FIXTURES, ValidatorTestCase, fixture_run,
-                     insert_line, products_line, remove_line, replace_line,
-                     valid_set_run, variant_run)
+from support import (BASELINE, FIXTURES, ValidatorTestCase,
+                     edit_procedure, fixture_run, insert_line,
+                     procedure_field_run, products_line, remove_line,
+                     replace_line, valid_set_run, variant_run)
 
 
 class IdentifierTests(ValidatorTestCase):
@@ -456,6 +457,39 @@ class UnknownKeyTests(ValidatorTestCase):
         """Scenario: ox-hugo draft key passes."""
         result = valid_set_run()
         self.assert_no_lines_for(result, "OSDB-0003")
+
+    def test_a_declared_key_is_no_unknown_field(self) -> None:
+        """Scenario: A declared key is no unknown field."""
+        self.assert_clean(procedure_field_run(edit_procedure(
+            BASELINE.name, insert_line("working_time = 2.5"))))
+        result = variant_run("OSDB-0100-undeclared.md",
+                             insert_line("working_time = 2.5"))
+        self.assert_one(result, "warning", "working_time", "unknown field",
+                        path_suffix="OSDB-0100-undeclared.md")
+
+    def test_every_declared_key_is_known(self) -> None:
+        """Scenario: A declared key is no unknown field (every key of
+        the fixture's declarations)."""
+        for line in ('notebook = "AE-1/2"', "working_time = 2.5",
+                     "inert_atmosphere = true",
+                     'project = "first-year-practical"'):
+            with self.subTest(line=line):
+                self.assert_clean(procedure_field_run(edit_procedure(
+                    BASELINE.name, insert_line(line))))
+                result = variant_run("OSDB-0100-undeclared.md",
+                                     insert_line(line))
+                self.assertEqual(
+                    [(p.field, p.severity, "unknown field" in p.message)
+                     for p in result.problems],
+                    [(line.split(" =")[0], "warning", True)])
+
+    def test_a_declared_key_keeps_the_other_key_rules(self) -> None:
+        """Requirement: Keys outside the schema (the errors and the
+        tolerated keys stand under declared fields)."""
+        result = procedure_field_run(edit_procedure(
+            BASELINE.name, insert_line("draft = true"),
+            insert_line("working_time = 2.5")))
+        self.assert_one(result, "error", "draft", "use status, not draft")
 
 
 if __name__ == "__main__":

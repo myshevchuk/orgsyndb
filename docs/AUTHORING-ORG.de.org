@@ -23,6 +23,8 @@
 #+AI_PASS: fact-check claude-opus-5-5 [2026-10-31 Sat 11:30] -- doc-writer pass line corrected from gpt-6 to the pinned run model
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-31 Sat 12:20] -- Einleitung zum Verbindungskatalog
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-10-31 Sat 16:26] -- Pflichtfeld group für Verbindungen der Beispielsammlung
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-01 Sun 12:50] -- Vorschriftenfelder: Kopf, Typumwandlung, fertige Seite und Übersetzungen
+#+AI_PASS: fact-check claude-opus-5-5 [2026-11-01 Sun 12:54] -- schema link searches the heading text, not an Org custom ID
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
@@ -86,6 +88,41 @@ bleiben auch in einer deutschen Vorschrift englisch.
   - ~#+HUGO_CUSTOM_FRONT_MATTER~ :: Wiederholte Zeilen mit Nummer, Autoren,
     Status, Reaktionstyp, Ansatzgröße, Produkten mit ihren Ausbeuten,
     Gefahren und optionalen Feldern.
+
+  Prüfen Sie ~orgsyndb.toml~ auf Felder unter ~[[fields.procedure]]~, die
+  zusätzlichen Vorschriftenangaben Ihrer Sammlung. Ergänzen Sie eine Zeile
+  ~#+HUGO_CUSTOM_FRONT_MATTER:~ vor ~:products~, das zuletzt bleibt. Die
+  Salicylsäure-Vorschrift der Beispielsammlung setzt nach ~:scale~:
+
+#+begin_src org
+  #+HUGO_CUSTOM_FRONT_MATTER: :notebook "AE-1/1" :project "first-year-practical" :working_time 3 :inert_atmosphere false
+#+end_src
+
+  Text und Auswahlschlüssel stehen in doppelten Anführungszeichen, Zahlen
+  und ~true~ oder ~false~ ohne. Zahlen haben einen Dezimalpunkt und keine
+  Einheit. Eine Mehrfachauswahl verwendet eine gequotete Liste, etwa
+  ~:techniques '("reflux" "distillation")~, wenn die Sammlung dieses Feld
+  und diese Vokabularwerte deklariert. ~required = true~ verlangt einen Wert
+  in jeder Vorschrift, auch in allgemeinen Vorschriften. Bei ~unique = true~
+  darf keine andere Vorschrift denselben Wert verwenden; Übersetzungen einer
+  Vorschrift zählen als eine. Die vier Beispielfelder sind optional. Ein
+  Laborjournalverweis muss ~[A-Z]{2}-\d+/\d+~ entsprechen und noch unvergeben
+  sein; die Arbeitszeit steht in Stunden und ist mindestens null.
+  Projektschlüssel kommen aus [[file:../examples/demo/vocabularies/projects.toml][projects.toml]]. Die
+  [[file:SCHEMA.de.md::Felddeklarationen für Vorschriften][Feldreferenz]] nennt alle Regeln.
+
+  Der Export mit ox-hugo/tomelr hat eine Grenze bei der Typumwandlung: Er
+  schreibt Strings ohne Anführungszeichen, wenn sie ~true~ oder ~false~
+  lauten, die Form eines Datums oder Datums mit Uhrzeit haben (~2026-01-01~,
+  ~2026-01-01T10:00:00+01:00~) oder Ganzzahlen aus einem optionalen Vorzeichen,
+  Ziffern und Unterstrichen sind (~1234~, ~-7~, ~7_000~, ~0012~).
+  Anführungszeichen in der Quelle verhindern das nicht, auch in Listen.
+  Solche Werte sind in Org weder als Text noch als Auswahlschlüssel
+  verwendbar, auch nicht als Einträge einer Mehrfachauswahl. Die Prüfung
+  meldet ~must be a string~, oder der exportierte Datenblock ist nicht
+  lesbar; ungequotetes ~0012~ ist ungültiges TOML. Wählen Sie Feldmuster und
+  Vokabularschlüssel, die diese Formen vermeiden, wenn Sie Org verwenden.
+  Markdown-Quellen haben diese Einschränkung nicht.
 
   Bei einer Einzelvorschrift setzen Sie ~:products~ auf eine gequotete Liste
   mit einem Eintrag pro Produkt. Jeder Eintrag enthält den Schlüssel ~compound~
@@ -297,8 +334,9 @@ bleiben auch in einer deutschen Vorschrift englisch.
   Einträge, jede Verbindung einmal in der Reihenfolge ihres ersten Auftretens.
   Auch Vorstufen- und Folgelinks berücksichtigen alle Einträge. Es folgen
   Reaktionstyp, Schlagwörter, Autoren, bei Entwürfen und zurückgezogenen
-  Vorschriften gegebenenfalls die Prüfenden unter *Geprüft von*, Erstellungs-
-  und Änderungszeit und die Links zu Vorstufen und Folgevorschriften. Wenn Ihre
+  Vorschriften gegebenenfalls die Prüfenden unter *Geprüft von*, deklarierte
+  Vorschriftenfelder, Erstellungs- und Änderungszeit und die Links zu
+  Vorstufen und Folgevorschriften. Wenn Ihre
   Vorschrift eine Stufe eines Synthesewegs ist, folgt auf *Verwendet in* das
   Feld *Synthesewege* mit verlinkten Titeln, nach Nummer geordnet. Ziffern
   der Summenformel erscheinen tiefgestellt. Molmasse und Ausbeute erscheinen
@@ -308,6 +346,18 @@ bleiben auch in einer deutschen Vorschrift englisch.
   Anfangsbuchstaben angezeigt, aus ~van~ wird ~Van~. Die acht Abschnitte des
   Textes stehen auf einem breiten Bildschirm neben dem Datenfeld, in einem
   schmalen Fenster und im Ausdruck danach.
+
+  Das Datenfeld zeigt jedes gesetzte deklarierte Vorschriftenfeld in
+  Deklarationsreihenfolge vor *Erstellt*, nach *Geprüft von*, sofern diese
+  Angabe erscheint. In der Beispielsammlung sind das *Laborjournal*,
+  *Projekt*, *Arbeitszeit* und *Schutzgas*. Auswahlwerte verwenden die Namen
+  aus dem Vokabular, etwa *Lehre › Grundpraktikum*. Arbeitszeit erscheint als
+  ~3 h~, Wahrheitswerte als *Ja* oder *Nein*. Zahlen verwenden das
+  Dezimalkomma. Die Katalogsuche findet diese angezeigten Werte. Felder mit
+  ~facet = true~ ergänzen Filter zwischen *Status* und *Schlagwort* in den
+  Vorschriftenkatalogen, auch auf Begriffsseiten und für allgemeine
+  Vorschriften. Die Beispielsammlung bietet *Projekt* und *Schutzgas*;
+  ein übergeordnetes Projekt erfasst auch darunter eingeordnete Werte.
 
   Bei einer allgemeinen Vorschrift steht *Anwendungsbereich* vor
   *Zusammenfassung*, mit einer Zeile je Eintrag. *Eintrag*, *Ausgangsstoffe*,
@@ -426,7 +476,10 @@ bleiben auch in einer deutschen Vorschrift englisch.
      löschen Sie die Zeile.
   4. Lassen Sie ~#+HUGO_SLUG~, ~:id~, ~:status~, ~:reaction_types~,
      ~#+HUGO_TAGS~, ~:products~, ~:substrates~ und ~:scheme_image~ wie im
-     Original. Behalten Sie die Reihenfolge und Werte der Scope-Tabelle;
+     Original. Wiederholen Sie jedes deklarierte Vorschriftenfeld mit
+     demselben Wert, oder lassen Sie es in beiden Fassungen weg. Übersetzen
+     Sie diese Werte nicht; deutsche Feldnamen kommen aus ~label_de~.
+     Behalten Sie die Reihenfolge und Werte der Scope-Tabelle;
      übersetzen Sie darin nur ~note~. Der Validator vergleicht die gemeinsamen
      Felder mit dem Original und meldet Abweichungen als Fehler. Zahlen werden
      nach ihrem Wert verglichen: ~85~ und ~85.0~ stimmen überein.

@@ -1,0 +1,15 @@
+{{- /* The facet of one declared field in a catalogue's facets: an open
+details.facet named by the field's key, its summary the field's shown
+label, holding one label.facet-value per entry, a choice value's
+carrying --depth. Takes a dict of field, an entry of
+site.Data.collection.fields.compound or .procedure, and entries, the
+values of field-facet-entries.html. */ -}}
+{{ $field := .field -}}
+<details class="facet" data-facet="{{ $field.key }}" open>
+<summary id="facet-{{ $field.key }}">{{ $field.label }}</summary>
+<div class="facet-values" role="group" aria-labelledby="facet-{{ $field.key }}">
+{{ range .entries -}}
+<label class="facet-value"{{ if isset . "depth" }} style="--depth: {{ .depth }}"{{ end }}><input type="checkbox" name="{{ $field.key }}" value="{{ .key }}"> <span class="facet-label">{{ .label }}</span> <span class="facet-count"></span></label>
+{{ end -}}
+</div>
+</details>

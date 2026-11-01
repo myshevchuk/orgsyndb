@@ -84,6 +84,31 @@ materials (`substrates`), checkers, literature references and an AI model.
 Delete the `#` at the start of an optional line when you need it. Leave the
 line commented when it does not apply.
 
+Check `orgsyndb.toml` for fields under `[[fields.procedure]]`. These are
+extra procedure details chosen by your collection, such as a lab-notebook
+reference or a project. Add them as `key = value` lines in the information
+block, before any table. For example, the demo's aspirin procedure sets
+these after `scale`:
+
+```toml
+notebook = "AE-1/2"
+project = "first-year-practical"
+working_time = 2.5
+inert_atmosphere = false
+```
+
+Keep text and choice keys in double quotes. Write numbers and `true` or
+`false` without quotes; numbers use a decimal point and no unit. A choice
+uses a key from its declared file in `vocabularies/`; `multiple = true`
+requires a non-empty list of different keys. A field with `required = true`
+must be set, including in a general procedure. A field with `unique = true`
+needs a value no other procedure uses. In the demo, all four are optional;
+a notebook reference must match `[A-Z]{2}-\d+/\d+`, such as `AE-1/2`, and be
+unused. Working time is in hours and must be at least zero. Find project keys
+in [`projects.toml`](../examples/demo/vocabularies/projects.toml), including
+`first-year-practical` under `teaching`. The
+[field reference](SCHEMA.md#procedure-field-declarations) gives the exact rules.
+
 Name products and starting materials by their registry keys. For example,
 the demo's aspirin procedure uses:
 
@@ -245,8 +270,9 @@ and SMILES. For several products, find those data on the compound pages.
 procedure, both lists include all entries, each compound once in order of first
 appearance. Precursor and used-in links also consider every entry. The panel
 then shows reaction type, tags, authors, checkers when present for draft or
-retired procedures under **Checked by**, created and modified times, and
-precursor or used-in links. When your procedure is a step of a sequence,
+retired procedures under **Checked by**, declared procedure fields, created
+and modified times, and precursor or used-in links. When your procedure is a
+step of a sequence,
 **Sequences** follows **Used in** and links those sequences by title, ordered
 by sequence ID. Formula digits appear as subscripts. Molecular
 weight gains `g/mol`, yield gains a percent sign, and SMILES has a **Copy**
@@ -254,6 +280,14 @@ button. Reaction type, tag, and author values link to pages that list related
 procedures. The site title-cases author names for display, so a name entered as
 `van` appears as `Van`. The eight body sections appear beside the panel on a
 wide screen and after it in a narrow window or in print.
+
+The panel shows each declared procedure field you set in declaration order,
+before **Created** and after **Checked by** when that label is present.
+The demo shows **Lab notebook**, **Project**, **Working time** and
+**Inert atmosphere**. Choices use their vocabulary labels, such as
+**Teaching › First-year practical**; working time appears as `2.5 h`, and
+booleans as **Yes** or **No**. A German site uses the declared German labels,
+`2,5 h` and **Ja** or **Nein**. Catalogue search finds these displayed values.
 
 A general procedure adds **Scope** before **Summary**, with one row per entry.
 **Entry**, **Starting materials**, **Products** and **Yield** always appear.
@@ -419,6 +453,15 @@ same kind in the full catalogue. Without JavaScript, the general-procedures
 page still lists its procedures by ID. Catalogue **Details** includes products
 from every entry and shows the yield range.
 
+Your collection's declared boolean and choice fields with `facet = true`
+also appear as filters between **Status** and **Tag**, including on
+reaction-type, tag, author and general-procedure pages. In the demo, use
+**Project** and **Inert atmosphere**. Selecting **Teaching** includes its
+practicals; selecting **Research** includes biaryls and cinnamates. Every
+catalogue offers values from the whole collection. You can share selections
+through the address, for example
+`/procedures/?project=research&inert_atmosphere=true`.
+
 ## 7. Write in German or translate a procedure
 
 The site shows one language, German unless the owner has set it to
@@ -444,8 +487,11 @@ phrases, reusable sentences, and their English equivalents.
 To translate an existing procedure, copy its file and add the language code
 before the extension, for example `OSDB-0002-aspirin.md` to
 `OSDB-0002-aspirin.de.md`. Keep the `id`, `slug`, `status`, `reaction_types`,
-`tags`, `products`, `substrates` and `scheme_image` as they are. Keep `scope`
-and its entry order, translating only each entry's `note`. The check reports
+`tags`, `products`, `substrates` and `scheme_image` as they are. Repeat every
+declared procedure field with the same value, or omit it in both variants.
+Do not translate these values; the site uses `label_de` for German field
+labels. Keep `scope` and its entry order, translating only each entry's `note`.
+The check reports
 differences in the shared fields as errors. Numeric yields compare by value, so
 `85` and `85.0` agree. Compound names come from `name` and `name_de` in the
 shared registry; add or edit `name_de` there for the German name. Translate the

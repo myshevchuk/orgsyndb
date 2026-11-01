@@ -156,6 +156,7 @@ The optional fields SHALL have these shapes when present:
 Front-matter keys outside the schema SHALL be handled as follows:
 - **Tolerated silently, subject to type:** `draft` (boolean `false` only), `description` (string), `aliases` (list of strings), `weight` (integer).
 - **Errors:** `draft = true`, `author` and `url`.
+- **Declared:** the key of a procedure field that the collection declares (procedure-fields "Procedure field declarations"), checked as procedure-fields "Procedure field values" states.
 - **Warnings:** any other key, with a message containing `unknown field`.
 
 #### Scenario: Draft set to true
@@ -177,6 +178,10 @@ Front-matter keys outside the schema SHALL be handled as follows:
 #### Scenario: ox-hugo draft key passes
 - **WHEN** the valid-set run examines `valid/export/OSDB-0003-*.md`, which has `draft = false` as ox-hugo emits it
 - **THEN** no line is printed for that file
+
+#### Scenario: A declared key is no unknown field
+- **WHEN** a procedure-field run (procedure-fields "Procedure field fixture") sets `working_time = 2.5` in `OSDB-0100-baseline.md`, and a variant run sets the same key under the file name `OSDB-0100-undeclared.md`
+- **THEN** the first exits 0 and prints nothing to stdout, and the second reports exactly one warning, field `working_time`, containing `unknown field`
 
 ### Requirement: Reaction-type vocabulary file
 The file `site/data/reaction_types.toml` SHALL map each reaction-type slug, as a top-level key matching `^[a-z0-9]+(-[a-z0-9]+)*$`, to a table containing a non-empty string `label` and, for each site language other than English, a non-empty string `label_<language>` (`label_de`). Its entries include at least `acylation`, `aldol-condensation`, `cross-coupling`, `esterification`, `olefination`, `protection`, `reduction` and `reductive-amination`.

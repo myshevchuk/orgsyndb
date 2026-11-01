@@ -9,6 +9,10 @@ status = "draft"
 reaction_types = ["hydrolysis"]
 tags = ["sample-data", "saponification"]
 scale = "50 mmol"
+notebook = "AE-1/1"
+project = "first-year-practical"
+working_time = 3
+inert_atmosphere = false
 substrates = ["methyl-salicylate"]
 products = [{ compound = "salicylic-acid", yield_percent = 80 }]
 hazards = [

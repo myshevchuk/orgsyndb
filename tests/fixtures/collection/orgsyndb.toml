@@ -55,3 +55,34 @@ vocabulary = "inventory-groups"
 required = true
 facet = true
 tabs = true
+
+[[fields.procedure]]
+key = "notebook"
+type = "text"
+label = "Lab notebook"
+label_de = "Laborjournal"
+unique = true
+pattern = '[A-Z]{2}-\d+/\d+'
+
+[[fields.procedure]]
+key = "project"
+type = "choice"
+label = "Project"
+label_de = "Projekt"
+vocabulary = "projects"
+facet = true
+
+[[fields.procedure]]
+key = "working_time"
+type = "number"
+label = "Working time"
+label_de = "Arbeitszeit"
+unit = "h"
+min = 0
+
+[[fields.procedure]]
+key = "inert_atmosphere"
+type = "boolean"
+label = "Inert atmosphere"
+label_de = "Schutzgas"
+facet = true

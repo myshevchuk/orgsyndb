@@ -254,12 +254,13 @@ Liste verlinkt deren Titel, nach Nummer geordnet.
 
 ## Felddeklarationen der Sammlung
 
-Um weitere Angaben wie Artikelnummern oder Stoffklassen zu erfassen,
-deklarieren Sie Verbindungsfelder in der `orgsyndb.toml` der Sammlung.
+Um weitere Angaben wie Artikelnummern, Stoffklassen oder Projekte von
+Vorschriften zu erfassen, deklarieren Sie Felder in der `orgsyndb.toml` der
+Sammlung.
 Diese UTF-8-TOML-Datei muss `format = 1` als Ganzzahl enthalten. Als
 einziger weiterer Schlüssel auf oberster Ebene ist `fields` erlaubt,
-eine Tabelle, deren einziger erlaubter Schlüssel `compound` ist. Ohne
-`fields` deklariert die Sammlung keine weiteren Felder.
+eine Tabelle mit ausschließlich `compound` und `procedure`, beide optional.
+Ohne `fields` deklariert die Sammlung keine weiteren Felder.
 
 Schreiben Sie eine Tabelle `[[fields.compound]]` je Feld, in der
 gewünschten Anzeigereihenfolge. Eine einzelne Tabelle `[fields.compound]`
@@ -282,6 +283,10 @@ search = true
 ```
 
 ### Schlüssel einer Deklaration
+
+Die folgenden Tabellen beschreiben Verbindungsdeklarationen. Für
+Vorschriftendeklarationen gelten dieselben Optionen mit den Ausnahmen
+im nächsten Unterabschnitt.
 
 | Schlüssel | TOML-Typ | Pflicht oder Vorgabe | Regel |
 |---|---|---|---|
@@ -317,6 +322,97 @@ Die Beispielsammlung deklariert außerdem `short_name` als Text mit
 und **Gruppe**. Das Vokabular ordnet `starting-materials` und `reagents`
 unter `purchased` ein, `intermediates` und `final-products` unter
 `synthesised`.
+
+### Felddeklarationen für Vorschriften
+
+Um Laborjournalverweise, Projekte oder andere Vorschriftendaten zu erfassen,
+schreiben Sie je Feld eine Tabelle `[[fields.procedure]]` in `orgsyndb.toml`,
+in Anzeigereihenfolge. Ohne `fields.procedure` sind keine Vorschriftenfelder
+deklariert. Die Beispielsammlung deklariert etwa:
+
+```toml
+[[fields.procedure]]
+key = "notebook"
+type = "text"
+label = "Lab notebook"
+label_de = "Laborjournal"
+unique = true
+pattern = '[A-Z]{2}-\d+/\d+'
+
+[[fields.procedure]]
+key = "project"
+type = "choice"
+label = "Project"
+label_de = "Projekt"
+vocabulary = "projects"
+facet = true
+```
+
+Es gelten die obigen Deklarationsschlüssel, Typen und Vorgaben, mit diesen
+Änderungen:
+
+- `column`, `search` und `tabs` sind nie erlaubt, auch nicht mit `false`.
+- `required = true` verlangt das Feld in jeder Vorschrift, auch in allgemeinen
+  Vorschriften. Die Vorgabe ist `false`.
+- `unique = true` ist für `text` und `number` verfügbar und verbietet denselben
+  gültigen Wert in zwei Vorschriften. Sprachfassungen einer Vorschrift zählen
+  dabei als eine Vorschrift. Die Vorgabe ist `false`.
+- `facet = true` ist für `boolean` und `choice` verfügbar und macht das Feld
+  zum Filter der Vorschriftenkataloge. Die Vorgabe ist `false`.
+- `key` muss `^[a-z][a-z0-9]*(_[a-z0-9]+)*$` entsprechen, darf nicht auf `_de`
+  enden und darf innerhalb von `fields.procedure` nur einmal vorkommen.
+  Ein Verbindungsfeld und ein Vorschriftenfeld dürfen denselben Schlüssel
+  haben. Für Vorschriften sind diese Schlüsselgruppen reserviert:
+
+  **Vorschriftenschema:** `id`, `slug`, `title`, `date`, `lastmod`, `authors`,
+  `status`, `reaction_types`, `tags`, `products`, `scale`, `hazards`, `substrates`,
+  `scope`, `scheme_image`, `checked_by`, `references`, `ai_model`, `language`,
+  `draft`, `description`, `aliases`, `weight`, `author`, `url`.
+
+  **Von Hugo gelesene Front-Matter-Schlüssel:** `build`, `cascade`,
+  `expirydate`, `headless`, `iscjklanguage`, `keywords`,
+  `kind`, `lang`, `layout`, `linktitle`, `markup`, `menu`, `menus`, `modified`,
+  `outputs`, `params`, `path`, `pubdate`, `publishdate`, `published`,
+  `resources`, `sitemap`, `sites`, `summary`, `translationkey`, `type`,
+  `unpublishdate`, `authors_weight`, `reaction_types_weight`, `tags_weight`.
+
+  **Vorschriftenkatalog:** `tag`, `created`, `text`, `q`, `sort`, `view`.
+
+Auswahlfelder für Verbindungen und Vorschriften teilen sich `vocabularies/`
+neben `orgsyndb.toml`. Ein Vokabular, das mehrere Felder nennen, wird einmal
+gelesen.
+
+Setzen Sie Vorschriftenwerte als Schlüssel auf oberster Ebene im TOML-
+Datenblock einer Markdown-Datei, vor jeder Tabelle. Die Aspirin-Vorschrift
+der Beispielsammlung setzt nach `scale`:
+
+```toml
+notebook = "AE-1/2"
+project = "first-year-practical"
+working_time = 2.5
+inert_atmosphere = false
+```
+
+Die Beispielsammlung deklariert `working_time` als `number` mit `unit = "h"`
+und `min = 0`, `inert_atmosphere` als `boolean` mit `facet = true`. Keines
+ihrer vier Vorschriftenfelder ist Pflicht. Eine neue Beispielvorschrift darf
+sie weglassen; ein gesetztes `notebook` muss dem Muster entsprechen und noch
+unvergeben sein.
+
+Jede Markdown-Vorschrift und jeder Org-Export wird gegen die
+Vorschriftendeklarationen geprüft. Wertfehler erscheinen am Vorschriftenpfad
+unter dem Feldschlüssel und verwenden die
+[Meldungen für Verbindungswerte](#verbindungswerte-und-meldungen), darunter
+`required field missing` sowie Typ-, Muster-, Grenzwert- und Auswahllistenfehler.
+Bei `unique` lautet die Meldung
+`"<value>" is also set by <other procedure IDs>`; Zahlen erscheinen ohne
+Anführungszeichen. Der Vergleich verwendet eine Bezugsfassung je
+Vorschriftennummer und nur Werte, die ihre Feldprüfung bestehen. Eine Datei
+mit nicht lesbarem Datenblock liefert keinen Wert. Alle Fassungen müssen
+dieselben deklarierten Werte wiederholen; siehe
+[Sprachen und Fassungen](#sprachen-und-fassungen). Die Org-Syntax und ihre
+Grenze bei String-Werten stehen unter
+[Org-Schlüsselwörter auf Dateiebene](#org-schlüsselwörter-auf-dateiebene).
 
 ### Vokabulare
 
@@ -441,12 +537,56 @@ für die Feldschlüssel stehen. Auch `tabs` bei einem anderen Typ als
 `choice` ist ein Konfigurationsfehler, wie bei anderen typabhängigen
 Optionen.
 
+`fields` erlaubt nur `compound` und `procedure`. Ein Eintrag wie
+`fields.reagent` ergibt `only fields.compound and fields.procedure are allowed`.
+Eine einzelne Tabelle `[fields.procedure]` ergibt
+`fields.procedure must be an array of tables, each written [[fields.procedure]]`.
+Für Vorschriftendeklarationen gelten dieselben Konfigurationsprüfungen wie
+für Verbindungsdeklarationen, ergänzt um diese Meldungen:
+
+| Problem | Meldung oder kennzeichnender Text |
+|---|---|
+| Nicht erlaubte Option | `a procedure field does not take column` (oder `search`, `tabs`) |
+| Schlüssel des Vorschriftenschemas | `declaration 5 of fields.procedure: key 'status' is a key of the procedure schema` |
+| Hugo-Schlüssel | `declaration 5 of fields.procedure: key 'layout' is a front-matter key that Hugo reads` |
+| Katalogschlüssel | `declaration 5 of fields.procedure: key 'tag' is reserved by the procedure catalogue; the reserved keys are tag, created, text, q, sort, view` |
+
+Die Deklarationsnummer ist die Position innerhalb von `fields.procedure`.
+Schlüsselfehler, auch doppelte oder falsch geschriebene Schlüssel, nennen
+`fields.procedure`.
+
 Vor einem Befehl prüft das Build-Programm nur das TOML der
 Einstellungsdatei, `format` und die Schlüssel auf oberster Ebene. Der
 Validator prüft die Deklarationen und Vokabulare. Eine fehlerhafte
 Deklaration verhindert daher weder `clean` noch `new`.
 
 ### Anzeige auf der Website
+
+Vorschriftenseiten zeigen jedes gesetzte deklarierte Vorschriftenfeld im
+Datenfeld, in Deklarationsreihenfolge nach **Geprüft von** und vor **Erstellt**.
+Eine deutsche Website verwendet `label_de`, falls vorhanden, sonst `label`.
+Text erscheint wie eingetragen, Zahlen mit dem Dezimalzeichen der Website
+und der Einheit, etwa `2,5 h`. Wahrheitswerte erscheinen als **Ja**/**Nein**,
+auf Englisch als **Yes**/**No**. Auswahlwerte zeigen den Pfad ihrer Namen,
+verbunden durch ` › `, etwa **Lehre › Grundpraktikum**. Mehrere Auswahlwerte
+stehen mit `, ` getrennt in der Reihenfolge der Vorschrift. Das Datenfeld
+wird indexiert; die Katalogsuche findet diese angezeigten Werte.
+
+Jedes Vorschriftenfeld vom Typ `boolean` oder `choice` mit `facet = true`
+ergänzt einen Filter zwischen **Status** und **Schlagwort**, in
+Deklarationsreihenfolge, anfangs geöffnet und ohne Link „Alle Werte“.
+Wahrheitsfilter zeigen zuerst **Ja**, dann **Nein**, jeweils nur, wenn eine
+veröffentlichte Vorschrift den Wert setzt. Auswahlfilter zeigen verwendete
+Werte und deren übergeordnete Werte als eingerückten Baum in
+Vokabularreihenfolge. Die Auswahl eines übergeordneten Werts erfasst auch
+Vorschriften unter den darunter eingeordneten Werten. Diese Filter stehen
+unter `/procedures/`, auf jeder Reaktionstyp-, Schlagwort- und Autorenseite
+sowie unter `/general-procedures/`. Jede Seite bietet Werte der gesamten
+Sammlung an. Die Adresse verwendet den deklarierten Schlüssel, etwa
+`/procedures/?project=research&inert_atmosphere=true`. Es gelten dieselben
+ODER/UND- und Zählregeln wie für die Verbindungsfilter unten.
+Vorschriftenfelder ergänzen keine Tabellenspalten, Werte in der Ansicht
+**Details** oder Reiter.
 
 Verbindungsseiten zeigen gesetzte Felder nach Summenformel, Molmasse,
 CAS und SMILES, in Deklarationsreihenfolge und mit den Feldnamen in der
@@ -633,13 +773,18 @@ Diese Felder werden abgelehnt:
 | `author = ["A. Example"]` | Das Schema verwendet die Mehrzahl. | `authors = ["A. Example"]` |
 | `url = "/procedures/osdb-0001/"` | Die URL ergibt sich aus `slug`. | `slug = "osdb-0001"` |
 
+Ein unter `fields.procedure` deklarierter Schlüssel wird als
+Vorschriftenfeld geprüft und ergibt keine Warnung `unknown field`. Ein nur
+unter `fields.compound` deklarierter Schlüssel bleibt in einer Vorschrift
+unbekannt, und umgekehrt.
+
 Jedes andere Feld der obersten Ebene ergibt die Warnung `unknown field`,
 auch Tippfehler wie `checkedby` und die Felder `product`, `yield_percent`
 auf oberster Ebene, `precursors` und `structure_image`. Ein unbekanntes Feld
 in einem Eintrag von `products` ergibt etwa `products[1].colour` als Warnung.
 Registerfelder sind nur dann unbekannt, wenn sie weder zu den eingebauten
-Verbindungsfeldern noch zu den Deklarationen der Sammlung gehören. Sie
-ergeben Warnungen an der Verbindungsdatei unter dem jeweiligen Feldnamen.
+Verbindungsfeldern noch zu den Deklarationen unter `fields.compound` gehören.
+Sie ergeben Warnungen an der Verbindungsdatei unter dem jeweiligen Feldnamen.
 
 ## Org-Schlüsselwörter auf Dateiebene
 
@@ -691,6 +836,31 @@ Jedes Produkt ist ein Eintrag `((compound . "key") (yield_percent . N))`
 in der gequoteten Liste. Zahlen haben in jeder Sprache einen Dezimalpunkt.
 Der Export hält tabellenartige Metadaten zusätzlich am Ende, damit spätere
 Felder nicht zur letzten Tabelle `[[products]]` gehören.
+
+Setzen Sie deklarierte Vorschriftenfelder auf weiteren Zeilen
+`#+HUGO_CUSTOM_FRONT_MATTER:` vor `:products`, etwa nach `:scale`:
+
+```org
+#+HUGO_CUSTOM_FRONT_MATTER: :notebook "AE-1/1" :project "first-year-practical" :working_time 3 :inert_atmosphere false
+```
+
+Strings stehen in doppelten Anführungszeichen; Zahlen und Wahrheitswerte
+bleiben ungequotet. Eine Mehrfachauswahl verwendet eine gequotete Liste,
+etwa `:techniques '("reflux" "distillation")`, wenn die Sammlung dieses
+Feld und diese Vokabularwerte deklariert.
+
+Der Export mit ox-hugo/tomelr erhält nicht jeden gequoteten String als Text.
+Er schreibt einen String ohne Anführungszeichen, wenn er `true` oder `false`
+lautet, die Form eines Datums oder Datums mit Uhrzeit hat (`2026-01-01`,
+`2026-01-01T10:00:00+01:00`) oder eine Ganzzahl ist: ein optionales Vorzeichen,
+gefolgt von Ziffern und Unterstrichen (`1234`, `-7`, `7_000`, `0012`). Das
+gilt auch für gequotete Quellwerte und Listeneinträge. Solche Werte sind in
+Org-Quellen weder als Text noch als Schlüssel einer Einfach- oder
+Mehrfachauswahl verwendbar. Die Prüfung meldet `must be a string`, oder der
+exportierte Datenblock ist nicht lesbar; etwa ist ungequotetes `0012`
+ungültiges TOML. Wenn Autoren Org verwenden, wählen Sie Muster und
+Vokabularschlüssel, die diese Formen vermeiden. Markdown-Quellen haben
+diese Einschränkung nicht.
 
 Eine Org-Quelle darf `date`, `lastmod`, `ai_model` oder den Dateinamen des
 Exports nicht über eine andere von ox-hugo gelesene Angabe setzen.
@@ -840,7 +1010,8 @@ Die Fassungen einer Vorschrift
 - haben denselben Grundnamen, den Dateinamen ohne Kürzel und Endung;
 - haben dieselbe `id` und denselben `slug`;
 - haben denselben Wert, oder dasselbe Fehlen, von `status`, `reaction_types`,
-  `tags`, `products`, `substrates`, `scope` und `scheme_image`;
+  `tags`, `products`, `substrates`, `scope`, `scheme_image` und jedem
+  deklarierten Vorschriftenfeld;
 - dürfen `note` in jedem Eintrag von `scope` übersetzen; alle anderen Werte von
   `scope` und die Reihenfolge der Einträge müssen übereinstimmen;
 - dürfen sich in allen übrigen Feldern und im Text unterscheiden: `title`,
@@ -855,6 +1026,12 @@ Ausgangsstoffe unter `substrates`. Abweichungen in `scope` erscheinen unter
 `scope`, ohne Vergleich der Anmerkungen; ein geänderter Schemapfad unter
 `scheme_image`. Zahlen werden nach ihrem Wert verglichen: `85` und `85.0`
 stimmen überein. Bei anderen Werten müssen Wert und Typ übereinstimmen.
+
+Bei einem deklarierten Vorschriftenfeld ergeben ein geänderter Wert, ein
+fehlender oder ein hinzugefügter Schlüssel einen Fehler unter diesem Schlüssel:
+`must equal the value in <path of the reference variant> (<value>); the variants of a procedure share it`.
+Wiederholen Sie Werte ohne Übersetzung. Der angezeigte Feldname kommt auf
+einer deutschen Website aus `label_de`, falls vorhanden.
 
 Verbindungsnamen kommen aus dem Register, unabhängig von der Sprache der
 Vorschrift. Eine deutsche Website verwendet `name_de`, wenn vorhanden,
@@ -904,7 +1081,8 @@ diese Vorgabedatei, sind keine weiteren Felder deklariert. Eine mit
 `--settings` ausdrücklich benannte Datei muss vorhanden sein. Der
 Validator prüft die Deklarationen und sucht deren Vokabulare ausgehend
 vom Verzeichnis der Einstellungsdatei. Danach prüft er die Werte jeder
-Verbindung gegen die Deklarationen.
+Verbindung und jeder Vorschrift gegen die jeweiligen Deklarationen.
+Org-Vorschriften erreichen diese Prüfung als Markdown-Exporte.
 
 `--sequences` ist ohne Angabe `md/sequences` im aktuellen Verzeichnis. Ein
 fehlender Ordner enthält keine Synthesewege; ein vorhandener Pfad, der kein
@@ -924,6 +1102,13 @@ keine Tabelle ist, erscheint unter `products[n]`. Registerprobleme nennen
 den Pfad der Verbindungsdatei und den Feldnamen, etwa
 `compounds/ethyl-acetate.toml:mw`. Weitere mögliche Felder sind `file_name`,
 `front_matter`, `toml` und `body`. Die Meldungen sind englisch.
+
+Fehler deklarierter Vorschriftenfelder nennen die Markdown-Quelle oder
+den Org-Export und den deklarierten Schlüssel, etwa `notebook` oder `project`.
+Typ-, Muster-, Grenzwert- und Auswahlmeldungen stehen unter
+[Felddeklarationen für Vorschriften](#felddeklarationen-für-vorschriften).
+`also set by` nennt andere Vorschriftennummern; `must equal the value in`
+nennt die sprachliche Bezugsfassung, deren Wert Sie wiederholen müssen.
 
 Felder eines Eintrags heißen `scope[n].<key>`, Produktfelder darin
 `scope[n].products[m].<key>`. Beide Zählungen beginnen bei 1. Ein Eintrag, der

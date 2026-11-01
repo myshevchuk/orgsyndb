@@ -1,5 +1,6 @@
-"""The compound fields of a collection as the site writes them
-(compound-fields "Field display").
+"""The compound and procedure fields of a collection as the site writes
+them (compound-fields "Field display", procedure-fields "Procedure field
+data").
 
 The declarations are read straight from the collection's
 ``orgsyndb.toml`` and its ``vocabularies/``, independently of
@@ -77,12 +78,13 @@ def _order(vocabulary: dict[str, dict[str, Any]]) -> tuple[str, ...]:
     return tuple(below(None))
 
 
-def read_fields(settings: Path, language: str) -> list[Field]:
-    """The compound fields ``settings`` declares, in declared order, with
-    their labels in ``language``."""
+def read_fields(settings: Path, language: str,
+                entity: str = "compound") -> list[Field]:
+    """The fields of ``fields.<entity>`` that ``settings`` declares, in
+    declared order, with their labels in ``language``."""
     data = tomllib.loads(settings.read_text(encoding="utf-8"))
     fields = []
-    for entry in data.get("fields", {}).get("compound", []):
+    for entry in data.get("fields", {}).get(entity, []):
         paths: dict[str, tuple[str, ...]] = {}
         ancestors: dict[str, tuple[str, ...]] = {}
         order: tuple[str, ...] = ()
@@ -101,6 +103,13 @@ def read_fields(settings: Path, language: str) -> list[Field]:
             entry.get("facet", False), entry.get("search", False),
             ancestors, order, entry.get("tabs", False)))
     return fields
+
+
+def read_procedure_fields(settings: Path, language: str) -> list[Field]:
+    """The procedure fields ``settings`` declares, in declared order,
+    with their labels in ``language``. ``column``, ``search`` and
+    ``tabs`` are false."""
+    return read_fields(settings, language, "procedure")
 
 
 def value_text(field: Field, value: Any, locale: str, *,
@@ -123,7 +132,9 @@ def value_text(field: Field, value: Any, locale: str, *,
 def shown(fields: list[Field], compound: dict[str, Any], locale: str, *,
           page: bool) -> list[tuple[Field, str]]:
     """The fields ``compound`` sets, in declared order, each with its
-    written value. In the directory only the column fields count."""
+    written value. In the directory only the column fields count. A
+    procedure's front matter serves as ``compound`` for its procedure
+    fields, with ``page`` true."""
     return [(field, value_text(field, compound[field.key], locale,
                                page=page))
             for field in fields
@@ -207,3 +218,29 @@ def search_text(fields: list[Field], compound: dict[str, Any]) -> str:
               if field.type == "text" and field.search
               and field.key in compound]
     return " ".join(part for part in parts if part)
+
+
+class ProcedureFieldsMixin:
+    """Procedure-field helpers for a build case: the declarations of the
+    sandbox collection and what the site shows of them."""
+
+    sandbox: ps.Sandbox
+    LOCALE: str
+
+    def procedure_fields(self) -> list[Field]:
+        """The procedure fields the sandbox collection declares, in the
+        site's language."""
+        return read_procedure_fields(
+            self.sandbox.root / "orgsyndb.toml", self.LOCALE)
+
+    def facet_fields(self) -> list[Field]:
+        """The procedure fields declared with ``facet = true``, in
+        declared order."""
+        return [f for f in self.procedure_fields() if f.facet]
+
+    def declared_pairs(self, data: dict[str, Any]
+                       ) -> list[tuple[str, str]]:
+        """The label and written value of each declared procedure field
+        that the front matter ``data`` sets, in declared order."""
+        return [(field.label, text) for field, text in shown(
+            self.procedure_fields(), data, self.LOCALE, page=True)]

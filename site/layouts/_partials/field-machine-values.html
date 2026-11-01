@@ -1,0 +1,20 @@
+{{- /* The machine values of one declared field that a record sets, as a
+catalogue facet filters by them: "true" or "false" for a boolean; each
+value set and each of its ancestors, once, for a choice, a value's
+ancestors before it. Takes a dict of field, an entry of
+site.Data.collection.fields.compound or .procedure, and record, the
+table that sets the field under its key (a registry entry or a page's
+Params). Returns an empty slice when the record does not set the
+field. */ -}}
+{{- $field := .field -}}
+{{- $set := slice -}}
+{{- if isset .record $field.key -}}
+{{- $value := index .record $field.key -}}
+{{- if eq $field.type "boolean" -}}
+{{- $set = slice (cond $value "true" "false") -}}
+{{- else -}}
+{{- range $chosen := cond $field.multiple $value (slice $value) }}{{ range (index $field.values $chosen).ancestors }}{{ $set = $set | append . }}{{ end }}{{ $set = $set | append $chosen }}{{ end -}}
+{{- $set = uniq $set -}}
+{{- end -}}
+{{- end -}}
+{{- return $set -}}

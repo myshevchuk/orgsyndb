@@ -9,6 +9,9 @@ status = "draft"
 reaction_types = ["esterification"]
 tags = ["sample-data", "fischer-esterification", "fragrance"]
 scale = "50 mmol"
+notebook = "AE-1/3"
+project = "first-year-practical"
+working_time = 4
 substrates = ["isopentyl-alcohol", "acetic-acid"]
 products = [{ compound = "isopentyl-acetate", yield_percent = 70 }]
 hazards = [

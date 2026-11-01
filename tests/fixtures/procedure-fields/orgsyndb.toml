@@ -1,0 +1,30 @@
+# Field declarations of the validator's procedure-field fixtures.
+format = 1
+
+[[fields.procedure]]
+key = "notebook"
+type = "text"
+label = "Lab notebook"
+label_de = "Laborjournal"
+pattern = '[A-Z]{2}-\d+/\d+'
+unique = true
+
+[[fields.procedure]]
+key = "working_time"
+type = "number"
+label = "Working time"
+label_de = "Arbeitszeit"
+unit = "h"
+min = 0
+
+[[fields.procedure]]
+key = "inert_atmosphere"
+type = "boolean"
+label = "Inert atmosphere"
+
+[[fields.procedure]]
+key = "project"
+type = "choice"
+label = "Project"
+label_de = "Projekt"
+vocabulary = "projects"

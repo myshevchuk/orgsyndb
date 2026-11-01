@@ -7,9 +7,11 @@ are in ``TEXTS``. The English and German test modules subclass it, and
 reach it as ``cs.CatalogueCase``, so that the base is not collected.
 """
 
+import json
 import re
 from typing import Any
 
+import field_support as fs
 import pipeline_support as ps
 from pipeline_support import Content, Node, Page
 
@@ -22,6 +24,7 @@ FACET_TAXONOMY = {"type": "reaction_types", "tag": "tags",
 TAXONOMY_FACET = {taxonomy: facet
                   for facet, taxonomy in FACET_TAXONOMY.items()}
 CATALOGUE_SCRIPT = re.compile(r"^/js/catalogue\.(?:min\.)?[0-9a-f]{16,}\.js$")
+DEPTH = re.compile(r"^--depth:(\d+);?$")
 
 TEXTS: dict[str, dict[str, Any]] = {
     "en": {
@@ -156,12 +159,24 @@ def instant(item: Content) -> float:
     return item.data["lastmod"].timestamp()
 
 
-class CatalogueCase(ps.ThemeBuildCase):
+class CatalogueCase(fs.ProcedureFieldsMixin, ps.ThemeBuildCase):
     """A build case with the catalogue's markup checks."""
 
     @property
     def texts(self) -> dict[str, Any]:
         return TEXTS[self.LOCALE]
+
+    def facet_names(self) -> list[str]:
+        """The facets of a procedure catalogue, in order: ``type``,
+        ``kind`` and ``status``, the procedure fields declared with
+        ``facet = true``, then ``tag`` and ``author``."""
+        return ["type", "kind", "status",
+                *(field.key for field in self.facet_fields()),
+                "tag", "author"]
+
+    def published(self) -> dict[str, dict[str, Any]]:
+        """The front matter of every published procedure, by ID."""
+        return {item.id: item.data for item in self.content()}
 
     def labels(self) -> dict[str, str]:
         """Reaction-type slug to label in the build's language."""
@@ -186,11 +201,16 @@ class CatalogueCase(ps.ThemeBuildCase):
 
     def facet_labels(self) -> dict[str, dict[str, str]]:
         """Per facet, each value some published procedure carries (and
-        the three statuses) with its display label."""
+        the three statuses) with its display label. A declared facet
+        lists its values in the order the catalogue shows them."""
         labels = self.labels()
         found: dict[str, dict[str, str]] = {
             "type": {}, "kind": dict(self.texts["kinds"]),
             "status": dict(self.texts["status"]), "tag": {}, "author": {}}
+        for field in self.facet_fields():
+            found[field.key] = {
+                value: label for value, label, _ in
+                fs.facet_entries(field, self.published(), self.LOCALE)}
         for item in self.content():
             for slug in item.data["reaction_types"]:
                 found["type"][slug] = labels[slug]
@@ -337,7 +357,7 @@ class CatalogueCase(ps.ThemeBuildCase):
         self.assertEqual(ps.facet_values(page, "kind"),
                          [("general", texts["kinds"]["general"])])
         everything = self.page("procedures/index.html")
-        for other in ps.FACETS:
+        for other in self.facet_names():
             if other != "kind":
                 self.assertEqual(ps.facet_values(page, other),
                                  ps.facet_values(everything, other), other)
@@ -409,7 +429,7 @@ class CatalogueCase(ps.ThemeBuildCase):
         self.assertEqual(heading.norm(), texts["filters"])
         groups = facets.find_all("details", "facet")
         self.assertEqual([g.attrs.get("data-facet") for g in groups],
-                         list(ps.FACETS))
+                         self.facet_names())
         self.assertLess(page.index_of(heading), page.index_of(groups[0]))
         expected = self.facet_labels()
         for group in groups:
@@ -426,13 +446,18 @@ class CatalogueCase(ps.ThemeBuildCase):
         summary = parts[0]
         self.assertEqual(summary.tag, "summary")
         self.assertTrue(summary.attrs.get("id"), "summary without an id")
-        self.assertEqual(summary.norm(), texts["facets"][facet])
+        declared = {f.key: f for f in self.facet_fields()}
+        self.assertEqual(
+            summary.norm(),
+            declared[facet].label if facet in declared
+            else texts["facets"][facet])
         values = parts[1]
         self.assertEqual(values.tag, "div")
         self.assertEqual(values.attrs.get("role"), "group")
         self.assertEqual(values.attrs.get("aria-labelledby"),
                          summary.attrs["id"])
-        opens = facet in ("type", "kind", "status") or facet == fixed
+        opens = (facet in ("type", "kind", "status") or facet == fixed
+                 or facet in declared)
         self.assertEqual("open" in group.attrs, opens)
         if facet == fixed:
             self.assertIn("data-fixed", group.attrs)
@@ -463,17 +488,39 @@ class CatalogueCase(ps.ThemeBuildCase):
     def assert_facet_values(self, page: Page, facet: str,
                             expected: dict[str, str]) -> None:
         """The facet lists exactly ``expected`` (value to label): the
-        kinds and statuses in their fixed order, other values ordered by
-        label.
+        kinds, statuses and declared fields' values in their fixed order,
+        other values ordered by label.
         Order is checked among ASCII labels only, as collation of other
         letters is Hugo's."""
         shown = ps.facet_values(page, facet)
         if facet in ("kind", "status"):
             self.assertEqual(shown, [(k, v) for k, v in expected.items()])
             return
+        declared = {f.key: f for f in self.facet_fields()}
+        if facet in declared:
+            self.assertEqual(shown, list(expected.items()))
+            self.check_depths(page, declared[facet])
+            return
         self.assertEqual(sorted(shown), sorted(expected.items()))
         names = [label for _, label in shown if label.isascii()]
         self.assertEqual(names, sorted(names))
+
+    def check_depths(self, page: Page, field: fs.Field) -> None:
+        """Each value of the declared facet ``field`` carries the depth of
+        the field data: ``style="--depth: <n>"`` for a choice, the number
+        of the value's ancestors."""
+        group = page.find("details", "facet", data_facet=field.key)
+        labels = group.find_all("label", "facet-value")
+        entries = fs.facet_entries(field, self.published(), self.LOCALE)
+        self.assertEqual(len(labels), len(entries))
+        for label, (value, _, depth) in zip(labels, entries):
+            with self.subTest(facet=field.key, value=value):
+                if depth is None:
+                    continue
+                style = ps.squash(label.attrs.get("style", ""))
+                found = DEPTH.match(style)
+                self.assertIsNotNone(found, f"style {style!r}")
+                self.assertEqual(int(found.group(1)), depth)
 
     def check_toolbar(self, page: Page, block: Node) -> None:
         texts = self.texts
@@ -520,6 +567,7 @@ class CatalogueCase(ps.ThemeBuildCase):
         for row, item in zip(rows, wanted):
             cells = ps.row_cells(row)
             with self.subTest(procedure=item.id):
+                self.check_declared_row_data(row, item)
                 self.assertEqual(len(cells), 5)
                 target = f"/procedures/{item.slug}/"
                 for cell, text in ((cells[0], item.id),
@@ -541,6 +589,20 @@ class CatalogueCase(ps.ThemeBuildCase):
                                  ps.rfc3339(item.data["lastmod"]))
                 self.assertEqual(moment.norm(),
                                  item.data["lastmod"].strftime("%Y-%m-%d"))
+
+    def check_declared_row_data(self, row: Node, item: Content) -> None:
+        """The row's ``data-<key>`` of each declared facet lists the
+        machine values that the procedure's front matter gives, each
+        once, and ``[]`` where the procedure sets none."""
+        for field in self.facet_fields():
+            raw = row.attrs.get(f"data-{field.key}")
+            self.assertIsNotNone(raw, f"no data-{field.key}")
+            listed = json.loads(raw)
+            self.assertEqual(len(listed), len(set(listed)), raw)
+            self.assertEqual(sorted(listed),
+                             sorted(fs.values_set(field, item.data)), raw)
+            if field.key not in item.data:
+                self.assertEqual(listed, [], raw)
 
     # --- the home page ---------------------------------------------------
 

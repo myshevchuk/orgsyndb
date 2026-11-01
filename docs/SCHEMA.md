@@ -231,11 +231,11 @@ it as its target. The list links those sequences by title, ordered by ID.
 
 ## Collection field declarations
 
-To record extra data such as item numbers or chemical classes, declare
-compound fields in the collection's `orgsyndb.toml`. This UTF-8 TOML file
-must contain `format = 1` as an integer. Its only other allowed top-level
-key is `fields`, a table whose only allowed key is `compound`. Without
-`fields`, the collection declares no extra fields.
+To record extra data such as item numbers, chemical classes or procedure
+projects, declare fields in the collection's `orgsyndb.toml`. This UTF-8
+TOML file must contain `format = 1` as an integer. Its only other allowed
+top-level key is `fields`, a table allowing only `compound` and `procedure`, both
+optional. Without `fields`, the collection declares no extra fields.
 
 Write one `[[fields.compound]]` table per field, in the order you want the
 site to show them. A single `[fields.compound]` table is invalid. For
@@ -258,6 +258,9 @@ search = true
 ```
 
 ### Declaration keys
+
+The following tables describe compound declarations. Procedure declarations
+use the same options with the exceptions in the next subsection.
 
 | Key | TOML type | Required or default | Rule |
 |---|---|---|---|
@@ -293,6 +296,89 @@ choice with `facet = true`, `tabs = true` and
 The `group` labels are **Group** and **Gruppe**. Its vocabulary places
 `starting-materials` and `reagents` under `purchased`, and `intermediates`
 and `final-products` under `synthesised`.
+
+### Procedure field declarations
+
+To record a lab-notebook reference, project or other procedure data, write
+one `[[fields.procedure]]` table per field in `orgsyndb.toml`, in display
+order. Omitting `fields.procedure` declares no procedure fields. For example,
+the demo declares:
+
+```toml
+[[fields.procedure]]
+key = "notebook"
+type = "text"
+label = "Lab notebook"
+label_de = "Laborjournal"
+unique = true
+pattern = '[A-Z]{2}-\d+/\d+'
+
+[[fields.procedure]]
+key = "project"
+type = "choice"
+label = "Project"
+label_de = "Projekt"
+vocabulary = "projects"
+facet = true
+```
+
+Use the declaration keys, types and defaults above, with these changes:
+
+- `column`, `search` and `tabs` are never allowed, even with `false`.
+- `required = true` requires the field on every procedure, including general
+  procedures. The default is `false`.
+- `unique = true`, available for `text` and `number`, forbids the same valid
+  value on two procedures. Language variants of one procedure count as one.
+  The default is `false`.
+- `facet = true`, available for `boolean` and `choice`, makes the field a
+  filter of the procedure catalogues. The default is `false`.
+- `key` must match `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`, must not end in `_de`,
+  and must occur only once within `fields.procedure`. A compound field and a
+  procedure field may share a key. Procedure keys must avoid these groups:
+
+  **Procedure schema:** `id`, `slug`, `title`, `date`, `lastmod`, `authors`,
+  `status`, `reaction_types`, `tags`, `products`, `scale`, `hazards`, `substrates`,
+  `scope`, `scheme_image`, `checked_by`, `references`, `ai_model`, `language`,
+  `draft`, `description`, `aliases`, `weight`, `author`, `url`.
+
+  **Front matter Hugo reads:** `build`, `cascade`, `expirydate`, `headless`,
+  `iscjklanguage`, `keywords`,
+  `kind`, `lang`, `layout`, `linktitle`, `markup`, `menu`, `menus`, `modified`,
+  `outputs`, `params`, `path`, `pubdate`, `publishdate`, `published`,
+  `resources`, `sitemap`, `sites`, `summary`, `translationkey`, `type`,
+  `unpublishdate`, `authors_weight`, `reaction_types_weight`, `tags_weight`.
+
+  **Procedure catalogue:** `tag`, `created`, `text`, `q`, `sort`, `view`.
+
+Compound and procedure choice fields share `vocabularies/` beside
+`orgsyndb.toml`. A vocabulary named by several fields is read once.
+
+Set procedure values as top-level keys in Markdown TOML front matter,
+before any table. The demo's aspirin procedure sets these after `scale`:
+
+```toml
+notebook = "AE-1/2"
+project = "first-year-practical"
+working_time = 2.5
+inert_atmosphere = false
+```
+
+The demo declares `working_time` as `number` with `unit = "h"` and `min = 0`,
+and `inert_atmosphere` as `boolean` with `facet = true`. None of its four
+procedure fields is required. A new demo procedure may omit them; any
+`notebook` it sets must match the pattern and be unused.
+
+Every Markdown procedure and Org export is checked against the procedure
+declarations. Value errors use the field's key on the procedure's path and
+the [compound value messages](#compound-values-and-messages), including
+`required field missing`, type, pattern, bound and choice-list errors.
+For `unique`, the message is `"<value>" is also set by <other procedure IDs>`;
+numbers appear without quotes. The comparison uses one reference variant
+per procedure ID and only values that pass the field checks. A file whose
+front matter cannot be parsed supplies no value. All variants must repeat
+the same declared values; see [Languages and variants](#languages-and-variants).
+For Org syntax and its string-typing limit, see
+[Org file-level keywords](#org-file-level-keywords).
 
 ### Vocabularies
 
@@ -408,12 +494,51 @@ Setting `tabs = true` on more than one field is a configuration error:
 are the field keys. Using `tabs` on a type other than `choice` is also a
 configuration error, as with other type-specific options.
 
+`fields` accepts only `compound` and `procedure`. An entry such as
+`fields.reagent` produces `only fields.compound and fields.procedure are allowed`.
+A single `[fields.procedure]` table produces
+`fields.procedure must be an array of tables, each written [[fields.procedure]]`.
+Procedure declarations have the same configuration checks as compound
+declarations, with these additional messages:
+
+| Problem | Message or identifying text |
+|---|---|
+| Withheld option | `a procedure field does not take column` (or `search`, `tabs`) |
+| Procedure-schema key | `declaration 5 of fields.procedure: key 'status' is a key of the procedure schema` |
+| Hugo key | `declaration 5 of fields.procedure: key 'layout' is a front-matter key that Hugo reads` |
+| Catalogue key | `declaration 5 of fields.procedure: key 'tag' is reserved by the procedure catalogue; the reserved keys are tag, created, text, q, sort, view` |
+
+The declaration number is its position within `fields.procedure`. Key errors,
+including duplicates and invalid spelling, identify `fields.procedure`.
+
 The build program checks only the settings file's TOML, `format` and
 top-level keys before running a command. The validator checks the
 declarations and vocabularies, so a broken declaration does not prevent
 `clean` or `new`.
 
 ### Display on the site
+
+Procedure pages show each declared field the procedure sets in the metadata
+panel, in declaration order, after **Checked by** and before **Created**.
+Labels use `label_de` on a German site when present, otherwise `label`.
+Text appears as written; numbers use the site's decimal separator and unit,
+such as `2,5 h`; booleans show **Yes**/**No** or **Ja**/**Nein**. Choices show
+the path of labels joined by ` › `, such as **Lehre › Grundpraktikum**;
+multiple choices are separated by `, ` in the procedure's order. The panel is
+indexed, so catalogue search finds these displayed values.
+
+Each boolean or choice procedure field with `facet = true` adds a filter
+between **Status** and **Tag**, in declaration order, open by default and
+without an “all values” link. Boolean filters list **Yes**, then **No**,
+each only when some published procedure sets it. Choice filters list used
+values and their ancestors as an indented tree in vocabulary order.
+Selecting a parent also matches procedures filed under its descendants.
+These filters appear on `/procedures/`, every reaction-type, tag and author
+page, and `/general-procedures/`. Every page offers values from the whole
+collection. The address uses the declared key, for example
+`/procedures/?project=research&inert_atmosphere=true`. Selections use the same
+OR/AND and count rules as compound filters below. Procedure fields do not
+add table columns, values to the **Details** view, or tabs.
 
 Compound pages show set fields after Formula, MW, CAS and SMILES, in
 declaration order, using the field labels in the site's language. Text
@@ -585,13 +710,17 @@ The following keys are rejected:
 | `author = ["A. Example"]` | The schema uses the plural field. | `authors = ["A. Example"]` |
 | `url = "/procedures/osdb-0001/"` | The URL is derived from `slug`. | `slug = "osdb-0001"` |
 
+A key declared under `fields.procedure` is checked as a procedure field
+and produces no `unknown field` warning. A key declared only under
+`fields.compound` remains unknown in a procedure, and vice versa.
+
 Any other top-level key produces an `unknown field` warning. This includes
 misspellings such as `checkedby` and the fields `product`, top-level
 `yield_percent`, `precursors` and `structure_image`. An unknown key in a
 `products` entry produces a warning such as `products[1].colour`. Unknown
 fields in a compound record are keys outside both the built-in compound
-fields and the collection's declarations. They produce warnings on its
-file under the field name.
+fields and the collection's `fields.compound` declarations. They produce
+warnings on its file under the field name.
 
 ## Org file-level keywords
 
@@ -640,6 +769,28 @@ Each product is one `((compound . "key") (yield_percent . N))` entry in the
 quoted list. Keep decimal points in numeric values in every language. The
 export also keeps table-valued metadata last so later fields do not become
 members of the last `[[products]]` table.
+
+Set declared procedure fields on additional `#+HUGO_CUSTOM_FRONT_MATTER:`
+lines before `:products`, for example after `:scale`:
+
+```org
+#+HUGO_CUSTOM_FRONT_MATTER: :notebook "AE-1/1" :project "first-year-practical" :working_time 3 :inert_atmosphere false
+```
+
+Double-quote strings; leave numbers and booleans unquoted. A multiple choice
+uses a quoted list, for example `:techniques '("reflux" "distillation")`
+when the collection declares that field and those vocabulary values.
+
+The ox-hugo/tomelr export cannot preserve every quoted string as text. It
+writes a string without quotes when it reads `true` or `false`, has the form
+of a date or date-time (`2026-01-01`, `2026-01-01T10:00:00+01:00`), or is an
+integer: an optional sign followed by digits and underscores (`1234`, `-7`,
+`7_000`, `0012`). This applies even to quoted source values and entries in
+lists. Such values cannot be text, choice keys or multiple-choice entries
+in an Org source. Validation reports `must be a string`, or the exported
+front matter fails to parse; for example, unquoted `0012` is invalid TOML.
+If authors use Org, choose patterns and vocabulary keys that avoid these
+forms. Markdown sources have no such limit.
 
 An Org source must not set `date`, `lastmod`, `ai_model`, or the export file
 name through another ox-hugo input. `orgsyndb export` rejects the keywords
@@ -789,7 +940,8 @@ The variants of a procedure:
 - have the same base name, the file name without code and suffix;
 - have the same `id` and `slug`;
 - have the same value, or the same absence, of `status`, `reaction_types`,
-  `tags`, `products`, `substrates`, `scope` and `scheme_image`;
+  `tags`, `products`, `substrates`, `scope`, `scheme_image` and every declared
+  procedure field;
 - may translate each scope entry's `note`; all other scope values and the entry
   order must agree;
 - may differ in every other field and in the body: `title`, `scale`,
@@ -803,6 +955,12 @@ that names the reference. A changed product key or yield is reported under
 scope difference is reported under `scope`, ignoring entry notes; a scheme-path
 difference is reported under `scheme_image`. Numbers compare by value, so `85`
 and `85.0` agree; other values compare by both value and type.
+
+For a declared procedure field, a changed value, a missing key or an added
+key produces an error under that key:
+`must equal the value in <path of the reference variant> (<value>); the variants of a procedure share it`.
+Repeat values without translating them. The displayed field label comes
+from `label_de` on a German site when supplied.
 
 Compound names come from the registry, independently of the procedure's
 language. A German site uses `name_de` when present, otherwise `name`;
@@ -848,7 +1006,8 @@ the validator uses `orgsyndb.toml` in the working directory; a missing
 default declares no extra fields. A file explicitly named by `--settings`
 must exist. The validator checks the declarations and resolves their
 vocabularies relative to the settings file's directory, then checks each
-compound's values against them.
+compound's and each procedure's values against its declarations. Org
+procedures reach this check as Markdown exports.
 
 `--sequences` defaults to `md/sequences` in the working directory. A missing
 directory holds no sequences; an existing path that is not a directory is a
@@ -866,6 +1025,13 @@ such as `products[1].yield_percent`, counting products from 1. A non-table
 entry is reported under `products[n]`. Compound problems use the compound
 file's path and field name, for example `compounds/ethyl-acetate.toml:mw`.
 Other possible fields are `file_name`, `front_matter`, `toml` and `body`.
+
+Declared procedure-field errors name the Markdown source or Org export
+and the declared key, such as `notebook` or `project`. Look up their type,
+pattern, bounds and choice messages under
+[Procedure field declarations](#procedure-field-declarations). An
+`also set by` message names other procedure IDs; a `must equal the value in`
+message names the reference language variant whose value you must repeat.
 
 Scope fields use `scope[n].<key>`, and a product within an entry uses
 `scope[n].products[m].<key>`. Both indices start at 1. A non-table scope entry

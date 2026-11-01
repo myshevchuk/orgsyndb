@@ -58,7 +58,9 @@ def number(text: str) -> float:
 
 def read_elisp(text: str, pos: int = 0) -> tuple[Any, int]:
     """Read one Elisp literal: string, number, symbol, quoted list or
-    alist. Quoted lists become lists, dotted pairs become tuples."""
+    alist. Quoted lists become lists, dotted pairs become tuples, and the
+    symbols ``true`` and ``false`` become booleans, as ox-hugo writes
+    them."""
     while text[pos].isspace():
         pos += 1
     char = text[pos]
@@ -90,6 +92,8 @@ def read_elisp(text: str, pos: int = 0) -> tuple[Any, int]:
         return items, pos + 1
     match = re.compile(r"[^\s()\"']+").match(text, pos)
     token = match.group(0)
+    if token in ("true", "false"):
+        return token == "true", match.end()
     try:
         return (int(token) if re.fullmatch(r"-?\d+", token)
                 else float(token)), match.end()
@@ -468,6 +472,34 @@ DEMO_DECLARATIONS = [
      "tabs": True, "vocabulary": "inventory-groups"},
 ]
 DEMO_LABELS = {"group": ("Group", "Gruppe")}
+DEMO_PROCEDURE_DECLARATIONS = [
+    {"key": "notebook", "type": "text", "unique": True,
+     "pattern": r"[A-Z]{2}-\d+/\d+"},
+    {"key": "project", "type": "choice", "facet": True,
+     "vocabulary": "projects"},
+    {"key": "working_time", "type": "number", "unit": "h", "min": 0},
+    {"key": "inert_atmosphere", "type": "boolean", "facet": True},
+]
+DEMO_PROCEDURE_LABELS = {
+    "notebook": ("Lab notebook", "Laborjournal"),
+    "project": ("Project", "Projekt"),
+    "working_time": ("Working time", "Arbeitszeit"),
+    "inert_atmosphere": ("Inert atmosphere", "Schutzgas")}
+# The values of projects.toml in file order, each with its parent and its
+# English and German labels.
+PROJECTS = [
+    ("teaching", None, "Teaching", "Lehre"),
+    ("first-year-practical", "teaching", "First-year practical",
+     "Grundpraktikum"),
+    ("advanced-practical", "teaching", "Advanced practical",
+     "Fortgeschrittenenpraktikum"),
+    ("research", None, "Research", "Forschung"),
+    ("biaryls", "research", "Biaryls", "Biaryle"),
+    ("cinnamates", "research", "Cinnamates", "Zimts\u00e4urederivate"),
+]
+PROJECT_VALUES = ("first-year-practical", "advanced-practical", "biaryls",
+                  "cinnamates")
+PROCEDURE_KEYS = ("notebook", "project", "working_time", "inert_atmosphere")
 # The values of inventory-groups.toml in file order, each with its parent
 # and its English and German labels.
 INVENTORY_GROUPS = [
@@ -517,11 +549,12 @@ def field_violations(collection: Path) -> list[str]:
         if key in DEMO_LABELS and pair != DEMO_LABELS[key]:
             problems.append(f"{key}: labels are {pair}")
     names = sorted(p.name for p in (collection / "vocabularies").glob("*"))
-    if names != ["chemical-classes.toml", "inventory-groups.toml"]:
+    if names != ["chemical-classes.toml", "inventory-groups.toml",
+                 "projects.toml"]:
         problems.append(f"vocabularies/ holds {names}")
     vocabularies = {}
     try:
-        for name in ("chemical-classes", "inventory-groups"):
+        for name in ("chemical-classes", "inventory-groups", "projects"):
             vocabularies[name] = tomllib.loads(
                 (collection / "vocabularies" / f"{name}.toml"
                  ).read_text(encoding="utf-8"))
@@ -582,4 +615,100 @@ def field_violations(collection: Path) -> list[str]:
     for wanted in (True, False, None):
         if wanted not in flags:
             problems.append(f"no compound has in_house {wanted!r}")
+    return problems + procedure_field_violations(
+        collection, settings, vocabularies["projects"])
+
+
+def procedure_values(collection: Path) -> dict[str, list[dict[str, Any]]]:
+    """The declared procedure fields that each procedure file of
+    ``collection`` sets, in either format and language, by ID: one table
+    per file, holding only the keys that the file sets."""
+    found: dict[str, list[dict[str, Any]]] = {}
+    paths = [*sorted((collection / "org" / "procedures").glob("OSDB-*.org")),
+             *sorted((collection / "md" / "procedures").glob("OSDB-*.md"))]
+    for path in paths:
+        sample = read_org(path) if path.suffix == ".org" \
+            else read_markdown(path)
+        found.setdefault(sample.data["id"], []).append(
+            {key: sample.data[key] for key in PROCEDURE_KEYS
+             if key in sample.data})
+    return found
+
+
+def procedure_field_violations(collection: Path, settings: dict[str, Any],
+                               projects: dict[str, dict[str, Any]]
+                               ) -> list[str]:
+    """Return the rules of sample-procedures "Demo collection" for the
+    procedure fields that ``settings``, the vocabulary ``projects`` and
+    the procedures of ``collection`` break."""
+    problems: list[str] = []
+    declared = settings.get("fields", {}).get("procedure", [])
+    if not declared:
+        return ["orgsyndb.toml declares no procedure field"]
+    bare = [{k: v for k, v in d.items() if k not in ("label", "label_de")}
+            for d in declared]
+    if bare != DEMO_PROCEDURE_DECLARATIONS:
+        problems.append(f"procedure declarations are {bare}")
+    labels = {d.get("key"): (d.get("label"), d.get("label_de"))
+              for d in declared}
+    if labels != DEMO_PROCEDURE_LABELS:
+        problems.append(f"procedure labels are {labels}")
+    held = [(value, entry.get("parent"), entry.get("label"),
+             entry.get("label_de")) for value, entry in projects.items()]
+    if held != PROJECTS:
+        problems.append(f"projects holds {held}")
+    by_id = procedure_values(collection)
+    if not by_id:
+        return problems + ["no procedure"]
+    values: dict[str, dict[str, Any]] = {}
+    for number, variants in by_id.items():
+        if any(variant != variants[0] for variant in variants):
+            problems.append(f"{number}: variants set {variants}")
+        values[number] = variants[0]
+        for key in ("notebook", "project"):
+            if key not in variants[0]:
+                problems.append(f"{number}: sets no {key}")
+        notebook = variants[0].get("notebook")
+        if "notebook" in variants[0] and not (
+                isinstance(notebook, str)
+                and re.fullmatch(r"[A-Z]{2}-\d+/\d+", notebook)):
+            problems.append(f"{number}: notebook is {notebook!r}")
+        if variants[0].get("project", PROJECT_VALUES[0]) \
+                not in PROJECT_VALUES:
+            problems.append(f"{number}: project is "
+                            f"{variants[0]['project']!r}")
+        time = variants[0].get("working_time", 0)
+        if isinstance(time, bool) or not isinstance(time, (int, float)) \
+                or time < 0:
+            problems.append(f"{number}: working_time is {time!r}")
+        flag = variants[0].get("inert_atmosphere", False)
+        if not isinstance(flag, bool):
+            problems.append(f"{number}: inert_atmosphere is {flag!r}")
+    notebooks = [v["notebook"] for v in values.values() if "notebook" in v]
+    if len(set(notebooks)) != len(notebooks):
+        problems.append(f"notebooks are {notebooks}")
+    chosen = {v.get("project") for v in values.values()}
+    for value in PROJECT_VALUES:
+        if value not in chosen:
+            problems.append(f"no procedure has project {value!r}")
+    times = [v["working_time"] for v in values.values()
+             if "working_time" in v]
+    if not times or len(times) == len(values):
+        problems.append(f"{len(times)} procedures set working_time")
+    if times and all(float(t).is_integer() for t in times):
+        problems.append("every working_time is a whole number")
+    flags = [v.get("inert_atmosphere") for v in values.values()]
+    for wanted in (False, None):
+        if wanted not in flags:
+            problems.append(f"no procedure has inert_atmosphere {wanted!r}")
+    if not any(v.get("inert_atmosphere") is True and v.get("project") in (
+            "biaryls", "cinnamates") for v in values.values()):
+        problems.append("no procedure of a research project needs an "
+                        "inert atmosphere")
+    if "OSDB-0002" in values and values["OSDB-0002"] != {
+            "notebook": "AE-1/2", "project": "first-year-practical",
+            "working_time": 2.5, "inert_atmosphere": False}:
+        problems.append(f"OSDB-0002 sets {values['OSDB-0002']}")
+    elif "OSDB-0002" not in values:
+        problems.append("OSDB-0002 is missing")
     return problems

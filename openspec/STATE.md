@@ -20,9 +20,6 @@ leaves this file then.
   several pages.
 - **Synthesis sequences written in Org.** Sequences are Markdown only;
   an Org source would need the export to handle `org/sequences/`.
-- **Procedure fields.** A collection declares custom front-matter
-  fields for its procedures, beside those for compounds, with the same
-  types and checks; the metadata panel shows them.
 - **Reaction types as a collection vocabulary.** The reaction types
   move from the application's `site/data/reaction_types.toml` into the
   collection's vocabularies, so each collection names its own.

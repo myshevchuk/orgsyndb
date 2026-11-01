@@ -1,0 +1,27 @@
+{{- /* The values a facet of one declared field lists, given the machine
+values the catalogue's records carry: for a boolean "true", then
+"false", each only when carried, labelled Yes and No; for a choice each
+carried value in the field data's order, with its label and depth, the
+number of its ancestors. Takes a dict of field, an entry of
+site.Data.collection.fields.compound or .procedure; carried, a slice of
+the machine values (field-machine-values.html) of every record; and
+own, a value of the choice field left out, whose descendants each stand
+one depth step less, or "" for none. Returns a slice of dicts of key
+and label, and depth for a choice. */ -}}
+{{- $field := .field -}}
+{{- $carried := .carried -}}
+{{- $own := .own -}}
+{{- $entries := slice -}}
+{{- if eq $field.type "boolean" -}}
+{{- range slice (slice "true" "boolean_yes") (slice "false" "boolean_no") }}{{ if in $carried (index . 0) }}{{ $entries = $entries | append (dict "key" (index . 0) "label" (T (index . 1))) }}{{ end }}{{ end -}}
+{{- else -}}
+{{- range $field.order -}}
+{{- if and (in $carried .) (ne . $own) -}}
+{{- $value := index $field.values . -}}
+{{- $depth := len $value.ancestors -}}
+{{- if and $own (in $value.ancestors $own) }}{{ $depth = sub $depth 1 }}{{ end -}}
+{{- $entries = $entries | append (dict "key" . "label" $value.label "depth" $depth) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- return $entries -}}

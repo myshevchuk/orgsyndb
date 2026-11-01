@@ -10,6 +10,7 @@
 #+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
 #+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("esterification")
 #+HUGO_CUSTOM_FRONT_MATTER: :scale "50 mmol"
+#+HUGO_CUSTOM_FRONT_MATTER: :notebook "AE-1/3" :project "first-year-practical" :working_time 4
 #+HUGO_CUSTOM_FRONT_MATTER: :substrates '("isopentyl-alcohol" "acetic-acid")
 #+HUGO_CUSTOM_FRONT_MATTER: :hazards '("Isopentyl alcohol: flammable liquid and vapour, harmful if inhaled, causes skin and serious eye irritation" "Glacial acetic acid: flammable, causes severe skin burns and eye damage" "Concentrated sulfuric acid: causes severe skin burns and eye damage" "Isopentyl acetate: flammable liquid and vapour")
 #+HUGO_CUSTOM_FRONT_MATTER: :references '("Furniss, B. S.; Hannaford, A. J.; Smith, P. W. G.; Tatchell, A. R. Vogel's Textbook of Practical Organic Chemistry, 5th ed.; Longman: Harlow, 1989.")

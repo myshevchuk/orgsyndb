@@ -810,21 +810,23 @@ def fields_data(settings: Path, language: str) -> dict[str, Any]:
     """Return the field data that the site reads for the collection whose
     settings file is SETTINGS, in the site's LANGUAGE.
 
-    The result is a table whose one key, ``compound``, lists a table per
+    The result is a table of two keys. ``compound`` lists a table per
     declared compound field, in declared order: its ``key``, ``type``
     and ``column``; its ``label`` as LANGUAGE shows it; ``facet`` for a
     boolean or choice field and ``search`` for a text field; the
     ``unit`` of a number field that declares one; and for a choice field
-    ``multiple``, ``tabs``, ``values`` and ``order``. ``values`` maps
-    every value of the field's vocabulary to its shown ``label``, its
-    ``path``, the shown labels of its ancestors, outermost first, then
-    its own, and its ``ancestors``, the keys of its ancestors, outermost
-    first.
-    ``order`` lists every value's key depth first: each top-level value
-    in file order, followed by the values filed under it in the same
-    order, recursively. A German label replaces the English one on a
-    German site where one is given. A SETTINGS that does not exist gives
-    ``{"compound": []}``. Raises ``validate.ConfigError`` when the
+    ``multiple``, ``tabs``, ``values`` and ``order``. ``procedure``
+    lists a table per declared procedure field, in declared order, with
+    the same keys except ``column``, ``search`` and ``tabs``.
+    ``values`` maps every value of the field's vocabulary to its shown
+    ``label``, its ``path``, the shown labels of its ancestors,
+    outermost first, then its own, and its ``ancestors``, the keys of
+    its ancestors, outermost first. ``order`` lists every value's key
+    depth first: each top-level value in file order, followed by the
+    values filed under it in the same order, recursively. A German
+    label replaces the English one on a German site where one is given.
+    A SETTINGS that does not exist gives ``{"compound": [],
+    "procedure": []}``. Raises ``validate.ConfigError`` when the
     declarations or their vocabularies break a rule of
     ``validate.load_fields``.
     """
@@ -847,21 +849,23 @@ def fields_data(settings: Path, language: str) -> dict[str, Any]:
                 order += [value, *below(terms, value)]
         return order
 
-    compound = []
-    for field in validate.load_fields(Path(settings), must_exist=False):
+    def describe(field: validate.Declaration,
+                 compound: bool) -> dict[str, Any]:
         entry: dict[str, Any] = {
             "key": field.key, "type": field.type,
-            "label": shown(field.label, field.label_de),
-            "column": field.column}
+            "label": shown(field.label, field.label_de)}
+        if compound:
+            entry["column"] = field.column
         if field.type in ("boolean", "choice"):
             entry["facet"] = field.facet
-        if field.type == "text":
+        if compound and field.type == "text":
             entry["search"] = field.search
         if field.unit is not None:
             entry["unit"] = field.unit
         if field.type == "choice":
             entry["multiple"] = field.multiple
-            entry["tabs"] = field.tabs
+            if compound:
+                entry["tabs"] = field.tabs
             labels = {value: shown(term.label, term.label_de)
                       for value, term in field.terms.items()}
             entry["values"] = {}
@@ -872,8 +876,11 @@ def fields_data(settings: Path, language: str) -> dict[str, Any]:
                     "path": [labels[key] for key in [*keys, value]],
                     "ancestors": keys}
             entry["order"] = below(field.terms, None)
-        compound.append(entry)
-    return {"compound": compound}
+        return entry
+
+    fields = validate.load_fields(Path(settings), must_exist=False)
+    return {"compound": [describe(f, True) for f in fields.compound],
+            "procedure": [describe(f, False) for f in fields.procedure]}
 
 
 def hugo_overlay(site: Path, collection: Path, language: str) -> str:

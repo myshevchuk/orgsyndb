@@ -14,6 +14,7 @@ import unittest
 import urllib.parse
 
 import catalogue_support as cs
+import field_support as fs
 import pipeline_support as ps
 from pipeline_support import Content
 
@@ -63,7 +64,8 @@ class PlainCatalogueTests(cs.CatalogueCase):
         self.assertEqual(
             [g.attrs.get("data-facet")
              for g in page.find_all("details", "facet")],
-            ["type", "kind", "status", "tag", "author"])
+            ["type", "kind", "status", "project", "inert_atmosphere",
+             "tag", "author"])
         group = page.find("details", "facet", data_facet="kind")
         self.assertIn("open", group.attrs)
         self.assertNotIn("data-fixed", group.attrs)
@@ -75,6 +77,90 @@ class PlainCatalogueTests(cs.CatalogueCase):
             [b.attrs.get("name") for b in group.find_all("input")],
             ["kind", "kind"])
         self.assertEqual(group.find_all("a"), [])
+
+    def test_declared_facets_in_the_html(self) -> None:
+        """Scenario: Declared facets in the HTML."""
+        pages = {relative: self.page(relative) for relative in (
+            "procedures/index.html", "general-procedures/index.html",
+            "tags/cinnamate/index.html")}
+        published = self.published()
+        project, atmosphere = self.facet_fields()
+        self.assertEqual((project.key, atmosphere.key),
+                         ("project", "inert_atmosphere"))
+        for relative, page in pages.items():
+            with self.subTest(page=relative):
+                groups = page.find_all("details", "facet")
+                self.assertEqual(
+                    [g.attrs.get("data-facet") for g in groups],
+                    ["type", "kind", "status", "project",
+                     "inert_atmosphere", "tag", "author"])
+                for group, label in zip(groups[3:5],
+                                        ("Project", "Inert atmosphere")):
+                    self.assertEqual(group.find("summary").norm(), label)
+                    self.assertIn("open", group.attrs)
+                    self.assertEqual(group.find_all("a"), [])
+                    self.assertNotIn("data-fixed", group.attrs)
+                entries = fs.facet_entries(project, published, "en")
+                self.assertEqual(
+                    ps.facet_values(page, "project"),
+                    [(value, label) for value, label, _ in entries])
+                self.check_depths(page, project)
+                self.assertEqual(
+                    [(value, depth) for value, _, depth in entries
+                     if value in ("teaching", "first-year-practical")],
+                    [("teaching", 0), ("first-year-practical", 1)])
+                self.assertEqual(
+                    ps.facet_values(page, "inert_atmosphere"),
+                    [(value, label) for value, label, _ in
+                     fs.facet_entries(atmosphere, published, "en")])
+                self.check_depths(page, atmosphere)
+
+    def test_a_declared_choice_lists_the_values_in_use_and_their_parents(
+            self) -> None:
+        """Scenario: Declared facets in the HTML (values and
+        ancestors)."""
+        page = self.page("procedures/index.html")
+        self.assertEqual(
+            ps.facet_values(page, "project"),
+            [("teaching", "Teaching"),
+             ("first-year-practical", "First-year practical"),
+             ("advanced-practical", "Advanced practical"),
+             ("research", "Research"), ("biaryls", "Biaryls"),
+             ("cinnamates", "Cinnamates")])
+        self.assertEqual(
+            ps.facet_values(page, "inert_atmosphere"),
+            [("true", "Yes"), ("false", "No")])
+
+    def test_rows_carry_the_declared_facets(self) -> None:
+        """Scenario: Rows carry the declared facets."""
+        page = self.page("procedures/index.html")
+        by_id = self.published()
+        rows = ps.catalogue_rows(page)
+        self.assertEqual(len(rows), len(by_id))
+        project, atmosphere = self.facet_fields()
+        for row in rows:
+            data = by_id[row.attrs["data-id"]]
+            with self.subTest(procedure=row.attrs["data-id"]):
+                for field in (project, atmosphere):
+                    self.assertEqual(
+                        sorted(json.loads(
+                            row.attrs[f"data-{field.key}"])),
+                        sorted(fs.values_set(field, data)))
+        second = page.find("tr", data_id="OSDB-0002")
+        self.assertEqual(
+            sorted(json.loads(second.attrs["data-project"])),
+            ["first-year-practical", "teaching"])
+        self.assertEqual(
+            json.loads(second.attrs["data-inert_atmosphere"]), ["false"])
+        seventh = page.find("tr", data_id="OSDB-0007")
+        self.assertEqual(
+            sorted(json.loads(seventh.attrs["data-project"])),
+            ["cinnamates", "research"])
+        self.assertEqual(
+            json.loads(seventh.attrs["data-inert_atmosphere"]), ["true"])
+        third = page.find("tr", data_id="OSDB-0003")
+        self.assertEqual(
+            json.loads(third.attrs["data-inert_atmosphere"]), [])
 
     def test_term_pages_carry_the_kind_facet_too(self) -> None:
         """Scenario: Controls in the HTML (term pages)."""
@@ -152,7 +238,7 @@ class PlainCatalogueTests(cs.CatalogueCase):
                 self.assertIn("disabled", boxes[0].attrs)
                 self.assertEqual(ps.facet_values(page, facet),
                                  [(key, name)])
-                for other in ps.FACETS:
+                for other in self.facet_names():
                     if other != facet:
                         self.assertEqual(ps.facet_values(page, other),
                                          ps.facet_values(home, other))
@@ -359,6 +445,13 @@ class CatalogueFixtureTests(DetailsChecks, cs.CatalogueCase):
                                  ps.rfc3339(item.data["date"]))
                 self.assertEqual(row.attrs.get("data-modified"),
                                  ps.rfc3339(item.data["lastmod"]))
+        for row in rows:
+            self.check_declared_row_data(row, by_id[row.attrs["data-id"]])
+        for number in range(1, 7):
+            row = page.find("tr", data_id=f"OSDB-092{number}")
+            for key in ("project", "inert_atmosphere"):
+                self.assertEqual(json.loads(row.attrs[f"data-{key}"]), [],
+                                 f"OSDB-092{number} {key}")
         authors = json.loads(page.find("tr", data_id="OSDB-0921")
                              .attrs["data-author"])
         self.assertEqual(authors, ["ä. müller", "a. example"])

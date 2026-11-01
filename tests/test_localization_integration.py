@@ -26,6 +26,7 @@ FOOTER = (r"^OrgSynDB · interne Vorschriften · Stand "
 BANNER = "Beispieldaten – Mengenangaben nicht experimentell überprüft."
 PANEL_LABELS = ["Produkt", "Summenformel", "Molmasse", "CAS", "SMILES",
                 "Ausgangsstoffe", "Reaktionstyp", "Schlagwörter", "Autoren",
+                "Laborjournal", "Projekt", "Arbeitszeit", "Schutzgas",
                 "Erstellt", "Geändert", "Vorstufen", "Synthesewege"]
 TITLES = {"procedures/index.html": "Vorschriften",
           "general-procedures/index.html": "Allgemeine Vorschriften",
@@ -189,6 +190,19 @@ class GermanSiteTests(GermanCase):
                          ("Kopieren", "Kopiert"))
         self.assertIsNotNone(page.heading("Reagenzien"))
 
+    def test_declared_fields_in_the_german_panel(self) -> None:
+        """Scenario: Declared fields in the German panel."""
+        page = self.page("procedures/osdb-0002/index.html")
+        pairs = page.definition_pairs(page.find("dl", "metadata"))
+        labels = [p.label for p in pairs]
+        first = labels.index("Autoren") + 1
+        self.assertEqual(
+            [(p.label, p.definition.norm()) for p in pairs[first:first + 4]],
+            [("Laborjournal", "AE-1/2"),
+             ("Projekt", "Lehre › Grundpraktikum"),
+             ("Arbeitszeit", "2,5 h"), ("Schutzgas", "Nein")])
+        self.assertEqual(labels[first + 4], "Erstellt")
+
     def test_german_labels_for_reaction_types(self) -> None:
         """Scenario: German labels for reaction types."""
         page = self.page("reaction_types/aldol-condensation/index.html")
@@ -222,6 +236,19 @@ class GermanSiteTests(GermanCase):
             ["Entwurf", "Geprüft", "Zurückgezogen"])
         self.assertEqual(self.table_ids(page), sorted(
             item.id for item in self.content()))
+        for key, label in (("project", "Projekt"),
+                           ("inert_atmosphere", "Schutzgas")):
+            group = page.find("details", "facet", data_facet=key)
+            self.assertEqual(group.find("summary").norm(), label)
+        self.assertEqual(
+            ps.facet_values(page, "project"),
+            [("teaching", "Lehre"),
+             ("first-year-practical", "Grundpraktikum"),
+             ("advanced-practical", "Fortgeschrittenenpraktikum"),
+             ("research", "Forschung"), ("biaryls", "Biaryle"),
+             ("cinnamates", "Zimtsäurederivate")])
+        self.assertEqual(ps.facet_values(page, "inert_atmosphere"),
+                         [("true", "Ja"), ("false", "Nein")])
 
     def test_german_general_procedures_view(self) -> None:
         """Scenario: German page titles (the general procedures)."""
@@ -275,8 +302,15 @@ class GermanSiteTests(GermanCase):
         self.assertEqual(
             list(panel),
             ["Produkte", "Ausgangsstoffe", "Reaktionstyp", "Schlagwörter",
-             "Autoren", "Erstellt", "Geändert", "Vorstufen",
+             "Autoren", "Laborjournal", "Projekt", "Arbeitszeit",
+             "Schutzgas", "Erstellt", "Geändert", "Vorstufen",
              "Synthesewege"])
+        self.assertEqual(
+            [(label, panel[label].norm()) for label in
+             ("Laborjournal", "Projekt", "Arbeitszeit", "Schutzgas")],
+            [("Laborjournal", "CE-3/1"),
+             ("Projekt", "Lehre › Fortgeschrittenenpraktikum"),
+             ("Arbeitszeit", "3,5 h"), ("Schutzgas", "Nein")])
 
     def test_german_term_page(self) -> None:
         """Scenario: German catalogue and home page (term page)."""

@@ -1,11 +1,12 @@
-{{- /* A compound's value of one declared field as plain text in the
+{{- /* A record's value of one declared field as plain text in the
 current language: a text as it is; a number with the language's decimal
 separator (decimal.html), followed by a space and the field's unit when
 it declares one; a boolean as Yes or No; a choice as each value's path,
 its labels joined by " › ", when page is true, else as each value's own
-label, several values joined by ", " in the compound's order. Takes a
-dict of field, an entry of site.Data.collection.fields.compound, value
-and page. Returns a string, so that the caller escapes it once. */ -}}
+label, several values joined by ", " in the record's order. Takes a
+dict of field, an entry of site.Data.collection.fields.compound or
+.procedure, value and page. Returns a string, so that the caller escapes
+it once. */ -}}
 {{- $field := .field -}}
 {{- $text := "" -}}
 {{- if eq $field.type "text" -}}

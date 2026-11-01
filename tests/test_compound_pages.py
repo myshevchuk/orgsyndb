@@ -1546,14 +1546,14 @@ class AncestorBesideValueTests(CompoundCase):
 
 class NoFacetFieldTests(CompoundCase):
     """The test collection in English, without a `facet = true` line in
-    its `orgsyndb.toml`."""
+    its `orgsyndb.toml`, those of its procedure fields included."""
 
     @classmethod
     def prepare(cls) -> None:
         path = cls.sandbox.root / "orgsyndb.toml"
         lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
         kept = [ln for ln in lines if ln.strip() != "facet = true"]
-        assert len(kept) == len(lines) - 3, "not three facet lines"
+        assert len(kept) == len(lines) - 5, "not five facet lines"
         path.write_text("".join(kept), encoding="utf-8")
 
     def test_the_catalogue_has_no_facets(self) -> None:
@@ -1629,7 +1629,7 @@ class NoFieldsTests(CompoundCase):
         path = self.sandbox.root / "build" / "data" / "fields.json"
         self.assertTrue(path.is_file(), "build/data/fields.json is missing")
         self.assertEqual(json.loads(path.read_text(encoding="utf-8")),
-                         {"compound": []})
+                         {"compound": [], "procedure": []})
 
     def test_the_pages_show_the_built_in_facts_only(self) -> None:
         """Requirement: Compound pages (one pair for each field the

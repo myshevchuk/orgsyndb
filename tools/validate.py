@@ -13,11 +13,11 @@ procedures name against the compounds it defines. The sequences
 directory holds synthesis sequences, Markdown files whose steps name
 procedures of the content roots; the validator checks that each step
 exists and that the steps chain. The collection's settings file
-declares further compound fields, whose values each compound file is
-checked against, and names the vocabularies of its choice fields. The
-validator reads no Org source: an
-Org procedure reaches it only as its export, and the export checks the
-Org source itself. Each problem is printed to stdout
+declares further compound and procedure fields, whose values each
+compound file and each procedure is checked against, and names the
+vocabularies of its choice fields. The validator reads no Org source:
+an Org procedure reaches it only as its export, and the export checks
+the Org source itself. Each problem is printed to stdout
 as ``<path>:<field>: <severity>: <message>``, followed by a summary line
 on stderr. The exit status is 0 when no error was found, 1 when at
 least one was, and 2 on a usage or configuration error.
@@ -67,10 +67,24 @@ TYPE_OPTIONS = {
     "boolean": ("facet",),
     "choice": ("vocabulary", "multiple", "facet", "tabs"),
 }
-# The keys no field may take, because the compound catalogue names its
-# rows' record keys and its address parameters with them.
+# The keys no compound field may take, because the compound catalogue
+# names its rows' record keys and its address parameters with them.
 RESERVED_FIELD_KEYS = ("id", "title", "created", "modified", "text", "q",
                        "sort", "view")
+# The options a procedure field does not take.
+PROCEDURE_WITHHELD_OPTIONS = ("column", "search", "tabs")
+# The front-matter keys Hugo reads for itself, beyond those the procedure
+# schema already names, and the weight it reads for each taxonomy.
+HUGO_FRONT_MATTER_KEYS = (
+    "build", "cascade", "expirydate", "headless", "iscjklanguage",
+    "keywords", "kind", "lang", "layout", "linktitle", "markup", "menu",
+    "menus", "modified", "outputs", "params", "path", "pubdate",
+    "publishdate", "published", "resources", "sitemap", "sites", "summary",
+    "translationkey", "type", "unpublishdate", "authors_weight",
+    "reaction_types_weight", "tags_weight")
+# The record keys and address parameters of the procedure catalogue that
+# neither the procedure schema nor Hugo names.
+PROCEDURE_CATALOGUE_KEYS = ("tag", "created", "text", "q", "sort", "view")
 TERM_KEYS = ("label", "label_de", "parent")
 STATUSES = ("draft", "checked", "retired")
 # The languages a procedure may be written in. A file name may carry one
@@ -111,7 +125,9 @@ class Kind(NamedTuple):
     ``noun`` names the kind in messages, ``prefix`` is the letters
     before the four digits of an ID, ``example`` a short slug that
     file-name messages show, and ``shared`` the front-matter keys that
-    every variant of one ID must agree on.
+    every variant of one ID must agree on. ``PROCEDURE`` lists the keys
+    of the procedure schema only; a run adds the keys of the declared
+    procedure fields (``with_declared``).
     """
 
     noun: str
@@ -253,6 +269,15 @@ def parse_front_matter(text: str) -> FrontMatter | Problem:
 # Field checks on one content file
 
 
+class Fields(NamedTuple):
+    """The fields a collection declares, each tuple in declared order:
+    ``compound`` those of ``fields.compound``, ``procedure`` those of
+    ``fields.procedure``."""
+
+    compound: tuple[Declaration, ...] = ()
+    procedure: tuple[Declaration, ...] = ()
+
+
 @dataclass
 class Context:
     """Settings shared by the checks of one run."""
@@ -261,7 +286,7 @@ class Context:
     static_dir: Path
     zone: dt.tzinfo
     compounds: frozenset[str] = frozenset()
-    fields: tuple[Declaration, ...] = ()
+    fields: Fields = Fields()
 
 
 def check_string(name: str, value: object) -> list[Problem]:
@@ -660,6 +685,8 @@ def check_extra_key(key: str, value: object) -> list[Problem]:
     return [warning(key, "unknown field")]
 
 
+# The keys outside the schema that check_extra_key tolerates or rejects.
+EXTRA_KEYS = ("draft", "description", "aliases", "weight", "author", "url")
 REQUIRED_KEYS = ("id", "slug", "title", "date", "lastmod", "authors",
                  "status", "reaction_types", "tags", "products", "scale",
                  "hazards")
@@ -674,10 +701,12 @@ def check_fields(data: dict[str, Any], ctx: Context) -> list[Problem]:
     """Check every front-matter key of one content file on its own.
 
     Covers required and optional fields, the ``lastmod >= date``
-    ordering, and keys outside the schema. A procedure with ``scope``
-    needs no ``products``, and its top-level ``products`` or
-    ``substrates`` are errors. Checks that need other files or the file
-    name are not included.
+    ordering, the procedure fields that CTX declares, and keys outside
+    the schema; the key of a declared field is no key outside the
+    schema. A procedure with ``scope`` needs no ``products``, and its
+    top-level ``products`` or ``substrates`` are errors. Checks that
+    need other files or the file name, ``unique`` among them, are not
+    included.
     """
     found: list[Problem] = []
     general = "scope" in data
@@ -733,8 +762,11 @@ def check_fields(data: dict[str, Any], ctx: Context) -> list[Problem]:
                 found += check_ai_model(value)
             case "language":
                 found += check_language(value)
+    found += check_declared(data, ctx.fields.procedure)
+    declared = {field.key for field in ctx.fields.procedure}
     for key, value in data.items():
-        if key not in REQUIRED_KEYS and key not in OPTIONAL_KEYS:
+        if (key not in REQUIRED_KEYS and key not in OPTIONAL_KEYS
+                and key not in declared):
             found += check_extra_key(key, value)
     return found
 
@@ -966,6 +998,12 @@ def group_by_id(files: Iterable[ContentFile],
     return by_id
 
 
+def with_declared(kind: Kind, fields: Iterable[Declaration]) -> Kind:
+    """Return KIND with the keys of the declared FIELDS added, after its
+    own, to the keys its variants share."""
+    return kind._replace(shared=kind.shared + tuple(f.key for f in fields))
+
+
 def check_cross_file(files: Sequence[ContentFile],
                      kind: Kind = PROCEDURE) -> list[ContentFile]:
     """Add duplicate-ID and variant problems to FILES, of KIND.
@@ -1043,7 +1081,8 @@ class Term(NamedTuple):
 
 
 class Declaration(NamedTuple):
-    """A compound field that a collection declares, its defaults applied.
+    """A compound or procedure field that a collection declares, its
+    defaults applied.
 
     ``type`` is one of FIELD_TYPES. An option the type does not take
     holds None, or False for a boolean option: ``pattern``, ``unique``
@@ -1109,7 +1148,8 @@ def check_choice(field: Declaration, value: object) -> list[Problem]:
 
 
 def check_field_value(field: Declaration, value: object) -> list[Problem]:
-    """Check VALUE, set by a compound file, against the declared FIELD.
+    """Check VALUE, set by a compound or procedure file, against the
+    declared FIELD.
 
     Problems are reported under the field's key. A value of the wrong
     type draws that one error and no other.
@@ -1141,9 +1181,9 @@ def check_field_value(field: Declaration, value: object) -> list[Problem]:
 
 def check_declared(data: dict[str, Any],
                    fields: Iterable[Declaration]) -> list[Problem]:
-    """Check the values that the parsed compound file DATA sets for the
-    declared FIELDS; a missing value is an error only for a field
-    declared ``required``."""
+    """Check the values that the parsed compound or procedure file DATA
+    sets for the declared FIELDS; a missing value is an error only for a
+    field declared ``required``."""
     found: list[Problem] = []
     for field in fields:
         if field.key in data:
@@ -1157,12 +1197,12 @@ def check_unique(fields: Iterable[Declaration],
                  parsed: Sequence[tuple[str, str, dict[str, Any]]]
                  ) -> list[tuple[str, Problem]]:
     """Compare the values of the FIELDS declared ``unique`` across the
-    compound files PARSED, each given as its path, its key and its
-    table.
+    files PARSED, each given as its path, the name that stands for it in
+    messages (a compound's key, a procedure's ID) and its table.
 
     Only a value that passes the checks of its field is compared. Each
     file that sets a value some other file also sets gets an error,
-    with its path, that names the keys of the other compounds.
+    with its path, that names the other files by their names.
     """
     problems: list[tuple[str, Problem]] = []
     for field in fields:
@@ -1175,8 +1215,8 @@ def check_unique(fields: Iterable[Declaration],
                 holders.setdefault(data[field.key], []).append((path, key))
         for value, owners in holders.items():
             shown = f'"{value}"' if isinstance(value, str) else str(value)
-            for path, key in owners if len(owners) > 1 else ():
-                others = ", ".join(k for _, k in owners if k != key)
+            for path, _ in owners if len(owners) > 1 else ():
+                others = ", ".join(k for p, k in owners if p != path)
                 problems.append((path, error(
                     field.key, f"{shown} is also set by {others}")))
     return problems
@@ -1723,23 +1763,57 @@ def declared_bound(entry: dict[str, Any], option: str,
     return value
 
 
+class Entity(NamedTuple):
+    """The declaration rules of the fields of one kind of record.
+
+    ``name`` is the record's table under ``fields``, as in
+    ``fields.compound``. ``reserved`` pairs each group of keys that no
+    field of the entity may take with the reason a message gives for
+    it, and ``withheld`` lists the declaration options the entity's
+    fields do not take, whatever their type.
+    """
+
+    name: str
+    reserved: tuple[tuple[tuple[str, ...], str], ...]
+    withheld: tuple[str, ...]
+
+
+COMPOUND_ENTITY = Entity("compound", (
+    (COMPOUND_REQUIRED_KEYS + COMPOUND_OPTIONAL_KEYS,
+     "is a built-in compound key"),
+    (RESERVED_FIELD_KEYS,
+     "is reserved by the compound catalogue; the reserved keys are "
+     f"{', '.join(RESERVED_FIELD_KEYS)}")), ())
+PROCEDURE_ENTITY = Entity("procedure", (
+    (REQUIRED_KEYS + OPTIONAL_KEYS + EXTRA_KEYS,
+     "is a key of the procedure schema"),
+    (HUGO_FRONT_MATTER_KEYS, "is a front-matter key that Hugo reads"),
+    (PROCEDURE_CATALOGUE_KEYS,
+     "is reserved by the procedure catalogue; the reserved keys are "
+     f"{', '.join(PROCEDURE_CATALOGUE_KEYS)}")), PROCEDURE_WITHHELD_OPTIONS)
+# The entities whose fields a settings file declares, in the order the
+# tables under ``fields`` are read.
+ENTITIES = (COMPOUND_ENTITY, PROCEDURE_ENTITY)
+
+
 def read_declaration(entry: dict[str, Any], number: int, settings: Path,
                      taken: Iterable[str],
-                     vocabularies: dict[str, dict[str, Term]]
-                     ) -> Declaration:
-    """Check the declaration ENTRY, the NUMBERth table of
-    ``fields.compound`` in the settings file SETTINGS, and return it.
+                     vocabularies: dict[str, dict[str, Term]],
+                     entity: Entity = COMPOUND_ENTITY) -> Declaration:
+    """Check the declaration ENTRY, the NUMBERth table of the ENTITY's
+    ``fields.<name>`` in the settings file SETTINGS, and return it.
 
-    TAKEN holds the keys of the declarations before it. A vocabulary
-    the declaration names is read from ``vocabularies/`` beside
-    SETTINGS, unless VOCABULARIES, a cache from vocabulary name to its
-    values that this call extends, already holds it. Raises ConfigError
-    when the declaration breaks a rule of a field declaration or its
-    vocabulary breaks one of a vocabulary; the message names SETTINGS or
-    the vocabulary file, the field's key once it is valid, and the
-    offending key or value.
+    TAKEN holds the keys of the declarations of ENTITY before it. A
+    vocabulary the declaration names is read from ``vocabularies/``
+    beside SETTINGS, unless VOCABULARIES, a cache from vocabulary name
+    to its values that this call extends, already holds it. Raises
+    ConfigError when the declaration breaks a rule of a field
+    declaration or of ENTITY, or its vocabulary breaks one of a
+    vocabulary; the message names SETTINGS or the vocabulary file, the
+    field's key once it is valid, and the offending key or value, and a
+    message about the key names the table ``fields.<name>``.
     """
-    where = f"{settings}: declaration {number} of fields.compound"
+    where = f"{settings}: declaration {number} of fields.{entity.name}"
     if "key" not in entry:
         raise ConfigError(f"{where}: key missing")
     key = entry["key"]
@@ -1747,13 +1821,9 @@ def read_declaration(entry: dict[str, Any], number: int, settings: Path,
         raise ConfigError(f"{where}: key {key!r} must be lowercase letters "
                           "and digits, words joined by single underscores, "
                           "starting with a letter, e.g. item_number")
-    if key in COMPOUND_REQUIRED_KEYS + COMPOUND_OPTIONAL_KEYS:
-        raise ConfigError(f"{where}: key {key!r} is a built-in compound "
-                          "key")
-    if key in RESERVED_FIELD_KEYS:
-        raise ConfigError(f"{where}: key {key!r} is reserved by the "
-                          "compound catalogue; the reserved keys are "
-                          f"{', '.join(RESERVED_FIELD_KEYS)}")
+    for keys, reason in entity.reserved:
+        if key in keys:
+            raise ConfigError(f"{where}: key {key!r} {reason}")
     if key.endswith("_de"):
         raise ConfigError(f"{where}: key {key!r} ends in _de, which is "
                           "reserved")
@@ -1768,6 +1838,9 @@ def read_declaration(entry: dict[str, Any], number: int, settings: Path,
         raise ConfigError(f"{where}: type {kind!r} is not one of "
                           f"{', '.join(FIELD_TYPES)}")
     for option in entry:
+        if option in entity.withheld:
+            raise ConfigError(f"{where}: a {entity.name} field does not "
+                              f"take {option}")
         if option in FIELD_OPTIONS + TYPE_OPTIONS[kind]:
             continue
         if any(option in options for options in TYPE_OPTIONS.values()):
@@ -1821,46 +1894,55 @@ def read_declaration(entry: dict[str, Any], number: int, settings: Path,
         tabs=declared_flag(entry, "tabs", where))
 
 
-def load_fields(path: Path,
-                must_exist: bool = True) -> tuple[Declaration, ...]:
-    """Load the compound fields that the collection settings file PATH
-    declares, in declared order.
+def load_fields(path: Path, must_exist: bool = True) -> Fields:
+    """Load the compound and procedure fields that the collection
+    settings file PATH declares, each in declared order.
 
     A settings file without ``fields`` declares no field, and so does a
-    PATH that does not exist when MUST_EXIST is false. Vocabularies
-    resolve against ``vocabularies/`` beside PATH, and only those a
-    declaration names are read. Raises ConfigError when PATH is missing
-    though MUST_EXIST, when it breaks a rule of read_settings, when
-    ``fields`` is not a table whose only key, ``compound``, holds an
-    array of tables that read_declaration accepts, or when more than one
-    declaration sets ``tabs = true``.
+    PATH that does not exist when MUST_EXIST is false; a ``fields``
+    without ``compound`` or ``procedure`` declares no field of that
+    entity. Vocabularies resolve against ``vocabularies/`` beside PATH;
+    only those a declaration names are read, each once, whichever
+    entities name it. Raises ConfigError when PATH is missing though
+    MUST_EXIST, when it breaks a rule of read_settings, when ``fields``
+    is not a table whose keys, ``compound`` and ``procedure``, each hold
+    an array of tables that read_declaration accepts for its entity, or
+    when more than one compound declaration sets ``tabs = true``.
     """
     if not must_exist and not path.exists():
-        return ()
+        return Fields()
+    names = [entity.name for entity in ENTITIES]
+    tables = " and ".join(f"[[fields.{name}]]" for name in names)
     fields = read_settings(path).get("fields", {})
     if not isinstance(fields, dict):
         raise ConfigError(f"{path}: fields must be a table holding the "
-                          "declarations [[fields.compound]]")
-    unknown = sorted(set(fields) - {"compound"})
+                          f"declarations {tables}")
+    unknown = sorted(set(fields) - set(names))
     if unknown:
         raise ConfigError(f"{path}: unknown key "
                           f"{', '.join(f'fields.{k}' for k in unknown)}; "
-                          "only fields.compound is allowed")
-    entries = fields.get("compound", [])
-    if not isinstance(entries, list) or not all(
-            isinstance(entry, dict) for entry in entries):
-        raise ConfigError(f"{path}: fields.compound must be an array of "
-                          "tables, each written [[fields.compound]]")
-    declared: list[Declaration] = []
+                          f"only {' and '.join(f'fields.{n}' for n in names)}"
+                          " are allowed")
     vocabularies: dict[str, dict[str, Term]] = {}
-    for number, entry in enumerate(entries, start=1):
-        declared.append(read_declaration(
-            entry, number, path, [d.key for d in declared], vocabularies))
-    tabs = [d.key for d in declared if d.tabs]
+    loaded: dict[str, tuple[Declaration, ...]] = {}
+    for entity in ENTITIES:
+        entries = fields.get(entity.name, [])
+        if not isinstance(entries, list) or not all(
+                isinstance(entry, dict) for entry in entries):
+            raise ConfigError(f"{path}: fields.{entity.name} must be an "
+                              "array of tables, each written "
+                              f"[[fields.{entity.name}]]")
+        declared: list[Declaration] = []
+        for number, entry in enumerate(entries, start=1):
+            declared.append(read_declaration(
+                entry, number, path, [d.key for d in declared],
+                vocabularies, entity))
+        loaded[entity.name] = tuple(declared)
+    tabs = [d.key for d in loaded["compound"] if d.tabs]
     if len(tabs) > 1:
         raise ConfigError(f"{path}: fields {', '.join(tabs)} each set tabs "
                           "= true; at most one field may")
-    return tuple(declared)
+    return Fields(**loaded)
 
 
 def load_zone() -> dt.tzinfo:
@@ -1960,9 +2042,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--settings", type=Path, default=None, metavar="FILE",
         help="collection settings file, whose field declarations the "
-        "compound files are checked against; its vocabularies are read "
-        "from vocabularies/ beside it (default: orgsyndb.toml in the "
-        "working directory; a missing default file declares no field)")
+        "compound files and the procedures are checked against; its "
+        "vocabularies are read from vocabularies/ beside it (default: "
+        "orgsyndb.toml in the working directory; a missing default file "
+        "declares no field)")
     parser.add_argument(
         "--static-dir", type=Path, default=DEFAULT_STATIC_DIR,
         metavar="DIR",
@@ -2005,8 +2088,12 @@ def run(content_roots: Sequence[str], registry: str, sequences: str,
     The compound keys of procedures and sequences resolve against the
     compounds the registry defines, which replace those of CTX, and the
     steps of the sequences against the procedures of the content roots.
+    The variants of a procedure share the values of its declared fields,
+    and a ``unique`` procedure field is compared across the files that
+    stand for their IDs.
     """
-    examined = examine_registry(registry, ctx.static_dir, ctx.fields)
+    examined = examine_registry(registry, ctx.static_dir,
+                                ctx.fields.compound)
     ctx = replace(ctx, compounds=examined.compounds)
     problems = list(examined.problems)
     content: list[ContentFile] = []
@@ -2016,7 +2103,11 @@ def run(content_roots: Sequence[str], registry: str, sequences: str,
                 problems.append((entry.path, entry.problem))
             else:
                 content.append(examine_content(entry, ctx))
-    check_cross_file(content)
+    standing = check_cross_file(
+        content, with_declared(PROCEDURE, ctx.fields.procedure))
+    problems += check_unique(ctx.fields.procedure, [
+        (item.path, item.data["id"], item.data) for item in standing
+        if item.data is not None and is_valid_id(item.data.get("id"))])
     for item in content:
         problems += [(item.path, p) for p in item.problems]
     found, count = examine_sequences(sequences, ctx,
