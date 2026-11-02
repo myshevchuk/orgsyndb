@@ -271,7 +271,8 @@ def run_build(collection: Path) -> list[tuple[Path, dict]]:
             (pipeline.FIELDS_STAGED,
              pipeline.fields_data(collection / MARKER, language)),
             (pipeline.REACTION_TYPES_STAGED,
-             pipeline.reaction_types_data(collection / MARKER, language))):
+             pipeline.reaction_types_data(collection / MARKER, language)),
+            (pipeline.ROUTES_STAGED, pipeline.routes_data(chosen))):
         path = Path("build") / staged
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2)

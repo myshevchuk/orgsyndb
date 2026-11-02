@@ -553,6 +553,23 @@ class SiteLanguageTests(unittest.TestCase):
         self.assertTrue(any(v.startswith("Step ") for v in english),
                         "no Step <k> string")
 
+    def test_the_route_strings_are_in_both_languages(self) -> None:
+        """Scenario: Interface strings (the route tree)."""
+        german = set(self.strings("de").values())
+        english = set(self.strings("en").values())
+        wanted_german = {
+            "Herstellungswege",
+            "Wege zu dieser Verbindung aus den Vorschriften der Sammlung, "
+            "jede Stufe mit ihren Ausgangsstoffen.",
+            "weitere Stufen auf ihrer Seite"}
+        wanted_english = {
+            "Routes",
+            "Ways to make this compound from the collection's procedures, "
+            "each step with the compounds it starts from.",
+            "more steps on its page"}
+        self.assertEqual(sorted(wanted_german - german), [])
+        self.assertEqual(sorted(wanted_english - english), [])
+
     def test_the_boolean_strings_are_in_both_languages(self) -> None:
         """Scenario: Interface strings (declared fields)."""
         english, german = self.strings("en"), self.strings("de")

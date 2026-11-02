@@ -215,6 +215,13 @@ main { padding: var(--space-3) 0 var(--space-5); }
 .compound-facts dd { margin: 0; overflow-wrap: anywhere; }
 .compound-facts code { font-size: 0.95em; }
 .compound-procedures { font-family: var(--font-ui); padding-left: var(--space-4); }
+.route-tree { font-family: var(--font-ui); padding-left: var(--space-4); }
+.route-tree ul {
+  margin: var(--space-1) 0 var(--space-1) var(--space-1);
+  padding-left: var(--space-2);
+  border-left: 1px solid var(--border);
+  list-style: none;
+}
 main > .structure { max-width: 21rem; }
 .copy-button { margin-left: var(--space-2); padding: 0 0.5rem; }
 

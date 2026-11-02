@@ -448,6 +448,8 @@ general procedure. The validator warns `unknown field` for `product`, top-level
 A synthesis sequence records the route you run through two or more procedures,
 including the chosen entry of a general procedure. The site checks that the
 steps connect and calculates the overall yield from their product yields.
+The **Routes** tree on a compound page is derived from the collection's
+procedures.
 
 Copy [`templates/sequence.md`](templates/sequence.md) into the collection's
 `md/sequences/`, named `SEQ-NNNN-short-slug.md`. Choose an unused number from
@@ -630,6 +632,31 @@ placeholder is **Product, CAS, SMILES or keyword** and its accessible name is
   matching procedures. **Sequences** follows **Used in** when any sequence
   names this compound as its target; it links those sequences by title, ordered
   by sequence ID. Compound pages mark **Compounds** as the current section.
+
+  **Routes** is the page's last section, after **Sequences** when present.
+  It shows ways to make the compound from the collection's published
+  procedures, each step with its starting materials. It appears only when
+  a route goes beyond one step; otherwise **Made by** already covers it.
+  Read the nested lists as alternatives under each compound and required
+  starting materials under each step. Those compounds link to their own
+  pages, with any values declared `beside = true`, and have their own
+  steps below them. Each step shows the procedure's ID and title, entry
+  number when needed, yield and status, as in **Made by**. Steps follow
+  procedure ID and then entry order. All published procedures take part,
+  whatever their status. A general procedure's entry uses only its own
+  starting materials.
+
+  A step that starts from a compound already above it on the same branch is
+  omitted, so cycles are not followed. If all steps would loop back, the
+  compound appears without steps and must be obtained another way. The
+  display uses a fixed depth limit of 6 steps and a fixed budget of 200
+  steps per tree. A larger tree is drawn to the largest depth that fits.
+  When more than 200 steps make the compound directly, the tree shows only
+  those. A compound cut off by a limit ends with **more steps on its page**;
+  follow its link to continue. Routes are derived during the build; you add
+  nothing to a procedure, a compound file or `orgsyndb.toml`. Compound pages
+  remain outside the search index, so routes do not change search.
+
 - `/sequences/` lists every published sequence by ID. Each row shows its title
   linked to the sequence page, its target linked to the compound page, the
   number of steps and the overall yield. The directory works without
@@ -937,7 +964,7 @@ These directories are generated and must not be committed. The collection's
 
 | Directory | Where | Contents |
 |---|---|---|
-| `build/` | collection | Org exports, selected procedure and sequence variants under `content/`, compound and procedure field declarations with display and filter settings and vocabulary labels, paths, ancestors and tree order in `data/fields.json`, reaction-type labels in `data/reaction_types.json`, the generated Hugo configuration overlay, Hugo's resource cache, temporary export data, and `export.log`. |
+| `build/` | collection | Org exports, selected procedure and sequence variants under `content/`, compound and procedure field declarations with display and filter settings and vocabulary labels, paths, ancestors and tree order in `data/fields.json`, reaction-type labels in `data/reaction_types.json`, derived routes in `data/routes.json`, the generated Hugo configuration overlay, Hugo's resource cache, temporary export data, and `export.log`. |
 | `public/` | collection | The complete static website and Pagefind index. |
 | `pdf/` | collection | One generated PDF per procedure. |
 | `.emacs-batch/` | application | The application's own ox-hugo and tomelr installations. |
@@ -963,6 +990,13 @@ each parent followed by its descendants in file order. The overlay mounts
 `build/data/reaction_types.json`, with each reaction-type slug mapped to its
 `label` in the site's language. The theme reads these labels as
 `site.Data.collection.reaction_types`.
+
+Before Hugo runs, the build also writes `build/data/routes.json`. For each
+compound with a route beyond one step, it holds a list of steps. Each step
+has `procedure`, `yield_percent` and `substrates`, with `entry` only for an
+entry of a general procedure. Each substrate has `compound`, its own
+`steps` list (empty unless drawn), and `more`, which is true when a limit
+cuts it off. The theme reads this data as `site.Data.collection.routes`.
 
 It runs Hugo without a build lock, so nothing is written under the
 application's `site/`.
