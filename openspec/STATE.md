@@ -21,6 +21,11 @@ leaves this file then.
   validator report unknown targets. Still open: whether a mention also
   relates the two pages, such as a "Mentioned in" list. Editor
   completion of these links waits on them.
+- **Reagents-table helper in Emacs.** Insert a Reagents row for a
+  registry compound, with its name in the procedure's language, CAS and
+  MW, and compute mmol and equivalents from a typed amount. Open: the
+  density a volume needs, significant figures, decimal commas, the
+  reference row, and whether Org tables use spreadsheet formulas.
 - **Preview in either language.** The site has one language, `locale`
   in the application's `site/hugo.toml`, so a preview shows the
   variant that suits it. A `serve --locale` option would preview the
