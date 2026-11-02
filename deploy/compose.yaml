@@ -1,0 +1,47 @@
+# OrgSynDB in containers: `builder` keeps the site built from the
+# collection's Git repository and the application's, `web` serves it.
+# Copy orgsyndb.env.example to orgsyndb.env beside this file, fill it in,
+# then run, from this directory:
+#   docker compose up -d --build
+# See the README's "Container deployment".
+name: orgsyndb
+
+x-image: &image
+  image: localhost/orgsyndb:latest
+  build:
+    context: docker
+    args:
+      APP_REPO: ${APP_REPO:-https://github.com/myshevchuk/orgsyndb.git}
+      APP_REF: ${APP_REF:-main}
+
+services:
+  builder:
+    <<: *image
+    command: ["orgsyndb-deploy", "run"]
+    init: true
+    restart: unless-stopped
+    env_file: orgsyndb.env
+    volumes:
+      - data:/var/lib/orgsyndb
+      # For ssh:// repositories: a directory holding the private key
+      # (owned by UID 1000, mode 600), config and known_hosts.
+      # - ./ssh:/home/orgsyndb/.ssh:ro
+      # A repository on this machine, mounted under /srv/git/ and named
+      # by that path in ORGSYNDB_COLLECTION_REPO:
+      # - /home/me/procedures:/srv/git/procedures:ro
+
+  web:
+    <<: *image
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile",
+              "--adapter", "caddyfile"]
+    restart: unless-stopped
+    env_file: orgsyndb.env
+    ports:
+      - "8080:8080"
+    volumes:
+      - data:/var/lib/orgsyndb:ro
+      - caddy:/home/orgsyndb/.local/share/caddy
+
+volumes:
+  data:
+  caddy:

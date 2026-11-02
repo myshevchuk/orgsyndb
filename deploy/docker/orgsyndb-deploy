@@ -1,0 +1,423 @@
+#!/usr/bin/env python3
+"""Keep an OrgSynDB site built from Git, for the container image.
+
+``orgsyndb-deploy run`` repeats a cycle until it is stopped: fetch the
+application and the collection from their Git repositories, build the
+site when either has moved, and publish it only when the build succeeds.
+``orgsyndb-deploy sync`` runs one cycle. ``orgsyndb-deploy status``
+prints the saved state; ``orgsyndb-deploy retry`` forgets the failed
+builds, so that the next cycle tries them again. SIGHUP starts the next
+cycle of ``run`` at once.
+
+Settings come from the environment:
+
+ORGSYNDB_COLLECTION_REPO   Git URL or path of the collection (required)
+ORGSYNDB_COLLECTION_REF    branch or tag to build (default: main)
+ORGSYNDB_COLLECTION_PATH   collection directory inside that repository
+                           (default: the repository root)
+ORGSYNDB_APP_UPDATE        true to follow the application's repository
+                           (default: true)
+ORGSYNDB_APP_REPO          Git URL or path of the application (default:
+                           the repository the image was built from)
+ORGSYNDB_APP_REF           branch or tag of the application (default:
+                           the one the image was built from)
+ORGSYNDB_INTERVAL          seconds between cycles (default: 300)
+ORGSYNDB_PDF               true to render procedure PDFs (default: false)
+ORGSYNDB_KEEP_RELEASES     published sites kept besides the current one
+                           (default: 2)
+ORGSYNDB_BUILD_TIMEOUT     seconds a build may take (default: 3600)
+
+The data directory (ORGSYNDB_DATA, default /var/lib/orgsyndb) holds the
+collection's clone in ``collection/``, the published sites in
+``releases/``, the symlink ``current`` to the site being served, and
+``state.json``. The application's clone is ORGSYNDB_APP (default
+/opt/orgsyndb/app). ORGSYNDB_IMAGE_INFO (default /opt/orgsyndb/image.json)
+names the image's record of the repository, ref and ``deploy/docker``
+tree it was built from. An application commit whose ``deploy/docker``
+tree differs needs a new image, and is not used.
+"""
+
+import json
+import os
+import shutil
+import signal
+import subprocess
+import sys
+import threading
+import time
+from dataclasses import dataclass
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+PROG = "orgsyndb-deploy"
+IMAGE_DIR = "deploy/docker"
+OUTPUTS = ("build", "public", "pdf")
+
+
+class Failure(Exception):
+    """A step failed; the cycle ends and the published site stays."""
+
+
+@dataclass
+class Settings:
+    data: Path
+    app: Path
+    image: dict
+    collection_repo: str
+    collection_ref: str
+    collection_path: str
+    app_update: bool
+    app_repo: str
+    app_ref: str
+    interval: int
+    pdf: bool
+    keep: int
+    timeout: int
+
+
+def log(message: str) -> None:
+    stamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    print(f"{stamp} {PROG}: {message}", flush=True)
+
+
+def flag(name: str, default: bool) -> bool:
+    value = os.environ.get(name, "").strip().lower()
+    if not value:
+        return default
+    if value in ("1", "true", "yes", "on"):
+        return True
+    if value in ("0", "false", "no", "off"):
+        return False
+    raise Failure(f"{name} must be true or false: {value}")
+
+
+def number(name: str, default: int, least: int) -> int:
+    value = os.environ.get(name, "").strip()
+    if not value:
+        return default
+    if not value.isdigit() or int(value) < least:
+        raise Failure(f"{name} must be a whole number of at least {least}: "
+                      f"{value}")
+    return int(value)
+
+
+def settings() -> Settings:
+    image_path = Path(os.environ.get("ORGSYNDB_IMAGE_INFO",
+                                     "/opt/orgsyndb/image.json"))
+    try:
+        image = json.loads(image_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise Failure(f"cannot read {image_path}: {exc}") from None
+    collection_repo = os.environ.get("ORGSYNDB_COLLECTION_REPO", "").strip()
+    if not collection_repo:
+        raise Failure("ORGSYNDB_COLLECTION_REPO is not set; name the Git "
+                      "repository of the collection")
+    path = os.environ.get("ORGSYNDB_COLLECTION_PATH", "").strip() or "."
+    if Path(path).is_absolute() or ".." in Path(path).parts:
+        raise Failure("ORGSYNDB_COLLECTION_PATH must be a relative path "
+                      f"inside the repository: {path}")
+    return Settings(
+        data=Path(os.environ.get("ORGSYNDB_DATA", "/var/lib/orgsyndb")),
+        app=Path(os.environ.get("ORGSYNDB_APP", "/opt/orgsyndb/app")),
+        image=image,
+        collection_repo=collection_repo,
+        collection_ref=(os.environ.get("ORGSYNDB_COLLECTION_REF", "").strip()
+                        or "main"),
+        collection_path=path,
+        app_update=flag("ORGSYNDB_APP_UPDATE", True),
+        app_repo=(os.environ.get("ORGSYNDB_APP_REPO", "").strip()
+                  or image["app_repo"]),
+        app_ref=(os.environ.get("ORGSYNDB_APP_REF", "").strip()
+                 or image["app_ref"]),
+        interval=number("ORGSYNDB_INTERVAL", 300, 10),
+        pdf=flag("ORGSYNDB_PDF", False),
+        keep=number("ORGSYNDB_KEEP_RELEASES", 2, 0),
+        timeout=number("ORGSYNDB_BUILD_TIMEOUT", 3600, 60),
+    )
+
+
+# --------------------------------------------------------------------------
+# Git
+
+
+def git(repo: Path, *args: str) -> str:
+    done = subprocess.run(["git", "-C", str(repo), *args],
+                          capture_output=True, text=True)
+    if done.returncode != 0:
+        raise Failure(f"git {' '.join(args)} in {repo}: "
+                      + (done.stderr.strip() or f"exit {done.returncode}"))
+    return done.stdout.strip()
+
+
+def fetch(repo: Path, url: str, ref: str) -> str:
+    """Fetch ``ref`` from ``url`` into ``repo``, creating the repository
+    when it does not exist, and return the fetched commit."""
+    if not (repo / ".git").exists():
+        repo.mkdir(parents=True, exist_ok=True)
+        git(repo, "init", "--quiet")
+    if git(repo, "remote").split().count("origin"):
+        git(repo, "remote", "set-url", "origin", url)
+    else:
+        git(repo, "remote", "add", "origin", url)
+    git(repo, "fetch", "--quiet", "--no-tags", "--force", "origin", ref)
+    return git(repo, "rev-parse", "FETCH_HEAD^{commit}")
+
+
+def head(repo: Path) -> str | None:
+    if not (repo / ".git").exists():
+        return None
+    try:
+        return git(repo, "rev-parse", "--verify", "--quiet",
+                   "HEAD^{commit}")
+    except Failure:
+        return None
+
+
+def checkout(repo: Path, commit: str) -> None:
+    """Make the working tree ``commit``, keeping ignored files such as
+    build output and fetched-tool caches."""
+    git(repo, "checkout", "--quiet", "--force", "--detach", commit)
+    git(repo, "clean", "--quiet", "-ffd")
+
+
+def tree(repo: Path, commit: str, path: str) -> str | None:
+    try:
+        return git(repo, "rev-parse", "--verify", "--quiet",
+                   f"{commit}:{path}")
+    except Failure:
+        return None
+
+
+# --------------------------------------------------------------------------
+# State
+
+
+def load_state(data: Path) -> dict:
+    try:
+        state = json.loads((data / "state.json").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        state = {}
+    except ValueError as exc:
+        log(f"ignoring unreadable state.json: {exc}")
+        state = {}
+    state.setdefault("deployed", None)
+    state.setdefault("failed", [])
+    return state
+
+
+def save_state(data: Path, state: dict) -> None:
+    path = data / "state.json"
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(state, indent=2) + "\n",
+                         encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def pair(app: str, collection: str) -> str:
+    return f"{app}:{collection}"
+
+
+# --------------------------------------------------------------------------
+# Build and publish
+
+
+def build(config: Settings) -> Path:
+    """Build the checked-out collection with the checked-out
+    application; return the collection directory."""
+    collection = (config.data / "collection" / config.collection_path)
+    command = [str(config.app / "tools" / "orgsyndb"), "-C",
+               str(collection), "pdf" if config.pdf else "build"]
+    log("running " + " ".join(command))
+    try:
+        done = subprocess.run(command, timeout=config.timeout)
+    except subprocess.TimeoutExpired:
+        raise Failure(f"the build took longer than {config.timeout} s")
+    except OSError as exc:
+        raise Failure(f"cannot run the build: {exc}") from None
+    if done.returncode != 0:
+        raise Failure(f"the build exited {done.returncode}")
+    return collection
+
+
+def publish(config: Settings, collection: Path, serial: int, app: str,
+            commit: str) -> str:
+    """Copy the build into a new release and point ``current`` at it."""
+    releases = config.data / "releases"
+    name = f"{serial:06d}-{app[:10]}-{commit[:10]}"
+    release = releases / name
+    partial = releases / f".{name}"
+    shutil.rmtree(partial, ignore_errors=True)
+    partial.mkdir(parents=True)
+    shutil.copytree(collection / "public", partial / "public",
+                    symlinks=True)
+    if config.pdf and (collection / "pdf").is_dir():
+        shutil.copytree(collection / "pdf", partial / "pdf", symlinks=True)
+    os.replace(partial, release)
+    link = config.data / "current"
+    temporary = config.data / ".current"
+    if temporary.is_symlink() or temporary.exists():
+        temporary.unlink()
+    temporary.symlink_to(Path("releases") / name)
+    os.replace(temporary, link)
+    prune(releases, name, config.keep)
+    return name
+
+
+def prune(releases: Path, current: str, keep: int) -> None:
+    """Remove all releases but ``current`` and the ``keep`` newest others,
+    and partial copies left by an interrupted publish."""
+    names = sorted((entry.name for entry in releases.iterdir()
+                    if entry.is_dir() and not entry.name.startswith(".")
+                    and entry.name != current), reverse=True)
+    for name in names[keep:]:
+        shutil.rmtree(releases / name)
+    for entry in releases.iterdir():
+        if entry.name.startswith("."):
+            shutil.rmtree(entry, ignore_errors=True)
+
+
+def attempt(config: Settings, state: dict, app: str, commit: str) -> bool:
+    """Build ``commit`` of the collection with ``app``, both checked out;
+    publish it on success. Record a failed pair so it is not built
+    again."""
+    log(f"building collection {commit[:10]} with application {app[:10]}")
+    try:
+        collection = build(config)
+        serial = state.get("serial", 0) + 1
+        name = publish(config, collection, serial, app, commit)
+    except (Failure, OSError) as exc:
+        log(f"failed: {exc}; the published site is unchanged")
+        state["failed"] = [*state["failed"], pair(app, commit)][-50:]
+        return False
+    state["serial"] = serial
+    state["deployed"] = {"app": app, "collection": commit,
+                         "release": name,
+                         "time": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
+    log(f"published release {name}")
+    return True
+
+
+# --------------------------------------------------------------------------
+# Cycle
+
+
+def wanted_app(config: Settings, current: str | None) -> str | None:
+    """Fetch the application and return the commit to move to, or None
+    to stay on ``current``."""
+    if not config.app_update:
+        return None
+    try:
+        target = fetch(config.app, config.app_repo, config.app_ref)
+    except Failure as exc:
+        log(f"cannot fetch the application: {exc}")
+        return None
+    if target == current:
+        return None
+    if tree(config.app, target, IMAGE_DIR) != config.image["deploy_tree"]:
+        log(f"application {target[:10]} changes {IMAGE_DIR}/ and needs a "
+            "new image; rebuild it with docker compose build --pull. "
+            f"Staying on {(current or 'none')[:10]}")
+        return None
+    return target
+
+
+def cycle(config: Settings) -> None:
+    data = config.data
+    (data / "releases").mkdir(parents=True, exist_ok=True)
+    state = load_state(data)
+    deployed = state["deployed"] or {}
+    published = (data / "current").is_dir()
+
+    old_app = head(config.app)
+    if old_app is None:
+        raise Failure(f"{config.app} is not a Git checkout of the "
+                      "application")
+    new_app = wanted_app(config, old_app)
+
+    repo = data / "collection"
+    try:
+        commit = fetch(repo, config.collection_repo, config.collection_ref)
+    except Failure as exc:
+        log(f"cannot fetch the collection: {exc}")
+        commit = head(repo)
+        if commit is None:
+            return
+    marker = repo / config.collection_path / "orgsyndb.toml"
+
+    candidates = []
+    if new_app is not None:
+        candidates.append(new_app)
+    candidates.append(old_app)
+    for app in candidates:
+        if (published and deployed.get("app") == app
+                and deployed.get("collection") == commit):
+            break
+        if pair(app, commit) in state["failed"]:
+            continue
+        checkout(config.app, app)
+        checkout(repo, commit)
+        if not marker.is_file():
+            log(f"collection {commit[:10]} holds no "
+                f"{config.collection_path}/orgsyndb.toml; set "
+                "ORGSYNDB_COLLECTION_PATH")
+            state["failed"] = [*state["failed"], pair(app, commit)][-50:]
+            break
+        if attempt(config, state, app, commit):
+            break
+    # Stay on the application of the published site, or on the old one.
+    keep = (state["deployed"] or {}).get("app") or old_app
+    if head(config.app) != keep and keep in candidates:
+        checkout(config.app, keep)
+    save_state(data, state)
+
+
+def run(config: Settings) -> int:
+    wake = threading.Event()
+    signal.signal(signal.SIGHUP, lambda *_: wake.set())
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    log(f"collection {config.collection_repo} ({config.collection_ref}); "
+        + (f"application {config.app_repo} ({config.app_ref})"
+           if config.app_update else "application updates off")
+        + f"; every {config.interval} s")
+    while True:
+        try:
+            cycle(config)
+        except (Failure, OSError) as exc:
+            log(f"error: {exc}")
+        wake.wait(config.interval)
+        wake.clear()
+
+
+def main(argv: list[str]) -> int:
+    command = argv[0] if argv else "run"
+    if command in ("-h", "--help", "help"):
+        print(__doc__)
+        return 0
+    if command not in ("run", "sync", "status", "retry") or len(argv) > 1:
+        print(f"usage: {PROG} [run|sync|status|retry|help]",
+              file=sys.stderr)
+        return 2
+    try:
+        data = Path(os.environ.get("ORGSYNDB_DATA", "/var/lib/orgsyndb"))
+        if command == "status":
+            print(json.dumps(load_state(data), indent=2))
+            return 0
+        if command == "retry":
+            state = load_state(data)
+            state["failed"] = []
+            save_state(data, state)
+            return 0
+        config = settings()
+        if command == "sync":
+            cycle(config)
+            return 0
+        return run(config)
+    except (Failure, OSError) as exc:
+        print(f"{PROG}: error: {exc}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        return 130
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
