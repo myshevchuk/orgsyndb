@@ -917,6 +917,16 @@ Add this to `config.el`, then run `doom sync`:
             :lisp-dir "emacs"))
 ```
 
+This installs from the repository's default branch, `main`, which is
+stable. To install the newest work, add `:branch "develop"` to the package
+specification:
+
+```elisp
+(package-vc-install
+ '(orgsyndb :url "https://github.com/myshevchuk/orgsyndb"
+            :lisp-dir "emacs" :branch "develop"))
+```
+
 Then add this to your init file:
 
 ```elisp
@@ -1137,6 +1147,12 @@ application's `site/`.
 
 ## Development
 
+Work lands on `develop`. Start change branches from `develop` and
+squash-merge them back into it; target `develop` in pull requests. `main`
+is the stable branch and the repository's default branch. It moves only
+at the owner's request, by fast-forward to a tested commit of `develop`.
+Every push to `main` deploys the demo site.
+
 Run the test suite from the application's root with:
 
 ```sh
@@ -1184,7 +1200,8 @@ Emacs 29 with:
 python -m pytest tests/test_export_integration.py tests/test_elisp.py
 ```
 
-It runs on pushes to `main`, pull requests, and manual dispatch.
+It runs on pushes to `main` and `develop`, pull requests, and manual
+dispatch.
 
 ## Troubleshooting
 
@@ -1233,9 +1250,9 @@ This repository publishes only its demo collection to GitHub Pages with
 [`.github/workflows/demo-site.yml`](.github/workflows/demo-site.yml). The
 workflow builds `examples/demo/` in a `fedora:44` container with
 `tools/orgsyndb -C examples/demo build`, then uploads
-`examples/demo/public`. A push to `main` builds and deploys the site. A pull
-request builds it without deploying, and you can also start the workflow by
-hand. Deployment runs only for `main`.
+`examples/demo/public`. A push to `main` builds and deploys the site. A push
+to `develop` or a pull request builds it without deploying. You can also
+start the workflow by hand. Deployment runs only for `main`.
 
 To publish the demo from a fork, set the repository's Pages source to
 **GitHub Actions** under **Settings > Pages**. The workflow needs no
