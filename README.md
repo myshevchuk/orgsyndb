@@ -1237,10 +1237,146 @@ repository and every collection whose `orgsyndb.toml` is tracked or staged,
 so a collection may also live in a subdirectory. In a repository without a
 collection it lets the commit through.
 
-## Deployment example
+## Container deployment
 
-`orgsyndb build` creates the deployable site in the collection's `public/`;
-OrgSynDB does not deploy it. [deploy/Caddyfile.example](deploy/Caddyfile.example)
+`deploy/` runs OrgSynDB on a server with Docker Compose or Podman Compose.
+Two containers share one image and one data volume:
+
+- `builder` clones the collection from its Git repository, builds the site
+  inside the container, and checks for new commits every five minutes. It
+  also follows the application's own repository, so the server picks up
+  new versions of OrgSynDB by itself.
+- `web` serves the last published site with Caddy on port 8080.
+
+The collection's repository may be anywhere Git reaches: an `https://` or
+`ssh://` URL on the internet or the intranet, or a repository on the
+server itself mounted into the container. Building the image needs
+internet access, since it installs Fedora packages and fetches ox-hugo,
+tomelr and Pagefind into the image. Once built, the containers need access
+only to the two repositories; with application updates off, only to the
+collection's.
+
+Set it up from a checkout of the application:
+
+```sh
+cd deploy
+cp orgsyndb.env.example orgsyndb.env
+# Set ORGSYNDB_COLLECTION_REPO in orgsyndb.env, then:
+docker compose up -d --build
+docker compose logs -f builder
+```
+
+The site is then at `http://<server>:8080/`. Before the first build
+finishes, the server answers 404.
+
+[`deploy/orgsyndb.env.example`](deploy/orgsyndb.env.example) lists the
+settings:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `ORGSYNDB_COLLECTION_REPO` | required | Git URL or path of the collection's repository |
+| `ORGSYNDB_COLLECTION_REF` | `main` | Branch or tag to build |
+| `ORGSYNDB_COLLECTION_PATH` | `.` | Directory of `orgsyndb.toml` inside that repository |
+| `ORGSYNDB_APP_UPDATE` | `true` | Follow the application's repository |
+| `ORGSYNDB_APP_REPO` | the image's | Git URL or path of the application |
+| `ORGSYNDB_APP_REF` | the image's | Branch or tag of the application |
+| `ORGSYNDB_INTERVAL` | `300` | Seconds between checks for new commits, at least 10 |
+| `ORGSYNDB_PDF` | `false` | Also render one PDF per procedure, served under `/pdf/` |
+| `ORGSYNDB_KEEP_RELEASES` | `2` | Published sites kept besides the current one |
+| `ORGSYNDB_BUILD_TIMEOUT` | `3600` | Seconds a build may take, at least 60 |
+| `ORGSYNDB_ADDRESS` | `:8080` | Caddy's site address |
+
+The image is built from the application's repository and branch given by
+the `APP_REPO` and `APP_REF` build arguments, by default
+`https://github.com/myshevchuk/orgsyndb.git` and `main`. Set them in the
+environment or in a `.env` file beside `compose.yaml` to build from another
+repository, such as a mirror on the intranet. `APP_REF` must be a branch
+or a tag. `ORGSYNDB_APP_REPO` and `ORGSYNDB_APP_REF` default to the same
+values.
+
+### Repository access
+
+For an `ssh://` repository, put the private key, a `known_hosts` file
+holding the server's host key, and optionally an SSH `config` into a
+directory, make the key owned by UID 1000 with mode 600, and enable the
+commented `./ssh:/home/orgsyndb/.ssh:ro` mount in `compose.yaml`. The
+containers run as user `orgsyndb` with UID 1000. An `https://` repository
+that needs a password can carry a read-only access token in its URL.
+
+For a repository on the server itself, mount it under `/srv/git/` and name
+it by that path:
+
+```yaml
+    volumes:
+      - data:/var/lib/orgsyndb
+      - /home/me/procedures:/srv/git/procedures:ro
+```
+
+```sh
+ORGSYNDB_COLLECTION_REPO=/srv/git/procedures
+```
+
+The repository's files must be readable by UID 1000. Git trusts
+repositories under `/srv/git/` although another user owns them. Only
+committed changes on the named branch are built, never the working tree.
+
+### Builds and updates
+
+Each cycle fetches the application's branch, if updates are on, and the
+collection's branch. When either has a new commit, `builder` checks both
+out and runs `orgsyndb build`, or `orgsyndb pdf` with `ORGSYNDB_PDF=true`.
+A successful build is copied into `releases/` in the data volume and
+becomes the served site at once: the symlink `current` then points to it.
+A failed build changes nothing that is served, and its output stays in
+the `builder` log.
+
+A new application commit is tried first with the newest collection
+commit. If that build fails, `builder` returns to the previous application
+commit and builds the collection with it. A combination of application and
+collection commits that failed is not built again; the next new commit of
+either is.
+
+The image holds the build tools and the update program. An application
+commit that changes `deploy/docker/` needs a new image, so `builder` logs
+that and stays on its current application commit. Rebuild the image then:
+
+```sh
+docker compose build --pull && docker compose up -d
+```
+
+Recreating the `builder` container returns the application to the commit
+the image holds; the next cycle updates it again.
+
+To start a cycle at once instead of waiting, and to see what is
+published:
+
+```sh
+docker compose kill -s HUP builder
+docker compose exec builder orgsyndb-deploy status
+```
+
+`status` prints the application and collection commits of the published
+site and the combinations that failed. After a failure that had nothing to
+do with the commits, such as a network outage while fetching a tool,
+`orgsyndb-deploy retry` forgets the failed combinations so that the next
+cycle builds them again.
+
+With `ORGSYNDB_APP_UPDATE=true`, every commit on the followed application
+branch reaches the server within one interval. The default, `main`, moves
+only to tested commits of `develop`. Following `develop` brings the newest
+work, untested on the server, so use it only for a trial server.
+
+### HTTPS
+
+The default Caddyfile, `deploy/docker/Caddyfile`, serves plain HTTP. For
+HTTPS, mount a Caddyfile of your own over `/etc/caddy/Caddyfile` in the
+`web` service, using `/var/lib/orgsyndb/current/public` as its root, or
+put the server behind the organisation's reverse proxy.
+
+## Serve a copy with Caddy
+
+`orgsyndb build` creates the deployable site in the collection's `public/`.
+Without containers, [deploy/Caddyfile.example](deploy/Caddyfile.example)
 shows how Caddy can serve a copy of that directory. Replace
 `orgsyndb.internal` with the server's internal host name and
 `/srv/orgsyndb/public` with the directory containing the copied site. Review
