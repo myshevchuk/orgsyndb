@@ -450,6 +450,12 @@ def check_temperature(name: str, value: object) -> list[Problem]:
     return []
 
 
+# The keys of a product table, and those of an entry of ``scope``.
+PRODUCT_KEYS = ("compound", "yield_percent")
+SCOPE_ENTRY_KEYS = ("substrates", "products", "scale", "time",
+                    "temperature", "note")
+
+
 def check_products(value: object, compounds: frozenset[str],
                    name: str = "products") -> list[Problem]:
     """Check the products array of tables ``value`` against the registry.
@@ -491,7 +497,7 @@ def check_products(value: object, compounds: frozenset[str],
             found += check_yield(f"{prefix}.yield_percent",
                                  entry["yield_percent"])
         for key in entry:
-            if key not in ("compound", "yield_percent"):
+            if key not in PRODUCT_KEYS:
                 found.append(warning(f"{prefix}.{key}", "unknown field"))
     found += [error(name, f"lists {key} twice") for key in repeated(keys)]
     return found
@@ -542,8 +548,7 @@ def check_scope(value: object, compounds: frozenset[str]) -> list[Problem]:
     that is not a table under ``scope[n]``. Each entry's ``substrates``
     and ``products`` are checked as the top-level fields are, against
     that entry alone and the registry keys ``compounds``; an entry key
-    other than these two, ``scale``, ``time``, ``temperature`` and
-    ``note`` is a warning.
+    outside SCOPE_ENTRY_KEYS is a warning.
     """
     if not isinstance(value, list):
         return [error("scope", "must be an array of tables, e.g. "
@@ -567,6 +572,9 @@ def check_scope(value: object, compounds: frozenset[str]) -> list[Problem]:
                                    "required field missing"))
         for key, item in entry.items():
             name = f"{prefix}.{key}"
+            if key not in SCOPE_ENTRY_KEYS:
+                found.append(warning(name, "unknown field"))
+                continue
             match key:
                 case "substrates":
                     found += check_substrates(item, entry.get("products"),
@@ -582,8 +590,6 @@ def check_scope(value: object, compounds: frozenset[str]) -> list[Problem]:
                     found += check_temperature(name, item)
                 case "note":
                     found += check_string(name, item)
-                case _:
-                    found.append(warning(name, "unknown field"))
     return found
 
 

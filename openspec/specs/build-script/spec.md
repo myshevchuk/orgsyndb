@@ -4,7 +4,7 @@
 Define `tools/orgsyndb`, its subcommands and conventions, the stdlib pipeline helper module, the optional pre-commit hook, the Caddyfile example and the ignore rules. Content and output paths are relative to the collection; `tools/`, `site/`, `templates/`, `.emacs-batch/` and `.tools/` belong to the application.
 ## Requirements
 ### Requirement: Entry point conventions
-`tools/orgsyndb` SHALL be an executable Python 3.14 program that uses only the standard library, besides importing `pipeline` and `validate` from its own directory. It has a `#!/usr/bin/env python3` shebang and is invoked as `orgsyndb [-C DIR] <subcommand> [options] [arguments]`, with the subcommands `export`, `validate`, `build`, `serve`, `pdf`, `new`, `init`, `clean`, `check-deps` and `help`. It follows these conventions:
+`tools/orgsyndb` SHALL be an executable Python 3.14 program that uses only the standard library, besides importing `pipeline` and `validate` from its own directory. It has a `#!/usr/bin/env python3` shebang and is invoked as `orgsyndb [-C DIR] <subcommand> [options] [arguments]`, with the subcommands `export`, `validate`, `build`, `serve`, `pdf`, `new`, `init`, `clean`, `check-deps`, `index` and `help`. It follows these conventions:
 - It locates the application from its own resolved path, following symlinks, so it works from any working directory. It refuses to run, with exit 1, unless `<app>/tools/orgsyndb` and `<app>/site/hugo.toml` exist.
 - It chooses the collection as the `collection` capability says.
 - It sets `TZ=Europe/Berlin` and `LC_TIME=C` in its own environment, so every child process inherits them.
@@ -45,7 +45,7 @@ Define `tools/orgsyndb`, its subcommands and conventions, the stdlib pipeline he
 Each subcommand SHALL check, before its first step, every external tool it will need. A collection has Org sources when `org/procedures/` holds at least one entry that `validate.discover(org_root, ".org")` returns, with or without a problem attached, that is, an entry that the export either exports or reports (org-export "Org sources and their problems"). `pipeline.has_org_sources(org_root)` makes this decision from the entry names alone.
 - `export`: `emacs` and `git` when the collection has Org sources, and no external tool otherwise. With Org sources, `git` is needed on every run, not only for the bootstrap, because every export checks the installed checkouts against their pins.
 - `validate`: what `export` needs.
-- `new`, `init`, `clean`, `check-deps` and `help`: no external tool. `git` is optional for `new`; without it `new` warns and scans the directories alone.
+- `new`, `init`, `clean`, `check-deps`, `index` and `help`: no external tool. `git` is optional for `new`; without it `new` warns and scans the directories alone.
 - `build`: what `export` needs, plus `hugo`.
 - `serve`: what `build` needs.
 - `pdf`: what `build` needs, plus `weasyprint`.
@@ -256,7 +256,7 @@ It never installs anything and never invokes `sudo`.
 - **AND** stdout has the lines `optional emacs (not installed; only for Org procedures)` and `optional git (not installed; only for Org procedures)`
 
 ### Requirement: Pipeline helper module
-`tools/pipeline.py` SHALL be a Python 3.14 module that uses only the standard library, besides importing `validate` from its own directory, and it annotates every callable. It has no command-line interface: `tools/orgsyndb` imports it, and the messages it prints name the program `orgsyndb`. It reads no Org source; of `org/procedures/` it reads only the entry names. The only Org files it reads are the documents of the application's `docs/` that it stages as help pages (site-help spec). It exposes the functions `slugify`, `next_id`, `org_timestamp`, `rfc3339`, `fill_template`, `has_org_sources`, `org_stems`, `org_error_reported`, `check_staging`, `recover_export`, `replace_export`, `new_procedure`, `pdf_jobs`, `install_pagefind`, `ensure_pagefind`, `hugo_overlay`, `help_slug`, `help_page`, `stage_help` and `remove_tree`.
+`tools/pipeline.py` SHALL be a Python 3.14 module that uses only the standard library, besides importing `validate` from its own directory, and it annotates every callable. It has no command-line interface: `tools/orgsyndb` imports it, and the messages it prints name the program `orgsyndb`. It reads no Org source; of `org/procedures/` it reads only the entry names. The only Org files it reads are the documents of the application's `docs/` that it stages as help pages (site-help spec). It exposes the functions `slugify`, `next_id`, `org_timestamp`, `rfc3339`, `fill_template`, `has_org_sources`, `org_stems`, `org_error_reported`, `check_staging`, `recover_export`, `replace_export`, `new_procedure`, `pdf_jobs`, `install_pagefind`, `ensure_pagefind`, `hugo_overlay`, `help_slug`, `help_page`, `stage_help`, `index_data` and `remove_tree`.
 
 #### Scenario: Only standard-library imports
 - **WHEN** a test parses `tools/pipeline.py` with `ast` and collects the top-level module names of every import
@@ -311,4 +311,23 @@ The application's `.gitignore` SHALL keep `__pycache__/` and `.pytest_cache/`, a
 - **WHEN** a test runs `git check-ignore` in the application on `examples/demo/build/export/x.md`, `examples/demo/public/index.html`, `examples/demo/pdf/x.pdf`, `.emacs-batch/elpa` and `.tools/pagefind-1.5.2/pagefind`, skipping when `git` is absent
 - **THEN** each path is reported as ignored
 - **AND** `examples/demo/org/procedures/OSDB-0001-salicylic-acid.org`, `examples/demo/md/procedures/OSDB-0002-aspirin.md`, `examples/demo/static/structures/isopentyl-acetate.svg`, `site/hugo.toml`, `site/.hugo_build.lock`, `build/x` and `tests/fixtures/export/build/x` are not
+
+### Requirement: index subcommand
+`tools/orgsyndb index` SHALL take no arguments, and print to stdout the JSON form of `pipeline.index_data(<collection>)` (collection-index "Index data") on one line, as strict JSON with non-ASCII characters written as themselves, followed by a newline. It prints no step line, creates no file or directory, and exits 0. A configuration error that `index_data` raises is printed as `orgsyndb: error: <message>` with exit 1. Any argument is a usage error.
+
+#### Scenario: Index of the demo
+- **WHEN** a test runs `tools/orgsyndb -C <collection> index` on a copy of the demo collection without `build/`
+- **THEN** it exits 0, stdout is one line that parses as JSON to `pipeline.index_data` of the copy, and the copy still has no `build/`
+
+#### Scenario: No external tool
+- **WHEN** a test runs `tools/orgsyndb -C <collection> index` on a copy of the demo collection, which has Org sources, with a `PATH` that holds only `python3`
+- **THEN** it exits 0
+
+#### Scenario: Arguments are refused
+- **WHEN** a test runs `tools/orgsyndb -C <collection> index compounds`
+- **THEN** it exits 2, and stderr contains the word `usage`
+
+#### Scenario: Configuration error
+- **WHEN** a test removes `vocabularies/projects.toml` from a copy of the test collection and runs `tools/orgsyndb -C <collection> index`
+- **THEN** it exits 1, stderr begins with `orgsyndb: error:` and contains `projects`, and stdout is empty
 

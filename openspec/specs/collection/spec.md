@@ -31,7 +31,7 @@ The program SHALL accept a global option `-C DIR` or `--collection DIR` (also `-
 - With the option, `DIR` is the collection. When `DIR/orgsyndb.toml` does not exist, the program exits 1 with an error naming `DIR` and `orgsyndb.toml`; it does not search elsewhere.
 - Without it, the collection is the first directory holding `orgsyndb.toml` among the working directory and its ancestors. When there is none, the program exits 1 with an error that names `-C` and `init`.
 
-Only `export`, `validate`, `build`, `serve`, `pdf`, `new` and `clean` use a collection. `help`, `check-deps` and `init` never look for one.
+Only `export`, `validate`, `build`, `serve`, `pdf`, `new`, `clean` and `index` use a collection. `help`, `check-deps` and `init` never look for one.
 
 #### Scenario: Found from a subdirectory
 - **WHEN** a test runs `<app>/tools/orgsyndb validate` with the working directory set to `md/procedures/` of a collection copy

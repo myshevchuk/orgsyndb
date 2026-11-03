@@ -14,6 +14,7 @@ exports the sources. Messages printed to stderr name the program
 import datetime as dt
 import functools
 import hashlib
+import math
 import os
 import re
 import shutil
@@ -1027,6 +1028,170 @@ def routes_data(files: Iterable[tuple[Path, dict[str, Any]]],
                for step in drawn for substrate in step["substrates"]):
             routes[compound] = drawn
     return routes
+
+
+def _json_value(value: Any) -> Any:
+    """Return ``value``, a parsed TOML value, as a value ``json.dumps``
+    writes as strict JSON: dates and times as their ISO 8601 text, and
+    a float that is not finite as None, inside arrays and tables too."""
+    match value:
+        case dict():
+            return {key: _json_value(item) for key, item in value.items()}
+        case list():
+            return [_json_value(item) for item in value]
+        case dt.date() | dt.time():
+            return value.isoformat()
+        case float() if not math.isfinite(value):
+            return None
+    return value
+
+
+def _declaration_data(field: validate.Declaration,
+                      withheld: Sequence[str]) -> dict[str, Any]:
+    """Return the index's table of the declaration FIELD: the options
+    every type takes and those of its type, in the validator's order,
+    without the options in WITHHELD."""
+    values = {"min": field.minimum, "max": field.maximum,
+              "pattern": field.pattern and field.pattern.pattern}
+    return {option: values[option] if option in values
+            else getattr(field, option)
+            for option in (*validate.FIELD_OPTIONS,
+                           *validate.TYPE_OPTIONS[field.type])
+            if option not in withheld}
+
+
+def _terms_data(terms: dict[str, validate.Term]) -> dict[str, Any]:
+    """Return the index's table of the vocabulary values TERMS."""
+    return {value: term._asdict() for value, term in terms.items()}
+
+
+def _content_entries(collection: Path, directory: str, suffix: str,
+                     kind: validate.Kind,
+                     source: str | None = None) -> list[dict[str, Any]]:
+    """Return the index entries of the content files of DIRECTORY of
+    COLLECTION, in name order: each file with SUFFIX whose name the
+    file-name pattern of KIND accepts. SOURCE, when given, is the
+    entries' ``format``. An Org file's ``front_matter`` is None; a
+    Markdown file's is parsed."""
+    root = collection / directory
+    pattern = validate.file_name_pattern(suffix, kind.prefix)
+    entries = []
+    for name in sorted(os.listdir(root)) if root.is_dir() else ():
+        match = pattern.match(name)
+        if match is None or (root / name).is_dir():
+            continue
+        item: dict[str, Any] = {"id": match.group(2),
+                                "language": match.group(3),
+                                "path": f"{directory}/{name}"}
+        if source is not None:
+            item["format"] = source
+        item["front_matter"] = None
+        if suffix == ".md":
+            text = validate.read_text(str(root / name))
+            parsed = (validate.parse_front_matter(text)
+                      if isinstance(text, str) else text)
+            if isinstance(parsed, validate.Problem):
+                item["error"] = parsed.message
+            else:
+                item["front_matter"] = _json_value(parsed.data)
+        entries.append(item)
+    return entries
+
+
+def _by_id(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return the index entries ENTRIES ordered by ID and then by path."""
+    return sorted(entries, key=lambda item: (item["id"], item["path"]))
+
+
+def index_data(collection: Path) -> dict[str, Any]:
+    """Return the index of the collection directory COLLECTION, a table
+    that ``json.dumps`` writes as strict JSON.
+
+    Its keys are ``site_language``, the language of the application's
+    site; ``schema``, the procedure, compound and sequence keys the
+    validator knows; ``fields``, the collection's compound and procedure
+    declarations, each with the options of its type and its defaults
+    applied; ``vocabularies``, the values of every vocabulary a
+    declaration names and of the reaction types, each with its
+    ``label``, ``label_de`` and ``parent``; and ``compounds``,
+    ``procedures`` and ``sequences``, one entry per content file whose
+    name the validator accepts, with its parsed table or front matter.
+    A content file that cannot be parsed is listed with that value None
+    and the reason in ``error``; an Org source is listed by name, with
+    ``front_matter`` None. Dates and times appear as ISO 8601 text, and
+    floats that are not finite as None. Reads no Org file and writes
+    nothing. Raises ``validate.ConfigError`` when the settings, the
+    declarations or their vocabularies break a rule of
+    ``validate.load_fields``, or the reaction types one of
+    ``validate.load_reaction_types``, and ValueError when the site's
+    language cannot be read.
+    """
+    collection = Path(collection)
+    settings = collection / validate.DEFAULT_SETTINGS
+    fields = validate.load_fields(settings)
+    reaction_types = validate.load_reaction_types(settings)
+    vocabularies: dict[str, Any] = {}
+    for entity in validate.ENTITIES:
+        for field in getattr(fields, entity.name):
+            if field.vocabulary is not None:
+                vocabularies[field.vocabulary] = _terms_data(field.terms)
+    if (collection / validate.REACTION_TYPES).exists():
+        vocabularies["reaction-types"] = _terms_data(reaction_types)
+
+    registry = collection / validate.DEFAULT_COMPOUNDS
+    compounds = []
+    for name in sorted(os.listdir(registry)) if registry.is_dir() else ():
+        match = validate.COMPOUND_FILE_RE.match(name)
+        if match is None or (registry / name).is_dir():
+            continue
+        item: dict[str, Any] = {
+            "key": match.group(1),
+            "path": f"{validate.DEFAULT_COMPOUNDS.as_posix()}/{name}"}
+        data = validate.read_compound(str(registry / name))
+        if isinstance(data, validate.Problem):
+            item["data"] = None
+            item["error"] = data.message
+        else:
+            item["data"] = _json_value(data)
+        compounds.append(item)
+
+    return {
+        "site_language": site_language(APP / "site"),
+        "schema": {
+            "procedure": {
+                "required": list(validate.REQUIRED_KEYS),
+                "optional": list(validate.OPTIONAL_KEYS),
+                "entry": list(validate.SCOPE_ENTRY_KEYS),
+                "product": list(validate.PRODUCT_KEYS),
+                "statuses": list(validate.STATUSES),
+                "languages": list(validate.LANGUAGES),
+                "shared": list(validate.SHARED_FIELDS),
+                "sections": {language: list(names) for language, names
+                             in validate.SECTIONS_BY_LANGUAGE.items()},
+            },
+            "compound": {
+                "required": list(validate.COMPOUND_REQUIRED_KEYS),
+                "optional": list(validate.COMPOUND_OPTIONAL_KEYS),
+            },
+            "sequence": {
+                "keys": list(validate.SEQUENCE_KEYS),
+                "step": list(validate.STEP_KEYS),
+            },
+        },
+        "fields": {entity.name: [_declaration_data(field, entity.withheld)
+                                 for field in getattr(fields, entity.name)]
+                   for entity in validate.ENTITIES},
+        "vocabularies": vocabularies,
+        "compounds": sorted(compounds, key=lambda item: item["key"]),
+        "procedures": _by_id(
+            _content_entries(collection, "org/procedures", ".org",
+                             validate.PROCEDURE, "org")
+            + _content_entries(collection, "md/procedures", ".md",
+                               validate.PROCEDURE, "md")),
+        "sequences": _by_id(_content_entries(
+            collection, validate.DEFAULT_SEQUENCES.as_posix(), ".md",
+            validate.SEQUENCE)),
+    }
 
 
 def hugo_overlay(site: Path, collection: Path, language: str) -> str:

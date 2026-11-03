@@ -901,6 +901,7 @@ prefix are relative to the collection.
 | `clean` | Removes `build/`, `public/`, and `pdf/`. |
 | `clean --all` | Also removes the application's `.emacs-batch/` and `.tools/`. Their contents are fetched again on the next relevant run. |
 | `check-deps` | Reports required tools; optional Emacs, Git, and Caddy; fetched tools; and the missing tool names when a required tool is missing. |
+| `index` | Prints the collection's schema, field declarations, vocabularies, compounds, procedures and sequences as one line of JSON for an editor. Needs a collection but no external tool, takes no arguments and writes nothing. Lists compound or Markdown files it cannot parse with the reason instead of failing. Org procedures are listed by file name only. Exits 1 on a configuration error. |
 | `help` | Prints the command summary. `-h` and `--help` do the same. |
 
 The program exits 0 on success, 1 on failure, and 2 on a usage error.
