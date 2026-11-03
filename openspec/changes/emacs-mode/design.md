@@ -129,14 +129,18 @@ the package never requires Flycheck.
 
 ### Timestamps through `time-stamp`
 
-The mode sets `time-stamp-active`, `time-stamp-pattern` (to nil, since
-a pattern overrides the other variables), `time-stamp-start`,
-`time-stamp-end`, `time-stamp-format`, `time-stamp-time-zone`,
-`time-stamp-line-limit` and `system-time-locale` buffer-locally and puts
-`time-stamp` on the buffer's `before-save-hook`. The user's global
-values, and a global `time-stamp` hook, stay in force everywhere else;
-in a collection buffer such a hook runs `time-stamp` a second time with
-the buffer's settings, which rewrites the same stamp.
+A function on the buffer's `before-save-hook` sets `time-stamp-active`,
+`time-stamp-pattern` (to nil, since a pattern overrides the other
+variables), `time-stamp-start`, `time-stamp-end`, `time-stamp-format`,
+`time-stamp-time-zone`, `time-stamp-line-limit` and `system-time-locale`
+buffer-locally at each save and runs `time-stamp`, so that the option is
+read at each save and the line limit keeps the search inside the front
+matter, or before an Org source's first heading. The buffer's own local
+values are kept and given back when the mode is turned off or the
+option is nil. The user's global values, and a global `time-stamp` hook,
+stay in force everywhere else; in a collection buffer such a hook runs
+`time-stamp` a second time with the buffer's settings, which rewrites
+the same stamp.
 
 Org uses `%Y-%02m-%02d %3a %02H:%02M:%02S` in Europe/Berlin with
 `system-time-locale` `C` for the English weekday. `time-stamp` has no

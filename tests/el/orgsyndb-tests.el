@@ -1030,6 +1030,27 @@ Also: A run stopped by the export keeps earlier problems."
                               (orgsyndb-test-diagnostics buffer))
                  1)))))
 
+(ert-deftest orgsyndb-test-a-killed-validation-buffer-gives-up-its-turn ()
+  "Scenario: A killed validation buffer gives up its turn."
+  (orgsyndb-test-with (root orgsyndb-test-collection)
+    (let ((orgsyndb-program
+           (orgsyndb-test-stub
+            (concat "  validate) sleep 30;;\n"
+                    "  pdf) mkdir -p \"$2/pdf\"; "
+                    "echo pdf > \"$2/pdf/OSDB-0002-aspirin.pdf\";;\n"))))
+      (with-current-buffer (orgsyndb-test-visit
+                            root "md/procedures/OSDB-0002-aspirin.md")
+        (let ((compilation (orgsyndb-validate)))
+          (sleep-for 0.5)
+          (let ((kill-buffer-query-functions nil))
+            (kill-buffer compilation)))
+        (orgsyndb-pdf))
+      (orgsyndb-test-wait
+       (lambda ()
+         (find-buffer-visiting
+          (expand-file-name "pdf/OSDB-0002-aspirin.pdf" root)))
+       20))))
+
 (ert-deftest orgsyndb-test-a-preview-build-waits-for-the-validation ()
   "Scenario: A preview build waits for the validation."
   (orgsyndb-test-with (root orgsyndb-test-collection)
@@ -1202,11 +1223,49 @@ Also: The fall-back hour."
 (ert-deftest orgsyndb-test-timestamps-turned-off ()
   "Scenario: Turned off."
   (orgsyndb-test-with (root orgsyndb-test-collection)
-    (let* ((orgsyndb-update-timestamps nil)
-           (file (expand-file-name "md/procedures/OSDB-0002-aspirin.md" root))
-           (before (orgsyndb-test-file-line file "lastmod")))
-      (orgsyndb-test-save-at (find-file-noselect file) "2026-07-15T10:00:00Z")
-      (should (equal (orgsyndb-test-file-line file "lastmod") before)))))
+    (let* ((file (expand-file-name "md/procedures/OSDB-0002-aspirin.md" root))
+           (other (expand-file-name "md/procedures/OSDB-0001-salicylic-acid.md"
+                                    root))
+           (before (orgsyndb-test-file-line file "lastmod"))
+           (other-before (orgsyndb-test-file-line other "lastmod"))
+           (visited (find-file-noselect other)))
+      (let ((orgsyndb-update-timestamps nil))
+        (orgsyndb-test-save-at (find-file-noselect file)
+                               "2026-07-15T10:00:00Z")
+        (orgsyndb-test-save-at visited "2026-07-15T10:00:00Z"))
+      (should (equal (orgsyndb-test-file-line file "lastmod") before))
+      (should (equal (orgsyndb-test-file-line other "lastmod")
+                     other-before)))))
+
+(ert-deftest orgsyndb-test-timestamps-only-the-front-matter ()
+  "Scenario: Only the front matter."
+  (orgsyndb-test-with (root orgsyndb-test-collection)
+    (let ((file (expand-file-name "md/procedures/OSDB-0002-aspirin.md" root))
+          (example "lastmod = 2020-01-01T00:00:00+01:00"))
+      (with-current-buffer (find-file-noselect file)
+        (goto-char (point-min))
+        (re-search-forward "^lastmod = .*\n")
+        (replace-match "")
+        (goto-char (point-max))
+        (insert "\n```toml\n" example "\n```\n"))
+      (orgsyndb-test-save-at (find-buffer-visiting file)
+                             "2026-07-15T10:00:00Z")
+      (should (equal (orgsyndb-test-file-line file "lastmod") example)))))
+
+(ert-deftest orgsyndb-test-the-buffers-own-settings-come-back ()
+  "Scenario: The buffer's own settings come back."
+  (orgsyndb-test-with (root orgsyndb-test-collection)
+    (dolist (file '("compounds/acetone.toml"
+                    "md/procedures/OSDB-0002-aspirin.md"))
+      (with-current-buffer (orgsyndb-test-visit root file)
+        (orgsyndb-mode -1)
+        (setq-local time-stamp-format "%Y")
+        (add-hook 'before-save-hook #'time-stamp nil t)
+        (orgsyndb-mode 1)
+        (orgsyndb-mode -1)
+        (should (local-variable-p 'time-stamp-format))
+        (should (equal time-stamp-format "%Y"))
+        (should (memq #'time-stamp before-save-hook))))))
 
 ;;;; New procedure and new compound
 

@@ -285,8 +285,7 @@ Each problem line leads, with `next-error', to the line of the field it
 names.  Return the buffer."
   (interactive)
   (let* ((root (orgsyndb--current-root))
-         (name (format "*orgsyndb validate %s*"
-                       (file-name-nondirectory (directory-file-name root))))
+         (name (orgsyndb--command-buffer-name "validate" root))
          (buffer (get-buffer-create name)))
     (orgsyndb--enqueue
      root 'validate-buffer
@@ -304,10 +303,13 @@ names.  Return the buffer."
          (if (null process)
              (funcall finish 'failed)
            (process-put process 'orgsyndb root)
-           (with-current-buffer compilation
-             (add-hook 'compilation-finish-functions
-                       (lambda (_buffer status) (funcall finish status))
-                       nil t))))))
+           ;; The turn ends with the process, even when the buffer is
+           ;; killed first and its finish functions never run.
+           (add-function :after (process-sentinel process)
+                         (lambda (process _event)
+                           (unless (process-live-p process)
+                             (funcall finish
+                                      (process-exit-status process)))))))))
     buffer))
 
 (provide 'orgsyndb-check)

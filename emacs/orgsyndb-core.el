@@ -234,9 +234,10 @@ be started."
     process))
 
 (defun orgsyndb--command-buffer-name (what root)
-  "Return the name of the buffer of the program's WHAT for ROOT."
+  "Return the name of the buffer of the program's WHAT for the collection
+ROOT, which the name gives as `abbreviate-file-name' does."
   (format "*orgsyndb %s %s*" what
-          (file-name-nondirectory (directory-file-name root))))
+          (abbreviate-file-name (directory-file-name root))))
 
 (defun orgsyndb--command-buffer (what root)
   "Return the buffer of the program's WHAT for the collection ROOT,

@@ -260,7 +260,11 @@ While `orgsyndb-validate-on-save` is non-nil, the default, the package SHALL run
 - **THEN** the buffer has exactly one diagnostic whose text begins `#+CREATED: weekday`
 
 ### Requirement: One command at a time
-The package SHALL run, per collection, at most one of the program's commands that write the collection's `build/`, `public/` or `pdf/`: `validate`, `build`, `pdf`, and `serve` until it prints its `serving` line. A command requested while another of them runs starts when that one ends, in the order requested; a `validate` or `build` that is already waiting is not added a second time. `orgsyndb-validate` waits in the same order. `index` and `new` start at once.
+The package SHALL run, per collection, at most one of the program's commands that write the collection's `build/`, `public/` or `pdf/`: `validate`, `build`, `pdf`, and `serve` until it prints its `serving` line. A command requested while another of them runs starts when that one ends, in the order requested; a `validate` or `build` that is already waiting is not added a second time. `orgsyndb-validate` waits in the same order. A command's turn ends when its process ends, however it ends. `index` and `new` start at once.
+
+#### Scenario: A killed validation buffer gives up its turn
+- **WHEN** an ERT test sets `orgsyndb-program` to a stub that sleeps for `validate` and creates `pdf/OSDB-0002-aspirin.pdf` for `pdf`, calls `orgsyndb-validate` in a buffer visiting `md/procedures/OSDB-0002-aspirin.md` of a copy of the test collection, kills the validation buffer, and calls `orgsyndb-pdf`
+- **THEN** a buffer visits `pdf/OSDB-0002-aspirin.pdf`
 
 #### Scenario: A preview build waits for the validation
 - **WHEN** an ERT test sets `orgsyndb-program` to a stub that records when each run starts and ends, prints its `serving` line for `serve`, and takes one second for `validate`; starts the server, saves a procedure buffer twice in a row and calls `orgsyndb-preview` while the validation runs
@@ -285,11 +289,11 @@ The user option `orgsyndb-diagnostics` SHALL choose how a buffer of kind `org-pr
 - **THEN** nothing was recorded before the stub was provided, and afterwards a checker named `orgsyndb` was recorded whose start function, called in the buffer of "Wrong weekday", reports one error on line 2
 
 ### Requirement: Timestamps on save
-While `orgsyndb-update-timestamps` is non-nil, the default, the mode SHALL keep the modification time of a procedure or sequence current with `time-stamp`, which it puts on the buffer's `before-save-hook` after giving `time-stamp-active`, `time-stamp-pattern`, `time-stamp-start`, `time-stamp-end`, `time-stamp-format`, `time-stamp-time-zone`, `time-stamp-line-limit` and `system-time-locale` buffer-local values, `time-stamp-pattern` nil:
-- In a buffer of kind `org-procedure`, `time-stamp` rewrites the timestamp of the first `#+LAST_MODIFIED` keyword, in any case, as `[YYYY-MM-DD Day hh:mm:ss]`, the Europe/Berlin local time with the English weekday.
+While `orgsyndb-update-timestamps` is non-nil, the default, the mode SHALL keep the modification time of a procedure or sequence current with `time-stamp`, which a function on the buffer's `before-save-hook` runs after giving `time-stamp-active`, `time-stamp-pattern`, `time-stamp-start`, `time-stamp-end`, `time-stamp-format`, `time-stamp-time-zone`, `time-stamp-line-limit` and `system-time-locale` buffer-local values, `time-stamp-pattern` nil:
+- In a buffer of kind `org-procedure`, `time-stamp` rewrites the timestamp of the first `#+LAST_MODIFIED` keyword before the first heading, in any case, as `[YYYY-MM-DD Day hh:mm:ss]`, the Europe/Berlin local time with the English weekday.
 - In a buffer of kind `md-procedure` or `sequence`, it rewrites the value of the front matter's `lastmod` key as `YYYY-MM-DDThh:mm:ss+HH:MM`, the Europe/Berlin local time and the offset in force, both from one offset, so that the text names the instant of the save.
 
-The global values of those variables are untouched. A file without the keyword or key is saved unchanged.
+The option is read at each save. The global values of those variables are untouched, and turning the mode off gives back each of them, and the buffer's `before-save-hook`, the local value it had before. A file without the keyword or key, before the first heading or in the front matter, is saved unchanged.
 
 #### Scenario: Org in winter
 - **WHEN** an ERT test, with the current time fixed at 2026-01-15T10:00:00Z and the global `system-time-locale` set to `de_DE.UTF-8`, saves a modified buffer visiting an Org procedure of a copy of the demo collection whose `#+LAST_MODIFIED` is `[2026-10-20 Tue 10:22:50]`
@@ -312,8 +316,16 @@ The global values of those variables are untouched. A file without the keyword o
 - **THEN** the default value of `time-stamp-format` is still `%Y`, and the buffer's local value differs from it
 
 #### Scenario: Turned off
-- **WHEN** an ERT test saves a modified Markdown procedure buffer with `orgsyndb-update-timestamps` nil
-- **THEN** its `lastmod` line is unchanged
+- **WHEN** an ERT test saves a modified Markdown procedure buffer with `orgsyndb-update-timestamps` nil, and saves another one, visited while the option was non-nil, after setting it to nil
+- **THEN** neither `lastmod` line changed
+
+#### Scenario: Only the front matter
+- **WHEN** an ERT test removes the `lastmod` line from the front matter of `md/procedures/OSDB-0002-aspirin.md` of a copy of the test collection, adds to its body a fenced code block holding the line `lastmod = 2020-01-01T00:00:00+01:00`, and saves it
+- **THEN** that line of the body is unchanged
+
+#### Scenario: The buffer's own settings come back
+- **WHEN** an ERT test gives a buffer visiting a compound file, and one visiting a Markdown procedure with `orgsyndb-mode` off, a local `time-stamp-format` of `%Y` and `time-stamp` on the local `before-save-hook`, then turns `orgsyndb-mode` on and off in each
+- **THEN** each buffer's local `time-stamp-format` is `%Y` and its local `before-save-hook` holds `time-stamp`
 
 ### Requirement: New procedure and new compound
 `orgsyndb-new-procedure` SHALL read a title and, with a prefix argument, a format, `org` or `md`, and a language, `none`, `de` or `en`; without one it uses `org` and `none`. It runs `orgsyndb -C <collection> new`, adding `--md` for Markdown and `--lang <code>` for a language, then the title's words, and visits the file whose collection-relative path the program prints. When the run fails, it signals an error holding the program's error output.
@@ -331,9 +343,9 @@ The global values of those variables are untouched. A file without the keyword o
 ### Requirement: Preview
 `orgsyndb-page-url` SHALL return, for a file of a collection, `http://127.0.0.1:<port>/` followed by `procedures/<id>/` for a procedure, `sequences/<id>/` for a sequence and `compounds/<key>/` for a compound file, the ID in lower case, and by nothing for any other file; `<port>` is the user option `orgsyndb-preview-port`, 8000 by default.
 
-`orgsyndb-serve` SHALL start `orgsyndb -C <collection> serve --port <port>` in the buffer `*orgsyndb serve <collection directory name>*` unless a serve process of the package runs for the collection; `orgsyndb-stop-server` ends that process.
+`orgsyndb-serve` SHALL start `orgsyndb -C <collection> serve --port <port>` in the buffer `*orgsyndb serve <collection>*`, the collection's directory abbreviated as `abbreviate-file-name` does, unless a serve process of the package runs for the collection; `orgsyndb-stop-server` ends that process.
 
-`orgsyndb-preview` SHALL show the page of the current file: with no serve process for the collection, it starts one as `orgsyndb-serve` does and calls `browse-url` on the page's URL once the process prints its `serving` line; with one running, it runs `orgsyndb -C <collection> build` in the background in the buffer `*orgsyndb build <collection directory name>*` and calls `browse-url` when the build exits 0, or displays that buffer when it fails. When the current file is a procedure or sequence that the site does not publish, its message names the variant the page shows: the file tagged with the site's language from the index's `site_language`, else the file without a code, else the other.
+`orgsyndb-preview` SHALL show the page of the current file: with no serve process for the collection, it starts one as `orgsyndb-serve` does and calls `browse-url` on the page's URL once the process prints its `serving` line; with one running, it runs `orgsyndb -C <collection> build` in the background in the buffer `*orgsyndb build <collection>*` and calls `browse-url` when the build exits 0, or displays that buffer when it fails. When the current file is a procedure or sequence that the site does not publish, its message names the variant the page shows: the file tagged with the site's language from the index's `site_language`, else the file without a code, else the other.
 
 `orgsyndb-preview-on-save-mode`, a buffer-local minor mode, SHALL start such a build after each save of its buffer once `orgsyndb-preview-delay` seconds pass without another save, when a serve process runs for the collection, without calling `browse-url`.
 

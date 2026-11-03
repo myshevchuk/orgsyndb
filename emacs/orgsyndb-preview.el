@@ -57,7 +57,8 @@ THEN, when given, is called with `serving' once the process prints its
    root 'serve
    (lambda (finish)
      (let ((buffer (orgsyndb--command-buffer "serve" root))
-           (serving nil))
+           (serving nil)
+           (said ""))
        (condition-case err
            (puthash
             root
@@ -71,13 +72,13 @@ THEN, when given, is called with `serving' once the process prints its
                  (with-current-buffer (process-buffer process)
                    (save-excursion
                      (goto-char (point-max))
-                     (insert output))
-                   (unless serving
-                     (save-excursion
-                       (goto-char (point-min))
-                       (when (re-search-forward "^serving " nil t)
-                         (setq serving t)
-                         (funcall finish 'serving)))))))
+                     (insert output))))
+               (unless serving
+                 (setq said (concat said output))
+                 (when (string-match-p "^serving " said)
+                   (setq serving t
+                         said nil)
+                   (funcall finish 'serving))))
              :on-exit
              (lambda (status _output _errors)
                (remhash root orgsyndb--servers)
