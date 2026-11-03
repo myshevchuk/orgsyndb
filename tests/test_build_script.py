@@ -9,6 +9,7 @@ import ast
 import json
 import os
 import py_compile
+import re
 import shutil
 import subprocess
 import sys
@@ -24,7 +25,7 @@ from pipeline_support import (BOOTSTRAP_HINT, DEMO, GIT_QUIET, HOOK,
                               snapshot)
 
 SUBCOMMANDS = ["export", "validate", "build", "serve", "pdf", "new", "init",
-               "clean", "check-deps", "help"]
+               "clean", "check-deps", "index", "help"]
 
 
 class ProgramTestCase(unittest.TestCase):
@@ -61,7 +62,8 @@ class UsageTests(ProgramTestCase):
             with self.subTest(form=form):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 for name in [*SUBCOMMANDS, "-C"]:
-                    self.assertIn(name, result.stdout)
+                    self.assertRegex(result.stdout,
+                                     rf"(?m)^  {re.escape(name)}\b")
 
     def test_program_is_invoked_through_a_symlink(self) -> None:
         """Scenario: Invoked through a symlink."""

@@ -17,8 +17,9 @@ class DemoSiteWorkflowTests(unittest.TestCase):
         text = WORKFLOW.read_text(encoding="utf-8")
 
         triggers = workflow_key(text, "on")
-        self.assertRegex(triggers,
-                         r"(?s)push:\s*\n\s+branches:\s*\[\s*main\s*\]")
+        self.assertRegex(
+            triggers,
+            r"(?s)push:\s*\n\s+branches:\s*\[\s*main\s*,\s*develop\s*\]")
         self.assertRegex(triggers, r"(?m)^\s+pull_request:")
         self.assertRegex(triggers, r"(?m)^\s+workflow_dispatch:")
         self.assertRegex(workflow_key(text, "permissions"),

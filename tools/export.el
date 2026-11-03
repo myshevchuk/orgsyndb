@@ -5,7 +5,7 @@
 ;; Usage: emacs -Q --batch -l tools/export.el ORG_ROOT STAGING_DIR
 ;;
 ;; Examines the Org sources in the directory ORG_ROOT with osdb-org.el,
-;; beside this file, and prints each problem to stdout as
+;; in the application's emacs/ directory, and prints each problem to stdout as
 ;; "<path>:<field>: <severity>: <message>"; nothing else goes to stdout.
 ;; When any problem is an error, it exits 1 without installing, loading
 ;; or exporting anything.  Otherwise it exports every source to
@@ -77,7 +77,7 @@ ORG_ROOT STAGING_DIR")
 
 ;; By file name, so that `load-path' stays as it is.
 (require 'osdb-org (expand-file-name
-                    "osdb-org"
+                    "../emacs/osdb-org"
                     (file-name-directory
                      (or load-file-name
                          (bound-and-true-p byte-compile-current-file)))))

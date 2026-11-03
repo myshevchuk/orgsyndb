@@ -7,7 +7,7 @@
 ;;   emacs -Q --batch -l tests/el/osdb-org-tests.el \
 ;;         -f ert-run-tests-batch-and-exit
 ;;
-;; The suite loads tools/osdb-org.el relative to its own location, reads
+;; The suite loads emacs/osdb-org.el relative to its own location, reads
 ;; fixtures from tests/fixtures/, and needs neither Org nor ox-hugo nor
 ;; tomelr nor the network.  When the library is missing or fails to load,
 ;; every test fails with that reason instead of the run aborting.
@@ -32,7 +32,7 @@
   "The root of the repository, as a directory name.")
 
 (defconst osdb-org-test-library
-  (expand-file-name "tools/osdb-org" osdb-org-test-repo)
+  (expand-file-name "emacs/osdb-org" osdb-org-test-repo)
   "The library to test, without its suffix.")
 
 (defconst osdb-org-test-fixtures
@@ -53,7 +53,7 @@
   "Load the library, or signal an error naming why it cannot load."
   (unless (featurep 'osdb-org)
     (unless (file-exists-p (concat osdb-org-test-library ".el"))
-      (error "The library tools/osdb-org.el is missing (%s.el)"
+      (error "The library emacs/osdb-org.el is missing (%s.el)"
              osdb-org-test-library))
     (require 'osdb-org osdb-org-test-library)))
 
@@ -1054,6 +1054,60 @@ Return what `osdb-org-examine' returns for its directory."
     (should (equal (length (car result)) 1))
     (should (equal (plist-get (car (car result)) :stem)
                    "OSDB-0001-vorlage.de"))))
+
+;;;; Front matter of an Org source
+
+(ert-deftest osdb-org-test-front-matter-of-the-demo-source ()
+  "Scenario: Demo source."
+  (osdb-org-test-require)
+  (let ((front-matter
+         (osdb-org-front-matter
+          (osdb-org-test-read
+           (expand-file-name
+            "examples/demo/org/procedures/OSDB-0007-ethyl-cinnamate.org"
+            osdb-org-test-repo)))))
+    (should (equal (alist-get 'title front-matter) "Ethyl cinnamate"))
+    (should (equal (alist-get 'slug front-matter) "osdb-0007"))
+    (should (equal (alist-get 'tags front-matter)
+                   '("sample-data" "wittig" "cinnamate")))
+    (should (equal (alist-get 'id front-matter) "OSDB-0007"))
+    (should (equal (alist-get 'authors front-matter) '("G. Example")))
+    (should (equal (alist-get 'working_time front-matter) 5))
+    (should (eq (alist-get 'inert_atmosphere front-matter) 'true))
+    (should (equal (alist-get 'products front-matter)
+                   '(((compound . "ethyl-cinnamate") (yield_percent . 80)))))
+    (should (equal (mapcar #'car front-matter)
+                   '(title slug tags id authors status reaction_types scale
+                           notebook project working_time inert_atmosphere
+                           substrates hazards references products)))))
+
+(ert-deftest osdb-org-test-front-matter-scope-table ()
+  "Scenario: Scope table."
+  (osdb-org-test-require)
+  (let* ((front-matter
+          (osdb-org-front-matter
+           (osdb-org-test-read
+            (expand-file-name "export/OSDB-0909-scope-table.org"
+                              osdb-org-test-fixtures))))
+         (scope (alist-get 'scope front-matter)))
+    (should (eq (car (car (last front-matter))) 'scope))
+    (should (= (length scope) 3))
+    (should (equal (alist-get 'substrates (car scope))
+                   '("acetic-acid" "ethanol")))
+    (should (equal (alist-get 'products (car scope))
+                   '(((compound . "ethyl-acetate") (yield_percent . 45.5))
+                     ((compound . "propyl-acetate") (yield_percent . 30)))))))
+
+(ert-deftest osdb-org-test-front-matter-blocks-and-unreadable-values ()
+  "Scenario: Blocks and unreadable values."
+  (osdb-org-test-require)
+  (should (equal (osdb-org-front-matter
+                  (concat "#+hugo_custom_front_matter: :status \"draft\" "
+                          ":scale \"5 mmol\n"
+                          "#+begin_example\n"
+                          "#+HUGO_CUSTOM_FRONT_MATTER: :id \"OSDB-0001\"\n"
+                          "#+end_example\n"))
+                 '((status . "draft")))))
 
 (provide 'osdb-org-tests)
 

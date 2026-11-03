@@ -229,6 +229,40 @@ produce `unknown field` warnings.
 A compound page adds **Sequences** after **Used in** when any sequence names
 it as its target. The list links those sequences by title, ordered by ID.
 
+**Routes** is the last section of the compound page, after **Sequences**
+when that section is present. It shows ways to make the compound from the
+collection's published procedures, including the procedures that make its
+starting materials. It appears only when a route goes beyond one step.
+When no procedure makes any of the starting materials, **Made by** already
+covers the available steps and there is no **Routes** section.
+
+Read the tree as nested lists. Under a compound, the steps are alternatives:
+any one will do. Under a step, all listed starting materials are needed.
+Each starting material links to its compound page and has its own steps
+below it, down to compounds no procedure makes. Compound links carry the
+values of fields declared `beside = true`, as elsewhere on the site.
+
+Each step shows the procedure's ID and title, entry number for a general
+procedure, yield and status, as in **Made by**. Steps are ordered by
+procedure ID, with a general procedure's entries in entry order. Each entry
+is a separate step and uses only that entry's starting materials. All
+published procedures take part, whatever their status; the badge shows it.
+
+The tree omits a step if any of its starting materials already appears
+above it on the same branch. This avoids cycles such as protection followed
+by removal of the protecting group. A compound whose only steps would loop
+back appears without steps: you must obtain it another way.
+
+The display uses a fixed depth limit of 6 steps and a fixed budget of 200
+steps per tree. These are not collection settings. A larger tree is drawn to
+the largest depth that fits. When more than 200 steps make the compound
+directly, the tree shows only those. A compound cut off by a limit ends with
+**more steps on its page**; follow its link to continue.
+
+The build derives routes automatically. You add nothing to a procedure,
+a compound file or `orgsyndb.toml` for them. Compound pages remain outside
+the search index, so routes do not change search.
+
 ## Collection field declarations
 
 To record extra data such as item numbers, chemical classes or procedure
@@ -642,6 +676,9 @@ in Markdown, including when its steps refer to Org procedures. Copy
 `md/sequences/`. `orgsyndb init` creates this directory; a missing directory
 holds no sequences. `orgsyndb new` creates procedures, so sequence files are
 copied by hand.
+
+A sequence records the route your group runs. The compound page's
+**Routes** tree is derived from the collection's procedures.
 
 Name the file `SEQ-NNNN-short-slug.md`, optionally with `.de` or `.en` before
 `.md`. The short slug matches `[a-z0-9]+(-[a-z0-9]+)*`. The filename's ID must

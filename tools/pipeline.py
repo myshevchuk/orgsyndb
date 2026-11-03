@@ -2,8 +2,8 @@
 
 The Org source names the export needs, the recoverable replacement of
 ``build/export/``, next-ID allocation, slugs, template filling, the Hugo
-overlay, the site's field and reaction-type data, PDF jobs and the
-Pagefind download.
+overlay, the site's field, reaction-type and route data, PDF jobs and
+the Pagefind download.
 File discovery and the reading of the collection settings come from
 ``validate.py`` in the same directory. No Org source is read here: of
 ``org/procedures/`` only the entry names are, and Emacs examines and
@@ -14,6 +14,7 @@ exports the sources. Messages printed to stderr name the program
 import datetime as dt
 import functools
 import hashlib
+import math
 import os
 import re
 import shutil
@@ -45,10 +46,15 @@ PREVIOUS = ".export-previous"
 STAGED = Path("content") / "procedures"
 SEQUENCES_STAGED = Path("content") / "sequences"
 HELP_STAGED = Path("content") / "help"
-# The field and reaction-type data Hugo reads as site.Data.collection,
-# under build/.
+# The field, reaction-type and route data Hugo reads as
+# site.Data.collection, under build/.
 FIELDS_STAGED = Path("data") / "fields.json"
 REACTION_TYPES_STAGED = Path("data") / "reaction_types.json"
+ROUTES_STAGED = Path("data") / "routes.json"
+# The depth limit and the step budget of the route trees the build
+# derives.
+ROUTE_DEPTH = 6
+ROUTE_BUDGET = 200
 
 PAGEFIND_VERSION = "1.5.2"
 PAGEFIND_TARBALL = (f"pagefind-v{PAGEFIND_VERSION}-x86_64-unknown-linux-"
@@ -908,6 +914,286 @@ def reaction_types_data(settings: Path,
                 Path(settings)).items()}
 
 
+class _Maker(NamedTuple):
+    """A step to a compound: a procedure, or one entry of a general
+    procedure, that makes it at YIELD_PERCENT from SUBSTRATES."""
+    procedure: str
+    entry: int | None
+    yield_percent: Any
+    substrates: tuple[str, ...]
+
+
+class _OverBudget(Exception):
+    """A route tree being built has more steps than its budget."""
+
+
+def routes_data(files: Iterable[tuple[Path, dict[str, Any]]],
+                depth: int = ROUTE_DEPTH,
+                budget: int = ROUTE_BUDGET) -> dict[str, list[dict[str, Any]]]:
+    """Return the route trees of the compounds that the procedures of
+    FILES make, drawn to at most DEPTH steps and within BUDGET steps.
+
+    FILES holds pairs of a path and the front matter of a procedure, of
+    which only ``id``, ``products``, ``substrates`` and ``scope`` are
+    read. A step to a compound is a specific procedure that lists it
+    among its ``products``, or an entry of a general procedure that
+    does; it starts from that procedure's or entry's ``substrates``, in
+    order, or from nothing when they are unset. The steps to a compound
+    come by procedure ID, the entries of one procedure in entry order.
+
+    A tree of a compound R alternates compounds and steps: under a
+    compound the steps it keeps, under a step the compounds it starts
+    from. A compound keeps every step to it except those that start
+    from a compound on its path, the compounds from R down to it, both
+    included, so that no cycle is followed. A tree to the depth D
+    expands the compounds fewer than D steps below R; a compound D
+    steps below R is cut off when it keeps a step, and a plain leaf
+    otherwise. R's route tree is its tree to the largest depth from 1
+    to DEPTH that holds at most BUDGET steps, counted at every level,
+    or its tree to the depth 1 when even that holds more.
+
+    The result maps the key of every compound whose route tree goes
+    past one step, that is, one of whose steps starts from a compound
+    that is expanded with a step or cut off, to the list of the steps
+    it keeps. A step is a table of ``procedure``, the procedure's ID;
+    ``entry``, the entry's number counted from 1, only for an entry of
+    a general procedure; ``yield_percent``, the yield of the compound it
+    makes; and ``substrates``, one table per compound it starts from,
+    holding ``compound``, its key, ``steps``, its own steps, empty
+    unless it is expanded, and ``more``, true exactly when it is cut
+    off. Raises ``KeyError`` when a procedure lacks ``id``, or a product
+    lacks ``compound`` or ``yield_percent``.
+    """
+    makers: dict[str, list[_Maker]] = {}
+    for _, data in sorted(files, key=lambda item: item[1]["id"]):
+        scope = data.get("scope")
+        for number, run in enumerate(scope or [data], 1):
+            for product in run.get("products", []):
+                makers.setdefault(product["compound"], []).append(_Maker(
+                    data["id"], number if scope else None,
+                    product["yield_percent"],
+                    tuple(run.get("substrates", []))))
+
+    def kept(compound: str, path: frozenset[str]) -> list[_Maker]:
+        return [maker for maker in makers.get(compound, [])
+                if path.isdisjoint(maker.substrates)]
+
+    def tree(root: str, limit: int,
+             cap: int | None) -> tuple[list[dict[str, Any]], bool]:
+        # The steps of ROOT's tree to the depth LIMIT, and whether it
+        # cuts a compound off; raises _OverBudget past CAP steps.
+        size, cut = 0, False
+
+        def grow(compound: str, path: frozenset[str],
+                 level: int) -> list[dict[str, Any]]:
+            nonlocal size, cut
+            steps = []
+            for maker in kept(compound, path):
+                size += 1
+                if cap is not None and size > cap:
+                    raise _OverBudget
+                substrates = []
+                for key in maker.substrates:
+                    below = path | {key}
+                    substrate: dict[str, Any] = {
+                        "compound": key, "steps": [], "more": False}
+                    if level + 1 < limit:
+                        substrate["steps"] = grow(key, below, level + 1)
+                    elif kept(key, below):
+                        substrate["more"] = cut = True
+                    substrates.append(substrate)
+                step: dict[str, Any] = {"procedure": maker.procedure}
+                if maker.entry is not None:
+                    step["entry"] = maker.entry
+                steps.append(step | {"yield_percent": maker.yield_percent,
+                                     "substrates": substrates})
+            return steps
+
+        return grow(root, frozenset({root}), 0), cut
+
+    # Deepen one level at a time and abandon a tree as soon as it passes
+    # the budget, so that no tree much larger than the budget is built.
+    # A tree that cuts nothing off is the same at every greater depth.
+    routes = {}
+    for compound in sorted(makers):
+        drawn, cut = tree(compound, 1, None)
+        for limit in range(2, depth + 1):
+            if not cut:
+                break
+            try:
+                drawn, cut = tree(compound, limit, budget)
+            except _OverBudget:
+                break
+        if any(substrate["steps"] or substrate["more"]
+               for step in drawn for substrate in step["substrates"]):
+            routes[compound] = drawn
+    return routes
+
+
+def _json_value(value: Any) -> Any:
+    """Return ``value``, a parsed TOML value, as a value ``json.dumps``
+    writes as strict JSON: dates and times as their ISO 8601 text, and
+    a float that is not finite as None, inside arrays and tables too."""
+    match value:
+        case dict():
+            return {key: _json_value(item) for key, item in value.items()}
+        case list():
+            return [_json_value(item) for item in value]
+        case dt.date() | dt.time():
+            return value.isoformat()
+        case float() if not math.isfinite(value):
+            return None
+    return value
+
+
+def _declaration_data(field: validate.Declaration,
+                      withheld: Sequence[str]) -> dict[str, Any]:
+    """Return the index's table of the declaration FIELD: the options
+    every type takes and those of its type, in the validator's order,
+    without the options in WITHHELD."""
+    values = {"min": field.minimum, "max": field.maximum,
+              "pattern": field.pattern and field.pattern.pattern}
+    return {option: values[option] if option in values
+            else getattr(field, option)
+            for option in (*validate.FIELD_OPTIONS,
+                           *validate.TYPE_OPTIONS[field.type])
+            if option not in withheld}
+
+
+def _terms_data(terms: dict[str, validate.Term]) -> dict[str, Any]:
+    """Return the index's table of the vocabulary values TERMS."""
+    return {value: term._asdict() for value, term in terms.items()}
+
+
+def _content_entries(collection: Path, directory: str, suffix: str,
+                     kind: validate.Kind,
+                     source: str | None = None) -> list[dict[str, Any]]:
+    """Return the index entries of the content files of DIRECTORY of
+    COLLECTION, in name order: each file with SUFFIX whose name the
+    file-name pattern of KIND accepts. SOURCE, when given, is the
+    entries' ``format``. An Org file's ``front_matter`` is None; a
+    Markdown file's is parsed."""
+    root = collection / directory
+    pattern = validate.file_name_pattern(suffix, kind.prefix)
+    entries = []
+    for name in sorted(os.listdir(root)) if root.is_dir() else ():
+        match = pattern.match(name)
+        if match is None or (root / name).is_dir():
+            continue
+        item: dict[str, Any] = {"id": match.group(2),
+                                "language": match.group(3),
+                                "path": f"{directory}/{name}"}
+        if source is not None:
+            item["format"] = source
+        item["front_matter"] = None
+        if suffix == ".md":
+            text = validate.read_text(str(root / name))
+            parsed = (validate.parse_front_matter(text)
+                      if isinstance(text, str) else text)
+            if isinstance(parsed, validate.Problem):
+                item["error"] = parsed.message
+            else:
+                item["front_matter"] = _json_value(parsed.data)
+        entries.append(item)
+    return entries
+
+
+def _by_id(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return the index entries ENTRIES ordered by ID and then by path."""
+    return sorted(entries, key=lambda item: (item["id"], item["path"]))
+
+
+def index_data(collection: Path) -> dict[str, Any]:
+    """Return the index of the collection directory COLLECTION, a table
+    that ``json.dumps`` writes as strict JSON.
+
+    Its keys are ``site_language``, the language of the application's
+    site; ``schema``, the procedure, compound and sequence keys the
+    validator knows; ``fields``, the collection's compound and procedure
+    declarations, each with the options of its type and its defaults
+    applied; ``vocabularies``, the values of every vocabulary a
+    declaration names and of the reaction types, each with its
+    ``label``, ``label_de`` and ``parent``; and ``compounds``,
+    ``procedures`` and ``sequences``, one entry per content file whose
+    name the validator accepts, with its parsed table or front matter.
+    A content file that cannot be parsed is listed with that value None
+    and the reason in ``error``; an Org source is listed by name, with
+    ``front_matter`` None. Dates and times appear as ISO 8601 text, and
+    floats that are not finite as None. Reads no Org file and writes
+    nothing. Raises ``validate.ConfigError`` when the settings, the
+    declarations or their vocabularies break a rule of
+    ``validate.load_fields``, or the reaction types one of
+    ``validate.load_reaction_types``, and ValueError when the site's
+    language cannot be read.
+    """
+    collection = Path(collection)
+    settings = collection / validate.DEFAULT_SETTINGS
+    fields = validate.load_fields(settings)
+    reaction_types = validate.load_reaction_types(settings)
+    vocabularies: dict[str, Any] = {}
+    for entity in validate.ENTITIES:
+        for field in getattr(fields, entity.name):
+            if field.vocabulary is not None:
+                vocabularies[field.vocabulary] = _terms_data(field.terms)
+    if (collection / validate.REACTION_TYPES).exists():
+        vocabularies["reaction-types"] = _terms_data(reaction_types)
+
+    registry = collection / validate.DEFAULT_COMPOUNDS
+    compounds = []
+    for name in sorted(os.listdir(registry)) if registry.is_dir() else ():
+        match = validate.COMPOUND_FILE_RE.match(name)
+        if match is None or (registry / name).is_dir():
+            continue
+        item: dict[str, Any] = {
+            "key": match.group(1),
+            "path": f"{validate.DEFAULT_COMPOUNDS.as_posix()}/{name}"}
+        data = validate.read_compound(str(registry / name))
+        if isinstance(data, validate.Problem):
+            item["data"] = None
+            item["error"] = data.message
+        else:
+            item["data"] = _json_value(data)
+        compounds.append(item)
+
+    return {
+        "site_language": site_language(APP / "site"),
+        "schema": {
+            "procedure": {
+                "required": list(validate.REQUIRED_KEYS),
+                "optional": list(validate.OPTIONAL_KEYS),
+                "entry": list(validate.SCOPE_ENTRY_KEYS),
+                "product": list(validate.PRODUCT_KEYS),
+                "statuses": list(validate.STATUSES),
+                "languages": list(validate.LANGUAGES),
+                "shared": list(validate.SHARED_FIELDS),
+                "sections": {language: list(names) for language, names
+                             in validate.SECTIONS_BY_LANGUAGE.items()},
+            },
+            "compound": {
+                "required": list(validate.COMPOUND_REQUIRED_KEYS),
+                "optional": list(validate.COMPOUND_OPTIONAL_KEYS),
+            },
+            "sequence": {
+                "keys": list(validate.SEQUENCE_KEYS),
+                "step": list(validate.STEP_KEYS),
+            },
+        },
+        "fields": {entity.name: [_declaration_data(field, entity.withheld)
+                                 for field in getattr(fields, entity.name)]
+                   for entity in validate.ENTITIES},
+        "vocabularies": vocabularies,
+        "compounds": sorted(compounds, key=lambda item: item["key"]),
+        "procedures": _by_id(
+            _content_entries(collection, "org/procedures", ".org",
+                             validate.PROCEDURE, "org")
+            + _content_entries(collection, "md/procedures", ".md",
+                               validate.PROCEDURE, "md")),
+        "sequences": _by_id(_content_entries(
+            collection, validate.DEFAULT_SEQUENCES.as_posix(), ".md",
+            validate.SEQUENCE)),
+    }
+
+
 def hugo_overlay(site: Path, collection: Path, language: str) -> str:
     """Return the Hugo configuration overlay for building ``collection``.
 
@@ -920,8 +1206,9 @@ def hugo_overlay(site: Path, collection: Path, language: str) -> str:
     ``build/content/help/``, the collection's static files, the
     collection's ``compounds/`` as the data entry ``compounds``, the
     staged sequences of ``build/content/sequences/``, and the staged
-    ``build/data/`` as the data entry ``collection``. The site has no
-    data entry but these two.
+    ``build/data/``, which holds the field, reaction-type and route
+    data, as the data entry ``collection``. The site has no data entry
+    but these two.
     """
     site, collection = Path(site), Path(collection)
 

@@ -24,6 +24,12 @@ Reihe nach, statt die Referenz zu wiederholen. Die englische Fassung ist
 
 ## 1. Eine Vorschriftendatei bekommen
 
+Wenn Sie in Emacs schreiben, vervollständigt das Paket `orgsyndb` die
+Schlüssel und Werte im Datenblock am Anfang der Datei. Es zeigt Probleme
+beim Schreiben und nach dem Speichern, hält die Änderungszeit aktuell und
+öffnet eine Vorschau der Seite. Die Installation erklärt die README der
+Anwendung im Abschnitt „Edit in Emacs“.
+
 Die Vorlage für deutsche Vorschriften ist
 [`templates/procedure.de.md`](../templates/procedure.de.md).
 
@@ -232,6 +238,32 @@ jede Vorschrift einmal; auch die Verzeichniszähler zählen sie nur einmal.
 Nach **Verwendet in** verlinkt **Synthesewege** die Wege, die diese Verbindung
 als Ziel nennen, nach Nummer geordnet. Der Abschnitt erscheint nur bei
 passenden Synthesewegen.
+
+**Herstellungswege** steht am Seitenende, nach **Synthesewege**, falls
+vorhanden. Der Abschnitt erscheint nur, wenn ein Weg über eine Stufe
+hinausgeht: Eine Vorschrift stellt einen Ausgangsstoff für eine weitere
+Stufe her. Der Baum zeigt die Stufen zur Verbindung, darunter die
+Ausgangsstoffe jeder Stufe und deren Herstellungsstufen, bis zu
+Verbindungen, die keine Vorschrift herstellt. Unter einer Verbindung genügt
+eine der Stufen; unter einer Stufe werden alle Ausgangsstoffe benötigt. Jede
+Stufe zeigt den Vorschriftenlink, gegebenenfalls die Eintragsnummer,
+Ausbeute und Status wie unter **Hergestellt nach**. Alle veröffentlichten
+Vorschriften nehmen unabhängig vom Status teil. Ein Eintrag einer
+allgemeinen Vorschrift verwendet nur seine eigenen Ausgangsstoffe. Die
+Verbindungslinks tragen die Werte der mit `beside = true` deklarierten
+Felder.
+
+Beginnt eine Stufe mit einer Verbindung, die auf demselben Ast bereits
+weiter oben steht, entfällt sie; Kreise werden nicht verfolgt. Würden alle
+Stufen zurückführen, erscheint die Verbindung ohne Stufen und muss anders
+beschafft werden. Die Anzeige verwendet eine feste Tiefengrenze von 6 Stufen
+und ein festes Budget von 200 Stufen pro Baum. Ein zu großer Baum wird bis
+zur größten Tiefe gezeigt, die noch passt. Stellen mehr als 200 Stufen die
+Verbindung direkt her, zeigt der Baum nur diese. Eine abgeschnittene
+Verbindung trägt den Zusatz **weitere Stufen auf ihrer Seite**; folgen Sie
+ihrem Link, um den Weg fortzusetzen. Der Build leitet die Herstellungswege
+ab. Dafür tragen Sie nichts zusätzlich in eine Vorschrift, eine
+Verbindungsdatei oder `orgsyndb.toml` ein.
 
 ### Eine allgemeine Vorschrift schreiben
 
@@ -599,6 +631,9 @@ herzustellen, halten Sie diesen Weg als **Syntheseweg** fest. Jede Stufe nennt
 die Vorschrift und bei einer allgemeinen Vorschrift den gewählten
 Scope-Eintrag. Die Website prüft den Zusammenhang der Stufen und berechnet die
 Gesamtausbeute.
+Der Syntheseweg hält den Weg fest, den Ihre Gruppe durchführt; den Baum
+**Herstellungswege** auf der Verbindungsseite leitet die Website aus den
+Vorschriften der Sammlung ab.
 
 Kopieren Sie [templates/sequence.md](../templates/sequence.md) nach
 `md/sequences/` der Sammlung. `orgsyndb init` legt diesen Ordner an.

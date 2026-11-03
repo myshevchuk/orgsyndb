@@ -163,9 +163,9 @@ class OldEmacsTests(ExportTestCase):
 class NoPackageElTests(unittest.TestCase):
     def test_no_package_el(self) -> None:
         """Scenario: No package.el."""
-        for name in ("export.el", "osdb-org.el"):
-            path = REPO / "tools" / name
-            self.assertTrue(path.is_file(), f"tools/{name} does not exist")
+        for name in ("tools/export.el", "emacs/osdb-org.el"):
+            path = REPO / name
+            self.assertTrue(path.is_file(), f"{name} does not exist")
             text = path.read_text(encoding="utf-8")
             with self.subTest(file=name):
                 self.assertNotIn("package-vc", text)

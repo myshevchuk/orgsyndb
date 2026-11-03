@@ -1,11 +1,11 @@
 # Builds the demo collection and publishes it with GitHub Pages. Pull
-# requests only build; pushes to main also deploy. The repository's
-# Pages source must be set to GitHub Actions.
+# requests and pushes to develop only build; pushes to main also
+# deploy. The repository's Pages source must be set to GitHub Actions.
 name: Demo site
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
   workflow_dispatch:
 

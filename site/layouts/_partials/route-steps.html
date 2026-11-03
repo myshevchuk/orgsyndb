@@ -1,0 +1,29 @@
+{{- /* A ul of route steps, one li.route-step per step of steps, a list
+of steps of site.Data.collection.routes, in order; the ul carries class
+when it is given. pages maps a procedure ID to its published page. A
+step reads as an item of Made by on a compound page: the procedure link
+with its ID and title, the entry for an entry of a general procedure,
+the yield and the status badge; then, when the step starts from any
+compound, a ul with one li.route-compound per compound, holding its
+compound link (compound-link.html) and either its own steps, drawn by
+this partial, or, when the depth limit cut it off, " · " and a
+span.route-more. Takes a dict of steps, pages and class. */ -}}
+{{- $pages := .pages -}}
+<ul{{ with .class }} class="{{ . }}"{{ end }}>
+{{ range .steps -}}
+{{ $page := index $pages .procedure -}}
+<li class="route-step"><a href="{{ $page.RelPermalink }}">{{ $page.Params.id }} {{ $page.Title }}</a>{{ with .entry }} · {{ T "made_by_entry" . }}{{ end }} · {{ partial "decimal.html" .yield_percent }} % · <span class="badge badge--{{ $page.Params.status }}">{{ partial "status-label.html" $page.Params.status }}</span>
+{{- with .substrates }}
+<ul>
+{{ range . -}}
+<li class="route-compound">{{ partial "compound-link.html" .compound }}
+{{- with .steps }}
+{{ partial "route-steps.html" (dict "steps" . "pages" $pages) }}
+{{- else }}{{ if .more }} · <span class="route-more">{{ T "routes_more" }}</span>{{ end }}{{ end -}}
+</li>
+{{ end -}}
+</ul>
+{{- end -}}
+</li>
+{{ end -}}
+</ul>

@@ -32,10 +32,20 @@
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-01 Sun 16:42] -- collection reaction-type keys in German procedures
 #+AI_PASS: fact-check claude-opus-5-5 [2026-11-01 Sun 16:55] -- doc-writer pass line corrected from gpt-6 to the pinned run model; schema links without a search, which help pages drop
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-01 Sun 21:54] -- notes after compound links
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-02 Mon 19:51] -- derived routes in the compound registry and sequence guidance
+#+AI_PASS: fact-check claude-opus-5-5 [2026-11-02 Mon 20:05] -- doc-writer pass line corrected from gpt-6 to the pinned run model; the step budget's depth-1 exception
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-03 Tue 08:15] -- Emacs package pointer
+#+AI_PASS: fact-check claude-opus-5-5 [2026-11-03 Tue 08:18] -- doc-writer pass line corrected from gpt-6 to the pinned run model; #+LAST_MODIFIED is updated on save by the Emacs package
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
 * Start from a generated stub
+
+  If you write in Emacs, the ~orgsyndb~ package completes metadata keys
+  and values in the file's header, called front matter. It shows problems
+  while you write and after saving, keeps the modification time current
+  and previews the page. For installation, see the application's README,
+  section “Edit in Emacs”.
 
   Create an Org procedure, from inside its collection, with:
 
@@ -70,7 +80,8 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   - ~#+CREATED~ :: When the procedure was first written, as an inactive Org
     timestamp.
   - ~#+LAST_MODIFIED~ :: When the procedure was last changed. Update this by
-    hand after every change; no command updates it automatically.
+    hand after every change; the ~orgsyndb~ program does not update it, and
+    only the Emacs package updates it when you save.
   - ~#+AI_MODEL~ (optional) :: The identifier of a model that assisted. Omit
     the line or use ~none~ to record no model.
   - ~#+OPTIONS: author:nil~ :: Prevents Org authorship metadata from becoming
@@ -211,6 +222,27 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   procedure once; the directory also counts each procedure once. When a
   sequence names this compound as its target, *Sequences* follows *Used in*
   and links those sequences by title, ordered by sequence ID.
+
+  *Routes* ends the page, after *Sequences* when present, if a route goes
+  beyond one step: a procedure makes a starting material for another step.
+  The tree shows steps that make the compound, then each step's starting
+  materials, then the steps that make those, down to compounds no procedure
+  makes. Under a compound, any one step will do; under a step, all starting
+  materials are needed. Each step shows the procedure link, entry number when
+  needed, yield and status, as in *Made by*. All published procedures take
+  part, whatever their status. A general procedure's entry uses only its own
+  starting materials. Compound links carry the values of fields declared
+  ~beside = true~.
+
+  A step is omitted if it starts from a compound already above it on the
+  same branch, so the tree never follows a cycle. If all steps would loop
+  back, the compound appears without steps and must be obtained another way.
+  The display uses a fixed depth limit of 6 steps and a fixed budget of 200
+  steps per tree. A larger tree is drawn to the largest depth that fits.
+  When more than 200 steps make the compound directly, the tree shows only
+  those. A compound cut off by a limit ends with *more steps on its page*;
+  follow its link to continue. Routes are derived during the build. You
+  write nothing extra in a procedure, a compound file or ~orgsyndb.toml~.
 
 * Write a general procedure
 
@@ -619,6 +651,8 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   a general procedure. The site checks that the steps connect and calculates
   the overall yield. Sequences are written in Markdown, even when all their
   procedures are Org sources. There is no Org sequence export.
+  A sequence records the route your group runs; the compound page's
+  *Routes* tree is derived from the collection's procedures.
 
   Copy [[file:../templates/sequence.md][templates/sequence.md]] into the collection's ~md/sequences/~.
   ~orgsyndb init~ creates this directory. ~orgsyndb new~ creates procedure

@@ -371,9 +371,9 @@ The site SHALL publish, for every compound of the registry, a page at `/compound
 - when the compound sets `structure_image`, a `figure.structure` holding an `img` whose `src` resolves to the published image and whose `alt` is `Structure of <name>`; otherwise no figure and no placeholder;
 - a `dl.compound-facts` with the pairs `Formula`, `MW`, `CAS` (only when set) and `SMILES`, written as the metadata panel writes them, the SMILES with its copy button, followed by one pair for each field the collection declares and the compound sets, in declared order, its label and value written as compound-fields "Field display" states, with whitespace after each `</dt>`;
 - `section.compound-made-by`, only when some published procedure has the compound among its products, with the `h2` `Made by` and a `ul` holding one `li` per such procedure, by ID, or, for a general procedure, one per entry that makes the compound, in entry order: an `a` linking the procedure page with the text `<ID> <title>`, then, for a general procedure, ` · entry <n>`, then ` · `, the yield of this compound in that procedure or entry as `<n> %`, then ` · ` and the procedure's status badge;
-- `section.compound-used-in`, only when some published procedure has the compound among its `substrates`, with the `h2` `Used in` and a `ul` holding one `li` per such procedure, by ID: an `a` linking the procedure page with the text `<ID> <title>`, then ` · ` and its status badge.
-
-- `section.compound-sequences`, as synthesis-sequences "Sequences beside procedures and compounds" states.
+- `section.compound-used-in`, only when some published procedure has the compound among its `substrates`, with the `h2` `Used in` and a `ul` holding one `li` per such procedure, by ID: an `a` linking the procedure page with the text `<ID> <title>`, then ` · ` and its status badge;
+- `section.compound-sequences`, as synthesis-sequences "Sequences beside procedures and compounds" states;
+- `section.compound-routes`, as synthesis-routes "Routes on compound pages" states.
 
 A compound page carries no `data-pagefind-body`, so the search index holds procedures only, and it loads no script but `site.js`.
 

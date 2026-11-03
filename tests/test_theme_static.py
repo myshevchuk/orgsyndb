@@ -186,6 +186,25 @@ class CompoundBesideStyleTests(unittest.TestCase):
                       [ps.plain_value(decl.value) for decl in found])
 
 
+class RouteTreeStyleTests(unittest.TestCase):
+    def rules(self, selector: str, prop: str) -> list[str]:
+        """The plain values that ``base.css`` gives ``prop`` in rules
+        whose selector list names exactly ``selector``."""
+        return [ps.plain_value(decl.value) for decl in css("base.css")
+                if decl.prop == prop and selector in ps.selectors_of(decl)]
+
+    def test_the_tree_is_set_in_the_interface_font_with_a_rule_line(
+            self) -> None:
+        """Scenario: The tree style."""
+        self.assertIn("var(--font-ui)", self.rules(".route-tree",
+                                                   "font-family"))
+        borders = self.rules(".route-tree ul", "border-left")
+        self.assertTrue(borders, "base.css has no border-left for "
+                                 ".route-tree ul")
+        self.assertTrue(any("var(--border)" in value for value in borders),
+                        borders)
+
+
 class ContrastFunctionTests(unittest.TestCase):
     """The helpers must reproduce known WCAG values, or the test above
     would hold nothing."""

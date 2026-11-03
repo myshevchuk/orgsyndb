@@ -448,6 +448,8 @@ general procedure. The validator warns `unknown field` for `product`, top-level
 A synthesis sequence records the route you run through two or more procedures,
 including the chosen entry of a general procedure. The site checks that the
 steps connect and calculates the overall yield from their product yields.
+The **Routes** tree on a compound page is derived from the collection's
+procedures.
 
 Copy [`templates/sequence.md`](templates/sequence.md) into the collection's
 `md/sequences/`, named `SEQ-NNNN-short-slug.md`. Choose an unused number from
@@ -630,6 +632,31 @@ placeholder is **Product, CAS, SMILES or keyword** and its accessible name is
   matching procedures. **Sequences** follows **Used in** when any sequence
   names this compound as its target; it links those sequences by title, ordered
   by sequence ID. Compound pages mark **Compounds** as the current section.
+
+  **Routes** is the page's last section, after **Sequences** when present.
+  It shows ways to make the compound from the collection's published
+  procedures, each step with its starting materials. It appears only when
+  a route goes beyond one step; otherwise **Made by** already covers it.
+  Read the nested lists as alternatives under each compound and required
+  starting materials under each step. Those compounds link to their own
+  pages, with any values declared `beside = true`, and have their own
+  steps below them. Each step shows the procedure's ID and title, entry
+  number when needed, yield and status, as in **Made by**. Steps follow
+  procedure ID and then entry order. All published procedures take part,
+  whatever their status. A general procedure's entry uses only its own
+  starting materials.
+
+  A step that starts from a compound already above it on the same branch is
+  omitted, so cycles are not followed. If all steps would loop back, the
+  compound appears without steps and must be obtained another way. The
+  display uses a fixed depth limit of 6 steps and a fixed budget of 200
+  steps per tree. A larger tree is drawn to the largest depth that fits.
+  When more than 200 steps make the compound directly, the tree shows only
+  those. A compound cut off by a limit ends with **more steps on its page**;
+  follow its link to continue. Routes are derived during the build; you add
+  nothing to a procedure, a compound file or `orgsyndb.toml`. Compound pages
+  remain outside the search index, so routes do not change search.
+
 - `/sequences/` lists every published sequence by ID. Each row shows its title
   linked to the sequence page, its target linked to the compound page, the
   number of steps and the overall yield. The directory works without
@@ -848,6 +875,149 @@ combine a sequence and its procedures into one PDF.
 Org files remain the source of truth. Never edit their generated Markdown
 copies in `build/export/`.
 
+## Edit in Emacs
+
+The `orgsyndb` package helps you fill in procedure metadata, find compounds,
+check your work and preview the page from Emacs. It lives in the
+application's `emacs/` directory and needs Emacs 29.1 or later. It requires
+no third-party package; Flycheck is optional.
+
+### Install the package
+
+Choose one of these three methods. Replace `~/path/to/orgsyndb` with your
+application checkout.
+
+**Load from a checkout.** Add this to your Emacs init file:
+
+```elisp
+(add-to-list 'load-path "~/path/to/orgsyndb/emacs")
+(require 'orgsyndb)
+(global-orgsyndb-mode 1)
+```
+
+**Doom Emacs.** Add this to `packages.el`:
+
+```elisp
+(package! orgsyndb
+  :recipe (:local-repo "~/path/to/orgsyndb" :files ("emacs/*.el")))
+```
+
+Add this to `config.el`, then run `doom sync`:
+
+```elisp
+(use-package! orgsyndb
+  :config (global-orgsyndb-mode 1))
+```
+
+**Install from Git.** Use `package-vc-install`:
+
+```elisp
+(package-vc-install
+ '(orgsyndb :url "https://github.com/myshevchuk/orgsyndb"
+            :lisp-dir "emacs"))
+```
+
+This installs from the repository's default branch, `main`, which is
+stable. To install the newest work, add `:branch "develop"` to the package
+specification:
+
+```elisp
+(package-vc-install
+ '(orgsyndb :url "https://github.com/myshevchuk/orgsyndb"
+            :lisp-dir "emacs" :branch "develop"))
+```
+
+Then add this to your init file:
+
+```elisp
+(require 'orgsyndb)
+(global-orgsyndb-mode 1)
+```
+
+This method clones the repository into Emacs's package directory. The
+package runs `tools/orgsyndb` from that clone. With the checkout methods,
+it runs the program from the checkout holding the package. Set
+`orgsyndb-program` if you want to use another program.
+
+### Write and check a procedure
+
+`global-orgsyndb-mode` enables `orgsyndb-mode` when you visit a collection's
+Org or Markdown procedure, sequence, compound file, vocabulary or
+`orgsyndb.toml`, whatever the major mode. `OSDB` appears in the mode line.
+Press `C-c C-;` to open the menu of commands, or call them with `M-x`.
+
+Use `completion-at-point` to fill in metadata keys and values. In
+Markdown procedures, completion works inside the `+++` information block;
+in Org, it works on `#+HUGO_CUSTOM_FRONT_MATTER` and `#+HUGO_TAGS` lines
+and in the `substrates` and `products` columns of the table named `scope`.
+It offers statuses, languages, reaction types, tags, authors, compound
+keys, scheme images and the collection's declared choice and boolean
+fields. Labels and compound names help you choose. Sequences also offer
+procedure IDs, general-procedure entry numbers and target compound keys;
+compound files offer keys, declared choice and boolean values, and
+structure images. Completion leaves body text to your other completion
+functions.
+
+To insert a compound key by its name, use `M-x orgsyndb-insert-compound`;
+in `.de` files it offers German names. On a compound key, `OSDB-NNNN` or
+`SEQ-NNNN`, press `M-.` to visit its file or `M-?` to list mentions in
+procedures and sequences, including mentions in body text. Navigation
+prefers the current file's language, then the variant without a language
+code. Eldoc, Emacs's information display at the cursor, shows a compound's
+name, formula, molecular weight and CAS number, or a procedure's title and
+status. `M-x orgsyndb-structure-mode` opens a side window with the
+compound's name, formula and structure image when available.
+
+In Org sources, checks of the file name, keywords, timestamps and scope
+table show problems as you type. Saving a collection file runs
+`orgsyndb validate` for the whole collection in the background. Its
+problems appear on the relevant field lines in open collection buffers;
+export problems appear on the Org source. If the export stops validation,
+Emacs says why and keeps the earlier validation problems. Flymake shows
+problems by default. Set `orgsyndb-diagnostics` to `flycheck` to use
+Flycheck, or to `nil` to disable both displays. Set
+`orgsyndb-validate-on-save` to `nil` to disable validation on save.
+`M-x orgsyndb-validate` lists every problem in a compilation buffer;
+`M-x next-error` takes you to each field's line.
+
+Saving a procedure or sequence also updates `#+LAST_MODIFIED` or `lastmod`
+in Europe/Berlin time, with English weekdays and the appropriate offset.
+The mode uses settings local to that buffer, so your `time-stamp` settings
+elsewhere stay in force. Set `orgsyndb-update-timestamps` to `nil` to
+disable these updates. Collection data is read through `orgsyndb index`
+when first needed and refreshed after each save. For changes made outside
+Emacs, save a collection file or run `M-x orgsyndb-refresh-index`.
+
+### Create files and preview the result
+
+- `M-x orgsyndb-new-procedure` creates a stub through `orgsyndb new`.
+  With `C-u M-x orgsyndb-new-procedure`, choose the format and language.
+- `M-x orgsyndb-new-compound` asks for a key, the built-in compound values
+  and each required declared field, then writes `compounds/<key>.toml`.
+  Leave an optional value empty to omit it.
+- `M-x orgsyndb-visit-variant` opens another language variant of the
+  procedure or sequence. `M-x orgsyndb-create-translation` creates a
+  procedure variant beside the source, keeping its front matter with new
+  creation and modification times and replacing the body headings with
+  those of the other language. Translate the text in place. The command
+  refuses to overwrite an existing file.
+
+Run `M-x orgsyndb-preview` to open the current file's page in your browser.
+The first preview starts `orgsyndb serve`; later previews rebuild the
+site. The port is `orgsyndb-preview-port`, initially 8000. The site shows
+one language; when the page uses another variant, Emacs names it in a
+message. `M-x orgsyndb-preview-on-save-mode` rebuilds while the site is
+served, after one second without another save by default; adjust
+`orgsyndb-preview-delay` to change that interval. Reload the browser page
+to see changes. Use `M-x orgsyndb-stop-server` to stop serving, or
+`M-x orgsyndb-serve` to start it directly. `M-x orgsyndb-pdf` builds the
+PDFs and opens the current procedure's PDF.
+
+The package runs validation, builds, PDFs and the server's first build
+one at a time per collection because each rewrites `build/`. Requests
+wait for the preceding run. Commands started in a shell are not
+coordinated with these runs.
+
 ## Command reference
 
 ```text
@@ -874,6 +1044,7 @@ prefix are relative to the collection.
 | `clean` | Removes `build/`, `public/`, and `pdf/`. |
 | `clean --all` | Also removes the application's `.emacs-batch/` and `.tools/`. Their contents are fetched again on the next relevant run. |
 | `check-deps` | Reports required tools; optional Emacs, Git, and Caddy; fetched tools; and the missing tool names when a required tool is missing. |
+| `index` | Prints the collection's schema, field declarations, vocabularies, compounds, procedures and sequences as one line of JSON for an editor. Needs a collection but no external tool, takes no arguments and writes nothing. Lists compound or Markdown files it cannot parse with the reason instead of failing. Org procedures are listed by file name only. Exits 1 on a configuration error. |
 | `help` | Prints the command summary. `-h` and `--help` do the same. |
 
 The program exits 0 on success, 1 on failure, and 2 on a usage error.
@@ -937,7 +1108,7 @@ These directories are generated and must not be committed. The collection's
 
 | Directory | Where | Contents |
 |---|---|---|
-| `build/` | collection | Org exports, selected procedure and sequence variants under `content/`, compound and procedure field declarations with display and filter settings and vocabulary labels, paths, ancestors and tree order in `data/fields.json`, reaction-type labels in `data/reaction_types.json`, the generated Hugo configuration overlay, Hugo's resource cache, temporary export data, and `export.log`. |
+| `build/` | collection | Org exports, selected procedure and sequence variants under `content/`, compound and procedure field declarations with display and filter settings and vocabulary labels, paths, ancestors and tree order in `data/fields.json`, reaction-type labels in `data/reaction_types.json`, derived routes in `data/routes.json`, the generated Hugo configuration overlay, Hugo's resource cache, temporary export data, and `export.log`. |
 | `public/` | collection | The complete static website and Pagefind index. |
 | `pdf/` | collection | One generated PDF per procedure. |
 | `.emacs-batch/` | application | The application's own ox-hugo and tomelr installations. |
@@ -964,10 +1135,23 @@ each parent followed by its descendants in file order. The overlay mounts
 `label` in the site's language. The theme reads these labels as
 `site.Data.collection.reaction_types`.
 
+Before Hugo runs, the build also writes `build/data/routes.json`. For each
+compound with a route beyond one step, it holds a list of steps. Each step
+has `procedure`, `yield_percent` and `substrates`, with `entry` only for an
+entry of a general procedure. Each substrate has `compound`, its own
+`steps` list (empty unless drawn), and `more`, which is true when a limit
+cuts it off. The theme reads this data as `site.Data.collection.routes`.
+
 It runs Hugo without a build lock, so nothing is written under the
 application's `site/`.
 
 ## Development
+
+Work lands on `develop`. Start change branches from `develop` and
+squash-merge them back into it; target `develop` in pull requests. `main`
+is the stable branch and the repository's default branch. It moves only
+at the owner's request, by fast-forward to a tested commit of `develop`.
+Every push to `main` deploys the demo site.
 
 Run the test suite from the application's root with:
 
@@ -982,16 +1166,25 @@ PDF checks. Tests that cannot find an optional tool skip their checks and
 name the missing tool. The integration tests build, validate, serve, and print
 copies of the Markdown-only test collection in `tests/fixtures/collection/`.
 They need Hugo and the cached Pagefind binary; the PDF tests also need
-WeasyPrint. Only the Org export tests copy the demo collection. Those tests
+WeasyPrint. The Org export tests copy the demo collection. Those tests
 need Emacs, Git, and the ox-hugo cache in `.emacs-batch/`; without Emacs, they
 skip with the reason `emacs not found`.
 
-The Org front end has an ERT suite in `tests/el/osdb-org-tests.el`.
-`tests/test_elisp.py` runs it under pytest, or you can run it directly:
+The Org front end and the Emacs package have suites using ERT, Emacs's
+Lisp test framework, in `tests/el/osdb-org-tests.el` and
+`tests/el/orgsyndb-tests.el`. `tests/test_elisp.py` runs both under pytest
+and byte-compiles every file in `emacs/`, treating warnings as errors.
+You can also run each suite directly:
 
 ```sh
 emacs -Q --batch -l tests/el/osdb-org-tests.el -f ert-run-tests-batch-and-exit
+emacs -Q --batch -l tests/el/orgsyndb-tests.el -f ert-run-tests-batch-and-exit
 ```
+
+The package suite uses temporary copies of the test collection and the
+demo. It runs the repository's `tools/orgsyndb` for `index` and `validate`,
+so it needs Python 3.14. Commands that start servers, builds and PDFs use
+a stub program. One test needs the ox-hugo cache and skips without it.
 
 To cache Pagefind, run `tools/orgsyndb -C examples/demo build` once. If you do
 not have Emacs, build a copy of `tests/fixtures/collection` outside
@@ -1000,13 +1193,15 @@ the generated `build/` and `public/` directories would affect the fixture
 checks.
 
 The `Emacs 29 export` GitHub Actions workflow runs the export integration
-tests and the ERT suite on Ubuntu 24.04's Emacs 29 with:
+tests and both ERT suites through `tests/test_elisp.py` on Ubuntu 24.04's
+Emacs 29 with:
 
 ```sh
 python -m pytest tests/test_export_integration.py tests/test_elisp.py
 ```
 
-It runs on pushes to `main`, pull requests, and manual dispatch.
+It runs on pushes to `main` and `develop`, pull requests, and manual
+dispatch.
 
 ## Troubleshooting
 
@@ -1191,9 +1386,9 @@ This repository publishes only its demo collection to GitHub Pages with
 [`.github/workflows/demo-site.yml`](.github/workflows/demo-site.yml). The
 workflow builds `examples/demo/` in a `fedora:44` container with
 `tools/orgsyndb -C examples/demo build`, then uploads
-`examples/demo/public`. A push to `main` builds and deploys the site. A pull
-request builds it without deploying, and you can also start the workflow by
-hand. Deployment runs only for `main`.
+`examples/demo/public`. A push to `main` builds and deploys the site. A push
+to `develop` or a pull request builds it without deploying. You can also
+start the workflow by hand. Deployment runs only for `main`.
 
 To publish the demo from a fork, set the repository's Pages source to
 **GitHub Actions** under **Settings > Pages**. The workflow needs no

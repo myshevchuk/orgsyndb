@@ -252,6 +252,48 @@ Eine Verbindungsseite ergänzt nach **Verwendet in** den Abschnitt
 **Synthesewege**, wenn Synthesewege diese Verbindung als Ziel nennen. Die
 Liste verlinkt deren Titel, nach Nummer geordnet.
 
+**Herstellungswege** ist der letzte Abschnitt der Verbindungsseite, nach
+**Synthesewege**, sofern dieser Abschnitt vorhanden ist. Er zeigt Wege zur
+Verbindung aus den veröffentlichten Vorschriften der Sammlung, einschließlich
+der Vorschriften für ihre Ausgangsstoffe. Er erscheint nur, wenn ein Weg
+über eine Stufe hinausgeht. Stellt keine Vorschrift einen der Ausgangsstoffe
+her, deckt **Hergestellt nach** die verfügbaren Stufen bereits ab; der
+Abschnitt **Herstellungswege** entfällt.
+
+Der Baum besteht aus verschachtelten Listen. Unter einer Verbindung stehen
+alternative Stufen: Eine davon genügt. Unter einer Stufe werden alle
+aufgeführten Ausgangsstoffe benötigt. Jeder Ausgangsstoff verlinkt auf seine
+Verbindungsseite; darunter stehen wiederum seine Herstellungsstufen, bis zu
+Verbindungen, die keine Vorschrift herstellt. Die Verbindungslinks tragen
+wie sonst auf der Website die Werte der mit `beside = true` deklarierten
+Felder.
+
+Jede Stufe zeigt Nummer und Titel der Vorschrift, bei einer allgemeinen
+Vorschrift die Eintragsnummer, Ausbeute und Status wie unter **Hergestellt
+nach**. Die Stufen sind nach Vorschriftennummer geordnet, die Einträge einer
+allgemeinen Vorschrift nach Eintragsreihenfolge. Jeder Eintrag ist eine
+eigene Stufe und verwendet nur seine eigenen Ausgangsstoffe. Alle
+veröffentlichten Vorschriften nehmen unabhängig vom Status teil; die
+Statusmarkierung zeigt ihn an.
+
+Beginnt eine Stufe mit einer Verbindung, die auf demselben Ast bereits
+weiter oben steht, entfällt diese Stufe. So werden Kreise wie das Anbringen
+und Entfernen einer Schutzgruppe nicht verfolgt. Würden alle Stufen einer
+Verbindung zurückführen, erscheint sie ohne Stufen: Sie müssen sie anders
+beschaffen.
+
+Die Anzeige verwendet eine feste Tiefengrenze von 6 Stufen und ein festes
+Budget von 200 Stufen pro Baum. Dies sind keine Sammlungseinstellungen. Ein
+zu großer Baum wird bis zur größten Tiefe gezeigt, die noch passt. Stellen
+mehr als 200 Stufen die Verbindung direkt her, zeigt der Baum nur diese.
+Eine abgeschnittene Verbindung trägt den Zusatz **weitere Stufen auf ihrer
+Seite**; folgen Sie ihrem Link, um den Weg fortzusetzen.
+
+Der Build leitet die Herstellungswege automatisch ab. Dafür tragen Sie
+nichts in eine Vorschrift, eine Verbindungsdatei oder `orgsyndb.toml` ein.
+Verbindungsseiten bleiben außerhalb des Suchindex; die Herstellungswege
+ändern die Suche daher nicht.
+
 ## Felddeklarationen der Sammlung
 
 Um weitere Angaben wie Artikelnummern, Stoffklassen oder Projekte von
@@ -703,6 +745,10 @@ verwenden. Kopieren Sie [templates/sequence.md](../templates/sequence.md) nach
 `md/sequences/` der Sammlung. `orgsyndb init` legt diesen Ordner an; ein
 fehlender Ordner enthält keine Synthesewege. `orgsyndb new` erzeugt
 Vorschriften, daher kopieren Sie die Vorlage für Synthesewege von Hand.
+
+Ein Syntheseweg hält den Weg fest, den Ihre Gruppe durchführt. Den Baum
+**Herstellungswege** auf der Verbindungsseite leitet die Website aus den
+Vorschriften der Sammlung ab.
 
 Der Dateiname ist `SEQ-NNNN-short-slug.md`, optional mit `.de` oder `.en` vor
 `.md`. Der kurze Slug entspricht `[a-z0-9]+(-[a-z0-9]+)*`. Die Nummer im

@@ -84,6 +84,9 @@ Subcommands:
   clean [--all]       remove build/, public/ and pdf/; --all also removes
                       the application's .emacs-batch/ and .tools/
   check-deps          report missing tools
+  index               print the collection's schema, field declarations,
+                      vocabularies, compounds, procedures and sequences
+                      as one line of JSON, for an editor
   help                show this text
 
 Paths are relative to the collection, except tools/ and the caches, which
@@ -271,7 +274,8 @@ def run_build(collection: Path) -> list[tuple[Path, dict]]:
             (pipeline.FIELDS_STAGED,
              pipeline.fields_data(collection / MARKER, language)),
             (pipeline.REACTION_TYPES_STAGED,
-             pipeline.reaction_types_data(collection / MARKER, language))):
+             pipeline.reaction_types_data(collection / MARKER, language)),
+            (pipeline.ROUTES_STAGED, pipeline.routes_data(chosen))):
         path = Path("build") / staged
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2)
@@ -468,6 +472,13 @@ def cmd_check_deps(option: str | None, args: Sequence[str]) -> int:
     return 0
 
 
+def cmd_index(option: str | None, args: Sequence[str]) -> int:
+    no_arguments("index", args)
+    index = pipeline.index_data(find_collection(option))
+    print(json.dumps(index, ensure_ascii=False, allow_nan=False))
+    return 0
+
+
 def cmd_help(option: str | None, args: Sequence[str]) -> int:
     print(USAGE)
     return 0
@@ -483,6 +494,7 @@ COMMANDS: dict[str, Callable[[str | None, Sequence[str]], int]] = {
     "init": cmd_init,
     "clean": cmd_clean,
     "check-deps": cmd_check_deps,
+    "index": cmd_index,
     "help": cmd_help,
 }
 

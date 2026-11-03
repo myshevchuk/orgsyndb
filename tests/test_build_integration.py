@@ -511,6 +511,24 @@ class ReactionTypeDataStagingTests(BuildTestCase):
         self.assertFalse((self.sandbox.root / "public").exists())
 
 
+class RouteDataStagingTests(BuildTestCase):
+    def test_route_data_is_staged(self) -> None:
+        """Scenario: Route data is staged."""
+        self.assert_ok(self.build("build"))
+        path = self.sandbox.root / "build" / "data" / "routes.json"
+        self.assertTrue(path.is_file(), "build/data/routes.json is missing")
+        staged = [(item, front_matter(item.read_text(encoding="utf-8")))
+                  for item in sorted((self.sandbox.root / "build" / "content"
+                                      / "procedures").glob("OSDB-*.md"))]
+        self.assertEqual(len(staged), 9)
+        expected = ps.pipeline_function("routes_data")(staged)
+        self.assertEqual(set(expected), {
+            "acetylsalicylic-acid", "1-biphenyl-4-yl-ethanol",
+            "cinnamic-acid"})
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8")),
+                         expected)
+
+
 class ShippedTreeValidationTests(DemoBuildTestCase):
     def test_shipped_tree_validates_without_any_problem_line(self) -> None:
         """Scenario: Clean validation of the shipped tree."""

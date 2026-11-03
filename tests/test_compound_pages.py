@@ -76,6 +76,24 @@ CATALOGUE_TEXTS = {
 }
 
 
+ROUTE_TEXTS = {
+    "en": {"heading": "Routes",
+           "intro": "Ways to make this compound from the collection's "
+                    "procedures, each step with the compounds it starts "
+                    "from.",
+           "entry": "entry", "more": "more steps on its page",
+           "status": {"draft": "draft", "checked": "checked",
+                      "retired": "retired"}},
+    "de": {"heading": "Herstellungswege",
+           "intro": "Wege zu dieser Verbindung aus den Vorschriften der "
+                    "Sammlung, jede Stufe mit ihren Ausgangsstoffen.",
+           "entry": "Eintrag", "more": "weitere Stufen auf ihrer Seite",
+           "status": {"draft": "Entwurf", "checked": "Geprüft",
+                      "retired": "Zurückgezogen"}},
+}
+CHAIN_LENGTH = 7
+
+
 class CompoundCase(tti.SiteCase):
     """Helpers for the scans of compound pages."""
 
@@ -129,6 +147,172 @@ class CompoundCase(tti.SiteCase):
         pairs = page.definition_pairs(page.find("dl", "compound-facts"))
         built_in = 3 + bool(self.registry()[key].get("cas"))
         return [(p.label, p.definition.norm()) for p in pairs[built_in:]]
+
+    # --- the route trees (synthesis-routes "Routes on compound pages") --
+
+    def route_data(self) -> dict[str, list[dict]]:
+        """The route data the build staged, ``build/data/routes.json``."""
+        path = self.sandbox.root / "build" / "data" / "routes.json"
+        self.assertTrue(path.is_file(), "build/data/routes.json is missing")
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def route_tree(self, page: Page) -> Node:
+        """The ``ul.route-tree`` of a compound page."""
+        tree = page.find("ul", "route-tree")
+        self.assertIsNotNone(tree, f"{page.url} has no ul.route-tree")
+        return tree
+
+    @staticmethod
+    def own_text(item: Node) -> str:
+        """The text of ``item`` outside its nested lists, whitespace
+        collapsed."""
+        return " ".join("".join(
+            c if isinstance(c, str) else c.text() for c in item.children
+            if not (isinstance(c, Node) and c.tag == "ul")).split())
+
+    @staticmethod
+    def between(item: Node, first: Node, second: Node) -> str:
+        """The raw text that lies between two children of ``item``."""
+        spot = item.children.index(first) + 1
+        end = item.children.index(second)
+        found = item.children[spot:end]
+        assert all(isinstance(c, str) for c in found), found
+        return "".join(found)
+
+    def step_parts(self, step: Node) -> tuple[Node, str, Node, Node | None]:
+        """The procedure link, the raw text between it and the status
+        badge, the badge and the nested ``ul`` of a ``li.route-step``."""
+        self.assertEqual((step.tag, step.classes), ("li", ["route-step"]))
+        link, badge, *rest = step.elements()
+        self.assertEqual(link.tag, "a")
+        self.assertEqual((badge.tag, badge.has_class("badge")),
+                         ("span", True))
+        self.assertLessEqual(len(rest), 1)
+        nested = rest[0] if rest else None
+        self.assertTrue(nested is None or nested.tag == "ul", rest)
+        return link, self.between(step, link, badge), badge, nested
+
+    def compound_items(self, ul: Node) -> list[Node]:
+        """The ``li.route-compound`` items of a list inside a step."""
+        self.assertEqual([(n.tag, n.classes) for n in ul.elements()],
+                         [("li", ["route-compound"])] * len(ul.elements()))
+        self.assertTrue(ul.elements(), "an empty ul")
+        return ul.elements()
+
+    def compound_link(self, page: Page, item: Node) -> str:
+        """The key of the compound that ``item`` links first."""
+        link = item.elements()[0]
+        self.assertEqual((link.tag, link.has_class("compound")),
+                         ("a", True))
+        target = page.resolve(link.attrs["href"])
+        self.assertRegex(target, r"^/compounds/[^/]+/$")
+        return target.removeprefix("/compounds/").removesuffix("/")
+
+    def check_route_steps(self, page: Page, ul: Node,
+                          steps: list[dict]) -> int:
+        """The ``li.route-step`` items of ``ul`` follow ``steps``, the
+        data's steps, each with its link, entry, yield and badge, and
+        each compound below with its link, its note and its steps or its
+        ``span.route-more``, recursively. Returns the number of
+        ``span.route-more`` found."""
+        texts = ROUTE_TEXTS[self.LOCALE]
+        by_id = self.by_id()
+        self.assertEqual(len(ul.elements()), len(steps))
+        found = 0
+        for item, step in zip(ul.elements(), steps):
+            with self.subTest(page=page.url, step=step["procedure"],
+                              entry=step.get("entry")):
+                procedure = by_id[step["procedure"]]
+                link, between, badge, nested = self.step_parts(item)
+                self.assertEqual(page.resolve(link.attrs["href"]),
+                                 f"/procedures/{procedure.slug}/")
+                self.assertEqual(link.norm(),
+                                 f"{procedure.id} {procedure.title}")
+                status = procedure.data["status"]
+                self.assertTrue(badge.has_class(f"badge--{status}"))
+                self.assertEqual(badge.norm(), texts["status"][status])
+                entry = (f" · {texts['entry']} {step['entry']}"
+                         if "entry" in step else "")
+                self.assertEqual(
+                    between, f"{entry} · {step['yield_percent']} % · ")
+                self.assertEqual(self.own_text(item),
+                                 f"{link.norm()}{between}{badge.norm()}")
+                self.assertEqual(nested is not None,
+                                 bool(step["substrates"]))
+                if nested is not None:
+                    found += self.check_route_compounds(
+                        page, nested, step["substrates"])
+        return found
+
+    def check_route_compounds(self, page: Page, ul: Node,
+                              compounds: list[dict]) -> int:
+        """The ``li.route-compound`` items of ``ul`` follow
+        ``compounds``, as ``check_route_steps`` says; returns the
+        number of ``span.route-more`` found."""
+        texts = ROUTE_TEXTS[self.LOCALE]
+        registry, fields = self.registry(), self.compound_fields()
+        self.assertEqual(len(self.compound_items(ul)), len(compounds))
+        found = 0
+        for item, compound in zip(ul.elements(), compounds):
+            key = compound["compound"]
+            with self.subTest(page=page.url, compound=key):
+                self.assertEqual(self.compound_link(page, item), key)
+                self.assertFalse(compound["more"] and compound["steps"])
+                note = fs.beside_note(fields, registry[key], self.LOCALE)
+                text = ps.shown_name(registry[key], self.LOCALE)
+                if note:
+                    text += f" {note}"
+                if compound["more"]:
+                    text += f" · {texts['more']}"
+                self.assertEqual(self.own_text(item), text)
+                more = [n for n in item.elements()
+                        if n.tag == "span" and n.has_class("route-more")]
+                self.assertEqual(len(more), int(compound["more"]))
+                lists = [n for n in item.elements() if n.tag == "ul"]
+                self.assertEqual(len(lists), int(bool(compound["steps"])))
+                if more:
+                    self.assertEqual(more[0].norm(), texts["more"])
+                    self.assertIs(item.elements()[-1], more[0])
+                    self.assertEqual(
+                        self.between(item, item.elements()[-2], more[0])
+                        .split()[-1:], ["·"])
+                    found += 1
+                if lists:
+                    found += self.check_route_steps(
+                        page, lists[0], compound["steps"])
+        return found
+
+    def check_route_trees(self) -> dict[str, dict]:
+        """Every compound page has a ``section.compound-routes``, the
+        last child of ``main``, exactly when its compound is a key of
+        the route data, and its tree follows the data. Returns the
+        data."""
+        texts = ROUTE_TEXTS[self.LOCALE]
+        data = self.route_data()
+        for key in self.registry():
+            page = self.compound_page(key)
+            main = page.find("main")
+            with self.subTest(compound=key):
+                sections = main.find_all("section", "compound-routes")
+                self.assertEqual(len(sections), int(key in data))
+                if key not in data:
+                    self.assertEqual(page.find_all("ul", "route-tree"), [])
+                    continue
+                (section,) = sections
+                self.assertIs(main.elements()[-1], section)
+                heading, intro, tree = section.elements()
+                self.assertEqual(
+                    (heading.tag, heading.norm(), intro.tag,
+                     intro.has_class("routes-intro"), intro.norm(),
+                     tree.tag, tree.has_class("route-tree")),
+                    ("h2", texts["heading"], "p", True, texts["intro"],
+                     "ul", True))
+                self.assertEqual(page.find_all("ul", "route-tree"), [tree])
+                found = self.check_route_steps(page, tree, data[key])
+                self.assertEqual(len(page.find_all("span", "route-more")),
+                                 found)
+                self.check_notes(page, tree)
+        return data
 
     # --- the compound tabs (site-catalogue "Compound tabs") -------------
 
@@ -589,24 +773,28 @@ class CompoundSiteTests(CompoundCase):
 
     def test_the_parts_come_in_order(self) -> None:
         """Scenario: A page per compound (order of the parts)."""
+        routed = self.route_data()
         for key in self.registry():
             page = self.compound_page(key)
             main = page.find("main")
             with self.subTest(compound=key):
                 parts = [main.find("h1"), main.find("dl", "compound-facts")]
                 for cls in ("compound-made-by", "compound-used-in",
-                            "compound-sequences"):
+                            "compound-sequences", "compound-routes"):
                     wanted = {
                         "compound-made-by": self.made_by(key),
                         "compound-used-in": self.used_in_by(key),
                         "compound-sequences": ss.sequences_making(
-                            key, self.sequences())}[cls]
+                            key, self.sequences()),
+                        "compound-routes": key in routed}[cls]
                     section = main.find("section", cls)
                     self.assertEqual(section is not None, bool(wanted), cls)
                     if section is not None:
                         parts.append(section)
                 order = [page.index_of(n) for n in parts]
                 self.assertEqual(order, sorted(order))
+                if key in routed:
+                    self.assertIs(main.elements()[-1], parts[-1])
 
     def test_made_by_and_used_in(self) -> None:
         """Scenario: Made by and used in."""
@@ -664,6 +852,69 @@ class CompoundSiteTests(CompoundCase):
                             text += f" · {made} %"
                         self.assertEqual(
                             entry.norm(), f"{text} · {badge.norm()}")
+
+    def test_route_trees_follow_the_data(self) -> None:
+        """Scenario: Route trees follow the data."""
+        data = self.check_route_trees()
+        self.assertEqual(set(data), {
+            "acetylsalicylic-acid", "1-biphenyl-4-yl-ethanol",
+            "cinnamic-acid"})
+        for key in ("salicylic-acid", "4-acetylbiphenyl",
+                    "methyl-salicylate"):
+            with self.subTest(compound=key):
+                self.assertIsNone(self.compound_page(key).find(
+                    "section", "compound-routes"))
+
+    def test_the_route_of_aspirin(self) -> None:
+        """Scenario: The route of aspirin."""
+        page = self.compound_page("acetylsalicylic-acid")
+        (step,) = self.route_tree(page).elements()
+        link, between, badge, nested = self.step_parts(step)
+        self.assertEqual(link.norm(),
+                         "OSDB-0002 Aspirin (acetylsalicylic acid)")
+        self.assertEqual(between, " · 75 % · ")
+        self.assertEqual((badge.norm(), badge.has_class("badge--draft")),
+                         ("draft", True))
+        salicylic, anhydride = self.compound_items(nested)
+        self.assertEqual([self.compound_link(page, i)
+                          for i in (salicylic, anhydride)],
+                         ["salicylic-acid", "acetic-anhydride"])
+        self.assertEqual([n.tag for n in anhydride.elements()
+                          if n.tag == "ul"], [])
+        (inner,) = [n for n in salicylic.elements() if n.tag == "ul"]
+        (made,) = inner.elements()
+        link, between, _, nested = self.step_parts(made)
+        self.assertTrue(link.norm().startswith("OSDB-0001 "), link.norm())
+        self.assertEqual(between, " · 80 % · ")
+        (methyl,) = self.compound_items(nested)
+        self.assertEqual(self.compound_link(page, methyl),
+                         "methyl-salicylate")
+        self.assertEqual([n for n in methyl.elements() if n.tag == "ul"],
+                         [])
+        self.assertEqual(page.find_all("span", "route-more"), [])
+
+    def test_two_steps_to_one_compound(self) -> None:
+        """Scenario: Two steps to one compound."""
+        page = self.compound_page("1-biphenyl-4-yl-ethanol")
+        first, second = self.route_tree(page).elements()
+        for item, ident, between in (
+                (first, "OSDB-0005", " · 90 % · "),
+                (second, "OSDB-0009", " · entry 1 · 90 % · ")):
+            with self.subTest(step=ident):
+                link, found, _, nested = self.step_parts(item)
+                self.assertTrue(link.norm().startswith(f"{ident} "),
+                                link.norm())
+                self.assertEqual(found, between)
+                (acetylbiphenyl,) = self.compound_items(nested)
+                self.assertEqual(self.compound_link(page, acetylbiphenyl),
+                                 "4-acetylbiphenyl")
+                (inner,) = [n for n in acetylbiphenyl.elements()
+                            if n.tag == "ul"]
+                (made,) = inner.elements()
+                link, found, _, _ = self.step_parts(made)
+                self.assertTrue(link.norm().startswith("OSDB-0004 "),
+                                link.norm())
+                self.assertEqual(found, " · 85 % · ")
 
     def test_the_sequences_that_make_a_compound(self) -> None:
         """Scenario: Links to the demo sequence (the compound pages)."""
@@ -1219,6 +1470,23 @@ class GermanCompoundTests(CompoundCase):
         self.assertEqual([c.text for c in row[4:6]],
                          ["CH-0020", "Carbonsäuren, Phenole"])
 
+    def test_a_german_route_tree(self) -> None:
+        """Scenario: A German route tree."""
+        page = self.compound_page("1-biphenyl-4-yl-ethanol")
+        section = page.find("section", "compound-routes")
+        self.assertIsNotNone(section, "no section.compound-routes")
+        self.assertEqual([h.norm() for h in section.find_all("h2")],
+                         ["Herstellungswege"])
+        self.assertEqual(
+            [p.norm() for p in section.find_all("p", "routes-intro")],
+            ["Wege zu dieser Verbindung aus den Vorschriften der Sammlung, "
+             "jede Stufe mit ihren Ausgangsstoffen."])
+        first, second = self.route_tree(page).elements()
+        self.assertEqual(self.step_parts(first)[1], " · 90 % · ")
+        self.assertEqual(self.step_parts(second)[1],
+                         " · Eintrag 1 · 90 % · ")
+        self.check_route_trees()
+
     def test_declared_fields_in_german(self) -> None:
         """Scenario: Declared fields in German."""
         carbonyl = "Carbonylverbindungen"
@@ -1697,6 +1965,146 @@ class NoFieldsTests(CompoundCase):
                           "Used in"])
         for row in model.rows[1:]:
             self.assertEqual(len(row), 6)
+
+
+CHAIN_PROCEDURE = """\
++++
+id = "OSDB-0911"
+slug = "osdb-0911"
+title = "Chain of seven steps"
+date = 2026-10-22T12:00:00+02:00
+lastmod = 2026-10-22T12:30:00+02:00
+authors = ["A. Example"]
+status = "draft"
+reaction_types = ["hydrolysis"]
+tags = ["sample-data", "route-check"]
+scale = "20 mmol"
+scope = [
+%s]
+hazards = ["Water: no hazard"]
++++
+
+## Summary
+
+A fictitious general procedure whose entry n makes chain-n from
+chain-(n-1). It is test data for the depth limit of a route tree.
+
+## Reagents
+
+| Reagent | CAS | MW (g/mol) | Amount | mmol | Equiv |
+|---|---|---|---|---|---|
+| Water | 7732-18-5 | 18.02 | 0.36 g | 20 | 1.0 |
+
+## Procedure
+
+1. Combine the reagents.
+
+## Workup and Purification
+
+Concentrate.
+
+## Characterization
+
+Colourless liquid.
+
+## Notes
+
+1. Fictitious procedure.
+
+## Hazards and Waste Disposal
+
+Collect waste separately.
+
+## References
+
+None.
+"""
+
+
+class CycleAndDepthTests(CompoundCase):
+    """A copy of the test collection, built in English after adding
+    ``OSDB-0910``, which makes ``salicylic-acid`` from
+    ``acetylsalicylic-acid``, and ``OSDB-0911``, a general procedure of
+    seven entries, entry ``n`` making ``chain-<n>`` from
+    ``chain-<n-1>``, with registry files for ``chain-0`` to
+    ``chain-7``."""
+
+    FIXTURES = ("OSDB-0910-aspirin-hydrolysis.md",)
+
+    @classmethod
+    def prepare(cls) -> None:
+        registry = cls.sandbox.root / "compounds"
+        for number in range(CHAIN_LENGTH + 1):
+            target = registry / f"chain-{number}.toml"
+            target.write_text(
+                f'name = "Chain {number}"\nformula = "C2H6"\n'
+                'mw = 30.07\nsmiles = "CC"\n'
+                + ps.required_field_lines(cls.sandbox, registry),
+                encoding="utf-8")
+        entries = "".join(
+            f'  {{ substrates = ["chain-{n - 1}"], products = '
+            f'[{{ compound = "chain-{n}", yield_percent = {50 + n} }}] }},\n'
+            for n in range(1, CHAIN_LENGTH + 1))
+        (cls.sandbox.md_dir() / "OSDB-0911-chain.md").write_text(
+            CHAIN_PROCEDURE % entries, encoding="utf-8")
+
+    def test_a_cycle_is_not_followed_on_the_page(self) -> None:
+        """Scenario: A cycle and the depth limit on the page (the
+        cycle)."""
+        salicylic = self.compound_page("salicylic-acid")
+        made = salicylic.find("section", "compound-made-by")
+        self.assertEqual(
+            [li.norm() for li in made.find_all("li")],
+            ["OSDB-0001 Salicylic acid · 80 % · draft",
+             "OSDB-0910 Salicylic acid by hydrolysis of aspirin · 95 % · "
+             "draft"])
+        self.assertIsNone(salicylic.find("section", "compound-routes"))
+        aspirin = self.compound_page("acetylsalicylic-acid")
+        tree = self.route_tree(aspirin)
+        self.assertEqual(
+            [self.step_parts(li)[0].norm().split()[0]
+             for li in tree.find_all("li", "route-step")],
+            ["OSDB-0002", "OSDB-0001"])
+        self.assertNotIn("OSDB-0910", tree.text())
+
+    def test_the_depth_limit_cuts_a_chain_off_on_the_page(self) -> None:
+        """Scenario: A cycle and the depth limit on the page (the
+        depth limit)."""
+        page = self.compound_page(f"chain-{CHAIN_LENGTH}")
+        tree = self.route_tree(page)
+        steps = tree.find_all("li", "route-step")
+        self.assertEqual(len(steps), 6)
+        level = tree
+        for entry in range(CHAIN_LENGTH, 1, -1):
+            with self.subTest(entry=entry):
+                (step,) = level.elements()
+                link, between, _, nested = self.step_parts(step)
+                self.assertEqual(link.norm(),
+                                 "OSDB-0911 Chain of seven steps")
+                self.assertEqual(
+                    between, f" · entry {entry} · {50 + entry} % · ")
+                (item,) = self.compound_items(nested)
+                self.assertEqual(self.compound_link(page, item),
+                                 f"chain-{entry - 1}")
+                lists = [n for n in item.elements() if n.tag == "ul"]
+                level = lists[0] if lists else None
+        self.assertIsNone(level, "chain-1 holds a ul")
+        self.assertEqual(item.elements()[-1].tag, "span")
+        more = page.find_all("span", "route-more")
+        self.assertEqual([m.norm() for m in more],
+                         ["more steps on its page"])
+        self.assertIs(item.elements()[-1], more[0])
+        self.assertTrue(
+            self.own_text(item).endswith(" · more steps on its page"),
+            self.own_text(item))
+
+    def test_every_route_tree_follows_the_data(self) -> None:
+        """Scenario: Route trees follow the data (the copy build)."""
+        data = self.check_route_trees()
+        self.assertIn("acetylsalicylic-acid", data)
+        self.assertIn(f"chain-{CHAIN_LENGTH}", data)
+        self.assertNotIn("salicylic-acid", data)
+        self.assertNotIn("chain-1", data)
 
 
 class FallbackNameTests(CompoundCase):

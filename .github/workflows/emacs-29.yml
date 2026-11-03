@@ -1,11 +1,11 @@
 # Runs the export integration tests and the ERT suite of
-# tools/osdb-org.el on Emacs 29, the oldest Emacs the export supports, as
+# emacs/osdb-org.el on Emacs 29, the oldest Emacs the export supports, as
 # Ubuntu 24.04 ships it.
 name: Emacs 29 export
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
   workflow_dispatch:
 

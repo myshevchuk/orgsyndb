@@ -4,7 +4,7 @@
 Define how `tools/export.el` turns Org procedure sources into Hugo content: an isolated, pinned batch Emacs, the front-matter mapping, body export options, and a complete, fresh and byte-identical export directory.
 ## Requirements
 ### Requirement: Isolated batch Emacs
-`tools/export.el` SHALL run under `emacs -Q --batch`, invoked as `emacs -Q --batch -l tools/export.el ORG_ROOT STAGING_DIR`, and SHALL work with Emacs 29.1 or later and the Org it bundles. `ORG_ROOT` is the directory of Org sources, and `tools/orgsyndb` passes `org/procedures` with the collection as working directory. It loads neither package.el nor any package archive. Before loading Org or `tools/osdb-org.el` it SHALL make these settings:
+`tools/export.el` SHALL run under `emacs -Q --batch`, invoked as `emacs -Q --batch -l tools/export.el ORG_ROOT STAGING_DIR`, and SHALL work with Emacs 29.1 or later and the Org it bundles. `ORG_ROOT` is the directory of Org sources, and `tools/orgsyndb` passes `org/procedures` with the collection as working directory. It loads neither package.el nor any package archive. Before loading Org or `emacs/osdb-org.el` it SHALL make these settings:
 - `user-emacs-directory` points to the application's `.emacs-batch/`.
 - `temporary-file-directory` and the `TMPDIR` environment variable point to `tmp/` in the parent directory of `STAGING_DIR`, which is the collection's `build/tmp/`, and which is created when missing.
 
@@ -39,7 +39,7 @@ On every run that goes on to export, that is, every run whose Org sources have n
 - **AND** `build/export/` is unchanged
 
 #### Scenario: No package.el
-- **WHEN** a test reads `tools/export.el` and `tools/osdb-org.el`
+- **WHEN** a test reads `tools/export.el` and `emacs/osdb-org.el`
 - **THEN** neither contains `package-vc` or `(require 'package)`
 
 ### Requirement: Exported timestamps
@@ -198,13 +198,13 @@ The export SHALL seed Emacs's random number generator with `(random "<stem>")` i
 
 ### Requirement: Export checked on Emacs 29
 The repository SHALL ship `.github/workflows/emacs-29.yml`, a GitHub Actions workflow that checks the export and the ERT suite on the oldest supported Emacs:
-- **Triggers.** It runs on a push to `main`, on pull requests and on manual dispatch (`workflow_dispatch`).
+- **Triggers.** It runs on a push to `main` or `develop`, on pull requests and on manual dispatch (`workflow_dispatch`).
 - **Permissions.** Its permissions are `contents: read`.
 - **Job.** A job named `export` runs on `ubuntu-24.04`. It installs `emacs-nox` and `git` with `apt-get install --no-install-recommends`, sets up Python 3.14 with `actions/setup-python`, and installs pytest with pip. It runs `tools/orgsyndb -C examples/demo export`, and then `python -m pytest tests/test_export_integration.py tests/test_elisp.py`.
 
 #### Scenario: Workflow is wired
 - **WHEN** a test reads `.github/workflows/emacs-29.yml` as text
-- **THEN** its triggers name `push` with branch `main`, `pull_request` and `workflow_dispatch`, and its permissions are `contents: read`
+- **THEN** its triggers name `push` with branches `main` and `develop`, `pull_request` and `workflow_dispatch`, and its permissions are `contents: read`
 - **AND** the `export` job runs on `ubuntu-24.04`, names an `apt-get install` with `--no-install-recommends` of `emacs-nox` and `git`, `actions/setup-python` with Python `3.14`, and the commands `tools/orgsyndb -C examples/demo export` and `python -m pytest tests/test_export_integration.py tests/test_elisp.py`, in that order
 
 ### Requirement: Export without Org sources
@@ -318,20 +318,20 @@ In each failure case `build/export/` is unchanged, and no later step of the subc
 - **THEN** the export exits 0, prints no line of the form `<path>:<field>: <severity>: <message>`, and `build/export/` holds `<stem>.md` for the stem of each new stub
 
 ### Requirement: Org front-end library
-`tools/osdb-org.el` SHALL hold every function of the export that reads Org text or Org file names, together with the timestamp arithmetic, and loading it SHALL have no effect beyond defining its functions and constants. It loads neither Org nor ox-hugo nor tomelr. It reads no command-line argument, starts no export and never calls `kill-emacs`. It provides the feature `osdb-org`, and `tools/export.el` loads it from its own directory after making the settings of "Isolated batch Emacs". It defines at least the functions that the ERT scenarios of this capability, procedure-schema and localization call: `osdb-org-examine`, `osdb-org-problem-line`, `osdb-org-check-file-name`, `osdb-org-local-instants`, `osdb-org-export-instants`, `osdb-org-rfc3339` and `osdb-org-zone-available-p`.
+`emacs/osdb-org.el` SHALL hold every function of the export that reads Org text or Org file names, together with the timestamp arithmetic, and loading it SHALL have no effect beyond defining its functions and constants. It loads neither Org nor ox-hugo nor tomelr. It reads no command-line argument, starts no export and never calls `kill-emacs`. It provides the feature `osdb-org`, and `tools/export.el` loads it from the application's `emacs/` directory after making the settings of "Isolated batch Emacs". It defines at least the functions that the ERT scenarios of this capability, procedure-schema and localization call: `osdb-org-examine`, `osdb-org-problem-line`, `osdb-org-check-file-name`, `osdb-org-local-instants`, `osdb-org-export-instants`, `osdb-org-rfc3339` and `osdb-org-zone-available-p`, and the function `osdb-org-front-matter` that the editor calls ("Front matter of an Org source").
 
 `osdb-org-examine` takes a directory and returns a pair of the sources and the problems, as follows:
 - The sources are the Org sources without any problem, in name order. Each carries its absolute path, its stem (the file name without `.org`), its `date` and `lastmod` as `YYYY-MM-DDThh:mm:ss+HH:MM` strings, and its AI model, or none when `#+AI_MODEL` is absent or `none`.
 - The problems are path and problem pairs, in report order. Each problem has a field, a severity and a message.
 
 #### Scenario: Library loads alone
-- **WHEN** an ERT test, running in the suite's `emacs -Q --batch` after it loaded `tools/osdb-org.el`, checks which features are present
+- **WHEN** an ERT test, running in the suite's `emacs -Q --batch` after it loaded `emacs/osdb-org.el`, checks which features are present
 - **THEN** `osdb-org` is a feature, and `org`, `ox-hugo` and `tomelr` are not
 
 ### Requirement: ERT suite
 The repository SHALL ship an ERT suite, `tests/el/osdb-org-tests.el`, that proves every scenario stated as an ERT test in this capability, procedure-schema and localization. Each test names its scenario in its docstring. The suite has these properties:
 - It runs with `emacs -Q --batch -l <repo>/tests/el/osdb-org-tests.el -f ert-run-tests-batch-and-exit` from any working directory.
-- It loads `tools/osdb-org.el` relative to its own location.
+- It loads `emacs/osdb-org.el` relative to its own location.
 - It needs neither ox-hugo nor tomelr nor network access.
 - It reads its fixtures from `tests/fixtures/`.
 
@@ -346,4 +346,20 @@ In ERT scenarios, an Org fixture path such as `org-invalid/missing-created/org/O
 #### Scenario: ERT suite without Emacs
 - **WHEN** `python3 -m pytest -rs tests/test_elisp.py` runs with a `PATH` that holds `python3` but no `emacs`
 - **THEN** its test is skipped with a reason that names `emacs`
+
+### Requirement: Front matter of an Org source
+`osdb-org-front-matter` SHALL take the text of an Org source and return the front matter its keywords give, without exporting and without loading Org: an alist of (KEY . VALUE) pairs, KEY a symbol, in the order of their lines and, on one line, of their pairs. `#+TITLE` gives `title` and `#+HUGO_SLUG` gives `slug`, each the keyword's trimmed value; `#+HUGO_TAGS` gives `tags`, the list of its space-separated words; and every `:key value` pair of every `#+HUGO_CUSTOM_FRONT_MATTER` line gives `key` with the Lisp value that `read` returns for the value's text, after one leading `'` is removed. A pair whose value cannot be read is left out. Keyword names match in any case, and lines inside blocks are skipped, as `osdb-org-keywords` skips them. When `osdb-org-scope` reads the text's table named `scope` without a problem, the alist ends with `scope`, the list of the entries it returns.
+
+#### Scenario: Demo source
+- **WHEN** an ERT test calls `osdb-org-front-matter` on the text of `examples/demo/org/procedures/OSDB-0007-ethyl-cinnamate.org`
+- **THEN** `title` is `"Ethyl cinnamate"`, `slug` is `"osdb-0007"`, `tags` is `("sample-data" "wittig" "cinnamate")`, `id` is `"OSDB-0007"`, `authors` is `("G. Example")`, `working_time` is `5`, `inert_atmosphere` is the symbol `true`, and `products` is `(((compound . "ethyl-cinnamate") (yield_percent . 80)))`
+- **AND** the keys come in the order `title`, `slug`, `tags`, `id`, `authors`, `status`, `reaction_types`, `scale`, `notebook`, `project`, `working_time`, `inert_atmosphere`, `substrates`, `hazards`, `references`, `products`
+
+#### Scenario: Scope table
+- **WHEN** an ERT test calls `osdb-org-front-matter` on the text of `tests/fixtures/export/OSDB-0909-scope-table.org`
+- **THEN** `scope` is the last key and holds three entries, the first with `substrates` `("acetic-acid" "ethanol")` and `products` `(((compound . "ethyl-acetate") (yield_percent . 45.5)) ((compound . "propyl-acetate") (yield_percent . 30)))`
+
+#### Scenario: Blocks and unreadable values
+- **WHEN** an ERT test calls `osdb-org-front-matter` on a text holding `#+hugo_custom_front_matter: :status "draft" :scale "5 mmol`, then a `#+begin_example` block holding `#+HUGO_CUSTOM_FRONT_MATTER: :id "OSDB-0001"`
+- **THEN** the result is `((status . "draft"))`
 

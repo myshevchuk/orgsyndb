@@ -6,9 +6,10 @@ sets (compound-fields.html); and, each only when it has an entry, the
 published procedures that make the compound, with its yield in each, and
 those that use it as a substrate (substrate-keys.html), both by ID with
 their status badges, and the published sequences whose target it is, by
-ID. A general procedure is listed under Made by once per
-entry that makes the compound, in entry order, with the entry's number,
-and under Used in once.
+ID; last, when the compound is a key of site.Data.collection.routes, its
+route tree (route-steps.html). A general procedure is listed under Made
+by once per entry that makes the compound, in entry order, with the
+entry's number, and under Used in once.
 The page carries no data-pagefind-body, so the search index holds
 procedures only. */ -}}
 {{ define "main" -}}
@@ -61,6 +62,15 @@ procedures only. */ -}}
 <li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>
 {{ end -}}
 </ul>
+</section>
+{{ end -}}
+{{ with index site.Data.collection.routes $key -}}
+{{ $pages := newScratch -}}
+{{ range $procedures }}{{ $pages.SetInMap "pages" .Params.id . }}{{ end -}}
+<section class="compound-routes" aria-labelledby="compound-routes">
+<h2 id="compound-routes">{{ T "label_routes" }}</h2>
+<p class="routes-intro">{{ T "routes_intro" }}</p>
+{{ partial "route-steps.html" (dict "steps" . "pages" ($pages.Get "pages") "class" "route-tree") }}
 </section>
 {{ end -}}
 {{ end }}

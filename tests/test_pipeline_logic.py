@@ -1052,6 +1052,227 @@ class ProcedureFieldDataTests(unittest.TestCase):
                     fields_data(path, "en")
 
 
+def specific(ident: str, product: str, *substrates: str,
+             percent: int = 90) -> tuple[Path, dict]:
+    """A specific procedure, as a ``(path, front matter)`` pair, that
+    makes ``product`` at ``percent`` from ``substrates``; with no
+    substrate it sets no ``substrates``."""
+    data: dict = {"id": ident, "products": [
+        {"compound": product, "yield_percent": percent}]}
+    if substrates:
+        data["substrates"] = list(substrates)
+    return Path(f"{ident}.md"), data
+
+
+def general(ident: str, *entries: tuple[list[str], dict[str, int]]
+            ) -> tuple[Path, dict]:
+    """A general procedure whose entries each start from the given
+    substrates and make the given compounds at the given yields."""
+    return Path(f"{ident}.md"), {"id": ident, "scope": [
+        {"substrates": list(substrates), "products": [
+            {"compound": key, "yield_percent": percent}
+            for key, percent in products.items()]}
+        for substrates, products in entries]}
+
+
+def made_by(ident: str, percent: int, *substrates: dict,
+            entry: int | None = None) -> dict:
+    """A step of route data: procedure ``ident``, in ``entry`` of a
+    general procedure, at ``percent``, starting from ``substrates``."""
+    step: dict = {"procedure": ident}
+    if entry is not None:
+        step["entry"] = entry
+    return {**step, "yield_percent": percent, "substrates": list(substrates)}
+
+
+def leaf(key: str) -> dict:
+    """A compound that no step makes, or that the cycle rule leaves
+    without one."""
+    return {"compound": key, "steps": [], "more": False}
+
+
+def cut_off(key: str) -> dict:
+    """A compound that the depth limit cuts off."""
+    return {"compound": key, "steps": [], "more": True}
+
+
+def expanded(key: str, *steps: dict) -> dict:
+    """A compound with the steps that make it drawn below it."""
+    return {"compound": key, "steps": list(steps), "more": False}
+
+
+class RouteDataTests(unittest.TestCase):
+    """synthesis-routes "Derived routes": ``pipeline.routes_data``."""
+
+    def routes(self, *files: tuple[Path, dict], **limits: int) -> dict:
+        return pipeline_function("routes_data")(list(files), **limits)
+
+    def test_routes_of_the_test_collection(self) -> None:
+        """Scenario: Routes of the test collection."""
+        module = pipeline()
+        files = module.choose_variants(module.content_files(
+            [str(TEST_COLLECTION / "md" / "procedures")]), "en")
+        self.assertEqual(len(files), 9)
+        routes = pipeline_function("routes_data")(files)
+        self.assertEqual(
+            set(routes), {"acetylsalicylic-acid", "1-biphenyl-4-yl-ethanol",
+                          "cinnamic-acid"})
+        self.assertEqual(routes["acetylsalicylic-acid"], [
+            made_by("OSDB-0002", 75,
+                    expanded("salicylic-acid", made_by(
+                        "OSDB-0001", 80, leaf("methyl-salicylate"))),
+                    leaf("acetic-anhydride"))])
+        acetylbiphenyl = expanded("4-acetylbiphenyl", made_by(
+            "OSDB-0004", 85, leaf("4-bromoacetophenone"),
+            leaf("phenylboronic-acid")))
+        self.assertEqual(routes["1-biphenyl-4-yl-ethanol"], [
+            made_by("OSDB-0005", 90, acetylbiphenyl),
+            made_by("OSDB-0009", 90, acetylbiphenyl, entry=1)])
+        self.assertEqual(routes["cinnamic-acid"], [
+            made_by("OSDB-0008", 90, expanded("ethyl-cinnamate", made_by(
+                "OSDB-0007", 80, leaf("benzaldehyde"),
+                leaf("ethyl-triphenylphosphoranylidene-acetate"))))])
+        self.assertEqual(json.loads(json.dumps(routes)), routes)
+
+    def test_a_protection_and_its_removal_is_not_followed(self) -> None:
+        """Scenario: A protection and its removal."""
+        routes = self.routes(
+            specific("OSDB-0001", "b", "a", percent=81),
+            specific("OSDB-0002", "a", "b", percent=82),
+            specific("OSDB-0003", "c", "b", percent=83))
+        self.assertEqual(routes, {"c": [
+            made_by("OSDB-0003", 83, expanded("b", made_by(
+                "OSDB-0001", 81, leaf("a"))))]})
+
+    def test_the_depth_limit_cuts_a_tree_off(self) -> None:
+        """Scenario: The depth limit (a depth of 2)."""
+        files = [specific(f"OSDB-000{n}", f"c{n}", f"c{n - 1}",
+                          percent=60 + n) for n in range(1, 5)]
+        routes = self.routes(*files, depth=2)
+        self.assertEqual(set(routes), {"c2", "c3", "c4"})
+        self.assertEqual(routes["c4"], [made_by("OSDB-0004", 64, expanded(
+            "c3", made_by("OSDB-0003", 63, cut_off("c2"))))])
+        self.assertEqual(routes["c3"], [made_by("OSDB-0003", 63, expanded(
+            "c2", made_by("OSDB-0002", 62, cut_off("c1"))))])
+        self.assertEqual(routes["c2"], [made_by("OSDB-0002", 62, expanded(
+            "c1", made_by("OSDB-0001", 61, leaf("c0"))))])
+
+    def test_a_depth_of_one_cuts_off_every_substrate_with_a_step(
+            self) -> None:
+        """Scenario: The depth limit (a depth of 1)."""
+        files = [specific(f"OSDB-000{n}", f"c{n}", f"c{n - 1}",
+                          percent=60 + n) for n in range(1, 5)]
+        routes = self.routes(*files, depth=1)
+        self.assertEqual(routes, {
+            f"c{n}": [made_by(f"OSDB-000{n}", 60 + n, cut_off(f"c{n - 1}"))]
+            for n in (2, 3, 4)})
+
+    def test_the_default_depth_is_six(self) -> None:
+        """Scenario: The depth limit (the default of the build)."""
+        files = [specific(f"OSDB-{n:04d}", f"c{n}", f"c{n - 1}")
+                 for n in range(1, 9)]
+        tree = self.routes(*files)["c8"]
+        for level in range(6):
+            (step,) = tree
+            self.assertEqual(step["procedure"], f"OSDB-{8 - level:04d}")
+            (substrate,) = step["substrates"]
+            self.assertEqual(substrate["compound"], f"c{7 - level}")
+            tree = substrate["steps"]
+        self.assertEqual(tree, [])
+        self.assertEqual(substrate["more"], True)
+
+    def stepped(self, budget: int) -> dict:
+        return self.routes(
+            specific("OSDB-0001", "r", "a", "b", percent=71),
+            specific("OSDB-0002", "a", "x", percent=72),
+            specific("OSDB-0003", "b", "y", percent=73),
+            specific("OSDB-0004", "x", "z", percent=74),
+            depth=6, budget=budget)
+
+    def test_a_tree_within_the_budget_is_drawn_whole(self) -> None:
+        """Scenario: The step budget (a budget of 4)."""
+        self.assertEqual(self.stepped(4)["r"], [made_by(
+            "OSDB-0001", 71,
+            expanded("a", made_by("OSDB-0002", 72, expanded(
+                "x", made_by("OSDB-0004", 74, leaf("z"))))),
+            expanded("b", made_by("OSDB-0003", 73, leaf("y"))))])
+
+    def test_a_tree_over_the_budget_is_drawn_to_a_smaller_depth(
+            self) -> None:
+        """Scenario: The step budget (a budget of 3)."""
+        self.assertEqual(self.stepped(3)["r"], [made_by(
+            "OSDB-0001", 71,
+            expanded("a", made_by("OSDB-0002", 72, cut_off("x"))),
+            expanded("b", made_by("OSDB-0003", 73, leaf("y"))))])
+
+    def test_a_budget_below_the_first_level_draws_one_step(self) -> None:
+        """Scenario: The step budget (a budget of 0)."""
+        self.assertEqual(self.stepped(0)["r"], [made_by(
+            "OSDB-0001", 71, cut_off("a"), cut_off("b"))])
+
+    def test_the_budget_counts_the_steps_of_a_tree_at_every_level(
+            self) -> None:
+        """Scenario: The step budget (the size of a tree)."""
+        files = [specific(f"OSDB-000{n}", f"c{n}", f"c{n - 1}")
+                 for n in range(1, 4)]
+        for budget, drawn in ((0, 1), (1, 1), (2, 2), (3, 3), (200, 3)):
+            with self.subTest(budget=budget):
+                tree = self.routes(*files, depth=6, budget=budget)["c3"]
+                steps = 0
+                while tree:
+                    (step,) = tree
+                    steps += 1
+                    tree = step["substrates"][0]["steps"]
+                self.assertEqual(steps, drawn)
+
+    def test_steps_come_by_id_and_entry_and_may_start_from_nothing(
+            self) -> None:
+        """Scenario: Order, entries and a step from nothing."""
+        routes = self.routes(
+            specific("OSDB-0003", "t", "m", percent=40),
+            general("OSDB-0001", (["m"], {"t": 60}), (["n"], {"t": 50})),
+            specific("OSDB-0002", "m", percent=30))
+        from_nothing = expanded("m", made_by("OSDB-0002", 30))
+        self.assertEqual(routes, {"t": [
+            made_by("OSDB-0001", 60, from_nothing, entry=1),
+            made_by("OSDB-0001", 50, leaf("n"), entry=2),
+            made_by("OSDB-0003", 40, from_nothing)]})
+        self.assertNotIn("entry", routes["t"][2])
+
+    def test_an_entry_is_a_step_of_its_own(self) -> None:
+        """Requirement: Scope entries (the steps of a derived route take
+        each entry on its own)."""
+        routes = self.routes(
+            general("OSDB-0001", (["a"], {"u": 61, "t": 62}),
+                    (["b", "c"], {"v": 63})),
+            specific("OSDB-0002", "w", "t", "v"),
+            specific("OSDB-0003", "t", "b"))
+        self.assertEqual(routes["w"], [made_by(
+            "OSDB-0002", 90,
+            expanded("t", made_by("OSDB-0001", 62, leaf("a"), entry=1),
+                     made_by("OSDB-0003", 90, leaf("b"))),
+            expanded("v", made_by("OSDB-0001", 63, leaf("b"), leaf("c"),
+                                  entry=2)))])
+
+    def test_only_the_compounds_of_a_route_deeper_than_one_step_are_keys(
+            self) -> None:
+        """Requirement: Derived routes (a compound whose steps all start
+        from compounds that nothing makes is not a key)."""
+        routes = self.routes(
+            specific("OSDB-0001", "p", "a"),
+            specific("OSDB-0002", "q", "p"),
+            specific("OSDB-0003", "q", "a"))
+        self.assertEqual(set(routes), {"q"})
+        self.assertEqual(routes["q"], [
+            made_by("OSDB-0002", 90, expanded("p", made_by(
+                "OSDB-0001", 90, leaf("a")))),
+            made_by("OSDB-0003", 90, leaf("a"))])
+
+    def test_no_procedure_gives_no_routes(self) -> None:
+        """Requirement: Derived routes (no procedure, no key)."""
+        self.assertEqual(self.routes(), {})
+
+
 class HelperModuleTests(unittest.TestCase):
     def test_only_standard_library_imports(self) -> None:
         """Scenario: Only standard-library imports."""

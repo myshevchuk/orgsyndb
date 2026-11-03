@@ -18,6 +18,12 @@ Diese Anleitung gibt es auch auf Deutsch: [AUTHORING.de.md](AUTHORING.de.md).
 
 ## 1. Get a procedure file
 
+If you write in Emacs, the `orgsyndb` package completes keys and values in
+the information block at the top of the file. It shows problems while you
+write and after saving, keeps the modification time current and previews
+the page. For installation, see the application's README, section “Edit in
+Emacs”.
+
 The file to copy is
 [`templates/procedure.md`](../templates/procedure.md).
 
@@ -190,6 +196,27 @@ under **Made by** once per entry that makes the compound, as
 procedure once, and the directory counts each procedure once. After
 **Used in**, **Sequences** links the sequences that name this compound as their
 target, by sequence ID. It appears only when there are matching sequences.
+
+**Routes** ends the page, after **Sequences** when present, if a route goes
+beyond one step: a procedure makes a starting material for another step.
+The tree shows steps that make the compound, then each step's starting
+materials, then the steps that make those, down to compounds no procedure
+makes. Under a compound, any one step will do; under a step, all starting
+materials are needed. Each step shows the procedure link, entry number when
+needed, yield and status, as in **Made by**. All published procedures take
+part, whatever their status. A general procedure's entry uses only its own
+starting materials. Compound links carry the values of fields declared
+`beside = true`.
+
+A step is omitted if it starts from a compound already above it on the same
+branch, so the tree never follows a cycle. If all steps would loop back, the
+compound appears without steps and must be obtained another way. The display
+uses a fixed depth limit of 6 steps and a fixed budget of 200 steps per
+tree. A larger tree is drawn to the largest depth that fits. When more than
+200 steps make the compound directly, the tree shows only those. A compound
+cut off by a limit ends with **more steps on its page**; follow its link to
+continue. Routes are derived during the build. You write nothing extra in a
+procedure, a compound file or `orgsyndb.toml`.
 
 ### Write a general procedure
 
@@ -518,6 +545,8 @@ When you use several procedures in order to make a target compound, record
 that route as a **synthesis sequence**. Each step names the procedure you run
 and, for a general procedure, the scope entry you use. The site checks that
 the steps connect and calculates their overall yield.
+The sequence records the route your group runs; the compound page's
+**Routes** tree is derived from the collection's procedures.
 
 Copy [templates/sequence.md](../templates/sequence.md) into the collection's
 `md/sequences/`. `orgsyndb init` creates this folder. `orgsyndb new` creates

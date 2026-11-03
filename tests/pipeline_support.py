@@ -68,7 +68,7 @@ PAGEFIND_HINT = ("pagefind not cached: run tools/orgsyndb -C examples/demo "
                  "(needs network)")
 
 # Directories the integration harness copies from the real application.
-COPIED = ("tools", "site", "templates", "docs")
+COPIED = ("tools", "emacs", "site", "templates", "docs")
 GIT_QUIET = ["-c", "user.name=Test Author",
              "-c", "user.email=author@example.invalid",
              "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"]
@@ -324,8 +324,8 @@ def make_sandbox(case: unittest.TestCase, *,
     """Create the copies for ``case``; removed on clean-up.
 
     Both live under a directory whose name contains a space. The
-    application copy holds ``tools/``, ``site/``, ``templates/`` and
-    ``docs/``; ``.emacs-batch/`` and ``.tools/`` are symlinked from the
+    application copy holds ``tools/``, ``emacs/``, ``site/``,
+    ``templates/`` and ``docs/``; ``.emacs-batch/`` and ``.tools/`` are symlinked from the
     real application (when they exist), or ``.emacs-batch/`` is copied
     with ``copy_emacs``. The collection copy is a copy of ``collection``, the
     test collection unless ``DEMO`` is passed, without its generated

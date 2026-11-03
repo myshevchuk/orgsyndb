@@ -517,9 +517,9 @@ class ShippedSiteTests(SiteCase):
 
     def test_notes_after_every_compound_link(self) -> None:
         """Scenario: Notes after every compound link. Every page is
-        scanned, a superset of the procedure pages, the sequence pages
-        and the sequence directory, so that a stray note or link shows
-        too."""
+        scanned, a superset of the procedure pages, the sequence pages,
+        the sequence directory and the compound pages, so that a stray
+        note or link shows too."""
         beside = [f.key for f in self.compound_fields() if f.beside]
         self.assertEqual(beside, ["item_number", "short_name"])
         noted: dict[str, int] = {}
@@ -537,6 +537,16 @@ class ShippedSiteTests(SiteCase):
                       "sequences/index.html"):
             with self.subTest(page=where):
                 self.assertGreater(noted[where], 0)
+        for key, links in (("acetylsalicylic-acid", 3),
+                           ("1-biphenyl-4-yl-ethanol", 6),
+                           ("cinnamic-acid", 3)):
+            where = f"compounds/{key}/index.html"
+            with self.subTest(page=where):
+                self.assertEqual(noted[where], links)
+        for key in ("salicylic-acid", "methyl-salicylate"):
+            where = f"compounds/{key}/index.html"
+            with self.subTest(page=where):
+                self.assertEqual(noted[where], 0)
 
     def test_notes_in_each_place_a_compound_is_linked(self) -> None:
         """Scenario: Notes after every compound link (the metadata panel,
