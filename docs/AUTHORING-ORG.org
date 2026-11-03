@@ -34,10 +34,18 @@
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-01 Sun 21:54] -- notes after compound links
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-02 Mon 19:51] -- derived routes in the compound registry and sequence guidance
 #+AI_PASS: fact-check claude-opus-5-5 [2026-11-02 Mon 20:05] -- doc-writer pass line corrected from gpt-6 to the pinned run model; the step budget's depth-1 exception
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-03 Tue 08:15] -- Emacs package pointer
+#+AI_PASS: fact-check claude-opus-5-5 [2026-11-03 Tue 08:18] -- doc-writer pass line corrected from gpt-6 to the pinned run model; #+LAST_MODIFIED is updated on save by the Emacs package
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
 * Start from a generated stub
+
+  If you write in Emacs, the ~orgsyndb~ package completes metadata keys
+  and values in the file's header, called front matter. It shows problems
+  while you write and after saving, keeps the modification time current
+  and previews the page. For installation, see the application's README,
+  section “Edit in Emacs”.
 
   Create an Org procedure, from inside its collection, with:
 
@@ -72,7 +80,8 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   - ~#+CREATED~ :: When the procedure was first written, as an inactive Org
     timestamp.
   - ~#+LAST_MODIFIED~ :: When the procedure was last changed. Update this by
-    hand after every change; no command updates it automatically.
+    hand after every change; the ~orgsyndb~ program does not update it, and
+    only the Emacs package updates it when you save.
   - ~#+AI_MODEL~ (optional) :: The identifier of a model that assisted. Omit
     the line or use ~none~ to record no model.
   - ~#+OPTIONS: author:nil~ :: Prevents Org authorship metadata from becoming

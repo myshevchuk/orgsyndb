@@ -18,6 +18,12 @@ Diese Anleitung gibt es auch auf Deutsch: [AUTHORING.de.md](AUTHORING.de.md).
 
 ## 1. Get a procedure file
 
+If you write in Emacs, the `orgsyndb` package completes keys and values in
+the information block at the top of the file. It shows problems while you
+write and after saving, keeps the modification time current and previews
+the page. For installation, see the application's README, section “Edit in
+Emacs”.
+
 The file to copy is
 [`templates/procedure.md`](../templates/procedure.md).
 

@@ -24,6 +24,12 @@ Reihe nach, statt die Referenz zu wiederholen. Die englische Fassung ist
 
 ## 1. Eine Vorschriftendatei bekommen
 
+Wenn Sie in Emacs schreiben, vervollständigt das Paket `orgsyndb` die
+Schlüssel und Werte im Datenblock am Anfang der Datei. Es zeigt Probleme
+beim Schreiben und nach dem Speichern, hält die Änderungszeit aktuell und
+öffnet eine Vorschau der Seite. Die Installation erklärt die README der
+Anwendung im Abschnitt „Edit in Emacs“.
+
 Die Vorlage für deutsche Vorschriften ist
 [`templates/procedure.de.md`](../templates/procedure.de.md).
 

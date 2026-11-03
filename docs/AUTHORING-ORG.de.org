@@ -30,6 +30,8 @@
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-01 Sun 21:54] -- Zusätze nach Verbindungslinks
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-02 Mon 19:51] -- abgeleitete Herstellungswege im Verbindungsregister und bei Synthesewegen
 #+AI_PASS: fact-check claude-opus-5-5 [2026-11-02 Mon 20:05] -- doc-writer pass line corrected from gpt-6 to the pinned run model; the step budget's depth-1 exception
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-03 Tue 08:15] -- Verweis auf das Emacs-Paket
+#+AI_PASS: fact-check claude-opus-5-5 [2026-11-03 Tue 08:18] -- doc-writer pass line corrected from gpt-6 to the pinned run model; #+LAST_MODIFIED is updated on save by the Emacs package
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
@@ -45,6 +47,12 @@ Datei, um die erlaubten Reaktionstypen zu ändern. Die
 [[file:SCHEMA.de.md][Schema-Referenz]] erklärt das Format und die Startliste.
 
 * Mit einem erzeugten Gerüst beginnen
+
+  Wenn Sie in Emacs schreiben, vervollständigt das Paket ~orgsyndb~ die
+  Schlüssel und Werte der Metadaten im Dateikopf. Es zeigt Probleme beim
+  Schreiben und nach dem Speichern, hält die Änderungszeit aktuell und
+  öffnet eine Vorschau der Seite. Die Installation erklärt die README der
+  Anwendung im Abschnitt „Edit in Emacs“.
 
   Legen Sie eine deutsche Org-Vorschrift im Ordner ihrer Sammlung so an:
 
@@ -82,8 +90,9 @@ Datei, um die erlaubten Reaktionstypen zu ändern. Die
   - ~#+CREATED~ :: Wann die Vorschrift zuerst geschrieben wurde, als
     inaktiver Org-Zeitstempel.
   - ~#+LAST_MODIFIED~ :: Wann die Vorschrift zuletzt geändert wurde.
-    Aktualisieren Sie es nach jeder Änderung von Hand; kein Befehl tut das
-    automatisch.
+    Aktualisieren Sie es nach jeder Änderung von Hand; das Programm
+    ~orgsyndb~ tut das nicht, nur das Emacs-Paket aktualisiert es beim
+    Speichern.
   - ~#+AI_MODEL~ (optional) :: Die Kennung eines Modells, das geholfen hat.
     Lassen Sie die Zeile weg oder verwenden Sie ~none~, um kein Modell zu
     erfassen.
