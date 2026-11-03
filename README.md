@@ -875,6 +875,139 @@ combine a sequence and its procedures into one PDF.
 Org files remain the source of truth. Never edit their generated Markdown
 copies in `build/export/`.
 
+## Edit in Emacs
+
+The `orgsyndb` package helps you fill in procedure metadata, find compounds,
+check your work and preview the page from Emacs. It lives in the
+application's `emacs/` directory and needs Emacs 29.1 or later. It requires
+no third-party package; Flycheck is optional.
+
+### Install the package
+
+Choose one of these three methods. Replace `~/path/to/orgsyndb` with your
+application checkout.
+
+**Load from a checkout.** Add this to your Emacs init file:
+
+```elisp
+(add-to-list 'load-path "~/path/to/orgsyndb/emacs")
+(require 'orgsyndb)
+(global-orgsyndb-mode 1)
+```
+
+**Doom Emacs.** Add this to `packages.el`:
+
+```elisp
+(package! orgsyndb
+  :recipe (:local-repo "~/path/to/orgsyndb" :files ("emacs/*.el")))
+```
+
+Add this to `config.el`, then run `doom sync`:
+
+```elisp
+(use-package! orgsyndb
+  :config (global-orgsyndb-mode 1))
+```
+
+**Install from Git.** Use `package-vc-install`:
+
+```elisp
+(package-vc-install
+ '(orgsyndb :url "https://github.com/myshevchuk/orgsyndb"
+            :lisp-dir "emacs"))
+```
+
+Then add this to your init file:
+
+```elisp
+(require 'orgsyndb)
+(global-orgsyndb-mode 1)
+```
+
+This method clones the repository into Emacs's package directory. The
+package runs `tools/orgsyndb` from that clone. With the checkout methods,
+it runs the program from the checkout holding the package. Set
+`orgsyndb-program` if you want to use another program.
+
+### Write and check a procedure
+
+`global-orgsyndb-mode` enables `orgsyndb-mode` when you visit a collection's
+Org or Markdown procedure, sequence, compound file, vocabulary or
+`orgsyndb.toml`, whatever the major mode. `OSDB` appears in the mode line.
+Press `C-c C-;` to open the menu of commands, or call them with `M-x`.
+
+Use `completion-at-point` to fill in metadata keys and values. In
+Markdown procedures, completion works inside the `+++` information block;
+in Org, it works on `#+HUGO_CUSTOM_FRONT_MATTER` and `#+HUGO_TAGS` lines
+and in the `substrates` and `products` columns of the table named `scope`.
+It offers statuses, languages, reaction types, tags, authors, compound
+keys, scheme images and the collection's declared choice and boolean
+fields. Labels and compound names help you choose. Sequences also offer
+procedure IDs, general-procedure entry numbers and target compound keys;
+compound files offer keys, declared choice and boolean values, and
+structure images. Completion leaves body text to your other completion
+functions.
+
+To insert a compound key by its name, use `M-x orgsyndb-insert-compound`;
+in `.de` files it offers German names. On a compound key, `OSDB-NNNN` or
+`SEQ-NNNN`, press `M-.` to visit its file or `M-?` to list mentions in
+procedures and sequences, including mentions in body text. Navigation
+prefers the current file's language, then the variant without a language
+code. Eldoc, Emacs's information display at the cursor, shows a compound's
+name, formula, molecular weight and CAS number, or a procedure's title and
+status. `M-x orgsyndb-structure-mode` opens a side window with the
+compound's name, formula and structure image when available.
+
+In Org sources, checks of the file name, keywords, timestamps and scope
+table show problems as you type. Saving a collection file runs
+`orgsyndb validate` for the whole collection in the background. Its
+problems appear on the relevant field lines in open collection buffers;
+export problems appear on the Org source. If the export stops validation,
+Emacs says why and keeps the earlier validation problems. Flymake shows
+problems by default. Set `orgsyndb-diagnostics` to `flycheck` to use
+Flycheck, or to `nil` to disable both displays. Set
+`orgsyndb-validate-on-save` to `nil` to disable validation on save.
+`M-x orgsyndb-validate` lists every problem in a compilation buffer;
+`M-x next-error` takes you to each field's line.
+
+Saving a procedure or sequence also updates `#+LAST_MODIFIED` or `lastmod`
+in Europe/Berlin time, with English weekdays and the appropriate offset.
+The mode uses settings local to that buffer, so your `time-stamp` settings
+elsewhere stay in force. Set `orgsyndb-update-timestamps` to `nil` to
+disable these updates. Collection data is read through `orgsyndb index`
+when first needed and refreshed after each save. For changes made outside
+Emacs, save a collection file or run `M-x orgsyndb-refresh-index`.
+
+### Create files and preview the result
+
+- `M-x orgsyndb-new-procedure` creates a stub through `orgsyndb new`.
+  With `C-u M-x orgsyndb-new-procedure`, choose the format and language.
+- `M-x orgsyndb-new-compound` asks for a key, the built-in compound values
+  and each required declared field, then writes `compounds/<key>.toml`.
+  Leave an optional value empty to omit it.
+- `M-x orgsyndb-visit-variant` opens another language variant of the
+  procedure or sequence. `M-x orgsyndb-create-translation` creates a
+  procedure variant beside the source, keeping its front matter with new
+  creation and modification times and replacing the body headings with
+  those of the other language. Translate the text in place. The command
+  refuses to overwrite an existing file.
+
+Run `M-x orgsyndb-preview` to open the current file's page in your browser.
+The first preview starts `orgsyndb serve`; later previews rebuild the
+site. The port is `orgsyndb-preview-port`, initially 8000. The site shows
+one language; when the page uses another variant, Emacs names it in a
+message. `M-x orgsyndb-preview-on-save-mode` rebuilds while the site is
+served, after one second without another save by default; adjust
+`orgsyndb-preview-delay` to change that interval. Reload the browser page
+to see changes. Use `M-x orgsyndb-stop-server` to stop serving, or
+`M-x orgsyndb-serve` to start it directly. `M-x orgsyndb-pdf` builds the
+PDFs and opens the current procedure's PDF.
+
+The package runs validation, builds, PDFs and the server's first build
+one at a time per collection because each rewrites `build/`. Requests
+wait for the preceding run. Commands started in a shell are not
+coordinated with these runs.
+
 ## Command reference
 
 ```text
@@ -1017,16 +1150,25 @@ PDF checks. Tests that cannot find an optional tool skip their checks and
 name the missing tool. The integration tests build, validate, serve, and print
 copies of the Markdown-only test collection in `tests/fixtures/collection/`.
 They need Hugo and the cached Pagefind binary; the PDF tests also need
-WeasyPrint. Only the Org export tests copy the demo collection. Those tests
+WeasyPrint. The Org export tests copy the demo collection. Those tests
 need Emacs, Git, and the ox-hugo cache in `.emacs-batch/`; without Emacs, they
 skip with the reason `emacs not found`.
 
-The Org front end has an ERT suite in `tests/el/osdb-org-tests.el`.
-`tests/test_elisp.py` runs it under pytest, or you can run it directly:
+The Org front end and the Emacs package have suites using ERT, Emacs's
+Lisp test framework, in `tests/el/osdb-org-tests.el` and
+`tests/el/orgsyndb-tests.el`. `tests/test_elisp.py` runs both under pytest
+and byte-compiles every file in `emacs/`, treating warnings as errors.
+You can also run each suite directly:
 
 ```sh
 emacs -Q --batch -l tests/el/osdb-org-tests.el -f ert-run-tests-batch-and-exit
+emacs -Q --batch -l tests/el/orgsyndb-tests.el -f ert-run-tests-batch-and-exit
 ```
+
+The package suite uses temporary copies of the test collection and the
+demo. It runs the repository's `tools/orgsyndb` for `index` and `validate`,
+so it needs Python 3.14. Commands that start servers, builds and PDFs use
+a stub program. One test needs the ox-hugo cache and skips without it.
 
 To cache Pagefind, run `tools/orgsyndb -C examples/demo build` once. If you do
 not have Emacs, build a copy of `tests/fixtures/collection` outside
@@ -1035,7 +1177,8 @@ the generated `build/` and `public/` directories would affect the fixture
 checks.
 
 The `Emacs 29 export` GitHub Actions workflow runs the export integration
-tests and the ERT suite on Ubuntu 24.04's Emacs 29 with:
+tests and both ERT suites through `tests/test_elisp.py` on Ubuntu 24.04's
+Emacs 29 with:
 
 ```sh
 python -m pytest tests/test_export_integration.py tests/test_elisp.py
