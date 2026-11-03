@@ -57,9 +57,9 @@ Starts after `collection-index` is merged; rebase this branch onto
 
 ## 5. Verification
 
-- [ ] 5.1 Full suite green, the ERT suites included, and the Emacs 29
+- [x] 5.1 Full suite green, the ERT suites included, and the Emacs 29
   workflow green
-- [ ] 5.2 By hand in the owner's Emacs: completion through Corfu,
-  Flymake diagnostics, `M-.`, the structure window and a preview in
-  the browser, on a copy of the demo
+- [ ] 5.2 By hand in the owner's Emacs, on `develop` before it reaches
+  `main`: completion through Corfu, Flymake diagnostics, `M-.`, the
+  structure window and a preview in the browser, on a copy of the demo
 - [x] 5.3 `openspec validate emacs-mode --strict`
