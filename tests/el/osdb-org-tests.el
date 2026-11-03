@@ -7,7 +7,7 @@
 ;;   emacs -Q --batch -l tests/el/osdb-org-tests.el \
 ;;         -f ert-run-tests-batch-and-exit
 ;;
-;; The suite loads tools/osdb-org.el relative to its own location, reads
+;; The suite loads emacs/osdb-org.el relative to its own location, reads
 ;; fixtures from tests/fixtures/, and needs neither Org nor ox-hugo nor
 ;; tomelr nor the network.  When the library is missing or fails to load,
 ;; every test fails with that reason instead of the run aborting.
@@ -32,7 +32,7 @@
   "The root of the repository, as a directory name.")
 
 (defconst osdb-org-test-library
-  (expand-file-name "tools/osdb-org" osdb-org-test-repo)
+  (expand-file-name "emacs/osdb-org" osdb-org-test-repo)
   "The library to test, without its suffix.")
 
 (defconst osdb-org-test-fixtures
@@ -53,7 +53,7 @@
   "Load the library, or signal an error naming why it cannot load."
   (unless (featurep 'osdb-org)
     (unless (file-exists-p (concat osdb-org-test-library ".el"))
-      (error "The library tools/osdb-org.el is missing (%s.el)"
+      (error "The library emacs/osdb-org.el is missing (%s.el)"
              osdb-org-test-library))
     (require 'osdb-org osdb-org-test-library)))
 

@@ -1,4 +1,4 @@
-"""The ERT suite of tools/osdb-org.el under pytest (org-export "ERT
+"""The ERT suite of emacs/osdb-org.el under pytest (org-export "ERT
 suite")."""
 
 import os
