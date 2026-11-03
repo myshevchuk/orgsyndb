@@ -1362,9 +1362,9 @@ do with the commits, such as a network outage while fetching a tool,
 cycle builds them again.
 
 With `ORGSYNDB_APP_UPDATE=true`, every commit on the followed application
-branch reaches the server within one interval, without review. Point
-`ORGSYNDB_APP_REF` at a branch or tag that receives only tested versions,
-or turn updates off and rebuild the image to update.
+branch reaches the server within one interval. The default, `main`, moves
+only to tested commits of `develop`. Following `develop` brings the newest
+work, untested on the server, so use it only for a trial server.
 
 ### HTTPS
 
