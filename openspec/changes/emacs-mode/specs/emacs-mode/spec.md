@@ -271,7 +271,7 @@ The package SHALL run, per collection, at most one of the program's commands tha
 
 #### Scenario: Next error
 - **WHEN** an ERT test changes `status = "draft"` to `status = "done"` in `md/procedures/OSDB-0002-aspirin.md` of a copy of the test collection, runs `orgsyndb-validate`, waits for it to finish and calls `next-error`
-- **THEN** the selected buffer visits that file with point on line 8
+- **THEN** the selected buffer visits `md/procedures/OSDB-0002-aspirin.de.md`, whose problem, that its status differs from its variant's, is the first line of the output, with point on line 8
 
 ### Requirement: Diagnostics front end
 The user option `orgsyndb-diagnostics` SHALL choose how a buffer of kind `org-procedure`, `md-procedure`, `sequence` or `compound` shows the diagnostics: `flymake`, the default, turns on `flymake-mode` with `orgsyndb-flymake` on the buffer's `flymake-diagnostic-functions`; `flycheck` turns on `flycheck-mode` with the checker `orgsyndb`; nil turns on neither. `emacs/orgsyndb-flycheck.el` defines the checker `orgsyndb` once the feature `flycheck` is present, and not before: a generic checker for buffers in `orgsyndb-mode` that reports the diagnostics `orgsyndb-flymake` would report, with the same lines, severities and texts.
