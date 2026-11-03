@@ -125,19 +125,25 @@ the opening lines are returned too when OPENERS is non-nil."
        (t (push line found))))
     (nreverse found)))
 
+(defun osdb-org--keyword (line)
+  "Return (NAME . VALUE) when LINE is a keyword line, else nil.
+NAME is the keyword name in upper case and VALUE its value, trimmed of
+spaces, tabs and CRs, as `osdb-org-keywords' describes them."
+  (let ((case-fold-search nil))
+    (when (string-match "\\`[ \t]*#\\+\\([A-Za-z_]+\\):\\(.*\\)\\'" line)
+      (cons (upcase (match-string 1 line))
+            (string-trim (match-string 2 line) "[ \t\r]+" "[ \t\r]+")))))
+
 (defun osdb-org--keywords-of-lines (lines)
   "Return the keywords of LINES as `osdb-org-keywords' does."
-  (let ((case-fold-search nil)
-        (found nil))
+  (let ((found nil))
     (dolist (line lines)
-      (when (string-match "\\`[ \t]*#\\+\\([A-Za-z_]+\\):\\(.*\\)\\'" line)
-        (let* ((name (upcase (match-string 1 line)))
-               (value (string-trim (match-string 2 line)
-                                   "[ \t\r]+" "[ \t\r]+"))
-               (entry (assoc name found)))
-          (if entry
-              (push value (cdr entry))
-            (push (list name value) found)))))
+      (pcase (osdb-org--keyword line)
+        (`(,name . ,value)
+         (let ((entry (assoc name found)))
+           (if entry
+               (push value (cdr entry))
+             (push (list name value) found))))))
     (nreverse (mapcar (lambda (entry)
                         (cons (car entry) (reverse (cdr entry))))
                       found))))
@@ -596,6 +602,55 @@ and every further row that is not a separator line is an entry."
                         (setq problems (append problems found))
                         (push entry entries))))
         (list problems (unless problems (nreverse entries)) start end)))))
+
+;;;; Front matter for the editor
+
+(defun osdb-org--front-matter-pair (piece)
+  "Return the (KEY . VALUE) pair of the custom front-matter PIECE, or nil.
+PIECE is one piece that `osdb-org--balanced-split' returns, with or
+without its leading `:'.  KEY is its first word, a symbol, and VALUE
+what `read' returns for the rest of PIECE, trimmed and without one
+leading `''.  Return nil when no rest follows the key or it cannot be
+read."
+  (let ((case-fold-search nil))
+    (when (string-match (concat "\\`:?\\([^ \f\t\n\r\v]+\\)[ \f\t\n\r\v]+"
+                                "'?\\([^ \f\t\n\r\v].*\\)\\'")
+                        piece)
+      (let ((key (intern (match-string 1 piece)))
+            (text (match-string 2 piece)))
+        (condition-case nil
+            (cons key (car (read-from-string text)))
+          (error nil))))))
+
+(defun osdb-org-front-matter (text)
+  "Return the front matter that the keywords of the Org TEXT give.
+The result is an alist of (KEY . VALUE), KEY a symbol, in the order of
+the keyword lines and, on one line, of their pairs.  `#+TITLE' gives
+`title' and `#+HUGO_SLUG' gives `slug', each the keyword's value;
+`#+HUGO_TAGS' gives `tags', the list of its words; and each piece of a
+`#+HUGO_CUSTOM_FRONT_MATTER' line gives the pair that
+`osdb-org--front-matter-pair' reads from it, a piece it cannot read
+giving none.  When `osdb-org-scope' reads TEXT's table named scope
+without a problem, the alist ends with `scope', the list of the entries
+it returns.  Keyword names match in any case, and lines inside blocks
+are skipped, as in `osdb-org-keywords'.  Nothing is exported and Org
+is not loaded."
+  (let ((found nil))
+    (dolist (line (osdb-org--outside-lines text))
+      (pcase (osdb-org--keyword line)
+        (`("TITLE" . ,value) (push (cons 'title value) found))
+        (`("HUGO_SLUG" . ,value) (push (cons 'slug value) found))
+        (`("HUGO_TAGS" . ,value) (push (cons 'tags (split-string value))
+                                       found))
+        (`("HUGO_CUSTOM_FRONT_MATTER" . ,value)
+         (dolist (piece (osdb-org--balanced-split value))
+           (let ((pair (osdb-org--front-matter-pair piece)))
+             (when pair
+               (push pair found)))))))
+    (pcase-let ((`(,problems ,entries ,start) (osdb-org-scope text)))
+      (when (and start (null problems))
+        (push (cons 'scope entries) found)))
+    (nreverse found)))
 
 ;;;; One source
 
