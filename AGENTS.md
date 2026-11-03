@@ -4,6 +4,19 @@
 
 This repo uses OpenSpec
 
+## Branches
+
+- `develop` is the working branch. Commit work that needs no proposal
+  on `develop`. A change's branch starts from `develop`; archive the
+  change on its branch, then squash-merge it into `develop`.
+- `main` is stable, and every push to it deploys the demo site. Move
+  it only when the owner asks, and only by fast-forward to a commit of
+  `develop`. Never commit on `main` or squash into it.
+- GitHub's default branch is `main`, so open pull requests with
+  `--base develop`.
+- Both branches reject force-pushes, deletion, merge commits and
+  unsigned commits.
+
 ## Committing
 
 This repo uses Conventional Commits
