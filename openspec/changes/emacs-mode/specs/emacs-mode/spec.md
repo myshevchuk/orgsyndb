@@ -39,7 +39,7 @@ The mode's lighter is ` OSDB`. The features of the following requirements act on
 - **THEN** `orgsyndb-mode` is on in the first buffer and off in the second
 
 ### Requirement: Collection data
-The package SHALL keep, per collection, the index that `orgsyndb index` prints (collection-index "Index data"), parsed with JSON objects as alists keyed by symbols, arrays as lists, `null` as nil and `false` as `:false`. `orgsyndb-index` returns the index of the current buffer's collection, running the program synchronously when the package holds none for it yet. After a buffer of kind `compound`, `vocabulary`, `settings`, `md-procedure` or `sequence` is saved, the package runs the program in the background and replaces the collection's index when the run succeeds. A run that exits non-zero leaves the index unchanged and shows the program's error output in a message. `orgsyndb-refresh-index` runs it again for the current collection.
+The package SHALL keep, per collection, the index that `orgsyndb index` prints (collection-index "Index data"), parsed with JSON objects as alists keyed by symbols, arrays as lists, `null` as nil and `false` as `:false`. `orgsyndb-index` returns the index of the current buffer's collection, running the program synchronously when the package holds none for it yet. After a buffer in `orgsyndb-mode` is saved, the package runs the program in the background and replaces the collection's index when the run succeeds. A run that exits non-zero leaves the index unchanged and shows the program's error output in a message. `orgsyndb-refresh-index` runs it again for the current collection.
 
 `orgsyndb-procedures` returns one record per entry of the index's `procedures`: the entry, with the `front_matter` of an Org source taken from `osdb-org-front-matter` (org-export "Front matter of an Org source") of the visiting buffer's text when a buffer visits the file, and of the file otherwise, read again when the file's modification time changes.
 
@@ -50,6 +50,10 @@ The package SHALL keep, per collection, the index that `orgsyndb index` prints (
 #### Scenario: Refresh after a save
 - **WHEN** an ERT test fetches the index of a copy of the test collection, then creates `compounds/ethanol.toml` through a buffer in `orgsyndb-mode`, saves it and waits for the background run to finish
 - **THEN** the index lists the compound `ethanol`
+
+#### Scenario: A new Org source after a save
+- **WHEN** an ERT test fetches the index of a copy of the demo collection, then creates `org/procedures/OSDB-0010-test.org` through a buffer in `orgsyndb-mode`, saves it and waits for the background run to finish
+- **THEN** `orgsyndb-procedures` holds a record whose `path` is `org/procedures/OSDB-0010-test.org`
 
 #### Scenario: A failed run keeps the index
 - **WHEN** an ERT test fetches the index of a copy of the test collection, then sets `orgsyndb-program` to a script that writes `boom` to stderr and exits 1, and calls `orgsyndb-refresh-index`
@@ -140,6 +144,10 @@ Elsewhere it returns nil.
 - **WHEN** the test does the same with point after `entry = ` in `{ procedure = "OSDB-0009", entry = }`
 - **THEN** the completions are `("1" "2" "3")`, and `1` is annotated with text containing `1-biphenyl-4-yl-ethanol`
 
+#### Scenario: Step entry of an Org general procedure
+- **WHEN** an ERT test copies `tests/fixtures/export/OSDB-0909-scope-table.org` into `org/procedures/` of a copy of the demo collection and does the same in `{ procedure = "OSDB-0909", entry = }`
+- **THEN** the completions are `("1" "2" "3")`, and `1` is annotated with text containing `ethyl-acetate` and `propyl-acetate`
+
 #### Scenario: Compound file
 - **WHEN** an ERT test creates `compounds/test.toml` in a copy of the demo collection holding `name = "Test"`, a line `chem` and a line `group = "fin"`, and calls the function after `chem` and after `fin`
 - **THEN** the first completions are `("chemical_class")`, and the second are `("final-products")`
@@ -205,20 +213,25 @@ When the file exists already, the command signals a user error naming it and wri
 - **THEN** the current buffer visits `org/procedures/OSDB-0007-ethyl-cinnamate.de.org`
 
 ### Requirement: Problem locations
-`orgsyndb-problem-location` SHALL take a collection directory, a problem's path relative to it and the problem's field, and return the file and the line, counting from 1, where the problem belongs:
+`orgsyndb-problem-location` SHALL take a collection directory, a problem's path relative to it, the problem's field and its message, and return the file and the line, counting from 1, where the problem belongs:
 - The file is the path, except that `build/export/<stem>.md` maps to `org/procedures/<stem>.org`.
 - The key is the field up to its first `[` or `.`.
-- In a Markdown or TOML file, the line is the first line of the front matter, or of the TOML file, that begins with the key followed by optional blanks and `=`.
+- A `front_matter` or `toml` problem whose message holds `at line <n>` belongs on line `<n>` of the file, the line that `tomllib` names.
+- In a Markdown or TOML file, the line is the first line of the front matter, or of the TOML file, that begins, after optional blanks, with the key, bare or in double quotes, followed by optional blanks and `=`, or that is a table header whose first dotted part is the key, such as `[[products]]`.
 - In an Org file, the line is the first line of the keyword that writes the key: `#+TITLE` for `title`, `#+HUGO_SLUG` for `slug`, `#+HUGO_TAGS` for `tags`, `#+CREATED` for `date`, `#+LAST_MODIFIED` for `lastmod`, `#+AI_MODEL` for `ai_model`, the keyword itself for a field that begins with `#+`; the `#+NAME: scope` line for `scope`; otherwise the first `#+HUGO_CUSTOM_FRONT_MATTER` line holding `:<key>` followed by a blank or the line's end. Keyword names match in any case.
 - The line is 1 when nothing matches.
 
 #### Scenario: Export problem on the Org source
-- **WHEN** an ERT test calls `orgsyndb-problem-location` for a copy of the demo collection with the path `build/export/OSDB-0007-ethyl-cinnamate.md` and the fields `products[1].yield_percent`, `working_time`, `title` and `file_name`
+- **WHEN** an ERT test calls `orgsyndb-problem-location` for a copy of the demo collection with the path `build/export/OSDB-0007-ethyl-cinnamate.md`, the message `must be a number`, and the fields `products[1].yield_percent`, `working_time`, `title` and `file_name`
 - **THEN** each result names `org/procedures/OSDB-0007-ethyl-cinnamate.org`, with the lines 18, 13, 1 and 1
 
 #### Scenario: Markdown and compound fields
-- **WHEN** an ERT test calls it for a copy of the test collection with `md/procedures/OSDB-0002-aspirin.md` and `status`, and with `compounds/acetic-anhydride.toml` and `mw`
+- **WHEN** an ERT test calls it for a copy of the test collection with `md/procedures/OSDB-0002-aspirin.md` and `status`, and with `compounds/acetic-anhydride.toml` and `mw`, each with the message `unknown`
 - **THEN** the lines are 8 and 4
+
+#### Scenario: Line of a TOML error
+- **WHEN** an ERT test calls it for a copy of the test collection with `compounds/acetic-anhydride.toml`, the field `toml` and the message `invalid TOML: Invalid value (at line 3, column 8)`
+- **THEN** the line is 3
 
 ### Requirement: Diagnostics of an Org source while typing
 In a buffer of kind `org-procedure`, the mode's Flymake backend `orgsyndb-flymake` SHALL report, on each Flymake check, the problems that `osdb-org-check-file-name` gives for the file name and that `osdb-org-lint` and `osdb-org-scope` give for the buffer text, each as a diagnostic of the problem's severity with the text `<field>: <message>`, on the whole line that "Problem locations" gives for the problem's field in the buffer.
@@ -228,7 +241,7 @@ In a buffer of kind `org-procedure`, the mode's Flymake backend `orgsyndb-flymak
 - **THEN** it reports one error, on line 2, whose text begins `#+CREATED: weekday "Tue" does not match`
 
 ### Requirement: Validation on save
-While `orgsyndb-validate-on-save` is non-nil, the default, the package SHALL run `orgsyndb validate` for the collection in the background after a buffer in `orgsyndb-mode` is saved; when a run for the collection is in progress, one more run follows it. From a run's standard output it reads the problem lines `<path>:<field>: <severity>: <message>`, dropping those whose path is an Org source. A run counts when its standard error holds the validator's summary line `validated <n> files: …`; a run without it, one that stopped at the Org export, changes nothing. When a run counts, its problems replace, for every file of the collection, the problems the package keeps, and `orgsyndb-flymake` reports in each buffer the kept problems of its file, placed by "Problem locations", with the text `<field>: <message>`, beside the diagnostics of "Diagnostics of an Org source while typing".
+While `orgsyndb-validate-on-save` is non-nil, the default, the package SHALL run `orgsyndb validate` for the collection in the background after a buffer in `orgsyndb-mode` is saved, as "One command at a time" orders the runs. From a run's standard output it reads the problem lines `<path>:<field>: <severity>: <message>`: those whose path lies in `org/procedures/` are export problems, the others validator problems. A run is complete when its standard error holds the validator's summary line `validated <n> files: …`. A complete run replaces the export and validator problems the package keeps for every file of the collection. An incomplete run, one that stopped at the Org export or before it, replaces the export problems only, and shows in the echo area its first problem line of severity `error`, or else the last line of its standard error. `orgsyndb-flymake` reports in each buffer the kept problems of its file, placed by "Problem locations", with the text `<field>: <message>`, beside the diagnostics of "Diagnostics of an Org source while typing"; an export problem with the field, severity and message of one of those is left out.
 
 #### Scenario: Markdown problem after a save
 - **WHEN** an ERT test, in a buffer with Flymake visiting `md/procedures/OSDB-0002-aspirin.md` of a copy of the test collection, changes `status = "draft"` to `status = "done"`, saves, and waits for the run to finish
@@ -239,8 +252,19 @@ While `orgsyndb-validate-on-save` is non-nil, the default, the package SHALL run
 - **THEN** the buffer has an error diagnostic on line 13 whose text begins `working_time:`
 
 #### Scenario: A run stopped by the export keeps earlier problems
-- **WHEN** after the first scenario's diagnostic the test copies `tests/fixtures/org-invalid/wrong-weekday/org/OSDB-0206-wrong-weekday.org` into the collection's `org/procedures/`, saves the Markdown buffer again, and waits for the run to finish
-- **THEN** the Markdown buffer still has its `status:` diagnostic
+- **WHEN** after the first scenario's diagnostic the test creates the directory `org/procedures/nested/` in the collection, saves the Markdown buffer again, and waits for the run to finish
+- **THEN** the Markdown buffer still has its `status:` diagnostic, and the last message contains `subdirectories`
+
+#### Scenario: No second copy of a problem shown while typing
+- **WHEN** an ERT test, in a buffer with Flymake visiting a copy of `tests/fixtures/org-invalid/wrong-weekday/org/OSDB-0206-wrong-weekday.org` placed in `org/procedures/` of a copy of the demo collection, saves and waits for the run to finish
+- **THEN** the buffer has exactly one diagnostic whose text begins `#+CREATED: weekday`
+
+### Requirement: One command at a time
+The package SHALL run, per collection, at most one of the program's commands that write the collection's `build/`, `public/` or `pdf/`: `validate`, `build`, `pdf`, and `serve` until it prints its `serving` line. A command requested while another of them runs starts when that one ends, in the order requested; a `validate` or `build` that is already waiting is not added a second time. `orgsyndb-validate` waits in the same order. `index` and `new` start at once.
+
+#### Scenario: A preview build waits for the validation
+- **WHEN** an ERT test sets `orgsyndb-program` to a stub that records when each run starts and ends, prints its `serving` line for `serve`, and takes one second for `validate`; starts the server, saves a procedure buffer twice in a row and calls `orgsyndb-preview` while the validation runs
+- **THEN** the stub's record shows no two runs other than `serve` overlapping, two runs of `validate`, and the `build` starting after the first `validate` ended
 
 ### Requirement: Validation buffer
 `orgsyndb-validate` SHALL run `orgsyndb validate` for the current collection in a compilation buffer in which each problem line is an error or a warning by its severity, and `next-error` visits the file and line that "Problem locations" gives for it.
@@ -261,9 +285,9 @@ The user option `orgsyndb-diagnostics` SHALL choose how a buffer of kind `org-pr
 - **THEN** nothing was recorded before the stub was provided, and afterwards a checker named `orgsyndb` was recorded whose start function, called in the buffer of "Wrong weekday", reports one error on line 2
 
 ### Requirement: Timestamps on save
-While `orgsyndb-update-timestamps` is non-nil, the default, the mode SHALL keep the modification time of a procedure or sequence current with `time-stamp`, which it puts on the buffer's `before-save-hook` after giving `time-stamp-active`, `time-stamp-start`, `time-stamp-end`, `time-stamp-format`, `time-stamp-time-zone`, `time-stamp-line-limit` and `system-time-locale` buffer-local values:
+While `orgsyndb-update-timestamps` is non-nil, the default, the mode SHALL keep the modification time of a procedure or sequence current with `time-stamp`, which it puts on the buffer's `before-save-hook` after giving `time-stamp-active`, `time-stamp-pattern`, `time-stamp-start`, `time-stamp-end`, `time-stamp-format`, `time-stamp-time-zone`, `time-stamp-line-limit` and `system-time-locale` buffer-local values, `time-stamp-pattern` nil:
 - In a buffer of kind `org-procedure`, `time-stamp` rewrites the timestamp of the first `#+LAST_MODIFIED` keyword, in any case, as `[YYYY-MM-DD Day hh:mm:ss]`, the Europe/Berlin local time with the English weekday.
-- In a buffer of kind `md-procedure` or `sequence`, it rewrites the value of the front matter's `lastmod` key as `YYYY-MM-DDThh:mm:ss+HH:MM`, the Europe/Berlin local time and the offset in force.
+- In a buffer of kind `md-procedure` or `sequence`, it rewrites the value of the front matter's `lastmod` key as `YYYY-MM-DDThh:mm:ss+HH:MM`, the Europe/Berlin local time and the offset in force, both from one offset, so that the text names the instant of the save.
 
 The global values of those variables are untouched. A file without the keyword or key is saved unchanged.
 
@@ -274,6 +298,14 @@ The global values of those variables are untouched. A file without the keyword o
 #### Scenario: Markdown in summer and winter
 - **WHEN** an ERT test saves a modified buffer visiting `md/procedures/OSDB-0002-aspirin.md` of a copy of the test collection with the current time fixed at 2026-07-15T10:00:00Z, and again at 2026-01-15T10:00:00Z
 - **THEN** the saved `lastmod` lines are `lastmod = 2026-07-15T12:00:00+02:00` and `lastmod = 2026-01-15T11:00:00+01:00`
+
+#### Scenario: The fall-back hour
+- **WHEN** an ERT test saves a modified buffer visiting `md/procedures/OSDB-0002-aspirin.md` of a copy of the test collection with the current time fixed at 2026-10-25T00:30:00Z, and again at 2026-10-25T01:30:00Z
+- **THEN** the saved `lastmod` lines are `lastmod = 2026-10-25T02:30:00+02:00` and `lastmod = 2026-10-25T02:30:00+01:00`
+
+#### Scenario: The user's own time-stamp settings
+- **WHEN** an ERT test sets the global `time-stamp-pattern` to `"10/Updated: <%Y>"`, puts `time-stamp` on the global `before-save-hook`, and saves a modified buffer visiting `md/procedures/OSDB-0002-aspirin.md` of a copy of the test collection with the current time fixed at 2026-07-15T10:00:00Z
+- **THEN** the saved `lastmod` line is `lastmod = 2026-07-15T12:00:00+02:00`
 
 #### Scenario: Global settings untouched
 - **WHEN** an ERT test sets the global `time-stamp-format` to `%Y` and visits a procedure of a collection copy with `global-orgsyndb-mode` on
