@@ -1,0 +1,239 @@
+#+TITLE: Moving the lab's Excel records into OrgSynDB
+#+DATE: [2026-11-04 Wed 15:06]
+#+AI_MODEL: gpt-6.1-sol
+#+AI_PASS: fact-check claude-opus-5-5 [2026-11-04 Wed 15:20] -- model keyword
+#+OPTIONS: toc:nil num:nil
+
+The agreed direction is to keep procedures and compound descriptions in
+Git, and add a web app for records that change during daily lab work.
+The owner accepted the concept on 2026-11-04. Work starts with the task
+tracker and the end-product inventory. Excel import comes later; those
+first two views are filled in by hand until it is available.
+
+* What the app is meant to bring together
+
+  The lab currently keeps six kinds of records in Excel, each with its
+  own layout:
+
+  - Synthesized end products.
+  - The owner's intermediates.
+  - Commercial reagents, including reagents from other departments.
+  - Quality control (QC) results for synthesized end products.
+  - A catalogue of products and their properties.
+  - Tasks.
+
+  The concept combines two ways of keeping information. Text files in
+  Git remain the source for material that is reviewed and versioned:
+  procedures, synthesis sequences and the compound registry. A database
+  holds inventories, QC results and tasks, where records change daily
+  and several people may edit them.
+
+  Each Excel file initially gets a separate app view with its existing
+  columns. Views combining information from different files wait until
+  the transition is complete.
+
+  The paper lab journal stays because it is more convenient. The app
+  records references to its pages; an electronic lab journal is outside
+  the concept. Procedures also stay as they are. Any minor changes to
+  their appearance become small, separate changes after the owner lists
+  them.
+
+* What starts next
+
+  The agreed starting pair is the task tracker and the end-product
+  inventory. Their views accept manual entries while Excel import is
+  still pending.
+
+  Two OpenSpec drafts describe the proposed changes:
+
+  - ~task-tracker~ introduces the web app and task list. It includes
+    accounts, sign-in, change history, deployment with PostgreSQL and
+    daily backups.
+  - ~end-product-inventory~ covers batches and containers of end
+    products, withdrawals with their history, and links to compounds
+    and procedures through the collection index. That index is a
+    machine-readable description of the text collection.
+
+  The owner still needs to provide the header row and a few anonymised
+  rows from each of these two Excel files. These establish the columns
+  their app views need to reproduce.
+
+  Subsequent changes cover intermediates, QC, catalogue properties in
+  compound files, commercial reagents, Excel import and export, and
+  navigation links from the static site to the app.
+
+  An earlier suggested order began with tasks as a small trial of
+  sign-in, views and import, followed by intermediates, then end
+  products together with QC and the catalogue. Commercial reagents came
+  last because other departments are involved. The agreed next step
+  instead starts tasks and end products together and postpones import.
+
+* The owner's five answers, 2026-11-04
+
+** 1. Will other departments use the app, or keep Excel while the app reads their rows?
+
+   Answer: Possibly; this remains undecided. Other departments' reagent
+   rows are the largest open question.
+
+** 2. Is an institute login available, such as LDAP, AD or single sign-on?
+
+   Answer: No. The app has its own accounts, created by an administrator.
+
+** 3. Do catalogue properties belong in compound files or the database?
+
+   Answer: Probably in the compound files.
+
+** 4. Which Excel file causes the most difficulty?
+
+   Answer: None in particular. The owner's intermediate inventory would
+   be easy to transfer.
+
+** 5. Do the containers have barcodes?
+
+   Answer: No. Container numbers remain handwritten for now. Labels are
+   an idea for later.
+
+* How the records fit together
+
+** Inventories describe containers
+
+   The three inventories share one table of containers, with a separate
+   view for each original file. The demo collection's ~group~ field
+   already distinguishes ~purchased~ materials, covering starting
+   materials and reagents, from ~synthesised~ materials, covering
+   intermediates and final products.
+
+   A commercial reagent can keep its name and CAS number on the
+   inventory row. It does not require a compound file, though one may be
+   linked. The handling of other departments' rows remains unresolved.
+
+   Inventory rows refer to compounds by key, the identifier used to link
+   a row to a compound. If a key disappears from the text collection,
+   the app flags the affected row and retains it.
+
+   Amounts come from containers. The ~stock~ field therefore leaves the
+   compound files. The demo collection declares that field in its
+   ~orgsyndb.toml~ configuration, so removing it changes the collection,
+   rather than the application.
+
+** Batches connect end products, QC and the catalogue
+
+   A batch number connects the end-product inventory, QC and catalogue.
+   The batch records the procedure used to make it and the paper
+   journal page. QC results belong to the batch; the catalogue lists the
+   product.
+
+   Much of the catalogue is already represented by the compound list's
+   final-products tab. The proposed home for descriptive properties,
+   including purity, appearance and storage, is declared fields in
+   compound files. This follows the owner's current preference, which
+   remains tentative.
+
+   The demo collection already declares a ~notebook~ procedure field
+   for journal references such as ~AE-2/12~. Batches and withdrawals get
+   the same kind of field.
+
+** Tasks remain a separate list
+
+   Tasks stand on their own. Identifiers in their reference column
+   become links.
+
+* The planned Excel transition
+
+  Excel import is deferred for the agreed first pair of views. The
+  broader transition plan still provides for checking imported records
+  against the original files before moving daily work into the app.
+
+** First, reproduce each file
+
+   Each file gets a read-only view with the same columns in the same
+   order. Excel remains the authoritative copy during this phase.
+   Re-import happens on upload or nightly, and export reproduces the
+   original layout. People can compare a view directly with their file.
+
+** Then, move one file at a time
+
+   A file's app view becomes editable when its Excel copy is frozen.
+   The same rows are never synchronised in both directions.
+
+   The shared commercial-reagents file can move one department at a
+   time. A reconciliation screen resolves rows changed in both places.
+
+** Finally, combine views
+
+   Once the transition is over, combined views can bring related
+   information together. One example is a stock box on a compound page
+   that links into the inventory.
+
+** Import needs particular care
+
+   Each Excel layout gets its column mapping once. Columns without a
+   matching app field are retained on the row so that their contents
+   survive. Every re-import shows which rows are new, changed, missing
+   or conflicting.
+
+* How the app sits beside the procedure site
+
+  The existing static site keeps its builder, Hugo, Pagefind and Caddy.
+  The procedure pages retain their current behaviour. The new app uses
+  Django with a PostgreSQL database and sits behind the same Caddy, at
+  the same address under its own paths.
+
+  The mockups use German paths: ~/bestand~, ~/qc~, ~/katalog~ and
+  ~/aufgaben~. The drafts use English paths, following the site's
+  convention, such as ~/tasks/~ and ~/inventory/~.
+
+  The static site remains open. Changing anything in the app requires
+  sign-in.
+
+** Why Django and PostgreSQL were chosen
+
+   Django provides an administration interface useful for corrections
+   during the transition. Its user groups can represent departments.
+   Available add-ons include ~django-simple-history~ for recording
+   changes and ~openpyxl~ for reading and writing Excel files.
+
+   PostgreSQL supports concurrent writes by several people and German
+   full-text search. Its RDKit extension offers a route to searching
+   for chemical substructures later. SQLite would be sufficient for an
+   initial trial.
+
+** Connecting the text collection to the app
+
+   ~orgsyndb index~ produces a JSON description of a collection. JSON is
+   the machine-readable format used here to pass collection information
+   to the app. The index was built for the Emacs package; the concept
+   uses it after each build to connect the app to the text collection.
+
+   The initial concept has the app load the index into read-only
+   database tables, marked with the Git commit identifying that version
+   of the collection. The first draft takes a smaller step: the builder
+   writes the index into every published release, and the app reads
+   that file. Database tables can follow when searching or combining
+   records requires them.
+
+* What remains for later
+
+  OpenEnventory covers some of the same ground, but its inventory is
+  unintuitive and its procedure component centres on a lab journal.
+  The useful idea to retain is an inventory organised around containers
+  with a history of changes. Barcodes can follow later; the electronic
+  lab journal is left out entirely.
+
+  Other ideas remain outside the first steps:
+
+  - QR labels on containers, with withdrawals recorded by scanning a
+    label on a phone.
+  - A Gefahrstoffverzeichnis, or hazardous-substances register, exported
+    from the reagents inventory.
+  - Tasks created automatically when stock is low.
+  - Searching by chemical structure.
+
+* Mockups
+
+  An architecture diagram and eight screen mockups illustrate the
+  concept. They use a German interface and demo data. File names,
+  layouts and numbers are placeholders. The link is private to the
+  owner:
+
+  https://claude.ai/artifact/KH9J4x74MTDGMevLpWNQw4

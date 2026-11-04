@@ -30,3 +30,8 @@ leaves this file then.
   in the application's `site/hugo.toml`, so a preview shows the
   variant that suits it. A `serve --locale` option would preview the
   other language's variants without editing that file.
+- **Lab records in the web application.** The rest of the concept in
+  `ideas/inventory-app.org`, after `task-tracker` and
+  `end-product-inventory`: the intermediates, QC, the catalogue's
+  properties as compound fields, commercial reagents, Excel import and
+  export, and links from the site's navigation to the application.
