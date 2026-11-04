@@ -5,7 +5,7 @@ modelled on *Organic Syntheses*. Each procedure lives in one source file:
 the owner writes Org files, and co-workers can write Markdown files. The
 build treats both formats alike.
 
-The finished site is static. Viewing it loads no fonts, analytics, or other
+The procedure site is static. Viewing it loads no fonts, analytics, or other
 resources from the internet. It has a light and dark theme, a procedure
 catalogue with full-text search and filters, browse directories, and an A4
 print layout. Its interface is German by default and can be switched to
@@ -21,8 +21,13 @@ separate single-column A4 layout.
 ## Application and collections
 
 This repository is the application: the build program, the validator, the
-procedure, compound and sequence schemas, the theme and the tests. It holds no
-procedures of its own apart from a demo. Procedures live in a *collection*,
+procedure, compound and sequence schemas, the theme, the lab application
+and the tests. The lab application in `webapp/` uses Django, a Python web
+framework, to track synthesis tasks at `/lab/` beside the static site.
+See [Container deployment](#container-deployment) to run both.
+
+The repository holds no procedures of its own apart from a demo.
+Procedures live in a *collection*,
 a separate directory, normally its own Git repository, that the application
 builds:
 
@@ -1153,14 +1158,16 @@ is the stable branch and the repository's default branch. It moves only
 at the owner's request, by fast-forward to a tested commit of `develop`.
 Every push to `main` deploys the demo site.
 
-Run the test suite from the application's root with:
+Run the build program's test suite from the repository root with:
 
 ```sh
-python3 -m pytest tests
+python3 -m pytest
 ```
 
-The command needs pytest. Node is optional and lets the tests exercise the
-real Pagefind search; it is never needed to build or view the site.
+The root `pytest.ini` limits collection to `tests/`, so this suite needs
+no Django. The command needs pytest. Node is optional and lets the tests
+exercise the real Pagefind search; it is never needed to build or view
+the site.
 `poppler-utils` is also optional and supplies `pdftotext` and `pdfinfo` for
 PDF checks. Tests that cannot find an optional tool skip their checks and
 name the missing tool. The integration tests build, validate, serve, and print
@@ -1203,6 +1210,39 @@ python -m pytest tests/test_export_integration.py tests/test_elisp.py
 It runs on pushes to `main` and `develop`, pull requests, and manual
 dispatch.
 
+### Lab application tests and local server
+
+The lab application has its own dependencies in `webapp/pyproject.toml`
+and `webapp/uv.lock`. With Python 3.14 or later and uv, the Python project
+manager, run its tests separately:
+
+```sh
+cd webapp
+uv run pytest
+```
+
+The suite uses SQLite, a database stored in one file, by default. Set
+`ORGSYNDB_DATABASE_URL` to run it against PostgreSQL instead. The
+[`webapp.yml`](.github/workflows/webapp.yml) GitHub Actions workflow runs
+this suite on SQLite and on a PostgreSQL 18 service on pushes to `main`
+and `develop`, and on pull requests.
+
+To develop with the collection's product links and interface language,
+generate its index from the repository root. Replace `<collection>` with
+your collection's directory, then start the local server:
+
+```sh
+tools/orgsyndb -C '<collection>' index > /tmp/orgsyndb-index.json
+cd webapp
+export ORGSYNDB_DEBUG=true
+export ORGSYNDB_INDEX=/tmp/orgsyndb-index.json
+uv run python manage.py migrate
+uv run python manage.py runserver
+```
+
+Open <http://127.0.0.1:8000/lab/>. The local database is
+`webapp/db.sqlite3` unless you set `ORGSYNDB_DATABASE_URL`.
+
 ## Troubleshooting
 
 If a poppler tool reports `Embedded font file may be invalid` for Cantarell
@@ -1240,13 +1280,22 @@ collection it lets the commit through.
 ## Container deployment
 
 `deploy/` runs OrgSynDB on a server with Docker Compose or Podman Compose.
-Two containers share one image and one data volume:
+Five services build and serve the site and keep the lab's records:
 
 - `builder` clones the collection from its Git repository, builds the site
   inside the container, and checks for new commits every five minutes. It
   also follows the application's own repository, so the server picks up
-  new versions of OrgSynDB by itself.
-- `web` serves the last published site with Caddy on port 8080.
+  new versions of the static site by itself.
+- `web` serves the last published site with Caddy on port 8080 and
+  forwards `/lab/` to `app`.
+- `db` runs PostgreSQL 18 and keeps the lab's records in the `db` volume.
+- `app` runs the lab application, built from the checkout that holds
+  `deploy/compose.yaml`. It reads the published collection's index from
+  the shared `data` volume.
+- `backup` dumps the database daily into `deploy/backups/` on the host.
+
+`builder` and `web` share one image. They and `app` share the `data`
+volume; `web` and `app` read it without writing to it.
 
 The collection's repository may be anywhere Git reaches: an `https://` or
 `ssh://` URL on the internet or the intranet, or a repository on the
@@ -1256,18 +1305,40 @@ tomelr and Pagefind into the image. Once built, the containers need access
 only to the two repositories; with application updates off, only to the
 collection's.
 
-Set it up from a checkout of the application:
+### Set up the services
+
+From a checkout of the application, copy the example settings:
 
 ```sh
 cd deploy
 cp orgsyndb.env.example orgsyndb.env
-# Set ORGSYNDB_COLLECTION_REPO in orgsyndb.env, then:
+```
+
+In `orgsyndb.env`, set `ORGSYNDB_COLLECTION_REPO` and choose the database
+user, password and name in `POSTGRES_USER`, `POSTGRES_PASSWORD` and
+`POSTGRES_DB`. Repeat those values in `ORGSYNDB_DATABASE_URL` as
+`postgres://<user>:<password>@db:5432/<database>`; the password appears
+in both settings. Set `ORGSYNDB_ALLOWED_HOSTS` to the host names you use
+to reach the site, separated by commas.
+
+Generate a secret key for sign-ins and put the result in
+`ORGSYNDB_SECRET_KEY`:
+
+```sh
+python3 -c 'import secrets; print(secrets.token_urlsafe(50))'
+```
+
+Git ignores `deploy/orgsyndb.env` and `deploy/backups/`. After filling in
+the settings, start the services from `deploy/`:
+
+```sh
 docker compose up -d --build
 docker compose logs -f builder
 ```
 
-The site is then at `http://<server>:8080/`. Before the first build
-finishes, the server answers 404.
+The site is then at `http://<server>:8080/`, with the lab application at
+`http://<server>:8080/lab/`. Before the first site build finishes, the
+static site answers 404.
 
 [`deploy/orgsyndb.env.example`](deploy/orgsyndb.env.example) lists the
 settings:
@@ -1277,22 +1348,69 @@ settings:
 | `ORGSYNDB_COLLECTION_REPO` | required | Git URL or path of the collection's repository |
 | `ORGSYNDB_COLLECTION_REF` | `main` | Branch or tag to build |
 | `ORGSYNDB_COLLECTION_PATH` | `.` | Directory of `orgsyndb.toml` inside that repository |
-| `ORGSYNDB_APP_UPDATE` | `true` | Follow the application's repository |
+| `ORGSYNDB_APP_UPDATE` | `true` | Follow the application's repository for static site builds |
 | `ORGSYNDB_APP_REPO` | the image's | Git URL or path of the application |
 | `ORGSYNDB_APP_REF` | the image's | Branch or tag of the application |
 | `ORGSYNDB_INTERVAL` | `300` | Seconds between checks for new commits, at least 10 |
 | `ORGSYNDB_PDF` | `false` | Also render one PDF per procedure, served under `/pdf/` |
 | `ORGSYNDB_KEEP_RELEASES` | `2` | Published sites kept besides the current one |
-| `ORGSYNDB_BUILD_TIMEOUT` | `3600` | Seconds a build may take, at least 60 |
+| `ORGSYNDB_BUILD_TIMEOUT` | `3600` | Seconds the build and then its index command may each take, at least 60 |
 | `ORGSYNDB_ADDRESS` | `:8080` | Caddy's site address |
+| `POSTGRES_USER` | `lab` in the example | Database user; must match the database URL |
+| `POSTGRES_PASSWORD` | choose your own | Database password; must match the database URL |
+| `POSTGRES_DB` | `lab` in the example | Database name; must match the database URL |
+| `ORGSYNDB_DATABASE_URL` | set for deployment | `postgres://<user>:<password>@db:5432/<database>` |
+| `ORGSYNDB_SECRET_KEY` | required | Generated secret key for sign-ins |
+| `ORGSYNDB_ALLOWED_HOSTS` | required | Comma-separated host names used to reach the site |
+| `ORGSYNDB_DEBUG` | `false` | Show error details; keep off on a reachable site |
+| `ORGSYNDB_INDEX` | `/var/lib/orgsyndb/current/index.json` | Published collection index read by the lab application |
+| `ORGSYNDB_APP_UPSTREAM` | `app:8000` | Address to which Caddy forwards `/lab/` |
+| `ORGSYNDB_BACKUP_HOURS` | `24` | Hours between database dumps |
+| `ORGSYNDB_KEEP_BACKUPS` | `14` | Newest database dumps kept |
 
-The image is built from the application's repository and branch given by
-the `APP_REPO` and `APP_REF` build arguments, by default
+The shared `builder`/`web` image is built from the application's repository
+and branch given by the `APP_REPO` and `APP_REF` build arguments, by default
 `https://github.com/myshevchuk/orgsyndb.git` and `main`. Set them in the
 environment or in a `.env` file beside `compose.yaml` to build from another
 repository, such as a mirror on the intranet. `APP_REF` must be a branch
 or a tag. `ORGSYNDB_APP_REPO` and `ORGSYNDB_APP_REF` default to the same
 values.
+
+### First account and tasks
+
+To create the first administrator account, run this from `deploy/`:
+
+```sh
+docker compose exec app python manage.py createsuperuser
+```
+
+The command asks for a user name, email, initials and password. Sign in
+at `/lab/admin/` to create further accounts. The admin requires staff
+status. You can assign tasks to an account without a usable password
+for a person who never signs in. Users change their own password through
+their initials in the header, at `/lab/accounts/password/`.
+
+You cannot delete accounts in the admin, so their names stay on the task
+history they wrote. To remove someone's access, deactivate their account
+by clearing its **Active** flag in the admin.
+
+Open `/lab/` to reach the task list at `/lab/tasks/`. Reading needs no
+sign-in; every change requires a signed-in account. The interface uses
+the site's German or English language, set by `locale` in
+`site/hugo.toml` and read from the published release's `index.json`.
+
+Each task has a number such as `T-001`, a product, priority, assignee,
+start and end dates, steps done and total, calculated progress, batch
+number, report and QC-list flags, and a note. QC means quality control;
+the flag records whether the batch is on the QC list. Dates determine
+whether a task is planned, running or ended; a task can also be
+cancelled. Ended tasks missing the report or QC-list flag show
+**Follow-up** and stay in the active list until both flags are set.
+
+You can choose a synthesis sequence from the collection to set the
+task's steps and list their procedures. Buttons on the task's page let
+you start it, finish a step, end it, and set the report and QC-list
+flags. Every change stays in the task's history.
 
 ### Repository access
 
@@ -1300,8 +1418,9 @@ For an `ssh://` repository, put the private key, a `known_hosts` file
 holding the server's host key, and optionally an SSH `config` into a
 directory, make the key owned by UID 1000 with mode 600, and enable the
 commented `./ssh:/home/orgsyndb/.ssh:ro` mount in `compose.yaml`. The
-containers run as user `orgsyndb` with UID 1000. An `https://` repository
-that needs a password can carry a read-only access token in its URL.
+`builder`, `web` and `app` containers run as user `orgsyndb` with UID 1000.
+An `https://` repository that needs a password can carry a read-only access
+token in its URL.
 
 For a repository on the server itself, mount it under `/srv/git/` and name
 it by that path:
@@ -1325,8 +1444,12 @@ committed changes on the named branch are built, never the working tree.
 Each cycle fetches the application's branch, if updates are on, and the
 collection's branch. When either has a new commit, `builder` checks both
 out and runs `orgsyndb build`, or `orgsyndb pdf` with `ORGSYNDB_PDF=true`.
-A successful build is copied into `releases/` in the data volume and
-becomes the served site at once: the symlink `current` then points to it.
+It then runs `orgsyndb index` to produce `index.json` for the lab
+application. An index command that fails or exceeds the build timeout
+counts as a failed build and leaves the published site in place.
+A successful build, including `index.json`, is copied into `releases/` in
+the data volume and becomes the served site at once: the symlink `current`
+then points to it.
 A failed build changes nothing that is served, and its output stays in
 the `builder` log.
 
@@ -1343,6 +1466,9 @@ that and stays on its current application commit. Rebuild the image then:
 ```sh
 docker compose build --pull && docker compose up -d
 ```
+
+Existing deployments need this rebuild once to pick up the `/lab/`
+forwarding and index publication in `deploy/docker/`.
 
 Recreating the `builder` container returns the application to the commit
 the image holds; the next cycle updates it again.
@@ -1362,16 +1488,63 @@ do with the commits, such as a network outage while fetching a tool,
 cycle builds them again.
 
 With `ORGSYNDB_APP_UPDATE=true`, every commit on the followed application
-branch reaches the server within one interval. The default, `main`, moves
-only to tested commits of `develop`. Following `develop` brings the newest
-work, untested on the server, so use it only for a trial server.
+branch reaches the site's builder within one interval. The default,
+`main`, moves only to tested commits of `develop`. Following `develop`
+brings the newest work, untested on the server, so use it only for a
+trial server.
+
+### Update the lab application
+
+Update the lab application deliberately so you can back up its records
+before applying database changes. The builder's automatic updates apply
+to the static site only. From `deploy/`, pull the new code, take a backup,
+and rebuild `app`:
+
+```sh
+git pull
+docker compose run --rm backup once
+docker compose up -d --build app
+```
+
+Continue with the rebuild only if the backup succeeds. On startup,
+`app` applies pending migrations, the changes to the database's tables,
+before serving requests.
+
+### Back up and restore lab records
+
+The `backup` service writes a database dump every 24 hours and keeps the
+14 newest dumps. Change `ORGSYNDB_BACKUP_HOURS` and
+`ORGSYNDB_KEEP_BACKUPS` to adjust this. Each file is named
+`lab-<UTC time>.dump`, with time written as `YYYYMMDDTHHMMSSZ`, under
+`deploy/backups/`. It uses `pg_dump`'s custom format, read by
+`pg_restore`. Files have mode 600 and belong to root, so copying them
+elsewhere requires root access.
+
+To take a backup immediately, run this from `deploy/`:
+
+```sh
+docker compose run --rm backup once
+```
+
+To restore a dump, stop `app`, restore the database, and start `app`
+again. From `deploy/`, replace the file name below with the dump you
+want to restore. `sudo cat` reads the root-owned file; the database
+container supplies `POSTGRES_USER` and `POSTGRES_DB` from `orgsyndb.env`:
+
+```sh
+docker compose stop app
+sudo cat 'backups/lab-<UTC time>.dump' | docker compose exec -T db sh -c \
+  'pg_restore --clean --if-exists -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+docker compose start app
+```
 
 ### HTTPS
 
 The default Caddyfile, `deploy/docker/Caddyfile`, serves plain HTTP. For
 HTTPS, mount a Caddyfile of your own over `/etc/caddy/Caddyfile` in the
-`web` service, using `/var/lib/orgsyndb/current/public` as its root, or
-put the server behind the organisation's reverse proxy.
+`web` service, using `/var/lib/orgsyndb/current/public` as its root and
+preserving the `/lab/` forwarding to `app`, or put the server behind the
+organisation's reverse proxy.
 
 ## Serve a copy with Caddy
 

@@ -1,0 +1,28 @@
+[project]
+name = "orgsyndb-web"
+version = "0.1.0"
+description = "The OrgSynDB lab application: tasks and later lab records."
+requires-python = ">=3.14"
+dependencies = [
+    "django>=5.2,<6.1",
+    "django-simple-history>=3.8",
+    "psycopg[binary]>=3.2",
+    "gunicorn>=23",
+    "whitenoise>=6.8",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-django>=4.9",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+pythonpath = ["."]
+testpaths = ["tests"]
+# The suite runs without collectstatic, so STATIC_ROOT does not exist.
+filterwarnings = ["ignore:No directory at:UserWarning"]

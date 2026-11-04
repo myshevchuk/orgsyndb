@@ -1,0 +1,117 @@
+#!/bin/sh
+# Dump the lab application's PostgreSQL database into a directory.
+#
+#   orgsyndb-backup [run]   dump now, then every ORGSYNDB_BACKUP_HOURS
+#                           hours, until stopped; a failed dump is
+#                           logged and the next one is tried on time
+#   orgsyndb-backup once    dump once; exit 1 when the dump fails
+#
+# Each dump is lab-<UTC time as YYYYMMDDTHHMMSSZ>.dump, in pg_dump's
+# custom format, readable by pg_restore. It is written under a temporary
+# name and renamed when complete. After each dump all but the
+# ORGSYNDB_KEEP_BACKUPS newest lab-*.dump files are removed.
+#
+# Settings come from the environment:
+#
+# POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
+#                         the database, dumped on the host db
+# ORGSYNDB_BACKUP_DIR     where dumps are written (default: /backups)
+# ORGSYNDB_BACKUP_HOURS   hours between dumps of run (default: 24)
+# ORGSYNDB_KEEP_BACKUPS   dumps kept (default: 14)
+
+set -u
+prog=orgsyndb-backup
+# Dumps hold the accounts' password hashes: only their owner reads them.
+umask 077
+
+error() {
+    printf '%s: error: %s\n' "$prog" "$*" >&2
+}
+
+usage() {
+    printf 'usage: %s [run|once]\n' "$prog" >&2
+    exit 2
+}
+
+# whole NAME VALUE: exit 1 unless VALUE is a whole number of at least 1.
+whole() {
+    case $2 in
+        '' | *[!0-9]*) error "$1 must be a whole number of at least 1: $2"
+                       exit 1 ;;
+    esac
+    if [ "$2" -lt 1 ]; then
+        error "$1 must be a whole number of at least 1: $2"
+        exit 1
+    fi
+}
+
+# prune DIR: remove all but the $keep newest lab-*.dump files of DIR.
+# Their names sort by time, oldest first.
+prune() {
+    count=0
+    for file in "$1"/lab-*.dump; do
+        [ -f "$file" ] && count=$((count + 1))
+    done
+    excess=$((count - keep))
+    for file in "$1"/lab-*.dump; do
+        [ "$excess" -gt 0 ] || break
+        [ -f "$file" ] || continue
+        rm -f -- "$file"
+        excess=$((excess - 1))
+    done
+}
+
+# dump: write one dump and prune; return 1, after logging why, when the
+# dump fails.
+dump() {
+    if [ -z "${POSTGRES_DB-}" ] || [ -z "${POSTGRES_USER-}" ]; then
+        error "POSTGRES_DB and POSTGRES_USER must be set"
+        return 1
+    fi
+    stamp=$(date -u +%Y%m%dT%H%M%SZ)
+    target="$dir/lab-$stamp.dump"
+    partial="$dir/.lab-$stamp.dump.partial"
+    if ! output=$(PGPASSWORD=${POSTGRES_PASSWORD-} pg_dump --no-password \
+            -h db -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc \
+            -f "$partial" 2>&1); then
+        rm -f -- "$partial"
+        error "pg_dump of $POSTGRES_DB failed${output:+: $output}"
+        return 1
+    fi
+    if ! mv -f -- "$partial" "$target"; then
+        rm -f -- "$partial"
+        error "cannot write $target"
+        return 1
+    fi
+    prune "$dir"
+    printf '%s: wrote %s\n' "$prog" "$target"
+}
+
+[ $# -le 1 ] || usage
+command=${1:-run}
+case $command in
+    run | once) ;;
+    *) usage ;;
+esac
+
+dir=${ORGSYNDB_BACKUP_DIR:-/backups}
+keep=${ORGSYNDB_KEEP_BACKUPS:-14}
+whole ORGSYNDB_KEEP_BACKUPS "$keep"
+
+if [ "$command" = once ]; then
+    dump
+    exit
+fi
+
+hours=${ORGSYNDB_BACKUP_HOURS:-24}
+whole ORGSYNDB_BACKUP_HOURS "$hours"
+sleeper=
+trap '[ -n "$sleeper" ] && kill "$sleeper" 2>/dev/null; exit 0' TERM INT
+printf '%s: dumping %s every %s hours into %s\n' "$prog" \
+    "${POSTGRES_DB-}" "$hours" "$dir"
+while :; do
+    dump || true
+    sleep $((hours * 3600)) &
+    sleeper=$!
+    wait "$sleeper"
+done

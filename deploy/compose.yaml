@@ -1,5 +1,8 @@
 # OrgSynDB in containers: `builder` keeps the site built from the
-# collection's Git repository and the application's, `web` serves it.
+# collection's Git repository and the application's, `web` serves it and
+# forwards /lab/ to the lab application `app`, which keeps its records
+# in the PostgreSQL database `db`; `backup` dumps that database daily
+# into backups/ beside this file.
 # Copy orgsyndb.env.example to orgsyndb.env beside this file, fill it in,
 # then run, from this directory:
 #   docker compose up -d --build
@@ -42,6 +45,48 @@ services:
       - data:/var/lib/orgsyndb:ro
       - caddy:/home/orgsyndb/.local/share/caddy
 
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    env_file: orgsyndb.env
+    volumes:
+      - db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL",
+             "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Built from the checkout that holds this file; after a git pull,
+  # take a backup, then: docker compose up -d --build app
+  app:
+    image: localhost/orgsyndb-app:latest
+    build:
+      context: ..
+      dockerfile: deploy/webapp/Dockerfile
+    restart: unless-stopped
+    env_file: orgsyndb.env
+    volumes:
+      - data:/var/lib/orgsyndb:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backup:
+    image: postgres:18
+    entrypoint: ["sh", "/opt/orgsyndb/backup/orgsyndb-backup"]
+    command: ["run"]
+    restart: unless-stopped
+    env_file: orgsyndb.env
+    volumes:
+      - ./backup:/opt/orgsyndb/backup:ro
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   data:
   caddy:
+  db:

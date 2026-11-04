@@ -1,7 +1,9 @@
-# Serves the site orgsyndb-deploy published last. ORGSYNDB_ADDRESS is
-# Caddy's site address, :8080 (plain HTTP on port 8080) by default; a host
-# name makes Caddy serve HTTPS for it instead. Mount
-# your own file over /etc/caddy/Caddyfile for other settings.
+# Serves the site orgsyndb-deploy published last, and forwards /lab/ to
+# the lab application. ORGSYNDB_ADDRESS is Caddy's site address, :8080
+# (plain HTTP on port 8080) by default; a host name makes Caddy serve
+# HTTPS for it instead. ORGSYNDB_APP_UPSTREAM is the application's
+# address, app:8000 by default. Mount your own file over
+# /etc/caddy/Caddyfile for other settings.
 # Cache-Control: no-cache makes browsers revalidate every file, so they
 # show a new build at once instead of cached pages of the previous one.
 {
@@ -10,6 +12,13 @@
 
 {$ORGSYNDB_ADDRESS::8080} {
 	header Cache-Control "no-cache"
+	# The application sees the whole path, /lab/ included.
+	handle /lab/* {
+		reverse_proxy {$ORGSYNDB_APP_UPSTREAM:app:8000}
+	}
+	handle /lab {
+		redir * /lab/
+	}
 	handle_path /pdf/* {
 		root * /var/lib/orgsyndb/current/pdf
 		file_server browse

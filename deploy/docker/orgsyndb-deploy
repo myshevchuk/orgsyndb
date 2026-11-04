@@ -25,11 +25,13 @@ ORGSYNDB_INTERVAL          seconds between cycles (default: 300)
 ORGSYNDB_PDF               true to render procedure PDFs (default: false)
 ORGSYNDB_KEEP_RELEASES     published sites kept besides the current one
                            (default: 2)
-ORGSYNDB_BUILD_TIMEOUT     seconds a build may take (default: 3600)
+ORGSYNDB_BUILD_TIMEOUT     seconds a build, and then its index, may
+                           take (default: 3600)
 
 The data directory (ORGSYNDB_DATA, default /var/lib/orgsyndb) holds the
 collection's clone in ``collection/``, the published sites in
-``releases/``, the symlink ``current`` to the site being served, and
+``releases/``, each with the output of ``orgsyndb index`` as
+``index.json``, the symlink ``current`` to the site being served, and
 ``state.json``. The application's clone is ORGSYNDB_APP (default
 /opt/orgsyndb/app). ORGSYNDB_IMAGE_INFO (default /opt/orgsyndb/image.json)
 names the image's record of the repository, ref and ``deploy/docker``
@@ -239,9 +241,29 @@ def build(config: Settings) -> Path:
     return collection
 
 
-def publish(config: Settings, collection: Path, serial: int, app: str,
-            commit: str) -> str:
-    """Copy the build into a new release and point ``current`` at it."""
+def index(config: Settings, collection: Path) -> str:
+    """Return the output of the checked-out application's ``orgsyndb
+    index`` for COLLECTION. Raise Failure when it fails or takes longer
+    than the build timeout."""
+    command = [str(config.app / "tools" / "orgsyndb"), "-C",
+               str(collection), "index"]
+    try:
+        done = subprocess.run(command, timeout=config.timeout,
+                              capture_output=True, text=True)
+    except subprocess.TimeoutExpired:
+        raise Failure(f"the index took longer than {config.timeout} s")
+    except OSError as exc:
+        raise Failure(f"cannot run the index: {exc}") from None
+    if done.returncode != 0:
+        raise Failure(f"the index exited {done.returncode}: "
+                      + done.stderr.strip())
+    return done.stdout
+
+
+def publish(config: Settings, collection: Path, index_text: str,
+            serial: int, app: str, commit: str) -> str:
+    """Copy the build and INDEX_TEXT, as ``index.json``, into a new
+    release and point ``current`` at it."""
     releases = config.data / "releases"
     name = f"{serial:06d}-{app[:10]}-{commit[:10]}"
     release = releases / name
@@ -252,6 +274,7 @@ def publish(config: Settings, collection: Path, serial: int, app: str,
                     symlinks=True)
     if config.pdf and (collection / "pdf").is_dir():
         shutil.copytree(collection / "pdf", partial / "pdf", symlinks=True)
+    (partial / "index.json").write_text(index_text, encoding="utf-8")
     os.replace(partial, release)
     link = config.data / "current"
     temporary = config.data / ".current"
@@ -277,14 +300,15 @@ def prune(releases: Path, current: str, keep: int) -> None:
 
 
 def attempt(config: Settings, state: dict, app: str, commit: str) -> bool:
-    """Build ``commit`` of the collection with ``app``, both checked out;
-    publish it on success. Record a failed pair so it is not built
-    again."""
+    """Build ``commit`` of the collection with ``app``, both checked out,
+    and write its index; publish both on success. Record a failed pair,
+    a failed index among them, so it is not built again."""
     log(f"building collection {commit[:10]} with application {app[:10]}")
     try:
         collection = build(config)
+        index_text = index(config, collection)
         serial = state.get("serial", 0) + 1
-        name = publish(config, collection, serial, app, commit)
+        name = publish(config, collection, index_text, serial, app, commit)
     except (Failure, OSError) as exc:
         log(f"failed: {exc}; the published site is unchanged")
         state["failed"] = [*state["failed"], pair(app, commit)][-50:]

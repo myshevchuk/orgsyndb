@@ -3,3 +3,11 @@ __pycache__/
 # Fetched-tool caches of the application.
 /.emacs-batch/
 /.tools/
+# The lab application's environment, local database and collected
+# static files.
+/webapp/.venv/
+/webapp/db.sqlite3
+/webapp/staticfiles/
+# Local deployment settings and database dumps.
+/deploy/orgsyndb.env
+/deploy/backups/

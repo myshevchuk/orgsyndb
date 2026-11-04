@@ -1,0 +1,44 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n lab %}
+{% block title %}{{ task.number }}{% endblock %}
+{% block main %}
+<h1>{{ task.number }} · {% product task.product %}</h1>
+<p class="lab-state">{% include "tasks/state.html" %}</p>
+{% if user.is_authenticated %}<div class="lab-actions">
+<a href="/lab/tasks/{{ task.number }}/edit/">{% translate "Edit" %}</a>
+{% for name, label in actions %}<form method="post" action="/lab/tasks/{{ task.number }}/{{ name }}/">{% csrf_token %}<button type="submit">{{ label }}</button></form>
+{% endfor %}</div>
+{% endif %}<dl class="metadata">
+<dt>{% translate "Priority" %}</dt>
+<dd>{{ task.get_priority_display }}</dd>
+<dt>{% translate "Assignee" %}</dt>
+<dd>{% if task.assignee %}{% person task.assignee %} {{ task.assignee.display_name }}{% else %}–{% endif %}</dd>
+<dt>{% translate "Started" %}</dt>
+<dd>{{ task.started|default_if_none:"–" }}</dd>
+<dt>{% translate "Ended" context "date" %}</dt>
+<dd>{{ task.ended|default_if_none:"–" }}</dd>
+<dt>{% translate "Progress" %}</dt>
+<dd>{% if task.steps_total %}{{ task.steps_done }}/{{ task.steps_total }} <progress value="{{ task.steps_done }}" max="{{ task.steps_total }}"></progress> {{ task.progress }} %{% else %}–{% endif %}</dd>
+<dt>{% translate "Batch" %}</dt>
+<dd>{{ task.batch|default:"–" }}</dd>
+<dt>{% translate "Report" %}</dt>
+<dd>{{ task.report|yes_no }}</dd>
+<dt>{% translate "QC list" %}</dt>
+<dd>{{ task.qc_list|yes_no }}</dd>
+<dt>{% translate "Created" %}</dt>
+<dd>{% person task.created_by %} {{ task.created_at }}</dd>
+</dl>
+{% if task.note %}<h2>{% translate "Note" %}</h2>
+<div class="lab-note">{{ task.note|linebreaks }}</div>
+{% endif %}{% if task.sequence %}<h2>{% translate "Sequence" %} {% sequence task.sequence sequence_known %}</h2>
+<ol class="sequence-steps">
+{% for step in steps %}<li>{% procedure step.procedure step.known %}{% if step.done %} <span class="badge badge--checked">{% translate "done" %}</span>{% endif %}</li>
+{% endfor %}</ol>
+{% endif %}<h2>{% translate "History" %}</h2>
+<ul class="lab-history">
+{% for entry in history %}<li><span class="lab-history__time">{{ entry.time }}</span> {% person entry.user %}
+{% if entry.created %}{% translate "Created" %}{% else %}<ul>
+{% for change in entry.changes %}<li>{{ change.label }}: {{ change.old }} → {{ change.new }}</li>
+{% empty %}<li>{% translate "No field changed" %}</li>
+{% endfor %}</ul>{% endif %}</li>
+{% endfor %}</ul>
+{% endblock %}

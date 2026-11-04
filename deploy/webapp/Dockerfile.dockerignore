@@ -1,0 +1,10 @@
+# The image takes only the application and the site's stylesheets from
+# the repository root.
+*
+!webapp/
+!site/assets/css/
+webapp/.venv/
+webapp/db.sqlite3
+webapp/staticfiles/
+**/__pycache__/
+**/.pytest_cache/

@@ -1,0 +1,236 @@
+# German interface texts of the OrgSynDB lab application.
+msgid ""
+msgstr ""
+"Project-Id-Version: orgsyndb-web\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Tasks"
+msgstr "Aufgaben"
+
+msgid "Assignee"
+msgstr "Bearbeitung"
+
+msgid "Steps done"
+msgstr "Stufen erledigt"
+
+msgid "A compound of the collection, by its key or item number, or a name."
+msgstr "Eine Verbindung der Sammlung, nach Schlüssel oder Artikelnummer, oder ein Name."
+
+msgid "A synthesis sequence of the collection; its steps set the steps total."
+msgstr "Ein Syntheseweg der Sammlung; seine Stufen bestimmen die Stufenzahl."
+
+msgid "The collection has no sequence %(id)s."
+msgstr "Die Sammlung hat keinen Syntheseweg %(id)s."
+
+msgid "yes"
+msgstr "ja"
+
+msgid "no"
+msgstr "nein"
+
+msgid "high"
+msgstr "hoch"
+
+msgid "medium"
+msgstr "mittel"
+
+msgid "low"
+msgstr "niedrig"
+
+msgid "Planned"
+msgstr "Geplant"
+
+msgid "Running"
+msgstr "In Arbeit"
+
+msgctxt "state"
+msgid "Ended"
+msgstr "Abgeschlossen"
+
+msgid "Cancelled"
+msgstr "Verworfen"
+
+msgid "No."
+msgstr "Nr."
+
+msgid "Product"
+msgstr "Produkt"
+
+msgid "Priority"
+msgstr "Priorität"
+
+msgid "Started"
+msgstr "Beginn"
+
+msgctxt "date"
+msgid "Ended"
+msgstr "Ende"
+
+msgid "Sequence"
+msgstr "Syntheseweg"
+
+msgid "Steps of the sequence"
+msgstr "Stufen des Synthesewegs"
+
+msgid "Steps total"
+msgstr "Stufen gesamt"
+
+msgid "Batch"
+msgstr "Charge"
+
+msgid "Report"
+msgstr "Bericht"
+
+msgid "QC list"
+msgstr "QC-Liste"
+
+msgid "Note"
+msgstr "Notiz"
+
+msgid "Created by"
+msgstr "Angelegt von"
+
+msgid "Created at"
+msgstr "Angelegt am"
+
+msgid "task"
+msgstr "Aufgabe"
+
+msgid "tasks"
+msgstr "Aufgaben"
+
+msgid "The start may not lie in the future."
+msgstr "Der Beginn darf nicht in der Zukunft liegen."
+
+msgid "The end may not lie in the future."
+msgstr "Das Ende darf nicht in der Zukunft liegen."
+
+msgid "An end needs a start."
+msgstr "Ein Ende braucht einen Beginn."
+
+msgid "The end may not precede the start."
+msgstr "Das Ende darf nicht vor dem Beginn liegen."
+
+msgid "Steps done need a steps total."
+msgstr "Erledigte Stufen brauchen eine Stufenzahl."
+
+msgid "Steps done may not exceed the steps total."
+msgstr "Es können nicht mehr Stufen erledigt sein, als es gibt."
+
+msgid "With a sequence, the total is the number of its steps."
+msgstr "Mit einem Syntheseweg ist die Stufenzahl die seiner Stufen."
+
+msgid "Edit %(number)s"
+msgstr "%(number)s bearbeiten"
+
+msgid "New task"
+msgstr "Neue Aufgabe"
+
+msgid "Save"
+msgstr "Speichern"
+
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgid "State"
+msgstr "Status"
+
+msgid "Person"
+msgstr "Person"
+
+msgid "Everyone"
+msgstr "Alle"
+
+msgid "Nobody"
+msgstr "Niemand"
+
+msgid "Any"
+msgstr "Alle"
+
+msgid "Search"
+msgstr "Suche"
+
+msgid "Filter"
+msgstr "Filtern"
+
+msgid "%(planned)s planned · %(running)s running · %(followup)s follow-up"
+msgstr "%(planned)s geplant · %(running)s in Arbeit · %(followup)s Nacharbeit"
+
+msgid "Progress"
+msgstr "Fortschritt"
+
+msgid "Edit"
+msgstr "Bearbeiten"
+
+msgid "Created"
+msgstr "Angelegt"
+
+msgid "done"
+msgstr "erledigt"
+
+msgid "History"
+msgstr "Änderungen"
+
+msgid "No field changed"
+msgstr "Kein Feld geändert"
+
+msgid "Follow-up"
+msgstr "Nacharbeit"
+
+msgid "Active"
+msgstr "Aktiv"
+
+msgid "All"
+msgstr "Alle"
+
+msgid "Task %(number)s saved."
+msgstr "Aufgabe %(number)s gespeichert."
+
+msgid "Task %(number)s started."
+msgstr "Aufgabe %(number)s begonnen."
+
+msgid "Step %(done)s of %(total)s of task %(number)s done."
+msgstr "Stufe %(done)s von %(total)s der Aufgabe %(number)s erledigt."
+
+msgid "Task %(number)s ended."
+msgstr "Aufgabe %(number)s abgeschlossen."
+
+msgid "The report of task %(number)s is done."
+msgstr "Der Bericht der Aufgabe %(number)s ist erledigt."
+
+msgid "Task %(number)s is on the QC list."
+msgstr "Aufgabe %(number)s steht auf der QC-Liste."
+
+msgid "Start"
+msgstr "Beginnen"
+
+msgid "Only a planned task can be started."
+msgstr "Nur eine geplante Aufgabe kann begonnen werden."
+
+msgid "Step done"
+msgstr "Stufe erledigt"
+
+msgid "Only a running task with steps left can finish a step."
+msgstr "Nur bei einer Aufgabe in Arbeit mit offenen Stufen kann eine Stufe erledigt werden."
+
+msgid "End"
+msgstr "Abschließen"
+
+msgid "Only a running task can be ended."
+msgstr "Nur eine Aufgabe in Arbeit kann abgeschlossen werden."
+
+msgid "Report done"
+msgstr "Bericht erledigt"
+
+msgid "Only an ended task whose report is not done can have it marked done."
+msgstr "Nur bei einer abgeschlossenen Aufgabe ohne erledigten Bericht kann der Bericht als erledigt markiert werden."
+
+msgid "On QC list"
+msgstr "Auf QC-Liste"
+
+msgid "Only an ended task not yet on the QC list can be put on it."
+msgstr "Nur eine abgeschlossene Aufgabe, die noch nicht auf der QC-Liste steht, kann auf sie gesetzt werden."

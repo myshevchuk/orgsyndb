@@ -1,0 +1,36 @@
+{% load i18n static %}<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{% block title %}{% endblock %} | {{ site_title }}</title>
+<link rel="stylesheet" href="{% static 'site/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'site/base.css' %}">
+<link rel="stylesheet" href="{% static 'site/screen.css' %}" media="screen">
+<link rel="stylesheet" href="{% static 'site/print.css' %}" media="print">
+<link rel="stylesheet" href="{% static 'lab.css' %}">
+</head>
+<body>
+<a class="skip-link" href="#main">{% translate "Skip to content" %}</a>
+<header class="site-header">
+<a class="site-title" href="/">{{ site_title }}</a>
+<nav aria-label="{% translate "Site" %}">
+<ul>
+{% for link in navigation %}<li><a href="{{ link.url }}"{% if link.current %} aria-current="{{ link.current }}"{% endif %}>{{ link.label }}</a></li>
+{% endfor %}</ul>
+</nav>
+<div class="lab-account">
+{% if user.is_authenticated %}<a href="/lab/accounts/password/" title="{% blocktranslate with name=user.display_name %}{{ name }}: change password{% endblocktranslate %}">{{ user.initials }}</a>
+<form method="post" action="/lab/accounts/logout/">{% csrf_token %}<button type="submit">{% translate "Sign out" %}</button></form>
+{% else %}<a href="/lab/accounts/login/?next={{ request.path|urlencode }}">{% translate "Sign in" %}</a>
+{% endif %}</div>
+</header>
+<main id="main">
+{% if messages %}<ul class="lab-messages">
+{% for message in messages %}<li class="lab-message lab-message--{{ message.level_tag }}"{% if message.level_tag == "error" %} role="alert"{% else %} role="status"{% endif %}>{{ message }}</li>
+{% endfor %}</ul>
+{% endif %}{% block main %}{% endblock %}
+</main>
+</body>
+</html>

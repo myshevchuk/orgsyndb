@@ -1,0 +1,42 @@
+# German interface texts of the OrgSynDB lab application.
+msgid ""
+msgstr ""
+"Project-Id-Version: orgsyndb-web\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Personal info"
+msgstr "Persönliche Angaben"
+
+msgid "Permissions"
+msgstr "Berechtigungen"
+
+msgid "Important dates"
+msgstr "Wichtige Daten"
+
+msgid "Accounts"
+msgstr "Konten"
+
+msgid "initials"
+msgstr "Kürzel"
+
+msgid "Enter one to five letters or digits."
+msgstr "Geben Sie ein bis fünf Buchstaben oder Ziffern ein."
+
+msgid "One to five letters or digits, shown in lists."
+msgstr "Ein bis fünf Buchstaben oder Ziffern, in Listen angezeigt."
+
+msgid "Another account has these initials."
+msgstr "Ein anderes Konto hat dieses Kürzel."
+
+msgid "Sign in"
+msgstr "Anmelden"
+
+msgid "Change password"
+msgstr "Passwort ändern"
+
+msgid "Your password has been changed."
+msgstr "Ihr Passwort wurde geändert."

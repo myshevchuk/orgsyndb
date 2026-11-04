@@ -1,0 +1,1 @@
+{% load i18n %}<span class="badge badge--{{ task.state }}">{{ task.state_label }}</span>{% if task.needs_follow_up %} <span class="badge badge--followup">{% translate "Follow-up" %}</span>{% endif %}

@@ -1,0 +1,51 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n lab %}
+{% block title %}{% translate "Tasks" %}{% endblock %}
+{% block main %}
+<div class="lab-heading">
+<h1>{% translate "Tasks" %}</h1>
+{% if user.is_authenticated %}<p class="actions"><a href="/lab/tasks/new/">{% translate "New task" %}</a></p>{% endif %}
+</div>
+<form class="lab-filters" method="get" action="/lab/tasks/">
+<label>{% translate "State" %}
+<select name="state">
+{% for value, label in state_filters %}<option value="{{ value }}"{% if value == filters.state %} selected{% endif %}>{{ label }}</option>
+{% endfor %}</select></label>
+<label>{% translate "Person" %}
+<select name="person">
+<option value=""{% if not filters.person %} selected{% endif %}>{% translate "Everyone" %}</option>
+<option value="none"{% if filters.person == "none" %} selected{% endif %}>{% translate "Nobody" %}</option>
+{% for account in accounts %}<option value="{{ account.initials }}"{% if account.initials == filters.person %} selected{% endif %}>{{ account.initials }} – {{ account.display_name }}</option>
+{% endfor %}</select></label>
+<label>{% translate "Priority" %}
+<select name="priority">
+<option value=""{% if not filters.priority %} selected{% endif %}>{% translate "Any" %}</option>
+{% for value, label in priorities %}<option value="{{ value }}"{% if value == filters.priority %} selected{% endif %}>{{ label }}</option>
+{% endfor %}</select></label>
+<label>{% translate "Search" %}
+<input type="search" name="q" value="{{ filters.q }}"></label>
+<button type="submit">{% translate "Filter" %}</button>
+</form>
+<p class="count">{% blocktranslate with planned=counts.planned running=counts.running followup=counts.followup %}{{ planned }} planned · {{ running }} running · {{ followup }} follow-up{% endblocktranslate %}</p>
+<div class="table-scroll">
+<table class="task-table">
+<thead>
+<tr><th>{% translate "No." %}</th><th>{% translate "Product" %}</th><th>{% translate "Priority" %}</th><th>{% translate "Assignee" %}</th><th>{% translate "Started" %}</th><th>{% translate "Ended" context "date" %}</th><th>{% translate "Progress" %}</th><th>{% translate "Batch" %}</th><th>{% translate "Report" %}</th><th>{% translate "QC list" %}</th><th>{% translate "State" %}</th></tr>
+</thead>
+<tbody>
+{% for task in tasks %}<tr data-state="{{ task.state }}">
+<td><a href="/lab/tasks/{{ task.number }}/">{{ task.number }}</a></td>
+<td>{% product task.product %}</td>
+<td>{{ task.get_priority_display }}</td>
+<td>{% person task.assignee %}</td>
+<td>{{ task.started|default_if_none:"" }}</td>
+<td>{{ task.ended|default_if_none:"" }}</td>
+<td>{% if task.steps_total %}{{ task.steps_done }}/{{ task.steps_total }} <progress value="{{ task.steps_done }}" max="{{ task.steps_total }}"></progress>{% endif %}</td>
+<td>{{ task.batch }}</td>
+<td>{{ task.report|yes_no }}</td>
+<td>{{ task.qc_list|yes_no }}</td>
+<td>{% include "tasks/state.html" %}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% endblock %}

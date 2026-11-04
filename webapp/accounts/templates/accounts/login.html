@@ -1,0 +1,15 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n %}
+{% block title %}{% translate "Sign in" %}{% endblock %}
+{% block main %}
+<h1>{% translate "Sign in" %}</h1>
+<form class="lab-form" method="post" action="/lab/accounts/login/">{% csrf_token %}
+{{ form.non_field_errors }}
+{% for field in form %}<div class="lab-field{% if field.errors %} lab-field--error{% endif %}">
+{{ field.label_tag }}
+{{ field }}
+{{ field.errors }}
+</div>
+{% endfor %}<input type="hidden" name="next" value="{{ next }}">
+<p class="lab-buttons"><button type="submit">{% translate "Sign in" %}</button></p>
+</form>
+{% endblock %}
