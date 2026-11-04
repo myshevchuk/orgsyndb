@@ -35,3 +35,10 @@ leaves this file then.
   `end-product-inventory`: the intermediates, QC, the catalogue's
   properties as compound fields, commercial reagents, Excel import and
   export, and links from the site's navigation to the application.
+- **Printing delivery notes.** Once `end-product-inventory` keeps
+  delivery notes, the application should print one: its number, date,
+  recipient and lines (article number, name, container size, count),
+  as a printable page or a PDF through WeasyPrint, so booking a
+  delivery and writing its note become one step and no delivery goes
+  unrecorded. Open: the layout and letterhead of today's notes,
+  whether the application assigns the note numbers, and signatures.
