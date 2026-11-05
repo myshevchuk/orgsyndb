@@ -1,0 +1,227 @@
+# German interface texts of the production planning.
+msgid ""
+msgstr ""
+"Project-Id-Version: orgsyndb-web\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Planning"
+msgstr "Planung"
+
+msgid "Planning parameters"
+msgstr "Planungsparameter"
+
+msgid "planning parameters"
+msgstr "Planungsparameter"
+
+msgid "Certainty"
+msgstr "Sicherheit"
+
+msgid "The probability with which a stock is to last its runway."
+msgstr "Die Wahrscheinlichkeit, mit der ein Bestand seine Reichweite halten soll."
+
+msgid "Buffer in days"
+msgstr "Puffer in Tagen"
+
+msgid ""
+"The time from a synthesis's end until its product can be delivered, for "
+"QC, filling and the unforeseen."
+msgstr ""
+"Die Zeit vom Ende einer Synthese, bis ihr Produkt geliefert werden kann, "
+"für QC, Abfüllung und Unvorhergesehenes."
+
+msgid "Default synthesis time in days"
+msgstr "Synthesedauer ohne Historie in Tagen"
+
+msgid "Counts until an article has three past syntheses."
+msgstr "Gilt, bis ein Artikel drei abgeschlossene Synthesen hat."
+
+msgid "History in quarters"
+msgstr "Historie in Quartalen"
+
+msgid "Minimum orders"
+msgstr "Mindestzahl der Aufträge"
+
+msgid ""
+"The orders the order model needs; with fewer, the quarterly totals give a "
+"rough forecast."
+msgstr ""
+"Die Aufträge, die das Auftragsmodell braucht; mit weniger geben die "
+"Quartalssummen eine grobe Prognose."
+
+msgid "High priority below days"
+msgstr "Hohe Priorität unter Tagen Spielraum"
+
+msgid "Medium priority below days"
+msgstr "Mittlere Priorität unter Tagen Spielraum"
+
+msgid "Target coverage in days"
+msgstr "Zielreichweite in Tagen"
+
+msgid ""
+"How long a new synthesis is to last beyond its synthesis time and the "
+"buffer."
+msgstr ""
+"Wie lange eine neue Synthese über ihre Synthesedauer und den Puffer hinaus "
+"reichen soll."
+
+msgid "The medium band must lie above the high band."
+msgstr "Die Grenze für mittel muss über der für hoch liegen."
+
+msgid "%(count)s day"
+msgid_plural "%(count)s days"
+msgstr[0] "%(count)s Tag"
+msgstr[1] "%(count)s Tage"
+
+msgid "rough"
+msgstr "grob"
+
+msgid "Urgent articles only"
+msgstr "Nur dringende Artikel"
+
+msgid "All articles"
+msgstr "Alle Artikel"
+
+msgid "Demand per year"
+msgstr "Bedarf/Jahr"
+
+msgid "Last delivery"
+msgstr "Letzte Lieferung"
+
+msgid "Runway"
+msgstr "Reichweite"
+
+msgid "Synthesis time"
+msgstr "Synthesedauer"
+
+msgid "Latest start"
+msgstr "Spätester Start"
+
+msgctxt "planning"
+msgid "Actions"
+msgstr "Maßnahmen"
+
+msgid "expected end %(end)s"
+msgstr "Ende voraussichtlich %(end)s"
+
+msgid "late"
+msgstr "verspätet"
+
+msgid "Fill %(container)s"
+msgstr "Abfüllen %(container)s"
+
+msgid "Check bulk"
+msgstr "Bulk prüfen"
+
+msgid "Plan synthesis"
+msgstr "Synthese planen"
+
+msgid "No article has a forecast."
+msgstr "Kein Artikel hat eine Prognose."
+
+msgid "No article needs a synthesis or another action."
+msgstr "Kein Artikel braucht eine Synthese oder eine andere Maßnahme."
+
+msgid "the last synthesis"
+msgid_plural "longest of the last %(count)s syntheses"
+msgstr[0] "die letzte Synthese"
+msgstr[1] "längste der letzten %(count)s Synthesen"
+
+msgctxt "synthesis time"
+msgid "default"
+msgstr "Vorgabe"
+
+msgid ""
+"Certainty %(certainty)s · buffer %(buffer)s · synthesis time until three "
+"syntheses exist %(synthesis)s · history %(history)s quarters · order model "
+"from %(orders)s orders · priority high below %(high)s and medium below "
+"%(medium)s days of slack · target %(target)s"
+msgstr ""
+"Sicherheit %(certainty)s · Puffer %(buffer)s · Synthesedauer, bis drei "
+"Synthesen vorliegen, %(synthesis)s · Historie %(history)s Quartale · "
+"Auftragsmodell ab %(orders)s Aufträgen · Priorität hoch unter %(high)s, "
+"mittel unter %(medium)s Tagen Spielraum · Ziel %(target)s"
+
+msgid "Forecast"
+msgstr "Prognose"
+
+msgid "Demand model"
+msgstr "Bedarfsmodell"
+
+msgid "quarterly totals: m = %(m)s, v = %(v)s from %(count)s quarters"
+msgstr "Quartalssummen: m = %(m)s, v = %(v)s aus %(count)s Quartalen"
+
+msgid ""
+"orders: λ = %(rate)s per day from %(count)s orders, median %(median)s and "
+"largest %(largest)s containers"
+msgstr ""
+"Aufträge: λ = %(rate)s je Tag aus %(count)s Aufträgen, Median %(median)s "
+"und größter %(largest)s Gebinde"
+
+msgid "Runway on hand"
+msgstr "Reichweite des Bestands"
+
+msgid "%(runway)s for %(stock)s containers at a certainty of %(certainty)s"
+msgstr "%(runway)s für %(stock)s Gebinde bei einer Sicherheit von %(certainty)s"
+
+msgid "Article %(article)s"
+msgstr "Artikel %(article)s"
+
+msgid "Usable bulk"
+msgstr "Nutzbares Bulk"
+
+msgid "%(amount)s %(unit)s, each open lot less the largest container size"
+msgstr "%(amount)s %(unit)s, jedes offene Bulk abzüglich der größten Gebindegröße"
+
+msgid "%(runway)s at a certainty of %(certainty)s for each size"
+msgstr "%(runway)s bei einer Sicherheit von %(certainty)s je Größe"
+
+msgid "Slack"
+msgstr "Spielraum"
+
+msgid "%(slack)s: the runway less the buffer (%(buffer)s) and the synthesis time"
+msgstr "%(slack)s: Reichweite abzüglich Puffer (%(buffer)s) und Synthesedauer"
+
+msgid ""
+"%(priority)s: high below %(high)s and medium below %(medium)s days of slack"
+msgstr ""
+"%(priority)s: hoch unter %(high)s, mittel unter %(medium)s Tagen Spielraum"
+
+msgid "New synthesis"
+msgstr "Neue Synthese"
+
+msgid ""
+"to last %(days)s (synthesis time %(synthesis)s, buffer %(buffer)s, target "
+"%(target)s) at a certainty of %(certainty)s for each size, beyond the "
+"containers and the usable bulk"
+msgstr ""
+"für %(days)s (Synthesedauer %(synthesis)s, Puffer %(buffer)s, Ziel "
+"%(target)s) bei einer Sicherheit von %(certainty)s je Größe, über Bestand "
+"und nutzbares Bulk hinaus"
+
+msgid "Delivery rhythm"
+msgstr "Lieferrhythmus"
+
+msgid "Deliveries in the past 365 days"
+msgstr "Lieferungen der letzten 365 Tage"
+
+msgid "Usual interval"
+msgstr "Übliches Intervall"
+
+msgid "%(interval)s, the median of the past 730 days"
+msgstr "%(interval)s, Median der letzten 730 Tage"
+
+msgid "– (fewer than three deliveries in the past 730 days)"
+msgstr "– (weniger als drei Lieferungen in den letzten 730 Tagen)"
+
+msgid "Next delivery expected"
+msgstr "Nächste Lieferung erwartet"
+
+msgid "No consumption, no forecast."
+msgstr "Kein Verbrauch, keine Prognose."
+
+msgid "Slack of this task: %(slack)s"
+msgstr "Spielraum dieser Aufgabe: %(slack)s"

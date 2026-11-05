@@ -23,6 +23,9 @@ msgstr "Hilfe"
 msgid "Inventory"
 msgstr "Bestand"
 
+msgid "Planning"
+msgstr "Planung"
+
 msgid "Tasks"
 msgstr "Aufgaben"
 

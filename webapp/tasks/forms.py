@@ -53,6 +53,8 @@ class TaskForm(forms.ModelForm):
         help_texts = {
             "product": _("A compound of the collection, by its key or "
                          "item number, or a name."),
+            "priority": _("Applies while no forecast computes the "
+                          "priority."),
             "sequence": _("A synthesis sequence of the collection; its "
                           "steps set the steps total."),
         }

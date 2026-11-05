@@ -1,6 +1,6 @@
 """The task list, the task page, its actions and its forms."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -16,6 +16,7 @@ from django.utils.translation import gettext_lazy, pgettext_lazy
 from django.views.decorators.http import require_POST
 
 from orgsyndb_web import index
+from planning.plan import Plan, TaskPriority, batch_lots, bulk_link
 from tasks.forms import TaskEditForm, TaskForm
 from tasks.history import history_entries
 from tasks.models import Priority, State, Task
@@ -77,10 +78,11 @@ def searched_text(task: Task) -> str:
     return "\n".join(parts).casefold()
 
 
-def selected(tasks: list[Task], filters: Filters, by_state: bool = True
+def selected(tasks: list[Task], filters: Filters,
+             priorities: Mapping[int, TaskPriority], by_state: bool = True
              ) -> list[Task]:
     """Return the TASKS FILTERS selects, leaving out the state filter
-    unless BY_STATE."""
+    unless BY_STATE; PRIORITIES maps each task's ID to its priority."""
     words = filters.q.casefold()
     return [
         task for task in tasks
@@ -89,22 +91,29 @@ def selected(tasks: list[Task], filters: Filters, by_state: bool = True
              or (task.assignee is None if filters.person == "none"
                  else task.assignee is not None
                  and task.assignee.initials == filters.person))
-        and (not filters.priority or task.priority == filters.priority)
+        and (not filters.priority
+             or priorities[task.pk].priority == filters.priority)
         and (not words or words in searched_text(task))]
 
 
 def task_list(request: HttpRequest) -> HttpResponse:
     """List the tasks the query's filters select, in the list's order,
-    with the counts of planned, running and follow-up tasks among those
-    the filters other than the state select."""
+    each with its priority, computed or entered, and the counts of
+    planned, running and follow-up tasks among those the filters other
+    than the state select."""
     accounts = list(get_user_model().objects.order_by("initials"))
     filters = Filters.from_query(request.GET,
                                  {user.initials for user in accounts})
     tasks = list(Task.objects.select_related("assignee"))
-    counted = selected(tasks, filters, by_state=False)
-    shown = sorted(selected(counted, filters), key=Task.sort_key)
+    plan = Plan(timezone.localdate())
+    priorities = {task.pk: plan.task_priority(task) for task in tasks}
+    counted = selected(tasks, filters, priorities, by_state=False)
+    shown = sorted(selected(counted, filters, priorities),
+                   key=lambda task: task.sort_key(
+                       priorities[task.pk].priority,
+                       priorities[task.pk].slack))
     return render(request, "tasks/list.html", {
-        "tasks": shown,
+        "tasks": [(task, priorities[task.pk]) for task in shown],
         "filters": filters,
         "accounts": accounts,
         "state_filters": STATE_FILTERS,
@@ -127,10 +136,13 @@ class Step:
 
 
 def task_page(request: HttpRequest, number: str) -> HttpResponse:
-    """Show the task NUMBER with its steps, actions and history; answer
-    404 for an unknown number."""
+    """Show the task NUMBER with its priority, steps, actions, the
+    forecast of each article it matches, the lots of its batch and its
+    history; answer 404 for an unknown number."""
     task = get_object_or_404(Task.objects.select_related(
         "assignee", "created_by"), number=number)
+    plan = Plan(timezone.localdate())
+    articles = plan.articles_of(task)
     steps = [Step(procedure=ident,
                   known=index.procedure_for(ident) is not None,
                   done=position < task.steps_done)
@@ -145,13 +157,20 @@ def task_page(request: HttpRequest, number: str) -> HttpResponse:
                     if action.applies(task)]
         if request.user.is_authenticated else [],
         "history": history_entries(task),
+        "shown": plan.task_priority(task),
+        "articles": articles,
+        "lots": batch_lots(task),
+        "bulk_link": bulk_link(
+            task, [line.article_number for line in articles]),
     })
 
 
 def form_page(request: HttpRequest, form_class: type[TaskForm],
-              task: Task) -> HttpResponse:
-    """Show FORM_CLASS for TASK, or save the posted form and return to
-    the task's page with a message; a form with errors shows again."""
+              task: Task, initial: dict[str, Any] | None = None
+              ) -> HttpResponse:
+    """Show FORM_CLASS for TASK, with the INITIAL values given, or save
+    the posted form and return to the task's page with a message; a
+    form with errors shows again."""
     if request.method == "POST":
         form = form_class(request.POST, instance=task)
         if form.is_valid():
@@ -160,7 +179,7 @@ def form_page(request: HttpRequest, form_class: type[TaskForm],
                              % {"number": saved.number})
             return redirect("task", number=saved.number)
     else:
-        form = form_class(instance=task)
+        form = form_class(instance=task, initial=initial)
     found = index.current()
     return render(request, "tasks/form.html", {
         "form": form,
@@ -172,8 +191,10 @@ def form_page(request: HttpRequest, form_class: type[TaskForm],
 
 @login_required
 def task_new(request: HttpRequest) -> HttpResponse:
-    """Create a task, made by the signed-in user."""
-    return form_page(request, TaskForm, Task(created_by=request.user))
+    """Create a task, made by the signed-in user; ``product`` in the
+    query fills in the product."""
+    return form_page(request, TaskForm, Task(created_by=request.user),
+                     {"product": request.GET.get("product", "")})
 
 
 @login_required

@@ -1,0 +1,7 @@
+{% load i18n planning %}{% if articles %}<h2>{% translate "Forecast" %}</h2>
+<dl class="metadata">
+{% for line in articles %}<dt><a href="/lab/planning/">{{ line.article_number }}</a></dt>
+<dd>{% if line.forecast %}{% with found=line.forecast %}{% translate "Runway" %} {{ found.runway|days }}{{ found.rough|rough }} · {% translate "Synthesis time" %} {{ found.synthesis_days|days }} · {% translate "Slack" %} {{ found.slack|days }} · {% translate "Latest start" %} {{ found.latest_start|default_if_none:"–" }}{% endwith %}{% else %}{% translate "No consumption, no forecast." %}{% endif %}</dd>
+{% endfor %}</dl>
+{% if shown.computed %}<p>{% blocktranslate with slack=shown.slack|days %}Slack of this task: {{ slack }}{% endblocktranslate %}{% if shown.slack < 0 %} <span class="badge badge--late">{% translate "late" %}</span>{% endif %}</p>
+{% endif %}{% endif %}

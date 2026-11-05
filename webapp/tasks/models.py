@@ -188,13 +188,16 @@ class Task(models.Model):
                 self.number = f"T-{Counter.next('task'):03d}"
             super().save(*args, **kwargs)
 
-    def sort_key(self) -> tuple[Any, ...]:
-        """The task's place in the list: by priority, high first, then by
+    def sort_key(self, priority: str, slack: float | None
+                 ) -> tuple[Any, ...]:
+        """The task's place in the list, given the PRIORITY it is listed
+        with and its SLACK in days or None: by priority, high first, then
+        by slack, smallest first and tasks without one last, then by
         state, running, planned, ended, cancelled, then by start date,
         earliest first and tasks without one last, then by number."""
-        return (PRIORITY_ORDER.get(self.priority, len(PRIORITY_ORDER)),
-                STATE_ORDER[self.state], self.started is None,
-                self.started or date.min,
+        return (PRIORITY_ORDER.get(priority, len(PRIORITY_ORDER)),
+                slack is None, slack or 0, STATE_ORDER[self.state],
+                self.started is None, self.started or date.min,
                 self.serial)
 
     @property

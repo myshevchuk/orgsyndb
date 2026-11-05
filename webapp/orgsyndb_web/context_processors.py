@@ -15,6 +15,7 @@ SITE_SECTIONS = [
 # The application's views: each a link and the path its pages lie under.
 VIEWS = [
     ("/lab/inventory/end-products/", _("Inventory"), "/lab/inventory/"),
+    ("/lab/planning/", _("Planning"), "/lab/planning/"),
     ("/lab/tasks/", _("Tasks"), "/lab/tasks/"),
 ]
 

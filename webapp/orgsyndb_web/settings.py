@@ -18,6 +18,7 @@ INSTALLED_APPS = [
     "accounts",
     "tasks",
     "inventory",
+    "planning",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",

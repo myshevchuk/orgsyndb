@@ -95,5 +95,6 @@
 </div>
 {% else %}<p>{% translate "No open bulk lot." %}</p>
 {% endif %}{% if user.is_authenticated %}<p class="actions"><a href="/lab/inventory/bulk/new/?article={{ item.article_number|urlencode }}">{% translate "New bulk lot" %}</a></p>
-{% endif %}{% include "inventory/history.html" %}
+{% endif %}{% include "planning/item_forecast.html" %}
+{% include "inventory/history.html" %}
 {% endblock %}

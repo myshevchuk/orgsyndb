@@ -1,0 +1,37 @@
+{% load i18n planning inventory %}<h2>{% translate "Forecast" %}</h2>
+{% if entry.model %}{% with found=forecast settings=forecast.parameters model=entry.model %}<dl class="metadata">
+<dt>{% translate "Demand model" %}</dt>
+<dd>{% if model.rough %}{% blocktranslate with m=model.m|figure v=model.v|figure count=model.quarters %}quarterly totals: m = {{ m }}, v = {{ v }} from {{ count }} quarters{% endblocktranslate %}{% else %}{% blocktranslate with rate=model.rate|figure:4 count=model.sizes|length median=model.median|figure largest=model.largest %}orders: λ = {{ rate }} per day from {{ count }} orders, median {{ median }} and largest {{ largest }} containers{% endblocktranslate %}{% endif %}{{ model.rough|rough }}</dd>
+<dt>{% translate "Runway on hand" %}</dt>
+<dd>{% blocktranslate with runway=entry.runway_on_hand|days stock=entry.item.quantity certainty=settings.certainty|percent %}{{ runway }} for {{ stock }} containers at a certainty of {{ certainty }}{% endblocktranslate %}{{ model.rough|rough }}</dd>
+</dl>
+<h3>{% blocktranslate with article=found.article_number %}Article {{ article }}{% endblocktranslate %}</h3>
+<dl class="metadata">
+<dt>{% translate "Usable bulk" %}</dt>
+<dd>{% blocktranslate with amount=found.usable_bulk|amount unit=found.bulk_unit_label %}{{ amount }} {{ unit }}, each open lot less the largest container size{% endblocktranslate %}</dd>
+<dt>{% translate "Runway" %}</dt>
+<dd>{% blocktranslate with runway=found.runway|days certainty=found.certainty|percent %}{{ runway }} at a certainty of {{ certainty }} for each size{% endblocktranslate %}{{ found.rough|rough }}</dd>
+<dt>{% translate "Synthesis time" %}</dt>
+<dd>{{ found.synthesis_days|days }} {% include "planning/basis.html" %}</dd>
+<dt>{% translate "Slack" %}</dt>
+<dd>{% blocktranslate with slack=found.slack|days buffer=settings.buffer_days|days %}{{ slack }}: the runway less the buffer ({{ buffer }}) and the synthesis time{% endblocktranslate %}{{ found.rough|rough }}</dd>
+<dt>{% translate "Latest start" %}</dt>
+<dd>{{ found.latest_start|default_if_none:"–" }}{{ found.rough|rough }}</dd>
+<dt>{% translate "Priority" %}</dt>
+<dd>{% blocktranslate with priority=found.priority_label high=settings.high_days medium=settings.medium_days %}{{ priority }}: high below {{ high }} and medium below {{ medium }} days of slack{% endblocktranslate %}{{ found.rough|rough }}</dd>
+<dt>{% translate "New synthesis" %}</dt>
+<dd>{% if found.yield_amount is not None %}{{ found.yield_amount|amount }} {{ found.bulk_unit_label }}{% if found.yield_mg is not None %} ({{ found.yield_mg }} mg){% endif %}{% endif %}{% for item, count in found.lacking_items %}{% if found.yield_amount is not None or not forloop.first %} · {% endif %}{{ count }} × {{ item.container }}{% endfor %}; {% blocktranslate with days=found.yield_days|days synthesis=found.synthesis_days|days buffer=settings.buffer_days|days target=settings.target_days|days certainty=found.certainty|percent %}to last {{ days }} (synthesis time {{ synthesis }}, buffer {{ buffer }}, target {{ target }}) at a certainty of {{ certainty }} for each size, beyond the containers and the usable bulk{% endblocktranslate %}{{ found.rough|rough }}</dd>
+</dl>
+<h3>{% translate "Delivery rhythm" %}</h3>
+<dl class="metadata">
+<dt>{% translate "Last delivery" %}</dt>
+<dd>{{ entry.rhythm.last|default_if_none:"–" }}</dd>
+<dt>{% translate "Deliveries in the past 365 days" %}</dt>
+<dd>{{ entry.rhythm.past_year }}</dd>
+<dt>{% translate "Usual interval" %}</dt>
+<dd>{% if entry.rhythm.interval is not None %}{% blocktranslate with interval=entry.rhythm.interval|days %}{{ interval }}, the median of the past 730 days{% endblocktranslate %}{% else %}{% translate "– (fewer than three deliveries in the past 730 days)" %}{% endif %}</dd>
+<dt>{% translate "Next delivery expected" %}</dt>
+<dd>{{ entry.rhythm.next|default_if_none:"–" }}</dd>
+</dl>
+{% endwith %}{% else %}<p>{% translate "No consumption, no forecast." %}</p>
+{% endif %}

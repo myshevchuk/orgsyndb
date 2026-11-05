@@ -234,3 +234,17 @@ msgstr "Auf QC-Liste"
 
 msgid "Only an ended task not yet on the QC list can be put on it."
 msgstr "Nur eine abgeschlossene Aufgabe, die noch nicht auf der QC-Liste steht, kann auf sie gesetzt werden."
+
+msgid "Applies while no forecast computes the priority."
+msgstr "Gilt, solange keine Prognose die Priorität berechnet."
+
+msgctxt "priority"
+msgid "computed"
+msgstr "berechnet"
+
+msgctxt "priority"
+msgid "entered"
+msgstr "manuell"
+
+msgid "Record as bulk"
+msgstr "Als Bulk erfassen"

@@ -1,0 +1,1 @@
+{% load i18n planning %}{% if shown.computed %}<span title="{{ shown.slack|days }}">{{ shown.label }}</span> <span class="lab-mark">{% translate "computed" context "priority" %}</span>{% else %}{{ shown.label }} <span class="lab-mark">{% translate "entered" context "priority" %}</span>{% endif %}

@@ -1414,11 +1414,40 @@ task's steps and list their procedures. Buttons on the task's page let
 you start it, finish a step, end it, and set the report and QC-list
 flags. Every change stays in the task's history.
 
+Planned and running tasks use a computed priority when their product
+matches an inventory article with a forecast. A match means the product
+equals the article number regardless of case, or both identify the same
+compound in the collection. The priority is marked **berechnet**
+(**computed**); hovering over it shows the task's slack in days, the time
+left after allowing for delivery preparation and the remaining synthesis.
+All other tasks keep the entered priority, marked **manuell** (**entered**).
+The list, its ordering and its priority filter use this displayed priority.
+You cannot override a computed priority; the form's priority applies while
+no forecast computes one. See [Production planning](#production-planning)
+for the calculation and its parameters.
+
+The task page shows each matching article's runway (how many days the
+stock lasts at the chosen certainty), synthesis time, slack and latest
+start, with its article number linking to the planning list.
+An article without consumption shows **Kein Verbrauch, keine Prognose.**
+(**No consumption, no forecast.**). A planned or running task also shows
+its own slack and is marked **verspätet** (**late**) below zero. A running
+task counts only its remaining synthesis time, so its priority can differ
+from the article's priority for starting a new synthesis.
+
+The task page links to bulk lots with the same nonempty batch when the
+task's product matches the lot's article. If you are signed in, an ended
+task with a batch and a matching article offers **Als Bulk erfassen**
+(**Record as bulk**). This opens the new-lot form with the article, batch
+and end date filled in. If several articles match, it uses the first
+article number in alphabetical order.
+
 ### End-product inventory
 
 Use the inventory to see which end products are ready to deliver and how
-long their stock will last. Choose **Bestand** (**Inventory**) before
-**Aufgaben** (**Tasks**) in the navigation, or open
+long their stock will last. The navigation lists **Bestand** (**Inventory**),
+**Planung** (**Planning**) and **Aufgaben** (**Tasks**) in that order.
+Choose **Bestand**, or open
 `/lab/inventory/end-products/`. `/lab/inventory/` redirects to the same
 list; `/lab/` still opens the task list. You can read the inventory
 without signing in. Use the same account as for tasks to enter items,
@@ -1510,6 +1539,22 @@ An item without a positive consumption mean has no level unless it is
 out. With a positive mean, stock at or above half a year's consumption
 has no level.
 
+The item page's **Prognose** (**Forecast**) section shows how demand is
+estimated and how many days the filled containers last at the chosen
+certainty, its runway on hand. It also shows the article's usable bulk,
+combined runway for all sizes, synthesis time with its basis, slack,
+latest start and priority. Figures estimated from quarterly totals are
+marked **grob** (**rough**). Without consumption, it shows
+**Kein Verbrauch, keine Prognose.** (**No consumption, no forecast.**).
+
+The forecast gives the amount a new synthesis must yield to cover its
+synthesis time, the delivery buffer and the target coverage, beyond the
+containers and usable bulk already available. It also shows the last
+delivery and the number of deliveries in the past 365 days. With at least
+three delivery notes in the past 730 days, it shows their usual interval,
+the median gap in whole days, and the next delivery expected that long
+after the last. Each forecast figure names the parameters it uses.
+
 #### Record bulk and fill containers
 
 Choose **New bulk lot** on the bulk list to record material not yet
@@ -1517,6 +1562,12 @@ divided into containers. A lot holds an article number, amount in `mg`,
 `g`, `µmol` or `mmol`, batch, location, date and note. Its page has its
 own ledger; correcting its amount requires a note. A lot at zero is used
 up and leaves the bulk list unless you tick **Used-up lots too**.
+
+The lot page links to tasks with the same nonempty batch whose product
+matches the lot's article. The new-lot form at `/lab/inventory/bulk/new/`
+accepts `article`, `batch` and `made_on` in the query to fill in the article
+number, batch and date. The task page's **Record as bulk** link supplies
+these values from the ended task.
 
 On an item page, choose **Fill** to add containers. You may select an
 open bulk lot of the same article and enter the amount taken in the
@@ -1537,6 +1588,76 @@ Deleting such an item or lot also deletes its opening entry.
 The inventory needs no new settings or services. Follow
 [Update the lab application](#update-the-lab-application) to deploy it;
 the `app` container applies the inventory migration on startup.
+
+### Production planning
+
+Use production planning to decide when to fill containers or start a
+synthesis. It computes a priority from consumption, available stock and
+synthesis durations, with the same figures visible to everyone. Choose
+**Planung** (**Planning**) or open `/lab/planning/`.
+
+Planning groups all container sizes of an article because one synthesis
+replenishes the bulk used to fill them. Its **runway** is how many days
+the stock lasts at the chosen certainty, 95 % by default. Bulk is shared
+between sizes so that it counts once. **Usable bulk** counts each
+convertible open lot's amount less the largest container size, at least
+zero, so that the amount counted can fill whole containers.
+
+The synthesis time is the longest of the article's last three completed
+syntheses; cancelled tasks do not count. Until three exist, the default
+of 21 days also counts. **Slack** is runway minus the buffer for QC,
+filling and the unforeseen, minus synthesis time. **Latest start** is
+today plus that slack. By default, priority is high below 14 days of
+slack, medium from 14 to below 56, and low from 56. Work already under way
+does not change the article's priority.
+
+With enough delivery-note orders, the forecast uses their measured rate
+and sizes. Otherwise it estimates demand from quarterly totals and marks
+its figures **grob** (**rough**). Forecasts depend on the entered history;
+they assume independent orders at a steady rate and do not model seasons.
+
+The planning list shows articles with a forecast whose priority is high
+or medium, or for which an action is due. Choose **All articles**
+(`/lab/planning/?all=1`) to see every article with a forecast. Rows are
+ordered by slack, smallest first, then by article number. Each row shows
+the article number and name; each container size with stock, level and
+runway on hand; demand per year; last delivery; usable bulk; article
+runway; synthesis time; latest start; priority; tasks; and actions.
+Container sizes link to their item pages. Planned and running tasks link
+to their task pages and show their expected end, with **verspätet**
+(**late**) when their slack is below zero. The line above the table shows
+the parameters in force.
+
+Use the actions offered for each article:
+
+- `Abfüllen <size>` (`Fill <size>`) opens that size's filling form
+  when its filled containers last less than the buffer and the open lots
+  can fill at least one container.
+- **Bulk prüfen** (**Check bulk**) opens the bulk list when an open lot
+  cannot be converted because the compound's molar mass is missing.
+- **Synthese planen** (**Plan synthesis**) opens a new task with the
+  article number filled in. It appears when priority is high or medium,
+  no matching task is planned or running, and every open lot converts.
+  An unconvertible lot may hold enough material, so check it first. This
+  action is a link when you are signed in and plain text otherwise.
+
+Staff edit one parameter record at `/lab/admin/planning/parameters/`;
+changes stay in its history. The defaults apply when no record exists.
+
+| Parameter | Default | Range and meaning |
+|---|---|---|
+| Certainty | `0.95` (95 %) | `0.5`–`0.999`; probability that stock lasts its runway |
+| Buffer | 28 days | 0–365 days; time from synthesis end until the product can be delivered, for QC, filling and the unforeseen |
+| Default synthesis time | 21 days | 1–730 days; also counts until three completed syntheses exist |
+| History | 12 quarters | 4–40 complete quarters for estimating demand |
+| Minimum orders | 6 | 3–100 orders; below this count, quarterly totals give a rough forecast |
+| High priority below | 14 days of slack | At least 0 and below the medium threshold |
+| Medium priority below | 56 days of slack | Above the high threshold |
+| Target coverage | 365 days | 30–1095 days beyond synthesis time and the buffer for sizing a new synthesis |
+
+Production planning needs no new settings or services. Follow
+[Update the lab application](#update-the-lab-application) to deploy it;
+the `app` container applies the `planning` migration on startup.
 
 ### Repository access
 
@@ -1709,6 +1830,10 @@ The built site publishes these documents under `/help/`, reached through
 - [Org authoring guide](docs/AUTHORING-ORG.org): Org templates, timestamps,
   export behaviour, Emacs conventions, and sequences written in Markdown. German:
   [AUTHORING-ORG.de.org](docs/AUTHORING-ORG.de.org).
+- [Production planning](docs/PLANNING.md): how the forecast computes
+  runway, synthesis time, priority and the amount a new synthesis must
+  yield, and how to use its actions and parameters. German:
+  [PLANNING.de.md](docs/PLANNING.de.md).
 - [German procedure style guide](docs/STYLE.de.md): guidance for clear,
   consistent German procedure text.
 - [German organic-synthesis glossary](docs/GLOSSARY.de.md): terms, fixed

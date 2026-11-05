@@ -139,7 +139,8 @@ class ColumnTests(ListCase):
         self.assertEqual(link.text(), task.number)
         self.assertEqual(link.get("href"), task_url(task))
         self.assertIn("Probe", row["Produkt"].text())
-        self.assertEqual(row["Priorität"].text(), "hoch")
+        self.assertIn("hoch", row["Priorität"].text())
+        self.assertIn("manuell", row["Priorität"].text())
         cell = row["Bearbeitung"]
         self.assertEqual(cell.text(), "AE")
         titled = [e for e in [cell, *cell.walk()] if e.get("title")]
@@ -197,7 +198,8 @@ class ColumnTests(ListCase):
         header, rows = table(root)
         self.assertEqual(header, COLUMNS_EN)
         row = rows[0]
-        self.assertEqual(row["Priority"].text(), "high")
+        self.assertIn("high", row["Priority"].text())
+        self.assertIn("entered", row["Priority"].text())
         self.assertEqual(row["Started"].text(), "2025-11-03")
         self.assertEqual(row["Report"].text(), "yes")
         self.assertEqual(row["QC list"].text(), "no")

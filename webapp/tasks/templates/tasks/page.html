@@ -5,11 +5,12 @@
 <p class="lab-state">{% include "tasks/state.html" %}</p>
 {% if user.is_authenticated %}<div class="lab-actions">
 <a href="/lab/tasks/{{ task.number }}/edit/">{% translate "Edit" %}</a>
-{% for name, label in actions %}<form method="post" action="/lab/tasks/{{ task.number }}/{{ name }}/">{% csrf_token %}<button type="submit">{{ label }}</button></form>
+{% if bulk_link %}<a href="{{ bulk_link }}">{% translate "Record as bulk" %}</a>
+{% endif %}{% for name, label in actions %}<form method="post" action="/lab/tasks/{{ task.number }}/{{ name }}/">{% csrf_token %}<button type="submit">{{ label }}</button></form>
 {% endfor %}</div>
 {% endif %}<dl class="metadata">
 <dt>{% translate "Priority" %}</dt>
-<dd>{{ task.get_priority_display }}</dd>
+<dd>{% include "tasks/priority.html" %}</dd>
 <dt>{% translate "Assignee" %}</dt>
 <dd>{% if task.assignee %}{% person task.assignee %} {{ task.assignee.display_name }}{% else %}–{% endif %}</dd>
 <dt>{% translate "Started" %}</dt>
@@ -33,6 +34,11 @@
 <ol class="sequence-steps">
 {% for step in steps %}<li>{% procedure step.procedure step.known %}{% if step.done %} <span class="badge badge--checked">{% translate "done" %}</span>{% endif %}</li>
 {% endfor %}</ol>
+{% endif %}{% include "planning/task_forecast.html" %}
+{% if lots %}<h2>{% translate "Bulk" %}</h2>
+<ul class="lab-links">
+{% for lot in lots %}<li><a href="/lab/inventory/bulk/{{ lot.pk }}/">{{ lot }}</a></li>
+{% endfor %}</ul>
 {% endif %}<h2>{% translate "History" %}</h2>
 <ul class="lab-history">
 {% for entry in history %}<li><span class="lab-history__time">{{ entry.time }}</span> {% person entry.user %}

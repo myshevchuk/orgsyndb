@@ -178,3 +178,11 @@ table.note-lines { padding: 0; }
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* The planning: the parameters in force, the cells that list one line
+   per item, task or action, and the mark of a late task. */
+.lab-parameters { color: var(--muted); font-family: var(--font-ui); font-size: 0.875rem; }
+.planning-cell { list-style: none; margin: 0; padding: 0; }
+.planning-cell > li { white-space: nowrap; }
+.lab-links { font-family: var(--font-ui); }
+.badge--late { background: var(--banner-bg); color: var(--banner-fg); border-color: var(--banner-border); }

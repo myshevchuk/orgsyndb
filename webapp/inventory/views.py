@@ -29,6 +29,7 @@ from inventory.models import (END_PRODUCTS, FACTOR, LEVEL_ORDER,
                               DeliveryNote, Item, Level, Lot, Movement,
                               plain)
 from orgsyndb_web import index
+from planning import plan
 
 LIST = "/lab/inventory/end-products/"
 BULK = "/lab/inventory/end-products/bulk/"
@@ -224,8 +225,8 @@ class QuarterRow:
 
 
 def item_page(request: HttpRequest, pk: int) -> HttpResponse:
-    """Show the item PK with its figures, chart, movements, bulk and
-    history; answer 404 for an unknown ID."""
+    """Show the item PK with its figures, chart, movements, bulk,
+    forecast and history; answer 404 for an unknown ID."""
     item = get_object_or_404(Item, pk=pk)
     today = timezone.localdate()
     figures = consumption(item, today)
@@ -238,6 +239,8 @@ def item_page(request: HttpRequest, pk: int) -> HttpResponse:
                                 reversible=movement.reversible
                                 and not done))
     mass = molar_mass(item)
+    found = plan.article(item.article_number, today) \
+        if item.inventory == END_PRODUCTS else None
     lots = Lot.objects.filter(inventory=item.inventory,
                               article_number=item.article_number,
                               amount__gt=0).order_by("made_on", "id")
@@ -255,13 +258,15 @@ def item_page(request: HttpRequest, pk: int) -> HttpResponse:
         "ledger": ledger,
         "lots": [(lot, containers_from(lot, item, mass)) for lot in lots],
         "bulk": bulk(item, lots),
+        "forecast": found,
+        "entry": found.entry(item) if found else None,
         "history": history_entries(item),
     })
 
 
 def lot_page(request: HttpRequest, pk: int) -> HttpResponse:
-    """Show the lot PK with its movements and history; answer 404 for an
-    unknown ID."""
+    """Show the lot PK with its movements, the tasks of its batch and its
+    history; answer 404 for an unknown ID."""
     lot = get_object_or_404(Lot, pk=pk)
     movements = lot.movements.select_related(
         "user", "item_movement__item").order_by("-id")
@@ -270,6 +275,7 @@ def lot_page(request: HttpRequest, pk: int) -> HttpResponse:
         "ledger": [(movement, movement.item_movement.item
                     if hasattr(movement, "item_movement") else None)
                    for movement in movements],
+        "tasks": plan.batch_tasks(lot),
         "history": history_entries(lot),
     })
 
@@ -547,8 +553,8 @@ def locations() -> Any:
 @login_required
 def lot_new(request: HttpRequest) -> HttpResponse:
     """Create a bulk lot with its opening amount, booked by the
-    signed-in user; ``article`` in the query fills in the article
-    number."""
+    signed-in user; ``article``, ``batch`` and ``made_on`` in the query
+    fill in the article number, the batch and the date."""
 
     def book(data: dict[str, Any]) -> HttpResponse:
         lot = bookings.create_lot(request.user, **data)
@@ -556,7 +562,9 @@ def lot_new(request: HttpRequest) -> HttpResponse:
                      lot_url(lot))
 
     form = LotForm(request.POST or None, initial={
-        "article_number": request.GET.get("article", "")})
+        "article_number": request.GET.get("article", ""),
+        "batch": request.GET.get("batch", ""),
+        "made_on": request.GET.get("made_on", "")})
     return form_page(request, form, book,
                      {"title": _("New bulk lot"), "cancel": BULK,
                       "compounds": compounds(), "locations": locations()})

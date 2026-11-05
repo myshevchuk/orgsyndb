@@ -1,0 +1,1 @@
+{% load i18n %}<span class="lab-mark">({% if found.basis_count %}{% blocktranslate count count=found.basis_count %}the last synthesis{% plural %}longest of the last {{ count }} syntheses{% endblocktranslate %}{% else %}{% translate "default" context "synthesis time" %}{% endif %})</span>
