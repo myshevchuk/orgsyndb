@@ -8,8 +8,9 @@ from pathlib import Path
 from django.contrib.staticfiles import finders
 from django.test import SimpleTestCase, TestCase
 
-from . import (REPO, IndexMixin, build_index, demo_index, make_task,
-               make_user, page, table, task_url, write_index)
+from . import (REPO, IndexMixin, build_index, demo_index, make_item,
+               make_lot, make_task, make_user, page, table, task_url,
+               ticking, berlin, write_index)
 
 CSS = REPO / "site" / "assets" / "css"
 STYLESHEETS = ["tokens.css", "base.css", "screen.css", "print.css"]
@@ -72,17 +73,18 @@ class ShellTests(IndexMixin, TestCase):
                 self.client.logout()
                 header, links = self.nav_links(self.shell(signed_in))
                 self.assertEqual(
-                    [(a.get("href"), a.text()) for a in links[:5]],
+                    [(a.get("href"), a.text()) for a in links[:6]],
                     [("/procedures/", strings["nav_procedures"]),
                      ("/compounds/", strings["nav_compounds"]),
                      ("/sequences/", strings["nav_sequences"]),
                      ("/help/", strings["nav_help"]),
+                     ("/lab/inventory/end-products/", "Bestand"),
                      ("/lab/tasks/", "Aufgaben")])
                 self.assertEqual(header.find("nav").get("aria-label"),
                                  strings["nav_site"])
                 self.assertEqual(
-                    [a.get("aria-current") for a in links[:5]],
-                    [None, None, None, None, "page"])
+                    [a.get("aria-current") for a in links[:6]],
+                    [None, None, None, None, None, "page"])
                 title = header.find("a", href="/")
                 self.assertIsNotNone(title)
                 self.assertEqual(title.text(), site_title())
@@ -93,8 +95,8 @@ class ShellTests(IndexMixin, TestCase):
             with self.subTest(path=path):
                 _, links = self.nav_links(self.shell(True, path))
                 self.assertEqual(
-                    [a.get("aria-current") for a in links[:5]],
-                    [None, None, None, None, "true"])
+                    [a.get("aria-current") for a in links[:6]],
+                    [None, None, None, None, None, "true"])
 
     def test_signed_in_state(self) -> None:
         """Scenario: Shell (sign-in state)."""
@@ -159,6 +161,84 @@ class ShellTests(IndexMixin, TestCase):
         self.assertEqual(len(hrefs), 5)
 
 
+class InventoryShellTests(IndexMixin, TestCase):
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        cls.kl = make_user("kl", "KL", "Klara", "Lehmann")
+
+    def setUp(self) -> None:
+        self.use_index(demo_index())
+        self.enterContext(ticking(berlin(2026, 11, 4, 8)))
+        self.item = make_item(self.kl, "CH-0012", quantity=5)
+        self.lot = make_lot(self.kl, "CH-0012")
+
+    def marks(self, path: str) -> list:
+        response = self.client.get(path)
+        self.assertEqual(response.status_code, 200)
+        header = page(response).find("header", cls="site-header")
+        links = header.find("nav").find_all("a")
+        self.assertEqual([a.text() for a in links[4:6]],
+                         ["Bestand", "Aufgaben"])
+        return [a.get("aria-current") for a in links[4:6]]
+
+    def paths(self) -> list[str]:
+        return ["/lab/inventory/end-products/bulk/",
+                "/lab/inventory/deliveries/",
+                f"/lab/inventory/items/{self.item.pk}/",
+                f"/lab/inventory/bulk/{self.lot.pk}/",
+                "/lab/inventory/end-products/new/",
+                "/lab/inventory/deliveries/new/",
+                "/lab/inventory/bulk/new/",
+                f"/lab/inventory/items/{self.item.pk}/fill/",
+                f"/lab/inventory/items/{self.item.pk}/edit/"]
+
+    def test_navigation_in_the_inventory(self) -> None:
+        """Scenario: Navigation in the inventory."""
+        self.assertEqual(self.marks("/lab/inventory/end-products/"),
+                         ["page", None])
+        self.assertEqual(
+            self.marks(f"/lab/inventory/items/{self.item.pk}/"),
+            ["true", None])
+
+    def test_every_page_under_the_inventory_marks_it(self) -> None:
+        self.client.force_login(self.kl)
+        for path in self.paths():
+            with self.subTest(path=path):
+                self.assertEqual(self.marks(path), ["true", None])
+
+    def test_the_english_label(self) -> None:
+        self.use_index(build_index("en"))
+        response = self.client.get("/lab/inventory/end-products/")
+        links = page(response).find("header", cls="site-header").find(
+            "nav").find_all("a")
+        self.assertEqual(links[4].text(), "Inventory")
+        self.assertEqual(links[4].get("href"), "/lab/inventory/end-products/")
+
+    def test_the_inventory_pages_carry_the_shell_and_no_script(self) -> None:
+        self.client.force_login(self.kl)
+        for path in ["/lab/inventory/end-products/", *self.paths()]:
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                html = response.content.decode("utf-8")
+                self.assertNotIn("<script", html.lower())
+                root = page(response)
+                self.assertIsNotNone(root.find("header", cls="site-header"))
+                hrefs = [e.get("href") for e in root.find_all("link")
+                         if e.get("rel") == "stylesheet"]
+                self.assertEqual(
+                    hrefs, [f"/lab/static/site/{n}" for n in STYLESHEETS]
+                    + ["/lab/static/lab.css"])
+
+    def test_the_message_shows_above_the_content(self) -> None:
+        self.client.force_login(self.kl)
+        done = self.client.post(
+            "/lab/inventory/items/%d/edit/" % self.item.pk,
+            {"name": "Neu", "category": "", "note": ""}, follow=True)
+        root = page(done)
+        self.assertIsNotNone(root.find("ul", cls="lab-messages"))
+
+
 class StaticFilesTests(SimpleTestCase):
 
     def test_the_sites_stylesheets_are_collected(self) -> None:
@@ -196,7 +276,8 @@ class LanguageTests(IndexMixin, TestCase):
         self.assertEqual(root.find("html").get("lang"), "en")
         links = root.find("header", cls="site-header").find("nav"
                                                             ).find_all("a")
-        self.assertEqual(links[4].text(), "Tasks")
+        self.assertEqual(links[4].text(), "Inventory")
+        self.assertEqual(links[5].text(), "Tasks")
         strings = site_strings("en")
         self.assertEqual([a.text() for a in links[:4]],
                          [strings[f"nav_{n}"] for n in

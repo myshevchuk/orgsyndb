@@ -13,7 +13,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Iterator
@@ -149,6 +149,15 @@ def frozen(moment: datetime) -> Any:
     return mock.patch("django.utils.timezone.now", return_value=moment)
 
 
+def ticking(start: datetime, step: timedelta = timedelta(seconds=1)) -> Any:
+    """A context manager that makes ``django.utils.timezone.now`` return
+    ``start``, then a moment ``step`` later on every further call, so
+    that no two bookings share a booking time."""
+    moments = (start + step * count for count in itertools.count())
+    return mock.patch("django.utils.timezone.now",
+                      side_effect=lambda: next(moments))
+
+
 def past(day: int, month: int = 3) -> date:
     """A date in 2025, in the past on any day the suite runs."""
     return date(2025, month, day)
@@ -171,6 +180,42 @@ def make_task(created_by: Any, **fields: Any) -> Any:
     from tasks.models import Task
     fields.setdefault("product", "Aspirin")
     return Task.objects.create(created_by=created_by, **fields)
+
+
+def make_item(user: Any, article: str = "CH-0001", name: str = "Probe",
+              size: str = "10", unit: str = "umol", quantity: int = 5,
+              category: str = "", note: str = "",
+              day: date | None = None) -> Any:
+    """An item of the inventory ``end-products``, booked by ``user``."""
+    from decimal import Decimal
+    from inventory.bookings import create_item
+    return create_item(
+        user, article_number=article, name=name, size=Decimal(size),
+        unit=unit, quantity=quantity, category=category, note=note,
+        date=day)
+
+
+BASE_FACTOR = {"mg": 1, "g": 1000, "umol": 1, "mmol": 1000}
+
+
+def make_lot(user: Any, article: str = "CH-0001", unit: str = "mg",
+             amount: str = "50", batch: str = "", location: str = "",
+             made_on: date | None = None, note: str = "") -> Any:
+    """A lot holding ``amount`` of ``unit``, kept in the base unit, with
+    its opening movement."""
+    from decimal import Decimal
+    from django.utils import timezone
+    from inventory.models import END_PRODUCTS, Lot, LotMovement
+    base = Decimal(amount) * BASE_FACTOR[unit]
+    lot = Lot.objects.create(
+        inventory=END_PRODUCTS, article_number=article, unit=unit,
+        amount=base, batch=batch, location=location, made_on=made_on,
+        note=note)
+    LotMovement.objects.create(
+        lot=lot, kind=LotMovement.Kind.OPENING, amount=base,
+        amount_after=base, date=timezone.localdate(),
+        booked_at=timezone.now(), user=user)
+    return lot
 
 
 def task_url(task: Any, action: str = "") -> str:

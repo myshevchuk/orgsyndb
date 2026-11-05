@@ -17,6 +17,7 @@ INSTALLED_APPS = [
     "orgsyndb_web",
     "accounts",
     "tasks",
+    "inventory",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",

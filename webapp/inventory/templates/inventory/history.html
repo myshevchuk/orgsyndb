@@ -1,0 +1,8 @@
+{% load i18n lab %}<h2>{% translate "History" %}</h2>
+<ul class="lab-history">
+{% for entry in history %}<li><span class="lab-history__time">{{ entry.time }}</span> {% person entry.user %}
+{% if entry.created %}{% translate "Created" %}{% else %}<ul>
+{% for change in entry.changes %}<li>{{ change.label }}: {{ change.old }} → {{ change.new }}</li>
+{% empty %}<li>{% translate "No field changed" %}</li>
+{% endfor %}</ul>{% endif %}</li>
+{% endfor %}</ul>

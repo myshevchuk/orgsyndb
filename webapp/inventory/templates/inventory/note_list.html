@@ -1,0 +1,36 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n %}
+{% block title %}{% translate "Deliveries" %}{% endblock %}
+{% block main %}
+<div class="lab-heading">
+<h1>{% translate "Deliveries" %}</h1>
+{% if user.is_authenticated %}<p class="actions"><a href="/lab/inventory/deliveries/new/">{% translate "New delivery note" %}</a></p>{% endif %}
+</div>
+{% include "inventory/tabs.html" %}
+<form class="lab-filters" method="get" action="/lab/inventory/deliveries/">
+<label>{% translate "Item" %}
+<select name="item">
+<option value=""{% if not chosen %} selected{% endif %}>{% translate "All" %}</option>
+{% for item in items %}<option value="{{ item.pk }}"{% if item.pk|stringformat:"d" == chosen %} selected{% endif %}>{{ item.article_number }} · {{ item.container }} · {{ item.name }}</option>
+{% endfor %}</select></label>
+<label>{% translate "Search" %}
+<input type="search" name="q" value="{{ q }}"></label>
+<button type="submit">{% translate "Filter" %}</button>
+</form>
+<div class="table-scroll">
+<table class="inventory-table">
+<thead>
+<tr><th scope="col">{% translate "Number" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Recipient" %}</th><th scope="col">{% translate "Lines" %}</th></tr>
+</thead>
+<tbody>
+{% for note, state in notes %}<tr>
+<td><a href="/lab/inventory/deliveries/{{ note.pk }}/">{{ note }}</a>{% include "inventory/note_marks.html" %}</td>
+<td>{{ note.date }}</td>
+<td>{{ note.recipient }}</td>
+<td><ul class="note-lines">
+{% for line in note.lines.all %}<li>{{ line.item.article_number }} {{ line.item.name }} · {{ line.item.container }} × {{ line.count }}</li>
+{% endfor %}</ul></td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% endblock %}

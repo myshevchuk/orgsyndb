@@ -106,3 +106,75 @@
 .lab-history > li + li { margin-top: var(--space-2); }
 .lab-history ul { margin: var(--space-1) 0 0; padding-left: var(--space-4); }
 .lab-history__time { color: var(--muted); }
+
+/* The inventory: stock levels, its tables, the consumption chart and the
+   rows of a delivery note. Each level's background and text keep a
+   contrast of at least 4.5:1 in both colour schemes. */
+:root {
+  --level-out-bg: #f8d4d4;
+  --level-out-fg: #6e1414;
+  --level-critical-bg: #fbdcbc;
+  --level-critical-fg: #5e2e00;
+  --level-low-bg: #fbf0a8;
+  --level-low-fg: #4d3f00;
+  --level-watch-bg: #ddf0cc;
+  --level-watch-fg: #21401a;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --level-out-bg: #5a1c1c;
+    --level-out-fg: #ffdada;
+    --level-critical-bg: #5a3212;
+    --level-critical-fg: #ffe1c4;
+    --level-low-bg: #4a4212;
+    --level-low-fg: #fff3b8;
+    --level-watch-bg: #26401c;
+    --level-watch-fg: #dcf5cf;
+  }
+}
+
+.level-out { background: var(--level-out-bg); color: var(--level-out-fg); }
+.level-critical { background: var(--level-critical-bg); color: var(--level-critical-fg); }
+.level-low { background: var(--level-low-bg); color: var(--level-low-fg); }
+.level-watch { background: var(--level-watch-bg); color: var(--level-watch-fg); }
+.stock { font-weight: 600; }
+span.stock[class*="level-"] { padding: 0 var(--space-2); border-radius: 0.25rem; }
+.level-label { font-weight: 400; font-size: 0.875em; }
+
+.level-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-3) 0 0;
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
+}
+.level-legend dt { padding: 0 var(--space-2); border-radius: 0.25rem; font-weight: 600; }
+.level-legend dd { margin: 0 var(--space-2) 0 0; }
+
+.inventory-table { width: 100%; }
+.inventory-table thead { background: var(--surface); }
+.inventory-table td:first-child { white-space: nowrap; }
+.inventory-table .number { text-align: right; white-space: nowrap; }
+.note-lines { margin: 0; padding-left: var(--space-3); }
+table.note-lines { padding: 0; }
+.note-lines select { max-width: 30rem; }
+.badge--historical { background: var(--surface); color: var(--fg); border-color: var(--border); }
+.badge--reversed { background: transparent; color: var(--muted); border-color: var(--border); }
+
+.consumption-chart { margin: 0 0 var(--space-3); max-width: 40rem; }
+.consumption-chart svg { width: 100%; height: auto; font-family: var(--font-ui); font-size: 11px; }
+.consumption-chart rect { fill: var(--link); }
+.consumption-chart text { fill: var(--muted); }
+.consumption-chart .chart-axis { stroke: var(--border); }
+.consumption-chart .chart-mean { stroke: var(--focus); stroke-width: 2; stroke-dasharray: 6 4; }
+.consumption-chart figcaption { color: var(--muted); font-family: var(--font-ui); font-size: 0.875rem; }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

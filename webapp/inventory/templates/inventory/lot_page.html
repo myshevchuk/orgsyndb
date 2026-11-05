@@ -1,0 +1,46 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n lab inventory %}
+{% block title %}{{ lot }}{% endblock %}
+{% block main %}
+<h1>{% translate "Bulk lot" %} {{ lot }}</h1>
+{% if user.is_authenticated %}<div class="lab-actions">
+<a href="/lab/inventory/bulk/{{ lot.pk }}/correct/">{% translate "Correct" %}</a>
+<a href="/lab/inventory/bulk/{{ lot.pk }}/edit/">{% translate "Edit" %}</a>
+</div>
+{% endif %}<dl class="metadata">
+<dt>{% translate "Article no." %}</dt>
+<dd>{{ lot.article_number }}</dd>
+<dt>{% translate "Compound" %}</dt>
+<dd>{% product lot.article_number %}</dd>
+<dt>{% translate "Batch" %}</dt>
+<dd>{{ lot.batch|default:"–" }}</dd>
+<dt>{% translate "Amount" %}</dt>
+<dd>{{ lot.amount|in_lot_unit:lot }}{% if not lot.amount %} <span class="badge badge--reversed">{% translate "used up" %}</span>{% endif %}</dd>
+<dt>{% translate "Location" %}</dt>
+<dd>{{ lot.location|default:"–" }}</dd>
+<dt>{% translate "Date" %}</dt>
+<dd>{{ lot.made_on|default_if_none:"–" }}</dd>
+</dl>
+{% if lot.note %}<h2>{% translate "Note" context "inventory" %}</h2>
+<div class="lab-note">{{ lot.note|linebreaks }}</div>
+{% endif %}<h2>{% translate "Movements" %}</h2>
+<div class="table-scroll">
+<table class="inventory-table">
+<thead>
+<tr><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Booked at" %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col">{% translate "Amount" %}</th><th scope="col">{% translate "Amount after" %}</th><th scope="col">{% translate "User" %}</th><th scope="col">{% translate "Item" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th></tr>
+</thead>
+<tbody>
+{% for movement, item in ledger %}<tr>
+<td>{{ movement.date }}</td>
+<td>{{ movement.booked_at }}</td>
+<td>{{ movement.get_kind_display }}</td>
+<td class="number">{{ movement.amount|in_lot_unit:lot }}</td>
+<td class="number">{{ movement.amount_after|in_lot_unit:lot }}</td>
+<td>{% person movement.user %}</td>
+<td>{% if item %}<a href="/lab/inventory/items/{{ item.pk }}/">{{ item.article_number }} · {{ item.container }}</a>{% endif %}</td>
+<td>{{ movement.note }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% include "inventory/history.html" %}
+{% endblock %}

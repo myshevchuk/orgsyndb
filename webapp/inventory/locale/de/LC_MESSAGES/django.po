@@ -1,0 +1,545 @@
+# German interface texts of the inventory.
+msgid ""
+msgstr ""
+"Project-Id-Version: orgsyndb-web\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Inventory"
+msgstr "Bestand"
+
+msgid "The date may not lie in the future."
+msgstr "Das Datum darf nicht in der Zukunft liegen."
+
+msgid "A note is required."
+msgstr "Eine Bemerkung ist nötig."
+
+msgid "The lot is used up."
+msgstr "Das Bulk ist aufgebraucht."
+
+msgid "The lot holds only %(amount)s %(unit)s."
+msgstr "Das Bulk enthält nur %(amount)s %(unit)s."
+
+msgid "The count may not be negative."
+msgstr "Die Anzahl darf nicht negativ sein."
+
+msgid "This article already has an item of this size and unit."
+msgstr "Diesen Artikel gibt es schon in dieser Größe und Einheit."
+
+msgid "A delivery note needs at least one line."
+msgstr "Ein Lieferschein braucht mindestens eine Zeile."
+
+msgid "The item is not an end product."
+msgstr "Der Artikel ist kein Endprodukt."
+
+msgid "The item is already in the note."
+msgstr "Der Artikel steht schon auf dem Lieferschein."
+
+msgid "The count must be above zero."
+msgstr "Die Anzahl muss größer als null sein."
+
+msgid "Another delivery note has this number."
+msgstr "Ein anderer Lieferschein hat diese Nummer."
+
+msgid "Only %(quantity)s containers of %(item)s are left."
+msgstr "Von %(item)s sind nur noch %(quantity)s Gebinde übrig."
+
+msgid "%(item)s has an entered consumption value for Q%(quarter)s %(year)s."
+msgstr "%(item)s hat für Q%(quarter)s %(year)s einen nachgetragenen Verbrauch."
+
+msgid "A current delivery note is reversed line by line, through its movements."
+msgstr "Ein laufender Lieferschein wird Zeile für Zeile über seine Buchungen storniert."
+
+msgid "The delivery note is already reversed."
+msgstr "Der Lieferschein ist schon storniert."
+
+msgid "The lot holds another article."
+msgstr "Das Bulk gehört zu einem anderen Artikel."
+
+msgid "Without a molar mass of the compound, enter the amount taken."
+msgstr "Ohne Molmasse der Verbindung bitte die entnommene Menge angeben."
+
+msgid "The amount taken must be above zero."
+msgstr "Die entnommene Menge muss größer als null sein."
+
+msgid "Only a delivery or a filling can be reversed."
+msgstr "Nur eine Abgabe oder eine Abfüllung kann storniert werden."
+
+msgid "The movement is already reversed."
+msgstr "Die Buchung ist schon storniert."
+
+msgid "The containers of the filling are no longer there."
+msgstr "Die Gebinde der Abfüllung sind nicht mehr da."
+
+msgid "The quarter is 1, 2, 3 or 4."
+msgstr "Das Quartal ist 1, 2, 3 oder 4."
+
+msgid "The year must be above zero."
+msgstr "Das Jahr muss größer als null sein."
+
+msgid "Historical delivery notes hold this quarter's consumption; reverse them before entering a value."
+msgstr "Nachgetragene Lieferscheine enthalten den Verbrauch dieses Quartals; sie sind vor dem Nachtragen eines Werts zu stornieren."
+
+msgid "The unit is mg, g, µmol or mmol."
+msgstr "Die Einheit ist mg, g, µmol oder mmol."
+
+msgid "The amount may not be negative."
+msgstr "Die Menge darf nicht negativ sein."
+
+msgid "Size"
+msgstr "Gebindegröße"
+
+msgid "Opening count"
+msgstr "Anfangsbestand"
+
+msgid "Links the item to the compound of the collection with this item number."
+msgstr "Verknüpft den Artikel mit der Verbindung der Sammlung, die diese Artikelnummer hat."
+
+msgid "The size must be above zero."
+msgstr "Die Gebindegröße muss größer als null sein."
+
+msgid "Number"
+msgstr "Nummer"
+
+msgid "Date"
+msgstr "Datum"
+
+msgid "Recipient"
+msgstr "Empfänger"
+
+msgctxt "inventory"
+msgid "Note"
+msgstr "Bemerkung"
+
+msgid "entered later – stock unchanged"
+msgstr "nachgetragen – Bestand bleibt unverändert"
+
+msgid "Item"
+msgstr "Artikel"
+
+msgid "Item %(row)s"
+msgstr "Artikel %(row)s"
+
+msgid "Count"
+msgstr "Anzahl"
+
+msgid "Count %(row)s"
+msgstr "Anzahl %(row)s"
+
+msgid "Choose an item."
+msgstr "Bitte einen Artikel wählen."
+
+msgid "Enter a count."
+msgstr "Bitte eine Anzahl angeben."
+
+msgid "Bulk lot"
+msgstr "Bulk"
+
+msgid "Amount taken"
+msgstr "Entnommene Menge"
+
+msgid "In the unit of the lot; left empty, the proposed amount is taken."
+msgstr "In der Einheit des Bulks; leer gelassen wird die vorgeschlagene Menge entnommen."
+
+msgid "Year"
+msgstr "Jahr"
+
+msgid "Quarter"
+msgstr "Quartal"
+
+msgid "Left empty, the quarter's value is removed."
+msgstr "Leer gelassen wird der Wert des Quartals entfernt."
+
+msgid "Amount"
+msgstr "Menge"
+
+msgid "yes"
+msgstr "ja"
+
+msgid "no"
+msgstr "nein"
+
+msgid "End products"
+msgstr "Endprodukte"
+
+msgctxt "level"
+msgid "out"
+msgstr "aufgebraucht"
+
+msgctxt "level"
+msgid "critical"
+msgstr "kritisch"
+
+msgctxt "level"
+msgid "low"
+msgstr "niedrig"
+
+msgctxt "level"
+msgid "watch"
+msgstr "beobachten"
+
+msgid "Article no."
+msgstr "Artikelnr."
+
+msgid "Name"
+msgstr "Name"
+
+msgid "Category"
+msgstr "Kategorie"
+
+msgid "Unit"
+msgstr "Einheit"
+
+msgid "Stock"
+msgstr "Bestand"
+
+msgid "item"
+msgstr "Artikel"
+
+msgid "items"
+msgstr "Artikel"
+
+msgid "Entered later"
+msgstr "Nachgetragen"
+
+msgid "Reversed"
+msgstr "Storniert"
+
+msgid "Note of the reversal"
+msgstr "Bemerkung zur Stornierung"
+
+msgid "Created by"
+msgstr "Angelegt von"
+
+msgid "Created at"
+msgstr "Angelegt am"
+
+msgid "delivery note"
+msgstr "Lieferschein"
+
+msgid "delivery notes"
+msgstr "Lieferscheine"
+
+msgid "line"
+msgstr "Zeile"
+
+msgid "lines"
+msgstr "Zeilen"
+
+msgid "Batch"
+msgstr "Charge"
+
+msgid "Location"
+msgstr "Ort"
+
+msgid "bulk lot"
+msgstr "Bulk"
+
+msgid "bulk lots"
+msgstr "Bulks"
+
+msgid "Opening amount"
+msgstr "Anfangsbestand"
+
+msgid "Filling"
+msgstr "Abfüllung"
+
+msgid "Correction"
+msgstr "Korrektur"
+
+msgid "Reversal"
+msgstr "Storno"
+
+msgid "Kind"
+msgstr "Art"
+
+msgid "Amount after"
+msgstr "Menge danach"
+
+msgid "Booked at"
+msgstr "Gebucht am"
+
+msgid "User"
+msgstr "Person"
+
+msgid "bulk movement"
+msgstr "Bulk-Buchung"
+
+msgid "bulk movements"
+msgstr "Bulk-Buchungen"
+
+msgid "Delivery"
+msgstr "Abgabe"
+
+msgid "Stock after"
+msgstr "Bestand danach"
+
+msgid "Reverses"
+msgstr "Storniert"
+
+msgid "movement"
+msgstr "Buchung"
+
+msgid "movements"
+msgstr "Buchungen"
+
+msgid "Entered by"
+msgstr "Eingetragen von"
+
+msgid "Entered at"
+msgstr "Eingetragen am"
+
+msgid "entered consumption"
+msgstr "nachgetragener Verbrauch"
+
+msgid "%(count)s container"
+msgid_plural "%(count)s containers"
+msgstr[0] "%(count)s Gebinde"
+msgstr[1] "%(count)s Gebinde"
+
+msgid "%(count)s lot does not convert"
+msgid_plural "%(count)s lots do not convert"
+msgstr[0] "%(count)s Bulk nicht umrechenbar"
+msgstr[1] "%(count)s Bulks nicht umrechenbar"
+
+msgid "The amount is in %(unit)s."
+msgstr "Die Menge ist in %(unit)s."
+
+msgid "Save"
+msgstr "Speichern"
+
+msgid "Propose amount"
+msgstr "Menge vorschlagen"
+
+msgid "Cancel"
+msgstr "Abbrechen"
+
+msgid "History"
+msgstr "Änderungen"
+
+msgid "Created"
+msgstr "Angelegt"
+
+msgid "No field changed"
+msgstr "Kein Feld geändert"
+
+msgid "New item"
+msgstr "Neuer Artikel"
+
+msgid "All"
+msgstr "Alle"
+
+msgid "Level"
+msgstr "Stufe"
+
+msgid "%(label)s or more urgent"
+msgstr "%(label)s oder dringender"
+
+msgid "Search"
+msgstr "Suche"
+
+msgid "Order"
+msgstr "Reihenfolge"
+
+msgid "By article number"
+msgstr "Nach Artikelnummer"
+
+msgid "By urgency"
+msgstr "Nach Dringlichkeit"
+
+msgid "Filter"
+msgstr "Filtern"
+
+msgid "%(count)s item"
+msgid_plural "%(count)s items"
+msgstr[0] "%(count)s Artikel"
+msgstr[1] "%(count)s Artikel"
+
+msgid "Container"
+msgstr "Gebinde"
+
+msgid "Mean per quarter"
+msgstr "Ø Quartal"
+
+msgid "Mean per year"
+msgstr "Ø Jahr"
+
+msgid "This year"
+msgstr "lfd. Jahr"
+
+msgid "Coverage"
+msgstr "Reichweite"
+
+msgid "Bulk"
+msgstr "Bulk"
+
+msgid "Book delivery"
+msgstr "Abgabe buchen"
+
+msgid "Fill"
+msgstr "Abfüllen"
+
+msgid "Correct count"
+msgstr "Bestand korrigieren"
+
+msgid "Enter consumption"
+msgstr "Verbrauch nachtragen"
+
+msgid "Edit"
+msgstr "Bearbeiten"
+
+msgid "Compound"
+msgstr "Verbindung"
+
+msgid "%(coverage)s quarters"
+msgstr "%(coverage)s Quartale"
+
+msgid "Consumption"
+msgstr "Verbrauch"
+
+msgid "Consumption per quarter"
+msgstr "Verbrauch je Quartal"
+
+msgid "The line marks the mean per quarter."
+msgstr "Die Linie markiert den Durchschnitt je Quartal."
+
+msgid "Entered"
+msgstr "Nachgetragen"
+
+msgid "Deliveries"
+msgstr "Lieferungen"
+
+msgid "Total"
+msgstr "Summe"
+
+msgid "Movements"
+msgstr "Buchungen"
+
+msgid "Delivery note"
+msgstr "Lieferschein"
+
+msgid "Actions"
+msgstr "Aktionen"
+
+msgid "reversed"
+msgstr "storniert"
+
+msgid "Reverse"
+msgstr "Stornieren"
+
+msgid "Containers"
+msgstr "Gebinde"
+
+msgid "does not convert"
+msgstr "nicht umrechenbar"
+
+msgid "No open bulk lot."
+msgstr "Kein offenes Bulk."
+
+msgid "New bulk lot"
+msgstr "Neues Bulk"
+
+msgid "no container left"
+msgstr "kein Gebinde übrig"
+
+msgid "below half the mean per quarter"
+msgstr "unter dem halben Durchschnitt je Quartal"
+
+msgid "below the mean per quarter"
+msgstr "unter dem Durchschnitt je Quartal"
+
+msgid "below twice the mean per quarter"
+msgstr "unter dem doppelten Durchschnitt je Quartal"
+
+msgid "Used-up lots too"
+msgstr "Auch aufgebrauchte"
+
+msgid "used up"
+msgstr "aufgebraucht"
+
+msgid "Correct"
+msgstr "Korrigieren"
+
+msgid "Book"
+msgstr "Buchen"
+
+msgid "New delivery note"
+msgstr "Neuer Lieferschein"
+
+msgid "Lines"
+msgstr "Zeilen"
+
+msgid "entered later"
+msgstr "nachgetragen"
+
+msgid "partly reversed"
+msgstr "teilweise storniert"
+
+msgid "Movement"
+msgstr "Buchung"
+
+msgid "Items"
+msgstr "Artikel"
+
+msgid "Item %(item)s created."
+msgstr "Artikel %(item)s angelegt."
+
+msgid "Item %(item)s saved."
+msgstr "Artikel %(item)s gespeichert."
+
+msgid "Edit %(item)s"
+msgstr "%(item)s bearbeiten"
+
+msgid "Filling of %(item)s booked."
+msgstr "Abfüllung von %(item)s gebucht."
+
+msgid "Choose a lot to propose an amount."
+msgstr "Für einen Vorschlag bitte ein Bulk wählen."
+
+msgid "Fill %(item)s"
+msgstr "%(item)s abfüllen"
+
+msgid "Count of %(item)s corrected."
+msgstr "Bestand von %(item)s korrigiert."
+
+msgid "Correct the count of %(item)s"
+msgstr "Bestand von %(item)s korrigieren"
+
+msgid "%(kind)s of %(item)s reversed."
+msgstr "%(kind)s von %(item)s storniert."
+
+msgid "Reverse: %(kind)s of %(count)s, %(date)s"
+msgstr "Stornieren: %(kind)s von %(count)s, %(date)s"
+
+msgid "Consumption of %(item)s saved."
+msgstr "Verbrauch von %(item)s gespeichert."
+
+msgid "Enter consumption of %(item)s"
+msgstr "Verbrauch von %(item)s nachtragen"
+
+msgid "Delivery note %(note)s booked."
+msgstr "Lieferschein %(note)s gebucht."
+
+msgid "Delivery note %(note)s saved."
+msgstr "Lieferschein %(note)s gespeichert."
+
+msgid "Delivery note %(note)s reversed."
+msgstr "Lieferschein %(note)s storniert."
+
+msgid "Reverse delivery note %(note)s"
+msgstr "Lieferschein %(note)s stornieren"
+
+msgid "Bulk lot %(lot)s created."
+msgstr "Bulk %(lot)s angelegt."
+
+msgid "Bulk lot %(lot)s saved."
+msgstr "Bulk %(lot)s gespeichert."
+
+msgid "Amount of %(lot)s corrected."
+msgstr "Menge von %(lot)s korrigiert."
+
+msgid "Correct the amount of %(lot)s"
+msgstr "Menge von %(lot)s korrigieren"

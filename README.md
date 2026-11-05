@@ -23,7 +23,9 @@ separate single-column A4 layout.
 This repository is the application: the build program, the validator, the
 procedure, compound and sequence schemas, the theme, the lab application
 and the tests. The lab application in `webapp/` uses Django, a Python web
-framework, to track synthesis tasks at `/lab/` beside the static site.
+framework, to track synthesis tasks and the end-product inventory at
+`/lab/` beside the static site. The inventory counts containers ready to
+deliver, records deliveries and tracks bulk material available for filling.
 See [Container deployment](#container-deployment) to run both.
 
 The repository holds no procedures of its own apart from a demo.
@@ -1411,6 +1413,130 @@ You can choose a synthesis sequence from the collection to set the
 task's steps and list their procedures. Buttons on the task's page let
 you start it, finish a step, end it, and set the report and QC-list
 flags. Every change stays in the task's history.
+
+### End-product inventory
+
+Use the inventory to see which end products are ready to deliver and how
+long their stock will last. Choose **Bestand** (**Inventory**) before
+**Aufgaben** (**Tasks**) in the navigation, or open
+`/lab/inventory/end-products/`. `/lab/inventory/` redirects to the same
+list; `/lab/` still opens the task list. You can read the inventory
+without signing in. Use the same account as for tasks to enter items,
+book stock changes or edit records.
+
+The lists have three tabs: **Items**, **Bulk** at
+`/lab/inventory/end-products/bulk/`, and **Deliveries** at
+`/lab/inventory/deliveries/`. Bulk is material that has not yet been
+divided into containers.
+
+#### Enter items and find stock
+
+Choose **New item** on the item list. Enter the article number, name,
+category, container size and unit (`mg`, `µmol`, `g` or `mmol`), opening
+count and note. Stock is a count of containers. Each row represents one
+article in one container size; an article can have several sizes. The
+article number, size and unit cannot change after creation. The item
+links to its compound when its article number matches an identifier in
+the collection, such as the demo's `item_number`.
+
+Enter items and past quarterly consumption by hand; there is no Excel
+import. The item list shows stock, consumption means, this year's
+consumption, coverage and bulk alongside the item's details. Filter by
+category, stock level or text. A level filter includes that level and
+more urgent ones. Choose **By urgency** to put out-of-stock items first,
+then the other levels, with the shortest coverage first within each level.
+Open an article number to see its item page.
+
+#### Book deliveries and correct counts
+
+On the item page, choose **Book delivery**, or choose **New delivery note**
+on the deliveries list. A delivery note (`Lieferschein`) holds an optional
+number, date, recipient, note and up to ten lines of items and container
+counts. Booking it reduces stock for all lines together. If any line
+exceeds the available stock, the whole note is refused and nothing
+changes. The deliveries list shows newest notes first and lets you
+filter by text or item.
+
+Stock changes only through bookings: the opening count, deliveries,
+fillings, corrections after counting, and reversals. The item page keeps
+these in a ledger showing the date, person and count after each booking.
+Choose **Correct count** after counting the containers, and give a note
+explaining the correction. To undo a mistaken delivery or filling,
+choose **Reverse** beside its ledger entry and give a note. A reversed
+delivery restores stock and no longer counts as consumption. Reversing
+a filling removes its containers and returns any amount taken to its
+bulk lot; it is refused if those containers are no longer available.
+
+You cannot edit or delete ledger entries or delete delivery notes. A
+delivery note's date and lines are fixed; its number, recipient and note
+can be edited. Reverse a current note's deliveries one line at a time
+from the items' ledgers.
+
+#### Enter past consumption and read stock levels
+
+On an item page, choose **Verbrauch nachtragen** (**Enter consumption**)
+to enter a past quarter's container count. Entering another value for
+the same quarter replaces it; leaving the count empty removes it.
+Subsequent deliveries add to consumption in the quarter of the delivery
+note's date.
+
+To record old paper delivery notes, tick **nachgetragen – Bestand bleibt
+unverändert** (**entered later – stock unchanged**) on the delivery form.
+These notes add consumption without changing stock. For each item and
+quarter, use either an entered consumption value or these old notes;
+the application refuses to combine them. Remove an entered value before
+entering the old notes behind it. You can reverse a note entered later
+as a whole, with a required note explaining why.
+
+The yearly mean covers complete calendar years before the current year,
+starting with the item's first year with data. The quarterly mean is a
+quarter of that yearly mean. The current year has its own column and
+does not enter the mean. **Coverage** is stock divided by the quarterly
+mean, expressed in quarters; it is blank without a positive mean. The
+item page shows quarterly consumption for the last two complete years
+and the current year as a bar chart and table.
+
+Stock cells show a colour and a text label. Against the mean consumption,
+the levels are:
+
+| Level | Colour | Stock remaining |
+|---|---|---|
+| Out | Red | No containers |
+| Critical | Orange | Above zero, below half a quarter's consumption |
+| Low | Yellow | At least half a quarter's, below a quarter's consumption |
+| Watch | Pale green | At least a quarter's, below half a year's consumption |
+
+An item without a positive consumption mean has no level unless it is
+out. With a positive mean, stock at or above half a year's consumption
+has no level.
+
+#### Record bulk and fill containers
+
+Choose **New bulk lot** on the bulk list to record material not yet
+divided into containers. A lot holds an article number, amount in `mg`,
+`g`, `µmol` or `mmol`, batch, location, date and note. Its page has its
+own ledger; correcting its amount requires a note. A lot at zero is used
+up and leaves the bulk list unless you tick **Used-up lots too**.
+
+On an item page, choose **Fill** to add containers. You may select an
+open bulk lot of the same article and enter the amount taken in the
+lot's unit. **Menge vorschlagen** (**Propose amount**) calculates the
+amount for the container count without booking it. Leaving the amount
+empty when booking uses that proposal. Conversion between mass and
+amount of substance uses the compound's molar mass; without it, enter
+the amount yourself. Booking adds the containers and deducts the bulk
+amount together. If the lot has too little material, neither changes.
+Each item shows its open lots and how many containers they could still
+fill, counted separately for each lot.
+
+Staff can inspect items, bulk lots, delivery notes and movements at
+`/lab/admin/`. An item or lot can be deleted only while its ledger holds
+just its opening entry; an item must also have no delivery-note lines.
+Deleting such an item or lot also deletes its opening entry.
+
+The inventory needs no new settings or services. Follow
+[Update the lab application](#update-the-lab-application) to deploy it;
+the `app` container applies the inventory migration on startup.
 
 ### Repository access
 

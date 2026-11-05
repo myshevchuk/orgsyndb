@@ -1,0 +1,53 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n inventory %}
+{% block title %}{% translate "End products" %}{% endblock %}
+{% block main %}
+<div class="lab-heading">
+<h1>{% translate "End products" %}</h1>
+{% if user.is_authenticated %}<p class="actions"><a href="/lab/inventory/end-products/new/">{% translate "New item" %}</a></p>{% endif %}
+</div>
+{% include "inventory/tabs.html" %}
+<form class="lab-filters" method="get" action="/lab/inventory/end-products/">
+<label>{% translate "Category" %}
+<select name="category">
+<option value=""{% if not filters.category %} selected{% endif %}>{% translate "All" %}</option>
+{% for category in categories %}<option value="{{ category }}"{% if category == filters.category %} selected{% endif %}>{{ category }}</option>
+{% endfor %}</select></label>
+<label>{% translate "Level" %}
+<select name="level">
+<option value=""{% if not filters.level %} selected{% endif %}>{% translate "All" %}</option>
+{% for value, label in levels %}<option value="{{ value }}"{% if value == filters.level %} selected{% endif %}>{% blocktranslate %}{{ label }} or more urgent{% endblocktranslate %}</option>
+{% endfor %}</select></label>
+<label>{% translate "Search" %}
+<input type="search" name="q" value="{{ filters.q }}"></label>
+<label>{% translate "Order" %}
+<select name="sort">
+<option value=""{% if not filters.sort %} selected{% endif %}>{% translate "By article number" %}</option>
+<option value="urgency"{% if filters.sort == "urgency" %} selected{% endif %}>{% translate "By urgency" %}</option>
+</select></label>
+<button type="submit">{% translate "Filter" %}</button>
+</form>
+<p class="count">{% blocktranslate count count=rows|length %}{{ count }} item{% plural %}{{ count }} items{% endblocktranslate %}</p>
+<div class="table-scroll">
+<table class="inventory-table">
+<thead>
+<tr><th scope="col">{% translate "Article no." %}</th><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Category" %}</th><th scope="col">{% translate "Container" %}</th><th scope="col">{% translate "Stock" %}</th><th scope="col">{% translate "Mean per quarter" %}</th><th scope="col">{% translate "Mean per year" %}</th><th scope="col">{% translate "This year" %}</th><th scope="col">{% translate "Coverage" %}</th><th scope="col">{% translate "Bulk" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th></tr>
+</thead>
+<tbody>
+{% for row in rows %}<tr>
+<td><a href="/lab/inventory/items/{{ row.item.pk }}/">{{ row.item.article_number }}</a></td>
+<td>{% if row.compound %}<a href="/compounds/{{ row.compound.key }}/">{{ row.item.name }}</a>{% else %}{{ row.item.name }}{% endif %}</td>
+<td>{{ row.item.category }}</td>
+<td class="number">{{ row.item.container }}</td>
+<td class="number stock{% if row.figures.level %} level-{{ row.figures.level }}{% endif %}">{{ row.item.quantity }}{% if row.figures.level %} <span class="level-label">{{ row.figures.level|level_label }}</span>{% endif %}</td>
+<td class="number">{% if row.figures.mean_quarter is not None %}{{ row.figures.mean_quarter|floatformat:1 }}{% endif %}</td>
+<td class="number">{% if row.figures.mean_year is not None %}{{ row.figures.mean_year|floatformat:1 }}{% endif %}</td>
+<td class="number">{{ row.figures.this_year }}</td>
+<td class="number">{% if row.figures.coverage is not None %}{{ row.figures.coverage|floatformat:1 }}{% endif %}</td>
+<td>{% include "inventory/bulk.html" with bulk=row.bulk %}</td>
+<td>{{ row.item.note }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% include "inventory/legend.html" %}
+{% endblock %}

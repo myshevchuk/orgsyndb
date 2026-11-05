@@ -11,20 +11,8 @@ from django.db.models import F
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import pgettext_lazy
-from simple_history.models import HistoricalRecords
 
-
-class RecordedHistory(HistoricalRecords):
-    """A change history whose records are ordered as they were recorded,
-    newest first, whatever their times say."""
-
-    def get_meta_options(self, model: type[models.Model]) -> dict[str, Any]:
-        """Return the options of the historical model's Meta, ordered by
-        the record's ID."""
-        options = super().get_meta_options(model)
-        options["ordering"] = ("-history_id",)
-        options["get_latest_by"] = "history_id"
-        return options
+from orgsyndb_web.history import RecordedHistory
 
 
 class Counter(models.Model):

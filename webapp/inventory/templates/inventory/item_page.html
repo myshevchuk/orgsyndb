@@ -1,0 +1,99 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n l10n lab inventory %}
+{% block title %}{{ item.article_number }} {{ item.name }}{% endblock %}
+{% block main %}
+<h1>{{ item.article_number }} · {{ item.name }}</h1>
+{% if user.is_authenticated %}<div class="lab-actions">
+<a href="/lab/inventory/deliveries/new/?item={{ item.pk }}">{% translate "Book delivery" %}</a>
+<a href="/lab/inventory/items/{{ item.pk }}/fill/">{% translate "Fill" %}</a>
+<a href="/lab/inventory/items/{{ item.pk }}/correct/">{% translate "Correct count" %}</a>
+<a href="/lab/inventory/items/{{ item.pk }}/consumption/">{% translate "Enter consumption" %}</a>
+<a href="/lab/inventory/items/{{ item.pk }}/edit/">{% translate "Edit" %}</a>
+</div>
+{% endif %}<dl class="metadata">
+<dt>{% translate "Compound" %}</dt>
+<dd>{% product item.article_number %}</dd>
+<dt>{% translate "Category" %}</dt>
+<dd>{{ item.category|default:"–" }}</dd>
+<dt>{% translate "Container" %}</dt>
+<dd>{{ item.container }}</dd>
+<dt>{% translate "Stock" %}</dt>
+<dd><span class="stock{% if figures.level %} level-{{ figures.level }}{% endif %}">{{ item.quantity }}{% if figures.level %} <span class="level-label">{{ figures.level|level_label }}</span>{% endif %}</span></dd>
+<dt>{% translate "Mean per quarter" %}</dt>
+<dd>{% if figures.mean_quarter is not None %}{{ figures.mean_quarter|floatformat:1 }}{% else %}–{% endif %}</dd>
+<dt>{% translate "Mean per year" %}</dt>
+<dd>{% if figures.mean_year is not None %}{{ figures.mean_year|floatformat:1 }}{% else %}–{% endif %}</dd>
+<dt>{% translate "This year" %}</dt>
+<dd>{{ figures.this_year }}</dd>
+<dt>{% translate "Coverage" %}</dt>
+<dd>{% if figures.coverage is not None %}{% blocktranslate with coverage=figures.coverage|floatformat:1 %}{{ coverage }} quarters{% endblocktranslate %}{% else %}–{% endif %}</dd>
+</dl>
+{% if item.note %}<h2>{% translate "Note" context "inventory" %}</h2>
+<div class="lab-note">{{ item.note|linebreaks }}</div>
+{% endif %}<h2>{% translate "Consumption" %}</h2>
+<figure class="consumption-chart">
+{% localize off %}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="img" aria-labelledby="consumption-title">
+<title id="consumption-title">{% translate "Consumption per quarter" %}</title>
+<line class="chart-axis" x1="0" y1="{{ chart.baseline }}" x2="{{ chart.width }}" y2="{{ chart.baseline }}"/>
+{% for bar in chart.bars %}<g class="chart-bar">
+<title>{{ bar.title }}</title>
+<rect x="{{ bar.x }}" y="{{ bar.y }}" width="24" height="{{ bar.height }}"/>
+<text x="{{ bar.label_x }}" y="{{ chart.baseline|add:14 }}" text-anchor="middle">Q{{ bar.quarter.1 }}</text>
+</g>
+{% endfor %}{% if chart.mean_y is not None %}<line class="chart-mean" x1="0" y1="{{ chart.mean_y }}" x2="{{ chart.width }}" y2="{{ chart.mean_y }}"/>
+{% endif %}{% for year, x in chart.years %}<text class="chart-year" x="{{ x }}" y="{{ chart.baseline|add:30 }}" text-anchor="middle">{{ year }}</text>
+{% endfor %}</svg>{% endlocalize %}
+{% if chart.mean_y is not None %}<figcaption>{% translate "The line marks the mean per quarter." %}</figcaption>{% endif %}
+</figure>
+<div class="table-scroll">
+<table class="inventory-table consumption-table">
+<thead>
+<tr><th scope="col">{% translate "Quarter" %}</th><th scope="col">{% translate "Entered" %}</th><th scope="col">{% translate "Deliveries" %}</th><th scope="col">{% translate "Total" %}</th></tr>
+</thead>
+<tbody>
+{% for row in quarters %}<tr><th scope="row">Q{{ row.quarter }} {{ row.year|unlocalize }}</th><td class="number">{{ row.entered }}</td><td class="number">{{ row.delivered }}</td><td class="number">{{ row.total }}</td></tr>
+{% endfor %}</tbody>
+</table>
+</div>
+<h2>{% translate "Movements" %}</h2>
+<div class="table-scroll">
+<table class="inventory-table">
+<thead>
+<tr><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Booked at" %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col">{% translate "Count" %}</th><th scope="col">{% translate "Stock after" %}</th><th scope="col">{% translate "User" %}</th><th scope="col">{% translate "Delivery note" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th>{% if user.is_authenticated %}<th scope="col"><span class="visually-hidden">{% translate "Actions" %}</span></th>{% endif %}</tr>
+</thead>
+<tbody>
+{% for row in ledger %}{% with movement=row.movement %}<tr>
+<td>{{ movement.date }}</td>
+<td>{{ movement.booked_at }}</td>
+<td>{{ movement.get_kind_display }}{% if row.reversed %} <span class="badge badge--reversed">{% translate "reversed" %}</span>{% endif %}</td>
+<td class="number">{{ movement.count }}</td>
+<td class="number">{{ movement.quantity_after }}</td>
+<td>{% person movement.user %}</td>
+<td>{% if movement.delivery_note %}<a href="/lab/inventory/deliveries/{{ movement.delivery_note.pk }}/">{{ movement.delivery_note }}</a> {{ movement.delivery_note.recipient }}{% endif %}</td>
+<td>{% if movement.delivery_note.note %}{{ movement.delivery_note.note }} {% endif %}{{ movement.note }}</td>
+{% if user.is_authenticated %}<td>{% if row.reversible %}<a href="/lab/inventory/items/{{ item.pk }}/movements/{{ movement.pk }}/reverse/">{% translate "Reverse" %}</a>{% endif %}</td>{% endif %}
+</tr>
+{% endwith %}{% endfor %}</tbody>
+</table>
+</div>
+<h2>{% translate "Bulk" %}</h2>
+{% if lots %}<p>{% include "inventory/bulk.html" %}</p>
+<div class="table-scroll">
+<table class="inventory-table">
+<thead>
+<tr><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "Amount" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Containers" %}</th></tr>
+</thead>
+<tbody>
+{% for lot, containers in lots %}<tr>
+<td><a href="/lab/inventory/bulk/{{ lot.pk }}/">{{ lot.batch|default:lot.pk }}</a></td>
+<td class="number">{{ lot.amount|in_lot_unit:lot }}</td>
+<td>{{ lot.location }}</td>
+<td>{{ lot.made_on|default_if_none:"" }}</td>
+<td class="number">{% if containers is None %}<span class="lab-mark">{% translate "does not convert" %}</span>{% else %}{{ containers }}{% endif %}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% else %}<p>{% translate "No open bulk lot." %}</p>
+{% endif %}{% if user.is_authenticated %}<p class="actions"><a href="/lab/inventory/bulk/new/?article={{ item.article_number|urlencode }}">{% translate "New bulk lot" %}</a></p>
+{% endif %}{% include "inventory/history.html" %}
+{% endblock %}

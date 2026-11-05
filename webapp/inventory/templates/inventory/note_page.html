@@ -1,0 +1,40 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n lab %}
+{% block title %}{% translate "Delivery note" %} {{ note }}{% endblock %}
+{% block main %}
+<h1>{% translate "Delivery note" %} {{ note }}</h1>
+<p class="lab-state">{% include "inventory/note_marks.html" %}</p>
+{% if user.is_authenticated %}<div class="lab-actions">
+<a href="/lab/inventory/deliveries/{{ note.pk }}/edit/">{% translate "Edit" %}</a>
+{% if note.historical and not note.reversed %}<a href="/lab/inventory/deliveries/{{ note.pk }}/reverse/">{% translate "Reverse" %}</a>
+{% endif %}</div>
+{% endif %}<dl class="metadata">
+<dt>{% translate "Date" %}</dt>
+<dd>{{ note.date }}</dd>
+<dt>{% translate "Recipient" %}</dt>
+<dd>{{ note.recipient|default:"–" }}</dd>
+<dt>{% translate "Created" %}</dt>
+<dd>{% person note.created_by %} {{ note.created_at }}</dd>
+{% if note.reversed %}<dt>{% translate "Note of the reversal" %}</dt>
+<dd>{{ note.reversal_note }}</dd>
+{% endif %}</dl>
+{% if note.note %}<h2>{% translate "Note" context "inventory" %}</h2>
+<div class="lab-note">{{ note.note|linebreaks }}</div>
+{% endif %}<h2>{% translate "Lines" %}</h2>
+<div class="table-scroll">
+<table class="inventory-table">
+<thead>
+<tr><th scope="col">{% translate "Article no." %}</th><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Container" %}</th><th scope="col">{% translate "Count" %}</th>{% if not note.historical %}<th scope="col">{% translate "Movement" %}</th>{% endif %}</tr>
+</thead>
+<tbody>
+{% for line, movement, reversed in lines %}<tr>
+<td><a href="/lab/inventory/items/{{ line.item.pk }}/">{{ line.item.article_number }}</a></td>
+<td>{{ line.item.name }}</td>
+<td class="number">{{ line.item.container }}</td>
+<td class="number">{{ line.count }}</td>
+{% if not note.historical %}<td>{% if movement %}{{ movement.get_kind_display }} {{ movement.date }} {% person movement.user %}{% if reversed %} <span class="badge badge--reversed">{% translate "reversed" %}</span>{% endif %}{% endif %}</td>{% endif %}
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% include "inventory/history.html" %}
+{% endblock %}

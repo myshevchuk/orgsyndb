@@ -1,0 +1,1 @@
+{% load i18n %}{% if note.historical %} <span class="badge badge--historical">{% translate "entered later" %}</span>{% endif %}{% if state == "reversed" %} <span class="badge badge--reversed">{% translate "reversed" %}</span>{% elif state == "partly" %} <span class="badge badge--reversed">{% translate "partly reversed" %}</span>{% endif %}

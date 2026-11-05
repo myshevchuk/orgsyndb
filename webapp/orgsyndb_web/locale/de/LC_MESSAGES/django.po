@@ -20,6 +20,9 @@ msgstr "Synthesewege"
 msgid "Help"
 msgstr "Hilfe"
 
+msgid "Inventory"
+msgstr "Bestand"
+
 msgid "Tasks"
 msgstr "Aufgaben"
 

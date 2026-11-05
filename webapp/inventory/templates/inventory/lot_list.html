@@ -1,0 +1,31 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n inventory %}
+{% block title %}{% translate "Bulk" %}{% endblock %}
+{% block main %}
+<div class="lab-heading">
+<h1>{% translate "Bulk" %}</h1>
+{% if user.is_authenticated %}<p class="actions"><a href="/lab/inventory/bulk/new/">{% translate "New bulk lot" %}</a></p>{% endif %}
+</div>
+{% include "inventory/tabs.html" %}
+<form class="lab-filters" method="get" action="/lab/inventory/end-products/bulk/">
+<label><input type="checkbox" name="empty" value="1"{% if empty %} checked{% endif %}> {% translate "Used-up lots too" %}</label>
+<button type="submit">{% translate "Filter" %}</button>
+</form>
+<div class="table-scroll">
+<table class="inventory-table">
+<thead>
+<tr><th scope="col">{% translate "Article no." %}</th><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "Amount" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th></tr>
+</thead>
+<tbody>
+{% for lot, name in rows %}<tr>
+<td><a href="/lab/inventory/bulk/{{ lot.pk }}/">{{ lot.article_number }}</a></td>
+<td>{{ name }}</td>
+<td>{{ lot.batch }}</td>
+<td class="number">{{ lot.amount|in_lot_unit:lot }}{% if not lot.amount %} <span class="lab-mark">{% translate "used up" %}</span>{% endif %}</td>
+<td>{{ lot.location }}</td>
+<td>{{ lot.made_on|default_if_none:"" }}</td>
+<td>{{ lot.note }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% endblock %}
