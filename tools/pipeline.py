@@ -1194,12 +1194,15 @@ def index_data(collection: Path) -> dict[str, Any]:
     }
 
 
-def hugo_overlay(site: Path, collection: Path, language: str) -> str:
+def hugo_overlay(site: Path, collection: Path, language: str,
+                 lab: bool = False) -> str:
     """Return the Hugo configuration overlay for building ``collection``.
 
     ``site`` is the application's Hugo project and ``collection`` the
     collection directory, both absolute; ``language`` is the site's
-    language. The overlay sets ``defaultContentLanguage`` to it, the
+    language. With ``lab`` the overlay also sets ``params.lab``, so that
+    the header links the lab application's views; without it, it sets
+    no ``params``. The overlay sets ``defaultContentLanguage`` to it, the
     publish and resource directories inside the collection, and seven
     module mounts: the application's pages, the staged procedures of
     ``build/content/procedures/``, the staged help pages of
@@ -1231,7 +1234,8 @@ def hugo_overlay(site: Path, collection: Path, language: str) -> str:
             + mount(collection / "build" / SEQUENCES_STAGED,
                     "content/sequences", "/SEQ-*.md")
             + mount(collection / "build" / FIELDS_STAGED.parent,
-                    "data/collection"))
+                    "data/collection")
+            + ("\n[params]\nlab = true\n" if lab else ""))
 
 
 # --------------------------------------------------------------------------

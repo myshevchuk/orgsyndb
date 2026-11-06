@@ -11,7 +11,9 @@ the page itself carries aria-current="page"; the link of the section a
 page lies in carries aria-current="true". /general-procedures/, the
 three taxonomy directories and their term pages lie in /procedures/, as
 their facets do, every compound page and compound tab page lies in
-/compounds/ and every sequence page in /sequences/. */ -}}
+/compounds/ and every sequence page in /sequences/. A site built with
+params.lab links the lab application's views first; no page of the
+site lies in them. */ -}}
 {{ $here := .RelPermalink -}}
 {{ $within := $here -}}
 {{ $general := and (eq .Kind "section") (eq .Section "general-procedures") -}}
@@ -40,9 +42,12 @@ their facets do, every compound page and compound tab page lies in
 <a class="site-title" href="/">{{ site.Title }}</a>
 <nav aria-label="{{ T "nav_site" }}">
 <ul>
-{{ range slice (slice "/procedures/" "nav_procedures") (slice "/compounds/" "nav_compounds") (slice "/sequences/" "nav_sequences") (slice "/help/" "nav_help") -}}
-{{ $url := index . 0 -}}
-<li><a href="{{ $url }}"{{ if eq $here $url }} aria-current="page"{{ else if hasPrefix $within $url }} aria-current="true"{{ end }}>{{ T (index . 1) }}</a></li>
+{{ $links := slice -}}
+{{ if site.Params.lab }}{{ $links = $links | append (dict "url" "/lab/inventory/end-products/" "key" "nav_inventory") (dict "url" "/lab/planning/" "key" "nav_planning") (dict "url" "/lab/tasks/" "key" "nav_tasks") }}{{ end -}}
+{{ $links = $links | append (dict "url" "/compounds/" "key" "nav_compounds") (dict "url" "/sequences/" "key" "nav_sequences") (dict "url" "/procedures/" "key" "nav_procedures") (dict "url" "/help/" "key" "nav_help") -}}
+{{ range $links -}}
+{{ $url := .url -}}
+<li><a href="{{ $url }}"{{ if eq $here $url }} aria-current="page"{{ else if hasPrefix $within $url }} aria-current="true"{{ end }}>{{ T .key }}</a></li>
 {{ end -}}
 </ul>
 </nav>

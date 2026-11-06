@@ -29,8 +29,10 @@ FOOTER = re.compile(r"OrgSynDB · internal procedures · built "
 ORIGIN = "http://127.0.0.1:8000"
 RFC3339 = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
                      r"(Z|[+-]\d{2}:\d{2})$")
-NAVIGATION = [("/procedures/", "Procedures"), ("/compounds/", "Compounds"),
-              ("/sequences/", "Sequences"), ("/help/", "Help")]
+NAVIGATION = [("/compounds/", "Compounds"), ("/sequences/", "Sequences"),
+              ("/procedures/", "Procedures"), ("/help/", "Help")]
+LAB_NAVIGATION = [("/lab/inventory/end-products/", "Inventory"),
+                  ("/lab/planning/", "Planning"), ("/lab/tasks/", "Tasks")]
 TABS = [("/procedures/", "All procedures"),
         ("/general-procedures/", "General procedures"),
         ("/reaction_types/", "Reaction types"), ("/tags/", "Tags"),
@@ -1679,3 +1681,30 @@ class SecondRouteSiteTests(SiteCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LabNavigationTests(SiteCase):
+    """The test collection built with ORGSYNDB_LAB=true."""
+
+    ENV = {"ORGSYNDB_LAB": "true"}
+
+    def test_lab_views_in_the_navigation(self) -> None:
+        """Scenario: Lab views in the navigation."""
+        for name in ("index.html", "procedures/osdb-0001/index.html"):
+            with self.subTest(page=name):
+                page = ps.load_page(self.public, self.public / name)
+                nav = page.find("header", "site-header").find(
+                    "nav", aria_label="Site")
+                links = page.links(nav)
+                self.assertEqual([(link.target, link.node.norm())
+                                  for link in links],
+                                 LAB_NAVIGATION + NAVIGATION)
+                for link in links[:3]:
+                    self.assertNotIn("aria-current", link.node.attrs)
+
+    def test_the_overlay_sets_the_lab(self) -> None:
+        """Scenario: Lab views on request (the overlay)."""
+        overlay = self.sandbox.root / "build" / "hugo-config" / "_default"
+        config = tomllib.loads((overlay / "hugo.toml").read_text(
+            encoding="utf-8"))
+        self.assertEqual(config.get("params"), {"lab": True})

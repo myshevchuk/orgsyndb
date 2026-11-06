@@ -250,8 +250,24 @@ def run_validator() -> int:
     return status
 
 
+def lab_requested() -> bool:
+    """Return whether ORGSYNDB_LAB asks for the lab application's views
+    in the site's header: true for true, 1, yes or on, false for an
+    unset or empty variable or false, 0, no or off, in any case. Raise
+    Failure, naming the variable and the value, for any other value."""
+    value = os.environ.get("ORGSYNDB_LAB", "").strip()
+    if value.lower() in ("1", "true", "yes", "on"):
+        return True
+    if value.lower() in ("", "0", "false", "no", "off"):
+        return False
+    raise Failure(f"ORGSYNDB_LAB must be true or false, not {value!r}")
+
+
 def run_build(collection: Path) -> list[tuple[Path, dict]]:
-    """Export, validate and build; return the published content files."""
+    """Export, validate and build; return the published content files.
+    The site links the lab application's views when ORGSYNDB_LAB asks
+    for them; a value it does not know stops the build before export."""
+    lab = lab_requested()
     run_export()
     if run_validator() != 0:
         raise Failure("validation found errors; the site was not built")
@@ -283,7 +299,7 @@ def run_build(collection: Path) -> list[tuple[Path, dict]]:
     config = collection / "build" / "hugo-config"
     (config / "_default").mkdir(parents=True, exist_ok=True)
     (config / "_default" / "hugo.toml").write_text(
-        pipeline.hugo_overlay(APP / "site", collection, language),
+        pipeline.hugo_overlay(APP / "site", collection, language, lab),
         encoding="utf-8")
     run(["hugo", "--source", APP / "site", "--configDir", config,
          "--minify", "--quiet", "--noBuildLock"])

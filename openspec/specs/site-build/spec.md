@@ -18,7 +18,7 @@ The file `site/hugo.toml` SHALL configure Hugo 0.162.1 as follows:
 
 The configuration names no host other than the loopback address in `params.siteurl`.
 
-`pipeline.hugo_overlay(site, collection, language)` SHALL return the text of the collection's overlay `build/hugo-config/_default/hugo.toml`, which the build passes to Hugo through `--configDir <collection>/build/hugo-config`, given the absolute paths of the application's `site/` and of the collection, and the site's language. It sets `defaultContentLanguage` to the language, `publishDir` to `<collection>/public`, `resourceDir` to `<collection>/build/hugo-resources`, and `module.mounts` to exactly these seven mounts, in this order, every path absolute:
+`pipeline.hugo_overlay(site, collection, language, lab=False)` SHALL return the text of the collection's overlay `build/hugo-config/_default/hugo.toml`, which the build passes to Hugo through `--configDir <collection>/build/hugo-config`, given the absolute paths of the application's `site/` and of the collection, the site's language, and whether the site links the lab application's views. It sets `defaultContentLanguage` to the language, `publishDir` to `<collection>/public`, `resourceDir` to `<collection>/build/hugo-resources`, and `module.mounts` to exactly these seven mounts, in this order, every path absolute:
 1. `<site>/content` → `content`;
 2. `<collection>/build/content/procedures` → `content/procedures` with `files = ["/OSDB-*.md"]`;
 3. `<collection>/build/content/help` → `content/help`;
@@ -29,6 +29,8 @@ The configuration names no host other than the loopback address in `params.siteu
 
 Mount 2 holds the procedures the build staged, one per ID, as the localization spec defines. Mount 3 holds the help pages the build staged from the application's `docs/`, as the site-help spec defines. Mount 4 replaces Hugo's default `<site>/static` mount, so the application SHALL have no `site/static/`; its own static files go in `site/assets/`. Mount 5 makes each compound file of the registry the Hugo data entry `site.Data.compounds.<key>`. Mount 6 holds the sequences the build staged, one per ID (synthesis-sequences "Sequence files"). Mount 7 makes the field data, the reaction-type data and the route data the build staged the Hugo data entries `site.Data.collection.fields` (compound-fields "Field data for the site"), `site.Data.collection.reaction_types` (reaction-types "Reaction-type data for the site") and `site.Data.collection.routes` (synthesis-routes "Derived routes"). Mounts 5 and 7 replace Hugo's default `<site>/data` mount, so the application SHALL have no `site/data/`: every data entry of the site comes from the collection.
 
+With `lab` true the overlay also sets `params.lab = true`, which Hugo merges with the `params` of `site/hugo.toml`; the header then links the lab application's views (site-theme "Page shell"). Without it the overlay sets no `params`.
+
 #### Scenario: Configuration parses to the contract
 - **WHEN** a test loads `site/hugo.toml` with `tomllib`
 - **THEN** every value listed above is present as stated, `taxonomies` has exactly the three entries, and none of `publishDir`, `resourceDir`, `module`, `languages` and `defaultContentLanguage` is present
@@ -38,6 +40,7 @@ Mount 2 holds the procedures the build staged, one per ID, as the localization s
 #### Scenario: Overlay parses to the contract
 - **WHEN** a test calls `hugo_overlay` with a site path and a collection path that both contain a space and a double quote, and the language `de`, and loads the result with `tomllib`
 - **THEN** it has exactly the keys `publishDir`, `resourceDir`, `defaultContentLanguage` and `module`, with the values and the seven mounts listed above
+- **AND** called with `lab=True` it has besides them exactly the key `params`, holding only `lab = true`
 
 ### Requirement: Merged procedures section
 A build SHALL publish each procedure ID of the content files of `build/export/` and `md/procedures/` as one page at `public/procedures/<slug>/index.html`, from the variant that the localization spec chooses, whatever its `date`, `publishDate` or `expiryDate`. No other file from those two directories is published.

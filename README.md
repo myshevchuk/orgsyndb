@@ -498,9 +498,14 @@ The built site provides these pages. Buttons and messages are named below
 as an English site shows them; the German site, the default, shows the
 German equivalents, such as **Kopieren** for **Copy**.
 
-The navigation links **Procedures**, **Compounds**, **Sequences** and **Help**
-(**Vorschriften**, **Verbindungen**, **Synthesewege** and **Hilfe** on a German
-site). Every page has a search field in the same place in the header. Except
+The navigation links **Compounds**, **Sequences**, **Procedures** and **Help**
+in that order (**Verbindungen**, **Synthesewege**, **Vorschriften** and
+**Hilfe** on a German site). A site built with `ORGSYNDB_LAB=true` puts
+**Inventory**, **Planning** and **Tasks** first (**Bestand**, **Planung** and
+**Aufgaben**), linking to `/lab/inventory/end-products/`, `/lab/planning/`
+and `/lab/tasks/`.
+
+Every page has a search field in the same place in the header. Except
 on term pages, `/general-procedures/`, `/compounds/` and its tab pages, its
 placeholder is **Product, CAS, SMILES or keyword** and its accessible name is
 **Search procedures**.
@@ -1056,6 +1061,17 @@ prefix are relative to the collection.
 
 The program exits 0 on success, 1 on failure, and 2 on a usage error.
 
+For `build`, set the environment variable `ORGSYNDB_LAB=true` to include
+the lab application's views in the site's header. It also accepts `1`,
+`yes` and `on`. Leave it unset or empty, or set it to `false`, `0`, `no`
+or `off`, to omit those links. Values are case-insensitive. Any other
+value stops `build` with exit 1 before export, with a message naming
+`ORGSYNDB_LAB` and the value. This also applies to `serve` and `pdf`, which
+run `build`. Enable the links only where the lab application runs under
+`/lab/`, as in the container deployment. Leave the variable unset for the
+GitHub Pages demo and local `orgsyndb serve` previews, which have no lab
+application.
+
 The normal `validate` command checks top-level procedure, compound and
 sequence files. Subdirectories under `md/procedures/`, `md/sequences/` or
 `compounds/` are invalid.
@@ -1446,7 +1462,9 @@ article number in alphabetical order.
 
 Use the inventory to see which end products are ready to deliver and how
 long their stock will last. The navigation lists **Bestand** (**Inventory**),
-**Planung** (**Planning**) and **Aufgaben** (**Tasks**) in that order.
+**Planung** (**Planning**), **Aufgaben** (**Tasks**), **Verbindungen**
+(**Compounds**), **Synthesewege** (**Sequences**), **Vorschriften**
+(**Procedures**) and **Hilfe** (**Help**) in that order.
 Choose **Bestand**, or open
 `/lab/inventory/end-products/`. `/lab/inventory/` redirects to the same
 list; `/lab/` still opens the task list. You can read the inventory
@@ -1687,6 +1705,12 @@ repositories under `/srv/git/` although another user owns them. Only
 committed changes on the named branch are built, never the working tree.
 
 ### Builds and updates
+
+`deploy/compose.yaml` sets `ORGSYNDB_LAB=true` for `builder`, so the site
+it builds links the lab application's views first. This setting belongs
+to the Compose file; it is not set in `orgsyndb.env`. For an existing
+deployment, after `git pull`, run `docker compose up -d` from `deploy/`
+to recreate `builder` with the setting. Its next build includes the links.
 
 Each cycle fetches the application's branch, if updates are on, and the
 collection's branch. When either has a new commit, `builder` checks both

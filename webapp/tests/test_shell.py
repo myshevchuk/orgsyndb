@@ -74,18 +74,18 @@ class ShellTests(IndexMixin, TestCase):
                 header, links = self.nav_links(self.shell(signed_in))
                 self.assertEqual(
                     [(a.get("href"), a.text()) for a in links[:7]],
-                    [("/procedures/", strings["nav_procedures"]),
+                    [("/lab/inventory/end-products/", "Bestand"),
+                     ("/lab/planning/", "Planung"),
+                     ("/lab/tasks/", "Aufgaben"),
                      ("/compounds/", strings["nav_compounds"]),
                      ("/sequences/", strings["nav_sequences"]),
-                     ("/help/", strings["nav_help"]),
-                     ("/lab/inventory/end-products/", "Bestand"),
-                     ("/lab/planning/", "Planung"),
-                     ("/lab/tasks/", "Aufgaben")])
+                     ("/procedures/", strings["nav_procedures"]),
+                     ("/help/", strings["nav_help"])])
                 self.assertEqual(header.find("nav").get("aria-label"),
                                  strings["nav_site"])
                 self.assertEqual(
                     [a.get("aria-current") for a in links[:7]],
-                    [None, None, None, None, None, None, "page"])
+                    [None, None, "page", None, None, None, None])
                 title = header.find("a", href="/")
                 self.assertIsNotNone(title)
                 self.assertEqual(title.text(), site_title())
@@ -97,7 +97,7 @@ class ShellTests(IndexMixin, TestCase):
                 _, links = self.nav_links(self.shell(True, path))
                 self.assertEqual(
                     [a.get("aria-current") for a in links[:7]],
-                    [None, None, None, None, None, None, "true"])
+                    [None, None, "true", None, None, None, None])
 
     def test_signed_in_state(self) -> None:
         """Scenario: Shell (sign-in state)."""
@@ -179,9 +179,9 @@ class InventoryShellTests(IndexMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         header = page(response).find("header", cls="site-header")
         links = header.find("nav").find_all("a")
-        self.assertEqual([a.text() for a in links[4:7]],
+        self.assertEqual([a.text() for a in links[0:3]],
                          ["Bestand", "Planung", "Aufgaben"])
-        return [a.get("aria-current") for a in links[4:7]]
+        return [a.get("aria-current") for a in links[0:3]]
 
     def paths(self) -> list[str]:
         return ["/lab/inventory/end-products/bulk/",
@@ -213,10 +213,10 @@ class InventoryShellTests(IndexMixin, TestCase):
         response = self.client.get("/lab/inventory/end-products/")
         links = page(response).find("header", cls="site-header").find(
             "nav").find_all("a")
-        self.assertEqual(links[4].text(), "Inventory")
-        self.assertEqual(links[4].get("href"), "/lab/inventory/end-products/")
-        self.assertEqual(links[5].text(), "Planning")
-        self.assertEqual(links[5].get("href"), "/lab/planning/")
+        self.assertEqual(links[0].text(), "Inventory")
+        self.assertEqual(links[0].get("href"), "/lab/inventory/end-products/")
+        self.assertEqual(links[1].text(), "Planning")
+        self.assertEqual(links[1].get("href"), "/lab/planning/")
 
     def test_the_inventory_pages_carry_the_shell_and_no_script(self) -> None:
         self.client.force_login(self.kl)
@@ -256,11 +256,11 @@ class PlanningShellTests(IndexMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         header = page(response).find("header", cls="site-header")
         links = header.find("nav").find_all("a")
-        self.assertEqual([(a.get("href"), a.text()) for a in links[4:7]],
+        self.assertEqual([(a.get("href"), a.text()) for a in links[0:3]],
                          [("/lab/inventory/end-products/", "Bestand"),
                           ("/lab/planning/", "Planung"),
                           ("/lab/tasks/", "Aufgaben")])
-        return [a.get("aria-current") for a in links[4:7]]
+        return [a.get("aria-current") for a in links[0:3]]
 
     def test_navigation_in_the_planning_list(self) -> None:
         """Scenario: Navigation in the planning list."""
@@ -288,8 +288,8 @@ class PlanningShellTests(IndexMixin, TestCase):
         self.use_index(build_index("en"))
         links = page(self.client.get("/lab/planning/")).find(
             "header", cls="site-header").find("nav").find_all("a")
-        self.assertEqual(links[5].text(), "Planning")
-        self.assertEqual(links[5].get("href"), "/lab/planning/")
+        self.assertEqual(links[1].text(), "Planning")
+        self.assertEqual(links[1].get("href"), "/lab/planning/")
 
     def test_the_other_views_do_not_mark_the_planning(self) -> None:
         self.assertEqual(self.marks("/lab/tasks/"), [None, None, "page"])
@@ -334,13 +334,13 @@ class LanguageTests(IndexMixin, TestCase):
         self.assertEqual(root.find("html").get("lang"), "en")
         links = root.find("header", cls="site-header").find("nav"
                                                             ).find_all("a")
-        self.assertEqual(links[4].text(), "Inventory")
-        self.assertEqual(links[5].text(), "Planning")
-        self.assertEqual(links[6].text(), "Tasks")
+        self.assertEqual(links[0].text(), "Inventory")
+        self.assertEqual(links[1].text(), "Planning")
+        self.assertEqual(links[2].text(), "Tasks")
         strings = site_strings("en")
-        self.assertEqual([a.text() for a in links[:4]],
+        self.assertEqual([a.text() for a in links[3:7]],
                          [strings[f"nav_{n}"] for n in
-                          ("procedures", "compounds", "sequences", "help")])
+                          ("compounds", "sequences", "procedures", "help")])
         header, rows = table(root)
         self.assertEqual(rows[0]["Started"].text(), "2026-11-03")
 

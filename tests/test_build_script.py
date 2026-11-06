@@ -6,6 +6,8 @@ A missing tools/orgsyndb fails them, because it is a deliverable.
 """
 
 import ast
+import importlib.machinery
+import importlib.util
 import json
 import os
 import py_compile
@@ -17,6 +19,7 @@ import tempfile
 import tomllib
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from pipeline_support import (BOOTSTRAP_HINT, DEMO, GIT_QUIET, HOOK,
                               ORGSYNDB, PIPELINE, REPO, TOOLS, Run,
@@ -630,3 +633,37 @@ class InitTests(ProgramTestCase):
         self.assertEqual(sorted(demo), ["fields", "format"])
         self.assertEqual(demo["format"], 1)
         self.assertIsInstance(demo["fields"], dict)
+
+
+class LabSwitchTests(ProgramTestCase):
+    def test_an_unknown_value_stops_the_build(self) -> None:
+        """Scenario: Lab views on request (an unknown value)."""
+        require_tool("hugo")
+        sandbox = make_sandbox(self)
+        result = sandbox.build("build",
+                               env=sandbox.env(ORGSYNDB_LAB="maybe"))
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("ORGSYNDB_LAB", result.stderr)
+        self.assertIn("maybe", result.stderr)
+        self.assertFalse((sandbox.root / "build" / "export").exists())
+
+    def test_the_values_it_accepts(self) -> None:
+        """Scenario: Lab views on request (the values)."""
+        loader = importlib.machinery.SourceFileLoader(
+            "orgsyndb_program", str(ORGSYNDB))
+        program = importlib.util.module_from_spec(
+            importlib.util.spec_from_loader(loader.name, loader))
+        loader.exec_module(program)
+        cases = {"true": True, "TRUE": True, "1": True, "yes": True,
+                 "On": True, "": False, "false": False, "0": False,
+                 "no": False, "OFF": False}
+        for value, expected in cases.items():
+            with self.subTest(value=value), mock.patch.dict(
+                    os.environ, {"ORGSYNDB_LAB": value}):
+                self.assertIs(program.lab_requested(), expected)
+        with mock.patch.dict(os.environ):
+            os.environ.pop("ORGSYNDB_LAB", None)
+            self.assertIs(program.lab_requested(), False)
+        with mock.patch.dict(os.environ, {"ORGSYNDB_LAB": "maybe"}):
+            with self.assertRaises(program.Failure):
+                program.lab_requested()

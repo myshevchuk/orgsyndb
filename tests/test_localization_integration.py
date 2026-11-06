@@ -11,9 +11,9 @@ import general_support as gs
 import pipeline_support as ps
 from pipeline_support import Page
 
-NAVIGATION = [("/procedures/", "Vorschriften"),
-              ("/compounds/", "Verbindungen"),
-              ("/sequences/", "Synthesewege"), ("/help/", "Hilfe")]
+NAVIGATION = [("/compounds/", "Verbindungen"),
+              ("/sequences/", "Synthesewege"),
+              ("/procedures/", "Vorschriften"), ("/help/", "Hilfe")]
 TABS = [("/procedures/", "Alle Vorschriften"),
         ("/general-procedures/", "Allgemeine Vorschriften"),
         ("/reaction_types/", "Reaktionstypen"), ("/tags/", "Schlagwörter"),

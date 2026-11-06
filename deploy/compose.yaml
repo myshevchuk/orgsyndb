@@ -24,6 +24,9 @@ services:
     init: true
     restart: unless-stopped
     env_file: orgsyndb.env
+    environment:
+      # The site links the lab application, which app below runs.
+      ORGSYNDB_LAB: "true"
     volumes:
       - data:/var/lib/orgsyndb
       # For ssh:// repositories: a directory holding the private key

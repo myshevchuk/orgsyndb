@@ -29,7 +29,7 @@ Every HTML page the theme renders SHALL contain, in this order:
 - a skip link `a.skip-link` with `href="#main"`;
 - a `header.site-header` holding, in this order:
   - `a.site-title`, linking `/` with the text `OrgSynDB`;
-  - a `nav` element carrying `aria-label="Site"`, which links, in this order, to `/procedures/`, `/compounds/`, `/sequences/` and `/help/`, with the texts `Procedures`, `Compounds`, `Sequences` and `Help`. The header holds no other `nav`;
+  - a `nav` element carrying `aria-label="Site"`, which links, in this order, to `/compounds/`, `/sequences/`, `/procedures/` and `/help/`, with the texts `Compounds`, `Sequences`, `Procedures` and `Help`. On a site built with the lab application's views (site-build "Hugo configuration") these links follow links to `/lab/inventory/end-products/`, `/lab/planning/` and `/lab/tasks/`, with the texts `Inventory`, `Planning` and `Tasks`. The header holds no other `nav`;
   - `form.site-search` with `role="search"` and `method="get"`, holding one `input` with `type="search"` and `name="q"`, and a `button` with `type="submit"` and the text `Search`. On the catalogue, the term pages and `/general-procedures/` it is the catalogue's search form, with the `action`, attributes and texts that site-catalogue "Catalogue controls" gives, and on `/compounds/` and its tab pages it is the compound catalogue's, as site-catalogue "Compound catalogue" and "Compound tabs" give. On every other page its `action` resolves to `/procedures/`, and its input carries `aria-label="Search procedures"` and the placeholder `Product, CAS, SMILES or keyword`;
 - exactly one `main` element with `id="main"`;
 - a `footer.site-footer` whose text is `OrgSynDB · internal procedures · built <time>`, where `<time>` is a `time` element whose `datetime` is the time the site was built, as an RFC 3339 date-time, and whose text is that time as `YYYY-MM-DD HH:MM`. Every page of one build shows the same time.
@@ -63,6 +63,10 @@ Headings follow these rules:
 #### Scenario: The header does not move between pages
 - **WHEN** the orchestrator measures the header and the `h1` of the home page, `/procedures/`, a term page, a procedure page and the help index in a browser at 1280 and at 500 CSS pixels (manual verification, tasks.md section 3)
 - **THEN** at each width the header has the same height, the site title, the navigation and the search form the same positions and sizes, and the `h1` the same font size on every page
+
+#### Scenario: Lab views in the navigation
+- **WHEN** a test builds a collection in locale `en` with the lab application's views and once without them, and reads the home page and a procedure page of each build
+- **THEN** with them each page's `nav` lists `Inventory`, `Planning`, `Tasks`, `Compounds`, `Sequences`, `Procedures` and `Help` in that order, the first three linking `/lab/inventory/end-products/`, `/lab/planning/` and `/lab/tasks/` and none of them carrying `aria-current`; without them it lists the last four only, and no link of the header leads under `/lab/`
 
 ### Requirement: Stylesheets by medium
 The theme SHALL build three stylesheets with Hugo Pipes functions available in the standard Hugo build (`resources.Get`, `resources.Concat`, `minify`, `fingerprint`), and link them from every page in this order:

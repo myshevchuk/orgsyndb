@@ -468,6 +468,16 @@ class FileTests(unittest.TestCase):
         self.assertIn("/lab/*", done.stdout)
         self.assertIn("reverse_proxy", done.stdout)
 
+    def test_the_builder_links_the_lab(self) -> None:
+        """Scenario: Compose file (the builder's ORGSYNDB_LAB, without
+        Docker)."""
+        text = (DEPLOY / "compose.yaml").read_text(encoding="utf-8")
+        builder = re.search(r"^  builder:\n(.*?)(?=^  \S)", text,
+                            re.M | re.S)
+        self.assertIsNotNone(builder)
+        self.assertRegex(builder.group(1),
+                         r"(?m)^      ORGSYNDB_LAB: \"true\"$")
+
     def test_compose_file(self) -> None:
         """Scenario: Compose file."""
         if shutil.which("docker") is None:
@@ -494,6 +504,8 @@ class FileTests(unittest.TestCase):
                          ["orgsyndb-deploy", "run"])
         self.assertEqual(services["builder"]["environment"][
             "ORGSYNDB_COLLECTION_REF"], "main")
+        self.assertEqual(services["builder"]["environment"][
+            "ORGSYNDB_LAB"], "true")
         for name in ("web", "app"):
             with self.subTest(service=name):
                 mounts = {m["target"]: m for m in services[name]["volumes"]}

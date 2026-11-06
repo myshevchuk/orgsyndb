@@ -7,9 +7,9 @@ from django.utils.translation import gettext_lazy as _
 
 SITE_TITLE = "OrgSynDB"
 SITE_SECTIONS = [
-    ("/procedures/", _("Procedures")),
     ("/compounds/", _("Compounds")),
     ("/sequences/", _("Sequences")),
+    ("/procedures/", _("Procedures")),
     ("/help/", _("Help")),
 ]
 # The application's views: each a link and the path its pages lie under.
@@ -22,13 +22,13 @@ VIEWS = [
 
 def navigation(path: str) -> list[dict[str, Any]]:
     """Return the header's links for a page at PATH, in order: the
-    site's sections, then the application's views.
+    application's views, then the site's sections.
 
     Each link is a dict of ``url``, ``label`` and ``current``: ``page``
     for the link to PATH itself, ``true`` for the link of the view whose
     pages PATH lies under, and the empty string otherwise.
     """
-    links = [(url, label, None) for url, label in SITE_SECTIONS] + VIEWS
+    links = VIEWS + [(url, label, None) for url, label in SITE_SECTIONS]
     shown = []
     for url, label, under in links:
         if path == url:

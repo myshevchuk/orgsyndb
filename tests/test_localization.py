@@ -644,3 +644,17 @@ class SiteLanguageTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LabNavigationStringTests(unittest.TestCase):
+    def test_the_lab_views_have_german_and_english_labels(self) -> None:
+        """Scenario: Lab views in the navigation (interface strings)."""
+        labels = {"de": ("Bestand", "Planung", "Aufgaben"),
+                  "en": ("Inventory", "Planning", "Tasks")}
+        for language, expected in labels.items():
+            with self.subTest(language=language):
+                strings = tomllib.loads((I18N / f"{language}.toml")
+                                        .read_text(encoding="utf-8"))
+                self.assertEqual(tuple(strings[key] for key in (
+                    "nav_inventory", "nav_planning", "nav_tasks")),
+                    expected)

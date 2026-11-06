@@ -106,6 +106,18 @@ class OverlayTests(unittest.TestCase):
         ]})
 
 
+    def test_overlay_with_the_lab(self) -> None:
+        """Scenario: Overlay parses to the contract (the lab)."""
+        site, collection = Path("/srv/app/site"), Path("/srv/data")
+        plain = tomllib.loads(pipeline().hugo_overlay(site, collection,
+                                                       "de"))
+        overlay = tomllib.loads(pipeline().hugo_overlay(
+            site, collection, "de", lab=True))
+        self.assertEqual(overlay.pop("params"), {"lab": True})
+        self.assertEqual(overlay, plain)
+        self.assertNotIn("params", plain)
+
+
 class DemoCollectionTests(unittest.TestCase):
     def test_samples_live_in_the_demo_collection(self) -> None:
         """Scenario: Samples live in the demo collection."""
