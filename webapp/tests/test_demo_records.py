@@ -188,6 +188,20 @@ class InventoryTests(SeededCase):
                            if record.prev_record is not None]
                 self.assertIn(["status"], changes)
 
+    def test_locations(self) -> None:
+        from inventory.models import Item
+        places: dict = defaultdict(set)
+        for item in Item.objects.all():
+            with self.subTest(item=str(item)):
+                self.assertRegex(item.compartment, r"^[0-9]+$")
+                self.assertRegex(item.box, r"^[0-9]+$")
+            places[item.article_number or item.name].add(item.compartment)
+        self.assertTrue(Item.objects.filter(
+            article_number__isnull=True).exclude(compartment="").exists())
+        for article, compartments in places.items():
+            with self.subTest(article=article):
+                self.assertEqual(len(compartments), 1)
+
     def test_items_are_named_as_their_compounds(self) -> None:
         from inventory.models import Item
         names = compound_names()

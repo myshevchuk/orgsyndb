@@ -21,6 +21,10 @@
 <dd>{{ item.get_status_display }}</dd>
 {% endif %}<dt>{% translate "In stock since" %}</dt>
 <dd>{{ item.stocked_on|default_if_none:"–" }}</dd>
+<dt>{% translate "Compartment" %}</dt>
+<dd>{{ item.compartment|default:"–" }}</dd>
+<dt>{% translate "Box" %}</dt>
+<dd>{{ item.box|default:"–" }}</dd>
 <dt>{% translate "Stock" %}</dt>
 <dd><span class="stock level-{{ figures.level }}">{{ item.quantity }} <span class="level-label">{{ figures.level|level_label }}</span></span></dd>
 <dt>{% translate "Mean per quarter" %}</dt>

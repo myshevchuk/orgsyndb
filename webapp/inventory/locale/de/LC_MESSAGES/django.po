@@ -619,3 +619,16 @@ msgstr "Der Tag, an dem der Artikel in den Endproduktbestand kam; in diesem Kale
 
 msgid "The quarter has not begun yet."
 msgstr "Das Quartal hat noch nicht begonnen."
+
+msgid "Compartment"
+msgstr "Fach"
+
+msgid "Box"
+msgstr "Box"
+
+msgid "Delivery note from selection"
+msgstr "Lieferschein mit Auswahl"
+
+#, python-format
+msgid "Select %(item)s"
+msgstr "%(item)s auswählen"

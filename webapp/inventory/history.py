@@ -14,7 +14,7 @@ from inventory.models import plain
 
 FIELDS = {
     "item": ["article_number", "name", "category", "status",
-             "stocked_on", "note"],
+             "stocked_on", "compartment", "box", "note"],
     "lot": ["batch", "location", "made_on", "note"],
     "deliverynote": ["number", "recipient", "note", "reversed",
                      "reversal_note"],

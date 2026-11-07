@@ -23,13 +23,15 @@
 <div class="table-scroll">
 <table class="inventory-table">
 <thead>
-<tr><th scope="col">{% translate "Article no." %}</th><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Container" %}</th><th scope="col">{% translate "Count" %}</th>{% if not note.historical %}<th scope="col">{% translate "Movement" %}</th>{% endif %}</tr>
+<tr><th scope="col">{% translate "Article no." %}</th><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Container" %}</th><th scope="col">{% translate "Compartment" %}</th><th scope="col">{% translate "Box" %}</th><th scope="col">{% translate "Count" %}</th>{% if not note.historical %}<th scope="col">{% translate "Movement" %}</th>{% endif %}</tr>
 </thead>
 <tbody>
 {% for line, movement, reversed in lines %}<tr>
 <td><a href="/lab/inventory/items/{{ line.item.pk }}/">{{ line.item.article_number }}</a></td>
 <td>{{ line.item.name }}</td>
 <td class="number">{{ line.item.container }}</td>
+<td>{{ line.item.compartment }}</td>
+<td>{{ line.item.box }}</td>
 <td class="number">{{ line.count }}</td>
 {% if not note.historical %}<td>{% if movement %}{{ movement.get_kind_display }} {{ movement.date }} {% person movement.user %}{% if reversed %} <span class="badge badge--reversed">{% translate "reversed" %}</span>{% endif %}{% endif %}</td>{% endif %}
 </tr>

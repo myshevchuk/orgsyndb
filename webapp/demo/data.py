@@ -98,6 +98,8 @@ class OpenItem(Change):
     size: Decimal
     unit: str
     quantity: int
+    compartment: str = ""
+    box: str = ""
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -685,8 +687,10 @@ def _size(line: _Timeline, article: _Article, turn: int, size: _Size,
             stock += count
         stock -= between(day, end)
     _check(key, opening, booked, demand)
+    compartment, box = place(article, turn)
     line.add(opened, ITEM, OpenItem, user=staff(size.opened, turn),
              key=key, article_number=article.article_number,
+             compartment=compartment, box=box,
              name=line.text(article.name),
              category=line.text(article.category),
              size=Decimal(size.size), unit=size.unit, quantity=opening)
@@ -718,6 +722,13 @@ def _size(line: _Timeline, article: _Article, turn: int, size: _Size,
                  user=staff((day - line.opening).days),
                  number=reversal[0].isoformat(), item=key,
                  note=line.text(NOTES["reversed delivery"]))
+
+
+def place(article: _Article, turn: int) -> tuple[str, str]:
+    """The compartment and box of the size at TURN of ARTICLE: one of
+    five compartments per article, and a box of its own per size."""
+    position = ARTICLES.index(article)
+    return str(1 + position % 5), str(3 * position + turn + 1)
 
 
 def _check(key: str, opening: int, booked: list[tuple[date, int, int]],

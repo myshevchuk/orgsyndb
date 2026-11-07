@@ -21,6 +21,9 @@ from inventory.models import END_PRODUCTS, DeliveryNote, Item, Lot
 DATE = forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
 ARTICLE_NUMBER = forms.TextInput(attrs={"list": "article-numbers",
                                         "autocomplete": "off"})
+COMPARTMENT = forms.TextInput(attrs={"list": "compartments",
+                                     "autocomplete": "off"})
+BOX = forms.TextInput(attrs={"list": "boxes", "autocomplete": "off"})
 STOCKED_ON_HELP = _("The day the item entered the end-product stock; "
                     "left empty, the opening count sets it when it is "
                     "above zero.")
@@ -77,12 +80,14 @@ class ItemForm(forms.ModelForm):
     class Meta:
         model = Item
         fields = ["article_number", "name", "category", "size", "unit",
-                  "quantity", "stocked_on", "note"]
+                  "quantity", "stocked_on", "compartment", "box", "note"]
         widgets = {
             "article_number": ARTICLE_NUMBER,
             "category": forms.TextInput(attrs={"list": "categories",
                                                "autocomplete": "off"}),
             "stocked_on": DATE,
+            "compartment": COMPARTMENT,
+            "box": BOX,
             "note": NOTE,
         }
         help_texts = {"article_number": ARTICLE_NUMBER_HELP,
@@ -122,11 +127,14 @@ class ItemEditForm(MetadataForm):
 
     class Meta:
         model = Item
-        fields = ["name", "category", "status", "stocked_on", "note"]
+        fields = ["name", "category", "status", "stocked_on",
+                  "compartment", "box", "note"]
         widgets = {
             "category": forms.TextInput(attrs={"list": "categories",
                                                "autocomplete": "off"}),
             "stocked_on": DATE,
+            "compartment": COMPARTMENT,
+            "box": BOX,
             "note": NOTE,
         }
         help_texts = {
@@ -149,10 +157,11 @@ class ItemEditForm(MetadataForm):
 
 class ItemChoiceField(forms.ModelChoiceField):
     """A choice among the items of ``end-products``, each shown as its
-    article number, container and name."""
+    article number, container and name, and where it is kept."""
 
     def label_from_instance(self, obj: Any) -> str:
-        return f"{obj.article_number} · {obj.container} · {obj.name}"
+        parts = [obj.article_number, obj.container, obj.name, obj.place]
+        return " · ".join(part for part in parts if part)
 
 
 class NoteForm(forms.Form):

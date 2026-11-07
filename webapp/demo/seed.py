@@ -142,6 +142,7 @@ class _Writer:
                     user, article_number=change.article_number,
                     name=change.name, size=change.size, unit=change.unit,
                     quantity=change.quantity, category=change.category,
+                    compartment=change.compartment, box=change.box,
                     date=day)
             case data.EnterConsumption():
                 bookings.enter_consumption(

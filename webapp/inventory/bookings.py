@@ -176,8 +176,8 @@ TAKEN = gettext_lazy(
 def create_item(user: Any, *, article_number: str | None, name: str,
                 size: Decimal, unit: str, quantity: int, category: str = "",
                 note: str = "", date: Date | None = None,
-                stocked_on: Date | None = None,
-                inventory: str = END_PRODUCTS) -> Item:
+                stocked_on: Date | None = None, compartment: str = "",
+                box: str = "", inventory: str = END_PRODUCTS) -> Item:
     """Create an item of INVENTORY with QUANTITY containers and its
     opening count, booked by USER and dated DATE, today by default.
 
@@ -195,7 +195,8 @@ def create_item(user: Any, *, article_number: str | None, name: str,
     item = Item(inventory=inventory,
                 article_number=_number(article_number), name=name,
                 category=category, size=size, unit=unit,
-                quantity=quantity, note=note,
+                quantity=quantity, note=note, compartment=compartment,
+                box=box,
                 stocked_on=stocked_on or (day if quantity > 0 else None))
     _checked(item)
     taken = str(TAKEN)

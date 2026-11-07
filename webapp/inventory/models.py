@@ -97,6 +97,9 @@ class Item(models.Model):
                               choices=Status.choices, default=Status.ACTIVE)
     stocked_on = models.DateField(_("In stock since"), null=True,
                                   blank=True, validators=[not_in_future])
+    compartment = models.CharField(_("Compartment"), max_length=30,
+                                   blank=True)
+    box = models.CharField(_("Box"), max_length=30, blank=True)
 
     history = RecordedHistory(excluded_fields=["quantity"])
 
@@ -124,6 +127,15 @@ class Item(models.Model):
         number format of the active language, as ``2,5 mg`` in
         German."""
         return f"{number_format(plain(self.size))} {Unit(self.unit).label}"
+
+    @property
+    def place(self) -> str:
+        """Where the item's containers are kept, as ``Fach 2 / Box 7``
+        in German, or the empty string when neither is set."""
+        parts = [f"{_('Compartment')} {self.compartment}"
+                 if self.compartment else "",
+                 f"{_('Box')} {self.box}" if self.box else ""]
+        return " / ".join(part for part in parts if part)
 
     def is_new(self, today: date) -> bool:
         """Whether the item entered stock in the calendar year of

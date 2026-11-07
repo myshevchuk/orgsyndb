@@ -12,10 +12,12 @@ from .inventory_support import (BULK, COMPOUND_PAGE, DELIVERIES, LEVELS, LIST,
                                 InventoryCase, has_amount, has_number,
                                 item_url, note_blocks, note_url, num)
 
-COLUMNS_DE = ["Artikelnr.", "Name", "Kategorie", "Gebinde", "Bestand",
+COLUMNS_DE = ["Artikelnr.", "Name", "Kategorie", "Gebinde", "Fach", "Box",
+              "Bestand",
               "Ø Quartal", "Ø Jahr", "lfd. Jahr", "Reichweite", "Bulk",
               "Bemerkung"]
-COLUMNS_EN = ["Article no.", "Name", "Category", "Container", "Stock",
+COLUMNS_EN = ["Article no.", "Name", "Category", "Container", "Compartment",
+              "Box", "Stock",
               "Mean per quarter", "Mean per year", "This year", "Coverage",
               "Bulk", "Note"]
 BULK_DE = ["Artikelnr.", "Name", "Charge", "Menge", "Ort", "Datum",

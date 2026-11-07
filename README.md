@@ -1527,7 +1527,8 @@ enters stock later, is filled without a bulk lot and is never delivered.
 Its synthesis task names the compound key `1-phenylethanol` as its product
 and has a batch but no lot. The item has no compound link or forecast.
 
-The item list shows all seven stock levels on any seeding day.
+Every demo item has a compartment and a box. The item list shows all
+seven stock levels on any seeding day.
 `CH-0012` in 1 g is **auslaufend** (**discontinued**), and `CH-0010` in
 25 g is **nicht benötigt** (**not needed**). Both were set aside after
 their opening counts and have never been delivered. `CH-0001` in 250 mg
@@ -1572,7 +1573,8 @@ This deletes every lab record and its history, including records you added
 after seeding, and restarts task numbering at `T-001`. It requires
 `ORGSYNDB_DEMO=true` and accepts only a demo database or one without lab
 records. It refuses other databases unchanged.
-Reseed an existing demo to give its items stock entry dates and states.
+Reseed an existing demo to give its items stock entry dates, states,
+compartments and boxes.
 
 To empty a test database deliberately, run from `deploy/`:
 
@@ -1621,6 +1623,13 @@ article in one container size; an article can have several sizes. No two
 items may share an article number, size and unit; items without a number
 are not compared. Size and unit cannot change after creation.
 
+To record where to find the containers in the freezer, enter **Fach**
+(**Compartment**) and **Box** on **New item**. Both fields are optional
+free text, at most 30 characters each. They suggest values already in
+use, ordered with `2` before `10`, but you can enter another value.
+Change them on **Edit** or in the admin when you move the containers.
+The item page shows both locations, with `–` for each empty field.
+
 Before the first delivery, choose **Enter article number** on the item
 page to open **Edit**. The article-number field appears only while the
 item has none. Enter the number once; it is fixed after you save it,
@@ -1664,6 +1673,7 @@ and has no **Enter consumption** or **New bulk lot** link.
 Enter items and past quarterly consumption by hand; there is no Excel
 import. The item list shows stock, consumption means, this year's
 consumption, coverage and bulk alongside the item's details. The
+**Fach** and **Box** columns follow **Gebinde** (**Container**). The
 **Bestand** (**Stock**) column shows container counts alone, coloured by
 level. Hover over a count to read the level's name; screen readers also
 read it. The legend below the table explains all seven colours in urgency
@@ -1671,12 +1681,16 @@ order and counts the items at each level across the whole inventory,
 even when the list is filtered. Choose a legend entry to list exactly
 the items at that level.
 
-Filter by category, stock level or text. The level filter offers **Out**,
-**Critical**, **Low** and **Watch**; each includes that level and more
-urgent ones. Choose **By urgency** to order items as out, critical, low,
-watch, sufficient, never delivered and dormant, with the shortest coverage
-first within each level. Items without coverage come last within their
-level.
+Filter by category, compartment, box, stock level or text. The **Fach**
+and **Box** filters offer values already in use, ordered with `2` before
+`10`. Each starts at **Alle** (**All**); choose a value to show only items
+kept exactly there.
+
+The level filter offers **Out**, **Critical**, **Low** and **Watch**;
+each includes that level and more urgent ones. Choose **By urgency** to
+order items as out, critical, low, watch, sufficient, never delivered and
+dormant, with the shortest coverage first within each level. Items
+without coverage come last within their level.
 
 By default, items without an article number appear last, ordered by name.
 Open an article number, or the name of an item without one, to see its
@@ -1686,14 +1700,35 @@ item page.
 
 Enter the item's article number before its first delivery. Delivery-note
 rows offer only items with an article number, for current and historical
-deliveries alike. On the item page, choose **Book delivery**, or choose
-**New delivery note** on the deliveries list. A delivery note
-(`Lieferschein`) holds an optional number, date, recipient, note and up to
-ten lines of items and container counts. Booking it reduces stock for all
-lines together. If any line
+deliveries alike. A delivery note (`Lieferschein`) holds an optional
+number, date, recipient, note and up to ten lines of items and container
+counts.
+
+To book a request for several articles, sign in and tick their rows in
+the item list's **Artikelnr.** (**Article no.**) column. Only items with an
+article number have a check box. Choose **Lieferschein mit Auswahl**
+(**Delivery note from selection**) above the table. The new note form
+opens with the selected items in its first rows, in the list's order
+from top to bottom. Enter the container counts. If you select more than
+ten items, only the first ten appear; book a second note for the rest.
+
+For one item, choose **Book delivery** on its item page to fill the
+note's first row. To start an empty note, choose **New delivery note** on
+the deliveries list. Each item choice shows the article number,
+container size, name and location, for example
+`CH-0012 · 100 mg · (E)-Zimtsäure · Fach 2 / Box 7`.
+An empty compartment or box is left out of the label; an item with neither
+shows no location.
+
+Booking the note reduces stock for all lines together. If any line
 exceeds the available stock, the whole note is refused and nothing
 changes. The deliveries list shows newest notes first and lets you
 filter by text or item.
+
+The note's page shows **Fach** and **Box** beside every line. Print it to
+use as a pick list when fetching the containers. These are the items'
+current locations: historical notes and reprints also show where the
+items are now.
 
 Stock changes only through bookings: the opening count, deliveries,
 fillings, corrections after counting, and reversals. The item page keeps

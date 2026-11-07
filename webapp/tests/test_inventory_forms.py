@@ -160,7 +160,8 @@ class NewItemTests(FormCase):
     def test_the_form_holds_the_fields_of_the_spec(self) -> None:
         names = form_names(page(self.client.get(NEW_ITEM)), "article_number")
         self.assertEqual(names, {"article_number", "name", "category", "size",
-                                 "unit", "quantity", "stocked_on", "note"})
+                                 "unit", "quantity", "stocked_on",
+                                 "compartment", "box", "note"})
 
     def test_the_unit_choices(self) -> None:
         root = page(self.client.get(NEW_ITEM))
@@ -264,7 +265,7 @@ class ItemEditTests(FormCase):
         root = page(self.client.get(item_url(self.target, "edit")))
         self.assertEqual(form_names(root, "name"),
                          {"name", "category", "status", "stocked_on",
-                          "note"})
+                          "compartment", "box", "note"})
 
     def test_changing_an_item(self) -> None:
         self.client.force_login(self.ae)

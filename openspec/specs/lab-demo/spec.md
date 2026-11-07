@@ -83,7 +83,7 @@ The data set SHALL open the inventory on the opening day `O`, `D` less 400 days,
 - one item without an article number, named `1-Phenylethanol` as the compound `1-phenylethanol` of `examples/demo`, opened after `O`, filled without a lot 89 days before `D`, and never delivered;
 - sizes that planning leaves out: `CH-0012` in 1 g, `discontinued`, and `CH-0010` in 25 g, `not_needed`, each set aside after its opening count and never delivered; and `CH-0001` in 250 mg, whose consumption is entered for the four quarters from the eighth to the fifth before the quarter of `O` and is none since;
 - `CH-0013` in 1 g, opened 60 days before `D`, with a delivery of one container every 15 days from then on;
-- each item's opening count, dated `O`, or later for a size added afterwards;
+- each item's opening count, dated `O`, or later for a size added afterwards, and a compartment and a box, numbers such as `3` and `12`, the sizes of an article in one compartment;
 - for the items that have them, entered consumption for each of the seven quarters from the eighth before the quarter of `O` to the second before it, and for `CH-0001` in 250 mg for the four from the eighth to the fifth, entered in the 30 days from `O`;
 - historical delivery notes dated from the first day of the quarter before that of `O` to the day before `O`, entered in the 30 days from `O`, one of them later reversed with a note;
 - current delivery notes from `O` on, each with a recipient, some with several lines;

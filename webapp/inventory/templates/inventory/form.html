@@ -17,6 +17,12 @@
 {% endif %}{% if categories %}<datalist id="categories">
 {% for category in categories %}<option value="{{ category }}"></option>
 {% endfor %}</datalist>
+{% endif %}{% if compartments %}<datalist id="compartments">
+{% for value in compartments %}<option value="{{ value }}"></option>
+{% endfor %}</datalist>
+{% endif %}{% if boxes %}<datalist id="boxes">
+{% for value in boxes %}<option value="{{ value }}"></option>
+{% endfor %}</datalist>
 {% endif %}{% if locations %}<datalist id="locations">
 {% for location in locations %}<option value="{{ location }}"></option>
 {% endfor %}</datalist>

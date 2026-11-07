@@ -1,5 +1,7 @@
 """The inventory's lists, pages and forms."""
 
+import itertools
+import re
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -23,10 +25,11 @@ from inventory.bookings import Refused
 from inventory.chart import chart, quarters_shown
 from inventory.figures import (Bulk, Consumption, bulk, consumption,
                                containers_from, molar_mass, proposed_amount)
-from inventory.forms import (ConsumptionForm, CorrectionForm, FillForm,
-                             ItemEditForm, ItemForm, LotCorrectionForm,
-                             LotEditForm, LotForm, NoteEditForm, NoteForm,
-                             ReversalForm, show_refusal)
+from inventory.forms import (ROWS, ConsumptionForm, CorrectionForm,
+                             FillForm, ItemEditForm, ItemForm,
+                             LotCorrectionForm, LotEditForm, LotForm,
+                             NoteEditForm, NoteForm, ReversalForm,
+                             show_refusal)
 from inventory.history import history_entries
 from inventory.models import (END_PRODUCTS, FACTOR, LEVEL_ORDER, URGENT,
                               DeliveryNote, Item, Level, Lot, Movement,
@@ -81,12 +84,15 @@ class ItemFilters:
     """The item list's filters as the query gives them, each unknown
     value replaced by its default: CATEGORY; LEVEL, one of the urgent
     levels or empty, admitting it and the more urgent ones; STOCK, any
-    level or empty, admitting that level alone; Q, the searched text;
-    and SORT, ``urgency`` or empty."""
+    level or empty, admitting that level alone; COMPARTMENT and BOX,
+    admitting the items kept there; Q, the searched text; and SORT,
+    ``urgency`` or empty."""
 
     category: str = ""
     level: str = ""
     stock: str = ""
+    compartment: str = ""
+    box: str = ""
     q: str = ""
     sort: str = ""
 
@@ -98,6 +104,8 @@ class ItemFilters:
         return cls(category=query.get("category", "").strip(),
                    level=level if level in URGENT else "",
                    stock=stock if stock in Level.values else "",
+                   compartment=query.get("compartment", "").strip(),
+                   box=query.get("box", "").strip(),
                    q=query.get("q", "").strip(),
                    sort="urgency" if query.get("sort") == "urgency"
                    else "")
@@ -109,6 +117,9 @@ class ItemFilters:
                 and (not self.level
                      or LEVEL_ORDER[shown] <= LEVEL_ORDER[self.level])
                 and (not self.stock or shown == self.stock)
+                and (not self.compartment
+                     or row.item.compartment == self.compartment)
+                and (not self.box or row.item.box == self.box)
                 and (not self.q or self.q.casefold() in row.searched()))
 
 
@@ -167,6 +178,8 @@ def item_list(request: HttpRequest) -> HttpResponse:
         "categories": sorted({item.category for item in items
                               if item.category}),
         "levels": [(level.value, level.label) for level in URGENT],
+        "compartments": in_use("compartment"),
+        "boxes": in_use("box"),
         "legend": legend(rows),
         "today": today,
         "tabs": tabs(LIST),
@@ -395,6 +408,22 @@ def categories() -> Any:
         .values_list("category", flat=True).distinct()
 
 
+def in_use(field: str) -> list[str]:
+    """The values of the items' FIELD, ``compartment`` or ``box``, each
+    once, in natural order."""
+    return sorted(set(Item.objects.exclude(**{field: ""}).values_list(
+        field, flat=True)), key=natural)
+
+
+def natural(text: str) -> tuple[Any, ...]:
+    """The order of TEXT among locations: its runs of the digits 0 to 9
+    by their value, so that ``2`` comes before ``10``, the rest, digits
+    of other scripts included, as text regardless of case."""
+    return tuple(int(part) if odd else part.casefold()
+                 for odd, part in zip(itertools.cycle((False, True)),
+                                      re.split(r"([0-9]+)", text)))
+
+
 def article_numbers() -> list[tuple[str, str]]:
     """The values of the unique text fields of the compounds of the
     collection index, each with its compound's name, for the article
@@ -417,7 +446,8 @@ def item_new(request: HttpRequest) -> HttpResponse:
     return form_page(
         request, ItemForm(request.POST or None), book,
         {"title": _("New item"), "cancel": LIST,
-         "article_numbers": article_numbers(), "categories": categories()})
+         "article_numbers": article_numbers(), "categories": categories(),
+         "compartments": in_use("compartment"), "boxes": in_use("box")})
 
 
 @login_required
@@ -444,7 +474,8 @@ def item_edit(request: HttpRequest, pk: int) -> HttpResponse:
         request, form, book,
         {"title": title, "cancel": item_url(item),
          "article_numbers": article_numbers(),
-         "categories": categories()})
+         "categories": categories(), "compartments": in_use("compartment"),
+         "boxes": in_use("box")})
 
 
 @login_required
@@ -553,13 +584,21 @@ def item_consumption(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def note_new(request: HttpRequest) -> HttpResponse:
-    """Book a delivery note made by the signed-in user; ``item`` in the
-    query puts that item in the first row."""
-    initial = {}
-    chosen = request.GET.get("item", "")
-    if chosen.isdigit():
-        initial["item_0"] = int(chosen)
-    form = NoteForm(request.POST or None, initial=initial)
+    """Book a delivery note made by the signed-in user; each ``item`` in
+    the query puts that item in the next row, in the order given, up to
+    the form's rows, leaving out items the form does not offer and
+    repeats."""
+    form = NoteForm(request.POST or None)
+    offered = set(form.fields["item_0"].queryset.values_list(
+        "pk", flat=True))
+    chosen: list[int] = []
+    for value in request.GET.getlist("item"):
+        if value.isdigit() and int(value) in offered \
+                and int(value) not in chosen:
+            chosen.append(int(value))
+    if not form.is_bound:
+        for row, pk in enumerate(chosen[:ROWS]):
+            form.initial[f"item_{row}"] = pk
 
     def book(data: dict[str, Any]) -> HttpResponse:
         note = bookings.book_note(
