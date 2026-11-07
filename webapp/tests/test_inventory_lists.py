@@ -12,12 +12,12 @@ from .inventory_support import (BULK, COMPOUND_PAGE, DELIVERIES, LEVELS, LIST,
                                 InventoryCase, has_amount, has_number,
                                 item_url, note_blocks, note_url, num)
 
-COLUMNS_DE = ["Artikelnr.", "Name", "Kategorie", "Gebinde", "Fach", "Box",
-              "Bestand", "Ø Jahr", "lfd. Jahr", "Reichweite", "Bulk",
-              "Bemerkung"]
-COLUMNS_EN = ["Article no.", "Name", "Category", "Container", "Compartment",
-              "Box", "Stock", "Mean per year", "This year", "Coverage",
-              "Bulk", "Note"]
+COLUMNS_DE = ["Artikelnr.", "Name", "Kategorie", "Gebinde", "Bestand",
+              "Ø Jahr", "Abgegeben", "Reichweite", "Lagerort", "Fach", "Box",
+              "Bulk verfügbar", "Bemerkung"]
+COLUMNS_EN = ["Article no.", "Name", "Category", "Container", "Stock",
+              "Mean per year", "Delivered", "Coverage", "Location",
+              "Compartment", "Box", "Bulk available", "Note"]
 BULK_DE = ["Artikelnr.", "Name", "Charge", "Menge", "Ort", "Datum",
            "Bemerkung"]
 BULK_EN = ["Article no.", "Name", "Batch", "Amount", "Location", "Date",
@@ -78,7 +78,7 @@ class ItemColumnTests(ListCase):
         self.assertEqual(num(stock), 3)
         self.assertIn("level-low", stock.classes)
         self.assertEqual(num(row["Ø Jahr"]), 18)
-        self.assertEqual(num(row["lfd. Jahr"]), 13)
+        self.assertEqual(num(row["Abgegeben"]), 13)
         self.assertEqual(num(row["Reichweite"]), num("0,7"))
         self.assertEqual(row["Bemerkung"].text(), "Notiz")
 
@@ -130,7 +130,7 @@ class ItemColumnTests(ListCase):
 
 class ItemOrderTests(ListCase):
 
-    def test_rows_are_ordered_by_article_unit_and_size(self) -> None:
+    def test_rows_are_ordered_by_article_and_container(self) -> None:
         for article, size, unit in (
                 ("CH-0002", "10", "umol"), ("CH-0001", "50", "mg"),
                 ("CH-0001", "5", "g"), ("CH-0001", "100", "mg"),
@@ -138,7 +138,7 @@ class ItemOrderTests(ListCase):
             self.item(article, size=size, unit=unit)
         self.assertEqual(
             [k.replace(" ", "") for k in self.keys()],
-            ["CH-00015g", "CH-000120mg", "CH-000150mg", "CH-0001100mg",
+            ["CH-000120mg", "CH-000150mg", "CH-0001100mg", "CH-00015g",
              f"CH-000110{MICRO}mol", f"CH-000210{MICRO}mol"])
 
     def test_urgent_items_first(self) -> None:
@@ -247,36 +247,40 @@ class ItemFilterTests(ListCase):
 
 class ItemListFurnishingTests(ListCase):
 
-    def outside_table(self, root) -> tuple[str, str]:
-        """The page's text before and after its table, the legend's
-        counts left out."""
-        text, grid = root.text(), root.find("table").text()
-        before, _, after = text.partition(grid)
-        for count in root.find("dl", "level-legend").find_all(
-                "span", "count"):
-            after = after.replace(count.text(), "", 1)
-        return before, after
+    def summary(self, root):
+        """The line that counts the items, which must precede the
+        table."""
+        line = root.find("p", "list-summary")
+        elements = list(root.walk())
+        self.assertLess(elements.index(line),
+                        elements.index(root.find("table")))
+        return line.text().split(" · ")[0]
 
     def test_the_count_is_above_the_table(self) -> None:
         for number in range(7):
             self.item(f"C-{number}")
-        before, after = self.outside_table(self.listing())
-        self.assertTrue(has_number(before, "7"), before)
-        self.assertFalse(has_number(after, "7"), after)
+        self.assertEqual(self.summary(self.listing()), "7 von 7 Artikeln")
 
     def test_the_count_follows_the_filter(self) -> None:
         for number in range(7):
             self.item(f"C-{number}", category="Eins" if number < 3 else "")
-        before, _ = self.outside_table(self.listing("?category=Eins"))
-        self.assertTrue(has_number(before, "3"), before)
-        self.assertFalse(has_number(before, "7"), before)
+        self.assertEqual(self.summary(self.listing("?category=Eins")),
+                         "3 von 7 Artikeln")
 
-    def test_the_legend_names_the_levels_below_the_table(self) -> None:
+    def test_one_item(self) -> None:
         self.item("C-1")
-        _, after = self.outside_table(self.listing())
-        for label in LEVELS.values():
-            with self.subTest(label=label):
-                self.assertIn(label, after)
+        self.assertEqual(self.summary(self.listing()), "1 von 1 Artikel")
+
+    def test_the_stock_menu_names_the_levels_above_the_table(self) -> None:
+        self.item("C-1")
+        root = self.listing()
+        menu = root.find(id="stock-menu")
+        elements = list(root.walk())
+        self.assertLess(elements.index(menu),
+                        elements.index(root.find("table")))
+        names = [strong.text() for strong in menu.find_all("strong")]
+        self.assertEqual(names[1:], [label[0].upper() + label[1:]
+                                     for label in LEVELS.values()])
 
     def test_the_link_to_a_new_item_is_for_signed_in_users(self) -> None:
         self.item()
@@ -307,13 +311,13 @@ class ItemListFurnishingTests(ListCase):
         with frozen(late):
             row = self.rows()[0]
         self.assertEqual(num(row["Ø Jahr"]), 32)
-        self.assertEqual(num(row["lfd. Jahr"]), 0)
+        self.assertEqual(num(row["Abgegeben"]), 0)
         self.assertNotIn("projected", row["Ø Jahr"].classes)
         before = datetime(2026, 12, 31, 22, 30, tzinfo=timezone.utc)
         with frozen(before):
             row = self.rows()[0]
         self.assertIn("projected", row["Ø Jahr"].classes)
-        self.assertEqual(num(row["lfd. Jahr"]), 32)
+        self.assertEqual(num(row["Abgegeben"]), 32)
 
 
 class SectionTabTests(ListCase):

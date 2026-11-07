@@ -628,3 +628,122 @@ msgstr "wenig"
 msgctxt "consumption"
 msgid "much"
 msgstr "viel"
+
+msgid "containers"
+msgstr "Gebinde"
+
+msgid "containers / year"
+msgstr "Gebinde / Jahr"
+
+msgid "%(year)s · containers"
+msgstr "%(year)s · Gebinde"
+
+msgid "quarters"
+msgstr "Quartale"
+
+msgctxt "item list"
+msgid "Delivered"
+msgstr "Abgegeben"
+
+msgctxt "item"
+msgid "Location"
+msgstr "Lagerort"
+
+msgid "Bulk available"
+msgstr "Bulk verfügbar"
+
+msgid "%(column)s descending, %(rest)s ascending"
+msgstr "%(column)s absteigend, %(rest)s aufsteigend"
+
+msgid "%(columns)s ascending"
+msgstr "%(columns)s aufsteigend"
+
+msgid "All stock statuses"
+msgstr "Alle Bestandsstatus"
+
+msgid "Search items"
+msgstr "Artikel suchen"
+
+msgid "Name or article number"
+msgstr "Name oder Artikelnummer"
+
+msgid "All categories"
+msgstr "Alle Kategorien"
+
+msgid "Stock status"
+msgstr "Bestandsstatus"
+
+msgid "More filters"
+msgstr "Weitere Filter"
+
+msgid "Columns"
+msgstr "Spalten"
+
+msgid "%(shown)s of %(total)s item"
+msgid_plural "%(shown)s of %(total)s items"
+msgstr[0] "%(shown)s von %(total)s Artikel"
+msgstr[1] "%(shown)s von %(total)s Artikeln"
+
+msgid "Row height"
+msgstr "Zeilenhöhe"
+
+msgid "Compact"
+msgstr "Kompakt"
+
+msgid "Very compact"
+msgstr "Sehr kompakt"
+
+msgid "Colour consumption"
+msgstr "Verbrauch einfärben"
+
+msgid "Delivery statistics of %(item)s"
+msgstr "Abgabenstatistik von %(item)s"
+
+msgid "Location of %(item)s"
+msgstr "Lagerort von %(item)s"
+
+msgid ""
+"<strong>Stock:</strong> colours and meanings in the filter “Stock status”. "
+"<strong>Location</strong> opens compartment, box and bulk. "
+"<strong>Delivered</strong> opens statistics by year and quarter."
+msgstr ""
+"<strong>Bestand:</strong> Farben und Bedeutungen im Filter "
+"„Bestandsstatus“. <strong>Ort</strong> öffnet Fach, Box und Bulk. "
+"<strong>Abgegeben</strong> öffnet Jahres- und Quartalsstatistik."
+
+msgid "Close"
+msgstr "Schließen"
+
+msgid "not recorded"
+msgstr "nicht hinterlegt"
+
+msgid "Finished containers"
+msgstr "Fertige Gebinde"
+
+msgid "No location is recorded for the finished containers."
+msgstr "Für die fertigen Gebinde ist kein Lagerort eingetragen."
+
+msgid "Bulk, stored separately"
+msgstr "Bulk, separat gelagert"
+
+msgid "Open item and location"
+msgstr "Artikel und Lagerort öffnen"
+
+msgid "%(year)s to %(day)s"
+msgstr "%(year)s bis %(day)s"
+
+msgid "Quarters of %(year)s"
+msgstr "Quartale %(year)s"
+
+msgctxt "quarter"
+msgid "running"
+msgstr "laufend"
+
+msgid "Entered consumption in %(years)s."
+msgstr "Nachgetragener Verbrauch in %(years)s."
+
+msgid "%(year)s is not over; its total is not a whole year's."
+msgstr "%(year)s ist unvollständig; die Summe ist kein ganzes Jahr."
+
+msgid "Open all quarters and movements"
+msgstr "Alle Quartale und Buchungen öffnen"

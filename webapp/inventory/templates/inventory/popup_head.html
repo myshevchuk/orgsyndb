@@ -1,0 +1,5 @@
+{% load i18n %}<div class="popup-head">
+<div><h2 id="{{ kind }}-{{ item.pk }}-title">{{ heading }} · {{ item.name }}</h2>
+<p>{% if item.article_number %}{{ item.article_number }} · {% endif %}{{ item.container }} · {% blocktranslate count count=item.quantity %}{{ count }} container{% plural %}{{ count }} containers{% endblocktranslate %}</p></div>
+<button type="button" class="popup-close" popovertarget="{{ kind }}-{{ item.pk }}" popovertargetaction="hide" aria-label="{% translate "Close" %}">×</button>
+</div>

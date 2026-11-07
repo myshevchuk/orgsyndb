@@ -1,4 +1,0 @@
-{% load i18n %}<dl class="level-legend">
-{% for entry in legend %}<dt class="level-{{ entry.level }}"><a href="/lab/inventory/end-products/?stock={{ entry.level }}">{{ entry.label }}</a></dt><dd>{{ entry.meaning }} <span class="count">({{ entry.count }})</span></dd>
-{% endfor %}</dl>
-<p class="heat-legend">{% translate "Consumption" %}: {% translate "little" context "consumption" %}{% for name in heats %} <span class="heat-swatch {{ name }}" aria-hidden="true"></span>{% endfor %} {% translate "much" context "consumption" %}</p>

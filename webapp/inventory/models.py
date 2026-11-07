@@ -143,13 +143,20 @@ class Item(models.Model):
         return self.stocked_on is not None \
             and self.stocked_on.year == today.year
 
-    def sort_key(self) -> tuple[bool, str, str, Decimal]:
-        """The item's place in the item list: by article number, items
-        without one after the others and by name, then unit, then
-        size."""
+    def container_order(self) -> tuple[bool, Decimal]:
+        """The place of the item's container size among sizes: units of
+        mass before units of amount of substance, then by size in mg or
+        µmol."""
+        return (BASE_UNIT[self.unit] != Unit.MG,
+                self.size * FACTOR[self.unit])
+
+    def sort_key(self) -> tuple[bool, str, tuple[bool, Decimal]]:
+        """The item's place in the default order: by article number,
+        items without one after the others and by name, then by
+        container size as ``container_order`` gives it."""
         number = self.article_number
         return (number is None, number if number is not None
-                else self.name.casefold(), self.unit, self.size)
+                else self.name.casefold(), self.container_order())
 
 
 class DeliveryNote(models.Model):

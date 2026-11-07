@@ -1,0 +1,12 @@
+{% load i18n inventory %}{% translate "not recorded" as missing %}<div id="where-{{ item.pk }}" class="lab-popup lab-detail" popover role="dialog" aria-labelledby="where-{{ item.pk }}-title">
+{% translate "Location" context "item" as heading %}{% include "inventory/popup_head.html" with kind="where" heading=heading %}<div class="popup-body">
+<h3>{% translate "Finished containers" %}</h3>
+<dl class="popup-location"><dt>{% translate "Compartment" %}</dt><dd>{{ item.compartment|default:missing }}</dd><dt>{% translate "Box" %}</dt><dd>{{ item.box|default:missing }}</dd></dl>
+{% if not item.compartment and not item.box %}<p class="popup-note">{% translate "No location is recorded for the finished containers." %}</p>
+{% endif %}{% if row.bulk.lots %}<h3>{% translate "Bulk, stored separately" %}</h3>
+<ul class="popup-lots">
+{% for lot in row.bulk.lots %}<li><strong>{{ lot.location|default:missing }}</strong> <a href="/lab/inventory/bulk/{{ lot.pk }}/">{% translate "Batch" %} {{ lot.batch|default:lot.pk }}</a> · {{ lot.amount|in_lot_unit:lot }}</li>
+{% endfor %}</ul>
+{% endif %}</div>
+<p class="popup-foot"><a href="/lab/inventory/items/{{ item.pk }}/">{% translate "Open item and location" %}</a></p>
+</div>

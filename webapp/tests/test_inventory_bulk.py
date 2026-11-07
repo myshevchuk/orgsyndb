@@ -381,7 +381,8 @@ class BulkOfAnItemTests(InventoryCase):
     def bulk_cells(self) -> dict[str, object]:
         header, rows = table(page(self.client.get(LIST)))
         return {f"{row[header[0]].text()} "
-                f"{row['Gebinde'].text().replace(' ', '')}": row["Bulk"]
+                f"{row['Gebinde'].text().replace(' ', '')}":
+                row["Bulk verfügbar"]
                 for row in rows}
 
     def test_containers_from_bulk(self) -> None:

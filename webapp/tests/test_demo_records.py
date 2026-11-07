@@ -136,24 +136,29 @@ class InventoryTests(SeededCase):
         """Scenario: Item list."""
         from inventory.models import Item
         header, rows = table(self.get(ITEMS))
-        articles = {row[header[0]].text() for row in rows[:-1]}
-        self.assertEqual(articles, set(ARTICLES))
-        last = rows[-1]
-        self.assertEqual(last[header[0]].text(), "")
+        numbered = [row for row in rows if row[header[0]].text()]
+        self.assertEqual({row[header[0]].text() for row in numbered},
+                         set(ARTICLES))
+        bare = [index for index, row in enumerate(rows)
+                if not row[header[0]].text()]
+        self.assertEqual(len(bare), 1)
+        last = rows[bare[0]]
+        category = [index for index, row in enumerate(rows)
+                    if row["Kategorie"].text() == last["Kategorie"].text()]
+        self.assertEqual(bare[0], category[-1])
+        self.assertGreater(len(category), 1)
         self.assertEqual(last[header[1]].text().removesuffix("neu"),
                          NUMBERLESS[0])
         item = Item.objects.get(article_number__isnull=True)
         self.assertEqual(last[header[1]].find("a").get("href"),
                          f"/lab/inventory/items/{item.pk}/")
         keys = compound_keys()
-        for row in rows[:-1]:
+        for row in numbered:
             article = row[header[0]].text()
             name = row[header[1]]
             with self.subTest(article=article):
                 link = name.find("a")
-                if "same-article" in name.parent.classes:
-                    self.assertIsNone(link)
-                elif article == "NV-0007":
+                if article == "NV-0007":
                     self.assertIsNone(link)
                     self.assertEqual(name.text(), "Neuverbindung 7")
                 else:

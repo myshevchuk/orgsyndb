@@ -1,71 +1,102 @@
-{% extends "orgsyndb_web/base.html" %}{% load i18n inventory %}
+{% extends "orgsyndb_web/base.html" %}{% load i18n static inventory %}
 {% block title %}{% translate "End products" %}{% endblock %}
+{% block head %}<script src="{% static 'lab.js' %}" defer></script>
+{% endblock %}
 {% block main %}
 <div class="lab-heading">
 <h1>{% translate "End products" %}</h1>
-{% if user.is_authenticated %}<p class="actions"><a href="/lab/inventory/end-products/new/">{% translate "New item" %}</a></p>{% endif %}
-</div>
+<span class="lab-count">{% blocktranslate count count=total %}{{ count }} item{% plural %}{{ count }} items{% endblocktranslate %}</span>
+{% if user.is_authenticated %}<p class="actions"><a href="/lab/inventory/end-products/new/">{% translate "New item" %}</a></p>
+<form id="pick" class="lab-pick" method="get" action="/lab/inventory/deliveries/new/"><button type="submit">{% translate "Delivery note from selection" %}</button></form>
+{% endif %}</div>
 {% include "inventory/tabs.html" %}
 <div class="lab-toolbar">
 <form id="filters" class="lab-filters" method="get" action="/lab/inventory/end-products/">
-<label>{% translate "Search" %}
-<input type="search" name="q" value="{{ filters.q }}"></label>
-<input type="hidden" name="sort" value="{{ filters.sort }}">
+<label>{% translate "Search items" %}
+<input type="search" name="q" value="{{ filters.q }}" placeholder="{% translate "Name or article number" %}"></label>
+<label>{% translate "Category" %}
+<select name="category" data-submit>
+<option value=""{% if not filters.category %} selected{% endif %}>{% translate "All categories" %}</option>
+{% for category in categories %}<option value="{{ category }}"{% if category == filters.category %} selected{% endif %}>{{ category }}</option>
+{% endfor %}</select></label>
+{% if filters.stock %}<input type="hidden" name="stock" value="{{ filters.stock }}">
+{% endif %}<input type="hidden" name="sort" value="{{ filters.sort }}">
 {% if filters.descending %}<input type="hidden" name="dir" value="desc">
 {% endif %}<button type="submit">{% translate "Filter" %}</button>
-<a href="{{ reset }}">{% translate "Reset" %}</a>
 </form>
-{% if user.is_authenticated %}<form id="pick" class="lab-pick" method="get" action="/lab/inventory/deliveries/new/"><button type="submit">{% translate "Delivery note from selection" %}</button></form>
-{% endif %}</div>
-<p class="count">{% blocktranslate count count=rows|length %}{{ count }} item{% plural %}{{ count }} items{% endblocktranslate %}</p>
-<div class="table-scroll table-sticky">
-<table class="inventory-table">
-<thead>
-<tr>{% for column in columns %}<th scope="col"{% if column.aria_sort %} aria-sort="{{ column.aria_sort }}"{% endif %}><a href="{{ column.href }}">{{ column.label }}</a></th>{% endfor %}</tr>
-<tr class="filter-row">
-<td><input type="search" name="number" value="{{ filters.number }}" form="filters" aria-label="{{ columns.0.label }}" size="8"></td>
-<td><input type="search" name="name" value="{{ filters.name }}" form="filters" aria-label="{{ columns.1.label }}" size="10"></td>
-<td><select name="category" form="filters" aria-label="{{ columns.2.label }}">
-<option value=""{% if not filters.category %} selected{% endif %}>{% translate "All" %}</option>
-{% for category in categories %}<option value="{{ category }}"{% if category == filters.category %} selected{% endif %}>{{ category }}</option>
-{% endfor %}</select></td>
-<td><select name="container" form="filters" aria-label="{{ columns.3.label }}">
+<div class="lab-control">
+<span id="stock-filter-label">{% translate "Stock status" %}</span>
+<button type="button" id="stock-filter" class="lab-menu-button" popovertarget="stock-menu" aria-labelledby="stock-filter-label stock-filter">{% if stock_choice.level %}{{ stock_choice.label }}{% else %}{% translate "All" %}{% endif %} ({{ stock_choice.count }})</button>
+<div id="stock-menu" class="lab-popup stock-menu" popover>
+<ul>
+{% for entry in stock_menu %}<li><a href="{{ entry.href }}"{% if entry.current %} aria-current="true"{% endif %}><span class="swatch{% if entry.level %} level-{{ entry.level }}{% else %} swatch-all{% endif %}" aria-hidden="true"></span><span class="entry-label"><strong>{{ entry.label }}</strong>{% if entry.meaning %}<small>{{ entry.meaning }}</small>{% endif %}</span><span class="count">{{ entry.count }}</span></a></li>
+{% endfor %}</ul>
+</div>
+</div>
+<div class="lab-control">
+<button type="button" class="lab-text-button" popovertarget="more-filters">{% translate "More filters" %}{% if filters.more %} ({{ filters.more }}){% endif %}</button>
+<div id="more-filters" class="lab-popup lab-menu" popover>
+<label>{% translate "Container" %}
+<select name="container" form="filters" data-submit>
 <option value=""{% if not filters.container %} selected{% endif %}>{% translate "All" %}</option>
 {% for value, label in containers %}<option value="{{ value }}"{% if value == filters.container %} selected{% endif %}>{{ label }}</option>
-{% endfor %}</select></td>
-<td><select name="compartment" form="filters" aria-label="{{ columns.4.label }}">
+{% endfor %}</select></label>
+<label>{% translate "Compartment" %}
+<select name="compartment" form="filters" data-submit>
 <option value=""{% if not filters.compartment %} selected{% endif %}>{% translate "All" %}</option>
 {% for value in compartments %}<option value="{{ value }}"{% if value == filters.compartment %} selected{% endif %}>{{ value }}</option>
-{% endfor %}</select></td>
-<td><select name="box" form="filters" aria-label="{{ columns.5.label }}">
+{% endfor %}</select></label>
+<label>{% translate "Box" %}
+<select name="box" form="filters" data-submit>
 <option value=""{% if not filters.box %} selected{% endif %}>{% translate "All" %}</option>
 {% for value in boxes %}<option value="{{ value }}"{% if value == filters.box %} selected{% endif %}>{{ value }}</option>
-{% endfor %}</select></td>
-<td><select name="stock" form="filters" aria-label="{{ columns.6.label }}">
-<option value=""{% if not filters.stock %} selected{% endif %}>{% translate "All" %}</option>
-{% for value, label in levels %}<option value="{{ value }}"{% if value == filters.stock %} selected{% endif %}>{{ label }}</option>
-{% endfor %}</select></td>
-<td></td><td></td><td></td><td></td>
-<td><input type="search" name="note" value="{{ filters.note }}" form="filters" aria-label="{{ columns.11.label }}" size="10"></td>
-</tr>
+{% endfor %}</select></label>
+</div>
+</div>
+<div class="lab-control lab-columns">
+<button type="button" class="lab-menu-button" popovertarget="columns-menu">{% translate "Columns" %}</button>
+<div id="columns-menu" class="lab-popup lab-menu" popover>
+<fieldset>
+<legend>{% translate "Columns" %}</legend>
+{% for column, checked in view_columns %}<label><input type="checkbox" id="column-{{ column.key }}" data-remember="item-list:column-{{ column.key }}"{% if checked %} checked{% endif %}> {{ column.label }}</label>
+{% endfor %}</fieldset>
+</div>
+</div>
+</div>
+<div class="table-caption">
+<p class="list-summary">{% blocktranslate with shown=rows|length count total=total %}{{ shown }} of {{ total }} item{% plural %}{{ shown }} of {{ total }} items{% endblocktranslate %} · {{ order }}{% if filters.active %} · <a href="{{ reset }}">{% translate "Reset" %}</a>{% endif %}</p>
+<div class="lab-view-controls">
+<label>{% translate "Row height" %}
+<select id="row-height" data-remember="item-list:row-height">
+<option value="compact" selected>{% translate "Compact" %}</option>
+<option value="tight">{% translate "Very compact" %}</option>
+</select></label>
+<p class="heat-legend"><label><input type="checkbox" id="heat-switch" data-remember="item-list:heat" checked> {% translate "Colour consumption" %}</label> <span class="heat-scale">{% translate "little" context "consumption" %}{% for name in heats %} <span class="heat-swatch {{ name }}" aria-hidden="true"></span>{% endfor %} {% translate "much" context "consumption" %}</span></p>
+</div>
+</div>
+<div class="table-scroll table-sticky">
+<table class="inventory-table item-table">
+<thead>
+<tr>{% for column in columns %}<th scope="col" class="col-{{ column.key }}{% if column.numeric %} number{% endif %}"{% if column.aria_sort %} aria-sort="{{ column.aria_sort }}"{% endif %}>{% if column.href %}<a href="{{ column.href }}">{{ column.label }}</a>{% else %}{{ column.label }}{% endif %}{% if column.unit %}<small>{{ column.unit }}</small>{% endif %}</th>{% endfor %}</tr>
 </thead>
 <tbody>
-{% for row in rows %}<tr{% if row.same_article %} class="same-article"{% endif %}>
-<td>{% if row.item.article_number %}{% if user.is_authenticated %}<input type="checkbox" name="item" value="{{ row.item.pk }}" form="pick" aria-label="{% blocktranslate with item=row.item %}Select {{ item }}{% endblocktranslate %}"> {% endif %}<a href="/lab/inventory/items/{{ row.item.pk }}/">{{ row.item.article_number }}</a>{% endif %}</td>
-<td>{% if row.same_article %}<span class="visually-hidden">{{ row.item.name }}</span>{% elif not row.item.article_number %}<a href="/lab/inventory/items/{{ row.item.pk }}/">{{ row.item.name }}</a>{% elif row.compound %}<a href="/compounds/{{ row.compound.key }}/">{{ row.item.name }}</a>{% else %}{{ row.item.name }}{% endif %}{% if row.item|new_on:today %}<sup class="mark-new">{% translate "new" context "item" %}</sup>{% endif %}</td>
-<td>{{ row.item.category }}</td>
-<td class="number">{{ row.item.container }}</td>
-<td>{{ row.item.compartment }}</td>
-<td>{{ row.item.box }}</td>
-<td class="number stock level-{{ row.figures.level }}" title="{{ row.figures.level|level_label }}">{{ row.item.quantity }}<span class="visually-hidden"> {{ row.figures.level|level_label }}</span></td>
-<td class="number{% if row.heat_mean %} {{ row.heat_mean }}{% endif %}{% if row.figures.projected %} projected" title="{% translate "projected from the current year" %}{% endif %}">{% if row.figures.mean_year is not None %}{{ row.figures.mean_year|floatformat:1 }}{% endif %}</td>
-<td class="number{% if row.heat_year %} {{ row.heat_year }}{% endif %}">{{ row.figures.this_year }}</td>
-<td class="number{% if row.figures.projected and row.figures.coverage is not None %} projected" title="{% translate "projected from the current year" %}{% endif %}">{% if row.figures.coverage is not None %}{{ row.figures.coverage|floatformat:1 }}{% endif %}</td>
-<td>{% include "inventory/bulk.html" with bulk=row.bulk %}</td>
-<td>{{ row.item.note }}</td>
+{% for row in rows %}{% with item=row.item figures=row.figures %}<tr{% if row.category_start %} class="category-start"{% endif %}>
+<td class="col-number">{% if item.article_number %}{% if user.is_authenticated %}<input type="checkbox" name="item" value="{{ item.pk }}" form="pick" aria-label="{% blocktranslate %}Select {{ item }}{% endblocktranslate %}"> {% endif %}<a href="/lab/inventory/items/{{ item.pk }}/">{{ item.article_number }}</a>{% endif %}</td>
+<td class="col-name">{% if not item.article_number %}<a href="/lab/inventory/items/{{ item.pk }}/">{{ item.name }}</a>{% elif row.compound %}<a href="/compounds/{{ row.compound.key }}/">{{ item.name }}</a>{% else %}{{ item.name }}{% endif %}{% if item|new_on:today %}<sup class="mark-new">{% translate "new" context "item" %}</sup>{% endif %}</td>
+<td class="col-category">{{ item.category }}</td>
+<td class="col-container number">{{ item.container }}</td>
+<td class="col-stock number stock level-{{ figures.level }}" title="{{ figures.level|level_label }}">{{ item.quantity }}<span class="visually-hidden"> {{ figures.level|level_label }}</span></td>
+<td class="col-mean_year number{% if row.heat_mean %} {{ row.heat_mean }}{% endif %}{% if figures.projected %} projected" title="{% translate "projected from the current year" %}{% endif %}">{% if figures.mean_year is not None %}{{ figures.mean_year|floatformat:1 }}{% endif %}</td>
+<td class="col-this_year number{% if row.heat_year %} {{ row.heat_year }}{% endif %}"><button type="button" class="stat-button" popovertarget="stats-{{ item.pk }}" aria-label="{% blocktranslate %}Delivery statistics of {{ item }}{% endblocktranslate %}">{{ figures.this_year }}</button>{% include "inventory/statistics_popup.html" %}</td>
+<td class="col-coverage number{% if figures.projected and figures.coverage is not None %} projected" title="{% translate "projected from the current year" %}{% endif %}">{% if figures.coverage is not None %}{{ figures.coverage|floatformat:1 }}{% endif %}</td>
+<td class="col-location"><button type="button" class="location-button" popovertarget="where-{{ item.pk }}" aria-label="{% blocktranslate %}Location of {{ item }}{% endblocktranslate %}"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M18 10c0 5-6 10-6 10S6 15 6 10a6 6 0 1 1 12 0Z"/><circle cx="12" cy="10" r="2"/></svg>{% translate "Location" %}</button>{% include "inventory/location_popup.html" %}</td>
+<td class="col-compartment">{{ item.compartment }}</td>
+<td class="col-box">{{ item.box }}</td>
+<td class="col-bulk">{% include "inventory/bulk.html" with bulk=row.bulk %}</td>
+<td class="col-note">{{ item.note }}</td>
 </tr>
-{% endfor %}</tbody>
+{% endwith %}{% endfor %}</tbody>
 </table>
 </div>
-{% include "inventory/legend.html" %}
+<p class="lab-table-note">{% blocktranslate trimmed %}<strong>Stock:</strong> colours and meanings in the filter “Stock status”. <strong>Location</strong> opens compartment, box and bulk. <strong>Delivered</strong> opens statistics by year and quarter.{% endblocktranslate %}</p>
 {% endblock %}

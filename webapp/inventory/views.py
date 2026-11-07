@@ -7,7 +7,6 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import date
-from decimal import Decimal
 from typing import Any
 from urllib.parse import urlencode
 
@@ -20,6 +19,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.formats import localize_input
+from django.utils.text import capfirst
 from django.utils.translation import gettext as _
 from django.utils.translation import pgettext
 from django.utils.translation import gettext_lazy
@@ -35,9 +35,10 @@ from inventory.forms import (ROWS, ConsumptionForm, CorrectionForm,
                              NoteEditForm, NoteForm, ReversalForm,
                              show_refusal)
 from inventory.history import history_entries
-from inventory.models import (BASE_UNIT, END_PRODUCTS, FACTOR, LEVEL_ORDER,
+from inventory.models import (END_PRODUCTS, FACTOR, LEVEL_ORDER,
                               DeliveryNote, Item, Level, Lot, Movement,
-                              Unit, plain)
+                              plain)
+from inventory.statistics import Statistics, statistics
 from orgsyndb_web import index
 from planning import plan
 
@@ -56,19 +57,21 @@ def tabs(current: str) -> list[dict[str, Any]]:
 
 @dataclass(frozen=True)
 class Row:
-    """An item of the item list with its consumption, its bulk and its
-    compound, or None. HEAT_MEAN and HEAT_YEAR are the classes of the
-    heat of its mean per year and of its current year's consumption,
-    empty without one; SAME_ARTICLE tells whether it continues the
-    article of the row before."""
+    """An item of the item list with its consumption, its bulk, its
+    compound, or None, and the figures of its statistics popup.
+    HEAT_MEAN and HEAT_YEAR are the classes of the heat of its mean per
+    year and of its current year's consumption, empty without one;
+    CATEGORY_START tells whether it is the first row of its category
+    after another category's."""
 
     item: Item
     figures: Consumption
     bulk: Bulk
     compound: Any
+    statistics: Statistics
     heat_mean: str = ""
     heat_year: str = ""
-    same_article: bool = False
+    category_start: bool = False
 
     def searched(self) -> str:
         """The text the list's search looks in, folded for a comparison
@@ -79,24 +82,12 @@ class Row:
                           item.note, self.compound.name if self.compound
                           else ""]).casefold()
 
-    def named(self) -> str:
-        """The item's name and its compound's, folded for a comparison
-        regardless of case."""
-        return "\n".join([self.item.name, self.compound.name
-                          if self.compound else ""]).casefold()
-
 
 def container_code(item: Item) -> str:
     """The value that names ITEM's container size in the list's filter:
     the size without trailing zeros and the unit's code, as ``2.5 mg``
     or ``10 umol``."""
     return f"{plain(item.size)} {item.unit}"
-
-
-def container_order(item: Item) -> tuple[bool, Decimal]:
-    """The place of ITEM's container size among sizes: units of mass
-    before units of amount of substance, then by size in mg or µmol."""
-    return BASE_UNIT[item.unit] != Unit.MG, item.size * FACTOR[item.unit]
 
 
 def folded(text: str) -> str | None:
@@ -110,50 +101,56 @@ def located(text: str) -> tuple[Any, ...] | None:
     return natural(text) if text else None
 
 
-# The value each sort key orders a row by, None for a row without one.
+# The value each sort key orders a row by, None for a row without one,
+# in the order of the list's columns.
 SORT_VALUES: dict[str, Callable[[Row], Any]] = {
     "number": lambda row: row.item.article_number,
     "name": lambda row: row.item.name.casefold(),
     "category": lambda row: folded(row.item.category),
-    "container": lambda row: container_order(row.item),
-    "compartment": lambda row: located(row.item.compartment),
-    "box": lambda row: located(row.item.box),
+    "container": lambda row: row.item.container_order(),
     "stock": lambda row: (LEVEL_ORDER[row.figures.level],
                           row.figures.coverage is None,
                           row.figures.coverage or 0),
     "mean_year": lambda row: row.figures.mean_year,
     "this_year": lambda row: row.figures.this_year,
     "coverage": lambda row: row.figures.coverage,
+    "compartment": lambda row: located(row.item.compartment),
+    "box": lambda row: located(row.item.box),
     "bulk": lambda row: row.bulk.containers if row.bulk.lots else None,
     "note": lambda row: folded(row.item.note),
 }
 SORTS = tuple(SORT_VALUES)
-# The parameters of the filters, in the order of their columns.
-FILTERS = ("q", "number", "name", "category", "container", "compartment",
-           "box", "stock", "note")
+DEFAULT_SORT = "category"
+# The parameters of the filters; the last three sit under "More
+# filters".
+FILTERS = ("q", "category", "stock", "container", "compartment", "box")
+MORE_FILTERS = ("container", "compartment", "box")
+# The columns that break ties in the default order.
+TIES = ("number", "container")
+# The columns that right-align their numbers; those the view controls
+# cannot hide; and those hidden until the user shows them.
+NUMERIC = ("container", "stock", "mean_year", "this_year", "coverage")
+FIXED_COLUMNS = ("number", "name", "stock")
+HIDDEN_COLUMNS = ("compartment", "box", "note")
 
 
 @dataclass(frozen=True)
 class ItemFilters:
     """The item list's filters and order as the query gives them, each
     unknown value replaced by its default: Q, the searched text;
-    NUMBER, NAME and NOTE, text the article number, the name or the
-    compound's, or the note contains; CATEGORY, CONTAINER as
-    ``container_code`` gives it, COMPARTMENT and BOX, admitting the
-    items with that value; STOCK, any level or empty, admitting that
-    level alone; SORT, one of ``SORTS``, ``number`` by default; and
-    DESCENDING, whether ``dir=desc`` reverses the order."""
+    CATEGORY, CONTAINER as ``container_code`` gives it, COMPARTMENT and
+    BOX, admitting the items with that value; STOCK, any level or
+    empty, admitting that level alone; SORT, one of ``SORTS``,
+    ``category`` by default; and DESCENDING, whether ``dir=desc``
+    reverses the order."""
 
     q: str = ""
-    number: str = ""
-    name: str = ""
     category: str = ""
+    stock: str = ""
     container: str = ""
     compartment: str = ""
     box: str = ""
-    stock: str = ""
-    note: str = ""
-    sort: str = "number"
+    sort: str = DEFAULT_SORT
     descending: bool = False
 
     @classmethod
@@ -163,21 +160,23 @@ class ItemFilters:
         if given["stock"] not in Level.values:
             given["stock"] = ""
         sort = query.get("sort", "")
-        return cls(**given, sort=sort if sort in SORTS else "number",
+        return cls(**given, sort=sort if sort in SORTS else DEFAULT_SORT,
                    descending=query.get("dir") == "desc")
+
+    @property
+    def active(self) -> bool:
+        """Whether any filter is in force."""
+        return any(getattr(self, name) for name in FILTERS)
+
+    @property
+    def more(self) -> int:
+        """The number of the filters under "More filters" in force."""
+        return sum(1 for name in MORE_FILTERS if getattr(self, name))
 
     def admits(self, row: Row) -> bool:
         """Whether ROW passes every filter."""
         item = row.item
-
-        def holds(text: str, wanted: str) -> bool:
-            return not wanted or wanted.casefold() in text.casefold()
-
-        return (holds(item.article_number or "", self.number)
-                and (not self.name
-                     or self.name.casefold() in row.named())
-                and holds(item.note, self.note)
-                and (not self.category or item.category == self.category)
+        return ((not self.category or item.category == self.category)
                 and (not self.container
                      or container_code(item) == self.container)
                 and (not self.compartment
@@ -209,37 +208,69 @@ class ItemFilters:
 
 @dataclass(frozen=True)
 class Column:
-    """A column of the item list: its LABEL, its sort KEY, the HREF its
-    header links to, and ARIA_SORT, ``ascending`` or ``descending`` for
-    the column in force, else empty."""
+    """A column of the item list: its sort KEY, or ``location``, its
+    LABEL, the UNIT shown beneath it, the HREF its header links to,
+    empty for a column that does not sort, and ARIA_SORT,
+    ``ascending`` or ``descending`` for the column in force, else
+    empty."""
 
-    label: str
     key: str
+    label: str
+    unit: str
     href: str
     aria_sort: str
 
-
-def column_labels() -> list[str]:
-    """The item list's column headers in the active language, in the
-    order of ``SORTS``."""
-    return [_("Article no."), _("Name"), _("Category"), _("Container"),
-            _("Compartment"), _("Box"), _("Stock"), _("Mean per year"),
-            _("This year"), _("Coverage"), _("Bulk"),
-            pgettext("inventory", "Note")]
+    @property
+    def numeric(self) -> bool:
+        """Whether the column right-aligns its numbers."""
+        return self.key in NUMERIC
 
 
-def columns(filters: ItemFilters) -> list[Column]:
-    """The columns of the list FILTERS shows, each header linking to the
-    list sorted by it, reversed when it is in force and not reversed."""
+def column_labels(year: int) -> list[tuple[str, str, str]]:
+    """The item list's columns in the active language, in their order,
+    each as its key, its label and the unit beneath it, with YEAR the
+    current year."""
+    return [
+        ("number", _("Article no."), ""), ("name", _("Name"), ""),
+        ("category", _("Category"), ""), ("container", _("Container"), ""),
+        ("stock", _("Stock"), _("containers")),
+        ("mean_year", _("Mean per year"), _("containers / year")),
+        ("this_year", pgettext("item list", "Delivered"),
+         _("%(year)s · containers") % {"year": year}),
+        ("coverage", _("Coverage"), _("quarters")),
+        ("location", pgettext("item", "Location"), ""),
+        ("compartment", _("Compartment"), ""), ("box", _("Box"), ""),
+        ("bulk", _("Bulk available"), ""),
+        ("note", pgettext("inventory", "Note"), "")]
+
+
+def columns(filters: ItemFilters, year: int) -> list[Column]:
+    """The columns of the list FILTERS shows in YEAR, each header but
+    the location's linking to the list sorted by it, reversed when it
+    is in force and not reversed."""
     found = []
-    for label, key in zip(column_labels(), SORTS):
+    for key, label, unit in column_labels(year):
         current = key == filters.sort
         found.append(Column(
-            label=label, key=key,
-            href=filters.link(key, current and not filters.descending),
+            key=key, label=label, unit=unit,
+            href="" if key not in SORTS
+            else filters.link(key, current and not filters.descending),
             aria_sort=("descending" if filters.descending else "ascending")
             if current else ""))
     return found
+
+
+def order_text(filters: ItemFilters, year: int) -> str:
+    """The order FILTERS put the list in, in words: the sorting column
+    and the columns that break its ties, each ascending or
+    descending."""
+    labels = {key: label for key, label, _unit in column_labels(year)}
+    rest = ", ".join(labels[key] for key in TIES if key != filters.sort)
+    if filters.descending:
+        return _("%(column)s descending, %(rest)s ascending") % {
+            "column": labels[filters.sort], "rest": rest}
+    return _("%(columns)s ascending") % {
+        "columns": ", ".join([labels[filters.sort], rest])}
 
 
 def heat(value: Any, positives: list[Any]) -> str:
@@ -266,24 +297,27 @@ def heated(rows: list[Row]) -> list[Row]:
             for row in rows]
 
 
-def grouped(rows: list[Row]) -> list[Row]:
-    """ROWS, each whose item has an article number, the same as the item
-    of the row before, marked as continuing that article."""
-    return [replace(row, same_article=bool(
-        index and row.item.article_number
-        and row.item.article_number == rows[index - 1].item.article_number))
+def by_category(rows: list[Row]) -> list[Row]:
+    """ROWS, each whose category differs from that of the row before
+    marked as starting a category."""
+    return [replace(row, category_start=bool(
+        index and folded(row.item.category)
+        != folded(rows[index - 1].item.category)))
         for index, row in enumerate(rows)]
 
 
 @dataclass(frozen=True)
-class LegendEntry:
-    """A level as the item list's legend shows it, with how many items
-    of the inventory are at it."""
+class StockEntry:
+    """An entry of the stock menu: its LEVEL, empty for every level, its
+    LABEL and MEANING, the COUNT of items it lists, the HREF of the list
+    it chooses, and whether it is CURRENT."""
 
     level: str
     label: str
     meaning: str
     count: int
+    href: str
+    current: bool
 
 
 MEANINGS = {
@@ -298,37 +332,62 @@ MEANINGS = {
 }
 
 
-def legend(rows: list[Row]) -> list[LegendEntry]:
-    """Return the legend's entries, one per level in urgency order, each
-    counting the items of ROWS at that level."""
-    counts = Counter(row.figures.level for row in rows)
-    return [LegendEntry(level=level, label=str(level.label),
-                        meaning=str(MEANINGS[level]), count=counts[level])
-            for level in Level]
+def stock_menu(rows: list[Row], filters: ItemFilters) -> list[StockEntry]:
+    """The stock menu's entries: every level, then each level in urgency
+    order, each counting the items of ROWS that every filter of FILTERS
+    but the level admits, and linking to the list with those filters,
+    the order in force and its level."""
+    others = replace(filters, stock="")
+    counts = Counter(row.figures.level for row in rows
+                     if others.admits(row))
+
+    def entry(level: str, label: str, meaning: str, count: int
+              ) -> StockEntry:
+        return StockEntry(
+            level=level, label=label, meaning=meaning, count=count,
+            href=LIST + replace(filters, stock=level).link(
+                filters.sort, filters.descending),
+            current=filters.stock == level)
+
+    return [entry("", _("All stock statuses"), "", counts.total()),
+            *(entry(level, capfirst(str(level.label)), str(MEANINGS[level]),
+                    counts[level]) for level in Level)]
 
 
 def item_list(request: HttpRequest) -> HttpResponse:
     """List the items of ``end-products`` the query's filters select,
-    with their figures, heats and bulk, in the order the query names."""
+    with their figures, heats, bulk and statistics, in the order the
+    query names."""
     today = timezone.localdate()
     filters = ItemFilters.from_query(request.GET)
     items = sorted(Item.objects.filter(inventory=END_PRODUCTS),
                    key=Item.sort_key)
-    lots = list(Lot.objects.filter(inventory=END_PRODUCTS, amount__gt=0))
-    rows = heated([Row(item=item, figures=consumption(item, today),
-                       bulk=bulk(item, lots),
-                       compound=index.compound_for(item.article_number)
-                       if item.article_number else None)
-                   for item in items])
+    lots = list(Lot.objects.filter(inventory=END_PRODUCTS, amount__gt=0)
+                .order_by("made_on", "id"))
+    rows = []
+    for item in items:
+        figures = consumption(item, today)
+        rows.append(Row(item=item, figures=figures, bulk=bulk(item, lots),
+                        compound=index.compound_for(item.article_number)
+                        if item.article_number else None,
+                        statistics=statistics(figures, today)))
+    rows = heated(rows)
     shown = filters.ordered([row for row in rows if filters.admits(row)])
-    if filters.sort == "number":
-        shown = grouped(shown)
+    if filters.sort == "category":
+        shown = by_category(shown)
     containers = {container_code(item): item.container for item in
-                  sorted(items, key=container_order)}
+                  sorted(items, key=Item.container_order)}
+    menu = stock_menu(rows, filters)
+    shown_columns = columns(filters, today.year)
     return render(request, "inventory/item_list.html", {
         "rows": shown,
+        "total": len(rows),
         "filters": filters,
-        "columns": columns(filters),
+        "columns": shown_columns,
+        "view_columns": [(column, column.key not in HIDDEN_COLUMNS)
+                         for column in shown_columns
+                         if column.key not in FIXED_COLUMNS],
+        "order": order_text(filters, today.year),
         "reset": filters.link(filters.sort, filters.descending,
                               filtered=False),
         "categories": sorted({item.category for item in items
@@ -336,8 +395,8 @@ def item_list(request: HttpRequest) -> HttpResponse:
         "containers": list(containers.items()),
         "compartments": in_use("compartment"),
         "boxes": in_use("box"),
-        "levels": [(level.value, level.label) for level in Level],
-        "legend": legend(rows),
+        "stock_menu": menu,
+        "stock_choice": next(entry for entry in menu if entry.current),
         "heats": [f"heat-{n}" for n in range(1, 6)],
         "today": today,
         "tabs": tabs(LIST),

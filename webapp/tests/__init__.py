@@ -344,15 +344,17 @@ class Element:
             node = node.parent
         return node
 
-    def text(self) -> str:
-        """The text inside, with runs of white space made one space."""
+    def text(self, skip: Any = None) -> str:
+        """The text inside, with runs of white space made one space,
+        leaving out the descendants for which SKIP, a predicate on
+        elements, holds."""
         parts: list[str] = []
 
         def collect(node: "Element") -> None:
             for child in node.children:
                 if isinstance(child, str):
                     parts.append(child)
-                else:
+                elif skip is None or not skip(child):
                     collect(child)
 
         collect(self)
@@ -422,18 +424,21 @@ def field_value(root: Element, name: str) -> str | None:
 
 
 def table(root: Element) -> tuple[list[str], list[dict[str, Element]]]:
-    """The header texts of the first table, from its first row, and its
-    rows outside ``thead`` as mappings from header text to cell."""
+    """The header texts of the first table, from its first row and
+    without the notes in ``small`` beneath them, and its rows outside
+    ``thead`` as mappings from header text to cell; the rows of tables
+    inside its cells are left out."""
     grid = root.find("table")
     if grid is None:
         raise AssertionError("the page holds no table")
-    rows = grid.find_all("tr")
+    rows = [tr for tr in grid.find_all("tr") if tr.closest("table") is grid]
 
     def cells(tr: Element) -> list[Element]:
         return [c for c in tr.children
                 if isinstance(c, Element) and c.tag in ("th", "td")]
 
-    header = [cell.text() for cell in cells(rows[0])]
+    header = [cell.text(lambda node: node.tag == "small")
+              for cell in cells(rows[0])]
     return header, [dict(zip(header, cells(tr))) for tr in rows[1:]
                     if tr.closest("thead") is None]
 

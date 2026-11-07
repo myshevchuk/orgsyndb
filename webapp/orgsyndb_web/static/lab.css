@@ -60,17 +60,6 @@
   font-size: 0.875rem;
 }
 .lab-filters label { display: flex; flex-direction: column; gap: var(--space-1); }
-/* The bar above the item list: the filters' form, whose controls sit in
-   the table's filter row, and the form the check boxes belong to. */
-.lab-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-2) var(--space-4);
-  margin: 0 0 var(--space-2);
-}
-.lab-toolbar .lab-filters { margin: 0; }
 .lab-pick { margin: 0; font-family: var(--font-ui); }
 
 .task-table { width: 100%; }
@@ -196,24 +185,12 @@
 .level-ok { background: var(--level-ok-bg); color: var(--level-ok-fg); }
 .level-undelivered { background: var(--level-undelivered-bg); color: var(--level-undelivered-fg); }
 .level-dormant { background: var(--level-dormant-bg); color: var(--level-dormant-fg); }
-.level-legend a { color: inherit; }
 /* An item that entered stock this year, and figures projected from it. */
 .mark-new { color: var(--link); font-family: var(--font-ui); font-size: 0.7em; font-weight: 600; margin-left: 0.15em; }
 .projected { font-style: italic; }
 .stock { font-weight: 600; }
 span.stock[class*="level-"] { padding: 0 var(--space-2); border-radius: 0.25rem; }
 .level-label { font-weight: 400; font-size: 0.875em; }
-
-.level-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-3);
-  margin: var(--space-3) 0 0;
-  font-family: var(--font-ui);
-  font-size: 0.875rem;
-}
-.level-legend dt { padding: 0 var(--space-2); border-radius: 0.25rem; font-weight: 600; }
-.level-legend dd { margin: 0 var(--space-2) 0 0; }
 
 /* The consumption heat: five steps from a pale pink to a blackish red,
    by the fifth of the consuming items a value falls in. */
@@ -222,7 +199,6 @@ span.stock[class*="level-"] { padding: 0 var(--space-2); border-radius: 0.25rem;
 .heat-3 { background: var(--heat-3-bg); color: var(--heat-3-fg); }
 .heat-4 { background: var(--heat-4-bg); color: var(--heat-4-fg); }
 .heat-5 { background: var(--heat-5-bg); color: var(--heat-5-fg); }
-.heat-legend { margin: var(--space-2) 0 0; font-family: var(--font-ui); font-size: 0.875rem; }
 .heat-swatch {
   display: inline-block;
   width: 1.5em;
@@ -235,26 +211,248 @@ span.stock[class*="level-"] { padding: 0 var(--space-2); border-radius: 0.25rem;
 .inventory-table thead { background: var(--surface); }
 .inventory-table td:first-child { white-space: nowrap; }
 .inventory-table .number { text-align: right; white-space: nowrap; }
-.inventory-table .filter-row td { padding-top: var(--space-1); padding-bottom: var(--space-1); }
-.inventory-table .filter-row :is(input, select) {
-  width: 100%;
-  min-width: 4rem;
-  font: inherit;
-  font-size: 0.8125rem;
-}
 .inventory-table thead th a { color: inherit; text-decoration: none; }
 .inventory-table thead th a:hover { text-decoration: underline; }
 .inventory-table th[aria-sort="ascending"] a::after { content: " ▲"; content: " ▲" / ""; font-size: 0.75em; }
 .inventory-table th[aria-sort="descending"] a::after { content: " ▼"; content: " ▼" / ""; font-size: 0.75em; }
-/* The further sizes of an article: its number muted, its name only for
-   screen readers, and no rule between the sizes. */
-.inventory-table tr:has(+ tr.same-article) > td { border-bottom-color: transparent; }
-.inventory-table tr.same-article > td:first-child a { color: var(--muted); }
 
-/* Paper has no use for the item list's controls: the filter row and
-   the bar above the table. */
+/* The item list: the bar of filters and menus above the table, the line
+   that counts and orders the rows with the view controls beside it,
+   the compact table, its popups, and the note below it. */
+.lab-count { color: var(--muted); font-family: var(--font-ui); }
+.lab-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2) var(--space-3);
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
+}
+.lab-toolbar .lab-filters { margin: 0; font-size: inherit; }
+.lab-toolbar .lab-filters input[type="search"] { width: 15rem; }
+.lab-toolbar :is(input, select, button) {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.2rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.5rem;
+}
+.lab-control { display: flex; flex-direction: column; gap: var(--space-1); }
+.lab-columns { margin-left: auto; }
+.lab-toolbar .lab-menu-button { min-width: 11rem; text-align: left; background: var(--surface); }
+.lab-columns .lab-menu-button { min-width: 0; }
+.lab-menu-button::after { content: " ▾"; content: " ▾" / ""; }
+.lab-toolbar .lab-text-button { border-color: transparent; background: none; color: var(--link); }
+
+.table-caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+  margin: 0 0 var(--space-2);
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+}
+.list-summary { margin: 0; }
+.lab-view-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-4); }
+.lab-view-controls select {
+  font: inherit;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.2rem;
+  margin-left: var(--space-1);
+  padding: 0.1rem 0.3rem;
+}
+.heat-legend { margin: 0; }
+.heat-scale { margin-left: var(--space-2); }
+
+.item-table { font-size: 0.8125rem; }
+.item-table :is(th, td) {
+  height: 1.875rem;
+  padding: 0.2rem 0.6rem;
+  white-space: nowrap;
+  vertical-align: middle;
+  border-right: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+.item-table :is(th, td):last-child { border-right: 0; }
+.item-table th { font-size: 0.75rem; font-weight: 600; vertical-align: bottom; }
+.item-table th small { display: block; color: var(--muted); font-size: 0.6875rem; font-weight: 400; }
+.item-table td a { text-decoration: none; }
+.item-table td a:hover { text-decoration: underline; }
+.item-table td.col-note { white-space: normal; min-width: 12rem; }
+.item-table td.col-location { text-align: center; padding: 0 0.3rem; }
+.item-table tr.category-start > td { border-top: 1px solid var(--muted); }
+.item-table tbody tr:is(:hover, :has(:popover-open)) > td:not(.stock, [class*="heat-"]) { background: var(--surface); }
+.stat-button {
+  font: inherit;
+  color: var(--link);
+  background: none;
+  border: 0;
+  border-bottom: 1px dotted currentColor;
+  border-radius: 0;
+  padding: 0;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.location-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--link);
+  background: none;
+  border: 0;
+  padding: 0.1rem 0.25rem;
+  cursor: pointer;
+}
+.location-button:hover { text-decoration: underline; }
+[popovertarget]:has(+ :popover-open) { outline: 2px solid var(--link); outline-offset: 2px; }
+.lab-table-note { margin: var(--space-2) 0 0; color: var(--muted); font-family: var(--font-ui); font-size: 0.8125rem; }
+.lab-table-note strong { color: var(--fg); font-weight: 600; }
+
+/* The view controls work through these rules alone: an unchecked box of
+   `Spalten` hides its column, `Sehr kompakt` tightens the rows, and an
+   unchecked `Verbrauch einfärben` drops the heat. lab.js only keeps
+   their state. */
+main:has(#column-category:not(:checked)) .item-table .col-category,
+main:has(#column-container:not(:checked)) .item-table .col-container,
+main:has(#column-mean_year:not(:checked)) .item-table .col-mean_year,
+main:has(#column-this_year:not(:checked)) .item-table .col-this_year,
+main:has(#column-coverage:not(:checked)) .item-table .col-coverage,
+main:has(#column-location:not(:checked)) .item-table .col-location,
+main:has(#column-compartment:not(:checked)) .item-table .col-compartment,
+main:has(#column-box:not(:checked)) .item-table .col-box,
+main:has(#column-bulk:not(:checked)) .item-table .col-bulk,
+main:has(#column-note:not(:checked)) .item-table .col-note { display: none; }
+main:has(#row-height option[value="tight"]:checked) .item-table { font-size: 0.75rem; }
+main:has(#row-height option[value="tight"]:checked) .item-table :is(th, td) { height: 1.75rem; padding: 0.1rem 0.45rem; }
+main:has(#heat-switch:not(:checked)) .item-table td[class*="heat-"] { background: none; color: inherit; }
+main:has(#heat-switch:checked) .item-table td[class*="heat-"] .stat-button { color: inherit; }
+
+/* Popups and menus. Without lab.js the browser centres a popup in the
+   window; lab.js marks it data-placed and sets its left and top. */
+.lab-popup {
+  padding: 0;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--muted);
+  border-radius: 0.25rem;
+  box-shadow: 0 6px 22px rgb(0 0 0 / 0.18);
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
+  font-weight: 400;
+  text-align: left;
+  white-space: normal;
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+}
+.lab-popup[data-placed] { position: fixed; inset: auto; margin: 0; }
+.lab-menu { padding: var(--space-2) var(--space-3); }
+.lab-menu > label { display: flex; flex-direction: column; gap: var(--space-1); margin: 0 0 var(--space-2); }
+.lab-menu fieldset { margin: 0; padding: 0; border: 0; }
+.lab-menu legend { padding: 0; margin: 0 0 var(--space-1); font-weight: 600; }
+.lab-menu fieldset label { display: flex; align-items: center; gap: var(--space-2); padding: 0.1rem 0; }
+.lab-menu fieldset input { margin: 0; }
+
+.stock-menu { width: min(23rem, calc(100vw - 2rem)); padding: var(--space-1); }
+.stock-menu ul { list-style: none; margin: 0; padding: 0; }
+.stock-menu li + li { margin-top: 0; }
+.stock-menu li:first-child { border-bottom: 1px solid var(--border); margin-bottom: var(--space-1); padding-bottom: var(--space-1); }
+.stock-menu a {
+  display: grid;
+  grid-template-columns: 1rem 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0.6rem;
+  color: var(--fg);
+  text-decoration: none;
+  border-radius: 0.2rem;
+}
+.stock-menu a:is(:hover, :focus-visible, [aria-current]) { background: var(--surface); }
+.stock-menu strong { display: block; font-weight: 500; }
+.stock-menu a[aria-current] strong { font-weight: 700; }
+.stock-menu small { display: block; color: var(--muted); font-size: 0.75rem; }
+.stock-menu .count { color: var(--muted); font-variant-numeric: tabular-nums; }
+.swatch { display: inline-block; width: 0.9rem; height: 0.9rem; border: 1px solid color-mix(in srgb, var(--fg) 15%, transparent); border-radius: 0.15rem; }
+.swatch-all { border-color: transparent; text-align: center; line-height: 0.9rem; }
+.stock-menu a[aria-current] .swatch-all::before { content: "✓"; content: "✓" / ""; }
+
+.lab-detail { width: min(36rem, calc(100vw - 2rem)); }
+.popup-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+.popup-head h2 { margin: 0; font-size: 1rem; }
+.popup-head p { margin: var(--space-1) 0 0; color: var(--muted); font-size: 0.8125rem; }
+.popup-close {
+  font: inherit;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--fg);
+  background: none;
+  border: 0;
+  padding: 0 0.2rem;
+  cursor: pointer;
+}
+.popup-body { padding: var(--space-3); }
+.popup-body h3 { margin: 0 0 var(--space-2); font-size: 0.875rem; }
+.popup-location { display: grid; grid-template-columns: 6rem 1fr; gap: var(--space-1) var(--space-2); margin: 0 0 var(--space-3); }
+.popup-location dt { color: var(--muted); }
+.popup-location dd { margin: 0; }
+.popup-note {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--border);
+  background: var(--surface);
+  font-size: 0.8125rem;
+}
+.popup-body > .popup-note:last-child { margin-bottom: 0; }
+.popup-body > h3:not(:first-child) { padding-top: var(--space-3); border-top: 1px solid var(--border); }
+.popup-lots { list-style: none; margin: 0; padding: 0; }
+.popup-lots li + li { margin-top: var(--space-2); }
+.popup-lots strong { display: block; }
+.popup-foot { margin: 0; padding: var(--space-2) var(--space-3); border-top: 1px solid var(--border); background: var(--surface); font-size: 0.8125rem; }
+.popup-foot a { font-weight: 600; }
+.popup-figures { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); margin: 0 0 var(--space-4); }
+.popup-figures dt { color: var(--muted); font-size: 0.8125rem; }
+.popup-figures dd { margin: 0.2rem 0 0; font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.quarter-bars {
+  list-style: none;
+  display: flex;
+  gap: var(--space-4);
+  height: 7rem;
+  margin: 0 0 1.75rem;
+  padding: 1.25rem var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
+}
+.quarter-bar { position: relative; flex: 1; display: flex; flex-direction: column; justify-content: flex-end; }
+.quarter-bars li + li { margin-top: 0; }
+.quarter-bar .bar { flex-shrink: 0; min-height: 1px; background: var(--border); }
+.quarter-bar.current .bar { background: var(--link); }
+.quarter-bar .bar-value { flex-shrink: 0; text-align: center; font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.quarter-bar .bar-label { position: absolute; top: 100%; left: 0; right: 0; padding-top: 0.3rem; color: var(--muted); font-size: 0.6875rem; text-align: center; white-space: nowrap; }
+.popup-table { width: 100%; margin: 0 0 var(--space-3); font-size: 0.8125rem; }
+.popup-table :is(th, td) { padding: 0.2rem 0.5rem; }
+
+/* Paper has no use for the item list's controls, its location column
+   or its popups. print.css hides every button, so the numbers of
+   Abgegeben come back as plain text. */
 @media print {
-  .inventory-table .filter-row, .lab-toolbar { display: none; }
+  .lab-toolbar, .lab-view-controls, .lab-table-note, .lab-heading .actions,
+  .lab-pick, .item-table .col-location, .item-table input[name="item"],
+  [popover] { display: none; }
+  .stat-button { display: inline; border: 0; color: inherit; }
 }
 
 /* On screen, the item list's box scrolls both ways, at most the window's

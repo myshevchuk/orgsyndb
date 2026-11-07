@@ -9,7 +9,7 @@ from decimal import Decimal
 from inventory.bookings import Refused, correct, create_item, fill
 from inventory.models import EnteredConsumption, Item
 
-from . import Element, field_value, page, table
+from . import field_value, page, table
 from .inventory_support import (LEVELS, LIST, NEW_ITEM, TODAY, FormCase,
                                 InventoryCase, fresh, item_url)
 from .planning_support import PlanningCase
@@ -209,29 +209,27 @@ class ListTests(InventoryCase):
             status="discontinued")
         return made
 
-    def test_legend_with_counts(self) -> None:
-        """Scenario: Legend with counts."""
+    def test_stock_menu_with_counts(self) -> None:
+        """Scenario: Stock menu with counts (the whole inventory)."""
         self.leveled()
-        root = page(self.client.get(LIST + "?q=xyz"))
-        legend = root.find("dl", "level-legend")
-        parts = [child for child in legend.children
-                 if isinstance(child, Element)]
+        root = page(self.client.get(LIST))
+        menu = root.find(id="stock-menu")
         counts = {}
-        for term, definition in zip(parts[::2], parts[1::2]):
-            level = next(c[6:] for c in term.classes
+        for link in menu.find_all("a")[1:]:
+            level = next(c[6:] for c in link.find(cls="swatch").classes
                          if c.startswith("level-"))
-            counts[level] = int(definition.find("span", "count")
-                                .text().strip("()"))
-            self.assertEqual(term.find("a").get("href"),
-                             f"{LIST}?stock={level}")
-            self.assertEqual(term.text(), LEVELS[level])
+            counts[level] = int(link.find("span", "count").text())
+            self.assertEqual(link.get("href"),
+                             f"{LIST}?stock={level}&sort=category")
+            label = LEVELS[level]
+            self.assertEqual(link.find("strong").text(),
+                             label[0].upper() + label[1:])
         self.assertEqual(counts, {"out": 0, "critical": 0, "low": 1,
                                   "watch": 0, "ok": 2, "undelivered": 0,
                                   "dormant": 1})
-        self.assertEqual([next(c[6:] for c in term.classes
-                               if c.startswith("level-"))
-                          for term in legend.find_all("dt")],
-                         list(counts))
+        none = page(self.client.get(LIST + "?q=xyz")).find(id="stock-menu")
+        self.assertEqual({link.find("span", "count").text()
+                          for link in none.find_all("a")}, {"0"})
 
     def test_one_level_exactly(self) -> None:
         """Scenario: One level exactly."""
@@ -242,10 +240,9 @@ class ListTests(InventoryCase):
         header, rows = self.rows("?stock=bogus")
         self.assertEqual(len(rows), 3)
         root = page(self.client.get(LIST + "?stock=critical"))
-        choice = root.find("select", name="stock")
         self.assertEqual(field_value(root, "stock"), "critical")
-        self.assertEqual(next(o for o in choice.find_all("option")
-                              if "selected" in o.attrs).text(), "kritisch")
+        button = root.find("button", attrs={"popovertarget": "stock-menu"})
+        self.assertEqual(button.text(), "Kritisch (1)")
 
     def test_urgent_items_first(self) -> None:
         """Scenario: Urgent items first."""

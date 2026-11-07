@@ -224,7 +224,8 @@ class InventoryShellTests(IndexMixin, TestCase):
             with self.subTest(path=path):
                 response = self.client.get(path)
                 html = response.content.decode("utf-8")
-                self.assertNotIn("<script", html.lower())
+                if path != "/lab/inventory/end-products/":
+                    self.assertNotIn("<script", html.lower())
                 root = page(response)
                 self.assertIsNotNone(root.find("header", cls="site-header"))
                 hrefs = [e.get("href") for e in root.find_all("link")
@@ -232,6 +233,31 @@ class InventoryShellTests(IndexMixin, TestCase):
                 self.assertEqual(
                     hrefs, [f"/lab/static/site/{n}" for n in STYLESHEETS]
                     + ["/lab/static/lab.css"])
+
+    def test_one_script_for_the_item_list(self) -> None:
+        """Scenario: One script for the item list."""
+        for signed_in in (False, True):
+            if signed_in:
+                self.client.force_login(self.kl)
+            with self.subTest(signed_in=signed_in):
+                response = self.client.get("/lab/inventory/end-products/")
+                html = response.content.decode("utf-8").lower()
+                self.assertEqual(html.count("<script"), 1)
+                scripts = page(response).find_all("script")
+                self.assertEqual(len(scripts), 1)
+                self.assertEqual(scripts[0].get("src"), "/lab/static/lab.js")
+                self.assertIn("defer", scripts[0].attrs)
+                self.assertEqual(scripts[0].text(), "")
+        for path in (f"/lab/inventory/items/{self.item.pk}/",
+                     "/lab/planning/"):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 200)
+                self.assertNotIn("<script",
+                                 response.content.decode("utf-8").lower())
+
+    def test_the_script_is_collected(self) -> None:
+        self.assertIsNotNone(finders.find("lab.js"))
 
     def test_the_message_shows_above_the_content(self) -> None:
         self.client.force_login(self.kl)

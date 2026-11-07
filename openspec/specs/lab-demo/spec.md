@@ -93,7 +93,7 @@ The data set SHALL open the inventory on the opening day `O`, `D` less 400 days,
 
 #### Scenario: Item list
 - **WHEN** the data set is written as of `D` with the demo collection's index and a test client requests `/lab/inventory/end-products/`
-- **THEN** the list shows the seven article numbers, the name of each item of the six final products linking to its compound's page, the name `Neuverbindung 7` without a link to a compound, and last the item `1-Phenylethanol` without an article number, its name linking to its page
+- **THEN** the list shows the seven article numbers, the name of each item of the six final products linking to its compound's page, the name `Neuverbindung 7` without a link to a compound, and the item `1-Phenylethanol` without an article number after the other items of its category, its name linking to its page
 
 #### Scenario: Levels on any seeding day
 - **WHEN** the data set is written, each time into an empty database, as of 2026-01-01, 2026-02-14, 2026-03-31, 2026-11-07 and 2028-02-29, with the demo collection's index, and a test client requests `/lab/inventory/end-products/` on that day

@@ -1,0 +1,25 @@
+{% load i18n l10n %}{% with statistics=row.statistics %}<div id="stats-{{ item.pk }}" class="lab-popup lab-detail lab-statistics" popover role="dialog" aria-labelledby="stats-{{ item.pk }}-title">
+{% translate "Delivered" context "item list" as heading %}{% include "inventory/popup_head.html" with kind="stats" heading=heading %}<div class="popup-body">
+<dl class="popup-figures">
+<div><dt>{% blocktranslate with year=statistics.year|unlocalize day=today|date:"MONTH_DAY_FORMAT" %}{{ year }} to {{ day }}{% endblocktranslate %}</dt><dd>{{ figures.this_year }}</dd></div>
+<div><dt>{% translate "Mean per year" %}</dt><dd{% if figures.projected %} class="projected" title="{% translate "projected from the current year" %}"{% endif %}>{% if figures.mean_year is not None %}{{ figures.mean_year|floatformat:1 }}{% else %}–{% endif %}</dd></div>
+<div><dt>{% translate "Mean per quarter" %}</dt><dd{% if figures.projected %} class="projected" title="{% translate "projected from the current year" %}"{% endif %}>{% if figures.mean_quarter is not None %}{{ figures.mean_quarter|floatformat:1 }}{% else %}–{% endif %}</dd></div>
+</dl>
+<h3>{% blocktranslate with year=statistics.year|unlocalize %}Quarters of {{ year }}{% endblocktranslate %}</h3>
+<ol class="quarter-bars">
+{% for bar in statistics.bars %}<li class="quarter-bar{% if bar.current %} current{% endif %}">{% if bar.value is not None %}<span class="bar-value">{{ bar.value }}</span><span class="bar" style="height: {{ bar.share|unlocalize }}%"></span>{% endif %}<span class="bar-label">Q{{ bar.quarter }}{% if bar.current %} {% translate "running" context "quarter" %}{% endif %}</span></li>
+{% endfor %}</ol>
+<table class="popup-table">
+<thead>
+<tr><th scope="col">{% translate "Year" %}</th>{% for bar in statistics.bars %}<th scope="col" class="number">Q{{ bar.quarter }}</th>{% endfor %}<th scope="col" class="number">{% translate "Total" %}</th></tr>
+</thead>
+<tbody>
+{% for year in statistics.years %}<tr><th scope="row">{{ year.year|unlocalize }}</th>{% for value in year.quarters %}<td class="number">{% if value is not None %}{{ value }}{% endif %}</td>{% endfor %}<td class="number"><strong>{{ year.total }}</strong></td></tr>
+{% endfor %}</tbody>
+</table>
+{% if statistics.entered_years %}<p class="popup-note entered-years">{% blocktranslate with years=statistics.entered_years|join:", " %}Entered consumption in {{ years }}.{% endblocktranslate %}</p>
+{% endif %}<p class="popup-note">{% blocktranslate with year=statistics.year|unlocalize %}{{ year }} is not over; its total is not a whole year's.{% endblocktranslate %}</p>
+</div>
+<p class="popup-foot"><a href="/lab/inventory/items/{{ item.pk }}/">{% translate "Open all quarters and movements" %}</a></p>
+</div>
+{% endwith %}
