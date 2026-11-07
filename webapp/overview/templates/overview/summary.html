@@ -1,0 +1,14 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n %}
+{% block title %}{% translate "Lab at a glance" %}{% endblock %}
+{% block head %}<base target="_top">
+{% endblock %}
+{% block body_class %} class="lab-framed"{% endblock %}
+{% block header %}{% endblock %}
+{% block messages %}{% endblock %}
+{% block main %}
+<section class="lab-summary">
+<h1 class="visually-hidden">{% translate "Lab at a glance" %}</h1>
+{% include "overview/_summary.html" %}
+<p class="lab-links"><a href="/lab/">{% translate "To the overview" %}</a></p>
+</section>
+{% endblock %}

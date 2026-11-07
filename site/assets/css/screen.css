@@ -101,6 +101,18 @@ h1 { font-size: 2.25rem; }
 .home-intro { margin-bottom: var(--space-5); }
 .lede { max-width: var(--measure); }
 
+/* A build that links the lab frames its summary, a lab page of the same
+   host, at a height that shows the stock bar and the four figures whole;
+   their wrapping on a narrow window takes the taller frame below. */
+.home-lab { margin-bottom: var(--space-5); }
+.home-lab h2 { margin-top: 0; }
+.home-lab-frame {
+  display: block;
+  width: 100%;
+  height: 15rem;
+  border: 0;
+}
+
 /* The recent and unchecked lists stop short of the full width, so that
    each date stays within reach of its title; the browse list stands
    beside both. */
@@ -393,6 +405,7 @@ pre { overflow-x: auto; }
 @media (max-width: 70rem) {
   body { padding: 0 var(--space-4); }
   .home-layout { grid-template-columns: minmax(0, 1fr); }
+  .home-lab-frame { height: 22rem; }
   .home-browse {
     grid-column: auto;
     grid-row: auto;
@@ -401,6 +414,10 @@ pre { overflow-x: auto; }
     padding: var(--space-4) 0 0;
   }
   .procedure, .procedure-header { grid-template-columns: minmax(0, 1fr) 16rem; }
+}
+/* On a phone the summary's figures wrap one per line. */
+@media (max-width: 30rem) {
+  .home-lab-frame { height: 30rem; }
 }
 /* Below 55rem the search form takes a line of its own under the title and
    the navigation, and the facets wait behind the Filters button, above

@@ -1,0 +1,8 @@
+{% load i18n %}<div class="stock-bar">{% for part in summary.parts %}<a class="level-{{ part.level }}" href="/lab/inventory/end-products/?stock={{ part.level }}" style="flex-grow: {{ part.count }}" title="{{ part.label }}: {{ part.count }}">{{ part.count }}</a>{% endfor %}</div>
+<p class="count">{% blocktranslate count count=summary.items %}{{ count }} item{% plural %}{{ count }} items{% endblocktranslate %}</p>
+<dl class="lab-figures">
+<div><dt>{% blocktranslate with year=summary.today.year|stringformat:"d" %}Delivered in {{ year }}{% endblocktranslate %}</dt><dd><span class="figure">{{ summary.this_year }}</span> {% blocktranslate count count=summary.this_year %}container{% plural %}containers{% endblocktranslate %} <span class="lab-mark">{% blocktranslate with day=summary.last_year_end|date:"SHORT_DATE_FORMAT" number=summary.last_year %}Last year to {{ day }}: {{ number }}{% endblocktranslate %}</span></dd></div>
+<div><dt>{% translate "Syntheses due" %}</dt><dd><a href="/lab/planning/"><span class="figure">{{ summary.due }}</span></a>{% if summary.late %} <span class="badge badge--late">{% blocktranslate count count=summary.late %}{{ count }} late{% plural %}{{ count }} late{% endblocktranslate %}</span>{% endif %}</dd></div>
+<div><dt>{% translate "Tasks" %}</dt><dd><a href="/lab/tasks/">{% blocktranslate with running=summary.running planned=summary.planned %}{{ running }} running · {{ planned }} planned{% endblocktranslate %}</a></dd></div>
+<div><dt>{% translate "Open bulk lots" %}</dt><dd><a href="/lab/inventory/end-products/bulk/"><span class="figure">{{ summary.lots }}</span></a></dd></div>
+</dl>

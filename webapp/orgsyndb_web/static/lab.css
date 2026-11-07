@@ -298,3 +298,58 @@ table.note-lines { padding: 0; }
 .planning-cell > li { white-space: nowrap; }
 .lab-links { font-family: var(--font-ui); }
 .badge--late { background: var(--banner-bg); color: var(--banner-fg); border-color: var(--banner-border); }
+
+/* The overview at /lab/: its parts in columns where the window allows,
+   the stock bar of the level colours, the figures, and the chart of
+   the deliveries per month. The summary is the first part alone, made
+   to be framed by the site's home page. */
+.lab-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: var(--space-4) var(--space-5);
+}
+.overview-part h2 { margin-top: 0; }
+.overview-stock, .overview-next, .overview-months { grid-column: 1 / -1; }
+.stock-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  min-height: 2.25rem;
+  border-radius: 0.25rem;
+  overflow: hidden;
+  font-family: var(--font-ui);
+  font-weight: 600;
+}
+.stock-bar a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.25rem;
+  text-decoration: none;
+}
+.stock-bar a:hover, .stock-bar a:focus-visible { text-decoration: underline; }
+.lab-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: var(--space-3) 0 0;
+  font-family: var(--font-ui);
+}
+.lab-figures dt { color: var(--muted); font-size: 0.875rem; }
+.lab-figures dd { margin: 0; }
+.lab-figures .figure { font-size: 1.5rem; font-weight: 700; }
+.lab-figures a { text-decoration: none; }
+.lab-figures a:hover { text-decoration: underline; }
+.overview-list { font-family: var(--font-ui); padding-left: var(--space-4); }
+.overview-list .count { font-weight: 600; }
+.lab-empty { color: var(--muted); font-family: var(--font-ui); }
+.deliveries-chart { margin: 0; max-width: 48rem; }
+.deliveries-chart svg { width: 100%; height: auto; font-family: var(--font-ui); font-size: 11px; }
+.deliveries-chart .current { fill: var(--link); }
+.deliveries-chart .previous { fill: var(--border); }
+.deliveries-chart text { fill: var(--muted); }
+.deliveries-chart .chart-axis { stroke: var(--border); }
+.deliveries-chart figcaption { color: var(--muted); font-family: var(--font-ui); font-size: 0.875rem; }
+body.lab-framed { margin: 0; padding: 0; max-width: none; }
+body.lab-framed main { padding: 0; }
+body.lab-framed .lab-demo { margin-bottom: var(--space-2); }

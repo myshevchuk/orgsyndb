@@ -154,6 +154,13 @@ class ShippedSiteTests(SiteCase):
 
     # --- site-theme -------------------------------------------------------
 
+    def test_no_lab_on_the_home_page(self) -> None:
+        """Scenario: The lab's summary on the home page (without the
+        lab)."""
+        page = ps.load_page(self.public, self.public / "index.html")
+        self.assertEqual(page.find_all("section", "home-lab"), [])
+        self.assertEqual(page.find_all("iframe"), [])
+
     def test_no_third_party_theme_and_no_web_fonts(self) -> None:
         """Scenario: No third-party theme and no web fonts."""
         site = self.sandbox.app / "site"
@@ -1705,6 +1712,61 @@ class LabNavigationTests(SiteCase):
                                  LAB_NAVIGATION + NAVIGATION)
                 for link in links[:3]:
                     self.assertNotIn("aria-current", link.node.attrs)
+
+    def test_the_labs_summary_on_the_home_page(self) -> None:
+        """Scenario: The lab's summary on the home page."""
+        page = ps.load_page(self.public, self.public / "index.html")
+        main = page.find("main")
+        order = [node for node in main.find_all()
+                 if node.parent is main]
+        names = [(node.tag, node.classes) for node in order]
+        self.assertEqual([tag for tag, _ in names][:3],
+                         ["div", "section", "div"])
+        self.assertIn("home-intro", names[0][1])
+        self.assertIn("home-lab", names[1][1])
+        self.assertIn("home-layout", names[2][1])
+        section = order[1]
+        self.assertEqual(section.find("h2").norm(), "Lab at a glance")
+        frame = section.find("iframe")
+        self.assertIn("home-lab-frame", frame.classes)
+        self.assertEqual(page.resolve(frame.attrs["src"]), "/lab/summary/")
+        self.assertEqual(frame.attrs.get("title"), "Lab at a glance")
+        self.assertEqual([(link.target, link.node.norm())
+                          for link in page.links(section)],
+                         [("/lab/", "Open the lab overview")])
+        self.assertFalse([source for source in page.script_sources()
+                          if source and "lab" in source])
+
+    def test_lab_references_at_the_root(self) -> None:
+        """Scenario: Lab references at the root."""
+        lab = {"/lab/", "/lab/summary/", "/lab/inventory/end-products/",
+               "/lab/planning/", "/lab/tasks/"}
+        scheme = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
+        found_lab: set[str] = set()
+        problems = []
+        for path, page in self.pages():
+            for node in page.nodes:
+                for attribute in ("href", "src", "action"):
+                    value = node.attrs.get(attribute)
+                    if value is None:
+                        continue
+                    if value.startswith("/"):
+                        problems.append((page.url, value))
+                    if scheme.match(value) or value.startswith("#"):
+                        continue
+                    joined = urllib.parse.urljoin(
+                        "http://127.0.0.1" + page.url, value)
+                    target = urllib.parse.unquote(
+                        urllib.parse.urlsplit(joined).path)
+                    if target.startswith("/lab/") or target == "/lab":
+                        found_lab.add(target)
+                        if target not in lab:
+                            problems.append((page.url, value))
+                        continue
+                    if not ps.target_file(self.public, target).is_file():
+                        problems.append((page.url, value))
+        self.assertEqual(problems, [])
+        self.assertEqual(found_lab, lab)
 
     def test_the_overlay_sets_the_lab(self) -> None:
         """Scenario: Lab views on request (the overlay)."""

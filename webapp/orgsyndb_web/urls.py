@@ -2,10 +2,12 @@
 
 from django.contrib import admin
 from django.urls import include, path
-from django.views.generic import RedirectView
+
+from overview import views as overview
 
 urlpatterns = [
-    path("lab/", RedirectView.as_view(url="/lab/tasks/")),
+    path("lab/", overview.overview, name="overview"),
+    path("lab/summary/", overview.summary, name="summary"),
     path("lab/inventory/", include("inventory.urls")),
     path("lab/planning/", include("planning.urls")),
     path("lab/tasks/", include("tasks.urls")),

@@ -1,4 +1,5 @@
-{{- /* The home page: the introduction, the five most recently modified
+{{- /* The home page: the introduction, in a build that links the lab its
+summary in a frame, the five most recently modified
 procedures (lastmod newest first, ID ascending for equal instants), the
 first five drafts by ID, which the catalogue lists first under
 ?status=draft, when there are any, and the browse list with the
@@ -11,6 +12,13 @@ sequences among them. */ -}}
 <h1>{{ T "home_title" }}</h1>
 <p class="lede">{{ T "home_lede" }}</p>
 </div>
+{{ if site.Params.lab -}}
+<section class="home-lab" aria-labelledby="home-lab">
+<h2 id="home-lab">{{ T "home_lab" }}</h2>
+<iframe class="home-lab-frame" src="/lab/summary/" title="{{ T "home_lab" }}"></iframe>
+<p><a href="/lab/">{{ T "home_lab_open" }}</a></p>
+</section>
+{{ end -}}
 <div class="home-layout">
 <section class="home-recent" aria-labelledby="home-recent">
 <h2 id="home-recent">{{ T "home_recent" }}</h2>

@@ -19,6 +19,7 @@ INSTALLED_APPS = [
     "tasks",
     "inventory",
     "planning",
+    "overview",
     "demo",
     "django.contrib.admin",
     "django.contrib.auth",

@@ -36,6 +36,8 @@ home_browse = "Übersicht"
 home_all_procedures = "Alle Vorschriften"
 home_unchecked = "Noch nicht geprüft"
 home_unchecked_all = "Alle Entwürfe"
+home_lab = "Labor auf einen Blick"
+home_lab_open = "Laborübersicht öffnen"
 
 catalogue_count_one = "1 Vorschrift"
 catalogue_count = "{{ .Count }} Vorschriften"

@@ -513,6 +513,13 @@ placeholder is **Product, CAS, SMILES or keyword** and its accessible name is
 **Search procedures**.
 
 - `/` opens with **Synthetic procedures** and a short introduction.
+  With `ORGSYNDB_LAB=true`, **Lab at a glance** appears below the
+  introduction, before **Recently updated**. It embeds the stock bar and
+  four figures from `/lab/summary/`. **Open the lab overview** opens
+  `/lab/` for the full [lab overview](#lab-overview). On a German site,
+  these labels are **Labor auf einen Blick** and **Laborübersicht öffnen**.
+  The summary needs no JavaScript; its links open in the whole window.
+  Without the lab setting, this section is absent.
   **Recently updated** lists up to five procedures, most recently modified
   first. **All procedures, recently updated first** opens the catalogue
   sorted by modification date. To find procedures awaiting a check, use
@@ -1066,15 +1073,17 @@ prefix are relative to the collection.
 The program exits 0 on success, 1 on failure, and 2 on a usage error.
 
 For `build`, set the environment variable `ORGSYNDB_LAB=true` to include
-the lab application's views in the site's header. It also accepts `1`,
-`yes` and `on`. Leave it unset or empty, or set it to `false`, `0`, `no`
-or `off`, to omit those links. Values are case-insensitive. Any other
-value stops `build` with exit 1 before export, with a message naming
+the lab application's views in the site's header and its summary on the
+home page. It also accepts `1`, `yes` and `on`. Leave it unset or empty,
+or set it to `false`, `0`, `no` or `off`, to omit those links and the
+summary. Values are case-insensitive. Any other value stops `build` with
+exit 1 before export, with a message naming
 `ORGSYNDB_LAB` and the value. This also applies to `serve` and `pdf`, which
-run `build`. Enable the links only where the lab application runs under
-`/lab/`, as in the container deployment. Leave the variable unset for the
-GitHub Pages demo and local `orgsyndb serve` previews, which have no lab
-application.
+run `build`. Enable this setting only where the lab application runs under
+`/lab/` on the same host, as in the container deployment. A lab build must
+be served at the host's root; its lab links and summary do not work under
+a path prefix. Leave the variable unset for the GitHub Pages demo and
+local `orgsyndb serve` previews, which have no lab application.
 
 The normal `validate` command checks top-level procedure, compound and
 sequence files. Subdirectories under `md/procedures/`, `md/sequences/` or
@@ -1449,9 +1458,11 @@ You cannot delete accounts in the admin, so their names stay on the task
 history they wrote. To remove someone's access, deactivate their account
 by clearing its **Active** flag in the admin.
 
-Open `/lab/` to reach the task list at `/lab/tasks/`. Reading needs no
-sign-in; every change requires a signed-in account. The interface uses
-the site's German or English language, set by `locale` in
+Open `/lab/` for the [lab overview](#lab-overview). Choose **Aufgaben**
+(**Tasks**) or open `/lab/tasks/` for the task list. Signing in still
+leads to the task list. Reading needs no sign-in; every change requires
+a signed-in account. The interface uses the site's German or English
+language, set by `locale` in
 `site/hugo.toml` and read from the published release's `index.json`.
 
 Each task has a number such as `T-001`, a product, priority, assignee,
@@ -1594,6 +1605,79 @@ accounts with password `demo`, the banner and the sign-in note: both
 notices follow the database's demo mark, which seeding writes, rather than
 the flag.
 
+### Lab overview
+
+To check stock, decide what to synthesize next and see how much the lab
+has delivered, open `/lab/`. **Labor auf einen Blick** (**Lab at a glance**)
+is readable without signing in.
+
+The stock bar under **Bestand** (**Inventory**) counts items at each
+[stock level](#enter-past-consumption-and-read-stock-levels). Its segments
+use the item list's colours and urgency order. Each segment's width shows
+its share of the items, and its number is the item count at that level.
+Hover over a segment for the level's name and count; choose it to open
+the item list filtered to that level. Levels without items are absent.
+The line below the bar gives the total number of items.
+
+Four figures follow:
+
+- **Abgegeben &lt;year&gt;** (**Delivered in &lt;year&gt;**) counts containers
+  delivered from 1 January through today. **Vorjahr bis &lt;date&gt;: &lt;n&gt;**
+  (**Last year to &lt;date&gt;: &lt;n&gt;**) compares the same span a year before.
+  On 29 February, the comparison ends on 28 February of the previous year.
+- **Fällige Synthesen** (**Syntheses due**) counts articles whose forecast
+  priority is high or medium and links to planning. A badge
+  **&lt;n&gt; verspätet** (**&lt;n&gt; late**) counts planned or running tasks
+  with slack below zero.
+  Slack is the runway left after the buffer for QC, filling and the
+  unforeseen and after the synthesis time;
+  [Production planning](#production-planning) explains the calculation.
+- **Aufgaben** (**Tasks**) shows the running and planned task counts and
+  links to the task list.
+- **Offene Bulk-Lose** (**Open bulk lots**) counts end-product lots with
+  material remaining and links to the bulk list.
+
+**Nächste Synthesen** (**Next syntheses**) lists up to five articles with
+a forecast, smallest slack first, in the same order as planning's
+**All articles** view. Each row shows the article number, name, priority,
+latest start and a planned or running task when one exists. The article
+number opens its first item in the item list's order. The task number
+opens the task; its state and any **verspätet** (**late**) mark appear
+beside it. Running tasks come before planned tasks, then task number
+decides which one appears. **Zur Planung** (**To planning**) opens the
+planning list. Without forecasts, **Keine Prognosen.** (**No forecasts.**)
+replaces the table.
+
+**Abgaben je Monat** (**Deliveries per month**) charts the twelve months
+ending with the current month. Each month's bar sits beside a grey bar
+for the same month a year before. Hover over a bar for its month, year
+and container count.
+
+**Meistgefragt &lt;year&gt;** (**Most requested in &lt;year&gt;**) lists up to
+five articles with the most containers delivered this year, with names
+and counts. **Empfänger &lt;year&gt;** (**Recipients in &lt;year&gt;**) lists
+up to five recipients by the same measure; notes without a recipient
+are excluded.
+**Letzte Lieferscheine** (**Latest delivery notes**) shows the first five
+notes in the delivery list, with number, date, recipient and container
+count. Follow the number to open a note; a note without a number uses
+`–` as its link. Empty lists show **Keine Abgaben.** (**No deliveries.**).
+
+The yearly delivery figure, monthly chart and yearly lists use
+delivery-note lines that count as consumption, using the note's date.
+Reversed deliveries are excluded; notes entered later (**nachgetragen**)
+count. Entered quarterly consumption is excluded because it has no day
+or month. Years recorded only as quarterly values
+therefore show no deliveries here. The comparison with last year becomes
+meaningful once you have a year of delivery notes.
+
+With `ORGSYNDB_LAB=true`, the site's home page embeds only the stock bar
+and four figures from `/lab/summary/`, with a link to this overview. For
+an existing container deployment, the next site build after pulling the
+change adds that section. Follow
+[Update the lab application](#update-the-lab-application) as well to serve
+the summary; the builder updates only the static site.
+
 ### End-product inventory
 
 Use the inventory to see which end products are ready to deliver and how
@@ -1603,9 +1687,9 @@ long their stock will last. The navigation lists **Bestand** (**Inventory**),
 (**Procedures**) and **Hilfe** (**Help**) in that order.
 Choose **Bestand**, or open
 `/lab/inventory/end-products/`. `/lab/inventory/` redirects to the same
-list; `/lab/` still opens the task list. You can read the inventory
-without signing in. Use the same account as for tasks to enter items,
-book stock changes or edit records.
+list; `/lab/` opens the [lab overview](#lab-overview). You can read the
+inventory without signing in. Use the same account as for tasks to enter
+items, book stock changes or edit records.
 
 The lists have three tabs: **Items**, **Bulk** at
 `/lab/inventory/end-products/bulk/`, and **Deliveries** at

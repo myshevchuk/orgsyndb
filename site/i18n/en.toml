@@ -36,6 +36,8 @@ home_browse = "Browse"
 home_all_procedures = "All procedures"
 home_unchecked = "Not yet checked"
 home_unchecked_all = "All draft procedures"
+home_lab = "Lab at a glance"
+home_lab_open = "Open the lab overview"
 
 catalogue_count_one = "1 procedure"
 catalogue_count = "{{ .Count }} procedures"

@@ -1,0 +1,68 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n l10n %}
+{% block title %}{% translate "Lab at a glance" %}{% endblock %}
+{% block main %}
+<h1>{% translate "Lab at a glance" %}</h1>
+<section class="lab-overview">
+<div class="overview-part overview-stock">
+<h2>{% translate "Inventory" %}</h2>
+{% include "overview/_summary.html" %}
+</div>
+<div class="overview-part overview-next">
+<h2>{% translate "Next syntheses" %}</h2>
+{% if next %}<div class="table-scroll">
+<table class="inventory-table">
+<thead>
+<tr><th scope="col">{% translate "Article no." %}</th><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Priority" %}</th><th scope="col">{% translate "Latest start" %}</th><th scope="col">{% translate "Task" %}</th></tr>
+</thead>
+<tbody>
+{% for entry in next %}<tr>
+<td><a href="/lab/inventory/items/{{ entry.item.pk }}/">{{ entry.forecast.article_number }}</a></td>
+<td>{{ entry.forecast.name }}</td>
+<td>{{ entry.forecast.priority_label }}</td>
+<td>{{ entry.forecast.latest_start|default_if_none:"–" }}</td>
+<td>{% if entry.task %}<a href="/lab/tasks/{{ entry.task.task.number }}/">{{ entry.task.task.number }}</a> {{ entry.state }}{% if entry.task.late %} <span class="badge badge--late">{% translate "late" %}</span>{% endif %}{% else %}–{% endif %}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% else %}<p class="lab-empty">{% translate "No forecasts." %}</p>
+{% endif %}<p class="lab-links"><a href="/lab/planning/">{% translate "To planning" %}</a></p>
+</div>
+<div class="overview-part overview-months">
+<h2>{% translate "Deliveries per month" %}</h2>
+<figure class="deliveries-chart">
+{% localize off %}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="img" aria-labelledby="deliveries-title">
+<title id="deliveries-title">{% translate "Containers delivered per month, beside the year before" %}</title>
+<line class="chart-axis" x1="0" y1="{{ chart.baseline }}" x2="{{ chart.width }}" y2="{{ chart.baseline }}"/>
+{% for month in chart.months %}<g class="chart-month">
+<rect class="previous" x="{{ month.previous.x }}" y="{{ month.previous.y }}" width="16" height="{{ month.previous.height }}"><title>{{ month.previous.title }}</title></rect>
+<rect class="current" x="{{ month.current.x }}" y="{{ month.current.y }}" width="16" height="{{ month.current.height }}"><title>{{ month.current.title }}</title></rect>
+<text x="{{ month.label_x }}" y="{{ chart.baseline|add:16 }}" text-anchor="middle">{{ month.label }}</text>
+</g>
+{% endfor %}</svg>{% endlocalize %}
+<figcaption>{% translate "The grey bar is the same month a year before." %}</figcaption>
+</figure>
+</div>
+<div class="overview-part">
+<h2>{% blocktranslate with year=year|stringformat:"d" %}Most requested in {{ year }}{% endblocktranslate %}</h2>
+{% if requested %}<ol class="overview-list">
+{% for entry in requested %}<li><a href="/lab/inventory/items/{{ entry.item.pk }}/">{{ entry.article_number }}</a> {{ entry.item.name }} <span class="count">{{ entry.count }}</span></li>
+{% endfor %}</ol>
+{% else %}<p class="lab-empty">{% translate "No deliveries." %}</p>
+{% endif %}</div>
+<div class="overview-part">
+<h2>{% blocktranslate with year=year|stringformat:"d" %}Recipients in {{ year }}{% endblocktranslate %}</h2>
+{% if recipients %}<ol class="overview-list">
+{% for recipient, count in recipients %}<li>{{ recipient }} <span class="count">{{ count }}</span></li>
+{% endfor %}</ol>
+{% else %}<p class="lab-empty">{% translate "No deliveries." %}</p>
+{% endif %}</div>
+<div class="overview-part">
+<h2>{% translate "Latest delivery notes" %}</h2>
+{% if latest %}<ol class="overview-list">
+{% for entry in latest %}<li><a href="/lab/inventory/deliveries/{{ entry.note.pk }}/">{{ entry.note.number|default:"–" }}</a> {{ entry.note.date }}{% if entry.note.recipient %} · {{ entry.note.recipient }}{% endif %} <span class="count">{{ entry.count }}</span></li>
+{% endfor %}</ol>
+{% else %}<p class="lab-empty">{% translate "No deliveries." %}</p>
+{% endif %}</div>
+</section>
+{% endblock %}

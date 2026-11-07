@@ -190,11 +190,9 @@ class ProxyTests(TestCase):
 
 class PathTests(TestCase):
 
-    def test_entry_redirects_and_other_paths_answer_404(self) -> None:
+    def test_entry_and_other_paths_answer_404(self) -> None:
         """Scenario: Entry and outside paths."""
-        entry = self.client.get("/lab/")
-        self.assertIn(entry.status_code, (301, 302))
-        self.assertEqual(entry["Location"], "/lab/tasks/")
+        self.assertEqual(self.client.get("/lab/").status_code, 200)
         for path in ("/procedures/", "/", "/lab/nowhere/", "/tasks/",
                      "/compounds/"):
             with self.subTest(path=path):
