@@ -77,9 +77,11 @@ def settings_from(environ: Mapping[str, str]) -> dict[str, Any]:
     from ``ORGSYNDB_SECRET_KEY``, ``ALLOWED_HOSTS`` from the
     comma-separated ``ORGSYNDB_ALLOWED_HOSTS``, ``DATABASES`` from
     ``ORGSYNDB_DATABASE_URL`` (by default the SQLite file
-    ``webapp/db.sqlite3``) and ``ORGSYNDB_INDEX``, the path of the
-    collection index. With debug on, the secret key and the host list
-    may be left out; the hosts are then ``localhost`` and ``127.0.0.1``.
+    ``webapp/db.sqlite3``), ``ORGSYNDB_INDEX``, the path of the
+    collection index, and ``ORGSYNDB_DEMO`` from the flag of that name,
+    which permits writing the demo data. With debug on, the secret key
+    and the host list may be left out; the hosts are then ``localhost``
+    and ``127.0.0.1``.
     Raise ImproperlyConfigured naming the variable when the secret key or
     the host list is missing outside debug, or a flag or the database URL
     is malformed.
@@ -110,4 +112,5 @@ def settings_from(environ: Mapping[str, str]) -> dict[str, Any]:
         "DATABASES": {"default": database(url)},
         "ORGSYNDB_INDEX": (environ.get("ORGSYNDB_INDEX", "").strip()
                            or DEFAULT_INDEX),
+        "ORGSYNDB_DEMO": flag(environ, "ORGSYNDB_DEMO", False),
     }

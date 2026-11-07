@@ -121,6 +121,28 @@ class IndexPathTests(SimpleTestCase):
         self.assertEqual(result["ORGSYNDB_INDEX"], "/x/index.json")
 
 
+class DemoFlagTests(SimpleTestCase):
+
+    def test_demo_flag(self) -> None:
+        """Scenario: Demo flag."""
+        self.assertIs(settings_from(BASE)["ORGSYNDB_DEMO"], False)
+        self.assertIs(settings_from({**BASE, "ORGSYNDB_DEMO": "yes"})
+                      ["ORGSYNDB_DEMO"], True)
+        with self.assertRaises(ImproperlyConfigured) as caught:
+            settings_from({**BASE, "ORGSYNDB_DEMO": "maybe"})
+        self.assertIn("ORGSYNDB_DEMO", str(caught.exception))
+
+    def test_demo_flag_takes_every_flag_word(self) -> None:
+        for word, expected in (("1", True), ("ON", True), ("off", False),
+                               ("", False)):
+            with self.subTest(word=word):
+                self.assertIs(settings_from({**BASE, "ORGSYNDB_DEMO": word})
+                              ["ORGSYNDB_DEMO"], expected)
+
+    def test_the_project_reads_the_flag(self) -> None:
+        self.assertIs(settings.ORGSYNDB_DEMO, False)
+
+
 class AppliedSettingsTests(SimpleTestCase):
 
     def test_settings_of_the_project(self) -> None:

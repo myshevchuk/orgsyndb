@@ -595,6 +595,16 @@ class FileTests(unittest.TestCase):
                   r"index\.json")
         self.assertRegex(text, r"(?:--uid[= ]|-u\s*)1000\b")
         self.assertRegex(text, r"(?m)^\s*(COPY|ADD)\s+.*\bwebapp/?\s")
+        self.assertIn("demo_data --if-empty", text)
+        command = text[text.rindex("CMD"):]
+        self.assertLess(command.index("migrate"), command.index("demo_data"))
+        self.assertLess(command.index("demo_data"), command.index("gunicorn"))
+
+    def test_env_example_names_the_demo_flag(self) -> None:
+        """Scenario: Demo flag in the example settings."""
+        text = ENV_EXAMPLE.read_text()
+        self.assertIn("#ORGSYNDB_DEMO=false", text.splitlines())
+        self.assertNotIn("ORGSYNDB_DEMO", parse_env(ENV_EXAMPLE))
 
 
 def parse_env(path: Path) -> dict[str, str]:

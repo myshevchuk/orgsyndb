@@ -12,4 +12,11 @@
 {% endfor %}<input type="hidden" name="next" value="{{ next }}">
 <p class="lab-buttons"><button type="submit">{% translate "Sign in" %}</button></p>
 </form>
-{% endblock %}
+{% if demo_mark %}<section class="lab-demo-accounts">
+<h2>{% translate "Demo accounts" %}</h2>
+<ul>
+{% for account in demo_accounts %}<li><code>{{ account.username }}</code> – {{ account.name }}</li>
+{% endfor %}</ul>
+<p>{% blocktranslate with password=demo_password %}Password for all: {{ password }}{% endblocktranslate %}</p>
+</section>
+{% endif %}{% endblock %}

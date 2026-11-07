@@ -1,0 +1,22 @@
+# German interface texts of the demo data of the OrgSynDB lab
+# application.
+msgid ""
+msgstr ""
+"Project-Id-Version: orgsyndb-web\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Demo data"
+msgstr "Demo-Daten"
+
+msgid "Seeded on"
+msgstr "Angelegt am"
+
+msgid "demo mark"
+msgstr "Demo-Kennzeichen"
+
+msgid "demo marks"
+msgstr "Demo-Kennzeichen"

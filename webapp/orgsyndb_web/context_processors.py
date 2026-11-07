@@ -5,6 +5,8 @@ from typing import Any
 from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
 
+from demo import data, models
+
 SITE_TITLE = "OrgSynDB"
 SITE_SECTIONS = [
     ("/compounds/", _("Compounds")),
@@ -42,7 +44,12 @@ def navigation(path: str) -> list[dict[str, Any]]:
 
 
 def shell(request: HttpRequest) -> dict[str, Any]:
-    """Return the context of the page shell: the site title and the
-    navigation for the requested path."""
+    """Return the context of the page shell: the site title, the
+    navigation for the requested path, and the database's demo mark,
+    None outside a demo database, with the demo accounts that sign
+    in and their password."""
     return {"site_title": SITE_TITLE,
-            "navigation": navigation(request.path)}
+            "navigation": navigation(request.path),
+            "demo_mark": models.current(),
+            "demo_accounts": data.signing_in(),
+            "demo_password": data.PASSWORD}

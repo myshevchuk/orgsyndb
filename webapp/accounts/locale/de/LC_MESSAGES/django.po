@@ -40,3 +40,10 @@ msgstr "Passwort ändern"
 
 msgid "Your password has been changed."
 msgstr "Ihr Passwort wurde geändert."
+
+msgid "Demo accounts"
+msgstr "Demo-Konten"
+
+#, python-format
+msgid "Password for all: %(password)s"
+msgstr "Passwort für alle: %(password)s"

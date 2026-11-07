@@ -27,7 +27,8 @@
 {% endif %}</div>
 </header>
 <main id="main">
-{% if messages %}<ul class="lab-messages">
+{% if demo_mark %}<p class="lab-demo">{% blocktranslate with day=demo_mark.seeded_on|date:"SHORT_DATE_FORMAT" %}Demo: All records are invented (as of {{ day }}).{% endblocktranslate %}</p>
+{% endif %}{% if messages %}<ul class="lab-messages">
 {% for message in messages %}<li class="lab-message lab-message--{{ message.level_tag }}"{% if message.level_tag == "error" %} role="alert"{% else %} role="status"{% endif %}>{{ message }}</li>
 {% endfor %}</ul>
 {% endif %}{% block main %}{% endblock %}

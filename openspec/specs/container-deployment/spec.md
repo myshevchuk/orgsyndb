@@ -130,11 +130,15 @@ A successful build SHALL be copied, with its `pdf/` when PDFs are on, into a new
 - **THEN** it succeeds, the services are `builder`, `web`, `db`, `app` and `backup`, `builder` runs `orgsyndb-deploy run`, reads the settings and has `ORGSYNDB_LAB` set to `true`, `web` and `app` mount the data volume read-only, `db`'s health check runs `pg_isready`, `app` depends on `db` being healthy, and `app` receives the example's `ORGSYNDB_DATABASE_URL`
 
 ### Requirement: Application image
-`deploy/webapp/Dockerfile` SHALL build an image from `fedora:44` that installs Python 3 and uv, copies `webapp/` and `site/assets/css/` from the build context, the repository root, installs the locked dependencies without the development ones, and collects the static files. It runs as the user `orgsyndb` with UID 1000 and exposes port 8000. Its command applies pending migrations and then serves `orgsyndb_web.wsgi` with gunicorn on `0.0.0.0:8000`. `ORGSYNDB_INDEX` defaults to `/var/lib/orgsyndb/current/index.json`.
+`deploy/webapp/Dockerfile` SHALL build an image from `fedora:44` that installs Python 3 and uv, copies `webapp/` and `site/assets/css/` from the build context, the repository root, installs the locked dependencies without the development ones, and collects the static files. It runs as the user `orgsyndb` with UID 1000 and exposes port 8000. Its command applies pending migrations, then runs `manage.py demo_data --if-empty`, which seeds an empty database when `ORGSYNDB_DEMO` is true and otherwise changes nothing (lab-demo "Demo data command"), and then serves `orgsyndb_web.wsgi` with gunicorn on `0.0.0.0:8000`. `ORGSYNDB_INDEX` defaults to `/var/lib/orgsyndb/current/index.json`. `deploy/orgsyndb.env.example` names `ORGSYNDB_DEMO`, commented out, with a comment saying that it fills an empty database with invented records whose accounts share a password shown on the sign-in page, and is for test deployments only.
 
 #### Scenario: Image inputs
 - **WHEN** a test reads `deploy/webapp/Dockerfile`
-- **THEN** it names `fedora:44`, `uv sync --frozen --no-dev`, `collectstatic`, `migrate` and `gunicorn`, and `USER orgsyndb`
+- **THEN** it names `fedora:44`, `uv sync --frozen --no-dev`, `collectstatic`, `migrate`, `demo_data --if-empty` and `gunicorn`, in the command in the order `migrate`, `demo_data`, `gunicorn`, and `USER orgsyndb`
+
+#### Scenario: Demo flag in the example settings
+- **WHEN** a test reads `deploy/orgsyndb.env.example`
+- **THEN** it holds the line `#ORGSYNDB_DEMO=false`
 
 ### Requirement: Database backups
 `deploy/backup/orgsyndb-backup` SHALL be an executable POSIX shell script with the subcommands `run`, the default, and `once`. `once` dumps the database `POSTGRES_DB` on host `db` as `POSTGRES_USER` with `POSTGRES_PASSWORD`, using `pg_dump` in custom format, into `<dir>/lab-<UTC time as YYYYMMDDTHHMMSSZ>.dump`, `<dir>` being `ORGSYNDB_BACKUP_DIR`, default `/backups`, writing a temporary file renamed when the dump is complete. It then removes all but the `ORGSYNDB_KEEP_BACKUPS` newest `lab-*.dump` files, default 14. A failed dump leaves no file and exits 1 with `orgsyndb-backup: error:` and the reason on stderr. `run` dumps as `once` does every `ORGSYNDB_BACKUP_HOURS` hours, default 24, starting at once, logs a failed dump and keeps going. A malformed number exits 1 naming the variable; an unknown subcommand exits 2 with a usage line.

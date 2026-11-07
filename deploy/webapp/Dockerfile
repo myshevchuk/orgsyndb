@@ -3,7 +3,8 @@
 # the repository root with deploy/compose.yaml, which sets the context;
 # it takes webapp/ and the site's stylesheets, site/assets/css/, from
 # the checkout. Updating the application means rebuilding this image;
-# the container applies pending migrations when it starts. See the
+# the container applies pending migrations when it starts, and with
+# ORGSYNDB_DEMO=true fills an empty database with the demo data. See the
 # README's "Container deployment".
 FROM fedora:44
 
@@ -32,6 +33,8 @@ RUN ORGSYNDB_SECRET_KEY=collectstatic ORGSYNDB_ALLOWED_HOSTS=localhost \
 ENV ORGSYNDB_INDEX=/var/lib/orgsyndb/current/index.json
 USER orgsyndb
 EXPOSE 8000
-# Pending migrations first, then the application.
-CMD ["sh", "-c", "python manage.py migrate --noinput && exec gunicorn \
+# Pending migrations first, then the demo data, which only an empty
+# database with ORGSYNDB_DEMO=true receives, then the application.
+CMD ["sh", "-c", "python manage.py migrate --noinput \
+&& python manage.py demo_data --if-empty && exec gunicorn \
 orgsyndb_web.wsgi --bind 0.0.0.0:8000 --workers 3 --access-logfile -"]

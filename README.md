@@ -1261,6 +1261,36 @@ uv run python manage.py runserver
 Open <http://127.0.0.1:8000/lab/>. The local database is
 `webapp/db.sqlite3` unless you set `ORGSYNDB_DATABASE_URL`.
 
+To try the lab with invented records, use the demo collection and a
+separate SQLite file. From the repository root:
+
+```sh
+tools/orgsyndb -C examples/demo index > /tmp/orgsyndb-index.json
+cd webapp
+export ORGSYNDB_DEBUG=true
+export ORGSYNDB_INDEX=/tmp/orgsyndb-index.json
+export ORGSYNDB_DEMO=true
+export ORGSYNDB_DATABASE_URL=sqlite:////tmp/orgsyndb-demo.sqlite3
+uv run python manage.py migrate
+uv run python manage.py demo_data
+uv run python manage.py runserver
+```
+
+This keeps the demo apart from `webapp/db.sqlite3`. The command writes
+records dated back from today in Europe/Berlin. For example, a successful
+run prints:
+
+```text
+Demo data as of 2026-11-07 written: 5 accounts, 13 items, 232 delivery notes and 19 tasks.
+```
+
+The date and counts depend on the day you run it. Open
+<http://127.0.0.1:8000/lab/> and use the accounts listed under
+[Demo deployment](#demo-deployment). To renew an existing demo, run
+`uv run python manage.py demo_data --replace` from `webapp/`; this deletes
+changes you made while trying it. Without `--replace`, the command refuses
+a database that already holds lab records, including accounts.
+
 ## Troubleshooting
 
 If a poppler tool reports `Embedded font file may be invalid` for Cantarell
@@ -1381,6 +1411,7 @@ settings:
 | `ORGSYNDB_SECRET_KEY` | required | Generated secret key for sign-ins |
 | `ORGSYNDB_ALLOWED_HOSTS` | required | Comma-separated host names used to reach the site |
 | `ORGSYNDB_DEBUG` | `false` | Show error details; keep off on a reachable site |
+| `ORGSYNDB_DEMO` | `false` | Permit writing invented demo records; at container start, fill an empty database. Test deployments only; never set on a stack that keeps real records |
 | `ORGSYNDB_INDEX` | `/var/lib/orgsyndb/current/index.json` | Published collection index read by the lab application |
 | `ORGSYNDB_APP_UPSTREAM` | `app:8000` | Address to which Caddy forwards `/lab/` |
 | `ORGSYNDB_BACKUP_HOURS` | `24` | Hours between database dumps |
@@ -1457,6 +1488,78 @@ task with a batch and a matching article offers **Als Bulk erfassen**
 (**Record as bulk**). This opens the new-lot form with the article, batch
 and end date filled in. If several articles match, it uses the first
 article number in alphabetical order.
+
+### Demo deployment
+
+Use a separate test deployment to explore the lab with invented records:
+inventory and stock levels, delivery notes, bulk lots and fillings, tasks
+in every state, and planning priorities and actions, all with histories.
+**Never set `ORGSYNDB_DEMO=true` on a stack that keeps real records.**
+
+Before the first start and before creating accounts, set these values in
+`deploy/orgsyndb.env`:
+
+```sh
+ORGSYNDB_COLLECTION_REPO=https://github.com/myshevchuk/orgsyndb.git
+ORGSYNDB_COLLECTION_PATH=examples/demo
+ORGSYNDB_DEMO=true
+```
+
+The data uses the in-house final products of `examples/demo`. Its index
+gives them compound links and molar masses for conversions between mg and
+µmol. With another collection's index, the products have no links and
+those conversions fail.
+
+At every start, `app` applies migrations, runs `demo_data --if-empty`, then
+starts serving requests. The command fills the database only when
+`ORGSYNDB_DEMO=true` and it holds no lab records. Otherwise it prints why
+it skips seeding and exits successfully without changes. The flag only
+permits writing demo data; setting it alone does not display demo content.
+If `app` starts before `builder` publishes the first index, seeding warns
+about missing compounds and writes German texts; the records are the same.
+
+Every lab page except the admin shows a banner stating that all records
+are invented, with the seeding date. The sign-in page lists the accounts
+that can sign in and their shared password, `demo`. The demo contains
+these accounts:
+
+| User name | Name | Access |
+|---|---|---|
+| `klehmann` | Katrin Lehmann | Superuser and staff; can use the admin |
+| `tbauer` | Tobias Bauer | Lab application |
+| `aschmidt` | Anna Schmidt | Lab application |
+| `jkoch` | Jonas Koch | Lab application |
+| `mwolf` | Miriam Wolf | Cannot sign in; former member named on early records |
+
+The records age after seeding. To renew them as of today, run from
+`deploy/`:
+
+```sh
+docker compose exec app python manage.py demo_data --replace
+```
+
+This deletes every lab record and its history, including records you added
+after seeding, and restarts task numbering at `T-001`. It requires
+`ORGSYNDB_DEMO=true` and accepts only a demo database or one without lab
+records. It refuses other databases unchanged.
+
+To empty a test database deliberately, run from `deploy/`:
+
+```sh
+docker compose exec app python manage.py flush --no-input
+```
+
+**This deletes every record, including accounts and histories.** To fill
+it with demo data, restart `app` with `ORGSYNDB_DEMO=true` or run
+`docker compose exec app python manage.py demo_data`.
+
+Before using a demo database for real records, set `ORGSYNDB_DEMO=false`
+in `orgsyndb.env` and run `docker compose up -d app` from `deploy/` to apply
+the setting. Then empty the database with the same `flush` command, or
+remove the `db` volume. Switching the flag off alone keeps the demo
+accounts with password `demo`, the banner and the sign-in note: both
+notices follow the database's demo mark, which seeding writes, rather than
+the flag.
 
 ### End-product inventory
 
