@@ -6,56 +6,60 @@
 {% if user.is_authenticated %}<p class="actions"><a href="/lab/inventory/end-products/new/">{% translate "New item" %}</a></p>{% endif %}
 </div>
 {% include "inventory/tabs.html" %}
-<form class="lab-filters" method="get" action="/lab/inventory/end-products/">
-<label>{% translate "Category" %}
-<select name="category">
-<option value=""{% if not filters.category %} selected{% endif %}>{% translate "All" %}</option>
-{% for category in categories %}<option value="{{ category }}"{% if category == filters.category %} selected{% endif %}>{{ category }}</option>
-{% endfor %}</select></label>
-<label>{% translate "Compartment" %}
-<select name="compartment">
-<option value=""{% if not filters.compartment %} selected{% endif %}>{% translate "All" %}</option>
-{% for value in compartments %}<option value="{{ value }}"{% if value == filters.compartment %} selected{% endif %}>{{ value }}</option>
-{% endfor %}</select></label>
-<label>{% translate "Box" %}
-<select name="box">
-<option value=""{% if not filters.box %} selected{% endif %}>{% translate "All" %}</option>
-{% for value in boxes %}<option value="{{ value }}"{% if value == filters.box %} selected{% endif %}>{{ value }}</option>
-{% endfor %}</select></label>
-<label>{% translate "Level" %}
-<select name="level">
-<option value=""{% if not filters.level %} selected{% endif %}>{% translate "All" %}</option>
-{% for value, label in levels %}<option value="{{ value }}"{% if value == filters.level %} selected{% endif %}>{% blocktranslate %}{{ label }} or more urgent{% endblocktranslate %}</option>
-{% endfor %}</select></label>
+<div class="lab-toolbar">
+<form id="filters" class="lab-filters" method="get" action="/lab/inventory/end-products/">
 <label>{% translate "Search" %}
 <input type="search" name="q" value="{{ filters.q }}"></label>
-<label>{% translate "Order" %}
-<select name="sort">
-<option value=""{% if not filters.sort %} selected{% endif %}>{% translate "By article number" %}</option>
-<option value="urgency"{% if filters.sort == "urgency" %} selected{% endif %}>{% translate "By urgency" %}</option>
-</select></label>
-{% if filters.stock %}<input type="hidden" name="stock" value="{{ filters.stock }}">
+<input type="hidden" name="sort" value="{{ filters.sort }}">
+{% if filters.descending %}<input type="hidden" name="dir" value="desc">
 {% endif %}<button type="submit">{% translate "Filter" %}</button>
+<a href="{{ reset }}">{% translate "Reset" %}</a>
 </form>
 {% if user.is_authenticated %}<form id="pick" class="lab-pick" method="get" action="/lab/inventory/deliveries/new/"><button type="submit">{% translate "Delivery note from selection" %}</button></form>
-{% endif %}<p class="count">{% blocktranslate count count=rows|length %}{{ count }} item{% plural %}{{ count }} items{% endblocktranslate %}</p>
-<div class="table-scroll">
+{% endif %}</div>
+<p class="count">{% blocktranslate count count=rows|length %}{{ count }} item{% plural %}{{ count }} items{% endblocktranslate %}</p>
+<div class="table-scroll table-sticky">
 <table class="inventory-table">
 <thead>
-<tr><th scope="col">{% translate "Article no." %}</th><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Category" %}</th><th scope="col">{% translate "Container" %}</th><th scope="col">{% translate "Compartment" %}</th><th scope="col">{% translate "Box" %}</th><th scope="col">{% translate "Stock" %}</th><th scope="col">{% translate "Mean per quarter" %}</th><th scope="col">{% translate "Mean per year" %}</th><th scope="col">{% translate "This year" %}</th><th scope="col">{% translate "Coverage" %}</th><th scope="col">{% translate "Bulk" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th></tr>
+<tr>{% for column in columns %}<th scope="col"{% if column.aria_sort %} aria-sort="{{ column.aria_sort }}"{% endif %}><a href="{{ column.href }}">{{ column.label }}</a></th>{% endfor %}</tr>
+<tr class="filter-row">
+<td><input type="search" name="number" value="{{ filters.number }}" form="filters" aria-label="{{ columns.0.label }}" size="8"></td>
+<td><input type="search" name="name" value="{{ filters.name }}" form="filters" aria-label="{{ columns.1.label }}" size="10"></td>
+<td><select name="category" form="filters" aria-label="{{ columns.2.label }}">
+<option value=""{% if not filters.category %} selected{% endif %}>{% translate "All" %}</option>
+{% for category in categories %}<option value="{{ category }}"{% if category == filters.category %} selected{% endif %}>{{ category }}</option>
+{% endfor %}</select></td>
+<td><select name="container" form="filters" aria-label="{{ columns.3.label }}">
+<option value=""{% if not filters.container %} selected{% endif %}>{% translate "All" %}</option>
+{% for value, label in containers %}<option value="{{ value }}"{% if value == filters.container %} selected{% endif %}>{{ label }}</option>
+{% endfor %}</select></td>
+<td><select name="compartment" form="filters" aria-label="{{ columns.4.label }}">
+<option value=""{% if not filters.compartment %} selected{% endif %}>{% translate "All" %}</option>
+{% for value in compartments %}<option value="{{ value }}"{% if value == filters.compartment %} selected{% endif %}>{{ value }}</option>
+{% endfor %}</select></td>
+<td><select name="box" form="filters" aria-label="{{ columns.5.label }}">
+<option value=""{% if not filters.box %} selected{% endif %}>{% translate "All" %}</option>
+{% for value in boxes %}<option value="{{ value }}"{% if value == filters.box %} selected{% endif %}>{{ value }}</option>
+{% endfor %}</select></td>
+<td><select name="stock" form="filters" aria-label="{{ columns.6.label }}">
+<option value=""{% if not filters.stock %} selected{% endif %}>{% translate "All" %}</option>
+{% for value, label in levels %}<option value="{{ value }}"{% if value == filters.stock %} selected{% endif %}>{{ label }}</option>
+{% endfor %}</select></td>
+<td></td><td></td><td></td><td></td>
+<td><input type="search" name="note" value="{{ filters.note }}" form="filters" aria-label="{{ columns.11.label }}" size="10"></td>
+</tr>
 </thead>
 <tbody>
-{% for row in rows %}<tr>
+{% for row in rows %}<tr{% if row.same_article %} class="same-article"{% endif %}>
 <td>{% if row.item.article_number %}{% if user.is_authenticated %}<input type="checkbox" name="item" value="{{ row.item.pk }}" form="pick" aria-label="{% blocktranslate with item=row.item %}Select {{ item }}{% endblocktranslate %}"> {% endif %}<a href="/lab/inventory/items/{{ row.item.pk }}/">{{ row.item.article_number }}</a>{% endif %}</td>
-<td>{% if not row.item.article_number %}<a href="/lab/inventory/items/{{ row.item.pk }}/">{{ row.item.name }}</a>{% elif row.compound %}<a href="/compounds/{{ row.compound.key }}/">{{ row.item.name }}</a>{% else %}{{ row.item.name }}{% endif %}{% if row.item|new_on:today %}<sup class="mark-new">{% translate "new" context "item" %}</sup>{% endif %}</td>
+<td>{% if row.same_article %}<span class="visually-hidden">{{ row.item.name }}</span>{% elif not row.item.article_number %}<a href="/lab/inventory/items/{{ row.item.pk }}/">{{ row.item.name }}</a>{% elif row.compound %}<a href="/compounds/{{ row.compound.key }}/">{{ row.item.name }}</a>{% else %}{{ row.item.name }}{% endif %}{% if row.item|new_on:today %}<sup class="mark-new">{% translate "new" context "item" %}</sup>{% endif %}</td>
 <td>{{ row.item.category }}</td>
 <td class="number">{{ row.item.container }}</td>
 <td>{{ row.item.compartment }}</td>
 <td>{{ row.item.box }}</td>
 <td class="number stock level-{{ row.figures.level }}" title="{{ row.figures.level|level_label }}">{{ row.item.quantity }}<span class="visually-hidden"> {{ row.figures.level|level_label }}</span></td>
-<td class="number{% if row.figures.projected %} projected" title="{% translate "projected from the current year" %}{% endif %}">{% if row.figures.mean_quarter is not None %}{{ row.figures.mean_quarter|floatformat:1 }}{% endif %}</td>
-<td class="number{% if row.figures.projected %} projected" title="{% translate "projected from the current year" %}{% endif %}">{% if row.figures.mean_year is not None %}{{ row.figures.mean_year|floatformat:1 }}{% endif %}</td>
-<td class="number">{{ row.figures.this_year }}</td>
+<td class="number{% if row.heat_mean %} {{ row.heat_mean }}{% endif %}{% if row.figures.projected %} projected" title="{% translate "projected from the current year" %}{% endif %}">{% if row.figures.mean_year is not None %}{{ row.figures.mean_year|floatformat:1 }}{% endif %}</td>
+<td class="number{% if row.heat_year %} {{ row.heat_year }}{% endif %}">{{ row.figures.this_year }}</td>
 <td class="number{% if row.figures.projected and row.figures.coverage is not None %} projected" title="{% translate "projected from the current year" %}{% endif %}">{% if row.figures.coverage is not None %}{{ row.figures.coverage|floatformat:1 }}{% endif %}</td>
 <td>{% include "inventory/bulk.html" with bulk=row.bulk %}</td>
 <td>{{ row.item.note }}</td>

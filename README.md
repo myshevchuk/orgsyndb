@@ -1671,30 +1671,76 @@ Its page offers **Enter article number** in place of **Book delivery**,
 and has no **Enter consumption** or **New bulk lot** link.
 
 Enter items and past quarterly consumption by hand; there is no Excel
-import. The item list shows stock, consumption means, this year's
-consumption, coverage and bulk alongside the item's details. The
-**Fach** and **Box** columns follow **Gebinde** (**Container**). The
-**Bestand** (**Stock**) column shows container counts alone, coloured by
+import. To find stock, use the item list's columns: **Artikelnr.**
+(**Article no.**), **Name**, **Kategorie** (**Category**), **Gebinde**
+(**Container**), **Fach** (**Compartment**), **Box**, **Bestand**
+(**Stock**), **Ø Jahr** (**Mean per year**), **lfd. Jahr** (**This year**),
+**Reichweite** (**Coverage**), **Bulk** and **Bemerkung** (**Note**).
+The quarterly mean is on the item page; coverage is still in quarters.
+Open an article number, or the name of an item without one, to see its
+item page.
+
+The **Bestand** column shows container counts alone, coloured by stock
 level. Hover over a count to read the level's name; screen readers also
 read it. The legend below the table explains all seven colours in urgency
 order and counts the items at each level across the whole inventory,
 even when the list is filtered. Choose a legend entry to list exactly
 the items at that level.
 
-Filter by category, compartment, box, stock level or text. The **Fach**
-and **Box** filters offer values already in use, ordered with `2` before
-`10`. Each starts at **Alle** (**All**); choose a value to show only items
-kept exactly there.
+To narrow the list, use the filter row directly below the column headers.
+The text fields under **Artikelnr.**, **Name** and **Bemerkung** find text
+anywhere in that field, regardless of case. **Name** also searches the
+item's compound name. The choices under **Kategorie**, **Gebinde**,
+**Fach** and **Box** offer **Alle** (**All**) or one value already in use.
+Choose a value to show only items matching it exactly. Container choices
+show size and unit; locations are ordered with `2` before `10`.
+The **Bestand** choice offers **Alle** or exactly one of the seven stock
+levels, as the legend does. The consumption, coverage and bulk columns
+have no filter.
 
-The level filter offers **Out**, **Critical**, **Low** and **Watch**;
-each includes that level and more urgent ones. Choose **By urgency** to
-order items as out, critical, low, watch, sufficient, never delivered and
-dormant, with the shortest coverage first within each level. Items
-without coverage come last within their level.
+Use **Suche** (**Search**) above the table to search the article number,
+name, category, note and compound name together, regardless of case.
+Choose **Filtern** (**Filter**), or press Enter in any text field, to
+apply all filters together. The controls show the filters in force.
+**Zurücksetzen** (**Reset**) clears every filter and keeps your sort
+order.
 
-By default, items without an article number appear last, ordered by name.
-Open an article number, or the name of an item without one, to see its
-item page.
+To reorder the list, choose any column header. Choose it again to reverse
+the order; ▲ or ▼ marks the sorted column. Sorting keeps your filters,
+and filtering keeps your order. You can bookmark the resulting view.
+Text sorts regardless of case. Containers sort from smallest to largest,
+with mass sizes before amount-of-substance sizes: 100 mg, 250 mg, 1 g,
+then µmol sizes. Locations sort with `2` before `10`. Consumption and
+coverage sort by value, smallest first; bulk sorts by how many containers
+the open lots would fill. Items without a value in the sorting column
+come last in either direction. Ties keep the default order.
+
+To put urgent items first, sort by **Bestand** in ascending order (▲).
+This orders items as out, critical, low, watch, sufficient, never delivered
+and dormant, with the shortest coverage first within each level. Items
+without coverage come last within their level in this order.
+
+The default order is by article number, then unit and size. Items without
+an article number appear last, ordered by name, then unit and size.
+When sorted by **Artikelnr.** in either direction, the sizes of one article
+are grouped and its name appears once. Further rows show a muted article
+number and keep the name for screen readers. Each size keeps its own
+article-number link and, when you are signed in, its own check box.
+Items without an article number are never grouped. Other sort orders
+show each row's name.
+
+To spot heavily used items, compare the five colour steps in **Ø Jahr**
+and **lfd. Jahr**. Each column ranks its positive values across the whole
+inventory into fifths, from least to most consumed; equal values share a
+step. The scale compares all categories and container sizes together.
+Zero and missing values stay uncoloured, and filtering does not change
+the colours. Below the stock-level legend, **Verbrauch** (**Consumption**)
+shows the scale from **wenig** (**little**) to **viel** (**much**).
+
+For a long or wide list, scroll inside the table's box. The column headers
+and filter row stay at the top, and **Artikelnr.** stays at the left.
+The box is at most the window's height. Printing shows the whole table,
+without the filter row and the controls above it.
 
 #### Book deliveries and correct counts
 

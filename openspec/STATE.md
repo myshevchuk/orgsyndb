@@ -61,6 +61,12 @@ leaves this file then.
   fillings and syntheses for it are booked as for any other. Open:
   which of these to refuse or warn about, and whether an item may be
   closed once its stock is gone.
+- **Heat by category and size.** The item list colours `Ø Jahr` and
+  `lfd. Jahr` by the fifth of all consuming items a value falls in, so
+  a 5 g size and a 100 mg one, or a reagent and an end product, share
+  one scale. Wanted: compare a value within its category or container
+  size, or by the amount of substance it stands for. Open: which
+  grouping the lab reads, and how small a group may be.
 - **Planning a new item's first quarter.** The demand models read only
   complete quarters, so an item first delivered in the current quarter
   has no forecast until the quarter ends, though the item list projects

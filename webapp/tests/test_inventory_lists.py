@@ -13,12 +13,10 @@ from .inventory_support import (BULK, COMPOUND_PAGE, DELIVERIES, LEVELS, LIST,
                                 item_url, note_blocks, note_url, num)
 
 COLUMNS_DE = ["Artikelnr.", "Name", "Kategorie", "Gebinde", "Fach", "Box",
-              "Bestand",
-              "Ø Quartal", "Ø Jahr", "lfd. Jahr", "Reichweite", "Bulk",
+              "Bestand", "Ø Jahr", "lfd. Jahr", "Reichweite", "Bulk",
               "Bemerkung"]
 COLUMNS_EN = ["Article no.", "Name", "Category", "Container", "Compartment",
-              "Box", "Stock",
-              "Mean per quarter", "Mean per year", "This year", "Coverage",
+              "Box", "Stock", "Mean per year", "This year", "Coverage",
               "Bulk", "Note"]
 BULK_DE = ["Artikelnr.", "Name", "Charge", "Menge", "Ort", "Datum",
            "Bemerkung"]
@@ -79,7 +77,6 @@ class ItemColumnTests(ListCase):
         stock = row["Bestand"]
         self.assertEqual(num(stock), 3)
         self.assertIn("level-low", stock.classes)
-        self.assertEqual(num(row["Ø Quartal"]), num("4,5"))
         self.assertEqual(num(row["Ø Jahr"]), 18)
         self.assertEqual(num(row["lfd. Jahr"]), 13)
         self.assertEqual(num(row["Reichweite"]), num("0,7"))
@@ -88,26 +85,22 @@ class ItemColumnTests(ListCase):
     def test_the_means_show_one_decimal_place(self) -> None:
         self.means_item("CH-0012")
         row = self.rows()[0]
-        self.assertEqual(row["Ø Quartal"].text(), "4,5")
         self.assertEqual(row["Reichweite"].text(), "0,7")
         self.assertRegex(row["Ø Jahr"].text(), r"^18(,0)?$")
 
     def test_the_figures_round_half_up(self) -> None:
-        quarter = self.item("R-1", quantity=2)
-        self.enter(quarter, 2025, 1, 1)
         year = self.item("R-2", quantity=9)
         self.enter(year, 2022, 1, 9)
         cover = self.item("R-3", quantity=2)
         self.enter(cover, 2025, 1, 32)
         rows = {r["Artikelnr."].text(): r for r in self.rows()}
-        self.assertEqual(num(rows["R-1"]["Ø Quartal"]), num("0,3"))
         self.assertEqual(num(rows["R-2"]["Ø Jahr"]), num("2,3"))
         self.assertEqual(num(rows["R-3"]["Reichweite"]), num("0,3"))
 
     def test_an_item_without_a_mean_has_empty_figures(self) -> None:
         self.item("N-1", quantity=2)
         row = self.rows()[0]
-        for column in ("Ø Quartal", "Ø Jahr", "Reichweite"):
+        for column in ("Ø Jahr", "Reichweite"):
             with self.subTest(column=column):
                 self.assertIsNone(num(row[column]))
 
@@ -123,7 +116,7 @@ class ItemColumnTests(ListCase):
         self.use_index(build_index("en"))
         self.means_item("CH-0012")
         row = self.rows()[0]
-        self.assertEqual(row["Mean per quarter"].text(), "4.5")
+        self.assertEqual(row["Mean per year"].text(), "18.0")
         self.assertEqual(row["Coverage"].text(), "0.7")
 
     def test_an_item_outside_the_collection_has_no_compound_link(
@@ -154,40 +147,40 @@ class ItemOrderTests(ListCase):
                                   ("A-4", 2)):
             self.with_mean_quarter(self.item(article, quantity=quantity), 4)
         self.assertEqual(self.articles(), ["A-1", "A-2", "A-3", "A-4"])
-        self.assertEqual(self.articles("?sort=urgency"),
+        self.assertEqual(self.articles("?sort=stock"),
                          ["A-3", "A-4", "A-1", "A-2"])
 
     def test_the_levels_follow_one_another(self) -> None:
         for article, quantity in (("A-1", 7), ("A-2", 8), ("A-3", 0),
                                   ("A-4", 2), ("A-5", 1)):
             self.with_mean_quarter(self.item(article, quantity=quantity), 4)
-        self.assertEqual(self.articles("?sort=urgency"),
+        self.assertEqual(self.articles("?sort=stock"),
                          ["A-3", "A-5", "A-4", "A-1", "A-2"])
 
     def test_the_smaller_coverage_comes_first_within_a_level(self) -> None:
         self.with_mean_quarter(self.item("B-1", quantity=3), 4)
         self.enter(self.item("B-2", quantity=4), 2025, 1, 32)
         self.assertEqual(self.articles(), ["B-1", "B-2"])
-        self.assertEqual(self.articles("?sort=urgency"), ["B-2", "B-1"])
+        self.assertEqual(self.articles("?sort=stock"), ["B-2", "B-1"])
 
     def test_items_without_a_coverage_come_last_in_their_level(
             self) -> None:
         self.with_mean_quarter(self.item("C-1", quantity=20), 4)
         self.with_mean_quarter(self.item("C-2", quantity=8), 4)
         self.item("C-3", quantity=2)
-        self.assertEqual(self.articles("?sort=urgency"),
+        self.assertEqual(self.articles("?sort=stock"),
                          ["C-2", "C-1", "C-3"])
 
     def test_an_empty_item_with_a_mean_comes_before_one_without(
             self) -> None:
         self.item("D-1", quantity=0)
         self.with_mean_quarter(self.item("D-2", quantity=0), 4)
-        self.assertEqual(self.articles("?sort=urgency"), ["D-2", "D-1"])
+        self.assertEqual(self.articles("?sort=stock"), ["D-2", "D-1"])
 
     def test_ties_keep_the_order_of_the_list(self) -> None:
         for article in ("E-2", "E-3", "E-1"):
             self.item(article, quantity=0)
-        self.assertEqual(self.articles("?sort=urgency"),
+        self.assertEqual(self.articles("?sort=stock"),
                          ["E-1", "E-2", "E-3"])
 
 
@@ -199,20 +192,14 @@ class ItemFilterTests(ListCase):
                 self.item(f"L-{quantity}", quantity=quantity), 4)
         self.item("L-N", quantity=3)
 
-    def test_level_filter(self) -> None:
-        """Scenario: Level filter."""
+    def test_each_level_exactly(self) -> None:
         self.leveled()
-        self.assertEqual(self.articles("?level=low"),
-                         ["L-0", "L-1", "L-2"])
-
-    def test_every_level_lists_the_more_urgent_ones_too(self) -> None:
-        self.leveled()
-        expected = {"out": ["L-0"], "critical": ["L-0", "L-1"],
-                    "low": ["L-0", "L-1", "L-2"],
-                    "watch": ["L-0", "L-1", "L-2", "L-4"]}
+        expected = {"out": ["L-0"], "critical": ["L-1"], "low": ["L-2"],
+                    "watch": ["L-4"], "ok": ["L-8"],
+                    "undelivered": ["L-N"], "dormant": []}
         for level, want in expected.items():
             with self.subTest(level=level):
-                self.assertEqual(self.articles(f"?level={level}"), want)
+                self.assertEqual(self.articles(f"?stock={level}"), want)
 
     def test_no_filter_lists_every_item(self) -> None:
         self.leveled()
@@ -248,13 +235,13 @@ class ItemFilterTests(ListCase):
         self.with_mean_quarter(
             self.item("F-3", quantity=8, category="Endprodukt"), 4)
         self.assertEqual(
-            self.articles("?category=Endprodukt&level=out&q=f-"), ["F-1"])
+            self.articles("?category=Endprodukt&stock=out&q=f-"), ["F-1"])
 
     def test_filters_keep_their_values_in_the_form(self) -> None:
         self.item("G-1", category="Grün")
-        root = self.listing(f"?category={quote("Grün")}&level=low&q=g-")
+        root = self.listing(f"?category={quote("Grün")}&stock=low&q=g-")
         self.assertEqual(field_value(root, "category"), "Grün")
-        self.assertEqual(field_value(root, "level"), "low")
+        self.assertEqual(field_value(root, "stock"), "low")
         self.assertEqual(field_value(root, "q"), "g-")
 
 

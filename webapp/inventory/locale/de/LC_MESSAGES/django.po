@@ -335,23 +335,8 @@ msgstr "Neuer Artikel"
 msgid "All"
 msgstr "Alle"
 
-msgid "Level"
-msgstr "Stufe"
-
-msgid "%(label)s or more urgent"
-msgstr "%(label)s oder dringender"
-
 msgid "Search"
 msgstr "Suche"
-
-msgid "Order"
-msgstr "Reihenfolge"
-
-msgid "By article number"
-msgstr "Nach Artikelnummer"
-
-msgid "By urgency"
-msgstr "Nach Dringlichkeit"
 
 msgid "Filter"
 msgstr "Filtern"
@@ -632,3 +617,14 @@ msgstr "Lieferschein mit Auswahl"
 #, python-format
 msgid "Select %(item)s"
 msgstr "%(item)s auswählen"
+
+msgid "Reset"
+msgstr "Zurücksetzen"
+
+msgctxt "consumption"
+msgid "little"
+msgstr "wenig"
+
+msgctxt "consumption"
+msgid "much"
+msgstr "viel"

@@ -151,7 +151,9 @@ class InventoryTests(SeededCase):
             name = row[header[1]]
             with self.subTest(article=article):
                 link = name.find("a")
-                if article == "NV-0007":
+                if "same-article" in name.parent.classes:
+                    self.assertIsNone(link)
+                elif article == "NV-0007":
                     self.assertIsNone(link)
                     self.assertEqual(name.text(), "Neuverbindung 7")
                 else:

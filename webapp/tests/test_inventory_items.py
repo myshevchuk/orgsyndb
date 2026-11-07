@@ -148,14 +148,15 @@ class CompoundTests(InventoryCase):
                          ["/compounds/cinnamic-acid/"])
         self.assertIn("Zimtsäure", cell.text())
 
-    def test_every_size_has_the_same_compound(self) -> None:
+    def test_an_article_links_its_compound_once(self) -> None:
         self.item("CH-0012", size="10", unit="umol")
         self.item("CH-0012", size="50", unit="mg")
         _, rows = table(page(self.client.get(LIST)))
         hrefs = [a.get("href") for row in rows
                  for a in row["Name"].find_all("a")
                  if COMPOUND_PAGE.match(a.get("href", ""))]
-        self.assertEqual(hrefs, ["/compounds/cinnamic-acid/"] * 2)
+        self.assertEqual(hrefs, ["/compounds/cinnamic-acid/"])
+        self.assertIn("same-article", rows[1]["Name"].parent.classes)
 
     def test_an_article_outside_the_collection_has_no_compound(
             self) -> None:

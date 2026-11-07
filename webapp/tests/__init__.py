@@ -422,16 +422,20 @@ def field_value(root: Element, name: str) -> str | None:
 
 
 def table(root: Element) -> tuple[list[str], list[dict[str, Element]]]:
-    """The header texts of the first table, and its other rows as
-    mappings from header text to cell."""
+    """The header texts of the first table, from its first row, and its
+    rows outside ``thead`` as mappings from header text to cell."""
     grid = root.find("table")
     if grid is None:
         raise AssertionError("the page holds no table")
-    rows = [[c for c in tr.children
-             if isinstance(c, Element) and c.tag in ("th", "td")]
-            for tr in grid.find_all("tr")]
-    header = [cell.text() for cell in rows[0]]
-    return header, [dict(zip(header, cells)) for cells in rows[1:]]
+    rows = grid.find_all("tr")
+
+    def cells(tr: Element) -> list[Element]:
+        return [c for c in tr.children
+                if isinstance(c, Element) and c.tag in ("th", "td")]
+
+    header = [cell.text() for cell in cells(rows[0])]
+    return header, [dict(zip(header, cells(tr))) for tr in rows[1:]
+                    if tr.closest("thead") is None]
 
 
 def numbers(root: Element) -> list[str]:

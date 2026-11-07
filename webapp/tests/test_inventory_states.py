@@ -242,9 +242,10 @@ class ListTests(InventoryCase):
         header, rows = self.rows("?stock=bogus")
         self.assertEqual(len(rows), 3)
         root = page(self.client.get(LIST + "?stock=critical"))
-        form = root.find("form", "lab-filters")
-        self.assertEqual(form.find("input", name="stock").get("value"),
-                         "critical")
+        choice = root.find("select", name="stock")
+        self.assertEqual(field_value(root, "stock"), "critical")
+        self.assertEqual(next(o for o in choice.find_all("option")
+                              if "selected" in o.attrs).text(), "kritisch")
 
     def test_urgent_items_first(self) -> None:
         """Scenario: Urgent items first."""
@@ -252,18 +253,12 @@ class ListTests(InventoryCase):
         self.with_mean_quarter(self.item("WA-1", quantity=5), 4)
         self.with_mean_quarter(self.item("OU-1", quantity=0), 4)
         self.item("UN-1", quantity=2)
-        header, rows = self.rows("?sort=urgency")
+        header, rows = self.rows("?sort=stock")
         stock = [next(c[6:] for c in row["Bestand"].classes
                       if c.startswith("level-")) for row in rows]
         self.assertEqual(stock, ["out", "low", "watch", "ok", "ok",
                                  "undelivered", "dormant"])
         self.assertTrue(made)
-
-    def test_the_level_filter_keeps_its_urgent_choices(self) -> None:
-        root = page(self.client.get(LIST))
-        options = [option.get("value") for option in root.find(
-            "select", name="level").find_all("option")]
-        self.assertEqual(options, ["", "out", "critical", "low", "watch"])
 
     def test_new_items_marked(self) -> None:
         """Scenario: New items marked."""
@@ -283,7 +278,7 @@ class ListTests(InventoryCase):
         self.with_mean_quarter(self.item("P-2", quantity=3), 4)
         header, rows = self.rows()
         by_article = {row[header[0]].text(): row for row in rows}
-        for column in ("Ø Quartal", "Ø Jahr", "Reichweite"):
+        for column in ("Ø Jahr", "Reichweite"):
             with self.subTest(column=column):
                 cell = by_article["P-1"][column]
                 self.assertIn("projected", cell.classes)

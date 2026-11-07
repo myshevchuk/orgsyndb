@@ -60,8 +60,18 @@
   font-size: 0.875rem;
 }
 .lab-filters label { display: flex; flex-direction: column; gap: var(--space-1); }
-/* The form the item list's check boxes belong to. */
-.lab-pick { margin: 0 0 var(--space-2); font-family: var(--font-ui); }
+/* The bar above the item list: the filters' form, whose controls sit in
+   the table's filter row, and the form the check boxes belong to. */
+.lab-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  margin: 0 0 var(--space-2);
+}
+.lab-toolbar .lab-filters { margin: 0; }
+.lab-pick { margin: 0; font-family: var(--font-ui); }
 
 .task-table { width: 100%; }
 .task-table thead { background: var(--surface); }
@@ -139,6 +149,16 @@
   --level-undelivered-fg: #22324d;
   --level-dormant-bg: #5d636b;
   --level-dormant-fg: #ffffff;
+  --heat-1-bg: #fbe4e6;
+  --heat-1-fg: #5c1a22;
+  --heat-2-bg: #f4b8be;
+  --heat-2-fg: #4d1219;
+  --heat-3-bg: #e0707a;
+  --heat-3-fg: #2a0508;
+  --heat-4-bg: #b3202c;
+  --heat-4-fg: #ffffff;
+  --heat-5-bg: #5a0a10;
+  --heat-5-fg: #ffffff;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -156,6 +176,16 @@
     --level-undelivered-fg: #dfe7f3;
     --level-dormant-bg: #686d74;
     --level-dormant-fg: #ffffff;
+    --heat-1-bg: #3a2226;
+    --heat-1-fg: #f6dde0;
+    --heat-2-bg: #5a262d;
+    --heat-2-fg: #fbe3e6;
+    --heat-3-bg: #80232e;
+    --heat-3-fg: #ffffff;
+    --heat-4-bg: #a8202d;
+    --heat-4-fg: #ffffff;
+    --heat-5-bg: #c62832;
+    --heat-5-fg: #ffffff;
   }
 }
 
@@ -185,10 +215,59 @@ span.stock[class*="level-"] { padding: 0 var(--space-2); border-radius: 0.25rem;
 .level-legend dt { padding: 0 var(--space-2); border-radius: 0.25rem; font-weight: 600; }
 .level-legend dd { margin: 0 var(--space-2) 0 0; }
 
+/* The consumption heat: five steps from a pale pink to a blackish red,
+   by the fifth of the consuming items a value falls in. */
+.heat-1 { background: var(--heat-1-bg); color: var(--heat-1-fg); }
+.heat-2 { background: var(--heat-2-bg); color: var(--heat-2-fg); }
+.heat-3 { background: var(--heat-3-bg); color: var(--heat-3-fg); }
+.heat-4 { background: var(--heat-4-bg); color: var(--heat-4-fg); }
+.heat-5 { background: var(--heat-5-bg); color: var(--heat-5-fg); }
+.heat-legend { margin: var(--space-2) 0 0; font-family: var(--font-ui); font-size: 0.875rem; }
+.heat-swatch {
+  display: inline-block;
+  width: 1.5em;
+  height: 1em;
+  vertical-align: middle;
+  border-radius: 0.2rem;
+}
+
 .inventory-table { width: 100%; }
 .inventory-table thead { background: var(--surface); }
 .inventory-table td:first-child { white-space: nowrap; }
 .inventory-table .number { text-align: right; white-space: nowrap; }
+.inventory-table .filter-row td { padding-top: var(--space-1); padding-bottom: var(--space-1); }
+.inventory-table .filter-row :is(input, select) {
+  width: 100%;
+  min-width: 4rem;
+  font: inherit;
+  font-size: 0.8125rem;
+}
+.inventory-table thead th a { color: inherit; text-decoration: none; }
+.inventory-table thead th a:hover { text-decoration: underline; }
+.inventory-table th[aria-sort="ascending"] a::after { content: " ▲"; content: " ▲" / ""; font-size: 0.75em; }
+.inventory-table th[aria-sort="descending"] a::after { content: " ▼"; content: " ▼" / ""; font-size: 0.75em; }
+/* The further sizes of an article: its number muted, its name only for
+   screen readers, and no rule between the sizes. */
+.inventory-table tr:has(+ tr.same-article) > td { border-bottom-color: transparent; }
+.inventory-table tr.same-article > td:first-child a { color: var(--muted); }
+
+/* Paper has no use for the item list's controls: the filter row and
+   the bar above the table. */
+@media print {
+  .inventory-table .filter-row, .lab-toolbar { display: none; }
+}
+
+/* On screen, the item list's box scrolls both ways, at most the window's
+   height, and keeps the header rows at its top and the first column at
+   its left. Paper keeps print.css's whole table. */
+@media screen {
+  .table-scroll.table-sticky { overflow: auto; max-height: calc(100vh - 4rem); }
+  .table-sticky thead { position: sticky; top: 0; z-index: 2; }
+  .table-sticky thead :is(th, td) { background: var(--surface); }
+  .table-sticky :is(th, td):first-child { position: sticky; left: 0; }
+  .table-sticky tbody td:first-child { z-index: 1; background: var(--bg); }
+  .table-sticky thead :is(th, td):first-child { z-index: 3; }
+}
 .note-lines { margin: 0; padding-left: var(--space-3); }
 table.note-lines { padding: 0; }
 .note-lines select { max-width: 30rem; }
