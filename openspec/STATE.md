@@ -67,6 +67,15 @@ leaves this file then.
   one scale. Wanted: compare a value within its category or container
   size, or by the amount of substance it stands for. Open: which
   grouping the lab reads, and how small a group may be.
+- **The item list's colours on paper.** Browsers print no background
+  colours, so the `Bestand`, `Ø Jahr` and `lfd. Jahr` cells keep only
+  their text colour. Values in the two darkest heat steps and at level
+  `ruhend`, white on screen, print near-white and are hard to read;
+  the other values print as dark text whose hue alone hints at their
+  level or heat, and nothing on paper names a level. Wanted: values
+  that print legibly, with their level and heat. Open: whether paper
+  keeps the colours, through `print-color-adjust: exact`, or marks
+  level and heat another way, such as a letter beside the value.
 - **Planning a new item's first quarter.** The demand models read only
   complete quarters, so an item first delivered in the current quarter
   has no forecast until the quarter ends, though the item list projects
