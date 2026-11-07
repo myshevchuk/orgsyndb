@@ -1,17 +1,18 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n l10n lab inventory %}
-{% block title %}{{ item.article_number }} {{ item.name }}{% endblock %}
+{% block title %}{% if item.article_number %}{{ item.article_number }} {% endif %}{{ item.name }}{% endblock %}
 {% block main %}
-<h1>{{ item.article_number }} · {{ item.name }}</h1>
+<h1>{% if item.article_number %}{{ item.article_number }} · {% endif %}{{ item.name }}</h1>
 {% if user.is_authenticated %}<div class="lab-actions">
-<a href="/lab/inventory/deliveries/new/?item={{ item.pk }}">{% translate "Book delivery" %}</a>
-<a href="/lab/inventory/items/{{ item.pk }}/fill/">{% translate "Fill" %}</a>
+{% if item.article_number %}<a href="/lab/inventory/deliveries/new/?item={{ item.pk }}">{% translate "Book delivery" %}</a>
+{% else %}<a href="/lab/inventory/items/{{ item.pk }}/edit/">{% translate "Enter article number" %}</a>
+{% endif %}<a href="/lab/inventory/items/{{ item.pk }}/fill/">{% translate "Fill" %}</a>
 <a href="/lab/inventory/items/{{ item.pk }}/correct/">{% translate "Correct count" %}</a>
-<a href="/lab/inventory/items/{{ item.pk }}/consumption/">{% translate "Enter consumption" %}</a>
-<a href="/lab/inventory/items/{{ item.pk }}/edit/">{% translate "Edit" %}</a>
+{% if item.article_number %}<a href="/lab/inventory/items/{{ item.pk }}/consumption/">{% translate "Enter consumption" %}</a>
+{% endif %}<a href="/lab/inventory/items/{{ item.pk }}/edit/">{% translate "Edit" %}</a>
 </div>
 {% endif %}<dl class="metadata">
 <dt>{% translate "Compound" %}</dt>
-<dd>{% product item.article_number %}</dd>
+<dd>{% if item.article_number %}{% product item.article_number %}{% else %}–{% endif %}</dd>
 <dt>{% translate "Category" %}</dt>
 <dd>{{ item.category|default:"–" }}</dd>
 <dt>{% translate "Container" %}</dt>
@@ -94,7 +95,7 @@
 </table>
 </div>
 {% else %}<p>{% translate "No open bulk lot." %}</p>
-{% endif %}{% if user.is_authenticated %}<p class="actions"><a href="/lab/inventory/bulk/new/?article={{ item.article_number|urlencode }}">{% translate "New bulk lot" %}</a></p>
+{% endif %}{% if user.is_authenticated and item.article_number %}<p class="actions"><a href="/lab/inventory/bulk/new/?article={{ item.article_number|urlencode }}">{% translate "New bulk lot" %}</a></p>
 {% endif %}{% include "planning/item_forecast.html" %}
 {% include "inventory/history.html" %}
 {% endblock %}

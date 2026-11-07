@@ -317,7 +317,6 @@ key = "item_number"
 type = "text"
 label = "Item no."
 label_de = "Artikelnr."
-required = true
 unique = true
 pattern = 'CH-\d{4}'
 column = true
@@ -514,15 +513,16 @@ eingebauten Feldern. Die `methyl-salicylate.toml` der Beispielsammlung
 setzt etwa:
 
 ```toml
-item_number = "CH-0018"
 chemical_class = ["esters", "phenols"]
 group = "starting-materials"
 ```
 
 Das Stoffklassen-Vokabular definiert beide Stoffklassen. Die Beispielsammlung
-verlangt `item_number`, `chemical_class` und `group`. Eine neu hinzugefügte
-Verbindung muss daher alle drei setzen und eine noch nicht vergebene
-Artikelnummer verwenden. Setzen Sie `group` auf `starting-materials`,
+verlangt `chemical_class` und `group` für jede Verbindung. Das optionale
+`item_number` ist die Artikelnummer auf Lieferscheinen. Setzen Sie es nur
+für ein Endprodukt, das bereits abgegeben wurde, mit einer eindeutigen
+Nummer aus `CH-` und vier Ziffern. Nur sechs Endprodukte der Beispielsammlung
+setzen es. Setzen Sie `group` auf `starting-materials`,
 `reagents`, `intermediates` oder `final-products` aus
 [`vocabularies/inventory-groups.toml`](../examples/demo/vocabularies/inventory-groups.toml).
 Der Schlusskommentar der Verbindungsvorlage fordert dazu auf, die von Ihrer
@@ -655,7 +655,8 @@ und **Ausgangsstoffe** im Datenfeld, in der Tabelle zum Anwendungsbereich
 einer allgemeinen Vorschrift, im Schema einer Synthesewegseite und beim
 Ziel im Synthesewegverzeichnis. Der Linktext bleibt der Verbindungsname.
 Nach einem Leerzeichen folgt ein Zusatz in Klammern und gedeckter Farbe,
-in der Beispielsammlung etwa **Essigsäureanhydrid (CH-0007, Ac2O)**.
+in der Beispielsammlung etwa **Essigsäureanhydrid (Ac2O)** oder
+**Acetylsalicylsäure (CH-0010, ASA)**.
 Er enthält nur gesetzte Werte in Deklarationsreihenfolge, ohne Feldnamen,
 durch `, ` getrennt. Jeder Wert erscheint wie auf der Verbindungsseite,
 Zahlen also mit dem Dezimalzeichen der Website und ihrer Einheit.

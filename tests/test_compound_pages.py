@@ -737,22 +737,19 @@ class CompoundSiteTests(CompoundCase):
                 ("Made in house", "Yes"),
                 ("Group", "Synthesised" + SEPARATOR + "Final products")],
             "acetic-acid": [
-                ("Item no.", "CH-0006"), ("Short name", "AcOH"),
+                ("Short name", "AcOH"),
                 ("Chemical class", classes["carboxylic"]),
                 ("Stock", "2500 g"), ("Made in house", "No"),
                 ("Group", "Purchased" + SEPARATOR + "Reagents")],
             "ethyl-triphenylphosphoranylidene-acetate": [
-                ("Item no.", "CH-0015"),
                 ("Chemical class", f"Organophosphorus compounds, "
                                    f"{classes['esters']}"),
                 ("Stock", "12.5 g"), ("Made in house", "No"),
                 ("Group", "Purchased" + SEPARATOR + "Reagents")],
             "methyl-salicylate": [
-                ("Item no.", "CH-0018"),
                 ("Chemical class", f"{classes['esters']}, Phenols"),
                 ("Group", "Purchased" + SEPARATOR + "Starting materials")],
             "4-bromoacetophenone": [
-                ("Item no.", "CH-0005"),
                 ("Chemical class", SEPARATOR.join(
                     ["Carbonyl compounds", "Ketones", "Aryl ketones"])
                  + ", Aryl halides"),
@@ -763,13 +760,20 @@ class CompoundSiteTests(CompoundCase):
             with self.subTest(compound=key):
                 self.assertEqual(self.declared_pairs(key), pairs)
 
-    def test_every_compound_sets_an_item_number(self) -> None:
-        """Scenario: Declared fields in English (a required field)."""
+    def test_an_item_number_shows_only_where_it_is_set(self) -> None:
+        """Scenario: Declared fields in English (an optional field)."""
+        numbered = 0
         for key, compound in self.registry().items():
             with self.subTest(compound=key):
-                self.assertEqual(
-                    self.declared_pairs(key)[0],
-                    ("Item no.", compound["item_number"]))
+                pairs = self.declared_pairs(key)
+                if "item_number" in compound:
+                    numbered += 1
+                    self.assertEqual(pairs[0],
+                                     ("Item no.", compound["item_number"]))
+                else:
+                    self.assertNotIn("Item no.",
+                                     [label for label, _ in pairs])
+        self.assertEqual(numbered, 6)
 
     def test_the_parts_come_in_order(self) -> None:
         """Scenario: A page per compound (order of the parts)."""
@@ -1038,10 +1042,10 @@ class CompoundSiteTests(CompoundCase):
             ["CH-0010", "Carboxylic acids, Esters"])
         self.assertEqual(
             [c.text for c in rows[self.shown("4-bromoacetophenone")][4:6]],
-            ["CH-0005", "Aryl ketones, Aryl halides"])
+            ["", "Aryl ketones, Aryl halides"])
         self.assertEqual(
             [c.text for c in rows["Benzaldehyde"][4:6]],
-            ["CH-0011", "Aldehydes"])
+            ["", "Aldehydes"])
 
     def test_the_compound_catalogue_in_the_html(self) -> None:
         """Scenario: The compound catalogue in the HTML."""
@@ -1142,7 +1146,7 @@ class CompoundSiteTests(CompoundCase):
         text = rows["salicylic-acid"].attrs["data-text"]
         self.assertEqual(
             text, "Salicylic acid Salicylsäure C7H6O3 69-72-7 "
-                  "OC(=O)c1ccccc1O CH-0020")
+                  "OC(=O)c1ccccc1O")
         for key, row in rows.items():
             self.assertNotIn("  ", row.attrs["data-text"], key)
 
@@ -1403,8 +1407,7 @@ class GermanCompoundTests(CompoundCase):
                          "Salicylsäure")
         self.assertEqual(
             rows["salicylic-acid"].attrs["data-text"],
-            "Salicylic acid Salicylsäure C7H6O3 69-72-7 OC(=O)c1ccccc1O "
-            "CH-0020")
+            "Salicylic acid Salicylsäure C7H6O3 69-72-7 OC(=O)c1ccccc1O")
 
     def test_the_german_header_search(self) -> None:
         """Scenario: German page shell (the header search on
@@ -1426,8 +1429,7 @@ class GermanCompoundTests(CompoundCase):
         facts = page.find("dl", "compound-facts")
         self.assertEqual([p.label for p in page.definition_pairs(facts)],
                          ["Summenformel", "Molmasse", "CAS", "SMILES",
-                          "Artikelnr.", "Stoffklasse", "Eigene Herstellung",
-                          "Gruppe"])
+                          "Stoffklasse", "Eigene Herstellung", "Gruppe"])
         values = {p.label: p.definition.norm()
                   for p in page.definition_pairs(facts)}
         self.assertEqual(values["Molmasse"], "138,12 g/mol")
@@ -1468,7 +1470,10 @@ class GermanCompoundTests(CompoundCase):
                    if m[0].text == "Salicylsäure")
         self.assertEqual(row[2].text, "138,12 g/mol")
         self.assertEqual([c.text for c in row[4:6]],
-                         ["CH-0020", "Carbonsäuren, Phenole"])
+                         ["", "Carbonsäuren, Phenole"])
+        row = next(m for m in model.rows[1:]
+                   if m[0].text == "(E)-Zimtsäure")
+        self.assertEqual(row[4].text, "CH-0012")
 
     def test_a_german_route_tree(self) -> None:
         """Scenario: A German route tree."""
@@ -1491,26 +1496,28 @@ class GermanCompoundTests(CompoundCase):
         """Scenario: Declared fields in German."""
         carbonyl = "Carbonylverbindungen"
         expected = {
+            "cinnamic-acid": [
+                ("Artikelnr.", "CH-0012"),
+                ("Stoffklasse", f"{carbonyl}{SEPARATOR}Carbonsäuren"),
+                ("Eigene Herstellung", "Ja"),
+                ("Gruppe", f"Selbst hergestellt{SEPARATOR}Endprodukte")],
             "acetic-acid": [
-                ("Artikelnr.", "CH-0006"), ("Kurzname", "AcOH"),
+                ("Kurzname", "AcOH"),
                 ("Stoffklasse", f"{carbonyl}{SEPARATOR}Carbonsäuren"),
                 ("Bestand", "2500 g"), ("Eigene Herstellung", "Nein"),
                 ("Gruppe", f"Zugekauft{SEPARATOR}Reagenzien")],
             "ethyl-triphenylphosphoranylidene-acetate": [
-                ("Artikelnr.", "CH-0015"),
                 ("Stoffklasse", "Organophosphorverbindungen, " + SEPARATOR
                  .join([carbonyl, "Carbonsäurederivate", "Ester"])),
                 ("Bestand", "12,5 g"), ("Eigene Herstellung", "Nein"),
                 ("Gruppe", f"Zugekauft{SEPARATOR}Reagenzien")],
             "salicylic-acid": [
-                ("Artikelnr.", "CH-0020"),
                 ("Stoffklasse", f"{carbonyl}{SEPARATOR}Carbonsäuren, "
                                 "Phenole"),
                 ("Eigene Herstellung", "Ja"),
                 ("Gruppe", f"Selbst hergestellt{SEPARATOR}"
                            "Zwischenprodukte")],
             "methyl-salicylate": [
-                ("Artikelnr.", "CH-0018"),
                 ("Stoffklasse", SEPARATOR.join(
                     [carbonyl, "Carbonsäurederivate", "Ester"])
                  + ", Phenole"),
@@ -2156,7 +2163,7 @@ class FallbackNameTests(CompoundCase):
         self.assertEqual(after[0], " ")
         self.assertEqual((after[1].tag, after[1].classes),
                          ("span", ["compound-beside"]))
-        self.assertEqual(after[1].text(), "(CH-0015, 12,5 g)")
+        self.assertEqual(after[1].text(), "(12,5 g)")
         self.check_notes(page, materials.definition)
 
 

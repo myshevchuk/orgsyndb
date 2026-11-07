@@ -30,8 +30,10 @@ ACCOUNTS = {
     "mwolf": ("Miriam Wolf", "MW"),
 }
 SIGNING_IN = ["klehmann", "tbauer", "aschmidt", "jkoch"]
-ARTICLES = ["CH-0001", "CH-0002", "CH-0003", "CH-0010", "CH-0012",
-            "CH-0013", "CH-0016", "NV-0007"]
+ARTICLES = ["CH-0001", "CH-0002", "CH-0010", "CH-0012", "CH-0013",
+            "CH-0016", "NV-0007"]
+# The demo's position without an article number, named as its compound.
+NUMBERLESS = ("1-Phenylethanol", "1-phenylethanol")
 LEVELS = ["out", "critical", "low", "watch"]
 NOTE_NUMBER = re.compile(r"^LS-(\d{4})-(\d{3})$")
 PLAN = "/lab/planning/"
@@ -123,6 +125,8 @@ class SeededCase(IndexMixin, TestCase):
         from django.contrib.auth import get_user_model
         return get_user_model().objects.get(username=username)
 
-    def items(self, article: str) -> list[Any]:
+    def items(self, article: str | None) -> list[Any]:
         from inventory.models import Item
+        if article is None:
+            return list(Item.objects.filter(article_number__isnull=True))
         return list(Item.objects.filter(article_number=article))

@@ -34,8 +34,8 @@
 </thead>
 <tbody>
 {% for row in rows %}<tr>
-<td><a href="/lab/inventory/items/{{ row.item.pk }}/">{{ row.item.article_number }}</a></td>
-<td>{% if row.compound %}<a href="/compounds/{{ row.compound.key }}/">{{ row.item.name }}</a>{% else %}{{ row.item.name }}{% endif %}</td>
+<td>{% if row.item.article_number %}<a href="/lab/inventory/items/{{ row.item.pk }}/">{{ row.item.article_number }}</a>{% endif %}</td>
+<td>{% if not row.item.article_number %}<a href="/lab/inventory/items/{{ row.item.pk }}/">{{ row.item.name }}</a>{% elif row.compound %}<a href="/compounds/{{ row.compound.key }}/">{{ row.item.name }}</a>{% else %}{{ row.item.name }}{% endif %}</td>
 <td>{{ row.item.category }}</td>
 <td class="number">{{ row.item.container }}</td>
 <td class="number stock{% if row.figures.level %} level-{{ row.figures.level }}{% endif %}">{{ row.item.quantity }}{% if row.figures.level %} <span class="level-label">{{ row.figures.level|level_label }}</span>{% endif %}</td>

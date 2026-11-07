@@ -170,11 +170,15 @@ class NewItemTests(FormCase):
 
     def test_the_article_number_offers_the_compounds(self) -> None:
         options = datalist(page(self.client.get(NEW_ITEM)), "article_number")
-        for entry in demo_data()["compounds"]:
+        numbered = [entry for entry in demo_data()["compounds"]
+                    if "item_number" in entry["data"]]
+        self.assertTrue(numbered)
+        for entry in numbered:
             data = entry["data"]
-            for identifier in (entry["key"], data["item_number"]):
-                with self.subTest(identifier=identifier):
-                    self.assertEqual(options[identifier], data["name_de"])
+            with self.subTest(identifier=data["item_number"]):
+                self.assertEqual(options[data["item_number"]],
+                                 data["name_de"])
+        self.assertEqual(len(options), len(numbered))
 
     def test_the_category_offers_the_categories_in_use(self) -> None:
         self.item("A-1", category="Endprodukt")
@@ -207,7 +211,7 @@ class NewItemTests(FormCase):
 
     def test_refused_fields(self) -> None:
         cases = {
-            "article_number": ["", "a" * 31],
+            "article_number": ["a" * 31],
             "name": ["", "n" * 201],
             "category": ["c" * 101],
             "size": ["", "0", "-1", "abc", "1,2345"],

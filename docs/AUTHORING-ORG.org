@@ -36,6 +36,8 @@
 #+AI_PASS: fact-check claude-opus-5-5 [2026-11-02 Mon 20:05] -- doc-writer pass line corrected from gpt-6 to the pinned run model; the step budget's depth-1 exception
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-03 Tue 08:15] -- Emacs package pointer
 #+AI_PASS: fact-check claude-opus-5-5 [2026-11-03 Tue 08:18] -- doc-writer pass line corrected from gpt-6 to the pinned run model; #+LAST_MODIFIED is updated on save by the Emacs package
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-07 Sat 11:46] -- demo article numbers, required compound fields and compound-link example
+#+AI_PASS: fact-check claude-opus-5-5 [2026-11-07 Sat 11:49] -- doc-writer pass line corrected from gpt-6 to the pinned run model
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -195,12 +197,14 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   ~[[fields.compound]]~. A declaration with ~required = true~ means every
   compound must supply that field. At the template's closing note, add the
   declared fields as further ~key = value~ lines in the compound file. The
-  [[file:../examples/demo/orgsyndb.toml][demo settings]] require ~item_number~, ~chemical_class~ and ~group~.
-  Choose an unused item number with ~CH-~ followed by four digits and a
-  non-empty list of value keys from
+  [[file:../examples/demo/orgsyndb.toml][demo settings]] require ~chemical_class~ and ~group~.
+  Choose a non-empty list of value keys for ~chemical_class~ from
   [[file:../examples/demo/vocabularies/chemical-classes.toml][vocabularies/chemical-classes.toml]]. Set ~group~ to one value from
   [[file:../examples/demo/vocabularies/inventory-groups.toml][vocabularies/inventory-groups.toml]]: ~starting-materials~, ~reagents~,
-  ~intermediates~ or ~final-products~. The
+  ~intermediates~ or ~final-products~. The optional ~item_number~ is the
+  article number printed on delivery notes. Set it only for an end product
+  that has been delivered, using a unique number with ~CH-~ followed by
+  four digits. Only six final products in the demo set it. The
   [[file:SCHEMA.md][schema reference]] gives the field types, rules and validator messages.
 
   To show a structure, place an SVG or PNG file in the collection's
@@ -348,7 +352,7 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   After each product or starting-material link, the panel shows any values
   that the compound sets for fields the collection declares with ~beside = true~.
   The link text stays the compound's name. One space and a muted note in
-  parentheses follow it, for example *Acetic anhydride (CH-0007, Ac2O)* in the
+  parentheses follow it, for example *Acetic anhydride (Ac2O)* in the
   demo. Values appear without labels, in declaration order, separated by a
   comma and a space, as on the compound page. Numbers use the site's decimal
   separator and unit.

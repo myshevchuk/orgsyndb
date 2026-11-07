@@ -50,13 +50,16 @@ class Item(models.Model):
     """An article in one container size, counted in whole containers.
 
     The article number, size and unit identify the item within its
-    inventory and are fixed once it exists. The quantity changes only by
-    movements; the change history covers the other fields.
+    inventory. The size and unit are fixed once it exists; the article
+    number, the one delivery notes carry, is None until the item is
+    first delivered and fixed once it is set. The quantity changes only
+    by movements; the change history covers the other fields.
     """
 
     inventory = models.CharField(_("Inventory"), max_length=30,
                                  choices=INVENTORIES, default=END_PRODUCTS)
-    article_number = models.CharField(_("Article no."), max_length=30)
+    article_number = models.CharField(_("Article no."), max_length=30,
+                                      null=True, blank=True)
     name = models.CharField(_("Name"), max_length=200)
     category = models.CharField(_("Category"), max_length=100, blank=True)
     size = models.DecimalField(
@@ -69,7 +72,8 @@ class Item(models.Model):
     history = RecordedHistory(excluded_fields=["quantity"])
 
     class Meta:
-        ordering = ["article_number", "unit", "size"]
+        ordering = [models.F("article_number").asc(nulls_last=True),
+                    "name", "unit", "size"]
         verbose_name = _("item")
         verbose_name_plural = _("items")
         constraints = [
@@ -81,7 +85,9 @@ class Item(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.article_number} {self.container} {self.name}"
+        shown = f"{self.container} {self.name}"
+        return f"{self.article_number} {shown}" if self.article_number \
+            else shown
 
     @property
     def container(self) -> str:
@@ -90,10 +96,13 @@ class Item(models.Model):
         German."""
         return f"{number_format(plain(self.size))} {Unit(self.unit).label}"
 
-    def sort_key(self) -> tuple[str, str, Decimal]:
-        """The item's place in the item list: by article number, then
-        unit, then size."""
-        return (self.article_number, self.unit, self.size)
+    def sort_key(self) -> tuple[bool, str, str, Decimal]:
+        """The item's place in the item list: by article number, items
+        without one after the others and by name, then unit, then
+        size."""
+        number = self.article_number
+        return (number is None, number if number is not None
+                else self.name.casefold(), self.unit, self.size)
 
 
 class DeliveryNote(models.Model):

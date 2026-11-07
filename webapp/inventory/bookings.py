@@ -24,6 +24,7 @@ from django.db.models.functions import Round
 from django.utils import timezone
 from django.utils.formats import number_format
 from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy
 
 from inventory.figures import proposed_amount, quarter_of, to_base
 from inventory.models import (BASE_UNIT, END_PRODUCTS, DeliveryLine,
@@ -146,13 +147,32 @@ def _lot_movement(user: Any, lot: Lot, kind: str, amount: Decimal,
         booked_at=timezone.now(), user=user, note=note)
 
 
-def create_item(user: Any, *, article_number: str, name: str,
+def _number(article_number: str | None) -> str | None:
+    """Return ARTICLE_NUMBER stripped, or None for none or an empty
+    one."""
+    return (article_number or "").strip() or None
+
+
+def number_taken(item: Item, article_number: str) -> bool:
+    """Whether another item of ITEM's inventory has ARTICLE_NUMBER with
+    ITEM's size and unit."""
+    return Item.objects.filter(
+        inventory=item.inventory, article_number=article_number,
+        size=item.size, unit=item.unit).exclude(pk=item.pk).exists()
+
+
+TAKEN = gettext_lazy(
+    "This article already has an item of this size and unit.")
+
+
+def create_item(user: Any, *, article_number: str | None, name: str,
                 size: Decimal, unit: str, quantity: int, category: str = "",
                 note: str = "", date: Date | None = None,
                 inventory: str = END_PRODUCTS) -> Item:
     """Create an item of INVENTORY with QUANTITY containers and its
     opening count, booked by USER and dated DATE, today by default.
 
+    An ARTICLE_NUMBER of None or empty gives an item without one.
     Refuse a QUANTITY below zero, a SIZE of zero or less, an unknown
     UNIT, a DATE after today, a value too long for its field, and an
     item whose article number, size and unit another item of the
@@ -161,14 +181,14 @@ def create_item(user: Any, *, article_number: str, name: str,
     day = _day(date)
     if quantity < 0:
         raise Refused({"quantity": _("The count may not be negative.")})
-    item = Item(inventory=inventory, article_number=article_number,
-                name=name, category=category, size=size, unit=unit,
+    item = Item(inventory=inventory,
+                article_number=_number(article_number), name=name,
+                category=category, size=size, unit=unit,
                 quantity=quantity, note=note)
     _checked(item)
-    taken = _("This article already has an item of this size and unit.")
-    if Item.objects.filter(inventory=inventory,
-                           article_number=article_number, size=size,
-                           unit=unit).exists():
+    taken = str(TAKEN)
+    if item.article_number is not None and number_taken(
+            item, item.article_number):
         raise Refused({"size": taken})
     try:
         with transaction.atomic():
@@ -180,6 +200,36 @@ def create_item(user: Any, *, article_number: str, name: str,
     return item
 
 
+def assign_article_number(user: Any, item: Item,
+                          article_number: str) -> Item:
+    """Give ITEM, which has no article number, ARTICLE_NUMBER, recorded
+    in its history as a change by USER, and return the item as stored.
+
+    Refuse an empty or too long ARTICLE_NUMBER, an item that already has
+    one, and a number another item of the inventory has with ITEM's size
+    and unit.
+    """
+    number = _number(article_number)
+    if number is None:
+        raise Refused({"article_number": _("Enter an article number.")})
+    _checked(Item(inventory=item.inventory, article_number=number,
+                  name=item.name, size=item.size, unit=item.unit))
+    try:
+        with transaction.atomic():
+            if number_taken(item, number):
+                raise Refused({"article_number": str(TAKEN)})
+            if not Item.objects.filter(
+                    pk=item.pk, article_number__isnull=True).update(
+                        article_number=number):
+                raise Refused({"article_number": _(
+                    "The item already has an article number.")})
+            stored = Item.objects.get(pk=item.pk)
+            _attributed(stored, user).save(update_fields=["article_number"])
+    except IntegrityError as error:
+        raise Refused({"article_number": str(TAKEN)}) from error
+    return stored
+
+
 def book_note(user: Any, *, date: Date, lines: Sequence[tuple[Item, int]],
               number: str | None = "", recipient: str = "", note: str = "",
               historical: bool = False) -> DeliveryNote:
@@ -189,7 +239,8 @@ def book_note(user: Any, *, date: Date, lines: Sequence[tuple[Item, int]],
     A current note books one delivery movement per line, dated DATE; a
     HISTORICAL note changes no quantity. Refuse, with the position of
     the line concerned where there is one: a note without lines; an item
-    twice, or of another inventory than ``end-products``; a count of
+    twice, of another inventory than ``end-products``, or without an
+    article number; a count of
     zero or less; for a current note, a count above the item's quantity;
     for a historical note, an item with an entered consumption value for
     the quarter of DATE. Refuse too a DATE after today, a NUMBER another
@@ -204,6 +255,10 @@ def book_note(user: Any, *, date: Date, lines: Sequence[tuple[Item, int]],
         if item.inventory != END_PRODUCTS:
             raise Refused({"item": _("The item is not an end product.")},
                           line=position)
+        if item.article_number is None:
+            raise Refused({"item": _(
+                "Enter the item's article number before its first "
+                "delivery.")}, line=position)
         if item.pk in seen:
             raise Refused({"item": _("The item is already in the note.")},
                           line=position)
@@ -395,10 +450,13 @@ def enter_consumption(user: Any, item: Item, *, year: int, quarter: int,
     containers, entered by USER, and return it; a COUNT of None removes
     the quarter's value and returns None.
 
-    Refuse a QUARTER outside 1 to 4, a YEAR below 1, a COUNT below zero,
-    and a value for a quarter in which the item has lines of a
-    historical note that is not reversed.
+    Refuse an item without an article number, a QUARTER outside 1 to
+    4, a YEAR below 1, a COUNT below zero, and a value for a quarter in
+    which the item has lines of a historical note that is not reversed.
     """
+    if item.article_number is None:
+        raise Refused(_("An item without an article number has never "
+                        "been delivered."))
     if not 1 <= quarter <= 4:
         raise Refused({"quarter": _("The quarter is 1, 2, 3 or 4.")})
     if year < 1:

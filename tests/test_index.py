@@ -126,7 +126,7 @@ class IndexOfTheTestCollectionTests(unittest.TestCase):
                           "stock", "in_house", "group"])
         self.assertEqual(compound["item_number"], {
             "key": "item_number", "type": "text", "label": "Item no.",
-            "label_de": "Artikelnr.", "required": True, "column": True,
+            "label_de": "Artikelnr.", "required": False, "column": True,
             "pattern": r"CH-\d{4}", "unique": True, "search": True,
             "beside": True})
         self.assertEqual(compound["stock"], {

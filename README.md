@@ -64,13 +64,15 @@ sequences, each with a German translation:
 
 The demo also declares six compound fields: `item_number`, `short_name`,
 `chemical_class`, `stock`, `in_house` and `group`. Its chemical-class
-vocabulary has 13 values on three levels. Every compound sets an item number
-and at least one chemical class; the compound directory shows both as
-columns. You can filter it by chemical class, group and whether a compound
-is made in house, and search by item number or short name as well as the
-compound's chemical data. The demo sets `beside = true` on `item_number`
-and `short_name`, so compound links read, for example,
-**Acetic anhydride (CH-0007, Ac2O)**.
+vocabulary has 13 values on three levels. Every compound sets at least one
+chemical class. Only the six final products delivered by the lab demo set
+`item_number`, the article number printed on delivery notes. The compound
+directory shows both fields as columns, with an empty item-number cell for
+compounds without one. You can filter it by chemical class, group and
+whether a compound is made in house, and search by item number or short
+name as well as the compound's chemical data. The demo sets `beside = true`
+on `item_number` and `short_name`, so compound links read, for example,
+**Acetic anhydride (Ac2O)** or **Acetylsalicylic acid (CH-0010, ASA)**.
 Every compound also sets `group` from the `inventory-groups` vocabulary.
 This field divides the directory into **Purchased** and **Synthesised**
 tab pages, each listing ten compounds.
@@ -316,7 +318,6 @@ key = "item_number"
 type = "text"
 label = "Item no."
 label_de = "Artikelnr."
-required = true
 unique = true
 pattern = 'CH-\d{4}'
 column = true
@@ -335,10 +336,11 @@ column = true
 facet = true
 ```
 
-The item number must match the whole pattern and be unique across the
-registry. A choice field uses a *vocabulary*: a file of allowed values with
-labels. Here it is `vocabularies/chemical-classes.toml`, beside
-`orgsyndb.toml`. `init` creates `vocabularies/` with `reaction-types.toml`,
+The item number is optional. When set, it must match the whole pattern and
+be unique across the registry. A choice field uses a *vocabulary*: a file
+of allowed values with labels. Here it is
+`vocabularies/chemical-classes.toml`, beside `orgsyndb.toml`. `init` creates
+`vocabularies/` with `reaction-types.toml`,
 copied from [`templates/reaction-types.toml`](templates/reaction-types.toml).
 Each procedure names exactly one slug from this file in `reaction_types`.
 Edit your collection's copy to add, rename or remove reaction types; a
@@ -370,16 +372,16 @@ Write field values as further top-level keys in each compound file. For
 example, the demo's `methyl-salicylate.toml` includes:
 
 ```toml
-item_number = "CH-0018"
 chemical_class = ["esters", "phenols"]
 group = "starting-materials"
 ```
 
 `multiple = true` requires a non-empty list of distinct vocabulary values.
 The full demo vocabulary also defines `phenols`. When adding a compound to
-the demo, supply all three fields and choose an unused item number. Set
-`group` to `starting-materials`, `reagents`, `intermediates` or
-`final-products` from
+the demo, supply `chemical_class` and `group`. Set `item_number` only for
+an end product that has been delivered, using its unique article number
+with `CH-` followed by four digits. Set `group` to `starting-materials`,
+`reagents`, `intermediates` or `final-products` from
 [`vocabularies/inventory-groups.toml`](examples/demo/vocabularies/inventory-groups.toml).
 The closing note in the compound template reminds you to add the fields
 your collection declares. The [field reference](docs/SCHEMA.md#collection-field-declarations)
@@ -1006,7 +1008,9 @@ Emacs, save a collection file or run `M-x orgsyndb-refresh-index`.
   With `C-u M-x orgsyndb-new-procedure`, choose the format and language.
 - `M-x orgsyndb-new-compound` asks for a key, the built-in compound values
   and each required declared field, then writes `compounds/<key>.toml`.
-  Leave an optional value empty to omit it.
+  Leave an optional value empty to omit it. In the demo, the required
+  declared fields are `chemical_class` and `group`; it does not prompt for
+  `item_number`.
 - `M-x orgsyndb-visit-variant` opens another language variant of the
   procedure or sequence. `M-x orgsyndb-create-translation` creates a
   procedure variant beside the source, keeping its front matter with new
@@ -1505,10 +1509,18 @@ ORGSYNDB_COLLECTION_PATH=examples/demo
 ORGSYNDB_DEMO=true
 ```
 
-The data uses the in-house final products of `examples/demo`. Its index
-gives them compound links and molar masses for conversions between mg and
-µmol. With another collection's index, the products have no links and
-those conversions fail.
+The data contains seven articles: `CH-0001`, `CH-0002`, `CH-0010`,
+`CH-0012`, `CH-0013` and `CH-0016`, the six delivered final products of
+`examples/demo`, and `NV-0007` (**Neuverbindung 7** / **New compound 7**),
+which has no compound in the collection. The demo collection's index gives
+the six products compound links and molar masses for conversions between
+mg and µmol. With another collection's index, the products have no links
+and those conversions fail.
+
+There is also an item **1-Phenylethanol** without an article number. It
+enters stock later, is filled without a bulk lot and is never delivered.
+Its synthesis task names the compound key `1-phenylethanol` as its product
+and has a batch but no lot. The item has no compound link or forecast.
 
 At every start, `app` applies migrations, runs `demo_data --if-empty`, then
 starts serving requests. The command fills the database only when
@@ -1581,13 +1593,35 @@ divided into containers.
 
 #### Enter items and find stock
 
-Choose **New item** on the item list. Enter the article number, name,
-category, container size and unit (`mg`, `µmol`, `g` or `mmol`), opening
-count and note. Stock is a count of containers. Each row represents one
-article in one container size; an article can have several sizes. The
-article number, size and unit cannot change after creation. The item
-links to its compound when its article number matches an identifier in
-the collection, such as the demo's `item_number`.
+Choose **New item** on the item list. Enter the name, category, container
+size and unit (`mg`, `µmol`, `g` or `mmol`), opening count and note.
+Leave the optional article number empty for an item that has never been
+delivered. It is the number printed on the article's
+delivery notes. Stock is a count of containers. Each row represents one
+article in one container size; an article can have several sizes. No two
+items may share an article number, size and unit; items without a number
+are not compared. Size and unit cannot change after creation.
+
+Before the first delivery, choose **Enter article number** on the item
+page to open **Edit**. The article-number field appears only while the
+item has none. Enter the number once; it is fixed after you save it,
+including in the admin. You can still edit the name, category and note.
+The item links to its compound when its article number matches an
+identifier in the collection, such as the demo's `item_number`.
+
+On **New item**, **Edit** and **New bulk lot**, article-number suggestions
+come from the compounds' unique text fields, such as the demo's
+`item_number`. Each number is labelled with the compound's name. These
+suggestions exclude compound keys; the task form's product field still
+offers both keys and item numbers.
+
+An item without an article number shows its container and name; its page
+heading is the name alone. It has no compound link (**Compound** shows
+`–`), no bulk lots and no forecast. It belongs to no planning article and
+matches no task. You can fill containers without a lot and correct their
+count, but cannot book deliveries or enter past consumption, even zero.
+Its page offers **Enter article number** in place of **Book delivery**,
+and has no **Enter consumption** or **New bulk lot** link.
 
 Enter items and past quarterly consumption by hand; there is no Excel
 import. The item list shows stock, consumption means, this year's
@@ -1595,14 +1629,19 @@ consumption, coverage and bulk alongside the item's details. Filter by
 category, stock level or text. A level filter includes that level and
 more urgent ones. Choose **By urgency** to put out-of-stock items first,
 then the other levels, with the shortest coverage first within each level.
-Open an article number to see its item page.
+By default, items without an article number appear last, ordered by name.
+Open an article number, or the name of an item without one, to see its
+item page.
 
 #### Book deliveries and correct counts
 
-On the item page, choose **Book delivery**, or choose **New delivery note**
-on the deliveries list. A delivery note (`Lieferschein`) holds an optional
-number, date, recipient, note and up to ten lines of items and container
-counts. Booking it reduces stock for all lines together. If any line
+Enter the item's article number before its first delivery. Delivery-note
+rows offer only items with an article number, for current and historical
+deliveries alike. On the item page, choose **Book delivery**, or choose
+**New delivery note** on the deliveries list. A delivery note
+(`Lieferschein`) holds an optional number, date, recipient, note and up to
+ten lines of items and container counts. Booking it reduces stock for all
+lines together. If any line
 exceeds the available stock, the whole note is refused and nothing
 changes. The deliveries list shows newest notes first and lets you
 filter by text or item.
@@ -1624,9 +1663,10 @@ from the items' ledgers.
 
 #### Enter past consumption and read stock levels
 
-On an item page, choose **Verbrauch nachtragen** (**Enter consumption**)
-to enter a past quarter's container count. Entering another value for
-the same quarter replaces it; leaving the count empty removes it.
+On an item page with an article number, choose **Verbrauch nachtragen**
+(**Enter consumption**) to enter a past quarter's container count.
+Entering another value for the same quarter replaces it; leaving the
+count empty removes it.
 Subsequent deliveries add to consumption in the quarter of the delivery
 note's date.
 

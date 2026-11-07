@@ -5,7 +5,8 @@
 from typing import Any
 
 from . import table
-from .demo_support import ITEMS, LEVELS, PLAN, SEEDING_DAYS, SeededCase
+from .demo_support import (ITEMS, LEVELS, NUMBERLESS, PLAN, SEEDING_DAYS,
+                           SeededCase)
 
 LISTED = {"CH-0012", "CH-0013", "CH-0010", "CH-0016", "NV-0007"}
 ALSO_WITH_ALL = {"CH-0001", "CH-0002"}
@@ -47,7 +48,8 @@ class DayChecks:
     def test_all_articles(self: Any) -> None:
         rows = self.rows("?all=1")
         self.assertEqual(set(rows), LISTED | ALSO_WITH_ALL)
-        self.assertNotIn("CH-0003", rows)
+        self.assertNotIn(None, rows)
+        self.assertNotIn(NUMBERLESS[0], self.get(PLAN + "?all=1").text())
 
     def test_ch_0012(self: Any) -> None:
         from tasks.models import State
@@ -94,8 +96,11 @@ class DayChecks:
         self.assertTrue(running)
         self.assertFalse(any(LATE in text for _task, text in running))
 
-    def test_ch_0003_has_no_forecast(self: Any) -> None:
-        for item in self.items("CH-0003"):
+    def test_the_position_without_a_number_has_no_forecast(
+            self: Any) -> None:
+        items = self.items(None)
+        self.assertEqual([item.name for item in items], [NUMBERLESS[0]])
+        for item in items:
             with self.subTest(item=str(item)):
                 text = self.get(f"/lab/inventory/items/{item.pk}/").text()
                 self.assertIn("Kein Verbrauch, keine Prognose.", text)

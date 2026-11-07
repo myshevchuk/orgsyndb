@@ -53,7 +53,9 @@ class DemoLookupTests(IndexMixin, SimpleTestCase):
             self) -> None:
         for entry in demo_data()["compounds"]:
             data = entry["data"]
-            for token in (entry["key"], data["item_number"]):
+            for token in (entry["key"], *([data["item_number"]]
+                                          if "item_number" in data
+                                          else [])):
                 with self.subTest(token=token):
                     found = index.compound_for(token)
                     self.assertEqual(found.key, entry["key"])

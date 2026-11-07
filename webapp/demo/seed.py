@@ -172,8 +172,8 @@ class _Writer:
             case data.Fill():
                 bookings.fill(user, self.items[change.item],
                               count=change.count, date=day,
-                              lot=self.lots[change.lot],
-                              amount=change.amount)
+                              lot=self.lots[change.lot] if change.lot
+                              else None, amount=change.amount)
             case data.Correct():
                 bookings.correct(user, self.items[change.item],
                                  count=change.count, note=change.note,

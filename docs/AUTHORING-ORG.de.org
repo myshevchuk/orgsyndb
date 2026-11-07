@@ -32,6 +32,8 @@
 #+AI_PASS: fact-check claude-opus-5-5 [2026-11-02 Mon 20:05] -- doc-writer pass line corrected from gpt-6 to the pinned run model; the step budget's depth-1 exception
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-03 Tue 08:15] -- Verweis auf das Emacs-Paket
 #+AI_PASS: fact-check claude-opus-5-5 [2026-11-03 Tue 08:18] -- doc-writer pass line corrected from gpt-6 to the pinned run model; #+LAST_MODIFIED is updated on save by the Emacs package
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-07 Sat 11:46] -- Artikelnummern, Pflichtfelder und Verbindungslink der Beispielsammlung
+#+AI_PASS: fact-check claude-opus-5-5 [2026-11-07 Sat 11:49] -- doc-writer pass line corrected from gpt-6 to the pinned run model
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
@@ -223,13 +225,16 @@ Datei, um die erlaubten Reaktionstypen zu ändern. Die
   ~[[fields.compound]]~. Bei ~required = true~ muss jede Verbindung das
   Feld setzen. Tragen Sie die deklarierten Felder beim Schlusskommentar der
   Vorlage als weitere Zeilen ~key = value~ in der Verbindungsdatei ein.
-  Die [[file:../examples/demo/orgsyndb.toml][Einstellungen der Beispielsammlung]] verlangen ~item_number~,
-  ~chemical_class~ und ~group~. Wählen Sie eine noch nicht vergebene
-  Artikelnummer aus ~CH-~ und vier Ziffern und eine nicht leere Liste von
+  Die [[file:../examples/demo/orgsyndb.toml][Einstellungen der Beispielsammlung]] verlangen ~chemical_class~
+  und ~group~. Wählen Sie für ~chemical_class~ eine nicht leere Liste von
   Wertschlüsseln aus
   [[file:../examples/demo/vocabularies/chemical-classes.toml][vocabularies/chemical-classes.toml]]. Setzen Sie ~group~ auf einen Wert aus
   [[file:../examples/demo/vocabularies/inventory-groups.toml][vocabularies/inventory-groups.toml]]: ~starting-materials~, ~reagents~,
-  ~intermediates~ oder ~final-products~. Die
+  ~intermediates~ oder ~final-products~. Das optionale ~item_number~ ist
+  die Artikelnummer auf Lieferscheinen. Setzen Sie es nur für ein
+  Endprodukt, das bereits abgegeben wurde, mit einer eindeutigen Nummer
+  aus ~CH-~ und vier Ziffern. Nur sechs Endprodukte der Beispielsammlung
+  setzen es. Die
   [[file:SCHEMA.de.md][Schema-Referenz]] nennt Feldtypen, Regeln und Validatormeldungen.
 
   Für ein Strukturbild legen Sie eine SVG- oder PNG-Datei in
@@ -396,7 +401,7 @@ Datei, um die erlaubten Reaktionstypen zu ändern. Die
   die die Verbindung für Felder mit der Deklaration ~beside = true~ setzt.
   Der Linktext bleibt der Verbindungsname. Nach einem Leerzeichen folgt ein
   Zusatz in Klammern und gedeckter Farbe, in der Beispielsammlung etwa
-  *Essigsäureanhydrid (CH-0007, Ac2O)*. Die Werte stehen ohne Feldnamen in
+  *Essigsäureanhydrid (Ac2O)*. Die Werte stehen ohne Feldnamen in
   Deklarationsreihenfolge, durch Komma und Leerzeichen getrennt.
   Jeder Wert erscheint wie auf der Verbindungsseite; Zahlen verwenden das
   Dezimalzeichen der Website und ihre Einheit.

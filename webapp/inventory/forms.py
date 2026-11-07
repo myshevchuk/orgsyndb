@@ -19,6 +19,12 @@ from inventory.bookings import Refused
 from inventory.models import END_PRODUCTS, DeliveryNote, Item, Lot
 
 DATE = forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
+ARTICLE_NUMBER = forms.TextInput(attrs={"list": "article-numbers",
+                                        "autocomplete": "off"})
+ARTICLE_NUMBER_HELP = _("The number of the article's delivery notes; "
+                        "left empty until it is first delivered. It "
+                        "links the item to the compound of the "
+                        "collection with this number.")
 NOTE = forms.Textarea(attrs={"rows": 3})
 ROWS = 10
 
@@ -70,16 +76,12 @@ class ItemForm(forms.ModelForm):
         fields = ["article_number", "name", "category", "size", "unit",
                   "quantity", "note"]
         widgets = {
-            "article_number": forms.TextInput(attrs={
-                "list": "compound-ids", "autocomplete": "off"}),
+            "article_number": ARTICLE_NUMBER,
             "category": forms.TextInput(attrs={"list": "categories",
                                                "autocomplete": "off"}),
             "note": NOTE,
         }
-        help_texts = {
-            "article_number": _("Links the item to the compound of the "
-                                "collection with this item number."),
-        }
+        help_texts = {"article_number": ARTICLE_NUMBER_HELP}
 
     def clean_size(self) -> Decimal:
         """Return the size; refuse one of zero or less."""
@@ -108,7 +110,10 @@ class MetadataForm(forms.ModelForm):
 
 
 class ItemEditForm(MetadataForm):
-    """The fields of an item that may change."""
+    """The fields of an item that may change, and, for an item without
+    an article number, the article number, which the form does not save:
+    ``article_number`` in its cleaned data is the number entered or
+    None."""
 
     class Meta:
         model = Item
@@ -118,6 +123,16 @@ class ItemEditForm(MetadataForm):
                                                "autocomplete": "off"}),
             "note": NOTE,
         }
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        if self.instance.article_number is None:
+            self.fields = {"article_number": forms.CharField(
+                label=_("Article no."), max_length=30, required=False,
+                empty_value=None, widget=ARTICLE_NUMBER,
+                help_text=_("Entered once, when the item is first "
+                            "delivered; fixed from then on.")),
+                **self.fields}
 
 
 class ItemChoiceField(forms.ModelChoiceField):
@@ -146,7 +161,8 @@ class NoteForm(forms.Form):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        items = Item.objects.filter(inventory=END_PRODUCTS)
+        items = Item.objects.filter(inventory=END_PRODUCTS,
+                                    article_number__isnull=False)
         for row in range(ROWS):
             self.fields[f"item_{row}"] = ItemChoiceField(
                 queryset=items, required=False, label=_("Item"),
@@ -310,8 +326,7 @@ class LotForm(forms.ModelForm):
         fields = ["article_number", "unit", "amount", "batch", "location",
                   "made_on", "note"]
         widgets = {
-            "article_number": forms.TextInput(attrs={
-                "list": "compound-ids", "autocomplete": "off"}),
+            "article_number": ARTICLE_NUMBER,
             "location": forms.TextInput(attrs={"list": "locations",
                                                "autocomplete": "off"}),
             "made_on": DATE,

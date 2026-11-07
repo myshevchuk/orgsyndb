@@ -45,7 +45,10 @@ def to_base(amount: Decimal, unit: str) -> Decimal:
 
 def molar_mass(item: Item) -> float | None:
     """Return the molar mass of the compound the item's article number
-    names in the collection index, or None."""
+    names in the collection index, or None, as for an item without an
+    article number."""
+    if not item.article_number:
+        return None
     found = index.compound_for(item.article_number)
     return found.mw if found else None
 
@@ -207,7 +210,8 @@ def bulk(item: Item, lots: Iterable[Lot]) -> Bulk:
     """Return the bulk of ITEM among LOTS: the open lots of its
     inventory and article number."""
     mine = [lot for lot in lots
-            if lot.amount > 0 and lot.inventory == item.inventory
+            if item.article_number and lot.amount > 0
+            and lot.inventory == item.inventory
             and lot.article_number == item.article_number]
     if not mine:
         return Bulk()

@@ -35,14 +35,17 @@ def compound_key(text: str) -> str | None:
     return found.key if found else None
 
 
-def matches(product: str, article_number: str,
+def matches(product: str, article_number: str | None,
             key: Callable[[str], str | None] = compound_key) -> bool:
     """Whether a task's PRODUCT matches the article ARTICLE_NUMBER.
 
     They match when the two texts are equal regardless of case, or when
     KEY, ``compound_key`` by default, finds a compound for both and it
-    is the same one.
+    is the same one. No product matches an ARTICLE_NUMBER of None or
+    empty.
     """
+    if not article_number:
+        return False
     if product.casefold() == article_number.casefold():
         return True
     found = key(product)
@@ -238,11 +241,12 @@ class Plan:
 
     @cached_property
     def items(self) -> dict[str, list[Item]]:
-        """The items of ``end-products`` by article number, each in the
-        item list's order."""
+        """The items of ``end-products`` that have an article number, by
+        article number, each in the item list's order."""
         found: dict[str, list[Item]] = {}
-        for item in sorted(Item.objects.filter(inventory=END_PRODUCTS),
-                           key=Item.sort_key):
+        for item in sorted(Item.objects.filter(
+                inventory=END_PRODUCTS, article_number__isnull=False),
+                key=Item.sort_key):
             found.setdefault(item.article_number, []).append(item)
         return found
 

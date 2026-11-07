@@ -42,3 +42,11 @@ leaves this file then.
   delivery and writing its note become one step and no delivery goes
   unrecorded. Open: the layout and letterhead of today's notes,
   whether the application assigns the note numbers, and signatures.
+- **Numbers of the database's own.** Article numbers are the
+  company's, on delivery notes, and only end products get one, at
+  their first delivery; until then an item has none and links to no
+  compound or bulk lot. A numbering of the lab's own for every
+  synthesized compound would let such items, their lots and tasks link
+  before the first delivery. Open: the scheme, whether the registry
+  keeps it as a compound field, and how it relates to the article
+  number.

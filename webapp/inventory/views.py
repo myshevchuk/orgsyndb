@@ -7,6 +7,7 @@ from typing import Any
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.db.models import Count
 from django.forms import BaseForm
 from django.http import HttpRequest, HttpResponse
@@ -67,7 +68,8 @@ class Row:
         """The text the list's search looks in, folded for a comparison
         regardless of case."""
         item = self.item
-        return "\n".join([item.article_number, item.name, item.category,
+        return "\n".join([item.article_number or "", item.name,
+                          item.category,
                           item.note, self.compound.name if self.compound
                           else ""]).casefold()
 
@@ -113,7 +115,8 @@ def item_list(request: HttpRequest) -> HttpResponse:
     lots = list(Lot.objects.filter(inventory=END_PRODUCTS, amount__gt=0))
     rows = [Row(item=item, figures=consumption(item, today),
                 bulk=bulk(item, lots),
-                compound=index.compound_for(item.article_number))
+                compound=index.compound_for(item.article_number)
+                if item.article_number else None)
             for item in items]
     shown = [row for row in rows if filters.admits(row)]
     if filters.sort:
@@ -196,7 +199,8 @@ def note_list(request: HttpRequest) -> HttpResponse:
         "notes": [(note, states[note.pk]) for note in shown],
         "q": q,
         "chosen": chosen,
-        "items": sorted(Item.objects.filter(inventory=END_PRODUCTS),
+        "items": sorted(Item.objects.filter(inventory=END_PRODUCTS,
+                                            article_number__isnull=False),
                         key=Item.sort_key),
         "tabs": tabs(DELIVERIES),
     })
@@ -239,11 +243,13 @@ def item_page(request: HttpRequest, pk: int) -> HttpResponse:
                                 reversible=movement.reversible
                                 and not done))
     mass = molar_mass(item)
+    numbered = item.article_number is not None
     found = plan.article(item.article_number, today) \
-        if item.inventory == END_PRODUCTS else None
+        if numbered and item.inventory == END_PRODUCTS else None
     lots = Lot.objects.filter(inventory=item.inventory,
                               article_number=item.article_number,
-                              amount__gt=0).order_by("made_on", "id")
+                              amount__gt=0).order_by("made_on", "id") \
+        if numbered else Lot.objects.none()
     return render(request, "inventory/item_page.html", {
         "item": item,
         "figures": figures,
@@ -346,10 +352,13 @@ def categories() -> Any:
         .values_list("category", flat=True).distinct()
 
 
-def compounds() -> Any:
-    """The compounds of the collection index, for the article numbers'
-    ``datalist``."""
-    return index.current().compounds.values()
+def article_numbers() -> list[tuple[str, str]]:
+    """The values of the unique text fields of the compounds of the
+    collection index, each with its compound's name, for the article
+    numbers' ``datalist``; no compound key is among them."""
+    return [(number, compound.name)
+            for compound in index.current().compounds.values()
+            for number in compound.identifiers if number != compound.key]
 
 
 @login_required
@@ -364,25 +373,34 @@ def item_new(request: HttpRequest) -> HttpResponse:
 
     return form_page(
         request, ItemForm(request.POST or None), book,
-        {"title": _("New item"), "cancel": LIST, "compounds": compounds(),
-         "categories": categories()})
+        {"title": _("New item"), "cancel": LIST,
+         "article_numbers": article_numbers(), "categories": categories()})
 
 
 @login_required
 def item_edit(request: HttpRequest, pk: int) -> HttpResponse:
-    """Change the name, category and note of the item PK."""
+    """Change the name, category and note of the item PK, and give it
+    the article number entered while it has none."""
     item = get_object_or_404(Item, pk=pk)
+    title = _("Edit %(item)s") % {"item": item}
 
     def book(data: dict[str, Any]) -> HttpResponse:
-        form.save()
-        return saved(request, _("Item %(item)s saved.") % {"item": item},
-                     item_url(item))
+        with transaction.atomic():
+            if data.get("article_number"):
+                form.instance.article_number = \
+                    bookings.assign_article_number(
+                        request.user, item,
+                        data["article_number"]).article_number
+            form.save()
+        stored = Item.objects.get(pk=item.pk)
+        return saved(request, _("Item %(item)s saved.") % {"item": stored},
+                     item_url(stored))
 
     form = ItemEditForm(request.POST or None, instance=item)
     return form_page(
         request, form, book,
-        {"title": _("Edit %(item)s") % {"item": item},
-         "cancel": item_url(item),
+        {"title": title, "cancel": item_url(item),
+         "article_numbers": article_numbers(),
          "categories": categories()})
 
 
@@ -567,7 +585,8 @@ def lot_new(request: HttpRequest) -> HttpResponse:
         "made_on": request.GET.get("made_on", "")})
     return form_page(request, form, book,
                      {"title": _("New bulk lot"), "cancel": BULK,
-                      "compounds": compounds(), "locations": locations()})
+                      "article_numbers": article_numbers(),
+                      "locations": locations()})
 
 
 @login_required

@@ -7,7 +7,6 @@ key = "item_number"
 type = "text"
 label = "Item no."
 label_de = "Artikelnr."
-required = true
 unique = true
 pattern = 'CH-\d{4}'
 column = true

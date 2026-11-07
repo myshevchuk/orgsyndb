@@ -231,11 +231,11 @@ Wherever the site writes an `a.compound`, the link to a compound's page, it SHAL
 #### Scenario: Notes after every compound link
 - **WHEN** a test scans every procedure page, every sequence page, `public/sequences/index.html` and every compound page after a theme build in locale `en`
 - **THEN** each `a.compound` whose compound sets a field the test collection's `orgsyndb.toml` declares with `beside = true` is followed by a text node holding one space and then a `span.compound-beside` whose text is computed as stated from the registry and the field data, each other `a.compound` is followed by no `span.compound-beside`, and each link's text is its compound's shown name
-- **AND** the `Starting materials` value of `procedures/osdb-0002/index.html` reads `Salicylic acid (CH-0020), Acetic anhydride (CH-0007, Ac2O)`
+- **AND** the `Product` value of `procedures/osdb-0002/index.html` reads `Acetylsalicylic acid (CH-0010, ASA)` and its `Starting materials` value `Salicylic acid, Acetic anhydride (Ac2O)`
 
 #### Scenario: A number beside a German link
 - **WHEN** a test builds a copy of the test collection in locale `de` after adding `beside = true` to the declaration of `stock` in its `orgsyndb.toml`, and reads `procedures/osdb-0007/index.html`
-- **THEN** the `a.compound` to `ethyl-triphenylphosphoranylidene-acetate` in its `Ausgangsstoffe` value is followed by a `span.compound-beside` with the text `(CH-0015, 12,5 g)`
+- **THEN** the `a.compound` to `ethyl-triphenylphosphoranylidene-acetate` in its `Ausgangsstoffe` value is followed by a `span.compound-beside` with the text `(12,5 g)`
 
 #### Scenario: Markup in a value, and a compound without one
 - **WHEN** a test builds a copy of the test collection in locale `en` after removing `beside = true` from the declaration of `item_number` in its `orgsyndb.toml` and setting the `short_name` of `acetone` to `<i>Me</i>2CO & co`, and reads `procedures/osdb-0006/index.html` and `procedures/osdb-0002/index.html`

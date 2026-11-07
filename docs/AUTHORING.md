@@ -166,13 +166,16 @@ Check your collection's `orgsyndb.toml` for further fields under
 `[[fields.compound]]`. A declaration with `required = true` means every
 compound must supply that field. At the template's closing note, add the
 declared fields as further `key = value` lines in the compound file. The
-[demo settings](../examples/demo/orgsyndb.toml) require `item_number`,
-`chemical_class` and `group`. Choose an unused item number with `CH-`
-followed by four digits and a non-empty list of value keys from
+[demo settings](../examples/demo/orgsyndb.toml) require `chemical_class`
+and `group`. Choose a non-empty list of value keys for `chemical_class` from
 [`vocabularies/chemical-classes.toml`](../examples/demo/vocabularies/chemical-classes.toml).
 Set `group` to one value from
 [`vocabularies/inventory-groups.toml`](../examples/demo/vocabularies/inventory-groups.toml):
 `starting-materials`, `reagents`, `intermediates` or `final-products`.
+The optional `item_number` is the article number printed on delivery
+notes. Set it only for an end product that has been delivered, using a
+unique number with `CH-` followed by four digits. Only six final products
+in the demo set it.
 The [field reference](SCHEMA.md#collection-field-declarations) gives the
 types, rules and validator messages.
 
@@ -311,7 +314,7 @@ wide screen and after it in a narrow window or in print.
 After each product or starting-material link, the panel shows any values
 that the compound sets for fields the collection declares with `beside = true`.
 The link text stays the compound's name. One space and a muted note in
-parentheses follow it, for example **Acetic anhydride (CH-0007, Ac2O)** in the
+parentheses follow it, for example **Acetic anhydride (Ac2O)** in the
 demo. Values appear without labels, in declaration order, separated by `, `,
 as on the compound page; numbers use the site's decimal separator and unit.
 A compound with none of these values gets no note. Procedure search finds

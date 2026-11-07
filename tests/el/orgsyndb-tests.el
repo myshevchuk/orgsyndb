@@ -1294,14 +1294,14 @@ Also: The fall-back hour."
   (orgsyndb-test-with (root orgsyndb-test-demo)
     (with-current-buffer (orgsyndb-test-visit root "orgsyndb.toml")
       (orgsyndb-test-answering '("ethanol" "Ethanol" "Ethanol" "C2H6O"
-                                 "46.07" "CCO" "64-17-5" "" "CH-0099"
+                                 "46.07" "CCO" "64-17-5" ""
                                  "alcohols" "reagents")
         (call-interactively #'orgsyndb-new-compound)))
     (let ((file (expand-file-name "compounds/ethanol.toml" root)))
       (should (equal (split-string (orgsyndb-test-file-text file) "\n" t)
                      '("name = \"Ethanol\"" "name_de = \"Ethanol\""
                        "formula = \"C2H6O\"" "mw = 46.07" "smiles = \"CCO\""
-                       "cas = \"64-17-5\"" "item_number = \"CH-0099\""
+                       "cas = \"64-17-5\""
                        "chemical_class = [\"alcohols\"]"
                        "group = \"reagents\"")))
       (should (equal (buffer-file-name (window-buffer (selected-window)))

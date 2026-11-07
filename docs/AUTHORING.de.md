@@ -204,13 +204,16 @@ Prüfen Sie die `orgsyndb.toml` Ihrer Sammlung auf weitere Felder unter
 Feld setzen. Tragen Sie die deklarierten Felder beim Schlusskommentar der
 Vorlage als weitere Zeilen `key = value` in der Verbindungsdatei ein. Die
 [Einstellungen der Beispielsammlung](../examples/demo/orgsyndb.toml)
-verlangen `item_number`, `chemical_class` und `group`. Wählen Sie eine noch
-nicht vergebene Artikelnummer aus `CH-` und vier Ziffern und eine nicht
-leere Liste von Wertschlüsseln aus
+verlangen `chemical_class` und `group`. Wählen Sie für `chemical_class`
+eine nicht leere Liste von Wertschlüsseln aus
 [`vocabularies/chemical-classes.toml`](../examples/demo/vocabularies/chemical-classes.toml).
 Setzen Sie `group` auf einen Wert aus
 [`vocabularies/inventory-groups.toml`](../examples/demo/vocabularies/inventory-groups.toml):
 `starting-materials`, `reagents`, `intermediates` oder `final-products`.
+Das optionale `item_number` ist die Artikelnummer auf Lieferscheinen.
+Setzen Sie es nur für ein Endprodukt, das bereits abgegeben wurde, mit
+einer eindeutigen Nummer aus `CH-` und vier Ziffern. Nur sechs Endprodukte
+der Beispielsammlung setzen es.
 Die [Feldreferenz](SCHEMA.de.md#felddeklarationen-der-sammlung) nennt
 Typen, Regeln und Validatormeldungen.
 
@@ -367,7 +370,7 @@ Nach jedem Produkt- oder Ausgangsstofflink zeigt das Datenfeld die Werte,
 die die Verbindung für Felder mit der Deklaration `beside = true` setzt.
 Der Linktext bleibt der Verbindungsname. Nach einem Leerzeichen folgt ein
 Zusatz in Klammern und gedeckter Farbe, in der Beispielsammlung etwa
-**Essigsäureanhydrid (CH-0007, Ac2O)**. Die Werte stehen ohne Feldnamen in
+**Essigsäureanhydrid (Ac2O)**. Die Werte stehen ohne Feldnamen in
 Deklarationsreihenfolge, durch `, ` getrennt, wie auf der Verbindungsseite;
 Zahlen verwenden das Dezimalzeichen der Website und ihre Einheit.
 Setzt eine Verbindung keinen dieser Werte, entfällt der Zusatz.

@@ -95,8 +95,11 @@ msgstr "Gebindegröße"
 msgid "Opening count"
 msgstr "Anfangsbestand"
 
-msgid "Links the item to the compound of the collection with this item number."
-msgstr "Verknüpft den Artikel mit der Verbindung der Sammlung, die diese Artikelnummer hat."
+msgid "The number of the article's delivery notes; left empty until it is first delivered. It links the item to the compound of the collection with this number."
+msgstr "Die Nummer auf den Lieferscheinen des Artikels; bleibt leer bis zur ersten Abgabe. Sie verknüpft den Artikel mit der Verbindung der Sammlung, die diese Nummer hat."
+
+msgid "Entered once, when the item is first delivered; fixed from then on."
+msgstr "Wird einmal eingetragen, bei der ersten Abgabe; danach fest."
 
 msgid "The size must be above zero."
 msgstr "Die Gebindegröße muss größer als null sein."
@@ -543,3 +546,18 @@ msgstr "Menge von %(lot)s korrigiert."
 
 msgid "Correct the amount of %(lot)s"
 msgstr "Menge von %(lot)s korrigieren"
+
+msgid "Enter article number"
+msgstr "Artikelnr. eintragen"
+
+msgid "Enter an article number."
+msgstr "Bitte eine Artikelnummer eintragen."
+
+msgid "The item already has an article number."
+msgstr "Der Artikel hat schon eine Artikelnummer."
+
+msgid "Enter the item's article number before its first delivery."
+msgstr "Vor der ersten Abgabe die Artikelnummer eintragen."
+
+msgid "An item without an article number has never been delivered."
+msgstr "Ein Artikel ohne Artikelnummer wurde noch nie abgegeben."

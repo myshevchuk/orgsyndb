@@ -10,14 +10,15 @@ while no delivery note has a line of it.
 
 from typing import Any
 
-from django.contrib import admin
-from django.core.exceptions import PermissionDenied
+from django.contrib import admin, messages
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Model, QuerySet
 from django.forms import ModelForm
 from django.http import HttpRequest, HttpResponse
 from simple_history.admin import SimpleHistoryAdmin
 
+from inventory import bookings
 from inventory.models import (DeliveryLine, DeliveryNote, Item, Lot,
                               LotMovement, Movement)
 
@@ -108,12 +109,63 @@ class OpeningOnlyAdmin(RecordAdmin):
 
 @admin.register(Item)
 class ItemAdmin(OpeningOnlyAdmin):
+    """The items, whose article number is editable only while an item
+    has none and is then given by ``bookings.assign_article_number``,
+    never by the form's own save."""
+
     list_display = ("article_number", "name", "category", "size", "unit",
                     "quantity")
     list_filter = ("category",)
     search_fields = ("article_number", "name")
-    readonly_fields = ("inventory", "article_number", "size", "unit",
-                       "quantity")
+    readonly_fields = ("inventory", "size", "unit", "quantity")
+
+    def get_form(self, request: HttpRequest, obj: Any = None,
+                 change: bool = False, **kwargs: Any) -> type[ModelForm]:
+        """Return the change form, which refuses an article number
+        another item of the inventory has with the item's size and
+        unit, as ``bookings.assign_article_number`` does."""
+        base = super().get_form(request, obj, change, **kwargs)
+
+        class ItemForm(base):  # type: ignore[valid-type, misc]
+            def clean_article_number(self) -> str | None:
+                number = (self.cleaned_data.get("article_number")
+                          or "").strip() or None
+                if number and bookings.number_taken(self.instance, number):
+                    raise ValidationError(str(bookings.TAKEN))
+                return number
+
+        return ItemForm
+
+    def get_readonly_fields(self, request: HttpRequest,
+                            obj: Any = None) -> tuple[str, ...]:
+        fixed = tuple(super().get_readonly_fields(request, obj))
+        if obj is None or obj.article_number is not None:
+            return ("inventory", "article_number", *fixed[1:])
+        return fixed
+
+    def save_model(self, request: HttpRequest, obj: Any, form: ModelForm,
+                   change: bool) -> None:
+        """Save the fields of FORM of OBJ but the article number, by the
+        signed-in user, and give OBJ the article number entered through
+        the booking, which refuses it once the item has one."""
+        number = form.cleaned_data.get("article_number") \
+            if "article_number" in form.fields else None
+        with transaction.atomic():
+            if number:
+                try:
+                    bookings.assign_article_number(request.user, obj,
+                                                   number)
+                except bookings.Refused as refused:
+                    # Given by another user since the form was checked:
+                    # nothing of this submission is saved.
+                    self.message_user(request, " ".join(refused.messages),
+                                      messages.ERROR)
+                    return
+            obj.article_number = Item.objects.filter(pk=obj.pk) \
+                .values_list("article_number", flat=True).get()
+            obj._history_user = request.user
+            obj.save(update_fields=[name for name in form.fields
+                                    if name != "article_number"])
 
 
 @admin.register(Lot)

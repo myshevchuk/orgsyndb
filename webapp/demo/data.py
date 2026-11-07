@@ -92,7 +92,7 @@ class OpenItem(Change):
     day."""
 
     key: str
-    article_number: str
+    article_number: str | None
     name: str
     category: str
     size: Decimal
@@ -154,12 +154,12 @@ class OpenLot(Change):
 @dataclass(frozen=True, kw_only=True)
 class Fill(Change):
     """Fill COUNT containers of ITEM from LOT, taking AMOUNT in the lot's
-    unit, dated the change's day."""
+    unit, or from no lot when LOT is None, dated the change's day."""
 
     item: str
-    lot: str
+    lot: str | None
     count: int
-    amount: Decimal
+    amount: Decimal | None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -249,6 +249,8 @@ class _Synthesis:
 
 @dataclass(frozen=True)
 class _Article:
+    # The article number, or for an article never delivered, which has
+    # none, the key of its compound; NUMBERED tells which.
     number: str
     name: Text
     category: Text
@@ -258,6 +260,12 @@ class _Article:
     # The molar mass in g/mol the fillings convert with, where the
     # lot's unit and the items' differ in kind.
     mass: str | None = None
+    numbered: bool = True
+
+    @property
+    def article_number(self) -> str | None:
+        """The article number its items carry, or None."""
+        return self.number if self.numbered else None
 
 
 SEQ_1 = ("OSDB-0001", "OSDB-0002")
@@ -345,12 +353,13 @@ ARTICLES = (
                     steps_done=((396, 1),))),
         mass="198.26"),
     _Article(
-        "CH-0003", ("1-Phenylethanol", "1-Phenylethanol"),
+        "1-phenylethanol", ("1-Phenylethanol", "1-Phenylethanol"),
         ("Alkohole", "Alcohols"), "mg",
         (_Size("100", "mg", final=8, opened=310),),
-        (_Synthesis("CH-0003", "aschmidt", 280, "aschmidt", started=285,
-                    ended=305, report=308, qc=309, fills=(311,),
-                    rest="200"),)),
+        (_Synthesis("1-phenylethanol", "aschmidt", 280, "aschmidt",
+                    started=285, ended=305, report=308, qc=309,
+                    fills=(311,)),),
+        numbered=False),
     _Article(
         "NV-0007", ("Neuverbindung 7", "New compound 7"),
         ("Neuverbindungen", "New compounds"), "umol",
@@ -539,16 +548,19 @@ def _article(line: _Timeline, article: _Article,
     """Add the changes of ARTICLE but its delivery notes, and return its
     orders, each a day, an item key and a count."""
     history = quarter_start(back(quarter_of(line.opening), 1))
-    lots = {}
+    yields = {}
     for position, synthesis in enumerate(article.syntheses):
         batch = batches.get((article.number, position), "")
         _task(line, article, position, synthesis, batch)
         if synthesis.ended is not None and synthesis.fills:
-            lots[position] = batch
+            yields[position] = batch
     opportunities = sorted(
         (offset, position) for position, synthesis
-        in enumerate(article.syntheses) if position in lots
+        in enumerate(article.syntheses) if position in yields
         for offset in synthesis.fills)
+    # An article without an article number has no lots: its syntheses
+    # fill its containers directly.
+    lots = yields if article.numbered else {}
     taken: dict[int, Decimal] = defaultdict(Decimal)
     found = []
     for turn, size in enumerate(article.sizes):
@@ -561,7 +573,8 @@ def _article(line: _Timeline, article: _Article,
         made = line.day(synthesis.ended)
         line.add(made, LOT, OpenLot, user=synthesis.by,
                  key=f"{article.number}#{position}",
-                 article_number=article.number, unit=article.lot_unit,
+                 article_number=article.article_number,
+                 unit=article.lot_unit,
                  amount=taken[position] + Decimal(synthesis.rest),
                  batch=batch, location=line.text(synthesis.location),
                  made_on=made)
@@ -644,16 +657,19 @@ def _size(line: _Timeline, article: _Article, turn: int, size: _Size,
         stock -= between(day, end)
     _check(key, opening, booked, demand)
     line.add(opened, ITEM, OpenItem, user=staff(size.opened, turn),
-             key=key, article_number=article.number,
+             key=key, article_number=article.article_number,
              name=line.text(article.name),
              category=line.text(article.category),
              size=Decimal(size.size), unit=size.unit, quantity=opening)
     for day, position, count in booked:
-        amount = amount_of(article, size, count)
-        taken[position] += amount
+        amount = amount_of(article, size, count) if article.numbered \
+            else None
+        if amount is not None:
+            taken[position] += amount
         line.add(day, FILL, Fill, user=staff((day - line.opening).days,
                                              turn),
-                 item=key, lot=f"{article.number}#{position}", count=count,
+                 item=key, lot=f"{article.number}#{position}"
+                 if article.numbered else None, count=count,
                  amount=amount)
     if correction:
         counted = opening + sum(count for day, _, count in booked
@@ -795,7 +811,8 @@ def _renumber_reversal(line: _Timeline, numbers: dict[date, str]) -> None:
 
 
 def compounds() -> list[str]:
-    """Return the item numbers of the compounds of ``examples/demo`` the
-    data set names."""
+    """Return the item numbers and keys by which the data set names
+    compounds of ``examples/demo``: the article numbers of its final
+    products and the compound keys of its articles without one."""
     return [article.number for article in ARTICLES
-            if article.number.startswith("CH-")]
+            if article.number.startswith("CH-") or not article.numbered]

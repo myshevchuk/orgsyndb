@@ -121,12 +121,17 @@ class DatalistTests(LinkCase):
     def test_each_identifier_of_each_compound_is_offered(self) -> None:
         self.use_index(demo_index())
         options = self.options()
+        expected = 0
         for entry in demo_data()["compounds"]:
             data = entry["data"]
-            for identifier in (entry["key"], data["item_number"]):
+            identifiers = [entry["key"], *([data["item_number"]]
+                                           if "item_number" in data
+                                           else [])]
+            expected += len(identifiers)
+            for identifier in identifiers:
                 with self.subTest(identifier=identifier):
                     self.assertEqual(options[identifier], data["name_de"])
-        self.assertEqual(len(options), 2 * len(demo_data()["compounds"]))
+        self.assertEqual(len(options), expected)
 
     def test_the_edit_form_offers_them_too(self) -> None:
         self.use_index(demo_index())

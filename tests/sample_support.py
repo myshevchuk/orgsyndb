@@ -459,9 +459,9 @@ def agreement_differences(org: Path, markdown: Path) -> list[str]:
 # --- the demo's compound fields ---------------------------------------------
 
 DEMO_DECLARATIONS = [
-    {"key": "item_number", "type": "text", "required": True,
-     "unique": True, "pattern": r"CH-\d{4}", "column": True,
-     "search": True, "beside": True},
+    {"key": "item_number", "type": "text", "unique": True,
+     "pattern": r"CH-\d{4}", "column": True, "search": True,
+     "beside": True},
     {"key": "short_name", "type": "text", "search": True,
      "beside": True},
     {"key": "chemical_class", "type": "choice", "required": True,
@@ -472,7 +472,16 @@ DEMO_DECLARATIONS = [
     {"key": "group", "type": "choice", "required": True, "facet": True,
      "tabs": True, "vocabulary": "inventory-groups"},
 ]
-DEMO_LABELS = {"group": ("Group", "Gruppe")}
+DEMO_LABELS = {"group": ("Group", "Gruppe"),
+               "item_number": ("Item no.", "Artikelnr.")}
+# The article numbers of the final products the lab demo delivers, the
+# only compounds that set item_number.
+DEMO_NUMBERS = {"1-4-bromophenyl-ethanol": "CH-0001",
+                "1-biphenyl-4-yl-ethanol": "CH-0002",
+                "acetylsalicylic-acid": "CH-0010",
+                "cinnamic-acid": "CH-0012",
+                "dibenzylideneacetone": "CH-0013",
+                "isopentyl-acetate": "CH-0016"}
 DEMO_PROCEDURE_DECLARATIONS = [
     {"key": "notebook", "type": "text", "unique": True,
      "pattern": r"[A-Z]{2}-\d+/\d+"},
@@ -580,7 +589,7 @@ def field_violations(collection: Path) -> list[str]:
     registry = read_registry(collection / "compounds")
     classes = [c.get("chemical_class") for c in registry.values()]
     for key, compound in registry.items():
-        for field in ("item_number", "chemical_class", "group"):
+        for field in ("chemical_class", "group"):
             if field not in compound:
                 problems.append(f"{key}: sets no {field}")
         value = compound.get("chemical_class")
@@ -595,10 +604,9 @@ def field_violations(collection: Path) -> list[str]:
     purchased = sum(g in PURCHASED_GROUPS for g in held)
     if (purchased, len(held) - purchased) != (10, 10):
         problems.append(f"{purchased} purchased of {len(held)} compounds")
-    numbers = [c.get("item_number") for c in registry.values()]
-    if len(set(numbers)) != len(numbers) or not all(
-            isinstance(n, str) and re.fullmatch(r"CH-\d{4}", n)
-            for n in numbers):
+    numbers = {key: c["item_number"] for key, c in registry.items()
+               if "item_number" in c}
+    if numbers != DEMO_NUMBERS:
         problems.append(f"item numbers are {numbers}")
     if not any(isinstance(c, list) and len(c) == 2 for c in classes):
         problems.append("no compound sets two chemical classes")

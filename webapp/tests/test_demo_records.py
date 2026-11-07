@@ -11,8 +11,9 @@ from django.test import TestCase
 from . import (BERLIN, IndexMixin, build_index, demo_data, demo_index,
                frozen, table)
 from .demo_support import (ACCOUNTS, ARTICLES, DAY, DELIVERIES,
-                           DEMO_PASSWORD, ITEMS, LOGIN, NOTE_NUMBER, PLAN,
-                           TASKS, SeededCase, noon, opening, run, seed)
+                           DEMO_PASSWORD, ITEMS, LOGIN, NOTE_NUMBER,
+                           NUMBERLESS, PLAN, TASKS, SeededCase, noon,
+                           opening, run, seed)
 
 O = opening(DAY)
 DEFAULT_PARAMETERS = {"certainty": 0.95, "buffer_days": 28,
@@ -48,13 +49,15 @@ def compound_names() -> dict[str, str]:
     found = {}
     for entry in demo_data()["compounds"]:
         data = entry["data"]
-        found[data["item_number"]] = data.get("name_de", data["name"])
+        if "item_number" in data:
+            found[data["item_number"]] = data.get("name_de", data["name"])
     return found
 
 
 def compound_keys() -> dict[str, str]:
     return {entry["data"]["item_number"]: entry["key"]
-            for entry in demo_data()["compounds"]}
+            for entry in demo_data()["compounds"]
+            if "item_number" in entry["data"]}
 
 
 class AccountTests(SeededCase):
@@ -131,11 +134,18 @@ class InventoryTests(SeededCase):
 
     def test_item_list(self) -> None:
         """Scenario: Item list."""
+        from inventory.models import Item
         header, rows = table(self.get(ITEMS))
-        articles = {row[header[0]].text() for row in rows}
+        articles = {row[header[0]].text() for row in rows[:-1]}
         self.assertEqual(articles, set(ARTICLES))
+        last = rows[-1]
+        self.assertEqual(last[header[0]].text(), "")
+        self.assertEqual(last[header[1]].text(), NUMBERLESS[0])
+        item = Item.objects.get(article_number__isnull=True)
+        self.assertEqual(last[header[1]].find("a").get("href"),
+                         f"/lab/inventory/items/{item.pk}/")
         keys = compound_keys()
-        for row in rows:
+        for row in rows[:-1]:
             article = row[header[0]].text()
             name = row[header[1]]
             with self.subTest(article=article):
@@ -151,9 +161,13 @@ class InventoryTests(SeededCase):
     def test_items_are_named_as_their_compounds(self) -> None:
         from inventory.models import Item
         names = compound_names()
-        for item in Item.objects.exclude(article_number="NV-0007"):
+        for item in Item.objects.exclude(article_number="NV-0007") \
+                .exclude(article_number__isnull=True):
             with self.subTest(item=str(item)):
                 self.assertEqual(item.name, names[item.article_number])
+        self.assertEqual(
+            [item.name for item in Item.objects.filter(
+                article_number__isnull=True)], [NUMBERLESS[0]])
         self.assertTrue(all(
             item.name == "Neuverbindung 7"
             for item in Item.objects.filter(article_number="NV-0007")))
@@ -264,9 +278,14 @@ class InventoryTests(SeededCase):
         self.assertTrue(fillings.exists())
         for filling in fillings:
             with self.subTest(filling=filling.pk):
+                if filling.item.article_number is None:
+                    self.assertIsNone(filling.bulk_movement)
+                    continue
                 self.assertIsNotNone(filling.bulk_movement)
                 self.assertEqual(filling.bulk_movement.lot.article_number,
                                  filling.item.article_number)
+        self.assertTrue(fillings.filter(
+            item__article_number__isnull=True).exists())
         self.assertGreaterEqual(lots.filter(amount=0).count(), 1)
         corrected = LotMovement.objects.filter(
             kind=LotMovement.Kind.CORRECTION)
@@ -359,11 +378,24 @@ class TaskTests(SeededCase):
         self.assertTrue(Task.objects.filter(product="cinnamic-acid").exists())
         self.assertTrue(Task.objects.filter(assignee=None).exists())
 
+    def test_the_position_without_a_number_has_its_task(self) -> None:
+        from planning.plan import batch_lots
+        from tasks.models import State, Task
+        tasks = list(Task.objects.filter(product=NUMBERLESS[1]))
+        self.assertTrue(tasks)
+        ended = [task for task in tasks if task.state == State.ENDED]
+        self.assertTrue(ended)
+        for task in ended:
+            with self.subTest(task=task.number):
+                self.assertTrue(task.batch)
+                self.assertEqual(batch_lots(task), [])
+
     def test_batches_link_tasks_and_lots(self) -> None:
         from inventory.models import Lot
         from planning.plan import batch_lots, batch_tasks
         from tasks.models import State, Task
         batched = [task for task in Task.objects.exclude(batch="")
+                   .exclude(product=NUMBERLESS[1])
                    if task.state == State.ENDED]
         self.assertTrue(batched)
         for task in batched:
@@ -521,10 +553,10 @@ def snapshot() -> dict:
     from tasks.models import Task
     return {
         "items": sorted(Item.objects.values_list(
-            "article_number", "size", "unit", "quantity")),
+            "article_number", "size", "unit", "quantity"), key=repr),
         "movements": sorted(Movement.objects.values_list(
             "item__article_number", "item__size", "item__unit", "kind",
-            "count", "date")),
+            "count", "date"), key=repr),
         "lots": sorted(Lot.objects.values_list("batch", "amount")),
         "tasks": sorted(Task.objects.values_list(
             "number", "product", "started", "ended")),
@@ -539,4 +571,5 @@ class IndexCheckTests(TestCase):
             with self.subTest(article=article):
                 self.assertIn(article, names)
         self.assertNotIn("NV-0007", names)
+        self.assertNotIn("CH-0003", names)
         self.assertTrue(demo_index().is_file())

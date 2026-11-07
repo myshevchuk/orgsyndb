@@ -782,11 +782,12 @@ class DemoFieldTests(unittest.TestCase):
     def test_the_demo_values_are_the_stated_ones(self) -> None:
         """Scenario: The demo declares its fields (the values)."""
         registry = sup.read_registry(DEMO / "compounds")
-        numbers = {key: compound.get("item_number")
-                   for key, compound in registry.items()}
+        numbers = {key: compound["item_number"]
+                   for key, compound in registry.items()
+                   if "item_number" in compound}
+        self.assertEqual(numbers, sup.DEMO_NUMBERS)
         self.assertEqual(
-            list(numbers.values()),
-            [f"CH-{n:04d}" for n in range(1, len(registry) + 1)])
+            {registry[key]["group"] for key in numbers}, {"final-products"})
         self.assertEqual(registry["acetic-acid"]["short_name"], "AcOH")
         self.assertEqual(registry["phenylboronic-acid"]["stock"], 25)
         self.assertEqual(

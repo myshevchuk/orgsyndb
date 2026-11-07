@@ -284,7 +284,6 @@ key = "item_number"
 type = "text"
 label = "Item no."
 label_de = "Artikelnr."
-required = true
 unique = true
 pattern = 'CH-\d{4}'
 column = true
@@ -469,14 +468,15 @@ alongside `name`, `cas` and the other built-in fields. For example, the
 demo's `methyl-salicylate.toml` sets:
 
 ```toml
-item_number = "CH-0018"
 chemical_class = ["esters", "phenols"]
 group = "starting-materials"
 ```
 
 The chemical-class vocabulary defines both classes. The demo requires
-`item_number`, `chemical_class` and `group`, so a compound added to that
-collection must set all three and use an unused item number. Set `group`
+`chemical_class` and `group` for every compound. Its optional `item_number`
+is the article number printed on delivery notes. Set it only for an end
+product that has been delivered, using a unique number with `CH-` followed
+by four digits. Only six final products in the demo set it. Set `group`
 to `starting-materials`, `reagents`, `intermediates` or `final-products`
 from [`vocabularies/inventory-groups.toml`](../examples/demo/vocabularies/inventory-groups.toml).
 The compound template's closing note tells you to add the fields your
@@ -596,7 +596,8 @@ To show identifiers or short names beside compound links, set
 scope table, a sequence page's scheme and the sequence directory's target
 show these values after each compound link. The link text stays the
 compound's name. One space separates the link from a muted note in
-parentheses, such as **Acetic anhydride (CH-0007, Ac2O)** in the demo.
+parentheses, such as **Acetic anhydride (Ac2O)** or
+**Acetylsalicylic acid (CH-0010, ASA)** in the demo.
 The note contains only values the compound sets, in declaration order,
 without labels and separated by `, `. Each value appears as on the compound
 page, including the site's decimal separator and unit for numbers.

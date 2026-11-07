@@ -11,9 +11,9 @@
 {{ field.errors }}
 </div>
 {% endfor %}{% if unit %}<p class="lab-help">{% blocktranslate %}The amount is in {{ unit }}.{% endblocktranslate %}</p>
-{% endif %}{% if compounds %}<datalist id="compound-ids">
-{% for compound in compounds %}{% for identifier in compound.identifiers %}<option value="{{ identifier }}" label="{{ compound.name }}"></option>
-{% endfor %}{% endfor %}</datalist>
+{% endif %}{% if article_numbers %}<datalist id="article-numbers">
+{% for number, name in article_numbers %}<option value="{{ number }}" label="{{ name }}"></option>
+{% endfor %}</datalist>
 {% endif %}{% if categories %}<datalist id="categories">
 {% for category in categories %}<option value="{{ category }}"></option>
 {% endfor %}</datalist>

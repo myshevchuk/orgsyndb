@@ -340,8 +340,8 @@ The option is read at each save. The global values of those variables are untouc
 - **THEN** the stub received `-C <collection> new --md --lang de Ethylacetat herstellen` as separate arguments, and the current buffer visits `md/procedures/OSDB-0010-ethylacetat.de.md`
 
 #### Scenario: New compound with declared fields
-- **WHEN** an ERT test calls `orgsyndb-new-compound` in a copy of the demo collection with the answers `ethanol`, `Ethanol`, `Ethanol`, `C2H6O`, `46.07`, `CCO`, `64-17-5`, an empty structure image, `CH-0099`, `alcohols` and `reagents`
-- **THEN** `compounds/ethanol.toml` holds exactly the lines `name = "Ethanol"`, `name_de = "Ethanol"`, `formula = "C2H6O"`, `mw = 46.07`, `smiles = "CCO"`, `cas = "64-17-5"`, `item_number = "CH-0099"`, `chemical_class = ["alcohols"]` and `group = "reagents"`, in that order, and `orgsyndb index` of the copy lists `ethanol` without an `error`
+- **WHEN** an ERT test calls `orgsyndb-new-compound` in a copy of the demo collection with the answers `ethanol`, `Ethanol`, `Ethanol`, `C2H6O`, `46.07`, `CCO`, `64-17-5`, an empty structure image, `alcohols` and `reagents`
+- **THEN** `compounds/ethanol.toml` holds exactly the lines `name = "Ethanol"`, `name_de = "Ethanol"`, `formula = "C2H6O"`, `mw = 46.07`, `smiles = "CCO"`, `cas = "64-17-5"`, `chemical_class = ["alcohols"]` and `group = "reagents"`, in that order, and `orgsyndb index` of the copy lists `ethanol` without an `error`
 
 ### Requirement: Preview
 `orgsyndb-page-url` SHALL return, for a file of a collection, `http://127.0.0.1:<port>/` followed by `procedures/<id>/` for a procedure, `sequences/<id>/` for a sequence and `compounds/<key>/` for a compound file, the ID in lower case, and by nothing for any other file; `<port>` is the user option `orgsyndb-preview-port`, 8000 by default.
