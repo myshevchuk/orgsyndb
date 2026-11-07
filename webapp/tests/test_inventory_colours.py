@@ -10,11 +10,12 @@ from django.test import SimpleTestCase
 from . import REPO
 
 CSS = REPO / "webapp" / "orgsyndb_web" / "static" / "lab.css"
-LEVELS = ("out", "critical", "low", "watch")
+LEVELS = ("out", "critical", "low", "watch", "ok", "undelivered",
+          "dormant")
 MINIMUM = 4.5
-# Hue ranges in degrees of the colours the spec names.
+# Hue ranges in degrees of the colours the spec names; dormant is grey.
 HUES = {"out": (-15, 15), "critical": (15, 45), "low": (45, 70),
-        "watch": (70, 170)}
+        "watch": (70, 170), "ok": (70, 170), "undelivered": (195, 240)}
 
 
 def luminance(colour: str) -> float:
@@ -76,7 +77,8 @@ def root_tokens(text: str) -> dict[str, str]:
     for found in re.finditer(r":root\s*\{", text):
         body, _ = balanced(text, found.start())
         for name, value in re.findall(
-                r"(--level-(?:out|critical|low|watch)-(?:bg|fg))\s*:\s*"
+                r"(--level-(?:out|critical|low|watch|ok|undelivered|"
+                r"dormant)-(?:bg|fg))\s*:\s*"
                 r"(#[0-9a-fA-F]{6})\s*;", body):
             tokens[name] = value
     return tokens
@@ -100,7 +102,7 @@ class LevelColourTests(SimpleTestCase):
         cls.light = root_tokens(light)
         cls.dark = root_tokens(dark)
 
-    def test_all_eight_tokens_are_defined_in_both_schemes(self) -> None:
+    def test_every_token_is_defined_in_both_schemes(self) -> None:
         names = {f"--level-{level}-{part}" for level in LEVELS
                  for part in ("bg", "fg")}
         self.assertEqual(set(self.light), names)
@@ -118,15 +120,37 @@ class LevelColourTests(SimpleTestCase):
                 ratio = contrast(*self.pair(self.dark, level))
                 self.assertGreaterEqual(ratio, MINIMUM)
 
-    def test_the_four_backgrounds_differ_in_each_scheme(self) -> None:
+    def test_the_seven_backgrounds_differ_in_each_scheme(self) -> None:
         for name, tokens in (("light", self.light), ("dark", self.dark)):
             with self.subTest(scheme=name):
                 backgrounds = {self.pair(tokens, level)[0].lower()
                                for level in LEVELS}
-                self.assertEqual(len(backgrounds), 4)
+                self.assertEqual(len(backgrounds), len(LEVELS))
 
-    def test_the_backgrounds_are_red_orange_yellow_and_pale_green(
-            self) -> None:
+    def test_ok_is_a_darker_green_than_watch(self) -> None:
+        for name, tokens in (("light", self.light), ("dark", self.dark)):
+            with self.subTest(scheme=name):
+                ok, watch = (self.pair(tokens, level)[0]
+                             for level in ("ok", "watch"))
+                saturation = [colorsys.rgb_to_hsv(*(
+                    int(colour[i:i + 2], 16) / 255 for i in (1, 3, 5)))[1]
+                    for colour in (ok, watch)]
+                self.assertGreater(saturation[0], saturation[1])
+        self.assertLess(luminance(self.pair(self.light, "ok")[0]),
+                        luminance(self.pair(self.light, "watch")[0]))
+
+    def test_dormant_is_a_dark_grey(self) -> None:
+        for name, tokens in (("light", self.light), ("dark", self.dark)):
+            with self.subTest(scheme=name):
+                colour = self.pair(tokens, "dormant")[0]
+                hsv = colorsys.rgb_to_hsv(*(
+                    int(colour[i:i + 2], 16) / 255 for i in (1, 3, 5)))
+                self.assertLess(hsv[1], 0.15)
+                self.assertLess(luminance(colour), luminance(
+                    self.pair(tokens, "undelivered")[0]) if name == "light"
+                    else 1)
+
+    def test_the_backgrounds_have_their_hues(self) -> None:
         for name, tokens in (("light", self.light), ("dark", self.dark)):
             for level, (low, high) in HUES.items():
                 with self.subTest(scheme=name, level=level):

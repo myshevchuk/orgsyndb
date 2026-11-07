@@ -50,3 +50,18 @@ leaves this file then.
   before the first delivery. Open: the scheme, whether the registry
   keeps it as a compound field, and how it relates to the article
   number.
+- **The mean in an item's second year.** The mean per year divides the
+  complete years from the first with data, so an item that entered use
+  in, say, October counts that partial year as a whole one, and its
+  mean in the next year is far too low. Wanted as a fix for every item:
+  count the first year in proportion, from the quarter of its first
+  consumption.
+- **Handling discontinued items.** An item set to `auslaufend` is
+  dormant and left out of planning, but nothing else changes: tasks,
+  fillings and syntheses for it are booked as for any other. Open:
+  which of these to refuse or warn about, and whether an item may be
+  closed once its stock is gone.
+- **Planning a new item's first quarter.** The demand models read only
+  complete quarters, so an item first delivered in the current quarter
+  has no forecast until the quarter ends, though the item list projects
+  its means from the current year.

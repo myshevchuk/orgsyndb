@@ -1,6 +1,3 @@
 {% load i18n %}<dl class="level-legend">
-<dt class="level-out">{% translate "out" context "level" %}</dt><dd>{% translate "no container left" %}</dd>
-<dt class="level-critical">{% translate "critical" context "level" %}</dt><dd>{% translate "below half the mean per quarter" %}</dd>
-<dt class="level-low">{% translate "low" context "level" %}</dt><dd>{% translate "below the mean per quarter" %}</dd>
-<dt class="level-watch">{% translate "watch" context "level" %}</dt><dd>{% translate "below twice the mean per quarter" %}</dd>
-</dl>
+{% for entry in legend %}<dt class="level-{{ entry.level }}"><a href="/lab/inventory/end-products/?stock={{ entry.level }}">{{ entry.label }}</a></dt><dd>{{ entry.meaning }} <span class="count">({{ entry.count }})</span></dd>
+{% endfor %}</dl>

@@ -9,7 +9,7 @@ from decimal import Decimal
 from inventory.bookings import Refused, book_note, create_item
 from inventory.models import EnteredConsumption, Item
 
-from . import field_value, make_task, make_user, page, table
+from . import field_value, make_item, make_task, make_user, page, table
 from .inventory_support import (COMPOUND_PAGE, DELIVERIES, LIST, NEW_ITEM,
                                 NEW_LOT, NEW_NOTE, TODAY, FormCase,
                                 InventoryCase, fresh, item_url, note_data,
@@ -20,13 +20,14 @@ ADMIN_ITEMS = "/lab/admin/inventory/item/"
 
 def numberless(user, name: str = "Neuverbindung 9", size: str = "10",
                unit: str = "mg", quantity: int = 4) -> Item:
-    return create_item(user, article_number=None, name=name,
-                       size=Decimal(size), unit=unit, quantity=quantity)
+    return make_item(user, None, name, size, unit, quantity)
 
 
 def edit_data(item: Item, **over: str) -> dict[str, str]:
     data = {"name": item.name, "category": item.category,
-            "note": item.note}
+            "note": item.note, "status": item.status,
+            "stocked_on": item.stocked_on.isoformat()
+            if item.stocked_on else ""}
     data.update(over)
     return data
 
@@ -305,6 +306,7 @@ class AdminTests(InventoryCase):
         item = numberless(self.kl)
         self.client.post(f"{ADMIN_ITEMS}{item.pk}/change/", {
             "name": item.name, "category": "", "note": "",
+            "status": "active", "stocked_on": "",
             "article_number": "CH-0021"})
         self.assertEqual(fresh(item).article_number, "CH-0021")
 
@@ -319,7 +321,7 @@ class AdminTests(InventoryCase):
             item, article_number="CH-0021"))
         self.client.post(f"{ADMIN_ITEMS}{item.pk}/change/", {
             "name": item.name, "category": "", "note": "neu",
-            "article_number": ""})
+            "status": "active", "stocked_on": "", "article_number": ""})
         stored = fresh(item)
         self.assertEqual((stored.article_number, stored.note),
                          ("CH-0021", "neu"))
@@ -329,6 +331,7 @@ class AdminTests(InventoryCase):
         item = numberless(self.kl, size="10", unit="umol")
         response = self.client.post(f"{ADMIN_ITEMS}{item.pk}/change/", {
             "name": item.name, "category": "", "note": "neu",
+            "status": "active", "stocked_on": "",
             "article_number": "CH-0012"})
         self.assertEqual(response.status_code, 200)
         self.assertIn("article_number",
@@ -345,6 +348,7 @@ class AdminTests(InventoryCase):
             item, article_number="CH-0021"))
         self.client.post(f"{ADMIN_ITEMS}{item.pk}/change/", {
             "name": item.name, "category": "", "note": "",
+            "status": "active", "stocked_on": "",
             "article_number": "CH-0022"})
         self.assertEqual(fresh(item).article_number, "CH-0021")
 

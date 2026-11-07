@@ -259,9 +259,13 @@ class ItemFilterTests(ListCase):
 class ItemListFurnishingTests(ListCase):
 
     def outside_table(self, root) -> tuple[str, str]:
-        """The page's text before and after its table."""
+        """The page's text before and after its table, the legend's
+        counts left out."""
         text, grid = root.text(), root.find("table").text()
         before, _, after = text.partition(grid)
+        for count in root.find("dl", "level-legend").find_all(
+                "span", "count"):
+            after = after.replace(count.text(), "", 1)
         return before, after
 
     def test_the_count_is_above_the_table(self) -> None:
@@ -315,10 +319,11 @@ class ItemListFurnishingTests(ListCase):
             row = self.rows()[0]
         self.assertEqual(num(row["Ø Jahr"]), 32)
         self.assertEqual(num(row["lfd. Jahr"]), 0)
+        self.assertNotIn("projected", row["Ø Jahr"].classes)
         before = datetime(2026, 12, 31, 22, 30, tzinfo=timezone.utc)
         with frozen(before):
             row = self.rows()[0]
-        self.assertIsNone(num(row["Ø Jahr"]))
+        self.assertIn("projected", row["Ø Jahr"].classes)
         self.assertEqual(num(row["lfd. Jahr"]), 32)
 
 

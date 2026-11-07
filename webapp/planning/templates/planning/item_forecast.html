@@ -33,5 +33,6 @@
 <dt>{% translate "Next delivery expected" %}</dt>
 <dd>{{ entry.rhythm.next|default_if_none:"–" }}</dd>
 </dl>
-{% endwith %}{% else %}<p>{% translate "No consumption, no forecast." %}</p>
+{% endwith %}{% elif figures.level == "dormant" %}<p>{% translate "Dormant, no forecast." %}</p>
+{% else %}<p>{% translate "No consumption, no forecast." %}</p>
 {% endif %}

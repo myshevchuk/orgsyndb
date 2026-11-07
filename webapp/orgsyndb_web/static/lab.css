@@ -120,8 +120,8 @@
 .lab-history__time { color: var(--muted); }
 
 /* The inventory: stock levels, its tables, the consumption chart and the
-   rows of a delivery note. Each level's background and text keep a
-   contrast of at least 4.5:1 in both colour schemes. */
+   rows of a delivery note. Each of the seven levels' background and
+   text keep a contrast of at least 4.5:1 in both colour schemes. */
 :root {
   --level-out-bg: #f8d4d4;
   --level-out-fg: #6e1414;
@@ -131,6 +131,12 @@
   --level-low-fg: #4d3f00;
   --level-watch-bg: #ddf0cc;
   --level-watch-fg: #21401a;
+  --level-ok-bg: #a3d68f;
+  --level-ok-fg: #123510;
+  --level-undelivered-bg: #d3dceb;
+  --level-undelivered-fg: #22324d;
+  --level-dormant-bg: #5d636b;
+  --level-dormant-fg: #ffffff;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -142,6 +148,12 @@
     --level-low-fg: #fff3b8;
     --level-watch-bg: #26401c;
     --level-watch-fg: #dcf5cf;
+    --level-ok-bg: #3a7a2c;
+    --level-ok-fg: #ffffff;
+    --level-undelivered-bg: #33415a;
+    --level-undelivered-fg: #dfe7f3;
+    --level-dormant-bg: #686d74;
+    --level-dormant-fg: #ffffff;
   }
 }
 
@@ -149,6 +161,13 @@
 .level-critical { background: var(--level-critical-bg); color: var(--level-critical-fg); }
 .level-low { background: var(--level-low-bg); color: var(--level-low-fg); }
 .level-watch { background: var(--level-watch-bg); color: var(--level-watch-fg); }
+.level-ok { background: var(--level-ok-bg); color: var(--level-ok-fg); }
+.level-undelivered { background: var(--level-undelivered-bg); color: var(--level-undelivered-fg); }
+.level-dormant { background: var(--level-dormant-bg); color: var(--level-dormant-fg); }
+.level-legend a { color: inherit; }
+/* An item that entered stock this year, and figures projected from it. */
+.mark-new { color: var(--link); font-family: var(--font-ui); font-size: 0.7em; font-weight: 600; margin-left: 0.15em; }
+.projected { font-style: italic; }
 .stock { font-weight: 600; }
 span.stock[class*="level-"] { padding: 0 var(--space-2); border-radius: 0.25rem; }
 .level-label { font-weight: 400; font-size: 0.875em; }

@@ -182,17 +182,24 @@ def make_task(created_by: Any, **fields: Any) -> Any:
     return Task.objects.create(created_by=created_by, **fields)
 
 
-def make_item(user: Any, article: str = "CH-0001", name: str = "Probe",
-              size: str = "10", unit: str = "umol", quantity: int = 5,
-              category: str = "", note: str = "",
-              day: date | None = None) -> Any:
-    """An item of the inventory ``end-products``, booked by ``user``."""
+# The day test items entered stock unless a test says otherwise: long
+# enough ago that no item is marked new.
+STOCKED_LONG_AGO = date(2019, 1, 2)
+
+
+def make_item(user: Any, article: str | None = "CH-0001",
+              name: str = "Probe", size: str = "10", unit: str = "umol",
+              quantity: int = 5, category: str = "", note: str = "",
+              day: date | None = None,
+              stocked_on: date | None = STOCKED_LONG_AGO) -> Any:
+    """An item of the inventory ``end-products``, booked by ``user``,
+    that entered stock on ``stocked_on``."""
     from decimal import Decimal
     from inventory.bookings import create_item
     return create_item(
         user, article_number=article, name=name, size=Decimal(size),
         unit=unit, quantity=quantity, category=category, note=note,
-        date=day)
+        date=day, stocked_on=stocked_on)
 
 
 BASE_FACTOR = {"mg": 1, "g": 1000, "umol": 1, "mmol": 1000}

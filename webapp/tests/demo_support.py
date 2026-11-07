@@ -34,7 +34,8 @@ ARTICLES = ["CH-0001", "CH-0002", "CH-0010", "CH-0012", "CH-0013",
             "CH-0016", "NV-0007"]
 # The demo's position without an article number, named as its compound.
 NUMBERLESS = ("1-Phenylethanol", "1-phenylethanol")
-LEVELS = ["out", "critical", "low", "watch"]
+LEVELS = ["out", "critical", "low", "watch", "ok", "undelivered",
+          "dormant"]
 NOTE_NUMBER = re.compile(r"^LS-(\d{4})-(\d{3})$")
 PLAN = "/lab/planning/"
 ITEMS = "/lab/inventory/end-products/"

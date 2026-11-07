@@ -163,6 +163,14 @@ class Fill(Change):
 
 
 @dataclass(frozen=True, kw_only=True)
+class SetStatus(Change):
+    """Set the state of ITEM to STATUS, as its edit form does."""
+
+    item: str
+    status: str
+
+
+@dataclass(frozen=True, kw_only=True)
 class Correct(Change):
     """Set the quantity of ITEM to COUNT, dated the change's day."""
 
@@ -201,7 +209,12 @@ class _Size:
     FINAL is the containers it holds on the seeding day. Orders come
     every GAP days, the first PHASE days after the first day of the
     history, with the counts SIZES in turn; GAP None gives none. OPENED
-    is the day of its opening count, in days after the opening.
+    is the day of its opening count, in days after the opening. RATE,
+    when given, is the containers a quarter its entered consumption
+    holds instead of its orders' rate, entered for the quarters ENTERED
+    counts back from the opening's quarter. A size not FILLED gets its
+    containers from its opening count alone. STATUS is set on the day
+    SET_ASIDE, in days after the opening.
     """
 
     size: str
@@ -211,10 +224,17 @@ class _Size:
     sizes: tuple[int, ...] = ()
     phase: int = 0
     opened: int = 0
+    rate: float | None = None
+    entered: tuple[int, ...] = (8, 7, 6, 5, 4, 3, 2)
+    filled: bool = True
+    status: str = "active"
+    set_aside: int = 0
 
     @property
     def per_quarter(self) -> float:
-        """The containers its orders take in a quarter."""
+        """The containers its orders take in a quarter, or its RATE."""
+        if self.rate is not None:
+            return self.rate
         if not self.gap:
             return 0
         return 91.3125 * sum(self.sizes) / len(self.sizes) / self.gap
@@ -278,7 +298,9 @@ ARTICLES = (
         "CH-0012", ("(E)-Zimtsäure", "(E)-Cinnamic acid"),
         ("Carbonsäuren", "Carboxylic acids"), "mg",
         (_Size("100", "mg", final=4, gap=21, sizes=(2, 3, 2, 4), phase=3),
-         _Size("500", "mg", final=3, gap=30, sizes=(1, 2, 1), phase=11)),
+         _Size("500", "mg", final=3, gap=30, sizes=(1, 2, 1), phase=11),
+         _Size("1", "g", final=2, filled=False, status="discontinued",
+               set_aside=120)),
         (_Synthesis("CH-0012", "mwolf", 0, "mwolf", started=-20, ended=14,
                     report=20, qc=30, fills=(15, 60, 100)),
          _Synthesis("cinnamic-acid", "tbauer", 115, "tbauer", started=120,
@@ -296,7 +318,9 @@ ARTICLES = (
         "CH-0010", ("Acetylsalicylsäure", "Acetylsalicylic acid"),
         ("Carbonsäuren", "Carboxylic acids"), "g",
         (_Size("1", "g", final=18, gap=14, sizes=(1, 1, 2), phase=5),
-         _Size("5", "g", final=8, gap=33, sizes=(1, 2, 1, 1), phase=17)),
+         _Size("5", "g", final=8, gap=33, sizes=(1, 2, 1, 1), phase=17),
+         _Size("25", "g", final=1, filled=False, status="not_needed",
+               set_aside=200)),
         (_Synthesis("CH-0010", "klehmann", 35, "jkoch", started=40,
                     ended=66, report=70, qc=74, sequence="SEQ-0001",
                     steps=SEQ_1, steps_done=((52, 1),),
@@ -313,7 +337,9 @@ ARTICLES = (
         "CH-0013", ("Dibenzylidenaceton", "Dibenzylideneacetone"),
         ("Ketone", "Ketones"), "mg",
         (_Size("250", "mg", final=0, gap=25, sizes=(1, 2, 1, 1),
-               phase=8),),
+               phase=8),
+         _Size("1", "g", final=4, gap=15, sizes=(1,), opened=340,
+               filled=False)),
         (_Synthesis("CH-0013", "tbauer", 85, "tbauer", started=90,
                     ended=115, report=118, qc=122, fills=(116, 180)),
          _Synthesis("CH-0013", "tbauer", 245, "jkoch", started=250,
@@ -336,7 +362,9 @@ ARTICLES = (
     _Article(
         "CH-0001", ("1-(4-Bromphenyl)ethanol", "1-(4-Bromophenyl)ethanol"),
         ("Alkohole", "Alcohols"), "mg",
-        (_Size("50", "mg", final=6, gap=200, sizes=(3,), phase=60),),
+        (_Size("50", "mg", final=6, gap=200, sizes=(3,), phase=60),
+         _Size("250", "mg", final=3, rate=2, entered=(8, 7, 6, 5),
+               filled=False)),
         (_Synthesis("CH-0001", "klehmann", 385, "jkoch",
                     priority="low"),)),
     _Article(
@@ -464,7 +492,7 @@ class _Timeline:
 
 # Ranks of the changes of one day.
 ACCOUNT, PARAMETERS, ITEM, TASK, LOT, FILL, NOTE, REVERSAL, CORRECTION, \
-    ENTRY, HISTORICAL, LOT_CORRECTION = range(12)
+    ENTRY, HISTORICAL, LOT_CORRECTION, STATUS = range(13)
 
 
 def staff(offset: int, turn: int = 0) -> str:
@@ -634,7 +662,8 @@ def _size(line: _Timeline, article: _Article, turn: int, size: _Size,
     if correction:
         demand[correction] += 1
     fills = [(line.day(offset), position) for offset, position
-             in opportunities if line.day(offset) >= opened]
+             in opportunities if line.day(offset) >= opened] \
+        if size.filled else []
     ends = [day for day, _ in fills[1:]] + [line.today]
     cushion = max(size.sizes, default=0)
 
@@ -678,8 +707,11 @@ def _size(line: _Timeline, article: _Article, turn: int, size: _Size,
         line.add(correction, CORRECTION, Correct,
                  user=staff(CORRECTED[2]), item=key, count=counted,
                  note=line.text(NOTES["correction"]))
-    if size.opened == 0 and size.gap:
+    if size.opened == 0 and (size.gap or size.rate):
         _entered(line, key, size, turn)
+    if size.status != "active":
+        line.add(line.day(size.set_aside), STATUS, SetStatus,
+                 user="klehmann", item=key, status=size.status)
     if reversal:
         day = reversal[0] + timedelta(days=2)
         line.add(day, REVERSAL, ReverseDelivery,
@@ -704,10 +736,11 @@ def _check(key: str, opening: int, booked: list[tuple[date, int, int]],
 
 
 def _entered(line: _Timeline, key: str, size: _Size, turn: int) -> None:
-    """Add the entered consumption of KEY for the seven quarters from
-    the eighth before the opening's quarter to the second before it."""
+    """Add the entered consumption of KEY for the quarters
+    ``size.entered`` counts back from the opening's quarter, by default
+    the seven from the eighth before it to the second."""
     opening = quarter_of(line.opening)
-    for index, count in enumerate(range(8, 1, -1)):
+    for index, count in enumerate(size.entered):
         year, quarter = back(opening, count)
         value = max(0, round(size.per_quarter * VARIATION[index]))
         offset = 1 + (turn * 3 + index) % (ENTRY_DAYS - 2)

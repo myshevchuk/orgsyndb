@@ -49,6 +49,7 @@ class PermissionTests(InventoryCase):
         return {
             NEW_ITEM: item_data(article_number="CH-0099"),
             item_url(item, "edit"): {"name": "X", "category": "",
+                                     "status": "active",
                                      "note": ""},
             NEW_NOTE: note_data((item, 1)),
             note_url(historical, "reverse"): {"note": "x"},
@@ -159,7 +160,7 @@ class NewItemTests(FormCase):
     def test_the_form_holds_the_fields_of_the_spec(self) -> None:
         names = form_names(page(self.client.get(NEW_ITEM)), "article_number")
         self.assertEqual(names, {"article_number", "name", "category", "size",
-                                 "unit", "quantity", "note"})
+                                 "unit", "quantity", "stocked_on", "note"})
 
     def test_the_unit_choices(self) -> None:
         root = page(self.client.get(NEW_ITEM))
@@ -259,15 +260,17 @@ class ItemEditTests(FormCase):
         self.assertEqual(field_value(root, "category"), "K")
         self.assertEqual(field_value(root, "note"), "alt")
 
-    def test_the_form_holds_name_category_and_note_only(self) -> None:
+    def test_the_form_holds_the_fields_that_may_change(self) -> None:
         root = page(self.client.get(item_url(self.target, "edit")))
         self.assertEqual(form_names(root, "name"),
-                         {"name", "category", "note"})
+                         {"name", "category", "status", "stocked_on",
+                          "note"})
 
     def test_changing_an_item(self) -> None:
         self.client.force_login(self.ae)
         done = self.client.post(item_url(self.target, "edit"), {
-            "name": "Neu", "category": "Z", "note": "neu"})
+            "name": "Neu", "category": "Z", "note": "neu",
+            "status": "active", "stocked_on": "2019-01-02"})
         self.assertRedirects(done, item_url(self.target),
                              fetch_redirect_response=False)
         item = fresh(self.target)
@@ -280,7 +283,7 @@ class ItemEditTests(FormCase):
     def test_fixed_identity(self) -> None:
         """Scenario: Fixed identity."""
         self.client.post(item_url(self.target, "edit"), {
-            "name": "Neu", "category": "", "note": "",
+            "name": "Neu", "category": "", "note": "", "status": "active",
             "article_number": "CH-9999", "size": "99", "unit": "g",
             "quantity": "77"})
         item = fresh(self.target)
@@ -1120,8 +1123,8 @@ class StaleEditTests(FormCase):
     def test_an_item_edit_keeps_a_delivery_booked_meanwhile(self) -> None:
         from inventory.forms import ItemEditForm
         item = self.item(quantity=5)
-        form = ItemEditForm({"name": "Neu", "category": "", "note": ""},
-                            instance=fresh(item))
+        form = ItemEditForm({"name": "Neu", "category": "", "note": "",
+                             "status": "active"}, instance=fresh(item))
         self.assertTrue(form.is_valid())
         self.deliver(item, 2)
         form.save()

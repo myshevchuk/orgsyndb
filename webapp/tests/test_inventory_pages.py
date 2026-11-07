@@ -128,7 +128,7 @@ class ChartTests(PageCase):
     def test_the_mean_is_drawn_as_a_line(self) -> None:
         with_mean = self.show(item_url(self.chart_item("CH-0012")))
         item = self.item("CH-0013", quantity=40)
-        self.enter_year(item, 2026, 3)
+        self.enter_year(item, 2026, 0)
         without = self.show(item_url(item))
         tags = ("line", "polyline", "path")
         self.assertGreater(len(with_mean.find("svg").find_all(tags)),
@@ -252,7 +252,8 @@ class ItemHistoryTests(PageCase):
         item = self.item("CH-0012", note="alt")
         self.client.force_login(self.ae)
         self.client.post(item_url(item, "edit"), {
-            "name": item.name, "category": "", "note": "neu"})
+            "name": item.name, "category": "", "note": "neu",
+            "status": "active", "stocked_on": "2019-01-02"})
         text = self.show(item_url(item)).text()
         for expected in ("alt", "neu", "AE", "KL", "Angelegt"):
             with self.subTest(expected=expected):

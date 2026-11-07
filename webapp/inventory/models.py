@@ -4,12 +4,15 @@ notes, entered consumption, and bulk lots with their own movements.
 Counts and amounts change only through ``inventory.bookings``.
 """
 
+from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Q
+from django.utils import timezone
 from django.utils.formats import number_format
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import pgettext_lazy
@@ -40,10 +43,32 @@ class Level(models.TextChoices):
     CRITICAL = "critical", pgettext_lazy("level", "critical")
     LOW = "low", pgettext_lazy("level", "low")
     WATCH = "watch", pgettext_lazy("level", "watch")
+    OK = "ok", pgettext_lazy("level", "sufficient")
+    UNDELIVERED = "undelivered", pgettext_lazy("level", "never delivered")
+    DORMANT = "dormant", pgettext_lazy("level", "dormant")
 
 
 # The levels from the most urgent on.
-LEVEL_ORDER = {Level.OUT: 0, Level.CRITICAL: 1, Level.LOW: 2, Level.WATCH: 3}
+LEVEL_ORDER = {level: rank for rank, level in enumerate(Level)}
+# The levels the list's level filter takes, each with the more urgent
+# ones.
+URGENT = (Level.OUT, Level.CRITICAL, Level.LOW, Level.WATCH)
+
+
+class Status(models.TextChoices):
+    """The state of an item set by hand: a size not needed for now, or
+    one being discontinued, is set aside from planning."""
+
+    ACTIVE = "active", pgettext_lazy("item status", "active")
+    NOT_NEEDED = "not_needed", pgettext_lazy("item status", "not needed")
+    DISCONTINUED = "discontinued", pgettext_lazy("item status",
+                                                 "discontinued")
+
+
+def not_in_future(day: date | None) -> None:
+    """Refuse a DAY after today."""
+    if day and day > timezone.localdate():
+        raise ValidationError(_("The date may not lie in the future."))
 
 
 class Item(models.Model):
@@ -68,6 +93,10 @@ class Item(models.Model):
     unit = models.CharField(_("Unit"), max_length=4, choices=Unit.choices)
     quantity = models.PositiveIntegerField(_("Stock"), default=0)
     note = models.TextField(pgettext_lazy("inventory", "Note"), blank=True)
+    status = models.CharField(_("Status"), max_length=12,
+                              choices=Status.choices, default=Status.ACTIVE)
+    stocked_on = models.DateField(_("In stock since"), null=True,
+                                  blank=True, validators=[not_in_future])
 
     history = RecordedHistory(excluded_fields=["quantity"])
 
@@ -95,6 +124,12 @@ class Item(models.Model):
         number format of the active language, as ``2,5 mg`` in
         German."""
         return f"{number_format(plain(self.size))} {Unit(self.unit).label}"
+
+    def is_new(self, today: date) -> bool:
+        """Whether the item entered stock in the calendar year of
+        TODAY."""
+        return self.stocked_on is not None \
+            and self.stocked_on.year == today.year
 
     def sort_key(self) -> tuple[bool, str, str, Decimal]:
         """The item's place in the item list: by article number, items

@@ -1285,7 +1285,7 @@ records dated back from today in Europe/Berlin. For example, a successful
 run prints:
 
 ```text
-Demo data as of 2026-11-07 written: 5 accounts, 13 items, 232 delivery notes and 19 tasks.
+Demo data as of 2026-11-07 written: 5 accounts, 17 items, 234 delivery notes and 19 tasks.
 ```
 
 The date and counts depend on the day you run it. Open
@@ -1294,6 +1294,8 @@ The date and counts depend on the day you run it. Open
 `uv run python manage.py demo_data --replace` from `webapp/`; this deletes
 changes you made while trying it. Without `--replace`, the command refuses
 a database that already holds lab records, including accounts.
+Reseed an existing demo this way to give its items stock entry dates and
+states.
 
 ## Troubleshooting
 
@@ -1481,8 +1483,11 @@ The task page shows each matching article's runway (how many days the
 stock lasts at the chosen certainty), synthesis time, slack and latest
 start, with its article number linking to the planning list.
 An article without consumption shows **Kein Verbrauch, keine Prognose.**
-(**No consumption, no forecast.**). A planned or running task also shows
-its own slack and is marked **verspätet** (**late**) below zero. A running
+(**No consumption, no forecast.**). The same applies when all its items
+are dormant or never delivered; see
+[Stock levels](#enter-past-consumption-and-read-stock-levels).
+A planned or running task also shows its own slack and is marked
+**verspätet** (**late**) below zero. A running
 task counts only its remaining synthesis time, so its priority can differ
 from the article's priority for starting a new synthesis.
 
@@ -1522,6 +1527,19 @@ enters stock later, is filled without a bulk lot and is never delivered.
 Its synthesis task names the compound key `1-phenylethanol` as its product
 and has a batch but no lot. The item has no compound link or forecast.
 
+The item list shows all seven stock levels on any seeding day.
+`CH-0012` in 1 g is **auslaufend** (**discontinued**), and `CH-0010` in
+25 g is **nicht benötigt** (**not needed**). Both were set aside after
+their opening counts and have never been delivered. `CH-0001` in 250 mg
+has consumption only in four early quarters and is dormant because none
+falls in this calendar year or the previous one.
+
+`CH-0013` in 1 g entered stock 60 days before seeding and is delivered
+every 15 days. When that stock entry date falls in the seeding year, it
+carries the blue **neu** (**new**) mark and has projected consumption
+means. **1-Phenylethanol** carries the mark when its stock entry date
+falls in the seeding year too.
+
 At every start, `app` applies migrations, runs `demo_data --if-empty`, then
 starts serving requests. The command fills the database only when
 `ORGSYNDB_DEMO=true` and it holds no lab records. Otherwise it prints why
@@ -1554,6 +1572,7 @@ This deletes every lab record and its history, including records you added
 after seeding, and restarts task numbering at `T-001`. It requires
 `ORGSYNDB_DEMO=true` and accepts only a demo database or one without lab
 records. It refuses other databases unchanged.
+Reseed an existing demo to give its items stock entry dates and states.
 
 To empty a test database deliberately, run from `deploy/`:
 
@@ -1609,6 +1628,25 @@ including in the admin. You can still edit the name, category and note.
 The item links to its compound when its article number matches an
 identifier in the collection, such as the demo's `item_number`.
 
+To set aside one container size, choose **Edit** on its item page and
+change **Status** from **aktiv** (**active**), the default, to **nicht
+benötigt** (**not needed**) or **auslaufend** (**discontinued**). You can
+also change it in the admin. Either state makes that item dormant and
+leaves it out of planning. The state applies to that size alone.
+Discontinued items have no further restrictions on bookings or tasks.
+
+For an item entered from paper records, give **Im Bestand seit** (**In
+stock since**) the day it really entered the end-product stock. This
+optional date is on **New item** and can be changed on **Edit**; it cannot
+be after today. If it is empty, the first booking that leaves containers
+sets it to the booking's date: an opening count above zero, a filling or
+a correction. The item page shows the date.
+
+An item whose stock entry date falls in the current calendar year carries
+a blue superscript **neu** (**new**) beside its name in the item list and
+on its page. The mark disappears on 1 January. Time spent as bulk does
+not count towards this date.
+
 On **New item**, **Edit** and **New bulk lot**, article-number suggestions
 come from the compounds' unique text fields, such as the demo's
 `item_number`. Each number is labelled with the compound's name. These
@@ -1625,10 +1663,21 @@ and has no **Enter consumption** or **New bulk lot** link.
 
 Enter items and past quarterly consumption by hand; there is no Excel
 import. The item list shows stock, consumption means, this year's
-consumption, coverage and bulk alongside the item's details. Filter by
-category, stock level or text. A level filter includes that level and
-more urgent ones. Choose **By urgency** to put out-of-stock items first,
-then the other levels, with the shortest coverage first within each level.
+consumption, coverage and bulk alongside the item's details. The
+**Bestand** (**Stock**) column shows container counts alone, coloured by
+level. Hover over a count to read the level's name; screen readers also
+read it. The legend below the table explains all seven colours in urgency
+order and counts the items at each level across the whole inventory,
+even when the list is filtered. Choose a legend entry to list exactly
+the items at that level.
+
+Filter by category, stock level or text. The level filter offers **Out**,
+**Critical**, **Low** and **Watch**; each includes that level and more
+urgent ones. Choose **By urgency** to order items as out, critical, low,
+watch, sufficient, never delivered and dormant, with the shortest coverage
+first within each level. Items without coverage come last within their
+level.
+
 By default, items without an article number appear last, ordered by name.
 Open an article number, or the name of an item without one, to see its
 item page.
@@ -1664,7 +1713,8 @@ from the items' ledgers.
 #### Enter past consumption and read stock levels
 
 On an item page with an article number, choose **Verbrauch nachtragen**
-(**Enter consumption**) to enter a past quarter's container count.
+(**Enter consumption**) to enter a past or current quarter's container
+count. You cannot enter a quarter that has not begun.
 Entering another value for the same quarter replaces it; leaving the
 count empty removes it.
 Subsequent deliveries add to consumption in the quarter of the delivery
@@ -1678,34 +1728,54 @@ the application refuses to combine them. Remove an entered value before
 entering the old notes behind it. You can reverse a note entered later
 as a whole, with a required note explaining why.
 
-The yearly mean covers complete calendar years before the current year,
-starting with the item's first year with data. The quarterly mean is a
-quarter of that yearly mean. The current year has its own column and
-does not enter the mean. **Coverage** is stock divided by the quarterly
-mean, expressed in quarters; it is blank without a positive mean. The
-item page shows quarterly consumption for the last two complete years
-and the current year as a bar chart and table.
+The yearly mean normally covers complete calendar years before the
+current year, starting with the item's first year with data. The quarterly
+mean is a quarter of that yearly mean. The current year has its own column
+and normally does not enter the mean.
 
-Stock cells show a colour and a text label. Against the mean consumption,
-the levels are:
+If all consumption above zero falls in the current year, the application
+projects the means from that year instead. It counts the days from the
+start of the quarter with the first positive consumption through today,
+including today, using at least 91.3125 days, one average quarter. The
+projected quarterly mean is this year's consumption times 91.3125 divided
+by that day count; the yearly mean is four times the quarterly mean.
+From the next year, the means use complete calendar years again.
 
-| Level | Colour | Stock remaining |
+**Coverage** is stock divided by the quarterly mean, expressed in
+quarters. It is blank without a positive mean and for dormant or
+never-delivered items; their means still show when available. Projected
+means and the coverage calculated from them appear in italics in the
+list and on the item page. Hover over them to see **hochgerechnet aus
+dem laufenden Jahr** (**projected from the current year**). These means
+also determine the stock level. The item page shows quarterly consumption
+for the last two complete years and the current year as a bar chart and
+table.
+
+Every item has exactly one stock level: the first matching row below.
+The item page and planning list show the level's name alongside its
+coloured stock count; the item list shows the count alone.
+
+| Level | Colour | When it applies |
 |---|---|---|
-| Out | Red | No containers |
-| Critical | Orange | Above zero, below half a quarter's consumption |
-| Low | Yellow | At least half a quarter's, below a quarter's consumption |
-| Watch | Pale green | At least a quarter's, below half a year's consumption |
+| ruhend (Dormant) | Dark grey | Set aside as not needed or discontinued, or has positive consumption but none in this calendar year or the previous one |
+| noch nie abgegeben (Never delivered) | Light slate blue | No consumption above zero |
+| aufgebraucht (Out) | Red | No containers |
+| kritisch (Critical) | Orange | Above zero, below half the quarterly mean |
+| niedrig (Low) | Yellow | At least half the quarterly mean, below the quarterly mean |
+| beobachten (Watch) | Pale green | At least the quarterly mean, below twice that mean |
+| ausreichend (Sufficient) | Darker green | At least twice the quarterly mean |
 
-An item without a positive consumption mean has no level unless it is
-out. With a positive mean, stock at or above half a year's consumption
-has no level.
+Dormant and never-delivered items keep those levels even with no
+containers left. A positive entered consumption value counts when
+deciding whether an item has been delivered, as do delivery notes.
 
 The item page's **Prognose** (**Forecast**) section shows how demand is
 estimated and how many days the filled containers last at the chosen
 certainty, its runway on hand. It also shows the article's usable bulk,
 combined runway for all sizes, synthesis time with its basis, slack,
 latest start and priority. Figures estimated from quarterly totals are
-marked **grob** (**rough**). Without consumption, it shows
+marked **grob** (**rough**). A dormant item shows **Ruhend, keine
+Prognose.** (**Dormant, no forecast.**). Without consumption, it shows
 **Kein Verbrauch, keine Prognose.** (**No consumption, no forecast.**).
 
 The forecast gives the amount a new synthesis must yield to cover its
@@ -1757,12 +1827,18 @@ synthesis. It computes a priority from consumption, available stock and
 synthesis durations, with the same figures visible to everyone. Choose
 **Planung** (**Planning**) or open `/lab/planning/`.
 
-Planning groups all container sizes of an article because one synthesis
-replenishes the bulk used to fill them. Its **runway** is how many days
-the stock lasts at the chosen certainty, 95 % by default. Bulk is shared
-between sizes so that it counts once. **Usable bulk** counts each
-convertible open lot's amount less the largest container size, at least
-zero, so that the amount counted can fill whole containers.
+Planning groups the container sizes of an article because one synthesis
+replenishes the bulk used to fill them. Dormant and never-delivered items
+have no demand model, runway or actions and do not contribute to planning
+figures. If every item is dormant or never delivered, the article has no
+forecast. These sizes still appear with their stock levels when another
+size gives the article a forecast.
+
+An article's **runway** is how many days the stock lasts at the chosen
+certainty, 95 % by default. Bulk is shared between sizes so that it counts
+once. **Usable bulk** counts each convertible open lot's amount less the
+largest container size with demand, at least zero, so that the amount
+counted can fill whole containers.
 
 The synthesis time is the longest of the article's last three completed
 syntheses; cancelled tasks do not count. Until three exist, the default

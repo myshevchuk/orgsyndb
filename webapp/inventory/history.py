@@ -13,7 +13,8 @@ from django.utils.translation import gettext as _
 from inventory.models import plain
 
 FIELDS = {
-    "item": ["article_number", "name", "category", "note"],
+    "item": ["article_number", "name", "category", "status",
+             "stocked_on", "note"],
     "lot": ["batch", "location", "made_on", "note"],
     "deliverynote": ["number", "recipient", "note", "reversed",
                      "reversal_note"],
@@ -54,6 +55,13 @@ def shown(value: Any) -> str:
     return str(value)
 
 
+def shown_field(field: models.Field, value: Any) -> str:
+    """Return VALUE of FIELD as the history shows it: a choice by its
+    label, any other value as ``shown`` writes it."""
+    labels = dict(field.flatchoices) if field.choices else {}
+    return str(labels[value]) if value in labels else shown(value)
+
+
 def history_entries(record: models.Model) -> list[Entry]:
     """Return the history of RECORD, an item, a lot or a delivery note,
     newest record first.
@@ -76,7 +84,8 @@ def history_entries(record: models.Model) -> list[Entry]:
                 new = getattr(current, field.attname)
                 if old != new:
                     changes.append(Change(label=str(field.verbose_name),
-                                          old=shown(old), new=shown(new)))
+                                          old=shown_field(field, old),
+                                          new=shown_field(field, new)))
         entries.append(Entry(time=current.history_date,
                              user=current.history_user,
                              created=current.history_type == "+",

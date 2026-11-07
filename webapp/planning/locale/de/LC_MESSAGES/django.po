@@ -225,3 +225,6 @@ msgstr "Kein Verbrauch, keine Prognose."
 
 msgid "Slack of this task: %(slack)s"
 msgstr "Spielraum dieser Aufgabe: %(slack)s"
+
+msgid "Dormant, no forecast."
+msgstr "Ruhend, keine Prognose."

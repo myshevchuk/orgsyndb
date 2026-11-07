@@ -561,3 +561,61 @@ msgstr "Vor der ersten Abgabe die Artikelnummer eintragen."
 
 msgid "An item without an article number has never been delivered."
 msgstr "Ein Artikel ohne Artikelnummer wurde noch nie abgegeben."
+
+msgctxt "level"
+msgid "sufficient"
+msgstr "ausreichend"
+
+msgctxt "level"
+msgid "never delivered"
+msgstr "noch nie abgegeben"
+
+msgctxt "level"
+msgid "dormant"
+msgstr "ruhend"
+
+msgid "at least twice the mean per quarter"
+msgstr "mindestens der doppelte Durchschnitt je Quartal"
+
+msgid "no consumption yet"
+msgstr "noch kein Verbrauch"
+
+msgid "set aside, or nothing delivered this year or last"
+msgstr "zurückgestellt, oder seit Vorjahr keine Abgabe"
+
+msgctxt "item status"
+msgid "active"
+msgstr "aktiv"
+
+msgctxt "item status"
+msgid "not needed"
+msgstr "nicht benötigt"
+
+msgctxt "item status"
+msgid "discontinued"
+msgstr "auslaufend"
+
+msgid "Status"
+msgstr "Status"
+
+msgid "In stock since"
+msgstr "Im Bestand seit"
+
+msgctxt "item"
+msgid "new"
+msgstr "neu"
+
+msgid "projected from the current year"
+msgstr "hochgerechnet aus dem laufenden Jahr"
+
+msgid "The day the item entered the end-product stock; left empty, the opening count sets it when it is above zero."
+msgstr "Der Tag, an dem der Artikel in den Endproduktbestand kam; bleibt es leer, setzt ihn der Anfangsbestand, wenn er über null liegt."
+
+msgid "A size not needed or being discontinued is dormant: planning leaves it out."
+msgstr "Eine nicht benötigte oder auslaufende Größe ruht: Die Planung lässt sie aus."
+
+msgid "The day the item entered the end-product stock; it is new in that calendar year."
+msgstr "Der Tag, an dem der Artikel in den Endproduktbestand kam; in diesem Kalenderjahr ist er neu."
+
+msgid "The quarter has not begun yet."
+msgstr "Das Quartal hat noch nicht begonnen."

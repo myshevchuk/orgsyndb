@@ -15,10 +15,11 @@ from functools import cached_property
 from typing import NamedTuple
 from urllib.parse import urlencode
 
-from inventory.figures import (Consumption, bulk, convert, counted_lines,
-                               figures_of, molar_mass, quarter_of)
+from inventory.figures import (Consumption, bulk, consumption, convert,
+                               counted_lines, figures_of, molar_mass,
+                               quarter_of)
 from inventory.models import (BASE_UNIT, END_PRODUCTS, EnteredConsumption,
-                              Item, Lot, Unit)
+                              Item, Level, Lot, Unit)
 from orgsyndb_web import index
 from planning import forecast
 from planning.forecast import Model, Rhythm
@@ -26,6 +27,8 @@ from planning.models import Parameters
 from tasks.models import Priority, State, Task
 
 ACTIVE = (State.PLANNED, State.RUNNING)
+# The levels of the items planning leaves out: they have no demand.
+UNPLANNED = (Level.DORMANT, Level.UNDELIVERED)
 
 
 def compound_key(text: str) -> str | None:
@@ -297,8 +300,12 @@ class Plan:
         if not items:
             return None
         settings = self.parameters
+        planned = [item for item in items if consumption(
+            item, self.today).level not in UNPLANNED]
+        if not planned:
+            return None
         mass = molar_mass(items[0])
-        unit = Unit.UMOL if mass else BASE_UNIT[items[0].unit]
+        unit = Unit.UMOL if mass else BASE_UNIT[planned[0].unit]
         lots = [lot for lot in self.lots
                 if lot.article_number == article_number]
         entries = [self._item(item, unit, mass) for item in items]
@@ -365,7 +372,8 @@ class Plan:
     def _item(self, item: Item, unit: str, mass: float | None
               ) -> ItemForecast:
         """Return the forecast of ITEM with its size in UNIT, MASS being
-        the molar mass of its compound."""
+        the molar mass of its compound; a dormant or never-delivered
+        item has no demand model."""
         entered = {(row.year, row.quarter): row.count for row in
                    EnteredConsumption.objects.filter(item=item)}
         orders = [(line.delivery_note.date, line.count)
@@ -374,15 +382,16 @@ class Plan:
         for day, count in orders:
             delivered[quarter_of(day)] = delivered.get(
                 quarter_of(day), 0) + count
-        model = forecast.demand(entered, orders, self.today,
-                                self.parameters)
+        figures = figures_of(item.quantity, entered, delivered,
+                             self.today, item.status)
+        model = None if figures.level in UNPLANNED else forecast.demand(
+            entered, orders, self.today, self.parameters)
         on_hand = None if model is None else model.runway(
             item.quantity, self.parameters.certainty)
         return ItemForecast(
             item=item, model=model, runway_on_hand=on_hand,
             size=convert(item.size, item.unit, unit, mass),
-            figures=figures_of(item.quantity, entered, delivered,
-                               self.today),
+            figures=figures,
             rhythm=forecast.rhythm([day for day, _ in orders], self.today),
             fill=(on_hand is not None
                   and on_hand < self.parameters.buffer_days

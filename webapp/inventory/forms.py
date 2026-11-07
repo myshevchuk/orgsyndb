@@ -21,6 +21,9 @@ from inventory.models import END_PRODUCTS, DeliveryNote, Item, Lot
 DATE = forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
 ARTICLE_NUMBER = forms.TextInput(attrs={"list": "article-numbers",
                                         "autocomplete": "off"})
+STOCKED_ON_HELP = _("The day the item entered the end-product stock; "
+                    "left empty, the opening count sets it when it is "
+                    "above zero.")
 ARTICLE_NUMBER_HELP = _("The number of the article's delivery notes; "
                         "left empty until it is first delivered. It "
                         "links the item to the compound of the "
@@ -74,14 +77,16 @@ class ItemForm(forms.ModelForm):
     class Meta:
         model = Item
         fields = ["article_number", "name", "category", "size", "unit",
-                  "quantity", "note"]
+                  "quantity", "stocked_on", "note"]
         widgets = {
             "article_number": ARTICLE_NUMBER,
             "category": forms.TextInput(attrs={"list": "categories",
                                                "autocomplete": "off"}),
+            "stocked_on": DATE,
             "note": NOTE,
         }
-        help_texts = {"article_number": ARTICLE_NUMBER_HELP}
+        help_texts = {"article_number": ARTICLE_NUMBER_HELP,
+                      "stocked_on": STOCKED_ON_HELP}
 
     def clean_size(self) -> Decimal:
         """Return the size; refuse one of zero or less."""
@@ -117,11 +122,18 @@ class ItemEditForm(MetadataForm):
 
     class Meta:
         model = Item
-        fields = ["name", "category", "note"]
+        fields = ["name", "category", "status", "stocked_on", "note"]
         widgets = {
             "category": forms.TextInput(attrs={"list": "categories",
                                                "autocomplete": "off"}),
+            "stocked_on": DATE,
             "note": NOTE,
+        }
+        help_texts = {
+            "status": _("A size not needed or being discontinued is "
+                        "dormant: planning leaves it out."),
+            "stocked_on": _("The day the item entered the end-product "
+                            "stock; it is new in that calendar year."),
         }
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:

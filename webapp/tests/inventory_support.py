@@ -25,7 +25,27 @@ KINDS = {"opening": "Anfangsbestand", "delivery": "Abgabe",
          "filling": "Abfüllung", "correction": "Korrektur",
          "reversal": "Storno"}
 LEVELS = {"out": "aufgebraucht", "critical": "kritisch", "low": "niedrig",
-          "watch": "beobachten"}
+          "watch": "beobachten", "ok": "ausreichend",
+          "undelivered": "noch nie abgegeben", "dormant": "ruhend"}
+
+
+def visible_text(element: Any) -> str:
+    """The text of ``element`` without that of its
+    ``span.visually-hidden`` descendants."""
+    from . import Element
+    parts: list[str] = []
+
+    def collect(node: Any) -> None:
+        for child in node.children:
+            if isinstance(child, Element):
+                if child.tag == "span" and "visually-hidden" in child.classes:
+                    continue
+                collect(child)
+            else:
+                parts.append(str(child))
+
+    collect(element)
+    return "".join(parts).strip()
 
 
 def item_url(item: Any, action: str = "") -> str:

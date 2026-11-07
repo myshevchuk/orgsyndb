@@ -135,9 +135,17 @@ def _lot_change(lot: Lot, amount: Decimal) -> Decimal:
 
 def _movement(user: Any, item: Item, kind: str, count: int, after: int,
               day: Date, **fields: Any) -> Movement:
-    return Movement.objects.create(
+    """Store the movement of ITEM, and when it leaves the item holding
+    containers and the item has no stock entry date, give it DAY as that
+    date, recorded in its history as a change by USER."""
+    movement = Movement.objects.create(
         item=item, kind=kind, count=count, quantity_after=after, date=day,
         booked_at=timezone.now(), user=user, **fields)
+    if after > 0 and Item.objects.filter(
+            pk=item.pk, stocked_on__isnull=True).update(stocked_on=day):
+        stored = Item.objects.get(pk=item.pk)
+        _attributed(stored, user).save(update_fields=["stocked_on"])
+    return movement
 
 
 def _lot_movement(user: Any, lot: Lot, kind: str, amount: Decimal,
@@ -168,15 +176,18 @@ TAKEN = gettext_lazy(
 def create_item(user: Any, *, article_number: str | None, name: str,
                 size: Decimal, unit: str, quantity: int, category: str = "",
                 note: str = "", date: Date | None = None,
+                stocked_on: Date | None = None,
                 inventory: str = END_PRODUCTS) -> Item:
     """Create an item of INVENTORY with QUANTITY containers and its
     opening count, booked by USER and dated DATE, today by default.
 
-    An ARTICLE_NUMBER of None or empty gives an item without one.
+    An ARTICLE_NUMBER of None or empty gives an item without one. The
+    item entered stock on STOCKED_ON, or, when that is None and QUANTITY
+    is above zero, on the opening count's date.
     Refuse a QUANTITY below zero, a SIZE of zero or less, an unknown
-    UNIT, a DATE after today, a value too long for its field, and an
-    item whose article number, size and unit another item of the
-    inventory has.
+    UNIT, a DATE or STOCKED_ON after today, a value too long for its
+    field, and an item whose article number, size and unit another item
+    of the inventory has.
     """
     day = _day(date)
     if quantity < 0:
@@ -184,7 +195,8 @@ def create_item(user: Any, *, article_number: str | None, name: str,
     item = Item(inventory=inventory,
                 article_number=_number(article_number), name=name,
                 category=category, size=size, unit=unit,
-                quantity=quantity, note=note)
+                quantity=quantity, note=note,
+                stocked_on=stocked_on or (day if quantity > 0 else None))
     _checked(item)
     taken = str(TAKEN)
     if item.article_number is not None and number_taken(
@@ -451,8 +463,9 @@ def enter_consumption(user: Any, item: Item, *, year: int, quarter: int,
     the quarter's value and returns None.
 
     Refuse an item without an article number, a QUARTER outside 1 to
-    4, a YEAR below 1, a COUNT below zero, and a value for a quarter in
-    which the item has lines of a historical note that is not reversed.
+    4, a YEAR below 1, a quarter after the current one, a COUNT below
+    zero, and a value for a quarter in which the item has lines of a
+    historical note that is not reversed.
     """
     if item.article_number is None:
         raise Refused(_("An item without an article number has never "
@@ -461,6 +474,8 @@ def enter_consumption(user: Any, item: Item, *, year: int, quarter: int,
         raise Refused({"quarter": _("The quarter is 1, 2, 3 or 4.")})
     if year < 1:
         raise Refused({"year": _("The year must be above zero.")})
+    if (year, quarter) > quarter_of(timezone.localdate()):
+        raise Refused({"quarter": _("The quarter has not begun yet.")})
     if count is not None and count < 0:
         raise Refused({"count": _("The count may not be negative.")})
     with transaction.atomic():

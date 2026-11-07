@@ -77,10 +77,9 @@ class MeanTests(InventoryCase):
         figures = self.consumption(first)
         self.assertAlmostEqual(float(figures.mean_year), 16)
         figures = self.consumption(second)
-        self.assertIsNone(figures.mean_year)
-        self.assertIsNone(figures.mean_quarter)
-        self.assertIsNone(figures.coverage)
-        self.assertIsNone(figures.level)
+        self.assertTrue(figures.projected)
+        self.assertIsNotNone(figures.mean_year)
+        self.assertIsNotNone(figures.coverage)
         self.assertEqual(figures.this_year, 32)
 
     def test_without_a_mean_an_empty_item_is_out(self) -> None:
@@ -139,9 +138,10 @@ class MeanTests(InventoryCase):
     def test_a_year_is_complete_when_today_is_in_the_next(self) -> None:
         item = self.item()
         self.enter(item, 2025, 1, 8)
-        self.assertIsNone(
-            self.consumption(item, date(2025, 12, 31)).mean_year)
+        self.assertTrue(
+            self.consumption(item, date(2025, 12, 31)).projected)
         figures = self.consumption(item, date(2026, 1, 1))
+        self.assertFalse(figures.projected)
         self.assertAlmostEqual(float(figures.mean_year), 8)
         self.assertEqual(figures.this_year, 0)
 
@@ -153,19 +153,19 @@ class MeanTests(InventoryCase):
         self.assertEqual(self.consumption(item, date(2025, 6, 1)).this_year,
                          8)
 
-    def test_a_mean_of_zero_has_no_coverage_and_no_level(self) -> None:
+    def test_a_mean_of_zero_is_never_delivered(self) -> None:
         item = self.item(quantity=2)
         self.enter(item, 2025, 1, 0)
         figures = self.consumption(item)
         self.assertEqual(float(figures.mean_year), 0)
         self.assertEqual(float(figures.mean_quarter), 0)
         self.assertIsNone(figures.coverage)
-        self.assertIsNone(figures.level)
+        self.assertEqual(figures.level, "undelivered")
 
-    def test_a_mean_of_zero_leaves_an_empty_item_out(self) -> None:
+    def test_never_delivered_wins_over_out(self) -> None:
         item = self.item(quantity=0)
         self.enter(item, 2025, 1, 0)
-        self.assertEqual(self.consumption(item).level, "out")
+        self.assertEqual(self.consumption(item).level, "undelivered")
 
     def test_an_empty_item_has_a_coverage_of_zero(self) -> None:
         item = self.item(quantity=0)
@@ -188,7 +188,7 @@ class MeanTests(InventoryCase):
         self.assertIsNone(figures.mean_year)
         self.assertIsNone(figures.mean_quarter)
         self.assertIsNone(figures.coverage)
-        self.assertIsNone(figures.level)
+        self.assertEqual(figures.level, "undelivered")
         self.assertEqual(figures.this_year, 0)
 
 
@@ -253,5 +253,6 @@ class ExactCoverageTests(InventoryCase):
     def test_coverage_is_exact_where_the_mean_recurs(self) -> None:
         item = self.item(quantity=6)
         self.enter(item, 2023, 1, 32)
+        self.enter(item, 2026, 1, 1)
         figures = self.consumption(item)
         self.assertEqual(figures.coverage, Decimal("2.25"))

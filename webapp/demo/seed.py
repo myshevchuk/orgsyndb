@@ -174,6 +174,11 @@ class _Writer:
                               count=change.count, date=day,
                               lot=self.lots[change.lot] if change.lot
                               else None, amount=change.amount)
+            case data.SetStatus():
+                item = Item.objects.get(pk=self.items[change.item].pk)
+                item.status = change.status
+                item._history_user = user
+                item.save(update_fields=["status"])
             case data.Correct():
                 bookings.correct(user, self.items[change.item],
                                  count=change.count, note=change.note,

@@ -237,7 +237,8 @@ class InventoryShellTests(IndexMixin, TestCase):
         self.client.force_login(self.kl)
         done = self.client.post(
             "/lab/inventory/items/%d/edit/" % self.item.pk,
-            {"name": "Neu", "category": "", "note": ""}, follow=True)
+            {"name": "Neu", "category": "", "note": "", "status": "active"},
+            follow=True)
         root = page(done)
         self.assertIsNotNone(root.find("ul", cls="lab-messages"))
 

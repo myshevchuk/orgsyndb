@@ -134,8 +134,8 @@ class DayChecks:
             with self.subTest(level=level):
                 self.assertTrue(any(f"level-{level}" in found
                                     for found in classes))
-        self.assertTrue(any(not any(name.startswith("level-")
-                                    for name in found)
+        self.assertTrue(all(any(name.startswith("level-")
+                                for name in found)
                             for found in classes))
 
 

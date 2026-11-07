@@ -32,10 +32,11 @@ class LimitTests(PlanningCase):
 
     def test_a_latest_start_beyond_the_calendar(self) -> None:
         item = self.item("NV-9", "NV-9", "1", "mg", 10)
-        first, *rest = WINDOW
-        self.enter(item, *first, 1)
-        for year, quarter in rest:
-            self.enter(item, year, quarter, 0)
+        # One container in a quarter of last year, outside the latest
+        # four: recent enough to be planned, and m stays at 1/12.
+        for year, quarter in WINDOW:
+            self.enter(item, year, quarter,
+                       1 if (year, quarter) == WINDOW[-5] else 0)
         self.lot("NV-9", "mg", "3000")
         found = self.forecast("NV-9")
         self.assertGreater(found.runway, 1e6)

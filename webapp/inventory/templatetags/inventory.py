@@ -1,10 +1,12 @@
 """Template filters of the inventory's pages."""
 
+from datetime import date
 from decimal import Decimal
+
 from django import template
 from django.utils.formats import number_format
 
-from inventory.models import Level, Lot, plain, shown
+from inventory.models import Item, Level, Lot, plain, shown
 
 register = template.Library()
 
@@ -29,3 +31,9 @@ def level_label(value: str | None) -> str:
     nothing for no level."""
     return str(Level(value).label) if value else ""
 
+
+
+@register.filter
+def new_on(item: Item, today: date) -> bool:
+    """Whether ITEM entered stock in the calendar year of TODAY."""
+    return item.is_new(today)

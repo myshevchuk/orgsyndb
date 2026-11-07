@@ -16,7 +16,7 @@
 <td>{{ found.article_number }}</td>
 <td>{{ found.name }}</td>
 <td><ul class="planning-cell">
-{% for entry in found.items %}<li><a href="/lab/inventory/items/{{ entry.item.pk }}/">{{ entry.item.container }}</a>: <span class="stock{% if entry.figures.level %} level-{{ entry.figures.level }}{% endif %}">{{ entry.item.quantity }}{% if entry.figures.level %} <span class="level-label">{{ entry.figures.level|level_label }}</span>{% endif %}</span>{% if entry.runway_on_hand is not None %} · {{ entry.runway_on_hand|days }}{% endif %}</li>
+{% for entry in found.items %}<li><a href="/lab/inventory/items/{{ entry.item.pk }}/">{{ entry.item.container }}</a>: <span class="stock level-{{ entry.figures.level }}">{{ entry.item.quantity }} <span class="level-label">{{ entry.figures.level|level_label }}</span></span>{% if entry.runway_on_hand is not None %} · {{ entry.runway_on_hand|days }}{% endif %}</li>
 {% endfor %}</ul></td>
 <td class="number"><ul class="planning-cell">
 {% for entry in found.items %}<li>{% if entry.per_year is not None %}{{ entry.per_year|decimal }}{% else %}–{% endif %}</li>

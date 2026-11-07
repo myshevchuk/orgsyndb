@@ -1,7 +1,7 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n l10n lab inventory %}
 {% block title %}{% if item.article_number %}{{ item.article_number }} {% endif %}{{ item.name }}{% endblock %}
 {% block main %}
-<h1>{% if item.article_number %}{{ item.article_number }} · {% endif %}{{ item.name }}</h1>
+<h1>{% if item.article_number %}{{ item.article_number }} · {% endif %}{{ item.name }}{% if item|new_on:today %}<sup class="mark-new">{% translate "new" context "item" %}</sup>{% endif %}</h1>
 {% if user.is_authenticated %}<div class="lab-actions">
 {% if item.article_number %}<a href="/lab/inventory/deliveries/new/?item={{ item.pk }}">{% translate "Book delivery" %}</a>
 {% else %}<a href="/lab/inventory/items/{{ item.pk }}/edit/">{% translate "Enter article number" %}</a>
@@ -17,16 +17,20 @@
 <dd>{{ item.category|default:"–" }}</dd>
 <dt>{% translate "Container" %}</dt>
 <dd>{{ item.container }}</dd>
+{% if item.status != "active" %}<dt>{% translate "Status" %}</dt>
+<dd>{{ item.get_status_display }}</dd>
+{% endif %}<dt>{% translate "In stock since" %}</dt>
+<dd>{{ item.stocked_on|default_if_none:"–" }}</dd>
 <dt>{% translate "Stock" %}</dt>
-<dd><span class="stock{% if figures.level %} level-{{ figures.level }}{% endif %}">{{ item.quantity }}{% if figures.level %} <span class="level-label">{{ figures.level|level_label }}</span>{% endif %}</span></dd>
+<dd><span class="stock level-{{ figures.level }}">{{ item.quantity }} <span class="level-label">{{ figures.level|level_label }}</span></span></dd>
 <dt>{% translate "Mean per quarter" %}</dt>
-<dd>{% if figures.mean_quarter is not None %}{{ figures.mean_quarter|floatformat:1 }}{% else %}–{% endif %}</dd>
+<dd{% if figures.projected %} class="projected" title="{% translate "projected from the current year" %}"{% endif %}>{% if figures.mean_quarter is not None %}{{ figures.mean_quarter|floatformat:1 }}{% else %}–{% endif %}</dd>
 <dt>{% translate "Mean per year" %}</dt>
-<dd>{% if figures.mean_year is not None %}{{ figures.mean_year|floatformat:1 }}{% else %}–{% endif %}</dd>
+<dd{% if figures.projected %} class="projected" title="{% translate "projected from the current year" %}"{% endif %}>{% if figures.mean_year is not None %}{{ figures.mean_year|floatformat:1 }}{% else %}–{% endif %}</dd>
 <dt>{% translate "This year" %}</dt>
 <dd>{{ figures.this_year }}</dd>
 <dt>{% translate "Coverage" %}</dt>
-<dd>{% if figures.coverage is not None %}{% blocktranslate with coverage=figures.coverage|floatformat:1 %}{{ coverage }} quarters{% endblocktranslate %}{% else %}–{% endif %}</dd>
+<dd{% if figures.projected and figures.coverage is not None %} class="projected" title="{% translate "projected from the current year" %}"{% endif %}>{% if figures.coverage is not None %}{% blocktranslate with coverage=figures.coverage|floatformat:1 %}{{ coverage }} quarters{% endblocktranslate %}{% else %}–{% endif %}</dd>
 </dl>
 {% if item.note %}<h2>{% translate "Note" context "inventory" %}</h2>
 <div class="lab-note">{{ item.note|linebreaks }}</div>

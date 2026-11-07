@@ -9,7 +9,7 @@ from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
 from inventory.models import (BASE_UNIT, FACTOR, DeliveryLine,
                               EnteredConsumption, Item, Level, Lot, Movement,
-                              Unit, shown)
+                              Status, Unit, shown)
 from orgsyndb_web import index
 
 MASS = (Unit.MG, Unit.G)
@@ -67,27 +67,33 @@ def proposed_amount(item: Item, count: int, lot: Lot) -> Decimal | None:
     return taken.quantize(BASE_PLACES, ROUND_HALF_UP)
 
 
-def level(quantity: int, mean_quarter: Number | None) -> str | None:
-    """Return the stock level of QUANTITY containers against the mean
-    consumption per quarter MEAN_QUARTER.
+def level(quantity: int, mean_quarter: Number | None, *,
+          status: str = Status.ACTIVE, consumed: bool = True,
+          recent: bool = True) -> str:
+    """Return the level of an item holding QUANTITY containers against
+    its mean consumption per quarter MEAN_QUARTER.
 
-    The level is ``out`` at zero; otherwise, with a mean above zero,
-    ``critical`` below half the mean, ``low`` below the mean and
-    ``watch`` below twice the mean. Return None for any other quantity,
-    and for every quantity above zero without a mean or with a mean of
-    zero.
+    The level is ``dormant`` for an item whose STATUS sets it aside, or
+    that has CONSUMED containers but none RECENT, in the current year or
+    the one before; else ``undelivered`` for one that has consumed none;
+    else ``out`` at zero; else, with a mean above zero, ``critical``
+    below half the mean, ``low`` below the mean and ``watch`` below
+    twice the mean; else ``ok``.
     """
+    if status != Status.ACTIVE or (consumed and not recent):
+        return Level.DORMANT
+    if not consumed:
+        return Level.UNDELIVERED
     if quantity == 0:
         return Level.OUT
-    if not mean_quarter:
-        return None
-    if quantity * 2 < mean_quarter:
-        return Level.CRITICAL
-    if quantity < mean_quarter:
-        return Level.LOW
-    if quantity < mean_quarter * 2:
-        return Level.WATCH
-    return None
+    if mean_quarter:
+        if quantity * 2 < mean_quarter:
+            return Level.CRITICAL
+        if quantity < mean_quarter:
+            return Level.LOW
+        if quantity < mean_quarter * 2:
+            return Level.WATCH
+    return Level.OK
 
 
 def quarter_of(day: date) -> Quarter:
@@ -104,9 +110,12 @@ class Consumption:
     lines hold; QUARTERS maps each quarter with either to their sum.
     MEAN_YEAR is the mean over the complete years before the day's,
     from the first year with data, and MEAN_QUARTER a quarter of it;
-    both are None without such a year. THIS_YEAR is the consumption of
-    the day's year. COVERAGE is the quantity in quarters of the mean,
-    None without a mean above zero, and LEVEL is the stock level.
+    both are None without such a year. For an item whose consumption
+    above zero all lies in the day's year they are instead PROJECTED
+    from that year. THIS_YEAR is the consumption of the day's year.
+    COVERAGE is the quantity in quarters of the mean, None without a
+    mean above zero and for a dormant or never-delivered item, and
+    LEVEL is the item's level.
     """
 
     entered: dict[Quarter, int]
@@ -116,7 +125,8 @@ class Consumption:
     mean_quarter: Decimal | None
     this_year: int
     coverage: Decimal | None
-    level: str | None
+    level: str
+    projected: bool = False
 
     def total(self, quarter: Quarter) -> int:
         """Return the consumption of QUARTER, zero without data."""
@@ -138,32 +148,66 @@ def counted_lines(item: Item) -> list[DeliveryLine]:
             and line.delivery_note_id not in reversed_notes]
 
 
+# The days of a quarter, in ten-thousandths, so that a projection
+# divides whole numbers once.
+QUARTER_DAYS = 913125
+SCALE = 10000
+
+
+def quarter_start(quarter: Quarter) -> date:
+    """Return the first day of QUARTER."""
+    year, number = quarter
+    return date(year, 3 * (number - 1) + 1, 1)
+
+
 def figures_of(quantity: int, entered: dict[Quarter, int],
-               delivered: dict[Quarter, int], today: date) -> Consumption:
+               delivered: dict[Quarter, int], today: date,
+               status: str = Status.ACTIVE) -> Consumption:
     """Return the consumption of an item holding QUANTITY containers,
-    given its ENTERED values and DELIVERED containers per quarter, as of
-    TODAY."""
+    given its ENTERED values and DELIVERED containers per quarter and
+    its STATUS, as of TODAY.
+
+    An item whose consumption above zero all lies in TODAY's year has
+    projected means: that year's consumption times 91.3125 divided by
+    the days from the first day of the quarter of its first consumption
+    above zero to TODAY, TODAY included, or by 91.3125 when that is
+    fewer.
+    """
     quarters = {key: entered.get(key, 0) + delivered.get(key, 0)
                 for key in sorted({*entered, *delivered})}
+    used = [key for key, count in quarters.items() if count > 0]
+    this_year = sum(count for (year, _), count in quarters.items()
+                    if year == today.year)
     years = range(min((year for year, _ in quarters), default=today.year),
                   today.year)
     mean_year = mean_quarter = coverage = None
-    if years:
-        # Each figure divides whole numbers once, so that one that
-        # terminates, such as a coverage of 2.25, is exact and rounds
-        # as it should.
+    projected = bool(used) and all(year == today.year for year, _ in used)
+    # Each figure divides whole numbers once, so that one that
+    # terminates, such as a coverage of 2.25, is exact and rounds as it
+    # should.
+    if projected:
+        days = (today - quarter_start(min(used))).days + 1
+        span = max(days * SCALE, QUARTER_DAYS)
+        mean_quarter = Decimal(this_year * QUARTER_DAYS) / span
+        mean_year = Decimal(4 * this_year * QUARTER_DAYS) / span
+        coverage = Decimal(quantity * span) / (this_year * QUARTER_DAYS)
+    elif years:
         total = sum(count for (year, _), count in quarters.items()
                     if year in years)
         mean_year = Decimal(total) / len(years)
         mean_quarter = Decimal(total) / (4 * len(years))
         if total:
             coverage = Decimal(quantity * 4 * len(years)) / total
+    found = level(quantity, mean_quarter, status=status,
+                  consumed=bool(used),
+                  recent=any(year >= today.year - 1 for year, _ in used))
+    if found in (Level.DORMANT, Level.UNDELIVERED):
+        coverage = None
     return Consumption(
         entered=entered, delivered=delivered, quarters=quarters,
         mean_year=mean_year, mean_quarter=mean_quarter,
-        this_year=sum(count for (year, _), count in quarters.items()
-                      if year == today.year),
-        coverage=coverage, level=level(quantity, mean_quarter))
+        this_year=this_year, coverage=coverage, level=found,
+        projected=projected)
 
 
 def consumption(item: Item, today: date) -> Consumption:
@@ -175,7 +219,8 @@ def consumption(item: Item, today: date) -> Consumption:
     for line in counted_lines(item):
         key = quarter_of(line.delivery_note.date)
         delivered[key] = delivered.get(key, 0) + line.count
-    return figures_of(item.quantity, entered, delivered, today)
+    return figures_of(item.quantity, entered, delivered, today,
+                      item.status)
 
 
 @dataclass(frozen=True)

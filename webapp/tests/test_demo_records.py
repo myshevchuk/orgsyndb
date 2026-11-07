@@ -140,7 +140,8 @@ class InventoryTests(SeededCase):
         self.assertEqual(articles, set(ARTICLES))
         last = rows[-1]
         self.assertEqual(last[header[0]].text(), "")
-        self.assertEqual(last[header[1]].text(), NUMBERLESS[0])
+        self.assertEqual(last[header[1]].text().removesuffix("neu"),
+                         NUMBERLESS[0])
         item = Item.objects.get(article_number__isnull=True)
         self.assertEqual(last[header[1]].find("a").get("href"),
                          f"/lab/inventory/items/{item.pk}/")
@@ -157,6 +158,35 @@ class InventoryTests(SeededCase):
                     self.assertIsNotNone(link)
                     self.assertEqual(link.get("href"),
                                      f"/compounds/{keys[article]}/")
+
+    def test_new_positions(self) -> None:
+        """Scenario: New positions."""
+        from inventory.models import Item
+        header, rows = table(self.get(ITEMS))
+        marked = {(row[header[1]].text().removesuffix("neu"),
+                   row[header[3]].text())
+                  for row in rows if row[header[1]].find("sup", "mark-new")}
+        self.assertEqual(marked, {(NUMBERLESS[0], "100 mg"),
+                                  ("Dibenzylidenaceton", "1 g")})
+        size = next(row for row in rows
+                    if row[header[0]].text() == "CH-0013"
+                    and row[header[3]].text() == "1 g")
+        self.assertIn("projected", size["Ø Jahr"].classes)
+        self.assertTrue(Item.objects.filter(status="discontinued").exists())
+
+    def test_sizes_set_aside(self) -> None:
+        from inventory.models import Item
+        aside = {(item.article_number, str(item.container), item.status)
+                 for item in Item.objects.exclude(status="active")}
+        self.assertEqual(aside, {("CH-0012", "1 g", "discontinued"),
+                                 ("CH-0010", "25 g", "not_needed")})
+        for item in Item.objects.exclude(status="active"):
+            with self.subTest(item=str(item)):
+                self.assertFalse(item.delivery_lines.exists())
+                changes = [record.diff_against(record.prev_record)
+                           .changed_fields for record in item.history.all()
+                           if record.prev_record is not None]
+                self.assertIn(["status"], changes)
 
     def test_items_are_named_as_their_compounds(self) -> None:
         from inventory.models import Item
@@ -205,9 +235,14 @@ class InventoryTests(SeededCase):
                 self.assertLessEqual(local(row.entered_at).date(),
                                      O + timedelta(days=30))
         self.assertTrue(by_item)
+        from inventory.models import Item
+        early = {quarters_before(quarter_of(O), count)
+                 for count in range(5, 9)}
+        dormant = Item.objects.get(article_number="CH-0001", size=250)
         for item, quarters in by_item.items():
             with self.subTest(item=item):
-                self.assertEqual(quarters, wanted)
+                self.assertEqual(quarters, early if item == dormant.pk
+                                 else wanted)
 
     def test_historical_notes(self) -> None:
         from inventory.models import DeliveryNote

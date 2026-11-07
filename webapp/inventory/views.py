@@ -1,5 +1,6 @@
 """The inventory's lists, pages and forms."""
 
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
@@ -15,6 +16,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.formats import localize_input
 from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy
 
 from inventory import bookings
 from inventory.bookings import Refused
@@ -26,7 +28,7 @@ from inventory.forms import (ConsumptionForm, CorrectionForm, FillForm,
                              LotEditForm, LotForm, NoteEditForm, NoteForm,
                              ReversalForm, show_refusal)
 from inventory.history import history_entries
-from inventory.models import (END_PRODUCTS, FACTOR, LEVEL_ORDER,
+from inventory.models import (END_PRODUCTS, FACTOR, LEVEL_ORDER, URGENT,
                               DeliveryNote, Item, Level, Lot, Movement,
                               plain)
 from orgsyndb_web import index
@@ -57,12 +59,12 @@ class Row:
 
     @property
     def urgency(self) -> tuple[Any, ...]:
-        """The row's place with ``sort=urgency``: by level, out first
-        and items without one last, then by coverage, smallest first and
-        items without one last, then in the list's order."""
+        """The row's place with ``sort=urgency``: by level in urgency
+        order, then by coverage, smallest first and items without one
+        last, then in the list's order."""
         coverage = self.figures.coverage
-        return (LEVEL_ORDER.get(self.figures.level, len(LEVEL_ORDER)),
-                coverage is None, coverage or 0, self.item.sort_key())
+        return (LEVEL_ORDER[self.figures.level], coverage is None,
+                coverage or 0, self.item.sort_key())
 
     def searched(self) -> str:
         """The text the list's search looks in, folded for a comparison
@@ -77,11 +79,14 @@ class Row:
 @dataclass(frozen=True)
 class ItemFilters:
     """The item list's filters as the query gives them, each unknown
-    value replaced by its default: CATEGORY; LEVEL, a level or empty; Q,
-    the searched text; and SORT, ``urgency`` or empty."""
+    value replaced by its default: CATEGORY; LEVEL, one of the urgent
+    levels or empty, admitting it and the more urgent ones; STOCK, any
+    level or empty, admitting that level alone; Q, the searched text;
+    and SORT, ``urgency`` or empty."""
 
     category: str = ""
     level: str = ""
+    stock: str = ""
     q: str = ""
     sort: str = ""
 
@@ -89,8 +94,10 @@ class ItemFilters:
     def from_query(cls, query: Any) -> "ItemFilters":
         """Return the filters of QUERY, a mapping of GET parameters."""
         level = query.get("level", "")
+        stock = query.get("stock", "")
         return cls(category=query.get("category", "").strip(),
-                   level=level if level in Level.values else "",
+                   level=level if level in URGENT else "",
+                   stock=stock if stock in Level.values else "",
                    q=query.get("q", "").strip(),
                    sort="urgency" if query.get("sort") == "urgency"
                    else "")
@@ -99,9 +106,42 @@ class ItemFilters:
         """Whether ROW passes every filter."""
         shown = row.figures.level
         return ((not self.category or row.item.category == self.category)
-                and (not self.level or shown is not None
-                     and LEVEL_ORDER[shown] <= LEVEL_ORDER[self.level])
+                and (not self.level
+                     or LEVEL_ORDER[shown] <= LEVEL_ORDER[self.level])
+                and (not self.stock or shown == self.stock)
                 and (not self.q or self.q.casefold() in row.searched()))
+
+
+@dataclass(frozen=True)
+class LegendEntry:
+    """A level as the item list's legend shows it, with how many items
+    of the inventory are at it."""
+
+    level: str
+    label: str
+    meaning: str
+    count: int
+
+
+MEANINGS = {
+    Level.OUT: gettext_lazy("no container left"),
+    Level.CRITICAL: gettext_lazy("below half the mean per quarter"),
+    Level.LOW: gettext_lazy("below the mean per quarter"),
+    Level.WATCH: gettext_lazy("below twice the mean per quarter"),
+    Level.OK: gettext_lazy("at least twice the mean per quarter"),
+    Level.UNDELIVERED: gettext_lazy("no consumption yet"),
+    Level.DORMANT: gettext_lazy(
+        "set aside, or nothing delivered this year or last"),
+}
+
+
+def legend(rows: list[Row]) -> list[LegendEntry]:
+    """Return the legend's entries, one per level in urgency order, each
+    counting the items of ROWS at that level."""
+    counts = Counter(row.figures.level for row in rows)
+    return [LegendEntry(level=level, label=str(level.label),
+                        meaning=str(MEANINGS[level]), count=counts[level])
+            for level in Level]
 
 
 def item_list(request: HttpRequest) -> HttpResponse:
@@ -126,7 +166,9 @@ def item_list(request: HttpRequest) -> HttpResponse:
         "filters": filters,
         "categories": sorted({item.category for item in items
                               if item.category}),
-        "levels": Level.choices,
+        "levels": [(level.value, level.label) for level in URGENT],
+        "legend": legend(rows),
+        "today": today,
         "tabs": tabs(LIST),
     })
 
@@ -252,6 +294,7 @@ def item_page(request: HttpRequest, pk: int) -> HttpResponse:
         if numbered else Lot.objects.none()
     return render(request, "inventory/item_page.html", {
         "item": item,
+        "today": today,
         "figures": figures,
         "chart": chart(figures, today.year),
         "quarters": [QuarterRow(year=year, quarter=quarter,

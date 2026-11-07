@@ -285,17 +285,16 @@ class YieldTests(PlanningCase):
         self.assertEqual(found.lacking, {micro.pk: 44})
         self.assertNotIn(mg.pk, found.lacking)
 
-    def test_no_item_converts(self) -> None:
-        """The first item by unit sets the bulk unit; it has no demand,
-        and the item that has converts into no mg."""
+    def test_an_unplanned_first_item_sets_no_bulk_unit(self) -> None:
+        """The first item by unit has never been delivered, so the item
+        with demand sets the bulk unit and converts into it."""
         self.item("NV-7", "NV-7", "1", "mg", 10)
-        micro = self.planned_item("NV-7", size="5", unit="umol",
-                                  quantity=10)
+        self.planned_item("NV-7", size="5", unit="umol", quantity=10)
         found = self.forecast("NV-7")
-        self.assertEqual(found.bulk_unit, "mg")
-        self.assertIsNone(found.yield_amount)
+        self.assertEqual(found.bulk_unit, "umol")
+        self.assertIsNotNone(found.yield_amount)
         self.assertIsNone(found.yield_mg)
-        self.assertEqual(found.lacking, {micro.pk: 42})
+        self.assertEqual(found.lacking, {})
         self.assertEqual(found.usable_bulk, D(0))
 
     def test_an_item_that_lacks_nothing_lacks_no_containers(self) -> None:
