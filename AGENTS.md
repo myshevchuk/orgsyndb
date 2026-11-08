@@ -44,3 +44,22 @@ understood or work correctly without it.
   they were made; leave them as they are.
 - The product is an early alpha with no users. Do not add backward
   compatibility, migration guides or deprecation paths.
+
+## Documents for people
+
+How a document is written depends on its kind:
+
+- **Technical references** serve the application's developers and
+  operators, and are closer to code comments than to a manual. They
+  include the generated table diagram
+  `webapp/docs/database-schema.html` and any other strictly technical
+  file, such as installation instructions or a command reference kept
+  in a file of its own. Whoever changes the code updates them, with no
+  Codex doc-writer pass, and they are in English only.
+- **`README.md`** gets a Codex doc-writer pass and stays in English
+  only.
+- **Every other document** a person reads is written by the Codex doc
+  writer.
+
+Where a spec requires a German version of a document, the spec wins
+(localization "German authoring documentation").
