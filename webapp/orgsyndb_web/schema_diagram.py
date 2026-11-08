@@ -26,7 +26,8 @@ from simple_history.models import HistoricalChanges
 WEBAPP = Path(__file__).resolve().parents[1]
 OUTPUT = WEBAPP / "docs" / "database-schema.html"
 
-# The table every record names a person by; its links are not drawn.
+# The table every record names a person by; its links have a kind of
+# their own.
 HUB = "accounts_user"
 # The name of the one box that stands for every history table.
 HISTORY = "‹app›_historical‹model›"
@@ -102,13 +103,15 @@ class Constraint:
 @dataclass(frozen=True)
 class Link:
     """A link the models do not hold, drawn from SOURCE.COLUMN to
-    TARGET.TARGET_COLUMN and labelled LABEL."""
+    TARGET.TARGET_COLUMN, labelled LABEL where it fits; NOTE tells how
+    it matches."""
 
     source: str
     column: str
     target: str
     target_column: str
     label: str
+    note: str = ""
 
 
 @dataclass(frozen=True)
@@ -144,9 +147,20 @@ GRID = (
 
 LINKS = (
     Link("inventory_lot", "article_number", "inventory_item",
-         "article_number",
-         "same inventory and article_number · no foreign key"),
-    Link("tasks_counter", "name", "tasks_task", "number", "T-###"),
+         "article_number", "same inventory and article_number",
+         "A lot belongs to the item of the same inventory and article "
+         "number."),
+    Link("tasks_task", "product", "inventory_item", "article_number",
+         "product",
+         "A task belongs to an article when its product equals the "
+         "article number regardless of case, or names the same compound "
+         "of the collection index."),
+    Link("tasks_task", "batch", "inventory_lot", "batch", "same batch",
+         "A lot belongs to a task when the two share a batch and the "
+         "task's product matches the lot's article number."),
+    Link("tasks_counter", "name", "tasks_task", "number", "T-###",
+         "The counter named task issues the task numbers, T- and at "
+         "least three digits."),
 )
 
 # Light and dark colour of each package's boxes.
@@ -158,6 +172,11 @@ COLOURS = {
     "demo": ("#66717b", "#a2abb4"),
     "history": ("#84479a", "#c98ddd"),
 }
+
+# The kinds of line, their switches' labels and whether they start on.
+KINDS = (("key", "Foreign keys", True),
+         ("user", "To accounts_user", False),
+         ("value", "Matched by value", True))
 
 OPERATORS = {"exact": "=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
 SHORT_TYPES = {"timestamp with time zone": "timestamptz",
@@ -431,8 +450,10 @@ def _collect(connection: BaseDatabaseWrapper) -> Schema:
 ROW, HEAD, PAD = 17, 30, 7
 MARGIN, TOP = 24, 24
 COLUMN_GAP, BAND_GAP, SLOT_GAP = 66, 70, 60
+GAP_LANE, CORRIDOR_LANE, COLUMN_LANE = 12, 10, 16
 MIN_WIDTH = 240
 NAME_ADVANCE, TYPE_ADVANCE, TITLE_ADVANCE = 6.6, 6.0, 6.4
+LABEL_ADVANCE = 5.7
 
 Point = tuple[float, float]
 Grid = Sequence[Sequence[Sequence[str] | None]]
@@ -477,8 +498,9 @@ class Edge:
     SOURCE_SIDE and TARGET_SIDE are the directions in which the line
     leaves each box: ``left``, ``right``, ``up`` or ``down``.
     SOURCE_END and TARGET_END are ``many``, ``zero_one``, ``one`` or
-    empty for a declared link. LABEL is drawn at LABEL_AT, a point and a
-    text anchor.
+    empty for a declared link. KIND is ``key``, ``user`` or ``value``.
+    LABEL is drawn at LABEL_AT, a point and a text anchor, or not at
+    all when LABEL_AT is None. NOTE tells how a declared link matches.
     """
 
     source: str
@@ -492,6 +514,8 @@ class Edge:
     target_end: str
     label: str
     label_at: tuple[float, float, str] | None
+    kind: str = "key"
+    note: str = ""
     soft: bool = False
 
 
@@ -512,14 +536,43 @@ class _Reference:
     column: str
     target: str
     target_column: str
-    soft: bool
+    kind: str
     label: str
+    note: str
     source_end: str
     target_end: str
     rule: str = ""
-    group: tuple[str, int] | None = None
-    span: tuple[float, float] = (0, 0)
-    offset: float = 0
+    source_gap: int = 0
+    target_gap: int = 0
+    corridor: int | None = None
+    corridor_lane: int = 0
+    index: int = 0
+
+
+@dataclass(frozen=True)
+class _Placement:
+    boxes: dict[str, Box]
+    where: dict[str, tuple[int, int]]
+    stacks: dict[int, list[str]]
+    tops: tuple[float, ...]
+    bottoms: tuple[float, ...]
+    columns: int
+    width: int
+    gaps: dict[int, int]
+    corridors: dict[int, int]
+
+    def gap_centre(self, gap: int) -> float:
+        """Return the middle of the gap after column GAP."""
+        return MARGIN + (gap + 1) * self.width + sum(
+            self.gaps.get(g, COLUMN_GAP) for g in range(gap)) + (
+            self.gaps.get(gap, COLUMN_GAP) / 2)
+
+    def corridor_y(self, corridor: int, lane: int) -> float:
+        """Return the height of LANE in the corridor below band
+        CORRIDOR."""
+        bottom = (self.bottoms[corridor] + BAND_GAP
+                  + self.corridors.get(corridor, 0))
+        return bottom - 18 - lane * CORRIDOR_LANE
 
 
 def box_width(tables: Iterable[Table]) -> int:
@@ -535,14 +588,18 @@ def box_width(tables: Iterable[Table]) -> int:
     return math.ceil(need / 4) * 4
 
 
-def _place(tables: Sequence[Table], grid: Grid
-           ) -> tuple[dict[str, Box], dict[str, tuple[int, int]],
-                      dict[int, list[str]], int]:
+def _place(tables: Sequence[Table], grid: Grid, gaps: dict[int, int],
+           corridors: dict[int, int]) -> _Placement:
     by_name = {t.name: t for t in tables}
     width = box_width(tables)
+    count = max(len(band) for band in grid)
+    lefts = [MARGIN]
+    for gap in range(count - 1):
+        lefts.append(lefts[-1] + width + gaps.get(gap, COLUMN_GAP))
     boxes: dict[str, Box] = {}
     where: dict[str, tuple[int, int]] = {}
-    columns: dict[int, list[str]] = {}
+    stacks: dict[int, list[str]] = {}
+    tops, bottoms = [], []
     top = TOP
     for band_index, band in enumerate(grid):
         bottom = top
@@ -554,18 +611,20 @@ def _place(tables: Sequence[Table], grid: Grid
                         f"the grid names {name}, which is not a table")
                 if name in boxes:
                     raise LayoutError(f"the grid names {name} twice")
-                left = MARGIN + column_index * (width + COLUMN_GAP)
-                box = Box(by_name[name], left, y, width)
+                box = Box(by_name[name], lefts[column_index], y, width)
                 boxes[name] = box
                 where[name] = (band_index, column_index)
-                columns.setdefault(column_index, []).append(name)
+                stacks.setdefault(column_index, []).append(name)
                 y = box.bottom + SLOT_GAP
                 bottom = max(bottom, box.bottom)
-        top = bottom + BAND_GAP
+        tops.append(top)
+        bottoms.append(bottom)
+        top = bottom + BAND_GAP + corridors.get(band_index, 0)
     missing = sorted(set(by_name) - set(boxes))
     if missing:
         raise LayoutError(f"the grid misses {', '.join(missing)}")
-    return boxes, where, columns, width
+    return _Placement(boxes, where, stacks, tuple(tops), tuple(bottoms),
+                      count, width, dict(gaps), dict(corridors))
 
 
 def _references(tables: Sequence[Table], links: Sequence[Link],
@@ -574,13 +633,14 @@ def _references(tables: Sequence[Table], links: Sequence[Link],
     found = []
     for table in tables:
         for column in table.columns:
-            if not column.ref or column.ref == hub or column.ref not in boxes:
+            if not column.ref or column.ref not in boxes:
                 continue
             found.append(_Reference(
                 table.name, column.name, column.ref, column.ref_column,
-                False,
+                "user" if column.ref == hub else "key",
                 "" if column.on_delete in (None, "PROTECT")
                 else column.on_delete.lower().replace("_", " "),
+                f"on delete {column.on_delete}" if column.on_delete else "",
                 "zero_one" if column.key == "1:1" else "many",
                 "zero_one" if column.nullable else "one"))
     for link in links:
@@ -590,78 +650,109 @@ def _references(tables: Sequence[Table], links: Sequence[Link],
                 raise LayoutError(f"{table}.{column} does not exist")
             boxes[table].row_y(column)
         found.append(_Reference(link.source, link.column, link.target,
-                                link.target_column, True, link.label, "",
-                                ""))
+                                link.target_column, "value", link.label,
+                                link.note, "", ""))
+    for index, ref in enumerate(found):
+        ref.index = index
     return found
 
 
-def _classify(ref: _Reference, boxes: dict[str, Box],
-              where: dict[str, tuple[int, int]],
-              columns: dict[int, list[str]]) -> None:
-    source, target = boxes[ref.source], boxes[ref.target]
-    (band, col), (target_band, target_col) = (where[ref.source],
-                                              where[ref.target])
-    name = f"{ref.source}.{ref.column}"
+def _under_points(ref: _Reference, place: _Placement) -> tuple[Point, ...]:
+    source, target = place.boxes[ref.source], place.boxes[ref.target]
+    (band, col), (_, target_col) = (place.where[ref.source],
+                                    place.where[ref.target])
+    low, high = sorted((col, target_col))
+    between = [place.boxes[n].bottom for n, (b, c) in place.where.items()
+               if b == band and low < c < high]
+    lane = max([*between, source.bottom]) + 36
+    rightward = target.left > source.left
+    sx = source.right - 46 if rightward else source.left + 46
+    tx = target.left if rightward else target.right
+    return ((sx, source.bottom), (sx, lane), (tx, lane))
+
+
+def _classify(ref: _Reference, place: _Placement) -> None:
+    target = place.boxes[ref.target]
+    (band, col), (target_band, target_col) = (place.where[ref.source],
+                                              place.where[ref.target])
     if ref.source == ref.target:
         ref.rule = "loop"
-    elif abs(col - target_col) == 1:
+        return
+    if abs(col - target_col) == 1:
         ref.rule = "elbow"
-        ref.group = ("gap", min(col, target_col))
-        ys = (source.row_y(ref.column), target.row_y(ref.target_column))
-        ref.span = (min(ys), max(ys))
-    elif col == target_col:
-        stack = columns[col]
-        if abs(stack.index(ref.source) - stack.index(ref.target)) != 1:
-            raise LayoutError(f"{name} fits no rule: a box stands between "
-                              f"it and {ref.target}")
+        ref.source_gap = ref.target_gap = min(col, target_col)
+        return
+    stack = place.stacks[col]
+    if col == target_col and abs(stack.index(ref.source)
+                                 - stack.index(ref.target)) == 1:
         ref.rule = "vertical"
-        ref.group = ("column", col)
-        upper, lower = sorted((source, target), key=lambda b: b.top)
-        ref.span = (upper.bottom, lower.top)
-    elif band == target_band:
-        ref.rule = "under"
-        if not target.top + HEAD < _lane(ref, boxes, where) < (
-                target.bottom - PAD):
-            raise LayoutError(f"{name} fits no rule: the line under the "
-                              f"boxes between misses {ref.target}")
+        return
+    if band == target_band and col != target_col:
+        points = _under_points(ref, place)
+        lane = points[1][1]
+        if (target.top + HEAD < lane < target.bottom - PAD
+                and _crossing(ref.source, ref.target, points,
+                              place.boxes) is None):
+            ref.rule = "under"
+            return
+    if place.columns < 2:
+        raise LayoutError(f"{ref.source}.{ref.column} fits no rule: "
+                          "the grid has no gap between columns")
+    ref.rule = "channel"
+    if target_col > col or (target_col == col
+                            and col < place.columns - 1):
+        ref.source_gap = col
     else:
-        raise LayoutError(f"{name} fits no rule: {ref.target} is in "
-                          "another band, more than one column away")
+        ref.source_gap = col - 1
+    if target_col == col:
+        ref.target_gap = ref.source_gap
+    else:
+        ref.target_gap = target_col if col > target_col else target_col - 1
+    if ref.source_gap != ref.target_gap:
+        ref.corridor = band if target_band >= band else band - 1
 
 
-def _lane(ref: _Reference, boxes: dict[str, Box],
-          where: dict[str, tuple[int, int]]) -> float:
-    (band, col), (_, target_col) = where[ref.source], where[ref.target]
-    low, high = sorted((col, target_col))
-    between = [boxes[n].bottom for n, (b, c) in where.items()
-               if b == band and low < c < high]
-    return max([*between, boxes[ref.source].bottom]) + 36
+def _lanes(spans: list[tuple[object, tuple[float, float], object]]
+           ) -> tuple[dict[object, int], dict[object, int]]:
+    """Give each span of SPANS, ``(group, (low, high), key)``, the lowest
+    lane of its group free over its span; return the lanes by key and
+    the number of lanes by group."""
+    ends: dict[object, list[float]] = {}
+    lanes: dict[object, int] = {}
+    for group, (low, high), key in sorted(
+            spans, key=lambda s: (str(s[0]), s[1][0], s[1][1], str(s[2]))):
+        taken = ends.setdefault(group, [])
+        lane = next((i for i, end in enumerate(taken) if end < low), None)
+        if lane is None:
+            lane = len(taken)
+            taken.append(high)
+        taken[lane] = high
+        lanes[key] = lane
+    return lanes, {group: len(taken) for group, taken in ends.items()}
 
 
-def _spread(refs: list[_Reference]) -> None:
-    groups: dict[tuple[str, int], list[_Reference]] = {}
-    for ref in refs:
-        if ref.group:
-            groups.setdefault(ref.group, []).append(ref)
-    for (kind, _), members in groups.items():
-        ends: list[float] = []
-        lanes = {}
-        for ref in sorted(members, key=lambda r: r.span):
-            lane = next((i for i, end in enumerate(ends)
-                         if end < ref.span[0] - 4), None)
-            if lane is None:
-                lane = len(ends)
-                ends.append(0)
-            ends[lane] = ref.span[1]
-            lanes[id(ref)] = lane
-        step = 12 if kind == "gap" else 16
-        for ref in members:
-            ref.offset = (lanes[id(ref)] - (len(ends) - 1) / 2) * step
+def _ends(ref: _Reference, place: _Placement) -> tuple[float, float]:
+    return (place.boxes[ref.source].row_y(ref.column),
+            place.boxes[ref.target].row_y(ref.target_column))
 
 
-def _route(ref: _Reference, boxes: dict[str, Box],
-           where: dict[str, tuple[int, int]]) -> Edge:
-    source, target = boxes[ref.source], boxes[ref.target]
+def _vertical_spans(ref: _Reference, place: _Placement
+                    ) -> list[tuple[int, tuple[float, float]]]:
+    """The gaps REF runs along, each with the heights it covers there."""
+    y1, y2 = _ends(ref, place)
+    if ref.rule == "elbow" or (ref.rule == "channel"
+                               and ref.corridor is None):
+        return [(ref.source_gap, (min(y1, y2), max(y1, y2)))]
+    if ref.rule != "channel":
+        return []
+    yc = place.corridor_y(ref.corridor, ref.corridor_lane)
+    return [(ref.source_gap, (min(y1, yc), max(y1, yc))),
+            (ref.target_gap, (min(yc, y2), max(yc, y2)))]
+
+
+def _route(ref: _Reference, place: _Placement, offsets: dict[object, float]
+           ) -> Edge:
+    source, target = place.boxes[ref.source], place.boxes[ref.target]
     label_at = None
     if ref.rule == "loop":
         y = source.row_y(ref.column)
@@ -671,22 +762,8 @@ def _route(ref: _Reference, boxes: dict[str, Box],
                   (back, below), (back, source.bottom))
         sides = ("right", "down")
         label_at = ((right + back) / 2, below + 13, "middle")
-    elif ref.rule == "elbow":
-        rightward = target.left > source.left
-        sx = source.right if rightward else source.left
-        tx = target.left if rightward else target.right
-        gx = (sx + tx) / 2 + ref.offset
-        y1, y2 = source.row_y(ref.column), target.row_y(ref.target_column)
-        points = ((sx, y1), (gx, y1), (gx, y2), (tx, y2))
-        sides = ("right", "left") if rightward else ("left", "right")
-        if ref.soft:
-            label_at = (gx, min(y1, y2) - 8, "middle")
-        elif abs(y2 - y1) >= 60:
-            label_at = (gx, (y1 + y2) / 2 + 3, "middle")
-        else:
-            label_at = (gx, max(y1, y2) + 16, "middle")
     elif ref.rule == "vertical":
-        x = source.centre + ref.offset
+        x = source.centre + offsets.get((ref.index, "column"), 0)
         if source.top < target.top:
             points = ((x, source.bottom), (x, target.top))
             sides = ("down", "up")
@@ -694,23 +771,71 @@ def _route(ref: _Reference, boxes: dict[str, Box],
             points = ((x, source.top), (x, target.bottom))
             sides = ("up", "down")
         label_at = (x + 8, (points[0][1] + points[1][1]) / 2 + 3, "start")
+    elif ref.rule == "under":
+        points = _under_points(ref, place)
+        sides = ("down", "left" if points[-1][0] == target.left
+                 else "right")
     else:
-        lane = _lane(ref, boxes, where)
-        rightward = target.left > source.left
-        sx = source.right - 46 if rightward else source.left + 46
-        tx = target.left if rightward else target.right
-        points = ((sx, source.bottom), (sx, lane), (tx, lane))
-        sides = ("down", "left" if rightward else "right")
-        label_at = ((sx + tx) / 2, lane - 6, "middle")
+        y1, y2 = _ends(ref, place)
+        ga = place.gap_centre(ref.source_gap) + offsets.get(
+            (ref.index, ref.source_gap), 0)
+        gb = place.gap_centre(ref.target_gap) + offsets.get(
+            (ref.index, ref.target_gap, "target"), offsets.get(
+                (ref.index, ref.target_gap), 0))
+        sx = source.right if ga > source.right else source.left
+        tx = target.right if gb > target.right else target.left
+        if ref.rule == "elbow" or ref.corridor is None:
+            points = ((sx, y1), (ga, y1), (ga, y2), (tx, y2))
+        else:
+            yc = place.corridor_y(ref.corridor, ref.corridor_lane)
+            points = ((sx, y1), (ga, y1), (ga, yc), (gb, yc), (gb, y2),
+                      (tx, y2))
+        sides = ("right" if sx == source.right else "left",
+                 "right" if tx == target.right else "left")
+        if ref.rule == "elbow" and ref.kind != "value":
+            if abs(y2 - y1) >= 60:
+                label_at = (ga, (y1 + y2) / 2 + 3, "middle")
+            else:
+                label_at = (ga, max(y1, y2) + 16, "middle")
+    if ref.label and (label_at is None or ref.kind == "value"):
+        label_at = _fitting_label(ref.label, points)
+        if label_at is None and ref.kind != "value":
+            label_at = _vertical_label(points)
     return Edge(ref.source, ref.column, ref.target, ref.target_column,
-                points, sides[0], sides[1], ref.source_end, ref.target_end,
-                ref.label, label_at if ref.label else None, ref.soft)
+                tuple(points), sides[0], sides[1], ref.source_end,
+                ref.target_end, ref.label,
+                label_at if ref.label else None, kind=ref.kind,
+                note=ref.note, soft=ref.kind == "value")
 
 
-def _crossing(edge: Edge, boxes: dict[str, Box]) -> str | None:
-    for (x1, y1), (x2, y2) in zip(edge.points, edge.points[1:]):
+def _fitting_label(label: str, points: Sequence[Point]
+                   ) -> tuple[float, float, str] | None:
+    """Return where LABEL goes above the longest horizontal segment of
+    POINTS, or None when that segment cannot hold it."""
+    segments = [(abs(b[0] - a[0]), a, b) for a, b in zip(points, points[1:])
+                if a[1] == b[1]]
+    if not segments:
+        return None
+    length, a, b = max(segments, key=lambda s: s[0])
+    if length < LABEL_ADVANCE * len(label) + 16:
+        return None
+    return ((a[0] + b[0]) / 2, a[1] - 5, "middle")
+
+
+def _vertical_label(points: Sequence[Point]) -> tuple[float, float, str]:
+    """Return where a label goes on the longest vertical segment of
+    POINTS, or on its first segment when none is vertical."""
+    segments = [(abs(b[1] - a[1]), a, b) for a, b in zip(points, points[1:])
+                if a[0] == b[0]] or [(0, points[0], points[1])]
+    _, a, b = max(segments, key=lambda s: s[0])
+    return ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + 3, "middle")
+
+
+def _crossing(source: str, target: str, points: Sequence[Point],
+              boxes: dict[str, Box]) -> str | None:
+    for (x1, y1), (x2, y2) in zip(points, points[1:]):
         for name, box in boxes.items():
-            if name in (edge.source, edge.target):
+            if name in (source, target):
                 continue
             if y1 == y2:
                 hit = (box.top < y1 < box.bottom
@@ -725,34 +850,67 @@ def _crossing(edge: Edge, boxes: dict[str, Box]) -> str | None:
     return None
 
 
+def crossing(edge: Edge, boxes: dict[str, Box]) -> str | None:
+    """Return the name of a box in BOXES that EDGE crosses, other than
+    its own two, or None."""
+    return _crossing(edge.source, edge.target, edge.points, boxes)
+
+
 def arrange(tables: Sequence[Table], grid: Grid,
             links: Sequence[Link] = (), hub: str | None = None) -> Drawing:
     """Place TABLES by GRID and route their references and LINKS.
 
     GRID holds bands, top to bottom, each a sequence of slots, left to
     right; a slot is None or the names of the tables it holds, top to
-    bottom. References to HUB, and to tables without a box, are not
-    drawn. Raises LayoutError when the grid misses a table, names an
-    unknown one or one twice, when a reference or link fits no routing
-    rule, or when a line would cross another box.
+    bottom. A reference to HUB is of kind ``user``, any other of kind
+    ``key``, a link of kind ``value``; references to tables without a
+    box are not drawn. Raises LayoutError when the grid misses a table,
+    names an unknown one or one twice, when a link names a missing
+    column, or when a line would cross another box.
     """
-    boxes, where, columns, width = _place(tables, grid)
-    refs = _references(tables, links, boxes, hub)
+    place = _place(tables, grid, {}, {})
+    refs = _references(tables, links, place.boxes, hub)
     for ref in refs:
-        _classify(ref, boxes, where, columns)
-    _spread(refs)
-    edges = tuple(_route(ref, boxes, where) for ref in refs)
+        _classify(ref, place)
+    channels = [r for r in refs if r.corridor is not None]
+    corridor_lanes, corridor_counts = _lanes(
+        [(r.corridor, tuple(sorted((r.source_gap, r.target_gap))), r.index)
+         for r in channels])
+    for ref in channels:
+        ref.corridor_lane = corridor_lanes[ref.index]
+    corridors = {k: (n - 1) * CORRIDOR_LANE
+                 for k, n in corridor_counts.items()}
+    place = _place(tables, grid, {}, corridors)
+    spans = []
+    for ref in refs:
+        for index, (gap, span) in enumerate(_vertical_spans(ref, place)):
+            key = (ref.index, gap, "target") if index else (ref.index, gap)
+            spans.append((gap, span, key))
+        if ref.rule == "vertical":
+            upper, lower = sorted((place.boxes[ref.source],
+                                   place.boxes[ref.target]),
+                                  key=lambda b: b.top)
+            spans.append((("column", place.where[ref.source][1]),
+                          (upper.bottom, lower.top), (ref.index, "column")))
+    lanes, counts = _lanes(spans)
+    gaps = {g: COLUMN_GAP + (n - 1) * GAP_LANE for g, n in counts.items()
+            if isinstance(g, int)}
+    place = _place(tables, grid, gaps, corridors)
+    offsets = {}
+    for group, _, key in spans:
+        step = GAP_LANE if isinstance(group, int) else COLUMN_LANE
+        offsets[key] = (lanes[key] - (counts[group] - 1) / 2) * step
+    edges = tuple(_route(ref, place, offsets) for ref in refs)
     for edge in edges:
-        crossed = _crossing(edge, boxes)
+        crossed = crossing(edge, place.boxes)
         if crossed:
             raise LayoutError(f"the line of {edge.source}.{edge.column} "
                               f"would cross {crossed}")
-    count = max(len(band) for band in grid)
-    return Drawing(
-        boxes, edges,
-        width=2 * MARGIN + count * width + (count - 1) * COLUMN_GAP,
-        height=max(b.bottom for b in boxes.values()) + 40,
-        box_width=width)
+    right = max(b.right for b in place.boxes.values())
+    deepest = max([b.bottom for b in place.boxes.values()]
+                  + [y for e in edges for _, y in e.points])
+    return Drawing(place.boxes, edges, width=right + MARGIN,
+                   height=deepest + 40, box_width=place.width)
 
 
 def _n(value: float) -> str:
@@ -808,12 +966,17 @@ def svg(drawing: Drawing, near: dict[str, list[str]]) -> str:
             f'relationship diagram of the OrgSynDB tables">'), '<g>']
     for edge in drawing.edges:
         ends = f"{edge.source_end} {edge.target_end}".strip()
+        arrow = "⇢" if edge.soft else "→"
+        tip = (f"{edge.source}.{edge.column} {arrow} "
+               f"{edge.target}.{edge.target_column}"
+               + (f"\n{edge.note}" if edge.note else ""))
         out.append(
-            f'<g class="edge{" soft" if edge.soft else ""}" '
+            f'<g class="edge{" soft" if edge.soft else ""} '
+            f'kind-{edge.kind}" '
             f'data-from="{_e(edge.source)}" data-to="{_e(edge.target)}" '
-            f'data-column="{_e(edge.column)}" data-ends="{ends}">'
-            f'<title>{_e(edge.source)}.{_e(edge.column)} → '
-            f'{_e(edge.target)}.{_e(edge.target_column)}</title>'
+            f'data-column="{_e(edge.column)}" '
+            f'data-target-column="{_e(edge.target_column)}" '
+            f'data-ends="{ends}"><title>{_e(tip)}</title>'
             f'<path class="ln" d="M'
             + "L".join(f"{_n(x)},{_n(y)}" for x, y in edge.points) + '"/>')
         if edge.soft:
@@ -939,6 +1102,9 @@ def render(schema: Schema, drawing: Drawing,
         "history_tables": schema.history_tables,
         "tables": [(t, [_prose(p) for p in t.doc]) for t in schema.tables],
         "framework": schema.framework,
+        "kinds": [(kind, label, sum(e.kind == kind for e in drawing.edges),
+                   checked)
+                  for kind, label, checked in KINDS],
     })
     return text.strip() + "\n"
 

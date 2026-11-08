@@ -299,7 +299,7 @@ class ArrangementTests(unittest.TestCase):
         xs = {e.points[1][0] for e in drawing.edges}
         self.assertEqual(len(xs), 2)
 
-    def test_ends_and_labels(self) -> None:
+    def test_ends_labels_and_kinds(self) -> None:
         a = Table("a", "inventory", (
             Column("id", "bigint", key="PK"),
             Column("b_id", "bigint", nullable=True, key="1:1", ref="b",
@@ -307,18 +307,25 @@ class ArrangementTests(unittest.TestCase):
             Column("u_id", "bigint", key="FK", ref="u",
                    on_delete="PROTECT")))
         drawing = sd.arrange([a, tbl("b"), tbl("u")],
-                             ((("a",), ("b",), ("u",)),), hub="u")
-        self.assertEqual(len(drawing.edges), 1)
-        edge = drawing.edges[0]
+                             ((("a",), ("b",), ("u",)),), hub="u",
+                             links=[Link("b", "c1", "u", "c2", "x")])
+        edges = {(e.target, e.kind): e for e in drawing.edges}
+        self.assertEqual(set(edges), {("b", "key"), ("u", "user"),
+                                      ("u", "value")})
+        edge = edges["b", "key"]
         self.assertEqual((edge.source_end, edge.target_end, edge.label),
                          ("zero_one", "zero_one", "cascade"))
+        self.assertEqual(edges["u", "user"].label, "")
 
     def test_declared_links(self) -> None:
         tables = [tbl("a"), tbl("b")]
-        drawing = sd.arrange(tables, ((("a",), ("b",)),),
-                             links=[Link("a", "c1", "b", "c2", "same")])
+        drawing = sd.arrange(
+            tables, ((("a",), ("b",)),),
+            links=[Link("a", "c1", "b", "c2", "same", "how it matches")])
         edge = drawing.edges[0]
         self.assertTrue(edge.soft)
+        self.assertEqual(edge.kind, "value")
+        self.assertEqual(edge.note, "how it matches")
         self.assertEqual(edge.points[0][1], drawing.boxes["a"].row_y("c1"))
         self.assertEqual(edge.points[-1][1], drawing.boxes["b"].row_y("c2"))
 
@@ -335,10 +342,6 @@ class ArrangementTests(unittest.TestCase):
             ([tbl("a"), tbl("b")], ((("a",), None),), "b"),
             ([tbl("a")], ((("a",), ("zz",)),), "zz"),
             ([tbl("a")], ((("a",), ("a",)),), "a"),
-            ([tbl("a", "c"), tbl("b"), tbl("c")],
-             ((("a",),), (("b",),), (("c",),)), "a.c_id"),
-            ([tbl("a", "c"), tbl("b"), tbl("c")],
-             ((("a",), ("b",), None), (None, None, ("c",))), "a.c_id"),
         ]
         for tables, grid, named in cases:
             with self.subTest(named=named, grid=grid):
@@ -346,14 +349,92 @@ class ArrangementTests(unittest.TestCase):
                     sd.arrange(tables, grid)
                 self.assertIn(named, str(caught.exception))
 
-    def test_a_line_through_a_box_is_refused(self) -> None:
-        tables = [tbl("a", "d"), tbl("s"), tbl("b", rows=12),
-                  tbl("d", rows=17)]
-        with self.assertRaises(LayoutError) as caught:
-            sd.arrange(tables, ((("a", "s"), ("b",), ("d",)),))
-        self.assertIn("a.d_id", str(caught.exception))
-        self.assertTrue(str(caught.exception).endswith(" s"),
-                        str(caught.exception))
+    def assert_clear(self, drawing: sd.Drawing) -> None:
+        """Assert that no line of DRAWING crosses a box but its own."""
+        for edge in drawing.edges:
+            self.assertIsNone(sd.crossing(edge, drawing.boxes),
+                              f"{edge.source}.{edge.column}")
+            self.assertTrue(on_box(edge.points[0],
+                                   drawing.boxes[edge.source]))
+            self.assertTrue(on_box(edge.points[-1],
+                                   drawing.boxes[edge.target]))
+
+    def test_channel_between_bands(self) -> None:
+        """Scenario: Channel between bands."""
+        drawing = sd.arrange(
+            [tbl("p"), tbl("q"), tbl("r"), tbl("s"), tbl("t", "p")],
+            ((("p",), ("q",)), (("r",), ("s",), ("t",))))
+        b = drawing.boxes
+        points = drawing.edges[0].points
+        self.assertEqual(points[0], (b["t"].left, b["t"].row_y("p_id")))
+        self.assertEqual(points[-1], (b["p"].right, b["p"].row_y("id")))
+        xs = [x for x, _ in points[1:-1]]
+        self.assertTrue(all(b["s"].right < x < b["t"].left
+                            for x in xs[:2]), points)
+        self.assertTrue(all(b["p"].right < x < b["q"].left
+                            for x in xs[2:]), points)
+        corridor = points[2][1]
+        self.assertEqual(corridor, points[3][1])
+        self.assertTrue(max(b[n].bottom for n in "pq") < corridor
+                        < min(b[n].top for n in "rst"), points)
+        self.assert_clear(drawing)
+
+    def test_channel_within_a_column(self) -> None:
+        """Scenario: Channel within a column."""
+        drawing = sd.arrange(
+            [tbl("a", "c"), tbl("b"), tbl("c"), tbl("d")],
+            ((("a",), ("d",)), (("b",),), (("c",),)))
+        b = drawing.boxes
+        points = drawing.edges[0].points
+        self.assertEqual(len(points), 4)
+        self.assertEqual(points[0], (b["a"].right, b["a"].row_y("c_id")))
+        self.assertEqual(points[-1], (b["c"].right, b["c"].row_y("id")))
+        self.assertTrue(b["a"].right < points[1][0] < b["d"].left)
+        self.assert_clear(drawing)
+
+    def test_delete_rule_on_a_short_channel(self) -> None:
+        a = Table("a", "inventory", (
+            Column("id", "bigint", key="PK"),
+            Column("c_id", "bigint", key="FK", ref="c",
+                   on_delete="CASCADE")))
+        drawing = sd.arrange([a, tbl("b"), tbl("c"), tbl("d")],
+                             ((("a",), ("d",)), (("b",),), (("c",),)))
+        edge = drawing.edges[0]
+        self.assertEqual(edge.label, "cascade")
+        self.assertIsNotNone(edge.label_at)
+        self.assertEqual(edge.label_at[0], edge.points[1][0])
+
+    def test_channel_in_place_of_a_crossing_line(self) -> None:
+        """Scenario: Channel in place of a crossing line."""
+        drawing = sd.arrange(
+            [tbl("a", "d"), tbl("s"), tbl("b", rows=12), tbl("d", rows=17)],
+            ((("a", "s"), ("b",), ("d",)),))
+        edge = drawing.edges[0]
+        self.assertEqual(edge.points[0][0], drawing.boxes["a"].right)
+        self.assert_clear(drawing)
+
+    def test_lanes_and_room(self) -> None:
+        """Scenario: Lanes and room."""
+        one = Table("t", "inventory", (
+            Column("id", "bigint", key="PK"),
+            Column("p_id", "bigint", key="FK", ref="p")))
+        two = Table("t", "inventory", (*one.columns,
+                                       Column("p2_id", "bigint", key="FK",
+                                              ref="p")))
+        grid = ((("p",), ("q",)), (("r",), ("s",), ("t",)))
+        single = sd.arrange([tbl("p"), tbl("q"), tbl("r"), tbl("s"), one],
+                            grid)
+        double = sd.arrange([tbl("p"), tbl("q"), tbl("r"), tbl("s"), two],
+                            grid)
+        heights = sorted(e.points[2][1] for e in double.edges)
+        self.assertEqual(heights[1] - heights[0], 10)
+        self.assertEqual(double.boxes["r"].top - single.boxes["r"].top, 10)
+        for left, right in (("p", "q"), ("s", "t")):
+            with self.subTest(gap=left + right):
+                self.assertEqual(
+                    double.boxes[right].left - double.boxes[left].right,
+                    single.boxes[right].left - single.boxes[left].right
+                    + 12)
 
     def test_the_applications_grid(self) -> None:
         schema = sd.collect()
@@ -361,7 +442,7 @@ class ArrangementTests(unittest.TestCase):
                              links=sd.LINKS, hub=sd.HUB)
         self.assertEqual(set(drawing.boxes),
                          APP_TABLES | {schema.history.name})
-        self.assertFalse(any(e.target == sd.HUB for e in drawing.edges))
+        self.assert_clear(drawing)
 
 
 class PageTests(unittest.TestCase):
@@ -378,6 +459,24 @@ class PageTests(unittest.TestCase):
         diagrams = [s for s in found if 'class="diagram"' in s[:200]]
         self.assertEqual(len(diagrams), 1)
         return diagrams[0]
+
+    def edges(self) -> list[dict[str, str]]:
+        """The lines of the diagram, each as its attributes and body."""
+        found = []
+        for match in re.finditer(r'<g class="edge([^"]*)"([^>]*)>(.*?)</g>',
+                                 self.svg(), re.DOTALL):
+            attributes = dict(re.findall(r'data-([a-z-]+)="([^"]*)"',
+                                         match.group(2)))
+            attributes["class"] = match.group(1).strip()
+            attributes["body"] = match.group(3)
+            found.append(attributes)
+        return found
+
+    def edge(self, source: str, column: str) -> dict[str, str]:
+        found = [e for e in self.edges()
+                 if e["from"] == source and e["column"] == column]
+        self.assertEqual(len(found), 1, f"{source}.{column}")
+        return found[0]
 
     def test_a_standalone_page(self) -> None:
         """Scenario: A standalone page."""
@@ -416,39 +515,88 @@ class PageTests(unittest.TestCase):
 
     def test_links_of_an_entered_consumption(self) -> None:
         """Scenario: Links of an entered consumption."""
-        svg = self.svg()
-        edge = re.search(
-            r'<g class="edge[^"]*" data-from="inventory_enteredconsumption"'
-            r' data-to="inventory_item".*?</g>', svg, re.DOTALL)
-        self.assertIsNotNone(edge)
-        self.assertIn(">cascade<", edge.group(0))
-        self.assertNotIn('data-to="accounts_user"', svg)
+        item = self.edge("inventory_enteredconsumption", "item_id")
+        self.assertEqual((item["to"], item["class"]),
+                         ("inventory_item", "kind-key"))
+        self.assertIn(">cascade<", item["body"])
+        user = self.edge("inventory_enteredconsumption", "entered_by_id")
+        self.assertEqual((user["to"], user["class"]),
+                         ("accounts_user", "kind-user"))
         row = re.search(r'<g class="row"[^>]*data-column='
                         r'"inventory_enteredconsumption.entered_by_id".*?'
-                        r'</g>', svg, re.DOTALL)
+                        r'</g>', self.svg(), re.DOTALL)
         self.assertIsNotNone(row)
         self.assertIn("app-accounts", row.group(0))
 
+    def test_links_to_people(self) -> None:
+        """Scenario: Links to people."""
+        to_people = [e for e in self.edges() if e["to"] == sd.HUB]
+        self.assertEqual(
+            sorted((e["from"], e["column"]) for e in to_people),
+            sorted([("inventory_deliverynote", "created_by_id"),
+                    ("inventory_movement", "user_id"),
+                    ("inventory_lotmovement", "user_id"),
+                    ("inventory_enteredconsumption", "entered_by_id"),
+                    ("tasks_task", "assignee_id"),
+                    ("tasks_task", "created_by_id"),
+                    (sd.HISTORY, "history_user_id")]))
+        self.assertTrue(all(e["class"] == "kind-user" for e in to_people))
+        self.assertIn(">set null<",
+                      self.edge(sd.HISTORY, "history_user_id")["body"])
+
+    def test_links_of_a_task(self) -> None:
+        """Scenario: Links of a task."""
+        for source, column, target, target_column in (
+                ("tasks_task", "product", "inventory_item",
+                 "article_number"),
+                ("tasks_task", "batch", "inventory_lot", "batch"),
+                ("tasks_counter", "name", "tasks_task", "number"),
+                ("inventory_lot", "article_number", "inventory_item",
+                 "article_number")):
+            with self.subTest(column=f"{source}.{column}"):
+                edge = self.edge(source, column)
+                self.assertEqual(
+                    (edge["class"], edge["to"], edge["target-column"]),
+                    ("soft kind-value", target, target_column))
+                tip = re.search(r"<title>(.*?)</title>", edge["body"],
+                                re.DOTALL).group(1)
+                note = next(link.note for link in sd.LINKS
+                            if (link.source, link.column)
+                            == (source, column))
+                self.assertTrue(note)
+                self.assertEqual(tip.splitlines()[1],
+                                 note.replace("'", "&#x27;"))
+
     def test_line_ends(self) -> None:
         """Scenario: Line ends."""
-        svg = self.svg()
         for source, column, ends in (
                 ("inventory_movement", "delivery_note_id", "many zero_one"),
                 ("inventory_movement", "bulk_movement_id",
                  "zero_one zero_one"),
                 ("inventory_deliveryline", "item_id", "many one")):
             with self.subTest(column=column):
-                self.assertRegex(
-                    svg, rf'<g class="edge" data-from="{source}" '
-                         rf'data-to="[a-z_]+" data-column="{column}" '
-                         rf'data-ends="{ends}"')
+                self.assertEqual(self.edge(source, column)["ends"], ends)
 
-    def test_declared_links_are_dashed(self) -> None:
-        svg = self.svg()
-        self.assertRegex(svg, r'<g class="edge soft" data-from='
-                              r'"inventory_lot" data-to="inventory_item"')
-        self.assertRegex(svg, r'<g class="edge soft" data-from='
-                              r'"tasks_counter" data-to="tasks_task"')
+    def test_switches(self) -> None:
+        """Scenario: Switches."""
+        group = re.search(r'<fieldset class="layers"[^>]*>.*?</fieldset>',
+                          self.page, re.DOTALL)
+        self.assertIsNotNone(group)
+        self.assertIn(" hidden", group.group(0)[:60])
+        kinds = [e["class"].split()[-1] for e in self.edges()]
+        self.assertEqual(set(kinds), {"kind-key", "kind-user", "kind-value"})
+        for kind, checked in (("key", True), ("user", False),
+                              ("value", True)):
+            with self.subTest(kind=kind):
+                box = re.search(rf'<input type="checkbox"[^>]*data-kind='
+                                rf'"{kind}"[^>]*>.*?</label>',
+                                group.group(0), re.DOTALL)
+                self.assertIsNotNone(box)
+                self.assertEqual(" checked" in box.group(0).split(">")[0],
+                                 checked)
+                count = kinds.count(f"kind-{kind}")
+                self.assertIn(f'<span class="count">{count}</span>',
+                              box.group(0))
 
 
 class CommandTests(unittest.TestCase):

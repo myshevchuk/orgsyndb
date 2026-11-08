@@ -143,6 +143,30 @@ code { font-family: var(--f-mono); font-size: 0.88em; overflow-wrap: anywhere; }
 svg.focus .tbl:not(.on) { opacity: .2; }
 svg.focus .edge:not(.on) { opacity: .1; }
 svg.focus .edge.on .ln, svg.focus .edge.on .mk { stroke: var(--ink); stroke-width: 1.8; }
+.edge.kind-user .ln, .edge.kind-user .mk, svg.focus .edge.kind-user.on .ln,
+svg.focus .edge.kind-user.on .mk { stroke: var(--app-accounts); }
+.edge.kind-user text { fill: var(--app-accounts); }
+svg.hide-key .edge.kind-key:not(.on):not(.peek),
+svg.hide-user .edge.kind-user:not(.on):not(.peek),
+svg.hide-value .edge.kind-value:not(.on):not(.peek) { display: none; }
+.edge.peek .ln, .edge.peek .mk { stroke-width: 2.2; }
+svg.focus .edge.peek { opacity: 1; }
+
+.layers {
+  border: 0; margin: -10px 0 0; padding: 0; min-width: 0;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px;
+  font-size: 13.5px;
+}
+.layers[hidden] { display: none; }
+.layers-title {
+  font-family: var(--f-display); font-weight: 600; font-size: 12px;
+  text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+}
+.layers label { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+.layers input { margin: 0; width: 15px; height: 15px; accent-color: var(--app-inventory); }
+.layers input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.layers .count { font-family: var(--f-mono); font-size: 11.5px; color: var(--faint); }
+.legend .ln.user { stroke: var(--app-accounts); }
 
 .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 28px 36px; }
 .notes section { min-width: 0; }
@@ -184,7 +208,10 @@ h2 {
     <div class="app-inventory"><span class="tag">1:1</span>unique foreign key</div>
     <div class="app-inventory"><span class="tag">UQ</span>unique</div>
     <div><span class="type">date?</span>nullable</div>
-    <div class="app-accounts"><span class="tag">FK</span><span>to <code>accounts_user</code>, not drawn</span></div>
+    <div>
+      <svg width="34" height="16" viewBox="0 0 34 16" aria-hidden="true"><path class="ln user" d="M0 8H34"/></svg>
+      <span>link to <code>accounts_user</code></span>
+    </div>
     <div>
       <svg width="34" height="16" viewBox="0 0 34 16" aria-hidden="true"><path class="ln" d="M0 8H34M12 8L0 1M12 8L0 15"/><circle class="o" cx="17" cy="8" r="3.6"/></svg>
       zero or more
@@ -203,8 +230,13 @@ h2 {
     </div>
   </div>
 
+  <fieldset class="layers" id="layers" hidden aria-label="Lines shown">
+    <span class="layers-title">Lines</span>
+    {% for kind, label, count, checked in kinds %}<label><input type="checkbox" id="layer-{{ kind }}" data-kind="{{ kind }}"{% if checked %} checked{% endif %}> {{ label }} <span class="count">{{ count }}</span></label>
+    {% endfor %}
+  </fieldset>
   <div class="sheet">{{ svg }}</div>
-  <p class="hint">Hover over a table, or tap it, to show only that table and the tables linked to it. Hover over a column to see its values and rules.</p>
+  <p class="hint">Switch kinds of line on and off above the diagram. Hover over a table, or tap it, to show only that table, the tables linked to it and all its lines. Hover over a column to see its values and rules and the lines through it.</p>
 
   <div class="notes">
     <section>
@@ -301,6 +333,25 @@ h2 {
     });
   });
   svg.addEventListener("click", function () { pinned = null; clear(); });
+  var layers = document.getElementById("layers");
+  if (layers) {
+    layers.hidden = false;
+    layers.querySelectorAll("input[data-kind]").forEach(function (input) {
+      function apply() { svg.classList.toggle("hide-" + input.dataset.kind, !input.checked); }
+      apply();
+      input.addEventListener("change", apply);
+    });
+  }
+  svg.querySelectorAll(".row").forEach(function (r) {
+    var at = r.dataset.column.indexOf(".");
+    var t = r.dataset.column.slice(0, at), c = r.dataset.column.slice(at + 1);
+    var through = edges.filter(function (e) {
+      return (e.dataset.from === t && e.dataset.column === c) || (e.dataset.to === t && e.dataset.targetColumn === c);
+    });
+    if (!through.length) return;
+    r.addEventListener("mouseenter", function () { through.forEach(function (e) { e.classList.add("peek"); }); });
+    r.addEventListener("mouseleave", function () { through.forEach(function (e) { e.classList.remove("peek"); }); });
+  });
 })();
 </script>
 </body>
