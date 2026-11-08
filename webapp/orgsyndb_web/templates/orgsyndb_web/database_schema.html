@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OrgSynDB tables</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* A schematic sheet: a gridded drawing of every table, coloured by
+   package, then the rules the drawing cannot show, as lists. */
+:root {
+  --bg: #eef2f3;
+  --paper: #ffffff;
+  --ink: #16212a;
+  --muted: #5b6a75;
+  --faint: #8d9aa3;
+  --line: #c6d0d6;
+  --rule: #e4e9ec;
+  --grid: #dfe6e9;
+  --edge: #3d4e5a;
+  --on-hue: #ffffff;
+  --hl: rgba(165, 101, 12, 0.14);
+  {% for app, light, dark in colours %}--app-{{ app }}: {{ light }};
+  {% endfor %}
+  --f-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1418; --paper: #161f25; --ink: #e2e9ed; --muted: #97a6b0;
+    --faint: #6c7b85; --line: #2f3c45; --rule: #222d34; --grid: #18232a;
+    --edge: #a9b8c2; --on-hue: #0e1418; --hl: rgba(229, 166, 76, 0.18);
+    {% for app, light, dark in colours %}--app-{{ app }}: {{ dark }};
+    {% endfor %}color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1418; --paper: #161f25; --ink: #e2e9ed; --muted: #97a6b0;
+  --faint: #6c7b85; --line: #2f3c45; --rule: #222d34; --grid: #18232a;
+  --edge: #a9b8c2; --on-hue: #0e1418; --hl: rgba(229, 166, 76, 0.18);
+  {% for app, light, dark in colours %}--app-{{ app }}: {{ dark }};
+  {% endfor %}color-scheme: dark;
+}
+{% for app, light, dark in colours %}.app-{{ app }} { --hue: var(--app-{{ app }}); }
+{% endfor %}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: 15px;
+  line-height: 1.55;
+}
+.wrap {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 56px;
+  display: grid;
+  gap: 28px;
+}
+header { display: grid; gap: 6px; }
+h1 {
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: clamp(28px, 4vw, 40px);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  margin: 0;
+  text-wrap: balance;
+}
+.lede { margin: 0; color: var(--muted); max-width: 72ch; }
+code { font-family: var(--f-mono); font-size: 0.88em; overflow-wrap: anywhere; }
+
+.apps { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 6px 0 0; padding: 0; list-style: none; }
+.apps li { display: flex; align-items: center; gap: 7px; font-size: 13.5px; color: var(--muted); }
+.apps b { color: var(--ink); font-weight: 600; font-family: var(--f-mono); font-size: 12.5px; }
+.sw { width: 11px; height: 11px; border-radius: 2px; flex: none; background: var(--hue); }
+
+.legend {
+  display: flex; flex-wrap: wrap; gap: 10px 26px;
+  font-size: 13px; color: var(--muted);
+  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  padding-block: 12px;
+}
+.legend > div { display: flex; align-items: center; gap: 8px; }
+.legend svg { flex: none; overflow: visible; }
+.legend .ln { fill: none; stroke: var(--edge); stroke-width: 1.3; }
+.legend .ln.soft { stroke: var(--faint); stroke-dasharray: 5 4; }
+.legend .o { fill: var(--paper); stroke: var(--edge); stroke-width: 1.3; }
+.tag {
+  font-family: var(--f-mono); font-size: 10.5px; font-weight: 600;
+  color: var(--hue); min-width: 22px; display: inline-block;
+}
+.type { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+
+.sheet {
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 22px 22px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.sheet svg { display: block; width: 100%; min-width: 1000px; height: auto; }
+.hint { margin: -16px 0 0; font-size: 12.5px; color: var(--faint); }
+
+.tbl { cursor: pointer; transition: opacity .15s; outline: none; }
+.tbl .box { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+.tbl.ghost .box { stroke-dasharray: 4 3; }
+.tbl:focus-visible .box, .tbl.on .box { stroke: var(--ink); stroke-width: 1.5; }
+.tbl .head { fill: var(--hue); }
+.tbl .tname { font-family: var(--f-display); font-weight: 600; font-size: 13.5px; fill: var(--on-hue); }
+.tbl .tname .pre { font-weight: 500; opacity: .78; }
+.tbl .pill { font-family: var(--f-mono); font-size: 9.5px; fill: var(--on-hue); opacity: .85; letter-spacing: .04em; }
+.row .cn { font-family: var(--f-mono); font-size: 11px; fill: var(--ink); }
+.row .ct { font-family: var(--f-mono); font-size: 10px; fill: var(--muted); }
+.row .gk { font-family: var(--f-mono); font-size: 9.5px; font-weight: 600; fill: var(--hue); }
+.row .sep { stroke: var(--rule); stroke-width: 1; }
+.row .bg { fill: transparent; }
+.row.hl .bg { fill: var(--hl); }
+.row.extra .cn { fill: var(--faint); font-style: italic; }
+
+.edge .ln { fill: none; stroke: var(--edge); stroke-width: 1.3; }
+.edge.soft .ln { stroke-dasharray: 5 4; stroke: var(--faint); }
+.edge .mk { fill: none; stroke: var(--edge); stroke-width: 1.3; }
+.edge .mk.o { fill: var(--paper); }
+.edge .dot { fill: var(--faint); }
+.edge text {
+  font-family: var(--f-mono); font-size: 9.5px; fill: var(--muted);
+  paint-order: stroke; stroke: var(--paper); stroke-width: 4px; stroke-linejoin: round;
+}
+.edge { transition: opacity .15s; }
+svg.focus .tbl:not(.on) { opacity: .2; }
+svg.focus .edge:not(.on) { opacity: .1; }
+svg.focus .edge.on .ln, svg.focus .edge.on .mk { stroke: var(--ink); stroke-width: 1.8; }
+
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 28px 36px; }
+.notes section { min-width: 0; }
+h2 {
+  font-family: var(--f-display); font-weight: 600; font-size: 13px;
+  text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+  margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line);
+}
+.notes ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.notes li { font-size: 14px; }
+.notes .on-t { display: block; font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.notes p { margin: 0 0 10px; font-size: 14px; }
+.notes h3 { font-size: 13px; font-weight: 600; margin: 12px 0 6px; color: var(--ink); }
+.docs { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px 36px; margin: 0; }
+.docs > div { min-width: 0; }
+.docs dt { font-family: var(--f-mono); font-size: 13px; font-weight: 600; color: var(--hue); margin-bottom: 4px; }
+.docs dd { margin: 0; }
+.docs dd p { margin: 0 0 8px; font-size: 14px; color: var(--ink); max-width: 70ch; }
+.framework { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.foot { font-size: 12.5px; color: var(--faint); border-top: 1px solid var(--line); padding-top: 12px; margin: 0; }
+
+@media (prefers-reduced-motion: reduce) { .tbl, .edge { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>OrgSynDB tables</h1>
+    <p class="lede">The lab application has {{ table_count }} tables in {{ package_count }} packages, plus {{ history_count }} history tables and Django's own tables. Column types are the ones PostgreSQL creates. SQLite stores the same columns under its own type names.</p>
+    <ul class="apps" aria-label="Packages">
+      {% for label, name in packages %}<li class="app-{{ label }}"><span class="sw"></span><b>{{ label }}</b> {{ name }}</li>
+      {% endfor %}<li class="app-history"><span class="sw"></span><b>simple_history</b> change history</li>
+    </ul>
+  </header>
+
+  <div class="legend" aria-label="Legend">
+    <div class="app-inventory"><span class="tag">PK</span>primary key</div>
+    <div class="app-inventory"><span class="tag">FK</span>foreign key, coloured by the table it references</div>
+    <div class="app-inventory"><span class="tag">1:1</span>unique foreign key</div>
+    <div class="app-inventory"><span class="tag">UQ</span>unique</div>
+    <div><span class="type">date?</span>nullable</div>
+    <div class="app-accounts"><span class="tag">FK</span><span>to <code>accounts_user</code>, not drawn</span></div>
+    <div>
+      <svg width="34" height="16" viewBox="0 0 34 16" aria-hidden="true"><path class="ln" d="M0 8H34M12 8L0 1M12 8L0 15"/><circle class="o" cx="17" cy="8" r="3.6"/></svg>
+      zero or more
+    </div>
+    <div>
+      <svg width="34" height="16" viewBox="0 0 34 16" aria-hidden="true"><path class="ln" d="M0 8H34M6 2V14M11 2V14"/></svg>
+      exactly one
+    </div>
+    <div>
+      <svg width="34" height="16" viewBox="0 0 34 16" aria-hidden="true"><path class="ln" d="M0 8H34M6 2V14"/><circle class="o" cx="14" cy="8" r="3.6"/></svg>
+      zero or one
+    </div>
+    <div>
+      <svg width="34" height="16" viewBox="0 0 34 16" aria-hidden="true"><path class="ln soft" d="M0 8H34"/></svg>
+      matched by value, no foreign key
+    </div>
+  </div>
+
+  <div class="sheet">{{ svg }}</div>
+  <p class="hint">Hover over a table, or tap it, to show only that table and the tables linked to it. Hover over a column to see its values and rules.</p>
+
+  <div class="notes">
+    <section>
+      <h2>Constraints</h2>
+      <ul>
+        {% for c in constraints %}<li>{% if c.kind == "unique" %}Unique on <code>{{ c.columns|join:", " }}</code>{% if c.condition %} where <code>{{ c.condition }}</code>{% endif %}{% else %}Check <code>{{ c.condition }}</code>{% endif %}
+          <span class="on-t">{{ c.table }}{% if c.name %} · {{ c.name }}{% endif %}</span></li>
+        {% endfor %}{% if positive_checks %}<li><code>CHECK (… &gt;= 0)</code> on
+          <span class="on-t">{{ positive_checks|join:", " }}</span></li>
+        {% endif %}{% for name, table, column in null_notes %}<li>Rows whose <code>{{ column }}</code> is null never conflict under <code>{{ name }}</code>, because NULLs are distinct in a unique constraint.
+          <span class="on-t">{{ table }}</span></li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <section>
+      <h2>On delete</h2>
+      {% for rule, keys in on_delete %}<h3>{{ rule }}</h3>
+      <ul>
+        {% for key in keys %}<li><code>{{ key }}</code></li>
+        {% endfor %}
+      </ul>
+      {% endfor %}
+    </section>
+
+    <section>
+      <h2>History tables</h2>
+      <p>Each saved change of a tracked row adds a row to its history table, holding the row's columns as they were then.</p>
+      <ul>
+        {% for h in history_tables %}<li><code>{{ h.name }}</code> {% if h.omitted %}without <code>{{ h.omitted|join:", " }}</code>{% else %}<span class="on-t">every column of <code>{{ h.tracked }}</code></span>{% endif %}</li>
+        {% endfor %}
+      </ul>
+    </section>
+  </div>
+
+  <section class="notes-tables">
+    <h2>Tables</h2>
+    <dl class="docs">
+      {% for table, doc in tables %}<div class="app-{{ table.app }}"><dt>{{ table.name }}</dt><dd>{% for p in doc %}<p>{{ p }}</p>{% endfor %}</dd></div>
+      {% endfor %}
+    </dl>
+  </section>
+
+  <section>
+    <h2>Django's tables</h2>
+    <ul class="framework">
+      {% for name in framework %}<li><code>{{ name }}</code></li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <p class="foot">Generated from the models by <code>ORGSYNDB_DEBUG=true uv run python manage.py schema_diagram</code> in <code>webapp/</code>. Change the models or the generator, then run it again; do not edit this file.</p>
+</div>
+<script>
+(function () {
+  var svg = document.querySelector("svg.diagram");
+  if (!svg) return;
+  var tables = new Map();
+  svg.querySelectorAll(".tbl").forEach(function (g) { tables.set(g.dataset.table, g); });
+  var edges = Array.prototype.slice.call(svg.querySelectorAll(".edge"));
+  var rows = Array.prototype.slice.call(svg.querySelectorAll(".row[data-ref]"));
+  var pinned = null;
+  function clear() {
+    svg.classList.remove("focus");
+    svg.querySelectorAll(".on, .hl").forEach(function (n) { n.classList.remove("on", "hl"); });
+  }
+  function show(k) {
+    clear();
+    var g = tables.get(k);
+    if (!g) return;
+    var near = new Set((g.dataset.near || "").split(" ").filter(Boolean));
+    svg.classList.add("focus");
+    g.classList.add("on");
+    near.forEach(function (n) { if (tables.has(n)) tables.get(n).classList.add("on"); });
+    edges.forEach(function (e) { if (e.dataset.from === k || e.dataset.to === k) e.classList.add("on"); });
+    rows.forEach(function (r) {
+      var owner = r.closest(".tbl").dataset.table;
+      if ((owner !== k && r.dataset.ref === k) || (owner === k && near.has(r.dataset.ref))) r.classList.add("hl");
+    });
+  }
+  tables.forEach(function (g, k) {
+    g.addEventListener("mouseenter", function () { if (!pinned) show(k); });
+    g.addEventListener("mouseleave", function () { if (!pinned) clear(); });
+    g.addEventListener("focus", function () { if (!pinned) show(k); });
+    g.addEventListener("blur", function () { if (!pinned) clear(); });
+    g.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      pinned = pinned === k ? null : k;
+      if (pinned) show(pinned); else clear();
+    });
+    g.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); g.dispatchEvent(new MouseEvent("click", { bubbles: true })); }
+      if (ev.key === "Escape") { pinned = null; clear(); }
+    });
+  });
+  svg.addEventListener("click", function () { pinned = null; clear(); });
+})();
+</script>
+</body>
+</html>

@@ -1258,6 +1258,20 @@ The suite uses SQLite, a database stored in one file, by default. Set
 this suite on SQLite and on a PostgreSQL 18 service on pushes to `main`
 and `develop`, and on pull requests.
 
+The standalone [database diagram](webapp/docs/database-schema.html) shows
+the lab application's tables and their relationships, generated from the
+models. The suite runs `schema_diagram --check`, so a model change that
+leaves the file out of date fails `uv run pytest`. Regenerate it from
+`webapp/` with the command below and commit the file. Add `--check` to
+check without writing; it exits 1 if the file is missing or out of date.
+Use `--output PATH` to write or check another file. To move a table in the
+diagram, edit `GRID` in `webapp/orgsyndb_web/schema_diagram.py` before
+regenerating.
+
+```sh
+ORGSYNDB_DEBUG=true uv run python manage.py schema_diagram
+```
+
 To develop with the collection's product links and interface language,
 generate its index from the repository root. Replace `<collection>` with
 your collection's directory, then start the local server:
