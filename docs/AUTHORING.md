@@ -73,7 +73,8 @@ Fill in these required fields:
   later edit.
 - `authors`: everyone who wrote the procedure.
 - `status`: whether the procedure is a draft, checked, or retired.
-- `reaction_types`: one reaction category.
+- `reaction_types`: one category from the lab registry’s `reaction-types`
+  vocabulary.
 - `tags`: useful lowercase search terms. Replace the template's
   `change-me`. The `sample-data` tag adds a warning banner to the page and
   to printouts, so never use it for a real procedure.
@@ -82,8 +83,8 @@ Fill in these required fields:
 - `hazards`: short descriptions of the main hazards.
 - `products`: required for a specific procedure; for a general procedure, use
   `scope` instead, as explained below. List one or more compound keys, each
-  with its isolated yield. A key is the name of a file in `compounds/` without
-  `.toml`; the next section explains how to find or create it.
+  with its isolated yield. A key identifies a substance in the lab
+  application’s registry; the next section explains how to find or add one.
 
 The template also contains optional, commented fields for starting
 materials (`substrates`), checkers, literature references and an AI model.
@@ -105,14 +106,16 @@ inert_atmosphere = false
 
 Keep text and choice keys in double quotes. Write numbers and `true` or
 `false` without quotes; numbers use a decimal point and no unit. A choice
-uses a key from its declared file in `vocabularies/`; `multiple = true`
+uses a term key from its named registry vocabulary; `multiple = true`
 requires a non-empty list of different keys. A field with `required = true`
 must be set, including in a general procedure. A field with `unique = true`
 needs a value no other procedure uses. In the demo, all four are optional;
 a notebook reference must match `[A-Z]{2}-\d+/\d+`, such as `AE-1/2`, and be
-unused. Working time is in hours and must be at least zero. Find project keys
-in [`projects.toml`](../examples/demo/vocabularies/projects.toml), including
-`first-year-practical` under `teaching`. The
+unused. Working time is in hours and must be at least zero. Find project
+keys in the lab registry’s `projects` vocabulary, including
+`first-year-practical` under `teaching` in the demo. A choice field’s
+`vocabulary` names `chemical-classes`, `inventory-groups`, `projects` or
+`reaction-types`. The
 [field reference](SCHEMA.md#procedure-field-declarations) gives the exact rules.
 
 Name products and starting materials by their registry keys. For example,
@@ -141,52 +144,42 @@ and every allowed value.
 
 ### Find or add the compounds
 
-The *compound registry* is the collection's `compounds/` folder. Each
-compound has one `<key>.toml` file containing its name and chemical data,
-shared by every procedure that makes or uses it. Look there for an existing
-entry before adding one. The key identifies the compound; the site does
-not compare structures to find duplicates.
+The *compound registry* is the lab application's list of substances, shared
+by every procedure that makes or uses them. Open `/lab/registry/` in the lab
+application and look for an existing substance before adding one. The key
+identifies the compound; the site does not compare structures to find
+duplicates.
 
-For a new compound, copy
-[`templates/compound.toml`](../templates/compound.toml) into `compounds/`.
-Choose a file name with lowercase letters and digits separated by single
-hyphens, such as `ethyl-acetate.toml`. Use `ethyl-acetate` as the key in
-your procedure. Replace the template's `example-compound` key in your
-procedure with the key you actually use. Creating a procedure stub does not
-create its compound records.
+Create and edit substances in the lab application. Use the substance's key
+in `products` or `substrates`, for example `ethyl-acetate`. Keys use lowercase
+letters and digits separated by single hyphens. Replace the template's
+`example-compound` with the key you actually use. Creating a procedure stub
+does not create a substance.
 
-Fill in `name`, `formula`, `mw` in g/mol, and `smiles`, the text notation
-for the structure. The optional `name_de` supplies the name on a German
-site; without it, that site uses `name`. An English site always uses `name`.
-You may also add `cas`, the CAS Registry Number, and `structure_image`.
-Keep text in quotes and molecular weight as a positive number without
-quotes. Compound files contain no `+++` lines or `[product]` heading.
+The collection's `orgsyndb.toml` names the registry in `registry`: the address
+of the lab application's snapshot, a saved copy of its registry, such as
+`http://localhost:8000/lab/registry/snapshot.json`, or a snapshot file's path.
+A relative path starts at the collection folder. A non-empty
+`ORGSYNDB_REGISTRY` environment variable overrides this setting. Ask the
+owner to set it if the collection has no registry.
 
-Check your collection's `orgsyndb.toml` for further fields under
-`[[fields.compound]]`. A declaration with `required = true` means every
-compound must supply that field. At the template's closing note, add the
-declared fields as further `key = value` lines in the compound file. The
-[demo settings](../examples/demo/orgsyndb.toml) require `chemical_class`
-and `group`. Choose a non-empty list of value keys for `chemical_class` from
-[`vocabularies/chemical-classes.toml`](../examples/demo/vocabularies/chemical-classes.toml).
-Set `group` to one value from
-[`vocabularies/inventory-groups.toml`](../examples/demo/vocabularies/inventory-groups.toml):
-`starting-materials`, `reagents`, `intermediates` or `final-products`.
-The optional `item_number` is the article number printed on delivery
-notes. Set it only for an end product that has been delivered, using a
-unique number with `CH-` followed by four digits. Only six final products
-in the demo set it.
-The [field reference](SCHEMA.md#collection-field-declarations) gives the
-types, rules and validator messages.
+Names and chemical data come from the substance in that registry: formula,
+molar mass in g/mol, SMILES (a text notation for molecular structures) and
+CAS Registry Number. An English site uses `name`; a German site uses
+`name_de` when supplied, otherwise `name`. The site also shows the substance's article number, short name,
+chemical classes and group. These four fields are built in; their display
+is fixed. The [field reference](SCHEMA.md#collection-field-declarations)
+gives the details.
 
-To show a structure, place an SVG or PNG file in the collection's
-`static/structures/` and set `structure_image` in the compound file, for
-example `structure_image = "structures/isopentyl-acetate.svg"` for
-`isopentyl-acetate`. For an SVG, use black lines and text on a white
-background rectangle. Give the file a `<title>`, and do not include scripts,
-external images, or other external references. The site shows the image on
-a white panel in dark mode. Ask the owner to add or check the image if you
-do not work with SVG files.
+To show a structure, place `static/structures/<key>.svg` or
+`static/structures/<key>.png` in the collection, using the substance's key.
+For example, use `static/structures/isopentyl-acetate.svg` for
+`isopentyl-acetate`. The build uses the SVG when both files exist. A
+substance without either file has no structure image. For an SVG, use black
+lines and text on a white background rectangle. Give the file a `<title>`,
+and do not include scripts, external images, or other external references.
+The site shows the image on a white panel in dark mode. Ask the owner to add
+or check the image if you do not work with SVG files.
 
 You may register a starting material even if no procedure makes it. A compound
 that no procedure uses is also allowed. **Compounds** in the site navigation
@@ -208,8 +201,8 @@ makes. Under a compound, any one step will do; under a step, all starting
 materials are needed. Each step shows the procedure link, entry number when
 needed, yield and status, as in **Made by**. All published procedures take
 part, whatever their status. A general procedure's entry uses only its own
-starting materials. Compound links carry the values of fields declared
-`beside = true`.
+starting materials. Compound links carry the substance’s article number
+and short name when supplied.
 
 A step is omitted if it starts from a compound already above it on the same
 branch, so the tree never follows a cycle. If all steps would loop back, the
@@ -219,7 +212,7 @@ tree. A larger tree is drawn to the largest depth that fits. When more than
 200 steps make the compound directly, the tree shows only those. A compound
 cut off by a limit ends with **more steps on its page**; follow its link to
 continue. Routes are derived during the build. You write nothing extra in a
-procedure, a compound file or `orgsyndb.toml`.
+procedure or `orgsyndb.toml`.
 
 ### Write a general procedure
 
@@ -311,12 +304,12 @@ procedures. The site title-cases author names for display, so a name entered as
 `van` appears as `Van`. The eight body sections appear beside the panel on a
 wide screen and after it in a narrow window or in print.
 
-After each product or starting-material link, the panel shows any values
-that the compound sets for fields the collection declares with `beside = true`.
+After each product or starting-material link, the panel shows the substance’s
+article number and short name when supplied, in that order.
 The link text stays the compound's name. One space and a muted note in
 parentheses follow it, for example **Acetic anhydride (Ac2O)** in the
-demo. Values appear without labels, in declaration order, separated by `, `,
-as on the compound page; numbers use the site's decimal separator and unit.
+demo. Values appear without labels, separated by `, `, as on the compound
+page.
 A compound with none of these values gets no note. Procedure search finds
 these values because the panel is indexed. The yield line, catalogue
 **Details**, image alt texts and page titles carry no note.
@@ -333,9 +326,9 @@ A general procedure adds **Scope** before **Summary**, with one row per entry.
 **Entry**, **Starting materials**, **Products** and **Yield** always appear.
 **Scale**, **Time**, **Temperature** and **Note** appear only when some entry
 sets them; an unset value leaves an empty cell. Starting materials and products
-link to compound pages, and products show small structure images when their
-registry records have them. The compound links carry the same notes as the
-panel. For example, entry 1 of OSDB-0009 makes the same alcohol as OSDB-0005,
+link to compound pages, and products show small structure images when the
+collection has matching image files. The compound links carry the same notes
+as the panel. For example, entry 1 of OSDB-0009 makes the same alcohol as OSDB-0005,
 so that compound's page lists both routes.
 
 ## 3. Write the procedure
@@ -381,8 +374,8 @@ its `md/procedures/`. Do not put it in a subfolder.
 If you do not have the collection, send the `.md` file to the owner. Tell the
 owner whether you used a procedure number they assigned or left the template
 number in place. The owner can then place, rename, and check it. Include
-any new compound files and structure images, or ask the owner to add their
-registry entries.
+any new structure images, and ask the owner to add any missing substances
+in the lab application.
 
 ## 5. Check the file
 
@@ -394,9 +387,9 @@ OrgSynDB program, open a terminal in the collection folder and run:
 orgsyndb validate
 ```
 
-The command exports the owner's Org procedures and then checks every
-procedure and compound record, plus sequences in `md/sequences/`. Each
-problem has this form:
+The command reads the registry, exports the owner's Org procedures and then
+checks every procedure and the sequences in `md/sequences/` against it.
+The lab application checks substance values. Each problem has this form:
 
 ```text
 path/to/file.md:field: error: message
@@ -407,7 +400,7 @@ Read each line from left to right:
 
 - The first part is the file to open.
 - The second part is the field or body section to inspect.
-- `error` means a procedure, compound record or sequence is invalid and the
+- `error` means a procedure, sequence or registry is invalid and the
   check fails.
 - `warning` means the check can finish, but you should review and correct
   the problem.
@@ -415,12 +408,14 @@ Read each line from left to right:
 
 For example, `products[1].yield_percent` names the yield in the first
 product entry; product numbers start at 1. An `unknown compound` error
-means you must check the key and its file in `compounds/`. A message such
-as `compounds/ethyl-acetate.toml:mw` names a field in that compound file.
+means you must check the key in the lab registry. A registry error under
+`substances` names a substance keyed `group`, which conflicts with the
+site’s group-tab directory. The lab application refuses this key, so the
+snapshot file was made another way; give the substance another key there.
 A line naming `body` tells you to inspect the section headings. Run the
 command again after correcting the file. The last line reports how many
-files, errors, and warnings were found; its file count includes compound
-records and sequence files, including language variants.
+files, errors, and warnings were found; its file count includes procedures
+and sequences, including language variants.
 
 For a general procedure, `scope[2].products[1].yield_percent` means the yield
 of the first product in entry 2. `must not be empty` under `scope` means you
@@ -468,8 +463,9 @@ titles and targets, step counts and overall yields. A sequence page shows
 its ID and title, **Steps** and **Overall yield**, a scheme, its linked
 procedures with entry numbers where needed, reaction type, yield and status,
 then your notes. The scheme shows starting materials, intermediates and target
-with registry structure images where available. Compound links in the scheme
-and the directory's targets carry the same notes as the panel.
+with matching structure images from `static/structures/` where available.
+Compound links in the scheme and the directory's targets carry the same
+notes as the panel.
 A plus joins the first step's starting materials, and arrows show step
 number, reaction type and yield. It runs down the page in narrow windows.
 Sequence pages are absent from the procedure search index; use their links
@@ -537,9 +533,9 @@ labels. Keep `scope` and its entry order, translating only each entry's `note`.
 The check reports
 differences in the shared fields as errors. Numeric yields compare by value, so
 `85` and `85.0` agree. Compound names come from `name` and `name_de` in the
-shared registry; add or edit `name_de` there for the German name. Translate the
-title, the hazards and the body, set `date` and `lastmod` to the time of the
-translation, and use the section headings and Reagents columns of the new
+lab registry; add or edit `name_de` in the lab application for the German
+name. Translate the title, the hazards and the body, set `date` and `lastmod`
+to the time of the translation, and use the section headings and Reagents columns of the new
 language, which the [procedure schema](SCHEMA.md#languages-and-variants) lists.
 
 ## 8. Write a synthesis sequence

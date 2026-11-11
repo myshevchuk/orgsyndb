@@ -26,7 +26,7 @@ VOCABULARIES = {
     "projects": ("Projekte", "Projects"),
     "reaction-types": ("Reaktionstypen", "Reaction types"),
 }
-DEMO_COLLECTION = REPO / "examples" / "demo"
+OLD_LAYOUT = Path(__file__).resolve().parent / "fixtures" / "old-layout"
 
 
 def substance_url(key: str, action: str = "") -> str:

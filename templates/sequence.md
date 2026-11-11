@@ -34,9 +34,9 @@ date = 2026-10-23T09:15:00+02:00
 # be earlier than date.
 lastmod = 2026-10-23T09:15:00+02:00
 
-# target: the compound the sequence makes, as its key in the compounds/
-# folder, e.g. "acetylsalicylic-acid". It must be a product of the last
-# step.
+# target: the compound the sequence makes, as the key of its substance
+# in the collection's registry, e.g. "acetylsalicylic-acid". It must be
+# a product of the last step.
 target = "acetylsalicylic-acid"
 
 # steps: the procedures in the order they are run, at least two. Each

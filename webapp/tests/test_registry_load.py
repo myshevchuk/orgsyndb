@@ -211,6 +211,7 @@ class RefusalTests(LoadCase):
 
     def test_a_substance_value_a_form_would_refuse(self) -> None:
         cases = [("key", "Bad Key"), ("key", ""), ("key", "k" * 101),
+                 ("key", "group"),
                  ("name", ""), ("name", "n" * 201), ("mw", 0),
                  ("mw", -1.5), ("mw", 1.2345), ("cas", "140-10-4"),
                  ("cas", "1-1-1"), ("short_name", "s" * 51),

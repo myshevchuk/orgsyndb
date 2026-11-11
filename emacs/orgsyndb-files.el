@@ -4,8 +4,7 @@
 
 ;; Commands that visit and create the files of a collection: another
 ;; language variant of a procedure or sequence, a translation of a
-;; procedure, a new procedure through `orgsyndb new', and a new compound
-;; file prompted from the schema and the declared fields.
+;; procedure, and a new procedure through `orgsyndb new'.
 
 ;;; Code:
 
@@ -201,81 +200,6 @@ FORMAT is `org', the default, or `md'; LANGUAGE is `none', the default,
       (find-file (expand-file-name
                   (car (last (split-string output "\n" t "[ \t\r]+")))
                   root)))))
-
-;;;; New compound
-
-(defconst orgsyndb--compound-template
-  '(("name" . text) ("name_de" . optional) ("formula" . text)
-    ("mw" . number) ("smiles" . text) ("cas" . optional)
-    ("structure_image" . image))
-  "The built-in keys of a compound file in the order of the application's
-compound template, each with how its value is read.")
-
-(defun orgsyndb--toml-value (value)
-  "Return VALUE as TOML: a string, a number, a boolean as t or `:false',
-or a list of strings."
-  (cond ((eq value t) "true")
-        ((eq value :false) "false")
-        ((numberp value) (format "%s" value))
-        ((stringp value)
-         (concat "\"" (replace-regexp-in-string "[\"\\\\]" "\\\\\\&" value)
-                 "\""))
-        ((listp value)
-         (concat "[" (mapconcat #'orgsyndb--toml-value value ", ") "]"))))
-
-(defun orgsyndb--read-field (root field)
-  "Read a value of the declared FIELD of ROOT in the minibuffer."
-  (let ((prompt (format "%s: " (alist-get 'label field))))
-    (pcase (alist-get 'type field)
-      ("choice"
-       (let ((values (mapcar (lambda (entry) (symbol-name (car entry)))
-                             (orgsyndb--vocabulary
-                              root (alist-get 'vocabulary field)))))
-         (if (eq (alist-get 'multiple field) t)
-             (completing-read-multiple prompt values nil t)
-           (completing-read prompt values nil t))))
-      ("boolean" (if (y-or-n-p prompt) t :false))
-      ("number" (read-number prompt))
-      (_ (read-string prompt)))))
-
-;;;###autoload
-(defun orgsyndb-new-compound (key)
-  "Create the compound file of KEY in the current collection and visit it.
-It asks for the built-in values in the order of the application's
-compound template, an empty answer leaving an optional one out, and
-then for each declared compound field that is required."
-  (interactive (list (read-string "Compound key: ")))
-  (let* ((root (orgsyndb--current-root))
-         (file (expand-file-name (format "compounds/%s.toml" key) root))
-         (lines nil))
-    (unless (string-match-p "\\`[a-z0-9]+\\(?:-[a-z0-9]+\\)*\\'" key)
-      (user-error "%s is not a lowercase hyphenated key" key))
-    (when (file-exists-p file)
-      (user-error "compounds/%s.toml exists already" key))
-    (pcase-dolist (`(,name . ,how) orgsyndb--compound-template)
-      (let ((value (pcase how
-                     ('number (read-number (format "%s: " name)))
-                     ('image (completing-read
-                              "structure_image (empty for none): "
-                              (orgsyndb--structure-images root)))
-                     ('optional (read-string
-                                 (format "%s (empty for none): " name)))
-                     (_ (read-string (format "%s: " name))))))
-        (unless (equal value "")
-          (push (cons name value) lines))))
-    (dolist (field (orgsyndb--declarations root 'compound))
-      (when (eq (alist-get 'required field) t)
-        (push (cons (alist-get 'key field) (orgsyndb--read-field root field))
-              lines)))
-    (make-directory (file-name-directory file) t)
-    (let ((coding-system-for-write 'utf-8-unix))
-      (write-region (mapconcat (lambda (line)
-                                 (format "%s = %s\n" (car line)
-                                         (orgsyndb--toml-value (cdr line))))
-                               (nreverse lines) "")
-                    nil file nil 'silent nil 'excl))
-    (orgsyndb--refresh-index-later root)
-    (find-file file)))
 
 (provide 'orgsyndb-files)
 

@@ -47,8 +47,6 @@ loaded from a checkout."
   '(("\\`org/procedures/[^/]+\\.org\\'" . org-procedure)
     ("\\`md/procedures/[^/]+\\.md\\'" . md-procedure)
     ("\\`md/sequences/[^/]+\\.md\\'" . sequence)
-    ("\\`compounds/[^/]+\\.toml\\'" . compound)
-    ("\\`vocabularies/[^/]+\\.toml\\'" . vocabulary)
     ("\\`orgsyndb\\.toml\\'" . settings))
   "The kinds of collection files, each with the collection-relative path
 that it matches.")
@@ -82,9 +80,7 @@ directory name, which then is the starting point."
 The kind is `org-procedure' for a `.org' file directly in
 `org/procedures/', `md-procedure' for a `.md' file directly in
 `md/procedures/', `sequence' for a `.md' file directly in
-`md/sequences/', `compound' for a `.toml' file directly in
-`compounds/', `vocabulary' for a `.toml' file directly in
-`vocabularies/' and `settings' for `orgsyndb.toml'.  It is nil for any
+`md/sequences/' and `settings' for `orgsyndb.toml'.  It is nil for any
 other file and for a file outside every collection."
   (let ((root (orgsyndb-collection-root file)))
     (when root
@@ -445,8 +441,8 @@ A record is the entry, the `front_matter' of an Org source taken from
       (setq value (alist-get key value)))))
 
 (defun orgsyndb--declarations (root entity)
-  "Return the declarations of the fields of ENTITY in ROOT, a symbol,
-`compound' or `procedure'."
+  "Return the fields of ENTITY in ROOT, a symbol: `compound' for the
+registry fields, `procedure' for the declared procedure fields."
   (alist-get entity (alist-get 'fields (orgsyndb-index root))))
 
 (defun orgsyndb--declaration (root entity key)
@@ -460,11 +456,12 @@ of value symbols to their labels and parents."
   (alist-get (intern name) (alist-get 'vocabularies (orgsyndb-index root))))
 
 (defun orgsyndb--compounds (root)
-  "Return the compound entries of the index of ROOT."
+  "Return the compound entries of the index of ROOT, one per substance of
+its registry, each an alist of `key', `data' and `url'."
   (alist-get 'compounds (orgsyndb-index root)))
 
 (defun orgsyndb--compound (root key)
-  "Return the parsed data of the compound KEY in ROOT, or nil."
+  "Return the data of the compound KEY in ROOT, or nil."
   (alist-get 'data (cl-find key (orgsyndb--compounds root)
                             :key (lambda (entry) (alist-get 'key entry))
                             :test #'equal)))

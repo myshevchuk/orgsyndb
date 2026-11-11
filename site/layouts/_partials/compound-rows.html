@@ -3,10 +3,10 @@ entry of the registry, ordered by shown name, holding key, the entry's
 key; name, its shown name (compound-name.html); compound, the entry;
 made and used, the numbers of published procedures that make the
 compound and that use it as a substrate, over every entry of a general
-procedure, each procedure counted once; text, the name, name_de,
-formula, CAS number, SMILES and the values of the text fields with
-search = true that the entry sets, joined by single spaces; and values,
-for each field declared with facet = true or tabs = true, a slice of
+procedure, each procedure counted once; text, the name and those of
+name_de, formula, CAS number, SMILES and the values of the text fields
+with search = true that the entry sets, joined by single spaces; and
+values, for each registry field with facet = true or tabs = true, a slice of
 machine values (field-machine-values.html); empty when the entry does
 not set the field. The records are the same on every page of a build,
 so a caller may call this with partialCached. */ -}}
@@ -23,9 +23,9 @@ so a caller may call this with partialCached. */ -}}
 {{ range $procedures }}{{ if in (partialCached "substrate-keys.html" . .Path) $key }}{{ $used = add $used 1 }}{{ end }}{{ end -}}
 {{ $words := slice $compound.name -}}
 {{ with $compound.name_de }}{{ $words = $words | append . }}{{ end -}}
-{{ $words = $words | append $compound.formula -}}
+{{ with $compound.formula }}{{ $words = $words | append . }}{{ end -}}
 {{ with $compound.cas }}{{ $words = $words | append . }}{{ end -}}
-{{ $words = $words | append $compound.smiles -}}
+{{ with $compound.smiles }}{{ $words = $words | append . }}{{ end -}}
 {{ range $searched }}{{ with index $compound .key }}{{ $words = $words | append . }}{{ end }}{{ end -}}
 {{ $values := dict -}}
 {{ range $filed -}}

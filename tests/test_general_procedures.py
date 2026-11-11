@@ -8,9 +8,10 @@ import unittest
 
 import support
 from pipeline_support import TEST_COLLECTION
-from support import (COMPOUNDS, GENERAL, STATIC_DIR, ValidatorTestCase,
+from support import (GENERAL, REGISTRY, STATIC_DIR, ValidatorTestCase,
                      apply_edits, fixture_run, general_variant_run,
-                     insert_line, remove_line, replace_block, replace_text)
+                     insert_line, load_snapshot, remove_line, replace_block,
+                     replace_text)
 from test_localization import germanised, run
 
 ENTRY_3 = ('{ substrates = ["ethanol"], products = '
@@ -63,26 +64,21 @@ class GeneralBaselineTests(ValidatorTestCase):
             self.assertEqual(text.count(f"\n## {name}\n"), 1, name)
 
     def test_its_compounds_are_in_the_fixture_registry(self) -> None:
-        """Harness: every compound it names is registered, and one of its
-        products sets a structure image."""
+        """Harness: every compound it names is a substance of the fixture
+        registry, and one of its products has a structure image."""
         entries = front_matter(general_text())["scope"]
         keys = [e["compound"] for entry in entries
                 for e in entry["products"]]
         keys += [key for entry in entries for key in entry["substrates"]]
-        images = []
+        held = {entry["key"] for entry in
+                load_snapshot(REGISTRY)["substances"]}
         for key in keys:
-            path = COMPOUNDS / f"{key}.toml"
-            self.assertTrue(path.is_file(), f"{key} is not registered")
-        for entry in entries:
-            for product in entry["products"]:
-                compound = tomllib.loads(
-                    (COMPOUNDS / f"{product['compound']}.toml").read_text(
-                        encoding="utf-8"))
-                if "structure_image" in compound:
-                    images.append(compound["structure_image"])
-        self.assertTrue(images, "no product sets structure_image")
-        for image in images:
-            self.assertTrue((STATIC_DIR / image).is_file(), image)
+            self.assertIn(key, held, f"{key} is not registered")
+        images = [
+            STATIC_DIR / "structures" / f"{product['compound']}.svg"
+            for entry in entries for product in entry["products"]]
+        self.assertTrue(any(image.is_file() for image in images),
+                        "no product has a structure image")
 
 
 class ScopeProblemTests(ValidatorTestCase):
@@ -569,20 +565,16 @@ class CollectionGeneralProcedureTests(ValidatorTestCase):
                            (self.ENGLISH, self.GERMAN))
         self.assertNotEqual(english[2]["note"], german[2]["note"])
 
-    def test_the_compound_files_hold_the_stated_values(self) -> None:
+    def test_the_registry_holds_the_stated_values(self) -> None:
         """Scenario: The demo's general procedure (compounds)."""
         keys = ["name", "name_de", "formula", "mw", "smiles", "cas"]
+        held = {entry["key"]: entry for entry in
+                load_snapshot(TEST_COLLECTION / "registry.json")[
+                    "substances"]}
         for key, values in self.COMPOUNDS.items():
-            path = TEST_COLLECTION / "compounds" / f"{key}.toml"
             with self.subTest(compound=key):
-                self.assertTrue(path.is_file(), f"{path.name} is missing")
-                text = path.read_text(encoding="utf-8")
-                data = tomllib.loads(text)
-                self.assertEqual(list(data)[:len(keys)], keys)
-                self.assertEqual(list(data.values())[:len(keys)], values)
-                self.assertEqual(
-                    [line.split(" = ")[0]
-                     for line in text.splitlines()][:len(keys)], keys)
+                self.assertIn(key, held, f"{key} is missing")
+                self.assertEqual([held[key][name] for name in keys], values)
 
     def test_the_scheme_image_is_part_of_the_collection(self) -> None:
         """Harness: the scheme image exists in the test collection."""
@@ -604,11 +596,12 @@ class CollectionGeneralProcedureTests(ValidatorTestCase):
             {german[0]["lastmod"]})
 
     def test_the_collection_validates(self) -> None:
-        """Harness: the collection's procedures and compounds are valid."""
+        """Harness: the collection's procedures validate against its
+        registry."""
         result = support.run_validator([
             "--settings", TEST_COLLECTION / "orgsyndb.toml",
             "--static-dir", TEST_COLLECTION / "static",
-            "--compounds", TEST_COLLECTION / "compounds",
+            "--registry", TEST_COLLECTION / "registry.json",
             TEST_COLLECTION / "md" / "procedures"])
         self.assert_clean(result)
 

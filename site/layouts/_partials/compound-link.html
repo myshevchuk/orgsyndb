@@ -1,8 +1,8 @@
 {{- /* A compound key as an a.compound linking the compound's page,
 /compounds/<key>/, with its shown name (compound-name.html) as text.
 When the registry entry sets fields of site.Data.collection.fields.compound
-declared beside, one space and a span.compound-beside follow the link,
-holding "(", those values in declared order as field-value.html writes
+with beside = true, one space and a span.compound-beside follow the link,
+holding "(", those values in the fields' order as field-value.html writes
 them on a compound page, joined by ", ", and ")". */ -}}
 <a class="compound" href="/compounds/{{ . }}/">{{ partial "compound-name.html" . }}</a>
 {{- with index site.Data.compounds . -}}

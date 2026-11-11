@@ -24,6 +24,19 @@ key_rule = RegexValidator(
     KEY_PATTERN, _("Enter lower-case letters and digits, joined by single "
                    "hyphens, such as cinnamic-acid."))
 
+# The directory of the collection site's compound tabs,
+# /compounds/group/, which no substance's page may take.
+TABS_KEY = "group"
+
+
+def unreserved(value: str) -> None:
+    """Refuse VALUE when it is TABS_KEY, the key that names the
+    directory of the collection site's compound tabs."""
+    if value == TABS_KEY:
+        raise ValidationError(
+            _("This key names the directory of the compound tabs on the "
+              "collection site; choose another."), code="reserved")
+
 
 def cas_rule(value: str) -> None:
     """Refuse VALUE unless it is a CAS number of the form ``140-10-3``
@@ -52,7 +65,7 @@ class Substance(models.Model):
     taken as one, which articles, lots and tasks refer to."""
 
     key = models.CharField(_("Key"), max_length=100, unique=True,
-                           validators=[key_rule])
+                           validators=[key_rule, unreserved])
     name = models.CharField(_("Name"), max_length=200)
     name_de = models.CharField(_("German name"), max_length=200,
                                blank=True)

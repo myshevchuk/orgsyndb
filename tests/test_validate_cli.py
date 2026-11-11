@@ -1,6 +1,7 @@
 """Command-line behaviour of tools/validate.py (procedure-validation)."""
 
 import ast
+import json
 import shutil
 import sys
 import tempfile
@@ -8,24 +9,12 @@ import unittest
 from pathlib import Path
 
 import support
-from support import (BASELINE, COMPOUNDS, FIXTURES, REACTION_TYPES, SETTINGS,
-                     STATIC_DIR, VALIDATOR, ValidatorTestCase, append_text,
-                     declaration, delete_reaction_types, edit_reaction_types,
-                     fields_copy, fixture_run, replace_text, run_validator,
-                     settings_variant_run, valid_set_run, variant_root,
-                     write_reaction_types)
-
-COMPOUND_FILES = len(list(COMPOUNDS.glob("*.toml")))
-VALID_MD_FILES = len(list((FIXTURES / "valid" / "md").glob("*.md")))
-
-
-def with_reaction_types(directory: Path) -> Path:
-    """Put a copy of the fixture reaction types into the
-    ``vocabularies/`` of ``directory``, a collection's root."""
-    (directory / "vocabularies").mkdir(exist_ok=True)
-    shutil.copyfile(REACTION_TYPES,
-                    directory / "vocabularies" / REACTION_TYPES.name)
-    return directory
+from support import (BASELINE, FIXTURES, REGISTRY, SETTINGS, STATIC_DIR,
+                     VALIDATOR, ValidatorTestCase, edit_registry,
+                     edit_registry_text, fixture_run, load_snapshot,
+                     registry_variant_run, run_validator, setting_terms,
+                     substance, term, valid_set_run, variant_root,
+                     write_snapshot)
 
 
 class CommandLineInterfaceTests(ValidatorTestCase):
@@ -43,13 +32,16 @@ class CommandLineInterfaceTests(ValidatorTestCase):
         self.assertIn("--org-root", result.stderr)
         self.assertEqual(result.stdout, "")
 
-    def test_vocabulary_option_is_refused(self) -> None:
-        """Scenario: Vocabulary option is refused."""
-        result = run_validator(
-            ["--vocabulary", REACTION_TYPES, FIXTURES / "valid" / "md"])
-        self.assertEqual(result.returncode, 2, result.stdout)
-        self.assertIn("--vocabulary", result.stderr)
-        self.assertEqual(result.stdout, "")
+    def test_vocabulary_and_compound_options_are_refused(self) -> None:
+        """Scenario: Vocabulary and compound options are refused."""
+        for option, value in (("--vocabulary", REGISTRY),
+                              ("--compounds", FIXTURES)):
+            with self.subTest(option=option):
+                result = run_validator(
+                    [option, value, FIXTURES / "valid" / "md"])
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertIn(option, result.stderr)
+                self.assertEqual(result.stdout, "")
 
     def test_root_that_is_not_a_directory_is_a_usage_error(self) -> None:
         """Scenario: Root is not a directory."""
@@ -72,76 +64,91 @@ class CommandLineInterfaceTests(ValidatorTestCase):
         self.assertTrue(names, "no imports found")
         self.assertEqual(names - set(sys.stdlib_module_names), set())
 
+    def test_registry_option_names_the_registry(self) -> None:
+        """Requirement: Command-line interface (--registry)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            registry = Path(tmp) / "registry.json"
+            write_snapshot(registry, {
+                "format": 1,
+                "vocabularies": {
+                    "chemical-classes": [], "inventory-groups": [],
+                    "projects": [],
+                    "reaction-types": [term("esterification",
+                                            "Esterification",
+                                            tree=False)]},
+                "substances": [substance("ethyl-acetate")]})
+            result = run_validator(
+                ["--settings", SETTINGS, "--static-dir", STATIC_DIR,
+                 "--registry", registry, BASELINE.parent])
+        self.assert_clean(result)
+        self.assertIn("validated 1 files: 0 errors, 0 warnings",
+                      result.stderr)
+
 
 class DefaultPathTests(ValidatorTestCase):
     def test_default_static_and_registry_are_the_working_directorys(
             self) -> None:
         """Scenario: Default static and registry directories are the
         working directory's."""
-        compound = (COMPOUNDS / "ethyl-acetate.toml").read_text(
-            encoding="utf-8")
-        self.assertIn('structure_image = "structures/ethyl-acetate.svg"',
-                      compound)
         with variant_root("OSDB-0100-baseline.md") as root:
             with tempfile.TemporaryDirectory() as cwd:
-                collection = with_reaction_types(Path(cwd))
+                collection = Path(cwd)
                 structures = collection / "static" / "structures"
                 structures.mkdir(parents=True)
                 shutil.copy2(STATIC_DIR / "structures"
                              / "ethyl-acetate.svg", structures)
-                (collection / "compounds").mkdir()
-                (collection / "compounds" / "ethyl-acetate.toml"
-                 ).write_text(compound, encoding="utf-8")
+                (collection / "build").mkdir()
+                shutil.copyfile(REGISTRY,
+                                collection / "build" / "registry.json")
                 result = run_validator([root], cwd=collection)
-                (structures / "ethyl-acetate.svg").unlink()
-                missing_image = run_validator([root], cwd=collection)
-                (collection / "compounds" / "ethyl-acetate.toml").unlink()
-                missing_registry = run_validator([root], cwd=collection)
         self.assert_clean(result)
-        self.assert_one(missing_image, "error", "structure_image",
-                        "not found", path_suffix="ethyl-acetate.toml")
-        self.assert_one(missing_registry, "error", "products[1].compound",
-                        'unknown compound "ethyl-acetate"')
 
-    def test_missing_registry_defines_no_compound(self) -> None:
+    def test_missing_registry_is_a_configuration_error(self) -> None:
         """Scenario: Missing registry."""
         result = fixture_run(
-            "baseline", compounds=FIXTURES / "no-such-registry")
-        self.assert_one(result, "error", "products[1].compound",
-                        'unknown compound "ethyl-acetate"')
+            "baseline", registry=FIXTURES / "no-such-registry.json")
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("validate.py: error:", result.stderr)
+        self.assertIn("no-such-registry.json", result.stderr)
+
+    def test_a_working_directory_without_a_registry_is_refused(
+            self) -> None:
+        """Requirement: Default paths come from the working directory
+        (a default registry file that does not exist)."""
+        with tempfile.TemporaryDirectory() as cwd:
+            self.assertEqual(list(Path(cwd).iterdir()), [])
+            result = run_validator(
+                ["--static-dir", STATIC_DIR, FIXTURES / "baseline"],
+                cwd=Path(cwd))
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("validate.py: error:", result.stderr)
+        self.assertIn("registry.json", result.stderr)
 
     def test_default_settings_file_is_the_working_directorys(self) -> None:
         """Scenario: Default settings file is the working directory's."""
-        settings = declaration("item_number", "text", "Item no.",
-                               "required = true")
+        settings = support.procedure_declaration(
+            "notebook", "text", "Lab notebook", "required = true")
         with tempfile.TemporaryDirectory() as cwd:
             (Path(cwd) / "orgsyndb.toml").write_text(
                 "format = 1\n" + settings, encoding="utf-8")
             result = run_validator(
-                ["--compounds", COMPOUNDS, "--static-dir", STATIC_DIR,
-                 FIXTURES / "baseline"], cwd=with_reaction_types(Path(cwd)))
-        self.assertEqual(result.returncode, 1, result.stderr)
-        self.assertEqual(len(result.problems), COMPOUND_FILES,
-                         result.stdout)
-        self.assertEqual(len(result.stdout.splitlines()), COMPOUND_FILES)
-        for problem in result.problems:
-            self.assertEqual(problem.field, "item_number", result.stdout)
-            self.assertEqual(problem.severity, "error", result.stdout)
-            self.assertIn("required field missing", problem.message)
-        self.assertEqual(
-            sorted(Path(p.path).name for p in result.problems),
-            sorted(path.name for path in COMPOUNDS.glob("*.toml")))
+                ["--registry", REGISTRY, "--static-dir", STATIC_DIR,
+                 FIXTURES / "baseline"], cwd=Path(cwd))
+        self.assert_one(result, "error", "notebook",
+                        "required field missing")
 
     def test_the_settings_option_outranks_the_working_directory(
             self) -> None:
         """Requirement: Command-line interface (--settings)."""
-        settings = declaration("item_number", "text", "Item no.",
-                               "required = true")
-        with tempfile.TemporaryDirectory() as cwd, fields_copy() as copy:
+        settings = support.procedure_declaration(
+            "notebook", "text", "Lab notebook", "required = true")
+        with tempfile.TemporaryDirectory() as cwd:
             (Path(cwd) / "orgsyndb.toml").write_text(
                 "format = 1\n" + settings, encoding="utf-8")
             result = run_validator(
-                ["--settings", copy.settings, "--compounds", COMPOUNDS,
+                ["--settings", SETTINGS, "--registry", REGISTRY,
                  "--static-dir", STATIC_DIR, FIXTURES / "baseline"],
                 cwd=Path(cwd))
         self.assert_clean(result)
@@ -151,40 +158,24 @@ class DefaultPathTests(ValidatorTestCase):
         """Requirement: Default paths come from the working directory (a
         settings file that does not exist, `--settings` omitted)."""
         with tempfile.TemporaryDirectory() as cwd:
-            with_reaction_types(Path(cwd))
             self.assertFalse((Path(cwd) / "orgsyndb.toml").exists())
             result = run_validator(
-                ["--compounds", COMPOUNDS, "--static-dir", STATIC_DIR,
+                ["--registry", REGISTRY, "--static-dir", STATIC_DIR,
                  FIXTURES / "baseline"], cwd=Path(cwd))
         self.assert_clean(result)
 
-    def test_an_empty_working_directory_has_no_reaction_types(self) -> None:
-        """Requirement: Default paths come from the working directory
-        (without `--settings`, the reaction types are the working
-        directory's)."""
-        with tempfile.TemporaryDirectory() as cwd:
-            self.assertEqual(list(Path(cwd).iterdir()), [])
-            result = run_validator(
-                ["--compounds", COMPOUNDS, "--static-dir", STATIC_DIR,
-                 FIXTURES / "baseline"], cwd=Path(cwd))
-        self.assert_one(result, "error", "reaction_types",
-                        'unknown reaction type "esterification"')
-
-    def test_compounds_option_names_the_registry(self) -> None:
-        """Requirement: Command-line interface (--compounds)."""
-        with tempfile.TemporaryDirectory() as tmp:
-            registry = Path(tmp) / "registry"
-            registry.mkdir()
-            shutil.copy2(COMPOUNDS / "ethyl-acetate.toml", registry)
-            result = run_validator(
-                ["--settings", SETTINGS, "--static-dir", STATIC_DIR,
-                 "--compounds", registry, BASELINE.parent])
-        self.assert_clean(result)
-        self.assertIn("validated 2 files: 0 errors, 0 warnings",
-                      result.stderr)
+    def test_a_named_settings_file_that_does_not_exist_is_refused(
+            self) -> None:
+        """Scenario: A named settings file that does not exist."""
+        result = fixture_run(
+            "baseline",
+            extra=["--settings", FIXTURES / "no-such-settings.toml"])
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("no-such-settings.toml", result.stderr)
 
 
-class VocabularyErrorTests(ValidatorTestCase):
+class RegistryErrorTests(ValidatorTestCase):
     def assert_configuration_error(self, result: support.Result,
                                    *needles: str) -> None:
         """Exit status 2, nothing on stdout, and a message on stderr that
@@ -198,109 +189,65 @@ class VocabularyErrorTests(ValidatorTestCase):
             with self.subTest(needle=needle):
                 self.assertIn(needle, result.stderr)
 
-    def run_on_valid_md(self, *steps: support.SettingsChange
-                        ) -> support.Result:
-        return settings_variant_run(*steps, roots=["valid/md"])
+    def test_a_registry_that_is_not_json(self) -> None:
+        """Scenario: Not JSON."""
+        result = registry_variant_run(edit_registry_text(
+            support.append_text("{")))
+        self.assert_configuration_error(result, "registry.json")
 
-    def test_entry_without_label_is_a_configuration_error(self) -> None:
-        """Scenario: Entry without a label."""
-        result = self.run_on_valid_md(edit_reaction_types(replace_text(
-            'label = "Reduction"', 'note = "no label"')))
-        self.assertEqual(result.returncode, 2, result.stderr)
-        self.assertEqual(result.stdout, "")
-        for needle in ("reaction-types.toml", "reduction", "label"):
-            with self.subTest(needle=needle):
-                self.assertIn(needle, result.stderr)
+    def test_a_registry_that_is_not_utf_8(self) -> None:
+        """Requirement: Registry errors are configuration errors (cannot
+        be read as UTF-8 JSON)."""
+        def change(registry: Path) -> None:
+            registry.write_bytes(b'{"format": 1, "x": "Caf\xe9"}')
+        self.assert_configuration_error(
+            registry_variant_run(change), "registry.json")
 
-    def test_missing_vocabulary_file_is_no_configuration_error(
+    def test_a_table_that_is_not_a_snapshot(self) -> None:
+        """Scenario: Not a snapshot (through the validator)."""
+        cases = {
+            "format 2": lambda t: t.update(format=2),
+            "format a string": lambda t: t.update(format="1"),
+            "no format": lambda t: t.pop("format"),
+            "substances a table": lambda t: t.update(substances={}),
+            "a substance that is no table":
+                lambda t: t.update(substances=["ethyl-acetate"]),
+            "vocabularies a list": lambda t: t.update(vocabularies=[]),
+            "a vocabulary that is no list":
+                lambda t: t["vocabularies"].update(projects={}),
+        }
+        for name, step in cases.items():
+            with self.subTest(case=name):
+                result = registry_variant_run(edit_registry(step))
+                self.assert_configuration_error(result, "registry.json")
+
+    def test_a_file_holding_a_list_is_not_a_snapshot(self) -> None:
+        """Requirement: Reading the registry (a table of the snapshot's
+        keys)."""
+        def change(registry: Path) -> None:
+            registry.write_text(json.dumps(["format", 1]),
+                                encoding="utf-8")
+        self.assert_configuration_error(
+            registry_variant_run(change), "registry.json")
+
+    def test_a_registry_without_reaction_types_makes_them_unknown(
             self) -> None:
-        """Scenario: Missing vocabulary file."""
-        result = self.run_on_valid_md(delete_reaction_types())
+        """Scenario: No reaction types."""
+        result = registry_variant_run(edit_registry(
+            setting_terms("reaction-types")))
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertNotIn("validate.py: error:", result.stderr)
-        self.assertEqual(len(result.stdout.splitlines()), VALID_MD_FILES)
-        self.assertEqual(len(result.problems), VALID_MD_FILES, result.stdout)
-        for problem in result.problems:
-            self.assertEqual(problem.field, "reaction_types", result.stdout)
-            self.assertIn("unknown reaction type", problem.message)
+        self.assert_one(result, "error", "reaction_types",
+                        "unknown reaction type")
 
-    def test_vocabulary_that_is_not_toml_is_a_configuration_error(
-            self) -> None:
-        """Scenario: Not TOML."""
-        result = self.run_on_valid_md(
-            edit_reaction_types(append_text("[reduction")))
-        self.assert_configuration_error(result, "reaction-types.toml")
-
-    def test_vocabulary_that_is_not_utf_8_is_a_configuration_error(
-            self) -> None:
-        """Requirement: Vocabulary file errors are configuration errors
-        (cannot be read as UTF-8)."""
-        result = self.run_on_valid_md(write_reaction_types(
-            b'[esterification]\nlabel = "Caf\xe9"\n'))
-        self.assert_configuration_error(result, "reaction-types.toml")
-
-    def test_vocabulary_key_that_is_not_a_slug_is_a_configuration_error(
-            self) -> None:
-        """Requirement: Vocabulary file errors are configuration errors
-        (a top-level key that is not a slug)."""
-        result = self.run_on_valid_md(edit_reaction_types(
-            append_text('\n[Bad_Key]\nlabel = "Bad"')))
-        self.assert_configuration_error(
-            result, "reaction-types.toml", "Bad_Key")
-
-    def test_a_value_that_is_not_a_table_is_a_configuration_error(
-            self) -> None:
-        """Requirement: Vocabulary file errors are configuration errors
-        (an entry that is not a table)."""
-        result = self.run_on_valid_md(write_reaction_types(
-            'reduction = "Reduction"\n'))
-        self.assert_configuration_error(
-            result, "reaction-types.toml", "reduction")
-
-    def test_a_label_that_is_empty_is_a_configuration_error(self) -> None:
-        """Requirement: Vocabulary file errors are configuration errors
-        (a label that is not a non-empty string)."""
-        for label in ('""', '" "', "5"):
-            with self.subTest(label=label):
-                result = self.run_on_valid_md(edit_reaction_types(
-                    replace_text('label = "Reduction"',
-                                 f"label = {label}")))
-                self.assert_configuration_error(
-                    result, "reaction-types.toml", "reduction", "label")
-
-    def test_a_label_de_that_is_not_a_string_is_a_configuration_error(
-            self) -> None:
-        """Requirement: Vocabulary file errors are configuration errors
-        (an empty or non-string label_de)."""
-        for label_de in ('""', "5", "true"):
-            with self.subTest(label_de=label_de):
-                result = self.run_on_valid_md(edit_reaction_types(
-                    replace_text('label = "Reduction"',
-                                 f'label = "Reduction"\nlabel_de = '
-                                 f"{label_de}")))
-                self.assert_configuration_error(
-                    result, "reaction-types.toml", "reduction", "label_de")
-
-    def test_a_vocabulary_without_a_value_is_a_configuration_error(
-            self) -> None:
-        """Requirement: Vocabulary file errors are configuration errors
-        (no value)."""
-        for content in ("", "# Nothing here yet.\n"):
-            with self.subTest(content=content):
-                result = self.run_on_valid_md(write_reaction_types(content))
-                self.assert_configuration_error(
-                    result, "reaction-types.toml")
-
-    def test_a_broken_vocabulary_stops_a_run_without_procedures(
-            self) -> None:
-        """Requirement: Vocabulary file errors are configuration errors
-        (the file is read whatever the content roots hold)."""
-        with tempfile.TemporaryDirectory() as tmp:
-            empty = Path(tmp) / "content"
-            empty.mkdir()
-            result = settings_variant_run(
-                write_reaction_types("[reduction\n"), roots=[empty])
-        self.assert_configuration_error(result, "reaction-types.toml")
+    def test_the_digest_is_not_checked(self) -> None:
+        """Requirement: Reading the registry (a table is a snapshot by
+        its format and the shapes of its vocabularies and substances)."""
+        def change(registry: Path) -> None:
+            table = load_snapshot(registry)
+            table["digest"] = "0" * 64
+            registry.write_text(json.dumps(table), encoding="utf-8")
+        self.assert_clean(registry_variant_run(change))
 
 
 class ProblemReportFormatTests(ValidatorTestCase):
@@ -317,8 +264,8 @@ class ProblemReportFormatTests(ValidatorTestCase):
     def test_summary_line_goes_to_stderr(self) -> None:
         """Scenario: Summary line."""
         result = valid_set_run()
-        self.assertIn(f"validated {4 + COMPOUND_FILES} files: "
-                      "0 errors, 0 warnings", result.stderr)
+        self.assertIn("validated 4 files: 0 errors, 0 warnings",
+                      result.stderr)
 
     def test_identical_input_gives_byte_identical_output(self) -> None:
         """Scenario: Deterministic output."""
@@ -374,7 +321,7 @@ class FileDiscoveryTests(ValidatorTestCase):
             (root / ".gitkeep").write_text("", encoding="utf-8")
             result = fixture_run(root)
         self.assert_clean(result)
-        self.assertIn(f"validated {1 + COMPOUND_FILES} files",
+        self.assertIn("validated 1 files: 0 errors, 0 warnings",
                       result.stderr)
 
 

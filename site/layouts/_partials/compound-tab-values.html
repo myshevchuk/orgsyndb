@@ -1,7 +1,7 @@
-{{- /* Returns the values of the field declared with tabs = true that have a
+{{- /* Returns the values of the registry field with tabs = true that have a
 tab page: the top-level values of its vocabulary, in the field data's
 order, that some entry of the registry sets or that are an ancestor of a
-value some entry sets. Returns an empty slice when no field declares
+value some entry sets. Returns an empty slice when no field has
 tabs = true. */ -}}
 {{ $tabs := slice -}}
 {{ with where site.Data.collection.fields.compound "tabs" true -}}

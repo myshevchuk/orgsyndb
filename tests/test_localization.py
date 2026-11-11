@@ -71,12 +71,12 @@ def run(files: dict[str, str]) -> support.Result:
 
 
 def run_with_template_registry(files: dict[str, str]) -> support.Result:
-    """``run`` against a registry holding the compound template as
+    """``run`` against a registry holding the substance
     ``example-compound``, the compound the procedure templates name, and
-    the starter reaction types."""
+    the reaction type they name."""
     with root_of(files) as root, support.template_registry() as registry, \
-            support.starter_settings() as settings:
-        return fixture_run(root, compounds=registry, settings=settings)
+            support.format_settings() as settings:
+        return fixture_run(root, registry=registry, settings=settings)
 
 
 class TranslatedFileTests(ValidatorTestCase):
@@ -312,16 +312,6 @@ class TranslatedFileTests(ValidatorTestCase):
         self.assert_clean(run({"OSDB-0100-baseline.md": baseline(
             replace("scale", 'scale = "2,5 mmol"'))}))
 
-    def test_empty_german_label_is_a_configuration_error(self) -> None:
-        """Scenario: Vocabulary with German labels."""
-        result = support.settings_variant_run(
-            support.edit_reaction_types(support.replace_text(
-                'label = "Esterification"',
-                'label = "Esterification"\nlabel_de = " "')))
-        self.assertEqual(result.returncode, 2, result.stdout)
-        self.assertEqual(result.stdout, "")
-        self.assertIn("label_de", result.stderr)
-
 
 class GermanStubTests(unittest.TestCase):
     def test_german_stubs_are_filled_and_valid(self) -> None:
@@ -346,9 +336,9 @@ class GermanStubTests(unittest.TestCase):
         self.assertEqual(data["title"], "Ölsäure")
         self.assertEqual(data["date"], dt.datetime.fromisoformat(NOW))
         with support.template_registry() as registry, \
-                support.starter_settings() as settings:
+                support.format_settings() as settings:
             checked = support.run_validator(
-                ["--compounds", registry, "--settings", settings,
+                ["--registry", registry, "--settings", settings,
                  stub.parent])
         self.assertEqual((checked.returncode, checked.stdout), (0, ""),
                          checked.stderr)
@@ -621,17 +611,6 @@ class SiteLanguageTests(unittest.TestCase):
             self.assertTrue(
                 any(v.startswith(start) and len(v) > len(start)
                     for v in values), f"no {start!r}<label> string")
-
-    def test_every_reaction_type_has_a_german_label(self) -> None:
-        """Scenario: Vocabulary with German labels."""
-        self.assertTrue(support.STARTER_REACTION_TYPES.is_file(),
-                        "templates/reaction-types.toml does not exist")
-        data = tomllib.loads(support.STARTER_REACTION_TYPES.read_text(
-            encoding="utf-8"))
-        self.assertTrue(data)
-        for slug, entry in data.items():
-            with self.subTest(slug=slug):
-                self.assertTrue(entry.get("label_de", "").strip())
 
     def test_site_pages_are_one_per_page(self) -> None:
         """Scenario: Site locale (content pages)."""

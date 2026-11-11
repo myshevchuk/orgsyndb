@@ -1,7 +1,7 @@
 # Procedure schema reference
 
-This reference defines valid OrgSynDB procedures, compound records and synthesis
-sequences.
+This reference defines valid OrgSynDB procedures and synthesis sequences,
+and the registry data they use.
 Use it to look up the exact spelling, type, and rule for a field, or to
 interpret a message from
 `tools/validate.py` or `orgsyndb export`.
@@ -75,7 +75,7 @@ The site derives the kind from `scope`; do not add a `kind` field.
 | `lastmod` | When the procedure was last changed. | Offset datetime | Yes | Must be unquoted, must not be earlier than `date`, and should use the Europe/Berlin offset in force at that instant. | `lastmod = 2026-10-19T17:42:05+02:00` |
 | `authors` | Everyone who wrote the procedure. | Non-empty array of non-empty strings | Yes | Must contain at least one name. | `authors = ["A. Example"]` |
 | `status` | The procedure's workflow state. | String | Yes | Must be exactly `draft`, `checked`, or `retired`. | `status = "draft"` |
-| `reaction_types` | The controlled reaction category. | Array of strings | Yes | Must contain exactly one slug from the collection's `vocabularies/reaction-types.toml`. | `reaction_types = ["esterification"]` |
+| `reaction_types` | The controlled reaction category. | Array of strings | Yes | Must contain exactly one slug from the registry's `reaction-types` vocabulary. | `reaction_types = ["esterification"]` |
 | `tags` | Search terms for the procedure. | Non-empty array of strings | Yes | Every tag must contain lowercase letters or digits, with single hyphens between groups. | `tags = ["acid-catalysed"]` |
 | `products` | The compounds made and their yields. | Non-empty array of tables | Only without `scope` | Every entry must contain `compound` and `yield_percent`, as described below. | `products = [{ compound = "ethyl-acetate", yield_percent = 85 }]` |
 | `scale` | The amount of product the procedure makes; the typical scale for a general procedure. | String | Yes | Must contain a number, whitespace, and a unit token. The number may have a decimal point or a decimal comma. The unit vocabulary is not restricted. | `scale = "25 mmol"` |
@@ -172,59 +172,67 @@ Omit an optional field when it does not apply.
 
 ## Compound registry
 
-Store each compound once so several procedures and their translations can
-refer to the same data. The collection's `compounds/` directory holds one
-UTF-8 TOML file per compound, named `<key>.toml`. The key is the compound's
-identity: two procedures name the same compound exactly when they use the
-same key. Structures are not compared to establish identity.
+Procedures and sequences share the substances of the lab application's
+registry. Create and edit substances at `/lab/registry/` in that application.
+A compound key is a substance's key: two procedures name the same compound
+exactly when they use the same key. Structures are not compared to establish
+identity. A key matches `[a-z0-9]+(-[a-z0-9]+)*`: lowercase letters and digits,
+with single hyphens between groups, for example `ethyl-acetate`. A substance
+that no procedure names is valid.
 
-A key matches `[a-z0-9]+(-[a-z0-9]+)*`: lowercase letters and digits, with
-single hyphens between groups, for example `ethyl-acetate`. Use the key
-without `.toml` in `products` and `substrates`. A compound that no procedure
-names is valid. Copy [templates/compound.toml](../templates/compound.toml)
-when adding a compound. This is a standalone TOML file, with no `+++` lines
-or `[product]` heading.
-
-| Field | Meaning | TOML type | Required | Value rule | Example |
-|---|---|---|---|---|---|
-| `name` | The compound name on an English site. | Non-empty string | Yes | Must not be empty. | `name = "Ethyl acetate"` |
-| `name_de` | The compound name on a German site. | Non-empty string | No | Must not be empty when present. A German site uses `name` when absent. | `name_de = "Ethylacetat"` |
-| `formula` | The molecular formula. | Non-empty string | Yes | Must not be empty. | `formula = "C4H8O2"` |
-| `mw` | Molecular weight in g/mol. | Integer or float | Yes | Must be finite and greater than zero. Do not quote it. A boolean is not a number. | `mw = 88.11` |
-| `smiles` | The structure in SMILES, a text notation for molecular structures. | Non-empty string | Yes | Must not be empty. | `smiles = "CCOC(C)=O"` |
-| `cas` | The CAS Registry Number, a chemical registry identifier. | String | No | Must have 2–7 digits, a hyphen, 2 digits, a hyphen, and the check digit. The check digit must verify. | `cas = "141-78-6"` |
-| `structure_image` | The structure image under the static directory. | String | No | Must be a relative path under `structures/`, contain no `..` component, end in `.svg` or `.png`, and name an existing file. | `structure_image = "structures/ethyl-acetate.svg"` |
-
-For example, `compounds/ethyl-acetate.toml` can contain:
+The collection names its registry in `orgsyndb.toml`:
 
 ```toml
-name = "Ethyl acetate"
-name_de = "Ethylacetat"
-formula = "C4H8O2"
-mw = 88.11
-smiles = "CCOC(C)=O"
-cas = "141-78-6"
+format = 1
+registry = "http://localhost:8000/lab/registry/snapshot.json"
 ```
 
-The validator checks that `formula` and `smiles` are non-empty strings. It
-does not check chemical formula syntax, SMILES validity, or whether the
-molecular weight agrees with the formula.
+`registry` is a non-empty string. It names an `http://` or `https://` address
+of the lab application's snapshot, or a snapshot file's path, relative to
+the collection unless absolute. A non-empty `ORGSYNDB_REGISTRY` environment
+variable overrides it. The demo uses
+`registry = "../../webapp/demo/registry.json"` and needs no running lab
+application. Collection directories named `compounds/` or `vocabularies/`
+are ignored.
 
-The `--static-dir` argument controls where the validator resolves a compound's
-`structure_image` or a procedure's `scheme_image`. Without it, the validator
-uses `static` in the current directory. `orgsyndb validate` passes the
-collection's `static/`. A path with the wrong prefix or suffix is not checked
-for existence.
+`orgsyndb validate`, `build`, `serve`, `pdf` and `index` read this registry.
+The first four keep the snapshot in `build/registry.json` and its source in
+`build/registry.source`; `index` writes nothing. Requests to an address have
+a 30-second timeout. If the address cannot be read or does not return a
+snapshot, the tools use the kept copy only when `build/registry.source`
+names the same address. They warn with:
 
-The registry has no subdirectories. A subdirectory is a `file_name` error
-containing `subdirectories are not supported`. Dotfiles are skipped
-silently. Any other file not named `<key>.toml` is a `file_name` error
-containing `must be named <key>.toml`, and defines no compound. A file that
-cannot be read as UTF-8 TOML gets a `toml` error and defines no compound;
-a parse error contains `invalid TOML`. A missing required field produces
-`required field missing`. A compound may also set fields declared by its
-collection. Only keys outside the built-in fields and those declarations
-produce `unknown field` warnings.
+```text
+orgsyndb: warning: cannot read the registry: <address>: <reason>; using the copy in build/registry.json, digest <digest>
+```
+
+Without a matching copy, the command fails with an error naming the address.
+A missing or unreadable snapshot file also fails; it has no fallback.
+
+The snapshot, a saved copy of the lab registry, is UTF-8 JSON in format 1.
+Its `digest` is a fingerprint of its contents. It supplies the vocabularies
+`chemical-classes`, `inventory-groups`, `projects` and `reaction-types`, and
+the substances. The site uses each substance's names, formula, molar mass
+(`mw`, in g/mol), SMILES (a text notation for molecular structures), CAS
+Registry Number (`cas`), article number, short name, chemical classes and
+group. An English site uses `name`; a German site uses `name_de` when
+supplied, otherwise `name`. Without formula, molar mass or SMILES, the
+substance has an empty directory cell, no corresponding search text and no
+such fact on its page. The lab application checks substance values; the
+collection validator checks references to their keys.
+
+To supply a structure image, put `static/structures/<key>.svg` or
+`static/structures/<key>.png` in the collection. The build uses the SVG when
+both exist. A substance without either has no image. There is no
+`structure_image` field to set. The build writes one
+`build/data/compounds/<key>.json` per substance and sets `structure_image`
+in that generated data only when it finds an image. Hugo reads these files
+as `data/compounds`.
+
+For a procedure's `scheme_image`, `--static-dir` controls where the validator
+resolves the path. It defaults to `static` in the current directory;
+`orgsyndb validate` passes the collection's `static/`. A path with the wrong
+prefix or suffix is not checked for existence.
 
 A compound page adds **Sequences** after **Used in** when any sequence names
 it as its target. The list links those sequences by title, ordered by ID.
@@ -240,7 +248,8 @@ Read the tree as nested lists. Under a compound, the steps are alternatives:
 any one will do. Under a step, all listed starting materials are needed.
 Each starting material links to its compound page and has its own steps
 below it, down to compounds no procedure makes. Compound links carry the
-values of fields declared `beside = true`, as elsewhere on the site.
+substance’s article number and short name when supplied, as elsewhere on
+the site.
 
 Each step shows the procedure's ID and title, entry number for a general
 procedure, yield and status, as in **Made by**. Steps are ordered by
@@ -259,51 +268,47 @@ the largest depth that fits. When more than 200 steps make the compound
 directly, the tree shows only those. A compound cut off by a limit ends with
 **more steps on its page**; follow its link to continue.
 
-The build derives routes automatically. You add nothing to a procedure,
-a compound file or `orgsyndb.toml` for them. Compound pages remain outside
+The build derives routes automatically. You add nothing to a procedure or
+`orgsyndb.toml` for them. Compound pages remain outside
 the search index, so routes do not change search.
 
 ## Collection field declarations
 
-To record extra data such as item numbers, chemical classes or procedure
-projects, declare fields in the collection's `orgsyndb.toml`. This UTF-8
-TOML file must contain `format = 1` as an integer. Its only other allowed
-top-level key is `fields`, a table allowing only `compound` and `procedure`, both
-optional. Without `fields`, the collection declares no extra fields.
+To record extra procedure data such as a lab-notebook reference or project,
+declare fields in the collection's `orgsyndb.toml`. This UTF-8 TOML file must
+contain `format = 1` as an integer. The other allowed top-level keys are
+`registry` and `fields`. `registry` names the snapshot as described under
+[Compound registry](#compound-registry). `fields` is an optional table whose
+only allowed key is `procedure`, an array of field declarations. Without
+`fields` or `fields.procedure`, the collection declares no extra procedure
+fields.
 
-Write one `[[fields.compound]]` table per field, in the order you want the
-site to show them. A single `[fields.compound]` table is invalid. For
-example, this declaration comes from the
-[demo settings](../examples/demo/orgsyndb.toml):
+Compounds have four built-in registry fields, in this order. Their
+presentation is fixed for every collection:
 
-```toml
-format = 1
+| Key | Value from the substance | Type and vocabulary | Label (English / German) | Display |
+|---|---|---|---|---|
+| `article_number` | Article number | Text | Article no. / Artikelnr. | Directory column, search, beside links |
+| `short_name` | Short name | Text | Short name / Kurzname | Search, beside links |
+| `chemical_class` | `chemical_classes`, in their order | Multiple choice, `chemical-classes` | Chemical class / Stoffklasse | Directory column, filter |
+| `group` | Group | Single choice, `inventory-groups` | Group / Gruppe | Filter, tabs |
 
-[[fields.compound]]
-key = "item_number"
-type = "text"
-label = "Item no."
-label_de = "Artikelnr."
-unique = true
-pattern = 'CH-\d{4}'
-column = true
-search = true
-beside = true
-```
+Set these values in the lab application. The collection declares only
+procedure fields; `fields.compound` is a configuration error.
 
 ### Declaration keys
 
-The following tables describe compound declarations. Procedure declarations
-use the same options with the exceptions in the next subsection.
+The following tables describe procedure declarations. Write one
+`[[fields.procedure]]` table per field; a single `[fields.procedure]`
+table is invalid.
 
 | Key | TOML type | Required or default | Rule |
 |---|---|---|---|
-| `key` | String | Required | Matches `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`: lowercase letters and digits, words joined by single underscores, starting with a letter. Must be declared once, must not end in `_de`, and must not be a built-in key: `name`, `name_de`, `formula`, `mw`, `smiles`, `cas` or `structure_image`. The catalogue also reserves `id`, `title`, `created`, `modified`, `text`, `q`, `sort` and `view` for its rows and address. |
+| `key` | String | Required | Matches `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`: lowercase letters and digits, words joined by single underscores, starting with a letter. Must be declared once, must not end in `_de`, and must avoid the reserved procedure keys listed below. |
 | `type` | String | Required | One of `text`, `number`, `boolean` or `choice`. |
 | `label` | Non-empty string | Required | The field's name on an English site. |
 | `label_de` | Non-empty string | Optional | The field's name on a German site; without it, the site uses `label`. |
-| `required` | Boolean | `false` | When `true`, every compound must set the field. |
-| `column` | Boolean | `false` | When `true`, the compound directory shows the field as a column. |
+| `required` | Boolean | `false` | When `true`, every procedure must set the field, including a general procedure. |
 
 Only the following additional keys are allowed for each type. Using an
 option on another type is a configuration error.
@@ -311,27 +316,13 @@ option on another type is a configuration error.
 | Key | Field type | TOML type | Required or default | Rule |
 |---|---|---|---|---|
 | `pattern` | `text` | String | Optional | A valid Python regular expression that the whole value must match. |
-| `search` | `text` | Boolean | `false` | When `true`, the compound catalogue's search matches the field's values. |
-| `beside` | `text`, `number` | Boolean | `false` | When `true`, set values follow compound links; see [Display on the site](#display-on-the-site). |
-| `unique` | `text`, `number` | Boolean | `false` | No two compounds may set the same valid value. |
+| `unique` | `text`, `number` | Boolean | `false` | No two procedures may set the same valid value; language variants count as one. |
 | `min` | `number` | Integer or float | Optional | Finite inclusive lower bound; must not exceed `max` when both are set. A boolean is not a number. |
 | `max` | `number` | Integer or float | Optional | Finite inclusive upper bound. A boolean is not a number. |
 | `unit` | `number` | Non-empty string | Optional | Written after the number, separated by a space. |
-| `vocabulary` | `choice` | String | Required | Names `vocabularies/<name>.toml` beside `orgsyndb.toml`, without the directory or extension. The name matches `[a-z0-9]+(-[a-z0-9]+)*`. |
-| `multiple` | `choice` | Boolean | `false` | When `true`, the compound supplies a non-empty list of distinct values instead of one string. |
-| `facet` | `boolean`, `choice` | Boolean | `false` | When `true`, the compound catalogue offers the field as a filter. |
-| `tabs` | `choice` | Boolean | `false` | When `true`, divides the compound directory into tab pages by the vocabulary's top-level values. At most one field may set `tabs = true`; it may also be a facet. |
-
-The demo sets `beside = true` on `item_number` and `short_name`.
-It also declares `short_name` as text with `search = true`,
-`chemical_class` as a required choice with `multiple = true`, `column = true`
-and `facet = true`, `stock` as a number with `min = 0` and `unit = "g"`,
-`in_house` as a boolean with `facet = true`, and finally `group` as a required
-choice with `facet = true`, `tabs = true` and
-`vocabulary = "inventory-groups"`.
-The `group` labels are **Group** and **Gruppe**. Its vocabulary places
-`starting-materials` and `reagents` under `purchased`, and `intermediates`
-and `final-products` under `synthesised`.
+| `vocabulary` | `choice` | String | Required | Names one of the registry vocabularies: `chemical-classes`, `inventory-groups`, `projects` or `reaction-types`. |
+| `multiple` | `choice` | Boolean | `false` | When `true`, the procedure supplies a non-empty list of distinct term keys instead of one string. |
+| `facet` | `boolean`, `choice` | Boolean | `false` | When `true`, the procedure catalogues offer the field as a filter. |
 
 ### Procedure field declarations
 
@@ -358,7 +349,7 @@ vocabulary = "projects"
 facet = true
 ```
 
-Use the declaration keys, types and defaults above, with these changes:
+Use the declaration keys, types and defaults above. These rules also apply:
 
 - `column`, `search`, `tabs` and `beside` are never allowed, even with
   `false`.
@@ -370,8 +361,8 @@ Use the declaration keys, types and defaults above, with these changes:
 - `facet = true`, available for `boolean` and `choice`, makes the field a
   filter of the procedure catalogues. The default is `false`.
 - `key` must match `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`, must not end in `_de`,
-  and must occur only once within `fields.procedure`. A compound field and a
-  procedure field may share a key. Procedure keys must avoid these groups:
+  and must occur only once within `fields.procedure`. Procedure keys must
+  avoid these groups:
 
   **Procedure schema:** `id`, `slug`, `title`, `date`, `lastmod`, `authors`,
   `status`, `reaction_types`, `tags`, `products`, `scale`, `hazards`, `substrates`,
@@ -387,8 +378,8 @@ Use the declaration keys, types and defaults above, with these changes:
 
   **Procedure catalogue:** `tag`, `created`, `text`, `q`, `sort`, `view`.
 
-Compound and procedure choice fields share `vocabularies/` beside
-`orgsyndb.toml`. A vocabulary named by several fields is read once.
+Procedure choice fields use the terms of their named registry vocabulary.
+A choice may name a term at any level of that vocabulary.
 
 Set procedure values as top-level keys in Markdown TOML front matter,
 before any table. The demo's aspirin procedure sets these after `scale`:
@@ -407,7 +398,7 @@ procedure fields is required. A new demo procedure may omit them; any
 
 Every Markdown procedure and Org export is checked against the procedure
 declarations. Value errors use the field's key on the procedure's path and
-the [compound value messages](#compound-values-and-messages), including
+the [procedure value messages](#procedure-values-and-messages), including
 `required field missing`, type, pattern, bound and choice-list errors.
 For `unique`, the message is `"<value>" is also set by <other procedure IDs>`;
 numbers appear without quotes. The comparison uses one reference variant
@@ -419,75 +410,47 @@ For Org syntax and its string-typing limit, see
 
 ### Vocabularies
 
-A vocabulary lists the values a choice field accepts. Store it as UTF-8
-TOML in `vocabularies/<name>.toml`, beside the settings file. The file name
-without `.toml` and each top-level value key must match
-`[a-z0-9]+(-[a-z0-9]+)*`: lowercase letters and digits with single hyphens
-between groups. Each value is a table with these keys and no others:
+A vocabulary lists the terms a choice field accepts. All four vocabularies
+come from the registry: `chemical-classes`, `inventory-groups`, `projects`
+and `reaction-types`. Create and edit terms in the lab application.
+A procedure stores a term's key; the site shows its label.
 
-| Key | TOML type | Required | Rule |
-|---|---|---|---|
-| `label` | Non-empty string | Yes | The value's name on an English site. |
-| `label_de` | Non-empty string | No | The value's name on a German site; without it, the site uses `label`. |
-| `parent` | String | No | Another value key in the same file, under which this value is filed. |
+Each term has an English `label` and may have `label_de`, its German label.
+A German site uses `label_de` when supplied, otherwise `label`.
+`chemical-classes`, `inventory-groups` and `projects` may have several
+levels: a term's `parent` names another term in the same vocabulary.
+Following parents must reach a term without a parent; a term cannot be its
+own ancestor. There is no limit on the number of levels. Choices may select
+terms at any level. For example, the demo's `esters` is filed under
+`acid-derivatives`, which is filed under `carbonyl-compounds`.
+Reaction types have one level.
 
-A vocabulary must contain at least one value. Following `parent` must
-eventually reach a value without a parent; a value must never be its own
-ancestor. There is no limit on the number of levels, and compounds may
-choose values at any level. The shape is the same as the reaction-type
-vocabulary, with the addition of `parent`.
-
-For example, the
-[demo vocabulary](../examples/demo/vocabularies/chemical-classes.toml)
-contains:
-
-```toml
-[carbonyl-compounds]
-label = "Carbonyl compounds"
-label_de = "Carbonylverbindungen"
-
-[acid-derivatives]
-label = "Carboxylic acid derivatives"
-label_de = "Carbonsäurederivate"
-parent = "carbonyl-compounds"
-
-[esters]
-label = "Esters"
-label_de = "Ester"
-parent = "acid-derivatives"
-```
-
-The collection may omit `vocabularies/` when no field needs it and the
-collection needs no reaction types. `init` creates the directory with the
-starter `reaction-types.toml`; add vocabularies for declared fields as needed.
+Filters and tabs list each term followed by the terms filed under it,
+recursively, with siblings in key order. Selecting a parent in a filter
+also matches values filed under its descendants.
 
 ### Compound values and messages
 
-Set each declared field as a plain top-level key in the compound file,
-alongside `name`, `cas` and the other built-in fields. For example, the
-demo's `methyl-salicylate.toml` sets:
+The lab application checks substance values. The collection validator does
+not report field-value errors on individual substances.
 
-```toml
-chemical_class = ["esters", "phenols"]
-group = "starting-materials"
+A substance keyed `group` conflicts with `/compounds/group/`, the directory
+of the group tabs. The lab application refuses this key, so only a snapshot
+file made another way can hold it. The validator reports one error on the snapshot path
+as passed to `--registry`, under `substances`:
+
+```text
+the substance "group" has the key of the directory of the compound tabs, /compounds/group/, which no substance may take
 ```
 
-The chemical-class vocabulary defines both classes. The demo requires
-`chemical_class` and `group` for every compound. Its optional `item_number`
-is the article number printed on delivery notes. Set it only for an end
-product that has been delivered, using a unique number with `CH-` followed
-by four digits. Only six final products in the demo set it. Set `group`
-to `starting-materials`, `reagents`, `intermediates` or `final-products`
-from [`vocabularies/inventory-groups.toml`](../examples/demo/vocabularies/inventory-groups.toml).
-The compound template's closing note tells you to add the fields your
-collection declares as further lines of the same form.
+### Procedure values and messages
 
-Value problems are errors on the compound file's path, under the declared
-field's key:
+Set declared procedure fields as top-level keys in front matter. Value
+problems are errors on the procedure file's path, under the declared key:
 
 | Field type or rule | Message | Meaning |
 |---|---|---|
-| `required = true` | `required field missing` | Set the field in every compound. |
+| `required = true` | `required field missing` | Set the field in every procedure, including a general procedure. |
 | `text`, single `choice` | `must be a string` | Put the value in quotes. |
 | `text` | `must not be empty` | Supply non-empty text. |
 | `text` with `pattern` | `must match the pattern <pattern>` | The whole string must match the declared pattern. |
@@ -495,70 +458,70 @@ field's key:
 | `number` with `min` | `must be at least <min>` | Increase the value to the inclusive lower bound or above. |
 | `number` with `max` | `must be at most <max>` | Reduce the value to the inclusive upper bound or below. |
 | `boolean` | `must be true or false, unquoted` | Use `true` or `false` without quotes. |
-| `choice` | `unknown value "<v>"; see vocabularies/<name>.toml for the allowed values` | Use a value key from the named vocabulary, at any level. |
-| `choice` with `multiple = true` | `must be a list of strings, e.g. ["<a value>"]` | Supply a list of quoted value keys. The example uses a value from the vocabulary. |
+| `choice` | `unknown value "<v>" of the vocabulary <name>` | Use a term key from the named registry vocabulary, at any level. |
+| `choice` with `multiple = true` | `must be a list of strings, e.g. ["<a term>"]` | Supply a list of quoted term keys. The example uses the first term in the snapshot, or `a term` if the vocabulary is empty. |
 | `choice` with `multiple = true` | `must not be empty` | Supply at least one choice. |
 | `choice` with `multiple = true` | `repeats "<v>"` | Remove the repeated value. |
-| `unique = true` | `"<value>" is also set by <other compound keys>` | Use a value no other compound sets. For numbers, the message shows the value without quotes. |
+| `unique = true` | `"<value>" is also set by <other procedure IDs>` | Use a value no other procedure sets. For numbers, the message shows the value without quotes. |
 
 A value of the wrong type produces only that type error. Empty text with a
 pattern produces only `must not be empty`. A list of choices produces one
 `unknown value` error per unknown string. Uniqueness checks compare values
-that pass their field's checks and report every compound sharing a value.
-
-A compound whose key equals the key of the field with `tabs = true`
-produces a `file_name` error containing `tabs`. The field's key names the
-directory of the tab pages at `/compounds/<field key>/<value>/`; rename the
-compound file to use another key. Only a one-word field key can collide:
-compound keys use hyphens between words, while field keys use underscores.
+that pass their field's checks and report every procedure sharing a value,
+using one reference variant per procedure ID.
 
 ### Configuration errors
 
-The validator rejects settings or vocabularies that break any rule above,
-including invalid regular expressions, non-finite bounds, `min` greater
-than `max`, duplicate declarations, missing vocabulary files and parent
-loops. A file explicitly named by `--settings` must exist. Settings and
-vocabulary files must be readable UTF-8 TOML.
+The validator rejects settings that break a declaration rule, including
+invalid regular expressions, non-finite bounds, `min` greater than `max`
+and duplicate declarations. A file explicitly named by `--settings` must
+exist. Settings must be readable UTF-8 TOML. A registry file must exist,
+be readable UTF-8 JSON and contain a format-1 snapshot with the four
+vocabularies and a list of substances.
 
 These are configuration errors: exit status 2, nothing on standard output,
 and `validate.py: error: ...` on standard error. Messages identify the
-settings or vocabulary file, the field key when valid, and the offending
-key or value. An option for another type produces a message such as
+settings or registry file, the field key when valid, and the offending key
+or value. An option for another type produces a message such as
 `a number field does not take pattern`; an unknown option produces
-`unknown key <key>`. An unknown top-level settings key produces
-`unknown key <key>; only format and fields are allowed`.
+`unknown key <key>`. An unknown top-level setting produces
+`unknown key <key>; only format, registry, fields are allowed`.
 
-Using `beside` on a `boolean` or `choice` field produces
-`a boolean field does not take beside` or `a choice field does not take beside`.
-A non-boolean value on a `text` or `number` field produces
-`beside must be true or false, unquoted`.
-
-Setting `tabs = true` on more than one field is a configuration error:
-`fields a, b each set tabs = true; at most one field may`, where `a, b`
-are the field keys. Using `tabs` on a type other than `choice` is also a
-configuration error, as with other type-specific options.
-
-`fields` accepts only `compound` and `procedure`. An entry such as
-`fields.reagent` produces `only fields.compound and fields.procedure are allowed`.
-A single `[fields.procedure]` table produces
+`fields` accepts only `procedure`. An entry such as `fields.compound` or
+`fields.reagent` produces `unknown key fields.<key>; only fields.procedure
+is allowed: a collection declares the fields of its procedures, and its
+compounds have the registry's`. A single `[fields.procedure]` table produces
 `fields.procedure must be an array of tables, each written [[fields.procedure]]`.
-Procedure declarations have the same configuration checks as compound
-declarations, with these additional messages:
 
 | Problem | Message or identifying text |
 |---|---|
-| Withheld option | `a procedure field does not take column` (or `search`, `tabs`, `beside`) |
+| Missing registry file | `registry file not found` |
+| Registry is not JSON | `not UTF-8 JSON: <reason>` |
+| Registry is not a snapshot | `not a registry snapshot: <reason>` |
+| Invalid `registry` setting | `registry must be the address of the lab application's registry snapshot or the path of a snapshot file, a non-empty string` |
+| Missing choice vocabulary | `vocabulary missing; a choice field names one of the registry's vocabularies, chemical-classes, inventory-groups, projects, reaction-types` |
+| Unknown choice vocabulary | `vocabulary '<name>' is not one of the registry's vocabularies, chemical-classes, inventory-groups, projects, reaction-types` |
+| Withheld option | `a procedure field does not take column` (or `search`, `tabs`, `beside`), even when set to `false` |
 | Procedure-schema key | `declaration 5 of fields.procedure: key 'status' is a key of the procedure schema` |
 | Hugo key | `declaration 5 of fields.procedure: key 'layout' is a front-matter key that Hugo reads` |
 | Catalogue key | `declaration 5 of fields.procedure: key 'tag' is reserved by the procedure catalogue; the reserved keys are tag, created, text, q, sort, view` |
 
 The declaration number is its position within `fields.procedure`. Key errors,
 including duplicates and invalid spelling, identify `fields.procedure`.
+Malformed snapshot errors identify the offending vocabulary, term or
+substance. These check the snapshot's shape and types, not substance values.
 
-The build program checks only the settings file's TOML, `format` and
-top-level keys before running a command. The validator checks the
-declarations and vocabularies, so a broken declaration does not prevent
-`clean` or `new`.
+Commands that read the registry also require a registry source. Without
+`registry` or a non-empty `ORGSYNDB_REGISTRY`, they report `no registry named; set
+registry to the address of the lab application's registry snapshot`,
+followed by an example address and the file-path and environment options.
+An address that cannot be read and has no matching kept copy produces
+`cannot read the registry: <address>: <reason>; there is no copy of it in build/registry.json`.
+
+The build program checks the settings file's TOML, `format`, top-level keys
+and `registry` value before running a command. The validator checks the
+procedure declarations, so a broken declaration does not prevent `clean`
+or `new`.
 
 ### Display on the site
 
@@ -584,79 +547,68 @@ collection. The address uses the declared key, for example
 OR/AND and count rules as compound filters below. Procedure fields do not
 add table columns, values to the **Details** view, or tabs.
 
-Compound pages show set fields after Formula, MW, CAS and SMILES, in
-declaration order, using the field labels in the site's language. Text
-appears as written. Numbers use the site's decimal separator and the
-declared unit, such as `12,5 g` on a German site. Booleans show **Yes** or
-**No**, or **Ja** or **Nein** in German.
+Compound pages show the four built-in fields after Formula, MW, CAS and
+SMILES, omitting absent values. They appear in this order: **Article no.**,
+**Short name**, **Chemical class**, **Group**, with their German labels on a
+German site. Article numbers and short names appear as written.
 
-To show identifiers or short names beside compound links, set
-`beside = true` on their `text` or `number` declarations. The metadata panel's
-**Product**/**Products** and **Starting materials**, a general procedure's
-scope table, a sequence page's scheme and the sequence directory's target
-show these values after each compound link. The link text stays the
-compound's name. One space separates the link from a muted note in
+The metadata panel's **Product**/**Products** and **Starting materials**, a
+general procedure's scope table, a sequence page's scheme, the sequence
+directory's target and compound-page route trees show the substance's
+article number and short name after each compound link. The link text stays
+the compound's name. One space separates the link from a muted note in
 parentheses, such as **Acetic anhydride (Ac2O)** or
-**Acetylsalicylic acid (CH-0010, ASA)** in the demo.
-The note contains only values the compound sets, in declaration order,
-without labels and separated by `, `. Each value appears as on the compound
-page, including the site's decimal separator and unit for numbers.
-A compound with none of these values gets no note. Key facts, the catalogue's
-**Details** view, image alt texts and page titles carry no note.
-The metadata panel is indexed, so procedure search also finds these values.
+**Acetylsalicylic acid (CH-0010, ASA)** in the demo. The note contains only
+values the substance has, article number first, without labels and separated
+by `, `. A substance with neither gets no note. Key facts, the catalogue's
+**Details** view, image alt texts and page titles carry no note. The metadata
+panel is indexed, so procedure search also finds these values.
 
 A choice on a compound page shows the labels of its ancestors and its own
 label joined by ` › `, such as **Carbonyl compounds › Carboxylic acid
-derivatives › Esters**. Multiple choices are separated by `, ` in the
-compound's order. The compound directory adds fields with `column = true`
-after CAS, in declaration order. It shows only each choice's own label,
-leaves unset values as empty cells, and aligns number columns to the right.
+derivatives › Esters**. Multiple chemical classes are separated by `, ` in
+the substance's order. The compound directory adds **Article no.** and
+**Chemical class** columns after CAS. It shows only each class's own label
+and leaves unset values as empty cells.
 
-When a field declares `tabs = true`, `/compounds/` and each tab page begin
-with a row of tabs, styled like the procedure tabs. **All compounds**
-(**Alle Verbindungen** in German) links to `/compounds/`. The remaining
-tabs use the labels of the vocabulary's top-level values, in vocabulary
-order, including only values some compound uses directly or through a
-value filed under them. The current page's tab is marked. A collection
-without a tabs field has no compound tabs or tab pages.
+`/compounds/` and each group tab page begin with a row of tabs, styled like
+the procedure tabs. **All compounds** (**Alle Verbindungen** in German)
+links to `/compounds/`. The remaining tabs use the labels of the
+`inventory-groups` vocabulary's top-level terms, in key order, including
+only terms some substance uses directly or through a term filed under them.
+The current page's tab is marked.
 
-A tab page lives at `/compounds/<field key>/<value>/`, with the value's
-label as its heading and title. It lists compounds that set the value or
-a value filed under it, in name order, whether or not the tabs field is
-a facet. Its count, filters and search work within that list, as on
-`/compounds/`. With `multiple = true`, a compound appears in every tab its
-values lead to. The demo's **Purchased** and **Synthesised** pages are
-`/compounds/group/purchased/` and `/compounds/group/synthesised/`, each with
-ten compounds.
+A tab page lives at `/compounds/group/<value>/`, with the value's label as
+its heading and title. It lists substances that set the value or a value
+filed under it, in name order. Its count, filters and search work within that
+list, as on `/compounds/`. The demo's **Purchased** and **Synthesised** pages
+are `/compounds/group/purchased/` and `/compounds/group/synthesised/`, with
+ten and eleven substances respectively.
 
-On a tab page, filters list only values carried by its compounds. When the
-tabs field is also a facet, its filter leaves out the tab's value and moves
-values filed under it up one level. With a multiple-valued tabs field, the
-compounds' other values remain in the filter. A filter with no values to
-list is omitted. The header search is labelled **Search compounds:
-\<label\>** (**Verbindungen durchsuchen: \<label\>** in German). Tab links
-carry no query or filters. Without JavaScript, a tab page shows its whole list.
+On a tab page, filters list only values carried by its substances. The
+**Group** filter leaves out the tab's value and moves values filed under it
+up one level. A filter with no values to list is omitted. The header search
+is labelled **Search compounds: \<label\>** (**Verbindungen durchsuchen:
+\<label\>** in German). Tab links carry no query or filters. Without
+JavaScript, a tab page shows its whole list.
 
 At `/compounds/`, the directory is a searchable, filterable catalogue of
 every registry entry. Rows stay in order of the name shown in the site's
-language. Fields declared with `facet = true` appear as filters in
-declaration order. A choice filter lists values used by compounds and their
-ancestors as an indented tree, in vocabulary-file order with each parent's
-descendants immediately after it. Selecting a parent also matches compounds
-filed under its descendants: **Carbonyl compounds** includes ketones and
-esters. Boolean filters offer **Yes** and **No** (**Ja** and **Nein** in
-German), each only when some compound sets it.
+language. **Chemical class** and **Group** appear as filters in that order.
+Each lists values used by substances and their ancestors as an indented
+tree. Each term is followed by its descendants, with siblings in key order.
+Selecting a parent also matches compounds filed under its descendants:
+**Carbonyl compounds** includes ketones and esters.
 
 Selections within one filter combine with OR; different filters combine
 with AND. Each value's count includes the search and every other filter,
 excluding its own filter's selections. Selected values appear as small
 buttons (chips) that remove a selection. **Clear all** clears the query and
 selections. The catalogue shows a total count, or **{shown} of {total}
-compounds** while filtering. With no facet fields, it has no filter column
-but keeps the count and search.
+compounds** while filtering.
 
 The header's **Search compounds** field matches English and German names,
-formula, CAS number, SMILES and values of text fields with `search = true`.
+formula, CAS number, SMILES, article number and short name.
 Every query word must match a substring, ignoring case and characters other
 than letters and digits. Searches such as `50-78-2`, `salicyl` and
 `c1ccccc1O` work without a Pagefind index. Outside these catalogues, including
@@ -664,8 +616,8 @@ individual compound pages, the header searches procedures; compound pages
 remain outside the procedure search index.
 
 The address preserves the query and selections, for example
-`/compounds/?q=ester&chemical_class=esters&in_house=true`. Parameters the page
-cannot apply are named in a notice and removed from the address. Search and
+`/compounds/?q=ester&chemical_class=esters&group=final-products`. Parameters
+the page cannot apply are named in a notice and removed from the address. Search and
 filters need JavaScript. Without it, the page shows the complete table and a
 note explaining this.
 
@@ -710,7 +662,7 @@ tag or reaction type. Every other key outside this schema produces an
 | `title` | Non-empty string | Yes | Page heading. | `title = "Aspirin from oil of wintergreen"` |
 | `date` | Offset datetime | Yes | Unquoted; the same date rules as procedures. | `date = 2026-10-23T09:15:00+02:00` |
 | `lastmod` | Offset datetime | Yes | The same rules as `date`; not earlier than `date`. | `lastmod = 2026-10-23T09:40:00+02:00` |
-| `target` | String | Yes | Existing compound key, without `.toml`; a product of the last step. | `target = "acetylsalicylic-acid"` |
+| `target` | String | Yes | Existing substance key in the registry; a product of the last step. | `target = "acetylsalicylic-acid"` |
 | `steps` | Array of tables | Yes | At least two steps, in execution order. | `steps = [{ procedure = "OSDB-0001" }, { procedure = "OSDB-0002" }]` |
 | `steps[n].procedure` | String | In every step | Procedure ID found in the validated content roots, whether exported from Org or written in Markdown. | `procedure = "OSDB-0009"` |
 | `steps[n].entry` | Integer | For general procedures only | Scope entry number from 1 through the number of entries; forbidden for a specific procedure. A boolean is not an integer. | `entry = 1` |
@@ -773,16 +725,12 @@ The following keys are rejected:
 | `url = "/procedures/osdb-0001/"` | The URL is derived from `slug`. | `slug = "osdb-0001"` |
 
 A key declared under `fields.procedure` is checked as a procedure field
-and produces no `unknown field` warning. A key declared only under
-`fields.compound` remains unknown in a procedure, and vice versa.
+and produces no `unknown field` warning.
 
 Any other top-level key produces an `unknown field` warning. This includes
 misspellings such as `checkedby` and the fields `product`, top-level
 `yield_percent`, `precursors` and `structure_image`. An unknown key in a
-`products` entry produces a warning such as `products[1].colour`. Unknown
-fields in a compound record are keys outside both the built-in compound
-fields and the collection's `fields.compound` declarations. They produce
-warnings on its file under the field name.
+`products` entry produces a warning such as `products[1].colour`.
 
 ## Org file-level keywords
 
@@ -840,8 +788,9 @@ lines before `:products`, for example after `:scale`:
 ```
 
 Double-quote strings; leave numbers and booleans unquoted. A multiple choice
-uses a quoted list, for example `:techniques '("reflux" "distillation")`
-when the collection declares that field and those vocabulary values.
+uses a quoted list, for example `:project '("first-year-practical" "advanced-practical")`
+when the collection declares `project` with `multiple = true` and uses the
+demo registry’s `projects` vocabulary.
 
 The ox-hugo/tomelr export cannot preserve every quoted string as text. It
 writes a string without quotes when it reads `true` or `false`, has the form
@@ -912,15 +861,16 @@ the separator:
 ## Reaction-type vocabulary
 
 `reaction_types` contains exactly one slug, a key such as `esterification`,
-from your collection's `vocabularies/reaction-types.toml`, beside
-`orgsyndb.toml`. Use the same slug in front matter in every language. Edit
-this file to add, rename or remove reaction types. A procedure still naming
-a renamed or removed slug fails validation.
+from the registry's `reaction-types` vocabulary. Use the same slug in front
+matter in every language. Create and edit reaction types in the lab
+application. A procedure naming a key the registry does not contain fails
+validation with:
 
-`orgsyndb init DIR` copies the starter list from
-[`templates/reaction-types.toml`](../templates/reaction-types.toml) into this
-file unless it already exists; an existing file stays unchanged. This table
-lists the starter values and their names on English and German sites:
+```text
+unknown reaction type "<value>"; the registry has no such reaction type
+```
+
+The demo registry contains these reaction types:
 
 | Slug | Label | German label |
 |---|---|---|
@@ -940,28 +890,17 @@ lists the starter values and their names on English and German sites:
 | `reduction` | Reduction | Reduktion |
 | `reductive-amination` | Reductive amination | Reduktive Aminierung |
 
-The file must be UTF-8 TOML and contain at least one value. Each top-level
-key must match `[a-z0-9]+(-[a-z0-9]+)*`: lowercase letters and digits with
-single hyphens between groups. Its table must contain a non-empty string
-`label` and may contain a non-empty string `label_de`. No other key is
-allowed. Reaction types form one level and do not take `parent`.
+An English site shows the term's `label`. A German site shows `label_de`
+when supplied, otherwise `label`. The `/reaction_types/` list and the
+catalogue's reaction-type filter sort by the displayed label. Reaction
+types have one level.
 
-An English site shows `label`. A German site shows `label_de`, or `label`
-when `label_de` is absent; an empty `label_de` is invalid. The
-`/reaction_types/` list and the catalogue's reaction-type filter sort by the
-displayed label.
-
-Without the file, the collection has no reaction types. Each procedure then
-reports `unknown reaction type "<v>"; see vocabularies/reaction-types.toml
-for the allowed values`. A collection containing only compounds still
-validates. A declared compound or procedure choice field may name
-`vocabulary = "reaction-types"`; in that case the file must exist, and its
-absence is a configuration error.
-
-An existing file that breaks a vocabulary rule is a configuration error.
-The validator exits 2 and writes `validate.py: error: ...` naming the file
-and, where applicable, the offending value and key. Both `orgsyndb validate`
-and `build` fail on such an error.
+A registry with no reaction-type terms gives the collection none, so each
+procedure's reaction type is unknown. A collection containing only
+substances still validates. A declared procedure choice field may name
+`vocabulary = "reaction-types"` like any of the other registry vocabularies.
+A malformed snapshot is a configuration error; both `orgsyndb validate` and
+`build` fail on it.
 
 ## Procedure body sections
 
@@ -1063,40 +1002,42 @@ marks the procedure with a `lang` attribute.
 
 A German Reagents table has the columns **Reagenz**, **CAS**, **M (g/mol)**,
 **Menge**, **mmol** and **Äquiv.**, and German text uses decimal commas.
-Product yields in `products` or `scope`, scope temperatures and `mw` in
-compound files stay TOML numbers with a decimal point in every language; a
-German site shows them with a comma.
+Product yields in `products` or `scope` and scope temperatures stay TOML
+numbers with a decimal point in every language; a German site shows them
+with a comma. Molar mass comes from the registry and also uses the site’s
+decimal separator.
 
 ## Reading validator output
 
 Run the validator with at least one Markdown content root:
 
 ```text
-tools/validate.py [--settings FILE] [--static-dir DIR] [--compounds DIR] [--sequences DIR] CONTENT_ROOT...
+tools/validate.py [--settings FILE] [--static-dir DIR] [--registry FILE] [--sequences DIR] CONTENT_ROOT...
 ```
 
 Each positional `CONTENT_ROOT` is a directory of Markdown procedures.
 `--static-dir` defaults to `static` in the current directory.
-`--compounds` defaults to `compounds` in the current directory. The
-validator checks every compound file there and resolves procedure keys
-against that registry. A missing registry directory is empty,
-so every key a procedure names is unknown. An existing path that is not a
-directory is a configuration error. `orgsyndb validate` passes
-`--settings orgsyndb.toml --static-dir static --compounds compounds --sequences md/sequences`
-from the collection root, after exporting Org sources.
+It resolves a procedure's `scheme_image` under that directory.
+`--registry` defaults to `build/registry.json` in the current directory.
+It takes a snapshot file, not an address. The validator checks procedure
+and sequence compound keys, reaction types and declared procedure values
+against that snapshot. It checks no substance values. An unreadable file
+or a file that is not a snapshot is a configuration error, exit status 2.
+`--compounds` and `--vocabulary` are not accepted; either is a usage error,
+also exit status 2.
+
+`orgsyndb validate` reads the registry named by the collection, keeps it in
+`build/registry.json`, exports Org sources, then passes
+`--settings orgsyndb.toml --static-dir static --registry build/registry.json --sequences md/sequences`
+and the existing procedure roots `build/export` and `md/procedures` from
+the collection root.
 
 `--settings` names the collection's `orgsyndb.toml`. Without the option,
 the validator uses `orgsyndb.toml` in the working directory; a missing
 default declares no extra fields. A file explicitly named by `--settings`
-must exist. The validator checks the declarations and resolves their
-vocabularies relative to the settings file's directory, then checks each
-compound's and each procedure's values against its declarations. Org
+must exist. The validator checks procedure declarations against the four
+registry vocabularies, then checks each procedure's declared values. Org
 procedures reach this check as Markdown exports.
-
-The validator also reads `vocabularies/reaction-types.toml` beside the
-settings file, even when the default settings file is absent. Without
-`--settings`, this is `vocabularies/reaction-types.toml` in the working
-directory. There is no command-line option for choosing a vocabulary file.
 
 `--sequences` defaults to `md/sequences` in the working directory. A missing
 directory holds no sequences; an existing path that is not a directory is a
@@ -1111,8 +1052,9 @@ Each problem is one line on standard output:
 
 The field is normally a front-matter key. Product fields use dotted names,
 such as `products[1].yield_percent`, counting products from 1. A non-table
-entry is reported under `products[n]`. Compound problems use the compound
-file's path and field name, for example `compounds/ethyl-acetate.toml:mw`.
+entry is reported under `products[n]`. A registry error uses the snapshot
+path as passed to `--registry` and field `substances`: a substance keyed
+`group` conflicts with the group tabs. Change its key in the lab application.
 Other possible fields are `file_name`, `front_matter`, `toml` and `body`.
 
 Declared procedure-field errors name the Markdown source or Org export
@@ -1141,8 +1083,8 @@ yields use the product and substrate messages below, under the scope field.
 For `products`, `must not be empty` means you need at least one entry;
 `must be an array of tables` or `must be a table` identifies the wrong TOML
 shape. `required field missing` names an omitted key. An unknown compound
-is reported as `unknown compound "<key>"; the compound registry has no
-<key>.toml`. Check the spelling and the registry directory. `lists <key>
+is reported as `unknown compound "<key>"; the registry has no substance of this key`.
+Check the spelling and the substance in the lab application. `lists <key>
 twice` means a duplicate product or substrate; `<key> is also a product`
 means a starting material repeats a product.
 
@@ -1151,16 +1093,16 @@ line format. Its fields can also be Org keywords such as `#+CREATED`,
 properties such as `#+PROPERTY` or `:EXPORT_DATE:`, and drawers such as
 `:LOGBOOK:`.
 
-An `error` means a procedure, compound record or sequence is invalid. A `warning`
+An `error` means a procedure, sequence or registry is invalid. A `warning`
 identifies a problem that does not make validation fail, such as a missing
 body section or an
 unknown field. After the problem lines, the validator writes a summary to
-standard error. The file count includes procedures, compound files and
-sequence files, including all language variants. For the demo collection,
-including existing Org exports:
+standard error. The file count includes procedures and sequence files,
+including all language variants; it counts no substances or snapshot file.
+For the demo collection, including existing Org exports:
 
 ```text
-validated 42 files: 0 errors, 0 warnings
+validated 24 files: 0 errors, 0 warnings
 ```
 
 The first three lines below are real validator output. The last is the same
@@ -1168,7 +1110,7 @@ line form produced by `orgsyndb export` for an Org source:
 
 ```text
 tests/fixtures/invalid/yield-out-of-range/OSDB-0110-yield-out-of-range.md:products[1].yield_percent: error: 104.5 must be between 0 and 100
-tests/fixtures/invalid/unknown-compound/OSDB-0123-unknown-compound.md:products[1].compound: error: unknown compound "no-such-compound"; the compound registry has no no-such-compound.toml
+tests/fixtures/invalid/unknown-compound/OSDB-0123-unknown-compound.md:products[1].compound: error: unknown compound "no-such-compound"; the registry has no substance of this key
 tests/fixtures/warn/missing-section/OSDB-0151-missing-section.md:body: warning: missing section "Notes"
 tests/fixtures/org-invalid/wrong-weekday/org/OSDB-0206-wrong-weekday.org:#+CREATED: error: weekday "Tue" does not match 2026-10-19 (Mon)
 ```
@@ -1178,8 +1120,8 @@ The exit status tells a calling command whether validation succeeded:
 | Exit status | Meaning |
 |---|---|
 | `0` | No errors were found. Warnings may still have been printed. |
-| `1` | At least one procedure, compound or sequence error was found. |
-| `2` | The invocation or validator configuration is invalid, such as no root, a root that is not a directory, a missing explicitly named settings file, invalid settings or declarations, or a missing or malformed vocabulary file. |
+| `1` | At least one procedure, sequence or registry error was found. |
+| `2` | The invocation or validator configuration is invalid, such as no root, a root that is not a directory, a missing explicitly named settings file, invalid settings or declarations, or an unreadable or malformed registry snapshot. |
 
 Usage and configuration failures are written to standard error and include
 `validate.py: error:`; standard output is empty. The validator suppresses
@@ -1201,7 +1143,7 @@ rules as procedures.
 | `id` | `duplicate id <id>, also used by <path>` | Assign a free ID; one file per language code, and one untagged file, may share it. |
 | `slug` | `must be "<value>" (the lowercased id)` | Use the lowercase `id`. |
 | `file_name` | `must be named SEQ-NNNN-short-slug.md` or `does not match id <id>` | Correct the file name or its ID. |
-| `target` | `unknown compound "<key>"` | Correct the key or add its registry entry. |
+| `target` | `unknown compound "<key>"; the registry has no substance of this key` | Correct the key or add the substance in the lab application. |
 | `steps` | `must list at least two steps` | Add enough steps to describe a sequence. |
 | `steps` or `steps[n]` | `must be an array of tables` or `must be a table` | Use the TOML forms shown above. |
 | `steps[n].procedure` | `<id> not found in any content root` | Use an existing procedure ID; include its directory in a direct validator call. |

@@ -12,7 +12,6 @@ site's script.
 import json
 import re
 import subprocess
-import tomllib
 import unittest
 from typing import Any
 
@@ -1080,11 +1079,13 @@ def compound_text(key: str) -> str:
     """The text the compound catalogue searches for compound ``key`` of
     the test collection: its names, formula, CAS number, SMILES and
     searchable text fields, joined by single spaces."""
-    compound = tomllib.loads((TEST_COLLECTION / "compounds"
-                              / f"{key}.toml").read_text(encoding="utf-8"))
-    parts = [compound["name"], compound.get("name_de"), compound["formula"],
-             compound.get("cas"), compound["smiles"],
-             compound.get("item_number"), compound.get("short_name")]
+    compound = ps.compounds_of(
+        json.loads((TEST_COLLECTION / "registry.json").read_text(
+            encoding="utf-8")), TEST_COLLECTION / "static")[key]
+    parts = [compound["name"], compound.get("name_de"),
+             compound.get("formula"), compound.get("cas"),
+             compound.get("smiles"), compound.get("article_number"),
+             compound.get("short_name")]
     return " ".join(part for part in parts if part)
 
 

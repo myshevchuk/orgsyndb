@@ -1,85 +1,61 @@
 # compound-registry Specification
 
 ## Purpose
-TBD - created by archiving change compound-registry. Update Purpose after archive.
+Define where a collection's compounds come from: the lab application's registry the collection names, how every tool reads it and keeps a copy, the checks the validator makes of it, and the structure images found by a substance's key.
 ## Requirements
-### Requirement: Compound files
-A collection's compound registry SHALL be its directory `compounds/`, holding one file per compound named `<key>.toml`, where `<key>` matches `^[a-z0-9]+(-[a-z0-9]+)*$` and is the compound's key. The key is the compound's identity: a procedure names a compound by its key, and two procedures name the same compound exactly when they name the same key. The validator reads the registry from the directory its `--compounds` option names (procedure-validation "Command-line interface"):
-- A file whose name begins with `.` is skipped silently.
-- A subdirectory is a `file_name` error on its path, containing `subdirectories are not supported`; its contents are not read.
-- Any other file whose name is not `<key>.toml` is a `file_name` error containing `must be named <key>.toml, the key lowercase and hyphenated`, and defines no compound.
-- A file that is not UTF-8 or is not valid TOML gets one `toml` error, containing `invalid TOML` for a parse error, and defines no compound.
+### Requirement: Registry source
+A collection SHALL name its registry in its `orgsyndb.toml` as `registry`, a non-empty string: an address beginning with `http://` or `https://`, of a lab application's snapshot (lab-registry "Snapshot"), or a path of a snapshot file, relative to the collection directory unless it is absolute. The environment variable `ORGSYNDB_REGISTRY`, when set and not empty, takes its place. A collection that names none, or names a value of another type, is a configuration error naming `registry`. The registry's substances are the collection's compounds: a procedure, a sequence and every page of the site name a compound by its substance's key, and two of them name the same compound exactly when they name the same key. The collection holds no `compounds/` and no `vocabularies/` directory; one that does is read as if it had none.
 
-A compound that no procedure names is allowed and draws no problem.
+#### Scenario: Registry named by a path
+- **WHEN** a test writes a snapshot file `registry.json` into a temporary collection whose `orgsyndb.toml` holds `format = 1` and `registry = "registry.json"`
+- **THEN** `pipeline.registry` on that collection returns the file's table
 
-#### Scenario: Badly named compound file
-- **WHEN** a registry variant run adds `Ethyl_Acetate.toml`, a copy of `ethyl-acetate.toml`, to the registry
-- **THEN** it reports exactly one error, on the path ending `Ethyl_Acetate.toml`, field `file_name`, containing `must be named <key>.toml`
+#### Scenario: The environment wins
+- **WHEN** the collection names `registry.json` and `ORGSYNDB_REGISTRY` names another snapshot file
+- **THEN** `pipeline.registry` returns the other file's table
 
-#### Scenario: Unparseable compound file
-- **WHEN** a registry variant run replaces the text of `ethyl-acetate.toml` with `name = "Ethyl acetate`
-- **THEN** it reports exactly one error, on the path ending `ethyl-acetate.toml`, field `toml`, containing `invalid TOML`, and one error for each procedure of the run that names `ethyl-acetate`, containing `unknown compound "ethyl-acetate"`
+#### Scenario: No registry named
+- **WHEN** a collection's `orgsyndb.toml` holds `format = 1` alone and `ORGSYNDB_REGISTRY` is not set
+- **THEN** `pipeline.registry` raises `validate.ConfigError` naming `registry`
 
-#### Scenario: Dotfiles and unused compounds
-- **WHEN** a registry variant run adds `.gitkeep` and `unused-compound.toml`, a valid compound that no procedure names, to the registry
-- **THEN** it exits 0 and prints nothing to stdout
+### Requirement: Reading the registry
+`pipeline.registry(collection, store=True)` SHALL return the collection's registry as a table, and every tool SHALL take the registry from it: the validator, through the file `orgsyndb validate` passes it; the build, which `serve` and `pdf` run; and `orgsyndb index`. For a path it reads the file. For an address it requests the snapshot with a timeout of 30 seconds and takes the body of an answer of status 200 that is a snapshot. It then writes the snapshot to `build/registry.json` in the collection, unless the path is that file, and the source, as the collection or `ORGSYNDB_REGISTRY` names it, to `build/registry.source`, and returns the snapshot; so `build/registry.json` holds the registry the tools last read. When the request fails, or the answer is not a snapshot, it returns the snapshot in `build/registry.json` when `build/registry.source` holds the same source, and writes to stderr a warning naming the address and the copy's `digest`; without such a copy, a copy of another source among them, it raises `validate.ConfigError` naming the address. With `store` false it writes no file, and falls back to a copy as above. A table is a snapshot when its `format` is `1` and its `vocabularies` and `substances` have the shapes lab-registry "Snapshot" states; any other content, or a file that is not UTF-8 JSON, raises `validate.ConfigError` naming the file or the address.
 
-### Requirement: Compound fields
-Every compound file SHALL hold a TOML table with these keys:
-- `name`: non-empty string, the compound's name on an English site;
-- `name_de`: optional non-empty string, its name on a German site (localization "German compound names");
-- `formula`: non-empty string;
-- `mw`: finite number greater than 0 (TOML integer or float, never boolean), in g/mol;
-- `smiles`: non-empty string;
-- `cas`: optional string matching `^\d{2,7}-\d{2}-\d$` whose final check digit verifies;
-- `structure_image`: optional, as the requirement "Structure image path" states.
+#### Scenario: Fetched and kept
+- **WHEN** a test serves a snapshot on a local HTTP server and calls `pipeline.registry` on a collection that names its address
+- **THEN** it returns the snapshot and the collection's `build/registry.json` holds the same table
 
-A missing required key is an error containing `required field missing`, and a value of the wrong type is an error. A compound file may also set the fields its collection declares, which compound-fields "Field values" checks. Any other key is a warning containing `unknown field`. Problems are reported on the compound file's path, under the key's name. The messages for `mw`, `cas` and `structure_image` are those the validator gave for the same checks of a procedure's former `product` table and `structure_image`: `must be a number in g/mol, unquoted, e.g. 88.11`, `must be greater than 0`, `must have the form NNNNNNN-NN-N, e.g. "64-17-5"`, `has a wrong check digit; check the number`, and those of the requirement below.
+#### Scenario: Offline with a copy
+- **WHEN** the address of the previous scenario no longer answers and `pipeline.registry` is called again
+- **THEN** it returns the copy and warns on stderr naming the address and the copy's digest
 
-#### Scenario: Missing formula
-- **WHEN** a registry variant run removes `formula` from `ethyl-acetate.toml`
-- **THEN** it reports exactly one error, on the path ending `ethyl-acetate.toml`, field `formula`, containing `required field missing`
+#### Scenario: Offline without a copy
+- **WHEN** a collection names an address that does not answer and has no `build/registry.json`
+- **THEN** `pipeline.registry` raises `validate.ConfigError` naming the address
 
-#### Scenario: Molecular weight of zero
-- **WHEN** a registry variant run sets `mw = 0` in `ethyl-acetate.toml`
-- **THEN** it reports exactly one error, field `mw`, containing `must be greater than 0`
+#### Scenario: A copy of another registry
+- **WHEN** a collection's `build/registry.json` was read from one address, and `ORGSYNDB_REGISTRY` then names another address that does not answer
+- **THEN** `pipeline.registry` raises `validate.ConfigError` naming the second address and returns nothing of the first
 
-#### Scenario: CAS number with a wrong check digit
-- **WHEN** a registry variant run sets `cas = "141-78-5"` in `ethyl-acetate.toml` (the valid number is `141-78-6`)
-- **THEN** it reports exactly one error, field `cas`, containing `check digit`
+#### Scenario: Not a snapshot
+- **WHEN** a collection names a file holding `{"format": 2}`
+- **THEN** `pipeline.registry` raises `validate.ConfigError` naming the file
 
-#### Scenario: Empty German name
-- **WHEN** a registry variant run sets `name_de = ""` in `ethyl-acetate.toml`
-- **THEN** it reports exactly one error, field `name_de`, containing `must not be empty`
+### Requirement: Registry checks
+The validator SHALL take the registry from the snapshot file its `--registry` option names (procedure-validation "Command-line interface"): the compound keys are the keys of its substances, and its vocabularies are those procedure fields and reaction types name (procedure-fields "Procedure field declarations", reaction-types "Reaction-type vocabulary"). It checks no substance's values: the lab application checks them. A substance whose key is `group`, the directory of the compound tabs (site-catalogue "Compound tabs"), is an error on the snapshot file, under the field `substances`, containing `group`.
 
-#### Scenario: Misspelt key
-- **WHEN** a registry variant run adds `smile = "CCOC(C)=O"` to `ethyl-acetate.toml`
-- **THEN** it reports exactly one warning, field `smile`, containing `unknown field`
+#### Scenario: Unknown compound
+- **WHEN** a registry variant run removes the substance `ethyl-acetate` from the fixture snapshot
+- **THEN** it reports one error for each procedure of the run that names `ethyl-acetate`, containing `unknown compound "ethyl-acetate"`
 
-#### Scenario: A declared field is not unknown
-- **WHEN** a field-declaration run adds `item_number = "CH-0001"` to `ethyl-acetate.toml`, with settings that declare the text field `item_number`
-- **THEN** it reports no problem on `ethyl-acetate.toml`
+#### Scenario: A substance named like the tabs directory
+- **WHEN** a registry variant run adds a substance with the key `group` to the fixture snapshot
+- **THEN** it reports exactly one error, on the snapshot's path, field `substances`, containing `group`
 
-### Requirement: Structure image path
-The optional `structure_image` of a compound SHALL be a relative path beginning with `structures/` and ending in `.svg` or `.png`, with no `..` component, naming a file that exists under the static directory. A path with the wrong prefix or suffix is not checked for existence.
+### Requirement: Structure images by key
+A substance's structure image SHALL be the file `static/structures/<key>.svg` of the collection, or `static/structures/<key>.png` when there is no SVG, `<key>` being the substance's key. A substance without either file has no structure image. No file names it otherwise, and no check reports a substance without an image. The data the build stages for a substance with an image sets `structure_image` to `structures/<key>.svg` or `structures/<key>.png` (site-build "Hugo configuration"); that is what the site's requirements mean by a compound that sets `structure_image`.
 
-#### Scenario: Image file missing
-- **WHEN** a registry variant run sets `structure_image = "structures/missing.svg"` in `ethyl-acetate.toml`, a file absent from `tests/fixtures/static`
-- **THEN** it reports exactly one error, field `structure_image`, containing `not found`
-
-#### Scenario: Unsupported image type
-- **WHEN** a registry variant run sets `structure_image = "structures/ethyl-acetate.jpg"` in `ethyl-acetate.toml`
-- **THEN** it reports exactly one error, field `structure_image`, containing `must end in .svg or .png`
-
-#### Scenario: Image outside the structures directory
-- **WHEN** a registry variant run sets `structure_image = "ethyl-acetate.svg"` in `ethyl-acetate.toml`
-- **THEN** it reports exactly one error, field `structure_image`, containing `must be a relative path under structures/`
-
-### Requirement: Compound template
-The file `templates/compound.toml` SHALL be a complete compound file that explains every key in TOML comments, sets every required key, and shows `name_de`, `cas` and `structure_image` commented out. It ends with comment lines saying that the fields a collection declares in its `orgsyndb.toml` are written below as further keys of the same form. Copied into a registry under a valid key, it validates with no error and no warning.
-
-#### Scenario: Template validates
-- **WHEN** a test copies `templates/compound.toml` into an empty temporary registry as `example-compound.toml` and runs the validator with that registry on an empty content root
-- **THEN** it exits 0 and prints nothing to stdout
-- **AND** the template's last comment block names `orgsyndb.toml`
+#### Scenario: Image found by key
+- **WHEN** the demo collection is built and its static files hold `structures/isopentyl-acetate.svg`
+- **THEN** the page of `isopentyl-acetate` shows that image, and the page of a substance without a file of its key shows none
 

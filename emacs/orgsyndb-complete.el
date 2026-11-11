@@ -3,9 +3,8 @@
 ;;; Commentary:
 
 ;; `orgsyndb-completion-at-point' completes the keys and values of the
-;; front matter of procedures and sequences, of compound files, of the
-;; custom front matter of Org sources and of their scope tables, from
-;; the collection index.  `orgsyndb-insert-compound' inserts a compound
+;; front matter of procedures and sequences, of the custom front matter
+;; of Org sources and of their scope tables, from the collection index.  `orgsyndb-insert-compound' inserts a compound
 ;; key chosen by the compound's name.
 
 ;;; Code:
@@ -116,7 +115,7 @@ annotated with the compound keys of that entry's products."
 
 (defun orgsyndb--value-candidates (root entity key)
   "Return the candidates for a string value of KEY, a string, in a file
-of ENTITY, `procedure', `sequence' or `compound', of ROOT, or nil."
+of ENTITY, `procedure' or `sequence', of ROOT, or nil."
   (let ((language (orgsyndb--language-code buffer-file-name)))
     (pcase (cons entity key)
       (`(procedure . "status")
@@ -133,9 +132,9 @@ of ENTITY, `procedure', `sequence' or `compound', of ROOT, or nil."
        (orgsyndb--compound-candidates root))
       (`(sequence . "target") (orgsyndb--compound-candidates root))
       (`(sequence . "procedure") (orgsyndb--procedure-ids root language))
-      (`(,(or 'procedure 'compound) . ,(or "scheme_image" "structure_image"))
+      (`(procedure . "scheme_image")
        (orgsyndb--candidates (orgsyndb--structure-images root)))
-      (`(,(or 'procedure 'compound) . ,_)
+      (`(procedure . ,_)
        (let ((field (orgsyndb--declaration root entity key)))
          (and field (equal (alist-get 'type field) "choice")
               (orgsyndb--vocabulary-candidates
@@ -143,7 +142,7 @@ of ENTITY, `procedure', `sequence' or `compound', of ROOT, or nil."
 
 (defun orgsyndb--boolean-p (root entity key)
   "Return non-nil when KEY is a declared boolean field of ENTITY in ROOT."
-  (and (memq entity '(procedure compound))
+  (and (eq entity 'procedure)
        (equal (alist-get 'type (orgsyndb--declaration root entity key))
               "boolean")))
 
@@ -151,18 +150,14 @@ of ENTITY, `procedure', `sequence' or `compound', of ROOT, or nil."
   "Return the top-level keys of a file of ENTITY in ROOT that SET, a
 list of strings, does not hold yet, annotated with `required' or the
 declared field's label."
-  (let* ((required (pcase entity
-                     ('procedure (orgsyndb--schema root 'procedure 'required))
-                     ('compound (orgsyndb--schema root 'compound 'required))))
+  (let* ((required (and (eq entity 'procedure)
+                        (orgsyndb--schema root 'procedure 'required)))
          (keys (pcase entity
                  ('procedure
                   (append required
                           (orgsyndb--schema root 'procedure 'optional)))
-                 ('compound
-                  (append required
-                          (orgsyndb--schema root 'compound 'optional)))
                  ('sequence (orgsyndb--schema root 'sequence 'keys))))
-         (declared (and (memq entity '(procedure compound))
+         (declared (and (eq entity 'procedure)
                         (orgsyndb--declarations root entity)))
          annotations)
     (dolist (key required)
@@ -186,7 +181,7 @@ declared field's label."
             (and (cdr data) (list :annotation-function (cdr data)))
             (list :exclusive 'no))))
 
-;;;; TOML front matter and compound files
+;;;; TOML front matter
 
 (defun orgsyndb--front-matter-bounds ()
   "Return (BEG . END) of the buffer's `+++' front matter, or nil.
@@ -469,8 +464,8 @@ table named scope, when point is in one."
 
 (defun orgsyndb-completion-at-point ()
   "Complete the key or value at point in a collection file.
-In procedures, sequences and compound files it completes front-matter
-keys and their values; in Org sources the keys and values of
+In procedures and sequences it completes front-matter keys and their
+values; in Org sources the keys and values of
 `#+HUGO_CUSTOM_FRONT_MATTER', the words of `#+HUGO_TAGS' and the
 compound keys of the scope table.  Elsewhere it returns nil."
   (when orgsyndb--root
@@ -482,8 +477,6 @@ compound keys of the scope table.  Elsewhere it returns nil."
                   (orgsyndb--complete-toml
                    (if (eq orgsyndb--kind 'sequence) 'sequence 'procedure)
                    (car bounds) (cdr bounds)))))
-          ('compound
-           (orgsyndb--complete-toml 'compound (point-min) (point-max)))
           ('org-procedure (orgsyndb--complete-org)))
       (error (message "orgsyndb: %s" (error-message-string err))
              nil))))

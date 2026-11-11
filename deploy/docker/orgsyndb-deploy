@@ -2,8 +2,9 @@
 """Keep an OrgSynDB site built from Git, for the container image.
 
 ``orgsyndb-deploy run`` repeats a cycle until it is stopped: fetch the
-application and the collection from their Git repositories, build the
-site when either has moved, and publish it only when the build succeeds.
+application and the collection from their Git repositories and the
+collection's registry from the lab application, build the site when any
+of them has changed, and publish it only when the build succeeds.
 ``orgsyndb-deploy sync`` runs one cycle. ``orgsyndb-deploy status``
 prints the saved state; ``orgsyndb-deploy retry`` forgets the failed
 builds, so that the next cycle tries them again. SIGHUP starts the next
@@ -27,18 +28,30 @@ ORGSYNDB_KEEP_RELEASES     published sites kept besides the current one
                            (default: 2)
 ORGSYNDB_BUILD_TIMEOUT     seconds a build, and then its index, may
                            take (default: 3600)
+ORGSYNDB_REGISTRY_URL      address of the lab application's registry
+                           snapshot (default:
+                           http://app:8000/lab/registry/snapshot.json)
+ORGSYNDB_ALLOWED_HOSTS     the host names the lab application accepts,
+                           separated by commas; the first that is not *,
+                           without a leading dot, is sent as the Host of
+                           the snapshot's request (default: localhost)
 
 The data directory (ORGSYNDB_DATA, default /var/lib/orgsyndb) holds the
-collection's clone in ``collection/``, the published sites in
-``releases/``, each with the output of ``orgsyndb index`` as
+collection's clone in ``collection/``, the snapshot last fetched in
+``registry.json`` and its address in ``registry.source``, the published
+sites in ``releases/``, each with the output of ``orgsyndb index`` as
 ``index.json``, the symlink ``current`` to the site being served, and
-``state.json``. The application's clone is ORGSYNDB_APP (default
-/opt/orgsyndb/app). ORGSYNDB_IMAGE_INFO (default /opt/orgsyndb/image.json)
-names the image's record of the repository, ref and ``deploy/docker``
-tree it was built from. An application commit whose ``deploy/docker``
-tree differs needs a new image, and is not used.
+``state.json``. Every run of ``tools/orgsyndb`` has ORGSYNDB_REGISTRY
+naming ``registry.json``; when the address does not answer, the copy of
+the same address is used, and without one nothing is built. The
+application's clone is ORGSYNDB_APP (default /opt/orgsyndb/app).
+ORGSYNDB_IMAGE_INFO (default /opt/orgsyndb/image.json) names the image's
+record of the repository, ref and ``deploy/docker`` tree it was built
+from. An application commit whose ``deploy/docker`` tree differs needs a
+new image, and is not used.
 """
 
+import http.client
 import json
 import os
 import shutil
@@ -47,6 +60,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -54,6 +68,11 @@ sys.dont_write_bytecode = True
 PROG = "orgsyndb-deploy"
 IMAGE_DIR = "deploy/docker"
 OUTPUTS = ("build", "public", "pdf")
+REGISTRY_URL = "http://app:8000/lab/registry/snapshot.json"
+REGISTRY_TIMEOUT = 30
+# The registry's vocabularies, which a snapshot holds.
+VOCABULARIES = ("chemical-classes", "inventory-groups", "projects",
+                "reaction-types")
 
 
 class Failure(Exception):
@@ -75,6 +94,8 @@ class Settings:
     pdf: bool
     keep: int
     timeout: int
+    registry_url: str
+    registry_host: str
 
 
 def log(message: str) -> None:
@@ -101,6 +122,17 @@ def number(name: str, default: int, least: int) -> int:
         raise Failure(f"{name} must be a whole number of at least {least}: "
                       f"{value}")
     return int(value)
+
+
+def request_host(allowed: str) -> str:
+    """Return the Host to request the snapshot with: the first entry of
+    ALLOWED, host names separated by commas, that is not ``*``, a
+    leading dot dropped, or ``localhost`` when there is none."""
+    for entry in allowed.split(","):
+        name = entry.strip().removeprefix(".")
+        if name and name != "*":
+            return name
+    return "localhost"
 
 
 def settings() -> Settings:
@@ -135,6 +167,10 @@ def settings() -> Settings:
         pdf=flag("ORGSYNDB_PDF", False),
         keep=number("ORGSYNDB_KEEP_RELEASES", 2, 0),
         timeout=number("ORGSYNDB_BUILD_TIMEOUT", 3600, 60),
+        registry_url=(os.environ.get("ORGSYNDB_REGISTRY_URL", "").strip()
+                      or REGISTRY_URL),
+        registry_host=request_host(os.environ.get("ORGSYNDB_ALLOWED_HOSTS",
+                                                  "")),
     )
 
 
@@ -215,8 +251,95 @@ def save_state(data: Path, state: dict) -> None:
     os.replace(temporary, path)
 
 
-def pair(app: str, collection: str) -> str:
-    return f"{app}:{collection}"
+def combination(app: str, collection: str, registry: str) -> str:
+    """Name what a release is built from: the application and collection
+    commits and the registry snapshot's digest."""
+    return f"{app}:{collection}:{registry}"
+
+
+# --------------------------------------------------------------------------
+# Registry
+
+
+def snapshot_digest(data: bytes) -> str:
+    """Return the ``digest`` of the registry snapshot DATA, UTF-8 JSON.
+    Raise Failure when DATA is not a table whose ``format`` is 1 and
+    which holds the four vocabularies, lists of tables each with a
+    string ``key`` and ``label``, and the list of substances, tables
+    each with a string ``key``."""
+    try:
+        table = json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise Failure(f"the answer is not JSON: {exc}") from None
+    if not (isinstance(table, dict) and type(table.get("format")) is int
+            and table["format"] == 1
+            and isinstance(table.get("vocabularies"), dict)
+            and all(isinstance(table["vocabularies"].get(name), list)
+                    for name in VOCABULARIES)
+            and isinstance(table.get("substances"), list)
+            and isinstance(table.get("digest"), str)
+            and all(_has_strings(term, "key", "label")
+                    for name in VOCABULARIES
+                    for term in table["vocabularies"][name])
+            and all(_has_strings(substance, "key")
+                    for substance in table["substances"])):
+        raise Failure("the answer is not a registry snapshot")
+    return table["digest"]
+
+
+def _has_strings(entry: object, *keys: str) -> bool:
+    """Whether ENTRY is a table whose KEYS are all strings."""
+    return isinstance(entry, dict) and all(
+        isinstance(entry.get(key), str) for key in keys)
+
+
+def fetch_registry(config: Settings) -> str | None:
+    """Request the snapshot at the registry address, keep it in
+    ``<data>/registry.json`` and the address in ``<data>/registry.source``,
+    and return its digest. When the request fails or its answer is no
+    snapshot, log it and return the digest of the copy kept for the same
+    address, or None when there is none."""
+    kept = config.data / "registry.json"
+    source = config.data / "registry.source"
+    request = urllib.request.Request(
+        config.registry_url, headers={"Host": config.registry_host,
+                                      "Accept": "application/json"})
+    try:
+        try:
+            with urllib.request.urlopen(request,
+                                        timeout=REGISTRY_TIMEOUT) as answer:
+                if answer.status != 200:
+                    raise Failure(f"status {answer.status}")
+                data = answer.read()
+        except (OSError, http.client.HTTPException, ValueError) as exc:
+            raise Failure(str(exc)) from None
+        digest = snapshot_digest(data)
+    except Failure as exc:
+        log(f"cannot fetch the registry from {config.registry_url}: {exc}")
+        try:
+            same = source.read_text(encoding="utf-8").strip() == (
+                config.registry_url)
+            digest = snapshot_digest(kept.read_bytes()) if same else None
+        except (OSError, Failure):
+            digest = None
+        if digest is None:
+            log("no copy of this registry is kept; nothing is built")
+        else:
+            log(f"using the copy of the registry, digest {digest}")
+        return digest
+    source.unlink(missing_ok=True)
+    temporary = kept.with_name(".registry.json")
+    temporary.write_bytes(data)
+    os.replace(temporary, kept)
+    source.write_text(config.registry_url + "\n", encoding="utf-8")
+    return digest
+
+
+def tool_environment(config: Settings) -> dict[str, str]:
+    """The environment of a run of ``tools/orgsyndb``: this program's,
+    with ORGSYNDB_REGISTRY naming the kept snapshot."""
+    return {**os.environ, "ORGSYNDB_REGISTRY":
+            str((config.data / "registry.json").absolute())}
 
 
 # --------------------------------------------------------------------------
@@ -231,7 +354,8 @@ def build(config: Settings) -> Path:
                str(collection), "pdf" if config.pdf else "build"]
     log("running " + " ".join(command))
     try:
-        done = subprocess.run(command, timeout=config.timeout)
+        done = subprocess.run(command, timeout=config.timeout,
+                              env=tool_environment(config))
     except subprocess.TimeoutExpired:
         raise Failure(f"the build took longer than {config.timeout} s")
     except OSError as exc:
@@ -249,7 +373,8 @@ def index(config: Settings, collection: Path) -> str:
                str(collection), "index"]
     try:
         done = subprocess.run(command, timeout=config.timeout,
-                              capture_output=True, text=True)
+                              capture_output=True, text=True,
+                              env=tool_environment(config))
     except subprocess.TimeoutExpired:
         raise Failure(f"the index took longer than {config.timeout} s")
     except OSError as exc:
@@ -299,11 +424,15 @@ def prune(releases: Path, current: str, keep: int) -> None:
             shutil.rmtree(entry, ignore_errors=True)
 
 
-def attempt(config: Settings, state: dict, app: str, commit: str) -> bool:
+def attempt(config: Settings, state: dict, app: str, commit: str,
+            registry: str) -> bool:
     """Build ``commit`` of the collection with ``app``, both checked out,
-    and write its index; publish both on success. Record a failed pair,
-    a failed index among them, so it is not built again."""
-    log(f"building collection {commit[:10]} with application {app[:10]}")
+    and the kept snapshot of digest ``registry``, and write its index;
+    publish both on success, and record the release in the state's
+    ``deployed``. Record a failed combination, a failed index among
+    them, so it is not built again."""
+    log(f"building collection {commit[:10]} with application {app[:10]} "
+        f"and registry {registry[:10]}")
     try:
         collection = build(config)
         index_text = index(config, collection)
@@ -311,11 +440,12 @@ def attempt(config: Settings, state: dict, app: str, commit: str) -> bool:
         name = publish(config, collection, index_text, serial, app, commit)
     except (Failure, OSError) as exc:
         log(f"failed: {exc}; the published site is unchanged")
-        state["failed"] = [*state["failed"], pair(app, commit)][-50:]
+        state["failed"] = [*state["failed"],
+                           combination(app, commit, registry)][-50:]
         return False
     state["serial"] = serial
     state["deployed"] = {"app": app, "collection": commit,
-                         "release": name,
+                         "registry": registry, "release": name,
                          "time": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
     log(f"published release {name}")
     return True
@@ -367,6 +497,9 @@ def cycle(config: Settings) -> None:
         if commit is None:
             return
     marker = repo / config.collection_path / "orgsyndb.toml"
+    registry = fetch_registry(config)
+    if registry is None:
+        return
 
     candidates = []
     if new_app is not None:
@@ -374,9 +507,10 @@ def cycle(config: Settings) -> None:
     candidates.append(old_app)
     for app in candidates:
         if (published and deployed.get("app") == app
-                and deployed.get("collection") == commit):
+                and deployed.get("collection") == commit
+                and deployed.get("registry") == registry):
             break
-        if pair(app, commit) in state["failed"]:
+        if combination(app, commit, registry) in state["failed"]:
             continue
         checkout(config.app, app)
         checkout(repo, commit)
@@ -384,9 +518,10 @@ def cycle(config: Settings) -> None:
             log(f"collection {commit[:10]} holds no "
                 f"{config.collection_path}/orgsyndb.toml; set "
                 "ORGSYNDB_COLLECTION_PATH")
-            state["failed"] = [*state["failed"], pair(app, commit)][-50:]
+            state["failed"] = [*state["failed"],
+                               combination(app, commit, registry)][-50:]
             break
-        if attempt(config, state, app, commit):
+        if attempt(config, state, app, commit, registry):
             break
     # Stay on the application of the published site, or on the old one.
     keep = (state["deployed"] or {}).get("app") or old_app

@@ -5,6 +5,8 @@ temporary directory, and locate the repository from this file.
 """
 
 import contextlib
+import hashlib
+import json
 import re
 import shutil
 import subprocess
@@ -13,7 +15,7 @@ import tempfile
 import unittest
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 REPO = Path(__file__).resolve().parent.parent
 FIXTURES = REPO / "tests" / "fixtures"
@@ -25,12 +27,9 @@ SEQUENCE_BASELINE = SEQUENCES / "SEQ-0001-baseline.md"
 SEQUENCE_TEMPLATE = REPO / "templates" / "sequence.md"
 SETTINGS_DIR = FIXTURES / "settings"
 SETTINGS = SETTINGS_DIR / "orgsyndb.toml"
-REACTION_TYPES = SETTINGS_DIR / "vocabularies" / "reaction-types.toml"
-STARTER_REACTION_TYPES = REPO / "templates" / "reaction-types.toml"
 STATIC_DIR = FIXTURES / "static"
-COMPOUNDS = FIXTURES / "compounds"
-COMPOUND_TEMPLATE = REPO / "templates" / "compound.toml"
-FIELDS = FIXTURES / "fields"
+REGISTRY = FIXTURES / "registry.json"
+PROCEDURE_TEMPLATE = REPO / "templates" / "procedure.md"
 PROCEDURE_FIELDS = FIXTURES / "procedure-fields"
 
 _LINE = re.compile(
@@ -87,18 +86,18 @@ def run_validator(args: Sequence[str | Path],
 
 def fixture_run(*roots: str | Path,
                 extra: Sequence[str | Path] = (),
-                compounds: Path = COMPOUNDS,
+                registry: Path = REGISTRY,
                 settings: Path = SETTINGS) -> Result:
     """Fixture run: roots are relative to tests/fixtures/ unless absolute.
 
-    ``compounds`` is the registry the run reads, the fixture registry
+    ``registry`` is the snapshot file the run reads, the fixture registry
     unless a registry variant names another; ``settings`` is the
-    settings file, whose directory holds the reaction types, the fixture
-    settings file unless a variant names another.
+    settings file, the fixture settings file unless a variant names
+    another.
     """
     args: list[str | Path] = [
         "--settings", settings, "--static-dir", STATIC_DIR,
-        "--compounds", compounds,
+        "--registry", registry,
     ]
     args += extra
     args += [FIXTURES / root for root in roots]
@@ -256,12 +255,12 @@ def general_variant_run(file_name: str, *edits: Edit) -> Result:
 
 def sequence_fixture_run(*roots: str | Path, sequences: str | Path,
                          extra: Sequence[str | Path] = (),
-                         compounds: Path = COMPOUNDS) -> Result:
+                         registry: Path = REGISTRY) -> Result:
     """Sequence fixture run: a fixture run on ``roots`` and ``general``
     with ``--sequences`` naming ``sequences``, relative to
     tests/fixtures/ unless absolute."""
     return fixture_run(
-        *roots, "general", compounds=compounds,
+        *roots, "general", registry=registry,
         extra=["--sequences", FIXTURES / sequences, *extra])
 
 
@@ -375,120 +374,214 @@ class ValidatorTestCase(unittest.TestCase):
             [ln for ln in result.stdout.splitlines() if needle in ln], [])
 
 
+class FieldTestCase(ValidatorTestCase):
+    """Assertions of the procedure-field tests."""
+
+    def assert_configuration_error(self, result: Result,
+                                   *needles: str) -> None:
+        """Exit status 2, nothing on stdout, and a message on stderr that
+        begins ``validate.py: error:`` and contains every needle."""
+        self.assertEqual(result.returncode, 2,
+                         f"stdout={result.stdout!r} "
+                         f"stderr={result.stderr!r}")
+        self.assertEqual(result.stdout, "")
+        self.assertIn("validate.py: error:", result.stderr)
+        self.assertNotIn("unrecognized arguments", result.stderr)
+        for needle in needles:
+            with self.subTest(needle=needle):
+                self.assertIn(needle, result.stderr)
+
+    def assert_errors(self, result: Result, field: str, text: str,
+                      count: int) -> None:
+        """Exit status 1 and exactly ``count`` lines, all errors with
+        ``field`` and a message containing ``text``."""
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual(len(result.stdout.splitlines()), count,
+                         result.stdout)
+        self.assertEqual(len(result.problems), count, result.stdout)
+        for problem in result.problems:
+            self.assertEqual(problem.severity, "error", result.stdout)
+            self.assertEqual(problem.field, field, result.stdout)
+            self.assertIn(text, problem.message, result.stdout)
+
+
+Table = dict[str, Any]
+
+
+def snapshot_digest(table: Table) -> str:
+    """The digest of a snapshot as lab-registry "Snapshot" states it:
+    the SHA-256 of the table without ``digest``, serialized with sorted
+    keys, no spaces and ASCII escapes."""
+    rest = {key: value for key, value in table.items() if key != "digest"}
+    return hashlib.sha256(json.dumps(
+        rest, sort_keys=True, separators=(",", ":"),
+        ensure_ascii=True).encode("utf-8")).hexdigest()
+
+
+def load_snapshot(path: Path = REGISTRY) -> Table:
+    """The snapshot file ``path`` as a table."""
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def write_snapshot(path: Path, table: Table) -> None:
+    """Write ``table`` to ``path`` as a snapshot, with its ``digest``
+    made to agree with the rest."""
+    table = {**table, "digest": snapshot_digest(table)}
+    path.write_text(json.dumps(table, indent=2, ensure_ascii=False) + "\n",
+                    encoding="utf-8")
+
+
+def term(key: str, label: str, label_de: str | None = None,
+         parent: str | None = None, tree: bool = True) -> Table:
+    """A term of a snapshot's vocabulary; ``tree`` terms carry a
+    ``parent``."""
+    entry: Table = {"key": key, "label": label, "label_de": label_de}
+    if tree:
+        entry["parent"] = parent
+    return entry
+
+
+def substance(key: str, name: str | None = None, **values: Any) -> Table:
+    """A substance of a snapshot: the fixture registry's kind, in the
+    group ``reagents`` and the class ``organic-compounds``, with the
+    ``values`` that replace the defaults."""
+    entry: Table = {
+        "key": key, "name": name or key, "name_de": None,
+        "short_name": None, "formula": None, "smiles": None, "cas": None,
+        "note": None, "group": "reagents",
+        "chemical_classes": ["organic-compounds"], "mw": None,
+        "article_number": None}
+    entry.update(values)
+    return entry
+
+
 @contextlib.contextmanager
 def registry_copy() -> Iterator[Path]:
-    """A fresh temporary copy of the fixture registry."""
+    """A fresh temporary copy of the fixture registry, the file
+    ``registry.json``."""
     with tempfile.TemporaryDirectory() as tmp:
-        registry = Path(tmp) / "compounds"
-        shutil.copytree(COMPOUNDS, registry)
+        registry = Path(tmp) / "registry.json"
+        shutil.copyfile(REGISTRY, registry)
         yield registry
 
 
-def registry_variant_run(change: Callable[[Path], None]) -> Result:
+RegistryChange = Callable[[Path], None]
+
+
+def registry_variant_run(change: RegistryChange) -> Result:
     """Registry variant run: ``change`` edits a copy of the registry, then
     a fixture run on ``baseline`` reads that copy."""
     with registry_copy() as registry:
         change(registry)
-        return fixture_run("baseline", compounds=registry)
+        return fixture_run("baseline", registry=registry)
 
 
-def edit_compound(key: str, *edits: Edit) -> Callable[[Path], None]:
-    """A registry change applying text edits to ``<key>.toml``."""
+def edit_registry(*steps: Callable[[Table], None]) -> RegistryChange:
+    """A registry change applying ``steps`` to the snapshot's table,
+    which is written back with its digest made to agree."""
     def change(registry: Path) -> None:
-        path = registry / f"{key}.toml"
-        path.write_text(apply_edits(path.read_text(encoding="utf-8"),
-                                    edits), encoding="utf-8")
+        table = load_snapshot(registry)
+        for step in steps:
+            step(table)
+        write_snapshot(registry, table)
     return change
 
 
-@contextlib.contextmanager
-def template_registry() -> Iterator[Path]:
-    """A temporary registry holding ``templates/compound.toml`` as
-    ``example-compound.toml``, the compound the procedure templates name."""
-    if not COMPOUND_TEMPLATE.is_file():
-        raise AssertionError("templates/compound.toml does not exist")
-    with tempfile.TemporaryDirectory() as tmp:
-        registry = Path(tmp) / "compounds"
-        registry.mkdir()
-        shutil.copy2(COMPOUND_TEMPLATE, registry / "example-compound.toml")
-        yield registry
-
-
-@contextlib.contextmanager
-def starter_settings() -> Iterator[Path]:
-    """A temporary settings file ``orgsyndb.toml`` holding ``format = 1``,
-    beside a ``vocabularies/reaction-types.toml`` that copies the starter
-    vocabulary ``templates/reaction-types.toml``."""
-    if not STARTER_REACTION_TYPES.is_file():
-        raise AssertionError("templates/reaction-types.toml does not exist")
-    with tempfile.TemporaryDirectory() as tmp:
-        directory = Path(tmp) / "collection"
-        (directory / "vocabularies").mkdir(parents=True)
-        (directory / "orgsyndb.toml").write_text("format = 1\n",
-                                                 encoding="utf-8")
-        shutil.copyfile(STARTER_REACTION_TYPES,
-                        directory / "vocabularies" / REACTION_TYPES.name)
-        yield directory / "orgsyndb.toml"
-
-
-class SettingsCopy(NamedTuple):
-    """The temporary copy of a settings variant run."""
-    settings: Path
-    vocabularies: Path
-
-
-@contextlib.contextmanager
-def settings_copy() -> Iterator[SettingsCopy]:
-    """A fresh temporary copy of ``tests/fixtures/settings/``."""
-    with tempfile.TemporaryDirectory() as tmp:
-        directory = Path(tmp) / "settings"
-        shutil.copytree(SETTINGS_DIR, directory)
-        yield SettingsCopy(directory / "orgsyndb.toml",
-                           directory / "vocabularies")
-
-
-SettingsChange = Callable[[SettingsCopy], None]
-
-
-def settings_variant_run(*steps: SettingsChange,
-                         roots: Sequence[str | Path] = ("baseline",)
-                         ) -> Result:
-    """Settings variant run: each of ``steps`` edits a copy of
-    ``tests/fixtures/settings/``, then a fixture run on ``roots`` reads
-    that copy through ``--settings``."""
-    with settings_copy() as copy:
-        for step in steps:
-            step(copy)
-        return fixture_run(*roots, settings=copy.settings)
-
-
-def edit_reaction_types(*edits: Edit) -> SettingsChange:
-    """A settings change applying text edits to
-    ``vocabularies/reaction-types.toml``."""
-    def change(copy: SettingsCopy) -> None:
-        path = copy.vocabularies / REACTION_TYPES.name
-        path.write_text(
-            apply_edits(path.read_text(encoding="utf-8"), edits),
+def edit_registry_text(*edits: Edit) -> RegistryChange:
+    """A registry change applying text edits to the snapshot file."""
+    def change(registry: Path) -> None:
+        registry.write_text(
+            apply_edits(registry.read_text(encoding="utf-8"), edits),
             encoding="utf-8")
     return change
 
 
-def delete_reaction_types() -> SettingsChange:
-    """A settings change deleting ``vocabularies/reaction-types.toml``."""
-    def change(copy: SettingsCopy) -> None:
-        (copy.vocabularies / REACTION_TYPES.name).unlink()
-    return change
+def without_substance(key: str) -> Callable[[Table], None]:
+    """A snapshot step removing the substance ``key``."""
+    def step(table: Table) -> None:
+        table["substances"] = [s for s in table["substances"]
+                               if s["key"] != key]
+    return step
 
 
-def write_reaction_types(content: str | bytes) -> SettingsChange:
-    """A settings change writing ``vocabularies/reaction-types.toml``."""
-    def change(copy: SettingsCopy) -> None:
-        path = copy.vocabularies / REACTION_TYPES.name
-        if isinstance(content, bytes):
-            path.write_bytes(content)
-        else:
-            path.write_text(content, encoding="utf-8")
-    return change
+def adding_substance(entry: Table) -> Callable[[Table], None]:
+    """A snapshot step adding the substance ``entry`` in key order."""
+    def step(table: Table) -> None:
+        table["substances"] = sorted(
+            [*table["substances"], entry], key=lambda s: s["key"])
+    return step
+
+
+def setting_substance(key: str, **values: Any) -> Callable[[Table], None]:
+    """A snapshot step setting ``values`` of the substance ``key``; a
+    value ``None`` removes the value."""
+    def step(table: Table) -> None:
+        (found,) = [s for s in table["substances"] if s["key"] == key]
+        found.update(values)
+    return step
+
+
+def setting_terms(vocabulary: str, *terms: Table
+                  ) -> Callable[[Table], None]:
+    """A snapshot step making ``terms`` the whole vocabulary."""
+    def step(table: Table) -> None:
+        table["vocabularies"][vocabulary] = list(terms)
+    return step
+
+
+def canonical_terms(terms: list[Table]) -> list[Table]:
+    """``terms`` in the order a snapshot lists a vocabulary: a parent
+    before the terms filed under it, and siblings in key order."""
+    known = {entry["key"] for entry in terms}
+    children: dict[str | None, list[Table]] = {}
+    for entry in terms:
+        parent = entry.get("parent")
+        children.setdefault(parent if parent in known else None,
+                            []).append(entry)
+    found: list[Table] = []
+
+    def visit(parent: str | None) -> None:
+        for entry in sorted(children.get(parent, []),
+                            key=lambda each: each["key"]):
+            found.append(entry)
+            visit(entry["key"])
+
+    visit(None)
+    return found
+
+
+def with_fixture_substances(table: Table, *keys: str) -> list[str]:
+    """Add to the snapshot ``table`` the substances ``keys`` of the
+    fixture registry that it lacks, with the terms of their group and
+    classes that it lacks, and keep its vocabularies in snapshot order.
+    Returns the keys added."""
+    fixture = load_snapshot(REGISTRY)
+    offered = {entry["key"]: entry for entry in fixture["substances"]}
+    held = {entry["key"] for entry in table["substances"]}
+    added = []
+    for key in keys:
+        if key in held:
+            continue
+        if key not in offered:
+            raise AssertionError(
+                f"tests/fixtures/registry.json has no substance {key}")
+        table["substances"].append(offered[key])
+        held.add(key)
+        added.append(key)
+    table["substances"].sort(key=lambda entry: entry["key"])
+    wanted = {
+        "inventory-groups": {entry["group"] for entry in
+                             table["substances"] if entry["key"] in added},
+        "chemical-classes": {name for entry in table["substances"]
+                             if entry["key"] in added
+                             for name in entry["chemical_classes"]}}
+    for name, keys_wanted in wanted.items():
+        known = {entry["key"] for entry in table["vocabularies"][name]}
+        table["vocabularies"][name] = canonical_terms(
+            table["vocabularies"][name]
+            + [entry for entry in fixture["vocabularies"][name]
+               if entry["key"] in keys_wanted - known])
+    return added
 
 
 def append_text(line: str) -> Edit:
@@ -506,99 +599,49 @@ def insert_after(anchor: str, line: str) -> Edit:
     return edit
 
 
+@contextlib.contextmanager
+def template_registry() -> Iterator[Path]:
+    """A temporary snapshot file holding the substance
+    ``example-compound`` and the reaction type that
+    ``templates/procedure.md`` names."""
+    text = PROCEDURE_TEMPLATE.read_text(encoding="utf-8")
+    found = re.search(r'(?m)^reaction_types\s*=\s*\["([^"]+)"\]', text)
+    if found is None:
+        raise AssertionError("the template names no reaction type")
+    table: Table = {
+        "format": 1,
+        "vocabularies": {
+            "chemical-classes": [term("organic-compounds",
+                                      "Organic compounds")],
+            "inventory-groups": [term("reagents", "Reagents")],
+            "projects": [],
+            "reaction-types": [term(found.group(1), found.group(1),
+                                    tree=False)]},
+        "substances": [substance("example-compound", "Example compound",
+                                 formula="C2H6O", mw=46.07,
+                                 smiles="CCO")]}
+    with tempfile.TemporaryDirectory() as tmp:
+        registry = Path(tmp) / "registry.json"
+        write_snapshot(registry, table)
+        yield registry
+
+
+@contextlib.contextmanager
+def format_settings() -> Iterator[Path]:
+    """A temporary settings file ``orgsyndb.toml`` holding
+    ``format = 1`` alone."""
+    with tempfile.TemporaryDirectory() as tmp:
+        settings = Path(tmp) / "orgsyndb.toml"
+        settings.write_text("format = 1\n", encoding="utf-8")
+        yield settings
+
+
 def declaration(key: str, type_: str, label: str, *lines: str) -> str:
     """The text of one ``[[fields.compound]]`` table, after a blank
     line, with the extra assignment ``lines``."""
     body = "".join(f"{line}\n" for line in lines)
     return (f'\n[[fields.compound]]\nkey = "{key}"\ntype = "{type_}"\n'
             f'label = "{label}"\n{body}')
-
-
-class FieldCopy(NamedTuple):
-    """The temporary copies of a field-declaration run."""
-    settings: Path
-    vocabularies: Path
-    registry: Path
-
-
-@contextlib.contextmanager
-def fields_copy() -> Iterator[FieldCopy]:
-    """Fresh temporary copies of ``tests/fixtures/fields/``, with the
-    fixture reaction types in its ``vocabularies/``, and of the fixture
-    registry."""
-    with tempfile.TemporaryDirectory() as tmp:
-        fields = Path(tmp) / "fields"
-        shutil.copytree(FIELDS, fields)
-        shutil.copyfile(REACTION_TYPES,
-                        fields / "vocabularies" / REACTION_TYPES.name)
-        registry = Path(tmp) / "compounds"
-        shutil.copytree(COMPOUNDS, registry)
-        yield FieldCopy(fields / "orgsyndb.toml", fields / "vocabularies",
-                        registry)
-
-
-FieldChange = Callable[[FieldCopy], None]
-
-
-def field_variant_run(*steps: FieldChange,
-                      extra: Sequence[str | Path] = ()) -> Result:
-    """Field-declaration run: each of ``steps`` edits the copies, then a
-    fixture run on ``baseline`` reads the registry copy and, through
-    ``--settings``, the copy of ``orgsyndb.toml``."""
-    with fields_copy() as copy:
-        for step in steps:
-            step(copy)
-        return fixture_run(
-            "baseline", compounds=copy.registry, settings=copy.settings,
-            extra=extra)
-
-
-def edit_settings(*edits: Edit) -> FieldChange:
-    """A field change applying text edits to ``orgsyndb.toml``."""
-    def change(copy: FieldCopy) -> None:
-        copy.settings.write_text(
-            apply_edits(copy.settings.read_text(encoding="utf-8"), edits),
-            encoding="utf-8")
-    return change
-
-
-def edit_field_compound(key: str, *edits: Edit) -> FieldChange:
-    """A field change applying text edits to the registry copy's
-    ``<key>.toml``."""
-    def change(copy: FieldCopy) -> None:
-        edit_compound(key, *edits)(copy.registry)
-    return change
-
-
-def edit_vocabulary(name: str, *edits: Edit) -> FieldChange:
-    """A field change applying text edits to ``vocabularies/<name>.toml``
-    of the fields copy."""
-    def change(copy: FieldCopy) -> None:
-        path = copy.vocabularies / f"{name}.toml"
-        path.write_text(
-            apply_edits(path.read_text(encoding="utf-8"), edits),
-            encoding="utf-8")
-    return change
-
-
-def delete_vocabulary(name: str) -> FieldChange:
-    """A field change deleting ``vocabularies/<name>.toml`` of the
-    fields copy."""
-    def change(copy: FieldCopy) -> None:
-        (copy.vocabularies / f"{name}.toml").unlink()
-    return change
-
-
-def write_vocabulary(name: str, content: str | bytes) -> FieldChange:
-    """A field change writing ``vocabularies/<name>.toml`` of the fields
-    copy, replacing or adding the file."""
-    def change(copy: FieldCopy) -> None:
-        path = copy.vocabularies / f"{name}.toml"
-        if isinstance(content, bytes):
-            path.write_bytes(content)
-        else:
-            path.write_text(content, encoding="utf-8")
-    return change
 
 
 def procedure_declaration(key: str, type_: str, label: str,
@@ -612,29 +655,24 @@ def procedure_declaration(key: str, type_: str, label: str,
 class ProcedureFieldCopy(NamedTuple):
     """The temporary copies of a procedure-field run."""
     settings: Path
-    vocabularies: Path
     registry: Path
     content: Path
 
 
 @contextlib.contextmanager
 def procedure_fields_copy() -> Iterator[ProcedureFieldCopy]:
-    """Fresh temporary copies of ``tests/fixtures/procedure-fields/``,
-    with the fixture reaction types in its ``vocabularies/``, and of the
-    fixture registry, and a fresh content root holding the baseline as
-    its only file."""
+    """Fresh temporary copies of ``tests/fixtures/procedure-fields/`` and
+    of the fixture registry, and a fresh content root holding the
+    baseline as its only file."""
     with tempfile.TemporaryDirectory() as tmp:
         fields = Path(tmp) / "procedure-fields"
         shutil.copytree(PROCEDURE_FIELDS, fields)
-        shutil.copyfile(REACTION_TYPES,
-                        fields / "vocabularies" / REACTION_TYPES.name)
-        registry = Path(tmp) / "compounds"
-        shutil.copytree(COMPOUNDS, registry)
+        registry = Path(tmp) / "registry.json"
+        shutil.copyfile(REGISTRY, registry)
         content = Path(tmp) / "content"
         content.mkdir()
         shutil.copyfile(BASELINE, content / BASELINE.name)
-        yield ProcedureFieldCopy(fields / "orgsyndb.toml",
-                                 fields / "vocabularies", registry,
+        yield ProcedureFieldCopy(fields / "orgsyndb.toml", registry,
                                  content)
 
 
@@ -650,7 +688,7 @@ def procedure_field_run(*steps: ProcedureFieldChange,
         for step in steps:
             step(copy)
         return fixture_run(
-            copy.content, compounds=copy.registry,
+            copy.content, registry=copy.registry,
             settings=copy.settings, extra=extra)
 
 
@@ -664,22 +702,12 @@ def edit_procedure_settings(*edits: Edit) -> ProcedureFieldChange:
     return change
 
 
-def edit_procedure_vocabulary(name: str, *edits: Edit
-                              ) -> ProcedureFieldChange:
-    """A procedure-field change applying text edits to
-    ``vocabularies/<name>.toml``."""
+def edit_procedure_registry(*steps: Callable[[Table], None]
+                            ) -> ProcedureFieldChange:
+    """A procedure-field change applying ``steps`` to the registry
+    copy's table."""
     def change(copy: ProcedureFieldCopy) -> None:
-        path = copy.vocabularies / f"{name}.toml"
-        path.write_text(
-            apply_edits(path.read_text(encoding="utf-8"), edits),
-            encoding="utf-8")
-    return change
-
-
-def delete_procedure_vocabulary(name: str) -> ProcedureFieldChange:
-    """A procedure-field change deleting ``vocabularies/<name>.toml``."""
-    def change(copy: ProcedureFieldCopy) -> None:
-        (copy.vocabularies / f"{name}.toml").unlink()
+        edit_registry(*steps)(copy.registry)
     return change
 
 
@@ -707,13 +735,4 @@ def add_procedure(name: str, *edits: Edit,
         (copy.content / name).write_text(
             apply_edits(path.read_text(encoding="utf-8"), edits),
             encoding="utf-8")
-    return change
-
-
-def edit_registry_compound(*edits: Edit, key: str = "ethyl-acetate"
-                           ) -> ProcedureFieldChange:
-    """A procedure-field change applying text edits to the registry
-    copy's ``<key>.toml``."""
-    def change(copy: ProcedureFieldCopy) -> None:
-        edit_compound(key, *edits)(copy.registry)
     return change

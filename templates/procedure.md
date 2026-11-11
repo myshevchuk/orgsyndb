@@ -36,9 +36,10 @@ authors = ["A. Example"]
 # longer be used.
 status = "draft"
 
-# The kind of reaction: exactly one entry. Allowed values are listed in
-# vocabularies/reaction-types.toml, for example "esterification",
-# "reduction" or "cross-coupling".
+# The kind of reaction: exactly one entry. Allowed values are the
+# reaction types of the collection's registry, kept in the lab
+# application, for example "esterification", "reduction" or
+# "cross-coupling".
 reaction_types = ["esterification"]
 
 # Keywords for searching, at least one. Lowercase letters and digits
@@ -49,10 +50,10 @@ tags = ["change-me"]
 scale = "25 mmol"
 
 # What the procedure makes: one entry in curly braces per product,
-# separated by commas. compound is the product's key, the name of its
-# file in the collection's compounds/ folder without .toml; copy
-# templates/compound.toml there to describe a new compound. yield_percent
-# is its yield in percent, a number from 0 to 100, without quotes or %.
+# separated by commas. compound is the product's key, the key of its
+# substance in the collection's registry; a new compound is created in
+# the lab application first. yield_percent is its yield in percent, a
+# number from 0 to 100, without quotes or %.
 products = [{ compound = "example-compound", yield_percent = 85 }]
 
 # The main hazards, at least one, each as a short phrase.

@@ -19,9 +19,9 @@
 # Die Produktliste muss allein auf der letzten Custom-Front-Matter-Zeile
 # stehen; sonst legt tomelr jeden späteren Schlüssel in ihre letzte
 # [[products]]-Tabelle. Je Produkt ein Eintrag
-# ((compound . "schlüssel") (yield_percent . N)): der Schlüssel benennt die
-# Datei der Verbindung im Ordner compounds/ der Sammlung ohne .toml, die
-# Ausbeute steht in Prozent, von 0 bis 100.
+# ((compound . "schlüssel") (yield_percent . N)): der Schlüssel ist der
+# der Substanz in der Registry der Sammlung, die Ausbeute steht in
+# Prozent, von 0 bis 100.
 #+HUGO_CUSTOM_FRONT_MATTER: :products '(((compound . "example-compound") (yield_percent . 85)))
 
 * Zusammenfassung

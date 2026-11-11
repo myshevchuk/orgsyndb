@@ -33,10 +33,13 @@ import unittest
 import urllib.parse
 from collections.abc import Iterable, Iterator
 from html.parser import HTMLParser
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import (BaseHTTPRequestHandler, SimpleHTTPRequestHandler,
+                         ThreadingHTTPServer)
 from pathlib import Path
 from types import ModuleType
 from typing import Any, NamedTuple
+
+from support import with_fixture_substances
 
 REPO = Path(__file__).resolve().parent.parent
 TOOLS = REPO / "tools"
@@ -45,7 +48,7 @@ EXPORT_FIXTURES = FIXTURES / "export"
 THEME_FIXTURES = FIXTURES / "theme"
 CATALOGUE_FIXTURES = FIXTURES / "catalogue"
 GENERAL_FIXTURES = FIXTURES / "general"
-FIXTURE_COMPOUNDS = FIXTURES / "compounds"
+FIXTURE_REGISTRY = FIXTURES / "registry.json"
 FIXTURE_STATIC = FIXTURES / "static"
 PAGEFIND_QUERY = REPO / "tests" / "js" / "pagefind-query.mjs"
 SEARCH_TERMS = REPO / "site" / "assets" / "js" / "search-terms.js"
@@ -162,6 +165,76 @@ def free_port() -> int:
         return sock.getsockname()[1]
 
 
+class SnapshotServer:
+    """A local HTTP server answering ``/lab/registry/snapshot.json``
+    with a snapshot, as the lab application does, and recording the
+    ``Host`` header of each request. ``table`` is the snapshot served;
+    ``status`` the status answered; set ``body`` to answer other text.
+    ``stop`` makes the address stop answering."""
+
+    PATH = "/lab/registry/snapshot.json"
+
+    def __init__(self, table: dict[str, Any]) -> None:
+        self.table = table
+        self.status = 200
+        self.body: bytes | None = None
+        self.hosts: list[str] = []
+        owner = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:
+                owner.hosts.append(self.headers.get("Host", ""))
+                if self.path != SnapshotServer.PATH:
+                    self.send_error(404)
+                    return
+                body = (owner.body if owner.body is not None
+                        else json.dumps(owner.table).encode("utf-8"))
+                self.send_response(owner.status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args: Any) -> None:
+                pass
+
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.port = self.server.server_address[1]
+        self.thread = threading.Thread(target=self.server.serve_forever,
+                                       daemon=True)
+        self.thread.start()
+        self.running = True
+
+    @property
+    def origin(self) -> str:
+        return f"http://127.0.0.1:{self.port}"
+
+    @property
+    def url(self) -> str:
+        return self.origin + self.PATH
+
+    def stop(self) -> None:
+        """Stop answering; the port is closed."""
+        if self.running:
+            self.server.shutdown()
+            self.server.server_close()
+            self.thread.join()
+            self.running = False
+
+
+def serve_snapshot(case: unittest.TestCase,
+                   table: dict[str, Any]) -> SnapshotServer:
+    """Serve the snapshot ``table`` until ``case`` cleans up."""
+    server = SnapshotServer(table)
+    case.addCleanup(server.stop)
+    return server
+
+
+def closed_address() -> str:
+    """A snapshot address on a port nothing listens on."""
+    return f"http://127.0.0.1:{free_port()}{SnapshotServer.PATH}"
+
+
 @contextlib.contextmanager
 def read_only_dir(path: Path):
     """Make ``path`` mode 0555 and restore its mode on exit."""
@@ -258,10 +331,14 @@ class Sandbox:
                           timeout=timeout)
 
     def validator(self, *args: str | Path) -> Run:
-        """Run the copy's tools/validate.py with the collection as cwd."""
+        """Run the copy's tools/validate.py with the collection as cwd,
+        reading the collection's registry file unless ``--registry`` is
+        given."""
+        extra = [] if "--registry" in map(str, args) else [
+            "--registry", str(collection_registry(self.root))]
         done = subprocess.run(
             [sys.executable, str(self.app / "tools" / "validate.py"),
-             *map(str, args)],
+             *extra, *map(str, args)],
             cwd=self.root, env=self.env(), capture_output=True, text=True,
             timeout=120)
         return Run(done.returncode, done.stdout, done.stderr)
@@ -350,11 +427,85 @@ def make_sandbox(case: unittest.TestCase, *,
     root = base / "collection copy"
     shutil.copytree(collection, root, symlinks=True,
                     ignore=shutil.ignore_patterns("build", "public", "pdf"))
+    keep_registry_inside(collection, root)
     work = base / "work dir"
     work.mkdir()
     home = base / "home"
     home.mkdir()
     return Sandbox(app, root, work, home)
+
+
+def collection_registry(collection: Path) -> Path:
+    """The snapshot file that the ``registry`` of the collection's
+    ``orgsyndb.toml`` names, a relative path taken from the
+    collection."""
+    data = tomllib.loads(
+        (collection / "orgsyndb.toml").read_text(encoding="utf-8"))
+    if "registry" not in data:
+        raise AssertionError(f"{collection}/orgsyndb.toml names no "
+                             "registry")
+    return collection / data["registry"]
+
+
+def keep_registry_inside(original: Path, copy: Path) -> None:
+    """Make the registry of the collection ``copy`` a file of the copy
+    when the original names one outside itself, as the demo collection
+    does: the snapshot is copied to ``registry.json`` and named there."""
+    named = collection_registry(copy)
+    if named.is_file():
+        return
+    settings = copy / "orgsyndb.toml"
+    text = settings.read_text(encoding="utf-8")
+    changed = re.sub(r'(?m)^registry = .*$', 'registry = "registry.json"',
+                     text)
+    if changed == text:
+        raise AssertionError("orgsyndb.toml names no registry")
+    shutil.copyfile(collection_registry(original), copy / "registry.json")
+    settings.write_text(changed, encoding="utf-8")
+
+
+def name_registry(collection: Path, value: str) -> None:
+    """Make the ``orgsyndb.toml`` of ``collection`` name ``value`` as its
+    registry."""
+    settings = collection / "orgsyndb.toml"
+    text = settings.read_text(encoding="utf-8")
+    changed = re.sub(r'(?m)^registry = .*$',
+                     lambda _: f"registry = {json.dumps(value)}", text)
+    if changed == text and f"registry = {json.dumps(value)}" not in text:
+        raise AssertionError("orgsyndb.toml names no registry")
+    settings.write_text(changed, encoding="utf-8")
+
+
+def snapshot_digest(table: dict[str, Any]) -> str:
+    """The digest of a snapshot (lab-registry "Snapshot")."""
+    rest = {key: value for key, value in table.items() if key != "digest"}
+    return hashlib.sha256(json.dumps(
+        rest, sort_keys=True, separators=(",", ":"),
+        ensure_ascii=True).encode("utf-8")).hexdigest()
+
+
+def read_snapshot(sandbox: Sandbox) -> dict[str, Any]:
+    """The snapshot of the sandbox collection's registry file."""
+    return json.loads(collection_registry(sandbox.root).read_text(
+        encoding="utf-8"))
+
+
+def write_snapshot(sandbox: Sandbox, table: dict[str, Any]) -> None:
+    """Write ``table`` as the sandbox collection's registry file, with
+    its digest made to agree."""
+    table = {**table, "digest": snapshot_digest(table)}
+    collection_registry(sandbox.root).write_text(
+        json.dumps(table, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8")
+
+
+def edit_snapshot(sandbox: Sandbox, *steps: Any) -> None:
+    """Apply each of ``steps`` to the table of the sandbox collection's
+    registry, and write it back."""
+    table = read_snapshot(sandbox)
+    for step in steps:
+        step(table)
+    write_snapshot(sandbox, table)
 
 
 # --- GitHub Actions workflows ---------------------------------------------
@@ -585,59 +736,24 @@ def fixture_compound_keys(path: Path) -> list[str]:
     return list(dict.fromkeys(keys))
 
 
-def required_field_lines(sandbox: Sandbox, registry: Path) -> str:
-    """The lines that give a fixture compound a valid value for each
-    field that the sandbox collection's ``orgsyndb.toml`` declares
-    required: a fresh ``CH-9nnn`` for ``item_number``, one class for
-    ``chemical_class`` and ``reagents`` for ``group``. The fixture
-    registry sets no declared field."""
-    data = tomllib.loads(
-        (sandbox.root / "orgsyndb.toml").read_text(encoding="utf-8"))
-    lines = ""
-    for field in data.get("fields", {}).get("compound", []):
-        if not field.get("required"):
-            continue
-        if field["key"] == "item_number":
-            number = 9000 + len(list(registry.glob("*.toml")))
-            lines += f'item_number = "CH-{number:04d}"\n'
-        elif field["key"] == "chemical_class":
-            lines += 'chemical_class = ["alcohols"]\n'
-        elif field["key"] == "group":
-            lines += 'group = "reagents"\n'
-        else:
-            raise AssertionError(f"put_compounds cannot set the required "
-                                 f"field {field['key']}")
-    return lines
-
-
-def put_compounds(sandbox: Sandbox, *keys: str) -> list[Path]:
-    """Copy fixture registry files into the sandbox collection's
-    ``compounds/``, with the structure images they name into
-    ``static/structures/``. A file the collection already holds is kept.
-    Where the collection declares required fields, each copy also sets
-    them."""
-    copied = []
-    registry = sandbox.root / "compounds"
-    registry.mkdir(parents=True, exist_ok=True)
+def put_compounds(sandbox: Sandbox, *keys: str) -> list[str]:
+    """Add the fixture registry's substances ``keys`` to the sandbox
+    collection's registry, with the terms of their group and classes
+    that it lacks, and the structure images that the fixture static
+    files hold for them into ``static/structures/``. A substance the
+    registry already holds is kept. Returns the keys added."""
+    table = read_snapshot(sandbox)
+    added = with_fixture_substances(table, *keys)
+    if added:
+        write_snapshot(sandbox, table)
     for key in keys:
-        source = FIXTURE_COMPOUNDS / f"{key}.toml"
-        if not source.is_file():
-            raise AssertionError(f"tests/fixtures/compounds/{key}.toml is "
-                                 "missing")
-        target = registry / source.name
-        if target.exists():
-            continue
-        copied.append(Path(shutil.copy2(source, target)))
-        with target.open("a", encoding="utf-8") as handle:
-            handle.write(required_field_lines(sandbox, registry))
-        image = tomllib.loads(source.read_text(encoding="utf-8")).get(
-            "structure_image")
-        if image:
-            destination = sandbox.root / "static" / image
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            if not destination.exists():
-                shutil.copy2(FIXTURE_STATIC / image, destination)
-    return copied
+        for suffix in (".svg", ".png"):
+            source = FIXTURE_STATIC / "structures" / f"{key}{suffix}"
+            destination = sandbox.root / "static" / "structures" / source.name
+            if source.is_file() and not destination.exists():
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, destination)
+    return added
 
 
 def put_theme_fixtures(sandbox: Sandbox, *names: str) -> list[Path]:
@@ -1015,22 +1131,46 @@ def help_documents(app: Path) -> list[HelpDocument]:
 
 def reaction_labels(collection: Path,
                     language: str = "en") -> dict[str, str]:
-    """Reaction-type slug to label in ``language``, from the
-    ``vocabularies/reaction-types.toml`` of the collection at
-    ``collection``."""
-    data = tomllib.loads(
-        (collection / "vocabularies" / "reaction-types.toml")
-        .read_text(encoding="utf-8"))
-    return {slug: entry.get(f"label_{language}", entry["label"])
-            for slug, entry in data.items()}
+    """Reaction-type key to label in ``language``, from the
+    ``reaction-types`` vocabulary of the registry that the collection at
+    ``collection`` names."""
+    table = json.loads(collection_registry(collection).read_text(
+        encoding="utf-8"))
+    return {entry["key"]: (entry.get("label_de") or entry["label"])
+            if language == "de" else entry["label"]
+            for entry in table["vocabularies"]["reaction-types"]}
+
+
+def compounds_of(table: dict[str, Any],
+                 static: Path) -> dict[str, dict[str, Any]]:
+    """The substances of the snapshot ``table``, by key, as the build
+    stages them for the site (site-build "Hugo configuration"): the
+    values a substance has under ``name``, ``name_de``, ``formula``,
+    ``mw``, ``smiles``, ``cas``, ``article_number``, ``short_name`` and
+    ``group``, its classes as the list ``chemical_class``, and
+    ``structure_image`` when ``static`` holds
+    ``structures/<key>.svg`` or ``.png``."""
+    found: dict[str, dict[str, Any]] = {}
+    for entry in table["substances"]:
+        compound = {name: entry[name] for name in (
+            "name", "name_de", "formula", "mw", "smiles", "cas",
+            "article_number", "short_name", "group")
+            if entry.get(name) is not None}
+        if entry["chemical_classes"]:
+            compound["chemical_class"] = list(entry["chemical_classes"])
+        for suffix in (".svg", ".png"):
+            if (static / "structures" / f"{entry['key']}{suffix}").is_file():
+                compound["structure_image"] = (
+                    f"structures/{entry['key']}{suffix}")
+                break
+        found[entry["key"]] = compound
+    return found
 
 
 def read_registry(sandbox: Sandbox) -> dict[str, dict[str, Any]]:
-    """Each compound file of the sandbox collection's ``compounds/``, by
-    key."""
-    registry = sandbox.root / "compounds"
-    return {path.stem: tomllib.loads(path.read_text(encoding="utf-8"))
-            for path in sorted(registry.glob("*.toml"))}
+    """Each substance of the sandbox collection's registry, by key, as
+    ``compounds_of`` states."""
+    return compounds_of(read_snapshot(sandbox), sandbox.root / "static")
 
 
 def shown_name(compound: dict[str, Any], locale: str) -> str:

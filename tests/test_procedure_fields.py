@@ -7,13 +7,11 @@ import tomllib
 import unittest
 from pathlib import Path
 
-import test_compound_fields as compound_tests
-from support import (BASELINE, GENERAL, PROCEDURE_FIELDS, add_procedure,
-                     append_text, declaration, edit_procedure,
-                     edit_procedure_settings, edit_procedure_vocabulary,
-                     edit_registry_compound, insert_after, insert_line,
-                     procedure_declaration, procedure_field_run,
-                     replace_line, replace_text)
+from support import (BASELINE, GENERAL, PROCEDURE_FIELDS, REGISTRY,
+                     FieldTestCase, add_procedure, append_text, declaration,
+                     edit_procedure, edit_procedure_settings, insert_after,
+                     insert_line, load_snapshot, procedure_declaration,
+                     procedure_field_run, replace_line, replace_text)
 from test_localization import germanised
 
 BASELINE_FILE = BASELINE.name
@@ -62,7 +60,7 @@ def add_german(*edits, name: str = "OSDB-0100-baseline.de.md"):
     return add_procedure(name, germanised, *edits)
 
 
-class ProcedureFieldTestCase(compound_tests.FieldTestCase):
+class ProcedureFieldTestCase(FieldTestCase):
     def assert_errors_on(self, result, field: str, text: str,
                          *names: str) -> None:
         """Exit status 1 and exactly one error per file name in
@@ -96,19 +94,18 @@ class ProcedureFieldFixtureTests(unittest.TestCase):
              "label": "Inert atmosphere"},
             {"key": "project", "type": "choice", "label": "Project",
              "label_de": "Projekt", "vocabulary": "projects"}])
-        vocabularies = PROCEDURE_FIELDS / "vocabularies"
-        self.assertEqual([p.name for p in vocabularies.iterdir()],
-                         ["projects.toml"])
-        projects = tomllib.loads(
-            (vocabularies / "projects.toml").read_text(encoding="utf-8"))
-        self.assertEqual(list(projects), ["teaching", "first-year-practical",
-                                          "research"])
-        self.assertEqual(projects, {
-            "teaching": {"label": "Teaching", "label_de": "Lehre"},
-            "first-year-practical": {
-                "label": "First-year practical",
-                "label_de": "Grundpraktikum", "parent": "teaching"},
-            "research": {"label": "Research", "label_de": "Forschung"}})
+        self.assertEqual(
+            [p.name for p in PROCEDURE_FIELDS.iterdir()],
+            ["orgsyndb.toml"])
+        projects = load_snapshot(REGISTRY)["vocabularies"]["projects"]
+        self.assertEqual(
+            {entry["key"]: (entry["label"], entry["label_de"],
+                            entry["parent"]) for entry in projects},
+            {"teaching": ("Teaching", "Lehre", None),
+             "first-year-practical": ("First-year practical",
+                                      "Grundpraktikum", "teaching"),
+             "research": ("Research", "Forschung", None)})
+        self.assertEqual(len(projects), 3)
 
     def test_the_fixture_declares_no_required_unique_or_facet_option(
             self) -> None:
@@ -133,11 +130,6 @@ class ProcedureFieldDeclarationTests(ProcedureFieldTestCase):
             insert_after('key = "inert_atmosphere"', "facet = true"),
             insert_after('key = "project"', "facet = true"))))
 
-    def test_one_key_for_a_compound_and_a_procedure_field(self) -> None:
-        """Scenario: One key for a compound and a procedure field."""
-        self.assert_clean(procedure_field_run(edit_procedure_settings(
-            append_text(declaration("notebook", "text", "Notebook")))))
-
     def test_a_settings_file_without_procedure_fields_declares_none(
             self) -> None:
         """Requirement: Procedure field declarations (no
@@ -147,25 +139,6 @@ class ProcedureFieldDeclarationTests(ProcedureFieldTestCase):
             set_values('notebook = "AE-1/2"'))
         self.assert_one(result, "warning", "notebook", "unknown field",
                         path_suffix=BASELINE_FILE)
-
-    def test_compound_declarations_declare_no_procedure_field(
-            self) -> None:
-        """Requirement: Procedure field declarations (a collection that
-        declares only compound fields declares no procedure field)."""
-        result = procedure_field_run(
-            edit_procedure_settings(lambda _: "format = 1\n" + declaration(
-                "notebook", "text", "Notebook")),
-            set_values('notebook = "AE-1/2"'))
-        self.assert_one(result, "warning", "notebook", "unknown field",
-                        path_suffix=BASELINE_FILE)
-
-    def test_procedure_declarations_declare_no_compound_field(self) -> None:
-        """Requirement: Procedure field declarations (a procedure field
-        and a compound field may have the same key, and never meet)."""
-        result = procedure_field_run(
-            edit_registry_compound(append_text('notebook = "AE-1/2"')))
-        self.assert_one(result, "warning", "notebook", "unknown field",
-                        path_suffix="ethyl-acetate.toml")
 
     def test_keys_that_follow_the_pattern_are_accepted(self) -> None:
         """Requirement: Procedure field declarations (the key pattern)."""
@@ -206,14 +179,17 @@ class ProcedureFieldDeclarationTests(ProcedureFieldTestCase):
             set_values('main_project = "research"',
                        'project = "teaching"')))
 
-    def test_a_vocabulary_that_no_declaration_names_is_not_read(
-            self) -> None:
-        """Requirement: Procedure field declarations (the vocabularies
-        of compound-fields "Vocabularies")."""
-        def write(copy) -> None:
-            (copy.vocabularies / "unused.toml").write_text(
-                "this is [not toml\n", encoding="utf-8")
-        self.assert_clean(procedure_field_run(write))
+    def test_a_choice_may_name_each_of_the_four_vocabularies(self) -> None:
+        """Requirement: Procedure field declarations (`vocabulary`, one
+        of the registry's four)."""
+        for name in ("chemical-classes", "inventory-groups", "projects",
+                     "reaction-types"):
+            with self.subTest(vocabulary=name):
+                self.assert_clean(procedure_field_run(
+                    edit_procedure_settings(append_text(
+                        procedure_declaration(
+                            "category", "choice", "Category",
+                            f'vocabulary = "{name}"')))))
 
 
 class ProcedureDeclarationErrorTests(ProcedureFieldTestCase):
@@ -396,9 +372,8 @@ class ProcedureDeclarationErrorTests(ProcedureFieldTestCase):
         self.assert_configuration_error(result, "notebook", "pattern")
 
     def test_a_bound_that_is_not_usable(self) -> None:
-        """Requirement: Procedure declaration errors are configuration
-        errors (a bound that breaks the rules of the compound
-        declarations)."""
+        """Scenario: A bound that is not a number, with the other bounds
+        the declaration rules refuse."""
         for old, new, option in (
                 ("min = 0", "min = 5\nmax = 1", "min"),
                 ("min = 0", "min = 0\nmax = nan", "max"),
@@ -437,18 +412,55 @@ class ProcedureDeclarationErrorTests(ProcedureFieldTestCase):
             'vocabulary = "no-such-vocabulary"')))
         self.assert_configuration_error(result, "no-such-vocabulary")
 
-    def test_a_vocabulary_that_breaks_its_rules(self) -> None:
+    def test_a_vocabulary_of_the_collection_is_not_one_of_the_four(
+            self) -> None:
         """Requirement: Procedure declaration errors are configuration
-        errors (a vocabulary that breaks the rules of the compound
-        declarations)."""
-        result = procedure_field_run(edit_procedure_vocabulary(
-            "projects", replace_text(
-                'parent = "teaching"', 'parent = "no-such-project"')))
-        self.assert_configuration_error(result, "projects", "parent")
-        result = procedure_field_run(edit_procedure_vocabulary(
-            "projects", append_text('\n[teaching-again]\n'
-                                    'label_de = "Lehre"')))
-        self.assert_configuration_error(result, "projects", "label")
+        errors (the vocabulary a `choice` field names is not one of the
+        registry's four)."""
+        for name in ("storage", "Projects", "projects.toml", ""):
+            with self.subTest(vocabulary=name):
+                result = procedure_field_run(edit_procedure_settings(
+                    replace_text('vocabulary = "projects"',
+                                 f'vocabulary = "{name}"')))
+                self.assert_configuration_error(result, "project")
+
+    def test_a_compound_declaration(self) -> None:
+        """Scenario: A compound declaration."""
+        result = procedure_field_run(edit_procedure_settings(append_text(
+            declaration("notebook", "text", "Notebook"))))
+        self.assert_configuration_error(result, "fields.compound")
+
+    def test_a_compound_declaration_beside_procedure_declarations(
+            self) -> None:
+        """Requirement: Procedure declaration errors are configuration
+        errors (`fields` holds a key other than `procedure`, `compound`
+        among them)."""
+        for name, text in {
+                "the fixture's own key": declaration(
+                    "notebook", "text", "Notebook"),
+                "a built-in registry key": declaration(
+                    "article_number", "text", "Article no."),
+                "a single table": ('\n[fields.compound]\nkey = "x"\n'
+                                   'type = "text"\nlabel = "X"\n')
+        }.items():
+            with self.subTest(case=name):
+                result = procedure_field_run(
+                    edit_procedure_settings(append_text(text)))
+                self.assert_configuration_error(result, "fields.compound")
+
+    def test_a_compound_declaration_alone(self) -> None:
+        """Requirement: Procedure declaration errors are configuration
+        errors (a settings file that declares only compound fields)."""
+        result = procedure_field_run(edit_procedure_settings(
+            lambda _: "format = 1\n" + declaration("x", "text", "X")))
+        self.assert_configuration_error(result, "fields.compound")
+
+    def test_a_misspelt_top_level_key(self) -> None:
+        """Scenario: A misspelt top-level key."""
+        result = procedure_field_run(edit_procedure_settings(
+            lambda text: text.replace("[[fields.procedure]]",
+                                      "[[feilds.procedure]]")))
+        self.assert_configuration_error(result, "feilds")
 
     def test_a_misspelt_entity_under_fields(self) -> None:
         """Requirement: Procedure declaration errors are configuration
@@ -546,8 +558,7 @@ class ProcedureFieldValueTests(ProcedureFieldTestCase):
     def test_a_value_outside_the_vocabulary(self) -> None:
         """Scenario: A value outside the vocabulary."""
         self.check_one('project = "outreach"', "project",
-                       'unknown value "outreach"',
-                       "vocabularies/projects.toml")
+                       'unknown value "outreach"', "projects")
 
     def test_a_choice_may_name_a_value_at_any_level(self) -> None:
         """Requirement: Procedure field values (`choice` at every level
@@ -748,17 +759,6 @@ class DeclaredKeyTests(ProcedureFieldTestCase):
         declaration names is outside the schema)."""
         result = procedure_field_run(set_values("working_tme = 2.5"))
         self.assert_one(result, "warning", "working_tme", "unknown field",
-                        path_suffix=BASELINE_FILE)
-
-    def test_a_key_declared_for_compounds_is_unknown_in_a_procedure(
-            self) -> None:
-        """Requirement: Procedure field values (only a procedure field's
-        key is declared)."""
-        result = procedure_field_run(
-            edit_procedure_settings(append_text(
-                declaration("item_number", "text", "Item no."))),
-            set_values('item_number = "CH-0001"'))
-        self.assert_one(result, "warning", "item_number", "unknown field",
                         path_suffix=BASELINE_FILE)
 
 

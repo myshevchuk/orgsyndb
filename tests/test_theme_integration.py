@@ -530,7 +530,7 @@ class ShippedSiteTests(SiteCase):
         the sequence directory and the compound pages, so that a stray
         note or link shows too."""
         beside = [f.key for f in self.compound_fields() if f.beside]
-        self.assertEqual(beside, ["item_number", "short_name"])
+        self.assertEqual(beside, ["article_number", "short_name"])
         noted: dict[str, int] = {}
         for path, page in self.pages():
             where = path.relative_to(self.public).as_posix()

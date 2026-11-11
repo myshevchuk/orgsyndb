@@ -34,6 +34,7 @@
 #+AI_PASS: fact-check claude-opus-5-5 [2026-11-03 Tue 08:18] -- doc-writer pass line corrected from gpt-6 to the pinned run model; #+LAST_MODIFIED is updated on save by the Emacs package
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-07 Sat 11:46] -- Artikelnummern, Pflichtfelder und Verbindungslink der Beispielsammlung
 #+AI_PASS: fact-check claude-opus-5-5 [2026-11-07 Sat 11:49] -- doc-writer pass line corrected from gpt-6 to the pinned run model
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-11 Wed 18:17] -- Laborregister, feste Verbindungsfelder, Bilder, Vokabulare und Validierung
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
@@ -43,10 +44,11 @@ zeigt jede Vorschrift, in welcher Sprache auch immer. Org-Schlüsselwörter,
 Feldnamen, Statuswerte, Schlagwörter und die Wochentage der Zeitstempel
 bleiben auch in einer deutschen Vorschrift englisch.
 
-Reaktionstyp-Kürzel übernehmen Sie in jeder Sprache unverändert aus
-~vocabularies/reaction-types.toml~ Ihrer Sammlung. Bearbeiten Sie diese
-Datei, um die erlaubten Reaktionstypen zu ändern. Die
-[[file:SCHEMA.de.md][Schema-Referenz]] erklärt das Format und die Startliste.
+Reaktionstyp-Kürzel übernehmen Sie in jeder Sprache unverändert aus dem
+Vokabular ~reaction-types~ des Laborregisters. Ein Vokabular ist eine Liste
+erlaubter Begriffe. Legen Sie Reaktionstypen in der Laboranwendung an und
+bearbeiten Sie sie dort. Die [[file:SCHEMA.de.md][Schema-Referenz]] erklärt die Werte und
+Meldungen.
 
 * Mit einem erzeugten Gerüst beginnen
 
@@ -110,6 +112,9 @@ Datei, um die erlaubten Reaktionstypen zu ändern. Die
     Status, Reaktionstyp, Ansatzgröße, Produkten mit ihren Ausbeuten,
     Gefahren und optionalen Feldern.
 
+  Wählen Sie ~:reaction_types~ aus dem Vokabular ~reaction-types~ des
+  Laborregisters.
+
   Prüfen Sie ~orgsyndb.toml~ auf Felder unter ~[[fields.procedure]]~, die
   zusätzlichen Vorschriftenangaben Ihrer Sammlung. Ergänzen Sie eine Zeile
   ~#+HUGO_CUSTOM_FRONT_MATTER:~ vor ~:products~, das zuletzt bleibt. Die
@@ -122,14 +127,17 @@ Datei, um die erlaubten Reaktionstypen zu ändern. Die
   Text und Auswahlschlüssel stehen in doppelten Anführungszeichen, Zahlen
   und ~true~ oder ~false~ ohne. Zahlen haben einen Dezimalpunkt und keine
   Einheit. Eine Mehrfachauswahl verwendet eine gequotete Liste, etwa
-  ~:techniques '("reflux" "distillation")~, wenn die Sammlung dieses Feld
-  und diese Vokabularwerte deklariert. ~required = true~ verlangt einen Wert
+  ~:project '("first-year-practical" "advanced-practical")~, wenn die Sammlung
+  ~project~ mit ~multiple = true~ deklariert und das Vokabular ~projects~
+  des Beispielregisters verwendet. ~required = true~ verlangt einen Wert
   in jeder Vorschrift, auch in allgemeinen Vorschriften. Bei ~unique = true~
   darf keine andere Vorschrift denselben Wert verwenden; Übersetzungen einer
   Vorschrift zählen als eine. Die vier Beispielfelder sind optional. Ein
   Laborjournalverweis muss ~[A-Z]{2}-\d+/\d+~ entsprechen und noch unvergeben
   sein; die Arbeitszeit steht in Stunden und ist mindestens null.
-  Projektschlüssel kommen aus [[file:../examples/demo/vocabularies/projects.toml][projects.toml]]. Die
+  Projektschlüssel kommen aus dem Vokabular ~projects~ des Laborregisters.
+  Das Feld ~vocabulary~ einer Auswahl benennt ~chemical-classes~,
+  ~inventory-groups~, ~projects~ oder ~reaction-types~. Die
   [[file:SCHEMA.de.md][Feldreferenz]] nennt alle Regeln.
 
   Der Export mit ox-hugo/tomelr hat eine Grenze bei der Typumwandlung: Er
@@ -147,8 +155,8 @@ Datei, um die erlaubten Reaktionstypen zu ändern. Die
 
   Bei einer Einzelvorschrift setzen Sie ~:products~ auf eine gequotete Liste
   mit einem Eintrag pro Produkt. Jeder Eintrag enthält den Schlüssel ~compound~
-  und ~yield_percent~. Ein Schlüssel ist der Name einer Datei in ~compounds/~
-  der Sammlung ohne ~.toml~. ~:products~ steht allein auf der letzten
+  und ~yield_percent~. Ein Schlüssel bezeichnet einen Stoff im Register
+  der Laboranwendung. ~:products~ steht allein auf der letzten
   Custom-Front-Matter-Zeile. Der Export hält tabellenartige Metadaten
   zusätzlich am Ende, damit spätere Felder nicht zur letzten Tabelle
   ~[[products]]~ gehören.
@@ -181,8 +189,9 @@ Datei, um die erlaubten Reaktionstypen zu ändern. Die
   #+HUGO_TAGS: esterification fragrance
 #+end_src
 
-  Produktnamen, chemische Daten und Strukturbilder gehören in das im
-  nächsten Abschnitt beschriebene Verbindungsregister.
+  Produktnamen und chemische Daten kommen aus dem Laborregister.
+  Strukturbilder gehören in ~static/structures/~ der Sammlung, wie im
+  nächsten Abschnitt beschrieben.
 
   Verwenden Sie die Anführungs- und Listenformen der Vorlage. Autoren und
   Gefahren sind zum Beispiel gequotete Lisp-Listen wie
@@ -196,55 +205,46 @@ Datei, um die erlaubten Reaktionstypen zu ändern. Die
 
 * Verbindungen finden oder anlegen
 
-  Das /Verbindungsregister/ ist der Ordner ~compounds/~ der Sammlung.
-  Eine Datei ~<key>.toml~ beschreibt jede Verbindung. Alle Vorschriften,
-  die sie herstellen oder verwenden, teilen sich diese Daten. Suchen Sie
-  zuerst nach einem vorhandenen Eintrag. Der Schlüssel bestimmt die
-  Identität der Verbindung; die Website vergleicht keine Strukturen,
-  um doppelte Einträge zu erkennen.
+  Das /Verbindungsregister/ ist die Stoffliste der Laboranwendung. Alle
+  Vorschriften, die diese Stoffe herstellen oder verwenden, teilen sich die
+  Daten. Öffnen Sie ~/lab/registry/~ in der Laboranwendung und suchen Sie
+  zuerst nach einem vorhandenen Stoff. Der Schlüssel bestimmt die Identität
+  der Verbindung; die Website vergleicht keine Strukturen, um doppelte
+  Einträge zu erkennen.
 
-  Kopieren Sie für eine neue Verbindung
-  [[file:../templates/compound.toml][templates/compound.toml]] nach ~compounds/~. Wählen Sie einen Dateinamen aus Kleinbuchstaben und Ziffern
-  mit einzelnen Bindestrichen, etwa ~ethyl-acetate.toml~. In ~:products~
-  oder ~:substrates~ verwenden Sie ~ethyl-acetate~ als Schlüssel. Ersetzen
-  Sie den Vorlagenschlüssel ~example-compound~ durch den tatsächlich
-  verwendeten Schlüssel. Ein neues Vorschriftengerüst legt keine
-  Verbindungseinträge an.
+  Legen Sie Stoffe in der Laboranwendung an und bearbeiten Sie sie dort.
+  Verwenden Sie den Stoffschlüssel in ~:products~ oder ~:substrates~, etwa
+  ~ethyl-acetate~. Schlüssel bestehen aus Kleinbuchstaben und Ziffern mit
+  einzelnen Bindestrichen. Ersetzen Sie den Vorlagenschlüssel
+  ~example-compound~ durch den tatsächlich verwendeten Schlüssel. Ein neues
+  Vorschriftengerüst legt keinen Stoff an.
 
-  Die Verbindungsdatei ist TOML, auch wenn Ihre Vorschrift Org ist. Sie hat
-  weder ~+++~-Zeilen noch eine Überschrift ~[product]~. Füllen Sie ~name~,
-  ~formula~, ~mw~ in g/mol und ~smiles~ aus. SMILES ist die Textschreibweise
-  der Strukturformel. Text steht in doppelten Anführungszeichen; die
-  Molmasse ist eine positive Zahl ohne Anführungszeichen und mit
-  Dezimalpunkt. Das optionale ~name_de~ liefert den Namen auf einer
-  deutschen Website; fehlt es, zeigt diese ~name~. Eine englische Website
-  verwendet immer ~name~. Optional sind auch ~cas~, die CAS-Registriernummer,
-  und ~structure_image~.
+  Die ~orgsyndb.toml~ der Sammlung benennt das Register unter ~registry~:
+  die Adresse eines Snapshots der Laboranwendung, also einer gespeicherten
+  Kopie ihres Registers, etwa
+  ~http://localhost:8000/lab/registry/snapshot.json~, oder den Pfad einer
+  Snapshot-Datei. Ein relativer Pfad beginnt im Ordner der Sammlung. Eine
+  nicht leere Umgebungsvariable ~ORGSYNDB_REGISTRY~ ersetzt diese Einstellung.
+  Bitten Sie die oder den Verantwortlichen, das Register einzutragen, wenn
+  die Sammlung keines benennt.
 
-  Prüfen Sie die ~orgsyndb.toml~ Ihrer Sammlung auf weitere Felder unter
-  ~[[fields.compound]]~. Bei ~required = true~ muss jede Verbindung das
-  Feld setzen. Tragen Sie die deklarierten Felder beim Schlusskommentar der
-  Vorlage als weitere Zeilen ~key = value~ in der Verbindungsdatei ein.
-  Die [[file:../examples/demo/orgsyndb.toml][Einstellungen der Beispielsammlung]] verlangen ~chemical_class~
-  und ~group~. Wählen Sie für ~chemical_class~ eine nicht leere Liste von
-  Wertschlüsseln aus
-  [[file:../examples/demo/vocabularies/chemical-classes.toml][vocabularies/chemical-classes.toml]]. Setzen Sie ~group~ auf einen Wert aus
-  [[file:../examples/demo/vocabularies/inventory-groups.toml][vocabularies/inventory-groups.toml]]: ~starting-materials~, ~reagents~,
-  ~intermediates~ oder ~final-products~. Das optionale ~item_number~ ist
-  die Artikelnummer auf Lieferscheinen. Setzen Sie es nur für ein
-  Endprodukt, das bereits abgegeben wurde, mit einer eindeutigen Nummer
-  aus ~CH-~ und vier Ziffern. Nur sechs Endprodukte der Beispielsammlung
-  setzen es. Die
-  [[file:SCHEMA.de.md][Schema-Referenz]] nennt Feldtypen, Regeln und Validatormeldungen.
+  Namen und chemische Daten kommen vom Stoff in diesem Register:
+  Summenformel, Molmasse in g/mol, SMILES als Textschreibweise für
+  Molekülstrukturen und CAS-Registriernummer. Eine englische Website verwendet
+  ~name~, eine deutsche ~name_de~, falls vorhanden, sonst ~name~. Die Website
+  zeigt außerdem Artikelnummer, Kurzname, Stoffklassen und Gruppe des Stoffs.
+  Diese vier Felder sind fest eingebaut; ihre Anzeige ist vorgegeben. Die
+  [[file:SCHEMA.de.md][Schema-Referenz]] nennt die Einzelheiten.
 
-  Für ein Strukturbild legen Sie eine SVG- oder PNG-Datei in
-  ~static/structures/~ der Sammlung ab. Setzen Sie ~structure_image~ in der
-  Verbindungsdatei, etwa ~structure_image = "structures/isopentyl-acetate.svg"~
-  für ~isopentyl-acetate~. Ein Struktur-SVG verwendet schwarze Linien und
-  Schrift auf einem weißen Hintergrundrechteck. Es hat ein ~<title>~ und
-  enthält keine Skripte, externen Bilder oder anderen externen Verweise.
-  Der weiße Hintergrund hält die Zeichnung im dunklen Farbschema der
-  Website und auf Papier lesbar.
+  Für ein Strukturbild legen Sie ~static/structures/<key>.svg~ oder
+  ~static/structures/<key>.png~ in der Sammlung ab. Verwenden Sie den
+  Stoffschlüssel, etwa ~static/structures/isopentyl-acetate.svg~ für
+  ~isopentyl-acetate~. Sind beide Dateien vorhanden, verwendet der Build das
+  SVG. Ohne eine dieser Dateien hat der Stoff kein Strukturbild. Ein
+  Struktur-SVG verwendet schwarze Linien und Schrift auf einem weißen
+  Hintergrundrechteck. Es hat ein ~<title>~ und enthält keine Skripte,
+  externen Bilder oder anderen externen Verweise. Der weiße Hintergrund
+  hält die Zeichnung im dunklen Farbschema der Website und auf Papier lesbar.
 
   Sie dürfen einen Ausgangsstoff registrieren, ohne dass eine Vorschrift ihn
   herstellt. Auch eine Verbindung, die keine Vorschrift verwendet, ist
@@ -271,8 +271,8 @@ Datei, um die erlaubten Reaktionstypen zu ändern. Die
   Eintragsnummer, Ausbeute und Status wie unter *Hergestellt nach*. Alle
   veröffentlichten Vorschriften nehmen unabhängig vom Status teil. Ein
   Eintrag einer allgemeinen Vorschrift verwendet nur seine eigenen
-  Ausgangsstoffe. Die Verbindungslinks tragen die Werte der mit ~beside =
-  true~ deklarierten Felder.
+  Ausgangsstoffe. Die Verbindungslinks tragen Artikelnummer und Kurzname des
+  Stoffs, sofern vorhanden.
 
   Beginnt eine Stufe mit einer Verbindung, die auf demselben Ast bereits
   weiter oben steht, entfällt sie; Kreise werden nicht verfolgt. Würden alle
@@ -284,7 +284,7 @@ Datei, um die erlaubten Reaktionstypen zu ändern. Die
   abgeschnittene Verbindung trägt den Zusatz *weitere Stufen auf ihrer
   Seite*; folgen Sie ihrem Link, um den Weg fortzusetzen. Der Build leitet
   die Herstellungswege ab. Dafür tragen Sie nichts zusätzlich in eine
-  Vorschrift, eine Verbindungsdatei oder ~orgsyndb.toml~ ein.
+  Vorschrift oder ~orgsyndb.toml~ ein.
 
 * Eine allgemeine Vorschrift schreiben
 
@@ -397,14 +397,13 @@ Datei, um die erlaubten Reaktionstypen zu ändern. Die
   Textes stehen auf einem breiten Bildschirm neben dem Datenfeld, in einem
   schmalen Fenster und im Ausdruck danach.
 
-  Nach jedem Produkt- oder Ausgangsstofflink zeigt das Datenfeld die Werte,
-  die die Verbindung für Felder mit der Deklaration ~beside = true~ setzt.
+  Nach jedem Produkt- oder Ausgangsstofflink zeigt das Datenfeld
+  Artikelnummer und Kurzname des Stoffs, sofern vorhanden, in dieser
+  Reihenfolge.
   Der Linktext bleibt der Verbindungsname. Nach einem Leerzeichen folgt ein
   Zusatz in Klammern und gedeckter Farbe, in der Beispielsammlung etwa
-  *Essigsäureanhydrid (Ac2O)*. Die Werte stehen ohne Feldnamen in
-  Deklarationsreihenfolge, durch Komma und Leerzeichen getrennt.
-  Jeder Wert erscheint wie auf der Verbindungsseite; Zahlen verwenden das
-  Dezimalzeichen der Website und ihre Einheit.
+  *Essigsäureanhydrid (Ac2O)*. Die Werte stehen ohne Feldnamen, durch Komma
+  und Leerzeichen getrennt, wie auf der Verbindungsseite.
   Setzt eine Verbindung keinen dieser Werte, entfällt der Zusatz.
   Die Vorschriftensuche findet diese Werte, weil das Datenfeld indexiert wird.
   Die Ausbeutezeile, die Katalogansicht *Details*, Alternativtexte von Bildern
@@ -427,8 +426,9 @@ Datei, um die erlaubten Reaktionstypen zu ändern. Die
   *Produkte* und *Ausbeute* erscheinen immer. *Ansatzgröße*, *Zeit*,
   *Temperatur* und *Anmerkung* erscheinen nur, wenn mindestens ein Eintrag das
   Feld setzt; ungesetzte Werte lassen leere Zellen. Verbindungen verlinken auf
-  ihre Seiten, und Produkte zeigen kleine Strukturbilder, sofern im Register
-  vorhanden. Die Verbindungslinks tragen dieselben Zusätze wie im Datenfeld.
+  ihre Seiten, und Produkte zeigen kleine Strukturbilder, sofern die Sammlung
+  passende Bilddateien enthält. Die Verbindungslinks tragen dieselben Zusätze
+  wie im Datenfeld.
   Eintrag 1 von OSDB-0009 stellt denselben Alkohol wie OSDB-0005
   her, sodass die Verbindungsseite beide Wege nennt.
 
@@ -547,8 +547,8 @@ Datei, um die erlaubten Reaktionstypen zu ändern. Die
      übersetzen Sie darin nur ~note~. Der Validator vergleicht die gemeinsamen
      Felder mit dem Original und meldet Abweichungen als Fehler. Zahlen werden
      nach ihrem Wert verglichen: ~85~ und ~85.0~ stimmen überein.
-     Verbindungsnamen kommen aus ~name~ und ~name_de~ im gemeinsamen Register.
-     Tragen Sie den deutschen Namen dort in ~name_de~ ein.
+     Verbindungsnamen kommen aus ~name~ und ~name_de~ im Laborregister.
+     Tragen Sie den deutschen Namen in der Laboranwendung in ~name_de~ ein.
   5. Übersetzen Sie den Text, ersetzen Sie die englischen Überschriften
      und Tabellenspalten durch die deutschen und schreiben Sie
      Dezimalkommas. Richten Sie sich dabei nach dem
@@ -635,24 +635,30 @@ Datei, um die erlaubten Reaktionstypen zu ändern. Die
   - Er ignoriert dateilokale Variablen.
 
   Prüfen Sie die Org-Quellen, das gesamte exportierte oder von Hand
-  geschriebene Markdown, das Verbindungsregister und die Synthesewege in
-  ~md/sequences/~ mit:
+  geschriebene Markdown und die Synthesewege in ~md/sequences/~ gegen das
+  Register mit:
 
 #+begin_src sh
   orgsyndb validate
 #+end_src
 
-  ~orgsyndb validate~ führt zuerst den Export aus. Meldet dieser einen
-  Org-Fehler, endet die Prüfung dort und startet den Markdown-Validator
-  nicht. Sonst lassen Fehler in Vorschriften, Verbindungseinträgen oder
-  Synthesewegen die Prüfung scheitern, Warnungen nicht. Der Befehl verwendet
-  ~compounds/~ und ~static/~ der Sammlung und übergibt dem Validator
-  ~--sequences md/sequences~. Ein Feld wie ~products[1].yield_percent~
-  nennt die Ausbeute im ersten Produkteintrag; die Zählung beginnt bei 1.
-  Bei ~unknown compound~ prüfen Sie den Schlüssel und seine Registerdatei.
-  Registerprobleme nennen die Verbindungsdatei und ihr Feld, etwa
-  ~compounds/ethyl-acetate.toml:mw~. Die Zusammenfassung zählt auch
-  Verbindungs- und Synthesewegdateien, einschließlich der Sprachfassungen.
+  ~orgsyndb validate~ liest das Register ein und führt dann den Export aus.
+  Meldet dieser einen Org-Fehler, endet die Prüfung dort und startet den
+  Markdown-Validator nicht. Sonst lassen Fehler in Vorschriften,
+  Synthesewegen oder im Register die Prüfung scheitern, Warnungen nicht.
+  Die Laboranwendung prüft die Werte
+  der Stoffe. Der Befehl übergibt dem Validator ~--registry build/registry.json~,
+  ~--static-dir static~ und ~--sequences md/sequences~. Ein Feld wie
+  ~products[1].yield_percent~ nennt die Ausbeute im ersten Produkteintrag;
+  die Zählung beginnt bei 1.
+  Bei ~unknown compound~ prüfen Sie den Schlüssel im Laborregister.
+  Ein Registerfehler unter ~substances~ bezeichnet einen Stoff mit dem
+  Schlüssel ~group~, der mit dem Verzeichnis für die Gruppenreiter der
+  Website kollidiert. Die Laboranwendung lässt diesen Schlüssel nicht zu;
+  die Snapshot-Datei wurde also anders erzeugt. Geben Sie dem Stoff dort
+  einen anderen Schlüssel.
+  Die Zusammenfassung zählt Vorschriften und Synthesewegdateien,
+  einschließlich der Sprachfassungen.
   Die Meldungen sind englisch. Meldet der Validator für
   eine deutsche Datei
   ~missing section "Summary"~, fehlt ihrem Namen das ~.de~. Die
@@ -694,9 +700,10 @@ Datei, um die erlaubten Reaktionstypen zu ändern. Die
   Eine Synthesewegseite zeigt Nummer und Titel, *Stufen* und *Gesamtausbeute*,
   ein Schema, die verlinkten Vorschriften mit gegebenenfalls Eintragsnummer,
   Reaktionstyp, Ausbeute und Status, danach Ihre Anmerkungen. Das Schema zeigt
-  Ausgangsstoffe, Zwischenprodukte und Ziel mit vorhandenen Strukturbildern
-  aus dem Register. Die Verbindungslinks im Schema und die Ziele im
-  Synthesewegverzeichnis tragen dieselben Zusätze wie im Datenfeld.
+  Ausgangsstoffe, Zwischenprodukte und Ziel mit passenden Strukturbildern
+  aus ~static/structures/~, sofern vorhanden. Die Verbindungslinks im Schema
+  und die Ziele im Synthesewegverzeichnis tragen dieselben Zusätze wie im
+  Datenfeld.
   Ein Plus verbindet die Ausgangsstoffe der ersten Stufe; Pfeile nennen
   Stufennummer, Reaktionstyp und Ausbeute. In schmalen Fenstern verläuft
   das Schema nach unten. Synthesewegseiten fehlen im Suchindex für

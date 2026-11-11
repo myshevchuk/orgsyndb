@@ -58,8 +58,8 @@ The registry's pages SHALL need no sign-in:
 - **THEN** the page is headed `(E)-Zimtsäure`, links `In der Sammlung` to `/compounds/cinnamic-acid/`, and lists the article's items under `Gebinde`
 
 #### Scenario: Not in the collection
-- **WHEN** the demo data set is written and a test client requests `/lab/registry/substances/new-compound-7/`
-- **THEN** the page is headed `Neuverbindung 7` and has no link `In der Sammlung`
+- **WHEN** the demo data set is written, the substance `ethyl-acetate`, named `Ethylacetat`, is added to the registry after the collection index was written, and a test client requests `/lab/registry/substances/ethyl-acetate/`
+- **THEN** the page is headed `Ethylacetat` and has no link `In der Sammlung`
 
 ### Requirement: Registry forms
 A signed-in user SHALL create and edit substances and terms through these forms, each saved with its change history:
@@ -67,7 +67,7 @@ A signed-in user SHALL create and edit substances and terms through these forms,
 - `/lab/registry/substances/new/` and `/lab/registry/substances/<key>/edit/`: the key, on the new form only; the name and German name; the short name; the group, a choice of the groups in the order of their page; the chemical classes, a check box per class in that order, at least one checked; the formula; the molar mass; the SMILES; the CAS number; and the note. After saving, the substance's page opens.
 - `/lab/registry/<vocabulary>/new/` and `/lab/registry/<vocabulary>/<key>/edit/`: the key, on the new form only; the label and German label; and, for the trees, the parent, a choice of the vocabulary's terms without the term itself and the terms filed under it, or none. After saving, the vocabulary's page opens.
 
-A key that breaks its pattern or is taken, a molar mass that is not a number above zero, and a CAS number of the wrong form, with a wrong check digit or taken, show an error at their field and save nothing. A number may be entered with a decimal comma.
+A key that breaks its pattern or is taken, the substance key `group`, which names the directory of the site's compound tabs (site-catalogue "Compound tabs"), a molar mass that is not a number above zero, and a CAS number of the wrong form, with a wrong check digit or taken, show an error at their field and save nothing. A number may be entered with a decimal comma.
 
 #### Scenario: New substance
 - **WHEN** a signed-in user posts the new-substance form with the key `ethyl-acetate`, the name `Ethyl acetate`, the group `reagents`, the chemical class `esters` and the molar mass `88,11`
@@ -80,6 +80,10 @@ A key that breaks its pattern or is taken, a molar mass that is not a number abo
 #### Scenario: Bad key
 - **WHEN** a signed-in user posts a new term of the projects with the key `Teaching 2`
 - **THEN** the form shows an error at the key and no term is created
+
+#### Scenario: The key of the compound tabs
+- **WHEN** a signed-in user posts the new-substance form with the key `group`
+- **THEN** the form shows an error at the key and no substance is created
 
 ### Requirement: Registry in the admin
 The admin SHALL list the substances and the terms of each vocabulary for staff, with search by key and names or labels and the change history of each record. Keys are read-only once a record exists, and a term's parent is refused as in the forms.
@@ -125,11 +129,7 @@ Empty or absent text, a missing molar mass and a missing article number are `nul
 
 It writes to stderr one warning naming the other keys it leaves out, such as `structure_image`, `in_house` and `stock`, with how many compounds set each. A compound without a group or a chemical class, or a file that cannot be read, is an error naming the file, and nothing is loaded.
 
-#### Scenario: Demo collection
-- **WHEN** `registry_import` runs on `examples/demo` into an empty database
-- **THEN** the registry holds the 20 compounds of `examples/demo` as substances, `cinnamic-acid` with the group `final-products`, the chemical class `carboxylic-acids` and an article numbered `CH-0012`, and stderr names `in_house` and `stock`
-
-#### Scenario: The demo registry follows the collection
-- **WHEN** a test builds the snapshot `registry_import` makes of `examples/demo` and reads `webapp/demo/registry.json`
-- **THEN** the file holds every term and substance of the import unchanged, and one substance more, `new-compound-7`, with the article number `NV-0007`
+#### Scenario: A collection in the old layout
+- **WHEN** `registry_import` runs into an empty database on `webapp/tests/fixtures/old-layout/`, a collection in the layout collections had before they named a registry: the demo collection's former `orgsyndb.toml`, `compounds/` and `vocabularies/`
+- **THEN** the registry holds its 20 compounds as substances, `cinnamic-acid` with the group `final-products`, the chemical class `carboxylic-acids` and an article numbered `CH-0012`, and stderr names `in_house` and `stock`
 

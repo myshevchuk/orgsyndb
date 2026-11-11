@@ -14,6 +14,9 @@ msgstr "Register"
 msgid "Enter lower-case letters and digits, joined by single hyphens, such as cinnamic-acid."
 msgstr "Kleinbuchstaben und Ziffern eingeben, verbunden durch einzelne Bindestriche, etwa cinnamic-acid."
 
+msgid "This key names the directory of the compound tabs on the collection site; choose another."
+msgstr "Dieser Schlüssel benennt das Verzeichnis der Verbindungsreiter der Sammlungsseite; bitte einen anderen wählen."
+
 msgid "Enter a CAS number such as 140-10-3."
 msgstr "Eine CAS-Nummer wie 140-10-3 eingeben."
 

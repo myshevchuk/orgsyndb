@@ -17,14 +17,13 @@ import tomllib
 import unittest
 from pathlib import Path
 
-from support import (COMPOUNDS, FIXTURES, SEQUENCE_BASELINE, SEQUENCES,
+from support import (FIXTURES, REGISTRY, SEQUENCE_BASELINE, SEQUENCES,
                      SETTINGS, STATIC_DIR, ValidatorTestCase, add_file,
                      add_sequence, changes, edit_sequence, fixture_run,
                      insert_line, remove_line, remove_sequence,
                      replace_line, replace_text, run_validator,
                      sequence_fixture_run, sequence_variant_run)
 
-COMPOUND_FILES = len(list(COMPOUNDS.glob("*.toml")))
 BASELINE = "SEQ-0001-baseline.md"
 GENERAL = "SEQ-0002-general-entry.md"
 STEP_1 = '{ procedure = "OSDB-0002" }'
@@ -91,8 +90,7 @@ class SequenceFixtureTests(ValidatorTestCase):
 
     def test_sequence_files_are_counted_in_the_summary(self) -> None:
         """Requirement: Problem report format (the summary counts)."""
-        count = (COMPOUND_FILES
-                 + len(list((FIXTURES / "valid" / "md").glob("*.md")))
+        count = (len(list((FIXTURES / "valid" / "md").glob("*.md")))
                  + len(list((FIXTURES / "sequences-procedures")
                             .glob("*.md")))
                  + len(list((FIXTURES / "general").glob("*.md")))
@@ -172,7 +170,7 @@ class FileNameTests(ValidatorTestCase):
 
 class OptionTests(ValidatorTestCase):
     ARGS = ["--settings", "settings/orgsyndb.toml", "--static-dir",
-            "static", "--compounds", "compounds"]
+            "static", "--registry", "registry.json"]
 
     def test_problems_carry_the_sequences_argument_as_given(self) -> None:
         """Requirement: Problem report format (the path of a sequence)."""
@@ -196,7 +194,7 @@ class OptionTests(ValidatorTestCase):
             shutil.copy2(source, cwd / "md" / "sequences")
             result = run_validator(
                 ["--settings", SETTINGS, "--static-dir", STATIC_DIR,
-                 "--compounds", COMPOUNDS, FIXTURES / "valid" / "md",
+                 "--registry", REGISTRY, FIXTURES / "valid" / "md",
                  FIXTURES / "general"], cwd=cwd)
         self.assert_one(result, "error", "file_name",
                         "does not match id SEQ-0003",
@@ -207,7 +205,7 @@ class OptionTests(ValidatorTestCase):
         (a missing directory)."""
         result = fixture_run("valid/md", "general")
         self.assert_clean(result)
-        self.assertIn(f"validated {COMPOUND_FILES + 3} files",
+        self.assertIn("validated 3 files",
                       result.stderr)
 
     def test_a_missing_named_directory_holds_no_sequence(self) -> None:
@@ -216,7 +214,7 @@ class OptionTests(ValidatorTestCase):
         result = sequence_fixture_run(
             "valid/md", sequences="sequences-invalid/no-such-directory")
         self.assert_clean(result)
-        self.assertIn(f"validated {COMPOUND_FILES + 3} files",
+        self.assertIn("validated 3 files",
                       result.stderr)
 
     def test_a_step_resolves_against_the_roots_given(self) -> None:

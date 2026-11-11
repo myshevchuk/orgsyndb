@@ -1,7 +1,7 @@
 # Schema-Referenz für Vorschriften
 
-Diese Referenz legt fest, was gültige OrgSynDB-Vorschriften,
-Verbindungseinträge und Synthesewege sind. Schlagen
+Diese Referenz legt fest, was gültige OrgSynDB-Vorschriften und
+Synthesewege sind und welche Registerdaten sie verwenden. Schlagen
 Sie hier die genaue Schreibweise, den Typ und die Regel eines Feldes nach,
 oder die Bedeutung einer Meldung von `tools/validate.py` oder dem Befehl
 `orgsyndb export`. Die englische Fassung ist [SCHEMA.md](SCHEMA.md); bei
@@ -86,7 +86,7 @@ Website leitet die Art aus `scope` ab; legen Sie kein Feld `kind` an.
 | `lastmod` | Wann die Vorschrift zuletzt geändert wurde. | Datum mit Zeitzonenversatz | Ja | Ohne Anführungszeichen, nicht früher als `date`, mit dem zu diesem Zeitpunkt geltenden Versatz von Europe/Berlin. | `lastmod = 2026-10-19T17:42:05+02:00` |
 | `authors` | Alle, die die Vorschrift geschrieben haben. | Nicht leeres Array nicht leerer Strings | Ja | Mindestens ein Name. | `authors = ["A. Example"]` |
 | `status` | Der Bearbeitungsstand. | String | Ja | Genau `draft`, `checked` oder `retired`. Eine deutsche Website zeigt *Entwurf*, *geprüft* oder *zurückgezogen*. | `status = "draft"` |
-| `reaction_types` | Die festgelegte Reaktionsklasse. | String-Array | Ja | Genau ein Kürzel aus `vocabularies/reaction-types.toml` der Sammlung. | `reaction_types = ["esterification"]` |
+| `reaction_types` | Die festgelegte Reaktionsklasse. | String-Array | Ja | Genau ein Kürzel aus dem Vokabular `reaction-types` des Registers. | `reaction_types = ["esterification"]` |
 | `tags` | Suchbegriffe. | Nicht leeres String-Array | Ja | Jedes Schlagwort besteht aus Kleinbuchstaben oder Ziffern mit einzelnen Bindestrichen zwischen den Gruppen. | `tags = ["acid-catalysed"]` |
 | `products` | Die hergestellten Verbindungen mit ihren Ausbeuten. | Nicht leeres Array von Tabellen | Nur ohne `scope` | Jeder Eintrag enthält `compound` und `yield_percent`, wie unten beschrieben. | `products = [{ compound = "ethyl-acetate", yield_percent = 85 }]` |
 | `scale` | Wie viel Produkt die Vorschrift liefert; bei einer allgemeinen Vorschrift die typische Ansatzgröße. | String | Ja | Eine Zahl, Leerraum und eine Einheit. Die Zahl darf einen Dezimalpunkt oder ein Dezimalkomma haben. Die Einheiten sind nicht festgelegt. | `scale = "2,5 mmol"` |
@@ -191,62 +191,72 @@ Lassen Sie ein optionales Feld weg, wenn es nicht zutrifft.
 
 ## Verbindungsregister
 
-Speichern Sie jede Verbindung einmal, damit mehrere Vorschriften und ihre
-Übersetzungen dieselben Daten verwenden. Im Verzeichnis `compounds/` der
-Sammlung steht eine UTF-8-TOML-Datei pro Verbindung, namens `<key>.toml`.
-Der Schlüssel bestimmt die Identität: Zwei Vorschriften meinen genau dann
-dieselbe Verbindung, wenn sie denselben Schlüssel verwenden. Strukturen
-werden dafür nicht verglichen.
+Vorschriften und Synthesewege teilen sich die Stoffe im Register der
+Laboranwendung. Legen Sie Stoffe unter `/lab/registry/` in dieser Anwendung
+an und bearbeiten Sie sie dort. Ein Verbindungsschlüssel ist der Schlüssel
+eines Stoffs: Zwei Vorschriften meinen genau dann dieselbe Verbindung,
+wenn sie denselben Schlüssel verwenden. Strukturen werden dafür nicht
+verglichen. Ein Schlüssel entspricht `[a-z0-9]+(-[a-z0-9]+)*`:
+Kleinbuchstaben und Ziffern mit einzelnen Bindestrichen zwischen den Gruppen,
+etwa `ethyl-acetate`. Ein Stoff, den keine Vorschrift nennt, ist gültig.
 
-Ein Schlüssel entspricht `[a-z0-9]+(-[a-z0-9]+)*`: Kleinbuchstaben und
-Ziffern mit einzelnen Bindestrichen zwischen den Gruppen, etwa
-`ethyl-acetate`. In `products` und `substrates` steht er ohne `.toml`.
-Eine Verbindung, die keine Vorschrift nennt, ist gültig. Kopieren Sie zum
-Anlegen [templates/compound.toml](../templates/compound.toml). Die Datei
-enthält nur TOML, ohne `+++`-Zeilen oder eine Überschrift `[product]`.
-
-| Feld | Bedeutung | TOML-Typ | Pflicht | Regel | Beispiel |
-|---|---|---|---|---|---|
-| `name` | Der Verbindungsname auf einer englischen Website. | Nicht leerer String | Ja | Darf nicht leer sein. | `name = "Ethyl acetate"` |
-| `name_de` | Der Verbindungsname auf einer deutschen Website. | Nicht leerer String | Nein | Darf nicht leer sein, wenn vorhanden. Fehlt er, verwendet die deutsche Website `name`. | `name_de = "Ethylacetat"` |
-| `formula` | Die Summenformel. | Nicht leerer String | Ja | Darf nicht leer sein. | `formula = "C4H8O2"` |
-| `mw` | Molmasse in g/mol. | Ganz- oder Gleitkommazahl | Ja | Endlich und größer als null. Ohne Anführungszeichen, mit Dezimalpunkt. Ein Wahrheitswert ist keine Zahl. | `mw = 88.11` |
-| `smiles` | Die Struktur als SMILES, eine Textschreibweise für Molekülstrukturen. | Nicht leerer String | Ja | Darf nicht leer sein. | `smiles = "CCOC(C)=O"` |
-| `cas` | Die CAS-Nummer, eine Registriernummer für chemische Stoffe. | String | Nein | 2 bis 7 Ziffern, Bindestrich, 2 Ziffern, Bindestrich und die Prüfziffer. Die Prüfziffer muss stimmen. | `cas = "141-78-6"` |
-| `structure_image` | Das Strukturbild im Verzeichnis für statische Dateien. | String | Nein | Ein relativer Pfad unter `structures/` ohne `..`, mit der Endung `.svg` oder `.png`, der auf eine vorhandene Datei zeigt. | `structure_image = "structures/ethyl-acetate.svg"` |
-
-Zum Beispiel kann `compounds/ethyl-acetate.toml` so aussehen:
+Die Sammlung benennt ihr Register in `orgsyndb.toml`:
 
 ```toml
-name = "Ethyl acetate"
-name_de = "Ethylacetat"
-formula = "C4H8O2"
-mw = 88.11
-smiles = "CCOC(C)=O"
-cas = "141-78-6"
+format = 1
+registry = "http://localhost:8000/lab/registry/snapshot.json"
 ```
 
-Der Validator prüft, dass `formula` und `smiles` nicht leere Strings sind.
-Er prüft weder die Schreibweise der Summenformel noch die Gültigkeit des
-SMILES, noch ob die Molmasse zur Summenformel passt.
+`registry` ist ein nicht leerer String. Er benennt eine mit `http://` oder
+`https://` beginnende Adresse des Snapshots der Laboranwendung oder den
+Pfad einer Snapshot-Datei. Ein Snapshot ist eine gespeicherte Kopie des
+Laborregisters. Ein relativer Pfad beginnt im Ordner der Sammlung; absolute
+Pfade sind ebenfalls erlaubt. Eine nicht leere Umgebungsvariable
+`ORGSYNDB_REGISTRY` ersetzt die Einstellung. Die Beispielsammlung verwendet
+`registry = "../../webapp/demo/registry.json"` und benötigt keine laufende
+Laboranwendung. Verzeichnisse der Sammlung namens `compounds/` oder
+`vocabularies/` werden ignoriert.
 
-Das Argument `--static-dir` bestimmt, wo der Validator das `structure_image`
-einer Verbindung oder das `scheme_image` einer Vorschrift sucht. Ohne Angabe
-nimmt er `static` im aktuellen Verzeichnis. `orgsyndb validate` übergibt das
-`static/` der Sammlung. Bei falschem Pfadanfang oder falscher Endung entfällt
-die Existenzprüfung.
+`orgsyndb validate`, `build`, `serve`, `pdf` und `index` lesen dieses Register.
+Die ersten vier speichern den Snapshot in `build/registry.json` und seine
+Quelle in `build/registry.source`; `index` schreibt nichts. Anfragen an eine
+Adresse haben eine Zeitgrenze von 30 Sekunden. Ist die Adresse nicht lesbar
+oder liefert sie keinen Snapshot, verwenden die Werkzeuge die gespeicherte
+Kopie nur, wenn `build/registry.source` dieselbe Adresse nennt. Sie warnen mit:
 
-Das Register hat keine Unterverzeichnisse. Ein Unterverzeichnis ist ein
-Fehler unter `file_name` mit `subdirectories are not supported`.
-Versteckte Dateien werden stillschweigend übergangen. Jede andere Datei,
-die nicht `<key>.toml` heißt, ist ein Fehler unter `file_name` mit
-`must be named <key>.toml` und definiert keine Verbindung. Eine nicht als
-UTF-8-TOML lesbare Datei erhält einen Fehler unter `toml` und definiert
-keine Verbindung; ein Syntaxfehler enthält `invalid TOML`. Ein fehlendes
-Pflichtfeld ergibt `required field missing`. Eine Verbindung darf auch die
-von ihrer Sammlung deklarierten Felder setzen. Nur Schlüssel, die weder zu
-den eingebauten Feldern noch zu diesen Deklarationen gehören, ergeben
-Warnungen mit `unknown field`.
+```text
+orgsyndb: warning: cannot read the registry: <address>: <reason>; using the copy in build/registry.json, digest <digest>
+```
+
+Ohne passende Kopie scheitert der Befehl mit einem Fehler, der die Adresse
+nennt. Auch eine fehlende oder nicht lesbare Snapshot-Datei führt zum
+Abbruch; für sie gibt es keinen Rückgriff auf eine andere Kopie.
+
+Der Snapshot ist UTF-8-JSON im Format 1. Sein `digest` ist ein Fingerabdruck
+des Inhalts. Er liefert die Vokabulare `chemical-classes`,
+`inventory-groups`, `projects` und `reaction-types` sowie die Stoffe. Ein
+Vokabular ist eine Liste erlaubter Begriffe. Die Website verwendet Namen,
+Summenformel, Molmasse (`mw`, in g/mol), SMILES als Textschreibweise für
+Molekülstrukturen, CAS-Registriernummer (`cas`), Artikelnummer, Kurzname,
+Stoffklassen und Gruppe jedes Stoffs. Eine englische Website verwendet
+`name`, eine deutsche `name_de`, falls vorhanden, sonst `name`. Ohne
+Summenformel, Molmasse oder SMILES bleibt die jeweilige Zelle im Verzeichnis
+leer. Der Stoff hat dann weder den entsprechenden Suchtext noch die Angabe
+auf seiner Seite. Die Laboranwendung prüft die Werte der Stoffe; der
+Validator der Sammlung prüft Verweise auf deren Schlüssel.
+
+Für ein Strukturbild legen Sie `static/structures/<key>.svg` oder
+`static/structures/<key>.png` in der Sammlung ab. Sind beide vorhanden,
+verwendet der Build das SVG. Ohne eine dieser Dateien hat der Stoff kein
+Bild. Es gibt kein Feld `structure_image` zum Ausfüllen. Der Build schreibt
+je Stoff eine Datei `build/data/compounds/<key>.json` und setzt
+`structure_image` in diesen erzeugten Daten nur, wenn er ein Bild findet.
+Hugo liest die Dateien als `data/compounds`.
+
+Das Argument `--static-dir` bestimmt, wo der Validator das `scheme_image`
+einer Vorschrift sucht. Ohne Angabe nimmt er `static` im aktuellen
+Verzeichnis. `orgsyndb validate` übergibt das `static/` der Sammlung. Bei
+falschem Pfadanfang oder falscher Endung entfällt die Existenzprüfung.
 
 Eine Verbindungsseite ergänzt nach **Verwendet in** den Abschnitt
 **Synthesewege**, wenn Synthesewege diese Verbindung als Ziel nennen. Die
@@ -265,8 +275,8 @@ alternative Stufen: Eine davon genügt. Unter einer Stufe werden alle
 aufgeführten Ausgangsstoffe benötigt. Jeder Ausgangsstoff verlinkt auf seine
 Verbindungsseite; darunter stehen wiederum seine Herstellungsstufen, bis zu
 Verbindungen, die keine Vorschrift herstellt. Die Verbindungslinks tragen
-wie sonst auf der Website die Werte der mit `beside = true` deklarierten
-Felder.
+wie sonst auf der Website Artikelnummer und Kurzname des Stoffs, sofern
+vorhanden.
 
 Jede Stufe zeigt Nummer und Titel der Vorschrift, bei einer allgemeinen
 Vorschrift die Eintragsnummer, Ausbeute und Status wie unter **Hergestellt
@@ -290,54 +300,48 @@ Eine abgeschnittene Verbindung trägt den Zusatz **weitere Stufen auf ihrer
 Seite**; folgen Sie ihrem Link, um den Weg fortzusetzen.
 
 Der Build leitet die Herstellungswege automatisch ab. Dafür tragen Sie
-nichts in eine Vorschrift, eine Verbindungsdatei oder `orgsyndb.toml` ein.
+nichts in eine Vorschrift oder `orgsyndb.toml` ein.
 Verbindungsseiten bleiben außerhalb des Suchindex; die Herstellungswege
 ändern die Suche daher nicht.
 
 ## Felddeklarationen der Sammlung
 
-Um weitere Angaben wie Artikelnummern, Stoffklassen oder Projekte von
-Vorschriften zu erfassen, deklarieren Sie Felder in der `orgsyndb.toml` der
-Sammlung.
-Diese UTF-8-TOML-Datei muss `format = 1` als Ganzzahl enthalten. Als
-einziger weiterer Schlüssel auf oberster Ebene ist `fields` erlaubt,
-eine Tabelle mit ausschließlich `compound` und `procedure`, beide optional.
-Ohne `fields` deklariert die Sammlung keine weiteren Felder.
+Um weitere Vorschriftenangaben wie Laborjournalverweise oder Projekte zu
+erfassen, deklarieren Sie Felder in der `orgsyndb.toml` der Sammlung. Diese
+UTF-8-TOML-Datei muss `format = 1` als Ganzzahl enthalten. Die anderen
+erlaubten Schlüssel auf oberster Ebene sind `registry` und `fields`.
+`registry` benennt den Snapshot wie unter
+[Verbindungsregister](#verbindungsregister) beschrieben. `fields` ist eine
+optionale Tabelle, deren einziger erlaubter Schlüssel `procedure` ist,
+ein Array von Felddeklarationen. Ohne `fields` oder `fields.procedure`
+deklariert die Sammlung keine weiteren Vorschriftenfelder.
 
-Schreiben Sie eine Tabelle `[[fields.compound]]` je Feld, in der
-gewünschten Anzeigereihenfolge. Eine einzelne Tabelle `[fields.compound]`
-ist ungültig. Diese Deklaration stammt aus den
-[Einstellungen der Beispielsammlung](../examples/demo/orgsyndb.toml):
+Verbindungen haben vier fest eingebaute Registerfelder in dieser
+Reihenfolge. Ihre Anzeige ist für jede Sammlung vorgegeben:
 
-```toml
-format = 1
+| Schlüssel | Wert des Stoffs | Typ und Vokabular | Feldname (Englisch / Deutsch) | Anzeige |
+|---|---|---|---|---|
+| `article_number` | Artikelnummer | Text | Article no. / Artikelnr. | Verzeichnisspalte, Suche, neben Links |
+| `short_name` | Kurzname | Text | Short name / Kurzname | Suche, neben Links |
+| `chemical_class` | `chemical_classes`, in ihrer Reihenfolge | Mehrfachauswahl, `chemical-classes` | Chemical class / Stoffklasse | Verzeichnisspalte, Filter |
+| `group` | Gruppe | Einzelauswahl, `inventory-groups` | Group / Gruppe | Filter, Reiter |
 
-[[fields.compound]]
-key = "item_number"
-type = "text"
-label = "Item no."
-label_de = "Artikelnr."
-unique = true
-pattern = 'CH-\d{4}'
-column = true
-search = true
-beside = true
-```
+Setzen Sie diese Werte in der Laboranwendung. Die Sammlung deklariert nur
+Vorschriftenfelder; `fields.compound` ist ein Konfigurationsfehler.
 
 ### Schlüssel einer Deklaration
 
-Die folgenden Tabellen beschreiben Verbindungsdeklarationen. Für
-Vorschriftendeklarationen gelten dieselben Optionen mit den Ausnahmen
-im nächsten Unterabschnitt.
+Die folgenden Tabellen beschreiben Vorschriftendeklarationen. Schreiben Sie
+je Feld eine Tabelle `[[fields.procedure]]`; eine einzelne Tabelle
+`[fields.procedure]` ist ungültig.
 
 | Schlüssel | TOML-Typ | Pflicht oder Vorgabe | Regel |
 |---|---|---|---|
-| `key` | String | Pflicht | Entspricht `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`: Kleinbuchstaben und Ziffern, Wörter durch einzelne Unterstriche verbunden, beginnend mit einem Buchstaben. Darf nur einmal deklariert sein, nicht auf `_de` enden und kein eingebauter Schlüssel sein: `name`, `name_de`, `formula`, `mw`, `smiles`, `cas` oder `structure_image`. Der Katalog reserviert außerdem `id`, `title`, `created`, `modified`, `text`, `q`, `sort` und `view` für seine Zeilen und die Adresse. |
+| `key` | String | Pflicht | Entspricht `^[a-z][a-z0-9]*(_[a-z0-9]+)*$`: Kleinbuchstaben und Ziffern, Wörter mit einzelnen Unterstrichen verbunden, mit einem Buchstaben beginnend. Darf nur einmal deklariert sein, nicht auf `_de` enden und keiner der unten aufgeführten reservierten Vorschriftenschlüssel sein. |
 | `type` | String | Pflicht | `text`, `number`, `boolean` oder `choice`. |
 | `label` | Nicht leerer String | Pflicht | Der Feldname auf einer englischen Website. |
 | `label_de` | Nicht leerer String | Optional | Der Feldname auf einer deutschen Website; fehlt er, verwendet sie `label`. |
-| `required` | Wahrheitswert | `false` | Bei `true` muss jede Verbindung das Feld setzen. |
-| `column` | Wahrheitswert | `false` | Bei `true` zeigt das Verbindungsverzeichnis das Feld als Spalte. |
+| `required` | Wahrheitswert | `false` | Bei `true` muss jede Vorschrift das Feld setzen, auch eine allgemeine Vorschrift. |
 
 Nur die folgenden zusätzlichen Schlüssel sind je nach Typ erlaubt. Eine
 Option bei einem anderen Typ ist ein Konfigurationsfehler.
@@ -345,27 +349,13 @@ Option bei einem anderen Typ ist ein Konfigurationsfehler.
 | Schlüssel | Feldtyp | TOML-Typ | Pflicht oder Vorgabe | Regel |
 |---|---|---|---|---|
 | `pattern` | `text` | String | Optional | Ein gültiger regulärer Ausdruck in Python, dem der ganze Wert entsprechen muss. |
-| `search` | `text` | Wahrheitswert | `false` | Bei `true` berücksichtigt die Suche im Verbindungskatalog die Werte des Felds. |
-| `beside` | `text`, `number` | Wahrheitswert | `false` | Bei `true` stehen gesetzte Werte nach Verbindungslinks; siehe [Anzeige auf der Website](#anzeige-auf-der-website). |
-| `unique` | `text`, `number` | Wahrheitswert | `false` | Zwei Verbindungen dürfen nicht denselben gültigen Wert setzen. |
+| `unique` | `text`, `number` | Wahrheitswert | `false` | Zwei Vorschriften dürfen nicht denselben gültigen Wert setzen; Sprachfassungen zählen als eine Vorschrift. |
 | `min` | `number` | Ganz- oder Gleitkommazahl | Optional | Endliche untere Grenze, einschließlich; darf `max` nicht überschreiten, wenn beide gesetzt sind. Ein Wahrheitswert ist keine Zahl. |
 | `max` | `number` | Ganz- oder Gleitkommazahl | Optional | Endliche obere Grenze, einschließlich. Ein Wahrheitswert ist keine Zahl. |
 | `unit` | `number` | Nicht leerer String | Optional | Steht nach der Zahl, durch ein Leerzeichen getrennt. |
-| `vocabulary` | `choice` | String | Pflicht | Benennt `vocabularies/<name>.toml` neben `orgsyndb.toml`, ohne Verzeichnis und Endung. Der Name entspricht `[a-z0-9]+(-[a-z0-9]+)*`. |
-| `multiple` | `choice` | Wahrheitswert | `false` | Bei `true` setzt die Verbindung eine nicht leere Liste verschiedener Werte statt eines einzelnen Strings. |
-| `facet` | `boolean`, `choice` | Wahrheitswert | `false` | Bei `true` bietet der Verbindungskatalog das Feld als Filter an. |
-| `tabs` | `choice` | Wahrheitswert | `false` | Bei `true` teilt das Feld das Verbindungsverzeichnis nach den Werten der obersten Vokabularebene in Reiterseiten auf. Höchstens ein Feld darf `tabs = true` setzen; es darf zugleich als Filter dienen. |
-
-Die Beispielsammlung setzt `beside = true` bei `item_number` und
-`short_name`. Sie deklariert außerdem `short_name` als Text mit
-`search = true`, `chemical_class` als Pflichtauswahl mit `multiple = true`,
-`column = true` und `facet = true`, `stock` als Zahl mit `min = 0` und
-`unit = "g"`, `in_house` als Wahrheitswert mit `facet = true` und zuletzt
-`group` als Pflichtauswahl mit `facet = true`, `tabs = true` und
-`vocabulary = "inventory-groups"`. Die Feldnamen von `group` sind **Group**
-und **Gruppe**. Das Vokabular ordnet `starting-materials` und `reagents`
-unter `purchased` ein, `intermediates` und `final-products` unter
-`synthesised`.
+| `vocabulary` | `choice` | String | Pflicht | Benennt eines der Registervokabulare: `chemical-classes`, `inventory-groups`, `projects` oder `reaction-types`. |
+| `multiple` | `choice` | Wahrheitswert | `false` | Bei `true` setzt die Vorschrift eine nicht leere Liste verschiedener Begriffsschlüssel statt eines einzelnen Strings. |
+| `facet` | `boolean`, `choice` | Wahrheitswert | `false` | Bei `true` bieten die Vorschriftenkataloge das Feld als Filter an. |
 
 ### Felddeklarationen für Vorschriften
 
@@ -392,8 +382,8 @@ vocabulary = "projects"
 facet = true
 ```
 
-Es gelten die obigen Deklarationsschlüssel, Typen und Vorgaben, mit diesen
-Änderungen:
+Es gelten die obigen Deklarationsschlüssel, Typen und Vorgaben. Außerdem
+gelten diese Regeln:
 
 - `column`, `search`, `tabs` und `beside` sind nie erlaubt, auch nicht mit
   `false`.
@@ -406,8 +396,7 @@ Es gelten die obigen Deklarationsschlüssel, Typen und Vorgaben, mit diesen
   zum Filter der Vorschriftenkataloge. Die Vorgabe ist `false`.
 - `key` muss `^[a-z][a-z0-9]*(_[a-z0-9]+)*$` entsprechen, darf nicht auf `_de`
   enden und darf innerhalb von `fields.procedure` nur einmal vorkommen.
-  Ein Verbindungsfeld und ein Vorschriftenfeld dürfen denselben Schlüssel
-  haben. Für Vorschriften sind diese Schlüsselgruppen reserviert:
+  Für Vorschriften sind diese Schlüsselgruppen reserviert:
 
   **Vorschriftenschema:** `id`, `slug`, `title`, `date`, `lastmod`, `authors`,
   `status`, `reaction_types`, `tags`, `products`, `scale`, `hazards`, `substrates`,
@@ -423,9 +412,9 @@ Es gelten die obigen Deklarationsschlüssel, Typen und Vorgaben, mit diesen
 
   **Vorschriftenkatalog:** `tag`, `created`, `text`, `q`, `sort`, `view`.
 
-Auswahlfelder für Verbindungen und Vorschriften teilen sich `vocabularies/`
-neben `orgsyndb.toml`. Ein Vokabular, das mehrere Felder nennen, wird einmal
-gelesen.
+Auswahlfelder für Vorschriften verwenden die Begriffe des benannten
+Registervokabulars. Eine Auswahl darf einen Begriff auf jeder Ebene dieses
+Vokabulars benennen.
 
 Setzen Sie Vorschriftenwerte als Schlüssel auf oberster Ebene im TOML-
 Datenblock einer Markdown-Datei, vor jeder Tabelle. Die Aspirin-Vorschrift
@@ -447,7 +436,7 @@ unvergeben sein.
 Jede Markdown-Vorschrift und jeder Org-Export wird gegen die
 Vorschriftendeklarationen geprüft. Wertfehler erscheinen am Vorschriftenpfad
 unter dem Feldschlüssel und verwenden die
-[Meldungen für Verbindungswerte](#verbindungswerte-und-meldungen), darunter
+[Meldungen für Vorschriftenwerte](#vorschriftenwerte-und-meldungen), darunter
 `required field missing` sowie Typ-, Muster-, Grenzwert- und Auswahllistenfehler.
 Bei `unique` lautet die Meldung
 `"<value>" is also set by <other procedure IDs>`; Zahlen erscheinen ohne
@@ -461,79 +450,54 @@ Grenze bei String-Werten stehen unter
 
 ### Vokabulare
 
-Ein Vokabular enthält die erlaubten Werte eines Auswahlfeldes. Speichern
-Sie es als UTF-8-TOML in `vocabularies/<name>.toml` neben der
-Einstellungsdatei. Der Dateiname ohne `.toml` und jeder Wertschlüssel auf
-oberster Ebene müssen `[a-z0-9]+(-[a-z0-9]+)*` entsprechen: Kleinbuchstaben
-und Ziffern mit einzelnen Bindestrichen zwischen den Gruppen. Jeder Wert
-ist eine Tabelle mit diesen Schlüsseln und keinen weiteren:
+Ein Vokabular enthält die erlaubten Begriffe eines Auswahlfeldes. Alle vier
+Vokabulare kommen aus dem Register: `chemical-classes`, `inventory-groups`,
+`projects` und `reaction-types`. Legen Sie Begriffe in der Laboranwendung
+an und bearbeiten Sie sie dort. Eine Vorschrift speichert den Schlüssel
+eines Begriffs; die Website zeigt seine Bezeichnung.
 
-| Schlüssel | TOML-Typ | Pflicht | Regel |
-|---|---|---|---|
-| `label` | Nicht leerer String | Ja | Der Name des Werts auf einer englischen Website. |
-| `label_de` | Nicht leerer String | Nein | Der Name des Werts auf einer deutschen Website; fehlt er, verwendet sie `label`. |
-| `parent` | String | Nein | Ein anderer Wertschlüssel derselben Datei, unter dem dieser Wert eingeordnet ist. |
+Jeder Begriff hat eine englische Bezeichnung `label` und kann eine deutsche
+Bezeichnung `label_de` haben. Eine deutsche Website verwendet `label_de`,
+falls vorhanden, sonst `label`. `chemical-classes`, `inventory-groups` und
+`projects` dürfen mehrere Ebenen haben: `parent` benennt einen anderen
+Begriff desselben Vokabulars, unter dem dieser Begriff eingeordnet ist.
+Wer `parent` folgt, muss schließlich einen Begriff ohne übergeordneten
+Begriff erreichen; kein Begriff darf sein eigener Vorfahr sein. Die Zahl
+der Ebenen ist unbegrenzt. Auswahlfelder dürfen Begriffe auf jeder Ebene
+wählen. Im Beispielregister ist etwa `esters` unter `acid-derivatives`
+eingeordnet und dieses unter `carbonyl-compounds`. Reaktionstypen haben
+nur eine Ebene.
 
-Ein Vokabular muss mindestens einen Wert enthalten. Wer `parent` folgt,
-muss schließlich einen Wert ohne übergeordneten Wert erreichen; kein Wert
-darf sein eigener Vorfahr sein. Die Zahl der Ebenen ist unbegrenzt.
-Verbindungen dürfen Werte auf jeder Ebene wählen. Der Aufbau entspricht
-dem Reaktionstyp-Vokabular, ergänzt um `parent`.
-
-Das
-[Vokabular der Beispielsammlung](../examples/demo/vocabularies/chemical-classes.toml)
-enthält etwa:
-
-```toml
-[carbonyl-compounds]
-label = "Carbonyl compounds"
-label_de = "Carbonylverbindungen"
-
-[acid-derivatives]
-label = "Carboxylic acid derivatives"
-label_de = "Carbonsäurederivate"
-parent = "carbonyl-compounds"
-
-[esters]
-label = "Esters"
-label_de = "Ester"
-parent = "acid-derivatives"
-```
-
-Die Sammlung darf `vocabularies/` weglassen, wenn kein Feld es benötigt und
-die Sammlung keine Reaktionstypen braucht. `init` legt das Verzeichnis mit
-der Startliste `reaction-types.toml` an. Ergänzen Sie Vokabulare für
-deklarierte Felder nach Bedarf.
+Filter und Reiter zeigen jeden Begriff mit den darunter eingeordneten
+Begriffen, jeweils wiederum mit deren untergeordneten Begriffen. Begriffe
+auf gleicher Ebene unter demselben übergeordneten Begriff stehen in
+Schlüsselreihenfolge. Die Auswahl eines übergeordneten Begriffs in einem
+Filter erfasst auch Werte unter dessen untergeordneten Begriffen.
 
 ### Verbindungswerte und Meldungen
 
-Setzen Sie jedes deklarierte Feld als normalen Schlüssel auf oberster
-Ebene in der Verbindungsdatei, neben `name`, `cas` und den anderen
-eingebauten Feldern. Die `methyl-salicylate.toml` der Beispielsammlung
-setzt etwa:
+Die Laboranwendung prüft die Werte der Stoffe. Der Validator der Sammlung
+meldet keine Feldwertfehler an einzelnen Stoffen.
 
-```toml
-chemical_class = ["esters", "phenols"]
-group = "starting-materials"
+Ein Stoff mit dem Schlüssel `group` kollidiert mit `/compounds/group/`, dem
+Verzeichnis der Gruppenreiter. Die Laboranwendung lässt diesen Schlüssel
+nicht zu; nur eine anders erzeugte Snapshot-Datei kann ihn enthalten. Der
+Validator meldet einen Fehler am
+Snapshot-Pfad, wie er an `--registry` übergeben wurde, unter `substances`:
+
+```text
+the substance "group" has the key of the directory of the compound tabs, /compounds/group/, which no substance may take
 ```
 
-Das Stoffklassen-Vokabular definiert beide Stoffklassen. Die Beispielsammlung
-verlangt `chemical_class` und `group` für jede Verbindung. Das optionale
-`item_number` ist die Artikelnummer auf Lieferscheinen. Setzen Sie es nur
-für ein Endprodukt, das bereits abgegeben wurde, mit einer eindeutigen
-Nummer aus `CH-` und vier Ziffern. Nur sechs Endprodukte der Beispielsammlung
-setzen es. Setzen Sie `group` auf `starting-materials`,
-`reagents`, `intermediates` oder `final-products` aus
-[`vocabularies/inventory-groups.toml`](../examples/demo/vocabularies/inventory-groups.toml).
-Der Schlusskommentar der Verbindungsvorlage fordert dazu auf, die von Ihrer
-Sammlung deklarierten Felder als weitere Zeilen derselben Form einzutragen.
+### Vorschriftenwerte und Meldungen
 
-Wertprobleme sind Fehler am Pfad der Verbindungsdatei, unter dem Schlüssel
-des deklarierten Feldes:
+Setzen Sie deklarierte Vorschriftenfelder als Schlüssel auf oberster Ebene
+im Datenblock. Wertprobleme sind Fehler am Pfad der Vorschriftendatei,
+unter dem deklarierten Schlüssel:
 
 | Feldtyp oder Regel | Meldung | Bedeutung |
 |---|---|---|
-| `required = true` | `required field missing` | Das Feld in jeder Verbindung setzen. |
+| `required = true` | `required field missing` | Das Feld in jeder Vorschrift setzen, auch in einer allgemeinen Vorschrift. |
 | `text`, einzelnes `choice` | `must be a string` | Den Wert in Anführungszeichen setzen. |
 | `text` | `must not be empty` | Nicht leeren Text angeben. |
 | `text` mit `pattern` | `must match the pattern <pattern>` | Der ganze String muss dem deklarierten Muster entsprechen. |
@@ -541,76 +505,75 @@ des deklarierten Feldes:
 | `number` mit `min` | `must be at least <min>` | Den Wert auf die untere Grenze oder darüber erhöhen. |
 | `number` mit `max` | `must be at most <max>` | Den Wert auf die obere Grenze oder darunter verringern. |
 | `boolean` | `must be true or false, unquoted` | `true` oder `false` ohne Anführungszeichen verwenden. |
-| `choice` | `unknown value "<v>"; see vocabularies/<name>.toml for the allowed values` | Einen Wertschlüssel aus dem genannten Vokabular verwenden, auf beliebiger Ebene. |
-| `choice` mit `multiple = true` | `must be a list of strings, e.g. ["<a value>"]` | Eine Liste von Wertschlüsseln in Anführungszeichen angeben. Das Beispiel nennt einen Wert aus dem Vokabular. |
+| `choice` | `unknown value "<v>" of the vocabulary <name>` | Einen Begriffsschlüssel aus dem benannten Registervokabular verwenden, auf beliebiger Ebene. |
+| `choice` mit `multiple = true` | `must be a list of strings, e.g. ["<a term>"]` | Eine Liste von Begriffsschlüsseln in Anführungszeichen angeben. Das Beispiel nennt den ersten Begriff im Snapshot oder `a term`, wenn das Vokabular leer ist. |
 | `choice` mit `multiple = true` | `must not be empty` | Mindestens einen Auswahlwert angeben. |
 | `choice` mit `multiple = true` | `repeats "<v>"` | Den wiederholten Wert entfernen. |
-| `unique = true` | `"<value>" is also set by <other compound keys>` | Einen Wert verwenden, den keine andere Verbindung setzt. Zahlen stehen in der Meldung ohne Anführungszeichen. |
+| `unique = true` | `"<value>" is also set by <other procedure IDs>` | Einen Wert verwenden, den keine andere Vorschrift setzt. Zahlen stehen in der Meldung ohne Anführungszeichen. |
 
 Ein Wert mit falschem Typ ergibt nur diesen Typfehler. Leerer Text mit
 einem Muster ergibt nur `must not be empty`. Eine Auswahlliste ergibt
 eine Meldung `unknown value` je unbekanntem String. Die
 Eindeutigkeitsprüfung vergleicht Werte, die ihre Feldprüfung bestehen,
-und meldet jede Verbindung, die denselben Wert setzt.
-
-Ist der Verbindungsschlüssel zugleich der Schlüssel des Felds mit
-`tabs = true`, ergibt das einen Fehler unter `file_name`, der `tabs`
-enthält. Der Feldschlüssel benennt das Verzeichnis der Reiterseiten unter
-`/compounds/<field key>/<value>/`. Wählen Sie für die Verbindungsdatei einen
-anderen Schlüssel. Nur ein Feldschlüssel aus einem Wort kann
-kollidieren: Verbindungsschlüssel trennen Wörter mit Bindestrichen,
-Feldschlüssel mit Unterstrichen.
+und meldet jede Vorschrift, die denselben Wert setzt. Sie verwendet dabei
+eine Bezugsfassung je Vorschriftennummer.
 
 ### Konfigurationsfehler
 
-Der Validator lehnt Einstellungen oder Vokabulare ab, die eine der
-obigen Regeln verletzen. Dazu zählen ungültige reguläre Ausdrücke, nicht
-endliche Grenzen, `min` größer als `max`, doppelte Deklarationen,
-fehlende Vokabulardateien und Schleifen der übergeordneten Werte. Eine
-mit `--settings` ausdrücklich benannte Datei muss vorhanden sein.
-Einstellungs- und Vokabulardateien müssen als UTF-8-TOML lesbar sein.
+Der Validator lehnt Einstellungen ab, die eine Deklarationsregel verletzen.
+Dazu zählen ungültige reguläre Ausdrücke, nicht endliche Grenzen, `min`
+größer als `max` und doppelte Deklarationen. Eine mit `--settings`
+ausdrücklich benannte Datei muss vorhanden sein. Einstellungen müssen als
+UTF-8-TOML lesbar sein. Eine Registerdatei muss vorhanden und als UTF-8-JSON
+lesbar sein und einen Snapshot im Format 1 mit den vier Vokabularen und
+einer Stoffliste enthalten.
 
 Dies sind Konfigurationsfehler: Rückgabewert 2, keine Standardausgabe
 und `validate.py: error: ...` auf der Standardfehlerausgabe. Die Meldungen
-nennen die Einstellungs- oder Vokabulardatei, den Feldschlüssel, sofern
+nennen die Einstellungs- oder Registerdatei, den Feldschlüssel, sofern
 gültig, und den beanstandeten Schlüssel oder Wert. Eine Option für einen
 anderen Typ ergibt etwa `a number field does not take pattern`; eine
 unbekannte Option ergibt `unknown key <key>`. Ein unbekannter Schlüssel
 auf oberster Ebene der Einstellungen ergibt
-`unknown key <key>; only format and fields are allowed`.
+`unknown key <key>; only format, registry, fields are allowed`.
 
-Bei einem Feld vom Typ `boolean` oder `choice` ergibt `beside` die Meldung
-`a boolean field does not take beside` oder `a choice field does not take beside`.
-Ein Wert, der bei `text` oder `number` kein Wahrheitswert ist, ergibt
-`beside must be true or false, unquoted`.
-
-Setzen mehrere Felder `tabs = true`, ist das ein Konfigurationsfehler:
-`fields a, b each set tabs = true; at most one field may`, wobei `a, b`
-für die Feldschlüssel stehen. Auch `tabs` bei einem anderen Typ als
-`choice` ist ein Konfigurationsfehler, wie bei anderen typabhängigen
-Optionen.
-
-`fields` erlaubt nur `compound` und `procedure`. Ein Eintrag wie
-`fields.reagent` ergibt `only fields.compound and fields.procedure are allowed`.
+`fields` erlaubt nur `procedure`. Ein Eintrag wie `fields.compound` oder
+`fields.reagent` ergibt
+`unknown key fields.<key>; only fields.procedure is allowed: a collection declares the fields of its procedures, and its compounds have the registry's`.
 Eine einzelne Tabelle `[fields.procedure]` ergibt
 `fields.procedure must be an array of tables, each written [[fields.procedure]]`.
-Für Vorschriftendeklarationen gelten dieselben Konfigurationsprüfungen wie
-für Verbindungsdeklarationen, ergänzt um diese Meldungen:
 
 | Problem | Meldung oder kennzeichnender Text |
 |---|---|
-| Nicht erlaubte Option | `a procedure field does not take column` (oder `search`, `tabs`, `beside`) |
+| Fehlende Registerdatei | `registry file not found` |
+| Register ist kein JSON | `not UTF-8 JSON: <reason>` |
+| Register ist kein Snapshot | `not a registry snapshot: <reason>` |
+| Ungültige Einstellung `registry` | `registry must be the address of the lab application's registry snapshot or the path of a snapshot file, a non-empty string` |
+| Fehlendes Auswahlvokabular | `vocabulary missing; a choice field names one of the registry's vocabularies, chemical-classes, inventory-groups, projects, reaction-types` |
+| Unbekanntes Auswahlvokabular | `vocabulary '<name>' is not one of the registry's vocabularies, chemical-classes, inventory-groups, projects, reaction-types` |
+| Nicht erlaubte Option | `a procedure field does not take column` (oder `search`, `tabs`, `beside`), auch bei `false` |
 | Schlüssel des Vorschriftenschemas | `declaration 5 of fields.procedure: key 'status' is a key of the procedure schema` |
 | Hugo-Schlüssel | `declaration 5 of fields.procedure: key 'layout' is a front-matter key that Hugo reads` |
 | Katalogschlüssel | `declaration 5 of fields.procedure: key 'tag' is reserved by the procedure catalogue; the reserved keys are tag, created, text, q, sort, view` |
 
 Die Deklarationsnummer ist die Position innerhalb von `fields.procedure`.
 Schlüsselfehler, auch doppelte oder falsch geschriebene Schlüssel, nennen
-`fields.procedure`.
+`fields.procedure`. Fehlerhafte Snapshots nennen das beanstandete Vokabular,
+den Begriff oder den Stoff. Diese Prüfungen betreffen Aufbau und Typen des
+Snapshots, nicht die Werte der Stoffe.
 
-Vor einem Befehl prüft das Build-Programm nur das TOML der
-Einstellungsdatei, `format` und die Schlüssel auf oberster Ebene. Der
-Validator prüft die Deklarationen und Vokabulare. Eine fehlerhafte
+Befehle, die das Register lesen, benötigen außerdem eine Registerquelle.
+Ohne `registry` oder eine nicht leere Umgebungsvariable `ORGSYNDB_REGISTRY`
+melden sie
+`no registry named; set registry to the address of the lab application's registry snapshot`,
+gefolgt von einer Beispieladresse und den Möglichkeiten, einen Dateipfad
+oder die Umgebungsvariable zu verwenden. Eine nicht lesbare Adresse ohne
+passende gespeicherte Kopie ergibt
+`cannot read the registry: <address>: <reason>; there is no copy of it in build/registry.json`.
+
+Vor einem Befehl prüft das Build-Programm das TOML der Einstellungsdatei,
+`format`, die Schlüssel auf oberster Ebene und den Wert von `registry`.
+Der Validator prüft die Vorschriftendeklarationen. Eine fehlerhafte
 Deklaration verhindert daher weder `clean` noch `new`.
 
 ### Anzeige auf der Website
@@ -641,91 +604,78 @@ ODER/UND- und Zählregeln wie für die Verbindungsfilter unten.
 Vorschriftenfelder ergänzen keine Tabellenspalten, Werte in der Ansicht
 **Details** oder Reiter.
 
-Verbindungsseiten zeigen gesetzte Felder nach Summenformel, Molmasse,
-CAS und SMILES, in Deklarationsreihenfolge und mit den Feldnamen in der
-Sprache der Website. Text erscheint wie eingetragen. Zahlen verwenden
-das Dezimalzeichen der Website und die deklarierte Einheit, etwa
-`12,5 g` auf einer deutschen Website. Wahrheitswerte erscheinen als
-**Yes** oder **No**, auf Deutsch als **Ja** oder **Nein**.
+Verbindungsseiten zeigen die vier fest eingebauten Felder nach Summenformel,
+Molmasse, CAS und SMILES. Fehlende Werte erscheinen nicht. Die Reihenfolge
+ist **Artikelnr.**, **Kurzname**, **Stoffklasse**, **Gruppe**, auf einer
+englischen Website **Article no.**, **Short name**, **Chemical class**,
+**Group**. Artikelnummern und Kurznamen erscheinen wie eingetragen.
 
-Um Kennungen oder Kurznamen neben Verbindungslinks anzuzeigen, setzen Sie
-`beside = true` bei deren Deklarationen vom Typ `text` oder `number`.
-Die Werte stehen nach den Verbindungslinks unter **Produkt**/**Produkte**
-und **Ausgangsstoffe** im Datenfeld, in der Tabelle zum Anwendungsbereich
-einer allgemeinen Vorschrift, im Schema einer Synthesewegseite und beim
-Ziel im Synthesewegverzeichnis. Der Linktext bleibt der Verbindungsname.
-Nach einem Leerzeichen folgt ein Zusatz in Klammern und gedeckter Farbe,
-in der Beispielsammlung etwa **Essigsäureanhydrid (Ac2O)** oder
-**Acetylsalicylsäure (CH-0010, ASA)**.
-Er enthält nur gesetzte Werte in Deklarationsreihenfolge, ohne Feldnamen,
-durch `, ` getrennt. Jeder Wert erscheint wie auf der Verbindungsseite,
-Zahlen also mit dem Dezimalzeichen der Website und ihrer Einheit.
-Setzt eine Verbindung keinen dieser Werte, entfällt der Zusatz.
-Die Angaben unter dem Titel, die Katalogansicht **Details**, Alternativtexte
-von Bildern und Seitentitel tragen keinen Zusatz. Das Datenfeld wird indexiert;
-daher findet die Vorschriftensuche auch diese Werte.
+Die Werte für Artikelnummer und Kurzname stehen nach den Verbindungslinks
+unter **Produkt**/**Produkte** und **Ausgangsstoffe** im Datenfeld, in der
+Tabelle zum Anwendungsbereich einer allgemeinen Vorschrift, im Schema einer
+Synthesewegseite, beim Ziel im Synthesewegverzeichnis und in den
+Herstellungswegen auf Verbindungsseiten. Der Linktext bleibt der
+Verbindungsname. Nach einem Leerzeichen folgt ein Zusatz in Klammern und
+gedeckter Farbe, in der Beispielsammlung etwa
+**Essigsäureanhydrid (Ac2O)** oder **Acetylsalicylsäure (CH-0010, ASA)**.
+Er enthält nur die Werte, die der Stoff hat, zuerst die Artikelnummer,
+ohne Feldnamen, durch `, ` getrennt. Hat ein Stoff keinen dieser Werte,
+entfällt der Zusatz. Die Angaben unter dem Titel, die Katalogansicht
+**Details**, Alternativtexte von Bildern und Seitentitel tragen keinen
+Zusatz. Das Datenfeld wird indexiert; daher findet die Vorschriftensuche
+auch diese Werte.
 
 Ein Auswahlwert auf einer Verbindungsseite zeigt die Namen seiner
 übergeordneten Werte und seinen eigenen Namen, verbunden durch ` › `,
 etwa **Carbonylverbindungen › Carbonsäurederivate › Ester**. Mehrere
-Auswahlwerte sind durch `, ` getrennt, in der Reihenfolge der Verbindung.
-Das Verbindungsverzeichnis ergänzt Felder mit `column = true` nach CAS,
-in Deklarationsreihenfolge. Es zeigt nur den eigenen Namen jedes
-Auswahlwerts, lässt ungesetzte Werte als leere Zellen und richtet
-Zahlenspalten rechtsbündig aus.
+Stoffklassen sind durch `, ` getrennt, in der Reihenfolge des Stoffs.
+Das Verbindungsverzeichnis ergänzt **Artikelnr.** und **Stoffklasse** nach
+CAS. Es zeigt nur den eigenen Namen jeder Stoffklasse und lässt ungesetzte
+Werte als leere Zellen.
 
-Deklariert ein Feld `tabs = true`, beginnen `/compounds/` und jede
-Reiterseite mit einer Reiterzeile, wie im Bereich **Vorschriften**.
-**Alle Verbindungen** (auf Englisch **All compounds**) verlinkt
-`/compounds/`. Danach folgen die Namen der Werte auf der obersten
-Vokabularebene in Vokabularreihenfolge. Ein Wert erscheint nur, wenn eine
-Verbindung ihn oder einen darunter eingeordneten Wert verwendet. Der
-Reiter der aktuellen Seite ist markiert. Ohne ein Feld mit `tabs = true`
-hat die Sammlung weder Verbindungsreiter noch Reiterseiten.
+`/compounds/` und jede Gruppenreiterseite beginnen mit einer Reiterzeile,
+wie im Bereich **Vorschriften**. **Alle Verbindungen** (auf Englisch
+**All compounds**) verlinkt `/compounds/`. Danach folgen die Bezeichnungen
+der Begriffe auf der obersten Ebene des Vokabulars `inventory-groups`, in
+Schlüsselreihenfolge. Ein Begriff erscheint nur, wenn ein Stoff ihn oder
+einen darunter eingeordneten Begriff verwendet. Der Reiter der aktuellen
+Seite ist markiert.
 
-Eine Reiterseite liegt unter `/compounds/<field key>/<value>/`; Überschrift
-und Seitentitel sind der Name des Werts. Sie listet nach Namen geordnet
-die Verbindungen, die diesen Wert oder einen darunter eingeordneten Wert
-setzen. Das gilt auch, wenn das Feld nicht als Filter dient. Anzahl, Filter
-und Suche beziehen sich auf diese Liste und funktionieren wie unter
-`/compounds/`. Bei `multiple = true` erscheint eine Verbindung in jedem
-Reiter, zu dem ihre Werte gehören. Die Beispielsammlung hat die Seiten
-**Zugekauft** unter `/compounds/group/purchased/` und **Selbst hergestellt**
-unter `/compounds/group/synthesised/`, mit jeweils zehn Verbindungen.
+Eine Reiterseite liegt unter `/compounds/group/<value>/`; Überschrift und
+Seitentitel sind die Bezeichnung des Werts. Sie listet nach Namen geordnet
+die Stoffe, die diesen Wert oder einen darunter eingeordneten Wert setzen.
+Anzahl, Filter und Suche beziehen sich auf diese Liste und funktionieren
+wie unter `/compounds/`. Die Beispielsammlung hat die Seiten **Zugekauft**
+unter `/compounds/group/purchased/` und **Selbst hergestellt** unter
+`/compounds/group/synthesised/`, mit zehn beziehungsweise elf Stoffen.
 
-Auf einer Reiterseite zeigen die Filter nur Werte ihrer Verbindungen.
-Dient das Feld mit `tabs = true` zugleich als Filter, lässt dieser den
-Wert des Reiters weg und rückt die darunter eingeordneten Werte um eine
-Ebene nach oben. Bei Mehrfachauswahl bleiben die anderen Werte der
-Verbindungen im Filter. Ein Filter ohne Werte entfällt. Die Suche im Kopf
-heißt **Verbindungen durchsuchen: \<label\>** (auf Englisch **Search compounds:
-\<label\>**). Reiterlinks übernehmen weder Suchtext noch Filter. Ohne
-JavaScript zeigt eine Reiterseite ihre vollständige Liste.
+Auf einer Reiterseite zeigen die Filter nur Werte ihrer Stoffe.
+Der Filter **Gruppe** lässt den Wert des Reiters weg und rückt die darunter
+eingeordneten Werte um eine Ebene nach oben. Ein Filter ohne Werte entfällt.
+Die Suche im Kopf heißt **Verbindungen durchsuchen: \<label\>** (auf Englisch
+**Search compounds: \<label\>**). Reiterlinks übernehmen weder Suchtext noch
+Filter. Ohne JavaScript zeigt eine Reiterseite ihre vollständige Liste.
 
 Unter `/compounds/` ist das Verzeichnis ein durchsuchbarer, filterbarer
 Katalog aller Registereinträge. Die Zeilen bleiben nach dem angezeigten
-Namen in der Sprache der Website geordnet. Felder mit `facet = true`
-erscheinen als Filter in Deklarationsreihenfolge. Ein Auswahlfilter zeigt
-die von Verbindungen verwendeten Werte und deren übergeordnete Werte als
-eingerückten Baum. Er folgt der Reihenfolge in der Vokabulardatei; alle
-untergeordneten Werte stehen unmittelbar nach dem zugehörigen übergeordneten
-Wert. Wählen Sie einen übergeordneten Wert, erfasst der Filter auch
-Verbindungen unter dessen untergeordneten Werten: **Carbonylverbindungen**
-schließt Ketone und Ester ein. Filter für Wahrheitswerte bieten **Ja** und
-**Nein** (auf Englisch **Yes** und **No**) jeweils nur an, wenn eine
-Verbindung den Wert setzt.
+Namen in der Sprache der Website geordnet. **Stoffklasse** und **Gruppe**
+erscheinen als Filter in dieser Reihenfolge. Jeder zeigt die von Stoffen
+verwendeten Werte und deren übergeordnete Werte als eingerückten Baum.
+Auf jeden Begriff folgen seine untergeordneten Begriffe; Begriffe mit
+demselben übergeordneten Begriff stehen in Schlüsselreihenfolge. Wählen Sie
+einen übergeordneten Wert, erfasst der Filter auch Verbindungen unter dessen
+untergeordneten Werten: **Carbonylverbindungen** schließt Ketone und Ester ein.
 
 Ausgewählte Werte innerhalb eines Filters sind mit ODER verknüpft,
 verschiedene Filter mit UND. Die Anzahl neben einem Wert berücksichtigt
 die Suche und alle anderen Filter, jedoch nicht die Auswahl im eigenen
 Filter. Ausgewählte Werte erscheinen als einzeln entfernbare Schaltflächen;
 **Alles zurücksetzen** löscht Suchtext und Auswahl. Der Katalog zeigt die
-Gesamtzahl oder beim Filtern **{shown} von {total} Verbindungen**. Ohne
-Felder mit `facet = true` entfällt die Filterspalte; Anzahl und Suche bleiben.
+Gesamtzahl oder beim Filtern **{shown} von {total} Verbindungen**.
 
 Das Suchfeld **Verbindungen durchsuchen** im Kopf berücksichtigt englische
-und deutsche Namen, Summenformel, CAS-Nummer, SMILES und Werte von Textfeldern
-mit `search = true`. Jedes Suchwort muss als Teil einer Zeichenfolge
+und deutsche Namen, Summenformel, CAS-Nummer, SMILES, Artikelnummer und
+Kurzname. Jedes Suchwort muss als Teil einer Zeichenfolge
 vorkommen. Dabei zählen weder Groß- und Kleinschreibung noch Zeichen außer
 Buchstaben und Ziffern. Suchangaben wie `50-78-2`, `salicyl` und `c1ccccc1O`
 funktionieren ohne Pagefind-Index. Außerhalb dieser Kataloge, auch auf
@@ -733,9 +683,9 @@ einzelnen Verbindungsseiten, durchsucht das Feld Vorschriften;
 Verbindungsseiten bleiben außerhalb des Suchindex für Vorschriften.
 
 Die Adresse hält Suchtext und Auswahl fest, etwa
-`/compounds/?q=ester&chemical_class=esters&in_house=true`. Parameter, die die
-Seite nicht anwenden kann, nennt sie in einem Hinweis und entfernt sie aus
-der Adresse. Suche und Filter brauchen JavaScript. Ohne JavaScript zeigt
+`/compounds/?q=ester&chemical_class=esters&group=final-products`. Parameter,
+die die Seite nicht anwenden kann, nennt sie in einem Hinweis und entfernt
+sie aus der Adresse. Suche und Filter brauchen JavaScript. Ohne JavaScript zeigt
 die Seite die vollständige Tabelle und einen entsprechenden Hinweis.
 
 ## Synthesewege
@@ -781,7 +731,7 @@ führen. Jedes andere Feld außerhalb dieses Schemas ergibt eine Warnung
 | `title` | Nicht leerer String | Ja | Seitentitel. | `title = "Aspirin aus Wintergrünöl"` |
 | `date` | Datum mit Zeitzonenversatz | Ja | Ohne Anführungszeichen; dieselben Regeln wie bei Vorschriften. | `date = 2026-10-23T09:15:00+02:00` |
 | `lastmod` | Datum mit Zeitzonenversatz | Ja | Dieselben Regeln wie für `date`; nicht früher als `date`. | `lastmod = 2026-10-23T09:40:00+02:00` |
-| `target` | String | Ja | Vorhandener Verbindungsschlüssel ohne `.toml`; ein Produkt der letzten Stufe. | `target = "acetylsalicylic-acid"` |
+| `target` | String | Ja | Vorhandener Stoffschlüssel im Register; ein Produkt der letzten Stufe. | `target = "acetylsalicylic-acid"` |
 | `steps` | Array von Tabellen | Ja | Mindestens zwei Stufen, in Ausführungsreihenfolge. | `steps = [{ procedure = "OSDB-0001" }, { procedure = "OSDB-0002" }]` |
 | `steps[n].procedure` | String | In jeder Stufe | Vorschriftennummer aus den geprüften Inhaltsverzeichnissen, aus Org exportiert oder in Markdown geschrieben. | `procedure = "OSDB-0009"` |
 | `steps[n].entry` | Ganzzahl | Nur bei allgemeinen Vorschriften | Eintragsnummer von 1 bis zur Zahl der Scope-Einträge; bei Einzelvorschriften verboten. Kein Wahrheitswert. | `entry = 1` |
@@ -848,17 +798,12 @@ Diese Felder werden abgelehnt:
 | `url = "/procedures/osdb-0001/"` | Die URL ergibt sich aus `slug`. | `slug = "osdb-0001"` |
 
 Ein unter `fields.procedure` deklarierter Schlüssel wird als
-Vorschriftenfeld geprüft und ergibt keine Warnung `unknown field`. Ein nur
-unter `fields.compound` deklarierter Schlüssel bleibt in einer Vorschrift
-unbekannt, und umgekehrt.
+Vorschriftenfeld geprüft und ergibt keine Warnung `unknown field`.
 
 Jedes andere Feld der obersten Ebene ergibt die Warnung `unknown field`,
 auch Tippfehler wie `checkedby` und die Felder `product`, `yield_percent`
 auf oberster Ebene, `precursors` und `structure_image`. Ein unbekanntes Feld
 in einem Eintrag von `products` ergibt etwa `products[1].colour` als Warnung.
-Registerfelder sind nur dann unbekannt, wenn sie weder zu den eingebauten
-Verbindungsfeldern noch zu den Deklarationen unter `fields.compound` gehören.
-Sie ergeben Warnungen an der Verbindungsdatei unter dem jeweiligen Feldnamen.
 
 ## Org-Schlüsselwörter auf Dateiebene
 
@@ -920,8 +865,9 @@ Setzen Sie deklarierte Vorschriftenfelder auf weiteren Zeilen
 
 Strings stehen in doppelten Anführungszeichen; Zahlen und Wahrheitswerte
 bleiben ungequotet. Eine Mehrfachauswahl verwendet eine gequotete Liste,
-etwa `:techniques '("reflux" "distillation")`, wenn die Sammlung dieses
-Feld und diese Vokabularwerte deklariert.
+etwa `:project '("first-year-practical" "advanced-practical")`, wenn die
+Sammlung `project` mit `multiple = true` deklariert und das Vokabular
+`projects` des Beispielregisters verwendet.
 
 Der Export mit ox-hugo/tomelr erhält nicht jeden gequoteten String als Text.
 Er schreibt einen String ohne Anführungszeichen, wenn er `true` oder `false`
@@ -998,17 +944,17 @@ Zeilenzählung beginnt nach der Trennlinie bei 1:
 ## Reaktionstypen
 
 `reaction_types` enthält genau ein Kürzel, einen Schlüssel wie
-`esterification`, aus `vocabularies/reaction-types.toml` Ihrer Sammlung
-neben `orgsyndb.toml`. Verwenden Sie in jeder Sprache dasselbe Kürzel im
-Datenblock. Bearbeiten Sie diese Datei, um Reaktionstypen hinzuzufügen,
-umzubenennen oder zu entfernen. Eine Vorschrift, die noch ein umbenanntes
-oder entferntes Kürzel nennt, besteht die Prüfung nicht.
+`esterification`, aus dem Vokabular `reaction-types` des Registers.
+Verwenden Sie in jeder Sprache dasselbe Kürzel im Datenblock. Legen Sie
+Reaktionstypen in der Laboranwendung an und bearbeiten Sie sie dort.
+Eine Vorschrift mit einem Schlüssel, den das Register nicht enthält,
+besteht die Prüfung nicht und erhält diese Meldung:
 
-`orgsyndb init DIR` kopiert die Startliste aus
-[`templates/reaction-types.toml`](../templates/reaction-types.toml) in diese
-Datei, sofern sie noch nicht vorhanden ist. Eine vorhandene Datei bleibt
-unverändert. Diese Tabelle zeigt die Startwerte mit ihren Bezeichnungen auf
-englischen und deutschen Websites:
+```text
+unknown reaction type "<value>"; the registry has no such reaction type
+```
+
+Das Beispielregister enthält diese Reaktionstypen:
 
 | Kürzel | Englisch | Deutsch |
 |---|---|---|
@@ -1028,32 +974,18 @@ englischen und deutschen Websites:
 | `reduction` | Reduction | Reduktion |
 | `reductive-amination` | Reductive amination | Reduktive Aminierung |
 
-Die Datei muss UTF-8-TOML sein und mindestens einen Wert enthalten. Jeder
-Schlüssel auf oberster Ebene muss `[a-z0-9]+(-[a-z0-9]+)*` entsprechen:
-Kleinbuchstaben und Ziffern mit einzelnen Bindestrichen zwischen den
-Gruppen. Seine Tabelle muss einen nicht leeren String `label` enthalten
-und darf einen nicht leeren String `label_de` enthalten. Andere Schlüssel
-sind nicht erlaubt. Reaktionstypen haben nur eine Ebene und erlauben kein
-`parent`.
+Eine englische Website zeigt `label` des Begriffs. Eine deutsche Website
+zeigt `label_de`, falls vorhanden, sonst `label`. Die Liste unter
+`/reaction_types/` und der Reaktionstypfilter des Katalogs sortieren nach
+der angezeigten Bezeichnung. Reaktionstypen haben nur eine Ebene.
 
-Eine englische Website zeigt `label`. Eine deutsche Website zeigt
-`label_de`, bei fehlendem `label_de` stattdessen `label`; ein leeres
-`label_de` ist ungültig. Die Liste unter `/reaction_types/` und der
-Reaktionstypfilter des Katalogs sortieren nach der angezeigten Bezeichnung.
-
-Ohne die Datei hat die Sammlung keine Reaktionstypen. Jede Vorschrift
-meldet dann `unknown reaction type "<v>"; see
-vocabularies/reaction-types.toml for the allowed values`. Eine Sammlung,
-die nur Verbindungen enthält, besteht die Prüfung weiterhin. Ein
-deklariertes Auswahlfeld für Verbindungen oder Vorschriften darf
-`vocabulary = "reaction-types"` nennen. Dann muss die Datei vorhanden
-sein; ihr Fehlen ist ein Konfigurationsfehler.
-
-Eine vorhandene Datei, die eine Vokabularregel verletzt, ist ein
-Konfigurationsfehler. Der Validator endet mit Rückgabewert 2 und schreibt
-`validate.py: error: ...` mit dem Dateinamen und gegebenenfalls dem
-betroffenen Wert und Schlüssel. Sowohl `orgsyndb validate` als auch
-`build` scheitern bei einem solchen Fehler.
+Enthält das Register keine Reaktionstypbegriffe, hat die Sammlung keine
+Reaktionstypen. Der Reaktionstyp jeder Vorschrift ist dann unbekannt.
+Eine Sammlung, die nur Stoffe enthält, besteht die Prüfung weiterhin.
+Ein deklariertes Auswahlfeld für Vorschriften darf
+`vocabulary = "reaction-types"` wie jedes andere Registervokabular benennen.
+Ein fehlerhafter Snapshot ist ein Konfigurationsfehler; sowohl
+`orgsyndb validate` als auch `build` scheitern daran.
 
 ## Abschnitte des Textes
 
@@ -1155,42 +1087,45 @@ Sprache als die Website, kennzeichnet ihre Seite die Vorschrift mit einem
 Die Reagenzientabelle einer deutschen Vorschrift hat die Spalten **Reagenz**,
 **CAS**, **M (g/mol)**, **Menge**, **mmol** und **Äquiv.**; ein Katalysator hat
 `kat.` in **mmol** und **Äquiv.** Deutscher Text schreibt Dezimalkommas.
-Produktausbeuten in `products` oder `scope`, Temperaturen in `scope` und `mw`
-in Verbindungsdateien bleiben in jeder Sprache TOML-Zahlen mit Dezimalpunkt;
-eine deutsche Website zeigt sie mit Komma.
+Produktausbeuten in `products` oder `scope` und Temperaturen in `scope`
+bleiben in jeder Sprache TOML-Zahlen mit Dezimalpunkt; eine deutsche Website
+zeigt sie mit Komma. Die Molmasse kommt aus dem Register und verwendet
+auf der Website ebenfalls deren Dezimalzeichen.
 
 ## Meldungen des Validators lesen
 
 Starten Sie den Validator mit mindestens einem Markdown-Verzeichnis:
 
 ```text
-tools/validate.py [--settings FILE] [--static-dir DIR] [--compounds DIR] [--sequences DIR] CONTENT_ROOT...
+tools/validate.py [--settings FILE] [--static-dir DIR] [--registry FILE] [--sequences DIR] CONTENT_ROOT...
 ```
 
 Jedes `CONTENT_ROOT` ist ein Verzeichnis mit Markdown-Vorschriften.
-Ohne Angabe ist `--static-dir` gleich `static` und `--compounds` gleich
-`compounds` im aktuellen Verzeichnis. Der Validator prüft dort jede
-Verbindungsdatei und löst die Schlüssel der Vorschriften gegen dieses
-Register auf. Ein
-fehlendes Registerverzeichnis ist leer: Jeder genannte Schlüssel ist dann
-unbekannt. Ein vorhandener Pfad, der kein Verzeichnis ist, ergibt einen
-Konfigurationsfehler. `orgsyndb validate` übergibt nach dem Org-Export
-`--settings orgsyndb.toml --static-dir static --compounds compounds --sequences md/sequences`
-aus dem Hauptordner der Sammlung.
+Ohne Angabe ist `--static-dir` gleich `static` im aktuellen Verzeichnis.
+Der Validator sucht das `scheme_image` einer Vorschrift darunter.
+`--registry` ist ohne Angabe `build/registry.json` im aktuellen Verzeichnis.
+Die Option erwartet eine Snapshot-Datei, keine Adresse. Der Validator prüft
+Verbindungsschlüssel der Vorschriften und Synthesewege, Reaktionstypen und
+deklarierte Vorschriftenwerte gegen diesen Snapshot. Er prüft keine Werte
+der Stoffe. Eine nicht lesbare Datei oder eine Datei, die kein Snapshot
+ist, ergibt einen Konfigurationsfehler mit Rückgabewert 2. `--compounds` und
+`--vocabulary` werden nicht akzeptiert; beide ergeben einen Aufruffehler,
+ebenfalls mit Rückgabewert 2.
+
+`orgsyndb validate` liest das von der Sammlung benannte Register ein,
+speichert es in `build/registry.json`, exportiert die Org-Quellen und
+übergibt dann
+`--settings orgsyndb.toml --static-dir static --registry build/registry.json --sequences md/sequences`
+sowie die vorhandenen Vorschriftenverzeichnisse `build/export` und
+`md/procedures` aus dem Hauptordner der Sammlung.
 
 `--settings` benennt die `orgsyndb.toml` der Sammlung. Ohne diese Option
 verwendet der Validator `orgsyndb.toml` im aktuellen Verzeichnis; fehlt
 diese Vorgabedatei, sind keine weiteren Felder deklariert. Eine mit
 `--settings` ausdrücklich benannte Datei muss vorhanden sein. Der
-Validator prüft die Deklarationen und sucht deren Vokabulare ausgehend
-vom Verzeichnis der Einstellungsdatei. Danach prüft er die Werte jeder
-Verbindung und jeder Vorschrift gegen die jeweiligen Deklarationen.
+Validator prüft die Vorschriftendeklarationen gegen die vier
+Registervokabulare und danach die deklarierten Werte jeder Vorschrift.
 Org-Vorschriften erreichen diese Prüfung als Markdown-Exporte.
-
-Der Validator liest außerdem `vocabularies/reaction-types.toml` neben der
-Einstellungsdatei, auch wenn die Vorgabedatei fehlt. Ohne `--settings` ist
-dies `vocabularies/reaction-types.toml` im aktuellen Verzeichnis. Es gibt
-keine Kommandozeilenoption zur Wahl einer Vokabulardatei.
 
 `--sequences` ist ohne Angabe `md/sequences` im aktuellen Verzeichnis. Ein
 fehlender Ordner enthält keine Synthesewege; ein vorhandener Pfad, der kein
@@ -1206,9 +1141,13 @@ Jedes Problem ist eine Zeile auf der Standardausgabe:
 
 Das Feld ist meist ein Feld des Datenblocks. Produktfelder heißen etwa
 `products[1].yield_percent`; die Zählung beginnt bei 1. Ein Eintrag, der
-keine Tabelle ist, erscheint unter `products[n]`. Registerprobleme nennen
-den Pfad der Verbindungsdatei und den Feldnamen, etwa
-`compounds/ethyl-acetate.toml:mw`. Weitere mögliche Felder sind `file_name`,
+keine Tabelle ist, erscheint unter `products[n]`. Ein Registerfehler nennt
+den Snapshot-Pfad, wie er an `--registry` übergeben wurde, und das Feld
+`substances`: Ein Stoff mit dem Schlüssel `group` kollidiert mit den
+Gruppenreitern.
+Die Laboranwendung lässt diesen Schlüssel nicht zu; die Snapshot-Datei
+wurde also anders erzeugt. Geben Sie dem Stoff dort einen anderen Schlüssel.
+Weitere mögliche Felder sind `file_name`,
 `front_matter`, `toml` und `body`. Die Meldungen sind englisch.
 
 Fehler deklarierter Vorschriftenfelder nennen die Markdown-Quelle oder
@@ -1238,10 +1177,11 @@ unter dem jeweiligen Feld in `scope`.
 Bei `products` bedeutet `must not be empty`, dass Sie mindestens einen
 Eintrag angeben müssen. `must be an array of tables` oder
 `must be a table` bezeichnet eine falsche TOML-Form. `required field missing` nennt ein fehlendes Feld.
-Ein unbekannter Schlüssel ergibt `unknown compound "<key>"; the compound
-registry has no <key>.toml`. Prüfen Sie die Schreibweise und das
-Registerverzeichnis. `lists <key> twice` bezeichnet ein doppelt genanntes
-Produkt oder einen Ausgangsstoff; `<key> is also a product` bedeutet,
+Ein unbekannter Schlüssel ergibt
+`unknown compound "<key>"; the registry has no substance of this key`.
+Prüfen Sie die Schreibweise und den Stoff in der Laboranwendung.
+`lists <key> twice` bezeichnet ein doppelt genanntes Produkt oder einen
+Ausgangsstoff; `<key> is also a product` bedeutet,
 dass ein Ausgangsstoff auch als Produkt aufgeführt ist.
 
 `orgsyndb export` schreibt Probleme der Org-Quellen in derselben Zeilenform
@@ -1249,17 +1189,17 @@ auf die Standardausgabe. Seine Felder können auch Org-Schlüsselwörter wie
 `#+CREATED`, Eigenschaften wie `#+PROPERTY` oder `:EXPORT_DATE:` und
 Schubladen wie `:LOGBOOK:` sein.
 
-Ein `error` bedeutet, dass eine Vorschrift, ein Verbindungseintrag oder ein
-Syntheseweg ungültig ist. Eine `warning`
+Ein `error` bedeutet, dass eine Vorschrift, ein Syntheseweg oder das
+Register ungültig ist. Eine `warning`
 bezeichnet ein Problem, das die Prüfung nicht scheitern lässt, etwa einen
 fehlenden Abschnitt oder ein unbekanntes Feld. Nach den Problemzeilen
 schreibt der Validator eine Zusammenfassung auf die Standardfehlerausgabe.
-Die Dateizahl umfasst Vorschriften, Verbindungsdateien und Synthesewegdateien,
-einschließlich aller Sprachfassungen. Für die
-Beispielsammlung einschließlich vorhandener Org-Exporte lautet sie:
+Die Dateizahl umfasst Vorschriften und Synthesewegdateien einschließlich
+aller Sprachfassungen; Stoffe und die Snapshot-Datei werden nicht gezählt.
+Für die Beispielsammlung einschließlich vorhandener Org-Exporte lautet sie:
 
 ```text
-validated 42 files: 0 errors, 0 warnings
+validated 24 files: 0 errors, 0 warnings
 ```
 
 Die ersten drei Zeilen sind echte Ausgaben des Validators. Die letzte
@@ -1267,7 +1207,7 @@ Zeile erzeugt `orgsyndb export` in derselben Form für eine Org-Quelle:
 
 ```text
 tests/fixtures/invalid/yield-out-of-range/OSDB-0110-yield-out-of-range.md:products[1].yield_percent: error: 104.5 must be between 0 and 100
-tests/fixtures/invalid/unknown-compound/OSDB-0123-unknown-compound.md:products[1].compound: error: unknown compound "no-such-compound"; the compound registry has no no-such-compound.toml
+tests/fixtures/invalid/unknown-compound/OSDB-0123-unknown-compound.md:products[1].compound: error: unknown compound "no-such-compound"; the registry has no substance of this key
 tests/fixtures/warn/missing-section/OSDB-0151-missing-section.md:body: warning: missing section "Notes"
 tests/fixtures/org-invalid/wrong-weekday/org/OSDB-0206-wrong-weekday.org:#+CREATED: error: weekday "Tue" does not match 2026-10-19 (Mon)
 ```
@@ -1277,8 +1217,8 @@ Der Rückgabewert sagt einem aufrufenden Befehl, ob die Prüfung gelungen ist:
 | Rückgabewert | Bedeutung |
 |---|---|
 | `0` | Kein Fehler gefunden. Warnungen können ausgegeben worden sein. |
-| `1` | Mindestens ein Fehler in einer Vorschrift, Verbindungsdatei oder einem Syntheseweg. |
-| `2` | Aufruf oder Konfiguration des Validators ist ungültig, etwa kein Verzeichnis, ein Verzeichnis, das keines ist, eine fehlende ausdrücklich benannte Einstellungsdatei, ungültige Einstellungen oder Deklarationen oder eine fehlende oder fehlerhafte Vokabulardatei. |
+| `1` | Mindestens ein Fehler in einer Vorschrift, einem Syntheseweg oder im Register. |
+| `2` | Aufruf oder Konfiguration des Validators ist ungültig, etwa kein Verzeichnis, ein Verzeichnis, das keines ist, eine fehlende ausdrücklich benannte Einstellungsdatei, ungültige Einstellungen oder Deklarationen oder ein nicht lesbarer oder fehlerhafter Register-Snapshot. |
 
 Aufruf- und Konfigurationsfehler gehen auf die Standardfehlerausgabe und
 enthalten `validate.py: error:`; die Standardausgabe bleibt leer. Der
@@ -1301,7 +1241,7 @@ TOML-Fehler folgen denselben Regeln wie bei Vorschriften.
 | `id` | `duplicate id <id>, also used by <path>` | Eine freie Nummer vergeben; je Sprachkürzel und einmal ohne Kürzel darf eine Datei sie teilen. |
 | `slug` | `must be "<value>" (the lowercased id)` | Die `id` in Kleinbuchstaben verwenden. |
 | `file_name` | `must be named SEQ-NNNN-short-slug.md` oder `does not match id <id>` | Dateinamen oder Nummer korrigieren. |
-| `target` | `unknown compound "<key>"` | Schlüssel korrigieren oder Registereintrag anlegen. |
+| `target` | `unknown compound "<key>"; the registry has no substance of this key` | Schlüssel korrigieren oder Stoff in der Laboranwendung anlegen. |
 | `steps` | `must list at least two steps` | Genügend Stufen für einen Syntheseweg angeben. |
 | `steps` oder `steps[n]` | `must be an array of tables` oder `must be a table` | Die oben gezeigten TOML-Formen verwenden. |
 | `steps[n].procedure` | `<id> not found in any content root` | Vorhandene Vorschriftennummer verwenden; beim direkten Aufruf deren Verzeichnis mitgeben. |

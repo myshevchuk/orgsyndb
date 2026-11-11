@@ -1,9 +1,0 @@
-name = "4-Acetylbiphenyl"
-name_de = "4-Acetylbiphenyl"
-formula = "C14H12O"
-mw = 196.25
-smiles = "CC(=O)c1ccc(cc1)-c1ccccc1"
-cas = "92-91-1"
-chemical_class = ["aryl-ketones"]
-in_house = true
-group = "intermediates"

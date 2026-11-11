@@ -89,11 +89,11 @@ The `status` field SHALL be exactly one of `draft`, `checked` or `retired`. Hugo
 - **THEN** it reports exactly one error, field `status`, containing `must be one of draft, checked, retired`
 
 ### Requirement: Controlled reaction type
-The `reaction_types` field SHALL be a list of exactly one string, and that string SHALL be a reaction type of the collection, a value of its `vocabularies/reaction-types.toml` (reaction-types "Reaction-type vocabulary"). A string that is not gets an error whose message contains `unknown reaction type "<v>"` and `vocabularies/reaction-types.toml`.
+The `reaction_types` field SHALL be a list of exactly one string, and that string SHALL be a reaction type of the collection, a term of its registry's `reaction-types` (reaction-types "Reaction-type vocabulary"). A string that is not gets an error whose message contains `unknown reaction type "<v>"`.
 
 #### Scenario: Reaction type outside the vocabulary
 - **WHEN** a fixture run on `invalid/unknown-reaction-type` examines `OSDB-0111-unknown-reaction-type.md`, whose `reaction_types` is `["esterfication"]`
-- **THEN** it reports exactly one error, field `reaction_types`, containing `unknown reaction type "esterfication"` and `vocabularies/reaction-types.toml`
+- **THEN** it reports exactly one error, field `reaction_types`, containing `unknown reaction type "esterfication"`
 
 #### Scenario: Two reaction types
 - **WHEN** a variant run sets `reaction_types = ["esterification", "reduction"]`, both in the fixture vocabulary, under the file name `OSDB-0100-two-reaction-types.md`
@@ -348,13 +348,13 @@ The rules for headings are:
 
 ### Requirement: Markdown template
 The file `templates/procedure.md` SHALL be a complete procedure using the placeholder ID `OSDB-0000` and slug `osdb-0000`. It satisfies the following:
-- Its front matter explains every field in TOML comments and shows the optional fields commented out. The comment on `reaction_types` names `vocabularies/reaction-types.toml` as the list of allowed values, and no line of the template names `site/data`.
+- Its front matter explains every field in TOML comments and shows the optional fields commented out. The comment on `reaction_types` says that the allowed values are the reaction types of the registry, and no line of the template names `site/data` or `vocabularies/`.
 - Its body has the eight sections, a Reagents table with the header `Reagent | CAS | MW (g/mol) | Amount | mmol | Equiv`, and numbered lists under Procedure and Notes.
 - Its `products` names the compound key `example-compound`, and its commented-out `substrates` line names the same key.
-- Once `OSDB-0000` is replaced by a real ID and `osdb-0000` by its lowercase form, it validates with no errors and no warnings in a collection whose reaction types are `templates/reaction-types.toml` (reaction-types "Starter reaction types") and whose registry holds `templates/compound.toml` as `example-compound.toml`.
+- Once `OSDB-0000` is replaced by a real ID and `osdb-0000` by its lowercase form, it validates with no errors and no warnings against a registry that holds the substance `example-compound` and the reaction type the template names.
 
 #### Scenario: Substituted Markdown template is clean
-- **WHEN** a test copies `templates/procedure.md` to a temporary directory as `OSDB-0001-template.md`, replacing every `OSDB-0000` with `OSDB-0001` and every `osdb-0000` with `osdb-0001`, copies `templates/compound.toml` into a temporary registry as `example-compound.toml`, writes a settings file `orgsyndb.toml` holding `format = 1` beside a `vocabularies/reaction-types.toml` copied from `templates/reaction-types.toml`, and runs the validator on that directory with that registry and `--settings` naming that settings file
+- **WHEN** a test copies `templates/procedure.md` to a temporary directory as `OSDB-0001-template.md`, replacing every `OSDB-0000` with `OSDB-0001` and every `osdb-0000` with `osdb-0001`, writes a snapshot holding the substance `example-compound` and the reaction type the template names, writes a settings file `orgsyndb.toml` holding `format = 1`, and runs the validator on that directory with `--registry` naming the snapshot and `--settings` naming that settings file
 - **THEN** it exits 0 and prints nothing to stdout
 
 #### Scenario: Unsubstituted Markdown template is rejected
@@ -363,7 +363,7 @@ The file `templates/procedure.md` SHALL be a complete procedure using the placeh
 
 #### Scenario: The templates name the collection's reaction types
 - **WHEN** a test reads `templates/procedure.md` and `templates/procedure.de.md`
-- **THEN** each contains `vocabularies/reaction-types.toml` in a comment line before its `reaction_types` line, and neither contains `site/data`
+- **THEN** each has a comment line before its `reaction_types` line that names the registry, and neither contains `site/data` or `vocabularies/`
 
 ### Requirement: Org template
 The file `templates/procedure.org` SHALL be a complete Org procedure that satisfies the following:
@@ -423,7 +423,7 @@ Problems of this requirement follow those of "Org file-level keywords", in the o
 
 ### Requirement: Products
 The `products` field SHALL be a non-empty array of tables, one per product of the procedure, each holding:
-- `compound`: a string that is a key of the compound registry (compound-registry "Compound files");
+- `compound`: a string that is the key of a substance of the collection's registry (compound-registry "Registry source");
 - `yield_percent`: a finite number from 0 to 100 inclusive (TOML integer or float; never boolean), the yield of that product.
 
 A problem inside the `n`-th table, counting from 1, is reported under `products[n].<key>`, and an entry that is not a table is an error under `products[n]` containing `must be a table`. Any other key in a table is a warning containing `unknown field`. The messages are:
@@ -475,7 +475,7 @@ The optional `substrates` field SHALL be a list of strings, the keys of the comp
 - **THEN** it reports exactly one error, field `substrates`, containing `ethyl-acetate is also a product`
 
 ### Requirement: Scheme image
-The optional `scheme_image` field SHALL name an image of the procedure's reaction scheme, with the rules of compound-registry "Structure image path": a relative path beginning with `structures/` and ending in `.svg` or `.png`, with no `..` component, naming a file that exists under the static directory, the wrong prefix or suffix leaving existence unchecked. Problems are reported under `scheme_image` with that requirement's messages.
+The optional `scheme_image` field SHALL name an image of the procedure's reaction scheme, a relative path beginning with `structures/` and ending in `.svg` or `.png`, with no `..` component, naming a file that exists under the static directory, the wrong prefix or suffix leaving existence unchecked. Problems are reported under `scheme_image`, containing `must be a relative path under structures/` for the prefix or a `..` component, `must end in .svg or .png` for the suffix, and `not found` for a file that does not exist.
 
 #### Scenario: Scheme image missing
 - **WHEN** a general variant run sets `scheme_image = "structures/missing.svg"` under the file name `OSDB-0140-missing-scheme.md`

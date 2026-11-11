@@ -38,10 +38,10 @@ authors = ["A. Example"]
 # wenn sie nicht mehr verwendet werden soll.
 status = "draft"
 
-# Die Art der Reaktion: genau ein Eintrag. Die erlaubten Werte stehen in
-# vocabularies/reaction-types.toml, zum Beispiel "esterification"
-# (Veresterung), "reduction" (Reduktion) oder "cross-coupling"
-# (Kreuzkupplung).
+# Die Art der Reaktion: genau ein Eintrag. Erlaubt sind die Reaktionstypen
+# der Registry der Sammlung, die die Laboranwendung führt, zum Beispiel
+# "esterification" (Veresterung), "reduction" (Reduktion) oder
+# "cross-coupling" (Kreuzkupplung).
 reaction_types = ["esterification"]
 
 # Schlagwörter für die Suche, mindestens eines. Nur Kleinbuchstaben und
@@ -55,10 +55,10 @@ scale = "25 mmol"
 
 # Was die Vorschrift liefert: ein Eintrag in geschweiften Klammern je
 # Produkt, durch Kommas getrennt. compound ist der Schlüssel des
-# Produkts, der Name seiner Datei im Ordner compounds/ der Sammlung ohne
-# .toml; für eine neue Verbindung templates/compound.toml dorthin
-# kopieren. yield_percent ist seine Ausbeute in Prozent, eine Zahl von 0
-# bis 100, ohne Anführungszeichen und ohne %.
+# Produkts, der Schlüssel seiner Substanz in der Registry der Sammlung;
+# eine neue Verbindung wird zuerst in der Laboranwendung angelegt.
+# yield_percent ist seine Ausbeute in Prozent, eine Zahl von 0 bis 100,
+# ohne Anführungszeichen und ohne %.
 products = [{ compound = "example-compound", yield_percent = 85 }]
 
 # Die wichtigsten Gefahren, mindestens eine, jeweils als kurzer Satz.

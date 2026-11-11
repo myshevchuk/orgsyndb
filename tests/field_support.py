@@ -1,11 +1,12 @@
-"""The compound and procedure fields of a collection as the site writes
-them (compound-fields "Field display", procedure-fields "Procedure field
-data").
+"""The registry fields and the procedure fields of a collection as the
+site writes them (compound-fields "Registry fields" and "Field display",
+procedure-fields "Procedure field data").
 
-The declarations are read straight from the collection's
-``orgsyndb.toml`` and its ``vocabularies/``, independently of
-``tools/pipeline.py``, so that a site test does not take its expectation
-from the code under test.
+The registry fields are stated here from the specification, and the
+procedure declarations are read straight from the collection's
+``orgsyndb.toml`` and the vocabularies of its registry snapshot,
+independently of ``tools/pipeline.py``, so that a site test does not
+take its expectation from the code under test.
 """
 
 import tomllib
@@ -32,7 +33,7 @@ class Field(NamedTuple):
     search: bool = False
     # value -> keys of its ancestors, outermost first
     ancestors: dict[str, tuple[str, ...]] = {}
-    # every value of the vocabulary, depth first, children in file order
+    # every value of the vocabulary, depth first, siblings in key order
     order: tuple[str, ...] = ()
     tabs: bool = False
     beside: bool = False
@@ -69,22 +70,64 @@ def _ancestors(vocabulary: dict[str, dict[str, Any]]
 
 
 def _order(vocabulary: dict[str, dict[str, Any]]) -> tuple[str, ...]:
-    """The values, each top-level value in file order followed by the
-    values filed under it, in file order, recursively."""
+    """The values, each top-level value followed by the values filed
+    under it, recursively, siblings in key order."""
     def below(parent: str | None) -> list[str]:
         found: list[str] = []
-        for value, entry in vocabulary.items():
-            if entry.get("parent") == parent:
+        for value in sorted(vocabulary):
+            if vocabulary[value].get("parent") == parent:
                 found.append(value)
                 found.extend(below(value))
         return found
     return tuple(below(None))
 
 
-def read_fields(settings: Path, language: str,
-                entity: str = "compound") -> list[Field]:
+def vocabulary_of(snapshot: dict[str, Any], name: str
+                  ) -> dict[str, dict[str, Any]]:
+    """The terms of the vocabulary ``name`` of a snapshot, by key, each
+    a table of ``label`` and, those it has, ``label_de`` and
+    ``parent``."""
+    return {term["key"]: {key: value for key, value in term.items()
+                          if key != "key" and value is not None}
+            for term in snapshot["vocabularies"][name]}
+
+
+def _choice(key: str, label: str, label_de: str, language: str,
+            snapshot: dict[str, Any], vocabulary: str, **options: Any
+            ) -> Field:
+    terms = vocabulary_of(snapshot, vocabulary)
+    return Field(
+        key, "choice", label_de if language == "de" else label,
+        options.get("column", False), None, options.get("multiple", False),
+        _paths(terms, language), options.get("facet", False), False,
+        _ancestors(terms), _order(terms), options.get("tabs", False), False)
+
+
+def registry_fields(snapshot: dict[str, Any], language: str
+                    ) -> list[Field]:
+    """The four registry fields, in order, with their labels in
+    ``language`` and the terms of the vocabularies of ``snapshot``
+    (compound-fields "Registry fields")."""
+    german = language == "de"
+    return [
+        Field("article_number", "text",
+              "Artikelnr." if german else "Article no.", True, None, False,
+              {}, search=True, beside=True),
+        Field("short_name", "text", "Kurzname" if german else "Short name",
+              False, None, False, {}, search=True, beside=True),
+        _choice("chemical_class", "Chemical class", "Stoffklasse",
+                language, snapshot, "chemical-classes", multiple=True,
+                column=True, facet=True),
+        _choice("group", "Group", "Gruppe", language, snapshot,
+                "inventory-groups", facet=True, tabs=True),
+    ]
+
+
+def read_fields(settings: Path, snapshot: dict[str, Any], language: str,
+                entity: str = "procedure") -> list[Field]:
     """The fields of ``fields.<entity>`` that ``settings`` declares, in
-    declared order, with their labels in ``language``."""
+    declared order, with their labels in ``language`` and the
+    vocabularies of ``snapshot``."""
     data = tomllib.loads(settings.read_text(encoding="utf-8"))
     fields = []
     for entry in data.get("fields", {}).get(entity, []):
@@ -92,10 +135,7 @@ def read_fields(settings: Path, language: str,
         ancestors: dict[str, tuple[str, ...]] = {}
         order: tuple[str, ...] = ()
         if entry["type"] == "choice":
-            vocabulary = tomllib.loads(
-                (settings.parent / "vocabularies"
-                 / f"{entry['vocabulary']}.toml").read_text(
-                     encoding="utf-8"))
+            vocabulary = vocabulary_of(snapshot, entry["vocabulary"])
             paths = _paths(vocabulary, language)
             ancestors = _ancestors(vocabulary)
             order = _order(vocabulary)
@@ -109,11 +149,12 @@ def read_fields(settings: Path, language: str,
     return fields
 
 
-def read_procedure_fields(settings: Path, language: str) -> list[Field]:
+def read_procedure_fields(settings: Path, snapshot: dict[str, Any],
+                          language: str) -> list[Field]:
     """The procedure fields ``settings`` declares, in declared order,
     with their labels in ``language``. ``column``, ``search`` and
     ``tabs`` are false."""
-    return read_fields(settings, language, "procedure")
+    return read_fields(settings, snapshot, language, "procedure")
 
 
 def value_text(field: Field, value: Any, locale: str, *,
@@ -291,7 +332,8 @@ def search_text(fields: list[Field], compound: dict[str, Any]) -> str:
     names, formula, CAS number, SMILES and the values of its searchable
     text fields, joined by single spaces."""
     parts = [compound["name"], compound.get("name_de"),
-             compound["formula"], compound.get("cas"), compound["smiles"]]
+             compound.get("formula"), compound.get("cas"),
+             compound.get("smiles")]
     parts += [compound[field.key] for field in fields
               if field.type == "text" and field.search
               and field.key in compound]
@@ -307,10 +349,9 @@ class ProcedureFieldsMixin:
     LOCALE: str
 
     def compound_fields(self) -> list[Field]:
-        """The compound fields the sandbox collection declares, in the
-        site's language."""
-        return read_fields(self.sandbox.root / "orgsyndb.toml",
-                           self.LOCALE)
+        """The four registry fields of the sandbox collection's
+        registry, in the site's language."""
+        return registry_fields(ps.read_snapshot(self.sandbox), self.LOCALE)
 
     def linked(self, key: str) -> str:
         """How the text of a container reads where the compound ``key``
@@ -330,7 +371,8 @@ class ProcedureFieldsMixin:
         """The procedure fields the sandbox collection declares, in the
         site's language."""
         return read_procedure_fields(
-            self.sandbox.root / "orgsyndb.toml", self.LOCALE)
+            self.sandbox.root / "orgsyndb.toml",
+            ps.read_snapshot(self.sandbox), self.LOCALE)
 
     def facet_fields(self) -> list[Field]:
         """The procedure fields declared with ``facet = true``, in

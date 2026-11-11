@@ -23,9 +23,11 @@ from unittest import mock
 
 from pipeline_support import (BOOTSTRAP_HINT, DEMO, GIT_QUIET, HOOK,
                               ORGSYNDB, PIPELINE, REPO, TOOLS, Run,
-                              make_path, make_sandbox, pipeline_function,
-                              require_pagefind, require_tool, run_script,
+                              closed_address, make_path, make_sandbox,
+                              pipeline_function, require_pagefind,
+                              require_tool, run_script, serve_snapshot,
                               snapshot)
+from support import load_snapshot, template_registry
 
 SUBCOMMANDS = ["export", "validate", "build", "serve", "pdf", "new", "init",
                "clean", "check-deps", "index", "help"]
@@ -277,7 +279,8 @@ class ValidateSettingsTests(ProgramTestCase):
     "validate subcommand")."""
 
     PREFIX = ["--settings", "orgsyndb.toml", "--static-dir", "static",
-              "--compounds", "compounds", "--sequences", "md/sequences"]
+              "--registry", "build/registry.json", "--sequences",
+              "md/sequences"]
 
     def recorded_arguments(self, sandbox, command: str = "validate"
                            ) -> tuple[Run, list[str]]:
@@ -313,33 +316,89 @@ class ValidateSettingsTests(ProgramTestCase):
         sandbox = make_sandbox(self)
         path = sandbox.root / "orgsyndb.toml"
         text = path.read_text(encoding="utf-8")
-        old = 'type = "number"\nlabel = "Stock"'
+        old = 'type = "number"\nlabel = "Working time"'
         self.assertEqual(text.count(old), 1)
-        path.write_text(text.replace(old, 'type = "date"\nlabel = "Stock"'),
-                        encoding="utf-8")
+        path.write_text(
+            text.replace(old, 'type = "date"\nlabel = "Working time"'),
+            encoding="utf-8")
         result = sandbox.build("validate")
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertEqual([ln for ln in result.stdout.splitlines()
                           if ": error: " in ln or ": warning: " in ln], [])
         self.assertIn("validate.py: error:", result.stderr)
-        self.assertIn("stock", result.stderr)
+        self.assertIn("working_time", result.stderr)
         self.assertNotIn("orgsyndb: error:", result.stderr)
 
     def test_a_declared_value_is_checked_by_validate(self) -> None:
         """Scenario: Seeds validate (the declared fields are checked)."""
         sandbox = make_sandbox(self)
-        path = sandbox.root / "compounds" / "acetone.toml"
+        path = sandbox.root / "md" / "procedures" / "OSDB-0002-aspirin.md"
         text = path.read_text(encoding="utf-8")
-        self.assertEqual(text.count("in_house = false"), 1)
-        path.write_text(text.replace("in_house = false",
-                                     'in_house = "no"'), encoding="utf-8")
+        self.assertEqual(text.count("inert_atmosphere = false"), 1)
+        path.write_text(text.replace("inert_atmosphere = false",
+                                     'inert_atmosphere = "no"'),
+                        encoding="utf-8")
         result = sandbox.build("validate")
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        lines = [ln for ln in result.stdout.splitlines() if ": error: " in ln]
+        lines = [ln for ln in result.stdout.splitlines()
+                 if ln.startswith("md/procedures/OSDB-0002-aspirin.md:"
+                                  "inert_atmosphere: error: ")]
         self.assertEqual(len(lines), 1, result.stdout)
-        self.assertTrue(lines[0].startswith(
-            "compounds/acetone.toml:in_house: error: "), lines[0])
         self.assertIn("must be true or false", lines[0])
+
+    def test_validate_leaves_the_registry_it_read(self) -> None:
+        """Requirement: validate subcommand (it reads the registry, which
+        leaves it in `build/registry.json`)."""
+        sandbox = make_sandbox(self)
+        result = sandbox.build("validate")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(
+            load_snapshot(sandbox.root / "build" / "registry.json"),
+            load_snapshot(sandbox.root / "registry.json"))
+
+    def test_validate_reads_a_registry_at_an_address(self) -> None:
+        """Requirement: validate subcommand (`build/registry.json` for an
+        address)."""
+        table = load_snapshot(
+            Path(__file__).resolve().parent / "fixtures" / "collection"
+            / "registry.json")
+        server = serve_snapshot(self, table)
+        sandbox = make_sandbox(self)
+        result = sandbox.build("validate",
+                               env=sandbox.env(ORGSYNDB_REGISTRY=server.url))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(
+            load_snapshot(sandbox.root / "build" / "registry.json"), table)
+        self.assertEqual(
+            (sandbox.root / "build" / "registry.source").read_text(
+                encoding="utf-8").strip(), server.url)
+
+    def test_a_registry_that_cannot_be_read_stops_validate_early(
+            self) -> None:
+        """Requirement: validate subcommand (a configuration error that
+        reading the registry raises, before the export)."""
+        sandbox = make_sandbox(self)
+        address = closed_address()
+        result = sandbox.build("validate",
+                               env=sandbox.env(ORGSYNDB_REGISTRY=address))
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertTrue(result.stderr.startswith("orgsyndb: error:"),
+                        result.stderr)
+        self.assertIn(address, result.stderr)
+        self.assertFalse((sandbox.root / "build" / "export").exists())
+
+    def test_a_collection_without_a_registry_stops_validate(self) -> None:
+        """Scenario: No registry named (through `validate`)."""
+        sandbox = make_sandbox(self)
+        (sandbox.root / "orgsyndb.toml").write_text(
+            "format = 1\n", encoding="utf-8")
+        env = sandbox.env()
+        env.pop("ORGSYNDB_REGISTRY", None)
+        result = sandbox.build("validate", env=env)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertTrue(result.stderr.startswith("orgsyndb: error:"),
+                        result.stderr)
+        self.assertIn("registry", result.stderr)
 
 
 class CleanTests(ProgramTestCase):
@@ -436,11 +495,32 @@ class MarkerTests(ProgramTestCase):
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn("title", result.stderr)
 
+    def test_a_registry_that_is_not_text_is_refused(self) -> None:
+        """Scenario: A registry that is not text."""
+        for value in ("3", '""', "true", '["registry.json"]'):
+            directory = self.collection_with(
+                f"format = 1\nregistry = {value}\n")
+            result = self.run_real("-C", directory, "validate")
+            with self.subTest(registry=value):
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn("orgsyndb.toml", result.stderr)
+                self.assertIn("registry", result.stderr)
+                self.assertFalse((directory / "build").exists())
+
+    def test_a_registry_beside_format_is_accepted_by_the_marker_check(
+            self) -> None:
+        """Requirement: Collection layout (`registry` beside
+        `format`)."""
+        directory = self.collection_with(
+            'format = 1\nregistry = "registry.json"\n')
+        result = self.run_real("-C", directory, "clean")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_unknown_key_beside_fields_is_refused(self) -> None:
         """Scenario: Unknown key (beside `fields`)."""
         directory = self.collection_with(
-            'format = 1\ntitle = "X"\n\n[[fields.compound]]\n'
-            'key = "item_number"\n')
+            'format = 1\ntitle = "X"\n\n[[fields.procedure]]\n'
+            'key = "notebook"\n')
         result = self.run_real("-C", directory, "validate")
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn("orgsyndb.toml", result.stderr)
@@ -450,7 +530,7 @@ class MarkerTests(ProgramTestCase):
     def test_declarations_do_not_stop_clean(self) -> None:
         """Scenario: Declarations do not stop other subcommands."""
         directory = self.collection_with(
-            'format = 1\n\n[[fields.compound]]\nkey = "item_number"\n')
+            'format = 1\n\n[[fields.procedure]]\nkey = "notebook"\n')
         result = self.run_real("-C", directory, "clean")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stderr.count("error"), 0, result.stderr)
@@ -460,7 +540,7 @@ class MarkerTests(ProgramTestCase):
         directory = self.temp_dir() / "a collection"
         self.assertEqual(self.run_real("init", directory).returncode, 0)
         with (directory / "orgsyndb.toml").open("a", encoding="utf-8") as f:
-            f.write('\n[[fields.compound]]\nkey = "item_number"\n'
+            f.write('\n[[fields.procedure]]\nkey = "notebook"\n'
                     'type = "nonsense"\n')
         result = self.run_real("-C", directory, "new", "--md",
                                "Ethyl acetate")
@@ -471,7 +551,7 @@ class MarkerTests(ProgramTestCase):
     def test_fields_alone_is_accepted_by_the_marker_check(self) -> None:
         """Requirement: Collection layout (`fields` beside `format`)."""
         directory = self.collection_with(
-            'format = 1\n\n[[fields.compound]]\nkey = "x"\n'
+            'format = 1\n\n[[fields.procedure]]\nkey = "x"\n'
             'type = "text"\nlabel = "X"\n')
         result = self.run_real("-C", directory, "clean")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -536,15 +616,19 @@ class InitTests(ProgramTestCase):
         result = self.run_real("init", target)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(Path(result.stdout.strip()), target.resolve())
-        self.assertEqual(tomllib.loads(
-            (target / "orgsyndb.toml").read_text(encoding="utf-8")),
-            {"format": 1})
+        text = (target / "orgsyndb.toml").read_text(encoding="utf-8")
+        self.assertEqual(tomllib.loads(text), {"format": 1})
+        self.assertTrue(
+            any(line.startswith("#") and "registry" in line
+                for line in text.splitlines()),
+            "no comment line names registry")
         self.assertEqual((target / ".gitignore").read_text(),
                          "/build/\n/public/\n/pdf/\n")
         for name in ("org/procedures", "md/procedures", "md/sequences",
-                     "compounds", "static/structures"):
+                     "static/structures"):
             self.assertTrue((target / name).is_dir(), name)
-        self.assertEqual(list((target / "compounds").iterdir()), [])
+        for name in ("compounds", "vocabularies"):
+            self.assertFalse((target / name).exists(), name)
         self.assertEqual(list((target / "md" / "sequences").iterdir()), [])
         result = self.run_real("-C", target, "new", "--md", "Ethyl acetate")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -552,45 +636,47 @@ class InitTests(ProgramTestCase):
                          "md/procedures/OSDB-0001-ethyl-acetate.md")
         stub = target / "md" / "procedures" / "OSDB-0001-ethyl-acetate.md"
         self.assertTrue(stub.is_file())
-        starter = REPO / "templates" / "reaction-types.toml"
-        written = target / "vocabularies" / "reaction-types.toml"
-        self.assertTrue(written.is_file(), "vocabularies/reaction-types.toml "
-                        "was not written")
-        self.assertEqual(written.read_bytes(), starter.read_bytes())
-        data = tomllib.loads(stub.read_text(encoding="utf-8").split(
-            "+++\n")[1])
-        self.assertEqual(len(data["reaction_types"]), 1)
-        self.assertIn(data["reaction_types"][0], tomllib.loads(
-            written.read_text(encoding="utf-8")))
+        self.assertFalse((target / "vocabularies").exists())
+
+    def test_the_commented_registry_line_shows_an_address(self) -> None:
+        """Requirement: init subcommand (a commented `registry` line that
+        shows the form of a snapshot address)."""
+        target = self.temp_dir() / "new collection"
+        self.assertEqual(self.run_real("init", target).returncode, 0)
+        lines = (target / "orgsyndb.toml").read_text(
+            encoding="utf-8").splitlines()
+        shown = [line for line in lines
+                 if re.match(r"#\s*registry\s*=", line)]
+        self.assertEqual(len(shown), 1, lines)
+        self.assertRegex(shown[0], r"https?://\S+/lab/registry/snapshot\.json")
+        self.assertTrue(lines[0].startswith("#"), lines[0])
+        self.assertGreater(lines.index(shown[0]), lines.index("format = 1"))
 
     def test_a_new_collection_validates_its_first_stub(self) -> None:
         """Scenario: New collection takes a procedure (the stub
-        validates)."""
+        validates against a registry that holds what the template
+        names)."""
         target = self.temp_dir() / "new collection"
         self.assertEqual(self.run_real("init", target).returncode, 0)
         result = self.run_real("-C", target, "new", "--md", "Ethyl acetate")
         self.assertEqual(result.returncode, 0, result.stderr)
-        (target / "compounds" / "example-compound.toml").write_bytes(
-            (REPO / "templates" / "compound.toml").read_bytes())
-        result = self.run_real("-C", target, "validate")
+        with template_registry() as registry:
+            env = dict(os.environ, ORGSYNDB_REGISTRY=str(registry))
+            result = self.run_real("-C", target, "validate", env=env)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertNotIn("reaction_types", result.stdout)
         self.assertNotIn("unknown reaction type", result.stdout)
         self.assertNotIn("validate.py: error:", result.stderr)
 
-    def test_existing_reaction_types_are_kept(self) -> None:
-        """Scenario: Existing reaction types are kept."""
-        target = self.temp_dir() / "collection"
-        (target / "vocabularies").mkdir(parents=True)
-        own = '[photolysis]\nlabel = "Photolysis"\n'
-        path = target / "vocabularies" / "reaction-types.toml"
-        path.write_text(own, encoding="utf-8")
-        result = self.run_real("init", target)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(tomllib.loads(
-            (target / "orgsyndb.toml").read_text(encoding="utf-8")),
-            {"format": 1})
-        self.assertEqual(path.read_text(encoding="utf-8"), own)
+    def test_a_new_collection_names_no_registry(self) -> None:
+        """Scenario: No registry named (a collection `init` made)."""
+        target = self.temp_dir() / "new collection"
+        self.assertEqual(self.run_real("init", target).returncode, 0)
+        env = dict(os.environ)
+        env.pop("ORGSYNDB_REGISTRY", None)
+        result = self.run_real("-C", target, "validate", env=env)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("registry", result.stderr)
 
     def test_existing_collection_is_refused(self) -> None:
         """Scenario: Existing collection is refused."""
@@ -621,17 +707,13 @@ class InitTests(ProgramTestCase):
         self.assertEqual(self.run_real("init", target).returncode, 0)
         self.assertEqual((DEMO / ".gitignore").read_text(),
                          (target / ".gitignore").read_text())
-        written = target / "vocabularies" / "reaction-types.toml"
-        self.assertTrue(written.is_file(), "vocabularies/reaction-types.toml "
-                        "was not written")
-        demo_types = DEMO / "vocabularies" / "reaction-types.toml"
-        self.assertTrue(demo_types.is_file(), f"{demo_types} is missing")
-        self.assertEqual(demo_types.read_bytes(), written.read_bytes())
         self.assertEqual(tomllib.loads(
             (target / "orgsyndb.toml").read_text()), {"format": 1})
         demo = tomllib.loads((DEMO / "orgsyndb.toml").read_text())
-        self.assertEqual(sorted(demo), ["fields", "format"])
+        self.assertEqual(sorted(demo), ["fields", "format", "registry"])
         self.assertEqual(demo["format"], 1)
+        self.assertEqual(demo["registry"],
+                         "../../webapp/demo/registry.json")
         self.assertIsInstance(demo["fields"], dict)
 
 

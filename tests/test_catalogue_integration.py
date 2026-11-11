@@ -122,11 +122,10 @@ class PlainCatalogueTests(cs.CatalogueCase):
         page = self.page("procedures/index.html")
         self.assertEqual(
             ps.facet_values(page, "project"),
-            [("teaching", "Teaching"),
-             ("first-year-practical", "First-year practical"),
+            [("research", "Research"), ("biaryls", "Biaryls"),
+             ("cinnamates", "Cinnamates"), ("teaching", "Teaching"),
              ("advanced-practical", "Advanced practical"),
-             ("research", "Research"), ("biaryls", "Biaryls"),
-             ("cinnamates", "Cinnamates")])
+             ("first-year-practical", "First-year practical")])
         self.assertEqual(
             ps.facet_values(page, "inert_atmosphere"),
             [("true", "Yes"), ("false", "No")])
@@ -351,9 +350,11 @@ class DetailsChecks:
             found.append(("Product", names[0]))
         if len(compounds) == 1:
             compound = compounds[0]
-            found.append(("Formula", compound["formula"]))
-            found.append(("MW", f"{ps.number_text(compound['mw'], locale)}"
-                                " g/mol"))
+            if compound.get("formula"):
+                found.append(("Formula", compound["formula"]))
+            if compound.get("mw"):
+                found.append(("MW", f"{ps.number_text(compound['mw'], locale)}"
+                                    " g/mol"))
             if compound.get("cas"):
                 found.append(("CAS", compound["cas"]))
         # The Yield of a general procedure's Details block is not fixed

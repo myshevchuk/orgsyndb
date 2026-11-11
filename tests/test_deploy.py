@@ -22,6 +22,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from pipeline_support import SnapshotServer, closed_address
+from support import (REGISTRY, load_snapshot, snapshot_digest)
+
 REPO = Path(__file__).resolve().parent.parent
 DEPLOY = REPO / "deploy"
 DOCKER = DEPLOY / "docker"
@@ -32,17 +35,24 @@ ENV_EXAMPLE = DEPLOY / "orgsyndb.env.example"
 
 FAKE_ORGSYNDB = """\
 #!/usr/bin/env python3
-# Fake tool: -C DIR build|pdf|index. A build fails when the collection
+# Fake tool: -C DIR build|pdf|index. Every run appends a JSON line of
+# the command, $ORGSYNDB_REGISTRY and the text of the file it names to
+# $FAKE_REGISTRY_LOG. A build fails when the collection
 # holds `fail` or the application's VERSION reads `broken`, and appends
 # one line per run to $FAKE_LOG. `index` logs nothing and prints a
 # minimal index; it fails when the collection holds `index-fail` or
 # VERSION reads `index-broken`, and sleeps past any timeout when the
 # collection holds `index-slow`.
-import os, sys, time
+import json, os, sys, time
 from pathlib import Path
 app = Path(__file__).resolve().parent.parent
 collection = Path(sys.argv[2])
 version = (app / "VERSION").read_text().strip()
+registry = os.environ.get("ORGSYNDB_REGISTRY", "")
+with open(os.environ["FAKE_REGISTRY_LOG"], "a") as log:
+    held = Path(registry).read_text() if registry and \\
+        Path(registry).is_file() else ""
+    log.write(json.dumps([sys.argv[3], registry, held]) + "\\n")
 if sys.argv[3] == "index":
     if (collection / "index-slow").exists():
         time.sleep(600)
@@ -123,11 +133,17 @@ class UpdaterTests(unittest.TestCase):
             ".gitignore": "/build/\n/public/\n/pdf/\n"})
         self.data = self.tmp / "data"
         self.log = self.tmp / "builds.log"
+        self.registry_log = self.tmp / "registry.log"
+        self.snapshot = load_snapshot(REGISTRY)
+        self.server = SnapshotServer(self.snapshot)
+        self.addCleanup(self.server.stop)
         self.env = {
             "PATH": os.environ["PATH"],
             "HOME": str(self.tmp),
             "GIT_CONFIG_NOSYSTEM": "1",
             "FAKE_LOG": str(self.log),
+            "FAKE_REGISTRY_LOG": str(self.registry_log),
+            "ORGSYNDB_REGISTRY_URL": self.server.url,
             "ORGSYNDB_DATA": str(self.data),
             "ORGSYNDB_APP": str(self.app),
             "ORGSYNDB_IMAGE_INFO": str(self.image),
@@ -404,6 +420,182 @@ class UpdaterTests(unittest.TestCase):
                               env=self.env, capture_output=True, text=True)
         self.assertEqual(done.returncode, 2)
         self.assertIn("usage", done.stderr)
+
+    # --- the registry (container-deployment "Update cycle") -------------
+
+    def runs(self) -> list[list[str]]:
+        """Each run of the fake tool: its command, the value of
+        ``ORGSYNDB_REGISTRY`` and the text of the file that names."""
+        if not self.registry_log.exists():
+            return []
+        return [json.loads(line)
+                for line in self.registry_log.read_text().splitlines()]
+
+    def change_registry(self) -> str:
+        """Make the served snapshot another one; return its digest."""
+        table = {**self.snapshot, "substances": list(
+            self.snapshot["substances"])}
+        table["substances"][0] = {**table["substances"][0],
+                                  "note": "changed"}
+        table["digest"] = snapshot_digest(table)
+        self.server.table = table
+        return table["digest"]
+
+    def test_the_snapshot_is_kept_with_its_address(self) -> None:
+        """Requirement: Update cycle (the snapshot goes to
+        `<data>/registry.json`, the address to
+        `<data>/registry.source`)."""
+        done = self.sync()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(
+            json.loads((self.data / "registry.json").read_text()),
+            self.snapshot)
+        self.assertEqual(
+            (self.data / "registry.source").read_text().strip(),
+            self.server.url)
+
+    def test_every_run_of_the_tools_names_the_snapshot_file(self) -> None:
+        """Scenario: First publish (every `tools/orgsyndb` run, the
+        index included, has `ORGSYNDB_REGISTRY` naming the file)."""
+        done = self.sync(ORGSYNDB_REGISTRY="http://elsewhere.invalid/x")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        runs = self.runs()
+        self.assertEqual(sorted(r[0] for r in runs), ["build", "index"])
+        for command, named, held in runs:
+            with self.subTest(command=command):
+                self.assertEqual(Path(named),
+                                 self.data / "registry.json")
+                self.assertEqual(json.loads(held), self.snapshot)
+
+    def test_the_pdf_run_names_the_snapshot_file(self) -> None:
+        """Requirement: Update cycle (`pdf` runs too)."""
+        self.sync(ORGSYNDB_PDF="true")
+        for command, named, _ in self.runs():
+            self.assertEqual(Path(named), self.data / "registry.json",
+                             command)
+
+    def test_the_build_fetches_nothing_itself(self) -> None:
+        """Requirement: Update cycle (the cycle fetches once)."""
+        self.sync()
+        self.assertEqual(len(self.server.hosts), 1)
+
+    def test_a_changed_registry_is_published_like_a_new_commit(self) -> None:
+        """Scenario: Registry change."""
+        self.sync()
+        first = self.snapshot["digest"]
+        second = self.change_registry()
+        self.assertNotEqual(first, second)
+        done = self.sync()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(len(self.releases()), 2)
+        self.assertEqual(self.builds(), ["v1 build", "v1 build"])
+        self.assertEqual(
+            json.loads(self.runs()[-1][2])["digest"], second)
+        self.assertEqual(self.state()["deployed"]["registry"], second)
+
+    def test_an_unchanged_registry_is_not_rebuilt(self) -> None:
+        """Requirement: Update cycle (the digest is part of every
+        combination)."""
+        self.sync()
+        self.sync()
+        self.assertEqual(self.builds(), ["v1 build"])
+        self.assertEqual(len(self.releases()), 1)
+
+    def test_the_host_of_the_request(self) -> None:
+        """Scenario: Host of the request."""
+        for allowed, host in (("lab.example.org,localhost",
+                               "lab.example.org"),
+                              ("*", "localhost"),
+                              (".example.org", "example.org"),
+                              ("*,lab.example.org", "lab.example.org")):
+            with self.subTest(allowed=allowed):
+                before = len(self.server.hosts)
+                done = self.sync(ORGSYNDB_ALLOWED_HOSTS=allowed)
+                self.assertEqual(done.returncode, 0,
+                                 done.stdout + done.stderr)
+                self.assertEqual(self.server.hosts[before:], [host])
+
+    def test_without_allowed_hosts_the_host_is_localhost(self) -> None:
+        """Requirement: Update cycle (`localhost` when there is
+        none)."""
+        self.sync()
+        self.assertEqual(self.server.hosts, ["localhost"])
+
+    def test_the_default_address_of_the_snapshot(self) -> None:
+        """Requirement: Updater program (`ORGSYNDB_REGISTRY_URL`,
+        default `http://app:8000/lab/registry/snapshot.json`)."""
+        self.assertIn("http://app:8000/lab/registry/snapshot.json",
+                      UPDATER.read_text(encoding="utf-8"))
+        self.assertIn("ORGSYNDB_ALLOWED_HOSTS",
+                      UPDATER.read_text(encoding="utf-8"))
+
+    def test_an_unreachable_registry_uses_the_copy(self) -> None:
+        """Scenario: Registry unreachable (a copy of the same
+        address)."""
+        self.sync()
+        self.server.stop()
+        commit_files(self.collection, {"content.txt": "second\n"})
+        done = self.sync()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn("cannot fetch the registry", done.stdout)
+        self.assertEqual(self.page(), "v1 second")
+        self.assertEqual(len(self.releases()), 2)
+        self.assertEqual(json.loads(self.runs()[-1][2]), self.snapshot)
+
+    def test_an_answer_that_is_no_snapshot_uses_the_copy(self) -> None:
+        """Requirement: Update cycle (a status other than 200, or a body
+        that is no snapshot, is a failure)."""
+        self.sync()
+        commit_files(self.collection, {"content.txt": "second\n"})
+        vocabularies = {**self.snapshot["vocabularies"],
+                        "projects": [{"key": 1}]}
+        malformed = [json.dumps({**self.snapshot, **change}).encode()
+                     for change in ({"substances": ["bad"]},
+                                    {"vocabularies": vocabularies})]
+        for status, body in ((200, b'{"format": 2}'), (200, b"not json"),
+                             (500, None), (404, b"{}"),
+                             *((200, body) for body in malformed)):
+            with self.subTest(status=status, body=body):
+                self.server.status, self.server.body = status, body
+                done = self.sync()
+                self.assertEqual(done.returncode, 0,
+                                 done.stdout + done.stderr)
+                self.assertIn("cannot fetch the registry", done.stdout)
+                self.assertEqual(self.page(), "v1 second")
+                self.assertEqual(
+                    json.loads((self.data / "registry.json").read_text()),
+                    self.snapshot)
+
+    def test_a_relative_data_directory_names_the_snapshot_absolutely(
+            self) -> None:
+        """Requirement: Update cycle (every run of `tools/orgsyndb` has
+        `ORGSYNDB_REGISTRY` naming `<data>/registry.json`)."""
+        done = subprocess.run(
+            [sys.executable, str(UPDATER), "sync"],
+            env={**self.env, "ORGSYNDB_DATA": "data"}, cwd=self.tmp,
+            capture_output=True, text=True, timeout=120)
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        for _, registry, held in self.runs():
+            self.assertEqual(registry, str(self.data / "registry.json"))
+            self.assertEqual(json.loads(held), self.snapshot)
+
+    def test_a_fresh_data_directory_without_a_registry_builds_nothing(
+            self) -> None:
+        """Scenario: Registry unreachable (no copy)."""
+        done = self.sync(ORGSYNDB_REGISTRY_URL=closed_address())
+        self.assertIn("cannot fetch the registry", done.stdout)
+        self.assertEqual(self.builds(), [])
+        self.assertFalse((self.data / "current").exists())
+
+    def test_a_copy_of_another_address_is_not_used(self) -> None:
+        """Requirement: Update cycle (the copy of the same address
+        only)."""
+        self.sync()
+        commit_files(self.collection, {"content.txt": "second\n"})
+        done = self.sync(ORGSYNDB_REGISTRY_URL=closed_address())
+        self.assertIn("cannot fetch the registry", done.stdout)
+        self.assertEqual(self.builds(), ["v1 build"])
+        self.assertEqual(self.page(), "v1 first")
 
 
 class FileTests(unittest.TestCase):

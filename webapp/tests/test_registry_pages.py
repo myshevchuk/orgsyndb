@@ -462,8 +462,10 @@ class DemoRegistryPageTests(SeededCase):
 
     def test_not_in_the_collection(self) -> None:
         """Scenario: Not in the collection."""
-        root = self.get("/lab/registry/substances/new-compound-7/")
-        self.assertEqual(root.find("h1").text(), "Neuverbindung 7")
+        make_substance("ethyl-acetate", "Ethyl acetate", classes=["esters"],
+                       name_de="Ethylacetat")
+        root = self.get("/lab/registry/substances/ethyl-acetate/")
+        self.assertEqual(root.find("h1").text(), "Ethylacetat")
         self.assertFalse([a for a in root.find_all("a")
                           if a.text() == "In der Sammlung"])
 

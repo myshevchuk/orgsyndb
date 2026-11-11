@@ -1,9 +1,10 @@
 """Testable logic behind tools/orgsyndb.
 
-The Org source names the export needs, the recoverable replacement of
-``build/export/``, next-ID allocation, slugs, template filling, the Hugo
-overlay, the site's field, reaction-type and route data, PDF jobs and
-the Pagefind download.
+The reading of the collection's registry, the Org source names the
+export needs, the recoverable replacement of ``build/export/``, next-ID
+allocation, slugs, template filling, the Hugo overlay, the site's
+substance, field, reaction-type and route data, the collection index,
+PDF jobs and the Pagefind download.
 File discovery and the reading of the collection settings come from
 ``validate.py`` in the same directory. No Org source is read here: of
 ``org/procedures/`` only the entry names are, and Emacs examines and
@@ -14,6 +15,8 @@ exports the sources. Messages printed to stderr name the program
 import datetime as dt
 import functools
 import hashlib
+import http.client
+import json
 import math
 import os
 import re
@@ -24,6 +27,7 @@ import tarfile
 import tomllib
 import unicodedata
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
@@ -46,6 +50,9 @@ PREVIOUS = ".export-previous"
 STAGED = Path("content") / "procedures"
 SEQUENCES_STAGED = Path("content") / "sequences"
 HELP_STAGED = Path("content") / "help"
+# The data of each substance, which Hugo reads as site.Data.compounds,
+# under build/.
+COMPOUNDS_STAGED = Path("data") / "compounds"
 # The field, reaction-type and route data Hugo reads as
 # site.Data.collection, under build/.
 FIELDS_STAGED = Path("data") / "fields.json"
@@ -69,6 +76,23 @@ PAGEFIND_BIN_SHA256 = ("c4b86009ce5420dc2a1748ab2705bef6"
 WEASYPRINT_WARNING_FILTER = "ignore:pkg_resources is deprecated:UserWarning"
 
 PROG = "orgsyndb"
+
+# The registry: the variable that names it in place of the collection's
+# setting, the seconds a request of its address may take, and the copy
+# of the registry last read and its source, in the collection.
+REGISTRY_VARIABLE = "ORGSYNDB_REGISTRY"
+REGISTRY_TIMEOUT = 30
+REGISTRY_KEPT = Path("build") / "registry.json"
+REGISTRY_SOURCE = Path("build") / "registry.source"
+# The values of a substance that the site reads under their own names.
+COMPOUND_VALUES = ("name", "name_de", "formula", "mw", "smiles", "cas",
+                   "article_number", "short_name", "group")
+# The options of a registry field that the index lists: those of every
+# field, and those of its type.
+REGISTRY_FIELD_OPTIONS = ("key", "type", "label", "label_de", "column")
+REGISTRY_TYPE_OPTIONS = {"text": ("search", "beside"),
+                         "choice": ("vocabulary", "multiple", "facet",
+                                    "tabs")}
 
 Rename = Callable[[Path, Path], None]
 Remove = Callable[[Path], None]
@@ -446,6 +470,140 @@ def candidate_names(collection: Path,
 
 
 # --------------------------------------------------------------------------
+# The registry
+
+
+def registry_source(collection: Path) -> str:
+    """Return the registry that the collection directory COLLECTION
+    names: ``ORGSYNDB_REGISTRY`` when it is set and not empty, else the
+    ``registry`` of the collection's ``orgsyndb.toml``.
+
+    Raises ``validate.ConfigError`` when the settings file breaks a
+    rule of ``validate.read_settings``, or names no registry while the
+    variable is unset or empty.
+    """
+    settings = Path(collection) / validate.DEFAULT_SETTINGS
+    named = validate.read_settings(settings).get("registry")
+    source = os.environ.get(REGISTRY_VARIABLE, "") or named
+    if source is None:
+        raise validate.ConfigError(
+            f"{settings}: no registry named; set registry to the address "
+            "of the lab application's registry snapshot, such as "
+            "http://localhost:8000/lab/registry/snapshot.json, or to the "
+            f"path of a snapshot file, or set {REGISTRY_VARIABLE}")
+    return source
+
+
+def is_address(source: str) -> bool:
+    """Whether the registry SOURCE is an address, not a path: it begins
+    with ``http://`` or ``https://``."""
+    return source.startswith(("http://", "https://"))
+
+
+def _fetch_snapshot(address: str) -> bytes:
+    """Return the body of the answer of status 200 to a GET of ADDRESS.
+
+    Raises ``validate.ConfigError`` naming ADDRESS and the reason when
+    the request fails, times out after REGISTRY_TIMEOUT seconds or is
+    answered with another status.
+    """
+    request = urllib.request.Request(
+        address, headers={"Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(request,
+                                    timeout=REGISTRY_TIMEOUT) as answer:
+            if answer.status != 200:
+                raise validate.ConfigError(
+                    f"{address}: answered with status {answer.status}")
+            return answer.read()
+    except (OSError, http.client.HTTPException, ValueError) as exc:
+        raise validate.ConfigError(f"{address}: {exc}") from None
+
+
+def _keep(build: Path, data: bytes | None, source: str) -> None:
+    """Make BUILD hold the copy of the registry read from SOURCE: DATA,
+    unless it is None, as ``registry.json``, and SOURCE as
+    ``registry.source``. The source file is removed first and written
+    last, so that it never names a copy it did not come with."""
+    build.mkdir(parents=True, exist_ok=True)
+    (build / REGISTRY_SOURCE.name).unlink(missing_ok=True)
+    for name, content in ((REGISTRY_KEPT.name, data),
+                          (REGISTRY_SOURCE.name,
+                           f"{source}\n".encode("utf-8"))):
+        if content is None:
+            continue
+        partial = build / f".{name}.partial"
+        partial.write_bytes(content)
+        partial.replace(build / name)
+
+
+def _kept_copy(collection: Path, source: str) -> dict[str, Any] | None:
+    """Return the snapshot in COLLECTION's ``build/registry.json`` when
+    ``build/registry.source`` names SOURCE and the copy is a snapshot,
+    else None."""
+    try:
+        kept = (collection / REGISTRY_SOURCE).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    if kept.removesuffix("\n") != source:
+        return None
+    try:
+        return validate.read_registry(collection / REGISTRY_KEPT)
+    except validate.ConfigError:
+        return None
+
+
+def registry(collection: Path, store: bool = True) -> dict[str, Any]:
+    """Return the registry snapshot of the collection directory
+    COLLECTION, from the source ``registry_source`` names.
+
+    A path, relative to COLLECTION unless absolute, is read as a
+    snapshot file. An address is requested, with a timeout of
+    REGISTRY_TIMEOUT seconds, and the body of an answer of status 200
+    taken as the snapshot. With STORE, the snapshot read is then kept
+    in the collection's ``build/registry.json``, unless the path is
+    that file, and the source in ``build/registry.source``; without it,
+    nothing is written.
+
+    When the address cannot be read or its answer is not a snapshot,
+    the kept copy is returned instead, provided ``build/registry.source``
+    names the same source, and a warning naming the address and the
+    copy's ``digest`` is written to stderr. Raises
+    ``validate.ConfigError`` when no registry is named, when a file
+    cannot be read or holds no snapshot (``validate.load_snapshot``),
+    the message naming the file, and when an address can be read
+    neither from itself nor from such a copy, the message naming the
+    address.
+    """
+    collection = Path(collection)
+    source = registry_source(collection)
+    build = collection / REGISTRY_KEPT.parent
+    if not is_address(source):
+        path = collection / source
+        table = validate.read_registry(path)
+        if store:
+            same = (collection / REGISTRY_KEPT).resolve() == path.resolve()
+            _keep(build, None if same else path.read_bytes(), source)
+        return table
+    try:
+        data = _fetch_snapshot(source)
+        table = validate.load_snapshot(data, source)
+    except validate.ConfigError as exc:
+        kept = _kept_copy(collection, source)
+        if kept is None:
+            raise validate.ConfigError(
+                f"cannot read the registry: {exc}; there is no copy of it "
+                f"in {REGISTRY_KEPT.as_posix()}") from None
+        print(f"{PROG}: warning: cannot read the registry: {exc}; using "
+              f"the copy in {REGISTRY_KEPT.as_posix()}, digest "
+              f"{kept.get('digest')}", file=sys.stderr)
+        return kept
+    if store:
+        _keep(build, data, source)
+    return table
+
+
+# --------------------------------------------------------------------------
 # Hugo
 
 
@@ -815,30 +973,31 @@ def stage_help(docs: Path, target: Path) -> int:
     return len(staged)
 
 
-def fields_data(settings: Path, language: str) -> dict[str, Any]:
+def fields_data(settings: Path, registry: dict[str, Any],
+                language: str) -> dict[str, Any]:
     """Return the field data that the site reads for the collection whose
-    settings file is SETTINGS, in the site's LANGUAGE.
+    settings file is SETTINGS and whose registry snapshot is REGISTRY,
+    in the site's LANGUAGE.
 
-    The result is a table of two keys. ``compound`` lists a table per
-    declared compound field, in declared order: its ``key``, ``type``
-    and ``column``; its ``label`` as LANGUAGE shows it; ``facet`` for a
-    boolean or choice field, ``search`` for a text field and ``beside``
-    for a text or number field; the ``unit`` of a number field that
-    declares one; and for a choice field ``multiple``, ``tabs``,
-    ``values`` and ``order``. ``procedure`` lists a table per declared
-    procedure field, in declared order, with the same keys except
-    ``column``, ``search``, ``tabs`` and ``beside``. ``values`` maps
-    every value of the field's vocabulary to its shown ``label``, its
-    ``path``, the shown labels of its ancestors, outermost first, then
-    its own, and its ``ancestors``, the keys of its ancestors,
-    outermost first. ``order`` lists every value's key depth first:
-    each top-level value in file order, followed by the values filed
-    under it in the same order, recursively. A German label replaces
-    the English one on a German site where one is given.
-    A SETTINGS that does not exist gives ``{"compound": [],
-    "procedure": []}``. Raises ``validate.ConfigError`` when the
-    declarations or their vocabularies break a rule of
-    ``validate.load_fields``.
+    The result is a table of two keys. ``compound`` lists the four
+    registry fields (``validate.registry_fields``) in their order:
+    each one's ``key``, ``type`` and ``column``; its ``label`` as
+    LANGUAGE shows it; ``search`` and ``beside`` for a text field; and
+    ``facet``, ``multiple``, ``tabs``, ``values`` and ``order`` for a
+    choice field. ``procedure`` lists a table per declared procedure
+    field, in declared order: its ``key``, ``type`` and ``label``;
+    ``facet`` for a boolean or choice field; the ``unit`` of a number
+    field that declares one; and ``multiple``, ``values`` and ``order``
+    for a choice field. ``values`` maps every term of the field's
+    vocabulary to its shown ``label``, its ``path``, the shown labels
+    of its ancestors, outermost first, then its own, and its
+    ``ancestors``, the keys of its ancestors, outermost first.
+    ``order`` lists every term's key depth first: each top-level term
+    followed by the terms filed under it, recursively, siblings in key
+    order. A German label replaces the English one on a German site
+    where one is given. A SETTINGS that does not exist declares no
+    procedure field. Raises ``validate.ConfigError`` when the
+    declarations break a rule of ``validate.load_fields``.
     """
     def shown(label: str, label_de: str | None) -> str:
         return label_de if language == "de" and label_de else label
@@ -854,8 +1013,8 @@ def fields_data(settings: Path, language: str) -> dict[str, Any]:
     def below(terms: dict[str, validate.Term],
               parent: str | None) -> list[str]:
         order = []
-        for value, term in terms.items():
-            if term.parent == parent:
+        for value in sorted(terms):
+            if terms[value].parent == parent:
                 order += [value, *below(terms, value)]
         return order
 
@@ -870,7 +1029,6 @@ def fields_data(settings: Path, language: str) -> dict[str, Any]:
             entry["facet"] = field.facet
         if compound and field.type == "text":
             entry["search"] = field.search
-        if compound and field.type in ("text", "number"):
             entry["beside"] = field.beside
         if field.unit is not None:
             entry["unit"] = field.unit
@@ -890,28 +1048,70 @@ def fields_data(settings: Path, language: str) -> dict[str, Any]:
             entry["order"] = below(field.terms, None)
         return entry
 
-    fields = validate.load_fields(Path(settings), must_exist=False)
-    return {"compound": [describe(f, True) for f in fields.compound],
-            "procedure": [describe(f, False) for f in fields.procedure]}
+    vocabularies = validate.registry_terms(registry)
+    procedure = validate.load_fields(Path(settings), vocabularies,
+                                     must_exist=False)
+    return {"compound": [describe(field, True) for field
+                         in validate.registry_fields(vocabularies)],
+            "procedure": [describe(field, False) for field in procedure]}
 
 
-def reaction_types_data(settings: Path,
+def reaction_types_data(registry: dict[str, Any],
                         language: str) -> dict[str, dict[str, str]]:
     """Return the reaction-type data that the site reads for the
-    collection whose settings file is SETTINGS, in the site's LANGUAGE.
+    collection whose registry snapshot is REGISTRY, in the site's
+    LANGUAGE.
 
-    The result maps every reaction type of the collection, the values of
-    ``vocabularies/reaction-types.toml`` beside SETTINGS in file order,
-    to a table holding only ``label``: the value's German label when
-    LANGUAGE is ``de`` and the value has one, its English label
-    otherwise. A collection without that file gives an empty table.
-    Raises ``validate.ConfigError`` when the file breaks a rule of
-    ``validate.load_reaction_types``.
+    The result maps every reaction type of the registry, in the
+    snapshot's order, to a table holding only ``label``: the term's
+    German label when LANGUAGE is ``de`` and the term has one, its
+    English label otherwise. A registry without reaction types gives an
+    empty table.
     """
+    terms = validate.registry_terms(registry)[validate.REACTION_TYPES]
     return {value: {"label": term.label_de if language == "de"
                     and term.label_de else term.label}
-            for value, term in validate.load_reaction_types(
-                Path(settings)).items()}
+            for value, term in terms.items()}
+
+
+def compound_data(substance: dict[str, Any],
+                  static: Path) -> dict[str, Any]:
+    """Return the data the site reads for SUBSTANCE, a substance of a
+    registry snapshot, whose collection's static files are STATIC.
+
+    The table holds those of the substance's ``name``, ``name_de``,
+    ``formula``, ``mw``, ``smiles``, ``cas``, ``article_number``,
+    ``short_name`` and ``group`` that are not null; ``chemical_class``,
+    its ``chemical_classes`` in their order, unless it has none; and
+    ``structure_image``, ``structures/<key>.svg`` when STATIC holds
+    that file, else ``structures/<key>.png`` when it holds that one.
+    """
+    data = {name: substance[name] for name in COMPOUND_VALUES
+            if substance.get(name) is not None}
+    if substance.get("chemical_classes"):
+        data["chemical_class"] = list(substance["chemical_classes"])
+    for suffix in (".svg", ".png"):
+        image = f"structures/{substance['key']}{suffix}"
+        if (Path(static) / image).is_file():
+            data["structure_image"] = image
+            break
+    return data
+
+
+def stage_compounds(registry: dict[str, Any], static: Path,
+                    target: Path) -> int:
+    """Write the data of each substance of the snapshot REGISTRY, as
+    ``compound_data`` returns it for the static files STATIC, to
+    ``TARGET/<key>.json``, after emptying TARGET; return the number of
+    files written."""
+    target = Path(target)
+    remove_tree(target)
+    target.mkdir(parents=True)
+    for substance in registry["substances"]:
+        (target / f"{substance['key']}.json").write_text(
+            json.dumps(compound_data(substance, static), ensure_ascii=False,
+                       indent=2) + "\n", encoding="utf-8")
+    return len(registry["substances"])
 
 
 class _Maker(NamedTuple):
@@ -1047,21 +1247,17 @@ def _json_value(value: Any) -> Any:
 
 
 def _declaration_data(field: validate.Declaration,
-                      withheld: Sequence[str]) -> dict[str, Any]:
-    """Return the index's table of the declaration FIELD: the options
-    every type takes and those of its type, in the validator's order,
-    without the options in WITHHELD."""
+                      options: Sequence[str]) -> dict[str, Any]:
+    """Return the index's table of the field FIELD: its OPTIONS, in
+    order, each under its own name."""
     values = {"min": field.minimum, "max": field.maximum,
               "pattern": field.pattern and field.pattern.pattern}
     return {option: values[option] if option in values
-            else getattr(field, option)
-            for option in (*validate.FIELD_OPTIONS,
-                           *validate.TYPE_OPTIONS[field.type])
-            if option not in withheld}
+            else getattr(field, option) for option in options}
 
 
 def _terms_data(terms: dict[str, validate.Term]) -> dict[str, Any]:
-    """Return the index's table of the vocabulary values TERMS."""
+    """Return the index's table of the vocabulary terms TERMS."""
     return {value: term._asdict() for value, term in terms.items()}
 
 
@@ -1103,58 +1299,56 @@ def _by_id(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(entries, key=lambda item: (item["id"], item["path"]))
 
 
+def substance_page(source: str, key: str) -> str | None:
+    """Return the address of the page of the substance KEY in the lab
+    application whose registry is SOURCE: the scheme, host and port of
+    the address SOURCE followed by ``/lab/registry/substances/<key>/``,
+    or None when SOURCE is a path."""
+    if not is_address(source):
+        return None
+    parts = urllib.parse.urlsplit(source)
+    return (f"{parts.scheme}://{parts.netloc}/lab/registry/substances/"
+            f"{urllib.parse.quote(key)}/")
+
+
 def index_data(collection: Path) -> dict[str, Any]:
     """Return the index of the collection directory COLLECTION, a table
     that ``json.dumps`` writes as strict JSON.
 
     Its keys are ``site_language``, the language of the application's
-    site; ``schema``, the procedure, compound and sequence keys the
-    validator knows; ``fields``, the collection's compound and procedure
-    declarations, each with the options of its type and its defaults
-    applied; ``vocabularies``, the values of every vocabulary a
-    declaration names and of the reaction types, each with its
-    ``label``, ``label_de`` and ``parent``; and ``compounds``,
-    ``procedures`` and ``sequences``, one entry per content file whose
-    name the validator accepts, with its parsed table or front matter.
-    A content file that cannot be parsed is listed with that value None
-    and the reason in ``error``; an Org source is listed by name, with
-    ``front_matter`` None. Dates and times appear as ISO 8601 text, and
-    floats that are not finite as None. Reads no Org file and writes
-    nothing. Raises ``validate.ConfigError`` when the settings, the
-    declarations or their vocabularies break a rule of
-    ``validate.load_fields``, or the reaction types one of
-    ``validate.load_reaction_types``, and ValueError when the site's
-    language cannot be read.
+    site; ``schema``, the procedure and sequence keys the validator
+    knows; ``registry``, the ``source`` of the collection's registry as
+    ``registry_source`` names it and the snapshot's ``digest``;
+    ``fields``, the registry fields under ``compound`` and the
+    collection's procedure declarations under ``procedure``, each with
+    the options of its type and its defaults applied; ``vocabularies``,
+    the registry's vocabularies, each mapping its terms, in the
+    snapshot's order, to their ``label``, ``label_de`` and ``parent``;
+    ``compounds``, one entry per substance, by key, with its ``key``,
+    its ``data`` as ``compound_data`` returns it and its ``url``
+    (``substance_page``); and ``procedures`` and ``sequences``, one
+    entry per content file whose name the validator accepts, with its
+    front matter. A content file that cannot be parsed is listed with
+    its front matter None and the reason in ``error``; an Org source is
+    listed by name, with ``front_matter`` None. Dates and times appear
+    as ISO 8601 text, and floats that are not finite as None.
+
+    The registry is read as ``registry`` reads it without storing a
+    copy; the index reads no Org file and writes nothing. Raises
+    ``validate.ConfigError`` when the registry cannot be read or the
+    declarations break a rule of ``validate.load_fields``, and
+    ValueError when the site's language cannot be read.
     """
     collection = Path(collection)
-    settings = collection / validate.DEFAULT_SETTINGS
-    fields = validate.load_fields(settings)
-    reaction_types = validate.load_reaction_types(settings)
-    vocabularies: dict[str, Any] = {}
-    for entity in validate.ENTITIES:
-        for field in getattr(fields, entity.name):
-            if field.vocabulary is not None:
-                vocabularies[field.vocabulary] = _terms_data(field.terms)
-    if (collection / validate.REACTION_TYPES).exists():
-        vocabularies["reaction-types"] = _terms_data(reaction_types)
-
-    registry = collection / validate.DEFAULT_COMPOUNDS
-    compounds = []
-    for name in sorted(os.listdir(registry)) if registry.is_dir() else ():
-        match = validate.COMPOUND_FILE_RE.match(name)
-        if match is None or (registry / name).is_dir():
-            continue
-        item: dict[str, Any] = {
-            "key": match.group(1),
-            "path": f"{validate.DEFAULT_COMPOUNDS.as_posix()}/{name}"}
-        data = validate.read_compound(str(registry / name))
-        if isinstance(data, validate.Problem):
-            item["data"] = None
-            item["error"] = data.message
-        else:
-            item["data"] = _json_value(data)
-        compounds.append(item)
-
+    source = registry_source(collection)
+    table = registry(collection, store=False)
+    vocabularies = validate.registry_terms(table)
+    procedure = validate.load_fields(
+        collection / validate.DEFAULT_SETTINGS, vocabularies)
+    compounds = [{"key": substance["key"],
+                  "data": compound_data(substance, collection / "static"),
+                  "url": substance_page(source, substance["key"])}
+                 for substance in table["substances"]]
     return {
         "site_language": site_language(APP / "site"),
         "schema": {
@@ -1169,19 +1363,23 @@ def index_data(collection: Path) -> dict[str, Any]:
                 "sections": {language: list(names) for language, names
                              in validate.SECTIONS_BY_LANGUAGE.items()},
             },
-            "compound": {
-                "required": list(validate.COMPOUND_REQUIRED_KEYS),
-                "optional": list(validate.COMPOUND_OPTIONAL_KEYS),
-            },
             "sequence": {
                 "keys": list(validate.SEQUENCE_KEYS),
                 "step": list(validate.STEP_KEYS),
             },
         },
-        "fields": {entity.name: [_declaration_data(field, entity.withheld)
-                                 for field in getattr(fields, entity.name)]
-                   for entity in validate.ENTITIES},
-        "vocabularies": vocabularies,
+        "registry": {"source": source, "digest": table.get("digest")},
+        "fields": {
+            "compound": [_declaration_data(
+                field, REGISTRY_FIELD_OPTIONS
+                + REGISTRY_TYPE_OPTIONS[field.type])
+                for field in validate.registry_fields(vocabularies)],
+            "procedure": [_declaration_data(
+                field, validate.FIELD_OPTIONS
+                + validate.TYPE_OPTIONS[field.type])
+                for field in procedure]},
+        "vocabularies": {name: _terms_data(terms)
+                         for name, terms in vocabularies.items()},
         "compounds": sorted(compounds, key=lambda item: item["key"]),
         "procedures": _by_id(
             _content_entries(collection, "org/procedures", ".org",
@@ -1206,12 +1404,12 @@ def hugo_overlay(site: Path, collection: Path, language: str,
     publish and resource directories inside the collection, and seven
     module mounts: the application's pages, the staged procedures of
     ``build/content/procedures/``, the staged help pages of
-    ``build/content/help/``, the collection's static files, the
-    collection's ``compounds/`` as the data entry ``compounds``, the
-    staged sequences of ``build/content/sequences/``, and the staged
-    ``build/data/``, which holds the field, reaction-type and route
-    data, as the data entry ``collection``. The site has no data entry
-    but these two.
+    ``build/content/help/``, the collection's static files, the staged
+    substance data of ``build/data/compounds/`` as the data entry
+    ``compounds``, the staged sequences of ``build/content/sequences/``,
+    and the staged ``build/data/``, which holds the field,
+    reaction-type and route data, as the data entry ``collection``. The
+    site has no data entry but these two.
     """
     site, collection = Path(site), Path(collection)
 
@@ -1230,7 +1428,8 @@ def hugo_overlay(site: Path, collection: Path, language: str,
                     "/OSDB-*.md")
             + mount(collection / "build" / HELP_STAGED, "content/help")
             + mount(collection / "static", "static")
-            + mount(collection / "compounds", "data/compounds")
+            + mount(collection / "build" / COMPOUNDS_STAGED,
+                    "data/compounds")
             + mount(collection / "build" / SEQUENCES_STAGED,
                     "content/sequences", "/SEQ-*.md")
             + mount(collection / "build" / FIELDS_STAGED.parent,

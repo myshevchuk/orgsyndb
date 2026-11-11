@@ -29,16 +29,14 @@ process waits for its turn.")
 (defun orgsyndb-page-url (file)
   "Return the URL of the site page of the collection FILE.
 That is `http://127.0.0.1:<port>/' followed by `procedures/<id>/' for
-a procedure, `sequences/<id>/' for a sequence and `compounds/<key>/'
-for a compound file, the ID in lower case, and by nothing for any
-other file; the port is `orgsyndb-preview-port'."
+a procedure and `sequences/<id>/' for a sequence, the ID in lower case,
+and by nothing for any other file; the port is `orgsyndb-preview-port'."
   (concat (format "http://127.0.0.1:%d/" orgsyndb-preview-port)
           (pcase (orgsyndb-file-kind file)
             ((or 'org-procedure 'md-procedure)
              (format "procedures/%s/" (downcase (orgsyndb--file-id file))))
             ('sequence
              (format "sequences/%s/" (downcase (orgsyndb--file-id file))))
-            ('compound (format "compounds/%s/" (file-name-base file)))
             (_ ""))))
 
 (defun orgsyndb--server (root)

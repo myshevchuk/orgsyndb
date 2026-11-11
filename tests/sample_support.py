@@ -2,6 +2,7 @@
 rules of the sample-procedures spec. Pure helpers, no I/O beyond reading."""
 
 import datetime
+import json
 import re
 import tomllib
 from pathlib import Path
@@ -240,10 +241,34 @@ def named_compounds(sample: Sample) -> list[str]:
     return product_keys(sample.data) + substrate_keys(sample.data)
 
 
-def read_registry(registry: Path) -> dict[str, dict[str, Any]]:
-    """Each compound file of a registry directory, by key."""
-    return {path.stem: tomllib.loads(path.read_text(encoding="utf-8"))
-            for path in sorted(registry.glob("*.toml"))}
+def read_snapshot(collection: Path) -> dict[str, Any]:
+    """The snapshot that the ``registry`` of the collection's
+    ``orgsyndb.toml`` names, a path relative to the collection."""
+    settings = tomllib.loads(
+        (collection / "orgsyndb.toml").read_text(encoding="utf-8"))
+    if "registry" not in settings:
+        raise AssertionError(f"{collection.name}/orgsyndb.toml names no "
+                             "registry")
+    return json.loads((collection / settings["registry"]).read_text(
+        encoding="utf-8"))
+
+
+def read_registry(collection: Path) -> dict[str, dict[str, Any]]:
+    """Each substance of the registry that ``collection`` names, by key,
+    as the table it has in the snapshot, its null values left out."""
+    return {entry["key"]: {key: value for key, value in entry.items()
+                           if key != "key" and value is not None}
+            for entry in read_snapshot(collection)["substances"]}
+
+
+def read_vocabulary(collection: Path, name: str
+                    ) -> dict[str, dict[str, Any]]:
+    """The terms of the vocabulary ``name`` of the registry that
+    ``collection`` names, by key, each a table of ``label`` and the
+    ``label_de`` and ``parent`` it has."""
+    return {term["key"]: {key: value for key, value in term.items()
+                          if key != "key" and value is not None}
+            for term in read_snapshot(collection)["vocabularies"][name]}
 
 
 # --- rules -----------------------------------------------------------------
@@ -264,17 +289,22 @@ def formula_weight(formula: str) -> float:
 
 
 def compound_violations(key: str, compound: dict[str, Any]) -> list[str]:
-    """Return the sample-procedures rules a demo registry compound
-    breaks: its ``mw`` against its formula, and its CAS number."""
+    """Return the sample-procedures rules a demo registry substance
+    breaks: its ``mw`` against its formula, where it has both, and its
+    CAS number, where it has one."""
     problems = []
-    try:
-        weight = formula_weight(compound.get("formula", ""))
-        if abs(float(compound.get("mw", "nan")) - weight) > 0.02:
-            problems.append(f"{key}: mw {compound.get('mw')} vs {weight:.2f}")
-    except ValueError as exc:
-        problems.append(f"{key}: {exc}")
-    if not cas_ok(compound.get("cas", "")):
-        problems.append(f"{key}: CAS {compound.get('cas')!r} fails the "
+    if "formula" in compound and "mw" in compound:
+        try:
+            weight = formula_weight(compound["formula"])
+            if abs(float(compound["mw"]) - weight) > 0.02:
+                problems.append(f"{key}: mw {compound['mw']} vs "
+                                f"{weight:.2f}")
+        except ValueError as exc:
+            problems.append(f"{key}: {exc}")
+    elif "formula" in compound or "mw" in compound:
+        problems.append(f"{key}: has a formula or a mw, not both")
+    if "cas" in compound and not cas_ok(compound["cas"]):
+        problems.append(f"{key}: CAS {compound['cas']!r} fails the "
                         "check digit")
     return problems
 
@@ -456,32 +486,17 @@ def agreement_differences(org: Path, markdown: Path) -> list[str]:
     return out
 
 
-# --- the demo's compound fields ---------------------------------------------
+# --- the demo's registry and fields -----------------------------------------
 
-DEMO_DECLARATIONS = [
-    {"key": "item_number", "type": "text", "unique": True,
-     "pattern": r"CH-\d{4}", "column": True, "search": True,
-     "beside": True},
-    {"key": "short_name", "type": "text", "search": True,
-     "beside": True},
-    {"key": "chemical_class", "type": "choice", "required": True,
-     "multiple": True, "column": True, "facet": True,
-     "vocabulary": "chemical-classes"},
-    {"key": "stock", "type": "number", "unit": "g", "min": 0},
-    {"key": "in_house", "type": "boolean", "facet": True},
-    {"key": "group", "type": "choice", "required": True, "facet": True,
-     "tabs": True, "vocabulary": "inventory-groups"},
-]
-DEMO_LABELS = {"group": ("Group", "Gruppe"),
-               "item_number": ("Item no.", "Artikelnr.")}
-# The article numbers of the final products the lab demo delivers, the
-# only compounds that set item_number.
+# The article numbers of the final products the lab demo delivers, and of
+# the one more substance the demo registry holds.
 DEMO_NUMBERS = {"1-4-bromophenyl-ethanol": "CH-0001",
                 "1-biphenyl-4-yl-ethanol": "CH-0002",
                 "acetylsalicylic-acid": "CH-0010",
                 "cinnamic-acid": "CH-0012",
                 "dibenzylideneacetone": "CH-0013",
-                "isopentyl-acetate": "CH-0016"}
+                "isopentyl-acetate": "CH-0016",
+                "new-compound-7": "NV-0007"}
 DEMO_PROCEDURE_DECLARATIONS = [
     {"key": "notebook", "type": "text", "unique": True,
      "pattern": r"[A-Z]{2}-\d+/\d+"},
@@ -495,7 +510,7 @@ DEMO_PROCEDURE_LABELS = {
     "project": ("Project", "Projekt"),
     "working_time": ("Working time", "Arbeitszeit"),
     "inert_atmosphere": ("Inert atmosphere", "Schutzgas")}
-# The values of projects.toml in file order, each with its parent and its
+# The terms of the vocabulary projects, each with its parent and its
 # English and German labels.
 PROJECTS = [
     ("teaching", None, "Teaching", "Lehre"),
@@ -510,8 +525,8 @@ PROJECTS = [
 PROJECT_VALUES = ("first-year-practical", "advanced-practical", "biaryls",
                   "cinnamates")
 PROCEDURE_KEYS = ("notebook", "project", "working_time", "inert_atmosphere")
-# The values of inventory-groups.toml in file order, each with its parent
-# and its English and German labels.
+# The terms of the vocabulary inventory-groups, each with its parent and
+# its English and German labels.
 INVENTORY_GROUPS = [
     ("purchased", None, "Purchased", "Zugekauft"),
     ("starting-materials", "purchased", "Starting materials",
@@ -536,132 +551,118 @@ def vocabulary_depth(vocabulary: dict[str, dict[str, Any]],
     return depth
 
 
+def named_compounds_of(collection: Path) -> set[str]:
+    """The keys that the procedures of ``collection``, in either format,
+    name as products or substrates."""
+    paths = [*sorted((collection / "org" / "procedures").glob("OSDB-*.org")),
+             *sorted((collection / "md" / "procedures").glob("OSDB-*.md"))]
+    named: set[str] = set()
+    for path in paths:
+        data = (read_org(path) if path.suffix == ".org"
+                else read_markdown(path)).data
+        named |= set(product_keys(data)) | set(substrate_keys(data))
+    return named
+
+
+def terms_of(collection: Path, name: str) -> list[tuple]:
+    """The terms of the vocabulary ``name`` as sorted tuples of key,
+    parent, label and German label."""
+    return sorted((key, term.get("parent"), term.get("label"),
+                   term.get("label_de"))
+                  for key, term in read_vocabulary(collection, name).items())
+
+
 def field_violations(collection: Path) -> list[str]:
     """Return the rules of sample-procedures "Demo collection" that the
-    declarations, the vocabulary and the compounds' values of
-    ``collection`` break."""
+    declarations, the registry's vocabularies and substances, and the
+    procedures of ``collection`` break."""
     problems: list[str] = []
     try:
         settings = tomllib.loads(
             (collection / "orgsyndb.toml").read_text(encoding="utf-8"))
-        declared = settings["fields"]["compound"]
-    except (OSError, KeyError, tomllib.TOMLDecodeError) as exc:
-        return [f"orgsyndb.toml declares no compound field: {exc!r}"]
-    labels = [(d.get("label"), d.get("label_de")) for d in declared]
-    bare = [{k: v for k, v in d.items() if k not in ("label", "label_de")}
-            for d in declared]
-    if bare != DEMO_DECLARATIONS:
-        problems.append(f"declarations are {bare}")
-    for key, pair in zip((d.get("key") for d in declared), labels):
-        for label in pair:
-            if not isinstance(label, str) or not label.strip():
-                problems.append(f"{key}: missing label or label_de")
-        if key in DEMO_LABELS and pair != DEMO_LABELS[key]:
-            problems.append(f"{key}: labels are {pair}")
-    names = sorted(p.name for p in (collection / "vocabularies").glob("*"))
-    if names != ["chemical-classes.toml", "inventory-groups.toml",
-                 "projects.toml", "reaction-types.toml"]:
-        problems.append(f"vocabularies/ holds {names}")
-    problems += reaction_type_violations(collection)
-    vocabularies = {}
-    try:
-        for name in ("chemical-classes", "inventory-groups", "projects"):
-            vocabularies[name] = tomllib.loads(
-                (collection / "vocabularies" / f"{name}.toml"
-                 ).read_text(encoding="utf-8"))
-            for value, entry in vocabularies[name].items():
-                if not str(entry.get("label_de", "")).strip():
-                    problems.append(f"{name}/{value}: no label_de")
-                if entry.get("parent", value) not in vocabularies[name]:
-                    problems.append(f"{name}/{value}: parent is not a "
-                                    "value")
-        vocabulary = vocabularies["chemical-classes"]
-        depths = [vocabulary_depth(vocabulary, v) for v in vocabulary]
-    except (OSError, KeyError, RecursionError, tomllib.TOMLDecodeError) as exc:
-        return problems + [f"vocabularies: {exc!r}"]
-    groups = [(value, entry.get("parent"), entry.get("label"),
-               entry.get("label_de"))
-              for value, entry in vocabularies["inventory-groups"].items()]
-    if groups != INVENTORY_GROUPS:
-        problems.append(f"inventory-groups holds {groups}")
+        if list(settings["fields"]) != ["procedure"]:
+            problems.append(f"fields holds {list(settings['fields'])}")
+        if sorted(settings) != ["fields", "format", "registry"]:
+            problems.append(f"orgsyndb.toml holds {sorted(settings)}")
+        vocabularies = {name: read_vocabulary(collection, name)
+                        for name in ("chemical-classes", "inventory-groups",
+                                     "projects", "reaction-types")}
+        registry = read_registry(collection)
+    except (OSError, KeyError, AssertionError, tomllib.TOMLDecodeError,
+            json.JSONDecodeError) as exc:
+        return [f"the settings and the registry: {exc!r}"]
+    for name in ("compounds", "vocabularies"):
+        if (collection / name).exists():
+            problems.append(f"{name}/ exists")
+    for name, terms in vocabularies.items():
+        for key, term in terms.items():
+            if not str(term.get("label_de", "")).strip():
+                problems.append(f"{name}/{key}: no label_de")
+            if term.get("parent", key) not in terms:
+                problems.append(f"{name}/{key}: parent is not a term")
+    classes = vocabularies["chemical-classes"]
+    depths = [vocabulary_depth(classes, key) for key in classes]
+    if terms_of(collection, "inventory-groups") != sorted(INVENTORY_GROUPS):
+        problems.append("inventory-groups holds "
+                        f"{terms_of(collection, 'inventory-groups')}")
     if max(depths, default=0) < 2:
-        problems.append("no value has two ancestors")
-    registry = read_registry(collection / "compounds")
-    classes = [c.get("chemical_class") for c in registry.values()]
-    for key, compound in registry.items():
-        for field in ("chemical_class", "group"):
-            if field not in compound:
-                problems.append(f"{key}: sets no {field}")
-        value = compound.get("chemical_class")
-        if not isinstance(value, list) or not set(value) <= set(vocabulary):
-            problems.append(f"{key}: chemical_class is {value!r}")
-    held = [c.get("group") for c in registry.values()]
-    for value in GROUP_VALUES:
-        if value not in held:
-            problems.append(f"no compound has group {value!r}")
-    if not set(held) <= set(GROUP_VALUES):
-        problems.append(f"groups are {held}")
-    purchased = sum(g in PURCHASED_GROUPS for g in held)
-    if (purchased, len(held) - purchased) != (10, 10):
-        problems.append(f"{purchased} purchased of {len(held)} compounds")
-    numbers = {key: c["item_number"] for key, c in registry.items()
-               if "item_number" in c}
-    if numbers != DEMO_NUMBERS:
-        problems.append(f"item numbers are {numbers}")
-    if not any(isinstance(c, list) and len(c) == 2 for c in classes):
-        problems.append("no compound sets two chemical classes")
-    if not any(isinstance(c, list) and any(
-            vocabulary_depth(vocabulary, v) == 2 for v in c if v in vocabulary)
-            for c in classes):
-        problems.append("no compound sets a class with two ancestors")
-    for field in ("short_name", "stock"):
-        count = sum(field in c for c in registry.values())
-        if count == 0 or count == len(registry):
-            problems.append(f"{count} compounds set {field}")
-    stocks = [c["stock"] for c in registry.values() if "stock" in c]
-    if all(float(s).is_integer() for s in stocks):
-        problems.append("every stock is a whole number")
-    flags = [c.get("in_house") for c in registry.values()]
-    for wanted in (True, False, None):
-        if wanted not in flags:
-            problems.append(f"no compound has in_house {wanted!r}")
+        problems.append("no class has two ancestors")
+    types = vocabularies["reaction-types"]
+    for procedure in sample_procedures(collection):
+        for named in procedure.data.get("reaction_types", []):
+            if named not in types:
+                problems.append(f"{procedure.path.name}: reaction type "
+                                f"{named!r} is not a term")
+    problems += registry_violations(registry, classes)
+    counts = purchased_and_synthesised(collection)
+    if counts != (10, 10):
+        problems.append(f"{counts[0]} purchased and {counts[1]} "
+                        "synthesised substances are named")
     return problems + procedure_field_violations(
         collection, settings, vocabularies["projects"])
 
 
-STARTER_REACTION_TYPES = (Path(__file__).resolve().parent.parent
-                          / "templates" / "reaction-types.toml")
-
-
-def reaction_type_violations(collection: Path) -> list[str]:
-    """Return the rules of sample-procedures "Demo collection" that
-    ``collection``'s ``vocabularies/reaction-types.toml`` breaks: it is
-    byte-identical to the starter vocabulary ``templates/reaction-types.toml``,
-    every value has a ``label_de``, and every reaction type that a sample
-    procedure names is one of its values."""
-    path = collection / "vocabularies" / "reaction-types.toml"
-    try:
-        data = path.read_bytes()
-        values = tomllib.loads(data.decode("utf-8"))
-        starter = STARTER_REACTION_TYPES.read_bytes()
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
-        return [f"reaction-types.toml: {exc!r}"]
-    problems = []
-    if data != starter:
-        problems.append("reaction-types.toml is not the starter vocabulary")
-    for value, entry in values.items():
-        if not str(entry.get("label_de", "")).strip():
-            problems.append(f"reaction-types/{value}: no label_de")
-    paths = [*sorted((collection / "org" / "procedures").glob("OSDB-*.org")),
-             *sorted((collection / "md" / "procedures").glob("OSDB-*.md"))]
-    for procedure in paths:
-        sample = read_org(procedure) if procedure.suffix == ".org" \
-            else read_markdown(procedure)
-        for named in sample.data.get("reaction_types", []):
-            if named not in values:
-                problems.append(f"{procedure.name}: reaction type {named!r} "
-                                "is not a value")
+def registry_violations(registry: dict[str, dict[str, Any]],
+                        classes: dict[str, dict[str, Any]]) -> list[str]:
+    """Return the rules for the substances' values of sample-procedures
+    "Demo collection" that ``registry``, by key, breaks."""
+    problems: list[str] = []
+    for key, compound in registry.items():
+        value = compound.get("chemical_classes")
+        if not isinstance(value, list) or not value \
+                or not set(value) <= set(classes):
+            problems.append(f"{key}: chemical_classes is {value!r}")
+        if compound.get("group") not in GROUP_VALUES:
+            problems.append(f"{key}: group is {compound.get('group')!r}")
+    held = [c.get("group") for c in registry.values()]
+    for value in GROUP_VALUES:
+        if value not in held:
+            problems.append(f"no substance has group {value!r}")
+    numbers = {key: c["article_number"] for key, c in registry.items()
+               if "article_number" in c}
+    if numbers != DEMO_NUMBERS:
+        problems.append(f"article numbers are {numbers}")
+    sets = [c.get("chemical_classes") for c in registry.values()]
+    if not any(isinstance(c, list) and len(c) == 2 for c in sets):
+        problems.append("no substance has two chemical classes")
+    if not any(isinstance(c, list) and any(
+            vocabulary_depth(classes, v) == 2 for v in c if v in classes)
+            for c in sets):
+        problems.append("no substance has a class with two ancestors")
+    count = sum("short_name" in c for c in registry.values())
+    if count == 0 or count == len(registry):
+        problems.append(f"{count} substances have a short_name")
     return problems
+
+
+def purchased_and_synthesised(collection: Path) -> tuple[int, int]:
+    """How many of the substances that the procedures of ``collection``
+    name are purchased and how many are synthesised."""
+    registry = read_registry(collection)
+    named = named_compounds_of(collection)
+    purchased = sum(registry[key]["group"] in PURCHASED_GROUPS
+                    for key in named if key in registry)
+    return purchased, len(named & set(registry)) - purchased
 
 
 def procedure_values(collection: Path) -> dict[str, list[dict[str, Any]]]:
@@ -698,9 +699,9 @@ def procedure_field_violations(collection: Path, settings: dict[str, Any],
               for d in declared}
     if labels != DEMO_PROCEDURE_LABELS:
         problems.append(f"procedure labels are {labels}")
-    held = [(value, entry.get("parent"), entry.get("label"),
-             entry.get("label_de")) for value, entry in projects.items()]
-    if held != PROJECTS:
+    held = sorted((value, entry.get("parent"), entry.get("label"),
+                   entry.get("label_de")) for value, entry in projects.items())
+    if held != sorted(PROJECTS):
         problems.append(f"projects holds {held}")
     by_id = procedure_values(collection)
     if not by_id:

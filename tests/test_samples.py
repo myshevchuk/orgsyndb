@@ -1,6 +1,7 @@
 """The seed and sample procedures (sample-procedures)."""
 
 import copy
+import json
 import re
 import shutil
 import tempfile
@@ -74,7 +75,7 @@ class SampleQuantityTests(unittest.TestCase):
 class CompoundWeightTests(unittest.TestCase):
     def test_compound_weights_agree_with_formulas(self) -> None:
         """Scenario: Seed tables are consistent (compound weights)."""
-        registry = sup.read_registry(DEMO / "compounds")
+        registry = sup.read_registry(DEMO)
         self.assertTrue(registry, "the demo registry holds no compound")
         for key, compound in registry.items():
             with self.subTest(compound=key):
@@ -216,7 +217,7 @@ STRUCTURE_SAMPLE = (DEMO / "org" / "procedures"
 class ThemeSampleSetTests(unittest.TestCase):
     def test_set_counts_and_chains(self) -> None:
         """Scenario: Set, counts and chain."""
-        registry = sup.read_registry(DEMO / "compounds")
+        registry = sup.read_registry(DEMO)
         for relative, (ident, reaction, product, substrates, formula,
                        cas) in EXPECTED_SAMPLES.items():
             path = DEMO / relative
@@ -266,19 +267,15 @@ class ThemeSampleSetTests(unittest.TestCase):
                 self.assertTrue(
                     set(sample.data.get("tags", [])) - {"sample-data"},
                     "no tag besides sample-data")
-        for key, compound in registry.items():
+        for key in sorted(sup.named_compounds_of(DEMO)):
             with self.subTest(compound=key):
-                self.assertTrue(sup.cas_ok(compound.get("cas", "")))
+                self.assertTrue(sup.cas_ok(registry[key].get("cas", "")))
 
 
 class StructureImageSampleTests(unittest.TestCase):
-    def test_isopentyl_acetate_sets_its_structure_image(self) -> None:
-        """Scenario: Structure image is set."""
-        compound = DEMO / "compounds" / "isopentyl-acetate.toml"
-        self.assertTrue(compound.is_file(), f"{compound.name} is missing")
-        self.assertEqual(
-            tomllib.loads(compound.read_text(encoding="utf-8")).get(
-                "structure_image"), "structures/isopentyl-acetate.svg")
+    def test_isopentyl_acetate_has_its_structure_image_by_key(self) -> None:
+        """Scenario: Structure image is present."""
+        self.assertIn("isopentyl-acetate", sup.read_registry(DEMO))
         self.assertTrue((DEMO / "static" / "structures"
                          / "isopentyl-acetate.svg").is_file(),
                         "examples/demo/static/structures/"
@@ -388,13 +385,11 @@ class DemoGeneralProcedureTests(unittest.TestCase):
     def test_the_registry_holds_the_three_compounds(self) -> None:
         """Scenario: The demo's general procedure (the compounds)."""
         keys = ["name", "name_de", "formula", "mw", "smiles", "cas"]
-        registry = sup.read_registry(DEMO / "compounds")
+        registry = sup.read_registry(DEMO)
         for key, values in GENERAL_COMPOUNDS.items():
             with self.subTest(compound=key):
                 self.assertIn(key, registry)
-                self.assertEqual(list(registry[key])[:len(keys)], keys)
-                self.assertEqual(
-                    list(registry[key].values())[:len(keys)], values)
+                self.assertEqual([registry[key][k] for k in keys], values)
 
     def test_the_reagents_table_describes_entry_one(self) -> None:
         """Requirement: Demo general procedure (the Reagents table)."""
@@ -649,32 +644,27 @@ class DemoFieldTests(unittest.TestCase):
         """Scenario: The demo declares its fields."""
         self.assertEqual(sup.field_violations(DEMO), [])
 
-    def test_the_demo_declares_beside_on_two_fields(self) -> None:
-        """Scenario: The demo declares its fields (`beside` on
-        `item_number` and `short_name`, and on no other)."""
+    def test_the_demo_names_its_registry(self) -> None:
+        """Scenario: The demo collection matches init (the demo's
+        settings)."""
         settings = tomllib.loads(
             (DEMO / "orgsyndb.toml").read_text(encoding="utf-8"))
-        self.assertEqual(
-            {d["key"]: d.get("beside")
-             for d in settings["fields"]["compound"]},
-            {"item_number": True, "short_name": True,
-             "chemical_class": None, "stock": None, "in_house": None,
-             "group": None})
+        self.assertEqual(settings["registry"],
+                         "../../webapp/demo/registry.json")
+        self.assertEqual(list(settings["fields"]), ["procedure"])
+        self.assertEqual((DEMO / settings["registry"]).resolve(),
+                         (REPO / "webapp" / "demo"
+                          / "registry.json").resolve())
 
-    def test_the_demo_vocabularies_are_the_only_ones(self) -> None:
-        """Scenario: The demo declares its fields (the vocabularies)."""
-        directory = DEMO / "vocabularies"
-        self.assertTrue(directory.is_dir(), "examples/demo/vocabularies "
-                        "is missing")
-        self.assertEqual(sorted(p.name for p in directory.iterdir()),
-                         ["chemical-classes.toml",
-                          "inventory-groups.toml", "projects.toml",
-                          "reaction-types.toml"])
-        vocabulary = tomllib.loads(
-            (directory / "chemical-classes.toml").read_text(
-                encoding="utf-8"))
+    def test_the_demo_holds_no_compound_and_vocabulary_files(self) -> None:
+        """Scenario: Samples live in the demo collection."""
+        for name in ("compounds", "vocabularies"):
+            self.assertFalse((DEMO / name).exists(), name)
+
+    def test_the_chemical_classes_of_the_demo(self) -> None:
+        """Requirement: Demo collection (the vocabularies)."""
         self.assertEqual(
-            sorted(vocabulary),
+            sorted(sup.read_vocabulary(DEMO, "chemical-classes")),
             sorted(["carbonyl-compounds", "aldehydes", "ketones",
                     "aryl-ketones", "carboxylic-acids", "acid-derivatives",
                     "esters", "anhydrides", "alcohols", "phenols",
@@ -682,14 +672,9 @@ class DemoFieldTests(unittest.TestCase):
                     "organophosphorus-compounds"]))
 
     def test_the_reaction_types_of_the_demo(self) -> None:
-        """Scenario: The demo declares its fields (reaction-types)."""
-        path = DEMO / "vocabularies" / "reaction-types.toml"
-        starter = REPO / "templates" / "reaction-types.toml"
-        self.assertTrue(path.is_file(), f"{path.name} is missing")
-        self.assertTrue(starter.is_file(), "templates/reaction-types.toml "
-                        "is missing")
-        self.assertEqual(path.read_bytes(), starter.read_bytes())
-        values = tomllib.loads(path.read_text(encoding="utf-8"))
+        """Requirement: Demo collection (every term has a German label;
+        every reaction type a sample names is a term)."""
+        values = sup.read_vocabulary(DEMO, "reaction-types")
         for value, entry in values.items():
             with self.subTest(value=value):
                 self.assertTrue(entry.get("label_de", "").strip())
@@ -699,34 +684,21 @@ class DemoFieldTests(unittest.TestCase):
         self.assertLessEqual(named, set(values))
 
     def test_the_inventory_groups_of_the_demo(self) -> None:
-        """Scenario: The demo declares its fields (inventory-groups)."""
-        path = DEMO / "vocabularies" / "inventory-groups.toml"
-        self.assertTrue(path.is_file(), f"{path.name} is missing")
-        vocabulary = tomllib.loads(path.read_text(encoding="utf-8"))
-        self.assertEqual(
-            [(value, entry.get("parent"), entry.get("label"),
-              entry.get("label_de"))
-             for value, entry in vocabulary.items()],
-            sup.INVENTORY_GROUPS)
+        """Requirement: Demo collection (the groups)."""
+        self.assertEqual(sup.terms_of(DEMO, "inventory-groups"),
+                         sorted(sup.INVENTORY_GROUPS))
 
     def test_the_projects_of_the_demo(self) -> None:
-        """Scenario: The demo declares its fields (projects)."""
-        path = DEMO / "vocabularies" / "projects.toml"
-        self.assertTrue(path.is_file(), f"{path.name} is missing")
-        vocabulary = tomllib.loads(path.read_text(encoding="utf-8"))
-        self.assertEqual(
-            [(value, entry.get("parent"), entry.get("label"),
-              entry.get("label_de"))
-             for value, entry in vocabulary.items()],
-            sup.PROJECTS)
+        """Requirement: Demo collection (the projects)."""
+        self.assertEqual(sup.terms_of(DEMO, "projects"),
+                         sorted(sup.PROJECTS))
 
     def test_the_demo_procedure_fields(self) -> None:
         """Scenario: The demo declares its fields (the procedure
         fields)."""
         settings = tomllib.loads(
             (DEMO / "orgsyndb.toml").read_text(encoding="utf-8"))
-        self.assertEqual(list(settings["fields"]),
-                         ["compound", "procedure"])
+        self.assertEqual(list(settings["fields"]), ["procedure"])
         declared = settings["fields"]["procedure"]
         self.assertEqual(
             [d["key"] for d in declared],
@@ -759,49 +731,33 @@ class DemoFieldTests(unittest.TestCase):
             {v[0]["project"] for v in values.values()},
             set(sup.PROJECT_VALUES))
 
-    def test_the_demo_group_field(self) -> None:
-        """Scenario: The demo declares its fields (group)."""
-        settings = tomllib.loads(
-            (DEMO / "orgsyndb.toml").read_text(encoding="utf-8"))
-        declared = settings["fields"]["compound"]
-        self.assertEqual(
-            [d["key"] for d in declared],
-            ["item_number", "short_name", "chemical_class", "stock",
-             "in_house", "group"])
-        group = declared[-1]
-        self.assertEqual(
-            {k: group.get(k) for k in ("type", "label", "label_de",
-                                       "vocabulary", "required", "facet",
-                                       "tabs")},
-            {"type": "choice", "label": "Group", "label_de": "Gruppe",
-             "vocabulary": "inventory-groups", "required": True,
-             "facet": True, "tabs": True})
-        self.assertEqual([d["key"] for d in declared if d.get("tabs")],
-                         ["group"])
-
     def test_the_demo_values_are_the_stated_ones(self) -> None:
-        """Scenario: The demo declares its fields (the values)."""
-        registry = sup.read_registry(DEMO / "compounds")
-        numbers = {key: compound["item_number"]
+        """Scenario: The demo's registry and fields (the values)."""
+        registry = sup.read_registry(DEMO)
+        numbers = {key: compound["article_number"]
                    for key, compound in registry.items()
-                   if "item_number" in compound}
+                   if "article_number" in compound}
         self.assertEqual(numbers, sup.DEMO_NUMBERS)
         self.assertEqual(
             {registry[key]["group"] for key in numbers}, {"final-products"})
         self.assertEqual(registry["acetic-acid"]["short_name"], "AcOH")
-        self.assertEqual(registry["phenylboronic-acid"]["stock"], 25)
-        self.assertEqual(
-            registry["ethyl-triphenylphosphoranylidene-acetate"]["stock"],
-            12.5)
-        self.assertEqual(registry["methyl-salicylate"]["chemical_class"],
+        self.assertEqual(registry["methyl-salicylate"]["chemical_classes"],
                          ["esters", "phenols"])
-        self.assertNotIn("in_house", registry["methyl-salicylate"])
-        self.assertIs(registry["acetone"]["in_house"], False)
-        self.assertIs(registry["salicylic-acid"]["in_house"], True)
+        self.assertEqual(registry["new-compound-7"]["article_number"],
+                         "NV-0007")
+        for key in ("formula", "mw", "smiles", "cas"):
+            self.assertNotIn(key, registry["new-compound-7"])
+
+    def test_every_substance_has_a_german_name(self) -> None:
+        """Requirement: Demo collection (every substance has a
+        `name_de`)."""
+        for key, compound in sup.read_registry(DEMO).items():
+            with self.subTest(compound=key):
+                self.assertTrue(compound.get("name_de", "").strip())
 
     def test_the_demo_groups_of_the_compounds(self) -> None:
-        """Scenario: The demo declares its fields (the group values)."""
-        registry = sup.read_registry(DEMO / "compounds")
+        """Scenario: The demo's registry and fields (the group values)."""
+        registry = sup.read_registry(DEMO)
         wanted = {
             "reagents": ["acetic-acid", "acetic-anhydride",
                          "ethyl-triphenylphosphoranylidene-acetate",
@@ -816,13 +772,15 @@ class DemoFieldTests(unittest.TestCase):
                                "1-biphenyl-4-yl-ethanol",
                                "dibenzylideneacetone", "cinnamic-acid",
                                "1-phenylethanol",
-                               "1-4-bromophenyl-ethanol"]}
+                               "1-4-bromophenyl-ethanol",
+                               "new-compound-7"]}
         self.assertEqual(
             {group: sorted(key for key, c in registry.items()
                            if c.get("group") == group)
              for group in wanted},
             {group: sorted(keys) for group, keys in wanted.items()})
-        self.assertEqual(len(registry), 20)
+        self.assertEqual(len(registry), 21)
+        self.assertEqual(sup.purchased_and_synthesised(DEMO), (10, 10))
 
 
 class ProcedureFieldCheckerTests(unittest.TestCase):
@@ -888,14 +846,37 @@ class ProcedureFieldCheckerTests(unittest.TestCase):
                     any(expected in line for line in violations),
                     violations)
 
-    def test_a_missing_beside_is_rejected(self) -> None:
-        """Scenario: The demo declares its fields (checker, no
-        `beside`)."""
+    def test_a_registry_without_a_group_value_is_rejected(self) -> None:
+        """Scenario: The demo's registry and fields (checker, rejected
+        registry)."""
+        root = self.collection()
+        path = root / "registry.json"
+        table = json.loads(path.read_text(encoding="utf-8"))
+        for entry in table["substances"]:
+            if entry["group"] == "intermediates":
+                entry["group"] = "reagents"
+        path.write_text(json.dumps(table), encoding="utf-8")
+        self.assertTrue(any("intermediates" in line for line in
+                            sup.field_violations(root)))
+
+    def test_a_vocabulary_term_without_a_german_label_is_rejected(
+            self) -> None:
+        """Scenario: The demo's registry and fields (checker, no
+        `label_de`)."""
+        root = self.collection()
+        path = root / "registry.json"
+        table = json.loads(path.read_text(encoding="utf-8"))
+        table["vocabularies"]["projects"][0]["label_de"] = None
+        path.write_text(json.dumps(table), encoding="utf-8")
+        self.assertNotEqual(sup.field_violations(root), [])
+
+    def test_a_compound_declaration_is_rejected(self) -> None:
+        """Scenario: The demo's registry and fields (checker, a
+        declared compound field)."""
         root = self.collection()
         path = root / "orgsyndb.toml"
-        text = path.read_text(encoding="utf-8")
-        self.assertEqual(text.count("beside = true\n"), 2)
-        path.write_text(text.replace("beside = true\n", "", 1),
+        path.write_text(path.read_text(encoding="utf-8")
+                        + '\n[[fields.compound]]\nkey = "x"\n',
                         encoding="utf-8")
         self.assertNotEqual(sup.field_violations(root), [])
 
@@ -915,17 +896,10 @@ class TestCollectionTests(unittest.TestCase):
         """Scenario: The test collection mirrors the demo."""
         self.assertTrue(COLLECTION.is_dir(), f"{COLLECTION} is missing")
         self.assertFalse((COLLECTION / "org").exists(), "org/ exists")
-        copied = ["orgsyndb.toml", ".gitignore",
+        copied = [".gitignore",
                   *sorted(f"static/{p}" for p in relative_files(
-                      DEMO / "static")),
-                  *sorted(f"compounds/{p}" for p in relative_files(
-                      DEMO / "compounds")),
-                  *sorted(f"vocabularies/{p}" for p in relative_files(
-                      DEMO / "vocabularies"))]
+                      DEMO / "static"))]
         self.assertIn("static/structures/isopentyl-acetate.svg", copied)
-        self.assertIn("compounds/salicylic-acid.toml", copied)
-        self.assertIn("vocabularies/chemical-classes.toml", copied)
-        self.assertIn("vocabularies/inventory-groups.toml", copied)
         for relative in copied:
             with self.subTest(file=relative):
                 self.assertTrue((COLLECTION / relative).is_file(),
@@ -936,11 +910,17 @@ class TestCollectionTests(unittest.TestCase):
             {p for p in relative_files(COLLECTION / "static")},
             relative_files(DEMO / "static"), "static/ files")
         self.assertEqual(
-            relative_files(COLLECTION / "compounds"),
-            relative_files(DEMO / "compounds"), "compounds/ files")
-        self.assertEqual(
-            relative_files(COLLECTION / "vocabularies"),
-            relative_files(DEMO / "vocabularies"), "vocabularies/ files")
+            (COLLECTION / "registry.json").read_bytes(),
+            (REPO / "webapp" / "demo" / "registry.json").read_bytes())
+        demo = tomllib.loads(
+            (DEMO / "orgsyndb.toml").read_text(encoding="utf-8"))
+        test = tomllib.loads(
+            (COLLECTION / "orgsyndb.toml").read_text(encoding="utf-8"))
+        self.assertEqual(test.pop("registry"), "registry.json")
+        demo.pop("registry")
+        self.assertEqual(test, demo)
+        for name in ("compounds", "vocabularies"):
+            self.assertFalse((COLLECTION / name).exists(), name)
         sequences = relative_files(DEMO / "md" / "sequences")
         self.assertEqual(len(sequences), 4, "the demo's sequences")
         for relative in sorted(sequences):

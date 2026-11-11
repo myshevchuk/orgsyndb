@@ -53,7 +53,8 @@ ignoring case with FOLD, or nil."
 
 (defun orgsyndb--field-line (text type field &optional message)
   "Return the line, from 1, of the file text TEXT where a problem of
-FIELD with MESSAGE belongs.  TYPE is `org', `md' or `toml'."
+FIELD with MESSAGE belongs.  TYPE is `org', `md', `json' or `toml'; a
+problem of a JSON file, the registry, belongs on line 1."
   (let ((lines (split-string text "\n"))
         (key (if (string-match "\\`[^[.]+" field) (match-string 0 field)
                field)))
@@ -99,10 +100,11 @@ FIELD with MESSAGE belongs.  TYPE is `org', `md' or `toml'."
      1)))
 
 (defun orgsyndb--file-type (file)
-  "Return the type of FILE's text: `org', `md' or `toml'."
+  "Return the type of FILE's text: `org', `md', `json' or `toml'."
   (pcase (file-name-extension file)
     ("org" 'org)
     ("md" 'md)
+    ("json" 'json)
     (_ 'toml)))
 
 (defun orgsyndb-problem-location (collection path field &optional message)
@@ -113,7 +115,8 @@ names its source `org/procedures/<stem>.org'.  FILE is absolute, and
 LINE counts from 1: the line that a TOML parse error MESSAGE names, the
 line of the field's key in Markdown front matter or a TOML file, in an
 Org source the keyword, scope table or custom front matter that writes
-the field, and 1 when nothing matches."
+the field, and 1 for the registry, `build/registry.json', and when
+nothing matches."
   (let* ((file (expand-file-name (orgsyndb--source-path path) collection))
          (buffer (find-buffer-visiting file))
          (text (cond (buffer (with-current-buffer buffer

@@ -15,10 +15,12 @@ import unittest
 import zoneinfo
 from pathlib import Path
 
+import field_support as fs
 import support
 from pipeline_support import (FIXTURES, GIT_QUIET, PIPELINE, REPO, Run,
                               TEST_COLLECTION, captured, front_matter,
                               pipeline, pipeline_function, snapshot)
+from support import term
 
 NOW = "2026-10-19T17:42:05+02:00"
 SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -256,9 +258,9 @@ class StubTests(unittest.TestCase):
         self.assertEqual(data["id"], "OSDB-0001")
         self.assertNotIn("ai_model", data)
         with support.template_registry() as registry, \
-                support.starter_settings() as settings:
+                support.format_settings() as settings:
             checked = support.run_validator(
-                ["--compounds", registry, "--settings", settings,
+                ["--registry", registry, "--settings", settings,
                  stub.parent])
         self.assertEqual(checked.returncode, 0, checked.stderr)
         self.assertEqual(checked.stdout, "")
@@ -423,132 +425,114 @@ class NoteLinkTests(unittest.TestCase):
                 LINKED_RESULT)
 
 
-FIELDS_SETTINGS = FIXTURES / "fields" / "orgsyndb.toml"
+SETTINGS_FILE = FIXTURES / "settings" / "orgsyndb.toml"
 PROCEDURE_SETTINGS = FIXTURES / "procedure-fields" / "orgsyndb.toml"
 TEST_SETTINGS = TEST_COLLECTION / "orgsyndb.toml"
+TEST_REGISTRY = TEST_COLLECTION / "registry.json"
+FIXTURE_REGISTRY = FIXTURES / "registry.json"
 
 
-def fixture_fields(language: str) -> list[dict]:
-    """The field data of the ``fields/`` fixtures that the contract
-    states, in ``language``: ``en`` or ``de``."""
-    german = language == "de"
-
-    def shown(english: str, deutsch: str | None = None) -> str:
-        return deutsch if german and deutsch is not None else english
-
-    def values(entries: dict[str, tuple[str, ...]],
-               ancestors: dict[str, list[str]]) -> dict[str, dict]:
-        return {key: {"label": path[-1], "path": list(path),
-                      "ancestors": ancestors.get(key, [])}
-                for key, path in entries.items()}
-
-    carbonyl = shown("Carbonyl compounds", "Carbonylverbindungen")
-    return [
-        {"key": "item_number", "type": "text", "column": True,
-         "search": False, "beside": False,
-         "label": shown("Item no.", "Artikelnr.")},
-        {"key": "short_name", "type": "text", "column": False,
-         "search": False, "beside": False, "label": "Short name"},
-        {"key": "stock", "type": "number", "column": False,
-         "beside": False, "label": shown("Stock", "Bestand"),
-         "unit": "g"},
-        {"key": "in_house", "type": "boolean", "column": False,
-         "facet": False,
-         "label": shown("Made in house", "Eigene Herstellung")},
-        {"key": "chemical_class", "type": "choice", "column": True,
-         "facet": False, "label": shown("Chemical class", "Stoffklasse"),
-         "multiple": True, "tabs": False,
-         "values": values({
-             "carbonyl-compounds": (carbonyl,),
-             "ketones": (carbonyl, shown("Ketones", "Ketone")),
-             "esters": (carbonyl, shown("Esters", "Ester")),
-             "alcohols": (shown("Alcohols", "Alkohole"),)},
-             {"ketones": ["carbonyl-compounds"],
-              "esters": ["carbonyl-compounds"]}),
-         "order": ["carbonyl-compounds", "ketones", "esters", "alcohols"]},
-        {"key": "storage", "type": "choice", "column": False,
-         "facet": False, "label": shown("Storage", "Lagerung"),
-         "multiple": False, "tabs": False,
-         "values": values({
-             "cabinet": (shown("Cabinet", "Schrank"),),
-             "fridge": (shown("Fridge", "K\u00fchlschrank"),)}, {}),
-         "order": ["cabinet", "fridge"]},
-    ]
+def load_registry(path: Path = TEST_REGISTRY) -> dict:
+    """The snapshot file ``path`` as a table."""
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
-def fixture_procedure_fields(language: str) -> list[dict]:
-    """The procedure field data of the ``procedure-fields/`` fixtures
-    that the contract states, in ``language``: ``en`` or ``de``."""
-    german = language == "de"
+def registry_with(**vocabularies: list[dict]) -> dict:
+    """A snapshot holding the given vocabularies (``chemical_classes``
+    for ``chemical-classes`` and so on) and no substance."""
+    names = {"chemical-classes": [], "inventory-groups": [],
+             "projects": [], "reaction-types": []}
+    for name, terms in vocabularies.items():
+        names[name.replace("_", "-")] = terms
+    return {"format": 1, "vocabularies": names, "substances": [],
+            "digest": "0" * 64}
 
-    def shown(english: str, deutsch: str) -> str:
-        return deutsch if german else english
 
-    teaching = shown("Teaching", "Lehre")
-    practical = shown("First-year practical", "Grundpraktikum")
-    return [
-        {"key": "notebook", "type": "text",
-         "label": shown("Lab notebook", "Laborjournal")},
-        {"key": "working_time", "type": "number",
-         "label": shown("Working time", "Arbeitszeit"), "unit": "h"},
-        {"key": "inert_atmosphere", "type": "boolean",
-         "label": "Inert atmosphere", "facet": False},
-        {"key": "project", "type": "choice",
-         "label": shown("Project", "Projekt"), "facet": False,
-         "multiple": False,
-         "values": {
-             "teaching": {"label": teaching, "path": [teaching],
-                          "ancestors": []},
-             "first-year-practical": {
-                 "label": practical, "path": [teaching, practical],
-                 "ancestors": ["teaching"]},
-             "research": {"label": shown("Research", "Forschung"),
-                          "path": [shown("Research", "Forschung")],
-                          "ancestors": []}},
-         "order": ["teaching", "first-year-practical", "research"]},
-    ]
+def field_data(field: fs.Field) -> dict:
+    """The field data of one field as the contract states it: a text
+    field has ``search`` and ``beside``; a choice field has ``facet``,
+    ``multiple``, ``tabs``, ``values`` and ``order``."""
+    data: dict = {"key": field.key, "type": field.type,
+                  "column": field.column, "label": field.label}
+    if field.type == "text":
+        data.update(search=field.search, beside=field.beside)
+        return data
+    data.update(
+        facet=field.facet, multiple=field.multiple, tabs=field.tabs,
+        values={key: {"label": path[-1], "path": list(path),
+                      "ancestors": list(field.ancestors[key])}
+                for key, path in field.paths.items()},
+        order=list(field.order))
+    return data
+
+
+def procedure_field_data(field: fs.Field) -> dict:
+    """The field data of one procedure field as the contract states
+    it."""
+    data: dict = {"key": field.key, "type": field.type,
+                  "label": field.label}
+    if field.type == "number" and field.unit:
+        data["unit"] = field.unit
+    if field.type in ("boolean", "choice"):
+        data["facet"] = field.facet
+    if field.type == "choice":
+        data.update(
+            multiple=field.multiple,
+            values={key: {"label": path[-1], "path": list(path),
+                          "ancestors": list(field.ancestors[key])}
+                    for key, path in field.paths.items()},
+            order=list(field.order))
+    return data
 
 
 class FieldDataTests(unittest.TestCase):
     """compound-fields "Field data for the site"."""
 
-    def settings(self, text: str,
-                 vocabularies: dict[str, str] | None = None) -> Path:
-        """An ``orgsyndb.toml`` holding ``text``, beside the
-        ``vocabularies`` (name to text) in a temporary collection."""
+    def settings(self, text: str) -> Path:
+        """An ``orgsyndb.toml`` holding ``text`` in a temporary
+        collection."""
         root = make_repo(self)
         (root / "orgsyndb.toml").write_text(text, encoding="utf-8")
-        (root / "vocabularies").mkdir()
-        for name, content in (vocabularies or {}).items():
-            (root / "vocabularies" / f"{name}.toml").write_text(
-                content, encoding="utf-8")
         return root / "orgsyndb.toml"
+
+    def data(self, language: str = "en", registry: dict | None = None,
+             settings: Path = SETTINGS_FILE) -> dict:
+        return pipeline_function("fields_data")(
+            settings, load_registry() if registry is None else registry,
+            language)
 
     def test_field_data_in_both_languages(self) -> None:
         """Scenario: Field data in both languages."""
-        fields_data = pipeline_function("fields_data")
         for language in ("en", "de"):
             with self.subTest(language=language):
-                data = fields_data(FIELDS_SETTINGS, language)
+                data = self.data(language)
                 self.assertEqual(list(data), ["compound", "procedure"])
                 self.assertEqual(data["procedure"], [])
-                self.assertEqual([f["key"] for f in data["compound"]],
-                                 ["item_number", "short_name", "stock",
-                                  "in_house", "chemical_class", "storage"])
-                self.assertEqual(data["compound"],
-                                 fixture_fields(language))
+                self.assertEqual(
+                    [f["key"] for f in data["compound"]],
+                    ["article_number", "short_name", "chemical_class",
+                     "group"])
+                self.assertEqual(
+                    data["compound"],
+                    [field_data(f) for f in fs.registry_fields(
+                        load_registry(), language)])
 
     def test_the_stated_values_of_the_scenario(self) -> None:
         """Scenario: Field data in both languages (the stated values)."""
-        fields_data = pipeline_function("fields_data")
-        english = {f["key"]: f for f in
-                   fields_data(FIELDS_SETTINGS, "en")["compound"]}
-        german = {f["key"]: f for f in
-                  fields_data(FIELDS_SETTINGS, "de")["compound"]}
-        self.assertEqual(english["stock"]["unit"], "g")
-        self.assertIs(english["chemical_class"]["multiple"], True)
-        self.assertIs(english["chemical_class"]["column"], True)
-        self.assertIs(english["storage"]["multiple"], False)
+        english = {f["key"]: f for f in self.data("en")["compound"]}
+        german = {f["key"]: f for f in self.data("de")["compound"]}
+        for fields in (english, german):
+            self.assertIs(fields["chemical_class"]["multiple"], True)
+            self.assertIs(fields["chemical_class"]["column"], True)
+            self.assertIs(fields["chemical_class"]["facet"], True)
+            self.assertIs(fields["group"]["tabs"], True)
+            self.assertIs(fields["group"]["multiple"], False)
+            for key in ("article_number", "short_name"):
+                self.assertIs(fields[key]["search"], True, key)
+                self.assertIs(fields[key]["beside"], True, key)
+            self.assertEqual(
+                fields["chemical_class"]["values"]["ketones"]["ancestors"],
+                ["carbonyl-compounds"])
         self.assertEqual(
             english["chemical_class"]["values"]["ketones"],
             {"label": "Ketones",
@@ -558,156 +542,59 @@ class FieldDataTests(unittest.TestCase):
             german["chemical_class"]["values"]["ketones"],
             {"label": "Ketone", "path": ["Carbonylverbindungen", "Ketone"],
              "ancestors": ["carbonyl-compounds"]})
+        self.assertEqual(english["article_number"]["label"], "Article no.")
+        self.assertEqual(german["article_number"]["label"], "Artikelnr.")
         self.assertEqual(english["short_name"]["label"], "Short name")
-        self.assertEqual(german["short_name"]["label"], "Short name")
-        for fields in (english, german):
-            self.assertIs(fields["item_number"]["search"], False)
-            self.assertIs(fields["short_name"]["search"], False)
-            for key in ("item_number", "short_name", "stock"):
-                self.assertIs(fields[key]["beside"], False, key)
-            for key in ("in_house", "chemical_class", "storage"):
-                self.assertNotIn("beside", fields[key], key)
-            for key in ("in_house", "chemical_class", "storage"):
-                self.assertIs(fields[key]["facet"], False, key)
-            for key in ("chemical_class", "storage"):
-                self.assertIs(fields[key]["tabs"], False, key)
-            self.assertEqual(
-                fields["chemical_class"]["values"]["alcohols"]["ancestors"],
-                [])
-            self.assertEqual(
-                fields["chemical_class"]["order"],
-                ["carbonyl-compounds", "ketones", "esters", "alcohols"])
+        self.assertEqual(german["short_name"]["label"], "Kurzname")
+        self.assertEqual(english["chemical_class"]["label"],
+                         "Chemical class")
+        self.assertEqual(german["chemical_class"]["label"], "Stoffklasse")
+        self.assertEqual(english["group"]["label"], "Group")
+        self.assertEqual(german["group"]["label"], "Gruppe")
+
+    def test_the_classes_of_a_branch_follow_their_parent(self) -> None:
+        """Scenario: Field data in both languages (the `order` of
+        `chemical_class` begins with `alcohols`, `aryl-halides`,
+        `carbonyl-compounds`, `acid-derivatives`, `anhydrides` and
+        `esters`)."""
+        order = {f["key"]: f for f in self.data()["compound"]
+                 }["chemical_class"]["order"]
+        self.assertEqual(order[:6], [
+            "alcohols", "aryl-halides", "carbonyl-compounds",
+            "acid-derivatives", "anhydrides", "esters"])
 
     def test_a_field_carries_only_the_keys_its_type_has(self) -> None:
         """Requirement: Field data for the site (these keys and no
         other)."""
-        data = pipeline_function("fields_data")(FIELDS_SETTINGS, "en")
-        keys = {field["key"]: set(field) for field in data["compound"]}
+        keys = {field["key"]: set(field)
+                for field in self.data()["compound"]}
         base = {"key", "type", "column", "label"}
-        self.assertEqual(keys["item_number"], base | {"search", "beside"})
+        self.assertEqual(keys["article_number"], base | {"search", "beside"})
         self.assertEqual(keys["short_name"], base | {"search", "beside"})
-        self.assertEqual(keys["in_house"], base | {"facet"})
-        self.assertEqual(keys["stock"], base | {"unit", "beside"})
         choice = base | {"facet", "multiple", "tabs", "values", "order"}
         self.assertEqual(keys["chemical_class"], choice)
-        self.assertEqual(keys["storage"], choice)
+        self.assertEqual(keys["group"], choice)
 
-    def test_facet_and_search_are_taken_as_declared(self) -> None:
-        """Requirement: Field data for the site (`facet` and `search`, as
-        declared)."""
-        path = self.settings(
-            'format = 1\n\n[[fields.compound]]\nkey = "tag"\n'
-            'type = "text"\nlabel = "Tag"\nsearch = true\n\n'
-            '[[fields.compound]]\nkey = "note"\ntype = "text"\n'
-            'label = "Note"\n\n[[fields.compound]]\nkey = "flag"\n'
-            'type = "boolean"\nlabel = "Flag"\nfacet = true\n\n'
-            '[[fields.compound]]\nkey = "kind"\ntype = "choice"\n'
-            'label = "Kind"\nvocabulary = "kinds"\nfacet = true\n',
-            {"kinds": '[top]\nlabel = "Top"\n'})
-        data = pipeline_function("fields_data")(path, "en")
-        by_key = {f["key"]: f for f in data["compound"]}
-        self.assertIs(by_key["tag"]["search"], True)
-        self.assertIs(by_key["note"]["search"], False)
-        self.assertIs(by_key["flag"]["facet"], True)
-        self.assertIs(by_key["kind"]["facet"], True)
-        self.assertNotIn("facet", by_key["tag"])
-        self.assertNotIn("search", by_key["flag"])
-        self.assertNotIn("search", by_key["kind"])
-
-    def test_beside_is_taken_as_declared(self) -> None:
-        """Requirement: Field data for the site (`beside`, as declared,
-        for a text and a number field only)."""
-        path = self.settings(
-            'format = 1\n\n[[fields.compound]]\nkey = "tag"\n'
-            'type = "text"\nlabel = "Tag"\nbeside = true\n\n'
-            '[[fields.compound]]\nkey = "note"\ntype = "text"\n'
-            'label = "Note"\n\n[[fields.compound]]\nkey = "count"\n'
-            'type = "number"\nlabel = "Count"\nbeside = true\n\n'
-            '[[fields.compound]]\nkey = "mass"\ntype = "number"\n'
-            'label = "Mass"\nbeside = false\n\n'
-            '[[fields.compound]]\nkey = "flag"\ntype = "boolean"\n'
-            'label = "Flag"\n\n[[fields.compound]]\nkey = "kind"\n'
-            'type = "choice"\nlabel = "Kind"\nvocabulary = "kinds"\n',
-            {"kinds": '[top]\nlabel = "Top"\n'})
-        data = pipeline_function("fields_data")(path, "en")
-        by_key = {f["key"]: f for f in data["compound"]}
-        self.assertIs(by_key["tag"]["beside"], True)
-        self.assertIs(by_key["note"]["beside"], False)
-        self.assertIs(by_key["count"]["beside"], True)
-        self.assertIs(by_key["mass"]["beside"], False)
-        for key in ("flag", "kind"):
-            self.assertNotIn("beside", by_key[key], key)
-
-    def test_the_test_collection_besides(self) -> None:
-        """Requirement: Field data for the site (`beside` of the test
-        collection)."""
-        data = pipeline_function("fields_data")(TEST_SETTINGS, "en")
+    def test_the_presentation_of_each_registry_field(self) -> None:
+        """Requirement: Registry fields (the table of presentation)."""
+        by_key = {f["key"]: f for f in self.data()["compound"]}
         self.assertEqual(
-            {f["key"]: f.get("beside") for f in data["compound"]},
-            {"item_number": True, "short_name": True,
-             "chemical_class": None, "stock": False, "in_house": None,
-             "group": None})
-
-    def test_the_test_collection_facets_and_searches(self) -> None:
-        """Requirement: Field data for the site (`facet` and `search` of
-        the test collection)."""
-        data = pipeline_function("fields_data")(TEST_SETTINGS, "en")
-        flags = {f["key"]: (f.get("facet"), f.get("search"))
-                 for f in data["compound"]}
-        self.assertEqual(flags, {
-            "item_number": (None, True), "short_name": (None, True),
-            "chemical_class": (True, None), "stock": (None, None),
-            "in_house": (True, None), "group": (True, None)})
-
-    def test_tabs_is_taken_as_declared(self) -> None:
-        """Requirement: Field data for the site (`tabs`, as declared)."""
-        path = self.settings(
-            'format = 1\n\n[[fields.compound]]\nkey = "kind"\n'
-            'type = "choice"\nlabel = "Kind"\nvocabulary = "kinds"\n'
-            'tabs = true\n\n[[fields.compound]]\nkey = "other"\n'
-            'type = "choice"\nlabel = "Other"\nvocabulary = "kinds"\n'
-            'tabs = false\n\n[[fields.compound]]\nkey = "plain"\n'
-            'type = "choice"\nlabel = "Plain"\nvocabulary = "kinds"\n'
-            '\n[[fields.compound]]\nkey = "flag"\ntype = "boolean"\n'
-            'label = "Flag"\n\n[[fields.compound]]\nkey = "note"\n'
-            'type = "text"\nlabel = "Note"\n\n'
-            '[[fields.compound]]\nkey = "count"\ntype = "number"\n'
-            'label = "Count"\n',
-            {"kinds": '[top]\nlabel = "Top"\n'})
-        data = pipeline_function("fields_data")(path, "en")
-        by_key = {f["key"]: f for f in data["compound"]}
-        self.assertIs(by_key["kind"]["tabs"], True)
-        self.assertIs(by_key["other"]["tabs"], False)
-        self.assertIs(by_key["plain"]["tabs"], False)
-        for key in ("flag", "note", "count"):
-            self.assertNotIn("tabs", by_key[key], key)
-
-    def test_the_test_collection_tabs_field(self) -> None:
-        """Requirement: Field data for the site (`tabs` of the test
-        collection)."""
-        for language in ("en", "de"):
-            with self.subTest(language=language):
-                data = pipeline_function("fields_data")(
-                    TEST_SETTINGS, language)
-                tabs = {f["key"]: f.get("tabs") for f in data["compound"]}
-                self.assertEqual(tabs, {
-                    "item_number": None, "short_name": None,
-                    "chemical_class": False, "stock": None,
-                    "in_house": None, "group": True})
-
-    def test_the_test_collection_group_field(self) -> None:
-        """Requirement: Field data for the site (the `group` field of the
-        test collection)."""
-        data = pipeline_function("fields_data")(TEST_SETTINGS, "de")
-        group = {f["key"]: f for f in data["compound"]}["group"]
+            {key: (f["type"], f["column"]) for key, f in by_key.items()},
+            {"article_number": ("text", True),
+             "short_name": ("text", False),
+             "chemical_class": ("choice", True),
+             "group": ("choice", False)})
         self.assertEqual(
-            (group["type"], group["label"], group["column"],
-             group["multiple"], group["facet"], group["tabs"]),
-            ("choice", "Gruppe", False, False, True, True))
-        self.assertEqual(
-            group["order"],
-            ["purchased", "starting-materials", "reagents", "synthesised",
-             "intermediates", "final-products"])
+            {key: (f["facet"], f["tabs"]) for key, f in by_key.items()
+             if f["type"] == "choice"},
+            {"chemical_class": (True, False), "group": (True, True)})
+
+    def test_the_group_field_of_the_test_collection(self) -> None:
+        """Requirement: Field data for the site (the `group` field)."""
+        group = {f["key"]: f for f in self.data("de")["compound"]}["group"]
+        self.assertEqual(set(group["values"]), {
+            "purchased", "reagents", "starting-materials", "synthesised",
+            "final-products", "intermediates"})
         self.assertEqual(
             group["values"]["reagents"],
             {"label": "Reagenzien", "path": ["Zugekauft", "Reagenzien"],
@@ -716,40 +603,29 @@ class FieldDataTests(unittest.TestCase):
             group["values"]["synthesised"],
             {"label": "Selbst hergestellt",
              "path": ["Selbst hergestellt"], "ancestors": []})
-
-    def test_a_number_without_a_unit_has_no_unit_key(self) -> None:
-        """Requirement: Field data for the site (`unit`: only for a number
-        field that declares one)."""
-        path = self.settings(
-            'format = 1\n\n[[fields.compound]]\nkey = "count"\n'
-            'type = "number"\nlabel = "Count"\nmin = 0\nmax = 9\n')
-        data = pipeline_function("fields_data")(path, "en")
-        self.assertEqual(data, {"compound": [
-            {"key": "count", "type": "number", "label": "Count",
-             "column": False, "beside": False}], "procedure": []})
+        self.assertEqual(
+            [key for key in group["order"] if key in
+             ("purchased", "synthesised")],
+            ["purchased", "synthesised"])
 
     def test_the_result_is_json(self) -> None:
         """Requirement: Field data for the site (the JSON that the build
         stages)."""
-        fields_data = pipeline_function("fields_data")
         for language in ("en", "de"):
-            data = fields_data(FIELDS_SETTINGS, language)
+            data = self.data(language)
             self.assertEqual(json.loads(json.dumps(data)), data)
 
     def test_labels_fall_back_to_the_english_one(self) -> None:
-        """Requirement: Field data for the site (labels, `label_de`
-        absent)."""
-        path = self.settings(
-            'format = 1\n\n[[fields.compound]]\nkey = "kind"\n'
-            'type = "choice"\nlabel = "Kind"\nvocabulary = "kinds"\n',
-            {"kinds": '[top]\nlabel = "Top"\nlabel_de = "Oben"\n\n'
-                      '[middle]\nlabel = "Middle"\nparent = "top"\n\n'
-                      '[bottom]\nlabel = "Bottom"\nlabel_de = "Unten"\n'
-                      'parent = "middle"\n'})
-        data = pipeline_function("fields_data")(path, "de")
-        (field,) = data["compound"]
-        self.assertEqual(field["label"], "Kind")
-        self.assertEqual(field["values"], {
+        """Requirement: Field data for the site (`label`, a term without
+        `label_de`)."""
+        registry = registry_with(chemical_classes=[
+            term("top", "Top", "Oben"),
+            term("middle", "Middle", None, "top"),
+            term("bottom", "Bottom", "Unten", "middle")])
+        data = self.data("de", registry)
+        classes = {f["key"]: f for f in data["compound"]
+                   }["chemical_class"]
+        self.assertEqual(classes["values"], {
             "top": {"label": "Oben", "path": ["Oben"], "ancestors": []},
             "middle": {"label": "Middle", "path": ["Oben", "Middle"],
                        "ancestors": ["top"]},
@@ -759,10 +635,9 @@ class FieldDataTests(unittest.TestCase):
 
     def test_a_value_is_listed_at_every_level(self) -> None:
         """Requirement: Field data for the site (`values` holds every
-        value of the vocabulary)."""
-        data = pipeline_function("fields_data")(TEST_SETTINGS, "de")
-        fields = {f["key"]: f for f in data["compound"]}
-        classes = fields["chemical_class"]["values"]
+        term of the vocabulary)."""
+        classes = {f["key"]: f for f in self.data("de")["compound"]
+                   }["chemical_class"]["values"]
         self.assertEqual(len(classes), 13)
         self.assertEqual(
             classes["aryl-ketones"],
@@ -771,143 +646,112 @@ class FieldDataTests(unittest.TestCase):
              "ancestors": ["carbonyl-compounds", "ketones"]})
         self.assertEqual(
             classes["anhydrides"]["path"],
-            ["Carbonylverbindungen", "Carbons\u00e4urederivate",
+            ["Carbonylverbindungen", "Carbonsäurederivate",
              "Anhydride"])
-        self.assertEqual(classes["anhydrides"]["ancestors"],
-                         ["carbonyl-compounds", "acid-derivatives"])
-        self.assertEqual(classes["alcohols"]["path"], ["Alkohole"])
         self.assertEqual(classes["alcohols"]["ancestors"], [])
-
-    def test_the_test_collection_field_data(self) -> None:
-        """Scenario: Field data in both languages (the test
-        collection)."""
-        data = pipeline_function("fields_data")(TEST_SETTINGS, "en")
-        self.assertEqual(
-            [(f["key"], f["type"], f["column"])
-             for f in data["compound"]],
-            [("item_number", "text", True), ("short_name", "text", False),
-             ("chemical_class", "choice", True), ("stock", "number", False),
-             ("in_house", "boolean", False), ("group", "choice", False)])
-        self.assertEqual(data["compound"][3]["unit"], "g")
-        self.assertEqual(
-            data["compound"][2]["values"]["aryl-ketones"]["path"],
-            ["Carbonyl compounds", "Ketones", "Aryl ketones"])
-        self.assertEqual(
-            data["compound"][2]["values"]["aryl-ketones"]["ancestors"],
-            ["carbonyl-compounds", "ketones"])
 
     def test_a_vocabulary_listed_out_of_order(self) -> None:
         """Scenario: Depth-first order."""
-        path = self.settings(
-            'format = 1\n\n[[fields.compound]]\nkey = "chemical_class"\n'
-            'type = "choice"\nlabel = "Chemical class"\n'
-            'vocabulary = "chemical-classes"\n',
-            {"chemical-classes": (
-                '[esters]\nlabel = "Esters"\nparent = "carbonyl-compounds"'
-                '\n\n[alcohols]\nlabel = "Alcohols"\n\n'
-                '[carbonyl-compounds]\nlabel = "Carbonyl compounds"\n\n'
-                '[ketones]\nlabel = "Ketones"\n'
-                'parent = "carbonyl-compounds"\n\n'
-                '[aryl-ketones]\nlabel = "Aryl ketones"\n'
-                'parent = "ketones"\n')})
-        (field,) = pipeline_function("fields_data")(path, "en")["compound"]
-        self.assertEqual(field.get("order"), [
+        registry = registry_with(chemical_classes=[
+            term("esters", "Esters", None, "carbonyl-compounds"),
+            term("alcohols", "Alcohols"),
+            term("carbonyl-compounds", "Carbonyl compounds"),
+            term("ketones", "Ketones", None, "carbonyl-compounds"),
+            term("aryl-ketones", "Aryl ketones", None, "ketones")])
+        classes = {f["key"]: f for f in self.data("en", registry)["compound"]
+                   }["chemical_class"]
+        self.assertEqual(classes["order"], [
             "alcohols", "carbonyl-compounds", "esters", "ketones",
             "aryl-ketones"])
-        values = field["values"]
-        self.assertEqual(values["aryl-ketones"].get("ancestors"),
+        values = classes["values"]
+        self.assertEqual(values["aryl-ketones"]["ancestors"],
                          ["carbonyl-compounds", "ketones"])
-        self.assertEqual(values["esters"].get("ancestors"),
+        self.assertEqual(values["esters"]["ancestors"],
                          ["carbonyl-compounds"])
-        self.assertEqual(values["alcohols"].get("ancestors"), [])
+        self.assertEqual(values["alcohols"]["ancestors"], [])
 
     def test_the_order_holds_every_value_once(self) -> None:
         """Requirement: Field data for the site (`order`: the keys of
-        every value)."""
-        data = pipeline_function("fields_data")(TEST_SETTINGS, "en")
-        field = {f["key"]: f for f in data["compound"]}["chemical_class"]
+        every term)."""
+        field = {f["key"]: f for f in self.data()["compound"]
+                 }["chemical_class"]
         self.assertEqual(len(field["order"]), len(set(field["order"])))
         self.assertEqual(set(field["order"]), set(field["values"]))
         for key in field["order"]:
-            ancestors = field["values"][key]["ancestors"]
             position = field["order"].index(key)
-            for ancestor in ancestors:
+            for ancestor in field["values"][key]["ancestors"]:
                 self.assertLess(field["order"].index(ancestor), position)
         self.assertEqual(field["order"].index("aryl-ketones"),
                          field["order"].index("ketones") + 1)
 
+    def test_a_registry_without_terms_gives_fields_without_values(
+            self) -> None:
+        """Requirement: Field data for the site (`values` and `order` of
+        an empty vocabulary)."""
+        data = self.data("en", registry_with())
+        self.assertEqual([f["key"] for f in data["compound"]],
+                         ["article_number", "short_name", "chemical_class",
+                          "group"])
+        for field in data["compound"][2:]:
+            self.assertEqual((field["values"], field["order"]), ({}, []))
+
     def test_no_settings_file(self) -> None:
         """Scenario: No settings file."""
-        fields_data = pipeline_function("fields_data")
         with tempfile.TemporaryDirectory(prefix="no settings ") as tmp:
             missing = Path(tmp) / "orgsyndb.toml"
             for language in ("en", "de"):
-                self.assertEqual(fields_data(missing, language),
-                                 {"compound": [], "procedure": []})
+                data = self.data(language, settings=missing)
+                self.assertEqual(data["procedure"], [])
+                self.assertEqual(
+                    [f["key"] for f in data["compound"]],
+                    ["article_number", "short_name", "chemical_class",
+                     "group"])
 
     def test_a_settings_file_that_declares_no_field(self) -> None:
-        """Requirement: Field data for the site (declares no field)."""
+        """Requirement: Field data for the site (declares no procedure
+        field)."""
         path = self.settings("format = 1\n")
-        self.assertEqual(pipeline_function("fields_data")(path, "en"),
-                         {"compound": [], "procedure": []})
+        data = self.data(settings=path)
+        self.assertEqual(data["procedure"], [])
+        self.assertEqual(len(data["compound"]), 4)
+
+    def test_a_declaration_of_a_compound_field_is_a_configuration_error(
+            self) -> None:
+        """Requirement: Registry fields (a collection declares no
+        compound field)."""
+        path = self.settings(
+            'format = 1\n\n[[fields.compound]]\nkey = "x"\n'
+            'type = "text"\nlabel = "X"\n')
+        with self.assertRaisesRegex(pipeline().validate.ConfigError,
+                                    "fields.compound"):
+            self.data(settings=path)
 
     def test_a_broken_declaration_is_a_configuration_error(self) -> None:
-        """Requirement: Field data for the site (a rule of the
+        """Requirement: Field data for the site (a rule of the procedure
         declarations)."""
-        fields_data = pipeline_function("fields_data")
         error = pipeline().validate.ConfigError
-        head = "format = 1\n\n[[fields.compound]]\n"
+        head = "format = 1\n\n[[fields.procedure]]\n"
         cases = {
             "no label": head + 'key = "x"\ntype = "text"\n',
-            "built-in key": head + (
-                'key = "cas"\ntype = "text"\nlabel = "CAS"\n'),
             "unknown option": head + (
                 'key = "x"\ntype = "text"\nlabel = "X"\nsortable = true\n'),
             "tabs on a text field": head + (
                 'key = "x"\ntype = "text"\nlabel = "X"\ntabs = true\n'),
-            "two tabs fields": head + (
-                'key = "x"\ntype = "choice"\nlabel = "X"\n'
-                'vocabulary = "kinds"\ntabs = true\n\n'
-                '[[fields.compound]]\nkey = "y"\ntype = "choice"\n'
-                'label = "Y"\nvocabulary = "kinds"\ntabs = true\n'),
+            "a reserved key": head + (
+                'key = "status"\ntype = "text"\nlabel = "Status"\n'),
             "a single table": (
-                'format = 1\n\n[fields.compound]\nkey = "x"\n'
+                'format = 1\n\n[fields.procedure]\nkey = "x"\n'
                 'type = "text"\nlabel = "X"\n'),
             "a misspelt entity": (
                 'format = 1\n\n[[fields.reagent]]\nkey = "lot"\n'
                 'type = "text"\nlabel = "Lot"\n'),
-            "a reserved procedure key": (
-                'format = 1\n\n[[fields.procedure]]\nkey = "status"\n'
-                'type = "text"\nlabel = "Status"\n'),
-            "a procedure column": (
-                'format = 1\n\n[[fields.procedure]]\nkey = "x"\n'
-                'type = "text"\nlabel = "X"\ncolumn = true\n'),
-            "a procedure single table": (
-                'format = 1\n\n[fields.procedure]\nkey = "x"\n'
-                'type = "text"\nlabel = "X"\n')}
+            "a vocabulary the registry lacks": head + (
+                'key = "x"\ntype = "choice"\nlabel = "X"\n'
+                'vocabulary = "storage"\n')}
         for name, text in cases.items():
             with self.subTest(case=name):
-                path = self.settings(text, {"kinds": '[top]\nlabel = "T"\n'})
                 with self.assertRaises(error):
-                    fields_data(path, "en")
-
-    def test_a_broken_vocabulary_is_a_configuration_error(self) -> None:
-        """Requirement: Field data for the site (a rule of the
-        vocabularies)."""
-        fields_data = pipeline_function("fields_data")
-        error = pipeline().validate.ConfigError
-        text = ('format = 1\n\n[[fields.compound]]\nkey = "kind"\n'
-                'type = "choice"\nlabel = "Kind"\nvocabulary = "kinds"\n')
-        cases = {
-            "missing": {},
-            "no label": {"kinds": "[top]\nlabel_de = 'Oben'\n"},
-            "cycle": {"kinds": '[a]\nlabel = "A"\nparent = "a"\n'},
-            "empty": {"kinds": ""}}
-        for name, vocabularies in cases.items():
-            with self.subTest(case=name):
-                path = self.settings(text, vocabularies)
-                with self.assertRaises(error):
-                    fields_data(path, "en")
+                    self.data(settings=self.settings(text))
 
 
 class ProcedureFieldDataTests(unittest.TestCase):
@@ -915,29 +759,38 @@ class ProcedureFieldDataTests(unittest.TestCase):
 
     settings = FieldDataTests.settings
 
+    def data(self, language: str = "en", settings: Path = PROCEDURE_SETTINGS,
+             registry: dict | None = None) -> dict:
+        return pipeline_function("fields_data")(
+            settings,
+            load_registry(FIXTURE_REGISTRY) if registry is None
+            else registry, language)
+
     def test_procedure_field_data_in_both_languages(self) -> None:
         """Scenario: Procedure field data in both languages."""
-        fields_data = pipeline_function("fields_data")
         for language in ("en", "de"):
             with self.subTest(language=language):
-                data = fields_data(PROCEDURE_SETTINGS, language)
+                data = self.data(language)
                 self.assertEqual(list(data), ["compound", "procedure"])
-                self.assertEqual(data["compound"], [])
+                self.assertEqual(
+                    [f["key"] for f in data["compound"]],
+                    ["article_number", "short_name", "chemical_class",
+                     "group"])
                 self.assertEqual(
                     [f["key"] for f in data["procedure"]],
                     ["notebook", "working_time", "inert_atmosphere",
                      "project"])
-                self.assertEqual(data["procedure"],
-                                 fixture_procedure_fields(language))
+                self.assertEqual(
+                    data["procedure"],
+                    [procedure_field_data(f) for f in fs.read_fields(
+                        PROCEDURE_SETTINGS, load_registry(FIXTURE_REGISTRY),
+                        language)])
 
     def test_the_stated_values_of_the_scenario(self) -> None:
         """Scenario: Procedure field data in both languages (the stated
         values)."""
-        fields_data = pipeline_function("fields_data")
-        english = {f["key"]: f for f in
-                   fields_data(PROCEDURE_SETTINGS, "en")["procedure"]}
-        german = {f["key"]: f for f in
-                  fields_data(PROCEDURE_SETTINGS, "de")["procedure"]}
+        english = {f["key"]: f for f in self.data("en")["procedure"]}
+        german = {f["key"]: f for f in self.data("de")["procedure"]}
         for fields in (english, german):
             self.assertEqual(fields["working_time"]["unit"], "h")
             self.assertIs(fields["project"]["multiple"], False)
@@ -945,9 +798,9 @@ class ProcedureFieldDataTests(unittest.TestCase):
             self.assertIs(fields["inert_atmosphere"]["facet"], False)
             self.assertEqual(fields["inert_atmosphere"]["label"],
                              "Inert atmosphere")
-            self.assertEqual(
-                fields["project"]["order"],
-                ["teaching", "first-year-practical", "research"])
+            self.assertEqual(fields["project"]["order"],
+                             ["research", "teaching",
+                              "first-year-practical"])
             for field in fields.values():
                 for key in ("column", "search", "tabs"):
                     self.assertNotIn(key, field)
@@ -965,8 +818,8 @@ class ProcedureFieldDataTests(unittest.TestCase):
     def test_a_field_carries_only_the_keys_its_type_has(self) -> None:
         """Requirement: Procedure field data (these keys and no
         other)."""
-        data = pipeline_function("fields_data")(PROCEDURE_SETTINGS, "en")
-        keys = {field["key"]: set(field) for field in data["procedure"]}
+        keys = {field["key"]: set(field)
+                for field in self.data()["procedure"]}
         base = {"key", "type", "label"}
         self.assertEqual(keys["notebook"], base)
         self.assertEqual(keys["working_time"], base | {"unit"})
@@ -983,43 +836,53 @@ class ProcedureFieldDataTests(unittest.TestCase):
             'type = "boolean"\nlabel = "Flag"\nfacet = true\n\n'
             '[[fields.procedure]]\nkey = "note"\ntype = "text"\n'
             'label = "Note"\n\n[[fields.procedure]]\nkey = "category"\n'
-            'type = "choice"\nlabel = "Category"\nvocabulary = "kinds"\n'
+            'type = "choice"\nlabel = "Category"\n'
+            'vocabulary = "chemical-classes"\n'
             'facet = true\nmultiple = true\n\n'
             '[[fields.procedure]]\nkey = "count"\ntype = "number"\n'
-            'label = "Count"\nmin = 0\n',
-            {"kinds": '[top]\nlabel = "Top"\n'})
-        data = pipeline_function("fields_data")(path, "en")
+            'label = "Count"\nmin = 0\n')
+        data = self.data(settings=path)
         by_key = {f["key"]: f for f in data["procedure"]}
         self.assertIs(by_key["flag"]["facet"], True)
         self.assertIs(by_key["category"]["facet"], True)
         self.assertIs(by_key["category"]["multiple"], True)
         self.assertNotIn("facet", by_key["note"])
-        self.assertEqual(set(by_key["count"]),
-                         {"key", "type", "label"})
-        self.assertEqual(data["compound"], [])
+        self.assertEqual(set(by_key["count"]), {"key", "type", "label"})
+
+    def test_a_choice_over_the_reaction_types(self) -> None:
+        """Requirement: Procedure field data (`values` and `order` of a
+        field over `reaction-types`)."""
+        path = self.settings(
+            'format = 1\n\n[[fields.procedure]]\nkey = "side_reaction"\n'
+            'type = "choice"\nlabel = "Side reaction"\n'
+            'vocabulary = "reaction-types"\n')
+        (field,) = self.data("de", path)["procedure"]
+        self.assertEqual(field["order"], ["esterification", "reduction"])
+        self.assertEqual(
+            field["values"]["reduction"],
+            {"label": "Reduction", "path": ["Reduction"], "ancestors": []})
 
     def test_the_test_collection_procedure_fields(self) -> None:
         """Requirement: Procedure field data (the test collection)."""
         for language in ("en", "de"):
             with self.subTest(language=language):
-                data = pipeline_function("fields_data")(
-                    TEST_SETTINGS, language)
+                data = self.data(language, TEST_SETTINGS, load_registry())
                 self.assertEqual(
                     [f["key"] for f in data["procedure"]],
                     ["notebook", "project", "working_time",
                      "inert_atmosphere"])
                 by_key = {f["key"]: f for f in data["procedure"]}
                 self.assertEqual(
-                    by_key["project"]["order"],
-                    ["teaching", "first-year-practical",
+                    set(by_key["project"]["order"]),
+                    {"teaching", "first-year-practical",
                      "advanced-practical", "research", "biaryls",
-                     "cinnamates"])
+                     "cinnamates"})
                 self.assertIs(by_key["project"]["facet"], True)
                 self.assertIs(by_key["inert_atmosphere"]["facet"], True)
                 self.assertEqual(by_key["working_time"]["unit"], "h")
                 self.assertNotIn("facet", by_key["notebook"])
-                self.assertEqual(len(data["compound"]), 6)
-        german = pipeline_function("fields_data")(TEST_SETTINGS, "de")
+                self.assertEqual(len(data["compound"]), 4)
+        german = self.data("de", TEST_SETTINGS, load_registry())
         self.assertEqual(
             [f["label"] for f in german["procedure"]],
             ["Laborjournal", "Projekt", "Arbeitszeit", "Schutzgas"])
@@ -1027,29 +890,21 @@ class ProcedureFieldDataTests(unittest.TestCase):
     def test_the_result_is_json(self) -> None:
         """Requirement: Procedure field data (the JSON that the build
         stages)."""
-        fields_data = pipeline_function("fields_data")
         for language in ("en", "de"):
-            data = fields_data(PROCEDURE_SETTINGS, language)
+            data = self.data(language)
             self.assertEqual(json.loads(json.dumps(data)), data)
 
-    def test_a_broken_procedure_vocabulary_is_a_configuration_error(
+    def test_a_vocabulary_the_registry_lacks_is_a_configuration_error(
             self) -> None:
         """Requirement: Procedure field data (a rule of the procedure
-        declarations or the vocabularies)."""
-        fields_data = pipeline_function("fields_data")
-        error = pipeline().validate.ConfigError
-        text = ('format = 1\n\n[[fields.procedure]]\nkey = "category"\n'
-                'type = "choice"\nlabel = "Category"\n'
-                'vocabulary = "kinds"\n')
-        cases = {
-            "missing": {},
-            "cycle": {"kinds": '[a]\nlabel = "A"\nparent = "a"\n'},
-            "empty": {"kinds": ""}}
-        for name, vocabularies in cases.items():
-            with self.subTest(case=name):
-                path = self.settings(text, vocabularies)
-                with self.assertRaisesRegex(error, "kinds"):
-                    fields_data(path, "en")
+        declarations)."""
+        path = self.settings(
+            'format = 1\n\n[[fields.procedure]]\nkey = "category"\n'
+            'type = "choice"\nlabel = "Category"\n'
+            'vocabulary = "kinds"\n')
+        with self.assertRaisesRegex(pipeline().validate.ConfigError,
+                                    "kinds"):
+            self.data(settings=path)
 
 
 def specific(ident: str, product: str, *substrates: str,

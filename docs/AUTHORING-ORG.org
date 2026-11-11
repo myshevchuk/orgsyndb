@@ -38,6 +38,7 @@
 #+AI_PASS: fact-check claude-opus-5-5 [2026-11-03 Tue 08:18] -- doc-writer pass line corrected from gpt-6 to the pinned run model; #+LAST_MODIFIED is updated on save by the Emacs package
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-07 Sat 11:46] -- demo article numbers, required compound fields and compound-link example
 #+AI_PASS: fact-check claude-opus-5-5 [2026-11-07 Sat 11:49] -- doc-writer pass line corrected from gpt-6 to the pinned run model
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-11 Wed 18:03] -- collection registry, built-in fields, images, vocabularies and validation
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -97,6 +98,9 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
     identifier, authors, status, reaction type, scale, products with their
     yields, hazards, and optional fields.
 
+  Choose ~:reaction_types~ from the lab registry’s ~reaction-types~
+  vocabulary.
+
   Check ~orgsyndb.toml~ for fields under ~[[fields.procedure]]~, the extra
   procedure details your collection records. Add a
   ~#+HUGO_CUSTOM_FRONT_MATTER:~ line before ~:products~, which stays last.
@@ -108,14 +112,17 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
 
   Double-quote text and choice keys; leave numbers and ~true~ or ~false~
   unquoted. Numbers use a decimal point and no unit. A multiple choice uses
-  a quoted list, such as ~:techniques '("reflux" "distillation")~ when the
-  collection declares that field and those vocabulary values.
+  a quoted list, such as ~:project '("first-year-practical" "advanced-practical")~
+  when the collection declares ~project~ with ~multiple = true~ and uses the
+  demo registry’s ~projects~ vocabulary.
   ~required = true~ requires a value on every procedure, including general
   procedures. ~unique = true~ requires a value no other procedure uses;
   translations of one procedure count as one. The demo's four fields are
   optional. Its notebook reference must match ~[A-Z]{2}-\d+/\d+~ and be
   unused; working time is in hours and at least zero. Project keys come from
-  [[file:../examples/demo/vocabularies/projects.toml][projects.toml]]. See [[file:SCHEMA.md][the field reference]] for all rules.
+  the lab registry’s ~projects~ vocabulary. A choice field’s ~vocabulary~
+  names ~chemical-classes~, ~inventory-groups~, ~projects~ or
+  ~reaction-types~. See [[file:SCHEMA.md][the field reference]] for all rules.
 
   The export with ox-hugo/tomelr has a typing limit: it writes strings
   without quotes if they read ~true~ or ~false~, have the form of a date or
@@ -130,7 +137,7 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
 
   For a specific procedure, set ~:products~ to a quoted list with one entry per
   product. Each entry contains its ~compound~ key and ~yield_percent~. A key is
-  the name of a file in the collection's ~compounds/~ without ~.toml~. Keep
+  the key of a substance in the lab application’s registry. Keep
   ~:products~ alone on the last custom-front-matter line. The exporter also
   keeps table-valued metadata last so later fields do not become members of the
   last ~[[products]]~ table.
@@ -159,8 +166,8 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   #+HUGO_TAGS: esterification fragrance
 #+end_src
 
-  Product names, chemical data and structure images belong in the compound
-  registry described next, rather than in the procedure header.
+  Product names and chemical data come from the lab registry. Structure
+  images belong in the collection’s ~static/structures/~, as described next.
 
   Use the template's quoting and list forms. For example, authors and hazards
   use quoted Lisp lists such as ~'("A. Example" "B. Example")~. Consult
@@ -172,48 +179,41 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
 
 * Find or add the compounds
 
-  The /compound registry/ is the collection's ~compounds/~ folder. One
-  ~<key>.toml~ file describes each compound, shared by every procedure that
-  makes or uses it. Look for an existing entry first. The key identifies
-  the compound; the site does not compare structures to find duplicates.
+  The /compound registry/ is the lab application's list of substances,
+  shared by every procedure that makes or uses them. Open ~/lab/registry/~
+  in the lab application and look for an existing substance before adding
+  one. The key identifies the compound; the site does not compare structures
+  to find duplicates.
 
-  For a new compound, copy
-  [[file:../templates/compound.toml][templates/compound.toml]] into ~compounds/~.
-  Choose a file name with lowercase letters and digits separated by single
-  hyphens, such as ~ethyl-acetate.toml~. Use ~ethyl-acetate~ as the key in
-  ~:products~ or ~:substrates~. Replace the stub's ~example-compound~ key
-  with the key you actually use. Creating a procedure stub does not create
-  compound records.
+  Create and edit substances in the lab application. Use the substance's key
+  in ~:products~ or ~:substrates~, for example ~ethyl-acetate~. Keys use
+  lowercase letters and digits separated by single hyphens. Replace the
+  stub's ~example-compound~ with the key you actually use. Creating a
+  procedure stub does not create a substance.
 
-  The compound file is TOML, even when your procedure is Org. It has no
-  ~+++~ lines or ~[product]~ heading. Fill in ~name~, ~formula~, ~mw~ in
-  g/mol, and ~smiles~, a text notation for molecular structures. Text uses
-  double quotes; molecular weight is a positive number without quotes.
-  The optional ~name_de~ supplies the name on a German site; without it,
-  that site uses ~name~. An English site always uses ~name~. You may also
-  add ~cas~, the CAS Registry Number, and ~structure_image~.
+  The collection's ~orgsyndb.toml~ names the registry in ~registry~: the
+  address of the lab application's snapshot, a saved copy of its registry,
+  such as ~http://localhost:8000/lab/registry/snapshot.json~, or a snapshot
+  file's path. A relative path starts at the collection folder. A non-empty
+  ~ORGSYNDB_REGISTRY~ environment variable overrides this setting. Ask the
+  owner to set it if the collection has no registry.
 
-  Check your collection's ~orgsyndb.toml~ for further fields under
-  ~[[fields.compound]]~. A declaration with ~required = true~ means every
-  compound must supply that field. At the template's closing note, add the
-  declared fields as further ~key = value~ lines in the compound file. The
-  [[file:../examples/demo/orgsyndb.toml][demo settings]] require ~chemical_class~ and ~group~.
-  Choose a non-empty list of value keys for ~chemical_class~ from
-  [[file:../examples/demo/vocabularies/chemical-classes.toml][vocabularies/chemical-classes.toml]]. Set ~group~ to one value from
-  [[file:../examples/demo/vocabularies/inventory-groups.toml][vocabularies/inventory-groups.toml]]: ~starting-materials~, ~reagents~,
-  ~intermediates~ or ~final-products~. The optional ~item_number~ is the
-  article number printed on delivery notes. Set it only for an end product
-  that has been delivered, using a unique number with ~CH-~ followed by
-  four digits. Only six final products in the demo set it. The
-  [[file:SCHEMA.md][schema reference]] gives the field types, rules and validator messages.
+  Names and chemical data come from the substance in that registry: formula,
+  molar mass in g/mol, SMILES (a text notation for molecular structures) and
+  CAS Registry Number. An English site uses ~name~; a German site uses
+  ~name_de~ when supplied, otherwise ~name~. The site also shows the substance's article number,
+  short name, chemical classes and group. These four fields are built in;
+  their display is fixed. The [[file:SCHEMA.md][schema reference]] gives the details.
 
-  To show a structure, place an SVG or PNG file in the collection's
-  ~static/structures/~. Set ~structure_image~ in the compound file, for
-  example ~structure_image = "structures/isopentyl-acetate.svg"~ for
-  ~isopentyl-acetate~. A structure SVG uses black lines and text on a white
-  background rectangle. It includes a ~<title>~ and contains no scripts,
-  external images, or other external references. The white background
-  keeps the drawing legible on the site's dark colour scheme and on paper.
+  To show a structure, place ~static/structures/<key>.svg~ or
+  ~static/structures/<key>.png~ in the collection, using the substance's key.
+  For example, use ~static/structures/isopentyl-acetate.svg~ for
+  ~isopentyl-acetate~. The build uses the SVG when both files exist. A
+  substance without either file has no structure image. A structure SVG
+  uses black lines and text on a white background rectangle. It includes a
+  ~<title>~ and contains no scripts, external images, or other external
+  references. The white background keeps the drawing legible on the site's
+  dark colour scheme and on paper.
 
   You may register a starting material even if no procedure makes it. A
   compound that no procedure uses is also allowed. *Compounds* in the site
@@ -235,8 +235,8 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   materials are needed. Each step shows the procedure link, entry number when
   needed, yield and status, as in *Made by*. All published procedures take
   part, whatever their status. A general procedure's entry uses only its own
-  starting materials. Compound links carry the values of fields declared
-  ~beside = true~.
+  starting materials. Compound links carry the substance’s article number
+  and short name when supplied.
 
   A step is omitted if it starts from a compound already above it on the
   same branch, so the tree never follows a cycle. If all steps would loop
@@ -246,7 +246,7 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   When more than 200 steps make the compound directly, the tree shows only
   those. A compound cut off by a limit ends with *more steps on its page*;
   follow its link to continue. Routes are derived during the build. You
-  write nothing extra in a procedure, a compound file or ~orgsyndb.toml~.
+  write nothing extra in a procedure or ~orgsyndb.toml~.
 
 * Write a general procedure
 
@@ -349,13 +349,12 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   eight body sections appear beside the panel on a wide screen and after it in
   a narrow window or in print.
 
-  After each product or starting-material link, the panel shows any values
-  that the compound sets for fields the collection declares with ~beside = true~.
+  After each product or starting-material link, the panel shows the
+  substance’s article number and short name when supplied, in that order.
   The link text stays the compound's name. One space and a muted note in
   parentheses follow it, for example *Acetic anhydride (Ac2O)* in the
-  demo. Values appear without labels, in declaration order, separated by a
-  comma and a space, as on the compound page. Numbers use the site's decimal
-  separator and unit.
+  demo. Values appear without labels, separated by a comma and a space, as
+  on the compound page.
   A compound with none of these values gets no note. Procedure search finds
   these values because the panel is indexed. The yield line, catalogue
   *Details*, image alt texts and page titles carry no note.
@@ -376,7 +375,7 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   columns *Entry*, *Starting materials*, *Products* and *Yield* always appear.
   *Scale*, *Time*, *Temperature* and *Note* appear only when some entry sets
   the field; unset values leave empty cells. Compounds link to their pages, and
-  products show small structure images when their registry records have them.
+  products show small structure images when the collection has matching files.
   The compound links carry the same notes as the panel.
   Entry 1 of OSDB-0009 makes the same alcohol as OSDB-0005, so its compound
   page lists both routes.
@@ -507,26 +506,29 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   - It never evaluates source blocks.
   - It ignores file-local variables.
 
-  Check the Org sources, all exported or hand-written Markdown, the compound
-  registry and synthesis sequences in ~md/sequences/~ with:
+  Check the Org sources, all exported or hand-written Markdown and synthesis
+  sequences in ~md/sequences/~ against the registry with:
 
 #+begin_src sh
   orgsyndb validate
 #+end_src
 
-  ~orgsyndb validate~ runs the export first. If the export reports an Org
-  error, validation stops there and does not start the Markdown validator.
-  Otherwise, errors in procedures, compound records or sequences fail
-  validation and warnings do not. The command uses the collection's ~compounds/~ registry and
-  ~static/~ for images, and passes ~--sequences md/sequences~ to the
-  validator. A field such as ~products[1].yield_percent~ names the
-  yield in the first product entry; counting starts at 1. ~unknown compound~
-  means you must check the key and its registry file. Registry problems name
-  the compound file and its field, such as ~compounds/ethyl-acetate.toml:mw~.
-  The summary counts compound and sequence files too, including language
-  variants. For scope entries, ~scope[2].time~
-  means the time in entry 2; ~scope[2].products[1].yield_percent~ means that
-  entry's first product yield. ~must not be empty~ under ~scope~ requires at
+  ~orgsyndb validate~ reads the registry, then runs the export. If the export
+  reports an Org error, validation stops there and does not start the
+  Markdown validator.
+  Otherwise, errors in procedures, sequences or the registry fail validation
+  and warnings do not. The lab application checks substance values. The
+  command passes ~--registry build/registry.json~, ~--static-dir static~ and
+  ~--sequences md/sequences~ to the validator. A field such as
+  ~products[1].yield_percent~ names the yield in the first product entry;
+  counting starts at 1. ~unknown compound~
+  means you must check the key in the lab registry. A registry error under
+  ~substances~ names a substance keyed ~group~, which conflicts with the
+  site’s group-tab directory. The lab application refuses this key, so the
+  snapshot file was made another way; give the substance another key there. The
+  summary counts procedure and sequence files, including language variants.
+  For scope entries, ~scope[2].time~ means the time in entry 2;
+  ~scope[2].products[1].yield_percent~ means that entry's first product yield. ~must not be empty~ under ~scope~ requires at
   least one entry. A top-level field with
   ~a general procedure lists them in scope; move <key> into its entries~ must
   be moved into the relevant entries. Time errors ask for a number followed by
@@ -558,9 +560,9 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   step counts and overall yields. A sequence page shows its ID and title,
   *Steps* and *Overall yield*, a scheme, the linked procedures with entry
   numbers where needed, reaction type, yield and status, then your notes.
-  The scheme shows starting materials, intermediates and target with registry
-  structure images where available. Compound links in the scheme and the
-  directory's targets carry the same notes as the panel.
+  The scheme shows starting materials, intermediates and target with matching
+  structure images from ~static/structures/~ where available. Compound links
+  in the scheme and the directory's targets carry the same notes as the panel.
   A plus joins the first step's starting materials; arrows show step
   number, reaction type and yield. In narrow windows the scheme runs down
   the page. Sequence pages are absent from the procedure search index; use
@@ -607,10 +609,9 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   status values and tags stay English, and so do the
   weekday names in ~#+CREATED~ and ~#+LAST_MODIFIED~.
 
-  Use reaction-type slugs from your collection's
-  ~vocabularies/reaction-types.toml~ unchanged in every language. Edit that
-  file to change the allowed reaction types. The
-  [[file:SCHEMA.md][reaction-type reference]] explains the format and starter list.
+  Use slugs from the registry’s ~reaction-types~ vocabulary unchanged in
+  every language. Create and edit reaction types in the lab application. The
+  [[file:SCHEMA.md][reaction-type reference]] explains the values and messages.
 
   Use the [[file:STYLE.de.md][German procedure style guide]] for the wording
   and the [[file:GLOSSARY.de.md][German organic-synthesis glossary]] for terms,
@@ -639,8 +640,8 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   compares the shared fields
   with the original and reports differences as errors. Numeric yields compare
   by value, so ~85~ and ~85.0~ agree. Compound names come from ~name~ and
-  ~name_de~ in the shared registry; add or edit ~name_de~ there for the German
-  name. The original and its translation may use different formats.
+  ~name_de~ in the lab registry; add or edit ~name_de~ in the lab application
+  for the German name. The original and its translation may use different formats.
 
   The export keeps the language code: ~OSDB-0001-x.de.org~ becomes
   ~build/export/OSDB-0001-x.de.md~. On a German site it is published at

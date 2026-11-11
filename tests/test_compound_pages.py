@@ -19,6 +19,7 @@ import catalogue_support as cs
 import field_support as fs
 import pipeline_support as ps
 import sequence_support as ss
+import support
 import test_theme_integration as tti
 from pipeline_support import Content, Node, Page
 
@@ -30,7 +31,8 @@ PURCHASED = ["acetic-acid", "acetic-anhydride",
 SYNTHESISED = ["salicylic-acid", "4-acetylbiphenyl", "ethyl-cinnamate",
                "acetylsalicylic-acid", "isopentyl-acetate",
                "1-biphenyl-4-yl-ethanol", "dibenzylideneacetone",
-               "cinnamic-acid", "1-phenylethanol", "1-4-bromophenyl-ethanol"]
+               "cinnamic-acid", "1-phenylethanol", "1-4-bromophenyl-ethanol",
+               "new-compound-7"]
 
 
 class Tab(NamedTuple):
@@ -39,7 +41,8 @@ class Tab(NamedTuple):
     value: str
 
 
-FACT_LABELS = ["Formula", "MW", "CAS", "SMILES"]
+FACT_KEYS = [("Formula", "formula"), ("MW", "mw"), ("CAS", "cas"),
+             ("SMILES", "smiles")]
 SEPARATOR = fs.PATH_SEPARATOR
 DEPTH = re.compile(r"^--depth:(\d+);?$")
 CATALOGUE_TEXTS = {
@@ -135,17 +138,17 @@ class CompoundCase(tti.SiteCase):
         return ps.shown_name(self.registry()[key], self.LOCALE)
 
     def fields(self) -> list[fs.Field]:
-        """The fields the collection declares, in the site's language."""
-        return fs.read_fields(self.sandbox.root / "orgsyndb.toml",
-                              self.LOCALE)
+        """The four registry fields, in the site's language."""
+        return self.compound_fields()
 
     def declared_pairs(self, key: str) -> list[tuple[str, str]]:
-        """The label and value of each declared field the compound sets
-        that its page shows after the built-in facts, in order, as read
-        from the page."""
+        """The label and value of each registry field the compound has
+        that its page shows after the facts, in order, as read from the
+        page."""
         page = self.compound_page(key)
         pairs = page.definition_pairs(page.find("dl", "compound-facts"))
-        built_in = 3 + bool(self.registry()[key].get("cas"))
+        compound = self.registry()[key]
+        built_in = sum(bool(compound.get(name)) for _, name in FACT_KEYS)
         return [(p.label, p.definition.norm()) for p in pairs[built_in:]]
 
     # --- the route trees (synthesis-routes "Routes on compound pages") --
@@ -670,30 +673,32 @@ class CompoundSiteTests(CompoundCase):
         self.assertIsNotNone(facts, "no dl.compound-facts")
         pairs = page.definition_pairs(facts)
         declared = fs.shown(self.fields(), compound, self.LOCALE, page=True)
-        wanted = [label for label in FACT_LABELS
-                  if label != "CAS" or compound.get("cas")]
+        wanted = [label for label, name in FACT_KEYS if compound.get(name)]
         wanted += [field.label for field, _ in declared]
         self.assertEqual([p.label for p in pairs], wanted)
         values = {p.label: p.definition for p in pairs}
         for field, text in declared:
             self.assertEqual(values[field.label].norm(), text, field.key)
-        self.assertEqual(values["Formula"].norm(), compound["formula"])
-        self.assertEqual(
-            [s.norm() for s in values["Formula"].find_all("sub")],
-            re.findall(r"[0-9]+", compound["formula"]))
-        self.assertEqual(values["MW"].norm(), f"{compound['mw']} g/mol")
+        if compound.get("formula"):
+            self.assertEqual(values["Formula"].norm(), compound["formula"])
+            self.assertEqual(
+                [s.norm() for s in values["Formula"].find_all("sub")],
+                re.findall(r"[0-9]+", compound["formula"]))
+        if compound.get("mw"):
+            self.assertEqual(values["MW"].norm(), f"{compound['mw']} g/mol")
         if compound.get("cas"):
             self.assertEqual(values["CAS"].norm(), compound["cas"])
-        code = values["SMILES"].find("code", data_smiles=True)
-        self.assertIsNotNone(code, "no code[data-smiles]")
-        self.assertEqual(code.norm(), compound["smiles"])
-        copy = values["SMILES"].find("button", "copy-button")
-        self.assertIsNotNone(copy, "no button.copy-button")
-        self.assertEqual(copy.attrs.get("type"), "button")
-        self.assertIn("data-copy-smiles", copy.attrs)
-        self.assertIn("hidden", copy.attrs)
-        self.assertEqual(copy.norm(), "Copy")
-        self.assertGreater(page.index_of(copy), page.index_of(code))
+        if compound.get("smiles"):
+            code = values["SMILES"].find("code", data_smiles=True)
+            self.assertIsNotNone(code, "no code[data-smiles]")
+            self.assertEqual(code.norm(), compound["smiles"])
+            copy = values["SMILES"].find("button", "copy-button")
+            self.assertIsNotNone(copy, "no button.copy-button")
+            self.assertEqual(copy.attrs.get("type"), "button")
+            self.assertIn("data-copy-smiles", copy.attrs)
+            self.assertIn("hidden", copy.attrs)
+            self.assertEqual(copy.norm(), "Copy")
+            self.assertGreater(page.index_of(copy), page.index_of(code))
         for pair in pairs:
             self.assertNotEqual(pair.gap, "", pair.label)
             self.assertEqual(pair.gap.strip(), "", pair.label)
@@ -720,60 +725,79 @@ class CompoundSiteTests(CompoundCase):
         self.assertLess(page.index_of(figures[0]),
                         page.index_of(main.find("dl", "compound-facts")))
 
-    def test_declared_fields_follow_the_built_in_facts(self) -> None:
-        """Scenario: Declared fields in English."""
-        classes = {
-            "carboxylic": "Carbonyl compounds" + SEPARATOR
-                          + "Carboxylic acids",
-            "esters": SEPARATOR.join(
-                ["Carbonyl compounds", "Carboxylic acid derivatives",
-                 "Esters"]),
-        }
+    def test_registry_fields_follow_the_facts(self) -> None:
+        """Scenario: Fields of a numbered substance."""
+        sep = SEPARATOR
         expected = {
             "acetylsalicylic-acid": [
-                ("Item no.", "CH-0010"), ("Short name", "ASA"),
-                ("Chemical class",
-                 f"{classes['carboxylic']}, {classes['esters']}"),
-                ("Made in house", "Yes"),
-                ("Group", "Synthesised" + SEPARATOR + "Final products")],
+                ("Article no.", "CH-0010"), ("Short name", "ASA"),
+                ("Chemical class", f"Carbonyl compounds{sep}Carboxylic "
+                 f"acids, Carbonyl compounds{sep}Carboxylic acid "
+                 f"derivatives{sep}Esters"),
+                ("Group", f"Synthesised{sep}Final products")],
             "acetic-acid": [
                 ("Short name", "AcOH"),
-                ("Chemical class", classes["carboxylic"]),
-                ("Stock", "2500 g"), ("Made in house", "No"),
-                ("Group", "Purchased" + SEPARATOR + "Reagents")],
-            "ethyl-triphenylphosphoranylidene-acetate": [
-                ("Chemical class", f"Organophosphorus compounds, "
-                                   f"{classes['esters']}"),
-                ("Stock", "12.5 g"), ("Made in house", "No"),
-                ("Group", "Purchased" + SEPARATOR + "Reagents")],
+                ("Chemical class",
+                 f"Carbonyl compounds{sep}Carboxylic acids"),
+                ("Group", f"Purchased{sep}Reagents")],
             "methyl-salicylate": [
-                ("Chemical class", f"{classes['esters']}, Phenols"),
-                ("Group", "Purchased" + SEPARATOR + "Starting materials")],
-            "4-bromoacetophenone": [
-                ("Chemical class", SEPARATOR.join(
-                    ["Carbonyl compounds", "Ketones", "Aryl ketones"])
-                 + ", Aryl halides"),
-                ("Stock", "100 g"), ("Made in house", "No"),
-                ("Group", "Purchased" + SEPARATOR + "Starting materials")],
+                ("Chemical class", f"Carbonyl compounds{sep}Carboxylic "
+                 f"acid derivatives{sep}Esters, Phenols"),
+                ("Group", f"Purchased{sep}Starting materials")],
+            "new-compound-7": [
+                ("Article no.", "NV-0007"),
+                ("Chemical class", "Carbonyl compounds"),
+                ("Group", f"Synthesised{sep}Final products")],
         }
         for key, pairs in expected.items():
             with self.subTest(compound=key):
                 self.assertEqual(self.declared_pairs(key), pairs)
 
-    def test_an_item_number_shows_only_where_it_is_set(self) -> None:
-        """Scenario: Declared fields in English (an optional field)."""
+    def test_every_registry_value_is_written_as_stated(self) -> None:
+        """Scenario: Registry fields in English (on every compound page
+        and in the compound directory)."""
+        fields, registry = self.fields(), self.registry()
+        columns = [field for field in fields if field.column]
+        model = next(m for m in self.catalogue_page().tables()
+                     if m.node.has_class("compound-table"))
+        rows = {row[0].text: row for row in model.rows[1:]}
+        for key, compound in registry.items():
+            with self.subTest(compound=key):
+                self.assertEqual(
+                    self.declared_pairs(key),
+                    [(field.label, text) for field, text in fs.shown(
+                        fields, compound, self.LOCALE, page=True)])
+                cells = rows[self.shown(key)][4:4 + len(columns)]
+                self.assertEqual(
+                    [cell.text for cell in cells],
+                    [fs.value_text(field, compound[field.key],
+                                   self.LOCALE, page=False)
+                     if field.key in compound else ""
+                     for field in columns])
+
+    def test_a_registry_field_shows_only_where_the_substance_has_it(
+            self) -> None:
+        """Requirement: Registry fields (a substance without a value of
+        a field does not have that field)."""
         numbered = 0
         for key, compound in self.registry().items():
             with self.subTest(compound=key):
-                pairs = self.declared_pairs(key)
-                if "item_number" in compound:
-                    numbered += 1
-                    self.assertEqual(pairs[0],
-                                     ("Item no.", compound["item_number"]))
-                else:
-                    self.assertNotIn("Item no.",
-                                     [label for label, _ in pairs])
-        self.assertEqual(numbered, 6)
+                labels = [label for label, _ in self.declared_pairs(key)]
+                for name, label in (("article_number", "Article no."),
+                                    ("short_name", "Short name")):
+                    self.assertEqual(name in compound, label in labels)
+                numbered += "article_number" in compound
+                self.assertEqual(labels[-2:], ["Chemical class", "Group"])
+        self.assertEqual(numbered, 7)
+
+    def test_no_page_shows_a_stock_or_a_made_in_house_field(self) -> None:
+        """Requirement: Registry fields (no compound field is declared
+        or shown beyond the four)."""
+        for key in self.registry():
+            labels = [label for label, _ in self.declared_pairs(key)]
+            with self.subTest(compound=key):
+                self.assertFalse({"Stock", "Made in house", "Item no."}
+                                 & set(labels))
 
     def test_the_parts_come_in_order(self) -> None:
         """Scenario: A page per compound (order of the parts)."""
@@ -991,11 +1015,11 @@ class CompoundSiteTests(CompoundCase):
         self.assertEqual(len(tables), 1)
         model = next(m for m in page.tables() if m.node is tables[0])
         self.assertEqual([c.text for c in model.rows[0]],
-                         ["Compound", "Formula", "MW", "CAS", "Item no.",
+                         ["Compound", "Formula", "MW", "CAS", "Article no.",
                           "Chemical class", "Made by", "Used in"])
         columns = [f for f in self.fields() if f.column]
         self.assertEqual([f.key for f in columns],
-                         ["item_number", "chemical_class"])
+                         ["article_number", "chemical_class"])
         registry = self.registry()
         names = {self.shown(key): key for key in registry}
         self.assertEqual(len(names), len(registry), "names are not unique")
@@ -1011,12 +1035,13 @@ class CompoundSiteTests(CompoundCase):
             compound = registry[key]
             with self.subTest(compound=key):
                 self.assertEqual(link.target, f"/compounds/{key}/")
-                self.assertEqual(cells[1].norm(), compound["formula"])
+                self.assertEqual(cells[1].norm(), compound.get("formula", ""))
                 self.assertEqual(
                     [s.norm() for s in cells[1].find_all("sub")],
-                    re.findall(r"[0-9]+", compound["formula"]))
-                self.assertEqual(cells[2].norm(),
-                                 f"{compound['mw']} g/mol")
+                    re.findall(r"[0-9]+", compound.get("formula", "")))
+                self.assertEqual(
+                    cells[2].norm(),
+                    f"{compound['mw']} g/mol" if "mw" in compound else "")
                 self.assertEqual(cells[3].norm(), compound.get("cas", ""))
                 texts = {f.key: text for f, text in fs.shown(
                     columns, compound, self.LOCALE, page=False)}
@@ -1030,6 +1055,19 @@ class CompoundSiteTests(CompoundCase):
         self.assertEqual(listed, sorted(names))
         self.assertEqual(len(set(listed)), len(listed))
 
+    def test_a_substance_without_formula_mass_or_cas_has_empty_cells(
+            self) -> None:
+        """Scenario: Empty cells."""
+        page = ps.load_page(self.public, self.public / "compounds"
+                            / "index.html")
+        model = next(m for m in page.tables()
+                     if m.node.has_class("compound-table"))
+        rows = {r[0].text: r for r in model.rows[1:]}
+        self.assertEqual([c.text for c in rows["New compound 7"][1:5]],
+                         ["", "", "", "NV-0007"])
+        self.assertEqual(
+            rows["Acetylsalicylic acid"][4].text, "CH-0010")
+
     def test_the_directory_writes_a_choice_as_its_own_labels(self) -> None:
         """Scenario: Every compound is listed (the column fields)."""
         page = ps.load_page(self.public, self.public / "compounds"
@@ -1042,7 +1080,7 @@ class CompoundSiteTests(CompoundCase):
             ["CH-0010", "Carboxylic acids, Esters"])
         self.assertEqual(
             [c.text for c in rows[self.shown("4-bromoacetophenone")][4:6]],
-            ["", "Aryl ketones, Aryl halides"])
+            ["", "Aryl halides, Aryl ketones"])
         self.assertEqual(
             [c.text for c in rows["Benzaldehyde"][4:6]],
             ["", "Aldehydes"])
@@ -1052,21 +1090,20 @@ class CompoundSiteTests(CompoundCase):
         page = self.catalogue_page()
         block = self.check_compound_catalogue(page)
         self.assertEqual(
-            block.find("p", "catalogue-count").norm(), "20 compounds")
-        self.assertEqual(len(self.registry()), 20)
+            block.find("p", "catalogue-count").norm(), "21 compounds")
+        self.assertEqual(len(self.registry()), 21)
         facets = block.find("div", "catalogue-facets")
         groups = facets.find_all("details", "facet")
         self.assertEqual([(g.attrs.get("data-facet"),
                            g.find("summary").norm()) for g in groups],
                          [("chemical_class", "Chemical class"),
-                          ("in_house", "Made in house"),
                           ("group", "Group")])
 
     def test_the_rows_carry_their_values(self) -> None:
         """Scenario: The compound catalogue in the HTML (the rows)."""
         page = self.catalogue_page()
         rows = self.check_compound_rows(page)
-        self.assertEqual(len(rows), 20)
+        self.assertEqual(len(rows), 21)
         classes = json.loads(
             rows["4-bromoacetophenone"].attrs["data-chemical_class"])
         self.assertEqual(
@@ -1085,39 +1122,21 @@ class CompoundSiteTests(CompoundCase):
                   .group(1))
                  for label in group.find_all("label", "facet-value")
                  for box in [label.find("input")]]
-        self.assertEqual(shown, [
-            ("carbonyl-compounds", "Carbonyl compounds", "0"),
-            ("aldehydes", "Aldehydes", "1"),
-            ("ketones", "Ketones", "1"),
-            ("aryl-ketones", "Aryl ketones", "2"),
-            ("carboxylic-acids", "Carboxylic acids", "1"),
-            ("acid-derivatives", "Carboxylic acid derivatives", "1"),
-            ("esters", "Esters", "2"),
-            ("anhydrides", "Anhydrides", "2"),
-            ("alcohols", "Alcohols", "0"),
-            ("phenols", "Phenols", "0"),
-            ("aryl-halides", "Aryl halides", "0"),
-            ("organoboron-compounds", "Organoboron compounds", "0"),
-            ("organophosphorus-compounds", "Organophosphorus compounds",
-             "0")])
-
-    def test_a_boolean_facet_lists_true_then_false(self) -> None:
-        """Requirement: Compound catalogue (facet values of a boolean
-        field)."""
-        page = self.catalogue_page()
-        self.assertEqual(ps.facet_values(page, "in_house"),
-                         [("true", "Yes"), ("false", "No")])
-        group = page.find("details", "facet", data_facet="in_house")
-        for label in group.find_all("label", "facet-value"):
-            self.assertEqual(label.find("input").attrs.get("type"),
-                             "checkbox")
-        rows = self.catalogue_rows(page)
-        registry = self.registry()
-        for row in rows:
-            compound = registry[row.attrs["data-id"]]
-            wanted = ([] if "in_house" not in compound
-                      else ["true" if compound["in_house"] else "false"])
-            self.assertEqual(json.loads(row.attrs["data-in_house"]), wanted)
+        self.assertEqual(
+            {value: (label, depth) for value, label, depth in shown},
+            {"carbonyl-compounds": ("Carbonyl compounds", "0"),
+             "aldehydes": ("Aldehydes", "1"),
+             "ketones": ("Ketones", "1"),
+             "aryl-ketones": ("Aryl ketones", "2"),
+             "carboxylic-acids": ("Carboxylic acids", "1"),
+             "acid-derivatives": ("Carboxylic acid derivatives", "1"),
+             "esters": ("Esters", "2"), "anhydrides": ("Anhydrides", "2"),
+             "alcohols": ("Alcohols", "0"), "phenols": ("Phenols", "0"),
+             "aryl-halides": ("Aryl halides", "0"),
+             "organoboron-compounds": ("Organoboron compounds", "0"),
+             "organophosphorus-compounds": (
+                 "Organophosphorus compounds", "0")})
+        self.assertEqual(len(shown), 13)
 
     def test_a_choice_value_is_listed_when_a_compound_sets_it_or_below(
             self) -> None:
@@ -1134,7 +1153,8 @@ class CompoundSiteTests(CompoundCase):
             wanted |= set(field.ancestors[value])
         self.assertEqual(listed, wanted)
         self.assertIn("carbonyl-compounds", listed)
-        self.assertNotIn("carbonyl-compounds", sets)
+        self.assertIn("acid-derivatives", listed)
+        self.assertNotIn("acid-derivatives", sets)
 
     def test_the_search_texts(self) -> None:
         """Scenario: The compound catalogue in the HTML (data-text)."""
@@ -1147,6 +1167,8 @@ class CompoundSiteTests(CompoundCase):
         self.assertEqual(
             text, "Salicylic acid Salicylsäure C7H6O3 69-72-7 "
                   "OC(=O)c1ccccc1O")
+        self.assertEqual(rows["new-compound-7"].attrs["data-text"],
+                         "New compound 7 Neuverbindung 7 NV-0007")
         for key, row in rows.items():
             self.assertNotIn("  ", row.attrs["data-text"], key)
 
@@ -1206,15 +1228,15 @@ class CompoundSiteTests(CompoundCase):
         self.assertEqual(page.find("h1").norm(), "Purchased")
         self.assertEqual(page.find("p", "catalogue-count").norm(),
                          "10 compounds")
-        self.assertEqual(ps.facet_values(page, "group"),
-                         [("starting-materials", "Starting materials"),
-                          ("reagents", "Reagents")])
+        self.assertEqual(dict(ps.facet_values(page, "group")),
+                         {"starting-materials": "Starting materials",
+                          "reagents": "Reagents"})
         group = page.find("details", "facet", data_facet="group")
         depths = [DEPTH.match(ps.squash(label.attrs["style"])).group(1)
                   for label in group.find_all("label", "facet-value")]
         self.assertEqual(depths, ["0", "0"])
-        self.assertEqual(ps.facet_values(page, "in_house"),
-                         [("false", "No")])
+        self.assertNotIn("purchased",
+                         [v for v, _ in ps.facet_values(page, "group")])
 
     def test_the_purchased_page_filters_by_what_its_rows_carry(self) -> None:
         """Scenario: Tabs in the HTML (the chemical_class facet)."""
@@ -1237,17 +1259,15 @@ class CompoundSiteTests(CompoundCase):
             [r.attrs["data-id"] for r in self.catalogue_rows(page)],
             sorted(SYNTHESISED, key=self.shown))
         self.assertEqual(page.find("p", "catalogue-count").norm(),
-                         "10 compounds")
-        self.assertEqual(ps.facet_values(page, "group"),
-                         [("intermediates", "Intermediates"),
-                          ("final-products", "Final products")])
-        self.assertEqual(ps.facet_values(page, "in_house"),
-                         [("true", "Yes")])
+                         "11 compounds")
+        self.assertEqual(dict(ps.facet_values(page, "group")),
+                         {"intermediates": "Intermediates",
+                          "final-products": "Final products"})
         self.assertEqual(
-            [value for value, _ in ps.facet_values(page, "chemical_class")],
-            ["carbonyl-compounds", "ketones", "aryl-ketones",
+            {value for value, _ in ps.facet_values(page, "chemical_class")},
+            {"carbonyl-compounds", "ketones", "aryl-ketones",
              "carboxylic-acids", "acid-derivatives", "esters", "alcohols",
-             "phenols", "aryl-halides"])
+             "phenols", "aryl-halides"})
 
     def test_a_row_of_a_tab_carries_the_tabs_own_value(self) -> None:
         """Requirement: Compound tabs (the rows as the catalogue's)."""
@@ -1264,14 +1284,14 @@ class CompoundSiteTests(CompoundCase):
             self) -> None:
         """Scenario: Tabs in the HTML (the catalogue keeps all rows)."""
         page = self.catalogue_page()
-        self.assertEqual(len(self.catalogue_rows(page)), 20)
+        self.assertEqual(len(self.catalogue_rows(page)), 21)
         self.assertEqual(
-            ps.facet_values(page, "group"),
-            [("purchased", "Purchased"),
-             ("starting-materials", "Starting materials"),
-             ("reagents", "Reagents"), ("synthesised", "Synthesised"),
-             ("intermediates", "Intermediates"),
-             ("final-products", "Final products")])
+            dict(ps.facet_values(page, "group")),
+            {"purchased": "Purchased",
+             "starting-materials": "Starting materials",
+             "reagents": "Reagents", "synthesised": "Synthesised",
+             "intermediates": "Intermediates",
+             "final-products": "Final products"})
         self.assertEqual(
             page.find("p", "catalogue-noscript").norm(),
             "Search and filters need JavaScript. Without it, this page "
@@ -1342,16 +1362,13 @@ class GermanCompoundTests(CompoundCase):
         page = self.catalogue_page()
         block = self.check_compound_catalogue(page)
         self.assertEqual(
-            block.find("p", "catalogue-count").norm(), "20 Verbindungen")
+            block.find("p", "catalogue-count").norm(), "21 Verbindungen")
         self.assertEqual(page.find("main").find("h1").norm(), "Verbindungen")
         groups = block.find_all("details", "facet")
         self.assertEqual([(g.attrs.get("data-facet"),
                            g.find("summary").norm()) for g in groups],
                          [("chemical_class", "Stoffklasse"),
-                          ("in_house", "Eigene Herstellung"),
                           ("group", "Gruppe")])
-        self.assertEqual(ps.facet_values(page, "in_house"),
-                         [("true", "Ja"), ("false", "Nein")])
         classes = dict(ps.facet_values(page, "chemical_class"))
         self.assertEqual(classes["ketones"], "Ketone")
         self.assertEqual(classes["carbonyl-compounds"],
@@ -1389,15 +1406,16 @@ class GermanCompoundTests(CompoundCase):
                 page = self.check_tab_page(Tab("group", value))
                 self.assertEqual(
                     page.find("p", "catalogue-count").norm(),
-                    "10 Verbindungen")
+                    {"purchased": "10 Verbindungen",
+                     "synthesised": "11 Verbindungen"}[value])
                 self.assertEqual(
                     page.find("details", "facet", data_facet="group")
                     .find("summary").norm(), "Gruppe")
         self.assertEqual(
-            ps.facet_values(self.tab_page(Tab("group", "purchased")),
-                            "group"),
-            [("starting-materials", "Ausgangsstoffe"),
-             ("reagents", "Reagenzien")])
+            dict(ps.facet_values(self.tab_page(Tab("group", "purchased")),
+                                 "group")),
+            {"starting-materials": "Ausgangsstoffe",
+             "reagents": "Reagenzien"})
 
     def test_the_german_rows(self) -> None:
         """Scenario: The compound catalogue in the HTML (a German
@@ -1429,7 +1447,7 @@ class GermanCompoundTests(CompoundCase):
         facts = page.find("dl", "compound-facts")
         self.assertEqual([p.label for p in page.definition_pairs(facts)],
                          ["Summenformel", "Molmasse", "CAS", "SMILES",
-                          "Stoffklasse", "Eigene Herstellung", "Gruppe"])
+                          "Stoffklasse", "Gruppe"])
         values = {p.label: p.definition.norm()
                   for p in page.definition_pairs(facts)}
         self.assertEqual(values["Molmasse"], "138,12 g/mol")
@@ -1492,29 +1510,21 @@ class GermanCompoundTests(CompoundCase):
                          " · Eintrag 1 · 90 % · ")
         self.check_route_trees()
 
-    def test_declared_fields_in_german(self) -> None:
-        """Scenario: Declared fields in German."""
+    def test_registry_fields_in_german(self) -> None:
+        """Scenario: Registry fields in German."""
         carbonyl = "Carbonylverbindungen"
         expected = {
             "cinnamic-acid": [
                 ("Artikelnr.", "CH-0012"),
                 ("Stoffklasse", f"{carbonyl}{SEPARATOR}Carbonsäuren"),
-                ("Eigene Herstellung", "Ja"),
                 ("Gruppe", f"Selbst hergestellt{SEPARATOR}Endprodukte")],
             "acetic-acid": [
                 ("Kurzname", "AcOH"),
                 ("Stoffklasse", f"{carbonyl}{SEPARATOR}Carbonsäuren"),
-                ("Bestand", "2500 g"), ("Eigene Herstellung", "Nein"),
-                ("Gruppe", f"Zugekauft{SEPARATOR}Reagenzien")],
-            "ethyl-triphenylphosphoranylidene-acetate": [
-                ("Stoffklasse", "Organophosphorverbindungen, " + SEPARATOR
-                 .join([carbonyl, "Carbonsäurederivate", "Ester"])),
-                ("Bestand", "12,5 g"), ("Eigene Herstellung", "Nein"),
                 ("Gruppe", f"Zugekauft{SEPARATOR}Reagenzien")],
             "salicylic-acid": [
                 ("Stoffklasse", f"{carbonyl}{SEPARATOR}Carbonsäuren, "
                                 "Phenole"),
-                ("Eigene Herstellung", "Ja"),
                 ("Gruppe", f"Selbst hergestellt{SEPARATOR}"
                            "Zwischenprodukte")],
             "methyl-salicylate": [
@@ -1527,12 +1537,12 @@ class GermanCompoundTests(CompoundCase):
             with self.subTest(compound=key):
                 self.assertEqual(self.declared_pairs(key), pairs)
 
-    def test_every_declared_value_reads_as_the_fields_say(self) -> None:
-        """Scenario: Declared fields in German (every compound)."""
+    def test_every_registry_value_reads_as_the_fields_say(self) -> None:
+        """Scenario: Registry fields in German (every compound)."""
         fields = self.fields()
         self.assertEqual([f.label for f in fields],
                          ["Artikelnr.", "Kurzname", "Stoffklasse",
-                          "Bestand", "Eigene Herstellung", "Gruppe"])
+                          "Gruppe"])
         for key, compound in self.registry().items():
             with self.subTest(compound=key):
                 self.assertEqual(
@@ -1541,275 +1551,14 @@ class GermanCompoundTests(CompoundCase):
                         fields, compound, "de", page=True)])
 
 
-class ChemicalClassTabsTests(CompoundCase):
-    """The test collection in English, with `tabs = true` moved from
-    `group` to `chemical_class` and an unused top-level class
-    `heterocycles` added."""
-
-    TABS = ["carbonyl-compounds", "alcohols", "phenols", "aryl-halides",
-            "organoboron-compounds", "organophosphorus-compounds"]
-
-    @classmethod
-    def prepare(cls) -> None:
-        path = cls.sandbox.root / "orgsyndb.toml"
-        text = path.read_text(encoding="utf-8")
-        assert text.count("tabs = true\n") == 1
-        text = text.replace("tabs = true\n", "")
-        anchor = 'vocabulary = "chemical-classes"\n'
-        assert text.count(anchor) == 1
-        path.write_text(text.replace(anchor, anchor + "tabs = true\n"),
-                        encoding="utf-8")
-        vocabulary = (cls.sandbox.root / "vocabularies"
-                      / "chemical-classes.toml")
-        vocabulary.write_text(
-            vocabulary.read_text(encoding="utf-8")
-            + '\n[heterocycles]\nlabel = "Heterocycles"\n'
-            'label_de = "Heterocyclen"\n', encoding="utf-8")
-
-    def test_the_tab_pages_are_the_top_level_values_in_use(self) -> None:
-        """Scenario: Tabs by a multiple-valued field."""
-        self.assertEqual(self.tab_values(), self.TABS)
-        directory = self.public / "compounds" / "chemical_class"
-        self.assertEqual(sorted(p.name for p in directory.iterdir()),
-                         sorted(self.TABS))
-        self.assertFalse((directory / "heterocycles").exists())
-        page = self.catalogue_page()
-        self.check_compound_tabs(page, None)
-        tabs = page.find("main").elements()[0]
-        self.assertEqual(
-            [(l.target, l.node.norm()) for l in page.links(tabs)],
-            [("/compounds/", "All compounds"),
-             ("/compounds/chemical_class/carbonyl-compounds/",
-              "Carbonyl compounds"),
-             ("/compounds/chemical_class/alcohols/", "Alcohols"),
-             ("/compounds/chemical_class/phenols/", "Phenols"),
-             ("/compounds/chemical_class/aryl-halides/", "Aryl halides"),
-             ("/compounds/chemical_class/organoboron-compounds/",
-              "Organoboron compounds"),
-             ("/compounds/chemical_class/organophosphorus-compounds/",
-              "Organophosphorus compounds")])
-        self.assertEqual(tabs.attrs.get("aria-label"), "Chemical class")
-
-    def test_the_group_tab_pages_are_gone(self) -> None:
-        """Scenario: Tabs by a multiple-valued field (no group
-        directory)."""
-        self.assertFalse((self.public / "compounds" / "group").exists())
-
-    def test_a_compound_lies_in_several_tabs(self) -> None:
-        """Scenario: Tabs by a multiple-valued field (a compound in two
-        tabs)."""
-        for value in ("carbonyl-compounds", "aryl-halides"):
-            with self.subTest(tab=value):
-                rows = [r.attrs["data-id"] for r in self.catalogue_rows(
-                    self.tab_page(Tab("chemical_class", value)))]
-                self.assertIn("4-bromoacetophenone", rows)
-        rows = [r.attrs["data-id"] for r in self.catalogue_rows(
-            self.tab_page(Tab("chemical_class", "alcohols")))]
-        self.assertNotIn("4-bromoacetophenone", rows)
-
-    def test_the_tabs_own_value_leaves_its_facet(self) -> None:
-        """Scenario: Tabs by a multiple-valued field (the facet of the
-        carbonyl-compounds page)."""
-        page = self.tab_page(Tab("chemical_class", "carbonyl-compounds"))
-        group = page.find("details", "facet", data_facet="chemical_class")
-        depths = {label.find("input").attrs["value"]: int(DEPTH.match(
-            ps.squash(label.attrs["style"])).group(1))
-            for label in group.find_all("label", "facet-value")}
-        self.assertNotIn("carbonyl-compounds", depths)
-        self.assertEqual(depths["aryl-ketones"], 1)
-        self.assertEqual(depths["aryl-halides"], 0)
-        self.assertEqual(depths["ketones"], 0)
-        self.assertEqual(depths["esters"], 1)
-        self.assertNotIn("alcohols", depths)
-
-    def test_a_facet_without_values_is_left_out(self) -> None:
-        """Requirement: Compound tabs (a facet with no value to list on
-        the page is left out)."""
-        page = self.tab_page(Tab("chemical_class", "organoboron-compounds"))
-        self.assertEqual(
-            [g.attrs.get("data-facet")
-             for g in page.find_all("details", "facet")],
-            ["in_house", "group"])
-
-    def test_every_tab_page_follows_the_contract(self) -> None:
-        """Scenario: Tabs by a multiple-valued field (every page)."""
-        for value in self.TABS:
-            with self.subTest(tab=value):
-                # The facet of the one-class organoboron tab has no value
-                # left once its own is dropped.
-                self.check_tab_page(
-                    Tab("chemical_class", value),
-                    facets=value != "organoboron-compounds")
-
-
-class TabsFieldNotAFacetTests(CompoundCase):
-    """The test collection in English, without the `facet = true` line of
-    the declaration of `group`."""
-
-    @classmethod
-    def prepare(cls) -> None:
-        path = cls.sandbox.root / "orgsyndb.toml"
-        text = path.read_text(encoding="utf-8")
-        old = ('vocabulary = "inventory-groups"\nrequired = true\n'
-               'facet = true\n')
-        assert text.count(old) == 1
-        path.write_text(text.replace(
-            old, 'vocabulary = "inventory-groups"\nrequired = true\n'),
-            encoding="utf-8")
-
-    def test_a_tabs_field_that_is_not_a_facet(self) -> None:
-        """Scenario: A tabs field that is not a facet."""
-        page = self.tab_page(Tab("group", "purchased"))
-        self.assertEqual(
-            [r.attrs["data-id"] for r in self.catalogue_rows(page)],
-            sorted(PURCHASED, key=self.shown))
-        self.assertEqual(page.find("p", "catalogue-count").norm(),
-                         "10 compounds")
-        self.assertEqual(page.find_all("details", "facet",
-                                       data_facet="group"), [])
-        self.assertEqual(
-            [g.attrs["data-facet"]
-             for g in page.find_all("details", "facet")],
-            ["chemical_class", "in_house"])
-
-    def test_the_tab_pages_still_follow_the_contract(self) -> None:
-        """Scenario: A tabs field that is not a facet (both pages)."""
-        for value in ("purchased", "synthesised"):
-            with self.subTest(tab=value):
-                self.check_tab_page(Tab("group", value))
-
-    def test_the_catalogue_keeps_its_tabs(self) -> None:
-        """Scenario: A tabs field that is not a facet (the catalogue)."""
-        page = self.catalogue_page()
-        self.check_compound_catalogue(page)
-        self.assertEqual(page.find_all("details", "facet",
-                                       data_facet="group"), [])
-
-
-class NoTabsFieldTests(CompoundCase):
-    """The test collection in English, without the `tabs = true` line of
-    its `orgsyndb.toml`."""
-
-    @classmethod
-    def prepare(cls) -> None:
-        path = cls.sandbox.root / "orgsyndb.toml"
-        text = path.read_text(encoding="utf-8")
-        assert text.count("tabs = true\n") == 1
-        path.write_text(text.replace("tabs = true\n", ""),
-                        encoding="utf-8")
-
-    def test_the_catalogue_has_no_tabs_and_there_is_no_tab_page(
-            self) -> None:
-        """Scenario: A collection without a tabs field."""
-        page = self.catalogue_page()
-        self.assertIsNone(page.find("nav", "section-tabs"))
-        self.assertFalse((self.public / "compounds" / "group").exists())
-        self.assertEqual(
-            [n.tag for n in page.find("main").elements()[:1]], ["div"])
-        self.assertEqual(page.find("main").elements()[0].classes[:1],
-                         ["catalogue"])
-
-    def test_the_catalogue_is_unchanged(self) -> None:
-        """Scenario: A collection without a tabs field (the catalogue)."""
-        page = self.catalogue_page()
-        block = self.check_compound_catalogue(page)
-        self.assertEqual(block.find("p", "catalogue-count").norm(),
-                         "20 compounds")
-        self.check_compound_rows(page)
-        self.assertEqual(
-            [g.attrs["data-facet"] for g in page.find_all("details",
-                                                          "facet")],
-            ["chemical_class", "in_house", "group"])
-
-    def test_no_page_has_compound_tabs(self) -> None:
-        """Scenario: A collection without a tabs field (every page)."""
-        for path in sorted(self.public.rglob("index.html")):
-            if "pagefind" in path.parts:
-                continue
-            page = ps.load_page(self.public, path)
-            if page.url.startswith("/compounds/"):
-                with self.subTest(page=page.url):
-                    self.assertIsNone(page.find("nav", "section-tabs"))
-
-
-class NumberAndBooleanColumnTests(CompoundCase):
-    """The test collection in English, with `column = true` added to the
-    declarations of `stock` and `in_house`."""
-
-    @classmethod
-    def prepare(cls) -> None:
-        path = cls.sandbox.root / "orgsyndb.toml"
-        text = path.read_text(encoding="utf-8")
-        for key in ("stock", "in_house"):
-            anchor = f'key = "{key}"\n'
-            assert text.count(anchor) == 1, key
-            text = text.replace(anchor, anchor + "column = true\n")
-        path.write_text(text, encoding="utf-8")
-
-    def directory(self):
-        page = ps.load_page(self.public, self.public / "compounds"
-                            / "index.html")
-        table = page.find("table", "compound-table")
-        return next(m for m in page.tables() if m.node is table)
-
-    def test_the_columns_follow_the_chemical_class(self) -> None:
-        """Scenario: Number and boolean columns."""
-        model = self.directory()
-        self.assertEqual([c.text for c in model.rows[0]],
-                         ["Compound", "Formula", "MW", "CAS", "Item no.",
-                          "Chemical class", "Stock", "Made in house",
-                          "Made by", "Used in"])
-        header = model.rows[0]
-        self.assertIn("num", header[6].classes)
-        self.assertNotIn("num", header[7].classes)
-        for row in model.rows[1:]:
-            with self.subTest(compound=row[0].text):
-                self.assertEqual(len(row), 10)
-                self.assertIn("num", row[6].classes)
-                self.assertNotIn("num", row[7].classes)
-
-    def test_the_cells_of_a_number_and_a_boolean(self) -> None:
-        """Scenario: Number and boolean columns (the cells)."""
-        rows = {r[0].text: r for r in self.directory().rows[1:]}
-        cells = {name: [c.text for c in row[6:8]]
-                 for name, row in rows.items()}
-        self.assertEqual(
-            cells["Ethyl (triphenylphosphoranylidene)acetate"],
-            ["12.5 g", "No"])
-        self.assertEqual(cells["Acetic acid"], ["2500 g", "No"])
-        self.assertEqual(cells["Salicylic acid"], ["", "Yes"])
-        self.assertEqual(cells["Methyl salicylate"], ["", ""])
-
-    def test_every_cell_follows_the_registry(self) -> None:
-        """Scenario: Number and boolean columns (every compound)."""
-        registry = self.registry()
-        names = {self.shown(key): key for key in registry}
-        columns = [f for f in self.fields() if f.column]
-        self.assertEqual([f.key for f in columns],
-                         ["item_number", "chemical_class", "stock",
-                          "in_house"])
-        for row in self.directory().rows[1:]:
-            compound = registry[names[row[0].text]]
-            texts = {f.key: text for f, text in fs.shown(
-                columns, compound, "en", page=False)}
-            with self.subTest(compound=row[0].text):
-                self.assertEqual([c.text for c in row[4:8]],
-                                 [texts.get(f.key, "") for f in columns])
-
-
 class AncestorBesideValueTests(CompoundCase):
-    """The test collection in English, with acetone setting
-    `carbonyl-compounds` beside `ketones`."""
+    """The test collection in English, with acetone in the chemical
+    classes `carbonyl-compounds` and `ketones`."""
 
     @classmethod
     def prepare(cls) -> None:
-        path = cls.sandbox.root / "compounds" / "acetone.toml"
-        text = path.read_text(encoding="utf-8")
-        old = 'chemical_class = ["ketones"]'
-        assert text.count(old) == 1
-        path.write_text(text.replace(
-            old, 'chemical_class = ["carbonyl-compounds", "ketones"]'),
-            encoding="utf-8")
+        ps.edit_snapshot(cls.sandbox, support.setting_substance(
+            "acetone", chemical_classes=["carbonyl-compounds", "ketones"]))
 
     def test_a_value_set_beside_its_ancestor(self) -> None:
         """Scenario: A value set beside its ancestor."""
@@ -1819,77 +1568,40 @@ class AncestorBesideValueTests(CompoundCase):
         self.assertEqual(len(listed), 2)
 
 
-class NoFacetFieldTests(CompoundCase):
-    """The test collection in English, without a `facet = true` line in
-    its `orgsyndb.toml`, those of its procedure fields included."""
-
-    @classmethod
-    def prepare(cls) -> None:
-        path = cls.sandbox.root / "orgsyndb.toml"
-        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
-        kept = [ln for ln in lines if ln.strip() != "facet = true"]
-        assert len(kept) == len(lines) - 5, "not five facet lines"
-        path.write_text("".join(kept), encoding="utf-8")
-
-    def test_the_catalogue_has_no_facets(self) -> None:
-        """Scenario: A collection without facet fields."""
-        page = self.catalogue_page()
-        block = self.check_compound_catalogue(page)
-        self.assertEqual(page.find_all("div", "catalogue-facets"), [])
-        self.assertEqual(page.find_all("button", "facets-toggle"), [])
-        self.assertEqual(page.find_all("details", "facet"), [])
-        self.assertEqual(
-            block.find("p", "catalogue-count").norm(), "20 compounds")
-        for tag, name in (("ul", "catalogue-active"),
-                          ("button", "clear-all"),
-                          ("p", "catalogue-message"),
-                          ("table", "compound-table")):
-            with self.subTest(element=f"{tag}.{name}"):
-                self.assertIsNotNone(block.find(tag, name))
-        self.check_compound_header_search(page)
-
-    def test_the_rows_keep_their_text(self) -> None:
-        """Scenario: A collection without facet fields (the rows)."""
-        rows = self.check_compound_rows(self.catalogue_page())
-        self.assertEqual(len(rows), 20)
-        self.assertEqual(rows["acetone"].attrs["data-title"], "Acetone")
-
-
 class MarkupFieldTests(CompoundCase):
     """The test collection in English, with markup characters in the
-    label and in a value of `short_name`, and `beside = true` removed
-    from `item_number`."""
+    `short_name` of `acetone` and in the label of the chemical class
+    `ketones`."""
 
-    LABEL = "Name <b>&</b>"
+    LABEL = "Ketones <b>&</b>"
     VALUE = "<i>Me</i>2CO & co"
 
     @classmethod
     def prepare(cls) -> None:
-        settings = cls.sandbox.root / "orgsyndb.toml"
-        text = settings.read_text(encoding="utf-8")
-        assert text.count('label = "Short name"') == 1
-        text = text.replace('label = "Short name"',
-                            f'label = "{cls.LABEL}"')
-        head, tail = text.split('key = "item_number"\n')
-        assert tail.index("beside = true\n") < tail.index("[[fields")
-        settings.write_text(
-            head + 'key = "item_number"\n'
-            + tail.replace("beside = true\n", "", 1), encoding="utf-8")
-        acetone = cls.sandbox.root / "compounds" / "acetone.toml"
-        text = acetone.read_text(encoding="utf-8")
-        assert "short_name" not in text
-        acetone.write_text(text + f'short_name = "{cls.VALUE}"\n',
-                           encoding="utf-8")
+        def relabel(table: dict) -> None:
+            (found,) = [t for t in table["vocabularies"]["chemical-classes"]
+                        if t["key"] == "ketones"]
+            found["label"] = cls.LABEL
+        ps.edit_snapshot(
+            cls.sandbox, relabel,
+            support.setting_substance("acetone", short_name=cls.VALUE))
 
     def test_markup_in_a_label_or_a_value_is_text(self) -> None:
         """Scenario: Markup in a label or a value is text."""
         page = self.compound_page("acetone")
         facts = page.find("main").find("dl", "compound-facts")
         pairs = {p.label: p for p in page.definition_pairs(facts)}
-        self.assertIn(self.LABEL, pairs, sorted(pairs))
-        self.assertEqual(pairs[self.LABEL].term.text(), self.LABEL)
-        self.assertEqual(pairs[self.LABEL].definition.text().strip(),
+        self.assertIn("Short name", pairs, sorted(pairs))
+        self.assertEqual(pairs["Short name"].definition.text().strip(),
                          self.VALUE)
+        self.assertEqual(facts.find_all("b"), [])
+        self.assertEqual(facts.find_all("i"), [])
+        ketone = self.compound_page("dibenzylideneacetone")
+        facts = ketone.find("main").find("dl", "compound-facts")
+        pairs = {p.label: p for p in ketone.definition_pairs(facts)}
+        self.assertTrue(
+            pairs["Chemical class"].definition.text().strip().endswith(
+                self.LABEL))
         self.assertEqual(facts.find_all("b"), [])
         self.assertEqual(facts.find_all("i"), [])
 
@@ -1929,49 +1641,6 @@ class MarkupFieldTests(CompoundCase):
         self.assertEqual(after[1].tag, "a")
         self.assertEqual(self.check_notes(page, materials),
                          [None, "(Ac2O)"])
-
-
-class NoFieldsTests(CompoundCase):
-    """The test collection in English, with an `orgsyndb.toml` that
-    declares no field. Its compounds keep the keys, which the validator
-    reports as warnings and the build tolerates."""
-
-    @classmethod
-    def prepare(cls) -> None:
-        (cls.sandbox.root / "orgsyndb.toml").write_text(
-            "format = 1\n", encoding="utf-8")
-
-    def test_the_field_data_is_empty(self) -> None:
-        """Scenario: No settings file (the staged data)."""
-        path = self.sandbox.root / "build" / "data" / "fields.json"
-        self.assertTrue(path.is_file(), "build/data/fields.json is missing")
-        self.assertEqual(json.loads(path.read_text(encoding="utf-8")),
-                         {"compound": [], "procedure": []})
-
-    def test_the_pages_show_the_built_in_facts_only(self) -> None:
-        """Requirement: Compound pages (one pair for each field the
-        collection declares)."""
-        for key, compound in self.registry().items():
-            page = self.compound_page(key)
-            facts = page.find("main").find("dl", "compound-facts")
-            with self.subTest(compound=key):
-                self.assertEqual(
-                    [p.label for p in page.definition_pairs(facts)],
-                    [label for label in FACT_LABELS
-                     if label != "CAS" or compound.get("cas")])
-
-    def test_the_directory_has_no_declared_column(self) -> None:
-        """Requirement: Compound directory (a column for each column
-        field)."""
-        page = ps.load_page(self.public, self.public / "compounds"
-                            / "index.html")
-        table = page.find("table", "compound-table")
-        model = next(m for m in page.tables() if m.node is table)
-        self.assertEqual([c.text for c in model.rows[0]],
-                         ["Compound", "Formula", "MW", "CAS", "Made by",
-                          "Used in"])
-        for row in model.rows[1:]:
-            self.assertEqual(len(row), 6)
 
 
 CHAIN_PROCEDURE = """\
@@ -2033,21 +1702,18 @@ class CycleAndDepthTests(CompoundCase):
     ``OSDB-0910``, which makes ``salicylic-acid`` from
     ``acetylsalicylic-acid``, and ``OSDB-0911``, a general procedure of
     seven entries, entry ``n`` making ``chain-<n>`` from
-    ``chain-<n-1>``, with registry files for ``chain-0`` to
-    ``chain-7``."""
+    ``chain-<n-1>``, with the substances ``chain-0`` to ``chain-7`` added
+    to its registry."""
 
     FIXTURES = ("OSDB-0910-aspirin-hydrolysis.md",)
 
     @classmethod
     def prepare(cls) -> None:
-        registry = cls.sandbox.root / "compounds"
-        for number in range(CHAIN_LENGTH + 1):
-            target = registry / f"chain-{number}.toml"
-            target.write_text(
-                f'name = "Chain {number}"\nformula = "C2H6"\n'
-                'mw = 30.07\nsmiles = "CC"\n'
-                + ps.required_field_lines(cls.sandbox, registry),
-                encoding="utf-8")
+        ps.edit_snapshot(cls.sandbox, *(
+            support.adding_substance(support.substance(
+                f"chain-{number}", f"Chain {number}", formula="C2H6",
+                mw=30.07, smiles="CC", chemical_classes=["alcohols"]))
+            for number in range(CHAIN_LENGTH + 1)))
         entries = "".join(
             f'  {{ substrates = ["chain-{n - 1}"], products = '
             f'[{{ compound = "chain-{n}", yield_percent = {50 + n} }}] }},\n'
@@ -2115,25 +1781,15 @@ class CycleAndDepthTests(CompoundCase):
 
 
 class FallbackNameTests(CompoundCase):
-    """The test collection in German, with one German name removed and
-    `beside = true` added to the declaration of `stock`."""
+    """The test collection in German, with the German name of `acetone`
+    removed from its registry."""
 
     LOCALE = "de"
 
     @classmethod
     def prepare(cls) -> None:
-        settings = cls.sandbox.root / "orgsyndb.toml"
-        text = settings.read_text(encoding="utf-8")
-        anchor = 'key = "stock"\n'
-        assert text.count(anchor) == 1
-        settings.write_text(text.replace(anchor, anchor + "beside = true\n"),
-                            encoding="utf-8")
-        path = cls.sandbox.root / "compounds" / "acetone.toml"
-        text = path.read_text(encoding="utf-8")
-        kept = [ln for ln in text.splitlines()
-                if not ln.startswith("name_de")]
-        assert len(kept) == len(text.splitlines()) - 1, "no name_de line"
-        path.write_text("\n".join(kept) + "\n", encoding="utf-8")
+        ps.edit_snapshot(cls.sandbox, support.setting_substance(
+            "acetone", name_de=None))
 
     def test_a_compound_without_a_german_name(self) -> None:
         """Scenario: A compound without a German name."""
@@ -2149,23 +1805,6 @@ class FallbackNameTests(CompoundCase):
         self.assertEqual([l.norm() for l in materials.definition.find_all(
             "a")], ["Benzaldehyd", "Acetone"])
 
-    def test_a_number_beside_a_german_link(self) -> None:
-        """Scenario: A number beside a German link. The build also drops
-        the German name of acetone, which OSDB-0007 does not take."""
-        page = ps.load_page(self.public, self.public / "procedures"
-                            / "osdb-0007" / "index.html")
-        materials = next(p for p in page.definition_pairs(
-            page.find("dl", "metadata")) if p.label == "Ausgangsstoffe")
-        after = fs.after_link(fs.link_to(
-            page, materials.definition,
-            "ethyl-triphenylphosphoranylidene-acetate"))
-        self.assertGreaterEqual(len(after), 2, "no note follows the link")
-        self.assertEqual(after[0], " ")
-        self.assertEqual((after[1].tag, after[1].classes),
-                         ("span", ["compound-beside"]))
-        self.assertEqual(after[1].text(), "(12,5 g)")
-        self.check_notes(page, materials.definition)
-
 
 class MarkupNameTests(CompoundCase):
     """The test collection in English, with a compound whose name holds
@@ -2175,11 +1814,11 @@ class MarkupNameTests(CompoundCase):
 
     @classmethod
     def prepare(cls) -> None:
-        (cls.sandbox.root / "compounds" / "dimethylurea.toml").write_text(
-            f'name = "{cls.NAME}"\nformula = "C3H8N2O"\nmw = 88.11\n'
-            'smiles = "CNC(=O)NC"\nitem_number = "CH-0099"\n'
-            'chemical_class = ["ketones"]\ngroup = "reagents"\n',
-            encoding="utf-8")
+        ps.edit_snapshot(cls.sandbox, support.adding_substance(
+            support.substance(
+                "dimethylurea", cls.NAME, formula="C3H8N2O", mw=88.11,
+                smiles="CNC(=O)NC", article_number="CH-0099",
+                chemical_classes=["ketones"])))
 
     def test_a_name_is_escaped_once(self) -> None:
         """Scenario: A page per compound (a name with markup characters)."""
@@ -2190,6 +1829,43 @@ class MarkupNameTests(CompoundCase):
                                  / "index.html")
         self.assertIn(self.NAME, [l.node.norm() for l in directory.links()
                                   if l.target == "/compounds/dimethylurea/"])
+
+
+class StructureImageByKeyTests(CompoundCase):
+    """The test collection in English, with `acetone.png`, and
+    `benzaldehyde.svg` beside `benzaldehyde.png`, added to its
+    `static/structures/`."""
+
+    @classmethod
+    def prepare(cls) -> None:
+        structures = cls.sandbox.root / "static" / "structures"
+        (structures / "acetone.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+        (structures / "benzaldehyde.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+        (structures / "benzaldehyde.svg").write_text(
+            "<svg xmlns='http://www.w3.org/2000/svg' width='1' "
+            "height='1'/>", encoding="utf-8")
+
+    def test_the_image_is_found_by_the_key(self) -> None:
+        """Scenario: Image found by key."""
+        for key, image in (("acetone", "structures/acetone.png"),
+                           ("benzaldehyde", "structures/benzaldehyde.svg"),
+                           ("isopentyl-acetate",
+                            "structures/isopentyl-acetate.svg")):
+            with self.subTest(compound=key):
+                page = self.compound_page(key)
+                (img,) = page.find("figure", "structure").find_all("img")
+                self.assertEqual(page.resolve(img.attrs["src"]),
+                                 "/" + image)
+                self.assertEqual(self.registry()[key]["structure_image"],
+                                 image)
+
+    def test_a_substance_without_a_file_of_its_key_shows_none(self) -> None:
+        """Scenario: Image found by key (no file of its key)."""
+        for key in ("salicylic-acid", "new-compound-7"):
+            with self.subTest(compound=key):
+                page = self.compound_page(key)
+                self.assertEqual(page.find("main").find_all("figure"), [])
+                self.assertEqual(page.find("main").find_all("img"), [])
 
 
 if __name__ == "__main__":

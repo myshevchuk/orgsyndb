@@ -9,11 +9,12 @@
 ;;; Commentary:
 
 ;; A minor mode for the files of an OrgSynDB collection: Org and
-;; Markdown procedures, synthesis sequences, compound files,
-;; vocabularies and `orgsyndb.toml'.  `global-orgsyndb-mode' turns it on
-;; in every buffer that visits such a file.  It completes front-matter
-;; keys and values, finds the definitions and references of compound
-;; keys and procedure IDs, describes them with eldoc, shows the problems
+;; Markdown procedures, synthesis sequences and `orgsyndb.toml'.
+;; `global-orgsyndb-mode' turns it on in every buffer that visits such a
+;; file.  It completes front-matter keys and values, finds the
+;; definitions and references of compound keys, which name the
+;; substances of the collection's registry, and of procedure IDs,
+;; describes them with eldoc, shows the problems
 ;; of the Org checks and of `orgsyndb validate' through Flymake or
 ;; Flycheck, keeps modification times current, and previews pages.
 ;; `C-c C-;' opens a menu of its commands.
@@ -34,7 +35,7 @@
 (require 'transient)
 
 (defcustom orgsyndb-diagnostics 'flymake
-  "How the buffers of procedures, sequences and compounds show problems.
+  "How the buffers of procedures and sequences show problems.
 `flymake' turns on `flymake-mode' with the backend `orgsyndb-flymake',
 `flycheck' turns on `flycheck-mode' with the checker `orgsyndb', and
 nil shows them through neither."
@@ -47,7 +48,7 @@ nil shows them through neither."
 (defvar flycheck-checker)
 
 (defconst orgsyndb--checked-kinds
-  '(org-procedure md-procedure sequence compound)
+  '(org-procedure md-procedure sequence)
   "The kinds of files whose problems the mode shows.")
 
 (defvar-local orgsyndb--diagnostics nil
@@ -140,7 +141,6 @@ commands.
   "Run a command of the OrgSynDB mode."
   [["Write"
     ("n" "New procedure" orgsyndb-new-procedure)
-    ("c" "New compound" orgsyndb-new-compound)
     ("i" "Insert compound" orgsyndb-insert-compound)
     ("v" "Visit variant" orgsyndb-visit-variant)
     ("t" "Create translation" orgsyndb-create-translation)]

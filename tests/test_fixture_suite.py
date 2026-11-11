@@ -1,18 +1,19 @@
 """The fixture suite itself (procedure-validation, "Fixture suite")."""
 
 import re
+import tempfile
 import tomllib
 import unittest
+from pathlib import Path
 
-from pipeline_support import org_scope_rows
-from support import (COMPOUNDS, FIXTURES, REACTION_TYPES, SETTINGS,
-                     SETTINGS_DIR, STATIC_DIR, ValidatorTestCase,
-                     fixture_run, run_validator, starter_settings,
-                     valid_set_run)
+from pipeline_support import TEST_COLLECTION, org_scope_rows
+from support import (FIXTURES, REGISTRY, SETTINGS, SETTINGS_DIR, STATIC_DIR,
+                     ValidatorTestCase, fixture_run, load_snapshot,
+                     run_validator, snapshot_digest, valid_set_run,
+                     with_fixture_substances, write_snapshot)
 
 OPTIONAL_TOP = ["substrates", "checked_by", "references", "ai_model",
                 "description", "weight"]
-OPTIONAL_COMPOUND = ["name_de", "cas", "structure_image"]
 
 # case directory -> (field, message substring), from each case's scenario
 INVALID_CASES = {
@@ -38,10 +39,6 @@ INVALID_CASES = {
 def load_front_matter(path):
     text = path.read_text(encoding="utf-8")
     return tomllib.loads(text.split("+++\n")[1])
-
-
-def load_compound(path):
-    return tomllib.loads(path.read_text(encoding="utf-8"))
 
 
 def named_keys(path) -> set[str]:
@@ -80,9 +77,6 @@ class ValidSetTests(ValidatorTestCase):
         for key in OPTIONAL_TOP:
             self.assertIn(key, seen)
         self.assertTrue(any(len(d["products"]) == 2 for d in docs))
-        compounds = [load_compound(p) for p in COMPOUNDS.glob("*.toml")]
-        for key in OPTIONAL_COMPOUND:
-            self.assertTrue(any(key in c for c in compounds), key)
         offsets = {d["date"].utcoffset().total_seconds() for d in docs}
         self.assertIn(3600, offsets)
         self.assertIn(7200, offsets)
@@ -108,10 +102,17 @@ class CatalogueFixtureTests(ValidatorTestCase):
 
     def test_the_fixtures_validate(self) -> None:
         """Harness: the catalogue fixtures validate cleanly."""
-        with starter_settings() as settings:
+        keys = sorted({key for path in
+                       (FIXTURES / "catalogue").glob("OSDB-*.md")
+                       for key in named_keys(path)})
+        table = load_snapshot(TEST_COLLECTION / "registry.json")
+        with_fixture_substances(table, *keys)
+        with tempfile.TemporaryDirectory() as tmp:
+            registry = Path(tmp) / "registry.json"
+            write_snapshot(registry, table)
             self.assert_clean(run_validator([
-                "--settings", settings, "--static-dir", STATIC_DIR,
-                "--compounds", COMPOUNDS, FIXTURES / "catalogue"]))
+                "--settings", SETTINGS, "--static-dir", STATIC_DIR,
+                "--registry", registry, FIXTURES / "catalogue"]))
 
     def test_the_fixtures_cover_what_they_are_for(self) -> None:
         """Harness: statuses, authors, tags, a missing CAS number, a
@@ -128,14 +129,18 @@ class CatalogueFixtureTests(ValidatorTestCase):
         self.assertTrue(any(len(d["tags"]) > 2 for d in docs))
         self.assertEqual(
             {len(d["reaction_types"]) for d in docs}, {1})
-        registry = {key: load_compound(COMPOUNDS / f"{key}.toml")
-                    for d in docs for key in [d["products"][0]["compound"]]}
+        registry = {entry["key"]: entry
+                    for entry in load_snapshot(REGISTRY)["substances"]}
         self.assertEqual(
             [d["id"] for d in docs
-             if "cas" not in registry[d["products"][0]["compound"]]],
+             if registry[d["products"][0]["compound"]]["cas"] is None],
             ["OSDB-0922"])
-        self.assertFalse(any("structure_image" in c
-                             for c in registry.values()))
+        for d in docs:
+            key = d["products"][0]["compound"]
+            for suffix in (".svg", ".png"):
+                self.assertFalse(
+                    (STATIC_DIR / "structures" / f"{key}{suffix}").exists(),
+                    key)
         ties = {}
         for d in docs:
             ties.setdefault(d["lastmod"].timestamp(), []).append(d)
@@ -180,35 +185,109 @@ class DependentCheckTests(ValidatorTestCase):
 
 
 class FixtureRegistryTests(ValidatorTestCase):
-    """The fixture registry, tests/fixtures/compounds/."""
+    """The fixture registry, tests/fixtures/registry.json."""
 
-    def test_registry_validates(self) -> None:
-        """Harness: the fixture registry is valid."""
-        result = run_validator([
-            "--settings", SETTINGS, "--static-dir", STATIC_DIR,
-            "--compounds", COMPOUNDS, FIXTURES / "valid" / "md"])
-        self.assert_clean(result)
-
-    def test_registry_holds_the_named_compounds_and_no_others(self) -> None:
-        """Requirement: Fixture suite (the committed registry)."""
+    def named(self) -> set[str]:
         named: set[str] = set()
         for path in sorted(FIXTURES.rglob("*")):
             rel = path.relative_to(FIXTURES).as_posix()
             if (path.suffix in (".md", ".org") and path.is_file()
                     and not rel.startswith(("invalid/", "collection/"))):
                 named |= named_keys(path)
-        self.assertTrue({"ethyl-acetate", "ethanol"} <= named)
-        self.assertEqual({p.stem for p in COMPOUNDS.glob("*.toml")}, named)
-        self.assertEqual({p.name for p in COMPOUNDS.iterdir()},
-                         {f"{key}.toml" for key in named})
+        return named
 
-    def test_ethyl_acetate_sets_every_optional_key(self) -> None:
-        """Requirement: Fixture suite (ethyl-acetate)."""
-        data = load_compound(COMPOUNDS / "ethyl-acetate.toml")
-        for key in OPTIONAL_COMPOUND:
-            self.assertIn(key, data)
-        self.assertEqual(data["structure_image"],
-                         "structures/ethyl-acetate.svg")
+    def test_registry_validates(self) -> None:
+        """Harness: the fixture registry is a snapshot the validator
+        accepts."""
+        result = run_validator([
+            "--settings", SETTINGS, "--static-dir", STATIC_DIR,
+            "--registry", REGISTRY, FIXTURES / "valid" / "md"])
+        self.assert_clean(result)
+
+    def test_registry_is_a_snapshot_with_its_digest(self) -> None:
+        """Requirement: Fixture suite (the fixture registry, a
+        snapshot)."""
+        table = load_snapshot(REGISTRY)
+        self.assertEqual(
+            list(table), ["format", "vocabularies", "substances",
+                          "digest"])
+        self.assertEqual(table["format"], 1)
+        self.assertEqual(table["digest"], snapshot_digest(table))
+        self.assertEqual(
+            list(table["vocabularies"]),
+            ["chemical-classes", "inventory-groups", "projects",
+             "reaction-types"])
+        keys = [entry["key"] for entry in table["substances"]]
+        self.assertEqual(keys, sorted(keys))
+
+    def test_registry_holds_the_named_compounds_and_no_others(self) -> None:
+        """Requirement: Fixture suite (a substance for every compound key
+        a committed fixture names)."""
+        named = self.named()
+        self.assertTrue({"ethyl-acetate", "ethanol"} <= named)
+        self.assertEqual(
+            {entry["key"] for entry in load_snapshot(REGISTRY)[
+                "substances"]}, named)
+
+    def test_every_substance_is_a_reagent_and_organic(self) -> None:
+        """Requirement: Fixture suite (the group `reagents`, the class
+        `organic-compounds`, no article number, no short name)."""
+        table = load_snapshot(REGISTRY)
+        for entry in table["substances"]:
+            with self.subTest(key=entry["key"]):
+                self.assertEqual(entry["group"], "reagents")
+                self.assertEqual(entry["chemical_classes"],
+                                 ["organic-compounds"])
+                self.assertIsNone(entry["article_number"])
+                self.assertIsNone(entry["short_name"])
+        vocabularies = table["vocabularies"]
+        self.assertEqual(
+            [(t["key"], t["label"]) for t in
+             vocabularies["chemical-classes"]],
+            [("organic-compounds", "Organic compounds")])
+        self.assertEqual(
+            [(t["key"], t["label"]) for t in
+             vocabularies["inventory-groups"]],
+            [("reagents", "Reagents")])
+
+    def test_registry_holds_the_stated_vocabularies(self) -> None:
+        """Requirement: Fixture suite (the reaction types and the
+        projects)."""
+        vocabularies = load_snapshot(REGISTRY)["vocabularies"]
+        self.assertEqual(
+            {t["key"]: t["label"] for t in vocabularies["reaction-types"]},
+            {"esterification": "Esterification",
+             "reduction": "Reduction"})
+        self.assertEqual(
+            {t["key"]: (t["label"], t["label_de"], t["parent"])
+             for t in vocabularies["projects"]},
+            {"teaching": ("Teaching", "Lehre", None),
+             "first-year-practical": ("First-year practical",
+                                      "Grundpraktikum", "teaching"),
+             "research": ("Research", "Forschung", None)})
+
+    def test_the_substances_keep_the_values_of_the_former_files(
+            self) -> None:
+        """Requirement: Fixture suite (made from the former compound
+        files)."""
+        held = {entry["key"]: entry
+                for entry in load_snapshot(REGISTRY)["substances"]}
+        ethyl = held["ethyl-acetate"]
+        self.assertEqual(
+            (ethyl["name"], ethyl["name_de"], ethyl["formula"],
+             ethyl["mw"], ethyl["smiles"], ethyl["cas"]),
+            ("Ethyl acetate", "Ethylacetat", "C4H8O2", 88.11, "CCOC(C)=O",
+             "141-78-6"))
+        self.assertEqual(held["salicylic-acid"]["name_de"], "Salicylsäure")
+        self.assertIsNone(held["10-undecenoic-acid"]["cas"])
+        self.assertIsNone(held["benzyl-ethanoate"]["name_de"])
+        self.assertEqual(held["benzyl-ethanoate"]["smiles"],
+                         held["benzyl-acetate"]["smiles"])
+
+    def test_the_static_files_hold_the_ethyl_acetate_structure(
+            self) -> None:
+        """Requirement: Fixture suite (static/structures/
+        ethyl-acetate.svg)."""
         self.assertTrue((STATIC_DIR / "structures"
                          / "ethyl-acetate.svg").is_file())
 
@@ -243,18 +322,27 @@ class FixtureSettingsTests(unittest.TestCase):
             tomllib.loads(SETTINGS.read_text(encoding="utf-8")),
             {"format": 1})
         self.assertEqual(
-            tomllib.loads(REACTION_TYPES.read_text(encoding="utf-8")),
-            {"esterification": {"label": "Esterification"},
-             "reduction": {"label": "Reduction"}})
-        self.assertEqual(
-            [p.name for p in (SETTINGS_DIR / "vocabularies").iterdir()],
-            ["reaction-types.toml"])
-        self.assertEqual(
             sorted(p.name for p in SETTINGS_DIR.iterdir()),
-            ["orgsyndb.toml", "vocabularies"])
+            ["orgsyndb.toml"])
+        self.assertEqual(
+            {t["key"]: t["label"] for t in load_snapshot(REGISTRY)[
+                "vocabularies"]["reaction-types"]},
+            {"esterification": "Esterification",
+             "reduction": "Reduction"})
+        for name in ("compounds", "fields"):
+            with self.subTest(name=name):
+                self.assertFalse((FIXTURES / name).exists())
         for name in ("reaction_types.toml", "bad-vocabulary.toml"):
             with self.subTest(name=name):
                 self.assertFalse((FIXTURES / name).exists())
+
+    def test_no_fixture_directory_keeps_a_vocabulary_file(self) -> None:
+        """Requirement: Fixture suite (the vocabularies are the fixture
+        registry's)."""
+        found = [p.relative_to(FIXTURES).as_posix()
+                 for p in FIXTURES.rglob("vocabularies")
+                 if "collection/build" not in p.as_posix()]
+        self.assertEqual(found, [])
 
 
 class FixtureHygieneTests(unittest.TestCase):

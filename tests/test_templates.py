@@ -9,9 +9,8 @@ import unittest
 from pathlib import Path
 
 from pipeline_support import TEST_COLLECTION
-from support import (COMPOUND_TEMPLATE, REPO, SEQUENCE_TEMPLATE,
-                     ValidatorTestCase, run_validator, starter_settings,
-                     template_registry)
+from support import (REPO, SEQUENCE_TEMPLATE, ValidatorTestCase,
+                     format_settings, run_validator, template_registry)
 
 MD_TEMPLATE = REPO / "templates" / "procedure.md"
 MD_TEMPLATE_DE = REPO / "templates" / "procedure.de.md"
@@ -43,9 +42,9 @@ class MarkdownTemplateTests(ValidatorTestCase):
             (root / "OSDB-0001-template.md").write_text(
                 text, encoding="utf-8")
             with template_registry() as registry, \
-                    starter_settings() as settings:
+                    format_settings() as settings:
                 result = run_validator(
-                    ["--compounds", registry, "--settings", settings,
+                    ["--registry", registry, "--settings", settings,
                      root], cwd=Path(tmp))
         self.assert_clean(result)
 
@@ -58,7 +57,7 @@ class MarkdownTemplateTests(ValidatorTestCase):
             (root / "OSDB-0000-template.md").write_text(
                 text, encoding="utf-8")
             with template_registry() as registry:
-                result = run_validator(["--compounds", registry, root],
+                result = run_validator(["--registry", registry, root],
                                        cwd=Path(tmp))
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn(
@@ -74,14 +73,15 @@ class MarkdownTemplateTests(ValidatorTestCase):
             with self.subTest(template=path.name):
                 text = read_template(path)
                 self.assertNotIn("site/data", text)
+                self.assertNotIn("vocabularies/", text)
                 lines = text.splitlines()
                 at = next(i for i, line in enumerate(lines)
                           if re.match(r"reaction_types\s*=", line))
                 self.assertTrue(
                     any(line.startswith("#")
-                        and "vocabularies/reaction-types.toml" in line
+                        and "registry" in line.lower()
                         for line in lines[:at]),
-                    "no comment before reaction_types names the file")
+                    "no comment before reaction_types names the registry")
 
     def test_template_names_the_example_compound(self) -> None:
         """Requirement: Markdown template (products and substrates)."""
@@ -135,57 +135,23 @@ class OrgTemplateTests(ValidatorTestCase):
                 any(ln.upper().startswith(prefix) for ln in lines), prefix)
 
 
-class CompoundTemplateTests(ValidatorTestCase):
-    REQUIRED = ["name", "formula", "mw", "smiles"]
-    OPTIONAL = ["name_de", "cas", "structure_image"]
+class RemovedTemplateTests(unittest.TestCase):
+    def test_there_are_no_compound_and_reaction_type_templates(self) -> None:
+        """Requirement: Compound template (removed); Starter reaction
+        types (removed)."""
+        for name in ("compound.toml", "reaction-types.toml"):
+            with self.subTest(template=name):
+                self.assertFalse((REPO / "templates" / name).exists())
 
-    def test_template_ends_with_a_note_on_declared_fields(self) -> None:
-        """Scenario: Template validates (the closing comment names
-        orgsyndb.toml)."""
-        lines = read_template(COMPOUND_TEMPLATE).rstrip("\n").split("\n")
-        self.assertTrue(lines[-1].startswith("#"),
-                        "the template does not end with a comment line")
-        block = []
-        for line in reversed(lines):
-            if not line.startswith("#"):
-                break
-            block.append(line)
-        text = " ".join(reversed(block))
-        self.assertIn("orgsyndb.toml", text)
-        self.assertNotIn("structure_image", text,
-                         "the closing block is the structure_image one")
-
-    def test_template_validates_as_a_registry_file(self) -> None:
-        """Scenario: Template validates."""
-        read_template(COMPOUND_TEMPLATE)
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "content"
-            root.mkdir()
-            with template_registry() as registry:
-                result = run_validator(["--compounds", registry, root],
-                                       cwd=Path(tmp))
-        self.assert_clean(result)
-
-    def test_template_explains_every_key_and_sets_the_required_ones(
-            self) -> None:
-        """Requirement: Compound template."""
-        lines = read_template(COMPOUND_TEMPLATE).splitlines()
-        comments = [ln for ln in lines if ln.startswith("#")]
-        for key in self.REQUIRED:
-            with self.subTest(key=key):
-                self.assertTrue(any(re.match(rf"{key}\s*=", ln)
-                                    for ln in lines), "not set")
-                self.assertTrue(any(re.search(rf"\b{key}\b", ln)
-                                    for ln in comments), "not explained")
-        for key in self.OPTIONAL:
-            with self.subTest(key=key):
-                self.assertFalse(any(re.match(rf"{key}\s*=", ln)
-                                     for ln in lines), "is set")
-                self.assertTrue(any(re.match(rf"#\s*{key}\s*=", ln)
-                                    for ln in comments),
-                                "not shown commented out")
-                self.assertTrue(any(re.search(rf"\b{key}\b", ln)
-                                    for ln in comments))
+    def test_the_procedure_templates_name_no_compound_template(self) -> None:
+        """Requirement: Compound template (removed): no template points
+        at it."""
+        for name in ("procedure.md", "procedure.de.md", "procedure.org",
+                     "procedure.de.org", "sequence.md"):
+            with self.subTest(template=name):
+                text = read_template(REPO / "templates" / name)
+                self.assertNotIn("compound.toml", text)
+                self.assertNotIn("reaction-types.toml", text)
 
 
 class SequenceTemplateTests(ValidatorTestCase):
@@ -211,7 +177,7 @@ class SequenceTemplateTests(ValidatorTestCase):
                 text, encoding="utf-8")
             result = run_validator(
                 ["--static-dir", collection / "static",
-                 "--compounds", collection / "compounds",
+                 "--registry", collection / "registry.json",
                  "--sequences", sequences,
                  collection / "md" / "procedures"], cwd=collection)
         self.assert_clean(result)

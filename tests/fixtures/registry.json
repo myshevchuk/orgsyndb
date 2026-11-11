@@ -1,0 +1,296 @@
+{
+  "format": 1,
+  "vocabularies": {
+    "chemical-classes": [
+      {
+        "key": "organic-compounds",
+        "label": "Organic compounds",
+        "label_de": null,
+        "parent": null
+      }
+    ],
+    "inventory-groups": [
+      {
+        "key": "reagents",
+        "label": "Reagents",
+        "label_de": null,
+        "parent": null
+      }
+    ],
+    "projects": [
+      {
+        "key": "research",
+        "label": "Research",
+        "label_de": "Forschung",
+        "parent": null
+      },
+      {
+        "key": "teaching",
+        "label": "Teaching",
+        "label_de": "Lehre",
+        "parent": null
+      },
+      {
+        "key": "first-year-practical",
+        "label": "First-year practical",
+        "label_de": "Grundpraktikum",
+        "parent": "teaching"
+      }
+    ],
+    "reaction-types": [
+      {
+        "key": "esterification",
+        "label": "Esterification",
+        "label_de": null
+      },
+      {
+        "key": "reduction",
+        "label": "Reduction",
+        "label_de": null
+      }
+    ]
+  },
+  "substances": [
+    {
+      "key": "10-undecenoic-acid",
+      "name": "10-Undecenoic acid",
+      "name_de": null,
+      "short_name": null,
+      "formula": "C11H20O2",
+      "smiles": "C=CCCCCCCCCC(=O)O",
+      "cas": null,
+      "note": null,
+      "group": "reagents",
+      "chemical_classes": [
+        "organic-compounds"
+      ],
+      "mw": 184.28,
+      "article_number": null
+    },
+    {
+      "key": "4-methylbenzoic-acid",
+      "name": "4-Methylbenzoic acid",
+      "name_de": null,
+      "short_name": null,
+      "formula": "C8H8O2",
+      "smiles": "Cc1ccc(cc1)C(=O)O",
+      "cas": "99-94-5",
+      "note": null,
+      "group": "reagents",
+      "chemical_classes": [
+        "organic-compounds"
+      ],
+      "mw": 136.15,
+      "article_number": null
+    },
+    {
+      "key": "acetic-acid",
+      "name": "Acetic acid",
+      "name_de": "Essigsäure",
+      "short_name": null,
+      "formula": "C2H4O2",
+      "smiles": "CC(=O)O",
+      "cas": "64-19-7",
+      "note": null,
+      "group": "reagents",
+      "chemical_classes": [
+        "organic-compounds"
+      ],
+      "mw": 60.05,
+      "article_number": null
+    },
+    {
+      "key": "acetylsalicylic-acid",
+      "name": "Acetylsalicylic acid",
+      "name_de": "Acetylsalicylsäure",
+      "short_name": null,
+      "formula": "C9H8O4",
+      "smiles": "CC(=O)Oc1ccccc1C(=O)O",
+      "cas": "50-78-2",
+      "note": null,
+      "group": "reagents",
+      "chemical_classes": [
+        "organic-compounds"
+      ],
+      "mw": 180.16,
+      "article_number": null
+    },
+    {
+      "key": "benzyl-acetate",
+      "name": "Benzyl acetate",
+      "name_de": null,
+      "short_name": null,
+      "formula": "C9H10O2",
+      "smiles": "CC(=O)OCc1ccccc1",
+      "cas": "140-11-4",
+      "note": null,
+      "group": "reagents",
+      "chemical_classes": [
+        "organic-compounds"
+      ],
+      "mw": 150.17,
+      "article_number": null
+    },
+    {
+      "key": "benzyl-ethanoate",
+      "name": "Benzyl ethanoate",
+      "name_de": null,
+      "short_name": null,
+      "formula": "C9H10O2",
+      "smiles": "CC(=O)OCc1ccccc1",
+      "cas": "140-11-4",
+      "note": null,
+      "group": "reagents",
+      "chemical_classes": [
+        "organic-compounds"
+      ],
+      "mw": 150.17,
+      "article_number": null
+    },
+    {
+      "key": "cinnamyl-alcohol",
+      "name": "Cinnamyl alcohol",
+      "name_de": null,
+      "short_name": null,
+      "formula": "C9H10O",
+      "smiles": "OC/C=C/c1ccccc1",
+      "cas": "104-54-1",
+      "note": null,
+      "group": "reagents",
+      "chemical_classes": [
+        "organic-compounds"
+      ],
+      "mw": 134.18,
+      "article_number": null
+    },
+    {
+      "key": "cis-stilbene",
+      "name": "cis-Stilbene",
+      "name_de": null,
+      "short_name": null,
+      "formula": "C14H12",
+      "smiles": "c1ccc(cc1)/C=C\\c1ccccc1",
+      "cas": "645-49-8",
+      "note": null,
+      "group": "reagents",
+      "chemical_classes": [
+        "organic-compounds"
+      ],
+      "mw": 180.25,
+      "article_number": null
+    },
+    {
+      "key": "ethanol",
+      "name": "Ethanol",
+      "name_de": null,
+      "short_name": null,
+      "formula": "C2H6O",
+      "smiles": "CCO",
+      "cas": "64-17-5",
+      "note": null,
+      "group": "reagents",
+      "chemical_classes": [
+        "organic-compounds"
+      ],
+      "mw": 46.07,
+      "article_number": null
+    },
+    {
+      "key": "ethyl-acetate",
+      "name": "Ethyl acetate",
+      "name_de": "Ethylacetat",
+      "short_name": null,
+      "formula": "C4H8O2",
+      "smiles": "CCOC(C)=O",
+      "cas": "141-78-6",
+      "note": null,
+      "group": "reagents",
+      "chemical_classes": [
+        "organic-compounds"
+      ],
+      "mw": 88.11,
+      "article_number": null
+    },
+    {
+      "key": "methyl-benzoate",
+      "name": "Methyl benzoate",
+      "name_de": null,
+      "short_name": null,
+      "formula": "C8H8O2",
+      "smiles": "COC(=O)c1ccccc1",
+      "cas": "93-58-3",
+      "note": null,
+      "group": "reagents",
+      "chemical_classes": [
+        "organic-compounds"
+      ],
+      "mw": 136.15,
+      "article_number": null
+    },
+    {
+      "key": "phenyl-salicylate",
+      "name": "Phenyl salicylate",
+      "name_de": null,
+      "short_name": null,
+      "formula": "C13H10O3",
+      "smiles": "O=C(Oc1ccccc1)c1ccccc1O",
+      "cas": "118-55-8",
+      "note": null,
+      "group": "reagents",
+      "chemical_classes": [
+        "organic-compounds"
+      ],
+      "mw": 214.22,
+      "article_number": null
+    },
+    {
+      "key": "propyl-acetate",
+      "name": "Propyl acetate",
+      "name_de": null,
+      "short_name": null,
+      "formula": "C5H10O2",
+      "smiles": "CCCOC(C)=O",
+      "cas": "109-60-4",
+      "note": null,
+      "group": "reagents",
+      "chemical_classes": [
+        "organic-compounds"
+      ],
+      "mw": 102.13,
+      "article_number": null
+    },
+    {
+      "key": "salicylic-acid",
+      "name": "Salicylic acid",
+      "name_de": "Salicylsäure",
+      "short_name": null,
+      "formula": "C7H6O3",
+      "smiles": "OC(=O)c1ccccc1O",
+      "cas": "69-72-7",
+      "note": null,
+      "group": "reagents",
+      "chemical_classes": [
+        "organic-compounds"
+      ],
+      "mw": 138.12,
+      "article_number": null
+    },
+    {
+      "key": "trans-stilbene",
+      "name": "trans-Stilbene",
+      "name_de": null,
+      "short_name": null,
+      "formula": "C14H12",
+      "smiles": "c1ccc(cc1)/C=C/c1ccccc1",
+      "cas": "103-30-0",
+      "note": null,
+      "group": "reagents",
+      "chemical_classes": [
+        "organic-compounds"
+      ],
+      "mw": 180.25,
+      "article_number": null
+    }
+  ],
+  "digest": "97b8db1cee56f7136991ac5eb65b2fd280b2c12417f6199bbfa3753bd3ee43f4"
+}

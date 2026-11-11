@@ -2,15 +2,15 @@
 panel shows no ID, and a product's formula, CAS number and SMILES only
 for a procedure with one product, so this hidden element keeps them in
 the indexed text. Its text is the ID, then for each product of
-product-keys.html in order its shown name, its formula, its CAS number when set and its SMILES, all
-separated by single spaces. */ -}}
+product-keys.html in order its shown name and those of its formula, CAS
+number and SMILES it has, all separated by single spaces. */ -}}
 {{ $terms := slice .Params.id -}}
 {{ range partial "product-keys.html" . -}}
 {{ $terms = $terms | append (partial "compound-name.html" .) -}}
 {{ with index site.Data.compounds . -}}
-{{ $terms = $terms | append .formula -}}
+{{ with .formula }}{{ $terms = $terms | append . }}{{ end -}}
 {{ with .cas }}{{ $terms = $terms | append . }}{{ end -}}
-{{ $terms = $terms | append .smiles -}}
+{{ with .smiles }}{{ $terms = $terms | append . }}{{ end -}}
 {{ end -}}
 {{ end -}}
 <span class="index-terms" hidden>{{ delimit $terms " " }}</span>

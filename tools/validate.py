@@ -6,27 +6,26 @@
 """Validate OrgSynDB procedure files against the procedure schema.
 
 Content roots are directories of Markdown procedures with ``+++`` TOML
-front matter, such as an ox-hugo export directory. The compound
-registry is a directory of ``<key>.toml`` files, one per compound; the
-validator checks each of them and resolves the compound keys that
-procedures name against the compounds it defines. The sequences
-directory holds synthesis sequences, Markdown files whose steps name
-procedures of the content roots; the validator checks that each step
-exists and that the steps chain. The collection's settings file
-declares further compound and procedure fields, whose values each
-compound file and each procedure is checked against, and names the
-vocabularies of its choice fields. The collection's reaction types are
-the vocabulary ``vocabularies/reaction-types.toml`` beside the settings
-file; a collection without that file has none. The validator reads no
-Org source: an Org procedure reaches it only as its export, and the
-export checks the Org source itself. Each problem is printed to stdout
-as ``<path>:<field>: <severity>: <message>``, followed by a summary line
-on stderr. The exit status is 0 when no error was found, 1 when at
-least one was, and 2 on a usage or configuration error.
+front matter, such as an ox-hugo export directory. The registry is a
+snapshot of the lab application's registry, a JSON file: its substances
+are the compounds that procedures and sequences name by key, and its
+vocabularies hold the reaction types and the terms of the procedure
+fields. The sequences directory holds synthesis sequences, Markdown
+files whose steps name procedures of the content roots; the validator
+checks that each step exists and that the steps chain. The collection's
+settings file declares further procedure fields, whose values each
+procedure is checked against, and names the vocabularies of its choice
+fields. The validator reads no Org source: an Org procedure reaches it
+only as its export, and the export checks the Org source itself. Each
+problem is printed to stdout as ``<path>:<field>: <severity>:
+<message>``, followed by a summary line on stderr. The exit status is 0
+when no error was found, 1 when at least one was, and 2 on a usage or
+configuration error.
 """
 
 import argparse
 import datetime as dt
+import json
 import math
 import os
 import re
@@ -34,46 +33,47 @@ import sys
 import tomllib
 import zoneinfo
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, NamedTuple
 
-# Structure images, compounds and sequences belong to a collection; run
-# from its root.
+# Structure images, the registry the collection's tools last read and
+# sequences belong to a collection; run from its root.
 DEFAULT_STATIC_DIR = Path("static")
-DEFAULT_COMPOUNDS = Path("compounds")
+DEFAULT_REGISTRY = Path("build") / "registry.json"
 DEFAULT_SEQUENCES = Path("md") / "sequences"
 DEFAULT_SETTINGS = Path("orgsyndb.toml")
-# The collection's reaction types, beside its settings file.
-REACTION_TYPES = Path("vocabularies") / "reaction-types.toml"
 ZONE_NAME = "Europe/Berlin"
 
 SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
-# A compound file is named <key>.toml, the key shaped like a slug.
-COMPOUND_FILE_RE = re.compile(r"^([a-z0-9]+(?:-[a-z0-9]+)*)\.toml$")
 SCALE_RE = re.compile(r"^\d+([.,]\d+)?\s+\S+$")
 TIME_RE = re.compile(r"\d+([.,]\d+)?\s+(min|h|d)")
-CAS_RE = re.compile(r"^(\d{2,7})-(\d{2})-(\d)$")
 # The collection settings file: the format it is written in, and its
 # top-level keys.
 SETTINGS_FORMAT = 1
-SETTINGS_KEYS = ("format", "fields")
+SETTINGS_KEYS = ("format", "registry", "fields")
+# The registry snapshot: the format it is written in, and its
+# vocabularies, the reaction types among them.
+SNAPSHOT_FORMAT = 1
+VOCABULARIES = ("chemical-classes", "inventory-groups", "projects",
+                "reaction-types")
+REACTION_TYPES = "reaction-types"
+# The text values of a substance in a snapshot, each a string or null.
+SUBSTANCE_TEXTS = ("name", "name_de", "short_name", "formula", "smiles", "cas",
+                   "note", "group", "article_number")
 FIELD_KEY_RE = re.compile(r"^[a-z][a-z0-9]*(_[a-z0-9]+)*$")
 FIELD_TYPES = ("text", "number", "boolean", "choice")
-# The keys of a field declaration: those every type takes, and those
-# only the named type takes.
-FIELD_OPTIONS = ("key", "type", "label", "label_de", "required", "column")
+# The keys of a procedure field declaration: those every type takes, and
+# those only the named type takes.
+FIELD_OPTIONS = ("key", "type", "label", "label_de", "required")
 TYPE_OPTIONS = {
-    "text": ("pattern", "unique", "search", "beside"),
-    "number": ("min", "max", "unit", "unique", "beside"),
+    "text": ("pattern", "unique"),
+    "number": ("min", "max", "unit", "unique"),
     "boolean": ("facet",),
-    "choice": ("vocabulary", "multiple", "facet", "tabs"),
+    "choice": ("vocabulary", "multiple", "facet"),
 }
-# The keys no compound field may take, because the compound catalogue
-# names its rows' record keys and its address parameters with them.
-RESERVED_FIELD_KEYS = ("id", "title", "created", "modified", "text", "q",
-                       "sort", "view")
-# The options a procedure field does not take.
+# The presentation options of the registry fields, which a procedure
+# field does not take.
 PROCEDURE_WITHHELD_OPTIONS = ("column", "search", "tabs", "beside")
 # The front-matter keys Hugo reads for itself, beyond those the procedure
 # schema already names, and the weight it reads for each taxonomy.
@@ -87,7 +87,6 @@ HUGO_FRONT_MATTER_KEYS = (
 # The record keys and address parameters of the procedure catalogue that
 # neither the procedure schema nor Hugo names.
 PROCEDURE_CATALOGUE_KEYS = ("tag", "created", "text", "q", "sort", "view")
-TERM_KEYS = ("label", "label_de", "parent")
 STATUSES = ("draft", "checked", "retired")
 # The languages a procedure may be written in. A file name may carry one
 # of them before its suffix, as in OSDB-0001-x.de.md; the files of one ID
@@ -197,18 +196,6 @@ def is_offset_datetime(value: object) -> bool:
     return isinstance(value, dt.datetime) and value.utcoffset() is not None
 
 
-def cas_check_digit_ok(cas: str) -> bool:
-    """Whether a CAS number of the form ``N-NN-N`` has a valid check digit.
-
-    The check digit is the sum of every other digit multiplied by its
-    position counted from the right, modulo 10.
-    """
-    digits = cas.replace("-", "")
-    body, check = digits[:-1], int(digits[-1])
-    total = sum(i * int(d) for i, d in enumerate(reversed(body), start=1))
-    return total % 10 == check
-
-
 def format_offset(offset: dt.timedelta) -> str:
     """Format a UTC offset as ``+HH:MM``."""
     minutes = int(offset.total_seconds()) // 60
@@ -271,24 +258,17 @@ def parse_front_matter(text: str) -> FrontMatter | Problem:
 # Field checks on one content file
 
 
-class Fields(NamedTuple):
-    """The fields a collection declares, each tuple in declared order:
-    ``compound`` those of ``fields.compound``, ``procedure`` those of
-    ``fields.procedure``."""
-
-    compound: tuple[Declaration, ...] = ()
-    procedure: tuple[Declaration, ...] = ()
-
-
 @dataclass
 class Context:
-    """Settings shared by the checks of one run."""
+    """Settings shared by the checks of one run: the registry's reaction
+    types and compound keys, the static directory, the time zone, and
+    the procedure fields the collection declares, in declared order."""
 
     reaction_types: frozenset[str]
     static_dir: Path
     zone: dt.tzinfo
     compounds: frozenset[str] = frozenset()
-    fields: Fields = Fields()
+    fields: tuple[Declaration, ...] = ()
 
 
 def check_string(name: str, value: object) -> list[Problem]:
@@ -391,9 +371,8 @@ def check_reaction_types(value: object,
     if len(value) != 1:
         return [error(name, "must contain exactly one reaction type")]
     if value[0] not in allowed:
-        return [error(name, f'unknown reaction type "{value[0]}"; see '
-                      f"{REACTION_TYPES.as_posix()} for the allowed "
-                      "values")]
+        return [error(name, f'unknown reaction type "{value[0]}"; the '
+                      "registry has no such reaction type")]
     return []
 
 
@@ -534,8 +513,8 @@ def check_compound_key(name: str, key: str,
                        compounds: frozenset[str]) -> list[Problem]:
     """Check that ``key`` is a key of the registry ``compounds``."""
     if key not in compounds:
-        return [error(name, f'unknown compound "{key}"; the compound '
-                      f"registry has no {key}.toml")]
+        return [error(name, f'unknown compound "{key}"; the registry has '
+                      "no substance of this key")]
     return []
 
 
@@ -618,12 +597,12 @@ def repeated(keys: Iterable[str]) -> list[str]:
     return found
 
 
-def check_structure_image(value: object, static_dir: Path,
-                          name: str = "structure_image") -> list[Problem]:
-    """Check the image path ``value``'s form, then that the file exists
-    under ``static_dir``.
+def check_image_path(name: str, value: object,
+                     static_dir: Path) -> list[Problem]:
+    """Check the image path VALUE's form, then that the file exists
+    under STATIC_DIR.
 
-    Problems are reported under ``name``. The existence check runs only
+    Problems are reported under NAME. The existence check runs only
     when the path has an allowed prefix and suffix.
     """
     if not isinstance(value, str):
@@ -764,15 +743,15 @@ def check_fields(data: dict[str, Any], ctx: Context) -> list[Problem]:
             case "scope":
                 found += check_scope(value, ctx.compounds)
             case "scheme_image":
-                found += check_structure_image(value, ctx.static_dir, key)
+                found += check_image_path(key, value, ctx.static_dir)
             case "checked_by" | "references":
                 found += check_string_list(key, value, non_empty=False)
             case "ai_model":
                 found += check_ai_model(value)
             case "language":
                 found += check_language(value)
-    found += check_declared(data, ctx.fields.procedure)
-    declared = {field.key for field in ctx.fields.procedure}
+    found += check_declared(data, ctx.fields)
+    declared = {field.key for field in ctx.fields}
     for key, value in data.items():
         if (key not in REQUIRED_KEYS and key not in OPTIONAL_KEYS
                 and key not in declared):
@@ -1048,40 +1027,15 @@ def check_cross_file(files: Sequence[ContentFile],
 
 
 # --------------------------------------------------------------------------
-# Compound registry
-
-COMPOUND_REQUIRED_KEYS = ("name", "formula", "mw", "smiles")
-COMPOUND_OPTIONAL_KEYS = ("name_de", "cas", "structure_image")
-
-
-def check_mw(value: object) -> list[Problem]:
-    """Check that ``mw`` is a finite number greater than 0."""
-    if not is_number(value):
-        return [error("mw", "must be a number in g/mol, unquoted, "
-                      "e.g. 88.11")]
-    if not math.isfinite(value) or value <= 0:
-        return [error("mw", "must be greater than 0")]
-    return []
-
-
-def check_cas(value: object) -> list[Problem]:
-    """Check that ``cas`` has the CAS form and a valid check digit."""
-    if not isinstance(value, str) or not CAS_RE.match(value):
-        return [error("cas", f"{value!r} must have the form NNNNNNN-NN-N, "
-                      'e.g. "64-17-5"')]
-    if not cas_check_digit_ok(value):
-        return [error("cas", f'"{value}" has a wrong check digit; check '
-                      "the number")]
-    return []
-
+# Registry
 
 class Term(NamedTuple):
-    """One value of a collection vocabulary.
+    """One term of a vocabulary of the registry.
 
-    ``label`` is the value's name on an English site and ``label_de``
-    its name on a German site, or None when the vocabulary gives none.
-    ``parent`` is the value it is filed under, or None for a top-level
-    value.
+    ``label`` is the term's name on an English site and ``label_de``
+    its name on a German site, or None when the registry gives none.
+    ``parent`` is the term it is filed under, or None for a top-level
+    term.
     """
 
     label: str
@@ -1090,22 +1044,24 @@ class Term(NamedTuple):
 
 
 class Declaration(NamedTuple):
-    """A compound or procedure field that a collection declares, its
-    defaults applied.
+    """A field of the collection's compounds or procedures, its defaults
+    applied: one of the registry fields (``registry_fields``) or a
+    procedure field the collection declares.
 
     ``type`` is one of FIELD_TYPES. An option the type does not take
-    holds None, or False for a boolean option: ``pattern``, ``unique``,
-    ``search`` and ``beside`` belong to a text field, ``minimum``,
-    ``maximum``, ``unit``, ``unique`` and ``beside`` to a number field,
-    ``facet`` to a boolean field, and ``vocabulary``, ``multiple``,
-    ``terms``, ``facet`` and ``tabs`` to a choice field. ``facet`` makes
-    the field a filter of the compound catalogue, ``search`` adds its
-    values to the text that the compound catalogue searches, ``beside``
-    has the site write the compound's value after every link to the
-    compound, and ``tabs`` divides the compound catalogue into tab pages
-    by the field's top-level values, whose directory the field's key
-    names. ``pattern`` is compiled; ``terms`` maps every value of the
-    field's vocabulary, in file order, to its entry.
+    holds None, or False for a boolean option: ``pattern`` and
+    ``unique`` belong to a text field, ``minimum``, ``maximum``,
+    ``unit`` and ``unique`` to a number field, ``facet`` to a boolean
+    field, and ``vocabulary``, ``multiple``, ``terms`` and ``facet`` to
+    a choice field. ``pattern`` is compiled; ``terms`` maps every term
+    of the field's vocabulary, in the registry's order, to its entry.
+    ``facet`` makes the field a filter of a catalogue. ``column``,
+    ``search``, ``beside`` and ``tabs`` are the presentation of a
+    registry field and False for a procedure field: a column of the
+    compound directory, the compound catalogue's search matching its
+    values, the value written after every link to the compound, and the
+    compound catalogue divided into tab pages by the field's top-level
+    terms, whose directory the field's key names.
     """
 
     key: str
@@ -1137,19 +1093,19 @@ def check_choice(field: Declaration, value: object) -> list[Problem]:
     the list repeats one ``repeats`` error.
     """
     name = field.key
-    source = f"vocabularies/{field.vocabulary}.toml"
 
     def unknown(entry: str) -> Problem:
-        return error(name, f'unknown value "{entry}"; see {source} for '
-                     "the allowed values")
+        return error(name, f'unknown value "{entry}" of the vocabulary '
+                     f"{field.vocabulary}")
 
     if not field.multiple:
         if not isinstance(value, str):
             return [error(name, "must be a string")]
         return [] if value in field.terms else [unknown(value)]
     if not is_string_list(value):
+        example = next(iter(field.terms), "a term")
         return [error(name, "must be a list of strings, e.g. "
-                      f'["{next(iter(field.terms))}"]')]
+                      f'["{example}"]')]
     if not value:
         return [error(name, "must not be empty")]
     found = [unknown(entry) for entry in dict.fromkeys(value)
@@ -1159,8 +1115,7 @@ def check_choice(field: Declaration, value: object) -> list[Problem]:
 
 
 def check_field_value(field: Declaration, value: object) -> list[Problem]:
-    """Check VALUE, set by a compound or procedure file, against the
-    declared FIELD.
+    """Check VALUE, set by a procedure, against the declared FIELD.
 
     Problems are reported under the field's key. A value of the wrong
     type draws that one error and no other.
@@ -1192,9 +1147,9 @@ def check_field_value(field: Declaration, value: object) -> list[Problem]:
 
 def check_declared(data: dict[str, Any],
                    fields: Iterable[Declaration]) -> list[Problem]:
-    """Check the values that the parsed compound or procedure file DATA
-    sets for the declared FIELDS; a missing value is an error only for a
-    field declared ``required``."""
+    """Check the values that the parsed procedure DATA sets for the
+    declared FIELDS; a missing value is an error only for a field
+    declared ``required``."""
     found: list[Problem] = []
     for field in fields:
         if field.key in data:
@@ -1209,7 +1164,7 @@ def check_unique(fields: Iterable[Declaration],
                  ) -> list[tuple[str, Problem]]:
     """Compare the values of the FIELDS declared ``unique`` across the
     files PARSED, each given as its path, the name that stands for it in
-    messages (a compound's key, a procedure's ID) and its table.
+    messages, a procedure's ID, and its table.
 
     Only a value that passes the checks of its field is compared. Each
     file that sets a value some other file also sets gets an error,
@@ -1233,120 +1188,212 @@ def check_unique(fields: Iterable[Declaration],
     return problems
 
 
-def check_compound(data: dict[str, Any], static_dir: Path,
-                   fields: Sequence[Declaration] = ()) -> list[Problem]:
-    """Check the keys of one parsed compound file.
 
-    Problems are reported under the key's name. ``structure_image`` is
-    resolved against ``static_dir``. The keys of the declared FIELDS are
-    checked against their declarations; any other key outside the
-    compound schema is a warning.
+
+def _terms_problem(name: str, terms: object) -> str | None:
+    """Return why TERMS, the snapshot's vocabulary NAME, is no list of
+    terms, or None when it is one: tables of a non-empty string ``key``,
+    no key twice, a non-empty string ``label``, and an optional
+    ``label_de``, a string or null, and ``parent``, null or the key of
+    another term of NAME, no term its own ancestor."""
+    where = f"vocabularies.{name}"
+    if not isinstance(terms, list):
+        return f"{where} must be a list of terms"
+    parents: dict[str, Any] = {}
+    for number, entry in enumerate(terms, start=1):
+        at = f"{where}[{number}]"
+        if not isinstance(entry, dict):
+            return f"{at} must be a table"
+        key, label = entry.get("key"), entry.get("label")
+        if not isinstance(key, str) or not key:
+            return f"{at}.key must be a non-empty string"
+        if key in parents:
+            return f"{where} lists the term {key} twice"
+        if not isinstance(label, str) or not label:
+            return f"{at}.label must be a non-empty string"
+        if not isinstance(entry.get("label_de"), str | None):
+            return f"{at}.label_de must be a string or null"
+        if not isinstance(entry.get("parent"), str | None):
+            return f"{at}.parent must be a string or null"
+        parents[key] = entry.get("parent")
+    for key, parent in parents.items():
+        if parent is not None and parent not in parents:
+            return f"{where}: the parent {parent!r} of {key} is no term of it"
+    for key, parent in parents.items():
+        seen = {key}
+        while parent is not None:
+            if parent in seen:
+                return f"{where}: the term {key} is its own ancestor"
+            seen.add(parent)
+            parent = parents[parent]
+    return None
+
+
+def _substance_problem(number: int, entry: object) -> str | None:
+    """Return why ENTRY, the NUMBERth substance of a snapshot, is none,
+    or None when it is one: a table whose ``key`` is a lowercase
+    hyphenated slug, and whose other values, those it has, have their
+    types: the texts of SUBSTANCE_TEXTS a string or null,
+    ``chemical_classes`` a list of strings and ``mw`` a finite number or
+    null."""
+    at = f"substances[{number}]"
+    if not isinstance(entry, dict):
+        return f"{at} must be a table"
+    key = entry.get("key")
+    if not isinstance(key, str) or not SLUG_RE.match(key):
+        return f"{at}.key must be a lowercase hyphenated slug"
+    for text in SUBSTANCE_TEXTS:
+        if not isinstance(entry.get(text), str | None):
+            return f"{at}.{text} must be a string or null"
+    if not is_string_list(entry.get("chemical_classes", [])):
+        return f"{at}.chemical_classes must be a list of strings"
+    mw = entry.get("mw")
+    if mw is not None and (not is_number(mw) or not math.isfinite(mw)):
+        return f"{at}.mw must be a number or null"
+    return None
+
+
+def snapshot_problem(table: object) -> str | None:
+    """Return why TABLE, a decoded JSON value, is not a registry
+    snapshot, or None when it is one.
+
+    A snapshot is a table whose ``format`` is the integer
+    SNAPSHOT_FORMAT; whose ``vocabularies`` is a table holding each of
+    VOCABULARIES as a list of terms, each a table of ``key``, ``label``
+    and optionally ``label_de`` and ``parent``; and whose
+    ``substances`` is a list of tables, each with a ``key``, no key
+    twice (``_substance_problem``). Other keys, ``digest`` among them, are not
+    checked.
     """
-    found: list[Problem] = []
-    for key in COMPOUND_REQUIRED_KEYS:
-        if key not in data:
-            found.append(error(key, "required field missing"))
-        elif key == "mw":
-            found += check_mw(data[key])
-        else:
-            found += check_string(key, data[key])
-    for key in COMPOUND_OPTIONAL_KEYS:
-        if key not in data:
-            continue
-        match key:
-            case "name_de":
-                found += check_string(key, data[key])
-            case "cas":
-                found += check_cas(data[key])
-            case "structure_image":
-                found += check_structure_image(data[key], static_dir)
-    found += check_declared(data, fields)
-    declared = {field.key for field in fields}
-    for key in data:
-        if (key not in COMPOUND_REQUIRED_KEYS + COMPOUND_OPTIONAL_KEYS
-                and key not in declared):
-            found.append(warning(key, "unknown field"))
-    return found
+    if not isinstance(table, dict):
+        return "it is not a JSON object"
+    found = table.get("format")
+    if type(found) is not int or found != SNAPSHOT_FORMAT:
+        shown = "missing" if found is None else json.dumps(found)
+        return (f"format is {shown}; this OrgSynDB reads format "
+                f"{SNAPSHOT_FORMAT}")
+    vocabularies = table.get("vocabularies")
+    if not isinstance(vocabularies, dict):
+        return ("vocabularies must be an object holding "
+                + ", ".join(VOCABULARIES))
+    for name in VOCABULARIES:
+        problem = _terms_problem(name, vocabularies.get(name))
+        if problem is not None:
+            return problem
+    substances = table.get("substances")
+    if not isinstance(substances, list):
+        return "substances must be a list of substances"
+    keys: set[str] = set()
+    for number, entry in enumerate(substances, start=1):
+        problem = _substance_problem(number, entry)
+        if problem is not None:
+            return problem
+        if entry["key"] in keys:
+            return f"substances lists the key {entry['key']} twice"
+        keys.add(entry["key"])
+    return None
 
 
-def read_compound(path: str) -> dict[str, Any] | Problem:
-    """Read and parse the compound file ``path`` as UTF-8 TOML.
+def load_snapshot(data: bytes, where: str) -> dict[str, Any]:
+    """Return the registry snapshot that DATA, UTF-8 JSON, holds.
 
-    Returns the parsed table, or a ``toml`` error when the file cannot
-    be read, is not UTF-8 or is not valid TOML.
+    Raises ConfigError, its message beginning with WHERE, the file or
+    address DATA came from, when DATA is not UTF-8 JSON or not a
+    snapshot (``snapshot_problem``).
     """
     try:
-        with open(path, encoding="utf-8-sig") as handle:
-            return tomllib.loads(handle.read())
-    except UnicodeDecodeError:
-        return error("toml", "file is not valid UTF-8")
-    except OSError as exc:
-        return error("toml", f"cannot read file: {exc.strerror}")
-    except tomllib.TOMLDecodeError as exc:
-        return error("toml", f"invalid TOML: {exc}")
+        table = json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError, RecursionError) as exc:
+        raise ConfigError(f"{where}: not UTF-8 JSON: {exc}") from None
+    problem = snapshot_problem(table)
+    if problem is not None:
+        raise ConfigError(f"{where}: not a registry snapshot: {problem}")
+    return table
 
 
-class Registry(NamedTuple):
-    """The outcome of examining a compound registry."""
+def read_registry(path: str | Path) -> dict[str, Any]:
+    """Read the registry snapshot file PATH and return its table.
 
-    compounds: frozenset[str]
-    problems: list[tuple[str, Problem]]
-    files: int
-
-
-def examine_registry(registry: str, static_dir: Path,
-                     fields: Sequence[Declaration] = ()) -> Registry:
-    """Check every compound file of the directory ``registry``.
-
-    Each file is checked against the compound schema and the declared
-    FIELDS, and the values of the fields declared ``unique`` are
-    compared across the files. A file whose key equals the key of the
-    field declared ``tabs`` is a ``file_name`` error, since that key
-    names the directory of the tab pages. Returns the keys of the
-    compounds the registry defines, the problems found, each with the
-    path ``registry`` joined with the entry name, and the number of
-    compound files examined. A file whose name begins with ``.`` is skipped; a
-    subdirectory, or any other file not named ``<key>.toml``, is a
-    ``file_name`` error and defines no compound, and so does a file that
-    does not parse. A ``registry`` that does not exist defines no
-    compound and draws no problem.
+    Raises ConfigError, its message beginning with PATH, when the file
+    does not exist or cannot be read, or when ``load_snapshot`` refuses
+    its content.
     """
-    if not os.path.isdir(registry):
-        return Registry(frozenset(), [], 0)
-    tabs = {field.key for field in fields if field.tabs}
-    parsed: list[tuple[str, str, dict[str, Any]]] = []
-    problems: list[tuple[str, Problem]] = []
-    files = 0
-    for name in sorted(os.listdir(registry)):
-        path = os.path.join(registry, name)
-        match = COMPOUND_FILE_RE.match(name)
-        if os.path.isdir(path):
-            problems.append((path, error(
-                "file_name", "subdirectories are not supported; move "
-                "its files to the top level")))
-        elif name.startswith("."):
-            continue
-        elif match is None:
-            problems.append((path, error(
-                "file_name", "must be named <key>.toml, the key lowercase "
-                "and hyphenated, e.g. ethyl-acetate.toml")))
-        else:
-            files += 1
-            data = read_compound(path)
-            if isinstance(data, Problem):
-                problems.append((path, data))
-                continue
-            parsed.append((path, match.group(1), data))
-            if match.group(1) in tabs:
-                problems.append((path, error(
-                    "file_name", f"{match.group(1)} is the key of the field "
-                    "declared tabs = true, which names the directory of "
-                    "the compound tab pages; rename the file")))
-            problems += [(path, p)
-                         for p in check_compound(data, static_dir, fields)]
-    problems += check_unique(fields, parsed)
-    return Registry(frozenset(key for _, key, _ in parsed), problems, files)
+    try:
+        data = Path(path).read_bytes()
+    except FileNotFoundError:
+        raise ConfigError(f"{path}: registry file not found") from None
+    except OSError as exc:
+        raise ConfigError(f"{path}: cannot read it: {exc}") from None
+    return load_snapshot(data, str(path))
 
+
+def registry_terms(registry: dict[str, Any]) -> dict[str, dict[str, Term]]:
+    """Return the vocabularies of the snapshot REGISTRY: each name of
+    VOCABULARIES mapped to its terms, in the snapshot's order, each key
+    to its entry. An absent ``label_de`` or ``parent`` is None."""
+    return {name: {entry["key"]: Term(entry["label"],
+                                      entry.get("label_de"),
+                                      entry.get("parent"))
+                   for entry in registry["vocabularies"][name]}
+            for name in VOCABULARIES}
+
+
+# The key of the registry field shown as tabs, which names the directory
+# of the compound tab pages.
+TABS_KEY = "group"
+
+
+def _declaration(key: str, type_: str, label: str, label_de: str | None,
+                 vocabulary: str | None = None,
+                 terms: dict[str, Term] | None = None,
+                 **flags: bool) -> Declaration:
+    """Return the field KEY of TYPE_ with its labels, for a choice its
+    VOCABULARY and TERMS, and the FLAGS among ``column``, ``search``,
+    ``beside``, ``multiple``, ``facet`` and ``tabs`` that it sets; every
+    other option takes its default."""
+    return Declaration(
+        key=key, type=type_, label=label, label_de=label_de,
+        required=False, column=flags.get("column", False), unique=False,
+        pattern=None, minimum=None, maximum=None, unit=None,
+        vocabulary=vocabulary, multiple=flags.get("multiple", False),
+        terms=terms or {}, facet=flags.get("facet", False),
+        search=flags.get("search", False), tabs=flags.get("tabs", False),
+        beside=flags.get("beside", False))
+
+
+def registry_fields(vocabularies: dict[str, dict[str, Term]]
+                    ) -> tuple[Declaration, ...]:
+    """Return the four registry fields that every compound has, in
+    order: ``article_number``, ``short_name``, ``chemical_class`` and
+    ``group``, the choices taking their terms from VOCABULARIES, as
+    ``registry_terms`` returns them.
+
+    A compound's value of each is its substance's ``article_number``,
+    ``short_name``, ``chemical_classes`` and ``group``.
+    """
+    return (
+        _declaration("article_number", "text", "Article no.",
+                        "Artikelnr.", column=True, search=True, beside=True),
+        _declaration("short_name", "text", "Short name", "Kurzname",
+                        search=True, beside=True),
+        _declaration("chemical_class", "choice", "Chemical class",
+                        "Stoffklasse", "chemical-classes",
+                        vocabularies["chemical-classes"], multiple=True,
+                        column=True, facet=True),
+        _declaration(TABS_KEY, "choice", "Group", "Gruppe",
+                        "inventory-groups", vocabularies["inventory-groups"],
+                        facet=True, tabs=True),
+    )
+
+
+def check_registry(registry: dict[str, Any]) -> list[Problem]:
+    """Check the snapshot REGISTRY for what the site cannot publish: a
+    substance whose key is TABS_KEY, which names the directory of the
+    compound tab pages, is an error under ``substances``."""
+    return [error("substances", f'the substance "{TABS_KEY}" has the key '
+                  "of the directory of the compound tabs, "
+                  f"/compounds/{TABS_KEY}/, which no substance may take")
+            for entry in registry["substances"] if entry["key"] == TABS_KEY]
 
 # --------------------------------------------------------------------------
 # Synthesis sequences
@@ -1628,98 +1675,29 @@ def read_settings(path: Path) -> dict[str, Any]:
     """Read the collection settings file PATH and return its table.
 
     The file must parse as TOML to a table holding ``format``, the
-    integer SETTINGS_FORMAT, and no top-level key outside SETTINGS_KEYS.
-    Nothing inside ``fields`` is checked. Raises ConfigError, its
-    message beginning with PATH, when the file breaks any of this or
-    cannot be read as UTF-8 TOML.
+    integer SETTINGS_FORMAT, optionally ``registry``, a string that is
+    not blank, and no top-level key outside SETTINGS_KEYS. Nothing
+    inside ``fields`` is checked. Raises ConfigError, its message
+    beginning with PATH, when the file breaks any of this or cannot be
+    read as UTF-8 TOML.
     """
     data = read_config(path)
     unknown = sorted(set(data) - set(SETTINGS_KEYS))
     if unknown:
         raise ConfigError(f"{path}: unknown key {', '.join(unknown)}; only "
-                          f"{' and '.join(SETTINGS_KEYS)} are allowed")
+                          f"{', '.join(SETTINGS_KEYS)} are allowed")
     value = data.get("format")
     if type(value) is not int or value != SETTINGS_FORMAT:
         shown = "missing" if value is None else repr(value)
         raise ConfigError(f"{path}: format is {shown}; this OrgSynDB reads "
                           f"format = {SETTINGS_FORMAT}")
+    registry = data.get("registry", "")
+    if not isinstance(registry, str) or "registry" in data and (
+            not registry.strip()):
+        raise ConfigError(f"{path}: registry must be the address of the lab "
+                          "application's registry snapshot or the path of "
+                          "a snapshot file, a non-empty string")
     return data
-
-
-def load_terms(path: Path) -> dict[str, Term]:
-    """Load the collection vocabulary PATH and return its values, in file
-    order, each with its entry.
-
-    Raises ConfigError, its message beginning with PATH, when the file
-    cannot be read as UTF-8 TOML, holds no value, or breaks a rule of a
-    vocabulary: every value a lowercase hyphenated slug whose entry is a
-    table with a non-empty string ``label``, an optional non-empty
-    string ``label_de`` and an optional ``parent`` that is another value
-    of the file, no other key, and no value its own ancestor.
-    """
-    data = read_config(path)
-    if not data:
-        raise ConfigError(f"{path}: the vocabulary has no value")
-    terms: dict[str, Term] = {}
-    for value, entry in data.items():
-        where = f"{path}: value {value!r}"
-        if not SLUG_RE.match(value):
-            raise ConfigError(f"{where} is not a lowercase hyphenated "
-                              "slug")
-        label = entry.get("label") if isinstance(entry, dict) else None
-        if not isinstance(label, str) or not label.strip():
-            raise ConfigError(f"{where} must be a table with a non-empty "
-                              "label")
-        unknown = sorted(set(entry) - set(TERM_KEYS))
-        if unknown:
-            raise ConfigError(f"{where} holds the unknown key "
-                              f"{', '.join(unknown)}; only "
-                              f"{', '.join(TERM_KEYS)} are allowed")
-        label_de = entry.get("label_de")
-        if "label_de" in entry and (not isinstance(label_de, str)
-                                    or not label_de.strip()):
-            raise ConfigError(f"{where}: label_de must be a non-empty "
-                              "string")
-        parent = entry.get("parent")
-        if "parent" in entry and (not isinstance(parent, str)
-                                  or parent not in data):
-            raise ConfigError(f"{where}: parent {parent!r} is not a value "
-                              "of this vocabulary")
-        terms[value] = Term(label, label_de, parent)
-    for value in terms:
-        current = terms[value].parent
-        for _ in terms:
-            if current is None:
-                break
-            if current == value:
-                raise ConfigError(f"{path}: value {value!r} is its own "
-                                  "ancestor; its parent entries form a "
-                                  "loop")
-            current = terms[current].parent
-    return terms
-
-
-def load_reaction_types(settings: Path) -> dict[str, Term]:
-    """Load the reaction types of the collection whose settings file is
-    SETTINGS and return them as load_terms does.
-
-    They are the vocabulary ``vocabularies/reaction-types.toml`` beside
-    SETTINGS, whether or not SETTINGS exists. A file that does not exist
-    gives no reaction type. Raises ConfigError, its message naming the
-    file, when the file breaks a rule of load_terms, and also when a
-    value takes ``parent``, the message then naming the value and
-    ``parent``: the reaction types form a single level.
-    """
-    path = Path(settings).parent / REACTION_TYPES
-    if not path.exists():
-        return {}
-    terms = load_terms(path)
-    for value, term in terms.items():
-        if term.parent is not None:
-            raise ConfigError(f"{path}: value {value!r} takes parent "
-                              f"{term.parent!r}; reaction types form a "
-                              "single level and take no parent")
-    return terms
 
 
 def declared_string(entry: dict[str, Any], option: str, where: str,
@@ -1764,65 +1742,41 @@ def declared_bound(entry: dict[str, Any], option: str,
     return value
 
 
-class Entity(NamedTuple):
-    """The declaration rules of the fields of one kind of record.
-
-    ``name`` is the record's table under ``fields``, as in
-    ``fields.compound``. ``reserved`` pairs each group of keys that no
-    field of the entity may take with the reason a message gives for
-    it, and ``withheld`` lists the declaration options the entity's
-    fields do not take, whatever their type.
-    """
-
-    name: str
-    reserved: tuple[tuple[tuple[str, ...], str], ...]
-    withheld: tuple[str, ...]
-
-
-COMPOUND_ENTITY = Entity("compound", (
-    (COMPOUND_REQUIRED_KEYS + COMPOUND_OPTIONAL_KEYS,
-     "is a built-in compound key"),
-    (RESERVED_FIELD_KEYS,
-     "is reserved by the compound catalogue; the reserved keys are "
-     f"{', '.join(RESERVED_FIELD_KEYS)}")), ())
-PROCEDURE_ENTITY = Entity("procedure", (
+# The keys no procedure field may take, each group with the reason a
+# message gives for it.
+RESERVED_PROCEDURE_KEYS = (
     (REQUIRED_KEYS + OPTIONAL_KEYS + EXTRA_KEYS,
      "is a key of the procedure schema"),
     (HUGO_FRONT_MATTER_KEYS, "is a front-matter key that Hugo reads"),
     (PROCEDURE_CATALOGUE_KEYS,
      "is reserved by the procedure catalogue; the reserved keys are "
-     f"{', '.join(PROCEDURE_CATALOGUE_KEYS)}")), PROCEDURE_WITHHELD_OPTIONS)
-# The entities whose fields a settings file declares, in the order the
-# tables under ``fields`` are read.
-ENTITIES = (COMPOUND_ENTITY, PROCEDURE_ENTITY)
+     f"{', '.join(PROCEDURE_CATALOGUE_KEYS)}"))
 
 
 def read_declaration(entry: dict[str, Any], number: int, settings: Path,
                      taken: Iterable[str],
-                     vocabularies: dict[str, dict[str, Term]],
-                     entity: Entity = COMPOUND_ENTITY) -> Declaration:
-    """Check the declaration ENTRY, the NUMBERth table of the ENTITY's
-    ``fields.<name>`` in the settings file SETTINGS, and return it.
+                     vocabularies: dict[str, dict[str, Term]]
+                     ) -> Declaration:
+    """Check the declaration ENTRY, the NUMBERth table of
+    ``fields.procedure`` in the settings file SETTINGS, and return it.
 
-    TAKEN holds the keys of the declarations of ENTITY before it. A
-    vocabulary the declaration names is read from ``vocabularies/``
-    beside SETTINGS, unless VOCABULARIES, a cache from vocabulary name
-    to its values that this call extends, already holds it. Raises
-    ConfigError when the declaration breaks a rule of a field
-    declaration or of ENTITY, or its vocabulary breaks one of a
-    vocabulary; the message names SETTINGS or the vocabulary file, the
-    field's key once it is valid, and the offending key or value, and a
-    message about the key names the table ``fields.<name>``.
+    TAKEN holds the keys of the declarations before it. The vocabulary
+    a choice field names is one of VOCABULARIES, whose terms
+    VOCABULARIES, as ``registry_terms`` returns them, holds. Raises
+    ConfigError when the declaration breaks a rule of a procedure field
+    declaration; the message names SETTINGS, the field's key once it is
+    valid, and the offending key or value, and a message about the key
+    names the table ``fields.procedure``.
     """
-    where = f"{settings}: declaration {number} of fields.{entity.name}"
+    where = f"{settings}: declaration {number} of fields.procedure"
     if "key" not in entry:
         raise ConfigError(f"{where}: key missing")
     key = entry["key"]
     if not isinstance(key, str) or not FIELD_KEY_RE.match(key):
         raise ConfigError(f"{where}: key {key!r} must be lowercase letters "
                           "and digits, words joined by single underscores, "
-                          "starting with a letter, e.g. item_number")
-    for keys, reason in entity.reserved:
+                          "starting with a letter, e.g. working_time")
+    for keys, reason in RESERVED_PROCEDURE_KEYS:
         if key in keys:
             raise ConfigError(f"{where}: key {key!r} {reason}")
     if key.endswith("_de"):
@@ -1839,9 +1793,9 @@ def read_declaration(entry: dict[str, Any], number: int, settings: Path,
         raise ConfigError(f"{where}: type {kind!r} is not one of "
                           f"{', '.join(FIELD_TYPES)}")
     for option in entry:
-        if option in entity.withheld:
-            raise ConfigError(f"{where}: a {entity.name} field does not "
-                              f"take {option}")
+        if option in PROCEDURE_WITHHELD_OPTIONS:
+            raise ConfigError(f"{where}: a procedure field does not take "
+                              f"{option}")
         if option in FIELD_OPTIONS + TYPE_OPTIONS[kind]:
             continue
         if any(option in options for options in TYPE_OPTIONS.values()):
@@ -1868,83 +1822,62 @@ def read_declaration(entry: dict[str, Any], number: int, settings: Path,
     if kind == "choice":
         if name is None:
             raise ConfigError(f"{where}: vocabulary missing; a choice "
-                              "field names a file vocabularies/<name>.toml")
-        if not isinstance(name, str) or not SLUG_RE.match(name):
-            raise ConfigError(f"{where}: vocabulary {name!r} must be the "
-                              "lowercase hyphenated name of a file "
-                              "vocabularies/<name>.toml, without .toml")
-        if name not in vocabularies:
-            path = settings.parent / "vocabularies" / f"{name}.toml"
-            if not path.is_file():
-                raise ConfigError(f"{where}: vocabulary file {path} not "
-                                  "found")
-            vocabularies[name] = load_terms(path)
+                              "field names one of the registry's "
+                              f"vocabularies, {', '.join(VOCABULARIES)}")
+        if name not in VOCABULARIES:
+            raise ConfigError(f"{where}: vocabulary {name!r} is not one of "
+                              "the registry's vocabularies, "
+                              f"{', '.join(VOCABULARIES)}")
         terms = vocabularies[name]
-    return Declaration(
-        key=key, type=kind,
-        label=declared_string(entry, "label", where, required=True),
-        label_de=declared_string(entry, "label_de", where),
-        required=declared_flag(entry, "required", where),
-        column=declared_flag(entry, "column", where),
-        unique=declared_flag(entry, "unique", where), pattern=pattern,
-        minimum=minimum, maximum=maximum,
-        unit=declared_string(entry, "unit", where), vocabulary=name,
-        multiple=declared_flag(entry, "multiple", where), terms=terms,
-        facet=declared_flag(entry, "facet", where),
-        search=declared_flag(entry, "search", where),
-        tabs=declared_flag(entry, "tabs", where),
-        beside=declared_flag(entry, "beside", where))
+    return _declaration(
+        key, kind, declared_string(entry, "label", where, required=True),
+        declared_string(entry, "label_de", where),
+        name, terms)._replace(
+            required=declared_flag(entry, "required", where),
+            unique=declared_flag(entry, "unique", where), pattern=pattern,
+            minimum=minimum, maximum=maximum,
+            unit=declared_string(entry, "unit", where),
+            multiple=declared_flag(entry, "multiple", where),
+            facet=declared_flag(entry, "facet", where))
 
 
-def load_fields(path: Path, must_exist: bool = True) -> Fields:
-    """Load the compound and procedure fields that the collection
-    settings file PATH declares, each in declared order.
+def load_fields(path: Path, vocabularies: dict[str, dict[str, Term]],
+                must_exist: bool = True) -> tuple[Declaration, ...]:
+    """Load the procedure fields that the collection settings file PATH
+    declares, in declared order.
 
-    A settings file without ``fields`` declares no field, and so does a
-    PATH that does not exist when MUST_EXIST is false; a ``fields``
-    without ``compound`` or ``procedure`` declares no field of that
-    entity. Vocabularies resolve against ``vocabularies/`` beside PATH;
-    only those a declaration names are read, each once, whichever
-    entities name it. Raises ConfigError when PATH is missing though
-    MUST_EXIST, when it breaks a rule of read_settings, when ``fields``
-    is not a table whose keys, ``compound`` and ``procedure``, each hold
-    an array of tables that read_declaration accepts for its entity, or
-    when more than one compound declaration sets ``tabs = true``.
+    VOCABULARIES holds the registry's terms, as ``registry_terms``
+    returns them. A settings file without ``fields``, or whose
+    ``fields`` holds no ``procedure``, declares no field, and so does a
+    PATH that does not exist when MUST_EXIST is false. Raises
+    ConfigError when PATH is missing though MUST_EXIST, when it breaks
+    a rule of read_settings, or when ``fields`` is not a table whose
+    only key, ``procedure``, holds an array of tables that
+    read_declaration accepts.
     """
     if not must_exist and not path.exists():
-        return Fields()
-    names = [entity.name for entity in ENTITIES]
-    tables = " and ".join(f"[[fields.{name}]]" for name in names)
+        return ()
     fields = read_settings(path).get("fields", {})
     if not isinstance(fields, dict):
         raise ConfigError(f"{path}: fields must be a table holding the "
-                          f"declarations {tables}")
-    unknown = sorted(set(fields) - set(names))
+                          "declarations [[fields.procedure]]")
+    unknown = sorted(set(fields) - {"procedure"})
     if unknown:
         raise ConfigError(f"{path}: unknown key "
                           f"{', '.join(f'fields.{k}' for k in unknown)}; "
-                          f"only {' and '.join(f'fields.{n}' for n in names)}"
-                          " are allowed")
-    vocabularies: dict[str, dict[str, Term]] = {}
-    loaded: dict[str, tuple[Declaration, ...]] = {}
-    for entity in ENTITIES:
-        entries = fields.get(entity.name, [])
-        if not isinstance(entries, list) or not all(
-                isinstance(entry, dict) for entry in entries):
-            raise ConfigError(f"{path}: fields.{entity.name} must be an "
-                              "array of tables, each written "
-                              f"[[fields.{entity.name}]]")
-        declared: list[Declaration] = []
-        for number, entry in enumerate(entries, start=1):
-            declared.append(read_declaration(
-                entry, number, path, [d.key for d in declared],
-                vocabularies, entity))
-        loaded[entity.name] = tuple(declared)
-    tabs = [d.key for d in loaded["compound"] if d.tabs]
-    if len(tabs) > 1:
-        raise ConfigError(f"{path}: fields {', '.join(tabs)} each set tabs "
-                          "= true; at most one field may")
-    return Fields(**loaded)
+                          "only fields.procedure is allowed: a collection "
+                          "declares the fields of its procedures, and its "
+                          "compounds have the registry's")
+    entries = fields.get("procedure", [])
+    if not isinstance(entries, list) or not all(
+            isinstance(entry, dict) for entry in entries):
+        raise ConfigError(f"{path}: fields.procedure must be an array of "
+                          "tables, each written [[fields.procedure]]")
+    declared: list[Declaration] = []
+    for number, entry in enumerate(entries, start=1):
+        declared.append(read_declaration(
+            entry, number, path, [d.key for d in declared], vocabularies))
+    return tuple(declared)
 
 
 def load_zone() -> dt.tzinfo:
@@ -2027,8 +1960,8 @@ def build_parser() -> argparse.ArgumentParser:
     """Return the command-line parser."""
     parser = argparse.ArgumentParser(
         prog="validate.py",
-        description="Validate OrgSynDB procedures, compounds and "
-        "synthesis sequences. Prints one "
+        description="Validate OrgSynDB procedures and synthesis sequences "
+        "against the collection's registry. Prints one "
         "'<path>:<field>: <severity>: <message>' line per problem and "
         "exits 0 (no errors), 1 (errors found) or 2 (usage or "
         "configuration error).")
@@ -2038,24 +1971,23 @@ def build_parser() -> argparse.ArgumentParser:
         "matter, such as an export directory (at least one)")
     parser.add_argument(
         "--settings", type=Path, default=None, metavar="FILE",
-        help="collection settings file, whose field declarations the "
-        "compound files and the procedures are checked against; its "
-        "vocabularies, the reaction types in "
-        "vocabularies/reaction-types.toml among them, are read from "
-        "vocabularies/ beside it, whether or not the file exists "
-        "(default: orgsyndb.toml in the working directory; a missing "
-        "default file declares no field)")
+        help="collection settings file, whose procedure field "
+        "declarations the procedures are checked against (default: "
+        "orgsyndb.toml in the working directory; a missing default file "
+        "declares no field)")
     parser.add_argument(
         "--static-dir", type=Path, default=DEFAULT_STATIC_DIR,
         metavar="DIR",
-        help="directory that structure_image paths are relative to "
+        help="directory that scheme_image paths are relative to "
         "(default: static in the working directory)")
     parser.add_argument(
-        "--compounds", default=str(DEFAULT_COMPOUNDS),
-        metavar="DIR",
-        help="compound registry, one <key>.toml file per compound "
-        "(default: compounds in the working directory; a missing "
-        "directory defines no compound)")
+        "--registry", default=str(DEFAULT_REGISTRY), metavar="FILE",
+        help="the collection's registry, a snapshot file of the lab "
+        "application's registry, whose substances are the compounds and "
+        "whose vocabularies hold the reaction types and the terms of the "
+        "procedure fields (default: build/registry.json in the working "
+        "directory, where the collection's tools leave the registry they "
+        "read)")
     parser.add_argument(
         "--sequences", default=str(DEFAULT_SEQUENCES), metavar="DIR",
         help="directory of synthesis sequences, SEQ-NNNN-short-slug.md "
@@ -2079,22 +2011,21 @@ def report(problems: Iterable[tuple[str, Problem]], files: int) -> int:
     return 1 if errors else 0
 
 
-def run(content_roots: Sequence[str], registry: str, sequences: str,
-        ctx: Context) -> int:
-    """Validate the compound REGISTRY, the CONTENT_ROOTS and the
-    SEQUENCES directory, report, and return the exit status.
+def run(content_roots: Sequence[str], registry: tuple[str, dict[str, Any]],
+        sequences: str, ctx: Context) -> int:
+    """Validate the CONTENT_ROOTS and the SEQUENCES directory against the
+    registry, report, and return the exit status.
 
-    The compound keys of procedures and sequences resolve against the
-    compounds the registry defines, which replace those of CTX, and the
-    steps of the sequences against the procedures of the content roots.
-    The variants of a procedure share the values of its declared fields,
-    and a ``unique`` procedure field is compared across the files that
-    stand for their IDs.
+    REGISTRY is the path of the registry snapshot, as given, and its
+    table; its problems (``check_registry``) are reported on that path.
+    The steps of the sequences resolve against the procedures of the
+    content roots, and their compounds against the registry keys of
+    CTX. The variants of a procedure share the values of its declared
+    fields, and a ``unique`` procedure field is compared across the
+    files that stand for their IDs.
     """
-    examined = examine_registry(registry, ctx.static_dir,
-                                ctx.fields.compound)
-    ctx = replace(ctx, compounds=examined.compounds)
-    problems = list(examined.problems)
+    path, table = registry
+    problems = [(path, problem) for problem in check_registry(table)]
     content: list[ContentFile] = []
     for root in content_roots:
         for entry in discover(root, ".md"):
@@ -2102,16 +2033,16 @@ def run(content_roots: Sequence[str], registry: str, sequences: str,
                 problems.append((entry.path, entry.problem))
             else:
                 content.append(examine_content(entry, ctx))
-    standing = check_cross_file(
-        content, with_declared(PROCEDURE, ctx.fields.procedure))
-    problems += check_unique(ctx.fields.procedure, [
+    standing = check_cross_file(content, with_declared(PROCEDURE,
+                                                       ctx.fields))
+    problems += check_unique(ctx.fields, [
         (item.path, item.data["id"], item.data) for item in standing
         if item.data is not None and is_valid_id(item.data.get("id"))])
     for item in content:
         problems += [(item.path, p) for p in item.problems]
     found, count = examine_sequences(sequences, ctx,
                                      procedure_index(content))
-    return report(problems + found, examined.files + len(content) + count)
+    return report(problems + found, len(content) + count)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -2126,22 +2057,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         for root in args.content_roots:
             if not os.path.isdir(root):
                 raise ConfigError(f"{root} is not a directory")
-        if (os.path.exists(args.compounds)
-                and not os.path.isdir(args.compounds)):
-            raise ConfigError(f"compound registry {args.compounds} is not "
-                              "a directory")
         if (os.path.exists(args.sequences)
                 and not os.path.isdir(args.sequences)):
             raise ConfigError(f"sequences directory {args.sequences} is "
                               "not a directory")
+        table = read_registry(args.registry)
+        vocabularies = registry_terms(table)
         settings = args.settings or DEFAULT_SETTINGS
-        fields = load_fields(settings, must_exist=args.settings is not None)
-        ctx = Context(frozenset(load_reaction_types(settings)),
-                      args.static_dir, load_zone(), fields=fields)
+        fields = load_fields(settings, vocabularies,
+                             must_exist=args.settings is not None)
+        ctx = Context(frozenset(vocabularies[REACTION_TYPES]),
+                      args.static_dir, load_zone(),
+                      frozenset(entry["key"]
+                                for entry in table["substances"]), fields)
     except ConfigError as exc:
         print(f"validate.py: error: {exc}", file=sys.stderr)
         return 2
-    return run(args.content_roots, args.compounds, args.sequences, ctx)
+    return run(args.content_roots, (str(args.registry), table),
+               args.sequences, ctx)
 
 
 if __name__ == "__main__":

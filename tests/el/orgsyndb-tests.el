@@ -125,7 +125,27 @@ Return the copy as a directory name."
       (let ((directory (expand-file-name name root)))
         (when (file-directory-p directory)
           (delete-directory directory t))))
+    (orgsyndb-test-keep-registry source root)
     root))
+
+(defun orgsyndb-test-keep-registry (source root)
+  "Make the registry of ROOT, a copy of the collection SOURCE, a file of
+the copy.
+When the registry that `orgsyndb.toml' of ROOT names is no file there,
+as for the demo collection, the snapshot is copied to `registry.json'
+and named there."
+  (let ((settings (expand-file-name "orgsyndb.toml" root)))
+    (with-temp-buffer
+      (insert-file-contents settings)
+      (goto-char (point-min))
+      (unless (re-search-forward "^registry = \"\\(.*\\)\"$" nil t)
+        (error "%s names no registry" settings))
+      (let ((named (match-string 1)))
+        (unless (file-exists-p (expand-file-name named root))
+          (copy-file (expand-file-name named source)
+                     (expand-file-name "registry.json" root))
+          (replace-match "registry = \"registry.json\"" t t)
+          (write-region (point-min) (point-max) settings))))))
 
 (defun orgsyndb-test-processes ()
   "Return the live processes the package started."
@@ -401,15 +421,12 @@ multiple answer is split at commas."
                      '("org/procedures/OSDB-0007-ethyl-cinnamate.de.org"
                        "md/procedures/OSDB-0002-aspirin.md"
                        "md/sequences/SEQ-0001-aspirin-from-wintergreen.md"
-                       "compounds/acetone.toml"
-                       "vocabularies/projects.toml"
                        "orgsyndb.toml"
                        "build/export/OSDB-0007-ethyl-cinnamate.md"
                        "static/structures/isopentyl-acetate.svg"))
-             '(org-procedure md-procedure sequence compound vocabulary
-                             settings nil nil)))
+             '(org-procedure md-procedure sequence settings nil nil)))
     (should (equal (orgsyndb-collection-root
-                    (expand-file-name "compounds/acetone.toml" root))
+                    (expand-file-name "orgsyndb.toml" root))
                    root))))
 
 (ert-deftest orgsyndb-test-turned-on-by-visiting ()
@@ -433,7 +450,7 @@ multiple answer is split at commas."
     (with-current-buffer (orgsyndb-test-visit
                           root "md/procedures/OSDB-0002-aspirin.md")
       (let ((index (orgsyndb-index)))
-        (should (= (length (alist-get 'compounds index)) 20))
+        (should (= (length (alist-get 'compounds index)) 21))
         (should (equal (alist-get 'site_language index)
                        (alist-get 'site_language (orgsyndb-index root))))))))
 
@@ -441,15 +458,15 @@ multiple answer is split at commas."
   "Scenario: Refresh after a save."
   (orgsyndb-test-with (root orgsyndb-test-collection)
     (orgsyndb-index root)
-    (with-current-buffer (orgsyndb-test-visit root "compounds/ethanol.toml")
+    (with-current-buffer (orgsyndb-test-visit
+                          root "md/procedures/OSDB-0010-test.md")
       (should orgsyndb-mode)
-      (insert "name = \"Ethanol\"\nformula = \"C2H6O\"\nmw = 46.07\n"
-              "smiles = \"CCO\"\n")
+      (insert "+++\n+++\n")
       (save-buffer))
     (orgsyndb-test-wait
      (lambda ()
-       (cl-find "ethanol" (alist-get 'compounds (orgsyndb-index root))
-                :key (lambda (entry) (alist-get 'key entry))
+       (cl-find "OSDB-0010" (alist-get 'procedures (orgsyndb-index root))
+                :key (lambda (entry) (alist-get 'id entry))
                 :test #'equal)))
     (orgsyndb-test-settle)))
 
@@ -636,7 +653,7 @@ a Summary, visit it, put point at its mark and complete."
                                       "| aceto¦ | | |\n")))
                    '("acetone" "acetophenone")))))
 
-;;;; Completion in sequences and compound files
+;;;; Completion in sequences
 
 (ert-deftest orgsyndb-test-complete-step-procedure ()
   "Scenario: Step procedure."
@@ -684,17 +701,44 @@ a Summary, visit it, put point at its mark and complete."
         (should (string-match-p "ethyl-acetate" annotation))
         (should (string-match-p "propyl-acetate" annotation))))))
 
-(ert-deftest orgsyndb-test-complete-compound-file ()
-  "Scenario: Compound file."
+(ert-deftest orgsyndb-test-complete-the-target-of-a-sequence ()
+  "Requirement: Completion in sequences (the compound keys inside the
+string of `target')."
   (orgsyndb-test-with (root orgsyndb-test-demo)
-    (orgsyndb-test-write root "compounds/test.toml"
-                         "name = \"Test\"\nchem¦\ngroup = \"fin\"\n")
-    (with-current-buffer (orgsyndb-test-visit root "compounds/test.toml")
-      (orgsyndb-test-mark)
-      (should (equal (car (orgsyndb-test-complete)) '("chemical_class")))
+    (with-current-buffer (orgsyndb-test-visit
+                          root
+                          "md/sequences/SEQ-0001-aspirin-from-wintergreen.md")
+      (orgsyndb-test-put-line "target = " "target = \"acetylsal¦\"")
+      (should (equal (car (orgsyndb-test-complete))
+                     '("acetylsalicylic-acid"))))))
+
+(ert-deftest orgsyndb-test-complete-the-keys-of-a-sequence ()
+  "Requirement: Completion in sequences (at the start of a line, the
+sequence keys that the front matter does not set yet)."
+  (orgsyndb-test-with (root orgsyndb-test-demo)
+    (with-current-buffer (orgsyndb-test-visit
+                          root
+                          "md/sequences/SEQ-0001-aspirin-from-wintergreen.md")
       (goto-char (point-min))
-      (search-forward "\"fin")
-      (should (equal (car (orgsyndb-test-complete)) '("final-products"))))))
+      (forward-line 1)
+      (re-search-forward "^\\+\\+\\+$")
+      (goto-char (match-beginning 0))
+      (insert "ta¦\n")
+      (orgsyndb-test-mark)
+      (should-not (member "target" (car (orgsyndb-test-complete)))))))
+
+(ert-deftest orgsyndb-test-no-completion-in-a-settings-file ()
+  "Requirement: Completion in sequences and compound files (removed):
+the settings file offers no compound field to complete."
+  (orgsyndb-test-with (root orgsyndb-test-demo)
+    (orgsyndb-test-write root "orgsyndb.toml"
+                         (concat (orgsyndb-test-file-text
+                                  (expand-file-name "orgsyndb.toml" root))
+                                 "chem¦\n"))
+    (with-current-buffer (orgsyndb-test-visit root "orgsyndb.toml")
+      (orgsyndb-test-mark)
+      (should-not (member "chemical_class"
+                          (car (orgsyndb-test-complete)))))))
 
 ;;;; Inserting a compound
 
@@ -729,6 +773,13 @@ point, as a list of (FILE . LINE)."
             (xref-backend-definitions
              backend (xref-backend-identifier-at-point backend)))))
 
+(defun orgsyndb-test-definition-buffer (item)
+  "Return the buffer and the line of the xref ITEM's location."
+  (let ((marker (xref-location-marker (xref-item-location item))))
+    (with-current-buffer (marker-buffer marker)
+      (cons (current-buffer)
+            (save-excursion (goto-char marker) (line-number-at-pos))))))
+
 (ert-deftest orgsyndb-test-compound-definition ()
   "Scenario: Compound definition."
   (orgsyndb-test-with (root orgsyndb-test-collection)
@@ -736,10 +787,64 @@ point, as a list of (FILE . LINE)."
                           root "md/procedures/OSDB-0002-aspirin.md")
       (goto-char (point-min))
       (search-forward "\"acetic-anh")
-      (should (equal (orgsyndb-test-definitions)
-                     (list (cons (expand-file-name
-                                  "compounds/acetic-anhydride.toml" root)
-                                 1)))))))
+      (let* ((backend (xref-find-backend))
+             (items (xref-backend-definitions
+                     backend (xref-backend-identifier-at-point backend))))
+        (should (= (length items) 1))
+        (pcase-let ((`(,buffer . ,line)
+                     (orgsyndb-test-definition-buffer (car items))))
+          (should (equal (buffer-name buffer) "*orgsyndb acetic-anhydride*"))
+          (should (= line 1))
+          (with-current-buffer buffer
+            (should (string-match-p "Acetic anhydride" (buffer-string)))
+            (should (string-match-p "Essigsäureanhydrid" (buffer-string)))
+            (should-not (text-property-any (point-min) (point-max)
+                                           'button t))))))))
+
+(ert-deftest orgsyndb-test-a-substance-with-a-page ()
+  "Scenario: A substance with a page."
+  (orgsyndb-test-with (root orgsyndb-test-collection)
+    (let* ((url "http://lab.example.org/lab/registry/substances/acetone/")
+           (index (with-temp-buffer
+                    (call-process orgsyndb-test-program nil t nil
+                                  "-C" root "index")
+                    (goto-char (point-min))
+                    (json-parse-buffer :object-type 'alist)))
+           (stub (orgsyndb-test-stub
+                  "  index) cat \"$(dirname \"$0\")/index.json\";;\n"))
+           (browsed nil))
+      (seq-doseq (entry (alist-get 'compounds index))
+        (when (equal (alist-get 'key entry) "acetone")
+          (setf (alist-get 'url entry) url)))
+      (let ((coding-system-for-write 'utf-8))
+        (with-temp-file (expand-file-name "index.json"
+                                          (file-name-directory stub))
+          (json-insert index)
+          (insert "\n")))
+      (let ((orgsyndb-program stub))
+        (with-current-buffer (orgsyndb-test-visit
+                              root "md/procedures/OSDB-0002-aspirin.md")
+          (orgsyndb-refresh-index)
+          (orgsyndb-test-settle)
+          (goto-char (point-min))
+          (search-forward "\"acetic-anhydride")
+          (replace-match "\"acetone" t t)
+          (let* ((backend (xref-find-backend))
+                 (items (xref-backend-definitions
+                         backend (xref-backend-identifier-at-point
+                                  backend))))
+            (should (= (length items) 1))
+            (pcase-let ((`(,buffer . ,_line)
+                         (orgsyndb-test-definition-buffer (car items))))
+              (should (equal (buffer-name buffer) "*orgsyndb acetone*"))
+              (with-current-buffer buffer
+                (let ((button (next-button (point-min) t)))
+                  (should button)
+                  (cl-letf (((symbol-function 'browse-url)
+                             (lambda (address &rest _)
+                               (push address browsed))))
+                    (button-activate button)))))
+            (should (equal browsed (list url)))))))))
 
 (ert-deftest orgsyndb-test-procedure-definition-in-the-readers-language ()
   "Scenario: Procedure definition in the reader's language."
@@ -773,9 +878,9 @@ point, as a list of (FILE . LINE)."
         (should (member (expand-file-name
                          "md/procedures/OSDB-0002-aspirin.de.md" root)
                         files))
-        (should-not (member (expand-file-name
-                             "compounds/acetic-anhydride.toml" root)
-                            files))))))
+        (should-not (cl-find-if
+                     (lambda (file) (string-match-p "/compounds/" file))
+                     files))))))
 
 ;;;; Documentation at point
 
@@ -927,26 +1032,26 @@ point, as a list of (FILE . LINE)."
                      (list (list source 18) (list source 13)
                            (list source 1) (list source 1)))))))
 
-(ert-deftest orgsyndb-test-markdown-and-compound-fields ()
-  "Scenario: Markdown and compound fields."
+(ert-deftest orgsyndb-test-markdown-fields-and-the-registry ()
+  "Scenario: Markdown fields and the registry."
   (orgsyndb-test-with (root orgsyndb-test-collection)
     (should (equal (cadr (orgsyndb-problem-location
                           root "md/procedures/OSDB-0002-aspirin.md" "status"
                           "unknown"))
                    8))
     (should (equal (cadr (orgsyndb-problem-location
-                          root "compounds/acetic-anhydride.toml" "mw"
+                          root "build/registry.json" "substances"
                           "unknown"))
-                   4))))
+                   1))))
 
 (ert-deftest orgsyndb-test-line-of-a-toml-error ()
-  "Scenario: Line of a TOML error."
+  "Scenario: Line of a front-matter error."
   (orgsyndb-test-with (root orgsyndb-test-collection)
     (should (equal (orgsyndb-problem-location
-                    root "compounds/acetic-anhydride.toml" "toml"
+                    root "md/procedures/OSDB-0002-aspirin.md" "front_matter"
                     "invalid TOML: Invalid value (at line 3, column 8)")
-                   (list (expand-file-name "compounds/acetic-anhydride.toml"
-                                           root)
+                   (list (expand-file-name
+                          "md/procedures/OSDB-0002-aspirin.md" root)
                          3)))))
 
 ;;;; Diagnostics
@@ -1255,7 +1360,7 @@ Also: The fall-back hour."
 (ert-deftest orgsyndb-test-the-buffers-own-settings-come-back ()
   "Scenario: The buffer's own settings come back."
   (orgsyndb-test-with (root orgsyndb-test-collection)
-    (dolist (file '("compounds/acetone.toml"
+    (dolist (file '("orgsyndb.toml"
                     "md/procedures/OSDB-0002-aspirin.md"))
       (with-current-buffer (orgsyndb-test-visit root file)
         (orgsyndb-mode -1)
@@ -1267,7 +1372,7 @@ Also: The fall-back hour."
         (should (equal time-stamp-format "%Y"))
         (should (memq #'time-stamp before-save-hook))))))
 
-;;;; New procedure and new compound
+;;;; New procedure
 
 (ert-deftest orgsyndb-test-new-markdown-procedure-in-german ()
   "Scenario: New Markdown procedure in German."
@@ -1289,38 +1394,6 @@ Also: The fall-back hour."
                      (expand-file-name
                       "md/procedures/OSDB-0010-ethylacetat.de.md" root))))))
 
-(ert-deftest orgsyndb-test-new-compound-with-declared-fields ()
-  "Scenario: New compound with declared fields."
-  (orgsyndb-test-with (root orgsyndb-test-demo)
-    (with-current-buffer (orgsyndb-test-visit root "orgsyndb.toml")
-      (orgsyndb-test-answering '("ethanol" "Ethanol" "Ethanol" "C2H6O"
-                                 "46.07" "CCO" "64-17-5" ""
-                                 "alcohols" "reagents")
-        (call-interactively #'orgsyndb-new-compound)))
-    (let ((file (expand-file-name "compounds/ethanol.toml" root)))
-      (should (equal (split-string (orgsyndb-test-file-text file) "\n" t)
-                     '("name = \"Ethanol\"" "name_de = \"Ethanol\""
-                       "formula = \"C2H6O\"" "mw = 46.07" "smiles = \"CCO\""
-                       "cas = \"64-17-5\""
-                       "chemical_class = [\"alcohols\"]"
-                       "group = \"reagents\"")))
-      (should (equal (buffer-file-name (window-buffer (selected-window)))
-                     file)))
-    (orgsyndb-test-settle)
-    (let* ((json (with-temp-buffer
-                   (call-process orgsyndb-test-program nil t nil
-                                 "-C" root "index")
-                   (buffer-string)))
-           (entry (cl-find "ethanol"
-                           (alist-get 'compounds
-                                      (json-parse-string json
-                                                         :object-type 'alist
-                                                         :array-type 'list))
-                           :key (lambda (entry) (alist-get 'key entry))
-                           :test #'equal)))
-      (should entry)
-      (should-not (assq 'error entry)))))
-
 ;;;; Preview, PDF and the structure window
 
 (ert-deftest orgsyndb-test-page-urls ()
@@ -1329,11 +1402,9 @@ Also: The fall-back hour."
     (should (equal (mapcar (lambda (file)
                              (orgsyndb-page-url (expand-file-name file root)))
                            '("org/procedures/OSDB-0007-ethyl-cinnamate.de.org"
-                             "compounds/acetone.toml"
                              "md/sequences/SEQ-0001-aspirin-from-wintergreen.md"
                              "orgsyndb.toml"))
                    '("http://127.0.0.1:8000/procedures/osdb-0007/"
-                     "http://127.0.0.1:8000/compounds/acetone/"
                      "http://127.0.0.1:8000/sequences/seq-0001/"
                      "http://127.0.0.1:8000/")))))
 
@@ -1350,10 +1421,11 @@ Also: Later preview builds."
     (let* ((stub (orgsyndb-test-stub orgsyndb-test-serve-stub))
            (orgsyndb-program stub)
            (browsed nil)
-           (url "http://127.0.0.1:8000/compounds/acetone/"))
+           (url "http://127.0.0.1:8000/procedures/osdb-0002/"))
       (cl-letf (((symbol-function 'browse-url)
                  (lambda (url &rest _) (push url browsed))))
-        (with-current-buffer (orgsyndb-test-visit root "compounds/acetone.toml")
+        (with-current-buffer (orgsyndb-test-visit
+                              root "md/procedures/OSDB-0002-aspirin.md")
           (orgsyndb-preview)
           (orgsyndb-test-wait (lambda () browsed))
           (should (member (list "-C" (orgsyndb-test-collection-name root)
@@ -1399,7 +1471,8 @@ Also: Later preview builds."
 (ert-deftest orgsyndb-test-structure-image-and-text ()
   "Scenario: Image and text."
   (orgsyndb-test-with (root orgsyndb-test-demo)
-    (with-current-buffer (orgsyndb-test-visit root "compounds/acetone.toml")
+    (with-current-buffer (orgsyndb-test-visit
+                          root "md/procedures/OSDB-0002-aspirin.md")
       (erase-buffer)
       (insert "isopentyl-acetate and acetone\n")
       (orgsyndb-structure-mode 1)
@@ -1463,7 +1536,7 @@ Also: Later preview builds."
                                      (get 'orgsyndb-dispatch
                                           'transient--layout)))
                        #'string<)
-                 (sort (list 'orgsyndb-new-procedure 'orgsyndb-new-compound
+                 (sort (list 'orgsyndb-new-procedure
                              'orgsyndb-insert-compound 'orgsyndb-visit-variant
                              'orgsyndb-create-translation 'orgsyndb-validate
                              'orgsyndb-preview 'orgsyndb-serve

@@ -1,6 +1,7 @@
 """Hugo configuration and its overlay, ignore rules, the demo collection
 and the Caddyfile example (site-build, build-script, sample-procedures)."""
 
+import json
 import re
 import shutil
 import subprocess
@@ -97,7 +98,7 @@ class OverlayTests(unittest.TestCase):
             {"source": f"{collection}/build/content/help",
              "target": "content/help"},
             {"source": f"{collection}/static", "target": "static"},
-            {"source": f"{collection}/compounds",
+            {"source": f"{collection}/build/data/compounds",
              "target": "data/compounds"},
             {"source": f"{collection}/build/content/sequences",
              "target": "content/sequences", "files": ["/SEQ-*.md"]},
@@ -133,15 +134,15 @@ class DemoCollectionTests(unittest.TestCase):
         named = set()
         for sample in sample_support.sample_procedures(DEMO):
             named |= set(sample_support.named_compounds(sample))
-        registry = DEMO / "compounds"
-        self.assertTrue(registry.is_dir(), "examples/demo/compounds is "
-                        "missing")
-        self.assertEqual(sorted(p.name for p in registry.iterdir()),
-                         sorted(f"{key}.toml" for key in named))
-        for path in sorted(registry.glob("*.toml")):
-            with self.subTest(compound=path.stem):
-                data = tomllib.loads(path.read_text(encoding="utf-8"))
-                self.assertTrue(data.get("name_de"), "no name_de")
+        table = json.loads((REPO / "webapp" / "demo" / "registry.json")
+                           .read_text(encoding="utf-8"))
+        self.assertEqual({s["key"] for s in table["substances"]},
+                         named | {"new-compound-7"})
+        for entry in table["substances"]:
+            with self.subTest(compound=entry["key"]):
+                self.assertTrue(entry["name_de"], "no name_de")
+        for name in ("compounds", "vocabularies"):
+            self.assertFalse((DEMO / name).exists(), name)
 
 
 @unittest.skipUnless(shutil.which("git"), "git not found")

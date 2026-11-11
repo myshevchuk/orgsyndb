@@ -245,11 +245,10 @@ class GermanSiteTests(GermanCase):
             self.assertEqual(group.find("summary").norm(), label)
         self.assertEqual(
             ps.facet_values(page, "project"),
-            [("teaching", "Lehre"),
-             ("first-year-practical", "Grundpraktikum"),
+            [("research", "Forschung"), ("biaryls", "Biaryle"),
+             ("cinnamates", "Zimtsäurederivate"), ("teaching", "Lehre"),
              ("advanced-practical", "Fortgeschrittenenpraktikum"),
-             ("research", "Forschung"), ("biaryls", "Biaryle"),
-             ("cinnamates", "Zimtsäurederivate")])
+             ("first-year-practical", "Grundpraktikum")])
         self.assertEqual(ps.facet_values(page, "inert_atmosphere"),
                          [("true", "Ja"), ("false", "Nein")])
 

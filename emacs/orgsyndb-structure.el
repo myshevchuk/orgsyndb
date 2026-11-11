@@ -22,19 +22,28 @@
   "The idle timer that updates the structure window for this buffer.")
 
 (defun orgsyndb--structure-compound ()
-  "Return the compound key at point, or in a compound file the file's
-own key, or nil."
+  "Return the compound key at point, or nil."
   (let ((identifier (orgsyndb--identifier-at-point)))
-    (cond ((and identifier (not (string-match-p orgsyndb--id-regexp
-                                                identifier)))
-           identifier)
-          ((eq orgsyndb--kind 'compound) (file-name-base buffer-file-name)))))
+    (and identifier (not (string-match-p orgsyndb--id-regexp identifier))
+         identifier)))
+
+(defun orgsyndb--structure-file (root key)
+  "Return the structure image of the compound KEY in ROOT, or nil.
+That is the file `static/structures/KEY.svg' of the collection, or
+`static/structures/KEY.png' when there is no SVG."
+  (cl-find-if #'file-readable-p
+              (mapcar (lambda (suffix)
+                        (expand-file-name (concat key suffix)
+                                          (expand-file-name
+                                           "static/structures/" root)))
+                      '(".svg" ".png"))))
 
 (defun orgsyndb-structure-update ()
   "Show the compound at point in the structure buffer.
-The buffer shows its structure image, when it sets one and Emacs can
-display the image's type, and below it its name and formula.  When
-point is on no compound, the buffer keeps what it shows."
+The buffer shows its structure image (`orgsyndb--structure-file'), when
+it has one and Emacs can display the image's type, and below it its name
+and formula.  When point is on no compound, the buffer keeps what it
+shows."
   (when orgsyndb--root
     (let* ((root orgsyndb--root)
            (key (ignore-errors (orgsyndb--structure-compound)))
@@ -42,13 +51,8 @@ point is on no compound, the buffer keeps what it shows."
       (when data
         (with-current-buffer (get-buffer-create orgsyndb--structure-buffer)
           (let* ((inhibit-read-only t)
-                 (image (alist-get 'structure_image data))
-                 (file (and (stringp image)
-                            (expand-file-name image
-                                              (expand-file-name "static/"
-                                                                root))))
-                 (type (and file (file-readable-p file)
-                            (image-supported-file-p file))))
+                 (file (orgsyndb--structure-file root key))
+                 (type (and file (image-supported-file-p file))))
             (erase-buffer)
             (when (and type (image-type-available-p type))
               (insert-image (create-image file type))

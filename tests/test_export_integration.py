@@ -15,6 +15,7 @@ import unittest
 from pathlib import Path
 
 import pipeline_support as ps
+import support
 from pipeline_support import (DEMO, FIXTURES, OX_HUGO_PIN, REPO,
                               TEST_COLLECTION, TOMELR_PIN, Sandbox, body_of,
                               front_matter, make_path, make_sandbox,
@@ -306,12 +307,8 @@ class DeclaredFieldExportTests(ExportTestCase):
     def test_a_quoted_integer_is_no_text(self) -> None:
         """Scenario: A quoted integer is no text."""
         sandbox = self.sandbox()
-        projects = sandbox.root / "vocabularies" / "projects.toml"
-        self.assertTrue(projects.is_file(),
-                        "examples/demo/vocabularies/projects.toml is "
-                        "missing")
-        with projects.open("a", encoding="utf-8") as handle:
-            handle.write('\n[2027]\nlabel = "2027"\n')
+        ps.edit_snapshot(sandbox, lambda table: table["vocabularies"][
+            "projects"].append(support.term("2027", "2027")))
         for suffix in (".org", ".de.org"):
             path = sandbox.root / f"{self.ORG_SEED}{suffix}"
             self.replace_value(path, "notebook", "1234")

@@ -45,19 +45,20 @@ def history_models() -> list:
 
 
 def compound_names() -> dict[str, str]:
-    """The German name of each demo compound by its item number."""
+    """The German name of each demo compound by its article number."""
     found = {}
     for entry in demo_data()["compounds"]:
         data = entry["data"]
-        if "item_number" in data:
-            found[data["item_number"]] = data.get("name_de", data["name"])
+        if "article_number" in data:
+            found[data["article_number"]] = data.get("name_de",
+                                                     data["name"])
     return found
 
 
 def compound_keys() -> dict[str, str]:
-    return {entry["data"]["item_number"]: entry["key"]
+    return {entry["data"]["article_number"]: entry["key"]
             for entry in demo_data()["compounds"]
-            if "item_number" in entry["data"]}
+            if "article_number" in entry["data"]}
 
 
 class AccountTests(SeededCase):
@@ -149,8 +150,7 @@ class RegistryTests(SeededCase):
         self.assertLessEqual({"cinnamic-acid", "new-compound-7",
                               NUMBERLESS[1]}, keys)
         self.assertEqual(
-            keys - {"new-compound-7"},
-            {entry["key"] for entry in demo_data()["compounds"]})
+            keys, {entry["key"] for entry in demo_data()["compounds"]})
 
     def test_the_registry_is_klehmanns_first_change_on_the_opening_day(
             self) -> None:
@@ -217,10 +217,9 @@ class InventoryTests(SeededCase):
             with self.subTest(article=article):
                 link = name.find("a")
                 self.assertIsNotNone(link)
-                key = "new-compound-7" if article == "NV-0007" \
-                    else keys[article]
                 self.assertEqual(link.get("href"),
-                                 f"/lab/registry/substances/{key}/")
+                                 f"/lab/registry/substances/"
+                                 f"{keys[article]}/")
                 if article == "NV-0007":
                     self.assertEqual(name.text(), "Neuverbindung 7")
 
@@ -734,9 +733,9 @@ class IndexCheckTests(TestCase):
 
     def test_demo_index_names_the_compounds(self) -> None:
         names = compound_names()
-        for article in ARTICLES[:-1]:
+        for article in ARTICLES:
             with self.subTest(article=article):
                 self.assertIn(article, names)
-        self.assertNotIn("NV-0007", names)
+        self.assertEqual(names["NV-0007"], "Neuverbindung 7")
         self.assertNotIn("CH-0003", names)
         self.assertTrue(demo_index().is_file())

@@ -126,7 +126,7 @@ class ReactionTypeTests(ValidatorTestCase):
             result, "error", "reaction_types",
             'unknown reaction type "esterfication"',
             path_suffix="OSDB-0111-unknown-reaction-type.md")
-        self.assertIn("vocabularies/reaction-types.toml", problem.message)
+        self.assertNotIn("vocabularies/", problem.message)
 
     def test_two_reaction_types_are_rejected(self) -> None:
         """Scenario: Two reaction types."""

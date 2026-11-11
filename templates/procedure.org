@@ -19,8 +19,8 @@
 # The products list must stay alone on the last custom front matter line;
 # tomelr would otherwise put every later key inside its last [[products]]
 # table. One ((compound . "key") (yield_percent . N)) entry per product:
-# the key names the compound's file in the collection's compounds/ folder,
-# without .toml, and the yield is in percent, from 0 to 100.
+# the key is that of the compound's substance in the collection's
+# registry, and the yield is in percent, from 0 to 100.
 #+HUGO_CUSTOM_FRONT_MATTER: :products '(((compound . "example-compound") (yield_percent . 85)))
 
 * Summary

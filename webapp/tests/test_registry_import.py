@@ -12,12 +12,11 @@ from django.core.management.base import CommandError
 from django.test import TestCase
 
 from inventory.models import Article
-from registry import snapshot
 from registry.models import Substance
 from vocabulary.models import ChemicalClass, Group, Project, ReactionType
 
 from . import IndexMixin, make_substance
-from .registry_support import DEMO_COLLECTION, demo_registry
+from .registry_support import OLD_LAYOUT
 
 VOCABULARY_FILES = {
     "chemical-classes": ChemicalClass, "inventory-groups": Group,
@@ -94,13 +93,15 @@ class ImportCase(IndexMixin, TestCase):
         return caught.exception
 
 
-class DemoCollectionTests(ImportCase):
+class OldLayoutTests(ImportCase):
+    """A collection in the layout collections had before they named a
+    registry: ``tests/fixtures/old-layout/``."""
 
-    def test_demo_collection(self) -> None:
-        """Scenario: Demo collection."""
-        _out, err = run(DEMO_COLLECTION)
+    def test_a_collection_in_the_old_layout(self) -> None:
+        """Scenario: A collection in the old layout."""
+        _out, err = run(OLD_LAYOUT)
         compounds = sorted(
-            path.stem for path in (DEMO_COLLECTION / "compounds").glob(
+            path.stem for path in (OLD_LAYOUT / "compounds").glob(
                 "*.toml"))
         self.assertEqual(len(compounds), 20)
         self.assertEqual(
@@ -115,7 +116,7 @@ class DemoCollectionTests(ImportCase):
         self.assertIn("stock", err)
 
     def test_the_numbered_compounds_get_articles(self) -> None:
-        run(DEMO_COLLECTION)
+        run(OLD_LAYOUT)
         self.assertEqual(
             dict(Article.objects.values_list("substance__key",
                                              "article_number")), {
@@ -127,9 +128,9 @@ class DemoCollectionTests(ImportCase):
                 "isopentyl-acetate": "CH-0016"})
 
     def test_every_term_of_the_vocabulary_files(self) -> None:
-        run(DEMO_COLLECTION)
+        run(OLD_LAYOUT)
         for name, model in VOCABULARY_FILES.items():
-            path = DEMO_COLLECTION / "vocabularies" / f"{name}.toml"
+            path = OLD_LAYOUT / "vocabularies" / f"{name}.toml"
             with path.open("rb") as handle:
                 wanted = tomllib.load(handle)
             with self.subTest(vocabulary=name):
@@ -143,7 +144,7 @@ class DemoCollectionTests(ImportCase):
                      for key, value in wanted.items()})
 
     def test_a_compounds_values(self) -> None:
-        run(DEMO_COLLECTION)
+        run(OLD_LAYOUT)
         found = Substance.objects.get(key="cinnamic-acid")
         self.assertEqual(
             (found.name, found.name_de, found.formula, str(found.mw),
@@ -153,39 +154,21 @@ class DemoCollectionTests(ImportCase):
 
     def test_the_warning_counts_the_compounds_that_set_each_key(
             self) -> None:
-        _out, err = run(DEMO_COLLECTION)
+        _out, err = run(OLD_LAYOUT)
         for key, count in (("in_house", 19), ("stock", 9),
                            ("structure_image", 1)):
             with self.subTest(key=key):
                 self.assertRegex(err, rf"{key}\D{{0,12}}{count}(?!\d)")
 
     def test_the_declared_fields_are_not_warned_about(self) -> None:
-        _out, err = run(DEMO_COLLECTION)
+        _out, err = run(OLD_LAYOUT)
         for key in ("short_name", "chemical_class", "group",
                     "item_number", "formula", "mw", "smiles"):
             with self.subTest(key=key):
                 self.assertNotRegex(err, rf"(?<![\w-]){key}(?![\w-])")
 
-    def test_the_demo_registry_follows_the_collection(self) -> None:
-        """Scenario: The demo registry follows the collection."""
-        run(DEMO_COLLECTION)
-        imported = snapshot.build()
-        shipped = demo_registry()
-        self.assertEqual(shipped["vocabularies"], imported["vocabularies"])
-        extra = [s for s in shipped["substances"]
-                 if s["key"] == "new-compound-7"]
-        self.assertEqual(len(extra), 1)
-        self.assertEqual(extra[0]["article_number"], "NV-0007")
-        self.assertEqual(extra[0]["name"], "New compound 7")
-        self.assertEqual(extra[0]["name_de"], "Neuverbindung 7")
-        self.assertEqual(
-            [s for s in shipped["substances"]
-             if s["key"] != "new-compound-7"],
-            imported["substances"])
-        self.assertEqual(shipped["format"], imported["format"])
-
     def test_the_printed_counts(self) -> None:
-        out, _err = run(DEMO_COLLECTION)
+        out, _err = run(OLD_LAYOUT)
         terms, substances, articles = counts()
         for number in (terms, substances, articles):
             with self.subTest(number=number):

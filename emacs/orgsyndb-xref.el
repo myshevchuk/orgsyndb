@@ -5,7 +5,8 @@
 ;; An `xref' backend for the compound keys and the procedure and
 ;; sequence IDs of a collection, wherever they appear in its files, and
 ;; an `eldoc' function that describes the compound or procedure at
-;; point.
+;; point.  The definition of a compound key is a buffer describing its
+;; substance in the collection's registry.
 
 ;;; Code:
 
@@ -56,6 +57,47 @@ hyphens that the registry holds."
                      (append (alist-get 'procedures (orgsyndb-index root))
                              (alist-get 'sequences (orgsyndb-index root))))))))
 
+(defconst orgsyndb--substance-facts
+  '((name_de . "German name") (formula . "Formula") (mw . "Molar mass")
+    (cas . "CAS") (article_number . "Article no.")
+    (short_name . "Short name"))
+  "The values of a substance that its buffer shows after its name, in
+order, each with its label.")
+
+(defun orgsyndb--substance-buffer (root key)
+  "Return the buffer `*orgsyndb KEY*', filled from the index of ROOT.
+It describes the substance KEY of the collection's registry: its name,
+then, one per line, those of its German name, formula, molar mass, CAS
+number, article number and short name that it has.  When the index
+gives the substance's page in the lab application, a button that calls
+`browse-url' on its address follows; otherwise a line says that it has
+none.  The buffer is in `special-mode'."
+  (let* ((entry (cl-find key (orgsyndb--compounds root)
+                         :key (lambda (entry) (alist-get 'key entry))
+                         :test #'equal))
+         (data (alist-get 'data entry))
+         (url (alist-get 'url entry))
+         (buffer (get-buffer-create (format "*orgsyndb %s*" key))))
+    (with-current-buffer buffer
+      (special-mode)
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (insert (or (alist-get 'name data) key) "\n")
+        (pcase-dolist (`(,name . ,label) orgsyndb--substance-facts)
+          (let ((value (alist-get name data)))
+            (when value
+              (insert label ": " (format "%s" value)
+                      (if (eq name 'mw) " g/mol" "") "\n"))))
+        (insert "\n")
+        (if (stringp url)
+            (insert-text-button "Open its page in the lab application"
+                                'action (lambda (_button) (browse-url url))
+                                'follow-link t 'help-echo url)
+          (insert "It has no page: the collection's registry is a file."))
+        (insert "\n")
+        (goto-char (point-min))))
+    buffer))
+
 (cl-defmethod xref-backend-definitions ((_backend (eql orgsyndb)) identifier)
   (let ((root (orgsyndb--current-root))
         (case-fold-search nil))
@@ -71,11 +113,8 @@ hyphens that the registry holds."
                                1 0))))))
      ((orgsyndb--compound-key-p root identifier)
       (list (xref-make identifier
-                       (xref-make-file-location
-                        (expand-file-name (format "compounds/%s.toml"
-                                                  identifier)
-                                          root)
-                        1 0)))))))
+                       (xref-make-buffer-location
+                        (orgsyndb--substance-buffer root identifier) 1)))))))
 
 (defun orgsyndb--file-text (file)
   "Return the text of FILE, from the buffer visiting it when there is one."

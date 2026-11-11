@@ -262,19 +262,18 @@ class ValidateSubcommandTests(BuildTestCase):
 
 
 class ValidateRegistryTests(BuildTestCase):
-    def test_registry_problem_is_reported_under_the_compounds_path(
+    def test_registry_problem_is_reported_under_the_registry_path(
             self) -> None:
         """Scenario: Seeds validate (the registry is checked)."""
-        path = self.sandbox.root / "compounds" / "salicylic-acid.toml"
-        path.write_text(path.read_text(encoding="utf-8").replace(
-            "mw = 138.12", "mw = 0"), encoding="utf-8")
+        ps.edit_snapshot(self.sandbox, lambda table: table[
+            "substances"].append(support.substance("group")))
         result = self.build("validate")
         self.assertEqual(result.returncode, 1, result.stderr)
         lines = problem_lines(result.stdout)
         self.assertEqual(len(lines), 1, result.stdout)
         self.assertTrue(lines[0].startswith(
-            "compounds/salicylic-acid.toml:mw: error: "), lines[0])
-        self.assertIn("must be greater than 0", lines[0])
+            "build/registry.json:substances: error: "), lines[0])
+        self.assertIn("group", lines[0])
 
     def test_unknown_compound_is_reported(self) -> None:
         """Scenario: Seeds validate (compounds are resolved)."""
@@ -287,28 +286,38 @@ class ValidateRegistryTests(BuildTestCase):
             and 'unknown compound "no-such-compound"' in ln
             for ln in result.stdout.splitlines()), result.stdout)
 
-    def test_structure_images_resolve_under_static(self) -> None:
-        """Scenario: Seeds validate (images are found under static)."""
+    def test_a_substance_without_a_structure_image_draws_no_problem(
+            self) -> None:
+        """Requirement: Structure images by key (no check reports a
+        substance without an image)."""
         (self.sandbox.root / "static" / "structures"
          / "isopentyl-acetate.svg").unlink()
         result = self.build("validate")
-        self.assertEqual(result.returncode, 1, result.stderr)
-        self.assertTrue(any(
-            ln.startswith("compounds/isopentyl-acetate.toml:"
-                          "structure_image: error:") and "not found" in ln
-            for ln in result.stdout.splitlines()), result.stdout)
+        self.assert_ok(result)
+        self.assertEqual(problem_lines(result.stdout), [])
 
-    def test_missing_registry_directory_leaves_every_key_unknown(
+    def test_a_substance_missing_from_the_registry_leaves_its_key_unknown(
             self) -> None:
-        """Scenario: Seeds validate (a collection without compounds/)."""
-        shutil.rmtree(self.sandbox.root / "compounds")
+        """Scenario: Seeds validate (compounds are resolved against the
+        registry)."""
+        ps.edit_snapshot(self.sandbox, support.without_substance(
+            "salicylic-acid"))
         result = self.build("validate")
         self.assertEqual(result.returncode, 1, result.stderr)
-        unknown = [ln for ln in problem_lines(result.stdout)
-                   if "unknown compound" in ln]
-        self.assertGreater(len(unknown), 0, result.stdout)
-        self.assertEqual(len(unknown), len(problem_lines(result.stdout)),
-                         result.stdout)
+        lines = problem_lines(result.stdout)
+        self.assertTrue(lines, result.stdout)
+        for line in lines:
+            self.assertIn('unknown compound "salicylic-acid"', line)
+
+    def test_a_missing_registry_file_stops_validate(self) -> None:
+        """Requirement: validate subcommand (a configuration error that
+        reading the registry raises)."""
+        (self.sandbox.root / "registry.json").unlink()
+        result = self.build("validate")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertTrue(result.stderr.startswith("orgsyndb: error:"),
+                        result.stderr)
+        self.assertIn("registry.json", result.stderr)
 
 
 class ValidateSequenceTests(BuildTestCase):
@@ -336,7 +345,6 @@ class ValidateSequenceTests(BuildTestCase):
         sequences = list((root / "md" / "sequences").glob("SEQ-*.md"))
         self.assertEqual(len(sequences), 4)
         files = (len(list((root / "md" / "procedures").glob("*.md")))
-                 + len(list((root / "compounds").glob("*.toml")))
                  + len(sequences))
         result = self.build("validate")
         self.assert_ok(result)
@@ -397,7 +405,8 @@ class FieldDataStagingTests(BuildTestCase):
     def expected(self) -> dict:
         language = ps.pipeline().site_language(self.sandbox.app / "site")
         return ps.pipeline_function("fields_data")(
-            self.sandbox.root / "orgsyndb.toml", language)
+            self.sandbox.root / "orgsyndb.toml",
+            ps.read_snapshot(self.sandbox), language)
 
     def test_field_data_is_staged(self) -> None:
         """Scenario: Field data is staged."""
@@ -406,8 +415,7 @@ class FieldDataStagingTests(BuildTestCase):
         self.assertEqual(data, self.expected())
         self.assertEqual(
             [f["key"] for f in data["compound"]],
-            ["item_number", "short_name", "chemical_class", "stock",
-             "in_house", "group"])
+            ["article_number", "short_name", "chemical_class", "group"])
         self.assertEqual(data["compound"][0]["label"], "Artikelnr.")
         self.assertEqual(
             [f["key"] for f in data["procedure"]],
@@ -420,14 +428,30 @@ class FieldDataStagingTests(BuildTestCase):
         self.assert_ok(self.build("build"))
         path = self.sandbox.root / "orgsyndb.toml"
         text = path.read_text(encoding="utf-8")
-        self.assertEqual(text.count('label_de = "Kurzname"'), 1)
-        path.write_text(text.replace('label_de = "Kurzname"',
-                                     'label_de = "Kurzbezeichnung"'),
+        self.assertEqual(text.count('label_de = "Laborjournal"'), 1)
+        path.write_text(text.replace('label_de = "Laborjournal"',
+                                     'label_de = "Laborbuch"'),
                         encoding="utf-8")
         self.assert_ok(self.build("build"))
         data = self.fields_json()
         self.assertEqual(data, self.expected())
-        self.assertEqual(data["compound"][1]["label"], "Kurzbezeichnung")
+        self.assertEqual(data["procedure"][0]["label"], "Laborbuch")
+
+    def test_a_second_build_stages_the_changed_registry(self) -> None:
+        """Requirement: build subcommand (the field data is written from
+        the registry read for this build)."""
+        self.assert_ok(self.build("build"))
+
+        def relabel(table: dict) -> None:
+            (found,) = [t for t in table["vocabularies"]["inventory-groups"]
+                        if t["key"] == "reagents"]
+            found["label_de"] = "Chemikalien"
+        ps.edit_snapshot(self.sandbox, relabel)
+        self.assert_ok(self.build("build"))
+        data = self.fields_json()
+        self.assertEqual(data, self.expected())
+        group = {f["key"]: f for f in data["compound"]}["group"]
+        self.assertEqual(group["values"]["reagents"]["label"], "Chemikalien")
 
     def test_a_declaration_error_stops_the_build_before_staging(
             self) -> None:
@@ -454,7 +478,7 @@ class ReactionTypeDataStagingTests(BuildTestCase):
     def expected(self) -> dict:
         language = ps.pipeline().site_language(self.sandbox.app / "site")
         return ps.pipeline_function("reaction_types_data")(
-            self.sandbox.root / "orgsyndb.toml", language)
+            ps.read_snapshot(self.sandbox), language)
 
     def test_reaction_type_data_is_staged(self) -> None:
         """Scenario: Reaction-type data is staged."""
@@ -468,37 +492,37 @@ class ReactionTypeDataStagingTests(BuildTestCase):
         """Requirement: build subcommand (the reaction-type data is
         written on every build)."""
         self.assert_ok(self.build("build"))
-        path = self.sandbox.root / "vocabularies" / "reaction-types.toml"
-        text = path.read_text(encoding="utf-8")
-        self.assertEqual(text.count('label_de = "Veresterung"'), 1)
-        path.write_text(text.replace('label_de = "Veresterung"',
-                                     'label_de = "Esterbildung"'),
-                        encoding="utf-8")
+
+        def relabel(table: dict) -> None:
+            (found,) = [t for t in table["vocabularies"]["reaction-types"]
+                        if t["key"] == "esterification"]
+            found["label_de"] = "Esterbildung"
+        ps.edit_snapshot(self.sandbox, relabel)
         self.assert_ok(self.build("build"))
         data = self.reaction_types_json()
         self.assertEqual(data, self.expected())
         self.assertEqual(data["esterification"], {"label": "Esterbildung"})
 
-    def test_a_broken_vocabulary_stops_the_build_before_staging(
+    def test_a_registry_that_is_not_a_snapshot_stops_the_build_before_staging(
             self) -> None:
         """Requirement: build subcommand (validation precedes the
-        staging)."""
-        path = self.sandbox.root / "vocabularies" / "reaction-types.toml"
-        path.write_text(path.read_text(encoding="utf-8").replace(
-            "[reduction]\n", '[reduction]\nparent = "esterification"\n'),
-            encoding="utf-8")
+        staging; a registry that is not a snapshot is a configuration
+        error)."""
+        (self.sandbox.root / "registry.json").write_text(
+            '{"format": 2}', encoding="utf-8")
         result = self.build("build")
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertIn("validate.py: error:", result.stderr)
-        self.assertIn("reaction-types.toml", result.stderr)
+        self.assertIn("registry.json", result.stderr)
         self.assertFalse((self.sandbox.root / "build" / "data").exists())
         self.assertFalse((self.sandbox.root / "public").exists())
 
     def test_a_collection_without_reaction_types_fails_validation(
             self) -> None:
-        """Requirement: Reaction-type vocabulary (a missing file leaves
-        every procedure's reaction type unknown)."""
-        (self.sandbox.root / "vocabularies" / "reaction-types.toml").unlink()
+        """Requirement: Reaction-type vocabulary (a registry without
+        reaction types leaves every procedure's reaction type
+        unknown)."""
+        ps.edit_snapshot(self.sandbox, support.setting_terms(
+            "reaction-types"))
         result = self.build("build")
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertNotIn("validate.py: error:", result.stderr)
@@ -507,8 +531,92 @@ class ReactionTypeDataStagingTests(BuildTestCase):
         for line in lines:
             self.assertIn(":reaction_types: error: unknown reaction type",
                           line)
-            self.assertIn("vocabularies/reaction-types.toml", line)
         self.assertFalse((self.sandbox.root / "public").exists())
+
+
+class StagedSubstanceDataTests(BuildTestCase):
+    """site-build "Hugo configuration": ``build/data/compounds/``."""
+
+    def staged(self) -> dict[str, dict]:
+        directory = self.sandbox.root / "build" / "data" / "compounds"
+        self.assertTrue(directory.is_dir(),
+                        "build/data/compounds/ is missing")
+        found = {}
+        for path in sorted(directory.iterdir()):
+            self.assertEqual(path.suffix, ".json", path.name)
+            found[path.stem] = json.loads(path.read_text(encoding="utf-8"))
+        return found
+
+    def test_one_file_per_substance(self) -> None:
+        """Scenario: Staged substance data."""
+        self.assert_ok(self.build("build"))
+        staged = self.staged()
+        table = ps.read_snapshot(self.sandbox)
+        self.assertEqual(sorted(staged),
+                         sorted(s["key"] for s in table["substances"]))
+        self.assertEqual(
+            staged, ps.compounds_of(table, self.sandbox.root / "static"))
+        self.assertEqual(staged["acetylsalicylic-acid"]["article_number"],
+                         "CH-0010")
+        self.assertEqual(staged["acetylsalicylic-acid"]["short_name"],
+                         "ASA")
+        self.assertNotIn("short_name", staged["salicylic-acid"])
+        self.assertEqual(staged["isopentyl-acetate"]["structure_image"],
+                         "structures/isopentyl-acetate.svg")
+        self.assertNotIn("structure_image", staged["salicylic-acid"])
+
+    def test_the_staged_values_are_the_substances(self) -> None:
+        """Requirement: Hugo configuration (`name`, `name_de`, `formula`,
+        `mw`, `smiles`, `cas`, the registry fields; `chemical_class` a
+        list of keys)."""
+        self.assert_ok(self.build("build"))
+        data = self.staged()["cinnamic-acid"]
+        self.assertEqual(data, {
+            "name": "(E)-Cinnamic acid", "name_de": "(E)-Zimtsäure",
+            "formula": "C9H8O2", "mw": 148.16,
+            "smiles": "OC(=O)/C=C/c1ccccc1", "cas": "140-10-3",
+            "article_number": "CH-0012",
+            "chemical_class": data["chemical_class"],
+            "group": data["group"]})
+        self.assertIsInstance(data["chemical_class"], list)
+        self.assertTrue(data["chemical_class"])
+        self.assertEqual(data["group"], "final-products")
+
+    def test_a_substance_without_values_has_none_of_them(self) -> None:
+        """Requirement: Hugo configuration (a value the substance lacks
+        is left out)."""
+        self.assert_ok(self.build("build"))
+        data = self.staged()["new-compound-7"]
+        for key in ("formula", "mw", "smiles", "cas", "short_name"):
+            self.assertNotIn(key, data)
+        self.assertEqual(data["article_number"], "NV-0007")
+
+    def test_the_svg_comes_before_the_png(self) -> None:
+        """Requirement: Structure images by key (the PNG when there is no
+        SVG)."""
+        structures = self.sandbox.root / "static" / "structures"
+        (structures / "acetone.png").write_bytes(b"\x89PNG")
+        (structures / "benzaldehyde.png").write_bytes(b"\x89PNG")
+        (structures / "benzaldehyde.svg").write_text(
+            "<svg xmlns='http://www.w3.org/2000/svg'/>", encoding="utf-8")
+        self.assert_ok(self.build("build"))
+        staged = self.staged()
+        self.assertEqual(staged["acetone"]["structure_image"],
+                         "structures/acetone.png")
+        self.assertEqual(staged["benzaldehyde"]["structure_image"],
+                         "structures/benzaldehyde.svg")
+
+    def test_the_staged_directory_is_rewritten_on_every_build(self) -> None:
+        """Requirement: build subcommand (the staged substance data is
+        written on every build)."""
+        self.assert_ok(self.build("build"))
+        ps.edit_snapshot(self.sandbox, support.without_substance(
+            "new-compound-7"), support.setting_substance(
+                "acetone", short_name="Me2CO"))
+        self.assert_ok(self.build("build"))
+        staged = self.staged()
+        self.assertNotIn("new-compound-7", staged)
+        self.assertEqual(staged["acetone"]["short_name"], "Me2CO")
 
 
 class RouteDataStagingTests(BuildTestCase):
