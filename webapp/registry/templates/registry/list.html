@@ -1,0 +1,38 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n lab inventory %}
+{% block title %}{% translate "Substances" %}{% endblock %}
+{% block main %}
+<div class="lab-heading">
+<h1>{% translate "Substances" %}</h1>
+<span class="lab-count">{{ substances|length }}</span>
+{% if user.is_authenticated %}<p class="actions"><a href="/lab/registry/substances/new/">{% translate "New substance" %}</a></p>
+{% endif %}</div>
+<nav class="section-tabs" aria-label="{% translate "Vocabularies" %}">
+<ul>
+{% for name, heading in vocabularies %}<li><a href="/lab/registry/{{ name }}/">{{ heading }}</a></li>
+{% endfor %}</ul>
+</nav>
+<form class="lab-filters" method="get" action="/lab/registry/">
+<label>{% translate "Search substances" %}
+<input type="search" name="q" value="{{ q }}"></label>
+<button type="submit">{% translate "Filter" %}</button>
+</form>
+<div class="table-scroll">
+<table class="inventory-table registry-table">
+<thead>
+<tr><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Key" %}</th><th scope="col">{% translate "Short name" %}</th><th scope="col">{% translate "Group" %}</th><th scope="col">{% translate "Chemical classes" %}</th><th scope="col">{% translate "Formula" %}</th><th scope="col">{% translate "Molar mass" %}</th><th scope="col">{% translate "Article no." %}</th></tr>
+</thead>
+<tbody>
+{% for found in substances %}<tr>
+<td>{% substance found %}</td>
+<td>{{ found.key }}</td>
+<td>{{ found.short_name }}</td>
+<td>{{ found.group.shown_label }}</td>
+<td>{% for term in found.chemical_classes.all %}{{ term.shown_label }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+<td>{{ found.formula }}</td>
+<td class="number">{% if found.mw is not None %}{{ found.mw|decimal }}{% endif %}</td>
+<td>{{ found.article_number|default_if_none:"" }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% endblock %}

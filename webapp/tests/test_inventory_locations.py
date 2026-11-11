@@ -32,7 +32,7 @@ class ItemFormTests(FormCase):
 
     def test_a_new_item_with_its_location(self) -> None:
         self.client.post(NEW_ITEM, {
-            "article_number": "CH-0012", "name": "Zimtsäure",
+            "substance": "cinnamic-acid", "article_number": "CH-0012",
             "category": "", "size": "10", "unit": "umol", "quantity": "3",
             "stocked_on": "", "compartment": "2", "box": "7", "note": ""})
         item = Item.objects.get()
@@ -40,7 +40,7 @@ class ItemFormTests(FormCase):
 
     def test_the_locations_are_optional(self) -> None:
         self.client.post(NEW_ITEM, {
-            "article_number": "CH-0012", "name": "Zimtsäure",
+            "substance": "cinnamic-acid", "article_number": "CH-0012",
             "category": "", "size": "10", "unit": "umol", "quantity": "3",
             "stocked_on": "", "compartment": "", "box": "", "note": ""})
         self.assertEqual((Item.objects.get().compartment,
@@ -51,7 +51,7 @@ class ItemFormTests(FormCase):
         for field in ("compartment", "box"):
             with self.subTest(field=field):
                 response = self.client.post(item_url(item, "edit"), {
-                    "name": item.name, "category": "", "note": "",
+                    "category": "", "note": "",
                     "status": "active", "stocked_on": "",
                     "compartment": "", "box": "", field: "x" * 31})
                 self.refused(response, field)
@@ -59,7 +59,7 @@ class ItemFormTests(FormCase):
     def test_the_edit_form_changes_them(self) -> None:
         item = self.item("CH-0012")
         self.client.post(item_url(item, "edit"), {
-            "name": item.name, "category": "", "note": "",
+            "category": "", "note": "",
             "status": "active", "stocked_on": "2019-01-02",
             "compartment": "3", "box": "12"})
         stored = fresh(item)
@@ -94,7 +94,7 @@ class ItemFormTests(FormCase):
         item.compartment, item.box = "2", "7"
         item.save()
         self.client.post(item_url(item, "edit"), {
-            "name": item.name, "category": "", "note": "",
+            "category": "", "note": "",
             "status": "active", "stocked_on": "2019-01-02",
             "compartment": "3", "box": "12"})
         history = page(self.client.get(item_url(item))).find(
@@ -219,7 +219,7 @@ class PageTests(FormCase):
         item = kept(self.item("CH-0012"), "2", "7")
         bare = self.item("CH-0010")
         for record, wanted in ((item, ("2", "7")), (bare, ("–", "–"))):
-            with self.subTest(item=record.article_number):
+            with self.subTest(item=record.article.article_number):
                 metadata = page(self.client.get(item_url(record))).find(
                     "dl", "metadata")
                 terms = [dt.text() for dt in metadata.find_all("dt")]

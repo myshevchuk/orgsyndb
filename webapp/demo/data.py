@@ -80,6 +80,12 @@ class CreateAccount(Change):
 
 
 @dataclass(frozen=True, kw_only=True)
+class LoadRegistry(Change):
+    """Load the demo registry, ``registry.json`` of this package, into
+    the empty registry."""
+
+
+@dataclass(frozen=True, kw_only=True)
 class SaveParameters(Change):
     """Store the planning parameters with FIELDS, or change them."""
 
@@ -88,12 +94,13 @@ class SaveParameters(Change):
 
 @dataclass(frozen=True, kw_only=True)
 class OpenItem(Change):
-    """Create the item KEY with its opening count, dated the change's
-    day."""
+    """Create the item KEY of the substance SUBSTANCE, by its key, with
+    its opening count, dated the change's day; ARTICLE_NUMBER and
+    CATEGORY are its article's."""
 
     key: str
+    substance: str
     article_number: str | None
-    name: str
     category: str
     size: Decimal
     unit: str
@@ -141,11 +148,14 @@ class ReverseDelivery(Change):
 
 @dataclass(frozen=True, kw_only=True)
 class OpenLot(Change):
-    """Create the bulk lot KEY with its opening amount, in UNIT, dated
-    the change's day."""
+    """Create the bulk lot KEY of the substance SUBSTANCE, by its key,
+    made in the lab or bought as SOURCE says, from SUPPLIER, with its
+    opening amount, in UNIT, dated the change's day."""
 
     key: str
-    article_number: str
+    substance: str
+    source: str
+    supplier: str
     unit: str
     amount: Decimal
     batch: str
@@ -194,7 +204,7 @@ class CorrectLot(Change):
 @dataclass(frozen=True, kw_only=True)
 class SaveTask(Change):
     """Create the task KEY with FIELDS, or change it; an assignee is
-    given by user name."""
+    given by user name and a substance by its key."""
 
     key: str
     fields: dict[str, Any]
@@ -244,13 +254,12 @@ class _Size:
 
 @dataclass(frozen=True)
 class _Synthesis:
-    """A task of an article, its days counted from the opening.
+    """A task of a substance, its days counted from the opening.
 
     A synthesis that ends yields a lot the day it ends, which fills its
     article's items on the days FILLS and keeps REST, in the lot's unit.
     """
 
-    product: str
     by: str
     created: int
     assignee: str | None = None
@@ -272,9 +281,10 @@ class _Synthesis:
 @dataclass(frozen=True)
 class _Article:
     # The article number, or for an article never delivered, which has
-    # none, the key of its compound; NUMBERED tells which.
+    # none, the key of its substance; NUMBERED tells which. SUBSTANCE is
+    # the key of its substance in the demo registry.
     number: str
-    name: Text
+    substance: str
     category: Text
     lot_unit: str
     sizes: tuple[_Size, ...]
@@ -297,109 +307,142 @@ DESICCATOR = ("Exsikkator 1", "Desiccator 1")
 
 ARTICLES = (
     _Article(
-        "CH-0012", ("(E)-Zimtsäure", "(E)-Cinnamic acid"),
+        "CH-0012", "cinnamic-acid",
         ("Carbonsäuren", "Carboxylic acids"), "mg",
         (_Size("100", "mg", final=4, gap=21, sizes=(2, 3, 2, 4), phase=3),
          _Size("500", "mg", final=3, gap=30, sizes=(1, 2, 1), phase=11),
          _Size("1", "g", final=2, filled=False, status="discontinued",
                set_aside=120)),
-        (_Synthesis("CH-0012", "mwolf", 0, "mwolf", started=-20, ended=14,
+        (_Synthesis("mwolf", 0, "mwolf", started=-20, ended=14,
                     report=20, qc=30, fills=(15, 60, 100)),
-         _Synthesis("cinnamic-acid", "tbauer", 115, "tbauer", started=120,
+         _Synthesis("tbauer", 115, "tbauer", started=120,
                     ended=161, report=168, qc=175, fills=(162, 210, 250),
                     note=("Umkristallisiert aus Ethanol/Wasser.",
                           "Recrystallised from ethanol/water.")),
-         _Synthesis("CH-0012", "aschmidt", 200, cancelled=206,
+         _Synthesis("aschmidt", 200, cancelled=206,
                     note=("Ausgangsmaterial verunreinigt, neu bestellt.",
                           "Starting material impure; reordered.")),
-         _Synthesis("CH-0012", "klehmann", 255, "aschmidt", started=260,
+         _Synthesis("klehmann", 255, "aschmidt", started=260,
                     ended=298, report=305, fills=(299, 330)),
-         _Synthesis("CH-0012", "klehmann", 330, "tbauer", started=338,
+         _Synthesis("klehmann", 330, "tbauer", started=338,
                     priority="high"))),
     _Article(
-        "CH-0010", ("Acetylsalicylsäure", "Acetylsalicylic acid"),
+        "CH-0010", "acetylsalicylic-acid",
         ("Carbonsäuren", "Carboxylic acids"), "g",
         (_Size("1", "g", final=18, gap=14, sizes=(1, 1, 2), phase=5),
          _Size("5", "g", final=8, gap=33, sizes=(1, 2, 1, 1), phase=17),
          _Size("25", "g", final=1, filled=False, status="not_needed",
                set_aside=200)),
-        (_Synthesis("CH-0010", "klehmann", 35, "jkoch", started=40,
+        (_Synthesis("klehmann", 35, "jkoch", started=40,
                     ended=66, report=70, qc=74, sequence="SEQ-0001",
                     steps=SEQ_1, steps_done=((52, 1),),
                     fills=(67, 120, 180), location=DESICCATOR),
-         _Synthesis("CH-0010", "klehmann", 225, "jkoch", started=230,
+         _Synthesis("klehmann", 225, "jkoch", started=230,
                     ended=261, report=266, qc=270, sequence="SEQ-0001",
                     steps=SEQ_1, steps_done=((245, 1),),
                     fills=(262, 310, 350), location=DESICCATOR),
-         _Synthesis("CH-0010", "aschmidt", 380, "aschmidt",
+         _Synthesis("aschmidt", 380, "aschmidt",
                     sequence="SEQ-0001", steps=SEQ_1,
                     note=("Ölbad vorher prüfen.",
                           "Check the oil bath first.")))),
     _Article(
-        "CH-0013", ("Dibenzylidenaceton", "Dibenzylideneacetone"),
+        "CH-0013", "dibenzylideneacetone",
         ("Ketone", "Ketones"), "mg",
         (_Size("250", "mg", final=0, gap=25, sizes=(1, 2, 1, 1),
                phase=8),
          _Size("1", "g", final=4, gap=15, sizes=(1,), opened=340,
                filled=False)),
-        (_Synthesis("CH-0013", "tbauer", 85, "tbauer", started=90,
+        (_Synthesis("tbauer", 85, "tbauer", started=90,
                     ended=115, report=118, qc=122, fills=(116, 180)),
-         _Synthesis("CH-0013", "tbauer", 245, "jkoch", started=250,
+         _Synthesis("tbauer", 245, "jkoch", started=250,
                     ended=270, report=274, qc=280, fills=(271, 300)))),
     _Article(
-        "CH-0016", ("Isopentylacetat", "Isopentyl acetate"),
+        "CH-0016", "isopentyl-acetate",
         ("Ester", "Esters"), "g",
         (_Size("1", "g", final=3, gap=10, sizes=(1, 2, 1), phase=2),
          _Size("5", "g", final=5, gap=30, sizes=(1, 1, 2), phase=9),
          _Size("10", "g", final=3, gap=35, sizes=(1, 1), phase=20)),
-        (_Synthesis("CH-0016", "klehmann", 25, "tbauer", started=30,
+        (_Synthesis("klehmann", 25, "tbauer", started=30,
                     ended=58, report=63, qc=66, fills=(59, 110, 150),
                     location=FRIDGE),
-         _Synthesis("CH-0016", "tbauer", 195, "jkoch", started=200,
+         _Synthesis("tbauer", 195, "jkoch", started=200,
                     ended=225, report=230, qc=233, fills=(226, 280, 330),
                     location=FRIDGE),
-         _Synthesis("CH-0016", "klehmann", 335, "tbauer", started=340,
+         _Synthesis("klehmann", 335, "tbauer", started=340,
                     ended=360, report=365, fills=(361,), rest="200",
                     location=FRIDGE))),
     _Article(
-        "CH-0001", ("1-(4-Bromphenyl)ethanol", "1-(4-Bromophenyl)ethanol"),
+        "CH-0001", "1-4-bromophenyl-ethanol",
         ("Alkohole", "Alcohols"), "mg",
         (_Size("50", "mg", final=6, gap=200, sizes=(3,), phase=60),
          _Size("250", "mg", final=3, rate=2, entered=(8, 7, 6, 5),
                filled=False)),
-        (_Synthesis("CH-0001", "klehmann", 385, "jkoch",
+        (_Synthesis("klehmann", 385, "jkoch",
                     priority="low"),)),
     _Article(
-        "CH-0002", ("1-(Biphenyl-4-yl)ethanol", "1-(Biphenyl-4-yl)ethanol"),
+        "CH-0002", "1-biphenyl-4-yl-ethanol",
         ("Alkohole", "Alcohols"), "mg",
         (_Size("10", "umol", final=10, gap=30, sizes=(2, 3), phase=4),
          _Size("50", "umol", final=5, gap=35, sizes=(1, 1, 2), phase=15)),
-        (_Synthesis("CH-0002", "klehmann", 75, "jkoch", started=80,
+        (_Synthesis("klehmann", 75, "jkoch", started=80,
                     ended=110, report=115, qc=121, sequence="SEQ-0002",
                     steps=SEQ_2, steps_done=((95, 1),),
                     fills=(111, 200, 300), rest="150"),
-         _Synthesis("CH-0002", "klehmann", 380, "jkoch", started=388,
+         _Synthesis("klehmann", 380, "jkoch", started=388,
                     sequence="SEQ-0002", steps=SEQ_2,
                     steps_done=((396, 1),))),
         mass="198.26"),
     _Article(
-        "1-phenylethanol", ("1-Phenylethanol", "1-Phenylethanol"),
+        "1-phenylethanol", "1-phenylethanol",
         ("Alkohole", "Alcohols"), "mg",
         (_Size("100", "mg", final=8, opened=310),),
-        (_Synthesis("1-phenylethanol", "aschmidt", 280, "aschmidt",
+        (_Synthesis("aschmidt", 280, "aschmidt",
                     started=285, ended=305, report=308, qc=309,
                     fills=(311,)),),
         numbered=False),
     _Article(
-        "NV-0007", ("Neuverbindung 7", "New compound 7"),
+        "NV-0007", "new-compound-7",
         ("Neuverbindungen", "New compounds"), "umol",
         (_Size("10", "mg", final=4, gap=20, sizes=(1, 2), phase=6),),
-        (_Synthesis("NV-0007", "tbauer", 95, "aschmidt", started=100,
+        (_Synthesis("tbauer", 95, "aschmidt", started=100,
                     ended=140, report=146, qc=150, fills=(141, 250, 330),
                     rest="600", location=FRIDGE),
-         _Synthesis("NV-0007", "aschmidt", 365, "aschmidt", started=372,
+         _Synthesis("aschmidt", 365, "aschmidt", started=372,
                     note=("Ansatz verdoppelt.", "Scale doubled."))),
         mass="250"),
+)
+
+
+
+@dataclass(frozen=True)
+class _Intermediate:
+    """A substance without an article, by its KEY, that a synthesis
+    yields a lot of, the day it ends, holding AMOUNT in UNIT: made in
+    the lab, or, with a SUPPLIER, bought from it."""
+
+    key: str
+    unit: str
+    amount: str
+    synthesis: _Synthesis
+    supplier: str = ""
+
+
+INTERMEDIATES = (
+    _Intermediate(
+        "4-acetylbiphenyl", "g", "12",
+        _Synthesis("klehmann", 145, "jkoch", started=150, ended=168,
+                   report=171, qc=173,
+                   note=("Vorstufe für CH-0002.",
+                         "Precursor of CH-0002."))),
+    _Intermediate(
+        "ethyl-cinnamate", "g", "25",
+        _Synthesis("klehmann", 205, "klehmann", started=210, ended=236,
+                   report=238, qc=239,
+                   note=("Auftragssynthese; die Charge ist die des "
+                         "Lieferanten.",
+                         "Contract synthesis; the batch is the "
+                         "supplier's.")),
+        supplier="ChemPur GmbH"),
 )
 
 RECIPIENTS: tuple[Text, ...] = (
@@ -493,8 +536,8 @@ class _Timeline:
 
 
 # Ranks of the changes of one day.
-ACCOUNT, PARAMETERS, ITEM, TASK, LOT, FILL, NOTE, REVERSAL, CORRECTION, \
-    ENTRY, HISTORICAL, LOT_CORRECTION, STATUS = range(13)
+ACCOUNT, REGISTRY, PARAMETERS, ITEM, TASK, LOT, FILL, NOTE, REVERSAL, \
+    CORRECTION, ENTRY, HISTORICAL, LOT_CORRECTION, STATUS = range(14)
 
 
 def staff(offset: int, turn: int = 0) -> str:
@@ -547,6 +590,7 @@ def changes(today: date, language: str) -> list[Change]:
     for account in ACCOUNTS:
         line.add(line.opening, ACCOUNT, CreateAccount,
                  user=account.username, account=account)
+    line.add(line.opening, REGISTRY, LoadRegistry, user="klehmann")
     line.add(line.day(1), PARAMETERS, SaveParameters, user="klehmann",
              fields={**DEFAULTS, "target_days": 180})
     line.add(line.day(200), PARAMETERS, SaveParameters, user="klehmann",
@@ -555,17 +599,24 @@ def changes(today: date, language: str) -> list[Change]:
     batches = _batches(line)
     for article in ARTICLES:
         orders += _article(line, article, batches)
+    for intermediate in INTERMEDIATES:
+        _intermediate(line, intermediate, batches)
     _notes(line, orders)
     return line.changes()
 
 
 def _batches(line: _Timeline) -> dict[tuple[str, int], str]:
-    """The batch of each synthesis that ends, by its article and its
-    position: ``B<yy>-<nnn>``, numbered in the order of their ends."""
+    """The batch of each synthesis that ends, by its article, or its
+    intermediate's key, and its position: ``B<yy>-<nnn>``, numbered in
+    the order of their ends."""
+    syntheses = [(article.number, position, synthesis)
+                 for article in ARTICLES
+                 for position, synthesis in enumerate(article.syntheses)]
+    syntheses += [(intermediate.key, 0, intermediate.synthesis)
+                  for intermediate in INTERMEDIATES]
     ended = sorted(
-        ((line.day(synthesis.ended), article.number, position)
-         for article in ARTICLES
-         for position, synthesis in enumerate(article.syntheses)
+        ((line.day(synthesis.ended), number, position)
+         for number, position, synthesis in syntheses
          if synthesis.ended is not None),
         key=lambda entry: entry[0])
     return {(number, position): f"B{day:%y}-{index:03d}"
@@ -581,7 +632,8 @@ def _article(line: _Timeline, article: _Article,
     yields = {}
     for position, synthesis in enumerate(article.syntheses):
         batch = batches.get((article.number, position), "")
-        _task(line, article, position, synthesis, batch)
+        _task(line, f"{article.number}#{position}", article.substance,
+              synthesis, batch)
         if synthesis.ended is not None and synthesis.fills:
             yields[position] = batch
     opportunities = sorted(
@@ -603,7 +655,7 @@ def _article(line: _Timeline, article: _Article,
         made = line.day(synthesis.ended)
         line.add(made, LOT, OpenLot, user=synthesis.by,
                  key=f"{article.number}#{position}",
-                 article_number=article.article_number,
+                 substance=article.substance, source="made", supplier="",
                  unit=article.lot_unit,
                  amount=taken[position] + Decimal(synthesis.rest),
                  batch=batch, location=line.text(synthesis.location),
@@ -689,9 +741,9 @@ def _size(line: _Timeline, article: _Article, turn: int, size: _Size,
     _check(key, opening, booked, demand)
     compartment, box = place(article, turn)
     line.add(opened, ITEM, OpenItem, user=staff(size.opened, turn),
-             key=key, article_number=article.article_number,
+             key=key, substance=article.substance,
+             article_number=article.article_number,
              compartment=compartment, box=box,
-             name=line.text(article.name),
              category=line.text(article.category),
              size=Decimal(size.size), unit=size.unit, quantity=opening)
     for day, position, count in booked:
@@ -760,15 +812,32 @@ def _entered(line: _Timeline, key: str, size: _Size, turn: int) -> None:
                  item=key, year=year, quarter=quarter, count=value)
 
 
-def _task(line: _Timeline, article: _Article, position: int,
+def _intermediate(line: _Timeline, intermediate: _Intermediate,
+                  batches: dict[tuple[str, int], str]) -> None:
+    """Add the task of INTERMEDIATE and the lot it yields the day it
+    ends, made in the lab or bought from the intermediate's
+    supplier."""
+    synthesis = intermediate.synthesis
+    batch = batches[(intermediate.key, 0)]
+    key = f"{intermediate.key}#0"
+    _task(line, key, intermediate.key, synthesis, batch)
+    made = line.day(synthesis.ended)
+    line.add(made, LOT, OpenLot, user=synthesis.by, key=key,
+             substance=intermediate.key,
+             source="bought" if intermediate.supplier else "made",
+             supplier=intermediate.supplier, unit=intermediate.unit,
+             amount=Decimal(intermediate.amount), batch=batch,
+             location=line.text(synthesis.location), made_on=made)
+
+
+def _task(line: _Timeline, key: str, substance: str,
           synthesis: _Synthesis, batch: str) -> None:
-    """Add the changes of the task of SYNTHESIS: its creation, then its
-    start, steps, end, report, QC list and cancellation, each on its
-    day."""
-    key = f"{article.number}#{position}"
+    """Add the changes of the task KEY of SYNTHESIS, of the substance
+    SUBSTANCE by its key: its creation, then its start, steps, end,
+    report, QC list and cancellation, each on its day."""
     total = len(synthesis.steps) or None
     fields: dict[str, Any] = {
-        "product": synthesis.product, "assignee": synthesis.assignee,
+        "substance": substance, "assignee": synthesis.assignee,
         "priority": synthesis.priority, "note": line.text(synthesis.note),
         "sequence": synthesis.sequence,
         "sequence_steps": list(synthesis.steps), "steps_total": total}
@@ -852,11 +921,3 @@ def _renumber_reversal(line: _Timeline, numbers: dict[date, str]) -> None:
             fields = {**fields,
                       "number": numbers[date.fromisoformat(fields["number"])]}
             line.pending[index] = (on, rank, seq, kind, fields)
-
-
-def compounds() -> list[str]:
-    """Return the item numbers and keys by which the data set names
-    compounds of ``examples/demo``: the article numbers of its final
-    products and the compound keys of its articles without one."""
-    return [article.number for article in ARTICLES
-            if article.number.startswith("CH-") or not article.numbered]

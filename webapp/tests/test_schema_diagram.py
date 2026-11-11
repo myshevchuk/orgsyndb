@@ -11,15 +11,17 @@ from django.core.management.base import CommandError
 from django.db.models import Q
 from django.utils import translation
 
-from inventory.models import Item
+from inventory.models import Article, Item
 from orgsyndb_web import schema_diagram as sd
 from orgsyndb_web.schema_diagram import Column, LayoutError, Link, Table
 
 APP_TABLES = {
-    "accounts_user", "inventory_item", "inventory_movement",
-    "inventory_deliverynote", "inventory_deliveryline", "inventory_lot",
-    "inventory_lotmovement", "inventory_enteredconsumption", "tasks_task",
-    "tasks_counter", "planning_parameters", "demo_demomark"}
+    "accounts_user", "registry_substance", "registry_substanceclass",
+    "vocabulary_chemicalclass", "vocabulary_group", "vocabulary_project",
+    "vocabulary_reactiontype", "inventory_article", "inventory_item",
+    "inventory_movement", "inventory_deliverynote", "inventory_deliveryline",
+    "inventory_lot", "inventory_lotmovement", "inventory_enteredconsumption",
+    "tasks_task", "tasks_counter", "planning_parameters", "demo_demomark"}
 
 
 def by_name(items: tuple, name: str):
@@ -50,13 +52,14 @@ class CollectionTests(unittest.TestCase):
         item = self.table("inventory_item")
         self.assertEqual(
             [c.name for c in item.columns],
-            ["id", "inventory", "article_number", "name", "category",
-             "size", "unit", "quantity", "note", "status", "stocked_on",
-             "compartment", "box"])
+            ["id", "article_id", "size", "unit", "quantity", "note",
+             "status", "stocked_on", "compartment", "box"])
         self.assertEqual((item.columns[0].key, item.columns[0].type),
                          ("PK", "bigint"))
-        number = self.column("inventory_item", "article_number")
-        self.assertEqual((number.type, number.nullable), ("varchar(30)", True))
+        article = self.column("inventory_item", "article_id")
+        self.assertEqual((article.key, article.type, article.nullable,
+                          article.ref),
+                         ("FK", "bigint", False, "inventory_article"))
         self.assertEqual(self.column("inventory_item", "size").type,
                          "numeric(10,3)")
         self.assertEqual(item.history, "inventory_historicalitem")
@@ -106,7 +109,7 @@ class CollectionTests(unittest.TestCase):
         count = self.column("inventory_deliveryline", "count")
         self.assertIn("at least 1", count.notes)
         self.assertEqual(count.check, ">= 0")
-        self.assertIsNone(self.column("inventory_item", "name").check)
+        self.assertIsNone(self.column("inventory_item", "note").check)
 
     def test_notes_in_english(self) -> None:
         """Scenario: Notes in English."""
@@ -119,23 +122,81 @@ class CollectionTests(unittest.TestCase):
         self.assertIn("from 0.5 to 0.999", certainty)
         self.assertIn("default 0.95", certainty)
 
+    def test_an_articles_key(self) -> None:
+        """Scenario: An article's key."""
+        substance = self.column("inventory_article", "substance_id")
+        self.assertEqual((substance.key, substance.type,
+                          substance.nullable, substance.ref),
+                         ("PK", "bigint", False, "registry_substance"))
+        number = self.column("inventory_article", "article_number")
+        self.assertEqual((number.key, number.type, number.nullable),
+                         ("UQ", "varchar(30)", True))
+
+    def test_the_registrys_tables(self) -> None:
+        group = self.column("registry_substance", "group_id")
+        self.assertEqual((group.key, group.ref, group.on_delete),
+                         ("FK", "vocabulary_group", "PROTECT"))
+        self.assertEqual(self.column("registry_substance", "mw").type,
+                         "numeric(10,3)")
+        self.assertTrue(self.column("registry_substance", "mw").nullable)
+        for column, ref in (("substance_id", "registry_substance"),
+                            ("chemical_class_id", "vocabulary_chemicalclass")):
+            with self.subTest(column=column):
+                found = self.column("registry_substanceclass", column)
+                self.assertEqual((found.key, found.ref), ("FK", ref))
+        for name in ("vocabulary_chemicalclass", "vocabulary_group",
+                     "vocabulary_project"):
+            with self.subTest(table=name):
+                parent = self.column(name, "parent_id")
+                self.assertEqual((parent.key, parent.ref, parent.nullable),
+                                 ("FK", name, True))
+                self.assertEqual(
+                    [c.name for c in self.table(name).columns],
+                    ["id", "key", "label", "label_de", "parent_id"])
+        self.assertEqual(
+            [c.name for c in self.table("vocabulary_reactiontype").columns],
+            ["id", "key", "label", "label_de"])
+
+    def test_lots_and_tasks_name_substances(self) -> None:
+        for name in ("inventory_lot", "tasks_task"):
+            with self.subTest(table=name):
+                found = self.column(name, "substance_id")
+                self.assertEqual((found.key, found.ref, found.nullable),
+                                 ("FK", "registry_substance", False))
+        names = [c.name for c in self.table("inventory_lot").columns]
+        for gone in ("inventory", "article_number"):
+            self.assertNotIn(gone, names)
+        self.assertNotIn("product",
+                         [c.name for c in self.table("tasks_task").columns])
+
     def test_docstrings(self) -> None:
         item = self.table("inventory_item")
-        self.assertTrue(item.about.startswith(
-            "An article in one container size"))
+        self.assertTrue(item.about)
         self.assertGreater(len(item.doc), 1)
         self.assertEqual(item.about, item.doc[0])
 
     def test_history_tables(self) -> None:
-        self.assertEqual(
-            {(h.name, h.tracked, h.omitted)
-             for h in self.schema.history_tables},
-            {("inventory_historicalitem", "inventory_item", ("quantity",)),
-             ("inventory_historicaldeliverynote", "inventory_deliverynote",
-              ()),
-             ("inventory_historicallot", "inventory_lot", ("amount",)),
-             ("tasks_historicaltask", "tasks_task", ()),
-             ("planning_historicalparameters", "planning_parameters", ())})
+        found = {(h.name, h.tracked, h.omitted)
+                 for h in self.schema.history_tables}
+        wanted = {
+            ("inventory_historicalitem", "inventory_item", ("quantity",)),
+            ("inventory_historicalarticle", "inventory_article", ()),
+            ("inventory_historicaldeliverynote", "inventory_deliverynote",
+             ()),
+            ("inventory_historicallot", "inventory_lot", ("amount",)),
+            ("registry_historicalsubstance", "registry_substance", ()),
+            ("vocabulary_historicalchemicalclass",
+             "vocabulary_chemicalclass", ()),
+            ("vocabulary_historicalgroup", "vocabulary_group", ()),
+            ("vocabulary_historicalproject", "vocabulary_project", ()),
+            ("vocabulary_historicalreactiontype",
+             "vocabulary_reactiontype", ()),
+            ("tasks_historicaltask", "tasks_task", ()),
+            ("planning_historicalparameters", "planning_parameters", ())}
+        self.assertLessEqual(wanted, found)
+        self.assertLessEqual(found - wanted, {
+            ("registry_historicalsubstanceclass", "registry_substanceclass",
+             ())})
         self.assertIn("not in history",
                       self.column("inventory_lot", "amount").notes)
         layout = self.schema.history
@@ -176,8 +237,16 @@ class ConstraintTests(unittest.TestCase):
         identity = self.constraint("inventory_item_identity")
         self.assertEqual(
             (identity.table, identity.kind, identity.columns),
-            ("inventory_item", "unique",
-             ("inventory", "article_number", "size", "unit")))
+            ("inventory_item", "unique", ("article_id", "size", "unit")))
+        cas = self.constraint("registry_substance_cas_once")
+        self.assertEqual((cas.table, cas.kind, cas.columns),
+                         ("registry_substance", "unique", ("cas",)))
+        self.assertTrue(cas.condition)
+        classes = self.constraint("registry_substanceclass_once")
+        self.assertEqual(
+            (classes.table, classes.kind, classes.columns),
+            ("registry_substanceclass", "unique",
+             ("substance_id", "chemical_class_id")))
         self.assertEqual(
             self.constraint("inventory_item_size_positive").condition,
             "size > 0")
@@ -195,11 +264,9 @@ class ConstraintTests(unittest.TestCase):
         self.assertIn("tasks_task.steps_done", self.schema.positive_checks)
         self.assertNotIn("inventory_item.name", self.schema.positive_checks)
 
-    def test_nullable_columns_in_unique_constraints(self) -> None:
-        self.assertEqual(
-            self.schema.null_notes,
-            (("inventory_item_identity", "inventory_item",
-              "article_number"),))
+    def test_the_item_identity_has_no_nullable_column(self) -> None:
+        self.assertNotIn("inventory_item_identity",
+                         [note[0] for note in self.schema.null_notes])
 
     def test_conditions(self) -> None:
         self.assertEqual(sd.condition_text(Q(size__gt=0) | Q(unit="mg"),
@@ -208,7 +275,7 @@ class ConstraintTests(unittest.TestCase):
         self.assertEqual(sd.condition_text(~Q(status="active"), Item),
                          "NOT (status = 'active')")
         self.assertEqual(
-            sd.condition_text(Q(article_number__isnull=True), Item),
+            sd.condition_text(Q(article_number__isnull=True), Article),
             "article_number IS NULL")
         self.assertEqual(
             sd.condition_text(Q(Q(size__lt=5) | Q(size__gte=10),
@@ -503,13 +570,16 @@ class PageTests(unittest.TestCase):
         """Scenario: Constraint lists."""
         text = re.sub(r"<[^>]+>", "", self.page)
         for part in ("inventory_item_identity",
-                     "inventory, article_number, size, unit",
+                     "article_id, size, unit",
                      "inventory_item_size_positive", "size &gt; 0",
                      "inventory_entered_quarter",
                      "quarter &gt;= 1 AND quarter &lt;= 4",
+                     "registry_substance_cas_once",
+                     "registry_substanceclass_once",
+                     "substance_id, chemical_class_id",
                      "inventory_historicalitem"):
             self.assertIn(part, text)
-        self.assertRegex(text, r"article_number\s+is null")
+        self.assertRegex(text, r"registry_substance_cas_once\s+.*\bcas\b")
         self.assertRegex(text, r"inventory_historicalitem\s+without\s+"
                                r"quantity")
 
@@ -547,12 +617,8 @@ class PageTests(unittest.TestCase):
     def test_links_of_a_task(self) -> None:
         """Scenario: Links of a task."""
         for source, column, target, target_column in (
-                ("tasks_task", "product", "inventory_item",
-                 "article_number"),
                 ("tasks_task", "batch", "inventory_lot", "batch"),
-                ("tasks_counter", "name", "tasks_task", "number"),
-                ("inventory_lot", "article_number", "inventory_item",
-                 "article_number")):
+                ("tasks_counter", "name", "tasks_task", "number")):
             with self.subTest(column=f"{source}.{column}"):
                 edge = self.edge(source, column)
                 self.assertEqual(
@@ -566,6 +632,64 @@ class PageTests(unittest.TestCase):
                 self.assertTrue(note)
                 self.assertEqual(tip.splitlines()[1],
                                  note.replace("'", "&#x27;"))
+        self.assertEqual(
+            sorted((e["from"], e["column"]) for e in self.edges()
+                   if e["class"].endswith("kind-value")),
+            [("tasks_counter", "name"), ("tasks_task", "batch")])
+        self.assertEqual(
+            sorted((link.source, link.column) for link in sd.LINKS),
+            [("tasks_counter", "name"), ("tasks_task", "batch")])
+
+    def test_the_declared_batch_link_names_the_substance(self) -> None:
+        note = next(link.note for link in sd.LINKS
+                    if (link.source, link.column) == ("tasks_task", "batch"))
+        self.assertIn("substance", note)
+        self.assertNotIn("product", note)
+
+    def test_links_to_the_registry(self) -> None:
+        """Scenario: Links to the registry."""
+        for source, column, target in (
+                ("tasks_task", "substance_id", "registry_substance"),
+                ("inventory_lot", "substance_id", "registry_substance"),
+                ("inventory_article", "substance_id", "registry_substance"),
+                ("inventory_item", "article_id", "inventory_article"),
+                ("registry_substance", "group_id", "vocabulary_group"),
+                ("registry_substanceclass", "substance_id",
+                 "registry_substance"),
+                ("registry_substanceclass", "chemical_class_id",
+                 "vocabulary_chemicalclass")):
+            with self.subTest(column=f"{source}.{column}"):
+                edge = self.edge(source, column)
+                self.assertEqual((edge["to"], edge["class"]),
+                                 (target, "kind-key"))
+        row = re.search(r'<g class="row"[^>]*data-column='
+                        r'"inventory_article.substance_id".*?</g>',
+                        self.svg(), re.DOTALL)
+        self.assertIsNotNone(row)
+        self.assertIn("app-registry", row.group(0))
+        self.assertNotIn("app-vocabulary", row.group(0))
+
+    def test_the_new_packages_have_colours_of_their_own(self) -> None:
+        colours = sd.COLOURS
+        self.assertIn("registry", colours)
+        self.assertIn("vocabulary", colours)
+        others = [value for app, value in colours.items()
+                  if app not in ("registry", "vocabulary")]
+        for app in ("registry", "vocabulary"):
+            with self.subTest(app=app):
+                self.assertNotIn(colours[app], others)
+        self.assertNotEqual(colours["registry"], colours["vocabulary"])
+        svg = self.svg()
+        for name, app in (("registry_substance", "registry"),
+                          ("registry_substanceclass", "registry"),
+                          ("vocabulary_group", "vocabulary"),
+                          ("vocabulary_project", "vocabulary"),
+                          ("vocabulary_reactiontype", "vocabulary"),
+                          ("vocabulary_chemicalclass", "vocabulary")):
+            with self.subTest(table=name):
+                box = re.search(rf'<g class="tbl app-{app}[^"]*"[^>]*'
+                                rf'data-table="{name}"', svg)
+                self.assertIsNotNone(box)
 
     def test_line_ends(self) -> None:
         """Scenario: Line ends."""

@@ -8,8 +8,8 @@ from inventory.bookings import book_note, fill
 from inventory.models import (DeliveryNote, EnteredConsumption, Item, Lot,
                               LotMovement, Movement)
 
-from . import (build_index, context_form, demo_data, field_value, page,
-               sent_messages)
+from . import (build_index, context_form, datalist, field_value,
+               make_article, make_substance, page, sent_messages)
 from .inventory_support import (LIST, MICRO, NEW_ITEM, NEW_LOT, NEW_NOTE,
                                 TODAY, FormCase, InventoryCase, fill_data,
                                 fresh, item_data, item_url, lot_data, lot_url,
@@ -27,16 +27,6 @@ def form_names(root, anchor: str) -> set[str]:
             and e.get("name") != "csrfmiddlewaretoken"}
 
 
-def datalist(root, field: str) -> dict[str, str]:
-    control = root.find("input", name=field)
-    listed = control.get("list")
-    assert listed, f"the input {field} names no datalist"
-    found = root.find("datalist", id=listed)
-    assert found is not None
-    return {o.get("value"): o.get("label") or o.text()
-            for o in found.find_all("option")}
-
-
 class PermissionTests(InventoryCase):
 
     def paths(self) -> dict[str, dict[str, str]]:
@@ -47,9 +37,8 @@ class PermissionTests(InventoryCase):
         lot = self.lot("CH-0012")
         today = TODAY.isoformat()
         return {
-            NEW_ITEM: item_data(article_number="CH-0099"),
-            item_url(item, "edit"): {"name": "X", "category": "",
-                                     "status": "active",
+            NEW_ITEM: item_data(size="50"),
+            item_url(item, "edit"): {"category": "", "status": "active",
                                      "note": ""},
             NEW_NOTE: note_data((item, 1)),
             note_url(historical, "reverse"): {"note": "x"},
@@ -61,7 +50,7 @@ class PermissionTests(InventoryCase):
             movement_url(movement): {"note": "x"},
             item_url(item, "consumption"): {"year": "2026", "quarter": "1",
                                             "count": "3"},
-            NEW_LOT: lot_data(article_number="CH-0099"),
+            NEW_LOT: lot_data(),
             lot_url(lot, "edit"): {"batch": "X", "location": "",
                                    "made_on": "", "note": ""},
             lot_url(lot, "correct"): {"amount": "1", "date": today,
@@ -121,13 +110,18 @@ class PermissionTests(InventoryCase):
 
 class NewItemTests(FormCase):
 
+    def setUp(self) -> None:
+        super().setUp()
+        self.article = make_article(self.cinnamic, "CH-0012")
+
     def test_new_item(self) -> None:
         """Scenario: New item."""
         done = self.client.post(NEW_ITEM, item_data())
         item = Item.objects.get()
         self.assertEqual(
-            (item.article_number, item.name, item.unit, item.quantity),
-            ("CH-0012", "Zimtsäure", "umol", 12))
+            (item.article, item.article.article_number,
+             item.article.substance.key, item.unit, item.quantity),
+            (self.article, "CH-0012", "cinnamic-acid", "umol", 12))
         self.assertEqual(item.size, Decimal("10"))
         movement = item.movements.get()
         self.assertEqual((movement.kind, movement.count, movement.user),
@@ -145,22 +139,24 @@ class NewItemTests(FormCase):
     def test_all_fields_are_saved(self) -> None:
         self.client.post(NEW_ITEM, item_data(
             category="Endprodukt", size="2,5", unit="mg", quantity="0",
-            note="Zeile eins\nZeile zwei"))
+            note="Zeile eins\nZeile zwei", compartment="2", box="7",
+            stocked_on="2021-06-01"))
         item = Item.objects.get()
-        self.assertEqual((item.category, item.unit, item.quantity),
+        self.assertEqual((item.article.category, item.unit, item.quantity),
                          ("Endprodukt", "mg", 0))
         self.assertEqual(item.size, Decimal("2.5"))
         self.assertIn("Zeile zwei", item.note)
-        self.assertEqual(item.inventory, "end-products")
+        self.assertEqual((item.compartment, item.box), ("2", "7"))
+        self.assertEqual(item.stocked_on, date(2021, 6, 1))
 
     def test_a_decimal_point_is_accepted_too(self) -> None:
         self.client.post(NEW_ITEM, item_data(size="2.5"))
         self.assertEqual(Item.objects.get().size, Decimal("2.5"))
 
     def test_the_form_holds_the_fields_of_the_spec(self) -> None:
-        names = form_names(page(self.client.get(NEW_ITEM)), "article_number")
-        self.assertEqual(names, {"article_number", "name", "category", "size",
-                                 "unit", "quantity", "stocked_on",
+        names = form_names(page(self.client.get(NEW_ITEM)), "substance")
+        self.assertEqual(names, {"substance", "article_number", "category",
+                                 "size", "unit", "quantity", "stocked_on",
                                  "compartment", "box", "note"})
 
     def test_the_unit_choices(self) -> None:
@@ -170,17 +166,11 @@ class NewItemTests(FormCase):
             {o.get("value"): o.text() for o in options if o.get("value")},
             {"mg": "mg", "umol": f"{MICRO}mol", "g": "g", "mmol": "mmol"})
 
-    def test_the_article_number_offers_the_compounds(self) -> None:
-        options = datalist(page(self.client.get(NEW_ITEM)), "article_number")
-        numbered = [entry for entry in demo_data()["compounds"]
-                    if "item_number" in entry["data"]]
-        self.assertTrue(numbered)
-        for entry in numbered:
-            data = entry["data"]
-            with self.subTest(identifier=data["item_number"]):
-                self.assertEqual(options[data["item_number"]],
-                                 data["name_de"])
-        self.assertEqual(len(options), len(numbered))
+    def test_the_substance_offers_every_substance(self) -> None:
+        make_substance("no-article", "No article")
+        options = datalist(page(self.client.get(NEW_ITEM)), "substance")
+        self.assertEqual(options, {"cinnamic-acid": "(E)-Zimtsäure",
+                                   "no-article": "No article"})
 
     def test_the_category_offers_the_categories_in_use(self) -> None:
         self.item("A-1", category="Endprodukt")
@@ -206,15 +196,17 @@ class NewItemTests(FormCase):
         self.assertEqual(Item.objects.count(), 2)
 
     def test_the_limits_are_accepted(self) -> None:
+        make_substance("fresh", "Fresh")
         self.client.post(NEW_ITEM, item_data(
-            article_number="a" * 30, name="n" * 200, category="c" * 100,
-            size="0,001", quantity="0"))
+            substance="fresh", article_number="a" * 30,
+            category="c" * 100, size="0,001", quantity="0"))
         self.assertEqual(Item.objects.count(), 1)
 
     def test_refused_fields(self) -> None:
+        make_substance("fresh", "Fresh")
         cases = {
+            "substance": ["", "no-such-substance", "CH-0012"],
             "article_number": ["a" * 31],
-            "name": ["", "n" * 201],
             "category": ["c" * 101],
             "size": ["", "0", "-1", "abc", "1,2345"],
             "unit": ["", "kg"],
@@ -222,21 +214,29 @@ class NewItemTests(FormCase):
         for field, values in cases.items():
             for value in values:
                 with self.subTest(field=field, value=value):
-                    self.refused(self.client.post(
-                        NEW_ITEM, item_data(**{field: value})), field)
+                    data = item_data(substance="fresh", article_number="")
+                    data[field] = value
+                    self.refused(self.client.post(NEW_ITEM, data), field)
         self.assertEqual(Item.objects.count(), 0)
         self.assertEqual(Movement.objects.count(), 0)
 
+    def test_unknown_substance(self) -> None:
+        """Scenario: Unknown substance."""
+        before = snapshot()
+        self.refused(self.client.post(NEW_ITEM, item_data(
+            substance="no-such-substance")), "substance")
+        self.assertEqual(snapshot(), before)
+
     def test_the_form_keeps_what_was_typed(self) -> None:
-        done = self.client.post(NEW_ITEM, item_data(
-            name="Probe", size="0", note="Notiz"))
+        done = self.client.post(NEW_ITEM, item_data(size="0",
+                                                    note="Notiz"))
         root = page(done)
-        self.assertEqual(field_value(root, "name"), "Probe")
+        self.assertEqual(field_value(root, "substance"), "cinnamic-acid")
         self.assertEqual(field_value(root, "size"), "0")
         self.assertEqual(field_value(root, "note"), "Notiz")
 
     def test_a_refused_form_sends_no_message(self) -> None:
-        done = self.client.post(NEW_ITEM, item_data(name=""))
+        done = self.client.post(NEW_ITEM, item_data(size="0"))
         self.assertEqual(sent_messages(done), [])
 
     def test_the_creator_is_the_signed_in_user(self) -> None:
@@ -247,65 +247,145 @@ class NewItemTests(FormCase):
                          self.ae)
 
 
+class NewItemArticleTests(FormCase):
+    """What the new-item form does with the article."""
+
+    def test_a_new_substance_gets_its_article(self) -> None:
+        from inventory.models import Article
+        make_substance("fresh", "Fresh")
+        self.client.post(NEW_ITEM, item_data(
+            substance="fresh", article_number="CH-0099",
+            category="Säuren"))
+        article = Article.objects.get()
+        self.assertEqual(
+            (article.substance.key, article.article_number,
+             article.category), ("fresh", "CH-0099", "Säuren"))
+        self.assertEqual(article.history.get().history_type, "+")
+        self.assertEqual(Item.objects.get().article, article)
+
+    def test_an_empty_number_gives_the_article_none(self) -> None:
+        from inventory.models import Article
+        make_substance("fresh", "Fresh")
+        self.client.post(NEW_ITEM, item_data(substance="fresh",
+                                             article_number=""))
+        self.assertIsNone(Article.objects.get().article_number)
+
+    def test_another_size_of_a_numbered_article(self) -> None:
+        """Scenario: Another size of a numbered article."""
+        from inventory.models import Article
+        make_article(self.cinnamic, "CH-0012", "Säuren")
+        done = self.client.post(NEW_ITEM, item_data(
+            size="50", article_number="", category=""))
+        self.assertEqual(done.status_code, 302)
+        article = Article.objects.get()
+        self.assertEqual((article.article_number, article.category),
+                         ("CH-0012", "Säuren"))
+        before = snapshot()
+        self.refused(self.client.post(NEW_ITEM, item_data(
+            size="100", article_number="CH-0099", category="")),
+            "article_number")
+        self.assertEqual(snapshot(), before)
+        self.assertEqual(Item.objects.count(), 1)
+
+    def test_the_articles_own_number_is_accepted(self) -> None:
+        make_article(self.cinnamic, "CH-0012")
+        done = self.client.post(NEW_ITEM, item_data(size="50"))
+        self.assertEqual(done.status_code, 302)
+        self.assertEqual(Item.objects.count(), 1)
+
+    def test_a_category_entered_replaces_the_articles(self) -> None:
+        from inventory.models import Article
+        make_article(self.cinnamic, "CH-0012", "Säuren")
+        self.client.post(NEW_ITEM, item_data(
+            size="50", article_number="", category="Ester"))
+        self.assertEqual(Article.objects.get().category, "Ester")
+
+    def test_a_number_entered_for_an_article_without_one(self) -> None:
+        from inventory.models import Article
+        make_article(self.cinnamic)
+        self.client.post(NEW_ITEM, item_data(article_number="CH-0021"))
+        self.assertEqual(Article.objects.get().article_number, "CH-0021")
+        self.assertEqual(Item.objects.count(), 1)
+
+    def test_a_number_of_another_article_is_refused(self) -> None:
+        make_article(make_substance("other"), "CH-0099")
+        before = snapshot()
+        self.refused(self.client.post(NEW_ITEM, item_data(
+            article_number="CH-0099")), "article_number")
+        self.assertEqual(snapshot(), before)
+
+
 class ItemEditTests(FormCase):
 
     def setUp(self) -> None:
         super().setUp()
-        self.target = self.item("CH-0012", name="Alt", size="10",
-                                unit="umol", quantity=7, category="K",
-                                note="alt")
+        self.target = self.item("CH-0012", size="10", unit="umol",
+                                quantity=7, category="K", note="alt")
 
     def test_the_form_shows_the_item(self) -> None:
         root = page(self.client.get(item_url(self.target, "edit")))
-        self.assertEqual(field_value(root, "name"), "Alt")
         self.assertEqual(field_value(root, "category"), "K")
         self.assertEqual(field_value(root, "note"), "alt")
 
     def test_the_form_holds_the_fields_that_may_change(self) -> None:
         root = page(self.client.get(item_url(self.target, "edit")))
-        self.assertEqual(form_names(root, "name"),
-                         {"name", "category", "status", "stocked_on",
+        self.assertEqual(form_names(root, "category"),
+                         {"category", "status", "stocked_on",
                           "compartment", "box", "note"})
 
     def test_changing_an_item(self) -> None:
         self.client.force_login(self.ae)
         done = self.client.post(item_url(self.target, "edit"), {
-            "name": "Neu", "category": "Z", "note": "neu",
-            "status": "active", "stocked_on": "2019-01-02"})
+            "category": "Z", "note": "neu", "status": "active",
+            "stocked_on": "2019-01-02"})
         self.assertRedirects(done, item_url(self.target),
                              fetch_redirect_response=False)
         item = fresh(self.target)
-        self.assertEqual((item.name, item.category, item.note),
-                         ("Neu", "Z", "neu"))
+        self.assertEqual((item.article.category, item.note), ("Z", "neu"))
         self.assertEqual(item.history.count(), 2)
         self.assertEqual(item.history.first().history_user, self.ae)
-        self.assertMessageNames(done, "CH-0012", "Neu")
+        self.assertMessageNames(done, "CH-0012", "Zimtsäure")
+
+    def test_the_category_is_the_articles_for_every_size(self) -> None:
+        other = self.item("CH-0012", size="50", unit="umol")
+        self.assertEqual(other.article.category, "K")
+        self.client.post(item_url(self.target, "edit"), {
+            "category": "Z", "note": "alt", "status": "active",
+            "stocked_on": "2019-01-02"})
+        self.assertEqual(fresh(other).article.category, "Z")
+        root = page(self.client.get(item_url(other, "edit")))
+        self.assertEqual(field_value(root, "category"), "Z")
+
+    def test_an_empty_category_is_saved(self) -> None:
+        self.client.post(item_url(self.target, "edit"), {
+            "category": "", "note": "alt", "status": "active",
+            "stocked_on": "2019-01-02"})
+        self.assertEqual(fresh(self.target).article.category, "")
 
     def test_fixed_identity(self) -> None:
         """Scenario: Fixed identity."""
         self.client.post(item_url(self.target, "edit"), {
-            "name": "Neu", "category": "", "note": "", "status": "active",
-            "article_number": "CH-9999", "size": "99", "unit": "g",
+            "category": "", "note": "", "status": "active",
+            "article_number": "CH-9999", "article": "999",
+            "substance": "no-such-substance", "size": "99", "unit": "g",
             "quantity": "77"})
         item = fresh(self.target)
-        self.assertEqual(item.name, "Neu")
         self.assertEqual(
-            (item.article_number, item.size, item.unit, item.quantity),
-            ("CH-0012", Decimal("10"), "umol", 7))
+            (item.article.article_number, item.article.substance.key,
+             item.size, item.unit, item.quantity),
+            ("CH-0012", "cinnamic-acid", Decimal("10"), "umol", 7))
         self.assertEqual(item.movements.count(), 1)
 
     def test_a_refused_edit_changes_nothing(self) -> None:
         before = snapshot()
         done = self.client.post(item_url(self.target, "edit"), {
-            "name": "", "category": "x", "note": "x"})
-        self.refused(done, "name")
+            "category": "c" * 101, "note": "x", "status": "active"})
+        self.refused(done, "category")
         self.assertEqual(snapshot(), before)
         done = self.client.post(item_url(self.target, "edit"), {
-            "name": "n" * 201, "category": "", "note": ""})
-        self.refused(done, "name")
-        done = self.client.post(item_url(self.target, "edit"), {
-            "name": "x", "category": "c" * 101, "note": ""})
-        self.refused(done, "category")
+            "category": "", "note": "x", "status": "no-such-status"})
+        self.refused(done, "status")
+        self.assertEqual(snapshot(), before)
 
 
 class NoteFormTests(FormCase):
@@ -945,17 +1025,28 @@ class ConsumptionFormTests(FormCase):
 class NewLotTests(FormCase):
 
     def test_the_form_holds_the_fields_of_the_spec(self) -> None:
-        names = form_names(page(self.client.get(NEW_LOT)), "article_number")
-        self.assertEqual(names, {"article_number", "unit", "amount", "batch",
-                                 "location", "made_on", "note"})
+        names = form_names(page(self.client.get(NEW_LOT)), "substance")
+        self.assertEqual(names, {"substance", "source", "supplier", "unit",
+                                 "amount", "batch", "location", "made_on",
+                                 "note"})
 
-    def test_the_article_number_comes_from_the_url(self) -> None:
-        root = page(self.client.get(f"{NEW_LOT}?article=CH-0012"))
-        self.assertEqual(field_value(root, "article_number"), "CH-0012")
+    def test_the_substance_comes_from_the_url(self) -> None:
+        root = page(self.client.get(f"{NEW_LOT}?substance=cinnamic-acid"))
+        self.assertEqual(field_value(root, "substance"), "cinnamic-acid")
 
-    def test_the_article_number_offers_the_compounds(self) -> None:
-        options = datalist(page(self.client.get(NEW_LOT)), "article_number")
-        self.assertEqual(options["CH-0012"], "(E)-Zimtsäure")
+    def test_the_source_is_made_by_default(self) -> None:
+        root = page(self.client.get(NEW_LOT))
+        self.assertEqual(field_value(root, "source"), "made")
+        options = root.find("select", name="source").find_all("option")
+        self.assertEqual(
+            {o.get("value"): o.text() for o in options if o.get("value")},
+            {"made": "hergestellt", "bought": "gekauft"})
+
+    def test_the_substance_offers_every_substance(self) -> None:
+        make_substance("no-article", "No article")
+        options = datalist(page(self.client.get(NEW_LOT)), "substance")
+        self.assertEqual(options, {"cinnamic-acid": "(E)-Zimtsäure",
+                                   "no-article": "No article"})
 
     def test_the_location_offers_the_locations_in_use(self) -> None:
         self.lot("A-1", location="Kühlraum")
@@ -968,14 +1059,14 @@ class NewLotTests(FormCase):
     def test_new_bulk_lot(self) -> None:
         done = self.client.post(NEW_LOT, lot_data(
             batch="B-1", location="Kühlraum", made_on="2026-10-01",
-            note="Rest"))
+            note="Rest", source="bought", supplier="Sigma"))
         lot = Lot.objects.get()
         self.assertRedirects(done, lot_url(lot),
                              fetch_redirect_response=False)
         self.assertEqual(
-            (lot.inventory, lot.article_number, lot.unit, lot.batch,
-             lot.location, lot.made_on, lot.note),
-            ("end-products", "CH-0012", "mg", "B-1", "Kühlraum",
+            (lot.substance.key, lot.source, lot.supplier, lot.unit,
+             lot.batch, lot.location, lot.made_on, lot.note),
+            ("cinnamic-acid", "bought", "Sigma", "mg", "B-1", "Kühlraum",
              date(2026, 10, 1), "Rest"))
         self.assertEqual(lot.amount, Decimal("50"))
         movement = lot.movements.get()
@@ -983,23 +1074,26 @@ class NewLotTests(FormCase):
                           movement.amount_after, movement.user),
                          ("opening", Decimal("50"), Decimal("50"),
                           self.kl))
-        self.assertMessageNames(done, "CH-0012", "B-1")
+        self.assertMessageNames(done, "Zimtsäure", "B-1")
 
     def test_the_amount_is_in_the_unit_of_the_lot(self) -> None:
         cases = [("g", "1", "1000"), ("mmol", "2,5", "2500"),
                  ("umol", "5", "5"), ("mg", "47,5", "47.5")]
         for unit, amount, base in cases:
             with self.subTest(unit=unit):
-                self.client.post(NEW_LOT, lot_data(
-                    unit=unit, amount=amount, article_number=f"U-{unit}"))
-                lot = Lot.objects.get(article_number=f"U-{unit}")
+                Lot.objects.all().delete()
+                self.client.post(NEW_LOT, lot_data(unit=unit,
+                                                   amount=amount))
+                lot = Lot.objects.get()
                 self.assertEqual(lot.unit, unit)
                 self.assertEqual(lot.amount, Decimal(base))
 
     def test_refused_fields(self) -> None:
-        cases = {"article_number": [""], "unit": ["", "kg"],
+        cases = {"substance": ["", "no-such-substance", "CH-0012"],
+                 "unit": ["", "kg"],
                  "amount": ["", "-1", "x"], "batch": ["b" * 101],
-                 "location": ["l" * 101], "made_on": ["x", "2026-13-01"]}
+                 "location": ["l" * 101], "supplier": ["s" * 101],
+                 "source": ["stolen"], "made_on": ["x", "2026-13-01"]}
         for field, values in cases.items():
             for value in values:
                 with self.subTest(field=field, value=value):
@@ -1024,7 +1118,8 @@ class LotEditTests(FormCase):
         super().setUp()
         self.target = self.lot("CH-0012", "mg", "50", batch="B-1",
                                location="Alt", made_on=date(2026, 10, 1),
-                               note="alt")
+                               note="alt", source="bought",
+                               supplier="Sigma")
 
     def test_the_form_holds_the_fields_of_the_spec(self) -> None:
         root = page(self.client.get(lot_url(self.target, "edit")))
@@ -1046,16 +1141,19 @@ class LotEditTests(FormCase):
                          ("B-2", "Neu", date(2026, 9, 1), "neu"))
         self.assertEqual(lot.history.count(), 2)
         self.assertEqual(lot.history.first().history_user, self.ae)
-        self.assertMessageNames(done, "CH-0012", "B-2")
+        self.assertMessageNames(done, "Zimtsäure", "B-2")
 
-    def test_article_unit_and_amount_are_fixed(self) -> None:
+    def test_substance_source_unit_and_amount_are_fixed(self) -> None:
+        make_substance("other")
         self.client.post(lot_url(self.target, "edit"), {
             "batch": "B-2", "location": "", "made_on": "", "note": "",
-            "article_number": "CH-9999", "unit": "g", "amount": "7"})
+            "substance": "other", "source": "made", "unit": "g",
+            "amount": "7"})
         lot = fresh(self.target)
         self.assertEqual(
-            (lot.article_number, lot.unit, lot.amount, lot.batch),
-            ("CH-0012", "mg", Decimal("50"), "B-2"))
+            (lot.substance.key, lot.source, lot.unit, lot.amount,
+             lot.batch),
+            ("cinnamic-acid", "bought", "mg", Decimal("50"), "B-2"))
         self.assertEqual(lot.movements.count(), 1)
 
     def test_a_refused_edit_changes_nothing(self) -> None:
@@ -1094,7 +1192,7 @@ class LotCorrectionFormTests(FormCase):
         newest = self.target.movements.order_by("-pk").first()
         self.assertEqual((newest.kind, newest.note, newest.user),
                          ("correction", "nachgewogen", self.kl))
-        self.assertMessageNames(done, "CH-0012")
+        self.assertMessageNames(done, "(E)-Zimtsäure")
 
     def test_the_amount_is_in_the_unit_of_the_lot(self) -> None:
         lot = self.lot("X-1", "g", "1")
@@ -1124,13 +1222,13 @@ class StaleEditTests(FormCase):
     def test_an_item_edit_keeps_a_delivery_booked_meanwhile(self) -> None:
         from inventory.forms import ItemEditForm
         item = self.item(quantity=5)
-        form = ItemEditForm({"name": "Neu", "category": "", "note": "",
+        form = ItemEditForm({"category": "", "note": "Neu",
                              "status": "active"}, instance=fresh(item))
         self.assertTrue(form.is_valid())
         self.deliver(item, 2)
         form.save()
         self.assertEqual(fresh(item).quantity, 3)
-        self.assertEqual(fresh(item).name, "Neu")
+        self.assertEqual(fresh(item).note, "Neu")
 
     def test_a_lot_edit_keeps_a_correction_booked_meanwhile(self) -> None:
         from inventory.bookings import correct_lot

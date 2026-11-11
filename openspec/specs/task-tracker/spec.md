@@ -7,7 +7,7 @@ Track the syntheses of end products in the lab application: tasks with product, 
 A task SHALL hold:
 
 - `number`, assigned when the task is created;
-- `product`, required text of at most 100 characters, shown through the compound links;
+- `substance`, the substance it makes, a required substance of the registry (lab-registry "Substances"), shown as its name linking to its page (web-app "Substance links");
 - `priority`: `high` (`hoch`, `high`), `medium` (`mittel`, `medium`) or `low` (`niedrig`, `low`); `medium` when created;
 - `assignee`, an optional account;
 - `started` and `ended`, optional dates, neither after today; `ended` needs `started` and is not before it;
@@ -49,14 +49,14 @@ A task's number SHALL be `T-` followed by a counter of at least three digits, ze
 - **THEN** the new task is `T-004`
 
 ### Requirement: Task list
-`/lab/tasks/` SHALL list tasks in a table with the columns `Nr.`, `Produkt`, `Priorität`, `Bearbeitung`, `Beginn`, `Ende`, `Fortschritt`, `Charge`, `Bericht`, `QC-Liste` and `Status` (`No.`, `Product`, `Priority`, `Assignee`, `Started`, `Ended`, `Progress`, `Batch`, `Report`, `QC list`, `State`): the number linking to the task's page; the product; the task's priority, computed or entered, with its mark, as `production-planning` states under Computed priority on tasks; the assignee's initials with the display name as title; the dates; the progress as `<steps_done>/<steps_total>` and a `progress` element, empty without a total; the batch; the two flags as `ja` or `nein` (`yes`, `no`); and the state as a badge with its label, followed by `Nacharbeit` (`Follow-up`) when the task needs it. Rows are ordered by that priority, high first, then by the task's slack, smallest first and tasks without one last, then by state, running before planned before ended before cancelled, then by start date, earliest first and tasks without one last, then by number. Above the table a line counts the tasks: `<p> geplant · <r> in Arbeit · <f> Nacharbeit` (`<p> planned · <r> running · <f> follow-up`). There is no paging. A signed-in user sees a link `Neue Aufgabe` (`New task`).
+`/lab/tasks/` SHALL list tasks in a table with the columns `Nr.`, `Produkt`, `Priorität`, `Bearbeitung`, `Beginn`, `Ende`, `Fortschritt`, `Charge`, `Bericht`, `QC-Liste` and `Status` (`No.`, `Product`, `Priority`, `Assignee`, `Started`, `Ended`, `Progress`, `Batch`, `Report`, `QC list`, `State`): the number linking to the task's page; the substance; the task's priority, computed or entered, with its mark, as `production-planning` states under Computed priority on tasks; the assignee's initials with the display name as title; the dates; the progress as `<steps_done>/<steps_total>` and a `progress` element, empty without a total; the batch; the two flags as `ja` or `nein` (`yes`, `no`); and the state as a badge with its label, followed by `Nacharbeit` (`Follow-up`) when the task needs it. Rows are ordered by that priority, high first, then by the task's slack, smallest first and tasks without one last, then by state, running before planned before ended before cancelled, then by start date, earliest first and tasks without one last, then by number. Above the table a line counts the tasks: `<p> geplant · <r> in Arbeit · <f> Nacharbeit` (`<p> planned · <r> running · <f> follow-up`). There is no paging. A signed-in user sees a link `Neue Aufgabe` (`New task`).
 
 The list filters with GET parameters in a form above it, and each filter keeps its value in the form:
 
 - `state`: `active` (planned, running, and ended needing follow-up; the default), `planned`, `running`, `followup`, `ended`, `cancelled` or `all`;
 - `person`: an account's initials, or `none` for tasks without an assignee;
 - `priority`: `high`, `medium` or `low`, compared with the task's priority, computed or entered;
-- `q`: text found, regardless of case, in the number, the product, the name of the product's compound, the batch or the note.
+- `q`: text found, regardless of case, in the number, the substance's key, name or German name, the batch or the note.
 
 An unknown value of a filter is ignored, with the default in its place.
 
@@ -65,15 +65,15 @@ An unknown value of a filter is ignored, with the default in its place.
 - **THEN** the table lists the running task, the planned task and the ended task without the report, in that order, the last marked `Nacharbeit`, and the count reads `1 geplant · 1 in Arbeit · 1 Nacharbeit`
 
 #### Scenario: Filters
-- **WHEN** the index is the demo collection's and a test client requests `/lab/tasks/?state=all&person=KL&q=zimt`
-- **THEN** the table lists exactly the tasks of `KL`, in any state, whose number, product, compound name, batch or note contains `zimt` in any case, among them a task with the product `CH-0012`, and the form shows `all`, `KL` and `zimt`
+- **WHEN** the demo data set is written and a test client requests `/lab/tasks/?state=all&person=KL&q=zimt`
+- **THEN** the table lists exactly the tasks of `KL`, in any state, whose number, substance key or names, batch or note contains `zimt` in any case, among them a task of `cinnamic-acid`, and the form shows `all`, `KL` and `zimt`
 
 #### Scenario: Computed over entered
 - **WHEN** a planned task with the entered priority low matches an article whose slack is 11 days, a running task with the entered priority high matches no article, a planned task has the entered priority medium, and a test client requests `/lab/tasks/` and `/lab/tasks/?priority=high`
 - **THEN** both list the first task with `hoch` and `berechnet`; the first lists it before the task of medium priority, and the second lists the first two tasks and not the third
 
 ### Requirement: Task page
-`/lab/tasks/<number>/` SHALL show the number and the product as heading, then the state, follow-up, priority with its mark, assignee, dates, progress, batch, the two flags, note, the creating user and time, and the change history. A task with a sequence shows the sequence's ID linking to `/sequences/<ID in lower case>/` and its `sequence_steps` as an ordered list, each procedure linking to `/procedures/<ID in lower case>/`, the first `steps_done` steps marked `erledigt` (`done`); a sequence or procedure the current index lacks shows with the mark `nicht in der Sammlung` and no link. For each article of the inventory `end-products` the task matches, it shows the article number linking to `/lab/planning/` and, for an article without a forecast, `Kein Verbrauch, keine Prognose.` (`No consumption, no forecast.`), else the article's runway, synthesis time, slack and latest start, and, for a planned or running task, the task's own slack, marked `verspätet` (`late`) when below zero. It links each bulk lot that belongs to the task through its batch. A signed-in user sees a link `Bearbeiten` (`Edit`) and the actions that apply, and on an ended task with a batch and a matching article a link `Als Bulk erfassen` (`Record as bulk`) to `/lab/inventory/bulk/new/` with `article`, `batch` and `made_on` filled in: the first matching article number in alphabetical order, the task's batch and its end date.
+`/lab/tasks/<number>/` SHALL show the number and the substance's name as heading, then the state, follow-up, priority with its mark, assignee, dates, progress, batch, the two flags, note, the creating user and time, and the change history. A task with a sequence shows the sequence's ID linking to `/sequences/<ID in lower case>/` and its `sequence_steps` as an ordered list, each procedure linking to `/procedures/<ID in lower case>/`, the first `steps_done` steps marked `erledigt` (`done`); a sequence or procedure the current index lacks shows with the mark `nicht in der Sammlung` and no link. For the article the task matches (production-planning "Matching tasks and articles"), when there is one, it shows the article number linking to `/lab/planning/` and, for an article without a forecast, `Kein Verbrauch, keine Prognose.` (`No consumption, no forecast.`), else the article's runway, synthesis time, slack and latest start, and, for a planned or running task, the task's own slack, marked `verspätet` (`late`) when below zero. It links each bulk lot that belongs to the task through its batch. A signed-in user sees a link `Bearbeiten` (`Edit`) and the actions that apply, and on an ended task with a batch a link `Als Bulk erfassen` (`Record as bulk`) to `/lab/inventory/bulk/new/` with `substance`, `batch` and `made_on` filled in: the task's substance's key, its batch and its end date.
 
 #### Scenario: Task with a sequence
 - **WHEN** the index is the demo collection's and a test client requests the page of a task with the sequence `SEQ-0001` and `steps_done` 1
@@ -102,22 +102,22 @@ An action that does not apply to the task's current state changes nothing and re
 - **THEN** the task is unchanged and the page shows an error message
 
 ### Requirement: Task forms
-`/lab/tasks/new/` SHALL create a task and `/lab/tasks/<number>/edit/` change one, for a signed-in user. The form holds the product with the compound `datalist`, priority, assignee (every account, shown as initials and display name, or none), start and end dates, sequence, steps total, steps done, batch, report, QC list, cancelled (on the edit form only) and note. Invalid input, among it an end without a start or before it, steps done above the total, and a sequence the index lacks, shows the form again with the errors beside their fields and saves nothing. A saved form leads to the task's page with the message `Aufgabe <number> gespeichert.` (`Task <number> saved.`). The creating user becomes `created_by`. The priority field carries the help text `Gilt, solange keine Prognose die Priorität berechnet.` (`Applies while no forecast computes the priority.`). The new-task form fills in a `product` given as a GET parameter.
+`/lab/tasks/new/` SHALL create a task and `/lab/tasks/<number>/edit/` change one, for a signed-in user. The form holds the substance by key, offered through the substances' `datalist` as the inventory forms offer it, priority, assignee (every account, shown as initials and display name, or none), start and end dates, sequence, steps total, steps done, batch, report, QC list, cancelled (on the edit form only) and note. Invalid input, among it an unknown substance, an end without a start or before it, steps done above the total, and a sequence the index lacks, shows the form again with the errors beside their fields and saves nothing. A saved form leads to the task's page with the message `Aufgabe <number> gespeichert.` (`Task <number> saved.`). The creating user becomes `created_by`. The priority field carries the help text `Gilt, solange keine Prognose die Priorität berechnet.` (`Applies while no forecast computes the priority.`). The new-task form fills in a substance key given as the GET parameter `substance`.
 
 #### Scenario: Creating a task
-- **WHEN** user `KL` posts the product `CH-0012`, priority `high` and assignee `AE` to `/lab/tasks/new/`
+- **WHEN** user `KL` posts the substance `cinnamic-acid`, priority `high` and assignee `AE` to `/lab/tasks/new/`
 - **THEN** a planned task `T-<n>` exists with `created_by` `KL`, and the response redirects to its page, which shows the message and `(E)-Zimtsäure`
 
 #### Scenario: End before start
 - **WHEN** a signed-in user posts a task started 2026-11-05 and ended 2026-11-04
 - **THEN** the form shows again with an error at the end date, and nothing is saved
 
-#### Scenario: Product from the query
-- **WHEN** a signed-in user requests `/lab/tasks/new/?product=CH-0012`
-- **THEN** the form's product field holds `CH-0012`
+#### Scenario: Substance from the query
+- **WHEN** a signed-in user requests `/lab/tasks/new/?substance=cinnamic-acid`
+- **THEN** the form's substance field holds `cinnamic-acid`
 
 ### Requirement: Tasks in the admin
-The admin SHALL list tasks and accounts for staff, with search by number, product and batch and the change history of each task. Deleting a task in the admin does not free its number.
+The admin SHALL list tasks and accounts for staff, with search by number, the substance's key and names, and batch, and the change history of each task. Deleting a task in the admin does not free its number.
 
 #### Scenario: Admin list
 - **WHEN** a staff user requests `/lab/admin/tasks/task/`

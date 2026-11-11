@@ -8,7 +8,7 @@ from django.test import SimpleTestCase
 
 from planning import forecast, plan
 
-from . import make_task
+from . import make_task, substance_for
 from .inventory_support import TODAY
 from .planning_support import WINDOW, PlanningCase
 
@@ -114,7 +114,7 @@ class ArticleSlackTests(PlanningCase):
         self.planned_item("NV-1", quantity=10)
         before = self.forecast("NV-1")
         self.running("NV-1", 14)
-        make_task(self.kl, product="NV-1")
+        make_task(self.kl, substance="NV-1")
         after = self.forecast("NV-1")
         self.assertEqual(after.slack, before.slack)
         self.assertEqual(after.priority, "high")
@@ -132,7 +132,7 @@ class TaskPriorityTests(PlanningCase):
 
     def test_computed_priority(self) -> None:
         """Scenario: Computed priority."""
-        task = make_task(self.kl, product="NV-1", priority="low")
+        task = make_task(self.kl, substance="NV-1", priority="low")
         shown, computed, slack = self.priority(task)
         self.assertEqual(shown, "high")
         self.assertTrue(computed)
@@ -140,7 +140,7 @@ class TaskPriorityTests(PlanningCase):
 
     def test_ended_task_keeps_its_entered_priority(self) -> None:
         """Scenario: Ended task keeps its entered priority."""
-        task = make_task(self.kl, product="NV-1", priority="low",
+        task = make_task(self.kl, substance="NV-1", priority="low",
                          started=date(2026, 9, 1), ended=date(2026, 9, 20))
         self.assertEqual(self.priority(task), ("low", False, None))
 
@@ -149,19 +149,19 @@ class TaskPriorityTests(PlanningCase):
                        {"started": date(2026, 9, 1),
                         "ended": date(2026, 9, 5)}):
             with self.subTest(**fields):
-                task = make_task(self.kl, product="NV-1", priority="medium",
+                task = make_task(self.kl, substance="NV-1", priority="medium",
                                  cancelled=True, **fields)
                 self.assertEqual(self.priority(task),
                                  ("medium", False, None))
 
-    def test_a_task_of_an_unknown_product_keeps_its_priority(self) -> None:
-        task = make_task(self.kl, product="Aspirin", priority="low")
+    def test_a_substance_without_an_article_keeps_the_priority(self) -> None:
+        task = make_task(self.kl, substance="Aspirin", priority="low")
         self.assertEqual(self.priority(task), ("low", False, None))
 
     def test_a_task_of_an_article_without_demand_keeps_its_priority(
             self) -> None:
         self.item("NV-0", size="1", unit="mg", quantity=10)
-        task = make_task(self.kl, product="NV-0", priority="high")
+        task = make_task(self.kl, substance="NV-0", priority="high")
         self.assertEqual(self.priority(task), ("high", False, None))
 
     def test_a_running_synthesis(self) -> None:
@@ -175,7 +175,7 @@ class TaskPriorityTests(PlanningCase):
 
     def test_a_task_is_late_below_zero(self) -> None:
         self.planned_item("NV-5", quantity=5)
-        task = make_task(self.kl, product="NV-5")
+        task = make_task(self.kl, substance="NV-5")
         shown, computed, slack = self.priority(task)
         self.assertLess(slack, 0)
         self.assertAlmostEqual(slack, 24.694 - 49, places=3)
@@ -188,28 +188,13 @@ class TaskPriorityTests(PlanningCase):
         self.parameters(default_synthesis_days=200)
         self.assertLess(self.priority(task)[2], 0)
 
-    def test_the_slack_is_the_smallest_over_the_matching_articles(
+    def test_a_task_of_the_substance_of_the_article_is_computed(
             self) -> None:
-        self.planned_item("CH-0012", size="10", unit="umol", quantity=10)
-        self.planned_item("cinnamic-acid", size="10", unit="umol",
-                          quantity=20)
-        task = make_task(self.kl, product="CH-0012", priority="low")
-        shown, computed, slack = self.priority(task)
-        self.assertAlmostEqual(slack, 60.654 - 49, places=3)
-        self.assertEqual((shown, computed), ("high", True))
-
-    def test_articles_without_a_forecast_do_not_count(self) -> None:
-        self.item("ch-0012", size="10", unit="umol", quantity=1000)
-        self.planned_item("CH-0012", size="10", unit="umol", quantity=10)
-        task = make_task(self.kl, product="CH-0012")
-        self.assertAlmostEqual(self.priority(task)[2], 60.654 - 49,
-                               places=3)
-
-    def test_the_text_of_a_task_matches_regardless_of_case(self) -> None:
-        task = make_task(self.kl, product="nv-1", priority="low")
+        task = make_task(self.kl, substance=substance_for("NV-1"),
+                         priority="low")
         self.assertEqual(self.priority(task)[0], "high")
 
     def test_the_bands_are_parameters(self) -> None:
         self.parameters(high_days=5, medium_days=20)
-        task = make_task(self.kl, product="NV-1", priority="low")
+        task = make_task(self.kl, substance="NV-1", priority="low")
         self.assertEqual(self.priority(task)[0], "medium")

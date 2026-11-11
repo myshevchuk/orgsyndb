@@ -99,7 +99,10 @@ class DayChecks:
     def test_the_position_without_a_number_has_no_forecast(
             self: Any) -> None:
         items = self.items(None)
-        self.assertEqual([item.name for item in items], [NUMBERLESS[0]])
+        self.assertEqual([item.article.substance.key for item in items],
+                         [NUMBERLESS[1]])
+        self.assertEqual([item.article.substance.name for item in items],
+                         [NUMBERLESS[0]])
         for item in items:
             with self.subTest(item=str(item)):
                 text = self.get(f"/lab/inventory/items/{item.pk}/").text()

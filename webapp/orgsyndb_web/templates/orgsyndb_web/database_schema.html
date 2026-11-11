@@ -242,8 +242,8 @@ h2 {
     <section>
       <h2>Constraints</h2>
       <ul>
-        {% for c in constraints %}<li>{% if c.kind == "unique" %}Unique on <code>{{ c.columns|join:", " }}</code>{% if c.condition %} where <code>{{ c.condition }}</code>{% endif %}{% else %}Check <code>{{ c.condition }}</code>{% endif %}
-          <span class="on-t">{{ c.table }}{% if c.name %} · {{ c.name }}{% endif %}</span></li>
+        {% for c in constraints %}<li><span class="on-t">{{ c.table }}{% if c.name %} · {{ c.name }}{% endif %}</span>
+          {% if c.kind == "unique" %}Unique on <code>{{ c.columns|join:", " }}</code>{% if c.condition %} where <code>{{ c.condition }}</code>{% endif %}{% else %}Check <code>{{ c.condition }}</code>{% endif %}</li>
         {% endfor %}{% if positive_checks %}<li><code>CHECK (… &gt;= 0)</code> on
           <span class="on-t">{{ positive_checks|join:", " }}</span></li>
         {% endif %}{% for name, table, column in null_notes %}<li>Rows whose <code>{{ column }}</code> is null never conflict under <code>{{ name }}</code>, because NULLs are distinct in a unique constraint.

@@ -8,7 +8,7 @@ from typing import Any
 from django.test import TestCase
 
 from . import (IndexMixin, berlin, context_form, demo_index, make_item,
-               make_lot, make_user, sent_messages, ticking)
+               make_lot, make_user, sent_messages, substance_for, ticking)
 
 NOW = berlin(2026, 11, 4, 8)
 TODAY = date(2026, 11, 4)
@@ -20,6 +20,7 @@ NEW_ITEM = "/lab/inventory/end-products/new/"
 NEW_NOTE = "/lab/inventory/deliveries/new/"
 NEW_LOT = "/lab/inventory/bulk/new/"
 COMPOUND_PAGE = re.compile(r"/compounds/[^/]+/\Z")
+SUBSTANCE_PAGE = re.compile(r"/lab/registry/substances/[^/]+/\Z")
 NOTE_PAGE = re.compile(r"/lab/inventory/deliveries/\d+/\Z")
 KINDS = {"opening": "Anfangsbestand", "delivery": "Abgabe",
          "filling": "Abfüllung", "correction": "Korrektur",
@@ -99,12 +100,14 @@ def has_amount(text: str, number: str, unit: str) -> bool:
 def snapshot() -> dict[str, Any]:
     """Everything the bookings change, to compare before and after a
     refusal."""
-    from inventory.models import (DeliveryLine, DeliveryNote,
+    from inventory.models import (Article, DeliveryLine, DeliveryNote,
                                   EnteredConsumption, Item, Lot, LotMovement,
                                   Movement)
     return {
+        "articles": sorted(Article.objects.values_list(
+            "pk", "article_number", "category")),
         "items": sorted(Item.objects.values_list(
-            "pk", "quantity", "name", "category", "note")),
+            "pk", "quantity", "note")),
         "movements": sorted(Movement.objects.values_list("pk", "count")),
         "notes": sorted(DeliveryNote.objects.values_list(
             "pk", "number", "recipient", "note", "reversed")),
@@ -183,14 +186,21 @@ class InventoryCase(IndexMixin, TestCase):
         self.use_index(demo_index())
         self.enterContext(ticking(NOW))
 
-    def item(self, article: str = "CH-0001", name: str = "Probe",
+    def item(self, article: str = "CH-0001", name: str | None = None,
              size: str = "10", unit: str = "umol", quantity: int = 5,
              **extra: Any) -> Any:
+        """An item of the article ``article``, of the substance
+        ``substance_for(article)`` (see ``make_item``); ``mw``,
+        ``category`` and the other keywords of ``make_item`` pass
+        on."""
         return make_item(self.kl, article, name, size, unit, quantity,
                          **extra)
 
     def lot(self, article: str = "CH-0001", unit: str = "mg",
             amount: str = "50", **extra: Any) -> Any:
+        """A lot of the substance ``substance_for(article)``, the
+        substance of the item of that article number (see
+        ``make_lot``)."""
         return make_lot(self.kl, article, unit, amount, **extra)
 
     def deliver(self, item: Any, count: int, day: date | None = None,
@@ -240,11 +250,13 @@ class InventoryCase(IndexMixin, TestCase):
 
 
 class FormCase(InventoryCase):
-    """A test case with a signed-in user."""
+    """A test case with a signed-in user and the substance
+    ``cinnamic-acid``, which ``item_data`` and ``lot_data`` name."""
 
     def setUp(self) -> None:
         super().setUp()
         self.client.force_login(self.kl)
+        self.cinnamic = substance_for("CH-0012")
 
     def refused(self, response: Any, field: str | None = None) -> None:
         """The form is shown again with errors."""
@@ -262,7 +274,10 @@ class FormCase(InventoryCase):
 
 
 def item_data(**over: str) -> dict[str, str]:
-    data = {"article_number": "CH-0012", "name": "Zimtsäure",
+    """The new-item form with the substance ``cinnamic-acid``, which a
+    test creates with ``make_substance("cinnamic-acid")`` or loads from
+    the demo registry."""
+    data = {"substance": "cinnamic-acid", "article_number": "CH-0012",
             "category": "", "size": "10", "unit": "umol", "quantity": "12",
             "note": ""}
     data.update(over)
@@ -292,8 +307,10 @@ def fill_data(**over: str) -> dict[str, str]:
 
 
 def lot_data(**over: str) -> dict[str, str]:
-    data = {"article_number": "CH-0012", "unit": "mg", "amount": "50",
-            "batch": "", "location": "", "made_on": "", "note": ""}
+    """The new-lot form with the substance ``cinnamic-acid``."""
+    data = {"substance": "cinnamic-acid", "source": "made", "supplier": "",
+            "unit": "mg", "amount": "50", "batch": "", "location": "",
+            "made_on": "", "note": ""}
     data.update(over)
     return data
 

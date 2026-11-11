@@ -3,9 +3,10 @@
 Counts and amounts change only by bookings, so the admin shows
 movements, the fixed fields and the quantities read-only, saves only
 the fields it shows editable, restores no earlier version, adds no
-record, and deletes no movement or delivery note. It deletes an item or
-a lot only while its one movement is the opening, and an item only
-while no delivery note has a line of it.
+record, and deletes no movement or delivery note. It deletes an article
+only while it has no items, an item or a lot only while its one
+movement is the opening, and an item only while no delivery note has a
+line of it.
 """
 
 from typing import Any
@@ -19,8 +20,8 @@ from django.http import HttpRequest, HttpResponse
 from simple_history.admin import SimpleHistoryAdmin
 
 from inventory import bookings
-from inventory.models import (DeliveryLine, DeliveryNote, Item, Lot,
-                              LotMovement, Movement)
+from inventory.models import (Article, DeliveryLine, DeliveryNote, Item,
+                              Lot, LotMovement, Movement)
 
 
 def deletable(record: Item | Lot) -> bool:
@@ -107,47 +108,52 @@ class OpeningOnlyAdmin(RecordAdmin):
                     pk__in=[record.pk for record in records]))
 
 
-@admin.register(Item)
-class ItemAdmin(OpeningOnlyAdmin):
-    """The items, whose article number is editable only while an item
-    has none and is then given by ``bookings.assign_article_number``,
-    never by the form's own save."""
+@admin.register(Article)
+class ArticleAdmin(RecordAdmin):
+    """The articles, whose article number is editable only while an
+    article has none and is then given by
+    ``bookings.assign_article_number``, never by the form's own save. An
+    article is deleted only while it has no items."""
 
-    list_display = ("article_number", "name", "category", "size", "unit",
-                    "quantity")
+    list_display = ("__str__", "article_number", "substance", "category")
     list_filter = ("category",)
-    search_fields = ("article_number", "name")
-    readonly_fields = ("inventory", "size", "unit", "quantity")
+    list_select_related = ("substance",)
+    search_fields = ("article_number", "substance__key", "substance__name",
+                     "substance__name_de")
+    readonly_fields = ("substance",)
+
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        return False
 
     def get_form(self, request: HttpRequest, obj: Any = None,
                  change: bool = False, **kwargs: Any) -> type[ModelForm]:
         """Return the change form, which refuses an article number
-        another item of the inventory has with the item's size and
-        unit, as ``bookings.assign_article_number`` does."""
+        another article has, as ``bookings.assign_article_number``
+        does."""
         base = super().get_form(request, obj, change, **kwargs)
 
-        class ItemForm(base):  # type: ignore[valid-type, misc]
+        class ArticleForm(base):  # type: ignore[valid-type, misc]
             def clean_article_number(self) -> str | None:
                 number = (self.cleaned_data.get("article_number")
                           or "").strip() or None
                 if number and bookings.number_taken(self.instance, number):
-                    raise ValidationError(str(bookings.TAKEN))
+                    raise ValidationError(str(bookings.NUMBER_TAKEN))
                 return number
 
-        return ItemForm
+        return ArticleForm
 
     def get_readonly_fields(self, request: HttpRequest,
                             obj: Any = None) -> tuple[str, ...]:
         fixed = tuple(super().get_readonly_fields(request, obj))
         if obj is None or obj.article_number is not None:
-            return ("inventory", "article_number", *fixed[1:])
+            return (*fixed, "article_number")
         return fixed
 
     def save_model(self, request: HttpRequest, obj: Any, form: ModelForm,
                    change: bool) -> None:
         """Save the fields of FORM of OBJ but the article number, by the
         signed-in user, and give OBJ the article number entered through
-        the booking, which refuses it once the item has one."""
+        the booking, which refuses it once the article has one."""
         number = form.cleaned_data.get("article_number") \
             if "article_number" in form.fields else None
         with transaction.atomic():
@@ -161,19 +167,36 @@ class ItemAdmin(OpeningOnlyAdmin):
                     self.message_user(request, " ".join(refused.messages),
                                       messages.ERROR)
                     return
-            obj.article_number = Item.objects.filter(pk=obj.pk) \
+            obj.article_number = Article.objects.filter(pk=obj.pk) \
                 .values_list("article_number", flat=True).get()
             obj._history_user = request.user
             obj.save(update_fields=[name for name in form.fields
                                     if name != "article_number"])
 
 
+@admin.register(Item)
+class ItemAdmin(OpeningOnlyAdmin):
+    """The items, whose article, size and unit are fixed."""
+
+    list_display = ("__str__", "size", "unit", "quantity", "status")
+    list_filter = ("status",)
+    list_select_related = ("article__substance",)
+    search_fields = ("article__article_number", "article__substance__key",
+                     "article__substance__name",
+                     "article__substance__name_de")
+    readonly_fields = ("article", "size", "unit", "quantity")
+
+
 @admin.register(Lot)
 class LotAdmin(OpeningOnlyAdmin):
-    list_display = ("article_number", "batch", "unit", "amount", "location",
-                    "made_on")
-    search_fields = ("article_number", "batch")
-    readonly_fields = ("inventory", "article_number", "unit", "amount")
+    list_display = ("__str__", "substance", "source", "batch", "unit",
+                    "amount", "location", "made_on")
+    list_select_related = ("substance",)
+    search_fields = ("substance__key", "substance__name",
+                     "substance__name_de",
+                     "substance__article__article_number",
+                     "batch", "supplier")
+    readonly_fields = ("substance", "source", "unit", "amount")
 
 
 class DeliveryLineInline(admin.TabularInline):
@@ -197,8 +220,9 @@ class DeliveryNoteAdmin(RecordAdmin):
     list_display = ("__str__", "date", "recipient", "historical",
                     "reversed", "created_by")
     list_filter = ("historical", "reversed")
-    search_fields = ("number", "recipient", "lines__item__article_number",
-                     "lines__item__name")
+    search_fields = ("number", "recipient",
+                     "lines__item__article__article_number",
+                     "lines__item__article__substance__name")
     readonly_fields = ("date", "historical", "reversed", "reversal_note",
                        "created_by", "created_at")
     inlines = [DeliveryLineInline]
@@ -231,8 +255,11 @@ class MovementAdmin(ReadOnlyAdmin):
     list_display = ("item", "kind", "count", "quantity_after", "date",
                     "booked_at", "user", "delivery_note")
     list_filter = ("kind",)
-    list_select_related = ("item", "user", "delivery_note")
-    search_fields = ("item__article_number", "item__name")
+    list_select_related = ("item__article__substance", "user",
+                           "delivery_note")
+    search_fields = ("item__article__article_number",
+                     "item__article__substance__key",
+                     "item__article__substance__name")
 
 
 @admin.register(LotMovement)
@@ -240,5 +267,6 @@ class LotMovementAdmin(ReadOnlyAdmin):
     list_display = ("lot", "kind", "amount", "amount_after", "date",
                     "booked_at", "user")
     list_filter = ("kind",)
-    list_select_related = ("lot", "user")
-    search_fields = ("lot__article_number", "lot__batch")
+    list_select_related = ("lot__substance", "user")
+    search_fields = ("lot__substance__key", "lot__substance__name",
+                     "lot__batch")

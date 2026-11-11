@@ -97,7 +97,7 @@ class ItemLevelTests(InventoryCase):
         Item.objects.filter(pk=gone.pk).update(status="discontinued")
         Item.objects.filter(pk=idle.pk).update(status="not_needed")
         for item in (gone, idle):
-            with self.subTest(item=item.article_number):
+            with self.subTest(item=item.article.article_number):
                 found = self.consumption(item)
                 self.assertEqual(found.level, "dormant")
                 self.assertIsNone(found.coverage)

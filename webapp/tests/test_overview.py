@@ -118,9 +118,9 @@ class FigureTests(OverviewCase):
                             recipient="AK Weber")
         reverse(self.kl, Movement.objects.get(delivery_note=note),
                 note="Falsch gebucht")
-        make_task(self.kl, product="CH-0012", started=SEVENTH)
-        make_task(self.kl, product="CH-0010")
-        make_task(self.kl, product="Aspirin")
+        make_task(self.kl, substance="CH-0012", started=SEVENTH)
+        make_task(self.kl, substance="CH-0010")
+        make_task(self.kl, substance="Aspirin")
         self.lot("CH-0012", "mg", "50")
 
     def test_figures_and_lists(self) -> None:
@@ -153,6 +153,26 @@ class FigureTests(OverviewCase):
         self.assertEqual([text.split()[0] for text in latest],
                          ["LS-3", "LS-2", "LS-1", "LS-00", "LS-0"])
         self.assertIn("02.10.2026", latest[0])
+
+    def test_open_lots_of_any_substance(self) -> None:
+        self.item("CH-0012", quantity=5)
+        self.lot("CH-0012", "mg", "50")
+        self.lot("acetophenone", "mg", "5", source="made")
+        self.lot("CH-0012", "mg", "20", source="bought", supplier="Sigma")
+        self.lot("acetophenone", "mg", "0")
+        shown = figures(self.get())
+        self.assertEqual(shown["Offene Bulk-Lose"].text(), "3")
+
+    def test_names_come_from_the_substances_of_the_articles(self) -> None:
+        zimt = self.item("CH-0012", quantity=40)
+        self.deliver(zimt, 3, date(2026, 3, 2), number="LS-1")
+        requested = entries(self.get(), "Meistgefragt 2026")
+        self.assertEqual(len(requested), 1)
+        self.assertIn("CH-0012", requested[0])
+        self.assertIn("(E)-Zimtsäure", requested[0])
+        self.use_index(build_index("en"))
+        requested = entries(self.get(), "Most requested in 2026")
+        self.assertIn("(E)-Cinnamic acid", requested[0])
 
     def test_the_latest_notes_link_their_pages(self) -> None:
         self.scenario()
@@ -272,6 +292,13 @@ class NextSynthesesTests(OverviewCase):
         self.assertEqual(section_of(root, "Nächste Synthesen").find(
             "a", href="/lab/planning/").text(), "Zur Planung")
 
+    def test_the_name_is_the_substances(self) -> None:
+        self.planned_item("NV-1", quantity=0, name="Erste")
+        _, rows = table(section_of(self.get(), "Nächste Synthesen"))
+        self.assertEqual(rows[0]["Name"].text(), "Erste")
+        self.assertEqual([a.get("href") for a in rows[0]["Name"].find_all(
+            "a")], ["/lab/registry/substances/nv-1/"])
+
     def test_the_article_links_its_first_item(self) -> None:
         self.planned_item("NV-1", size="5", quantity=0)
         first = self.planned_item("NV-1", size="1", quantity=0)
@@ -326,7 +353,7 @@ class SummaryTests(OverviewCase):
         for article in ("OK-1", "OK-2"):
             self.with_mean_quarter(self.item(article, quantity=20), 4)
         self.with_mean_quarter(self.item("LO-1", quantity=3), 4)
-        make_task(self.kl, product="OK-1", started=date(2026, 11, 1))
+        make_task(self.kl, substance="OK-1", started=date(2026, 11, 1))
         self.lot("OK-1", "mg", "50")
         response = self.client.get(SUMMARY)
         self.assertEqual(response.status_code, 200)

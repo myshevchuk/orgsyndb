@@ -1,7 +1,7 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n lab %}
 {% block title %}{{ task.number }}{% endblock %}
 {% block main %}
-<h1>{{ task.number }} · {% product task.product %}</h1>
+<h1>{{ task.number }} · {% substance task.substance %}</h1>
 <p class="lab-state">{% include "tasks/state.html" %}</p>
 {% if user.is_authenticated %}<div class="lab-actions">
 <a href="/lab/tasks/{{ task.number }}/edit/">{% translate "Edit" %}</a>

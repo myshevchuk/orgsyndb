@@ -1,10 +1,11 @@
 """Tests of the task list (task-tracker: Task list)."""
 
 from datetime import date
+from urllib.parse import quote
 
 from django.test import TestCase
 
-from . import (IndexMixin, build_index, compound, demo_index, field_value,
+from . import (IndexMixin, build_index, demo_index, field_value,
                make_task, make_user, numbers, page, past, table, task_url)
 
 COLUMNS_DE = ["Nr.", "Produkt", "Priorität", "Bearbeitung", "Beginn",
@@ -39,15 +40,15 @@ class DefaultViewTests(ListCase):
     @classmethod
     def setUpTestData(cls) -> None:
         super().setUpTestData()
-        cls.planned = make_task(cls.kl, product="Alpha", priority="low")
-        cls.running = make_task(cls.kl, product="Beta", priority="high",
+        cls.planned = make_task(cls.kl, substance="Alpha", priority="low")
+        cls.running = make_task(cls.kl, substance="Beta", priority="high",
                                 started=past(1))
-        cls.done = make_task(cls.kl, product="Gamma", started=past(1),
+        cls.done = make_task(cls.kl, substance="Gamma", started=past(1),
                              ended=past(2), report=True, qc_list=True)
-        cls.followup = make_task(cls.kl, product="Delta", priority="low",
+        cls.followup = make_task(cls.kl, substance="Delta", priority="low",
                                  started=past(1), ended=past(2),
                                  qc_list=True)
-        cls.cancelled = make_task(cls.kl, product="Epsilon",
+        cls.cancelled = make_task(cls.kl, substance="Epsilon",
                                   cancelled=True)
 
     def test_default_view(self) -> None:
@@ -124,12 +125,12 @@ class DefaultViewTests(ListCase):
 class ColumnTests(ListCase):
 
     def test_columns(self) -> None:
-        make_task(self.kl, product="Probe")
+        make_task(self.kl, substance="Probe")
         header, _ = table(self.listing())
         self.assertEqual(header, COLUMNS_DE)
 
     def test_a_row(self) -> None:
-        task = make_task(self.kl, product="Probe", priority="high",
+        task = make_task(self.kl, substance="Probe", priority="high",
                          assignee=self.ae, started=date(2025, 11, 3),
                          steps_total=5, steps_done=2, batch="B-17",
                          report=True)
@@ -139,6 +140,9 @@ class ColumnTests(ListCase):
         self.assertEqual(link.text(), task.number)
         self.assertEqual(link.get("href"), task_url(task))
         self.assertIn("Probe", row["Produkt"].text())
+        self.assertEqual(
+            [a.get("href") for a in row["Produkt"].find_all("a")],
+            ["/lab/registry/substances/probe/"])
         self.assertIn("hoch", row["Priorität"].text())
         self.assertIn("manuell", row["Priorität"].text())
         cell = row["Bearbeitung"]
@@ -164,7 +168,7 @@ class ColumnTests(ListCase):
         self.assertEqual(titles, ["plain"])
 
     def test_a_row_without_assignee_or_total(self) -> None:
-        make_task(self.kl, product="Probe")
+        make_task(self.kl, substance="Probe")
         _, rows = table(self.listing())
         row = rows[0]
         self.assertEqual(row["Bearbeitung"].text(), "")
@@ -176,11 +180,11 @@ class ColumnTests(ListCase):
         self.assertIn("Geplant", row["Status"].text())
 
     def test_state_badges(self) -> None:
-        make_task(self.kl, product="P")
-        make_task(self.kl, product="R", started=past(1))
-        make_task(self.kl, product="E", started=past(1), ended=past(2),
+        make_task(self.kl, substance="P")
+        make_task(self.kl, substance="R", started=past(1))
+        make_task(self.kl, substance="E", started=past(1), ended=past(2),
                   report=True, qc_list=True)
-        make_task(self.kl, product="C", cancelled=True)
+        make_task(self.kl, substance="C", cancelled=True)
         _, rows = table(self.listing("?state=all"))
         labels = {r["Produkt"].text().split()[0]: r["Status"].text()
                   for r in rows}
@@ -191,7 +195,7 @@ class ColumnTests(ListCase):
 
     def test_english_columns_and_texts(self) -> None:
         self.use_index(build_index("en"))
-        make_task(self.kl, product="Probe", priority="high",
+        make_task(self.kl, substance="Probe", priority="high",
                   assignee=self.ae, started=date(2025, 11, 3),
                   steps_total=5, steps_done=2, report=True)
         root = self.listing()
@@ -209,7 +213,7 @@ class ColumnTests(ListCase):
 
     def test_english_follow_up_and_new_task_link(self) -> None:
         self.use_index(build_index("en"))
-        make_task(self.kl, product="Probe", started=past(1), ended=past(2))
+        make_task(self.kl, substance="Probe", started=past(1), ended=past(2))
         self.client.force_login(self.kl)
         root = self.listing()
         _, rows = table(root)
@@ -217,6 +221,27 @@ class ColumnTests(ListCase):
         self.assertEqual(
             [a.text() for a in root.find_all("a", href="/lab/tasks/new/")],
             ["New task"])
+
+
+class SubstanceLinkTests(ListCase):
+
+    def test_a_substance_links_to_its_page_in_the_german_name(self) -> None:
+        """Scenario: A task's substance."""
+        make_task(self.kl, substance="CH-0012")
+        make_task(self.kl, substance="Aspirin")
+        _, rows = table(self.listing())
+        cinnamic = next(r for r in rows
+                        if "Zimtsäure" in r["Produkt"].text())
+        self.assertEqual(cinnamic["Produkt"].text(), "(E)-Zimtsäure")
+        self.assertEqual(
+            [a.get("href") for a in cinnamic["Produkt"].find_all("a")],
+            ["/lab/registry/substances/cinnamic-acid/"])
+
+    def test_the_name_is_english_on_an_english_site(self) -> None:
+        self.use_index(build_index("en"))
+        make_task(self.kl, substance="CH-0012")
+        _, rows = table(self.listing())
+        self.assertEqual(rows[0]["Product"].text(), "(E)-Cinnamic acid")
 
 
 class OrderTests(ListCase):
@@ -299,18 +324,18 @@ class FilterTests(ListCase):
     def test_filters(self) -> None:
         """Scenario: Filters."""
         found = [
-            self.make(self.kl, product="CH-0012", started=past(1)),
-            self.make(self.kl, product="cinnamic-acid"),
-            self.make(self.kl, product="Zimt-Derivat"),
-            self.make(self.kl, product="Aspirin",
+            self.make(self.kl, substance="CH-0012", started=past(1)),
+            self.make(self.kl, substance="cinnamic-acid"),
+            self.make(self.kl, substance="Zimt-Derivat"),
+            self.make(self.kl, substance="Aspirin",
                       note="Vorstufe von Zimts\u00e4ure"),
-            self.make(self.kl, product="Aspirin", batch="ZIMT-7",
+            self.make(self.kl, substance="Aspirin", batch="ZIMT-7",
                       cancelled=True),
         ]
-        self.make(self.kl, product="Aspirin")
-        self.make(self.ae, product="CH-0012")
-        self.make(None, product="CH-0012")
-        self.make(self.kl, product="Aspirin", note="nichts")
+        self.make(self.kl, substance="Aspirin")
+        self.make(self.ae, substance="CH-0012")
+        self.make(None, substance="CH-0012")
+        self.make(self.kl, substance="Aspirin", note="nichts")
         root = self.listing("?state=all&person=KL&q=zimt")
         self.assertEqual(sorted(numbers(root)),
                          sorted(t.number for t in found))
@@ -319,18 +344,18 @@ class FilterTests(ListCase):
         self.assertEqual(field_value(root, "q"), "zimt")
 
     def test_text_is_found_regardless_of_case(self) -> None:
-        match = self.make(None, product="CH-0012")
-        self.make(None, product="Aspirin")
+        match = self.make(None, substance="CH-0012")
+        self.make(None, substance="Aspirin")
         for query in ("zimt", "ZIMT", "Zimt", "zIMTs\u00c4ure"):
             with self.subTest(query=query):
                 self.assertEqual(self.shown(f"?q={query}"),
                                  [match.number])
 
     def test_text_is_found_in_every_field(self) -> None:
-        by_product = self.make(None, product="Ferrocen")
-        by_batch = self.make(None, product="A", batch="FC-0815")
-        by_note = self.make(None, product="B", note="mit Ferrocen-Rest")
-        self.make(None, product="C")
+        by_product = self.make(None, substance="Ferrocen")
+        by_batch = self.make(None, substance="A", batch="FC-0815")
+        by_note = self.make(None, substance="B", note="mit Ferrocen-Rest")
+        self.make(None, substance="C")
         self.assertEqual(self.shown("?q=ferrocen"),
                          [by_product.number, by_note.number])
         self.assertEqual(self.shown("?q=fc-08"), [by_batch.number])
@@ -342,18 +367,22 @@ class FilterTests(ListCase):
         self.assertEqual(self.shown("?q=t-00"),
                          [t.number for t in tasks])
 
-    def test_text_is_found_in_the_name_of_the_compound(self) -> None:
-        self.use_index(build_index("en", [
-            compound("cinnamic-acid", name="(E)-Cinnamic acid",
-                     name_de="(E)-Zimts\u00e4ure", item_number="CH-0012")]))
-        match = self.make(None, product="CH-0012")
-        self.make(None, product="Aspirin")
-        self.assertEqual(self.shown("?q=cinnamic"), [match.number])
+    def test_text_is_found_in_the_substances_key_and_names(self) -> None:
+        match = self.make(None, substance="CH-0012")
+        self.make(None, substance="Aspirin")
+        for query in ("cinnamic-ac", "(e)-cinnamic", "zimts\u00e4ure"):
+            with self.subTest(query=query):
+                self.assertEqual(self.shown(f"?q={quote(query)}"),
+                                 [match.number])
+
+    def test_the_article_number_is_no_text_of_the_task(self) -> None:
+        self.make(None, substance="CH-0012")
+        self.assertEqual(self.shown("?q=ch-0012"), [])
 
     def test_person_filter(self) -> None:
-        mine = self.make(self.kl, product="A")
-        hers = self.make(self.ae, product="B")
-        nobody = self.make(None, product="C")
+        mine = self.make(self.kl, substance="A")
+        hers = self.make(self.ae, substance="B")
+        nobody = self.make(None, substance="C")
         self.assertEqual(self.shown("?person=KL"), [mine.number])
         self.assertEqual(self.shown("?person=AE"), [hers.number])
         self.assertEqual(self.shown("?person=none"), [nobody.number])
@@ -363,11 +392,11 @@ class FilterTests(ListCase):
         self.assertEqual(field_value(root, "person"), "none")
 
     def test_filters_combine(self) -> None:
-        match = self.make(self.kl, product="Zimt", priority="high",
+        match = self.make(self.kl, substance="Zimt", priority="high",
                           started=past(1))
-        self.make(self.kl, product="Zimt", priority="low")
-        self.make(self.ae, product="Zimt", priority="high")
-        self.make(self.kl, product="Aspirin", priority="high")
+        self.make(self.kl, substance="Zimt", priority="low")
+        self.make(self.ae, substance="Zimt", priority="high")
+        self.make(self.kl, substance="Aspirin", priority="high")
         self.assertEqual(
             self.shown("?person=KL&priority=high&state=running&q=zimt"),
             [match.number])

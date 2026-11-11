@@ -13,8 +13,7 @@ from django.utils.translation import gettext as _
 from inventory.models import plain
 
 FIELDS = {
-    "item": ["article_number", "name", "category", "status",
-             "stocked_on", "compartment", "box", "note"],
+    "item": ["status", "stocked_on", "compartment", "box", "note"],
     "lot": ["batch", "location", "made_on", "note"],
     "deliverynote": ["number", "recipient", "note", "reversed",
                      "reversal_note"],

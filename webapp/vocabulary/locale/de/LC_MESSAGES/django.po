@@ -1,0 +1,54 @@
+# German interface texts of the vocabularies.
+msgid ""
+msgstr ""
+"Project-Id-Version: orgsyndb-web\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Vocabularies"
+msgstr "Vokabulare"
+
+msgid "Enter lower-case letters and digits, joined by single hyphens, such as carboxylic-acids."
+msgstr "Kleinbuchstaben und Ziffern eingeben, verbunden durch einzelne Bindestriche, etwa carboxylic-acids."
+
+msgid "Key"
+msgstr "Schlüssel"
+
+msgid "Label"
+msgstr "Bezeichnung"
+
+msgid "German label"
+msgstr "Bezeichnung deutsch"
+
+msgid "A term cannot be filed under itself or under a term filed under it."
+msgstr "Ein Begriff kann nicht unter sich selbst oder einem seiner Unterbegriffe stehen."
+
+msgid "Parent"
+msgstr "Oberbegriff"
+
+msgid "chemical class"
+msgstr "Stoffklasse"
+
+msgid "chemical classes"
+msgstr "Stoffklassen"
+
+msgid "group"
+msgstr "Gruppe"
+
+msgid "groups"
+msgstr "Gruppen"
+
+msgid "project"
+msgstr "Projekt"
+
+msgid "projects"
+msgstr "Projekte"
+
+msgid "reaction type"
+msgstr "Reaktionstyp"
+
+msgid "reaction types"
+msgstr "Reaktionstypen"

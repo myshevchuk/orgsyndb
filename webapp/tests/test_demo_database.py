@@ -86,7 +86,7 @@ class NotADemoDatabaseTests(IndexMixin, TestCase):
     @classmethod
     def setUpTestData(cls) -> None:
         cls.kl = make_user("kl", "KL", "Klara", "Lehmann")
-        make_task(cls.kl, product="CH-0012")
+        make_task(cls.kl, substance="CH-0012")
 
     def setUp(self) -> None:
         self.use_index(demo_index())

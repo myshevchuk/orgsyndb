@@ -440,6 +440,26 @@ class SharedBulkTests(PlanningCase):
         self.planned_item("NV-6", size="5", unit="mg", quantity=10)
         self.assertEqual(self.forecast("NV-6").bulk_unit, Unit.MG)
 
+    def test_a_dormant_size_does_not_choose_the_bulk_unit(self) -> None:
+        """Scenario: A dormant size does not choose the bulk unit."""
+        self.item("NV-9", size="1", unit="mg", quantity=0,
+                  status="not_needed")
+        self.planned_item("NV-9", size="1", unit="umol", quantity=10)
+        self.lot("NV-9", "umol", "100")
+        found = self.forecast("NV-9")
+        self.assertEqual(found.bulk_unit, Unit.UMOL)
+        self.assertEqual(found.usable_bulk, D(99))
+
+    def test_the_molar_mass_is_the_substances(self) -> None:
+        """A substance with a molar mass has a bulk of µmol, whatever
+        the index says."""
+        self.planned_item("NV-5", size="10", unit="mg", quantity=10)
+        self.lot("NV-5", "mg", "100")
+        self.assertEqual(self.forecast("NV-5").bulk_unit, Unit.MG)
+        self.item("NV-5", mw="100", size="5", unit="mg")
+        found = self.forecast("NV-5")
+        self.assertEqual(found.bulk_unit, Unit.UMOL)
+
     def test_an_item_that_does_not_convert_limits_the_runway(self) -> None:
         mg = self.planned_item("NV-6", size="10", unit="mg", quantity=0)
         micro = self.planned_item("NV-6", size="1", unit="umol",

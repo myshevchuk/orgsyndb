@@ -6,19 +6,19 @@ production-planning: Demand models, Runway and Item forecast)."""
 from datetime import date
 from decimal import Decimal
 
-from inventory.bookings import Refused, correct, create_item, fill
+from inventory.bookings import Refused, correct, fill
 from inventory.models import EnteredConsumption, Item
 
-from . import field_value, page, table
+from . import field_value, make_substance, page, table
 from .inventory_support import (LEVELS, LIST, NEW_ITEM, TODAY, FormCase,
-                                InventoryCase, fresh, item_url)
+                                InventoryCase, fresh, item_data, item_url)
 from .planning_support import PlanningCase
 
 PROJECTED = "hochgerechnet aus dem laufenden Jahr"
 
 
 def edit_data(item: Item, **over: str) -> dict[str, str]:
-    data = {"name": item.name, "category": item.category,
+    data = {"category": item.article.category,
             "note": item.note, "status": item.status,
             "stocked_on": item.stocked_on.isoformat()
             if item.stocked_on else ""}
@@ -104,8 +104,8 @@ class StockEntryTests(FormCase):
 
     def test_by_the_first_filling(self) -> None:
         """Scenario: Stock entry by the first filling."""
-        item = create_item(self.kl, article_number="S-1", name="Probe",
-                           size=Decimal("10"), unit="mg", quantity=0)
+        item = self.item("S-1", size="10", unit="mg", quantity=0,
+                         stocked_on=None)
         self.assertIsNone(fresh(item).stocked_on)
         fill(self.kl, item, count=3, date=date(2026, 10, 20))
         fill(self.kl, item, count=2, date=date(2026, 11, 2))
@@ -116,16 +116,16 @@ class StockEntryTests(FormCase):
         self.assertEqual(last.history_user, self.kl)
 
     def test_by_a_correction(self) -> None:
-        item = create_item(self.kl, article_number="S-2", name="Probe",
-                           size=Decimal("10"), unit="mg", quantity=0)
+        item = self.item("S-2", size="10", unit="mg", quantity=0,
+                         stocked_on=None)
         correct(self.kl, item, count=2, note="gefunden",
                 date=date(2026, 9, 1))
         self.assertEqual(fresh(item).stocked_on, date(2026, 9, 1))
 
     def test_by_the_opening_count(self) -> None:
         """Scenario: Stock entry by the opening count."""
-        item = create_item(self.kl, article_number="S-3", name="Probe",
-                           size=Decimal("10"), unit="mg", quantity=5)
+        self.client.post(NEW_ITEM, item_data(quantity="5"))
+        item = Item.objects.get()
         self.assertEqual(fresh(item).stocked_on, TODAY)
         response = self.client.post(item_url(item, "edit"), edit_data(
             fresh(item), stocked_on="2019-05-02"))
@@ -140,9 +140,8 @@ class StockEntryTests(FormCase):
         self.assertIn(["stocked_on"], changed)
 
     def test_a_later_movement_keeps_the_date(self) -> None:
-        item = create_item(self.kl, article_number="S-4", name="Probe",
-                           size=Decimal("10"), unit="mg", quantity=5,
-                           stocked_on=date(2020, 1, 1))
+        item = self.item("S-4", size="10", unit="mg", quantity=5,
+                         stocked_on=date(2020, 1, 1))
         fill(self.kl, item, count=1)
         self.assertEqual(fresh(item).stocked_on, date(2020, 1, 1))
 
@@ -167,11 +166,11 @@ class StockEntryTests(FormCase):
                 self.assertIn(shown, history)
 
     def test_new_item_form_takes_a_date(self) -> None:
-        response = self.client.post(NEW_ITEM, {
-            "article_number": "", "name": "Altbestand", "category": "",
-            "size": "10", "unit": "mg", "quantity": "3",
-            "stocked_on": "2021-06-01", "note": ""})
-        item = Item.objects.get(name="Altbestand")
+        make_substance("altbestand", "Altbestand")
+        response = self.client.post(NEW_ITEM, item_data(
+            substance="altbestand", article_number="", size="10",
+            unit="mg", quantity="3", stocked_on="2021-06-01"))
+        item = Item.objects.get(article__substance__key="altbestand")
         self.assertRedirects(response, item_url(item),
                              fetch_redirect_response=False)
         self.assertEqual(item.stocked_on, date(2021, 6, 1))

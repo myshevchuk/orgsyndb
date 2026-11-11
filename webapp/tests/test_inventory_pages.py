@@ -36,12 +36,21 @@ class ItemHeadTests(PageCase):
         self.assertIn("CH-0012", heading)
         self.assertIn("Zimtsäure", heading)
         text = root.text()
-        for expected in ("Endprodukt", "Zeile eins", "(E)-Zimtsäure"):
+        for expected in ("Endprodukt", "Zeile eins"):
             with self.subTest(expected=expected):
                 self.assertIn(expected, text)
         self.assertTrue(has_amount(text, "2,5", "mg"), text)
-        self.assertTrue([a for a in root.find_all("a")
-                         if a.get("href") == "/compounds/cinnamic-acid/"])
+        hrefs = [a.get("href") for a in root.find_all("a")]
+        self.assertIn("/lab/registry/substances/cinnamic-acid/", hrefs)
+        self.assertNotIn("/compounds/cinnamic-acid/", hrefs)
+
+    def test_the_substance_is_named_by_language(self) -> None:
+        from . import build_index
+        item = self.item("CH-0012")
+        self.assertIn("(E)-Zimtsäure", self.show(item_url(item)).text())
+        self.use_index(build_index("en"))
+        self.assertIn("(E)-Cinnamic acid",
+                      self.show(item_url(item)).text())
 
     def test_the_figures(self) -> None:
         item = self.means_item("CH-0012", name="Zimtsäure")
@@ -252,8 +261,8 @@ class ItemHistoryTests(PageCase):
         item = self.item("CH-0012", note="alt")
         self.client.force_login(self.ae)
         self.client.post(item_url(item, "edit"), {
-            "name": item.name, "category": "", "note": "neu",
-            "status": "active", "stocked_on": "2019-01-02"})
+            "category": "", "note": "neu", "status": "active",
+            "stocked_on": "2019-01-02"})
         text = self.show(item_url(item)).text()
         for expected in ("alt", "neu", "AE", "KL", "Angelegt"):
             with self.subTest(expected=expected):
@@ -279,6 +288,26 @@ class LotPageTests(PageCase):
                 self.assertIn(expected, text)
         self.assertTrue(has_amount(text, "42,592", "mg"), text)
         self.assertNotIn("aufgebraucht", text)
+
+    def test_the_substance_the_source_and_the_supplier(self) -> None:
+        self.item("CH-0012")
+        lot = self.lot("CH-0012", "mg", "5", source="bought",
+                       supplier="Sigma")
+        root = self.show(lot_url(lot))
+        self.assertIn("/lab/registry/substances/cinnamic-acid/",
+                      [a.get("href") for a in root.find_all("a")])
+        text = root.text()
+        for expected in ("(E)-Zimtsäure", "CH-0012", "gekauft", "Sigma"):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, text)
+
+    def test_a_lot_of_a_substance_without_an_article(self) -> None:
+        lot = self.lot("acetophenone", "mg", "5", source="made")
+        root = self.show(lot_url(lot))
+        self.assertIn("/lab/registry/substances/acetophenone/",
+                      [a.get("href") for a in root.find_all("a")])
+        self.assertIn("hergestellt", root.text())
+        self.assertNotRegex(root.text(), r"[A-Z]{2}-\d{4}")
 
     def test_lot_page_after_a_filling(self) -> None:
         """Scenario: Lot page after a filling."""

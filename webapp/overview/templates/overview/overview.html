@@ -1,4 +1,4 @@
-{% extends "orgsyndb_web/base.html" %}{% load i18n l10n %}
+{% extends "orgsyndb_web/base.html" %}{% load i18n l10n lab %}
 {% block title %}{% translate "Lab at a glance" %}{% endblock %}
 {% block main %}
 <h1>{% translate "Lab at a glance" %}</h1>
@@ -17,7 +17,7 @@
 <tbody>
 {% for entry in next %}<tr>
 <td><a href="/lab/inventory/items/{{ entry.item.pk }}/">{{ entry.forecast.article_number }}</a></td>
-<td>{{ entry.forecast.name }}</td>
+<td>{% substance entry.forecast.substance %}</td>
 <td>{{ entry.forecast.priority_label }}</td>
 <td>{{ entry.forecast.latest_start|default_if_none:"–" }}</td>
 <td>{% if entry.task %}<a href="/lab/tasks/{{ entry.task.task.number }}/">{{ entry.task.task.number }}</a> {{ entry.state }}{% if entry.task.late %} <span class="badge badge--late">{% translate "late" %}</span>{% endif %}{% else %}–{% endif %}</td>
@@ -46,7 +46,7 @@
 <div class="overview-part">
 <h2>{% blocktranslate with year=year|stringformat:"d" %}Most requested in {{ year }}{% endblocktranslate %}</h2>
 {% if requested %}<ol class="overview-list">
-{% for entry in requested %}<li><a href="/lab/inventory/items/{{ entry.item.pk }}/">{{ entry.article_number }}</a> {{ entry.item.name }} <span class="count">{{ entry.count }}</span></li>
+{% for entry in requested %}<li><a href="/lab/inventory/items/{{ entry.item.pk }}/">{{ entry.article_number }}</a> {% substance entry.item.substance %} <span class="count">{{ entry.count }}</span></li>
 {% endfor %}</ol>
 {% else %}<p class="lab-empty">{% translate "No deliveries." %}</p>
 {% endif %}</div>

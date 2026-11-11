@@ -25,7 +25,7 @@ A row's tooltip names the column, its type and nullability, the table and column
 
 #### Scenario: An item's columns
 - **WHEN** a test generates the diagram
-- **THEN** the box `inventory_item` lists `id`, `inventory`, `article_number`, `name`, `category`, `size`, `unit`, `quantity`, `note`, `status`, `stocked_on`, `compartment` and `box`, in this order, with `id` marked `PK` and typed `bigint`, `article_number` typed `varchar(30)?`, `size` typed `numeric(10,3)`, the box marked `HISTORY`, the tooltip of `status` naming `active`, `not_needed` and `discontinued`, and the tooltip of `quantity` saying `not in history` and `CHECK >= 0` and naming no upper bound
+- **THEN** the box `inventory_item` lists `id`, `article_id`, `size`, `unit`, `quantity`, `note`, `status`, `stocked_on`, `compartment` and `box`, in this order, with `id` marked `PK` and typed `bigint`, `article_id` marked `FK` and typed `bigint`, `size` typed `numeric(10,3)`, the box marked `HISTORY`, the tooltip of `status` naming `active`, `not_needed` and `discontinued`, and the tooltip of `quantity` saying `not in history` and `CHECK >= 0` and naming no upper bound
 
 #### Scenario: Keys of a movement
 - **WHEN** a test generates the diagram
@@ -37,7 +37,11 @@ A row's tooltip names the column, its type and nullability, the table and column
 
 #### Scenario: Only the application's tables
 - **WHEN** a test generates the diagram
-- **THEN** its boxes are exactly `accounts_user`, `inventory_item`, `inventory_movement`, `inventory_deliverynote`, `inventory_deliveryline`, `inventory_lot`, `inventory_lotmovement`, `inventory_enteredconsumption`, `tasks_task`, `tasks_counter`, `planning_parameters`, `demo_demomark` and the box of the history tables
+- **THEN** its boxes are exactly `accounts_user`, `registry_substance`, `registry_substanceclass`, `vocabulary_chemicalclass`, `vocabulary_group`, `vocabulary_project`, `vocabulary_reactiontype`, `inventory_article`, `inventory_item`, `inventory_movement`, `inventory_deliverynote`, `inventory_deliveryline`, `inventory_lot`, `inventory_lotmovement`, `inventory_enteredconsumption`, `tasks_task`, `tasks_counter`, `planning_parameters`, `demo_demomark` and the box of the history tables
+
+#### Scenario: An article's key
+- **WHEN** a test generates the diagram
+- **THEN** in the box `inventory_article`, `substance_id` is marked `PK` and typed `bigint`, and `article_number` is marked `UQ` and typed `varchar(30)?`
 - **AND** Django's tables list `accounts_user_groups`, `accounts_user_user_permissions`, `auth_group` and `django_session`, and no table that has a box or is a history table
 
 ### Requirement: Links between tables
@@ -49,9 +53,7 @@ The diagram SHALL draw every foreign key between two boxes as a line from the re
 
 The referencing end of a foreign key shows zero or more, or zero or one for a unique foreign key; the referenced end shows exactly one, or zero or one when the column is nullable. A line whose delete rule is not `PROTECT` carries that rule, `cascade` or `set null`. The key mark of a foreign key takes the colour of the package of the table it references. The declared links are:
 
-- from `inventory_lot.article_number` to `inventory_item.article_number`: a lot belongs to the item of the same inventory and article number;
-- from `tasks_task.product` to `inventory_item.article_number`: a task belongs to an article when its product equals the article number regardless of case, or names the same compound of the collection index;
-- from `tasks_task.batch` to `inventory_lot.batch`: a lot belongs to a task when the two share a batch and the task's product matches the lot's article number;
+- from `tasks_task.batch` to `inventory_lot.batch`: a lot belongs to a task when the two share a batch and the task's substance is the lot's;
 - from `tasks_counter.name` to `tasks_task.number`: the counter `task` issues the task numbers.
 
 A line's tooltip names its two columns and, for a foreign key, its delete rule, for a declared link, how it matches. A declared link's short label is drawn above its longest horizontal segment when the segment is long enough to hold it. Each history table's layout is drawn once, as a dashed box headed `‹app›_historical‹model›` and marked with the number of history tables: the columns of one history table, its tracked columns other than `id` given as one row.
@@ -66,7 +68,11 @@ A line's tooltip names its two columns and, for a foreign key, its delete rule, 
 
 #### Scenario: Links of a task
 - **WHEN** a test generates the diagram
-- **THEN** lines of kind `value` run from `tasks_task.product` to `inventory_item.article_number`, from `tasks_task.batch` to `inventory_lot.batch`, from `tasks_counter.name` to `tasks_task.number` and from `inventory_lot.article_number` to `inventory_item.article_number`, each with a tooltip saying how it matches
+- **THEN** lines of kind `value` run from `tasks_task.batch` to `inventory_lot.batch` and from `tasks_counter.name` to `tasks_task.number`, each with a tooltip saying how it matches, and no other line of kind `value` is drawn
+
+#### Scenario: Links to the registry
+- **WHEN** a test generates the diagram
+- **THEN** lines of kind `key` run from `tasks_task.substance_id`, `inventory_lot.substance_id` and `inventory_article.substance_id` to `registry_substance`, from `inventory_item.article_id` to `inventory_article`, from `registry_substance.group_id` to `vocabulary_group`, and from `registry_substanceclass` to `registry_substance` and `vocabulary_chemicalclass`; the key mark of `inventory_article.substance_id` has the colour of the `registry` package, and the boxes of the `registry` and `vocabulary` packages each have a colour of their own
 
 #### Scenario: Line ends
 - **WHEN** a test generates the diagram
@@ -141,5 +147,5 @@ A script shows the switches and hides the lines of each kind switched off; `Fore
 
 #### Scenario: Constraint lists
 - **WHEN** a test reads the generated page
-- **THEN** the constraints name `inventory_item_identity` with `inventory, article_number, size, unit`, `inventory_item_size_positive` with `size > 0`, `inventory_entered_quarter` with `quarter >= 1 AND quarter <= 4`, and the note that rows with `article_number` null never conflict under `inventory_item_identity`; and the history tables name `inventory_historicalitem` without `quantity`
+- **THEN** the constraints name `inventory_item_identity` with `article_id, size, unit`, `inventory_item_size_positive` with `size > 0`, `inventory_entered_quarter` with `quarter >= 1 AND quarter <= 4`, `registry_substance_cas_once` with `cas` and its condition, and `registry_substanceclass_once` with `substance_id, chemical_class_id`; and the history tables name `inventory_historicalitem` without `quantity`
 

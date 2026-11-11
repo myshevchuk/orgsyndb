@@ -5,12 +5,14 @@ from unittest import mock
 from django.core.management.base import CommandError
 from django.test import TestCase
 
-from . import IndexMixin, demo_index, frozen, make_task, make_user
+from . import (IndexMixin, demo_index, frozen, make_group, make_substance,
+               make_task, make_user)
 from .demo_support import (ACCOUNTS, DAY, lab_records, noon, run, seed,
                            task_counter)
 
-EMPTY = {"accounts": 0, "tasks": 0, "items": 0, "movements": 0,
-         "notes": 0, "lots": 0, "consumption": 0, "parameters": 0}
+EMPTY = {"accounts": 0, "substances": 0, "terms": 0, "articles": 0,
+         "tasks": 0, "items": 0, "movements": 0, "notes": 0, "lots": 0,
+         "consumption": 0, "parameters": 0}
 
 
 def demo_marks() -> int:
@@ -45,18 +47,48 @@ class RecordsPresentTests(IndexMixin, TestCase):
     def test_real_records_are_not_replaced(self) -> None:
         """Scenario: Real records are not replaced."""
         kl = make_user("kl", "KL")
-        make_task(kl, product="CH-0012")
+        make_task(kl, substance="CH-0012")
+        before = lab_records()
+        self.assertEqual((before["accounts"], before["tasks"],
+                          before["substances"]), (1, 1, 1))
         with frozen(noon(DAY)), self.assertRaises(CommandError):
             run("--replace", index=demo_index())
-        self.assertEqual(lab_records(),
-                         {**EMPTY, "accounts": 1, "tasks": 1})
+        self.assertEqual(lab_records(), before)
+        self.assertEqual(demo_marks(), 0)
+
+    def test_a_substance_alone_is_a_lab_record(self) -> None:
+        make_substance("existing")
+        before = lab_records()
+        self.assertEqual(before["substances"], 1)
+        for args in ((), ("--replace",)):
+            with self.subTest(args=args), frozen(noon(DAY)), \
+                    self.assertRaises(CommandError) as caught:
+                run(*args, index=demo_index())
+            if not args:
+                self.assertIn("--replace", str(caught.exception))
+            self.assertEqual(lab_records(), before)
+        self.assertEqual(demo_marks(), 0)
+
+    def test_a_term_alone_is_a_lab_record(self) -> None:
+        make_group("existing")
+        before = lab_records()
+        self.assertEqual(before["terms"], 1)
+        with frozen(noon(DAY)), self.assertRaises(CommandError) as caught:
+            run(index=demo_index())
+        self.assertIn("--replace", str(caught.exception))
+        self.assertEqual(lab_records(), before)
         self.assertEqual(demo_marks(), 0)
 
     def test_surviving_history_counts_as_records(self) -> None:
+        from registry.models import Substance
         from tasks.models import Task
+        from vocabulary.models import Group
         kl = make_user("kl", "KL")
-        make_task(kl, product="CH-0012").delete()
+        make_task(kl, substance="CH-0012").delete()
         kl.delete()
+        Substance.objects.all().delete()
+        Group.objects.all().delete()
+        self.assertEqual(lab_records(), EMPTY)
         histories = Task.history.count()
         self.assertGreater(histories, 0)
         for args in ((), ("--replace",)):
@@ -89,12 +121,20 @@ class ReplaceTests(IndexMixin, TestCase):
     def test_replace_a_demo_database(self) -> None:
         """Scenario: Replace a demo database."""
         from django.contrib.auth import get_user_model
+        from registry.models import Substance
         from tasks.models import Task
+        from vocabulary.models import Group
         seed(DAY)
         kl = make_user("kl", "KL9")
-        make_task(kl, product="CH-0012", note="added after seeding")
+        make_task(kl, substance="CH-0012", note="added after seeding")
+        make_substance("stray-substance")
+        make_group("stray-group")
         with frozen(noon(DAY)):
             run("--replace", index=demo_index())
+        self.assertFalse(Substance.objects.filter(
+            key="stray-substance").exists())
+        self.assertFalse(Group.objects.filter(key="stray-group").exists())
+        self.assertEqual(Substance.objects.count(), 21)
         users = get_user_model().objects
         self.assertFalse(users.filter(username="kl").exists())
         self.assertEqual(sorted(users.values_list("username", flat=True)),
@@ -211,12 +251,13 @@ class NoIndexTests(IndexMixin, TestCase):
 
     def test_no_index(self) -> None:
         """Scenario: No index."""
+        from registry.models import Substance
         path = self.use_index(None)
         with frozen(noon(DAY)):
             out, err = run(index=path)
-        # The data set names seven compounds of examples/demo.
-        self.assertRegex(err, r"(?<!\d)7(?!\d)")
+        self.assertEqual(err.strip(), "")
         self.assertEqual(lab_records()["accounts"], len(ACCOUNTS))
+        self.assertEqual(Substance.objects.count(), 21)
         self.assertEqual(demo_marks(), 1)
 
     def test_the_demo_index_gives_no_warning(self) -> None:
@@ -228,9 +269,11 @@ class SummaryTests(IndexMixin, TestCase):
 
     def test_success_prints_what_was_written(self) -> None:
         from inventory.models import DeliveryNote, Item
+        from registry.models import Substance
         from tasks.models import Task
         out, _err = seed(DAY)
-        for count in (len(ACCOUNTS), Item.objects.count(),
-                      DeliveryNote.objects.count(), Task.objects.count()):
+        for count in (len(ACCOUNTS), Substance.objects.count(),
+                      Item.objects.count(), DeliveryNote.objects.count(),
+                      Task.objects.count()):
             with self.subTest(count=count):
                 self.assertRegex(out, rf"(?<!\d){count}(?!\d)")

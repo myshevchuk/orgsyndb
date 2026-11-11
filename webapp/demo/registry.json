@@ -1,0 +1,583 @@
+{
+  "format": 1,
+  "vocabularies": {
+    "chemical-classes": [
+      {
+        "key": "alcohols",
+        "label": "Alcohols",
+        "label_de": "Alkohole",
+        "parent": null
+      },
+      {
+        "key": "aryl-halides",
+        "label": "Aryl halides",
+        "label_de": "Arylhalogenide",
+        "parent": null
+      },
+      {
+        "key": "carbonyl-compounds",
+        "label": "Carbonyl compounds",
+        "label_de": "Carbonylverbindungen",
+        "parent": null
+      },
+      {
+        "key": "acid-derivatives",
+        "label": "Carboxylic acid derivatives",
+        "label_de": "Carbonsäurederivate",
+        "parent": "carbonyl-compounds"
+      },
+      {
+        "key": "anhydrides",
+        "label": "Anhydrides",
+        "label_de": "Anhydride",
+        "parent": "acid-derivatives"
+      },
+      {
+        "key": "esters",
+        "label": "Esters",
+        "label_de": "Ester",
+        "parent": "acid-derivatives"
+      },
+      {
+        "key": "aldehydes",
+        "label": "Aldehydes",
+        "label_de": "Aldehyde",
+        "parent": "carbonyl-compounds"
+      },
+      {
+        "key": "carboxylic-acids",
+        "label": "Carboxylic acids",
+        "label_de": "Carbonsäuren",
+        "parent": "carbonyl-compounds"
+      },
+      {
+        "key": "ketones",
+        "label": "Ketones",
+        "label_de": "Ketone",
+        "parent": "carbonyl-compounds"
+      },
+      {
+        "key": "aryl-ketones",
+        "label": "Aryl ketones",
+        "label_de": "Arylketone",
+        "parent": "ketones"
+      },
+      {
+        "key": "organoboron-compounds",
+        "label": "Organoboron compounds",
+        "label_de": "Organoborverbindungen",
+        "parent": null
+      },
+      {
+        "key": "organophosphorus-compounds",
+        "label": "Organophosphorus compounds",
+        "label_de": "Organophosphorverbindungen",
+        "parent": null
+      },
+      {
+        "key": "phenols",
+        "label": "Phenols",
+        "label_de": "Phenole",
+        "parent": null
+      }
+    ],
+    "inventory-groups": [
+      {
+        "key": "purchased",
+        "label": "Purchased",
+        "label_de": "Zugekauft",
+        "parent": null
+      },
+      {
+        "key": "reagents",
+        "label": "Reagents",
+        "label_de": "Reagenzien",
+        "parent": "purchased"
+      },
+      {
+        "key": "starting-materials",
+        "label": "Starting materials",
+        "label_de": "Ausgangsstoffe",
+        "parent": "purchased"
+      },
+      {
+        "key": "synthesised",
+        "label": "Synthesised",
+        "label_de": "Selbst hergestellt",
+        "parent": null
+      },
+      {
+        "key": "final-products",
+        "label": "Final products",
+        "label_de": "Endprodukte",
+        "parent": "synthesised"
+      },
+      {
+        "key": "intermediates",
+        "label": "Intermediates",
+        "label_de": "Zwischenprodukte",
+        "parent": "synthesised"
+      }
+    ],
+    "projects": [
+      {
+        "key": "research",
+        "label": "Research",
+        "label_de": "Forschung",
+        "parent": null
+      },
+      {
+        "key": "biaryls",
+        "label": "Biaryls",
+        "label_de": "Biaryle",
+        "parent": "research"
+      },
+      {
+        "key": "cinnamates",
+        "label": "Cinnamates",
+        "label_de": "Zimtsäurederivate",
+        "parent": "research"
+      },
+      {
+        "key": "teaching",
+        "label": "Teaching",
+        "label_de": "Lehre",
+        "parent": null
+      },
+      {
+        "key": "advanced-practical",
+        "label": "Advanced practical",
+        "label_de": "Fortgeschrittenenpraktikum",
+        "parent": "teaching"
+      },
+      {
+        "key": "first-year-practical",
+        "label": "First-year practical",
+        "label_de": "Grundpraktikum",
+        "parent": "teaching"
+      }
+    ],
+    "reaction-types": [
+      {
+        "key": "acylation",
+        "label": "Acylation",
+        "label_de": "Acylierung"
+      },
+      {
+        "key": "aldol-condensation",
+        "label": "Aldol condensation",
+        "label_de": "Aldolkondensation"
+      },
+      {
+        "key": "alkylation",
+        "label": "Alkylation",
+        "label_de": "Alkylierung"
+      },
+      {
+        "key": "amide-coupling",
+        "label": "Amide coupling",
+        "label_de": "Amidkupplung"
+      },
+      {
+        "key": "cross-coupling",
+        "label": "Cross-coupling",
+        "label_de": "Kreuzkupplung"
+      },
+      {
+        "key": "cycloaddition",
+        "label": "Cycloaddition",
+        "label_de": "Cycloaddition"
+      },
+      {
+        "key": "deprotection",
+        "label": "Deprotection",
+        "label_de": "Entschützung"
+      },
+      {
+        "key": "esterification",
+        "label": "Esterification",
+        "label_de": "Veresterung"
+      },
+      {
+        "key": "hydrolysis",
+        "label": "Hydrolysis",
+        "label_de": "Hydrolyse"
+      },
+      {
+        "key": "nucleophilic-substitution",
+        "label": "Nucleophilic substitution",
+        "label_de": "Nucleophile Substitution"
+      },
+      {
+        "key": "olefination",
+        "label": "Olefination",
+        "label_de": "Olefinierung"
+      },
+      {
+        "key": "oxidation",
+        "label": "Oxidation",
+        "label_de": "Oxidation"
+      },
+      {
+        "key": "protection",
+        "label": "Protection",
+        "label_de": "Schützung"
+      },
+      {
+        "key": "reduction",
+        "label": "Reduction",
+        "label_de": "Reduktion"
+      },
+      {
+        "key": "reductive-amination",
+        "label": "Reductive amination",
+        "label_de": "Reduktive Aminierung"
+      }
+    ]
+  },
+  "substances": [
+    {
+      "key": "1-4-bromophenyl-ethanol",
+      "name": "1-(4-Bromophenyl)ethanol",
+      "name_de": "1-(4-Bromphenyl)ethanol",
+      "short_name": null,
+      "formula": "C8H9BrO",
+      "smiles": "CC(O)c1ccc(Br)cc1",
+      "cas": "5391-88-8",
+      "note": null,
+      "group": "final-products",
+      "chemical_classes": [
+        "alcohols",
+        "aryl-halides"
+      ],
+      "mw": 201.06,
+      "article_number": "CH-0001"
+    },
+    {
+      "key": "1-biphenyl-4-yl-ethanol",
+      "name": "1-(Biphenyl-4-yl)ethanol",
+      "name_de": "1-(Biphenyl-4-yl)ethanol",
+      "short_name": null,
+      "formula": "C14H14O",
+      "smiles": "CC(O)c1ccc(cc1)-c1ccccc1",
+      "cas": "3562-73-0",
+      "note": null,
+      "group": "final-products",
+      "chemical_classes": [
+        "alcohols"
+      ],
+      "mw": 198.26,
+      "article_number": "CH-0002"
+    },
+    {
+      "key": "1-phenylethanol",
+      "name": "1-Phenylethanol",
+      "name_de": "1-Phenylethanol",
+      "short_name": null,
+      "formula": "C8H10O",
+      "smiles": "CC(O)c1ccccc1",
+      "cas": "98-85-1",
+      "note": null,
+      "group": "final-products",
+      "chemical_classes": [
+        "alcohols"
+      ],
+      "mw": 122.17,
+      "article_number": null
+    },
+    {
+      "key": "4-acetylbiphenyl",
+      "name": "4-Acetylbiphenyl",
+      "name_de": "4-Acetylbiphenyl",
+      "short_name": null,
+      "formula": "C14H12O",
+      "smiles": "CC(=O)c1ccc(cc1)-c1ccccc1",
+      "cas": "92-91-1",
+      "note": null,
+      "group": "intermediates",
+      "chemical_classes": [
+        "aryl-ketones"
+      ],
+      "mw": 196.25,
+      "article_number": null
+    },
+    {
+      "key": "4-bromoacetophenone",
+      "name": "4′-Bromoacetophenone",
+      "name_de": "4′-Bromacetophenon",
+      "short_name": null,
+      "formula": "C8H7BrO",
+      "smiles": "CC(=O)c1ccc(Br)cc1",
+      "cas": "99-90-1",
+      "note": null,
+      "group": "starting-materials",
+      "chemical_classes": [
+        "aryl-halides",
+        "aryl-ketones"
+      ],
+      "mw": 199.05,
+      "article_number": null
+    },
+    {
+      "key": "acetic-acid",
+      "name": "Acetic acid",
+      "name_de": "Essigsäure",
+      "short_name": "AcOH",
+      "formula": "C2H4O2",
+      "smiles": "CC(=O)O",
+      "cas": "64-19-7",
+      "note": null,
+      "group": "reagents",
+      "chemical_classes": [
+        "carboxylic-acids"
+      ],
+      "mw": 60.05,
+      "article_number": null
+    },
+    {
+      "key": "acetic-anhydride",
+      "name": "Acetic anhydride",
+      "name_de": "Essigsäureanhydrid",
+      "short_name": "Ac2O",
+      "formula": "C4H6O3",
+      "smiles": "CC(=O)OC(C)=O",
+      "cas": "108-24-7",
+      "note": null,
+      "group": "reagents",
+      "chemical_classes": [
+        "anhydrides"
+      ],
+      "mw": 102.09,
+      "article_number": null
+    },
+    {
+      "key": "acetone",
+      "name": "Acetone",
+      "name_de": "Aceton",
+      "short_name": null,
+      "formula": "C3H6O",
+      "smiles": "CC(C)=O",
+      "cas": "67-64-1",
+      "note": null,
+      "group": "starting-materials",
+      "chemical_classes": [
+        "ketones"
+      ],
+      "mw": 58.08,
+      "article_number": null
+    },
+    {
+      "key": "acetophenone",
+      "name": "Acetophenone",
+      "name_de": "Acetophenon",
+      "short_name": null,
+      "formula": "C8H8O",
+      "smiles": "CC(=O)c1ccccc1",
+      "cas": "98-86-2",
+      "note": null,
+      "group": "starting-materials",
+      "chemical_classes": [
+        "aryl-ketones"
+      ],
+      "mw": 120.15,
+      "article_number": null
+    },
+    {
+      "key": "acetylsalicylic-acid",
+      "name": "Acetylsalicylic acid",
+      "name_de": "Acetylsalicylsäure",
+      "short_name": "ASA",
+      "formula": "C9H8O4",
+      "smiles": "CC(=O)Oc1ccccc1C(=O)O",
+      "cas": "50-78-2",
+      "note": null,
+      "group": "final-products",
+      "chemical_classes": [
+        "carboxylic-acids",
+        "esters"
+      ],
+      "mw": 180.16,
+      "article_number": "CH-0010"
+    },
+    {
+      "key": "benzaldehyde",
+      "name": "Benzaldehyde",
+      "name_de": "Benzaldehyd",
+      "short_name": null,
+      "formula": "C7H6O",
+      "smiles": "O=Cc1ccccc1",
+      "cas": "100-52-7",
+      "note": null,
+      "group": "starting-materials",
+      "chemical_classes": [
+        "aldehydes"
+      ],
+      "mw": 106.12,
+      "article_number": null
+    },
+    {
+      "key": "cinnamic-acid",
+      "name": "(E)-Cinnamic acid",
+      "name_de": "(E)-Zimtsäure",
+      "short_name": null,
+      "formula": "C9H8O2",
+      "smiles": "OC(=O)/C=C/c1ccccc1",
+      "cas": "140-10-3",
+      "note": null,
+      "group": "final-products",
+      "chemical_classes": [
+        "carboxylic-acids"
+      ],
+      "mw": 148.16,
+      "article_number": "CH-0012"
+    },
+    {
+      "key": "dibenzylideneacetone",
+      "name": "Dibenzylideneacetone",
+      "name_de": "Dibenzylidenaceton",
+      "short_name": "dba",
+      "formula": "C17H14O",
+      "smiles": "O=C(/C=C/c1ccccc1)/C=C/c1ccccc1",
+      "cas": "538-58-9",
+      "note": null,
+      "group": "final-products",
+      "chemical_classes": [
+        "ketones"
+      ],
+      "mw": 234.3,
+      "article_number": "CH-0013"
+    },
+    {
+      "key": "ethyl-cinnamate",
+      "name": "Ethyl (E)-cinnamate",
+      "name_de": "(E)-Zimtsäureethylester",
+      "short_name": null,
+      "formula": "C11H12O2",
+      "smiles": "CCOC(=O)/C=C/c1ccccc1",
+      "cas": "103-36-6",
+      "note": null,
+      "group": "intermediates",
+      "chemical_classes": [
+        "esters"
+      ],
+      "mw": 176.21,
+      "article_number": null
+    },
+    {
+      "key": "ethyl-triphenylphosphoranylidene-acetate",
+      "name": "Ethyl (triphenylphosphoranylidene)acetate",
+      "name_de": "(Triphenylphosphoranyliden)essigsäureethylester",
+      "short_name": null,
+      "formula": "C22H21O2P",
+      "smiles": "CCOC(=O)C=P(c1ccccc1)(c1ccccc1)c1ccccc1",
+      "cas": "1099-45-2",
+      "note": null,
+      "group": "reagents",
+      "chemical_classes": [
+        "esters",
+        "organophosphorus-compounds"
+      ],
+      "mw": 348.38,
+      "article_number": null
+    },
+    {
+      "key": "isopentyl-acetate",
+      "name": "Isopentyl acetate",
+      "name_de": "Isopentylacetat",
+      "short_name": null,
+      "formula": "C7H14O2",
+      "smiles": "CC(C)CCOC(C)=O",
+      "cas": "123-92-2",
+      "note": null,
+      "group": "final-products",
+      "chemical_classes": [
+        "esters"
+      ],
+      "mw": 130.19,
+      "article_number": "CH-0016"
+    },
+    {
+      "key": "isopentyl-alcohol",
+      "name": "Isopentyl alcohol",
+      "name_de": "Isopentylalkohol",
+      "short_name": null,
+      "formula": "C5H12O",
+      "smiles": "CC(C)CCO",
+      "cas": "123-51-3",
+      "note": null,
+      "group": "starting-materials",
+      "chemical_classes": [
+        "alcohols"
+      ],
+      "mw": 88.15,
+      "article_number": null
+    },
+    {
+      "key": "methyl-salicylate",
+      "name": "Methyl salicylate",
+      "name_de": "Salicylsäuremethylester",
+      "short_name": null,
+      "formula": "C8H8O3",
+      "smiles": "COC(=O)c1ccccc1O",
+      "cas": "119-36-8",
+      "note": null,
+      "group": "starting-materials",
+      "chemical_classes": [
+        "esters",
+        "phenols"
+      ],
+      "mw": 152.15,
+      "article_number": null
+    },
+    {
+      "key": "new-compound-7",
+      "name": "New compound 7",
+      "name_de": "Neuverbindung 7",
+      "short_name": null,
+      "group": "final-products",
+      "chemical_classes": [
+        "carbonyl-compounds"
+      ],
+      "formula": null,
+      "mw": null,
+      "smiles": null,
+      "cas": null,
+      "note": null,
+      "article_number": "NV-0007"
+    },
+    {
+      "key": "phenylboronic-acid",
+      "name": "Phenylboronic acid",
+      "name_de": "Phenylboronsäure",
+      "short_name": "PhB(OH)2",
+      "formula": "C6H7BO2",
+      "smiles": "OB(O)c1ccccc1",
+      "cas": "98-80-6",
+      "note": null,
+      "group": "reagents",
+      "chemical_classes": [
+        "organoboron-compounds"
+      ],
+      "mw": 121.93,
+      "article_number": null
+    },
+    {
+      "key": "salicylic-acid",
+      "name": "Salicylic acid",
+      "name_de": "Salicylsäure",
+      "short_name": null,
+      "formula": "C7H6O3",
+      "smiles": "OC(=O)c1ccccc1O",
+      "cas": "69-72-7",
+      "note": null,
+      "group": "intermediates",
+      "chemical_classes": [
+        "carboxylic-acids",
+        "phenols"
+      ],
+      "mw": 138.12,
+      "article_number": null
+    }
+  ],
+  "digest": "9ba24cf30fd235f478ee3228b65c3935cf83277ade1a8a03b7cbf1b07527fced"
+}

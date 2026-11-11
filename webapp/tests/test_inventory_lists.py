@@ -6,11 +6,12 @@ from urllib.parse import quote
 
 from inventory.bookings import book_note, reverse, reverse_historical
 
-from . import build_index, field_value, frozen, page, table
+from . import build_index, field_value, frozen, make_substance, page, table
 from .inventory_support import (BULK, COMPOUND_PAGE, DELIVERIES, LEVELS, LIST,
                                 MICRO, NEW_ITEM, NEW_LOT, NEW_NOTE,
-                                InventoryCase, has_amount, has_number,
-                                item_url, note_blocks, note_url, num)
+                                SUBSTANCE_PAGE, InventoryCase, has_amount,
+                                has_number, item_url, note_blocks, note_url,
+                                num)
 
 COLUMNS_DE = ["Artikelnr.", "Name", "Kategorie", "Gebinde", "Bestand",
               "Ø Jahr", "Abgegeben", "Reichweite", "Lagerort", "Fach", "Box",
@@ -18,10 +19,10 @@ COLUMNS_DE = ["Artikelnr.", "Name", "Kategorie", "Gebinde", "Bestand",
 COLUMNS_EN = ["Article no.", "Name", "Category", "Container", "Stock",
               "Mean per year", "Delivered", "Coverage", "Location",
               "Compartment", "Box", "Bulk available", "Note"]
-BULK_DE = ["Artikelnr.", "Name", "Charge", "Menge", "Ort", "Datum",
-           "Bemerkung"]
-BULK_EN = ["Article no.", "Name", "Batch", "Amount", "Location", "Date",
-           "Note"]
+BULK_DE = ["Name", "Artikelnr.", "Herkunft", "Charge", "Menge", "Ort",
+           "Datum", "Bemerkung"]
+BULK_EN = ["Name", "Article no.", "Source", "Batch", "Amount", "Location",
+           "Date", "Note"]
 
 
 class ListCase(InventoryCase):
@@ -68,8 +69,10 @@ class ItemColumnTests(ListCase):
         self.assertEqual(link.text(), "CH-0012")
         self.assertEqual(link.get("href"), item_url(item))
         self.assertEqual([a.get("href") for a in row["Name"].find_all("a")
-                          if COMPOUND_PAGE.match(a.get("href", ""))],
-                         ["/compounds/cinnamic-acid/"])
+                          if SUBSTANCE_PAGE.search(a.get("href", ""))],
+                         ["/lab/registry/substances/cinnamic-acid/"])
+        self.assertFalse([a for a in row["Name"].find_all("a")
+                          if COMPOUND_PAGE.match(a.get("href", ""))])
         self.assertIn("Zimtsäure", row["Name"].text())
         self.assertEqual(row["Kategorie"].text(), "Endprodukt")
         self.assertTrue(has_amount(row["Gebinde"].text(), "10",
@@ -119,12 +122,12 @@ class ItemColumnTests(ListCase):
         self.assertEqual(row["Mean per year"].text(), "18.0")
         self.assertEqual(row["Coverage"].text(), "0.7")
 
-    def test_an_item_outside_the_collection_has_no_compound_link(
+    def test_an_item_outside_the_collection_links_its_substance(
             self) -> None:
         self.item("X-9999", name="Neu")
         row = self.rows()[0]
-        self.assertFalse([a for a in row["Name"].find_all("a")
-                          if COMPOUND_PAGE.match(a.get("href", ""))])
+        self.assertEqual([a.get("href") for a in row["Name"].find_all("a")],
+                         ["/lab/registry/substances/x-9999/"])
         self.assertIn("Neu", row["Name"].text())
 
 
@@ -218,11 +221,11 @@ class ItemFilterTests(ListCase):
         self.item("AB-1", name="Probe Eins")
         self.item("AB-2", name="Beta", category="Grün")
         self.item("AB-3", name="Gamma", note="Hinweis Xyz")
-        self.item("CH-0012", name="Probe Vier")
+        self.item("CH-0012")
         cases = {"ab-1": ["AB-1"], "BETA": ["AB-2"], "grün": ["AB-2"],
                  "GRÜN": ["AB-2"], "xyz": ["AB-3"],
-                 "(e)-zimts": ["CH-0012"], "probe": ["AB-1", "CH-0012"],
-                 "nichts": []}
+                 "(e)-zimts": ["CH-0012"], "cinnamic-acid": ["CH-0012"],
+                 "probe": ["AB-1"], "nichts": []}
         for text, want in cases.items():
             with self.subTest(q=text):
                 self.assertEqual(self.articles(f"?q={quote(text)}"), want)
@@ -380,10 +383,47 @@ class BulkListTests(InventoryCase):
         row = self.rows()["B-1"]
         self.assertEqual(row["Artikelnr."].text(), "CH-0012")
         self.assertEqual(row["Name"].text(), "Zimtsäure")
+        self.assertEqual([a.get("href") for a in row["Name"].find_all("a")],
+                         ["/lab/registry/substances/cinnamic-acid/"])
+        self.assertEqual(row["Herkunft"].text(), "hergestellt")
         self.assertTrue(has_amount(row["Menge"].text(), "50", "mg"))
         self.assertEqual(row["Ort"].text(), "Kühlraum")
         self.assertEqual(row["Datum"].text(), "01.10.2026")
         self.assertEqual(row["Bemerkung"].text(), "Rest")
+
+    def test_the_source_and_the_supplier(self) -> None:
+        self.lot("X-1", batch="B-M", source="made")
+        self.lot("X-1", batch="B-B", source="bought")
+        self.lot("X-1", batch="B-S", source="bought", supplier="Sigma")
+        rows = self.rows()
+        self.assertEqual(rows["B-M"]["Herkunft"].text(), "hergestellt")
+        self.assertEqual(rows["B-B"]["Herkunft"].text(), "gekauft")
+        self.assertEqual(rows["B-S"]["Herkunft"].text(), "gekauft · Sigma")
+
+    def test_the_source_in_english(self) -> None:
+        self.use_index(build_index("en"))
+        self.lot("X-1", batch="B-M", source="made")
+        self.lot("X-1", batch="B-S", source="bought", supplier="Sigma")
+        rows = {r["Batch"].text(): r for r in table(self.listing())[1]}
+        self.assertEqual(rows["B-M"]["Source"].text(), "made")
+        self.assertEqual(rows["B-S"]["Source"].text(), "bought · Sigma")
+
+    def test_lots_of_an_intermediate(self) -> None:
+        """Scenario: Lots of an intermediate."""
+        self.item("CH-0012", name="Zimtsäure")
+        self.lot("acetophenone", batch="B-I", source="made")
+        self.lot("CH-0012", batch="B-C", source="bought", supplier="Sigma")
+        rows = self.rows()
+        self.assertEqual(rows["B-I"]["Artikelnr."].text(), "")
+        self.assertEqual(rows["B-I"]["Herkunft"].text(), "hergestellt")
+        self.assertEqual(rows["B-C"]["Artikelnr."].text(), "CH-0012")
+        self.assertEqual(rows["B-C"]["Herkunft"].text(), "gekauft · Sigma")
+
+    def test_the_article_of_an_article_without_a_number_is_empty(
+            self) -> None:
+        self.item(None, "Ohne Nummer")
+        self.lot("Ohne Nummer", batch="B-N")
+        self.assertEqual(self.rows()["B-N"]["Artikelnr."].text(), "")
 
     def test_the_amount_shows_in_the_unit_of_the_lot(self) -> None:
         self.lot("X-1", "g", "1", batch="B-G")
@@ -398,22 +438,19 @@ class BulkListTests(InventoryCase):
         self.assertTrue(has_amount(self.rows()["B-1"]["Menge"].text(),
                                    "7,409", "mg"))
 
-    def test_the_name_is_the_first_items_in_the_lists_order(self) -> None:
-        self.item("X-1", name="Zweiter", size="10", unit="umol")
-        self.item("X-1", name="Erster", size="50", unit="mg")
+    def test_the_name_is_the_substances(self) -> None:
         self.lot("X-1", "mg", "5", batch="B-1")
-        self.assertEqual(self.rows()["B-1"]["Name"].text(), "Erster")
+        self.assertEqual(self.rows()["B-1"]["Name"].text(), "X-1")
 
-    def test_the_name_is_empty_without_an_item(self) -> None:
-        self.lot("X-9", "mg", "5", batch="B-1")
-        self.assertEqual(self.rows()["B-1"]["Name"].text(), "")
-
-    def test_rows_are_ordered_by_article_then_date(self) -> None:
-        self.lot("X-2", batch="B-5", made_on=date(2020, 1, 1))
-        self.lot("X-1", batch="B-2", made_on=date(2026, 5, 1))
-        self.lot("X-1", batch="B-3")
-        self.lot("X-1", batch="B-1", made_on=date(2025, 1, 1))
-        self.assertEqual(self.batches(), ["B-1", "B-2", "B-3", "B-5"])
+    def test_rows_are_ordered_by_name_then_date(self) -> None:
+        beta = make_substance("s1", "beta")
+        alpha = make_substance("s2", "Alpha")
+        gamma = make_substance("s3", "Gamma")
+        self.lot(substance=gamma, batch="B-3", made_on=date(2020, 1, 1))
+        self.lot(substance=beta, batch="B-2")
+        self.lot(substance=beta, batch="B-1", made_on=date(2025, 1, 1))
+        self.lot(substance=alpha, batch="B-0", made_on=date(2026, 5, 1))
+        self.assertEqual(self.batches(), ["B-0", "B-1", "B-2", "B-3"])
 
     def test_used_up_lots(self) -> None:
         """Scenario: Used-up lots."""

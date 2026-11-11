@@ -241,15 +241,15 @@ class PlanningCase(InventoryCase):
         from planning.models import Parameters
         return Parameters.objects.create(**{**DEFAULTS, **over})
 
-    def synthesis(self, product: str, days: int, end: date,
+    def synthesis(self, substance: Any, days: int, end: date,
                   **over: Any) -> Any:
         """An ended task that took ``days`` days and ended on ``end``."""
-        return make_task(self.kl, product=product,
+        return make_task(self.kl, substance=substance,
                          started=end - timedelta(days=days), ended=end,
                          report=True, qc_list=True, **over)
 
-    def running(self, product: str, ago: int, **over: Any) -> Any:
-        return make_task(self.kl, product=product,
+    def running(self, substance: Any, ago: int, **over: Any) -> Any:
+        return make_task(self.kl, substance=substance,
                          started=TODAY - timedelta(days=ago), **over)
 
     def forecast(self, article: str, today: date = TODAY) -> Any:

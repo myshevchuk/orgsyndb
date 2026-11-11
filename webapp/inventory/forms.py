@@ -16,11 +16,13 @@ from django.utils.translation import gettext_lazy as _
 from django.utils.translation import pgettext_lazy
 
 from inventory.bookings import Refused
-from inventory.models import END_PRODUCTS, DeliveryNote, Item, Lot
+from inventory.models import DeliveryNote, Item, Lot, Source
+from registry.forms import SubstanceKeyField, decimal_field
 
 DATE = forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
-ARTICLE_NUMBER = forms.TextInput(attrs={"list": "article-numbers",
-                                        "autocomplete": "off"})
+ARTICLE_NUMBER = forms.TextInput(attrs={"autocomplete": "off"})
+CATEGORY = forms.TextInput(attrs={"list": "categories",
+                                  "autocomplete": "off"})
 COMPARTMENT = forms.TextInput(attrs={"list": "compartments",
                                      "autocomplete": "off"})
 BOX = forms.TextInput(attrs={"list": "boxes", "autocomplete": "off"})
@@ -28,9 +30,9 @@ STOCKED_ON_HELP = _("The day the item entered the end-product stock; "
                     "left empty, the opening count sets it when it is "
                     "above zero.")
 ARTICLE_NUMBER_HELP = _("The number of the article's delivery notes; "
-                        "left empty until it is first delivered. It "
-                        "links the item to the compound of the "
-                        "collection with this number.")
+                        "left empty until it is first delivered. Saved "
+                        "on the article, for every size of it.")
+CATEGORY_HELP = _("Saved on the article, for every size of it.")
 NOTE = forms.Textarea(attrs={"rows": 3})
 ROWS = 10
 
@@ -61,37 +63,38 @@ def not_in_future(day: Any) -> None:
         raise forms.ValidationError(_("The date may not lie in the future."))
 
 
-def decimal_field(label: Any, **kwargs: Any) -> forms.DecimalField:
-    """Return a decimal field that reads and shows the decimal separator
-    of the active language and accepts a decimal point too."""
-    return forms.DecimalField(label=label, localize=True,
-                              widget=forms.TextInput(
-                                  attrs={"inputmode": "decimal"}),
-                              **kwargs)
-
-
 class ItemForm(forms.ModelForm):
-    """A new item with its opening count. The size, in up to three
-    places, must be above zero."""
+    """A new item with its opening count, of the substance named by its
+    key. The article number and the category are the article's: they
+    make the substance's article when it has none, and otherwise are
+    checked against it and saved on it by the booking. The size, in up
+    to three places, must be above zero."""
 
+    substance = SubstanceKeyField()
+    article_number = forms.CharField(
+        label=_("Article no."), max_length=30, required=False,
+        widget=ARTICLE_NUMBER, help_text=ARTICLE_NUMBER_HELP)
+    category = forms.CharField(label=_("Category"), max_length=100,
+                               required=False, widget=CATEGORY,
+                               help_text=CATEGORY_HELP)
     size = decimal_field(_("Size"), max_digits=10, decimal_places=3)
     quantity = forms.IntegerField(label=_("Opening count"), min_value=0)
 
     class Meta:
         model = Item
-        fields = ["article_number", "name", "category", "size", "unit",
-                  "quantity", "stocked_on", "compartment", "box", "note"]
+        fields = ["size", "unit", "quantity", "stocked_on", "compartment",
+                  "box", "note"]
         widgets = {
-            "article_number": ARTICLE_NUMBER,
-            "category": forms.TextInput(attrs={"list": "categories",
-                                               "autocomplete": "off"}),
             "stocked_on": DATE,
             "compartment": COMPARTMENT,
             "box": BOX,
             "note": NOTE,
         }
-        help_texts = {"article_number": ARTICLE_NUMBER_HELP,
-                      "stocked_on": STOCKED_ON_HELP}
+        help_texts = {"stocked_on": STOCKED_ON_HELP}
+
+    field_order = ["substance", "article_number", "category", "size",
+                   "unit", "quantity", "stocked_on", "compartment", "box",
+                   "note"]
 
     def clean_size(self) -> Decimal:
         """Return the size; refuse one of zero or less."""
@@ -120,18 +123,23 @@ class MetadataForm(forms.ModelForm):
 
 
 class ItemEditForm(MetadataForm):
-    """The fields of an item that may change, and, for an item without
-    an article number, the article number, which the form does not save:
-    ``article_number`` in its cleaned data is the number entered or
-    None."""
+    """The fields of an item that may change, its article's category,
+    and, while the article has no article number, the article number,
+    which the form does not save: ``article_number`` in its cleaned data
+    is the number entered or None.
+
+    Saving saves the category on the article, for every size of it,
+    when it differs from the article's.
+    """
+
+    category = forms.CharField(label=_("Category"), max_length=100,
+                               required=False, widget=CATEGORY,
+                               help_text=CATEGORY_HELP)
 
     class Meta:
         model = Item
-        fields = ["name", "category", "status", "stocked_on",
-                  "compartment", "box", "note"]
+        fields = ["status", "stocked_on", "compartment", "box", "note"]
         widgets = {
-            "category": forms.TextInput(attrs={"list": "categories",
-                                               "autocomplete": "off"}),
             "stocked_on": DATE,
             "compartment": COMPARTMENT,
             "box": BOX,
@@ -146,13 +154,29 @@ class ItemEditForm(MetadataForm):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        if self.instance.article_number is None:
-            self.fields = {"article_number": forms.CharField(
+        article = self.instance.article
+        self.initial.setdefault("category", article.category)
+        fields = dict(self.fields)
+        head = {"category": fields.pop("category")}
+        if article.article_number is None:
+            head = {"article_number": forms.CharField(
                 label=_("Article no."), max_length=30, required=False,
                 empty_value=None, widget=ARTICLE_NUMBER,
-                help_text=_("Entered once, when the item is first "
-                            "delivered; fixed from then on.")),
-                **self.fields}
+                help_text=_("Entered once, when the article is first "
+                            "delivered; fixed from then on, and saved "
+                            "on the article for every size of it.")),
+                **head}
+        self.fields = {**head, **fields}
+
+    def save(self, commit: bool = True) -> Any:
+        """Return the item with the form's values; with COMMIT, save the
+        form's fields of it and the category on its article."""
+        item = super().save(commit)
+        if commit:
+            from inventory.bookings import set_category
+            set_category(getattr(item, "_history_user", None),
+                         item.article, self.cleaned_data["category"])
+        return item
 
 
 class ItemChoiceField(forms.ModelChoiceField):
@@ -182,8 +206,9 @@ class NoteForm(forms.Form):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        items = Item.objects.filter(inventory=END_PRODUCTS,
-                                    article_number__isnull=False)
+        items = Item.objects.filter(
+            article__article_number__isnull=False).select_related(
+                "article__substance")
         for row in range(ROWS):
             self.fields[f"item_{row}"] = ItemChoiceField(
                 queryset=items, required=False, label=_("Item"),
@@ -273,8 +298,8 @@ class ReversalForm(forms.Form):
 
 
 class FillForm(forms.Form):
-    """A filling of an item, from one of the open lots of its article or
-    from none. The amount, in the lot's unit, may be left empty to take
+    """A filling of an item, from one of the open lots of its substance
+    or from none. The amount, in the lot's unit, may be left empty to take
     the proposal."""
 
     count = forms.IntegerField(label=_("Count"), min_value=1)
@@ -293,8 +318,8 @@ class FillForm(forms.Form):
         super().__init__(*args, **kwargs)
         lot = self.fields["lot"]
         lot.queryset = Lot.objects.filter(
-            inventory=item.inventory, article_number=item.article_number,
-            amount__gt=0).order_by("made_on", "id")
+            substance_id=item.article_id, amount__gt=0).order_by(
+                "made_on", "id")
         lot.label_from_instance = lot_label
         self.fields["date"].initial = timezone.localdate()
 
@@ -338,21 +363,31 @@ class ConsumptionForm(forms.Form):
 
 
 class LotForm(forms.ModelForm):
-    """A new bulk lot with its opening amount, in the lot's unit."""
+    """A new bulk lot of a substance named by its key, made in the lab
+    unless the source chosen says bought, with its opening amount in
+    the lot's unit."""
 
+    substance = SubstanceKeyField()
     amount = decimal_field(_("Amount"), min_value=0)
 
     class Meta:
         model = Lot
-        fields = ["article_number", "unit", "amount", "batch", "location",
-                  "made_on", "note"]
+        fields = ["substance", "source", "supplier", "unit", "amount",
+                  "batch", "location", "made_on", "note"]
         widgets = {
-            "article_number": ARTICLE_NUMBER,
             "location": forms.TextInput(attrs={"list": "locations",
                                                "autocomplete": "off"}),
             "made_on": DATE,
             "note": NOTE,
         }
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.fields["source"].required = False
+
+    def clean_source(self) -> str:
+        """Return the source chosen, ``made`` when none is."""
+        return self.cleaned_data.get("source") or Source.MADE
 
 
 class LotEditForm(MetadataForm):

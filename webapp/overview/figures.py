@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from inventory.figures import consumption, counted_lines
-from inventory.models import END_PRODUCTS, DeliveryNote, Item, Level, Lot
+from inventory.models import DeliveryNote, Item, Level, Lot
 from planning.plan import ArticleForecast, Plan, TaskLine
 from tasks.models import Priority, State
 
@@ -182,8 +182,9 @@ class Summary:
 
 def summary(today: date, plan: Plan, items: list[Item],
             deliveries: list[Delivered]) -> Summary:
-    """Return the summary on TODAY of ITEMS, the items of
-    ``end-products``, of DELIVERIES and of what PLAN holds."""
+    """Return the summary on TODAY of ITEMS, every item, of DELIVERIES
+    and of what PLAN holds; the open lots counted are those of any
+    substance."""
     end = a_year_before(today)
     states = Counter(task.state for task in plan.tasks)
     late = [task for task in plan.tasks
@@ -197,8 +198,7 @@ def summary(today: date, plan: Plan, items: list[Item],
                 for found in plan.forecasts()),
         late=len(late), running=states[State.RUNNING],
         planned=states[State.PLANNED],
-        lots=Lot.objects.filter(inventory=END_PRODUCTS,
-                                amount__gt=0).count())
+        lots=Lot.objects.filter(amount__gt=0).count())
 
 
 def next_syntheses(plan: Plan) -> list[NextSynthesis]:
@@ -215,6 +215,6 @@ def next_syntheses(plan: Plan) -> list[NextSynthesis]:
 
 
 def end_products() -> list[Item]:
-    """Return the items of ``end-products`` in the item list's order."""
-    return sorted(Item.objects.filter(inventory=END_PRODUCTS),
+    """Return every item in the item list's order."""
+    return sorted(Item.objects.select_related("article__substance"),
                   key=Item.sort_key)

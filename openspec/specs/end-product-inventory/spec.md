@@ -1,15 +1,12 @@
 # end-product-inventory Specification
 
 ## Purpose
-Count the lab's end products in the lab application: items in containers of one size, changed only by movements, delivery notes current and historical, consumption per quarter with its means and coverage, stock levels, bulk lots and filling from them, their lists, pages and forms, and the admin.
+Count the lab's end products in the lab application: articles, each one substance of the registry with its article number and category; items, an article in containers of one size, changed only by movements, delivery notes current and historical, consumption per quarter with its means and coverage, stock levels, bulk lots and filling from them, their lists, pages and forms, and the admin.
 ## Requirements
 ### Requirement: Items
-The `inventory` package SHALL keep items, each with a change history:
+The `inventory` package SHALL keep items, each a container size of an article (Articles), with a change history:
 
-- `inventory`, `end-products` for every item this capability creates;
-- `article_number`, the number the article's delivery notes carry, at most 30 characters, or none: an item has none until it is first delivered;
-- `name`, required, at most 200 characters;
-- `category`, optional, at most 100 characters;
+- `article`, fixed once the item is created;
 - `size`, a decimal greater than zero with up to three places, and `unit`, one of `mg`, `umol` (shown `µmol`), `g` and `mmol`;
 - `quantity`, the whole number of containers left, at least zero, changed only by movements;
 - `note`, optional text;
@@ -19,27 +16,19 @@ The `inventory` package SHALL keep items, each with a change history:
 
 The first movement that leaves an item holding containers while it has no `stocked_on` sets it to that movement's date; it may be edited. An item whose `stocked_on` lies in the current calendar year is new (`neu`, `new`).
 
-No two items of an inventory share article number, size and unit; items without an article number are not compared. The size and unit are fixed once the item is created, in the views and the admin alike. An item without an article number may be given one once, which is refused when another item of the inventory has that number, size and unit; from then on the article number is fixed. An item's compound is `compound_for(article_number)`, shown through the compound links, so every size of an article has the same compound and molar mass; an item without an article number has no compound and no lots, cannot be delivered, and cannot have consumption entered. An item shows as its article number, container and name, or as its container and name when it has no article number.
+No two items of one article share size and unit. The size and unit are fixed once the item is created, in the views and the admin alike. An item's substance, name, article number and category are its article's, so every size of an article has the same substance and molar mass. An item without an article number, one whose article has none, cannot be delivered and cannot have consumption entered. An item shows as its article number, container and name, or as its container and name when it has no article number.
 
-#### Scenario: Compound through the article number
-- **WHEN** the index is the demo collection's and an item has the article number `CH-0012`
-- **THEN** its compound is `cinnamic-acid`, and its name links to `/compounds/cinnamic-acid/` wherever the compound shows
+#### Scenario: Substance through the article
+- **WHEN** the demo data set is written and an item has the article number `CH-0012`
+- **THEN** its substance is `cinnamic-acid`, and its name `(E)-Zimtsäure` links to `/lab/registry/substances/cinnamic-acid/` wherever it shows
 
 #### Scenario: One article in two sizes
-- **WHEN** a signed-in user creates an item `CH-0012` of 10 µmol and another of 50 µmol, then a third of 10 µmol
-- **THEN** the first two are saved and the third is refused with an error at the size
+- **WHEN** a signed-in user creates items of the substance `cinnamic-acid` of 10 µmol and of 50 µmol, then a third of 10 µmol
+- **THEN** the first two are saved, as sizes of one article, and the third is refused with an error at the size
 
 #### Scenario: Positions without an article number
-- **WHEN** a signed-in user creates two items `Neuverbindung 9` of 10 mg without an article number
-- **THEN** both are saved, each without a compound
-
-#### Scenario: Article number entered once
-- **WHEN** a signed-in user gives an item without an article number the number `CH-0021` in its edit form, and then posts its edit form with the number `CH-0022`
-- **THEN** the item has the article number `CH-0021`, its history records the change, and the second post leaves it unchanged
-
-#### Scenario: Article number taken
-- **WHEN** an item `CH-0012` of 10 µmol exists and a signed-in user gives `CH-0012` to an item of 10 µmol without an article number
-- **THEN** the form shows an error at the article number and the item keeps none
+- **WHEN** a signed-in user creates an item of 10 mg of a substance `new-compound-9` that has no article
+- **THEN** the item is saved as the first size of a new article of that substance, without an article number
 
 #### Scenario: Stock entry by the first filling
 - **WHEN** on 2026-11-04 a signed-in user creates an item with an opening count of 0, fills 3 containers dated 2026-10-20, and fills 2 more dated 2026-11-02
@@ -77,7 +66,7 @@ Every change of an item's quantity SHALL be a movement holding `kind`, `count`, 
 - **THEN** the item has 2 containers more, the delivery no longer counts in that quarter's consumption, and a second reversal of it is refused
 
 ### Requirement: Delivery notes
-The `inventory` package SHALL keep delivery notes (`Lieferscheine`), each with a change history: `number`, optional, at most 30 characters, unique among notes when given; `date`, never after today; `recipient`, optional, at most 100 characters; `note`; `historical`; `reversed` and `reversal_note`, the flag of a reversed historical note and the note it was reversed with; `created_by` and `created_at`; and one or more lines, each an item of the inventory `end-products` with an article number and a `count` above zero, no item twice in one note. A line of an item without an article number is refused, current or historical. A note shows as its number, or as `#<id>` when it has none.
+The `inventory` package SHALL keep delivery notes (`Lieferscheine`), each with a change history: `number`, optional, at most 30 characters, unique among notes when given; `date`, never after today; `recipient`, optional, at most 100 characters; `note`; `historical`; `reversed` and `reversal_note`, the flag of a reversed historical note and the note it was reversed with; `created_by` and `created_at`; and one or more lines, each an item with an article number and a `count` above zero, no item twice in one note. A line of an item without an article number is refused, current or historical. A note shows as its number, or as `#<id>` when it has none.
 
 A current note, `historical` off, books one `delivery` movement per line, dated as the note, all in one transaction: when one line's count exceeds its item's quantity, the whole note is refused and nothing changes. A historical note, `historical` on, records deliveries made before they could be booked, such as those of old paper delivery notes: its lines change no quantity. A historical note is refused when one of its lines' items has an entered consumption value for the quarter of the note's date, and an entered value is refused for a quarter in which the item has lines of a historical note that is not reversed. A signed-in user may mark a historical note reversed, with a required note; a current note's lines are reversed one by one through their movements, and the note shows as reversed when all its lines are, and as partly reversed when some are. A note's date, kind and lines are fixed once it is created, its number, recipient and note may be edited, and no note is deleted, in the views or the admin.
 
@@ -170,7 +159,7 @@ Every item therefore has a level. Their order, from the most urgent, is out, cri
 - **THEN** the first is dormant and the second is not
 
 ### Requirement: Bulk lots
-The `inventory` package SHALL keep bulk lots, each with a change history: `inventory`; `article_number`, required; `unit`, one of `mg`, `g`, `umol` and `mmol`, in which the lot is entered and shown; `amount`, at least zero, kept in the lot's base unit, `mg` for `mg` and `g` and `µmol` for `µmol` and `mmol`, with six decimal places; `batch`, `location`, at most 100 characters, and `made_on`, each optional; and `note`. The article number and unit are fixed once the lot is created. A lot belongs to every item of its inventory with the same article number. Its amount shows in its unit to three decimal places, rounded half up.
+The `inventory` package SHALL keep bulk lots, each with a change history: `substance`, a substance of the registry; `source` (`Herkunft`, `Source`), `made` (`hergestellt`, `made`) or `bought` (`gekauft`, `bought`); `supplier` (`Lieferant`, `Supplier`), optional, at most 100 characters; `unit`, one of `mg`, `g`, `umol` and `mmol`, in which the lot is entered and shown; `amount`, at least zero, kept in the lot's base unit, `mg` for `mg` and `g` and `µmol` for `µmol` and `mmol`, with six decimal places; `batch`, `location`, at most 100 characters, and `made_on`, each optional; and `note`. The substance, source and unit are fixed once the lot is created. A lot may be of any substance, intermediates and house-made reagents among them, and one substance may have made and bought lots side by side; a lot belongs to every item of its substance's article, when the substance has one. Its amount shows in its unit to three decimal places, rounded half up.
 
 Its amount changes only by its movements, each holding `kind`, `amount`, `amount_after`, `date`, `booked_at`, `user` and `note`, by one atomic conditional update in the transaction that stores the movement, as for items: `opening`, the amount entered on creation; `filling`, the amount taken, more than zero and at most the lot's amount; `correction`, the amount weighed, with a required note; `reversal`, the amount a reversed filling returns. A lot at zero is used up. Lot movements are never edited or deleted, except that deleting a lot in the admin deletes its opening movement with it.
 
@@ -178,21 +167,29 @@ Its amount changes only by its movements, each holding `kind`, `amount`, `amount
 - **WHEN** a signed-in user corrects a lot of `50` mg to `47,5` mg with the note `nachgewogen`
 - **THEN** the lot holds `47,5` mg and its newest movement is that correction
 
+#### Scenario: Made and bought lots
+- **WHEN** a signed-in user creates a lot of `cinnamic-acid` made in the lab and another bought from the supplier `Sigma`
+- **THEN** both lots exist with their sources, the second with its supplier, and the items of the article `CH-0012` count both among their bulk
+
+#### Scenario: Lot of a substance without an article
+- **WHEN** a signed-in user creates a lot of the substance `acetophenone`, which has no article
+- **THEN** the lot exists and belongs to no item
+
 ### Requirement: Filling from bulk
-Filling an item SHALL optionally name an open lot of its article number and the amount taken from it, in the lot's unit. The proposed amount is the count times the item's size, converted into the lot's base unit and rounded half up to six places, shown in the lot's unit. The filling form has, besides its button to book, a button `Menge vorschlagen` (`Propose amount`), which books nothing and shows the form again with the values entered and the amount set to the proposal for the count and lot entered. When a lot is named and the amount is left empty, the proposed amount is booked. Units of the same kind convert by their factors: 1 g is 1000 mg, and 1 mmol is 1000 µmol. Mass and amount of substance convert through the molar mass of the item's compound in g/mol. Without that molar mass across kinds, nothing is proposed, the amount is required, and `Menge vorschlagen` shows an error at the amount. The item's filling and the lot's filling are stored in one transaction. An amount above the lot's, or one that rounds to zero, refuses both.
+Filling an item SHALL optionally name an open lot of its substance and the amount taken from it, in the lot's unit. The proposed amount is the count times the item's size, converted into the lot's base unit and rounded half up to six places, shown in the lot's unit. The filling form has, besides its button to book, a button `Menge vorschlagen` (`Propose amount`), which books nothing and shows the form again with the values entered and the amount set to the proposal for the count and lot entered. When a lot is named and the amount is left empty, the proposed amount is booked. Units of the same kind convert by their factors: 1 g is 1000 mg, and 1 mmol is 1000 µmol. Mass and amount of substance convert through the molar mass of the item's substance in g/mol. Without that molar mass across kinds, nothing is proposed, the amount is required, and `Menge vorschlagen` shows an error at the amount. The item's filling and the lot's filling are stored in one transaction. An amount above the lot's, or one that rounds to zero, refuses both.
 
 Wherever an item shows its bulk, it shows the amount of its open lots by unit and the number of its containers they would still fill. That number is, for each open lot that converts into the item's unit, its amount converted and divided by the size and rounded down, summed over the lots. A lot that does not convert is left out of that number and counted as not convertible.
 
 #### Scenario: Filling with conversion
-- **WHEN** the index is the demo collection's, an item `CH-0012` of 10 µmol has a lot of `50` mg, and a signed-in user fills 5 containers from it
+- **WHEN** an item `CH-0012` of 10 µmol, whose substance has the molar mass 148.16, has a lot of `50` mg, and a signed-in user fills 5 containers from it
 - **THEN** `Menge vorschlagen` shows the form with the amount `7,408` and books nothing; booking it gives the item 5 more containers, the lot holds `42,592` mg, and the item's movement names the lot's movement
 
 #### Scenario: Small filling from a lot in grams
-- **WHEN** the index is the demo collection's, an item `CH-0012` of 10 µmol has a lot of `1` g, and a signed-in user fills 1 container from it, leaving the amount empty
+- **WHEN** an item `CH-0012` of 10 µmol, whose substance has the molar mass 148.16, has a lot of `1` g, and a signed-in user fills 1 container from it, leaving the amount empty
 - **THEN** the lot holds 998,5184 mg, shown as `0,999` g
 
 #### Scenario: Containers from bulk
-- **WHEN** the index is the demo collection's and an item `CH-0012` of 10 µmol has one open lot of `50` mg
+- **WHEN** an item `CH-0012` of 10 µmol, whose substance has the molar mass 148.16, has one open lot of `50` mg
 - **THEN** it shows `50 mg` and 33 containers
 
 #### Scenario: Lots are not pooled
@@ -200,10 +197,10 @@ Wherever an item shows its bulk, it shows the amount of its open lots by unit an
 - **THEN** it shows 0 containers from bulk
 
 ### Requirement: Item list
-`/lab/inventory/end-products/` SHALL list the items of the inventory `end-products` under the heading `Endprodukte` (`End products`), followed by the number of items of the inventory, in a table with the columns `Artikelnr.`, `Name`, `Kategorie`, `Gebinde`, `Bestand`, `Ø Jahr`, `Abgegeben`, `Reichweite`, `Lagerort`, `Fach`, `Box`, `Bulk verfügbar` and `Bemerkung` (`Article no.`, `Name`, `Category`, `Container`, `Stock`, `Mean per year`, `Delivered`, `Coverage`, `Location`, `Compartment`, `Box`, `Bulk available`, `Note`). Under its label, in a `small`, the header of `Bestand` reads `Gebinde` (`containers`), that of `Ø Jahr` `Gebinde / Jahr` (`containers / year`), that of `Abgegeben` the current year and `Gebinde`, as `2026 · Gebinde`, and that of `Reichweite` `Quartale` (`quarters`). The cells hold:
+`/lab/inventory/end-products/` SHALL list the items under the heading `Endprodukte` (`End products`), followed by the number of items, in a table with the columns `Artikelnr.`, `Name`, `Kategorie`, `Gebinde`, `Bestand`, `Ø Jahr`, `Abgegeben`, `Reichweite`, `Lagerort`, `Fach`, `Box`, `Bulk verfügbar` and `Bemerkung` (`Article no.`, `Name`, `Category`, `Container`, `Stock`, `Mean per year`, `Delivered`, `Coverage`, `Location`, `Compartment`, `Box`, `Bulk available`, `Note`). Under its label, in a `small`, the header of `Bestand` reads `Gebinde` (`containers`), that of `Ø Jahr` `Gebinde / Jahr` (`containers / year`), that of `Abgegeben` the current year and `Gebinde`, as `2026 · Gebinde`, and that of `Reichweite` `Quartale` (`quarters`). The cells hold:
 
 - the article number, linking to the item's page;
-- the name, linking to the compound when there is one and to the item's page when the item has no article number, followed by the mark `neu` (`new`), a `sup.mark-new`, for a new item;
+- the name, linking to the substance's page (lab-registry "Registry pages") when the item has an article number and to the item's page when it has none, followed by the mark `neu` (`new`), a `sup.mark-new`, for a new item;
 - the category, and the size with its unit;
 - the quantity alone, its cell carrying its level as Stock levels states;
 - the mean per year, and the current year's consumption as a button that opens its statistics, each cell carrying its heat as Consumption heat states;
@@ -215,7 +212,7 @@ Every cell carries the class `col-<key>`, the key being its column's `sort` valu
 
 Each popup is an element with the `popover` attribute inside the cell of the button that opens it, which names it in `popovertarget`; it holds a heading, the item's article number, container and quantity, a button that closes it with `popovertargetaction="hide"`, and a link to the item's page. The row whose popup is open is highlighted.
 
-- The location popup, headed `Lagerort · <name>` (`Location · <name>`), lists under `Fertige Gebinde` (`Finished containers`) the compartment and the box, each `nicht hinterlegt` (`not recorded`) when it is not set, and under `Bulk, separat gelagert` (`Bulk, stored separately`) each open lot of the item's article number with its location, or `nicht hinterlegt`, its batch and its amount, linking to the lot's page.
+- The location popup, headed `Lagerort · <name>` (`Location · <name>`), lists under `Fertige Gebinde` (`Finished containers`) the compartment and the box, each `nicht hinterlegt` (`not recorded`) when it is not set, and under `Bulk, separat gelagert` (`Bulk, stored separately`) each open lot of the item's substance with its location, or `nicht hinterlegt`, its batch and its amount, linking to the lot's page.
 - The statistics popup, headed `Abgegeben · <name>` (`Delivered · <name>`), shows the current year's consumption up to today, the mean per year and the mean per quarter, `–` for a mean there is not; a bar for each quarter of the current year, as high as its share of the year's largest quarter, the current quarter's marked `laufend` (`running`) and the quarters to come without a bar; and a table of the consumption of each quarter of the two years before the current one and of the current year, with each year's sum, the quarters to come left empty. It names the years whose quarters hold an entered value above zero, and says that the current year is incomplete.
 
 The GET parameter `sort` names the column that orders the rows, one of `number`, `name`, `category`, `container`, `stock`, `mean_year`, `this_year`, `coverage`, `compartment`, `box`, `bulk` and `note`, any other value or none being `category`; `dir=desc` reverses the order, any other value or none keeping it. The columns order:
@@ -230,9 +227,9 @@ The GET parameter `sort` names the column that orders the rows, one of `number`,
 
 Items without a value in the sorting column, being without an article number, category, note, compartment, box, mean per year, coverage or open lot, come after the others in either direction. Items that tie, these included, keep the default order: by article number, items without one after the others and by name, then by container as `container` orders. Each column's header but that of `Lagerort` holds a link to the list with the filters in force and `sort` naming that column, with `dir=desc` when the list is sorted by it already and not reversed; the header of the sorting column carries `aria-sort`, `ascending` or `descending`. Sorted by `category`, the first row of each category after the first carries the class `category-start`.
 
-A line above the table reads `<n> von <m> Artikeln` (`<n> of <m> items`), the items listed and those of the inventory, then the order in force: the sorting column's label, and after it those of `Artikelnr.` and `Gebinde` that it is not, followed by `aufsteigend` (`ascending`), as `Kategorie, Artikelnr., Gebinde aufsteigend`; when reversed, the sorting column's label followed by `absteigend` (`descending`), and then the others followed by `aufsteigend`. While a filter is in force the line ends with a link `Zurücksetzen` (`Reset`) to the list in the same order without filters.
+A line above the table reads `<n> von <m> Artikeln` (`<n> of <m> items`), the items listed and all items, then the order in force: the sorting column's label, and after it those of `Artikelnr.` and `Gebinde` that it is not, followed by `aufsteigend` (`ascending`), as `Kategorie, Artikelnr., Gebinde aufsteigend`; when reversed, the sorting column's label followed by `absteigend` (`descending`), and then the others followed by `aufsteigend`. While a filter is in force the line ends with a link `Zurücksetzen` (`Reset`) to the list in the same order without filters.
 
-Above the table, the GET form `filters` holds the search `q`, labelled `Artikel suchen` (`Search items`), listing the items in whose article number, name, category, note or compound's name the text is found regardless of case; the choice `category`, labelled `Kategorie`, of `Alle Kategorien` (`All categories`) and each category in use; hidden fields for `stock`, `sort` and `dir` as in force; and the button `Filtern` (`Filter`). Beside it:
+Above the table, the GET form `filters` holds the search `q`, labelled `Artikel suchen` (`Search items`), listing the items in whose article number, category or note, or in whose substance's key, name, German name or short name, the text is found regardless of case; the choice `category`, labelled `Kategorie`, of `Alle Kategorien` (`All categories`) and each category in use; hidden fields for `stock`, `sort` and `dir` as in force; and the button `Filtern` (`Filter`). Beside it:
 
 - a button labelled `Bestandsstatus` (`Stock status`), reading the label of the level in force, or `Alle` (`All`), and in parentheses the number of items it admits, opens a popup that lists `Alle Bestandsstatus` (`All stock statuses`) and the seven levels in their order. Each level shows its colour, its label, what it means and how many items are at it. Each entry counts the items that every filter but `stock` admits, and links to the list with the filters and order in force and `stock` set to the level, or without `stock` for `Alle Bestandsstatus`. The entry in force carries `aria-current="true"`. `stock` lists exactly the items at that level.
 - a button `Weitere Filter` (`More filters`), followed in parentheses by the number of its filters in force when there are some, opens a popup with the choices `container`, `compartment` and `box`, which belong to the form `filters`. Each offers `Alle` (`All`) and each value in use once, in the column's order, and lists the items with that value. Containers are given as the size without trailing zeros and the unit's code, such as `2.5 mg` or `10 umol`, and labelled as the column shows them.
@@ -296,7 +293,7 @@ The table sits in a box `div.table-scroll.table-sticky` that, on screen, is at m
 - **THEN** each row's location popup shows its compartment and box, the first request lists the first item alone and the second both, and `Weitere Filter` reads `Weitere Filter (1)` on both
 
 #### Scenario: Location popup
-- **WHEN** an item `CH-0012` of 100 mg holding 3 containers has no compartment or box, and an open lot `B-7` of `50` mg of `CH-0012` lies in `Kühlschrank 2`, and a test client requests the list
+- **WHEN** an item `CH-0012` of 100 mg holding 3 containers has no compartment or box, and an open lot `B-7` of `50` mg of its substance lies in `Kühlschrank 2`, and a test client requests the list
 - **THEN** its button `Ort` names a popover in its own cell, headed `Lagerort` with the item's name, which shows `CH-0012`, `100 mg` and 3 containers, `nicht hinterlegt` for the compartment and the box, and `Kühlschrank 2` and `B-7` linking to the lot's page, and links to the item's page
 
 #### Scenario: Statistics popup
@@ -334,11 +331,15 @@ The table sits in a box `div.table-scroll.table-sticky` that, on screen, is at m
 - **THEN** the popup lies below the first button, starting at its left edge; above the second, kept 16 pixels inside the window's right edge; and over the third, its bottom 16 pixels above the window's bottom edge
 
 ### Requirement: Bulk list
-`/lab/inventory/end-products/bulk/` SHALL list the open bulk lots of the inventory `end-products` with the columns `Artikelnr.`, `Name`, `Charge`, `Menge`, `Ort`, `Datum` and `Bemerkung` (`Article no.`, `Name`, `Batch`, `Amount`, `Location`, `Date`, `Note`), the name being that of the article number's first item in the item list's order, empty when it has none, ordered by article number, then date, oldest first and lots without one last. `empty=1` adds the used-up lots. The item list, the bulk list and the delivery list carry section tabs `Artikel`, `Bulk` and `Lieferungen` (`Items`, `Bulk`, `Deliveries`) in the site's `nav.section-tabs` markup. A signed-in user sees a link `Neues Bulk` (`New bulk lot`).
+`/lab/inventory/end-products/bulk/` SHALL list the open bulk lots, of every substance, with the columns `Name`, `Artikelnr.`, `Herkunft`, `Charge`, `Menge`, `Ort`, `Datum` and `Bemerkung` (`Name`, `Article no.`, `Source`, `Batch`, `Amount`, `Location`, `Date`, `Note`): the name being the lot's substance's, linking to its page; the article number that of the substance's article, empty when there is none; and the source `hergestellt` or `gekauft`, followed by the supplier when there is one. The lots are ordered by name regardless of case, then date, oldest first and lots without one last. `empty=1` adds the used-up lots. The item list, the bulk list and the delivery list carry section tabs `Artikel`, `Bulk` and `Lieferungen` (`Items`, `Bulk`, `Deliveries`) in the site's `nav.section-tabs` markup. A signed-in user sees a link `Neues Bulk` (`New bulk lot`).
 
 #### Scenario: Used-up lots
 - **WHEN** the database holds an open lot and a used-up lot, and a test client requests the bulk list with and without `empty=1`
 - **THEN** it lists both with it and only the open lot without
+
+#### Scenario: Lots of an intermediate
+- **WHEN** the database holds an open lot of `acetophenone`, which has no article, made in the lab, and one of `cinnamic-acid` bought from `Sigma`, and a test client requests the bulk list
+- **THEN** it lists the first with an empty article number and `hergestellt`, and the second with `CH-0012` and `gekauft · Sigma`
 
 ### Requirement: Delivery list
 `/lab/inventory/deliveries/` SHALL list the delivery notes, newest date first, then newest booking first, each with its number linking to its page, date, recipient, the mark `nachgetragen` (`entered later`) on a historical note and `storniert` (`reversed`) on a reversed one, and its lines with article number, name, size and count; a current note shows `storniert` when all its lines are reversed and `teilweise storniert` (`partly reversed`) when some are. GET parameters filter it and keep their values: `q`, text found regardless of case in the number or recipient, and `item`, an item's id. `/lab/inventory/deliveries/<id>/` shows one note with its lines, each with the article number, name, size, compartment, box and count, their movements and the change history, and an unknown id answers 404. A signed-in user sees a link `Neuer Lieferschein` (`New delivery note`).
@@ -352,22 +353,22 @@ The table sits in a box `div.table-scroll.table-sticky` that, on screen, is at m
 - **THEN** the line shows `2` and `7` in the columns `Fach` and `Box`
 
 ### Requirement: Item page
-`/lab/inventory/items/<id>/` SHALL show the article number and name as heading, or the name alone for an item without an article number, followed by the mark `neu` for a new item; the compound, or `–` for an item without an article number; the category, size and note; the `status` when it is not `active`; the `stocked_on`, `–` when there is none; the compartment and the box, `–` for each that is not set; the quantity with its level; the means and coverage; the current year's consumption; a chart of the consumption of each quarter of the two complete years before the current one and of the current year, an inline `svg` with one bar per quarter titled with the quarter and its value and, when the item has a mean, a line at the mean per quarter, followed by a table of each quarter's entered value, deliveries and total; the movements in booking order, newest first, with date, booking time, kind, count, quantity after, the user's initials, the delivery note with its number and recipient, the note, and the mark `storniert` (`reversed`) on a reversed movement; the open lots of its article number with the number of containers they would fill; under `Prognose` (`Forecast`), the item's forecast, as `production-planning` states under Item forecast; and the change history. A signed-in user sees the links `Abgabe buchen` (`Book delivery`), to the new delivery note with the item in its first line, `Abfüllen` (`Fill`), `Bestand korrigieren` (`Correct count`), `Verbrauch nachtragen` (`Enter consumption`), `Bearbeiten` (`Edit`), and `Stornieren` (`Reverse`) beside each delivery and filling not yet reversed; for an item without an article number, `Artikelnr. eintragen` (`Enter article number`), to its edit form, takes the place of `Abgabe buchen`, and `Verbrauch nachtragen` and every link to a new bulk lot are left out. An unknown id answers 404.
+`/lab/inventory/items/<id>/` SHALL show the article number and name as heading, or the name alone for an item without an article number, followed by the mark `neu` for a new item; the substance, linking to its page; the category, size and note; the `status` when it is not `active`; the `stocked_on`, `–` when there is none; the compartment and the box, `–` for each that is not set; the quantity with its level; the means and coverage; the current year's consumption; a chart of the consumption of each quarter of the two complete years before the current one and of the current year, an inline `svg` with one bar per quarter titled with the quarter and its value and, when the item has a mean, a line at the mean per quarter, followed by a table of each quarter's entered value, deliveries and total; the movements in booking order, newest first, with date, booking time, kind, count, quantity after, the user's initials, the delivery note with its number and recipient, the note, and the mark `storniert` (`reversed`) on a reversed movement; the open lots of its substance with the number of containers they would fill; under `Prognose` (`Forecast`), the item's forecast, as `production-planning` states under Item forecast; and the change history. A signed-in user sees the links `Abgabe buchen` (`Book delivery`), to the new delivery note with the item in its first line, `Abfüllen` (`Fill`), `Bestand korrigieren` (`Correct count`), `Verbrauch nachtragen` (`Enter consumption`), `Bearbeiten` (`Edit`), and `Stornieren` (`Reverse`) beside each delivery and filling not yet reversed; for an item without an article number, `Artikelnr. eintragen` (`Enter article number`), to its edit form, takes the place of `Abgabe buchen`, and `Verbrauch nachtragen` is left out. An unknown id answers 404.
 
 #### Scenario: Chart and ledger
 - **WHEN** on 2026-11-04 a test client requests the page of an item with entered values for three quarters of 2025 and two deliveries in 2026
 - **THEN** the `svg` has twelve bars, the table lists the same values, and the movements list the deliveries before the opening count
 
 #### Scenario: Page of a position without an article number
-- **WHEN** a signed-in user requests the page of an item `Neuverbindung 9` of 10 mg without an article number
-- **THEN** its heading is `Neuverbindung 9`, its compound shows `–`, and it links `Artikelnr. eintragen` to its edit form and has neither `Abgabe buchen`, `Verbrauch nachtragen` nor a link to `/lab/inventory/bulk/new/`
+- **WHEN** a signed-in user requests the page of an item of 10 mg of the substance `new-compound-9`, named `Neuverbindung 9`, without an article number
+- **THEN** its heading is `Neuverbindung 9`, its substance links to `/lab/registry/substances/new-compound-9/`, and it links `Artikelnr. eintragen` to its edit form and has neither `Abgabe buchen` nor `Verbrauch nachtragen`
 
 #### Scenario: A discontinued size
 - **WHEN** a test client requests the page of an item with the `status` `discontinued`, 4 containers and the `stocked_on` 2024-03-01
 - **THEN** it shows `auslaufend`, `01.03.2024`, and 4 with the class `level-dormant` and the text `ruhend`
 
 ### Requirement: Bulk lot page
-`/lab/inventory/bulk/<id>/` SHALL show the lot's article number, batch, amount, location, date and note, the mark `aufgebraucht` (`used up`) at zero, its movements in booking order, newest first, with date, booking time, kind, amount, amount after, the user's initials, note and, for a filling, the item filled, each task that belongs to the lot through its batch, linking to it, and its change history. A signed-in user sees the links `Korrigieren` (`Correct`) and `Bearbeiten` (`Edit`). An unknown id answers 404.
+`/lab/inventory/bulk/<id>/` SHALL show the lot's substance, linking to its page, and the article number of the substance's article when there is one; its source and supplier; its batch, amount, location, date and note, the mark `aufgebraucht` (`used up`) at zero, its movements in booking order, newest first, with date, booking time, kind, amount, amount after, the user's initials, note and, for a filling, the item filled, each task that belongs to the lot through its batch, linking to it, and its change history. A signed-in user sees the links `Korrigieren` (`Correct`) and `Bearbeiten` (`Edit`). An unknown id answers 404.
 
 #### Scenario: Lot page after a filling
 - **WHEN** a test client requests the page of a lot from which 5 containers of an item were filled
@@ -376,26 +377,34 @@ The table sits in a box `div.table-scroll.table-sticky` that, on screen, is at m
 ### Requirement: Inventory forms
 For a signed-in user, the application SHALL offer:
 
-- `/lab/inventory/end-products/new/`: a new item with its opening count, the article number, optional, with the article numbers' `datalist`, the category with a `datalist` of the categories in use, the `stocked_on`, optional, left empty for the opening count to set, and the compartment and the box, each with a `datalist` of the values in use;
-- `/lab/inventory/items/<id>/edit/`: the item's name, category, note, `status`, `stocked_on`, compartment and box, the last two each with a `datalist` of the values in use, and its article number with the article numbers' `datalist` while it has none;
+- `/lab/inventory/end-products/new/`: a new item with its opening count, its substance by key, the article number, optional, and the category with a `datalist` of the categories in use, the `stocked_on`, optional, left empty for the opening count to set, and the compartment and the box, each with a `datalist` of the values in use;
+- `/lab/inventory/items/<id>/edit/`: the item's note, `status`, `stocked_on`, compartment and box, the last two each with a `datalist` of the values in use, and its article's category and, while the article has none, its article number, both saved on the article for every size of it, as the form says beside them;
 - `/lab/inventory/deliveries/new/`: a delivery note with ten rows for lines, each offering the items with an article number, each shown as its article number, container and name and, where they are set, `Fach <compartment>` and `Box <box>` (`Compartment <compartment>`, `Box <box>`), joined by ` · ` and the locations by ` / `, rows left empty being ignored, and a check box `nachgetragen – Bestand bleibt unverändert` (`entered later – stock unchanged`) for a historical note; `?item=<id>`, given once or several times, puts those items in the first rows in the order given, up to ten, leaving out ids of items it does not offer and ids given twice;
 - `/lab/inventory/deliveries/<id>/reverse/`: marking a historical note reversed, with its note;
 - `/lab/inventory/items/<id>/fill/` and `/correct/`: a movement;
 - `/lab/inventory/items/<id>/movements/<movement id>/reverse/`: the reversal of a delivery or filling, with its note;
 - `/lab/inventory/items/<id>/consumption/`: the entered value of a year and quarter, replacing an earlier one of that quarter, or removing it when left empty;
 - `/lab/inventory/deliveries/<id>/edit/`: a note's number, recipient and note;
-- `/lab/inventory/bulk/new/`: a new lot with its opening amount, the article number with the article numbers' `datalist`, and the location with a `datalist` of the locations in use; `?article=<article number>`, `?batch=<batch>` and `?made_on=<date>` fill in those fields;
+- `/lab/inventory/bulk/new/`: a new lot with its opening amount, its substance by key, its source, `hergestellt` when none is chosen, and its supplier, and the location with a `datalist` of the locations in use; `?substance=<key>`, `?batch=<batch>` and `?made_on=<date>` fill in those fields;
 - `/lab/inventory/bulk/<id>/edit/`, for the batch, location, date and note, and `/correct/`.
 
-The article numbers' `datalist` offers each value of a unique text field of each compound of the index, labelled with the compound's name, and no compound key. An empty article number is none. Invalid input shows the form again with the errors beside their fields and saves nothing. A saved form leads, with a message naming the record, to the page of the delivery note for the forms of notes, and to the page of the item or lot for every other.
+A substance is named by its key, offered through a `datalist` of every substance's key labelled with its name; an unknown key is an error at the field. On the new-item form, the article number and the category make the substance's article when it has none, an empty number giving it none. When the substance has an article, a field left empty leaves the article's value as it is; a category entered replaces the article's; an article number entered gives the article that number when it has none, as the edit form does, and must otherwise be its number, or the form shows an error at it. On the edit form, the category field holds the article's category and saves what it holds, empty included, and the article number, offered only while the article has none, gives it one when entered and leaves it without one when empty. Invalid input shows the form again with the errors beside their fields and saves nothing. A saved form leads, with a message naming the record, to the page of the delivery note for the forms of notes, and to the page of the item or lot for every other.
 
 #### Scenario: New item
-- **WHEN** user `KL` posts an item `CH-0012` named `Zimtsäure` of 10 µmol with an opening count of 12
+- **WHEN** user `KL` posts an item of the substance `cinnamic-acid`, whose article is `CH-0012`, of 10 µmol with an opening count of 12
 - **THEN** the item exists with 12 containers, its only movement is the opening count by `KL`, and the response redirects to its page
 
 #### Scenario: New item without an article number
-- **WHEN** a signed-in user posts an item named `Neuverbindung 9` of 10 mg with an empty article number and an opening count of 4
-- **THEN** the item exists with 4 containers and no article number
+- **WHEN** a signed-in user posts an item of the substance `new-compound-9`, which has no article, of 10 mg with an empty article number and an opening count of 4
+- **THEN** the item exists with 4 containers, and its new article has no article number
+
+#### Scenario: Another size of a numbered article
+- **WHEN** the article of `cinnamic-acid` is `CH-0012` in the category `Säuren`, and a signed-in user posts an item of `cinnamic-acid` of 50 µmol with the article number and the category left empty, then one of 100 µmol with the article number `CH-0099`
+- **THEN** the first item is saved and the article is still `CH-0012` in `Säuren`, and the second form shows an error at the article number and saves nothing
+
+#### Scenario: Unknown substance
+- **WHEN** a signed-in user posts the new-item form naming the substance `no-such-substance`
+- **THEN** the form shows an error at the substance and nothing is saved
 
 #### Scenario: Entered consumption replaced
 - **WHEN** a signed-in user enters 4 for the second quarter of 2026 and then 5 for the same quarter
@@ -406,12 +415,12 @@ The article numbers' `datalist` offers each value of a unique text field of each
 - **THEN** those fields are unchanged
 
 #### Scenario: New lot from the query
-- **WHEN** a signed-in user requests `/lab/inventory/bulk/new/?article=CH-0012&batch=B-2026-031&made_on=2026-10-30`
-- **THEN** the form holds the article number `CH-0012`, the batch `B-2026-031` and the date 2026-10-30
+- **WHEN** a signed-in user requests `/lab/inventory/bulk/new/?substance=cinnamic-acid&batch=B-2026-031&made_on=2026-10-30`
+- **THEN** the form holds the substance `cinnamic-acid`, the source `hergestellt`, the batch `B-2026-031` and the date 2026-10-30
 
-#### Scenario: Numbers, not keys
-- **WHEN** the index is the demo collection's and a signed-in user requests the new-item form
-- **THEN** its article numbers' `datalist` offers `CH-0012` labelled `(E)-Zimtsäure` and does not offer `cinnamic-acid`
+#### Scenario: Substances offered
+- **WHEN** the demo data set is written and a signed-in user requests the new-item form
+- **THEN** its substances' `datalist` offers `cinnamic-acid` labelled `(E)-Zimtsäure`
 
 #### Scenario: Delivery rows without positions lacking a number
 - **WHEN** items `CH-0012` and `Neuverbindung 9` without an article number exist and a signed-in user requests the new delivery note form
@@ -434,22 +443,22 @@ The article numbers' `datalist` offers each value of a unique text field of each
 - **THEN** its rows offer it as `CH-0012 · 100 mg · (E)-Zimtsäure · Fach 2 / Box 7`
 
 ### Requirement: Inventory in the admin
-The admin SHALL list items, bulk lots, delivery notes and the movements for staff, with search by article number and name and the change history of each record. It shows movements, delivery notes' dates, kinds and lines, and the fixed fields read-only, an item's article number among them once it has one; an article number entered there is given as the item's edit form gives it, only while the item has none. It deletes no movement or delivery note, and deletes an item or lot only while its one movement is the opening and, for an item, no delivery note has a line of it.
+The admin SHALL list articles, items, bulk lots, delivery notes and the movements for staff, with search by article number and by the substance's key and names, and the change history of each record. It shows movements, delivery notes' dates, kinds and lines, and the fixed fields read-only, an article's number among them once it has one; an article number entered there is given as the edit form gives it, only while the article has none. It deletes no movement or delivery note, deletes an article only while it has no items, and deletes an item or lot only while its one movement is the opening and, for an item, no delivery note has a line of it.
 
 #### Scenario: Deleting a booked item
 - **WHEN** a staff user deletes an item that has a delivery
 - **THEN** the admin refuses and the item remains
 
 #### Scenario: Article number in the admin
-- **WHEN** a staff user opens the change page of an item without an article number and of one with `CH-0012`
+- **WHEN** a staff user opens the change page of an article without a number and of the article `CH-0012`
 - **THEN** the first offers the article number as an input and the second shows it read-only
 
 #### Scenario: A stale change page keeps the number
-- **WHEN** a staff user loads the admin's change page of an item without an article number, a signed-in user then gives it `CH-0021` in its edit form, and the staff user saves the change page with the article number left empty and a new note
-- **THEN** the item keeps `CH-0021` and has the new note
+- **WHEN** a staff user loads the admin's change page of an article without a number, a signed-in user then gives it `CH-0021` in the edit form of one of its items, and the staff user saves the change page with the article number left empty and a new category
+- **THEN** the article keeps `CH-0021` and has the new category
 
 ### Requirement: Consumption heat
-The heat of an item's mean per year, and that of its current year's consumption, SHALL be, for a value above zero, `heat-<n>` with `n` being `1 + ⌊5B/N⌋`, where `N` is the number of items of the inventory `end-products` whose value of the same kind is above zero and `B` the number of those whose value is smaller. A value of zero, or none, has no heat. The heats run from a pale pink, `heat-1`, through red to a blackish red, `heat-5`; each cell carrying one shows its text with a contrast of at least 4.5:1 to the heat's background in both colour schemes. The item list's check box `Verbrauch einfärben` shows or hides the heats' colours (Item list).
+The heat of an item's mean per year, and that of its current year's consumption, SHALL be, for a value above zero, `heat-<n>` with `n` being `1 + ⌊5B/N⌋`, where `N` is the number of items whose value of the same kind is above zero and `B` the number of those whose value is smaller. A value of zero, or none, has no heat. The heats run from a pale pink, `heat-1`, through red to a blackish red, `heat-5`; each cell carrying one shows its text with a contrast of at least 4.5:1 to the heat's background in both colour schemes. The item list's check box `Verbrauch einfärben` shows or hides the heats' colours (Item list).
 
 #### Scenario: Fifths of the consuming items
 - **WHEN** six items' consumption in the current year is 0, 1, 2, 2, 5 and 9 containers, and a test client requests the list, then with `q=` naming the item of 9 alone
@@ -458,4 +467,19 @@ The heat of an item's mean per year, and that of its current year's consumption,
 #### Scenario: Readable in both schemes
 - **WHEN** a test reads the heat colours of `lab.css` for the light and the dark scheme
 - **THEN** each heat's text and background have a contrast of at least 4.5:1
+
+### Requirement: Articles
+The `inventory` package SHALL keep articles, each with a change history: `substance`, a substance of the registry (lab-registry "Substances") and the article's primary key, so that an article is that one substance and a substance has at most one article; `article_number`, the number the article's delivery notes carry, at most 30 characters, unique among articles when given, or none: an article has none until it is first delivered; and `category`, optional, at most 100 characters. An article's name is its substance's name. An article without an article number may be given one once, which is refused when another article has it; from then on the number is fixed, in the views and the admin alike. An article that has items cannot be deleted.
+
+#### Scenario: Article number entered once
+- **WHEN** a signed-in user gives an item whose article has no article number the number `CH-0021` in its edit form, and then posts its edit form with the number `CH-0022`
+- **THEN** the article has the number `CH-0021`, its history records the change, and the second post leaves it unchanged
+
+#### Scenario: Article number taken
+- **WHEN** the article of `cinnamic-acid` has the number `CH-0012` and a signed-in user gives `CH-0012` to an item of another article
+- **THEN** the form shows an error at the article number and that article keeps none
+
+#### Scenario: One number for every size
+- **WHEN** an article without a number has items of 10 µmol and of 50 µmol and a signed-in user gives the first the article number `CH-0021`
+- **THEN** both items show `CH-0021`
 

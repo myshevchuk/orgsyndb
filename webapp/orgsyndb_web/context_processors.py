@@ -19,6 +19,7 @@ VIEWS = [
     ("/lab/inventory/end-products/", _("Inventory"), "/lab/inventory/"),
     ("/lab/planning/", _("Planning"), "/lab/planning/"),
     ("/lab/tasks/", _("Tasks"), "/lab/tasks/"),
+    ("/lab/registry/", _("Substances"), "/lab/registry/"),
 ]
 
 

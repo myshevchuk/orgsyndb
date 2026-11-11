@@ -7,8 +7,9 @@ from django.test import TestCase
 from tasks.models import Task
 
 from . import (NOT_IN_COLLECTION, IndexMixin, build_index, demo_index,
-               edit_data, make_task, make_user, page, past, procedure,
-               sequence, task_form_data, task_url)
+               edit_data, make_article, make_task, make_user, page, past,
+               procedure, sequence, substance_for, task_form_data,
+               task_url)
 
 
 class PageCase(IndexMixin, TestCase):
@@ -40,7 +41,7 @@ class DetailTests(PageCase):
 
     def test_the_page_shows_the_record(self) -> None:
         task = make_task(
-            self.kl, product="Probe", priority="high", assignee=self.ae,
+            self.kl, substance="Probe", priority="high", assignee=self.ae,
             started=past(3, 11), steps_total=5, steps_done=2,
             batch="B-17", report=True,
             note="Zeile eins\nZeile zwei")
@@ -58,6 +59,35 @@ class DetailTests(PageCase):
         self.assertLessEqual({"ja", "nein"}, set(text.split()))
         self.assertIsNotNone(root.find("progress"))
         self.assertNotIn("Nacharbeit", text)
+
+    def test_the_substance_links_to_its_page(self) -> None:
+        task = make_task(self.kl, substance="CH-0012")
+        root = self.show(task)
+        self.assertIn("(E)-Zimtsäure", root.find("h1").text())
+        self.assertIn("/lab/registry/substances/cinnamic-acid/",
+                      [a.get("href") for a in root.find_all("a")])
+        self.assertNotIn("/compounds/cinnamic-acid/",
+                         [a.get("href") for a in root.find_all("a")])
+
+    def test_an_article_without_items_matches(self) -> None:
+        found = substance_for("CH-0099")
+        make_article(found, "CH-0099")
+        task = make_task(self.kl, substance=found)
+        root = self.show(task)
+        self.assertIn("/lab/planning/", [a.get("href")
+                                         for a in root.find_all("a")])
+        text = root.text()
+        self.assertIn("CH-0099", text)
+        self.assertIn("Kein Verbrauch, keine Prognose.", text)
+
+    def test_no_substance_is_marked_as_missing_from_the_collection(
+            self) -> None:
+        """Every substance is in the registry."""
+        for language in ("de", "en"):
+            self.use_index(build_index(language))
+            task = make_task(self.kl, substance="Probe")
+            self.assertNotIn(NOT_IN_COLLECTION[language],
+                             self.show(task).text())
 
     def test_follow_up_is_shown(self) -> None:
         task = make_task(self.kl, started=past(1), ended=past(2),
@@ -89,7 +119,7 @@ class DetailTests(PageCase):
 
     def test_english_page(self) -> None:
         self.use_index(build_index("en"))
-        task = make_task(self.kl, product="Probe", priority="high",
+        task = make_task(self.kl, substance="Probe", priority="high",
                          started=past(3, 11))
         text = self.show(task).text()
         self.assertIn("Running", text)
@@ -194,8 +224,9 @@ class HistoryTests(PageCase):
 
     def change_priority(self, creator, changer) -> Task:
         self.client.force_login(creator)
+        substance_for("Aspirin")
         self.client.post("/lab/tasks/new/", task_form_data(
-            product="Aspirin", priority="medium"))
+            substance="aspirin", priority="medium"))
         task = Task.objects.get()
         self.client.force_login(changer)
         done = self.client.post(task_url(task, "edit"),

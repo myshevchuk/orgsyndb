@@ -1,11 +1,13 @@
-"""The inventory: items counted in containers, their movements, delivery
-notes, entered consumption, and bulk lots with their own movements.
+"""The inventory: articles, their items counted in containers, the items'
+movements, delivery notes, entered consumption, and bulk lots of
+substances with their own movements.
 
 Counts and amounts change only through ``inventory.bookings``.
 """
 
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Any
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -18,10 +20,6 @@ from django.utils.translation import gettext_lazy as _
 from django.utils.translation import pgettext_lazy
 
 from orgsyndb_web.history import RecordedHistory
-
-END_PRODUCTS = "end-products"
-INVENTORIES = [(END_PRODUCTS, _("End products"))]
-
 
 class Unit(models.TextChoices):
     MG = "mg", "mg"
@@ -71,22 +69,53 @@ def not_in_future(day: date | None) -> None:
         raise ValidationError(_("The date may not lie in the future."))
 
 
+class Article(models.Model):
+    """An article: one substance of the registry as the lab delivers it,
+    in one or more container sizes, its items.
+
+    The substance is the article's primary key, so a substance has at
+    most one article. The article number, the one delivery notes carry,
+    is None until the article is first delivered and fixed once it is
+    set; it is unique among articles. The category is the article's and
+    every size's.
+    """
+
+    substance = models.OneToOneField(
+        "registry.Substance", verbose_name=_("Substance"),
+        primary_key=True, on_delete=models.PROTECT, related_name="article")
+    article_number = models.CharField(_("Article no."), max_length=30,
+                                      unique=True, null=True, blank=True)
+    category = models.CharField(_("Category"), max_length=100, blank=True)
+
+    history = RecordedHistory()
+
+    class Meta:
+        ordering = [models.F("article_number").asc(nulls_last=True),
+                    "substance__key"]
+        verbose_name = _("article")
+        verbose_name_plural = _("articles")
+
+    def __str__(self) -> str:
+        return self.article_number or self.substance.shown_name
+
+    @property
+    def name(self) -> str:
+        """The name of the article's substance in the active language."""
+        return self.substance.shown_name
+
+
 class Item(models.Model):
     """An article in one container size, counted in whole containers.
 
-    The article number, size and unit identify the item within its
-    inventory. The size and unit are fixed once it exists; the article
-    number, the one delivery notes carry, is None until the item is
-    first delivered and fixed once it is set. The quantity changes only
-    by movements; the change history covers the other fields.
+    The article, size and unit identify the item and are fixed once it
+    exists. Its substance, name, article number and category are its
+    article's. The quantity changes only by movements; the change
+    history covers the other fields.
     """
 
-    inventory = models.CharField(_("Inventory"), max_length=30,
-                                 choices=INVENTORIES, default=END_PRODUCTS)
-    article_number = models.CharField(_("Article no."), max_length=30,
-                                      null=True, blank=True)
-    name = models.CharField(_("Name"), max_length=200)
-    category = models.CharField(_("Category"), max_length=100, blank=True)
+    article = models.ForeignKey(Article, verbose_name=_("article"),
+                                on_delete=models.PROTECT,
+                                related_name="items")
     size = models.DecimalField(
         _("Size"), max_digits=10, decimal_places=3,
         validators=[MinValueValidator(Decimal("0.001"))])
@@ -104,13 +133,13 @@ class Item(models.Model):
     history = RecordedHistory(excluded_fields=["quantity"])
 
     class Meta:
-        ordering = [models.F("article_number").asc(nulls_last=True),
-                    "name", "unit", "size"]
+        ordering = [models.F("article__article_number").asc(nulls_last=True),
+                    "article__substance__key", "unit", "size"]
         verbose_name = _("item")
         verbose_name_plural = _("items")
         constraints = [
             models.UniqueConstraint(
-                fields=["inventory", "article_number", "size", "unit"],
+                fields=["article", "size", "unit"],
                 name="inventory_item_identity"),
             models.CheckConstraint(condition=Q(size__gt=0),
                                    name="inventory_item_size_positive"),
@@ -118,8 +147,28 @@ class Item(models.Model):
 
     def __str__(self) -> str:
         shown = f"{self.container} {self.name}"
-        return f"{self.article_number} {shown}" if self.article_number \
-            else shown
+        number = self.article_number
+        return f"{number} {shown}" if number else shown
+
+    @property
+    def substance(self) -> Any:
+        """The substance of the item's article."""
+        return self.article.substance
+
+    @property
+    def article_number(self) -> str | None:
+        """The article number of the item's article, or None."""
+        return self.article.article_number
+
+    @property
+    def name(self) -> str:
+        """The name of the item's substance in the active language."""
+        return self.article.substance.shown_name
+
+    @property
+    def category(self) -> str:
+        """The category of the item's article."""
+        return self.article.category
 
     @property
     def container(self) -> str:
@@ -219,17 +268,29 @@ class DeliveryLine(models.Model):
         return f"{self.count} × {self.item}"
 
 
+class Source(models.TextChoices):
+    """Where a lot comes from."""
+
+    MADE = "made", pgettext_lazy("lot source", "made")
+    BOUGHT = "bought", pgettext_lazy("lot source", "bought")
+
+
 class Lot(models.Model):
-    """A bulk lot of an article number, not yet aliquoted.
+    """A bulk lot of a substance, not yet aliquoted, made in the lab or
+    bought.
 
     The amount is kept in the base unit of the lot's unit, mg or µmol,
     and changes only by the lot's movements. A lot at zero is used up.
-    The article number and the unit are fixed once the lot exists.
+    The substance, source and unit are fixed once the lot exists. A lot
+    belongs to every item of its substance's article.
     """
 
-    inventory = models.CharField(_("Inventory"), max_length=30,
-                                 choices=INVENTORIES, default=END_PRODUCTS)
-    article_number = models.CharField(_("Article no."), max_length=30)
+    substance = models.ForeignKey(
+        "registry.Substance", verbose_name=_("Substance"),
+        on_delete=models.PROTECT, related_name="lots")
+    source = models.CharField(_("Source"), max_length=6,
+                              choices=Source.choices, default=Source.MADE)
+    supplier = models.CharField(_("Supplier"), max_length=100, blank=True)
     unit = models.CharField(_("Unit"), max_length=4, choices=Unit.choices)
     amount = models.DecimalField(_("Amount"), max_digits=18,
                                  decimal_places=6, default=0)
@@ -241,7 +302,7 @@ class Lot(models.Model):
     history = RecordedHistory(excluded_fields=["amount"])
 
     class Meta:
-        ordering = ["article_number", "id"]
+        ordering = ["substance__key", "id"]
         verbose_name = _("bulk lot")
         verbose_name_plural = _("bulk lots")
         constraints = [
@@ -250,8 +311,21 @@ class Lot(models.Model):
         ]
 
     def __str__(self) -> str:
-        label = self.batch or f"#{self.pk}"
-        return f"{self.article_number} {label}"
+        shown = f"{self.substance.shown_name} {self.batch or f'#{self.pk}'}"
+        number = self.article_number
+        return f"{number} {shown}" if number else shown
+
+    @property
+    def article_number(self) -> str | None:
+        """The article number of the lot's substance, or None."""
+        return self.substance.article_number
+
+    @property
+    def origin(self) -> str:
+        """The source as the active language names it, followed by the
+        supplier when there is one, as ``gekauft · Sigma``."""
+        shown = str(Source(self.source).label)
+        return f"{shown} · {self.supplier}" if self.supplier else shown
 
     @property
     def shown_amount(self) -> Decimal:

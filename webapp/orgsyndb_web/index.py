@@ -1,5 +1,5 @@
 """The collection index: what the published release says about the
-collection's language, compounds, procedures and sequences.
+collection's language, its compounds' keys, procedures and sequences.
 
 The index is the JSON file ``orgsyndb index`` writes into each release;
 the setting ``ORGSYNDB_INDEX`` names it. It is read again whenever the
@@ -28,23 +28,6 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
-class Compound:
-    """A compound of the collection.
-
-    KEY is its file name without the suffix; NAME is ``name_de`` on a
-    German site when the compound has one, else ``name``; MW is its
-    molecular weight, or None when the compound gives no number; and
-    IDENTIFIERS are the key followed by the values of the compound's
-    unique text fields.
-    """
-
-    key: str
-    name: str
-    mw: float | None
-    identifiers: tuple[str, ...]
-
-
-@dataclass(frozen=True)
 class Sequence:
     """A synthesis sequence: its ID and its steps' procedure IDs, in
     order."""
@@ -57,16 +40,13 @@ class Sequence:
 class Index:
     """A read collection index.
 
-    LANGUAGE is the site's, ``de`` or ``en``. COMPOUNDS maps keys to
-    compounds; VALUES maps each unique text value to the key of the one
-    compound holding it, or to None when several compounds hold it.
-    PROCEDURES holds the procedure IDs and SEQUENCES maps sequence IDs
-    to sequences.
+    LANGUAGE is the site's, ``de`` or ``en``. COMPOUNDS holds the keys
+    of the collection's compounds, PROCEDURES the procedure IDs, and
+    SEQUENCES maps sequence IDs to sequences.
     """
 
     language: str = DEFAULT_LANGUAGE
-    compounds: dict[str, Compound] = field(default_factory=dict)
-    values: dict[str, str | None] = field(default_factory=dict)
+    compounds: frozenset[str] = frozenset()
     procedures: frozenset[str] = frozenset()
     sequences: dict[str, Sequence] = field(default_factory=dict)
 
@@ -91,42 +71,6 @@ def _entries(data: dict[str, Any], key: str) -> list[dict[str, Any]]:
     if not isinstance(entries, list):
         return []
     return [entry for entry in entries if isinstance(entry, dict)]
-
-
-def _unique_text_fields(data: dict[str, Any]) -> list[str]:
-    fields = data.get("fields")
-    declared = fields.get("compound") if isinstance(fields, dict) else None
-    if not isinstance(declared, list):
-        return []
-    return [item["key"] for item in declared
-            if isinstance(item, dict) and isinstance(item.get("key"), str)
-            and item.get("type") == "text" and item.get("unique") is True]
-
-
-def _compounds(data: dict[str, Any], language: str
-               ) -> tuple[dict[str, Compound], dict[str, str | None]]:
-    unique = _unique_text_fields(data)
-    compounds: dict[str, Compound] = {}
-    holders: dict[str, set[str]] = {}
-    for entry in _entries(data, "compounds"):
-        key, values = entry.get("key"), entry.get("data")
-        if not isinstance(key, str) or not isinstance(values, dict):
-            continue
-        name = values.get("name")
-        if language == "de" and isinstance(values.get("name_de"), str):
-            name = values["name_de"]
-        mw = values.get("mw")
-        texts = [values[f] for f in unique if isinstance(values.get(f), str)]
-        compounds[key] = Compound(
-            key=key, name=name if isinstance(name, str) else key,
-            mw=(float(mw) if isinstance(mw, (int, float))
-                and not isinstance(mw, bool) else None),
-            identifiers=tuple(dict.fromkeys([key, *texts])))
-        for text in texts:
-            holders.setdefault(text, set()).add(key)
-    values_to_keys = {text: (next(iter(keys)) if len(keys) == 1 else None)
-                      for text, keys in holders.items()}
-    return compounds, values_to_keys
 
 
 def _rank(entry: dict[str, Any], language: str) -> tuple[int, str]:
@@ -175,9 +119,10 @@ def parse(data: Any) -> Index:
     language = data.get("site_language")
     if language not in LANGUAGES:
         language = DEFAULT_LANGUAGE
-    compounds, values = _compounds(data, language)
     return Index(
-        language=language, compounds=compounds, values=values,
+        language=language, compounds=frozenset(
+            entry["key"] for entry in _entries(data, "compounds")
+            if isinstance(entry.get("key"), str)),
         procedures=frozenset(
             entry["id"] for entry in _entries(data, "procedures")
             if isinstance(entry.get("id"), str)),
@@ -230,18 +175,10 @@ def current() -> Index:
         return found
 
 
-def compound_for(token: str) -> Compound | None:
-    """Return the compound TOKEN names, or None.
-
-    TOKEN names a compound by its key, which wins over any other match,
-    or by a value of one of its unique text fields. A value that several
-    compounds hold names none of them.
-    """
-    found = current()
-    if token in found.compounds:
-        return found.compounds[token]
-    key = found.values.get(token)
-    return None if key is None else found.compounds[key]
+def has_compound(key: str) -> bool:
+    """Whether the index lists a compound of the key KEY, so that the
+    site has its page."""
+    return key in current().compounds
 
 
 def procedure_for(token: str) -> str | None:

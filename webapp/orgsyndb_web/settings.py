@@ -16,6 +16,8 @@ globals().update(settings_from(os.environ))
 INSTALLED_APPS = [
     "orgsyndb_web",
     "accounts",
+    "vocabulary",
+    "registry",
     "tasks",
     "inventory",
     "planning",

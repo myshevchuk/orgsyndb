@@ -7,10 +7,15 @@
 <a href="/lab/inventory/bulk/{{ lot.pk }}/edit/">{% translate "Edit" %}</a>
 </div>
 {% endif %}<dl class="metadata">
-<dt>{% translate "Article no." %}</dt>
+<dt>{% translate "Substance" %}</dt>
+<dd>{% substance lot.substance %}</dd>
+{% if lot.article_number %}<dt>{% translate "Article no." %}</dt>
 <dd>{{ lot.article_number }}</dd>
-<dt>{% translate "Compound" %}</dt>
-<dd>{% product lot.article_number %}</dd>
+{% endif %}<dt>{% translate "Source" %}</dt>
+<dd>{{ lot.get_source_display }}</dd>
+{% if lot.supplier %}<dt>{% translate "Supplier" %}</dt>
+<dd>{{ lot.supplier }}</dd>
+{% endif %}
 <dt>{% translate "Batch" %}</dt>
 <dd>{{ lot.batch|default:"–" }}</dd>
 <dt>{% translate "Amount" %}</dt>
@@ -36,7 +41,7 @@
 <td class="number">{{ movement.amount|in_lot_unit:lot }}</td>
 <td class="number">{{ movement.amount_after|in_lot_unit:lot }}</td>
 <td>{% person movement.user %}</td>
-<td>{% if item %}<a href="/lab/inventory/items/{{ item.pk }}/">{{ item.article_number }} · {{ item.container }}</a>{% endif %}</td>
+<td>{% if item %}<a href="/lab/inventory/items/{{ item.pk }}/">{% if item.article_number %}{{ item.article_number }} · {% endif %}{{ item.container }}</a>{% endif %}</td>
 <td>{{ movement.note }}</td>
 </tr>
 {% endfor %}</tbody>
@@ -44,7 +49,7 @@
 </div>
 {% if tasks %}<h2>{% translate "Tasks" %}</h2>
 <ul class="lab-links">
-{% for task in tasks %}<li><a href="/lab/tasks/{{ task.number }}/">{{ task.number }}</a> {{ task.product }} {% include "tasks/state.html" %}</li>
+{% for task in tasks %}<li><a href="/lab/tasks/{{ task.number }}/">{{ task.number }}</a> {% include "tasks/state.html" %}</li>
 {% endfor %}</ul>
 {% endif %}{% include "inventory/history.html" %}
 {% endblock %}

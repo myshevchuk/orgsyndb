@@ -6,14 +6,14 @@ from decimal import Decimal
 
 from django.test import SimpleTestCase
 
-from inventory.bookings import (Refused, correct_lot, create_lot, fill,
-                                reverse)
+from inventory.bookings import Refused, correct_lot, fill, reverse
 from inventory.figures import convert
-from inventory.models import END_PRODUCTS, Lot, LotMovement
+from inventory.models import Lot, LotMovement
 
-from . import build_index, compound, page, table
-from .inventory_support import (LIST, MICRO, TODAY, InventoryCase, fresh,
-                                has_amount, has_number, item_url, lot_url,
+from . import make_substance, page, table
+from .inventory_support import (LIST, MICRO, NEW_LOT, TODAY, FormCase,
+                                InventoryCase, fresh, has_amount,
+                                has_number, item_url, lot_data, lot_url,
                                 newest_movement, snapshot)
 
 MW = Decimal("148.16")
@@ -70,29 +70,104 @@ class ConvertTests(SimpleTestCase):
 class LotTests(InventoryCase):
 
     def test_a_lot_keeps_its_fields(self) -> None:
-        made = create_lot(
-            self.kl, article_number="CH-0012", unit="mg",
-            amount=Decimal("50"), batch="B-1", location="Kühlraum",
-            made_on=date(2026, 10, 1), note="Rest")
+        made = self.lot("CH-0012", "mg", "50", batch="B-1",
+                        location="Kühlraum", made_on=date(2026, 10, 1),
+                        note="Rest", source="bought", supplier="Sigma")
         lot = Lot.objects.get(pk=made.pk)
-        self.assertEqual(lot.inventory, END_PRODUCTS)
         self.assertEqual(
-            (lot.article_number, lot.unit, lot.batch, lot.location,
-             lot.made_on, lot.note),
-            ("CH-0012", "mg", "B-1", "Kühlraum", date(2026, 10, 1), "Rest"))
+            (lot.substance.key, lot.source, lot.supplier, lot.unit,
+             lot.batch, lot.location, lot.made_on, lot.note),
+            ("cinnamic-acid", "bought", "Sigma", "mg", "B-1", "Kühlraum",
+             date(2026, 10, 1), "Rest"))
         self.assertEqual(lot.amount, Decimal("50"))
 
+    def test_a_lot_has_a_substance_and_no_article_number(self) -> None:
+        names = {field.name for field in Lot._meta.get_fields()}
+        self.assertIn("substance", names)
+        for gone in ("inventory", "article_number"):
+            with self.subTest(field=gone):
+                self.assertNotIn(gone, names)
+        field = Lot._meta.get_field("substance")
+        self.assertEqual(field.remote_field.on_delete.__name__, "PROTECT")
+
+    def test_the_two_sources(self) -> None:
+        sources = {value for value, _ in
+                   Lot._meta.get_field("source").choices}
+        self.assertEqual(sources, {"made", "bought"})
+
+    def test_the_supplier_has_at_most_100_characters(self) -> None:
+        self.assertEqual(Lot._meta.get_field("supplier").max_length, 100)
+
     def test_batch_location_date_and_note_are_optional(self) -> None:
-        lot = create_lot(self.kl, article_number="CH-0012", unit="mg",
-                         amount=Decimal("5"))
-        lot = fresh(lot)
-        self.assertEqual((lot.batch, lot.location, lot.note), ("", "", ""))
+        lot = fresh(self.lot("CH-0012", "mg", "5"))
+        self.assertEqual((lot.batch, lot.location, lot.note, lot.supplier),
+                         ("", "", "", ""))
         self.assertIsNone(lot.made_on)
 
+    def test_a_lot_of_any_substance(self) -> None:
+        """Scenario: Lot of a substance without an article."""
+        from inventory.models import Article
+        lot = self.lot("acetophenone", "mg", "5")
+        self.assertEqual(lot.substance.key, "acetophenone")
+        self.assertFalse(Article.objects.exists())
+
+    def test_made_and_bought_lots_side_by_side(self) -> None:
+        """Scenario: Made and bought lots."""
+        item = self.item("CH-0012", size="10", unit="umol")
+        made = self.lot("CH-0012", "mg", "50", source="made")
+        bought = self.lot("CH-0012", "mg", "20", source="bought",
+                          supplier="Sigma")
+        self.assertEqual(made.substance, bought.substance)
+        self.assertEqual((fresh(bought).source, fresh(bought).supplier),
+                         ("bought", "Sigma"))
+        root = page(self.client.get(item_url(item)))
+        text = root.text()
+        self.assertTrue(has_amount(text, "50", "mg"), text)
+        self.assertTrue(has_amount(text, "20", "mg"), text)
+
+    def test_a_lot_belongs_to_every_size_of_its_article(self) -> None:
+        small = self.item("CH-0012", size="10", unit="umol")
+        large = self.item("CH-0012", size="50", unit="umol")
+        self.lot("CH-0012", "mg", "50", batch="B-7")
+        for item in (small, large):
+            with self.subTest(item=item.pk):
+                self.assertIn("B-7", page(self.client.get(
+                    item_url(item))).text())
+
+    def test_the_four_units(self) -> None:
+        units = {value for value, _ in Lot._meta.get_field("unit").choices}
+        self.assertEqual(units, {"mg", "g", "umol", "mmol"})
+
+    def test_amounts_have_six_places(self) -> None:
+        self.assertEqual(Lot._meta.get_field("amount").decimal_places, 6)
+
+
+class NewLotFormTests(FormCase):
+    """The booking behind the new-lot form."""
+
+    def test_a_lot_keeps_its_fields(self) -> None:
+        done = self.client.post(NEW_LOT, lot_data(
+            batch="B-1", location="Kühlraum", made_on="2026-10-01",
+            note="Rest", source="bought", supplier="Sigma", amount="50"))
+        lot = Lot.objects.get()
+        self.assertRedirects(done, lot_url(lot),
+                             fetch_redirect_response=False)
+        self.assertEqual(
+            (lot.substance.key, lot.source, lot.supplier, lot.unit,
+             lot.batch, lot.location, lot.made_on, lot.note),
+            ("cinnamic-acid", "bought", "Sigma", "mg", "B-1", "Kühlraum",
+             date(2026, 10, 1), "Rest"))
+        self.assertEqual(lot.amount, Decimal("50"))
+
+    def test_the_source_is_made_when_none_is_chosen(self) -> None:
+        data = lot_data()
+        del data["source"]
+        self.client.post(NEW_LOT, data)
+        self.assertEqual(Lot.objects.get().source, "made")
+
     def test_the_opening_amount_is_the_first_movement(self) -> None:
-        lot = create_lot(self.kl, article_number="CH-0012", unit="mg",
-                         amount=Decimal("50"))
-        movement = lot.movements.get()
+        self.client.post(NEW_LOT, lot_data(amount="50"))
+        movement = Lot.objects.get().movements.get()
         self.assertEqual(movement.kind, LotMovement.Kind.OPENING)
         self.assertEqual(movement.kind, "opening")
         self.assertEqual((movement.amount, movement.amount_after),
@@ -101,51 +176,80 @@ class LotTests(InventoryCase):
         self.assertEqual(movement.date, TODAY)
         self.assertIsNotNone(movement.booked_at)
 
-    def test_the_opening_date_may_be_given(self) -> None:
-        lot = create_lot(self.kl, article_number="CH-0012", unit="mg",
-                         amount=Decimal("50"), date=date(2026, 10, 1))
-        self.assertEqual(lot.movements.get().date, date(2026, 10, 1))
-
-    def test_the_four_units(self) -> None:
-        units = {value for value, _ in Lot._meta.get_field("unit").choices}
-        self.assertEqual(units, {"mg", "g", "umol", "mmol"})
-
     def test_amounts_are_kept_in_the_base_unit(self) -> None:
         cases = [("mg", "5", "5"), ("g", "1", "1000"), ("umol", "5", "5"),
                  ("mmol", "2", "2000"), ("g", "0.0015", "1.5")]
-        for number, (unit, amount, base) in enumerate(cases):
+        for unit, amount, base in cases:
             with self.subTest(unit=unit, amount=amount):
-                lot = create_lot(
-                    self.kl, article_number=f"L-{number}", unit=unit,
-                    amount=Decimal(amount))
-                lot = fresh(lot)
+                Lot.objects.all().delete()
+                self.client.post(NEW_LOT, lot_data(unit=unit,
+                                                   amount=amount))
+                lot = Lot.objects.get()
                 self.assertEqual(lot.unit, unit)
                 self.assertEqual(lot.amount, Decimal(base))
                 self.assertEqual(lot.movements.get().amount_after,
                                  Decimal(base))
 
-    def test_amounts_have_six_places(self) -> None:
-        self.assertEqual(Lot._meta.get_field("amount").decimal_places, 6)
-        lot = create_lot(self.kl, article_number="CH-0012", unit="mg",
-                         amount=Decimal("0.000001"))
-        self.assertEqual(fresh(lot).amount, Decimal("0.000001"))
+    def test_the_smallest_amount(self) -> None:
+        self.client.post(NEW_LOT, lot_data(amount="0.000001"))
+        self.assertEqual(Lot.objects.get().amount, Decimal("0.000001"))
 
     def test_a_lot_of_zero_is_used_up_from_the_start(self) -> None:
-        lot = create_lot(self.kl, article_number="CH-0012", unit="mg",
-                         amount=Decimal("0"))
-        self.assertEqual(fresh(lot).amount, 0)
+        self.client.post(NEW_LOT, lot_data(amount="0"))
+        self.assertEqual(Lot.objects.get().amount, 0)
 
     def test_a_negative_amount_is_refused(self) -> None:
         before = snapshot()
-        with self.assertRaises(Refused):
-            create_lot(self.kl, article_number="CH-0012", unit="mg",
-                       amount=Decimal("-1"))
+        self.refused(self.client.post(NEW_LOT, lot_data(amount="-1")),
+                     "amount")
         self.assertEqual(snapshot(), before)
 
     def test_a_lot_keeps_a_history(self) -> None:
-        lot = create_lot(self.kl, article_number="CH-0012", unit="mg",
-                         amount=Decimal("50"))
-        self.assertEqual(lot.history.get().history_user, self.kl)
+        self.client.post(NEW_LOT, lot_data())
+        self.assertEqual(Lot.objects.get().history.get().history_user,
+                         self.kl)
+
+    def test_a_lot_of_a_substance_without_an_article(self) -> None:
+        make_substance("acetophenone", "Acetophenone")
+        self.client.post(NEW_LOT, lot_data(substance="acetophenone"))
+        self.assertEqual(Lot.objects.get().substance.key, "acetophenone")
+
+    def test_made_and_bought_lots_of_one_substance(self) -> None:
+        self.client.post(NEW_LOT, lot_data(source="made"))
+        self.client.post(NEW_LOT, lot_data(source="bought",
+                                           supplier="Sigma"))
+        self.assertEqual(
+            sorted(Lot.objects.values_list("source", "supplier")),
+            [("bought", "Sigma"), ("made", "")])
+
+    def test_an_unknown_source_is_refused(self) -> None:
+        self.refused(self.client.post(NEW_LOT, lot_data(source="stolen")),
+                     "source")
+
+    def test_a_supplier_of_more_than_100_characters_is_refused(self) -> None:
+        self.refused(self.client.post(NEW_LOT, lot_data(
+            source="bought", supplier="s" * 101)), "supplier")
+
+    def test_an_unknown_substance_is_refused(self) -> None:
+        before = snapshot()
+        self.refused(self.client.post(NEW_LOT, lot_data(
+            substance="no-such-substance")), "substance")
+        self.assertEqual(snapshot(), before)
+
+    def test_the_substance_source_and_unit_are_fixed(self) -> None:
+        make_substance("acetophenone")
+        self.client.post(NEW_LOT, lot_data(source="bought",
+                                           supplier="Sigma"))
+        lot = Lot.objects.get()
+        self.client.post(lot_url(lot, "edit"), {
+            "batch": "B-2", "location": "", "made_on": "", "note": "x",
+            "substance": "acetophenone", "source": "made",
+            "supplier": "Other", "unit": "g"})
+        lot = fresh(lot)
+        self.assertEqual(
+            (lot.batch, lot.substance.key, lot.source, lot.supplier,
+             lot.unit),
+            ("B-2", "cinnamic-acid", "bought", "Sigma", "mg"))
 
 
 class LotCorrectionTests(InventoryCase):
@@ -254,9 +358,8 @@ class FillingFromBulkTests(InventoryCase):
         self.assertEqual(fresh(lot).amount, Decimal("48.8888"))
 
     def test_the_proposal_rounds_half_up_to_six_places(self) -> None:
-        self.use_index(build_index("de", [compound(
-            "tie", name="Tie", mw=2.5, item_number="T-1")]))
-        item = self.item("T-1", size="0.001", unit="umol", quantity=0)
+        item = self.item("T-1", size="0.001", unit="umol", quantity=0,
+                         mw="2.5")
         lot = self.lot("T-1", "mg", "1")
         movement = fill(self.kl, item, count=1, lot=lot)
         self.assertEqual(movement.bulk_movement.amount, Decimal("0.000003"))
@@ -301,9 +404,8 @@ class FillingFromBulkTests(InventoryCase):
         self.assertEqual(snapshot(), before)
 
     def test_a_proposal_that_rounds_to_zero_refuses_both(self) -> None:
-        self.use_index(build_index("de", [compound(
-            "light", name="Light", mw=0.001, item_number="T-2")]))
-        item = self.item("T-2", size="0.001", unit="umol", quantity=0)
+        item = self.item("T-2", size="0.001", unit="umol", quantity=0,
+                         mw="0.001")
         lot = self.lot("T-2", "mg", "5")
         before = snapshot()
         with self.assertRaises(Refused):
@@ -318,7 +420,7 @@ class FillingFromBulkTests(InventoryCase):
             fill(self.kl, item, count=1, lot=lot, amount=Decimal("1"))
         self.assertEqual(snapshot(), before)
 
-    def test_a_lot_of_another_article_is_refused(self) -> None:
+    def test_a_lot_of_another_substance_is_refused(self) -> None:
         item = self.item("CH-0012", quantity=0)
         lot = self.lot("CH-0013", "mg", "50")
         before = snapshot()

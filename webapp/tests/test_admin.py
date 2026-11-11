@@ -18,10 +18,10 @@ class AdminCase(IndexMixin, TestCase):
         cls.staff = make_user("boss", "BO", is_staff=True,
                               is_superuser=True)
         cls.worker = make_user("lab-worker-kl", "KL")
-        cls.first = make_task(cls.worker, product="Aspirin")
-        cls.second = make_task(cls.worker, product="Zimtsäure",
+        cls.first = make_task(cls.worker, substance="Aspirin")
+        cls.second = make_task(cls.worker, substance="Zimtsäure",
                                batch="B-77")
-        cls.third = make_task(cls.worker, product="Ferrocen")
+        cls.third = make_task(cls.worker, substance="Ferrocen")
 
     def setUp(self) -> None:
         self.use_index(demo_index())
@@ -72,10 +72,16 @@ class TaskListTests(AdminCase):
         self.assertNotIn(self.first.number, text)
         self.assertNotIn(self.third.number, text)
 
-    def test_search_by_product(self) -> None:
-        text = self.client.get(f"{TASKS}?q=ferrocen").content.decode()
-        self.assertIn(self.third.number, text)
-        self.assertNotIn(self.first.number, text)
+    def test_search_by_the_substance(self) -> None:
+        """By its key and by its names."""
+        fourth = make_task(self.worker, substance="CH-0012")
+        for query in ("ferrocen", "cinnamic-acid", "cinnamic", "zimts"):
+            wanted = self.third if query == "ferrocen" else fourth
+            with self.subTest(query=query):
+                text = self.client.get(
+                    f"{TASKS}?q={query}").content.decode()
+                self.assertIn(f"{TASKS}{wanted.pk}/change/", text)
+                self.assertNotIn(f"{TASKS}{self.first.pk}/change/", text)
 
     def test_search_by_batch(self) -> None:
         text = self.client.get(f"{TASKS}?q=B-77").content.decode()

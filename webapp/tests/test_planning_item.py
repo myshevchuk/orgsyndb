@@ -146,11 +146,10 @@ class FigureTests(PlanningCase):
         self.assertEqual(found.lacking, {})
         self.assertIsInstance(found.yield_amount, Decimal)
 
-    def test_the_name_is_that_of_the_first_item(self) -> None:
-        """The first in the item list's order, though it has no
-        demand."""
+    def test_the_name_is_that_of_the_substance(self) -> None:
+        """Every size of the article has the name of its substance."""
         self.item("NV-1", "Erste", "5", "mg", 1)
-        self.planned_item("NV-1", size="10", quantity=1, name="Zweite")
+        self.planned_item("NV-1", size="10", quantity=1)
         self.assertEqual(self.forecast("NV-1").name, "Erste")
 
     def test_the_model_of_each_item(self) -> None:
@@ -523,6 +522,6 @@ class RhythmPageTests(PageCase):
     def test_a_task_does_not_change_the_rhythm(self) -> None:
         item = self.item("NV-1", "NV-1", "1", "mg", 20)
         self.deliver(item, 1, date(2026, 8, 1))
-        make_task(self.kl, product="NV-1")
+        make_task(self.kl, substance="NV-1")
         self.assertTrue(has_date(self.prognosis(item).text(),
                                  date(2026, 8, 1)))

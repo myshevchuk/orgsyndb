@@ -1,0 +1,26 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n %}
+{% block title %}{{ heading }}{% endblock %}
+{% block main %}
+<div class="lab-heading">
+<h1>{{ heading }}</h1>
+{% if user.is_authenticated %}<p class="actions"><a href="/lab/registry/{{ name }}/new/">{% translate "New term" %}</a></p>
+{% endif %}</div>
+<p><a href="/lab/registry/">{% translate "Substances" %}</a></p>
+<div class="table-scroll">
+<table class="inventory-table vocabulary-table">
+<thead>
+<tr><th scope="col">{% translate "Key" %}</th><th scope="col">{% translate "Label" %}</th><th scope="col">{% translate "German label" %}</th>{% if tree %}<th scope="col">{% translate "Parent" %}</th>{% endif %}<th scope="col" class="number">{% translate "In use" %}</th></tr>
+</thead>
+<tbody>
+{% for term, depth, count in terms %}<tr>
+<td class="term-depth-{{ depth }}" style="padding-inline-start: {{ depth }}.5em">{% if user.is_authenticated %}<a href="/lab/registry/{{ name }}/{{ term.key }}/edit/">{{ term.key }}</a>{% else %}{{ term.key }}{% endif %}</td>
+<td>{{ term.label }}</td>
+<td>{{ term.label_de }}</td>
+{% if tree %}<td>{% if term.parent %}{{ term.parent.shown_label }}{% endif %}</td>
+{% endif %}<td class="number">{{ count }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% if not terms %}<p>{% translate "No terms." %}</p>
+{% endif %}{% endblock %}

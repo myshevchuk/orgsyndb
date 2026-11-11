@@ -1,26 +1,25 @@
 """The production plan as the database gives it: which tasks belong to
 which articles, each article's forecast, and the priority of each task.
 
-Planning works on articles: all items of the inventory ``end-products``
-with one article number. ``Plan`` reads the records once and keeps each
-article's forecast, so a page asks one plan for every figure it shows.
+Planning works on the articles that have an article number, each the
+items of one substance; a task belongs to the article of its substance.
+``Plan`` reads the records once and keeps each article's forecast, so a
+page asks one plan for every figure it shows.
 """
 
 import math
-from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from functools import cached_property
-from typing import NamedTuple
+from typing import Any, NamedTuple
 from urllib.parse import urlencode
 
 from inventory.figures import (Consumption, bulk, consumption, convert,
                                counted_lines, figures_of, molar_mass,
                                quarter_of)
-from inventory.models import (BASE_UNIT, END_PRODUCTS, EnteredConsumption,
-                              Item, Level, Lot, Unit)
-from orgsyndb_web import index
+from inventory.models import (BASE_UNIT, Article, EnteredConsumption, Item,
+                              Level, Lot, Unit)
 from planning import forecast
 from planning.forecast import Model, Rhythm
 from planning.models import Parameters
@@ -29,30 +28,6 @@ from tasks.models import Priority, State, Task
 ACTIVE = (State.PLANNED, State.RUNNING)
 # The levels of the items planning leaves out: they have no demand.
 UNPLANNED = (Level.DORMANT, Level.UNDELIVERED)
-
-
-def compound_key(text: str) -> str | None:
-    """Return the key of the compound ``compound_for`` finds for TEXT, or
-    None."""
-    found = index.compound_for(text)
-    return found.key if found else None
-
-
-def matches(product: str, article_number: str | None,
-            key: Callable[[str], str | None] = compound_key) -> bool:
-    """Whether a task's PRODUCT matches the article ARTICLE_NUMBER.
-
-    They match when the two texts are equal regardless of case, or when
-    KEY, ``compound_key`` by default, finds a compound for both and it
-    is the same one. No product matches an ARTICLE_NUMBER of None or
-    empty.
-    """
-    if not article_number:
-        return False
-    if product.casefold() == article_number.casefold():
-        return True
-    found = key(product)
-    return found is not None and found == key(article_number)
 
 
 class TaskPriority(NamedTuple):
@@ -117,9 +92,9 @@ class ItemForecast:
 class ArticleForecast:
     """The forecast of an article that has demand.
 
-    ITEMS are all its items in the item list's order, NAME that of the
-    first. BULK_UNIT is the unit its bulk is counted in, USABLE_BULK
-    what its open lots that convert can fill in whole containers, and
+    SUBSTANCE is the article's substance and NAME its name; ITEMS are
+    all its items in the item list's order. BULK_UNIT is the unit its
+    bulk is counted in, USABLE_BULK what its open lots that convert can fill in whole containers, and
     UNCONVERTIBLE whether an open lot does not convert. CERTAINTY is
     the one each item with demand is planned at. RUNWAY, SLACK and
     LATEST_START follow from those and from SYNTHESIS_DAYS, the longest
@@ -132,6 +107,7 @@ class ArticleForecast:
     """
 
     article_number: str
+    substance: Any
     name: str
     items: list[ItemForecast]
     parameters: Parameters
@@ -239,47 +215,47 @@ class Plan:
                  parameters: Parameters | None = None) -> None:
         self.today = today
         self.parameters = parameters or Parameters.current()
-        self._keys: dict[str, str | None] = {}
         self._forecasts: dict[str, ArticleForecast | None] = {}
 
     @cached_property
     def items(self) -> dict[str, list[Item]]:
-        """The items of ``end-products`` that have an article number, by
-        article number, each in the item list's order."""
+        """The items whose article has an article number, by article
+        number, each in the item list's order."""
         found: dict[str, list[Item]] = {}
         for item in sorted(Item.objects.filter(
-                inventory=END_PRODUCTS, article_number__isnull=False),
-                key=Item.sort_key):
+                article__article_number__isnull=False).select_related(
+                    "article__substance"), key=Item.sort_key):
             found.setdefault(item.article_number, []).append(item)
         return found
 
     @cached_property
+    def numbers(self) -> dict[int, str]:
+        """The article numbers of the numbered articles, with items or
+        without, by the ID of their substance."""
+        return dict(Article.objects.filter(
+            article_number__isnull=False).values_list("pk",
+                                                      "article_number"))
+
+    @cached_property
     def lots(self) -> list[Lot]:
-        """The open lots of ``end-products``."""
-        return list(Lot.objects.filter(inventory=END_PRODUCTS,
-                                       amount__gt=0))
+        """The open lots."""
+        return list(Lot.objects.filter(amount__gt=0))
 
     @cached_property
     def tasks(self) -> list[Task]:
         """Every task."""
-        return list(Task.objects.all())
+        return list(Task.objects.select_related("substance"))
 
-    def key(self, text: str) -> str | None:
-        """Return the compound key ``compound_key`` gives TEXT, read once
-        per text."""
-        if text not in self._keys:
-            self._keys[text] = compound_key(text)
-        return self._keys[text]
+    def matches(self, task: Task, article_number: str) -> bool:
+        """Whether TASK names the substance of the article
+        ARTICLE_NUMBER."""
+        return self.numbers.get(task.substance_id) == article_number
 
-    def matches(self, product: str, article_number: str) -> bool:
-        """Whether PRODUCT matches ARTICLE_NUMBER, as ``matches`` tells."""
-        return matches(product, article_number, self.key)
-
-    def matching(self, product: str) -> list[str]:
-        """Return the article numbers PRODUCT matches, in alphabetical
-        order."""
-        return sorted(number for number in self.items
-                      if self.matches(product, number))
+    def matching(self, task: Task) -> list[str]:
+        """Return the article numbers TASK matches: that of its
+        substance's article, when it has a number, or none."""
+        number = self.numbers.get(task.substance_id)
+        return [] if number is None else [number]
 
     def forecasts(self) -> list[ArticleForecast]:
         """Return the forecast of every article that has one, by article
@@ -307,7 +283,7 @@ class Plan:
         mass = molar_mass(items[0])
         unit = Unit.UMOL if mass else BASE_UNIT[planned[0].unit]
         lots = [lot for lot in self.lots
-                if lot.article_number == article_number]
+                if lot.substance_id == items[0].article_id]
         entries = [self._item(item, unit, mass) for item in items]
         held = [entry for entry in entries if entry.model is not None]
         if not held:
@@ -331,7 +307,8 @@ class Plan:
         horizon = days + settings.buffer_days + settings.target_days
         produced, mg = self._yield(held, horizon, each, usable, unit, mass)
         return ArticleForecast(
-            article_number=article_number, name=items[0].name,
+            article_number=article_number,
+            substance=items[0].article.substance, name=items[0].name,
             items=entries,
             parameters=settings, bulk_unit=unit, usable_bulk=usable,
             unconvertible=any(amount is None for amount in converted),
@@ -348,7 +325,7 @@ class Plan:
 
     @staticmethod
     def _yield(held: list[ItemForecast], horizon: int, each: float,
-               usable: Decimal, unit: str, mass: float | None
+               usable: Decimal, unit: str, mass: Decimal | None
                ) -> tuple[Decimal | None, int | None]:
         """Return what a new synthesis must yield for the items HELD, all
         with demand, to last HORIZON days at the certainty EACH, beyond
@@ -369,10 +346,10 @@ class Plan:
                                             mass)))
         return forecast.whole(exact), mg
 
-    def _item(self, item: Item, unit: str, mass: float | None
+    def _item(self, item: Item, unit: str, mass: Decimal | None
               ) -> ItemForecast:
         """Return the forecast of ITEM with its size in UNIT, MASS being
-        the molar mass of its compound; a dormant or never-delivered
+        the molar mass of its substance; a dormant or never-delivered
         item has no demand model."""
         entered = {(row.year, row.quarter): row.count for row in
                    EnteredConsumption.objects.filter(item=item)}
@@ -404,7 +381,7 @@ class Plan:
         ended = sorted(
             (task for task in self.tasks
              if task.state == State.ENDED and task.started
-             and self.matches(task.product, article_number)),
+             and self.matches(task, article_number)),
             key=lambda task: (task.ended, task.started, task.serial))
         return [max(1, (task.ended - task.started).days)
                 for task in ended]
@@ -427,8 +404,7 @@ class Plan:
             return None
         slacks = [found.runway - self.parameters.buffer_days
                   - self.remaining(task, found)
-                  for found in map(self.forecast,
-                                   self.matching(task.product))
+                  for found in map(self.forecast, self.matching(task))
                   if found is not None]
         return min(slacks, default=None)
 
@@ -447,7 +423,7 @@ class Plan:
         FOUND, running first, then by number."""
         active = sorted(
             (task for task in self.tasks if task.state in ACTIVE
-             and self.matches(task.product, found.article_number)),
+             and self.matches(task, found.article_number)),
             key=lambda task: (task.state != State.RUNNING, task.serial))
         lines = []
         for task in active:
@@ -471,10 +447,9 @@ class Plan:
                             and not tasks and not found.unconvertible))
 
     def articles_of(self, task: Task) -> list[ArticleLine]:
-        """Return the articles TASK matches, in alphabetical order, each
-        with its forecast."""
+        """Return the articles TASK matches, each with its forecast."""
         return [ArticleLine(number, self.forecast(number))
-                for number in self.matching(task.product)]
+                for number in self.matching(task)]
 
 
 def article(article_number: str, today: date) -> ArticleForecast | None:
@@ -492,37 +467,33 @@ def task_priority(task: Task, today: date) -> TaskPriority:
 
 
 def batch_lots(task: Task) -> list[Lot]:
-    """Return the lots of ``end-products`` that belong to TASK: those
-    with its batch, which is not empty, whose article it matches, in
-    the lot list's order."""
+    """Return the lots that belong to TASK: those of its substance with
+    its batch, which is not empty, in the order of their IDs."""
     if not task.batch:
         return []
-    return [lot for lot in Lot.objects.filter(inventory=END_PRODUCTS,
-                                              batch=task.batch)
-            if matches(task.product, lot.article_number)]
+    return list(Lot.objects.filter(batch=task.batch,
+                                   substance_id=task.substance_id)
+                .select_related("substance").order_by("id"))
 
 
 def batch_tasks(lot: Lot) -> list[Task]:
-    """Return the tasks that belong to LOT: those with its batch, which
-    is not empty, that match its article, by number."""
+    """Return the tasks that belong to LOT: those of its substance with
+    its batch, which is not empty, by number."""
     if not lot.batch:
         return []
-    return sorted((task for task in Task.objects.filter(batch=lot.batch)
-                   if matches(task.product, lot.article_number)),
+    return sorted(Task.objects.filter(batch=lot.batch,
+                                      substance_id=lot.substance_id),
                   key=lambda task: task.serial)
 
 
-def bulk_link(task: Task, articles: Iterable[str]) -> str | None:
+def bulk_link(task: Task) -> str | None:
     """Return the path of the new-lot form filled in from TASK, or None.
 
     The form is filled in when TASK is ended, not cancelled, and has a
-    batch, and ARTICLES, the article numbers it matches, are not empty:
-    with the first of them in alphabetical order, the batch, and the end
-    date.
+    batch: with its substance's key, the batch, and the end date.
     """
-    first = min(articles, default=None)
-    if task.state != State.ENDED or not task.batch or first is None:
+    if task.state != State.ENDED or not task.batch:
         return None
     return "/lab/inventory/bulk/new/?" + urlencode({
-        "article": first, "batch": task.batch,
+        "substance": task.substance.key, "batch": task.batch,
         "made_on": task.ended.isoformat()})

@@ -9,7 +9,7 @@ from datetime import date, datetime, time, timedelta
 from django.test import TestCase
 
 from . import (BERLIN, IndexMixin, build_index, demo_data, demo_index,
-               frozen, table)
+               frozen, page, table)
 from .demo_support import (ACCOUNTS, ARTICLES, DAY, DELIVERIES,
                            DEMO_PASSWORD, ITEMS, LOGIN, NOTE_NUMBER,
                            NUMBERLESS, PLAN, TASKS, SeededCase, noon,
@@ -130,6 +130,64 @@ class AccountTests(SeededCase):
                 self.assertLess(task.ended, year_ago.date())
 
 
+class RegistryTests(SeededCase):
+    """The demo registry, loaded before the lab records (lab-demo: Demo
+    data command)."""
+
+    def test_the_registry_is_the_demo_registry(self) -> None:
+        from registry import snapshot as registry_snapshot
+        from .registry_support import demo_registry, without_digest
+        self.assertEqual(
+            without_digest(registry_snapshot.build()),
+            without_digest(demo_registry()))
+
+    def test_the_registry_holds_the_substances_of_the_collection(
+            self) -> None:
+        from registry.models import Substance
+        keys = set(Substance.objects.values_list("key", flat=True))
+        self.assertEqual(len(keys), 21)
+        self.assertLessEqual({"cinnamic-acid", "new-compound-7",
+                              NUMBERLESS[1]}, keys)
+        self.assertEqual(
+            keys - {"new-compound-7"},
+            {entry["key"] for entry in demo_data()["compounds"]})
+
+    def test_the_registry_is_klehmanns_first_change_on_the_opening_day(
+            self) -> None:
+        from inventory.models import Article, Item
+        from registry.models import Substance
+        from vocabulary.models import (ChemicalClass, Group, Project,
+                                       ReactionType)
+        klehmann = self.account("klehmann")
+        created = []
+        records = [
+            *Substance.objects.all(),
+            *Article.objects.exclude(article_number__isnull=True),
+            *(term for model in (ChemicalClass, Group, Project,
+                                 ReactionType)
+              for term in model.objects.all())]
+        for record in records:
+            first = record.history.order_by("history_id").first()
+            with self.subTest(record=str(record)):
+                self.assertEqual(first.history_type, "+")
+                self.assertEqual(first.history_user, klehmann)
+                self.assertEqual(local(first.history_date).date(), O)
+            created.append(first.history_date)
+        self.assertTrue(created)
+        opened = [first.history_date for first in (
+            record.history.order_by("history_id").first()
+            for record in Item.objects.all())]
+        self.assertLess(max(created), min(opened))
+
+    def test_the_articles_with_numbers_come_with_the_registry(self) -> None:
+        from inventory.models import Article
+        for article in Article.objects.exclude(article_number__isnull=True):
+            first = article.history.order_by("history_id").first()
+            with self.subTest(article=article.article_number):
+                self.assertEqual(first.article_number,
+                                 article.article_number)
+
+
 class InventoryTests(SeededCase):
 
     def test_item_list(self) -> None:
@@ -149,7 +207,7 @@ class InventoryTests(SeededCase):
         self.assertGreater(len(category), 1)
         self.assertEqual(last[header[1]].text().removesuffix("neu"),
                          NUMBERLESS[0])
-        item = Item.objects.get(article_number__isnull=True)
+        item = Item.objects.get(article__article_number__isnull=True)
         self.assertEqual(last[header[1]].find("a").get("href"),
                          f"/lab/inventory/items/{item.pk}/")
         keys = compound_keys()
@@ -158,13 +216,13 @@ class InventoryTests(SeededCase):
             name = row[header[1]]
             with self.subTest(article=article):
                 link = name.find("a")
+                self.assertIsNotNone(link)
+                key = "new-compound-7" if article == "NV-0007" \
+                    else keys[article]
+                self.assertEqual(link.get("href"),
+                                 f"/lab/registry/substances/{key}/")
                 if article == "NV-0007":
-                    self.assertIsNone(link)
                     self.assertEqual(name.text(), "Neuverbindung 7")
-                else:
-                    self.assertIsNotNone(link)
-                    self.assertEqual(link.get("href"),
-                                     f"/compounds/{keys[article]}/")
 
     def test_new_positions(self) -> None:
         """Scenario: New positions."""
@@ -183,7 +241,8 @@ class InventoryTests(SeededCase):
 
     def test_sizes_set_aside(self) -> None:
         from inventory.models import Item
-        aside = {(item.article_number, str(item.container), item.status)
+        aside = {(item.article.article_number, str(item.container),
+                  item.status)
                  for item in Item.objects.exclude(status="active")}
         self.assertEqual(aside, {("CH-0012", "1 g", "discontinued"),
                                  ("CH-0010", "25 g", "not_needed")})
@@ -202,32 +261,50 @@ class InventoryTests(SeededCase):
             with self.subTest(item=str(item)):
                 self.assertRegex(item.compartment, r"^[0-9]+$")
                 self.assertRegex(item.box, r"^[0-9]+$")
-            places[item.article_number or item.name].add(item.compartment)
+            places[item.article_id].add(item.compartment)
         self.assertTrue(Item.objects.filter(
-            article_number__isnull=True).exclude(compartment="").exists())
+            article__article_number__isnull=True).exclude(
+                compartment="").exists())
         for article, compartments in places.items():
             with self.subTest(article=article):
                 self.assertEqual(len(compartments), 1)
 
-    def test_items_are_named_as_their_compounds(self) -> None:
+    def test_items_are_named_as_their_substances(self) -> None:
         from inventory.models import Item
         names = compound_names()
-        for item in Item.objects.exclude(article_number="NV-0007") \
-                .exclude(article_number__isnull=True):
+        for item in Item.objects.exclude(
+                article__article_number="NV-0007").exclude(
+                    article__article_number__isnull=True):
+            substance = item.article.substance
             with self.subTest(item=str(item)):
-                self.assertEqual(item.name, names[item.article_number])
+                self.assertEqual(substance.name_de,
+                                 names[item.article.article_number])
         self.assertEqual(
-            [item.name for item in Item.objects.filter(
-                article_number__isnull=True)], [NUMBERLESS[0]])
-        self.assertTrue(all(
-            item.name == "Neuverbindung 7"
-            for item in Item.objects.filter(article_number="NV-0007")))
+            [item.article.substance.key for item in Item.objects.filter(
+                article__article_number__isnull=True)], [NUMBERLESS[1]])
+        for item in Item.objects.filter(article__article_number="NV-0007"):
+            self.assertEqual(item.article.substance.key, "new-compound-7")
+            self.assertEqual(item.article.substance.name, "New compound 7")
+            self.assertEqual(item.article.substance.name_de,
+                             "Neuverbindung 7")
+
+    def test_every_article_is_one_substance_of_the_registry(self) -> None:
+        from inventory.models import Article
+        from registry.models import Substance
+        numbered = Article.objects.exclude(article_number__isnull=True)
+        self.assertEqual(
+            {article.article_number for article in numbered},
+            set(ARTICLES))
+        self.assertEqual(Article.objects.count(), len(ARTICLES) + 1)
+        for article in Article.objects.all():
+            self.assertTrue(Substance.objects.filter(
+                pk=article.pk).exists())
 
     def test_sizes_and_units(self) -> None:
         from inventory.models import Item
         sizes = defaultdict(int)
         for item in Item.objects.all():
-            sizes[item.article_number] += 1
+            sizes[item.article_id] += 1
         self.assertGreaterEqual(max(sizes.values()), 3)
         self.assertLessEqual({"mg", "g", "umol"},
                              set(Item.objects.values_list("unit",
@@ -259,7 +336,8 @@ class InventoryTests(SeededCase):
         from inventory.models import Item
         early = {quarters_before(quarter_of(O), count)
                  for count in range(5, 9)}
-        dormant = Item.objects.get(article_number="CH-0001", size=250)
+        dormant = Item.objects.get(article__article_number="CH-0001",
+                                   size=250)
         for item, quarters in by_item.items():
             with self.subTest(item=item):
                 self.assertEqual(quarters, early if item == dormant.pk
@@ -334,21 +412,32 @@ class InventoryTests(SeededCase):
         self.assertTrue(fillings.exists())
         for filling in fillings:
             with self.subTest(filling=filling.pk):
-                if filling.item.article_number is None:
+                if filling.item.article.article_number is None:
                     self.assertIsNone(filling.bulk_movement)
                     continue
                 self.assertIsNotNone(filling.bulk_movement)
-                self.assertEqual(filling.bulk_movement.lot.article_number,
-                                 filling.item.article_number)
+                self.assertEqual(filling.bulk_movement.lot.substance,
+                                 filling.item.article.substance)
         self.assertTrue(fillings.filter(
-            item__article_number__isnull=True).exists())
+            item__article__article_number__isnull=True).exists())
         self.assertGreaterEqual(lots.filter(amount=0).count(), 1)
         corrected = LotMovement.objects.filter(
             kind=LotMovement.Kind.CORRECTION)
         self.assertEqual(corrected.count(), 1)
         self.assertTrue(corrected.get().note.strip())
-        self.assertTrue(lots.filter(article_number="NV-0007",
+        self.assertTrue(lots.filter(substance__key="new-compound-7",
                                     unit="umol").exists())
+
+    def test_bought_and_intermediate_lots(self) -> None:
+        from inventory.models import Article, Lot
+        bought = Lot.objects.filter(source="bought")
+        self.assertTrue(bought.exists())
+        self.assertTrue(all(lot.supplier.strip() for lot in bought))
+        self.assertTrue(Lot.objects.filter(source="made").exists())
+        intermediate = [
+            lot for lot in Lot.objects.filter(source="made", amount__gt=0)
+            if not Article.objects.filter(pk=lot.substance_id).exists()]
+        self.assertTrue(intermediate)
 
     def test_notes(self) -> None:
         """Scenario: Notes."""
@@ -402,11 +491,10 @@ class TaskTests(SeededCase):
                 task.full_clean()
 
     def test_synthesis_time_of_ch_0012(self) -> None:
-        from planning.plan import matches
         from tasks.models import State, Task
         ended = [task for task in Task.objects.all()
                  if task.state == State.ENDED
-                 and matches(task.product, "CH-0012")]
+                 and task.substance.key == "cinnamic-acid"]
         self.assertGreaterEqual(len(ended), 3)
         header, rows = table(self.get(PLAN))
         row = next(row for row in rows if row[header[0]].text() == "CH-0012")
@@ -415,29 +503,40 @@ class TaskTests(SeededCase):
 
     def test_sequences(self) -> None:
         from tasks.models import State, Task
-        steps = {"SEQ-0001": ("CH-0010", ["OSDB-0001", "OSDB-0002"]),
-                 "SEQ-0002": ("CH-0002", ["OSDB-0004", "OSDB-0009"])}
+        steps = {"SEQ-0001": ("acetylsalicylic-acid",
+                              ["OSDB-0001", "OSDB-0002"]),
+                 "SEQ-0002": ("1-biphenyl-4-yl-ethanol",
+                              ["OSDB-0004", "OSDB-0009"])}
         for sequence, (product, wanted) in steps.items():
             tasks = Task.objects.filter(sequence=sequence)
             with self.subTest(sequence=sequence):
                 self.assertTrue(tasks.exists())
                 for task in tasks:
-                    self.assertEqual(task.product, product)
+                    self.assertEqual(task.substance.key, product)
                     self.assertEqual(task.sequence_steps, wanted)
                     self.assertEqual(task.steps_total, 2)
         self.assertTrue(any(
             task.state == State.RUNNING and task.steps_done == 1
             for task in Task.objects.exclude(sequence="")))
 
-    def test_compound_key_and_no_assignee(self) -> None:
+    def test_every_task_names_a_substance_of_the_registry(self) -> None:
+        from registry.models import Substance
         from tasks.models import Task
-        self.assertTrue(Task.objects.filter(product="cinnamic-acid").exists())
+        for task in Task.objects.all():
+            with self.subTest(task=task.number):
+                self.assertTrue(Substance.objects.filter(
+                    pk=task.substance_id).exists())
+
+    def test_a_substance_task_and_no_assignee(self) -> None:
+        from tasks.models import Task
+        self.assertTrue(Task.objects.filter(
+            substance__key="cinnamic-acid").exists())
         self.assertTrue(Task.objects.filter(assignee=None).exists())
 
     def test_the_position_without_a_number_has_its_task(self) -> None:
         from planning.plan import batch_lots
         from tasks.models import State, Task
-        tasks = list(Task.objects.filter(product=NUMBERLESS[1]))
+        tasks = list(Task.objects.filter(substance__key=NUMBERLESS[1]))
         self.assertTrue(tasks)
         ended = [task for task in tasks if task.state == State.ENDED]
         self.assertTrue(ended)
@@ -451,7 +550,7 @@ class TaskTests(SeededCase):
         from planning.plan import batch_lots, batch_tasks
         from tasks.models import State, Task
         batched = [task for task in Task.objects.exclude(batch="")
-                   .exclude(product=NUMBERLESS[1])
+                   .exclude(substance__key=NUMBERLESS[1])
                    if task.state == State.ENDED]
         self.assertTrue(batched)
         for task in batched:
@@ -510,11 +609,10 @@ class RecordedPastTests(SeededCase):
 
     def test_task_history(self) -> None:
         """Scenario: Task history."""
-        from planning.plan import matches
         from tasks.models import State, Task
         task = next(task for task in Task.objects.all()
                     if task.state == State.RUNNING
-                    and matches(task.product, "CH-0012"))
+                    and task.substance.key == "cinnamic-acid")
         records = list(task.history.order_by("history_id"))
         self.assertEqual(records[0].history_type, "+")
         self.assertIsNone(records[0].started)
@@ -576,22 +674,32 @@ class LanguageTests(IndexMixin, TestCase):
 
     def test_english_index(self) -> None:
         """Scenario: English index."""
-        from inventory.models import Item
         index = self.use_index(build_index("en"))
         seed(DAY, index=index)
-        self.assertTrue(all(
-            item.name == "New compound 7"
-            for item in Item.objects.filter(article_number="NV-0007")))
-        self.assertTrue(all(
-            item.name == "(E)-Cinnamic acid"
-            for item in Item.objects.filter(article_number="CH-0012")))
+        header, rows = table(page(self.client.get(ITEMS)))
+        names = {row[header[0]].text(): row[header[1]].text()
+                 for row in rows if row[header[0]].text()}
+        self.assertEqual(names["NV-0007"], "New compound 7")
+        self.assertEqual(names["CH-0012"], "(E)-Cinnamic acid")
 
-    def test_no_index_writes_german(self) -> None:
-        from inventory.models import Item
+    def test_a_german_index_names_the_items_in_german(self) -> None:
+        seed(DAY, index=self.use_index(build_index("de")))
+        header, rows = table(page(self.client.get(ITEMS)))
+        names = {row[header[0]].text(): row[header[1]].text()
+                 for row in rows if row[header[0]].text()}
+        self.assertEqual(names["NV-0007"], "Neuverbindung 7")
+        self.assertEqual(names["CH-0012"], "(E)-Zimtsäure")
+
+    def test_the_substances_have_names_in_both_languages(self) -> None:
+        from registry.models import Substance
         seed(DAY, index=self.use_index(None))
-        self.assertTrue(all(
-            item.name == "Neuverbindung 7"
-            for item in Item.objects.filter(article_number="NV-0007")))
+        for key, english, german in (
+                ("new-compound-7", "New compound 7", "Neuverbindung 7"),
+                ("cinnamic-acid", "(E)-Cinnamic acid", "(E)-Zimtsäure")):
+            with self.subTest(key=key):
+                found = Substance.objects.get(key=key)
+                self.assertEqual((found.name, found.name_de),
+                                 (english, german))
 
     def test_same_records_whatever_the_index(self) -> None:
         """Scenario: Same records whatever the index."""
@@ -606,16 +714,19 @@ def snapshot() -> dict:
     """The records that must not depend on the index, without their
     IDs."""
     from inventory.models import Item, Lot, Movement
+    from registry.models import Substance
     from tasks.models import Task
     return {
+        "substances": sorted(Substance.objects.values_list("key", "name")),
         "items": sorted(Item.objects.values_list(
-            "article_number", "size", "unit", "quantity"), key=repr),
+            "article__article_number", "size", "unit", "quantity"),
+            key=repr),
         "movements": sorted(Movement.objects.values_list(
-            "item__article_number", "item__size", "item__unit", "kind",
-            "count", "date"), key=repr),
+            "item__article__article_number", "item__size", "item__unit",
+            "kind", "count", "date"), key=repr),
         "lots": sorted(Lot.objects.values_list("batch", "amount")),
         "tasks": sorted(Task.objects.values_list(
-            "number", "product", "started", "ended")),
+            "number", "substance__key", "started", "ended")),
     }
 
 

@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
 
 from orgsyndb_web import index
+from registry.forms import SubstanceKeyField
 from tasks.models import Task
 
 DATE = forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
@@ -23,13 +24,14 @@ class AssigneeField(forms.ModelChoiceField):
 class TaskForm(forms.ModelForm):
     """The fields of a new task.
 
-    A sequence that the form sets or changes must be one the collection
-    index lists; its steps are copied onto the task and their number
+    The substance is named by its key. A sequence that the form sets or
+    changes must be one the collection index lists; its steps are copied onto the task and their number
     replaces the steps total. A sequence left as it was reads nothing
     from the index, and a cleared one clears the steps. Steps done left
     empty count as zero.
     """
 
+    substance = SubstanceKeyField()
     assignee = AssigneeField(
         queryset=get_user_model().objects.order_by("initials"),
         required=False, label=_("Assignee"), empty_label="–")
@@ -38,12 +40,10 @@ class TaskForm(forms.ModelForm):
 
     class Meta:
         model = Task
-        fields = ["product", "priority", "assignee", "started", "ended",
+        fields = ["substance", "priority", "assignee", "started", "ended",
                   "sequence", "steps_total", "steps_done", "batch",
                   "report", "qc_list", "note"]
         widgets = {
-            "product": forms.TextInput(attrs={"list": "compound-ids",
-                                              "autocomplete": "off"}),
             "sequence": forms.TextInput(attrs={"list": "sequence-ids",
                                                "autocomplete": "off"}),
             "started": DATE,
@@ -51,8 +51,6 @@ class TaskForm(forms.ModelForm):
             "note": forms.Textarea(attrs={"rows": 4}),
         }
         help_texts = {
-            "product": _("A compound of the collection, by its key or "
-                         "item number, or a name."),
             "priority": _("Applies while no forecast computes the "
                           "priority."),
             "sequence": _("A synthesis sequence of the collection; its "

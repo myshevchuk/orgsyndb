@@ -1,4 +1,4 @@
-{% extends "orgsyndb_web/base.html" %}{% load i18n inventory %}
+{% extends "orgsyndb_web/base.html" %}{% load i18n lab inventory %}
 {% block title %}{% translate "Bulk" %}{% endblock %}
 {% block main %}
 <div class="lab-heading">
@@ -13,13 +13,14 @@
 <div class="table-scroll">
 <table class="inventory-table">
 <thead>
-<tr><th scope="col">{% translate "Article no." %}</th><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "Amount" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th></tr>
+<tr><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Article no." %}</th><th scope="col">{% translate "Source" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "Amount" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th></tr>
 </thead>
 <tbody>
-{% for lot, name in rows %}<tr>
-<td><a href="/lab/inventory/bulk/{{ lot.pk }}/">{{ lot.article_number }}</a></td>
-<td>{{ name }}</td>
-<td>{{ lot.batch }}</td>
+{% for lot in lots %}<tr>
+<td>{% substance lot.substance %}</td>
+<td>{{ lot.article_number|default_if_none:"" }}</td>
+<td>{{ lot.origin }}</td>
+<td><a href="/lab/inventory/bulk/{{ lot.pk }}/">{{ lot.batch|default:lot.pk }}</a></td>
 <td class="number">{{ lot.amount|in_lot_unit:lot }}{% if not lot.amount %} <span class="lab-mark">{% translate "used up" %}</span>{% endif %}</td>
 <td>{{ lot.location }}</td>
 <td>{{ lot.made_on|default_if_none:"" }}</td>

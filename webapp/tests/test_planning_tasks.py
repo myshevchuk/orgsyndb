@@ -4,8 +4,8 @@ production-planning: Computed priority on tasks)."""
 
 from datetime import date, timedelta
 
-from . import (build_index, field_value, make_task, numbers, table,
-               task_form_data, task_url)
+from . import (build_index, field_value, make_task, numbers, substance_for,
+               table, task_form_data, task_url)
 from .inventory_support import TODAY
 from .planning_support import (PLAN, PlanningCase, article_links, count_days,
                                has_date, has_days, metadata, titles)
@@ -40,11 +40,11 @@ class ListPriorityTests(TasksCase):
 
     def setUp(self) -> None:
         super().setUp()
-        self.computed = make_task(self.kl, product="NV-1", priority="low")
+        self.computed = make_task(self.kl, substance="NV-1", priority="low")
         self.running_entered = make_task(
-            self.kl, product="Aspirin", priority="high",
+            self.kl, substance="Aspirin", priority="high",
             started=TODAY - timedelta(days=3))
-        self.medium = make_task(self.kl, product="Aspirin",
+        self.medium = make_task(self.kl, substance="Aspirin",
                                 priority="medium")
 
     def test_computed_over_entered(self) -> None:
@@ -74,7 +74,7 @@ class ListPriorityTests(TasksCase):
 
     def test_an_ended_task_keeps_its_entered_priority(self) -> None:
         """Scenario: Ended task keeps its entered priority."""
-        ended = make_task(self.kl, product="NV-1", priority="low",
+        ended = make_task(self.kl, substance="NV-1", priority="low",
                           started=date(2026, 9, 1), ended=date(2026, 9, 20),
                           report=True, qc_list=True)
         cell = self.rows("?state=all")[ended.number]["Priorität"]
@@ -83,7 +83,7 @@ class ListPriorityTests(TasksCase):
         self.assertNotIn("berechnet", cell.text())
 
     def test_a_cancelled_task_keeps_its_entered_priority(self) -> None:
-        cancelled = make_task(self.kl, product="NV-1", priority="low",
+        cancelled = make_task(self.kl, substance="NV-1", priority="low",
                               cancelled=True)
         cell = self.rows("?state=cancelled")[cancelled.number]["Priorität"]
         self.assertIn("niedrig", cell.text())
@@ -96,10 +96,10 @@ class ListPriorityTests(TasksCase):
         self.assertIn("berechnet", cell.text())
         self.assertIn("25 Tage", titles(cell))
 
-    def test_a_product_without_demand_keeps_its_entered_priority(
+    def test_a_substance_without_demand_keeps_its_entered_priority(
             self) -> None:
         self.item("NV-0", size="1", unit="mg", quantity=3)
-        task = make_task(self.kl, product="NV-0", priority="low")
+        task = make_task(self.kl, substance="NV-0", priority="low")
         cell = self.rows()[task.number]["Priorität"]
         self.assertIn("niedrig", cell.text())
         self.assertIn("manuell", cell.text())
@@ -119,8 +119,8 @@ class ListPriorityTests(TasksCase):
 class PriorityFilterTests(TasksCase):
 
     def test_the_filter_compares_the_computed_priority(self) -> None:
-        computed = make_task(self.kl, product="NV-1", priority="low")
-        entered_low = make_task(self.kl, product="Aspirin", priority="low")
+        computed = make_task(self.kl, substance="NV-1", priority="low")
+        entered_low = make_task(self.kl, substance="Aspirin", priority="low")
         self.assertEqual(self.shown("?priority=high"), [computed.number])
         self.assertEqual(self.shown("?priority=low"), [entered_low.number])
         self.assertEqual(self.shown("?priority=medium"), [])
@@ -131,7 +131,7 @@ class PriorityFilterTests(TasksCase):
         self.assertEqual(self.shown("?priority=high"), [])
 
     def test_an_ended_task_is_found_by_its_entered_priority(self) -> None:
-        ended = make_task(self.kl, product="NV-1", priority="low",
+        ended = make_task(self.kl, substance="NV-1", priority="low",
                           started=date(2026, 9, 1), ended=date(2026, 9, 20))
         self.assertEqual(self.shown("?state=ended&priority=low"),
                          [ended.number])
@@ -156,46 +156,46 @@ class ListOrderTests(PlanningCase):
 
     def test_the_smaller_slack_comes_first(self) -> None:
         """NV-10 has a slack of 11.65 days, NV-5 one of -24.3."""
-        ten = make_task(self.kl, product="NV-10")
-        five = make_task(self.kl, product="NV-5")
+        ten = make_task(self.kl, substance="NV-10")
+        five = make_task(self.kl, substance="NV-5")
         self.assertEqual(self.shown(), [five.number, ten.number])
 
     def test_a_task_without_a_slack_comes_after_those_with_one(self) -> None:
-        entered = make_task(self.kl, product="Aspirin", priority="high")
-        ten = make_task(self.kl, product="NV-10", priority="low")
-        five = make_task(self.kl, product="NV-5", priority="low")
+        entered = make_task(self.kl, substance="Aspirin", priority="high")
+        ten = make_task(self.kl, substance="NV-10", priority="low")
+        five = make_task(self.kl, substance="NV-5", priority="low")
         self.assertEqual(self.shown(),
                          [five.number, ten.number, entered.number])
 
     def test_the_priority_comes_before_the_slack(self) -> None:
-        fifteen = make_task(self.kl, product="NV-15")
-        entered = make_task(self.kl, product="Aspirin", priority="high")
+        fifteen = make_task(self.kl, substance="NV-15")
+        entered = make_task(self.kl, substance="Aspirin", priority="high")
         self.assertEqual(self.shown(), [entered.number, fifteen.number])
-        ten = make_task(self.kl, product="NV-10")
+        ten = make_task(self.kl, substance="NV-10")
         self.assertEqual(self.shown(),
                          [ten.number, entered.number, fifteen.number])
 
     def test_a_computed_low_comes_after_an_entered_medium(self) -> None:
         self.planned_item("NV-25", quantity=25)
-        low = make_task(self.kl, product="NV-25", priority="high")
-        medium = make_task(self.kl, product="Aspirin", priority="medium")
+        low = make_task(self.kl, substance="NV-25", priority="high")
+        medium = make_task(self.kl, substance="Aspirin", priority="medium")
         self.assertEqual(self.shown(), [medium.number, low.number])
 
     def test_equal_slack_goes_by_state(self) -> None:
         """A task that starts today needs the whole time, as a planned
         one does."""
-        planned = make_task(self.kl, product="NV-10")
-        running = make_task(self.kl, product="NV-10", started=TODAY)
+        planned = make_task(self.kl, substance="NV-10")
+        running = make_task(self.kl, substance="NV-10", started=TODAY)
         self.assertEqual(self.shown(), [running.number, planned.number])
 
     def test_equal_slack_then_goes_by_start_date_then_number(self) -> None:
         """Two tasks started more than the synthesis time ago have no
         time left; their slack is the same."""
-        late = make_task(self.kl, product="NV-10",
+        late = make_task(self.kl, substance="NV-10",
                          started=TODAY - timedelta(days=30))
-        early = make_task(self.kl, product="NV-10",
+        early = make_task(self.kl, substance="NV-10",
                           started=TODAY - timedelta(days=40))
-        same = make_task(self.kl, product="NV-10",
+        same = make_task(self.kl, substance="NV-10",
                          started=TODAY - timedelta(days=40))
         self.assertEqual(self.shown(),
                          [early.number, same.number, late.number])
@@ -204,17 +204,17 @@ class ListOrderTests(PlanningCase):
             self) -> None:
         """Its slack is smaller: the running task has done some of its
         work."""
-        running = make_task(self.kl, product="NV-15",
+        running = make_task(self.kl, substance="NV-15",
                             started=TODAY - timedelta(days=4))
-        planned = make_task(self.kl, product="NV-15")
+        planned = make_task(self.kl, substance="NV-15")
         self.assertEqual(self.shown(), [planned.number, running.number])
 
     def test_tasks_of_entered_priority_keep_the_old_order(self) -> None:
-        cancelled = make_task(self.kl, product="Aspirin", cancelled=True)
-        ended = make_task(self.kl, product="Aspirin",
+        cancelled = make_task(self.kl, substance="Aspirin", cancelled=True)
+        ended = make_task(self.kl, substance="Aspirin",
                           started=date(2026, 9, 1), ended=date(2026, 9, 2))
-        planned = make_task(self.kl, product="Aspirin")
-        running = make_task(self.kl, product="Aspirin",
+        planned = make_task(self.kl, substance="Aspirin")
+        running = make_task(self.kl, substance="Aspirin",
                             started=date(2026, 9, 1))
         self.assertEqual(
             self.shown("?state=all"),
@@ -225,21 +225,21 @@ class ListOrderTests(PlanningCase):
 class PagePriorityTests(TasksCase):
 
     def test_computed_priority_on_the_page(self) -> None:
-        task = make_task(self.kl, product="NV-1", priority="low")
+        task = make_task(self.kl, substance="NV-1", priority="low")
         cell = metadata(self.get(task_url(task)))["Priorität"]
         self.assertIn("hoch", cell.text())
         self.assertIn("berechnet", cell.text())
         self.assertIn("11 Tage", titles(cell))
 
     def test_entered_priority_on_the_page(self) -> None:
-        task = make_task(self.kl, product="Aspirin", priority="low")
+        task = make_task(self.kl, substance="Aspirin", priority="low")
         cell = metadata(self.get(task_url(task)))["Priorität"]
         self.assertIn("niedrig", cell.text())
         self.assertIn("manuell", cell.text())
         self.assertNotIn("berechnet", cell.text())
 
     def test_an_ended_task_shows_its_entered_priority(self) -> None:
-        task = make_task(self.kl, product="NV-1", priority="low",
+        task = make_task(self.kl, substance="NV-1", priority="low",
                          started=date(2026, 9, 1), ended=date(2026, 9, 20))
         cell = metadata(self.get(task_url(task)))["Priorität"]
         self.assertIn("niedrig", cell.text())
@@ -247,7 +247,7 @@ class PagePriorityTests(TasksCase):
 
     def test_the_english_page(self) -> None:
         self.use_index(build_index("en"))
-        task = make_task(self.kl, product="NV-1", priority="low")
+        task = make_task(self.kl, substance="NV-1", priority="low")
         cell = metadata(self.get(task_url(task)))["Priority"]
         self.assertIn("computed", cell.text())
         self.assertIn("11 days", titles(cell))
@@ -255,9 +255,9 @@ class PagePriorityTests(TasksCase):
 
 class PageForecastTests(TasksCase):
 
-    def test_forecast_of_the_product(self) -> None:
-        """Scenario: Forecast of the product."""
-        task = make_task(self.kl, product="NV-1")
+    def test_forecast_of_the_substance(self) -> None:
+        """Scenario: Forecast of the substance."""
+        task = make_task(self.kl, substance="NV-1")
         root = self.get(task_url(task))
         links = article_links(root)
         self.assertEqual([a.text() for a in links], ["NV-1"])
@@ -277,19 +277,19 @@ class PageForecastTests(TasksCase):
 
     def test_a_late_task_is_marked(self) -> None:
         self.planned_item("NV-5", quantity=5)
-        task = make_task(self.kl, product="NV-5")
+        task = make_task(self.kl, substance="NV-5")
         self.assertIn("verspätet", self.get(task_url(task)).text())
         running = self.running("NV-5", 3)
         self.assertIn("verspätet", self.get(task_url(running)).text())
 
     def test_a_task_in_time_is_not_marked(self) -> None:
-        task = make_task(self.kl, product="NV-1")
+        task = make_task(self.kl, substance="NV-1")
         self.assertNotIn("verspätet", self.get(task_url(task)).text())
 
     def test_an_ended_task_shows_the_article_and_no_slack_of_its_own(
             self) -> None:
         self.planned_item("NV-5", quantity=5)
-        task = make_task(self.kl, product="NV-5", started=date(2026, 9, 1),
+        task = make_task(self.kl, substance="NV-5", started=date(2026, 9, 1),
                          ended=date(2026, 9, 20), report=True, qc_list=True)
         text = self.get(task_url(task)).text()
         self.assertTrue(has_days(text, 24), text)
@@ -298,14 +298,14 @@ class PageForecastTests(TasksCase):
     def test_the_english_page(self) -> None:
         self.use_index(build_index("en"))
         self.planned_item("NV-5", quantity=5)
-        task = make_task(self.kl, product="NV-5")
+        task = make_task(self.kl, substance="NV-5")
         text = self.get(task_url(task)).text()
         self.assertIn("late", text)
         self.assertTrue(has_days(text, 24), text)
 
     def test_an_article_without_a_forecast(self) -> None:
         self.item("NV-0", size="1", unit="mg", quantity=3)
-        task = make_task(self.kl, product="NV-0")
+        task = make_task(self.kl, substance="NV-0")
         root = self.get(task_url(task))
         self.assertIn(NO_FORECAST_DE, root.text())
         links = article_links(root)
@@ -315,34 +315,14 @@ class PageForecastTests(TasksCase):
     def test_the_english_text_without_a_forecast(self) -> None:
         self.use_index(build_index("en"))
         self.item("NV-0", size="1", unit="mg", quantity=3)
-        task = make_task(self.kl, product="NV-0")
+        task = make_task(self.kl, substance="NV-0")
         self.assertIn(NO_FORECAST_EN, self.get(task_url(task)).text())
 
-    def test_a_product_that_matches_no_article(self) -> None:
-        task = make_task(self.kl, product="Aspirin")
+    def test_a_substance_without_an_article(self) -> None:
+        task = make_task(self.kl, substance="Aspirin")
         root = self.get(task_url(task))
         self.assertNotIn(NO_FORECAST_DE, root.text())
         self.assertEqual(article_links(root), [])
-
-    def test_every_matching_article_is_shown(self) -> None:
-        self.planned_item("CH-0012", size="10", unit="umol", quantity=10)
-        self.item("cinnamic-acid", size="10", unit="umol", quantity=3)
-        task = make_task(self.kl, product="CH-0012")
-        root = self.get(task_url(task))
-        links = [a.text() for a in article_links(root)]
-        self.assertEqual(sorted(links), ["CH-0012", "cinnamic-acid"])
-        self.assertIn(NO_FORECAST_DE, root.text())
-        self.assertTrue(has_days(root.text(), 60), root.text())
-
-    def test_the_task_slack_is_the_smallest_of_its_articles(self) -> None:
-        self.planned_item("CH-0012", size="10", unit="umol", quantity=10)
-        self.planned_item("cinnamic-acid", size="10", unit="umol",
-                          quantity=25)
-        task = make_task(self.kl, product="CH-0012")
-        text = self.get(task_url(task)).text()
-        self.assertTrue(has_days(text, 60), text)
-        self.assertTrue(has_days(text, 182), text)
-        self.assertEqual(count_days(text, 11), 2, text)
 
 
 class FormTests(TasksCase):
@@ -352,7 +332,7 @@ class FormTests(TasksCase):
         self.client.force_login(self.kl)
 
     def test_the_priority_field_says_when_it_applies(self) -> None:
-        task = make_task(self.kl, product="Aspirin")
+        task = make_task(self.kl, substance="Aspirin")
         for path in (NEW, task_url(task, "edit")):
             with self.subTest(path=path):
                 root = self.get(path)
@@ -366,25 +346,26 @@ class FormTests(TasksCase):
         self.use_index(build_index("en"))
         self.assertIn(HELP_EN, self.get(NEW).text())
 
-    def test_product_from_the_query(self) -> None:
-        """Scenario: Product from the query."""
-        root = self.get(NEW + "?product=CH-0012")
-        self.assertEqual(field_value(root, "product"), "CH-0012")
+    def test_substance_from_the_query(self) -> None:
+        """Scenario: Substance from the query."""
+        root = self.get(NEW + "?substance=cinnamic-acid")
+        self.assertEqual(field_value(root, "substance"), "cinnamic-acid")
 
-    def test_without_a_query_the_product_is_empty(self) -> None:
-        self.assertIn(field_value(self.get(NEW), "product"), (None, ""))
+    def test_without_a_query_the_substance_is_empty(self) -> None:
+        self.assertIn(field_value(self.get(NEW), "substance"), (None, ""))
 
-    def test_a_product_with_special_characters(self) -> None:
-        root = self.get(NEW + "?product=A%26B+%22x%22")
-        self.assertEqual(field_value(root, "product"), 'A&B "x"')
+    def test_a_substance_with_special_characters(self) -> None:
+        root = self.get(NEW + "?substance=A%26B+%22x%22")
+        self.assertEqual(field_value(root, "substance"), 'A&B "x"')
 
-    def test_the_form_saves_the_product_from_its_field(self) -> None:
+    def test_the_form_saves_the_substance_from_its_field(self) -> None:
         from tasks.models import Task
-        done = self.client.post(NEW + "?product=CH-0012",
-                                task_form_data(product="NV-1"))
+        substance_for("NV-1")
+        done = self.client.post(NEW + "?substance=cinnamic-acid",
+                                task_form_data(substance="nv-1"))
         self.assertEqual(done.status_code, 302)
-        self.assertEqual(Task.objects.get().product, "NV-1")
+        self.assertEqual(Task.objects.get().substance.key, "nv-1")
 
     def test_other_fields_keep_their_defaults(self) -> None:
-        root = self.get(NEW + "?product=CH-0012")
+        root = self.get(NEW + "?substance=cinnamic-acid")
         self.assertEqual(field_value(root, "priority"), "medium")

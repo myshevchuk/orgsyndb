@@ -7,7 +7,7 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 
 from . import (PASSWORD, IndexMixin, demo_index, edit_data, make_task,
-               make_user, page, task_form_data, task_url)
+               make_user, page, substance_for, task_form_data, task_url)
 
 User = get_user_model()
 LOGIN = "/lab/accounts/login/"
@@ -181,6 +181,7 @@ class AccountWithoutPasswordTests(IndexMixin, TestCase):
     def test_the_account_can_be_named_on_a_task(self) -> None:
         self.use_index(demo_index())
         self.client.force_login(self.kl)
+        substance_for("Aspirin")
         done = self.client.post("/lab/tasks/new/", task_form_data(
             assignee=str(self.student.pk)))
         self.assertEqual(done.status_code, 302)
@@ -209,7 +210,7 @@ class PermissionTests(IndexMixin, TestCase):
     @classmethod
     def setUpTestData(cls) -> None:
         cls.kl = make_user("kl", "KL")
-        cls.task = make_task(cls.kl, product="Aspirin",
+        cls.task = make_task(cls.kl, substance="Aspirin",
                              steps_total=2)
 
     def setUp(self) -> None:
@@ -233,10 +234,10 @@ class PermissionTests(IndexMixin, TestCase):
         path = task_url(self.task, "edit")
         self.redirected_to_sign_in(self.client.get(path), path)
         self.redirected_to_sign_in(
-            self.client.post(path, edit_data(self.task, product="Changed")),
+            self.client.post(path, edit_data(self.task, substance="changed")),
             path)
         self.task.refresh_from_db()
-        self.assertEqual(self.task.product, "Aspirin")
+        self.assertEqual(self.task.substance.key, "aspirin")
 
     def test_actions_without_sign_in(self) -> None:
         for action in ("start", "step", "end", "report", "qc-list"):

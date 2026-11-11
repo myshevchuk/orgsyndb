@@ -100,11 +100,13 @@ class ColumnTests(ListCase):
                                  date(2026, 11, 15)))
         self.assertIn("hoch", row["Priorität"].text())
 
-    def test_the_name_is_that_of_the_first_item(self) -> None:
+    def test_the_name_is_that_of_the_substance(self) -> None:
         self.item("NV-1", "Erste", "5", "mg", 1)
-        self.planned_item("NV-1", size="10", quantity=10, name="Zweite")
-        self.assertEqual(self.articles("?all=1")["NV-1"]["Name"].text(),
-                         "Erste")
+        self.planned_item("NV-1", size="10", quantity=10)
+        cell = self.articles("?all=1")["NV-1"]["Name"]
+        self.assertEqual(cell.text(), "Erste")
+        self.assertEqual([a.get("href") for a in cell.find_all("a")],
+                         ["/lab/registry/substances/nv-1/"])
 
     def test_the_containers_in_the_order_of_the_item_list(self) -> None:
         self.planned_item("NV-1", size="10", quantity=10)
@@ -253,10 +255,10 @@ class TasksColumnTests(ListCase):
 
     def test_planned_and_running_tasks_running_first_then_by_number(
             self) -> None:
-        planned = make_task(self.kl, product="NV-1")
+        planned = make_task(self.kl, substance="NV-1")
         running = self.running("NV-1", 14)
-        other = make_task(self.kl, product="nv-1")
-        make_task(self.kl, product="NV-1", cancelled=True)
+        other = make_task(self.kl, substance="nv-1")
+        make_task(self.kl, substance="NV-1", cancelled=True)
         self.synthesis("NV-1", 10, date(2026, 9, 1))
         cell = self.cell()
         links = [a for a in cell.find_all("a")
@@ -268,7 +270,7 @@ class TasksColumnTests(ListCase):
                           for t in (running, planned, other)])
 
     def test_each_task_shows_its_state_and_expected_end(self) -> None:
-        planned = make_task(self.kl, product="NV-1")
+        planned = make_task(self.kl, substance="NV-1")
         running = self.running("NV-1", 14)
         parts = self.segments(self.cell(), [planned, running])
         self.assertIn("In Arbeit", parts[running.number])
@@ -283,7 +285,7 @@ class TasksColumnTests(ListCase):
     def test_the_expected_end_follows_the_synthesis_time(self) -> None:
         for days in (30, 35, 40):
             self.synthesis("NV-1", days, TODAY - timedelta(days=days * 3))
-        planned = make_task(self.kl, product="NV-1")
+        planned = make_task(self.kl, substance="NV-1")
         text = self.cell().text()
         self.assertTrue(has_date(text, TODAY + timedelta(days=40)), text)
         self.assertIn(planned.number, text)
@@ -293,7 +295,7 @@ class TasksColumnTests(ListCase):
         self.assertTrue(has_date(self.cell().text(), TODAY))
 
     def test_a_task_in_time_is_not_late(self) -> None:
-        make_task(self.kl, product="NV-1")
+        make_task(self.kl, substance="NV-1")
         self.running("NV-1", 14)
         self.assertNotIn("verspätet", self.cell().text())
 
@@ -308,7 +310,7 @@ class TasksColumnTests(ListCase):
         """Slack 38.5 days less the buffer: a planned task, which needs
         21 days, is late, a task started 20 days ago is not."""
         self.planned_item("NV-7", quantity=7)
-        planned = make_task(self.kl, product="NV-7")
+        planned = make_task(self.kl, substance="NV-7")
         running = self.running("NV-7", 20)
         parts = self.segments(self.cell("NV-7"), [planned, running])
         self.assertIn("verspätet", parts[planned.number])
@@ -321,23 +323,14 @@ class TasksColumnTests(ListCase):
         row = self.articles("?all=1")["NV-5"]
         self.assertIn("late", row["Tasks"].text())
 
-    def test_a_task_of_a_compound_is_listed_with_the_article(self) -> None:
+    def test_a_task_of_the_substance_is_listed_with_the_article(self) -> None:
         self.planned_item("CH-0012", size="10", unit="umol", quantity=10)
-        task = make_task(self.kl, product="cinnamic-acid")
+        task = make_task(self.kl, substance="cinnamic-acid")
         self.assertIn(task.number, self.cell("CH-0012").text())
-
-    def test_a_task_that_matches_two_articles_is_listed_with_both(
-            self) -> None:
-        self.planned_item("CH-0012", size="10", unit="umol", quantity=10)
-        self.planned_item("cinnamic-acid", size="10", unit="umol",
-                          quantity=10)
-        task = make_task(self.kl, product="CH-0012")
-        self.assertIn(task.number, self.cell("CH-0012").text())
-        self.assertIn(task.number, self.cell("cinnamic-acid").text())
 
     def test_other_articles_tasks_are_not_listed(self) -> None:
         self.planned_item("NV-2", quantity=10)
-        task = make_task(self.kl, product="NV-2")
+        task = make_task(self.kl, substance="NV-2")
         self.assertNotIn(task.number, self.cell("NV-1").text())
 
     def test_the_article_priority_ignores_its_tasks(self) -> None:
@@ -369,7 +362,7 @@ class ActionTests(ListCase):
         plan_links = [a for a in third.find_all("a")
                       if a.text() == PLAN_DE]
         self.assertEqual([a.get("href") for a in plan_links],
-                         [NEW_TASK + "?product=NV-3"])
+                         [NEW_TASK + "?substance=nv-3"])
         self.assertNotIn(CHECK_DE, third.text())
         self.assertNotIn("Abfüllen", third.text())
 
@@ -462,7 +455,8 @@ class ActionTests(ListCase):
                     article, True).find_all("a") if a.text() == PLAN_DE]
                 self.assertEqual(
                     [a.get("href") for a in links],
-                    [NEW_TASK + f"?product={article}"] if offered else [])
+                    [NEW_TASK + f"?substance={article.lower()}"]
+                    if offered else [])
 
     def test_plan_synthesis_is_for_signed_in_users(self) -> None:
         self.planned_item("NV-1", quantity=10)
@@ -477,7 +471,7 @@ class ActionTests(ListCase):
         self.planned_item("NV-1", quantity=10)
         self.planned_item("NV-2", quantity=10)
         self.planned_item("NV-3", quantity=10)
-        make_task(self.kl, product="NV-1")
+        make_task(self.kl, substance="NV-1")
         self.running("NV-2", 5)
         for article in ("NV-1", "NV-2"):
             with self.subTest(article=article):
@@ -488,13 +482,13 @@ class ActionTests(ListCase):
     def test_other_tasks_do_not_stop_the_offer(self) -> None:
         self.planned_item("NV-1", quantity=10)
         self.synthesis("NV-1", 10, date(2026, 9, 1))
-        make_task(self.kl, product="NV-1", cancelled=True)
-        make_task(self.kl, product="NV-9")
+        make_task(self.kl, substance="NV-1", cancelled=True)
+        make_task(self.kl, substance="NV-9")
         self.assertIn(PLAN_DE, self.actions("NV-1", True).text())
 
-    def test_a_task_of_the_same_compound_stops_the_offer(self) -> None:
+    def test_a_task_of_the_same_substance_stops_the_offer(self) -> None:
         self.planned_item("CH-0012", size="10", unit="umol", quantity=10)
-        make_task(self.kl, product="cinnamic-acid")
+        make_task(self.kl, substance="cinnamic-acid")
         self.assertNotIn(PLAN_DE, self.actions("CH-0012", True).text())
 
     def test_a_lot_that_does_not_convert_stops_the_offer(self) -> None:
@@ -545,22 +539,23 @@ class CreatedTaskTests(ListCase):
         link = [a for a in row["Maßnahmen"].find_all("a")
                 if a.text() == PLAN_DE][0]
         form = self.get(link.get("href"))
-        product = field_value(form, "product")
-        self.assertEqual(product, "NV-3")
-        done = self.client.post(NEW_TASK, task_form_data(product=product))
+        key = field_value(form, "substance")
+        self.assertEqual(key, "nv-3")
+        done = self.client.post(NEW_TASK, task_form_data(substance=key))
         self.assertEqual(done.status_code, 302)
         task = Task.objects.get()
         row = self.articles(signed_in=True)["NV-3"]
         self.assertIn(task.number, row["Aufgaben"].text())
         self.assertNotIn(PLAN_DE, row["Maßnahmen"].text())
 
-    def test_the_task_of_a_compound_article(self) -> None:
+    def test_the_task_of_a_demo_article(self) -> None:
         self.planned_item("CH-0012", size="10", unit="umol", quantity=10)
         self.client.force_login(self.kl)
         row = self.articles(signed_in=True)["CH-0012"]
         link = [a for a in row["Maßnahmen"].find_all("a")
                 if a.text() == PLAN_DE][0]
-        self.assertEqual(link.get("href"), NEW_TASK + "?product=CH-0012")
+        self.assertEqual(link.get("href"),
+                         NEW_TASK + "?substance=cinnamic-acid")
 
 
 class PageTests(ListCase):

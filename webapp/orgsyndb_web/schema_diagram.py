@@ -141,23 +141,17 @@ GRID = (
      ("inventory_lotmovement",), (HUB,)),
     (("inventory_deliveryline",), ("inventory_item",),
      ("inventory_enteredconsumption",), ("inventory_lot",)),
-    (("tasks_task",), ("tasks_counter", HISTORY), ("planning_parameters",),
-     ("demo_demomark",)),
+    (("inventory_article",), ("registry_substance",),
+     ("registry_substanceclass",), ("tasks_task",)),
+    (("vocabulary_group", "vocabulary_project"),
+     ("vocabulary_chemicalclass", "vocabulary_reactiontype"),
+     ("tasks_counter", HISTORY), ("planning_parameters", "demo_demomark")),
 )
 
 LINKS = (
-    Link("inventory_lot", "article_number", "inventory_item",
-         "article_number", "same inventory and article_number",
-         "A lot belongs to the item of the same inventory and article "
-         "number."),
-    Link("tasks_task", "product", "inventory_item", "article_number",
-         "product",
-         "A task belongs to an article when its product equals the "
-         "article number regardless of case, or names the same compound "
-         "of the collection index."),
     Link("tasks_task", "batch", "inventory_lot", "batch", "same batch",
          "A lot belongs to a task when the two share a batch and the "
-         "task's product matches the lot's article number."),
+         "task's substance is the lot's."),
     Link("tasks_counter", "name", "tasks_task", "number", "T-###",
          "The counter named task issues the task numbers, T- and at "
          "least three digits."),
@@ -166,6 +160,8 @@ LINKS = (
 # Light and dark colour of each package's boxes.
 COLOURS = {
     "inventory": ("#0e7378", "#45c2c6"),
+    "registry": ("#b0306a", "#ef7fb1"),
+    "vocabulary": ("#7a6a12", "#cdbb52"),
     "accounts": ("#a5650c", "#e5a64c"),
     "tasks": ("#4652c4", "#929cff"),
     "planning": ("#3a7f33", "#7cc673"),
@@ -232,12 +228,12 @@ def comparison(lookup: str, value: object,
     """
     name, _, operator = lookup.partition("__")
     operator = operator or "exact"
+    if operator != "isnull" and operator not in OPERATORS:
+        raise ValueError(f"cannot write the lookup {operator!r} of "
+                         f"{model._meta.db_table} as SQL")
     column = model._meta.get_field(name).column
     if operator == "isnull":
         return f"{column} IS {'' if value else 'NOT '}NULL"
-    if operator not in OPERATORS:
-        raise ValueError(f"cannot write the lookup {operator!r} of "
-                         f"{model._meta.db_table} as SQL")
     if value is None:
         return f"{column} IS NULL"
     return f"{column} {OPERATORS[operator]} {literal(value, model)}"
@@ -320,10 +316,11 @@ def column_of(field: models.Field,
     if check:
         check = re.sub(r'^"[^"]+"\s*', "", check)
     ref = ref_column = on_delete = None
-    if field.primary_key:
+    if field.primary_key and not field.is_relation:
         key = "PK"
     elif field.is_relation:
-        key = "1:1" if field.one_to_one or field.unique else "FK"
+        key = "PK" if field.primary_key else \
+            "1:1" if field.one_to_one or field.unique else "FK"
         ref = field.related_model._meta.db_table
         ref_column = field.target_field.column
         on_delete = field.remote_field.on_delete.__name__
@@ -415,7 +412,10 @@ def _collect(connection: BaseDatabaseWrapper) -> Schema:
                             about=doc[0] if doc else "", doc=doc,
                             history=past._meta.db_table if past else None))
         constraints += constraints_of(model)
-    sample = min(historical, key=lambda m: m._meta.db_table)
+    # The layout is drawn from a history table of a row with an ``id``.
+    sample = min((m for m in historical if any(
+        f.name == "id" for f in m._meta.concrete_fields)),
+        key=lambda m: m._meta.db_table)
     fields = sample._meta.concrete_fields
     layout = [column_of(f, connection) for f in fields
               if f.name == "id" or f.name.startswith("history_")]

@@ -10,11 +10,13 @@ from tasks.models import Task
 
 @admin.register(Task)
 class TaskAdmin(SimpleHistoryAdmin):
-    list_display = ("number", "product", "priority", "assignee", "started",
+    list_display = ("number", "substance", "priority", "assignee", "started",
                     "ended", "steps_done", "steps_total", "batch",
                     "report", "qc_list", "cancelled")
     list_filter = ("priority", "cancelled", "report", "qc_list")
-    search_fields = ("number", "product", "batch")
+    list_select_related = ("substance", "assignee")
+    search_fields = ("number", "substance__key", "substance__name",
+                     "substance__name_de", "batch")
     ordering = ("id",)
     readonly_fields = ("number", "sequence", "sequence_steps", "created_by",
                        "created_at")

@@ -1,4 +1,4 @@
-{% extends "orgsyndb_web/base.html" %}{% load i18n static inventory %}
+{% extends "orgsyndb_web/base.html" %}{% load i18n static lab inventory %}
 {% block title %}{% translate "End products" %}{% endblock %}
 {% block head %}<script src="{% static 'lab.js' %}" defer></script>
 {% endblock %}
@@ -82,7 +82,7 @@
 <tbody>
 {% for row in rows %}{% with item=row.item figures=row.figures %}<tr{% if row.category_start %} class="category-start"{% endif %}>
 <td class="col-number">{% if item.article_number %}{% if user.is_authenticated %}<input type="checkbox" name="item" value="{{ item.pk }}" form="pick" aria-label="{% blocktranslate %}Select {{ item }}{% endblocktranslate %}"> {% endif %}<a href="/lab/inventory/items/{{ item.pk }}/">{{ item.article_number }}</a>{% endif %}</td>
-<td class="col-name">{% if not item.article_number %}<a href="/lab/inventory/items/{{ item.pk }}/">{{ item.name }}</a>{% elif row.compound %}<a href="/compounds/{{ row.compound.key }}/">{{ item.name }}</a>{% else %}{{ item.name }}{% endif %}{% if item|new_on:today %}<sup class="mark-new">{% translate "new" context "item" %}</sup>{% endif %}</td>
+<td class="col-name">{% if not item.article_number %}<a href="/lab/inventory/items/{{ item.pk }}/">{{ item.name }}</a>{% else %}{% substance item.substance %}{% endif %}{% if item|new_on:today %}<sup class="mark-new">{% translate "new" context "item" %}</sup>{% endif %}</td>
 <td class="col-category">{{ item.category }}</td>
 <td class="col-container number">{{ item.container }}</td>
 <td class="col-stock number stock level-{{ figures.level }}" title="{{ figures.level|level_label }}">{{ item.quantity }}<span class="visually-hidden"> {{ figures.level|level_label }}</span></td>

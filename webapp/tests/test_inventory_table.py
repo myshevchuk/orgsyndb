@@ -12,7 +12,8 @@ from django.test import SimpleTestCase
 
 from inventory.models import Item
 
-from . import berlin, build_index, field_value, page, table, ticking
+from . import (berlin, build_index, field_value, make_substance, page, table,
+               ticking)
 from .inventory_support import LIST, InventoryCase, fresh, item_url, lot_url
 from .test_inventory_colours import (CSS, MINIMUM, balanced, contrast,
                                      split_schemes)
@@ -498,11 +499,30 @@ class FilterTests(TableCase):
         self.assertEqual(self.articles(f"?container={quote('2.5 mg')}"),
                          ["G-1", "G-4"])
 
-    def test_the_search_finds_the_compound(self) -> None:
-        self.item("CH-0012", "Probe")
-        self.item("CH-0001", "Probe")
-        self.assertEqual(self.articles(f"?q={quote('zimts')}"),
-                         ["CH-0012"])
+    def test_the_search_finds_the_substances_names(self) -> None:
+        self.item("CH-0012")
+        self.item("CH-0001")
+        for text in ("zimts", "CINNAMIC", "(e)-cinn"):
+            with self.subTest(q=text):
+                self.assertEqual(self.articles(f"?q={quote(text)}"),
+                                 ["CH-0012"])
+
+    def test_the_search_finds_the_substances_key(self) -> None:
+        self.item("CH-0012")
+        self.item("CH-0001")
+        self.assertEqual(self.articles("?q=bromophenyl-ethanol"),
+                         ["CH-0001"])
+
+    def test_the_search_finds_the_short_name(self) -> None:
+        self.item("S-1", substance=make_substance("s-1", short_name="ZS"))
+        self.item("S-2")
+        self.assertEqual(self.articles("?q=zs"), ["S-1"])
+
+    def test_the_search_finds_the_article_number_and_category(self) -> None:
+        self.item("S-1", category="Säuren")
+        self.item("S-2")
+        self.assertEqual(self.articles("?q=s-1"), ["S-1"])
+        self.assertEqual(self.articles(f"?q={quote('säur')}"), ["S-1"])
 
     def test_the_filters_keep_the_order_and_the_level(self) -> None:
         self.item("O-1")

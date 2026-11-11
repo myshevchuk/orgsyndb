@@ -2,18 +2,21 @@
 ``demo_data`` command asks of it first.
 
 Every change of ``demo.data.changes`` is made through the application's
-own write paths: counts and amounts through ``inventory.bookings``,
-tasks and planning parameters through their models' saves after their
-own validation. Each change is made with ``django.utils.timezone.now``
-standing at its moment, so that the times the write paths stamp, the
+own write paths: the registry through ``registry.snapshot.load``, counts
+and amounts through ``inventory.bookings``, tasks and planning
+parameters through their models' saves after their own validation.
+Each change is made with ``django.utils.timezone.now`` standing at its
+moment, so that the times the write paths stamp, the
 history records' among them, and the day they take as today are the
 change's.
 """
 
+import json
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime
+from pathlib import Path
 from typing import Any
 from unittest import mock
 
@@ -23,11 +26,19 @@ from django.contrib.auth import get_user_model
 from demo import data
 from demo.models import DemoMark
 from inventory import bookings
-from inventory.models import (DeliveryLine, DeliveryNote, EnteredConsumption,
-                              Item, Lot, LotMovement, Movement)
-from orgsyndb_web import index
+from inventory.models import (Article, DeliveryLine, DeliveryNote,
+                              EnteredConsumption, Item, Lot, LotMovement,
+                              Movement)
 from planning.models import Parameters
+from registry import snapshot
+from registry.models import Substance, SubstanceClass
 from tasks.models import Counter, Task
+from vocabulary.models import ChemicalClass, Group, Project, ReactionType
+
+# The demo registry: the snapshot of the demo collection's registry and
+# the substance new-compound-7.
+REGISTRY = Path(__file__).resolve().parent / "registry.json"
+TERMS = (ChemicalClass, Group, Project, ReactionType)
 
 
 @dataclass(frozen=True)
@@ -35,6 +46,7 @@ class Summary:
     """What a seed wrote: the number of each kind of record."""
 
     accounts: int
+    substances: int
     items: int
     notes: int
     tasks: int
@@ -48,12 +60,14 @@ def histories() -> list[type]:
 
 
 def holds_records() -> bool:
-    """Whether the database holds lab records: an account, task, item,
-    delivery note, bulk lot, entered consumption value, stored planning
-    parameters, change-history record or the demo mark."""
+    """Whether the database holds lab records: an account, substance,
+    vocabulary term, article, task, item, delivery note, bulk lot,
+    entered consumption value, stored planning parameters,
+    change-history record or the demo mark."""
     return any(model.objects.exists() for model in (
-        get_user_model(), Task, Item, DeliveryNote, Lot,
-        EnteredConsumption, Parameters, DemoMark, *histories()))
+        get_user_model(), Substance, *TERMS, Article, Task, Item,
+        DeliveryNote, Lot, EnteredConsumption, Parameters, DemoMark,
+        *histories()))
 
 
 def is_demo() -> bool:
@@ -61,19 +75,14 @@ def is_demo() -> bool:
     return DemoMark.objects.exists()
 
 
-def missing_compounds() -> int:
-    """Return how many of the compounds of ``examples/demo`` the data set
-    names the collection index lacks."""
-    return sum(index.compound_for(number) is None
-               for number in data.compounds())
-
-
 def clear() -> None:
     """Delete every lab record, with its movements, lines and change
     history, and set the task counter to zero.
 
-    Reversals go before the movements they reverse and movements before
-    the notes and lots they name, which protect them otherwise.
+    Reversals go before the movements they reverse, movements before
+    the notes and lots they name, records before the substances and
+    terms they name, and terms are taken out of their trees before they
+    are deleted, as each protects the other otherwise.
     """
     Movement.objects.exclude(reverses=None).delete()
     Movement.objects.all().delete()
@@ -84,6 +93,13 @@ def clear() -> None:
     EnteredConsumption.objects.all().delete()
     Item.objects.all().delete()
     Task.objects.all().delete()
+    Article.objects.all().delete()
+    SubstanceClass.objects.all().delete()
+    Substance.objects.all().delete()
+    for model in TERMS:
+        if model is not ReactionType:
+            model.objects.update(parent=None)
+        model.objects.all().delete()
     Parameters.objects.all().delete()
     DemoMark.objects.all().delete()
     for model in histories():
@@ -113,8 +129,10 @@ def write(today: date, language: str) -> Summary:
         with clock(change.moment):
             writer.make(change)
     DemoMark.objects.create(seeded_on=today)
-    return Summary(accounts=len(writer.users), items=len(writer.items),
-                   notes=len(writer.notes), tasks=len(writer.tasks))
+    return Summary(accounts=len(writer.users),
+                   substances=Substance.objects.count(),
+                   items=len(writer.items), notes=len(writer.notes),
+                   tasks=len(writer.tasks))
 
 
 class _Writer:
@@ -135,12 +153,17 @@ class _Writer:
         match change:
             case data.CreateAccount(account=account):
                 self.users[account.username] = self.account(change)
+            case data.LoadRegistry():
+                snapshot.load(json.loads(REGISTRY.read_text(
+                    encoding="utf-8")), user)
             case data.SaveParameters(fields=fields):
                 self.save_parameters(user, fields)
             case data.OpenItem():
                 self.items[change.key] = bookings.create_item(
-                    user, article_number=change.article_number,
-                    name=change.name, size=change.size, unit=change.unit,
+                    user, substance=Substance.objects.get(
+                        key=change.substance),
+                    article_number=change.article_number,
+                    size=change.size, unit=change.unit,
                     quantity=change.quantity, category=change.category,
                     compartment=change.compartment, box=change.box,
                     date=day)
@@ -166,7 +189,9 @@ class _Writer:
                 bookings.reverse(user, movement, note=change.note)
             case data.OpenLot():
                 self.lots[change.key] = bookings.create_lot(
-                    user, article_number=change.article_number,
+                    user, substance=Substance.objects.get(
+                        key=change.substance),
+                    source=change.source, supplier=change.supplier,
                     unit=change.unit, amount=change.amount,
                     batch=change.batch, location=change.location,
                     made_on=change.made_on, date=day)
@@ -225,6 +250,8 @@ class _Writer:
         for name, value in fields.items():
             if name == "assignee":
                 value = self.users[value] if value else None
+            elif name == "substance":
+                value = Substance.objects.get(key=value)
             setattr(task, name, value)
         task.full_clean(exclude=["number"])
         task._history_user = user

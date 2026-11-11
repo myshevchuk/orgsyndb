@@ -35,11 +35,9 @@ from inventory.forms import (ROWS, ConsumptionForm, CorrectionForm,
                              NoteEditForm, NoteForm, ReversalForm,
                              show_refusal)
 from inventory.history import history_entries
-from inventory.models import (END_PRODUCTS, FACTOR, LEVEL_ORDER,
-                              DeliveryNote, Item, Level, Lot, Movement,
-                              plain)
+from inventory.models import (FACTOR, LEVEL_ORDER, Article, DeliveryNote,
+                              Item, Level, Lot, Movement, plain)
 from inventory.statistics import Statistics, statistics
-from orgsyndb_web import index
 from planning import plan
 
 LIST = "/lab/inventory/end-products/"
@@ -57,8 +55,8 @@ def tabs(current: str) -> list[dict[str, Any]]:
 
 @dataclass(frozen=True)
 class Row:
-    """An item of the item list with its consumption, its bulk, its
-    compound, or None, and the figures of its statistics popup.
+    """An item of the item list with its consumption, its bulk and the
+    figures of its statistics popup.
     HEAT_MEAN and HEAT_YEAR are the classes of the heat of its mean per
     year and of its current year's consumption, empty without one;
     CATEGORY_START tells whether it is the first row of its category
@@ -67,7 +65,6 @@ class Row:
     item: Item
     figures: Consumption
     bulk: Bulk
-    compound: Any
     statistics: Statistics
     heat_mean: str = ""
     heat_year: str = ""
@@ -75,12 +72,14 @@ class Row:
 
     def searched(self) -> str:
         """The text the list's search looks in, folded for a comparison
-        regardless of case."""
+        regardless of case: the article number, category and note, and
+        the substance's key, names and short name."""
         item = self.item
-        return "\n".join([item.article_number or "", item.name,
-                          item.category,
-                          item.note, self.compound.name if self.compound
-                          else ""]).casefold()
+        substance = item.substance
+        return "\n".join([item.article_number or "", item.category,
+                          item.note, substance.key, substance.name,
+                          substance.name_de,
+                          substance.short_name]).casefold()
 
 
 def container_code(item: Item) -> str:
@@ -355,21 +354,17 @@ def stock_menu(rows: list[Row], filters: ItemFilters) -> list[StockEntry]:
 
 
 def item_list(request: HttpRequest) -> HttpResponse:
-    """List the items of ``end-products`` the query's filters select,
-    with their figures, heats, bulk and statistics, in the order the
-    query names."""
+    """List the items the query's filters select, with their figures,
+    heats, bulk and statistics, in the order the query names."""
     today = timezone.localdate()
     filters = ItemFilters.from_query(request.GET)
-    items = sorted(Item.objects.filter(inventory=END_PRODUCTS),
+    items = sorted(Item.objects.select_related("article__substance"),
                    key=Item.sort_key)
-    lots = list(Lot.objects.filter(inventory=END_PRODUCTS, amount__gt=0)
-                .order_by("made_on", "id"))
+    lots = list(Lot.objects.filter(amount__gt=0).order_by("made_on", "id"))
     rows = []
     for item in items:
         figures = consumption(item, today)
         rows.append(Row(item=item, figures=figures, bulk=bulk(item, lots),
-                        compound=index.compound_for(item.article_number)
-                        if item.article_number else None,
                         statistics=statistics(figures, today)))
     rows = heated(rows)
     shown = filters.ordered([row for row in rows if filters.admits(row)])
@@ -404,22 +399,18 @@ def item_list(request: HttpRequest) -> HttpResponse:
 
 
 def lot_list(request: HttpRequest) -> HttpResponse:
-    """List the open lots of ``end-products``, and the used-up ones too
-    with ``empty=1``, by article number, then by date, oldest first and
-    lots without one last."""
+    """List the open lots of every substance, and the used-up ones too
+    with ``empty=1``, by the substance's name regardless of case, then
+    by date, oldest first and lots without one last."""
     empty = request.GET.get("empty") == "1"
-    lots = Lot.objects.filter(inventory=END_PRODUCTS)
+    lots = Lot.objects.select_related("substance__article")
     if not empty:
         lots = lots.filter(amount__gt=0)
-    names: dict[str, str] = {}
-    for item in sorted(Item.objects.filter(inventory=END_PRODUCTS),
-                       key=Item.sort_key):
-        names.setdefault(item.article_number, item.name)
     shown = sorted(lots, key=lambda lot: (
-        lot.article_number, lot.made_on is None, lot.made_on or date.min,
-        lot.pk))
+        lot.substance.shown_name.casefold(), lot.made_on is None,
+        lot.made_on or date.min, lot.pk))
     return render(request, "inventory/lot_list.html", {
-        "rows": [(lot, names.get(lot.article_number, "")) for lot in shown],
+        "lots": shown,
         "empty": empty,
         "tabs": tabs(BULK),
     })
@@ -471,9 +462,9 @@ def note_list(request: HttpRequest) -> HttpResponse:
         "notes": [(note, states[note.pk]) for note in shown],
         "q": q,
         "chosen": chosen,
-        "items": sorted(Item.objects.filter(inventory=END_PRODUCTS,
-                                            article_number__isnull=False),
-                        key=Item.sort_key),
+        "items": sorted(Item.objects.filter(
+            article__article_number__isnull=False).select_related(
+                "article__substance"), key=Item.sort_key),
         "tabs": tabs(DELIVERIES),
     })
 
@@ -503,7 +494,8 @@ class QuarterRow:
 def item_page(request: HttpRequest, pk: int) -> HttpResponse:
     """Show the item PK with its figures, chart, movements, bulk,
     forecast and history; answer 404 for an unknown ID."""
-    item = get_object_or_404(Item, pk=pk)
+    item = get_object_or_404(Item.objects.select_related(
+        "article__substance"), pk=pk)
     today = timezone.localdate()
     figures = consumption(item, today)
     movements = item.movements.select_related(
@@ -515,13 +507,10 @@ def item_page(request: HttpRequest, pk: int) -> HttpResponse:
                                 reversible=movement.reversible
                                 and not done))
     mass = molar_mass(item)
-    numbered = item.article_number is not None
     found = plan.article(item.article_number, today) \
-        if numbered and item.inventory == END_PRODUCTS else None
-    lots = Lot.objects.filter(inventory=item.inventory,
-                              article_number=item.article_number,
-                              amount__gt=0).order_by("made_on", "id") \
-        if numbered else Lot.objects.none()
+        if item.article_number is not None else None
+    lots = Lot.objects.filter(substance_id=item.article_id,
+                              amount__gt=0).order_by("made_on", "id")
     return render(request, "inventory/item_page.html", {
         "item": item,
         "today": today,
@@ -546,9 +535,10 @@ def item_page(request: HttpRequest, pk: int) -> HttpResponse:
 def lot_page(request: HttpRequest, pk: int) -> HttpResponse:
     """Show the lot PK with its movements, the tasks of its batch and its
     history; answer 404 for an unknown ID."""
-    lot = get_object_or_404(Lot, pk=pk)
+    lot = get_object_or_404(Lot.objects.select_related(
+        "substance__article"), pk=pk)
     movements = lot.movements.select_related(
-        "user", "item_movement__item").order_by("-id")
+        "user", "item_movement__item__article").order_by("-id")
     return render(request, "inventory/lot_page.html", {
         "lot": lot,
         "ledger": [(movement, movement.item_movement.item
@@ -571,7 +561,8 @@ def note_page(request: HttpRequest, pk: int) -> HttpResponse:
         "state": note_states([note])[note.pk],
         "lines": [(line, movements.get(line.item_id),
                    hasattr(movements.get(line.item_id), "reversal"))
-                  for line in note.lines.select_related("item")],
+                  for line in note.lines.select_related(
+                      "item__article__substance")],
         "history": history_entries(note),
     })
 
@@ -620,8 +611,9 @@ def note_url(note: DeliveryNote, action: str = "") -> str:
 
 
 def categories() -> Any:
-    """The categories of the items, for the category's ``datalist``."""
-    return Item.objects.exclude(category="").order_by("category") \
+    """The categories of the articles, for the category's
+    ``datalist``."""
+    return Article.objects.exclude(category="").order_by("category") \
         .values_list("category", flat=True).distinct()
 
 
@@ -641,15 +633,6 @@ def natural(text: str) -> tuple[Any, ...]:
                                       re.split(r"([0-9]+)", text)))
 
 
-def article_numbers() -> list[tuple[str, str]]:
-    """The values of the unique text fields of the compounds of the
-    collection index, each with its compound's name, for the article
-    numbers' ``datalist``; no compound key is among them."""
-    return [(number, compound.name)
-            for compound in index.current().compounds.values()
-            for number in compound.identifiers if number != compound.key]
-
-
 @login_required
 def item_new(request: HttpRequest) -> HttpResponse:
     """Create an item with its opening count, booked by the signed-in
@@ -662,27 +645,29 @@ def item_new(request: HttpRequest) -> HttpResponse:
 
     return form_page(
         request, ItemForm(request.POST or None), book,
-        {"title": _("New item"), "cancel": LIST,
-         "article_numbers": article_numbers(), "categories": categories(),
-         "compartments": in_use("compartment"), "boxes": in_use("box")})
+        {"title": _("New item"), "cancel": LIST, "substances": True,
+         "categories": categories(), "compartments": in_use("compartment"),
+         "boxes": in_use("box")})
 
 
 @login_required
 def item_edit(request: HttpRequest, pk: int) -> HttpResponse:
-    """Change the name, category and note of the item PK, and give it
-    the article number entered while it has none."""
-    item = get_object_or_404(Item, pk=pk)
+    """Change the state, stock entry, location and note of the item PK
+    and its article's category, and give its article the article number
+    entered while it has none."""
+    item = get_object_or_404(Item.objects.select_related(
+        "article__substance"), pk=pk)
     title = _("Edit %(item)s") % {"item": item}
 
     def book(data: dict[str, Any]) -> HttpResponse:
         with transaction.atomic():
             if data.get("article_number"):
-                form.instance.article_number = \
-                    bookings.assign_article_number(
-                        request.user, item,
-                        data["article_number"]).article_number
+                bookings.assign_article_number(request.user, item.article,
+                                               data["article_number"])
+            form.instance._history_user = request.user
             form.save()
-        stored = Item.objects.get(pk=item.pk)
+        stored = Item.objects.select_related("article__substance").get(
+            pk=item.pk)
         return saved(request, _("Item %(item)s saved.") % {"item": stored},
                      item_url(stored))
 
@@ -690,7 +675,6 @@ def item_edit(request: HttpRequest, pk: int) -> HttpResponse:
     return form_page(
         request, form, book,
         {"title": title, "cancel": item_url(item),
-         "article_numbers": article_numbers(),
          "categories": categories(), "compartments": in_use("compartment"),
          "boxes": in_use("box")})
 
@@ -729,7 +713,8 @@ def proposed(request: HttpRequest, form: FillForm, item: Item) -> FillForm:
     base = proposed_amount(item, form.cleaned_data["count"], lot)
     if base is None:
         form.add_error("amount", _(
-            "Without a molar mass of the compound, enter the amount taken."))
+            "Without a molar mass of the substance, enter the amount "
+            "taken."))
         return form
     data = request.POST.copy()
     data["amount"] = localize_input(plain(base / FACTOR[lot.unit]))
@@ -870,8 +855,8 @@ def locations() -> Any:
 @login_required
 def lot_new(request: HttpRequest) -> HttpResponse:
     """Create a bulk lot with its opening amount, booked by the
-    signed-in user; ``article``, ``batch`` and ``made_on`` in the query
-    fill in the article number, the batch and the date."""
+    signed-in user; ``substance``, ``batch`` and ``made_on`` in the
+    query fill in the substance's key, the batch and the date."""
 
     def book(data: dict[str, Any]) -> HttpResponse:
         lot = bookings.create_lot(request.user, **data)
@@ -879,13 +864,12 @@ def lot_new(request: HttpRequest) -> HttpResponse:
                      lot_url(lot))
 
     form = LotForm(request.POST or None, initial={
-        "article_number": request.GET.get("article", ""),
+        "substance": request.GET.get("substance", ""),
         "batch": request.GET.get("batch", ""),
         "made_on": request.GET.get("made_on", "")})
     return form_page(request, form, book,
                      {"title": _("New bulk lot"), "cancel": BULK,
-                      "article_numbers": article_numbers(),
-                      "locations": locations()})
+                      "substances": True, "locations": locations()})
 
 
 @login_required

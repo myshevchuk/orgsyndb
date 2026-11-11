@@ -1,4 +1,4 @@
-{% extends "orgsyndb_web/base.html" %}{% load i18n %}
+{% extends "orgsyndb_web/base.html" %}{% load i18n lab %}
 {% block title %}{{ title }}{% endblock %}
 {% block main %}
 <h1>{{ title }}</h1>
@@ -11,9 +11,7 @@
 {{ field.errors }}
 </div>
 {% endfor %}{% if unit %}<p class="lab-help">{% blocktranslate %}The amount is in {{ unit }}.{% endblocktranslate %}</p>
-{% endif %}{% if article_numbers %}<datalist id="article-numbers">
-{% for number, name in article_numbers %}<option value="{{ number }}" label="{{ name }}"></option>
-{% endfor %}</datalist>
+{% endif %}{% if substances %}{% substance_datalist %}
 {% endif %}{% if categories %}<datalist id="categories">
 {% for category in categories %}<option value="{{ category }}"></option>
 {% endfor %}</datalist>

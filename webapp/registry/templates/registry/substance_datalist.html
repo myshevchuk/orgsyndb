@@ -1,0 +1,3 @@
+<datalist id="substances">
+{% for found in substances %}<option value="{{ found.key }}" label="{{ found.shown_name }}"></option>
+{% endfor %}</datalist>

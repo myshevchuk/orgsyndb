@@ -34,7 +34,7 @@
 <tbody>
 {% for task, shown in tasks %}<tr data-state="{{ task.state }}">
 <td><a href="/lab/tasks/{{ task.number }}/">{{ task.number }}</a></td>
-<td>{% product task.product %}</td>
+<td>{% substance task.substance %}</td>
 <td>{% include "tasks/priority.html" %}</td>
 <td>{% person task.assignee %}</td>
 <td>{{ task.started|default_if_none:"" }}</td>

@@ -77,12 +77,19 @@ def seed(day: date, index: Any = None) -> tuple[str, str]:
 def lab_records() -> dict[str, int]:
     """The number of each kind of lab record the database holds."""
     from django.contrib.auth import get_user_model
-    from inventory.models import (DeliveryNote, EnteredConsumption, Item,
-                                  Lot, Movement)
+    from inventory.models import (Article, DeliveryNote, EnteredConsumption,
+                                  Item, Lot, Movement)
     from planning.models import Parameters
+    from registry.models import Substance
     from tasks.models import Task
+    from vocabulary.models import (ChemicalClass, Group, Project,
+                                   ReactionType)
     return {
         "accounts": get_user_model().objects.count(),
+        "substances": Substance.objects.count(),
+        "terms": sum(model.objects.count() for model in (
+            ChemicalClass, Group, Project, ReactionType)),
+        "articles": Article.objects.count(),
         "tasks": Task.objects.count(),
         "items": Item.objects.count(),
         "movements": Movement.objects.count(),
@@ -129,5 +136,7 @@ class SeededCase(IndexMixin, TestCase):
     def items(self, article: str | None) -> list[Any]:
         from inventory.models import Item
         if article is None:
-            return list(Item.objects.filter(article_number__isnull=True))
-        return list(Item.objects.filter(article_number=article))
+            return list(Item.objects.filter(
+                article__article_number__isnull=True))
+        return list(Item.objects.filter(
+            article__article_number=article))

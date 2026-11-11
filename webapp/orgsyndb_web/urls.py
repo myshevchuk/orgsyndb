@@ -11,6 +11,7 @@ urlpatterns = [
     path("lab/inventory/", include("inventory.urls")),
     path("lab/planning/", include("planning.urls")),
     path("lab/tasks/", include("tasks.urls")),
+    path("lab/registry/", include("registry.urls")),
     path("lab/accounts/", include("accounts.urls")),
     path("lab/admin/", admin.site.urls),
 ]

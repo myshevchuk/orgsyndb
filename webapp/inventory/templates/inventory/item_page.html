@@ -11,8 +11,8 @@
 {% endif %}<a href="/lab/inventory/items/{{ item.pk }}/edit/">{% translate "Edit" %}</a>
 </div>
 {% endif %}<dl class="metadata">
-<dt>{% translate "Compound" %}</dt>
-<dd>{% if item.article_number %}{% product item.article_number %}{% else %}–{% endif %}</dd>
+<dt>{% translate "Substance" %}</dt>
+<dd>{% substance item.substance %}</dd>
 <dt>{% translate "Category" %}</dt>
 <dd>{{ item.category|default:"–" }}</dd>
 <dt>{% translate "Container" %}</dt>
@@ -103,7 +103,7 @@
 </table>
 </div>
 {% else %}<p>{% translate "No open bulk lot." %}</p>
-{% endif %}{% if user.is_authenticated and item.article_number %}<p class="actions"><a href="/lab/inventory/bulk/new/?article={{ item.article_number|urlencode }}">{% translate "New bulk lot" %}</a></p>
+{% endif %}{% if user.is_authenticated and item.article_number %}<p class="actions"><a href="/lab/inventory/bulk/new/?substance={{ item.substance.key|urlencode }}">{% translate "New bulk lot" %}</a></p>
 {% endif %}{% include "planning/item_forecast.html" %}
 {% include "inventory/history.html" %}
 {% endblock %}

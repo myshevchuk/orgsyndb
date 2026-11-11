@@ -10,7 +10,6 @@ from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 from inventory.models import (BASE_UNIT, FACTOR, DeliveryLine,
                               EnteredConsumption, Item, Level, Lot, Movement,
                               Status, Unit, shown)
-from orgsyndb_web import index
 
 MASS = (Unit.MG, Unit.G)
 BASE_PLACES = Decimal("0.000001")
@@ -43,14 +42,10 @@ def to_base(amount: Decimal, unit: str) -> Decimal:
                                                      ROUND_HALF_UP)
 
 
-def molar_mass(item: Item) -> float | None:
-    """Return the molar mass of the compound the item's article number
-    names in the collection index, or None, as for an item without an
-    article number."""
-    if not item.article_number:
-        return None
-    found = index.compound_for(item.article_number)
-    return found.mw if found else None
+def molar_mass(item: Item) -> Decimal | None:
+    """Return the molar mass in g/mol of ITEM's substance, or None when
+    the substance has none."""
+    return item.article.substance.mw
 
 
 def proposed_amount(item: Item, count: int, lot: Lot) -> Decimal | None:
@@ -58,7 +53,7 @@ def proposed_amount(item: Item, count: int, lot: Lot) -> Decimal | None:
     lot's base unit, rounded half up to six places.
 
     Return None when the item's unit and the lot's are of different
-    kinds and the item's compound has no molar mass.
+    kinds and the item's substance has no molar mass.
     """
     taken = convert(Decimal(count) * item.size, item.unit,
                     BASE_UNIT[lot.unit], molar_mass(item))
@@ -140,7 +135,8 @@ def counted_lines(item: Item | None = None) -> list[DeliveryLine]:
     reversed."""
     movements = Movement.objects.filter(kind=Movement.Kind.DELIVERY,
                                         reversal__isnull=False)
-    lines = DeliveryLine.objects.select_related("delivery_note", "item")
+    lines = DeliveryLine.objects.select_related(
+        "delivery_note", "item__article__substance")
     if item is not None:
         movements = movements.filter(item=item)
         lines = lines.filter(item=item)
@@ -247,7 +243,7 @@ class Bulk:
 def containers_from(lot: Lot, item: Item, mass: Number | None
                     ) -> int | None:
     """Return the number of ITEM's containers LOT would still fill, with
-    MASS the molar mass of the item's compound; None when the lot does
+    MASS the molar mass of the item's substance; None when the lot does
     not convert into the item's unit."""
     converted = convert(lot.amount, BASE_UNIT[lot.unit], item.unit, mass)
     if converted is None:
@@ -257,11 +253,9 @@ def containers_from(lot: Lot, item: Item, mass: Number | None
 
 def bulk(item: Item, lots: Iterable[Lot]) -> Bulk:
     """Return the bulk of ITEM among LOTS: the open lots of its
-    inventory and article number."""
+    substance."""
     mine = [lot for lot in lots
-            if item.article_number and lot.amount > 0
-            and lot.inventory == item.inventory
-            and lot.article_number == item.article_number]
+            if lot.amount > 0 and lot.substance_id == item.article_id]
     if not mine:
         return Bulk()
     mass = molar_mass(item)

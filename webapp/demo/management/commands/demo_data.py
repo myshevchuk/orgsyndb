@@ -8,8 +8,9 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
-from demo import data, seed
+from demo import seed
 from orgsyndb_web import index
+from registry import snapshot
 
 
 class Command(BaseCommand):
@@ -52,13 +53,6 @@ class Command(BaseCommand):
             raise CommandError(
                 "ORGSYNDB_DEMO is not true; the demo data is written only "
                 "with ORGSYNDB_DEMO=true, into a test database.")
-        missing = seed.missing_compounds()
-        if missing:
-            self.stderr.write(
-                f"Warning: the collection index lacks {missing} of the "
-                f"{len(data.compounds())} compounds of examples/demo the "
-                "demo data names; their names will not link and their "
-                "units will not convert.")
         today = timezone.localdate()
         try:
             with transaction.atomic():
@@ -75,10 +69,14 @@ class Command(BaseCommand):
                 if replace:
                     seed.clear()
                 summary = seed.write(today, index.current().language)
+        except snapshot.Broken as error:
+            raise CommandError(
+                f"The demo registry could not be loaded: {error}") from error
         except ValidationError as error:
             raise CommandError(
                 f"The demo data could not be written: {error}") from error
         self.stdout.write(
             f"Demo data as of {today.isoformat()} written: "
-            f"{summary.accounts} accounts, {summary.items} items, "
-            f"{summary.notes} delivery notes and {summary.tasks} tasks.")
+            f"{summary.accounts} accounts, {summary.substances} "
+            f"substances, {summary.items} items, {summary.notes} delivery "
+            f"notes and {summary.tasks} tasks.")

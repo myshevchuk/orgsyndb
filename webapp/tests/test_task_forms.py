@@ -7,10 +7,11 @@ from tasks.models import Task
 
 from . import (IndexMixin, build_index, context_form, demo_index,
                edit_data, field_value, make_task, make_user, page, past,
-               procedure, sent_messages, sequence, task_form_data, task_url)
+               procedure, sent_messages, sequence, substance_for,
+               task_form_data, task_url)
 
 NEW = "/lab/tasks/new/"
-FIELDS = {"product", "priority", "assignee", "started", "ended", "sequence",
+FIELDS = {"substance", "priority", "assignee", "started", "ended", "sequence",
           "steps_total", "steps_done", "batch", "report", "qc_list",
           "note"}
 
@@ -25,6 +26,8 @@ class FormCase(IndexMixin, TestCase):
     def setUp(self) -> None:
         self.use_index(demo_index())
         self.client.force_login(self.kl)
+        for text in ("Aspirin", "Probe", "CH-0012"):
+            substance_for(text)
 
     def only_task(self) -> Task:
         return Task.objects.get()
@@ -43,12 +46,13 @@ class CreateTests(FormCase):
     def test_creating_a_task(self) -> None:
         """Scenario: Creating a task."""
         done = self.client.post(NEW, task_form_data(
-            product="CH-0012", priority="high", assignee=str(self.ae.pk)))
+            substance="cinnamic-acid", priority="high",
+            assignee=str(self.ae.pk)))
         task = self.only_task()
         self.assertRegex(task.number, r"^T-\d{3,}$")
         self.assertEqual(task.state, "planned")
         self.assertEqual(task.created_by, self.kl)
-        self.assertEqual(task.product, "CH-0012")
+        self.assertEqual(task.substance.key, "cinnamic-acid")
         self.assertEqual(task.priority, "high")
         self.assertEqual(task.assignee, self.ae)
         self.assertRedirects(done, task_url(task),
@@ -72,14 +76,14 @@ class CreateTests(FormCase):
 
     def test_all_fields_are_saved(self) -> None:
         self.client.post(NEW, task_form_data(
-            product="Probe", priority="low", assignee=str(self.ae.pk),
+            substance="probe", priority="low", assignee=str(self.ae.pk),
             started="2025-03-02", ended="2025-03-05", steps_total="5",
             steps_done="3", batch="B-9", report="on", qc_list="on",
             note="Zeile eins\nZeile zwei"))
         task = self.only_task()
         self.assertEqual(
-            (task.product, task.priority, task.assignee),
-            ("Probe", "low", self.ae))
+            (task.substance.key, task.priority, task.assignee),
+            ("probe", "low", self.ae))
         self.assertEqual((task.started, task.ended),
                          (past(2), past(5)))
         self.assertEqual((task.steps_total, task.steps_done), (5, 3))
@@ -103,7 +107,7 @@ class CreateTests(FormCase):
 
     def test_the_form_holds_the_fields_of_the_spec(self) -> None:
         root = page(self.client.get(NEW))
-        form = root.find("input", name="product").closest("form")
+        form = root.find("input", name="substance").closest("form")
         names = {e.get("name") for e in
                  form.find_all(("input", "select", "textarea"))}
         names.discard("csrfmiddlewaretoken")
@@ -112,7 +116,7 @@ class CreateTests(FormCase):
     def test_cancelled_is_on_the_edit_form_only(self) -> None:
         task = make_task(self.kl)
         root = page(self.client.get(task_url(task, "edit")))
-        form = root.find("input", name="product").closest("form")
+        form = root.find("input", name="substance").closest("form")
         names = {e.get("name") for e in
                  form.find_all(("input", "select", "textarea"))}
         names.discard("csrfmiddlewaretoken")
@@ -195,13 +199,22 @@ class ValidationTests(FormCase):
             steps_total="3", steps_done="-1"))
         self.refused(done, "steps_done")
 
-    def test_product_is_required_and_bounded(self) -> None:
-        self.refused(self.client.post(NEW, task_form_data(product="")),
-                     "product")
+    def test_the_substance_is_required(self) -> None:
+        self.refused(self.client.post(NEW, task_form_data(substance="")),
+                     "substance")
+        self.assertEqual(Task.objects.count(), 0)
+
+    def test_unknown_substance(self) -> None:
         self.refused(self.client.post(NEW, task_form_data(
-            product="x" * 101)), "product")
-        self.client.post(NEW, task_form_data(product="x" * 100))
-        self.assertEqual(Task.objects.count(), 1)
+            substance="no-such-substance")), "substance")
+        self.assertEqual(Task.objects.count(), 0)
+
+    def test_a_substance_is_named_by_its_key_alone(self) -> None:
+        for text in ("Aspirin", "CH-0012", "(E)-Zimtsäure"):
+            with self.subTest(text=text):
+                self.refused(self.client.post(NEW, task_form_data(
+                    substance=text)), "substance")
+        self.assertEqual(Task.objects.count(), 0)
 
     def test_batch_is_bounded(self) -> None:
         self.refused(self.client.post(NEW, task_form_data(
@@ -218,27 +231,27 @@ class ValidationTests(FormCase):
 
     def test_the_form_keeps_what_was_typed(self) -> None:
         done = self.client.post(NEW, task_form_data(
-            product="Probe", batch="B-9", steps_total="3",
+            substance="probe", batch="B-9", steps_total="3",
             steps_done="4"))
         root = page(done)
-        self.assertEqual(field_value(root, "product"), "Probe")
+        self.assertEqual(field_value(root, "substance"), "probe")
         self.assertEqual(field_value(root, "batch"), "B-9")
         self.assertEqual(field_value(root, "steps_done"), "4")
 
     def test_a_refused_form_sends_no_success_message(self) -> None:
-        done = self.client.post(NEW, task_form_data(product=""))
+        done = self.client.post(NEW, task_form_data(substance=""))
         self.assertEqual(sent_messages(done), [])
 
 
 class EditTests(FormCase):
 
     def test_the_form_shows_the_task(self) -> None:
-        task = make_task(self.kl, product="Probe", priority="low",
+        task = make_task(self.kl, substance="Probe", priority="low",
                          assignee=self.ae, started=past(2),
                          steps_total=5, steps_done=2, batch="B-9",
                          report=True, note="Notiz")
         root = page(self.client.get(task_url(task, "edit")))
-        self.assertEqual(field_value(root, "product"), "Probe")
+        self.assertEqual(field_value(root, "substance"), "probe")
         self.assertEqual(field_value(root, "priority"), "low")
         self.assertEqual(field_value(root, "assignee"), str(self.ae.pk))
         self.assertEqual(field_value(root, "steps_total"), "5")
@@ -249,7 +262,7 @@ class EditTests(FormCase):
         self.assertEqual(field_value(root, "note"), "Notiz")
 
     def test_changing_a_task(self) -> None:
-        task = make_task(self.kl, product="Probe")
+        task = make_task(self.kl, substance="Probe")
         self.client.force_login(self.ae)
         done = self.client.post(task_url(task, "edit"), edit_data(
             task, priority="high", batch="B-1", cancelled="on"))
@@ -266,7 +279,7 @@ class EditTests(FormCase):
         self.assertIn(f"Aufgabe {task.number} gespeichert.", text)
 
     def test_a_change_is_recorded_with_its_user(self) -> None:
-        task = make_task(self.kl, product="Probe")
+        task = make_task(self.kl, substance="Probe")
         self.client.post(task_url(task, "edit"),
                          edit_data(task, priority="high"))
         newest = task.history.first()
@@ -274,12 +287,12 @@ class EditTests(FormCase):
         self.assertEqual(task.history.count(), 2)
 
     def test_a_refused_edit_changes_nothing(self) -> None:
-        task = make_task(self.kl, product="Probe", started=past(5))
+        task = make_task(self.kl, substance="Probe", started=past(5))
         done = self.client.post(task_url(task, "edit"), edit_data(
-            task, ended="2025-03-04", product="Changed"))
+            task, ended="2025-03-04", substance="aspirin"))
         self.refused(done, "ended")
         task.refresh_from_db()
-        self.assertEqual(task.product, "Probe")
+        self.assertEqual(task.substance.key, "probe")
         self.assertIsNone(task.ended)
         self.assertEqual(task.history.count(), 1)
 

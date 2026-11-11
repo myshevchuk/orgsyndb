@@ -1,4 +1,4 @@
-{% extends "orgsyndb_web/base.html" %}{% load i18n planning inventory %}
+{% extends "orgsyndb_web/base.html" %}{% load i18n planning inventory lab %}
 {% block title %}{% translate "Planning" %}{% endblock %}
 {% block main %}
 <div class="lab-heading">
@@ -14,7 +14,7 @@
 <tbody>
 {% for row in rows %}{% with found=row.forecast %}<tr>
 <td>{{ found.article_number }}</td>
-<td>{{ found.name }}</td>
+<td>{% substance found.substance %}</td>
 <td><ul class="planning-cell">
 {% for entry in found.items %}<li><a href="/lab/inventory/items/{{ entry.item.pk }}/">{{ entry.item.container }}</a>: <span class="stock level-{{ entry.figures.level }}">{{ entry.item.quantity }} <span class="level-label">{{ entry.figures.level|level_label }}</span></span>{% if entry.runway_on_hand is not None %} · {{ entry.runway_on_hand|days }}{% endif %}</li>
 {% endfor %}</ul></td>
@@ -33,7 +33,7 @@
 <td><ul class="planning-cell">
 {% for item in row.fill %}<li><a href="/lab/inventory/items/{{ item.pk }}/fill/">{% blocktranslate with container=item.container %}Fill {{ container }}{% endblocktranslate %}</a></li>
 {% endfor %}{% if row.check_bulk %}<li><a href="/lab/inventory/end-products/bulk/">{% translate "Check bulk" %}</a></li>
-{% endif %}{% if row.plan_synthesis %}<li>{% if user.is_authenticated %}<a href="/lab/tasks/new/?product={{ found.article_number|urlencode }}">{% translate "Plan synthesis" %}</a>{% else %}{% translate "Plan synthesis" %}{% endif %}</li>
+{% endif %}{% if row.plan_synthesis %}<li>{% if user.is_authenticated %}<a href="/lab/tasks/new/?substance={{ found.substance.key|urlencode }}">{% translate "Plan synthesis" %}</a>{% else %}{% translate "Plan synthesis" %}{% endif %}</li>
 {% endif %}</ul></td>
 </tr>
 {% endwith %}{% endfor %}</tbody>

@@ -32,9 +32,6 @@ msgstr "Diesen Artikel gibt es schon in dieser Größe und Einheit."
 msgid "A delivery note needs at least one line."
 msgstr "Ein Lieferschein braucht mindestens eine Zeile."
 
-msgid "The item is not an end product."
-msgstr "Der Artikel ist kein Endprodukt."
-
 msgid "The item is already in the note."
 msgstr "Der Artikel steht schon auf dem Lieferschein."
 
@@ -55,12 +52,6 @@ msgstr "Ein laufender Lieferschein wird Zeile für Zeile über seine Buchungen s
 
 msgid "The delivery note is already reversed."
 msgstr "Der Lieferschein ist schon storniert."
-
-msgid "The lot holds another article."
-msgstr "Das Bulk gehört zu einem anderen Artikel."
-
-msgid "Without a molar mass of the compound, enter the amount taken."
-msgstr "Ohne Molmasse der Verbindung bitte die entnommene Menge angeben."
 
 msgid "The amount taken must be above zero."
 msgstr "Die entnommene Menge muss größer als null sein."
@@ -94,12 +85,6 @@ msgstr "Gebindegröße"
 
 msgid "Opening count"
 msgstr "Anfangsbestand"
-
-msgid "The number of the article's delivery notes; left empty until it is first delivered. It links the item to the compound of the collection with this number."
-msgstr "Die Nummer auf den Lieferscheinen des Artikels; bleibt leer bis zur ersten Abgabe. Sie verknüpft den Artikel mit der Verbindung der Sammlung, die diese Nummer hat."
-
-msgid "Entered once, when the item is first delivered; fixed from then on."
-msgstr "Wird einmal eingetragen, bei der ersten Abgabe; danach fest."
 
 msgid "The size must be above zero."
 msgstr "Die Gebindegröße muss größer als null sein."
@@ -379,9 +364,6 @@ msgstr "Verbrauch nachtragen"
 msgid "Edit"
 msgstr "Bearbeiten"
 
-msgid "Compound"
-msgstr "Verbindung"
-
 msgid "%(coverage)s quarters"
 msgstr "%(coverage)s Quartale"
 
@@ -537,9 +519,6 @@ msgstr "Artikelnr. eintragen"
 
 msgid "Enter an article number."
 msgstr "Bitte eine Artikelnummer eintragen."
-
-msgid "The item already has an article number."
-msgstr "Der Artikel hat schon eine Artikelnummer."
 
 msgid "Enter the item's article number before its first delivery."
 msgstr "Vor der ersten Abgabe die Artikelnummer eintragen."
@@ -747,3 +726,47 @@ msgstr "%(year)s ist unvollständig; die Summe ist kein ganzes Jahr."
 
 msgid "Open all quarters and movements"
 msgstr "Alle Quartale und Buchungen öffnen"
+
+msgid "article"
+msgstr "Artikel"
+
+msgid "articles"
+msgstr "Artikel"
+
+msgid "Source"
+msgstr "Herkunft"
+
+msgid "Supplier"
+msgstr "Lieferant"
+
+msgctxt "lot source"
+msgid "made"
+msgstr "hergestellt"
+
+msgctxt "lot source"
+msgid "bought"
+msgstr "gekauft"
+
+msgid "Another article has this article number."
+msgstr "Ein anderer Artikel hat diese Artikelnummer."
+
+msgid "The article already has an article number."
+msgstr "Der Artikel hat schon eine Artikelnummer."
+
+msgid "The article has the number %(number)s."
+msgstr "Der Artikel hat die Nummer %(number)s."
+
+msgid "Saved on the article, for every size of it."
+msgstr "Wird beim Artikel gespeichert, für alle seine Gebinde."
+
+msgid "The number of the article's delivery notes; left empty until it is first delivered. Saved on the article, for every size of it."
+msgstr "Die Nummer der Lieferscheine des Artikels; leer, bis er zum ersten Mal abgegeben wird. Wird beim Artikel gespeichert, für alle seine Gebinde."
+
+msgid "Entered once, when the article is first delivered; fixed from then on, and saved on the article for every size of it."
+msgstr "Wird einmal eingetragen, wenn der Artikel zum ersten Mal abgegeben wird, und steht danach fest; gilt für alle Gebinde des Artikels."
+
+msgid "The lot holds another substance."
+msgstr "Das Bulk enthält eine andere Substanz."
+
+msgid "Without a molar mass of the substance, enter the amount taken."
+msgstr "Ohne Molmasse der Substanz die entnommene Menge eingeben."

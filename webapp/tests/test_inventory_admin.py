@@ -4,14 +4,16 @@ in the admin)."""
 from datetime import date
 from decimal import Decimal
 
-from inventory.bookings import book_note, correct, create_lot, fill
-from inventory.models import (DeliveryNote, Item, Lot, LotMovement,
+from inventory.bookings import book_note, correct, fill
+from inventory.models import (Article, DeliveryNote, Item, Lot, LotMovement,
                               Movement)
 
-from . import make_item, make_user, page
+from . import (make_article, make_item, make_lot, make_substance, make_user,
+               page)
 from .inventory_support import InventoryCase
 
 ADMIN = "/lab/admin/inventory/"
+ARTICLES = ADMIN + "article/"
 ITEMS = ADMIN + "item/"
 LOTS = ADMIN + "lot/"
 NOTES = ADMIN + "deliverynote/"
@@ -52,13 +54,13 @@ class AdminCase(InventoryCase):
 class AccessTests(AdminCase):
 
     def test_staff_enter(self) -> None:
-        for path in (ITEMS, LOTS, NOTES, MOVEMENTS):
+        for path in (ARTICLES, ITEMS, LOTS, NOTES, MOVEMENTS):
             with self.subTest(path=path):
                 self.assertEqual(self.client.get(path).status_code, 200)
 
     def test_anonymous_users_are_sent_to_the_admin_sign_in(self) -> None:
         self.client.logout()
-        for path in (ITEMS, LOTS, NOTES, MOVEMENTS):
+        for path in (ARTICLES, ITEMS, LOTS, NOTES, MOVEMENTS):
             with self.subTest(path=path):
                 done = self.client.get(path)
                 self.assertEqual(done.status_code, 302)
@@ -67,7 +69,7 @@ class AccessTests(AdminCase):
 
     def test_users_without_staff_status_are_kept_out(self) -> None:
         self.client.force_login(self.worker)
-        for path in (ITEMS, LOTS, NOTES, MOVEMENTS):
+        for path in (ARTICLES, ITEMS, LOTS, NOTES, MOVEMENTS):
             with self.subTest(path=path):
                 done = self.client.get(path)
                 self.assertIn(done.status_code, (302, 403))
@@ -99,12 +101,34 @@ class ListTests(AdminCase):
         self.assertIn("CH-0013", text)
         self.assertNotIn("CH-0012", text)
 
-    def test_search_lots_by_article_number(self) -> None:
-        self.lot("CH-0012", batch="B-ONE")
-        self.lot("CH-0013", batch="B-TWO")
-        text = self.client.get(f"{LOTS}?q=ch-0013").content.decode()
-        self.assertIn("CH-0013", text)
-        self.assertNotIn("CH-0012", text)
+    def test_search_items_by_the_substances_key(self) -> None:
+        wanted = self.stocked("CH-0012", "Zimtsäure")
+        other = self.stocked("CH-0013", "Benzaldehyd")
+        text = self.client.get(f"{ITEMS}?q=cinnamic").content.decode()
+        self.assertIn(f"{ITEMS}{wanted.pk}/change/", text)
+        self.assertNotIn(f"{ITEMS}{other.pk}/change/", text)
+
+    def test_search_lots_by_the_substances_key_and_names(self) -> None:
+        wanted = self.lot("CH-0012", batch="B-ONE")
+        other = self.lot("CH-0013", batch="B-TWO")
+        for query in ("cinnamic", "cinnamic-acid", "zimts"):
+            with self.subTest(query=query):
+                text = self.client.get(f"{LOTS}?q={query}").content.decode()
+                self.assertIn(f"{LOTS}{wanted.pk}/change/", text)
+                self.assertNotIn(f"{LOTS}{other.pk}/change/", text)
+
+    def test_articles_are_listed_and_searched(self) -> None:
+        wanted = self.stocked("CH-0012", "Zimtsäure").article
+        other = self.stocked("CH-0013", "Benzaldehyd").article
+        text = self.client.get(ARTICLES).content.decode()
+        self.assertIn(f"{ARTICLES}{wanted.pk}/change/", text)
+        self.assertIn(f"{ARTICLES}{other.pk}/change/", text)
+        for query in ("ch-0012", "cinnamic", "zimts"):
+            with self.subTest(query=query):
+                text = self.client.get(
+                    f"{ARTICLES}?q={query}").content.decode()
+                self.assertIn(f"{ARTICLES}{wanted.pk}/change/", text)
+                self.assertNotIn(f"{ARTICLES}{other.pk}/change/", text)
 
     def test_movements_and_notes_are_listed(self) -> None:
         item = self.stocked()
@@ -125,8 +149,7 @@ class HistoryTests(AdminCase):
         self.assertIn("lab-worker-xy", done.content.decode("utf-8"))
 
     def test_the_change_history_of_a_lot(self) -> None:
-        lot = create_lot(self.worker, article_number="CH-0012", unit="mg",
-                         amount=Decimal("5"))
+        lot = make_lot(self.worker, "CH-0012", "mg", "5")
         done = self.client.get(f"{LOTS}{lot.pk}/history/")
         self.assertEqual(done.status_code, 200)
         self.assertIn("lab-worker-xy", done.content.decode("utf-8"))
@@ -142,11 +165,24 @@ class HistoryTests(AdminCase):
 
 class ReadOnlyTests(AdminCase):
 
+    def test_the_change_history_of_an_article(self) -> None:
+        article = self.stocked().article
+        done = self.client.get(f"{ARTICLES}{article.pk}/history/")
+        self.assertEqual(done.status_code, 200)
+        self.assertIn("lab-worker-xy", done.content.decode("utf-8"))
+
+    def test_the_substance_of_an_article_is_read_only(self) -> None:
+        article = self.stocked().article
+        names = editable(self.client.get(
+            f"{ARTICLES}{article.pk}/change/"))
+        self.assertNotIn("substance", names)
+        self.assertIn("category", names)
+
     def test_the_fixed_fields_of_an_item_are_read_only(self) -> None:
         item = self.stocked()
         names = editable(self.client.get(f"{ITEMS}{item.pk}/change/"))
-        self.assertIn("name", names)
-        for fixed in ("article_number", "size", "unit", "quantity"):
+        self.assertIn("note", names)
+        for fixed in ("article", "size", "unit", "quantity"):
             with self.subTest(field=fixed):
                 self.assertNotIn(fixed, names)
 
@@ -160,7 +196,7 @@ class ReadOnlyTests(AdminCase):
         lot = self.lot("CH-0012", batch="B-1")
         names = editable(self.client.get(f"{LOTS}{lot.pk}/change/"))
         self.assertIn("batch", names)
-        for fixed in ("article_number", "unit", "amount"):
+        for fixed in ("substance", "source", "unit", "amount"):
             with self.subTest(field=fixed):
                 self.assertNotIn(fixed, names)
 
@@ -196,17 +232,38 @@ class ReadOnlyTests(AdminCase):
 
     def test_a_posted_change_of_the_fixed_fields_is_ignored(self) -> None:
         item = self.stocked()
+        other = self.stocked("CH-0013", "Benzaldehyd")
         self.client.post(f"{ITEMS}{item.pk}/change/", {
-            "name": "Neu", "article_number": "CH-9999", "size": "99",
+            "note": "Neu", "article": str(other.article.pk), "size": "99",
             "unit": "g", "quantity": "77"})
         item = Item.objects.get(pk=item.pk)
         self.assertEqual(
-            (item.article_number, item.unit, item.quantity),
+            (item.article.article_number, item.unit, item.quantity),
             ("CH-0012", "umol", 9))
         self.assertEqual(str(item.size), "10.000")
 
 
 class DeletionTests(AdminCase):
+
+    def test_an_article_with_items_stays(self) -> None:
+        item = self.stocked()
+        self.delete(ARTICLES, item.article)
+        self.assertTrue(Article.objects.filter(
+            pk=item.article.pk).exists())
+
+    def test_an_article_without_items_is_deleted(self) -> None:
+        article = make_article(make_substance("spare"), "SP-1")
+        self.assertEqual(self.delete(ARTICLES, article), 302)
+        self.assertFalse(Article.objects.filter(pk=article.pk).exists())
+
+    def test_the_bulk_action_does_not_delete_an_article_with_items(
+            self) -> None:
+        item = self.stocked()
+        self.client.post(ARTICLES, {"action": "delete_selected",
+                                    "_selected_action": [item.article.pk],
+                                    "post": "yes"})
+        self.assertTrue(Article.objects.filter(
+            pk=item.article.pk).exists())
 
     def test_deleting_a_booked_item(self) -> None:
         """Scenario: Deleting a booked item."""
@@ -332,7 +389,7 @@ class HistoryRestoreTests(AdminCase):
         self.assertFalse(Item.objects.filter(pk=item.pk).exists())
         done = self.client.post(
             f"{ITEMS}{item.pk}/history/{record.history_id}/",
-            {"name": item.name, "category": "", "note": ""})
+            {"note": ""})
         self.assertEqual(done.status_code, 403)
         self.assertFalse(Item.objects.filter(pk=item.pk).exists())
 
@@ -361,10 +418,8 @@ class DeletionCheckTests(AdminCase):
         from django.contrib import admin
         from django.core.exceptions import PermissionDenied
         from inventory.bookings import correct_lot
-        lot = create_lot(self.worker, article_number="CH-0012", unit="mg",
-                         amount=Decimal("50"))
-        spare = create_lot(self.worker, article_number="CH-0012",
-                           unit="mg", amount=Decimal("5"))
+        lot = make_lot(self.worker, "CH-0012", "mg", "50")
+        spare = make_lot(self.worker, "CH-0012", "mg", "5")
         correct_lot(self.worker, lot, amount=Decimal("40"), note="gewogen")
         with self.assertRaises(PermissionDenied):
             admin.site._registry[Lot].delete_queryset(

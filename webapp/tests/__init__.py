@@ -6,13 +6,16 @@ models when they are called.
 """
 
 import atexit
+import io
 import itertools
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import unicodedata
 from datetime import date, datetime, timedelta
 from html.parser import HTMLParser
 from pathlib import Path
@@ -25,6 +28,7 @@ BERLIN = ZoneInfo("Europe/Berlin")
 PASSWORD = "Tr4ck-Lab-Zebra-91"
 NOT_IN_COLLECTION = {"de": "nicht in der Sammlung",
                      "en": "not in the collection"}
+DEMO_REGISTRY = REPO / "webapp" / "demo" / "registry.json"
 
 # ---------------------------------------------------------------------------
 # Collection indexes
@@ -176,10 +180,142 @@ def make_user(username: str, initials: str, first_name: str = "",
         first_name=first_name, last_name=last_name, **extra)
 
 
-def make_task(created_by: Any, **fields: Any) -> Any:
+def slug(text: str) -> str:
+    """``text`` as a registry key: lower case ASCII letters and digits
+    joined by single hyphens, as ``Neuverbindung 9`` gives
+    ``neuverbindung-9``."""
+    ascii_text = unicodedata.normalize("NFKD", text).encode(
+        "ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9]+", "-", ascii_text.lower()).strip("-")
+
+
+def make_group(key: str = "purchased", label: str | None = None,
+               parent: Any = None, **fields: Any) -> Any:
+    """The group ``key``, created when there is none; ``fields``, such
+    as ``label_de``, are for a group that has to be created."""
+    from vocabulary.models import Group
+    return Group.objects.get_or_create(key=key, defaults={
+        "label": label or key.replace("-", " ").title(),
+        "parent": parent, **fields})[0]
+
+
+def make_class(key: str = "alcohols", label: str | None = None,
+               parent: Any = None, **fields: Any) -> Any:
+    """The chemical class ``key``, created when there is none."""
+    from vocabulary.models import ChemicalClass
+    return ChemicalClass.objects.get_or_create(key=key, defaults={
+        "label": label or key.replace("-", " ").title(),
+        "parent": parent, **fields})[0]
+
+
+def make_substance(key: str, name: str | None = None, group: Any = None,
+                   classes: Any = (), **fields: Any) -> Any:
+    """The substance ``key``, created when there is none, in ``group``
+    (the group ``purchased`` by default) and the chemical classes
+    ``classes``, which are keys or terms. The name of an existing
+    substance stays; a field given for it replaces its value. ``mw``
+    may be a string or a number."""
+    from decimal import Decimal
+    from registry.models import Substance, SubstanceClass
+    if fields.get("mw") is not None:
+        fields["mw"] = Decimal(str(fields["mw"]))
+    found = Substance.objects.filter(key=key).first()
+    if found is None:
+        found = Substance.objects.create(
+            key=key, name=name or key, group=group or make_group(),
+            **fields)
+    else:
+        changed = dict(fields)
+        if group is not None:
+            changed["group"] = group
+        for field, value in changed.items():
+            setattr(found, field, value)
+        if changed:
+            found.save()
+    for term in classes:
+        term = make_class(term) if isinstance(term, str) else term
+        SubstanceClass.objects.get_or_create(substance=found,
+                                             chemical_class=term)
+    return found
+
+
+# The substances of the demo collection that have an item number, by
+# that number: key, English name, German name and molar mass. Test
+# records that name one of these article numbers get the substance, so
+# that ``CH-0012`` is ``cinnamic-acid`` with its molar mass 148.16.
+DEMO_ARTICLES = {
+    "CH-0001": ("1-4-bromophenyl-ethanol", "1-(4-Bromophenyl)ethanol",
+                "1-(4-Bromphenyl)ethanol", "201.06"),
+    "CH-0002": ("1-biphenyl-4-yl-ethanol", "1-(Biphenyl-4-yl)ethanol",
+                "1-(Biphenyl-4-yl)ethanol", "198.26"),
+    "CH-0010": ("acetylsalicylic-acid", "Acetylsalicylic acid",
+                "Acetylsalicylsäure", "180.16"),
+    "CH-0012": ("cinnamic-acid", "(E)-Cinnamic acid", "(E)-Zimtsäure",
+                "148.16"),
+    "CH-0013": ("dibenzylideneacetone", "Dibenzylideneacetone",
+                "Dibenzylidenaceton", "234.3"),
+    "CH-0016": ("isopentyl-acetate", "Isopentyl acetate",
+                "Isopentylacetat", "130.19"),
+}
+
+
+def demo_article(text: str) -> tuple[str, str, str, str] | None:
+    """The entry of ``DEMO_ARTICLES`` for an article number or a key."""
+    if text in DEMO_ARTICLES:
+        return DEMO_ARTICLES[text]
+    return next((known for known in DEMO_ARTICLES.values()
+                 if known[0] == text), None)
+
+
+def substance_for(text: str, name: str | None = None,
+                  **fields: Any) -> Any:
+    """The substance a test names by ``text``, created when there is
+    none: the demo substance of an article number or key in
+    ``DEMO_ARTICLES``, else the substance whose key is ``slug(text)``,
+    named ``name`` or ``text``. How a test names a substance by an
+    article number or a plain name, ``NV-7`` giving ``nv-7``."""
+    from registry.models import Substance
+    known = demo_article(text)
+    key = known[0] if known else slug(text)
+    if Substance.objects.filter(key=key).exists():
+        return make_substance(key, **fields)
+    if known is None:
+        return make_substance(key, name or text, **fields)
+    return make_substance(key, name or known[1], **{
+        "name_de": "" if name else known[2], "mw": known[3], **fields})
+
+
+def make_article(substance: Any, number: str | None = None,
+                 category: str = "", user: Any = None) -> Any:
+    """The article of ``substance``, created when there is none. A
+    number or a category given for an existing article is set when the
+    article lacks it. ``user``, when given, is the history's user of
+    what this call saves."""
+    from inventory.models import Article
+    article = Article.objects.filter(substance=substance).first()
+    if article is None:
+        article = Article(substance=substance,
+                          article_number=number or None, category=category)
+    else:
+        if number and not article.article_number:
+            article.article_number = number
+        if category:
+            article.category = category
+    if user is not None:
+        article._history_user = user
+    article.save()
+    return article
+
+
+def make_task(created_by: Any, substance: Any = "Aspirin",
+              **fields: Any) -> Any:
+    """A task of ``substance``, a substance or a text that
+    ``substance_for`` turns into one."""
     from tasks.models import Task
-    fields.setdefault("product", "Aspirin")
-    return Task.objects.create(created_by=created_by, **fields)
+    if isinstance(substance, str):
+        substance = substance_for(substance)
+    return Task.objects.create(created_by=created_by, substance=substance,
+                               **fields)
 
 
 # The day test items entered stock unless a test says otherwise: long
@@ -188,18 +324,49 @@ STOCKED_LONG_AGO = date(2019, 1, 2)
 
 
 def make_item(user: Any, article: str | None = "CH-0001",
-              name: str = "Probe", size: str = "10", unit: str = "umol",
+              name: str | None = None, size: str = "10", unit: str = "umol",
               quantity: int = 5, category: str = "", note: str = "",
               day: date | None = None,
-              stocked_on: date | None = STOCKED_LONG_AGO) -> Any:
+              stocked_on: date | None = STOCKED_LONG_AGO,
+              substance: Any = None, mw: Any = None, name_de: str = "",
+              compartment: str = "", box: str = "",
+              status: str | None = None) -> Any:
     """An item of the inventory ``end-products``, booked by ``user``,
-    that entered stock on ``stocked_on``."""
+    that entered stock on ``stocked_on``.
+
+    The item is a size of the article of ``substance``; without one, of
+    the substance ``substance_for(article)``, named ``name`` (``Probe``
+    for an article number that is not a demo article's) when it has to
+    be created, or ``substance_for(name)`` for an item without an
+    article number. The article is created with the number ``article``
+    when it has none.
+    """
     from decimal import Decimal
-    from inventory.bookings import create_item
-    return create_item(
-        user, article_number=article, name=name, size=Decimal(size),
-        unit=unit, quantity=quantity, category=category, note=note,
-        date=day, stocked_on=stocked_on)
+    from django.utils import timezone
+    from inventory.models import Item, Movement
+    fields = {**({"name_de": name_de} if name_de else {}),
+              **({"mw": mw} if mw is not None else {})}
+    if substance is None:
+        text = article or name or "Probe"
+        substance = substance_for(
+            text, name or (None if demo_article(text) else "Probe"),
+            **fields)
+    elif mw is not None:
+        substance = make_substance(substance.key, mw=mw)
+    owned = make_article(substance, article or None, category, user)
+    moved = day or timezone.localdate()
+    item = Item(article=owned, size=Decimal(size), unit=unit,
+                quantity=quantity, note=note, compartment=compartment,
+                box=box, stocked_on=stocked_on or (
+                    moved if quantity > 0 else None),
+                **({"status": status} if status else {}))
+    item._history_user = user
+    item.save()
+    Movement.objects.create(
+        item=item, kind=Movement.Kind.OPENING, count=quantity,
+        quantity_after=quantity, date=moved, booked_at=timezone.now(),
+        user=user)
+    return item
 
 
 BASE_FACTOR = {"mg": 1, "g": 1000, "umol": 1, "mmol": 1000}
@@ -207,22 +374,40 @@ BASE_FACTOR = {"mg": 1, "g": 1000, "umol": 1, "mmol": 1000}
 
 def make_lot(user: Any, article: str = "CH-0001", unit: str = "mg",
              amount: str = "50", batch: str = "", location: str = "",
-             made_on: date | None = None, note: str = "") -> Any:
+             made_on: date | None = None, note: str = "",
+             substance: Any = None, source: str = "made",
+             supplier: str = "", mw: Any = None) -> Any:
     """A lot holding ``amount`` of ``unit``, kept in the base unit, with
-    its opening movement."""
+    its opening movement. It is of ``substance``, or of the substance
+    ``substance_for(article)``, which ``make_item`` gives to the item of
+    that article number."""
     from decimal import Decimal
     from django.utils import timezone
-    from inventory.models import END_PRODUCTS, Lot, LotMovement
+    from inventory.models import Lot, LotMovement
+    if substance is None:
+        substance = substance_for(
+            article, **({"mw": mw} if mw is not None else {}))
+    elif mw is not None:
+        substance = make_substance(substance.key, mw=mw)
     base = Decimal(amount) * BASE_FACTOR[unit]
-    lot = Lot.objects.create(
-        inventory=END_PRODUCTS, article_number=article, unit=unit,
-        amount=base, batch=batch, location=location, made_on=made_on,
-        note=note)
+    lot = Lot(substance=substance, source=source, supplier=supplier,
+              unit=unit, amount=base, batch=batch, location=location,
+              made_on=made_on, note=note)
+    lot._history_user = user
+    lot.save()
     LotMovement.objects.create(
         lot=lot, kind=LotMovement.Kind.OPENING, amount=base,
         amount_after=base, date=timezone.localdate(),
         booked_at=timezone.now(), user=user)
     return lot
+
+
+def load_demo_registry() -> None:
+    """Load the demo registry into an empty database with
+    ``registry_load``."""
+    from django.core.management import call_command
+    call_command("registry_load", str(DEMO_REGISTRY),
+                 stdout=io.StringIO())
 
 
 def task_url(task: Any, action: str = "") -> str:
@@ -231,8 +416,10 @@ def task_url(task: Any, action: str = "") -> str:
 
 def task_form_data(**over: Any) -> dict[str, str]:
     """The fields of the task form with nothing filled in but the
-    product; a flag is on when given as ``"on"``."""
-    data = {"product": "Aspirin", "priority": "medium", "assignee": "",
+    substance key ``aspirin``, which a test creates with
+    ``substance_for("Aspirin")``; a flag is on when given as
+    ``"on"``."""
+    data = {"substance": "aspirin", "priority": "medium", "assignee": "",
             "started": "", "ended": "", "sequence": "", "steps_total": "",
             "steps_done": "", "batch": "", "note": ""}
     data.update(over)
@@ -242,7 +429,7 @@ def task_form_data(**over: Any) -> dict[str, str]:
 def edit_data(task: Any, **over: Any) -> dict[str, str]:
     """The edit form's fields as the task stands, with ``over`` applied."""
     data = task_form_data(
-        product=task.product, priority=task.priority,
+        substance=task.substance.key, priority=task.priority,
         assignee=str(task.assignee_id or ""),
         started=task.started.isoformat() if task.started else "",
         ended=task.ended.isoformat() if task.ended else "",
@@ -441,6 +628,19 @@ def table(root: Element) -> tuple[list[str], list[dict[str, Element]]]:
               for cell in cells(rows[0])]
     return header, [dict(zip(header, cells(tr))) for tr in rows[1:]
                     if tr.closest("thead") is None]
+
+
+def datalist(root: Element, field: str) -> dict[str, str]:
+    """The options of the ``datalist`` that the control named ``field``
+    names in its ``list`` attribute, each value with its label."""
+    control = root.find(("input", "select", "textarea"), name=field)
+    assert control is not None, f"the page has no control {field}"
+    listed = control.get("list")
+    assert listed, f"the control {field} names no datalist"
+    found = root.find("datalist", id=listed)
+    assert found is not None, f"the page has no datalist {listed}"
+    return {o.get("value"): o.get("label") or o.text()
+            for o in found.find_all("option")}
 
 
 def numbers(root: Element) -> list[str]:

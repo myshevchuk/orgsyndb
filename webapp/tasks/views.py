@@ -70,10 +70,10 @@ class Filters:
 
 def searched_text(task: Task) -> str:
     """The text the list's search looks in, folded for a comparison
-    regardless of case: the number, the product, the name of the
-    product's compound, the batch and the note."""
-    found = index.compound_for(task.product)
-    parts = [task.number, task.product, found.name if found else "",
+    regardless of case: the number, the substance's key and names, the
+    batch and the note."""
+    substance = task.substance
+    parts = [task.number, substance.key, substance.name, substance.name_de,
              task.batch, task.note]
     return "\n".join(parts).casefold()
 
@@ -104,7 +104,7 @@ def task_list(request: HttpRequest) -> HttpResponse:
     accounts = list(get_user_model().objects.order_by("initials"))
     filters = Filters.from_query(request.GET,
                                  {user.initials for user in accounts})
-    tasks = list(Task.objects.select_related("assignee"))
+    tasks = list(Task.objects.select_related("assignee", "substance"))
     plan = Plan(timezone.localdate())
     priorities = {task.pk: plan.task_priority(task) for task in tasks}
     counted = selected(tasks, filters, priorities, by_state=False)
@@ -140,7 +140,7 @@ def task_page(request: HttpRequest, number: str) -> HttpResponse:
     forecast of each article it matches, the lots of its batch and its
     history; answer 404 for an unknown number."""
     task = get_object_or_404(Task.objects.select_related(
-        "assignee", "created_by"), number=number)
+        "assignee", "created_by", "substance"), number=number)
     plan = Plan(timezone.localdate())
     articles = plan.articles_of(task)
     steps = [Step(procedure=ident,
@@ -160,8 +160,7 @@ def task_page(request: HttpRequest, number: str) -> HttpResponse:
         "shown": plan.task_priority(task),
         "articles": articles,
         "lots": batch_lots(task),
-        "bulk_link": bulk_link(
-            task, [line.article_number for line in articles]),
+        "bulk_link": bulk_link(task),
     })
 
 
@@ -180,21 +179,19 @@ def form_page(request: HttpRequest, form_class: type[TaskForm],
             return redirect("task", number=saved.number)
     else:
         form = form_class(instance=task, initial=initial)
-    found = index.current()
     return render(request, "tasks/form.html", {
         "form": form,
         "task": task,
-        "compounds": found.compounds.values(),
-        "sequences": found.sequences.values(),
+        "sequences": index.current().sequences.values(),
     })
 
 
 @login_required
 def task_new(request: HttpRequest) -> HttpResponse:
-    """Create a task, made by the signed-in user; ``product`` in the
-    query fills in the product."""
+    """Create a task, made by the signed-in user; ``substance`` in the
+    query fills in the substance's key."""
     return form_page(request, TaskForm, Task(created_by=request.user),
-                     {"product": request.GET.get("product", "")})
+                     {"substance": request.GET.get("substance", "")})
 
 
 @login_required

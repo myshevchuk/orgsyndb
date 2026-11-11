@@ -25,15 +25,15 @@ When no record exists, the defaults apply. `z` is `statistics.NormalDist().inv_c
 - **THEN** the admin shows an error and keeps the earlier record
 
 ### Requirement: Matching tasks and articles
-A task SHALL match an item of the inventory `end-products` when the task's product equals the item's article number regardless of case, or when `compound_for` finds a compound for both and it is the same compound. A task matches an article when it matches one of its items. Planning works on articles: all items of the inventory `end-products` with one article number. An item without an article number belongs to no article, matches no task and has no forecast.
+A task SHALL match the article of its substance, when the substance has one. Planning works on articles, each the items of one substance; an article without an article number has no consumption and no forecast, and the tasks that match it show their entered priority.
 
-#### Scenario: Match by compound and by text
-- **WHEN** the index is the demo collection's, items `CH-0012` of 10 µmol and of 50 µmol and an item `NV-7` exist, and tasks name the products `cinnamic-acid` and `nv-7`
-- **THEN** the first task matches the article `CH-0012` and both its items, and the second matches `NV-7`
+#### Scenario: Match by substance
+- **WHEN** items of 10 µmol and of 50 µmol of the article `CH-0012`, of the substance `cinnamic-acid`, and an item of the article `NV-0007`, of `new-compound-7`, exist, and tasks name the substances `cinnamic-acid` and `new-compound-7`
+- **THEN** the first task matches the article `CH-0012` and both its items, and the second matches `NV-0007`
 
 #### Scenario: A position without an article number
-- **WHEN** the index is the demo collection's, an item named `1-Phenylethanol` without an article number has 8 containers, and a planned task names the product `1-phenylethanol`
-- **THEN** the planning list with `all=1` lists no article for the item, and the task matches no article and shows its entered priority
+- **WHEN** an item of the substance `1-phenylethanol`, whose article has no article number, has 8 containers, and a planned task names `1-phenylethanol`
+- **THEN** the planning list with `all=1` lists no article for the item, and the task shows its entered priority
 
 ### Requirement: Demand models
 An item's demand SHALL be described by one of two models, estimated from its history window: the last `history_quarters` complete quarters, leaving out quarters before the item's first quarter with data. An item whose history window is empty or holds no consumption has no demand and no forecast, and so has an item whose level is `dormant` or `undelivered` (end-product-inventory "Stock levels"), whatever its history. Orders are the item's delivery-note lines that count as consumption, each with its date and count.
@@ -73,7 +73,7 @@ The demand per year shows as `365.25 λ` times the mean order size, or as `4m`.
 ### Requirement: Runway
 The runway of an item for a stock of `S` containers at a certainty `q` SHALL be the longest number of days `H` whose need at `q` is at most `S`, the same rule holding for `S` zero. In the quarterly model it is `((−z_q σ + √(z_q²σ² + 4μS)) / (2μ))²`, zero for `S` zero; in the order model, the `H` at which `P(demand over H ≤ S)` falls to `q`, to 0.01 days, which for `S` zero is the time within which no order arrives with probability `q`. An item's runway on hand is that of its quantity at `certainty`.
 
-An article's runway uses, for each of its `k` items with demand, the certainty `q_k = 1 − (1 − certainty) / k`, so that by the union bound all of them are covered together with probability at least `certainty`, whatever the relation between their demands. Its bulk unit is µmol when the compound has a molar mass, else the kind of unit, mass or amount of substance, of the article's first item by unit and size among those whose level is neither `dormant` nor `undelivered`. An item converts when its container size converts into that unit; `s_max` is the largest container size, in that unit, among the converting items with demand, and zero when none has demand. Each open lot that converts counts with its amount in that unit minus `s_max`, where positive, so that whatever is counted can be filled in whole containers of any size. The usable bulk is the sum of those amounts. The article's runway is the longest `H` that meets two conditions:
+An article's runway uses, for each of its `k` items with demand, the certainty `q_k = 1 − (1 − certainty) / k`, so that by the union bound all of them are covered together with probability at least `certainty`, whatever the relation between their demands. Its bulk unit is µmol when the substance has a molar mass, else the kind of unit, mass or amount of substance, of the article's first item by unit and size among those whose level is neither `dormant` nor `undelivered`. An item converts when its container size converts into that unit; `s_max` is the largest container size, in that unit, among the converting items with demand, and zero when none has demand. Each open lot that converts counts with its amount in that unit minus `s_max`, where positive, so that whatever is counted can be filled in whole containers of any size. The usable bulk is the sum of those amounts. The article's runway is the longest `H` that meets two conditions:
 
 - the sum, over the converting items with demand, of the whole containers each lacks for `H` days at `q_k`, its need minus its quantity where positive, rounded up, times its container size, does not exceed the usable bulk;
 - `H` is at most the runway on hand at `q_k` of every item with demand that does not convert.
@@ -97,7 +97,7 @@ An article has a forecast when one of its items has demand. Runways show as whol
 - **THEN** its usable bulk is zero and its runway is its runway on hand
 
 #### Scenario: A dormant size does not choose the bulk unit
-- **WHEN** with the default parameters an article whose compound has no molar mass has an item of 1 mg, dormant, and an item of 1 µmol with 10 containers and twelve quarters of 9 in the quarterly model, and an open lot of 100 µmol
+- **WHEN** with the default parameters an article whose substance has no molar mass has an item of 1 mg, dormant, and an item of 1 µmol with 10 containers and twelve quarters of 9 in the quarterly model, and an open lot of 100 µmol
 - **THEN** its bulk unit is µmol, the lot converts, and its runway is that of the µmol item with the lot
 
 ### Requirement: Synthesis time
@@ -141,7 +141,7 @@ A planned or running task with a slack SHALL have the priority of that slack, it
 An item's forecast, shown on the item page, SHALL hold for an item with demand: its model, with `λ`, the number of orders and their median and largest size, or `m`, `v` and the number of quarters, marked `grob`; its runway on hand; and for its article the bulk, runway, synthesis time with its basis, slack, latest start and priority. It shows the amount a new synthesis must yield: for the converting items with demand, the sum of the whole containers each lacks for `L + buffer_days + target_days` days at `q_k`, its need minus its quantity where positive, rounded up, times its container size, minus the usable bulk, at least zero, in the bulk unit rounded up to a whole mg or µmol, and, when the bulk unit is µmol, also in mg, the unrounded amount converted and rounded up to a whole mg; and for each item that does not convert, the whole containers it lacks for that time, rounded up, as a count of its own size. It shows the delivery rhythm: the last delivery's date, the number of delivery notes in the past 365 days, and, given at least three notes in the past 730 days, the median number of days between their consecutive dates, rounded half up to a whole day, and the next delivery expected that many days after the last. Lines of reversed movements and reversed historical notes do not count. Each figure names the parameters it used. A dormant item shows `Ruhend, keine Prognose.` (`Dormant, no forecast.`), and every other item without demand `Kein Verbrauch, keine Prognose.` (`No consumption, no forecast.`).
 
 #### Scenario: Forecast figures
-- **WHEN** on 2026-11-04 with the default parameters the page of the 1 mg item with 10 containers, `m` 9, `v` 9, no bulk and an article number that names no compound of the index is requested
+- **WHEN** on 2026-11-04 with the default parameters the page of the 1 mg item with 10 containers, `m` 9, `v` 9, no bulk and a substance without molar mass is requested
 - **THEN** it shows the runway 60 days, the synthesis time 21 days by default, the slack 11 days, the latest start 2026-11-15, the priority high, and 42 mg for a new synthesis, all marked `grob`
 
 #### Scenario: Delivery rhythm
@@ -149,17 +149,17 @@ An item's forecast, shown on the item page, SHALL hold for an item with demand: 
 - **THEN** the page shows the last delivery 2026-10-01, four deliveries in the past year, a usual interval of 31 days and the next delivery expected on 2026-11-01
 
 ### Requirement: Planning list
-`/lab/planning/` SHALL list the articles with a forecast whose priority is high or medium or for which an action is due, and with `all=1` every article with a forecast, ordered by slack, smallest first, then by article number. The table has the columns `Artikelnr.`, `Name`, `Gebinde`, `Bedarf/Jahr`, `Letzte Lieferung`, `Bulk`, `Reichweite`, `Synthesedauer`, `Spätester Start`, `Priorität`, `Aufgaben` and `Maßnahmen` (`Article no.`, `Name`, `Containers`, `Demand per year`, `Last delivery`, `Bulk`, `Runway`, `Synthesis time`, `Latest start`, `Priority`, `Tasks`, `Actions`). `Name` is the name of the article's first item in the item list's order. `Gebinde` lists each item, in that order, with its size, quantity with its level, and runway on hand; `Bedarf/Jahr` each item's demand per year in containers, rounded half up to one place, in the same order; `Letzte Lieferung` the latest date of the delivery notes of the article's items that count; and `Bulk` the usable bulk in the bulk unit. `Aufgaben` lists every matching planned or running task, running first, then by number, with its number linking to it, its state and its expected end, today plus its remaining synthesis time, marked `verspätet` (`late`) when its slack is below zero. `Maßnahmen` gives each that applies:
+`/lab/planning/` SHALL list the articles with a forecast whose priority is high or medium or for which an action is due, and with `all=1` every article with a forecast, ordered by slack, smallest first, then by article number. The table has the columns `Artikelnr.`, `Name`, `Gebinde`, `Bedarf/Jahr`, `Letzte Lieferung`, `Bulk`, `Reichweite`, `Synthesedauer`, `Spätester Start`, `Priorität`, `Aufgaben` and `Maßnahmen` (`Article no.`, `Name`, `Containers`, `Demand per year`, `Last delivery`, `Bulk`, `Runway`, `Synthesis time`, `Latest start`, `Priority`, `Tasks`, `Actions`). `Name` is the article's name. `Gebinde` lists each item, in that order, with its size, quantity with its level, and runway on hand; `Bedarf/Jahr` each item's demand per year in containers, rounded half up to one place, in the same order; `Letzte Lieferung` the latest date of the delivery notes of the article's items that count; and `Bulk` the usable bulk in the bulk unit. `Aufgaben` lists every matching planned or running task, running first, then by number, with its number linking to it, its state and its expected end, today plus its remaining synthesis time, marked `verspätet` (`late`) when its slack is below zero. `Maßnahmen` gives each that applies:
 
 - `Abfüllen <size>` (`Fill <size>`), for each item whose runway on hand is below `buffer_days` and of whose containers the open lots would fill at least one, linking to its filling form;
 - `Bulk prüfen` (`Check bulk`), linking to the bulk list, when an open lot of the article does not convert;
-- `Synthese planen` (`Plan synthesis`), linking for a signed-in user to `/lab/tasks/new/?product=<article number>`, when the priority is high or medium, no matching task is planned or running, and every open lot of the article converts, since a lot that does not may hold enough.
+- `Synthese planen` (`Plan synthesis`), linking for a signed-in user to `/lab/tasks/new/?substance=<key>`, the key of the article's substance, when the priority is high or medium, no matching task is planned or running, and every open lot of the article converts, since a lot that does not may hold enough.
 
 The line above the table states the parameters in force.
 
 #### Scenario: Actions
-- **WHEN** on 2026-11-04 with the default parameters three articles of one 1 mg item each, every item with twelve quarters of 9 in the quarterly model and no tasks, exist: the first with 1 container and a lot of 20 mg, the second with 10 containers and only a lot in µmol of a compound without molar mass, the third with 10 containers and no lot
-- **THEN** the first is listed, though its priority is low, with `Abfüllen 1 mg`; the second shows check bulk and not plan synthesis; the third shows plan synthesis linking to the new-task form with its article number
+- **WHEN** on 2026-11-04 with the default parameters three articles of one 1 mg item each, every item with twelve quarters of 9 in the quarterly model and no tasks, exist: the first with 1 container and a lot of 20 mg, the second with 10 containers and only a lot in µmol, its substance without molar mass, the third with 10 containers and no lot
+- **THEN** the first is listed, though its priority is low, with `Abfüllen 1 mg`; the second shows check bulk and not plan synthesis; the third shows plan synthesis linking to the new-task form with its substance's key
 
 #### Scenario: Created task matches its article
 - **WHEN** a signed-in user follows an article's plan-synthesis link and saves the form
@@ -170,13 +170,13 @@ The line above the table states the parameters in force.
 - **THEN** the row marks the task `verspätet`
 
 ### Requirement: Batches between tasks and bulk
-A task and a bulk lot SHALL belong to each other when their batches are equal and not empty and the task matches the lot's article. The task page and the lot page link the records that belong to theirs, and an ended task with a batch offers to record it as a lot, as `task-tracker` and `end-product-inventory` state.
+A task and a bulk lot SHALL belong to each other when their batches are equal and not empty and the task's substance is the lot's. The task page and the lot page link the records that belong to theirs, and an ended task with a batch offers to record it as a lot, as `task-tracker` and `end-product-inventory` state.
 
 #### Scenario: Bulk from an ended task
-- **WHEN** a signed-in user opens the link on an ended task with the batch `B-2026-031` naming `CH-0012`, and saves the form with an amount
-- **THEN** a lot `CH-0012` with the batch `B-2026-031` exists, and the task's page and the lot's page link to each other
+- **WHEN** a signed-in user opens the link on an ended task of `cinnamic-acid` with the batch `B-2026-031`, and saves the form with an amount
+- **THEN** a lot of `cinnamic-acid`, made in the lab, with the batch `B-2026-031` exists, and the task's page and the lot's page link to each other
 
-#### Scenario: Same batch, other product
-- **WHEN** a lot of `NV-7` and a task naming `CH-0012` both have the batch `B-001`
+#### Scenario: Same batch, other substance
+- **WHEN** a lot of `new-compound-7` and a task of `cinnamic-acid` both have the batch `B-001`
 - **THEN** neither page links the other
 

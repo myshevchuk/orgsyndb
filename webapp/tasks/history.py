@@ -8,9 +8,10 @@ from django.contrib.auth import get_user_model
 from django.utils import formats
 from django.utils.translation import gettext as _
 
+from registry.models import Substance
 from tasks.models import Priority, Task
 
-FIELDS = ["product", "priority", "assignee", "started", "ended",
+FIELDS = ["substance", "priority", "assignee", "started", "ended",
           "sequence", "sequence_steps", "steps_total", "steps_done",
           "batch", "report", "qc_list", "cancelled", "note"]
 
@@ -36,11 +37,15 @@ class Entry:
     changes: list[Change]
 
 
-def shown(name: str, value: Any, users: dict[Any, Any]) -> str:
+def shown(name: str, value: Any, users: dict[Any, Any],
+          keys: dict[Any, str]) -> str:
     """Return VALUE of the task field NAME as the history shows it, in
-    the active language; USERS maps account IDs to accounts."""
+    the active language; USERS maps account IDs to accounts and KEYS
+    substance IDs to the substances' keys."""
     if value is None or value == "" or value == []:
         return "–"
+    if name == "substance":
+        return keys.get(value, str(value))
     if name == "priority":
         return str(Priority(value).label) if value in Priority.values \
             else str(value)
@@ -67,6 +72,9 @@ def history_entries(task: Task) -> list[Entry]:
     user_ids = {getattr(record, "assignee_id") for record in records}
     users = get_user_model().objects.in_bulk(
         [pk for pk in user_ids if pk is not None])
+    keys = dict(Substance.objects.filter(
+        pk__in={record.substance_id for record in records}).values_list(
+            "pk", "key"))
     entries = []
     for position, record in enumerate(records):
         before = records[position + 1] if position + 1 < len(records) \
@@ -79,8 +87,8 @@ def history_entries(task: Task) -> list[Entry]:
                 if old != new:
                     changes.append(Change(
                         label=str(field.verbose_name),
-                        old=shown(field.name, old, users),
-                        new=shown(field.name, new, users)))
+                        old=shown(field.name, old, users, keys),
+                        new=shown(field.name, new, users, keys)))
         entries.append(Entry(time=record.history_date,
                              user=record.history_user,
                              created=record.history_type == "+",

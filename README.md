@@ -259,6 +259,10 @@ several procedures and their translations can use the same chemical data.
 `init` creates this directory along with `org/procedures/`,
 `md/procedures/`, `md/sequences/` and `static/structures/`.
 
+The lab application keeps its own [substance registry](#substance-registry);
+use `manage.py registry_import COLLECTION` to import a collection's compounds
+and vocabularies into an empty lab registry.
+
 Each compound is a `<key>.toml` file. The key contains lowercase letters
 and digits, with single hyphens between groups, for example
 `ethyl-acetate.toml`. The key identifies the compound; structures are not
@@ -1137,6 +1141,20 @@ error. `orgsyndb validate` passes `--sequences md/sequences`. The
 [schema reference](docs/SCHEMA.md#sequence-messages) lists sequence messages
 and corrections.
 
+### Lab application commands
+
+Run these Django commands from `webapp/` as
+`uv run python manage.py <command>`. In a container deployment, run them
+from `deploy/` as `docker compose exec app python manage.py <command>`;
+input files and collection directories must be available inside `app`.
+
+| Command | What it does |
+|---|---|
+| `registry_import COLLECTION` | Fills an empty lab registry from the collection directory's compounds and four vocabularies. See [Substance registry](#substance-registry) for required fields and fields left out. |
+| `registry_load FILE` | Fills an empty lab registry from a JSON snapshot, including article numbers. Invalid input leaves the registry unchanged. |
+| `demo_data [--replace \| --if-empty]` | Loads the demo registry and invented lab records. Requires `ORGSYNDB_DEMO=true`; see [Demo deployment](#demo-deployment) for the replacement and startup rules. |
+| `schema_diagram [--check] [--output PATH]` | Writes the database diagram, or checks it without writing with `--check`. See [Lab application tests and local server](#lab-application-tests-and-local-server). |
+
 ## Generated directories
 
 These directories are generated and must not be committed. The collection's
@@ -1272,7 +1290,7 @@ regenerating.
 ORGSYNDB_DEBUG=true uv run python manage.py schema_diagram
 ```
 
-To develop with the collection's product links and interface language,
+To develop with links to the collection and its interface language,
 generate its index from the repository root. Replace `<collection>` with
 your collection's directory, then start the local server:
 
@@ -1287,6 +1305,11 @@ uv run python manage.py runserver
 
 Open <http://127.0.0.1:8000/lab/>. The local database is
 `webapp/db.sqlite3` unless you set `ORGSYNDB_DATABASE_URL`.
+The index supplies the language, compound keys for collection links,
+procedures and sequences. Add substances in the
+[lab registry](#substance-registry), or use `registry_import` to fill an
+empty registry from your collection; the index does not supply substance
+names, molar masses or article numbers.
 
 To try the lab with invented records, use the demo collection and a
 separate SQLite file. From the repository root:
@@ -1303,22 +1326,21 @@ uv run python manage.py demo_data
 uv run python manage.py runserver
 ```
 
-This keeps the demo apart from `webapp/db.sqlite3`. The command writes
-records dated back from today in Europe/Berlin. For example, a successful
-run prints:
+This keeps the demo apart from `webapp/db.sqlite3`. The command loads
+`webapp/demo/registry.json`, then writes inventory and task records dated
+back from today in Europe/Berlin. For example, a successful run prints:
 
 ```text
-Demo data as of 2026-11-07 written: 5 accounts, 17 items, 234 delivery notes and 19 tasks.
+Demo data as of 2026-11-07 written: 5 accounts, 21 substances, 17 items, 234 delivery notes and 21 tasks.
 ```
 
 The date and counts depend on the day you run it. Open
 <http://127.0.0.1:8000/lab/> and use the accounts listed under
 [Demo deployment](#demo-deployment). To renew an existing demo, run
 `uv run python manage.py demo_data --replace` from `webapp/`; this deletes
-changes you made while trying it. Without `--replace`, the command refuses
-a database that already holds lab records, including accounts.
-Reseed an existing demo this way to give its items stock entry dates and
-states.
+changes you made while trying it, including substances and vocabulary
+terms. Without `--replace`, the command refuses a database that already
+holds lab records, including accounts or a registry.
 
 ## Troubleshooting
 
@@ -1479,9 +1501,9 @@ a signed-in account. The interface uses the site's German or English
 language, set by `locale` in
 `site/hugo.toml` and read from the published release's `index.json`.
 
-Each task has a number such as `T-001`, a product, priority, assignee,
-start and end dates, steps done and total, calculated progress, batch
-number, report and QC-list flags, and a note. QC means quality control;
+Each task has a number such as `T-001`, the substance it makes, priority,
+assignee, start and end dates, steps done and total, calculated progress,
+batch number, report and QC-list flags, and a note. QC means quality control;
 the flag records whether the batch is on the QC list. Dates determine
 whether a task is planned, running or ended; a task can also be
 cancelled. Ended tasks missing the report or QC-list flag show
@@ -1492,10 +1514,17 @@ task's steps and list their procedures. Buttons on the task's page let
 you start it, finish a step, end it, and set the report and QC-list
 flags. Every change stays in the task's history.
 
-Planned and running tasks use a computed priority when their product
-matches an inventory article with a forecast. A match means the product
-equals the article number regardless of case, or both identify the same
-compound in the collection. The priority is marked **berechnet**
+To enter a task, sign in and choose **New task**. In **Substance**, enter
+a key from the [substance registry](#substance-registry); the suggestions
+pair each key with its name. Add a missing substance in the registry
+first. `/lab/tasks/new/?substance=cinnamic-acid`, for example, fills in
+that key. Search the task list by substance key or either language's name.
+
+Planned and running tasks use a computed priority when their substance's
+inventory article has a forecast. An article is one substance with its
+article number and category, shared by all its container sizes. An article
+without a number has no forecast, so its tasks keep their entered
+priority. The computed priority is marked **berechnet**
 (**computed**); hovering over it shows the task's slack in days, the time
 left after allowing for delivery preparation and the remaining synthesis.
 All other tasks keep the entered priority, marked **manuell** (**entered**).
@@ -1504,7 +1533,7 @@ You cannot override a computed priority; the form's priority applies while
 no forecast computes one. See [Production planning](#production-planning)
 for the calculation and its parameters.
 
-The task page shows each matching article's runway (how many days the
+The task page shows the matching article's runway (how many days the
 stock lasts at the chosen certainty), synthesis time, slack and latest
 start, with its article number linking to the planning list.
 An article without consumption shows **Kein Verbrauch, keine Prognose.**
@@ -1517,17 +1546,17 @@ task counts only its remaining synthesis time, so its priority can differ
 from the article's priority for starting a new synthesis.
 
 The task page links to bulk lots with the same nonempty batch when the
-task's product matches the lot's article. If you are signed in, an ended
-task with a batch and a matching article offers **Als Bulk erfassen**
-(**Record as bulk**). This opens the new-lot form with the article, batch
-and end date filled in. If several articles match, it uses the first
-article number in alphabetical order.
+task and lot name the same substance. If you are signed in, an ended
+task with a batch offers **Als Bulk erfassen** (**Record as bulk**).
+This opens the new-lot form with the substance, batch and end date filled
+in, including for a substance without an article.
 
 ### Demo deployment
 
 Use a separate test deployment to explore the lab with invented records:
-inventory and stock levels, delivery notes, bulk lots and fillings, tasks
-in every state, and planning priorities and actions, all with histories.
+substances and vocabularies, inventory and stock levels, delivery notes,
+bulk lots and fillings, tasks in every state, and planning priorities and
+actions, all with histories.
 **Never set `ORGSYNDB_DEMO=true` on a stack that keeps real records.**
 
 Before the first start and before creating accounts, set these values in
@@ -1539,18 +1568,28 @@ ORGSYNDB_COLLECTION_PATH=examples/demo
 ORGSYNDB_DEMO=true
 ```
 
-The data contains seven articles: `CH-0001`, `CH-0002`, `CH-0010`,
-`CH-0012`, `CH-0013` and `CH-0016`, the six delivered final products of
+The command loads the demo registry from `webapp/demo/registry.json`
+after creating the accounts, before entering stock and tasks. It contains
+the demo collection's 20 compounds and four vocabularies, plus the
+substance `new-compound-7` (**Neuverbindung 7** / **New compound 7**).
+Its history starts on the demo's opening day, recorded by `klehmann`.
+
+The inventory contains seven numbered articles: `CH-0001`, `CH-0002`,
+`CH-0010`, `CH-0012`, `CH-0013` and `CH-0016`, the six delivered final products of
 `examples/demo`, and `NV-0007` (**Neuverbindung 7** / **New compound 7**),
-which has no compound in the collection. The demo collection's index gives
-the six products compound links and molar masses for conversions between
-mg and µmol. With another collection's index, the products have no links
-and those conversions fail.
+which has no compound in the collection. Their names and molar masses
+come from the lab registry. Conversions between mg and µmol use those
+molar masses regardless of the collection index. The substance pages link
+to the collection only when its index lists their keys.
 
 There is also an item **1-Phenylethanol** without an article number. It
 enters stock later, is filled without a bulk lot and is never delivered.
-Its synthesis task names the compound key `1-phenylethanol` as its product
-and has a batch but no lot. The item has no compound link or forecast.
+Its synthesis task names the substance `1-phenylethanol` and has a batch
+but no lot. The item links to its substance and has no forecast.
+
+The bulk list also includes `ethyl-cinnamate` bought from **ChemPur GmbH**
+and the intermediate `4-acetylbiphenyl` made in the lab, with a task for
+each substance.
 
 Every demo item has a compartment and a box. The item list shows all
 seven stock levels on any seeding day.
@@ -1571,8 +1610,8 @@ starts serving requests. The command fills the database only when
 `ORGSYNDB_DEMO=true` and it holds no lab records. Otherwise it prints why
 it skips seeding and exits successfully without changes. The flag only
 permits writing demo data; setting it alone does not display demo content.
-If `app` starts before `builder` publishes the first index, seeding warns
-about missing compounds and writes German texts; the records are the same.
+If `app` starts before `builder` publishes the first index, seeding writes
+German free text; the registry and stock records are the same.
 
 Every lab page except the admin shows a banner stating that all records
 are invented, with the seeding date. The sign-in page lists the accounts
@@ -1594,12 +1633,10 @@ The records age after seeding. To renew them as of today, run from
 docker compose exec app python manage.py demo_data --replace
 ```
 
-This deletes every lab record and its history, including records you added
-after seeding, and restarts task numbering at `T-001`. It requires
-`ORGSYNDB_DEMO=true` and accepts only a demo database or one without lab
-records. It refuses other databases unchanged.
-Reseed an existing demo to give its items stock entry dates, states,
-compartments and boxes.
+This deletes every lab record and its history, including the registry and
+records you added after seeding, and restarts task numbering at `T-001`.
+It requires `ORGSYNDB_DEMO=true` and accepts only a demo database or one
+without lab records. It refuses other databases unchanged.
 
 To empty a test database deliberately, run from `deploy/`:
 
@@ -1648,7 +1685,7 @@ Four figures follow:
   [Production planning](#production-planning) explains the calculation.
 - **Aufgaben** (**Tasks**) shows the running and planned task counts and
   links to the task list.
-- **Offene Bulk-Lose** (**Open bulk lots**) counts end-product lots with
+- **Offene Bulk-Lose** (**Open bulk lots**) counts lots of any substance with
   material remaining and links to the bulk list.
 
 **Nächste Synthesen** (**Next syntheses**) lists up to five articles with
@@ -1692,13 +1729,115 @@ change adds that section. Follow
 [Update the lab application](#update-the-lab-application) as well to serve
 the summary; the builder updates only the static site.
 
+### Substance registry
+
+Before entering stock or planning a synthesis, find or add the substance
+in the lab registry. A **substance** is a compound, mixture or solution
+that you track as one material. Choose **Substanzen** (**Substances**) or
+open `/lab/registry/`. You can read the registry without signing in;
+creating or editing a record requires a signed-in account.
+
+Search by key, English or German name, short name or CAS number, the
+chemical registry identifier. The list shows substances in name order,
+with their group, chemical classes, formula, molar mass and article number.
+Open a substance's name to see its full record, containers, open bulk lots
+and tasks. **In der Sammlung** (**In the collection**) links to the site's
+compound page when the collection index lists the same key.
+
+#### Add substances and vocabulary terms
+
+To add a substance, choose **Neue Substanz** (**New substance**). Enter
+a key, such as `cinnamic-acid`, and an English name, choose a group and
+check at least one chemical class. A key uses lowercase letters and
+digits joined by single hyphens. It must be unique and cannot change
+after creation. Use **Edit** on the substance's page to change its other
+fields.
+
+You can also enter a German name, short name, formula, molar mass in
+g/mol, SMILES structure notation, CAS number and note. Formula, molar mass
+and structure may stay empty, including for mixtures and solutions.
+A molar mass must be above zero; you can enter a decimal comma. A CAS
+number must have the correct form and check digit and must be unused.
+A German interface shows the German name when present, otherwise the
+English name.
+
+The links above the substance list open four **vocabularies**, lists of
+terms you can reuse: **Chemical classes**, **Groups**, **Projects** and
+**Reaction types**. The first three allow a term to sit under a parent;
+reaction types are a flat list. Each page shows keys, labels in both
+languages, parents where applicable and how many substances use each
+term. Parents appear before their children, with siblings ordered by key.
+
+To add a missing group or class before creating a substance, open its
+vocabulary and choose **New term**. Enter a unique key using the same
+rule as substance keys and an English label. You can add a German label
+and, in a tree, a parent. The parent cannot be the term itself or one
+filed under it. Choose a term's key to edit its labels or parent; its
+key stays fixed. Changes to substances and terms keep a history.
+Staff can delete them in `/lab/admin/` only while no record uses them;
+the registry pages offer no deletion.
+
+#### Import a registry or copy its substance data
+
+To start with an existing collection, use `registry_import COLLECTION`.
+Run it before adding any substance or vocabulary term: both import
+commands require an empty lab registry.
+
+The import reads `compounds/<key>.toml` and the vocabulary files
+`chemical-classes.toml`, `inventory-groups.toml`, `projects.toml` and
+`reaction-types.toml` under `vocabularies/`. It takes the compounds'
+names, formula, molar mass, SMILES and CAS number, plus `short_name`,
+`chemical_class`, `group` and `item_number`; the last becomes the article
+number. Every compound must name a group and at least one chemical class.
+Other fields, such as `structure_image`, `in_house` and `stock`, are left
+out. One warning names these fields and counts the compounds that set
+each.
+
+For example, from `webapp/`, import the demo collection into an empty
+registry with:
+
+```sh
+uv run python manage.py registry_import '../examples/demo'
+```
+
+It reports:
+
+```text
+Loaded 40 terms, 20 substances and 6 articles.
+```
+
+It also writes this warning to standard error:
+
+```text
+Warning: these keys of the compound files are left out: in_house (19 compounds), stock (9 compounds), structure_image (1 compound).
+```
+
+To copy substance and vocabulary data from another lab, save
+`/lab/registry/snapshot.json` from that server and load the saved file
+with `registry_load FILE`. This JSON **snapshot** includes the four
+vocabularies, substances and article numbers, with a format number and a
+digest, a fingerprint that changes with the registry's contents.
+Downloading it needs no sign-in. Both commands load everything in one transaction;
+an unknown format, broken reference or invalid value leaves the registry
+unchanged. Errors identify the record and field. The
+[command reference](#lab-application-commands) gives local and container
+invocations.
+
+The site's compound pages, validator and Emacs still use the collection's
+`compounds/` and `vocabularies/` files. Editing the lab registry does not
+update those files. The lab application reads only the language, compound
+keys for collection links, procedures and sequences from the collection
+index; its substance names, molar masses and article numbers come from
+its own registry.
+
 ### End-product inventory
 
 Use the inventory to see which end products are ready to deliver and how
 long their stock will last. The navigation lists **Bestand** (**Inventory**),
-**Planung** (**Planning**), **Aufgaben** (**Tasks**), **Verbindungen**
-(**Compounds**), **Synthesewege** (**Sequences**), **Vorschriften**
-(**Procedures**) and **Hilfe** (**Help**) in that order.
+**Planung** (**Planning**), **Aufgaben** (**Tasks**), **Substanzen**
+(**Substances**), **Verbindungen** (**Compounds**), **Synthesewege**
+(**Sequences**), **Vorschriften** (**Procedures**) and **Hilfe** (**Help**)
+in that order.
 Choose **Bestand**, or open
 `/lab/inventory/end-products/`. `/lab/inventory/` redirects to the same
 list; `/lab/` opens the [lab overview](#lab-overview). You can read the
@@ -1712,14 +1851,26 @@ divided into containers.
 
 #### Enter items and find stock
 
-Choose **New item** on the item list. Enter the name, category, container
-size and unit (`mg`, `µmol`, `g` or `mmol`), opening count and note.
-Leave the optional article number empty for an item that has never been
-delivered. It is the number printed on the article's
-delivery notes. Stock is a count of containers. Each row represents one
-article in one container size; an article can have several sizes. No two
-items may share an article number, size and unit; items without a number
-are not compared. Size and unit cannot change after creation.
+An **article** is one substance with an article number and category;
+the number may stay empty until its first delivery. An **item** is one
+container size of that article. All sizes share the substance's name
+and the article's number and category. Stock is a count of containers.
+
+Choose **New item** on the item list. In **Substance**, enter a key from
+the [substance registry](#substance-registry); suggestions show every
+key with its name. Create a missing substance in the registry first.
+Enter the container size and unit (`mg`, `µmol`, `g` or `mmol`), opening
+count and note. No two items of one article may share size and unit,
+even without an article number. The article, size and unit cannot change
+after creation.
+
+If the substance has no article, the form creates it with the optional
+article number and category you enter. If it already has an article,
+leave those fields empty to keep its values. A category you enter
+replaces the category for every size. An article number you enter gives
+the article one if it has none; otherwise it must match the existing
+number. The number is unique among articles and is printed on delivery
+notes.
 
 To record where to find the containers in the freezer, enter **Fach**
 (**Compartment**) and **Box** on **New item**. Both fields are optional
@@ -1732,10 +1883,12 @@ optional **Fach** and **Box** columns.
 
 Before the first delivery, choose **Enter article number** on the item
 page to open **Edit**. The article-number field appears only while the
-item has none. Enter the number once; it is fixed after you save it,
-including in the admin. You can still edit the name, category and note.
-The item links to its compound when its article number matches an
-identifier in the collection, such as the demo's `item_number`.
+article has none. Enter the number once; it is fixed after you save it,
+including in the admin, and appears on every size of that article.
+You can still edit the category and the item's note. Clearing the category
+on **Edit** clears it for every size. Change the name on the substance's
+page, which the item links to; that page links to the collection's
+compound when its index lists the substance's key.
 
 To set aside one container size, choose **Edit** on its item page and
 change **Status** from **aktiv** (**active**), the default, to **nicht
@@ -1756,17 +1909,12 @@ a blue superscript **neu** (**new**) beside its name in the item list and
 on its page. The mark disappears on 1 January. Time spent as bulk does
 not count towards this date.
 
-On **New item**, **Edit** and **New bulk lot**, article-number suggestions
-come from the compounds' unique text fields, such as the demo's
-`item_number`. Each number is labelled with the compound's name. These
-suggestions exclude compound keys; the task form's product field still
-offers both keys and item numbers.
-
 An item without an article number shows its container and name; its page
-heading is the name alone. It has no compound link (**Compound** shows
-`–`), no bulk lots and no forecast. It belongs to no planning article and
-matches no task. You can fill containers without a lot and correct their
-count, but cannot book deliveries or enter past consumption, even zero.
+heading is the name alone. It links to its substance and shows that
+substance's open lots. Its article has no forecast; tasks of the same
+substance keep their entered priority. You can fill containers from a
+matching lot or without a lot and correct their count, but cannot book
+deliveries or enter past consumption, even zero.
 Its page offers **Enter article number** in place of **Book delivery**,
 and has no **Enter consumption** or **New bulk lot** link.
 
@@ -1824,9 +1972,10 @@ list exactly those items, keeping the other filters and order. Choose
 The button shows the chosen level, or **Alle** (**All**), and its count.
 
 To narrow the list, use the filters above the table. **Artikel suchen**
-(**Search items**) finds text anywhere in the article number, name,
-category, note or compound name, regardless of case. Press Enter to
-search. **Kategorie** offers **Alle Kategorien** (**All categories**) or
+(**Search items**) finds text anywhere in the article number, category,
+note or the substance's key, English or German name and short name,
+regardless of case. Press Enter to search. **Kategorie** offers
+**Alle Kategorien** (**All categories**) or
 one category in use. Open **Weitere Filter** (**More filters**) for
 **Gebinde**, **Fach** and **Box**. Each offers **Alle** or one value in use;
 choose a value to match it exactly. Container choices show size and unit;
@@ -2023,32 +2172,42 @@ after the last. Each forecast figure names the parameters it uses.
 #### Record bulk and fill containers
 
 Choose **New bulk lot** on the bulk list to record material not yet
-divided into containers. A lot holds an article number, amount in `mg`,
-`g`, `µmol` or `mmol`, batch, location, date and note. Its page has its
+divided into containers. Choose any substance by key, including an
+intermediate or a reagent made in the lab. Choose **hergestellt** (**made**),
+the default, or **gekauft** (**bought**), and optionally enter a supplier.
+The same substance can have made and bought lots. Enter the amount in
+`mg`, `g`, `µmol` or `mmol`, batch, location, date and note. The substance,
+source and unit cannot change after creation.
+
+The bulk list shows all open lots, including substances without an
+article. It shows the substance's name, article number when present and
+source, with the supplier beside it when given. Each lot's page has its
 own ledger; correcting its amount requires a note. A lot at zero is used
 up and leaves the bulk list unless you tick **Used-up lots too**.
 
-The lot page links to tasks with the same nonempty batch whose product
-matches the lot's article. The new-lot form at `/lab/inventory/bulk/new/`
-accepts `article`, `batch` and `made_on` in the query to fill in the article
-number, batch and date. The task page's **Record as bulk** link supplies
-these values from the ended task.
+The lot page links to tasks with the same nonempty batch and substance.
+The new-lot form at `/lab/inventory/bulk/new/` accepts `substance`, `batch`
+and `made_on` in the query to fill in the substance key, batch and date.
+The task page's **Record as bulk** link supplies these values from the
+ended task.
 
 On an item page, choose **Fill** to add containers. You may select an
-open bulk lot of the same article and enter the amount taken in the
+open bulk lot of the same substance and enter the amount taken in the
 lot's unit. **Menge vorschlagen** (**Propose amount**) calculates the
 amount for the container count without booking it. Leaving the amount
 empty when booking uses that proposal. Conversion between mass and
-amount of substance uses the compound's molar mass; without it, enter
-the amount yourself. Booking adds the containers and deducts the bulk
+amount of substance uses the molar mass in the registry; without it,
+enter the amount yourself. Booking adds the containers and deducts the bulk
 amount together. If the lot has too little material, neither changes.
 Each item shows its open lots and how many containers they could still
 fill, counted separately for each lot.
 
-Staff can inspect items, bulk lots, delivery notes and movements at
-`/lab/admin/`. An item or lot can be deleted only while its ledger holds
+Staff can inspect articles, items, bulk lots, delivery notes and movements
+at `/lab/admin/`. An item or lot can be deleted only while its ledger holds
 just its opening entry; an item must also have no delivery-note lines.
 Deleting such an item or lot also deletes its opening entry.
+An article can be deleted only while it has no items; its article number
+is read-only once set.
 
 The inventory needs no new settings or services. Follow
 [Update the lab application](#update-the-lab-application) to deploy it;
@@ -2062,9 +2221,11 @@ synthesis durations, with the same figures visible to everyone. Choose
 **Planung** (**Planning**) or open `/lab/planning/`.
 
 Planning groups the container sizes of an article because one synthesis
-replenishes the bulk used to fill them. Dormant and never-delivered items
-have no demand model, runway or actions and do not contribute to planning
-figures. If every item is dormant or never delivered, the article has no
+replenishes the bulk used to fill them. Tasks and bulk lots match the
+article by substance. An article without a number has no forecast.
+Dormant and never-delivered items have no demand model, runway or actions
+and do not contribute to planning figures. If every item is dormant or
+never delivered, the article has no
 forecast. These sizes still appear with their stock levels when another
 size gives the article a forecast.
 
@@ -2105,9 +2266,10 @@ Use the actions offered for each article:
   when its filled containers last less than the buffer and the open lots
   can fill at least one container.
 - **Bulk prüfen** (**Check bulk**) opens the bulk list when an open lot
-  cannot be converted because the compound's molar mass is missing.
+  cannot be converted because its substance has no molar mass in the
+  registry.
 - **Synthese planen** (**Plan synthesis**) opens a new task with the
-  article number filled in. It appears when priority is high or medium,
+  substance key filled in. It appears when priority is high or medium,
   no matching task is planned or running, and every open lot converts.
   An unconvertible lot may hold enough material, so check it first. This
   action is a link when you are signed in and plain text otherwise.

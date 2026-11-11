@@ -57,7 +57,7 @@ STATE_ORDER = {State.RUNNING: 0, State.PLANNED: 1, State.ENDED: 2,
 
 
 class Task(models.Model):
-    """The synthesis of a product, from planning to its report and the
+    """The synthesis of a substance, from planning to its report and the
     QC list.
 
     A task's number, ``T-`` and at least three digits, is assigned when
@@ -67,7 +67,9 @@ class Task(models.Model):
 
     number = models.CharField(_("No."), max_length=20, unique=True,
                               editable=False)
-    product = models.CharField(_("Product"), max_length=100)
+    substance = models.ForeignKey(
+        "registry.Substance", verbose_name=_("Substance"),
+        on_delete=models.PROTECT, related_name="tasks")
     priority = models.CharField(_("Priority"), max_length=6,
                                 choices=Priority.choices,
                                 default=Priority.MEDIUM)
@@ -103,7 +105,7 @@ class Task(models.Model):
         verbose_name_plural = _("tasks")
 
     def __str__(self) -> str:
-        return f"{self.number} {self.product}"
+        return f"{self.number} {self.substance.shown_name}"
 
     @property
     def state(self) -> str:

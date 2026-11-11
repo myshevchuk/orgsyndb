@@ -6,7 +6,7 @@ from django.test import SimpleTestCase
 
 from planning import forecast
 
-from . import make_task
+from . import make_task, substance_for
 from .inventory_support import TODAY
 from .planning_support import PlanningCase
 
@@ -88,7 +88,7 @@ class ArticleSynthesisTests(PlanningCase):
         self.synthesis("NV-1", 9, date(2026, 7, 1))
         self.synthesis("NV-1", 10, date(2026, 8, 1))
         self.assertEqual(self.times(), (10, 3))
-        make_task(self.kl, product="NV-1", started=date(2026, 1, 1),
+        make_task(self.kl, substance="NV-1", started=date(2026, 1, 1),
                   ended=date(2026, 9, 1), report=True, qc_list=True)
         self.assertEqual(self.times(), (243, 3))
 
@@ -106,14 +106,14 @@ class ArticleSynthesisTests(PlanningCase):
     def test_cancelled_tasks_are_left_out(self) -> None:
         for days in (10, 11, 12):
             self.synthesis("NV-1", days, date(2026, 9, 1))
-        make_task(self.kl, product="NV-1", started=date(2026, 1, 1),
+        make_task(self.kl, substance="NV-1", started=date(2026, 1, 1),
                   ended=date(2026, 10, 1), cancelled=True)
         self.assertEqual(self.times(), (12, 3))
 
     def test_planned_and_running_tasks_are_left_out(self) -> None:
         for days in (10, 11, 12):
             self.synthesis("NV-1", days, date(2026, 9, 1))
-        make_task(self.kl, product="NV-1")
+        make_task(self.kl, substance="NV-1")
         self.running("NV-1", 300)
         self.assertEqual(self.times(), (12, 3))
 
@@ -123,11 +123,11 @@ class ArticleSynthesisTests(PlanningCase):
         self.synthesis("NV-2", 200, date(2026, 10, 1))
         self.assertEqual(self.times(), (12, 3))
 
-    def test_tasks_match_by_compound_and_case(self) -> None:
+    def test_tasks_match_by_substance(self) -> None:
         self.planned_item("CH-0012", size="10", unit="umol", quantity=10)
         self.synthesis("cinnamic-acid", 30, date(2026, 8, 1))
-        self.synthesis("ch-0012", 31, date(2026, 8, 2))
-        self.synthesis("CH-0012", 32, date(2026, 8, 3))
+        self.synthesis("CH-0012", 31, date(2026, 8, 2))
+        self.synthesis(substance_for("CH-0012"), 32, date(2026, 8, 3))
         self.assertEqual(self.times("CH-0012"), (32, 3))
 
     def test_the_default_is_a_parameter(self) -> None:
@@ -135,14 +135,6 @@ class ArticleSynthesisTests(PlanningCase):
         self.assertEqual(self.times(), (35, None))
         self.synthesis("NV-1", 40, date(2026, 8, 1))
         self.assertEqual(self.times(), (40, 1))
-
-    def test_a_task_that_matches_two_articles_counts_for_both(self) -> None:
-        self.planned_item("CH-0012", size="10", unit="umol", quantity=10)
-        self.planned_item("cinnamic-acid", size="10", unit="umol",
-                          quantity=10)
-        self.synthesis("CH-0012", 50, date(2026, 8, 1))
-        self.assertEqual(self.times("CH-0012"), (50, 1))
-        self.assertEqual(self.times("cinnamic-acid"), (50, 1))
 
 
 class RemainingTimeTests(PlanningCase):
@@ -159,7 +151,7 @@ class RemainingTimeTests(PlanningCase):
         return plan.task_priority(task, TODAY)[2]
 
     def test_a_planned_task_needs_the_whole_time(self) -> None:
-        planned = make_task(self.kl, product="NV-1")
+        planned = make_task(self.kl, substance="NV-1")
         self.assertAlmostEqual(self.slack(planned), 60.654 - 28 - 21,
                                places=3)
 
@@ -178,7 +170,7 @@ class RemainingTimeTests(PlanningCase):
     def test_the_remaining_time_follows_the_synthesis_time(self) -> None:
         for days, ago in ((30, 400), (35, 300), (40, 200)):
             self.synthesis("NV-1", days, TODAY - timedelta(days=ago))
-        planned = make_task(self.kl, product="NV-1")
+        planned = make_task(self.kl, substance="NV-1")
         running = self.running("NV-1", 10)
         self.assertAlmostEqual(self.slack(planned), 60.654 - 28 - 40,
                                places=3)
