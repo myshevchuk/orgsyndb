@@ -410,9 +410,10 @@ Table = dict[str, Any]
 
 def snapshot_digest(table: Table) -> str:
     """The digest of a snapshot as lab-registry "Snapshot" states it:
-    the SHA-256 of the table without ``digest``, serialized with sorted
-    keys, no spaces and ASCII escapes."""
-    rest = {key: value for key, value in table.items() if key != "digest"}
+    the SHA-256 of the table without ``digest`` and ``import``,
+    serialized with sorted keys, no spaces and ASCII escapes."""
+    rest = {key: value for key, value in table.items()
+            if key not in ("digest", "import")}
     return hashlib.sha256(json.dumps(
         rest, sort_keys=True, separators=(",", ":"),
         ensure_ascii=True).encode("utf-8")).hexdigest()

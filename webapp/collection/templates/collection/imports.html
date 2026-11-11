@@ -1,0 +1,27 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n %}
+{% block title %}{% translate "Imports" %}{% endblock %}
+{% block main %}
+<div class="lab-heading">
+<h1>{% translate "Imports" %}</h1>
+</div>
+<p><a href="/lab/registry/">{% translate "Substances" %}</a></p>
+{% if latest %}<p class="collection-latest">{% blocktranslate with commit=latest.commit|slice:":10" release=latest.release received=latest.received_at|date:"SHORT_DATETIME_FORMAT" %}Latest accepted import: commit {{ commit }}, release {{ release }}, received {{ received }}. Procedures: {{ procedures }}, sequences: {{ sequences }}.{% endblocktranslate %}</p>
+{% endif %}{% if imports %}<div class="table-scroll">
+<table class="inventory-table collection-table">
+<thead>
+<tr><th scope="col">{% translate "Received" %}</th><th scope="col">{% translate "Commit" %}</th><th scope="col">{% translate "Trigger" %}</th><th scope="col">{% translate "Outcome" %}</th><th scope="col">{% translate "Release" %}</th><th scope="col">{% translate "Errors" %}</th></tr>
+</thead>
+<tbody>
+{% for record in imports %}<tr>
+<td>{{ record.received_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+<td><code>{{ record.commit|slice:":10" }}</code></td>
+<td>{{ record.get_trigger_display }}</td>
+<td>{{ record.get_outcome_display }}</td>
+<td>{{ record.release }}</td>
+<td>{{ record.errors|linebreaksbr }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% else %}<p>{% translate "No imports yet." %}</p>
+{% endif %}{% endblock %}

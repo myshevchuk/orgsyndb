@@ -1392,6 +1392,132 @@ def index_data(collection: Path) -> dict[str, Any]:
     }
 
 
+def _named_files(collection: Path, directories: Iterable[str],
+                 kind: validate.Kind) -> list[tuple[Path, dict[str, Any]]]:
+    """Return ``(path, front matter)`` for each Markdown file of the
+    DIRECTORIES of COLLECTION whose name the file-name pattern of KIND
+    accepts, in directory order and then name order. A missing
+    directory holds none. Raises ValueError, naming the file, when a
+    file cannot be read or has no front matter."""
+    pattern = validate.file_name_pattern(".md", kind.prefix)
+    found = []
+    for directory in directories:
+        root = collection / directory
+        for name in sorted(os.listdir(root)) if root.is_dir() else ():
+            path = root / name
+            if pattern.match(name) is None or path.is_dir():
+                continue
+            text = validate.read_text(str(path))
+            parsed = (validate.parse_front_matter(text)
+                      if isinstance(text, str) else text)
+            if isinstance(parsed, validate.Problem):
+                raise ValueError(f"{path}: {parsed.message}")
+            found.append((path, _json_value(parsed.data)))
+    return found
+
+
+def _german_titles(files: Iterable[tuple[Path, dict[str, Any]]]
+                   ) -> dict[str, str]:
+    """Map each ID of FILES that has a file tagged ``de`` to that
+    file's title; of several, the first in FILES."""
+    titles: dict[str, str] = {}
+    for path, data in files:
+        if validate.language_of(path.name) == "de":
+            titles.setdefault(data.get("id"), data.get("title"))
+    return titles
+
+
+def _entry_data(substrates: Any, products: Any) -> dict[str, Any]:
+    """Return the manifest's table of one scope entry made of the keys
+    SUBSTRATES and the product tables PRODUCTS, both in file order."""
+    return {"substrates": list(substrates or ()),
+            "products": [{"compound": product.get("compound"),
+                          "yield_percent": product.get("yield_percent")}
+                         for product in products or ()]}
+
+
+def _procedure_data(path: Path, data: dict[str, Any], export: Path,
+                    title_de: str | None) -> dict[str, Any]:
+    """Return the manifest's table of the procedure published from the
+    file PATH with the front matter DATA; EXPORT is the collection's
+    ``build/export/`` and TITLE_DE the title of its German file."""
+    scope = data.get("scope")
+    entries = ([_entry_data(item.get("substrates"), item.get("products"))
+                for item in scope] if scope
+               else [_entry_data(data.get("substrates"),
+                                 data.get("products"))])
+    types = data.get("reaction_types") or [None]
+    return {"id": data["id"],
+            "source": "org" if path.parent == export else "md",
+            "title": data.get("title"),
+            "title_de": title_de,
+            "reaction_type": types[0],
+            "general": bool(scope),
+            "entries": entries}
+
+
+def manifest_data(collection: Path) -> dict[str, Any]:
+    """Return the collection half of a manifest of the collection
+    directory COLLECTION, a table that ``json.dumps`` writes as strict
+    JSON.
+
+    Its keys are ``language``, the language of the application's site;
+    ``procedures``, one table per procedure ID among the files of
+    ``build/export/`` and ``md/procedures/`` whose names the
+    validator's file-name pattern accepts, ordered by ID; and
+    ``sequences``, likewise for ``md/sequences/``. Each describes the
+    variant the site publishes (``choose_variants``): a procedure by
+    its ``id``, ``source`` (``org`` for an export, else ``md``),
+    ``title``, ``title_de`` (the title of the ID's file tagged ``de``,
+    or None), ``reaction_type`` (the first of ``reaction_types``),
+    ``general`` (whether it has ``scope``) and ``entries``, one per
+    element of ``scope`` or else one of the top-level substrates and
+    products, each a table of ``substrates``, keys in file order, and
+    ``products``, tables of ``compound`` and ``yield_percent``; a
+    sequence by its ``id``, ``title``, ``title_de``, ``target`` and
+    ``steps``, tables of ``procedure`` and ``entry``, None when the
+    step gives none.
+
+    No registry is read, no value is checked and nothing is written.
+    Raises ValueError when ``org/procedures/`` holds an Org source and
+    ``build/export/`` does not exist, when a file named like a
+    procedure or sequence has no front matter it can read, naming the
+    file, or when the site's language cannot be read.
+    """
+    collection = Path(collection)
+    export = collection / "build" / EXPORT
+    if has_org_sources(str(collection / "org" / "procedures")) and \
+            not export.is_dir():
+        raise ValueError("org/procedures/ holds Org sources but "
+                         "build/export/ does not exist; build the "
+                         "collection first")
+    language = site_language(APP / "site")
+    procedures = _named_files(collection,
+                              (f"build/{EXPORT}", "md/procedures"),
+                              validate.PROCEDURE)
+    sequences = _named_files(collection,
+                             (validate.DEFAULT_SEQUENCES.as_posix(),),
+                             validate.SEQUENCE)
+    procedure_titles = _german_titles(procedures)
+    sequence_titles = _german_titles(sequences)
+    return {
+        "language": language,
+        "procedures": [
+            _procedure_data(path, data, export,
+                            procedure_titles.get(data["id"]))
+            for path, data in choose_variants(procedures, language)],
+        "sequences": [
+            {"id": data["id"],
+             "title": data.get("title"),
+             "title_de": sequence_titles.get(data["id"]),
+             "target": data.get("target"),
+             "steps": [{"procedure": step.get("procedure"),
+                        "entry": step.get("entry")}
+                       for step in data.get("steps") or ()]}
+            for _, data in choose_variants(sequences, language)],
+    }
+
+
 def hugo_overlay(site: Path, collection: Path, language: str,
                  lab: bool = False) -> str:
     """Return the Hugo configuration overlay for building ``collection``.

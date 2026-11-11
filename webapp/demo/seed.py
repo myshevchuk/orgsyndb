@@ -23,12 +23,15 @@ from unittest import mock
 from django.apps import apps
 from django.contrib.auth import get_user_model
 
+from collection.models import (EntrySubstance, Import, Procedure,
+                               ScopeEntry, Sequence, Step)
 from demo import data
 from demo.models import DemoMark
 from inventory import bookings
 from inventory.models import (Article, DeliveryLine, DeliveryNote,
                               EnteredConsumption, Item, Lot, LotMovement,
                               Movement)
+from orgsyndb_web import lock
 from planning.models import Parameters
 from registry import snapshot
 from registry.models import Substance, SubstanceClass
@@ -62,12 +65,13 @@ def histories() -> list[type]:
 def holds_records() -> bool:
     """Whether the database holds lab records: an account, substance,
     vocabulary term, article, task, item, delivery note, bulk lot,
-    entered consumption value, stored planning parameters,
-    change-history record or the demo mark."""
+    entered consumption value, stored planning parameters, import of
+    the collection, imported procedure or sequence, change-history
+    record or the demo mark."""
     return any(model.objects.exists() for model in (
         get_user_model(), Substance, *TERMS, Article, Task, Item,
-        DeliveryNote, Lot, EnteredConsumption, Parameters, DemoMark,
-        *histories()))
+        DeliveryNote, Lot, EnteredConsumption, Parameters, Import,
+        Procedure, Sequence, DemoMark, *histories()))
 
 
 def is_demo() -> bool:
@@ -77,13 +81,24 @@ def is_demo() -> bool:
 
 def clear() -> None:
     """Delete every lab record, with its movements, lines and change
-    history, and set the task counter to zero.
+    history, and set the task counter to zero. The caller provides the
+    transaction, in which the lock (``orgsyndb_web.lock``) is taken
+    first.
 
     Reversals go before the movements they reverse, movements before
     the notes and lots they name, records before the substances and
-    terms they name, and terms are taken out of their trees before they
-    are deleted, as each protects the other otherwise.
+    terms they name, steps before the entries they name, and terms and
+    imports are taken out of their trees and chains before they are
+    deleted, as each protects the other otherwise.
     """
+    lock.hold()
+    Step.objects.all().delete()
+    Sequence.objects.all().delete()
+    EntrySubstance.objects.all().delete()
+    ScopeEntry.objects.all().delete()
+    Procedure.objects.all().delete()
+    Import.objects.update(base=None)
+    Import.objects.all().delete()
     Movement.objects.exclude(reverses=None).delete()
     Movement.objects.all().delete()
     DeliveryLine.objects.all().delete()

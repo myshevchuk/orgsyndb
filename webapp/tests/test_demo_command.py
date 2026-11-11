@@ -3,10 +3,11 @@
 from unittest import mock
 
 from django.core.management.base import CommandError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from . import (IndexMixin, demo_index, frozen, make_group, make_substance,
                make_task, make_user)
+from .collection_support import TOKEN, make_import, manifest, post
 from .demo_support import (ACCOUNTS, DAY, lab_records, noon, run, seed,
                            task_counter)
 
@@ -263,6 +264,91 @@ class NoIndexTests(IndexMixin, TestCase):
     def test_the_demo_index_gives_no_warning(self) -> None:
         _out, err = seed(DAY)
         self.assertEqual(err.strip(), "")
+
+
+def imported_rows() -> dict[str, int]:
+    """The rows of the collection import the database holds."""
+    from .collection_support import counts
+    return counts()
+
+
+@override_settings(ORGSYNDB_BUILDER_TOKEN=TOKEN)
+class ImportedRowsTests(IndexMixin, TestCase):
+    """The collection's imports are lab records (lab-demo: Demo data
+    command)."""
+
+    def import_demo(self) -> int:
+        """Accept the demo collection's manifest; return the import's
+        id."""
+        done = post(self.client, manifest())
+        self.assertEqual(done.json()["outcome"], "accepted", done.content)
+        return done.json()["import"]
+
+    def test_replacing_after_an_import(self) -> None:
+        """Scenario: Replacing after an import."""
+        from registry import snapshot
+        seed(DAY)
+        self.import_demo()
+        self.assertIsNotNone(snapshot.build()["import"])
+        self.assertGreater(imported_rows()["Procedure"], 0)
+        with frozen(noon(DAY)):
+            run("--replace", index=demo_index())
+        self.assertEqual({name: n for name, n in imported_rows().items()
+                          if n}, {})
+        self.assertIsNone(snapshot.build()["import"])
+        self.assertEqual(demo_marks(), 1)
+
+    def test_the_collection_is_imported_again_after_a_replacement(
+            self) -> None:
+        """Requirement: Demo data command (after the replacement the
+        snapshot's `import` is `null`, so a build is accepted with no
+        base)."""
+        seed(DAY)
+        self.import_demo()
+        with frozen(noon(DAY)):
+            run("--replace", index=demo_index())
+        done = post(self.client, manifest())
+        self.assertEqual(done.json()["outcome"], "accepted", done.content)
+        from collection.models import Import
+        self.assertIsNone(Import.objects.get().base)
+
+    def test_a_database_holding_an_import_has_lab_records(self) -> None:
+        """Requirement: Demo data command (the imports are lab
+        records)."""
+        make_import()
+        with frozen(noon(DAY)), self.assertRaises(CommandError) as caught:
+            run(index=demo_index())
+        self.assertIn("--replace", str(caught.exception))
+        with frozen(noon(DAY)):
+            run("--if-empty", index=demo_index())
+        self.assertEqual(lab_records(), EMPTY)
+        self.assertEqual(imported_rows()["Import"], 1)
+        self.assertEqual(demo_marks(), 0)
+
+    def test_a_failed_replacement_keeps_the_imported_rows(self) -> None:
+        """Scenario: Failure changes nothing (replace, with an
+        import)."""
+        from inventory import bookings
+        from registry import snapshot
+        seed(DAY)
+        self.import_demo()
+        before = imported_rows()
+        latest = snapshot.build()["import"]
+        real = bookings.book_note
+        calls = {"count": 0}
+
+        def book_note(*args, **kwargs):
+            calls["count"] += 1
+            if calls["count"] > 5:
+                raise bookings.Refused("refused by the test")
+            return real(*args, **kwargs)
+
+        with frozen(noon(DAY)), mock.patch(
+                "inventory.bookings.book_note", side_effect=book_note), \
+                self.assertRaises(CommandError):
+            run("--replace", index=demo_index())
+        self.assertEqual(imported_rows(), before)
+        self.assertEqual(snapshot.build()["import"], latest)
 
 
 class SummaryTests(IndexMixin, TestCase):

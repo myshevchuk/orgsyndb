@@ -30,6 +30,7 @@ from inventory.figures import proposed_amount, quarter_of, to_base
 from inventory.models import (BASE_UNIT, Article, DeliveryLine,
                               DeliveryNote, EnteredConsumption, Item, Lot,
                               LotMovement, Movement, Source, Unit, shown)
+from orgsyndb_web import lock
 from registry.models import Substance
 
 
@@ -186,7 +187,9 @@ NUMBER_TAKEN = gettext_lazy("Another article has this article number.")
 def _numbered(user: Any, article: Article, number: str) -> None:
     """Give ARTICLE, which has no article number, NUMBER, recorded in its
     history as a change by USER; refuse a number another article has
-    and an article that has one by now."""
+    and an article that has one by now. The lock (``orgsyndb_web.lock``)
+    is taken in the caller's transaction before anything is written."""
+    lock.hold()
     if number_taken(article, number):
         raise Refused({"article_number": str(NUMBER_TAKEN)})
     if not Article.objects.filter(
@@ -244,8 +247,10 @@ def _article_for(user: Any, substance: Substance, number: str | None,
     not empty, and NUMBER when it has none; a NUMBER other than the one
     it has is refused, as is a number another article has. The
     substance's row is locked first, so that two requests cannot both
-    make its article.
+    make its article, after the lock (``orgsyndb_web.lock``) that every
+    article write takes.
     """
+    lock.hold()
     Substance.objects.select_for_update().filter(pk=substance.pk).first()
     article = Article.objects.filter(pk=substance.pk).first()
     if article is None:

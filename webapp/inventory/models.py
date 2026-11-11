@@ -20,6 +20,7 @@ from django.utils.translation import gettext_lazy as _
 from django.utils.translation import pgettext_lazy
 
 from orgsyndb_web.history import RecordedHistory
+from orgsyndb_web.lock import LockedQuerySet, LockedWrites
 
 class Unit(models.TextChoices):
     MG = "mg", "mg"
@@ -69,7 +70,7 @@ def not_in_future(day: date | None) -> None:
         raise ValidationError(_("The date may not lie in the future."))
 
 
-class Article(models.Model):
+class Article(LockedWrites, models.Model):
     """An article: one substance of the registry as the lab delivers it,
     in one or more container sizes, its items.
 
@@ -77,8 +78,11 @@ class Article(models.Model):
     most one article. The article number, the one delivery notes carry,
     is None until the article is first delivered and fixed once it is
     set; it is unique among articles. The category is the article's and
-    every size's.
+    every size's. Its saves and deletions take the lock
+    (``orgsyndb_web.lock``).
     """
+
+    objects = LockedQuerySet.as_manager()
 
     substance = models.OneToOneField(
         "registry.Substance", verbose_name=_("Substance"),

@@ -11,6 +11,7 @@ from registry.models import Substance
 
 from . import (IndexMixin, load_demo_registry, make_article, make_group,
                make_substance)
+from .collection_support import make_import
 from .registry_support import (SNAPSHOT, RegistryCase, wipe_registry,
                                without_digest)
 
@@ -34,7 +35,7 @@ class ShapeTests(RegistryCase):
     def test_the_top_level(self) -> None:
         built = snapshot.build()
         self.assertEqual(set(built), {"format", "digest", "vocabularies",
-                                      "substances"})
+                                      "substances", "import"})
         self.assertEqual(built["format"], 1)
         self.assertEqual(set(built["vocabularies"]), set(VOCABULARIES))
 
@@ -121,6 +122,51 @@ class ShapeTests(RegistryCase):
         self.assertEqual(built["vocabularies"],
                          {name: [] for name in VOCABULARIES})
         self.assertEqual(built["digest"], digest_of(built))
+
+
+class ImportTests(RegistryCase):
+    """Requirement: Snapshot (`import`, the latest accepted import,
+    outside the digest)."""
+
+    def test_no_import_is_null(self) -> None:
+        from collection.models import Import
+        self.assertIsNone(snapshot.build()["import"])
+        make_import(outcome="refused")
+        self.assertEqual(Import.objects.count(), 1)
+        self.assertIsNone(snapshot.build()["import"])
+
+    def test_the_latest_accepted_import(self) -> None:
+        first = make_import()
+        second = make_import(base=first, release="000002-b-c",
+                             language="en")
+        make_import(outcome="refused")
+        found = snapshot.build()["import"]
+        self.assertEqual(found, {
+            "id": second.pk, "build": str(second.build),
+            "commit": second.commit, "snapshot": second.snapshot,
+            "tooling": second.tooling, "release": "000002-b-c",
+            "language": "en"})
+        self.assertIsInstance(found["id"], int)
+        self.assertIsInstance(found["build"], str)
+
+    def test_it_serializes_with_an_import(self) -> None:
+        make_import()
+        built = snapshot.build()
+        self.assertEqual(json.loads(json.dumps(built)), built)
+
+    def test_an_import_is_outside_the_digest(self) -> None:
+        before = snapshot.build()
+        make_import()
+        after = snapshot.build()
+        self.assertIsNotNone(after["import"])
+        self.assertEqual(after["digest"], before["digest"])
+        self.assertEqual(after["digest"], digest_of(after))
+
+    def test_the_answer_over_http_names_the_import(self) -> None:
+        record = make_import()
+        answer = self.client.get(SNAPSHOT).json()
+        self.assertEqual(answer["import"]["id"], record.pk)
+        self.assertEqual(answer, snapshot.build())
 
 
 class OrderTests(RegistryCase):
@@ -220,6 +266,29 @@ class DemoRegistryTests(IndexMixin, TestCase):
         found.note = "changed"
         found.save()
         self.assertNotEqual(snapshot.build()["digest"], first["digest"])
+
+
+class DemoImportTests(IndexMixin, TestCase):
+
+    def test_an_import_changes_no_digest(self) -> None:
+        """Scenario: An import changes no digest."""
+        from django.test import override_settings
+        from .collection_support import TOKEN, manifest, post
+        self.use_index(None)
+        load_demo_registry()
+        first = snapshot.build()
+        with override_settings(ORGSYNDB_BUILDER_TOKEN=TOKEN):
+            done = post(self.client, manifest())
+        self.assertEqual(done.json()["outcome"], "accepted", done.content)
+        second = snapshot.build()
+        self.assertEqual(first["digest"], second["digest"])
+        self.assertIsNone(first["import"])
+        self.assertEqual(second["import"]["id"], done.json()["import"])
+        from collection.models import Import
+        record = Import.objects.get()
+        self.assertEqual((second["import"]["commit"],
+                          second["import"]["release"]),
+                         (record.commit, record.release))
 
 
 class HttpTests(IndexMixin, TestCase):

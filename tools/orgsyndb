@@ -91,6 +91,10 @@ Subcommands:
   index               print the collection's schema, registry, fields,
                       vocabularies, compounds, procedures and sequences
                       as one line of JSON, for an editor
+  manifest            after a build, print the site language and the
+                      published procedures, with their scope entries,
+                      and sequences, with their steps, as one line of
+                      JSON, for the lab application's import
   help                show this text
 
 Paths are relative to the collection, except tools/ and the caches, which
@@ -513,6 +517,13 @@ def cmd_index(option: str | None, args: Sequence[str]) -> int:
     return 0
 
 
+def cmd_manifest(option: str | None, args: Sequence[str]) -> int:
+    no_arguments("manifest", args)
+    manifest = pipeline.manifest_data(find_collection(option))
+    print(json.dumps(manifest, ensure_ascii=False, allow_nan=False))
+    return 0
+
+
 def cmd_help(option: str | None, args: Sequence[str]) -> int:
     print(USAGE)
     return 0
@@ -529,6 +540,7 @@ COMMANDS: dict[str, Callable[[str | None, Sequence[str]], int]] = {
     "clean": cmd_clean,
     "check-deps": cmd_check_deps,
     "index": cmd_index,
+    "manifest": cmd_manifest,
     "help": cmd_help,
 }
 

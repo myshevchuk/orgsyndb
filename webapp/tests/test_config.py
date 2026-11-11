@@ -143,6 +143,28 @@ class DemoFlagTests(SimpleTestCase):
         self.assertIs(settings.ORGSYNDB_DEMO, False)
 
 
+class BuilderTokenTests(SimpleTestCase):
+
+    def test_builder_token(self) -> None:
+        """Scenario: Builder token."""
+        self.assertEqual(settings_from(BASE)["ORGSYNDB_BUILDER_TOKEN"], "")
+        self.assertEqual(
+            settings_from({**BASE, "ORGSYNDB_BUILDER_TOKEN": "s3cret"})
+            ["ORGSYNDB_BUILDER_TOKEN"], "s3cret")
+
+    def test_an_empty_token_is_empty(self) -> None:
+        """Requirement: Settings from the environment (default empty,
+        which turns the manifest path off)."""
+        self.assertEqual(
+            settings_from({**BASE, "ORGSYNDB_BUILDER_TOKEN": ""})
+            ["ORGSYNDB_BUILDER_TOKEN"], "")
+
+    def test_the_project_has_the_setting(self) -> None:
+        """Requirement: Settings from the environment (the Django
+        setting of the same name)."""
+        self.assertIsInstance(settings.ORGSYNDB_BUILDER_TOKEN, str)
+
+
 class AppliedSettingsTests(SimpleTestCase):
 
     def test_settings_of_the_project(self) -> None:

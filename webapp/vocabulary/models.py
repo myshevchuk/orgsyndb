@@ -17,6 +17,7 @@ from django.utils.translation import get_language
 from django.utils.translation import gettext_lazy as _
 
 from orgsyndb_web.history import RecordedHistory
+from orgsyndb_web.lock import LockedQuerySet, LockedWrites
 
 KEY_PATTERN = r"^[a-z0-9]+(-[a-z0-9]+)*$"
 key_rule = RegexValidator(
@@ -29,9 +30,12 @@ def german() -> bool:
     return (get_language() or "").startswith("de")
 
 
-class Term(models.Model):
+class Term(LockedWrites, models.Model):
     """A term of a vocabulary: its KEY, its LABEL on an English site and
-    LABEL_DE on a German one."""
+    LABEL_DE on a German one. Its saves and deletions take the lock
+    (``orgsyndb_web.lock``)."""
+
+    objects = LockedQuerySet.as_manager()
 
     key = models.CharField(_("Key"), max_length=50, unique=True,
                            validators=[key_rule])

@@ -169,8 +169,10 @@ def demo_registry() -> dict[str, Any]:
 
 
 def without_digest(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """``snapshot`` without its ``digest`` and its ``import``, the two
+    keys a file of the registry may lack."""
     return {key: value for key, value in snapshot.items()
-            if key != "digest"}
+            if key not in ("digest", "import")}
 
 
 def small_snapshot() -> dict[str, Any]:

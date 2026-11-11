@@ -4,9 +4,10 @@ snapshot back into an empty registry.
 A snapshot is a table of ``format``, ``1``; ``vocabularies``, a table
 of the four vocabularies by their collection names, each a list of its
 terms, a parent before the terms filed under it and siblings in key
-order; ``substances``, ordered by key; and ``digest``, the SHA-256 of
-the rest. Empty text, a missing molar mass and a missing article number
-are ``null``.
+order; ``substances``, ordered by key; ``import``, the latest accepted
+import of the collection or ``null``; and ``digest``, the SHA-256 of the
+rest but ``import``. Empty text, a missing molar mass and a missing
+article number are ``null``.
 """
 
 import hashlib
@@ -18,12 +19,16 @@ from typing import Any
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
+from collection.models import latest_accepted
 from inventory.models import Article
+from orgsyndb_web import lock
 from registry.models import Substance, SubstanceClass
 from vocabulary.models import (ChemicalClass, Group, Project, ReactionType,
                                Term, is_tree, tree_order)
 
 FORMAT = 1
+# The keys of a snapshot that its digest does not cover.
+UNDIGESTED = ("digest", "import")
 # The vocabularies by the names the snapshot and the collection give
 # them, in the order the snapshot lists them.
 VOCABULARIES: dict[str, type[Term]] = {
@@ -43,9 +48,10 @@ def _text(value: str) -> str | None:
 
 def digest(table: dict[str, Any]) -> str:
     """Return the lowercase hexadecimal SHA-256 of TABLE without its
-    ``digest``, serialized with sorted keys, no spaces and ASCII
-    escapes, encoded as UTF-8."""
-    rest = {key: value for key, value in table.items() if key != "digest"}
+    ``digest`` and its ``import``, serialized with sorted keys, no
+    spaces and ASCII escapes, encoded as UTF-8."""
+    rest = {key: value for key, value in table.items()
+            if key not in UNDIGESTED}
     return hashlib.sha256(json.dumps(
         rest, sort_keys=True, separators=(",", ":"),
         ensure_ascii=True).encode("utf-8")).hexdigest()
@@ -61,9 +67,24 @@ def _term(term: Term, keys: dict[Any, str]) -> dict[str, Any]:
     return entry
 
 
+def latest_import() -> dict[str, Any] | None:
+    """Return the snapshot's table of the latest accepted import of the
+    collection: its ``id``, ``build``, ``commit``, ``snapshot``,
+    ``tooling``, ``release`` and ``language``; None when none was
+    accepted."""
+    record = latest_accepted()
+    if record is None:
+        return None
+    return {"id": record.pk, "build": str(record.build),
+            "commit": record.commit, "snapshot": record.snapshot,
+            "tooling": record.tooling, "release": record.release,
+            "language": record.language}
+
+
 def build() -> dict[str, Any]:
     """Return the registry as a table that ``json.dumps`` serializes:
-    the format, the vocabularies, the substances and the digest."""
+    the format, the vocabularies, the substances, the latest accepted
+    import and the digest, which does not cover the import."""
     vocabularies = {}
     for name, model in VOCABULARIES.items():
         terms = list(model.objects.all())
@@ -89,7 +110,8 @@ def build() -> dict[str, Any]:
             "article_number": numbers.get(substance.pk)})
     table: dict[str, Any] = {"format": FORMAT,
                              "vocabularies": vocabularies,
-                             "substances": substances}
+                             "substances": substances,
+                             "import": latest_import()}
     table["digest"] = digest(table)
     return table
 
@@ -224,24 +246,26 @@ def load(table: Any, user: Any = None) -> tuple[int, int, int]:
     The terms of each vocabulary are created in their order, a parent
     named before the terms filed under it, then the substances with
     their classes, and an article for each substance that names an
-    article number; each gets a creation in its history. The digest is
-    ignored, and a vocabulary that is missing is empty. Raise Broken,
-    writing nothing, when the registry holds a substance or a term, the
-    format is not ``1``, a term or substance names a key that does not
-    exist, or a value breaks a rule the forms check.
+    article number; each gets a creation in its history, all in one
+    transaction holding the lock (``orgsyndb_web.lock``). The digest and
+    the import are ignored, and a vocabulary that is missing is empty.
+    Raise Broken, writing nothing, when the registry holds a substance
+    or a term, the format is not ``1``, a term or substance names a key
+    that does not exist, or a value breaks a rule the forms check.
     """
     if not isinstance(table, dict):
         raise Broken("the snapshot is not a table")
-    if not is_empty():
-        raise Broken("the registry holds substances or terms; it is filled "
-                     "only while it is empty")
-    found = table.get("format")
-    if type(found) is not int or found != FORMAT:
-        raise Broken(f"format {found!r}: the format is {FORMAT}")
-    vocabularies = table.get("vocabularies") or {}
-    if not isinstance(vocabularies, dict):
-        raise Broken("vocabularies: not a table")
     with transaction.atomic():
+        lock.hold()
+        if not is_empty():
+            raise Broken("the registry holds substances or terms; it is "
+                         "filled only while it is empty")
+        found = table.get("format")
+        if type(found) is not int or found != FORMAT:
+            raise Broken(f"format {found!r}: the format is {FORMAT}")
+        vocabularies = table.get("vocabularies") or {}
+        if not isinstance(vocabularies, dict):
+            raise Broken("vocabularies: not a table")
         terms = sum(
             _load_terms(name, model, _entries(vocabularies.get(name), name),
                         user)

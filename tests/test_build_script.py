@@ -30,7 +30,7 @@ from pipeline_support import (BOOTSTRAP_HINT, DEMO, GIT_QUIET, HOOK,
 from support import load_snapshot, template_registry
 
 SUBCOMMANDS = ["export", "validate", "build", "serve", "pdf", "new", "init",
-               "clean", "check-deps", "index", "help"]
+               "clean", "check-deps", "index", "manifest", "help"]
 
 
 class ProgramTestCase(unittest.TestCase):

@@ -170,7 +170,8 @@ class SnapshotServer:
     with a snapshot, as the lab application does, and recording the
     ``Host`` header of each request. ``table`` is the snapshot served;
     ``status`` the status answered; set ``body`` to answer other text.
-    ``stop`` makes the address stop answering."""
+    ``stop`` makes the address stop answering. It answers a ``POST`` with
+    ``post``, which refuses it here; ``FakeApp`` answers manifests."""
 
     PATH = "/lab/registry/snapshot.json"
 
@@ -187,13 +188,15 @@ class SnapshotServer:
                 if self.path != SnapshotServer.PATH:
                     self.send_error(404)
                     return
-                body = (owner.body if owner.body is not None
-                        else json.dumps(owner.table).encode("utf-8"))
+                body = owner.snapshot_body()
                 self.send_response(owner.status)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
+
+            def do_POST(self) -> None:
+                owner.post(self)
 
             def log_message(self, *args: Any) -> None:
                 pass
@@ -204,6 +207,15 @@ class SnapshotServer:
                                        daemon=True)
         self.thread.start()
         self.running = True
+
+    def snapshot_body(self) -> bytes:
+        """The text a request for the snapshot is answered with."""
+        return (self.body if self.body is not None
+                else json.dumps(self.table).encode("utf-8"))
+
+    def post(self, handler: BaseHTTPRequestHandler) -> None:
+        """Answer a ``POST``, which this server does not take."""
+        handler.send_error(404)
 
     @property
     def origin(self) -> str:
@@ -222,6 +234,143 @@ class SnapshotServer:
             self.running = False
 
 
+MANIFEST_PATH = "/lab/collection/manifest/"
+
+
+class Received:
+    """A manifest the fake application received: its parsed ``body``,
+    its ``headers`` by lower-case name, its ``host``, and the ``rule``
+    it was answered by."""
+
+    def __init__(self, body: dict[str, Any], headers: dict[str, str],
+                 rule: Any) -> None:
+        self.body = body
+        self.headers = headers
+        self.host = headers.get("host", "")
+        self.rule = rule
+
+
+class FakeApp(SnapshotServer):
+    """The lab application as the builder sees it: the snapshot at
+    ``/lab/registry/snapshot.json``, whose ``import`` is the latest
+    accepted import, and ``POST /lab/collection/manifest/``.
+
+    Each manifest is kept in ``manifests``, a ``Received`` with its
+    headers, before it is answered; ``on_manifest``, when set, is called
+    with its body first, from the server's thread. With ``token`` set, a
+    request without ``Authorization: Bearer <token>`` is answered 403.
+
+    A manifest is answered by the next of the rules given to ``answer``,
+    else by ``default``:
+
+    - ``"accept"``: a built manifest is recorded as accepted, so that
+      the next snapshot names it in ``import``, and answered 200
+      ``accepted``; a refused one is recorded as refused and answered
+      200 ``refused``;
+    - ``"refuse"``: as ``"accept"``, but a built manifest is recorded
+      as refused;
+    - ``"stale"``: 409 ``stale``, recorded nowhere;
+    - an ``int``: that status with a JSON error, recorded nowhere;
+    - ``"drop"``: closed without an answer, recorded nowhere;
+    - ``"accept-drop"``: as ``"accept"``, then closed without an
+      answer.
+
+    ``imports`` lists every import recorded, accepted or refused, each a
+    table with its ``id`` from 1 and its ``outcome``; ``imported`` is the
+    latest accepted one as the snapshot names it, or None.
+    """
+
+    def __init__(self, table: dict[str, Any]) -> None:
+        self.manifests: list[Received] = []
+        self.imports: list[dict[str, Any]] = []
+        self.imported: dict[str, Any] | None = None
+        self.token: str | None = None
+        self.default: Any = "accept"
+        self.rules: list[Any] = []
+        self.on_manifest: Any = None
+        self.answered: dict[str, tuple[int, dict[str, Any]]] = {}
+        super().__init__(table)
+
+    @property
+    def manifest_url(self) -> str:
+        return self.origin + MANIFEST_PATH
+
+    def answer(self, *rules: Any) -> None:
+        """Answer the next manifests by RULES, in order."""
+        self.rules.extend(rules)
+
+    def snapshot_body(self) -> bytes:
+        if self.body is not None:
+            return self.body
+        return json.dumps({**self.table, "import": self.imported}
+                          ).encode("utf-8")
+
+    def post(self, handler: BaseHTTPRequestHandler) -> None:
+        length = int(handler.headers.get("Content-Length", "0"))
+        raw = handler.rfile.read(length)
+        if handler.path != MANIFEST_PATH:
+            handler.send_error(404)
+            return
+        try:
+            body = json.loads(raw.decode("utf-8"))
+        except ValueError:
+            self.reply(handler, 400, {"error": "not JSON"})
+            return
+        headers = {name.lower(): value
+                   for name, value in handler.headers.items()}
+        rule = self.rules.pop(0) if self.rules else self.default
+        self.manifests.append(Received(body, headers, rule))
+        if self.on_manifest is not None:
+            self.on_manifest(body)
+        if (self.token is not None
+                and headers.get("authorization") != f"Bearer {self.token}"):
+            self.reply(handler, 403, {"error": "wrong token"})
+            return
+        if body.get("build") in self.answered:
+            self.reply(handler, *self.answered[body["build"]])
+            return
+        if rule == "drop":
+            handler.close_connection = True
+            return
+        if isinstance(rule, int):
+            self.reply(handler, rule, {"error": "answered by the test"})
+        elif rule == "stale":
+            self.reply(handler, 409, {"outcome": "stale"})
+        else:
+            outcome = ("refused" if body.get("outcome") == "refused"
+                       or rule == "refuse" else "accepted")
+            number = self.record(body, outcome)
+            status, payload = 200, {"outcome": outcome, "import": number}
+            self.answered[body["build"]] = (status, payload)
+            if rule == "accept-drop":
+                handler.close_connection = True
+            else:
+                self.reply(handler, status, payload)
+
+    def record(self, body: dict[str, Any], outcome: str) -> int:
+        """Record the manifest BODY as an import of OUTCOME; return its
+        id."""
+        number = len(self.imports) + 1
+        kept = {key: body.get(key) for key in (
+            "build", "commit", "snapshot", "tooling", "release",
+            "language")}
+        self.imports.append({"id": number, "outcome": outcome,
+                             "errors": body.get("errors", []), **kept})
+        if outcome == "accepted":
+            self.imported = {"id": number, **kept}
+        return number
+
+    @staticmethod
+    def reply(handler: BaseHTTPRequestHandler, status: int,
+              payload: dict[str, Any]) -> None:
+        text = json.dumps(payload).encode("utf-8")
+        handler.send_response(status)
+        handler.send_header("Content-Type", "application/json")
+        handler.send_header("Content-Length", str(len(text)))
+        handler.end_headers()
+        handler.wfile.write(text)
+
+
 def serve_snapshot(case: unittest.TestCase,
                    table: dict[str, Any]) -> SnapshotServer:
     """Serve the snapshot ``table`` until ``case`` cleans up."""
@@ -233,6 +382,11 @@ def serve_snapshot(case: unittest.TestCase,
 def closed_address() -> str:
     """A snapshot address on a port nothing listens on."""
     return f"http://127.0.0.1:{free_port()}{SnapshotServer.PATH}"
+
+
+def closed_manifest_address() -> str:
+    """A manifest address on a port nothing listens on."""
+    return f"http://127.0.0.1:{free_port()}{MANIFEST_PATH}"
 
 
 @contextlib.contextmanager
@@ -477,8 +631,10 @@ def name_registry(collection: Path, value: str) -> None:
 
 
 def snapshot_digest(table: dict[str, Any]) -> str:
-    """The digest of a snapshot (lab-registry "Snapshot")."""
-    rest = {key: value for key, value in table.items() if key != "digest"}
+    """The digest of a snapshot (lab-registry "Snapshot"): the table
+    without ``digest`` and ``import``."""
+    rest = {key: value for key, value in table.items()
+            if key not in ("digest", "import")}
     return hashlib.sha256(json.dumps(
         rest, sort_keys=True, separators=(",", ":"),
         ensure_ascii=True).encode("utf-8")).hexdigest()

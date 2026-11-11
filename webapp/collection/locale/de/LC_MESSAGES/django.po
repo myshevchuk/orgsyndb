@@ -1,0 +1,148 @@
+# German interface texts of the collection's imports.
+msgid ""
+msgstr ""
+"Project-Id-Version: orgsyndb-web\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Collection"
+msgstr "Sammlung"
+
+msgid "Enter 40 lower-case hexadecimal digits."
+msgstr "40 hexadezimale Ziffern in Kleinbuchstaben eingeben."
+
+msgid "Enter 64 lower-case hexadecimal digits."
+msgstr "64 hexadezimale Ziffern in Kleinbuchstaben eingeben."
+
+msgid "Accepted"
+msgstr "Angenommen"
+
+msgid "Refused"
+msgstr "Abgelehnt"
+
+msgid "Commit"
+msgstr "Commit"
+
+msgid "Tooling"
+msgstr "Werkzeuge"
+
+msgid "Catch-up"
+msgstr "Nachholen"
+
+msgid "Substrate"
+msgstr "Edukt"
+
+msgid "Build"
+msgstr "Build"
+
+msgid "Committed"
+msgstr "Committet"
+
+msgid "Base"
+msgstr "Basis"
+
+msgid "Registry digest"
+msgstr "Prüfsumme des Registers"
+
+msgid "Release"
+msgstr "Release"
+
+msgid "Language"
+msgstr "Sprache"
+
+msgid "Outcome"
+msgstr "Ergebnis"
+
+msgid "Trigger"
+msgstr "Anlass"
+
+msgid "Errors"
+msgstr "Fehler"
+
+msgid "Received"
+msgstr "Empfangen"
+
+msgid "import"
+msgstr "Import"
+
+msgid "imports"
+msgstr "Importe"
+
+msgid "ID"
+msgstr "ID"
+
+msgid "Source format"
+msgstr "Quellformat"
+
+msgid "Title"
+msgstr "Titel"
+
+msgid "German title"
+msgstr "Titel deutsch"
+
+msgid "Reaction type"
+msgstr "Reaktionstyp"
+
+msgid "Last import"
+msgstr "Letzter Import"
+
+msgid "Withdrawn"
+msgstr "Zurückgezogen"
+
+msgid "procedure"
+msgstr "Vorschrift"
+
+msgid "procedures"
+msgstr "Vorschriften"
+
+msgid "Signature"
+msgstr "Signatur"
+
+msgid "Position"
+msgstr "Position"
+
+msgid "scope entry"
+msgstr "Eintrag des Anwendungsbereichs"
+
+msgid "scope entries"
+msgstr "Einträge des Anwendungsbereichs"
+
+msgid "Role"
+msgstr "Rolle"
+
+msgid "Yield (%)"
+msgstr "Ausbeute (%)"
+
+msgid "substance of a scope entry"
+msgstr "Substanz eines Eintrags"
+
+msgid "substances of scope entries"
+msgstr "Substanzen von Einträgen"
+
+msgid "Target"
+msgstr "Zielverbindung"
+
+msgid "sequence"
+msgstr "Syntheseweg"
+
+msgid "sequences"
+msgstr "Synthesewege"
+
+msgid "step"
+msgstr "Stufe"
+
+msgid "steps"
+msgstr "Stufen"
+
+msgid "Imports"
+msgstr "Importe"
+
+#, python-format
+msgid "Latest accepted import: commit %(commit)s, release %(release)s, received %(received)s. Procedures: %(procedures)s, sequences: %(sequences)s."
+msgstr "Zuletzt angenommener Import: Commit %(commit)s, Release %(release)s, empfangen %(received)s. Vorschriften: %(procedures)s, Synthesewege: %(sequences)s."
+
+msgid "No imports yet."
+msgstr "Noch keine Importe."

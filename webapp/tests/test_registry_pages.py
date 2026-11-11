@@ -89,6 +89,24 @@ class ListTests(RegistryCase):
             with self.subTest(vocabulary=vocabulary):
                 self.assertIn(term_url(vocabulary), found)
 
+    def test_a_link_leads_to_the_imports(self) -> None:
+        """Requirement: Registry pages (`Importe der Sammlung`, to
+        `/lab/collection/`)."""
+        for signed_in in (False, True):
+            with self.subTest(signed_in=signed_in):
+                found = [a for a in self.get(
+                    REGISTRY, signed_in=signed_in).find_all("a")
+                    if a.text() == "Importe der Sammlung"]
+                self.assertEqual([a.get("href") for a in found],
+                                 ["/lab/collection/"])
+
+    def test_the_link_to_the_imports_in_english(self) -> None:
+        self.use_index(build_index("en"))
+        found = [a for a in self.get(REGISTRY).find_all("a")
+                 if a.text() == "Collection imports"]
+        self.assertEqual([a.get("href") for a in found],
+                         ["/lab/collection/"])
+
     def test_the_new_substance_link_needs_a_sign_in(self) -> None:
         anonymous = self.get(REGISTRY)
         self.assertNotIn(substance_url("new"), hrefs(anonymous))

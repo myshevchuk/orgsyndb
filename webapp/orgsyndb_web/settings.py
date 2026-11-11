@@ -1,7 +1,8 @@
 """Django settings of the OrgSynDB lab application.
 
 The environment decides the secret key, debug, the host names, the
-database and the path of the collection index; see
+database, the path of the collection index, the demo flag and the
+builder's token; see
 ``orgsyndb_web.config.settings_from``.
 """
 
@@ -21,6 +22,7 @@ INSTALLED_APPS = [
     "tasks",
     "inventory",
     "planning",
+    "collection",
     "overview",
     "demo",
     "django.contrib.admin",

@@ -16,6 +16,7 @@ from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
 from orgsyndb_web.history import RecordedHistory
+from orgsyndb_web.lock import LockedQuerySet, LockedWrites
 from vocabulary.models import KEY_PATTERN, ChemicalClass, Group, german
 
 CAS_PATTERN = re.compile(r"^\d{2,7}-\d{2}-\d$")
@@ -60,9 +61,12 @@ def above_zero(value: Decimal) -> None:
                               code="min_value")
 
 
-class Substance(models.Model):
+class Substance(LockedWrites, models.Model):
     """A substance of the registry: a compound, or a mixture or solution
-    taken as one, which articles, lots and tasks refer to."""
+    taken as one, which articles, lots and tasks refer to. Its saves and
+    deletions take the lock (``orgsyndb_web.lock``)."""
+
+    objects = LockedQuerySet.as_manager()
 
     key = models.CharField(_("Key"), max_length=100, unique=True,
                            validators=[key_rule, unreserved])
@@ -121,10 +125,12 @@ class Substance(models.Model):
             return None
 
 
-class SubstanceClass(models.Model):
+class SubstanceClass(LockedWrites, models.Model):
     """A chemical class of a substance: one row per substance and
     class. Its change history records each class given to or taken from
     a substance, and who did it."""
+
+    objects = LockedQuerySet.as_manager()
 
     substance = models.ForeignKey(Substance, verbose_name=_("substance"),
                                   on_delete=models.CASCADE,

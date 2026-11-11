@@ -23,6 +23,7 @@ The settings SHALL come from these environment variables:
 - `ORGSYNDB_ALLOWED_HOSTS`: the host names the site is reached by, separated by commas; required unless `ORGSYNDB_DEBUG` is true, when it defaults to `localhost,127.0.0.1`.
 - `ORGSYNDB_INDEX`: the path of the collection index, default `/var/lib/orgsyndb/current/index.json`.
 - `ORGSYNDB_DEMO`: a flag, default false, that permits writing the demo data (lab-demo "Demo data command").
+- `ORGSYNDB_BUILDER_TOKEN`: the token the builder signs its manifests with (collection-import "Manifest"); default empty, which turns the manifest path off.
 
 A flag takes the words `orgsyndb-deploy` accepts. A missing secret key or host list, a malformed flag or a database URL of another scheme stops the start with a message naming the variable. A request forwarded with `X-Forwarded-Proto: https` counts as secure. The time zone is `Europe/Berlin`. `webapp/db.sqlite3` is ignored by Git.
 
@@ -41,6 +42,10 @@ A flag takes the words `orgsyndb-deploy` accepts. A missing secret key or host l
 #### Scenario: Demo flag
 - **WHEN** a test loads the settings with `ORGSYNDB_DEMO` unset, set to `yes` and set to `maybe`
 - **THEN** the first gives the flag false, the second true, and the third fails naming `ORGSYNDB_DEMO`
+
+#### Scenario: Builder token
+- **WHEN** a test loads the settings with `ORGSYNDB_BUILDER_TOKEN` unset and set to `s3cret`
+- **THEN** the first gives an empty token and the second `s3cret`
 
 ### Requirement: Paths under /lab/
 The application SHALL serve everything under `/lab/`: its views, `/lab/accounts/login/`, `/lab/accounts/logout/` and `/lab/accounts/password/`, the admin at `/lab/admin/`, and its static files at `/lab/static/`. `/lab/` shows the lab's overview and `/lab/summary/` its summary (lab-overview "Overview page" and "Summary for the home page"). Any other path answers 404.
@@ -61,7 +66,7 @@ The user model SHALL be `accounts.User`, Django's user with an added `initials`:
 - **THEN** sign-in fails, and the account is offered as assignee in the task form
 
 ### Requirement: Permissions
-Pages that show data SHALL need no sign-in. Every page and action that changes data needs a signed-in user: a request without one, GET or POST, redirects to the sign-in page with `next` set to the requested path and changes nothing. The admin needs staff status. The views offer no deletion; staff delete in the admin.
+Pages that show data SHALL need no sign-in. Every page and action that changes data needs a signed-in user: a request without one, GET or POST, redirects to the sign-in page with `next` set to the requested path and changes nothing. The one exception is the manifest path, which the builder signs with a service token instead and which never redirects (collection-import "Manifest"). The admin needs staff status. The views offer no deletion; staff delete in the admin.
 
 #### Scenario: Form without sign-in
 - **WHEN** a test client that is not signed in requests and posts `/lab/tasks/new/`

@@ -18,11 +18,12 @@ import sys
 import tempfile
 import time
 import unittest
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from pipeline_support import SnapshotServer, closed_address
+from pipeline_support import FakeApp, closed_address, closed_manifest_address
 from support import (REGISTRY, load_snapshot, snapshot_digest)
 
 REPO = Path(__file__).resolve().parent.parent
@@ -33,16 +34,46 @@ WEBAPP_DOCKERFILE = DEPLOY / "webapp" / "Dockerfile"
 BACKUP = DEPLOY / "backup" / "orgsyndb-backup"
 ENV_EXAMPLE = DEPLOY / "orgsyndb.env.example"
 
+TOKEN = "builder-token"
+# What the fake tool's `manifest` prints: the collection half of a
+# manifest.
+FAKE_MANIFEST = {
+    "language": "de",
+    "procedures": [{
+        "id": "OSDB-0001", "source": "md", "title": "Salicylsäure",
+        "title_de": "Salicylsäure", "reaction_type": "hydrolysis",
+        "general": False,
+        "entries": [{"substrates": ["methyl-salicylate"],
+                     "products": [{"compound": "salicylic-acid",
+                                   "yield_percent": 80}]}]}],
+    "sequences": [{
+        "id": "SEQ-0001", "title": "Salicylsäure", "title_de": None,
+        "target": "salicylic-acid",
+        "steps": [{"procedure": "OSDB-0001", "entry": None}]}],
+}
+BUILT_KEYS = {"format", "build", "commit", "committed_at", "base",
+              "snapshot", "tooling", "trigger", "outcome", "release",
+              "language", "procedures", "sequences"}
+REFUSED_KEYS = {"format", "build", "commit", "committed_at", "base",
+                "snapshot", "tooling", "trigger", "outcome", "errors"}
+# The line the fake build prints, on standard output, when it fails.
+FAKE_PROBLEM = ("md/procedures/OSDB-0001-x.md:title: error: the fake "
+                "build was told to fail")
+
 FAKE_ORGSYNDB = """\
 #!/usr/bin/env python3
-# Fake tool: -C DIR build|pdf|index. Every run appends a JSON line of
-# the command, $ORGSYNDB_REGISTRY and the text of the file it names to
-# $FAKE_REGISTRY_LOG. A build fails when the collection
-# holds `fail` or the application's VERSION reads `broken`, and appends
-# one line per run to $FAKE_LOG. `index` logs nothing and prints a
-# minimal index; it fails when the collection holds `index-fail` or
-# VERSION reads `index-broken`, and sleeps past any timeout when the
-# collection holds `index-slow`.
+# Fake tool: -C DIR build|pdf|index|manifest. Every run appends a JSON
+# line of the command, $ORGSYNDB_REGISTRY and the text of the file it
+# names to $FAKE_REGISTRY_LOG. A build fails when the collection
+# holds `fail` or the application's VERSION reads `broken`, printing a
+# problem line and an error line, or silently when it holds
+# `fail-silent`, and appends one line per run to $FAKE_LOG. `index`
+# and `manifest` log nothing. `index` prints a minimal index; it fails
+# when the collection holds `index-fail` or VERSION reads
+# `index-broken`, and sleeps past any timeout when the collection holds
+# `index-slow`. `manifest` prints the fixed collection half of a
+# manifest; it fails and sleeps likewise on `manifest-fail`,
+# `manifest-slow` and VERSION `manifest-broken`.
 import json, os, sys, time
 from pathlib import Path
 app = Path(__file__).resolve().parent.parent
@@ -60,9 +91,22 @@ if sys.argv[3] == "index":
         sys.exit(1)
     print('{"site_language": "de"}')
     sys.exit(0)
+if sys.argv[3] == "manifest":
+    if (collection / "manifest-slow").exists():
+        time.sleep(600)
+    if (collection / "manifest-fail").exists() \\
+            or version == "manifest-broken":
+        sys.exit(1)
+    print(@MANIFEST@)
+    sys.exit(0)
 with open(os.environ["FAKE_LOG"], "a") as log:
     log.write(f"{version} {sys.argv[3]}\\n")
+if (collection / "fail-silent").exists():
+    sys.exit(1)
 if (collection / "fail").exists() or version == "broken":
+    print(@PROBLEM@)
+    print("orgsyndb: error: validation found errors; the site was not "
+          "built", file=sys.stderr)
     sys.exit(1)
 public = collection / "public"
 public.mkdir(exist_ok=True)
@@ -71,7 +115,8 @@ text = (collection / "content.txt").read_text().strip()
 if sys.argv[3] == "pdf":
     (collection / "pdf").mkdir(exist_ok=True)
     (collection / "pdf" / "a.pdf").write_text("pdf\\n")
-"""
+""".replace("@MANIFEST@", repr(json.dumps(FAKE_MANIFEST))).replace(
+    "@PROBLEM@", repr(FAKE_PROBLEM))
 
 
 def git(repo: Path, *args: str) -> str:
@@ -93,6 +138,11 @@ def commit_files(repo: Path, files: dict[str, str | None]) -> str:
     git(repo, "add", "-A")
     git(repo, "commit", "--quiet", "-m", "change")
     return git(repo, "rev-parse", "HEAD")
+
+
+def plain(table: dict) -> dict:
+    """The snapshot ``table`` without its ``import``."""
+    return {key: value for key, value in table.items() if key != "import"}
 
 
 @unittest.skipIf(shutil.which("git") is None, "git not found")
@@ -135,7 +185,8 @@ class UpdaterTests(unittest.TestCase):
         self.log = self.tmp / "builds.log"
         self.registry_log = self.tmp / "registry.log"
         self.snapshot = load_snapshot(REGISTRY)
-        self.server = SnapshotServer(self.snapshot)
+        self.server = FakeApp(self.snapshot)
+        self.server.token = TOKEN
         self.addCleanup(self.server.stop)
         self.env = {
             "PATH": os.environ["PATH"],
@@ -144,6 +195,8 @@ class UpdaterTests(unittest.TestCase):
             "FAKE_LOG": str(self.log),
             "FAKE_REGISTRY_LOG": str(self.registry_log),
             "ORGSYNDB_REGISTRY_URL": self.server.url,
+            "ORGSYNDB_MANIFEST_URL": self.server.manifest_url,
+            "ORGSYNDB_BUILDER_TOKEN": TOKEN,
             "ORGSYNDB_DATA": str(self.data),
             "ORGSYNDB_APP": str(self.app),
             "ORGSYNDB_IMAGE_INFO": str(self.image),
@@ -170,6 +223,16 @@ class UpdaterTests(unittest.TestCase):
     def releases(self) -> list[str]:
         return sorted(entry.name for entry in
                       (self.data / "releases").iterdir())
+
+    def current(self) -> str | None:
+        """The name of the release ``current`` points at, or None."""
+        link = self.data / "current"
+        return os.path.basename(os.readlink(link)) if link.is_symlink() \
+            else None
+
+    def sent(self) -> list[dict]:
+        """The manifests the fake application received, in order."""
+        return [received.body for received in self.server.manifests]
 
     def test_first_sync_publishes(self) -> None:
         done = self.sync()
@@ -208,17 +271,31 @@ class UpdaterTests(unittest.TestCase):
         self.assertEqual(self.page(), "v1 d")
 
     def test_failed_collection_keeps_site_and_is_not_retried(self) -> None:
+        """Scenario: Failed collection commit."""
         self.sync()
-        commit_files(self.collection, {"fail": "", "content.txt": "bad"})
+        bad = commit_files(self.collection, {"fail": "",
+                                             "content.txt": "bad"})
         done = self.sync()
         self.assertEqual(done.returncode, 0)
         self.assertIn("published site is unchanged", done.stdout)
         self.assertEqual(self.page(), "v1 first")
+        first = self.server.imports[0]["id"]
+        self.assertEqual(len(self.sent()), 2)
+        report = self.sent()[1]
+        self.assertEqual(set(report), REFUSED_KEYS)
+        self.assertEqual(report["outcome"], "refused")
+        self.assertEqual((report["commit"], report["trigger"],
+                          report["base"]), (bad, "commit", first))
+        self.assertIn(FAKE_PROBLEM, report["errors"])
+        self.assertTrue(all(": error: " in line
+                            for line in report["errors"]), report["errors"])
         self.sync()
         self.assertEqual(self.builds(), ["v1 build", "v1 build"])
+        self.assertEqual(len(self.sent()), 2)
         commit_files(self.collection, {"fail": None, "content.txt": "ok"})
         self.sync()
         self.assertEqual(self.page(), "v1 ok")
+        self.assertEqual(self.sent()[2]["base"], first)
 
     def test_application_update_is_published(self) -> None:
         self.sync()
@@ -285,6 +362,7 @@ class UpdaterTests(unittest.TestCase):
         self.assertIn("ORGSYNDB_COLLECTION_PATH", done.stdout)
         self.assertFalse((self.data / "current").exists())
         self.assertEqual(self.builds(), [])
+        self.assertEqual(self.sent(), [])
 
     def test_pdf_is_published(self) -> None:
         self.sync(ORGSYNDB_PDF="true")
@@ -367,6 +445,8 @@ class UpdaterTests(unittest.TestCase):
         self.assertEqual(state["deployed"]["collection"], self.col_v1)
         self.assertEqual(len(state["failed"]), 1)
         self.assertIn(bad, state["failed"][0])
+        self.assertEqual([m["outcome"] for m in self.sent()],
+                         ["built", "refused"])
         self.sync()
         self.assertEqual(self.builds(), ["v1 build", "v1 build"])
         commit_files(self.collection, {"index-fail": None,
@@ -431,28 +511,25 @@ class UpdaterTests(unittest.TestCase):
         return [json.loads(line)
                 for line in self.registry_log.read_text().splitlines()]
 
-    def change_registry(self) -> str:
-        """Make the served snapshot another one; return its digest."""
+    def change_registry(self, note: str = "changed") -> str:
+        """Make the served snapshot another one, whose first substance
+        has the note ``note``; return its digest."""
         table = {**self.snapshot, "substances": list(
             self.snapshot["substances"])}
-        table["substances"][0] = {**table["substances"][0],
-                                  "note": "changed"}
+        table["substances"][0] = {**table["substances"][0], "note": note}
         table["digest"] = snapshot_digest(table)
         self.server.table = table
         return table["digest"]
 
-    def test_the_snapshot_is_kept_with_its_address(self) -> None:
+    def test_the_snapshot_is_kept(self) -> None:
         """Requirement: Update cycle (the snapshot goes to
-        `<data>/registry.json`, the address to
-        `<data>/registry.source`)."""
+        `<data>/registry.json`; no address is kept)."""
         done = self.sync()
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         self.assertEqual(
-            json.loads((self.data / "registry.json").read_text()),
+            plain(json.loads((self.data / "registry.json").read_text())),
             self.snapshot)
-        self.assertEqual(
-            (self.data / "registry.source").read_text().strip(),
-            self.server.url)
+        self.assertFalse((self.data / "registry.source").exists())
 
     def test_every_run_of_the_tools_names_the_snapshot_file(self) -> None:
         """Scenario: First publish (every `tools/orgsyndb` run, the
@@ -460,12 +537,13 @@ class UpdaterTests(unittest.TestCase):
         done = self.sync(ORGSYNDB_REGISTRY="http://elsewhere.invalid/x")
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         runs = self.runs()
-        self.assertEqual(sorted(r[0] for r in runs), ["build", "index"])
+        self.assertEqual([r[0] for r in runs],
+                         ["build", "manifest", "index"])
         for command, named, held in runs:
             with self.subTest(command=command):
                 self.assertEqual(Path(named),
                                  self.data / "registry.json")
-                self.assertEqual(json.loads(held), self.snapshot)
+                self.assertEqual(plain(json.loads(held)), self.snapshot)
 
     def test_the_pdf_run_names_the_snapshot_file(self) -> None:
         """Requirement: Update cycle (`pdf` runs too)."""
@@ -492,6 +570,11 @@ class UpdaterTests(unittest.TestCase):
         self.assertEqual(
             json.loads(self.runs()[-1][2])["digest"], second)
         self.assertEqual(self.state()["deployed"]["registry"], second)
+        self.assertEqual(len(self.sent()), 2)
+        self.assertEqual(self.sent()[1]["trigger"], "registry")
+        self.assertEqual(self.sent()[1]["snapshot"], second)
+        self.assertEqual(self.sent()[1]["base"],
+                         self.server.imports[0]["id"])
 
     def test_an_unchanged_registry_is_not_rebuilt(self) -> None:
         """Requirement: Update cycle (the digest is part of every
@@ -529,29 +612,39 @@ class UpdaterTests(unittest.TestCase):
         self.assertIn("ORGSYNDB_ALLOWED_HOSTS",
                       UPDATER.read_text(encoding="utf-8"))
 
-    def test_an_unreachable_registry_uses_the_copy(self) -> None:
-        """Scenario: Registry unreachable (a copy of the same
-        address)."""
+    def test_an_unreachable_registry_builds_nothing(self) -> None:
+        """Scenario: Registry unreachable (after a publish)."""
         self.sync()
-        self.server.stop()
         commit_files(self.collection, {"content.txt": "second\n"})
-        done = self.sync()
-        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
-        self.assertIn("cannot fetch the registry", done.stdout)
-        self.assertEqual(self.page(), "v1 second")
-        self.assertEqual(len(self.releases()), 2)
-        self.assertEqual(json.loads(self.runs()[-1][2]), self.snapshot)
+        for how in ("another address", "stopped"):
+            with self.subTest(how=how):
+                env = {}
+                if how == "stopped":
+                    self.server.stop()
+                else:
+                    env["ORGSYNDB_REGISTRY_URL"] = closed_address()
+                done = self.sync(**env)
+                self.assertEqual(done.returncode, 0,
+                                 done.stdout + done.stderr)
+                self.assertIn("cannot fetch the registry", done.stdout)
+                self.assertEqual(self.page(), "v1 first")
+                self.assertEqual(self.builds(), ["v1 build"])
+                self.assertEqual(len(self.releases()), 1)
+                self.assertEqual(len(self.sent()), 1)
 
-    def test_an_answer_that_is_no_snapshot_uses_the_copy(self) -> None:
+    def test_an_answer_that_is_no_snapshot_builds_nothing(self) -> None:
         """Requirement: Update cycle (a status other than 200, or a body
-        that is no snapshot, is a failure)."""
+        that is no snapshot, is a failure, and builds nothing)."""
         self.sync()
         commit_files(self.collection, {"content.txt": "second\n"})
         vocabularies = {**self.snapshot["vocabularies"],
                         "projects": [{"key": 1}]}
-        malformed = [json.dumps({**self.snapshot, **change}).encode()
+        malformed = [json.dumps({**self.snapshot, "import": None,
+                                 **change}).encode()
                      for change in ({"substances": ["bad"]},
-                                    {"vocabularies": vocabularies})]
+                                    {"vocabularies": vocabularies},
+                                    {"import": "accepted"},
+                                    {"import": {"id": "one"}})]
         for status, body in ((200, b'{"format": 2}'), (200, b"not json"),
                              (500, None), (404, b"{}"),
                              *((200, body) for body in malformed)):
@@ -561,9 +654,11 @@ class UpdaterTests(unittest.TestCase):
                 self.assertEqual(done.returncode, 0,
                                  done.stdout + done.stderr)
                 self.assertIn("cannot fetch the registry", done.stdout)
-                self.assertEqual(self.page(), "v1 second")
+                self.assertEqual(self.page(), "v1 first")
+                self.assertEqual(self.builds(), ["v1 build"])
                 self.assertEqual(
-                    json.loads((self.data / "registry.json").read_text()),
+                    plain(json.loads(
+                        (self.data / "registry.json").read_text())),
                     self.snapshot)
 
     def test_a_relative_data_directory_names_the_snapshot_absolutely(
@@ -577,7 +672,7 @@ class UpdaterTests(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         for _, registry, held in self.runs():
             self.assertEqual(registry, str(self.data / "registry.json"))
-            self.assertEqual(json.loads(held), self.snapshot)
+            self.assertEqual(plain(json.loads(held)), self.snapshot)
 
     def test_a_fresh_data_directory_without_a_registry_builds_nothing(
             self) -> None:
@@ -587,15 +682,395 @@ class UpdaterTests(unittest.TestCase):
         self.assertEqual(self.builds(), [])
         self.assertFalse((self.data / "current").exists())
 
-    def test_a_copy_of_another_address_is_not_used(self) -> None:
-        """Requirement: Update cycle (the copy of the same address
-        only)."""
+    # --- the manifest and the application (container-deployment
+    # "Manifests", "Update cycle", "Releases") ----------------------------
+
+    def refused_reports(self) -> list[dict]:
+        """The manifests that report a failed build."""
+        return [m for m in self.sent() if m["outcome"] == "refused"]
+
+    def test_the_default_address_of_the_manifest(self) -> None:
+        """Requirement: Updater program (`ORGSYNDB_MANIFEST_URL`,
+        default `http://app:8000/lab/collection/manifest/`)."""
+        text = UPDATER.read_text(encoding="utf-8")
+        self.assertIn("http://app:8000/lab/collection/manifest/", text)
+        self.assertIn("ORGSYNDB_MANIFEST_URL", text)
+        self.assertIn("ORGSYNDB_BUILDER_TOKEN", text)
+
+    def test_no_token_builds_nothing(self) -> None:
+        """Scenario: No token."""
+        for value in ("", None):
+            with self.subTest(value=value):
+                env = {k: v for k, v in self.env.items()
+                       if k != "ORGSYNDB_BUILDER_TOKEN"}
+                if value is not None:
+                    env["ORGSYNDB_BUILDER_TOKEN"] = value
+                done = subprocess.run(
+                    [sys.executable, str(UPDATER), "sync"], env=env,
+                    capture_output=True, text=True, timeout=120)
+                self.assertEqual(done.returncode, 0,
+                                 done.stdout + done.stderr)
+                self.assertIn("ORGSYNDB_BUILDER_TOKEN", done.stdout)
+                self.assertEqual(self.builds(), [])
+                self.assertEqual(self.sent(), [])
+                self.assertFalse((self.data / "current").exists())
+
+    def test_what_a_manifest_holds(self) -> None:
+        """Scenario: What a manifest holds."""
+        done = self.sync()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        (received,) = self.server.manifests
+        body = received.body
+        self.assertEqual(set(body), BUILT_KEYS)
+        self.assertEqual(body["format"], 1)
+        uuid.UUID(body["build"])
+        self.assertEqual(body["commit"], self.col_v1)
+        sent = datetime.fromisoformat(body["committed_at"])
+        self.assertIsNotNone(sent.utcoffset())
+        self.assertEqual(sent, datetime.fromisoformat(git(
+            self.collection, "log", "-1", "--format=%cI", self.col_v1)))
+        self.assertEqual(body["snapshot"], self.snapshot["digest"])
+        self.assertEqual(body["tooling"], self.app_v1)
+        self.assertIsNone(body["base"])
+        self.assertEqual(body["trigger"], "catch-up")
+        self.assertEqual(body["outcome"], "built")
+        self.assertEqual(body["release"], self.current())
+        for key in ("language", "procedures", "sequences"):
+            with self.subTest(key=key):
+                self.assertEqual(body[key], FAKE_MANIFEST[key])
+        self.assertEqual(received.headers["authorization"],
+                         f"Bearer {TOKEN}")
+        self.assertTrue(received.headers["content-type"].startswith(
+            "application/json"), received.headers)
+        self.assertEqual(received.host, "localhost")
+
+    def test_the_manifest_has_the_host_of_the_snapshot_request(self) -> None:
+        """Requirement: Manifests (the `Host` header of the snapshot
+        request)."""
+        self.sync(ORGSYNDB_ALLOWED_HOSTS="lab.example.org,localhost")
+        self.assertEqual(self.server.hosts, ["lab.example.org"])
+        self.assertEqual([m.host for m in self.server.manifests],
+                         ["lab.example.org"])
+
+    def test_the_tools_run_in_order(self) -> None:
+        """Requirement: Releases (`manifest` and `index` run after the
+        build)."""
+        self.sync()
+        self.assertEqual([run[0] for run in self.runs()],
+                         ["build", "manifest", "index"])
+
+    def test_a_release_is_staged_before_its_manifest_is_sent(self) -> None:
+        """Requirement: Releases (`current` moves only once the
+        application accepts)."""
+        seen = []
+
+        def look(body: dict) -> None:
+            release = self.data / "releases" / body["release"]
+            seen.append((
+                (release / "public" / "index.html").is_file(),
+                (release / "index.json").is_file(), self.current()))
+
+        self.server.on_manifest = look
         self.sync()
         commit_files(self.collection, {"content.txt": "second\n"})
-        done = self.sync(ORGSYNDB_REGISTRY_URL=closed_address())
-        self.assertIn("cannot fetch the registry", done.stdout)
-        self.assertEqual(self.builds(), ["v1 build"])
+        self.sync()
+        names = [m["release"] for m in self.sent()]
+        self.assertEqual(len(set(names)), 2)
+        self.assertEqual(seen, [(True, True, None),
+                                (True, True, names[0])])
+        self.assertEqual(self.current(), names[1])
+
+    def test_first_publish_sends_one_manifest(self) -> None:
+        """Scenario: First publish."""
+        self.sync()
         self.assertEqual(self.page(), "v1 first")
+        self.assertEqual(len(self.sent()), 1)
+        self.assertEqual(self.sent()[0]["trigger"], "catch-up")
+
+    def test_nothing_new_sends_nothing(self) -> None:
+        """Scenario: Nothing new."""
+        self.sync()
+        self.sync()
+        self.assertEqual(self.builds(), ["v1 build"])
+        self.assertEqual(len(self.releases()), 1)
+        self.assertEqual(len(self.sent()), 1)
+
+    def test_a_new_collection_commit_names_its_base(self) -> None:
+        """Scenario: New collection commit."""
+        self.sync()
+        col_v2 = commit_files(self.collection, {"content.txt": "second\n"})
+        self.sync()
+        first, second = self.sent()
+        self.assertEqual((second["trigger"], second["commit"]),
+                         ("commit", col_v2))
+        self.assertEqual(second["base"], self.server.imports[0]["id"])
+        self.assertNotEqual(second["build"], first["build"])
+
+    def test_an_application_update_triggers_a_build(self) -> None:
+        """Scenario: Application update triggers a build."""
+        self.sync()
+        app_v2 = commit_files(self.upstream, {"VERSION": "v2\n"})
+        self.sync()
+        self.assertEqual(self.builds(), ["v1 build", "v2 build"])
+        second = self.sent()[1]
+        self.assertEqual((second["trigger"], second["tooling"]),
+                         ("tooling", app_v2))
+        self.assertEqual(second["base"], self.server.imports[0]["id"])
+
+    def test_the_trigger_names_the_first_change(self) -> None:
+        """Requirement: Manifests (`commit`, else `registry`, else
+        `tooling`, else `catch-up`)."""
+        self.sync()
+        commit_files(self.upstream, {"VERSION": "v2\n"})
+        commit_files(self.collection, {"content.txt": "second\n"})
+        self.change_registry()
+        self.sync()
+        commit_files(self.upstream, {"VERSION": "v3\n"})
+        self.change_registry("again")
+        self.sync()
+        commit_files(self.upstream, {"VERSION": "v4\n"})
+        self.sync()
+        self.assertEqual([m["trigger"] for m in self.sent()],
+                         ["catch-up", "commit", "registry", "tooling"])
+        self.assertEqual(self.page(), "v4 second")
+
+    def test_a_missing_release_is_built_again_as_a_catch_up(self) -> None:
+        """Requirement: Update cycle (a build whose release is missing)."""
+        self.sync()
+        shutil.rmtree(self.data / "releases" / self.current())
+        done = self.sync()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(self.builds(), ["v1 build", "v1 build"])
+        second = self.sent()[1]
+        self.assertEqual(second["trigger"], "catch-up")
+        self.assertEqual(second["base"], self.server.imports[0]["id"])
+        self.assertEqual(self.page(), "v1 first")
+        self.assertEqual(self.current(), second["release"])
+
+    def test_the_accepted_release_comes_back(self) -> None:
+        """Scenario: The accepted release comes back."""
+        self.sync()
+        first = self.current()
+        commit_files(self.collection, {"content.txt": "second\n"})
+        self.sync()
+        second = self.current()
+        self.assertNotEqual(first, second)
+        link = self.data / "current"
+        link.unlink()
+        link.symlink_to(Path("releases") / first)
+        for lost in ("pointing elsewhere", "missing"):
+            with self.subTest(lost=lost):
+                if lost == "missing":
+                    link.unlink()
+                done = self.sync()
+                self.assertEqual(done.returncode, 0,
+                                 done.stdout + done.stderr)
+                self.assertEqual(self.current(), second)
+                self.assertEqual(self.builds(), ["v1 build", "v1 build"])
+                self.assertEqual(len(self.sent()), 2)
+                self.assertEqual(self.page(), "v1 second")
+
+    def test_a_refused_build_is_not_published(self) -> None:
+        """Scenario: Refused by the application."""
+        self.sync()
+        bad = commit_files(self.collection, {"content.txt": "second\n"})
+        self.server.answer("refuse")
+        done = self.sync()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(self.page(), "v1 first")
+        self.assertEqual(len(self.releases()), 1)
+        state = self.state()
+        self.assertEqual(len(state["failed"]), 1)
+        self.assertIn(bad, state["failed"][0])
+        self.assertEqual(state["deployed"]["collection"], self.col_v1)
+        self.sync()
+        self.assertEqual(self.builds(), ["v1 build", "v1 build"])
+        self.assertEqual(len(self.sent()), 2)
+
+    def test_a_stale_manifest_is_built_again(self) -> None:
+        """Scenario: Stale."""
+        self.server.answer("stale")
+        done = self.sync()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertFalse((self.data / "current").exists())
+        self.assertEqual(self.releases(), [])
+        self.assertEqual(self.state()["failed"], [])
+        self.assertEqual(self.server.imports, [])
+        done = self.sync()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(self.builds(), ["v1 build", "v1 build"])
+        self.assertEqual(self.page(), "v1 first")
+        first, second = self.sent()
+        self.assertNotEqual(first["build"], second["build"])
+        self.assertEqual(len(self.server.hosts), 2)
+
+    def test_a_manifest_that_gets_no_answer_keeps_its_release(self) -> None:
+        """Scenario: Application unreachable."""
+        for how in ("closed address", "no answer", "another status"):
+            with self.subTest(how=how):
+                shutil.rmtree(self.data, ignore_errors=True)
+                self.server.rules.clear()
+                self.server.manifests.clear()
+                env = {}
+                if how == "closed address":
+                    env["ORGSYNDB_MANIFEST_URL"] = closed_manifest_address()
+                elif how == "no answer":
+                    self.server.answer("drop")
+                else:
+                    self.server.answer(500)
+                done = self.sync(**env)
+                self.assertEqual(done.returncode, 0,
+                                 done.stdout + done.stderr)
+                self.assertIn("cannot send the manifest", done.stdout)
+                self.assertFalse((self.data / "current").exists())
+                self.assertEqual(self.state()["failed"], [])
+                self.assertEqual(len(self.releases()), 1)
+
+    def test_lost_answers_keep_one_staged_release(self) -> None:
+        """Requirement: Releases (a staged release whose answer is lost
+        is kept for a later cycle; pruning removes it like any other)."""
+        self.server.answer(500, 500, 500)
+        for _ in range(3):
+            done = self.sync(ORGSYNDB_KEEP_RELEASES="0")
+            self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+            self.assertIn("cannot send the manifest", done.stdout)
+            self.assertEqual(len(self.releases()), 1)
+        newest = self.releases()[0]
+        done = self.sync(ORGSYNDB_KEEP_RELEASES="0")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertNotIn(newest, self.releases())
+        self.assertEqual(len(self.releases()), 1)
+        self.assertTrue((self.data / "current").is_dir())
+
+    def test_a_wrong_token_is_an_answer_that_publishes_nothing(
+            self) -> None:
+        """Requirement: Manifests (any other answer: log it, record
+        nothing)."""
+        done = self.sync(ORGSYNDB_BUILDER_TOKEN="another-token")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn("cannot send the manifest", done.stdout)
+        self.assertFalse((self.data / "current").exists())
+        self.assertEqual(self.state()["failed"], [])
+        self.assertEqual(self.server.imports, [])
+
+    def test_an_accepted_answer_that_is_lost(self) -> None:
+        """Scenario: Accepted, answer lost."""
+        self.sync()
+        commit_files(self.collection, {"content.txt": "second\n"})
+        self.server.answer("accept-drop")
+        done = self.sync()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn("cannot send the manifest", done.stdout)
+        self.assertEqual(self.page(), "v1 first")
+        self.assertEqual(self.state()["failed"], [])
+        self.assertEqual(len(self.releases()), 2)
+        staged = self.server.imported["release"]
+        done = self.sync()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(self.current(), staged)
+        self.assertEqual(self.page(), "v1 second")
+        self.assertEqual(self.builds(), ["v1 build", "v1 build"])
+        self.assertEqual(len(self.sent()), 2)
+
+    def test_a_failed_build_is_reported_late(self) -> None:
+        """Scenario: A failed build reported late."""
+        self.sync()
+        bad = commit_files(self.collection, {"fail": "",
+                                             "content.txt": "bad"})
+        done = self.sync(ORGSYNDB_MANIFEST_URL=closed_manifest_address())
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn("cannot send the manifest", done.stdout)
+        self.assertEqual(self.state()["failed"], [])
+        self.assertEqual(self.builds(), ["v1 build", "v1 build"])
+        done = self.sync()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(self.builds(), ["v1 build"] * 3)
+        (report,) = self.refused_reports()
+        self.assertEqual(report["commit"], bad)
+        state = self.state()
+        self.assertEqual(len(state["failed"]), 1)
+        self.assertIn(bad, state["failed"][0])
+        self.sync()
+        self.assertEqual(self.builds(), ["v1 build"] * 3)
+
+    def test_a_report_answered_by_another_status_is_not_recorded(
+            self) -> None:
+        """Requirement: Manifests (a failed build is recorded as failed
+        once the application answered its report with 200)."""
+        self.sync()
+        commit_files(self.collection, {"fail": "", "content.txt": "bad"})
+        self.server.answer(500)
+        done = self.sync()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn("cannot send the manifest", done.stdout)
+        self.assertEqual(self.state()["failed"], [])
+        self.sync()
+        self.assertEqual(self.builds(), ["v1 build"] * 3)
+        self.assertEqual(len(self.state()["failed"]), 1)
+
+    def test_a_failure_without_error_lines_is_reported(self) -> None:
+        """Requirement: Manifests (`errors` is the failure message when
+        the output has no `: error: ` line)."""
+        self.sync()
+        commit_files(self.collection, {"fail-silent": "",
+                                       "content.txt": "bad"})
+        self.sync()
+        (report,) = self.refused_reports()
+        self.assertTrue(report["errors"])
+        self.assertTrue(all(isinstance(line, str) and line
+                            for line in report["errors"]), report["errors"])
+        self.assertEqual(len(self.state()["failed"]), 1)
+
+    def test_a_failing_manifest_or_index_is_a_failed_build(self) -> None:
+        """Scenario: Failing index or manifest."""
+        self.sync()
+        for marker in ("manifest-fail", "index-fail"):
+            with self.subTest(marker=marker):
+                bad = commit_files(self.collection, {
+                    marker: "", "content.txt": marker})
+                before = len(self.sent())
+                page, releases = self.page(), self.releases()
+                done = self.sync()
+                self.assertEqual(done.returncode, 0,
+                                 done.stdout + done.stderr)
+                self.assertEqual(self.page(), page)
+                self.assertEqual(self.releases(), releases)
+                (report,) = self.sent()[before:]
+                self.assertEqual((report["outcome"], report["commit"]),
+                                 ("refused", bad))
+                self.assertTrue(report["errors"])
+                self.assertIn(bad, self.state()["failed"][-1])
+                commit_files(self.collection, {marker: None})
+                self.sync()
+
+    @unittest.skipUnless(os.environ.get("OSDB_SLOW_TESTS"),
+                         "set OSDB_SLOW_TESTS: waits out the 60-second "
+                         "minimum of ORGSYNDB_BUILD_TIMEOUT")
+    def test_a_manifest_past_the_timeout_is_a_failed_build(self) -> None:
+        """Scenario: Failing index or manifest (timeout)."""
+        self.sync()
+        commit_files(self.collection, {"manifest-slow": "",
+                                       "content.txt": "slow\n"})
+        done = self.sync(ORGSYNDB_BUILD_TIMEOUT="60")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(self.page(), "v1 first")
+        self.assertEqual(len(self.refused_reports()), 1)
+        self.assertEqual(len(self.state()["failed"]), 1)
+
+    def test_a_failed_application_build_is_reported_before_the_fallback(
+            self) -> None:
+        """Scenario: Broken application (the broken build is
+        reported)."""
+        self.sync()
+        commit_files(self.upstream, {"VERSION": "broken\n"})
+        commit_files(self.collection, {"content.txt": "second\n"})
+        self.sync()
+        self.assertEqual([m["outcome"] for m in self.sent()],
+                         ["built", "refused", "built"])
+        broken = self.sent()[1]
+        self.assertIn(FAKE_PROBLEM, broken["errors"])
+        self.assertEqual(self.sent()[2]["tooling"], self.app_v1)
+        self.assertEqual(self.page(), "v1 second")
 
 
 class FileTests(unittest.TestCase):
@@ -659,6 +1134,28 @@ class FileTests(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn("/lab/*", done.stdout)
         self.assertIn("reverse_proxy", done.stdout)
+
+    def test_caddyfile_does_not_forward_the_manifest(self) -> None:
+        """Scenario: Caddyfile (`/lab/collection/manifest*` answered
+        with `404` ahead of the `/lab/*` route)."""
+        text = (DOCKER / "Caddyfile").read_text()
+        self.assertRegex(
+            text, r"handle\s+/lab/collection/manifest\*\s*\{[^}]*"
+                  r"respond[^}\n]*\b404\b")
+        self.assertLess(text.index("/lab/collection/manifest*"),
+                        text.index("handle /lab/*"))
+        if shutil.which("caddy") is None:
+            self.skipTest("caddy not found")
+        done = subprocess.run(["caddy", "adapt", "--adapter", "caddyfile",
+                               "--config", str(DOCKER / "Caddyfile")],
+                              capture_output=True, text=True)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("/lab/collection/manifest*", done.stdout)
+        self.assertLess(done.stdout.index("/lab/collection/manifest*"),
+                        done.stdout.index('"/lab/*"'))
+        between = done.stdout[done.stdout.index("/lab/collection/manifest*"):
+                              done.stdout.index('"/lab/*"')]
+        self.assertRegex(between, r'"status_code":\s*"?404')
 
     def test_the_builder_links_the_lab(self) -> None:
         """Scenario: Compose file (the builder's ORGSYNDB_LAB, without
@@ -745,7 +1242,7 @@ class FileTests(unittest.TestCase):
         env = parse_env(ENV_EXAMPLE)
         for key in ("POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB",
                     "ORGSYNDB_DATABASE_URL", "ORGSYNDB_SECRET_KEY",
-                    "ORGSYNDB_ALLOWED_HOSTS"):
+                    "ORGSYNDB_ALLOWED_HOSTS", "ORGSYNDB_BUILDER_TOKEN"):
             with self.subTest(key=key):
                 self.assertIn(key, env)
         url = urlsplit(env["ORGSYNDB_DATABASE_URL"])
@@ -755,6 +1252,21 @@ class FileTests(unittest.TestCase):
         self.assertEqual(url.hostname, "db")
         self.assertEqual(url.path, "/" + env["POSTGRES_DB"])
         self.assertRegex(text, r"(?i)generat")
+
+    def test_env_example_says_how_to_generate_the_token(self) -> None:
+        """Requirement: Web server and Compose file (`orgsyndb.env.example`
+        lists `ORGSYNDB_BUILDER_TOKEN`, with how to generate a token)."""
+        lines = ENV_EXAMPLE.read_text().splitlines()
+        (index,) = [number for number, line in enumerate(lines)
+                    if line.startswith("ORGSYNDB_BUILDER_TOKEN=")]
+        comment = []
+        for line in reversed(lines[:index]):
+            if not line.startswith("#"):
+                break
+            comment.insert(0, line)
+        text = "\n".join(comment)
+        self.assertRegex(text, r"(?i)generat")
+        self.assertRegex(text, r"(?i)token")
 
     def test_git_ignores_local_deployment_files(self) -> None:
         if shutil.which("git") is None:

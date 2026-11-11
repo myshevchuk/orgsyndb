@@ -1029,6 +1029,7 @@ prefix are relative to the collection.
 | `clean --all` | Also removes the application's `.emacs-batch/` and `.tools/`. Their contents are fetched again on the next relevant run. |
 | `check-deps` | Reports required tools; optional Emacs, Git, and Caddy; fetched tools; and the missing tool names when a required tool is missing. |
 | `index` | Reads the registry and prints the site language, procedure and sequence schema, registry source and digest, four compound fields, procedure declarations, vocabularies, substances, procedures and sequences as one line of JSON for an editor. Needs a collection but no external tool, takes no arguments and writes nothing. Lists Markdown files it cannot parse with the reason instead of failing. Org procedures are listed by file name only. Exits 1 on a configuration error, including an unreadable registry without a matching kept copy. |
+| `manifest` | After a build, prints the site language, published procedures with their scope entries, and sequences with their steps as one line of JSON for the lab application's import. Takes no arguments, reads no registry and writes no files. Collections with Org sources need `build/export/`; run `build` first. |
 | `help` | Prints the command summary. `-h` and `--help` do the same. |
 
 The program exits 0 on success, 1 on failure, and 2 on a usage error.
@@ -1364,9 +1365,12 @@ Five services build and serve the site and keep the lab's records:
 - `builder` clones the collection from its Git repository, builds the site
   inside the container, and checks for new commits every five minutes. It
   also follows the application's own repository, so the server picks up
-  new versions of the static site by itself.
+  new versions of the static site by itself. It reports each build to the
+  lab application and publishes only a release the application accepts.
 - `web` serves the last published site with Caddy on port 8080 and
-  forwards `/lab/` to `app`.
+  forwards `/lab/` to `app`, except the builder's manifest path. Caddy
+  answers 404 for every path beginning with `/lab/collection/manifest`;
+  the builder sends manifests directly to `app` over the Compose network.
 - `db` runs PostgreSQL 18 and keeps the lab's records in the `db` volume.
 - `app` runs the lab application, built from the checkout that holds
   `deploy/compose.yaml`. It reads the published collection's index from
@@ -1407,6 +1411,18 @@ Generate a secret key for sign-ins and put the result in
 python3 -c 'import secrets; print(secrets.token_urlsafe(50))'
 ```
 
+Generate a separate service token and put it in `ORGSYNDB_BUILDER_TOKEN`:
+
+```sh
+python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
+```
+
+The builder uses this token to authenticate each build report, called a
+**manifest**, and the app accepts only that token. Both services read it
+from `orgsyndb.env`. Without it, the builder builds nothing and the app's
+manifest endpoint answers 404. `ORGSYNDB_MANIFEST_URL` defaults to
+`http://app:8000/lab/collection/manifest/` on the Compose network.
+
 Git ignores `deploy/orgsyndb.env` and `deploy/backups/`. After filling in
 the settings, start the services from `deploy/`:
 
@@ -1416,8 +1432,8 @@ docker compose logs -f builder
 ```
 
 The site is then at `http://<server>:8080/`, with the lab application at
-`http://<server>:8080/lab/`. Before the first site build finishes, the
-static site answers 404.
+`http://<server>:8080/lab/`. Until the app accepts the first site build
+and the builder publishes it, the static site answers 404.
 
 [`deploy/orgsyndb.env.example`](deploy/orgsyndb.env.example) lists the
 settings:
@@ -1433,13 +1449,16 @@ settings:
 | `ORGSYNDB_INTERVAL` | `300` | Seconds between checks for new commits, at least 10 |
 | `ORGSYNDB_PDF` | `false` | Also render one PDF per procedure, served under `/pdf/` |
 | `ORGSYNDB_KEEP_RELEASES` | `2` | Published sites kept besides the current one |
-| `ORGSYNDB_BUILD_TIMEOUT` | `3600` | Seconds the build and then its index command may each take, at least 60 |
+| `ORGSYNDB_BUILD_TIMEOUT` | `3600` | Seconds the build, manifest and index commands may each take, at least 60 |
+| `ORGSYNDB_REGISTRY_URL` | `http://app:8000/lab/registry/snapshot.json` | Registry snapshot fetched for each cycle |
+| `ORGSYNDB_MANIFEST_URL` | `http://app:8000/lab/collection/manifest/` | App endpoint that receives each build's manifest |
 | `ORGSYNDB_ADDRESS` | `:8080` | Caddy's site address |
 | `POSTGRES_USER` | `lab` in the example | Database user; must match the database URL |
 | `POSTGRES_PASSWORD` | choose your own | Database password; must match the database URL |
 | `POSTGRES_DB` | `lab` in the example | Database name; must match the database URL |
 | `ORGSYNDB_DATABASE_URL` | set for deployment | `postgres://<user>:<password>@db:5432/<database>` |
 | `ORGSYNDB_SECRET_KEY` | required | Generated secret key for sign-ins |
+| `ORGSYNDB_BUILDER_TOKEN` | required for builds | Shared service token the builder sends and the app checks on each manifest |
 | `ORGSYNDB_ALLOWED_HOSTS` | required | Comma-separated host names used to reach the site |
 | `ORGSYNDB_DEBUG` | `false` | Show error details; keep off on a reachable site |
 | `ORGSYNDB_DEMO` | `false` | Permit writing invented demo records; at container start, fill an empty database. Test deployments only; never set on a stack that keeps real records |
@@ -1592,8 +1611,9 @@ falls in the seeding year too.
 At every start, `app` applies migrations, runs `demo_data --if-empty`, then
 starts serving requests. The command fills the database only when
 `ORGSYNDB_DEMO=true` and it holds no lab records. Otherwise it prints why
-it skips seeding and exits successfully without changes. The flag only
-permits writing demo data; setting it alone does not display demo content.
+it skips seeding and exits successfully without changes. An import of the
+collection counts as a lab record. The flag only permits writing demo
+data; setting it alone does not display demo content.
 If `app` starts before `builder` publishes the first index, seeding writes
 German free text; the registry and stock records are the same.
 
@@ -1617,8 +1637,11 @@ The records age after seeding. To renew them as of today, run from
 docker compose exec app python manage.py demo_data --replace
 ```
 
-This deletes every lab record and its history, including the registry and
-records you added after seeding, and restarts task numbering at `T-001`.
+This deletes every lab record and its history, including the registry,
+collection imports, imported procedures with their scope entries,
+sequences with their steps, and records you added after seeding. It
+restarts task numbering at `T-001`. The builder's next cycle imports the
+collection again.
 It requires `ORGSYNDB_DEMO=true` and accepts only a demo database or one
 without lab records. It refuses other databases unchanged.
 
@@ -1730,6 +1753,41 @@ compound page when the collection index lists the same key. The index
 includes every substance in the registry read for the build; a newly added
 substance gets this link after the next build.
 
+#### Inspect collection imports
+
+To check which collection build the app accepted, choose **Collection
+imports** above the substance list or open `/lab/collection/`. You need
+no sign-in. The page is headed **Imports**. It names the latest accepted
+import's commit, release and received time, with counts of procedures
+and sequences that are not withdrawn.
+
+The table lists imports newest first. Its columns are **Received**,
+**Commit**, **Trigger**, **Outcome**, **Release** and **Errors**. Commits
+show their first ten characters. Triggers are **Commit**, **Registry**,
+**Tooling** or **Catch-up**; outcomes are **Accepted** or **Refused**.
+A refused import lists its errors, one per line. Before any import, the
+page shows **No imports yet.**
+
+Only an accepted import writes the collection's procedures, scope entries
+and their substances, sequences and steps into the app's database. A
+**scope entry** is one combination of substrates and products in a
+procedure. The app matches it within its procedure by the sorted
+substance keys on each side of `substrates >> products`. Changing yields
+or order keeps the same entry; changing its substances creates a new
+entry and withdraws the old one. A procedure or sequence absent from an
+accepted import is marked withdrawn rather than deleted. Within an
+imported procedure, an entry removed from its scope is also withdrawn.
+
+The app refuses an import when a procedure names an unknown substance or
+reaction type, two entries of one procedure have the same substances, or
+an ID occurs twice. It also refuses a sequence with an unknown target
+substance or a step naming a procedure outside the collection or an entry
+that procedure does not have. A procedure must have at least one entry.
+The refused import records every error and changes no procedure, entry
+or sequence. Staff can inspect imports, procedures and sequences in
+`/lab/admin/`; these records are read-only, with no add, edit or delete
+actions.
+
 #### Add substances and vocabulary terms
 
 To add a substance, choose **Neue Substanz** (**New substance**). Enter
@@ -1796,11 +1854,13 @@ invocations.
 
 The site's compound pages, validator and Emacs read the registry named by
 the collection, as described under [Compound registry](#compound-registry).
-A rebuild publishes changes to substances and terms on the static site;
-refresh the Emacs index to read those changes in the editor. The lab
-application reads the language, compound keys for collection links,
-procedures and sequences from the collection index. Its substance names,
-molar masses and article numbers come directly from its registry.
+A rebuild accepted by the lab application publishes changes to substances
+and terms on the static site; refresh the Emacs index to read those
+changes in the editor. The lab application reads the language and compound
+keys for collection links from the release's `index.json`; tasks read its
+procedures and sequences. The accepted import also stores the collection's
+procedures, scope entries and sequences as database records. Substance
+names, molar masses and article numbers come directly from the lab registry.
 
 ### End-product inventory
 
@@ -2306,46 +2366,97 @@ that is not `*`, with a leading `.` removed, or `localhost` if there is no
 such entry. The builder and app share `orgsyndb.env`, so the request needs
 no separate host setting.
 
-The builder keeps the snapshot at `<data>/registry.json` and its source
-at `<data>/registry.source`; `<data>` is the data volume's directory,
-`/var/lib/orgsyndb` by default. If the request fails or returns something
-other than a snapshot, the builder uses the kept copy only when it came
-from the same address. Without such a copy it builds nothing. These log
-messages identify the failure and the result:
+The builder writes the fetched snapshot to `<data>/registry.json`;
+`<data>` is the data volume's directory, `/var/lib/orgsyndb` by default.
+If the request fails or returns something other than a snapshot, the
+cycle builds nothing. Only the app can accept a build, and the builder
+needs its current snapshot to know what it last accepted. The log says:
 
 ```text
-cannot fetch the registry from <url>: <reason>
-using the copy of the registry, digest <digest>
+cannot fetch the registry from <url>: <reason>; nothing is built
 ```
 
-Without a matching copy, the second message is:
+The snapshot names the latest accepted import. Before deciding whether to
+build, the builder points `<data>/current` at that import's release when
+the release exists in `<data>/releases/`. This also restores an accepted
+release after a lost response to its manifest. Without
+`ORGSYNDB_BUILDER_TOKEN`, the builder still restores that release but
+builds nothing. Its log begins `ORGSYNDB_BUILDER_TOKEN is not set`.
+
+A build is needed when the collection commit, registry digest or
+application commit differs from the latest accepted import's, or that
+import's release is missing. The digest is a fingerprint of the registry's
+contents. Accepting an import does not change it. The manifest records
+the first matching trigger in this order:
+
+| Trigger | When it applies |
+|---|---|
+| `commit` | The collection commit differs |
+| `registry` | The registry digest differs |
+| `tooling` | The application commit differs |
+| `catch-up` | No import has been accepted, or its release is missing and all three values match |
+
+For a combination of application commit, collection commit and registry
+digest that needs building and has not been recorded as failed, the
+builder checks out both commits. It runs `orgsyndb build`, or
+`orgsyndb pdf` with `ORGSYNDB_PDF=true`, followed by `orgsyndb manifest`
+and `orgsyndb index`. `ORGSYNDB_BUILD_TIMEOUT` applies separately to each
+command. Every invocation receives `ORGSYNDB_REGISTRY` naming
+`<data>/registry.json`, so the site and release index use the same
+snapshot. A command that fails or exceeds its timeout counts as a failed
+build.
+
+The builder stages a successful build in
+`<data>/releases/<serial>-<app>-<commit>`, with `public/`, `pdf/` when
+PDFs are enabled, and `index.json` for the lab application's tasks. The
+serial starts at `000001`; both commits use their first ten characters.
+Staging leaves the served site in place.
+
+The builder then posts the manifest to `ORGSYNDB_MANIFEST_URL`, with
+`Authorization: Bearer <token>` using `ORGSYNDB_BUILDER_TOKEN`, the
+snapshot request's `Host`, and a 30-second timeout. The manifest describes
+the collection's language, procedures, scope entries, sequences and
+steps. It also identifies the build, commits, registry digest, latest
+accepted import used as its base, trigger and staged release. The app
+accepts a build only while that base is still the latest accepted import
+and the registry digest is still current, and after checking the
+collection's references.
+
+| App response | What the builder does |
+|---|---|
+| `accepted` | Publishes the release by atomically pointing `current` at it, records it as deployed, and keeps the current release plus the `ORGSYNDB_KEEP_RELEASES` newest others |
+| `refused` | Removes the staged release, leaves the served site in place, and records the combination as failed |
+| `stale` | Removes the staged release and records no failure; the next cycle builds again with a fresh snapshot |
+| No response or another response | Logs `cannot send the manifest: <reason>`, keeps the staged release and records no failure; a later cycle publishes it if the snapshot names it as accepted, otherwise it builds again |
+
+These log lines identify publication, restoration, refusal and staleness;
+the timestamp and `orgsyndb-deploy:` prefix are omitted here:
 
 ```text
-no copy of this registry is kept; nothing is built
+published release <name>
+published release <name>, which the application accepted
+the application refused release <name>; the published site is unchanged
+the application found release <name> stale; the next cycle builds again
 ```
 
-A registry change triggers a build just as a new application or collection
-commit does. The snapshot's digest, its content fingerprint, is part of
-every combination the builder records. For a new combination, `builder`
-checks out both commits and runs `orgsyndb build`, or `orgsyndb pdf` with
-`ORGSYNDB_PDF=true`. It then runs `orgsyndb index` to produce `index.json`
-for the lab application. Every tool invocation in the cycle receives
-`ORGSYNDB_REGISTRY` naming `<data>/registry.json`, so the site and release
-index use the same snapshot. An index command that fails or exceeds the
-build timeout counts as a failed build and leaves the published site in
-place.
-A successful build, including `index.json`, is copied into `releases/` in
-the data volume and becomes the served site at once: the symlink `current`
-then points to it.
-A failed build changes nothing that is served, and its output stays in
-the `builder` log.
+A failed build leaves the served site in place. Its output stays in the
+`builder` log, and the builder reports it to the app as `refused`. The
+report contains output lines with `: error: `, or the failure message
+when there are none. The builder records the combination as failed only
+once the app answers the report. If it cannot send the report, it logs
+`cannot send the manifest: <reason>`; the next cycle builds again and
+reports the failure then. Accepted and refused imports appear on the
+[imports page](#inspect-collection-imports).
 
 A new application commit is tried first with the newest collection
-commit. If that build fails, `builder` returns to the previous application
-commit and builds the collection with it, using the same snapshot.
-A combination of application commit, collection commit and registry digest
-that failed is not built again. A new commit of either repository or a
-changed registry digest creates another combination to try.
+commit. Once a failure or refusal is recorded for that build, the
+builder tries the previous application commit with the same collection
+commit and snapshot. A combination recorded as failed is
+skipped on later cycles; the builder keeps up to 50 failed combinations.
+A new commit of either repository or a changed registry digest creates
+another combination to try. If the collection cannot be fetched, the
+builder uses its last fetched commit when one exists. If the application
+cannot be fetched, it stays on its current commit.
 
 The image holds the build tools and the update program. An application
 commit that changes `deploy/docker/` needs a new image, so `builder` logs

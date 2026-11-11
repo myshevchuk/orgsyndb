@@ -21,7 +21,9 @@ APP_TABLES = {
     "vocabulary_reactiontype", "inventory_article", "inventory_item",
     "inventory_movement", "inventory_deliverynote", "inventory_deliveryline",
     "inventory_lot", "inventory_lotmovement", "inventory_enteredconsumption",
-    "tasks_task", "tasks_counter", "planning_parameters", "demo_demomark"}
+    "tasks_task", "tasks_counter", "planning_parameters", "demo_demomark",
+    "collection_import", "collection_procedure", "collection_scopeentry",
+    "collection_entrysubstance", "collection_sequence", "collection_step"}
 
 
 def by_name(items: tuple, name: str):

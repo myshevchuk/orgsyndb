@@ -19,7 +19,7 @@ A database SHALL be a demo database when it holds the demo mark, which the demo 
 - **THEN** neither page has an element with the class `lab-demo` or `lab-demo-accounts`
 
 ### Requirement: Demo data command
-`manage.py demo_data` SHALL write the demo data set as of today in `Europe/Berlin`, `D`, into the database, all in one transaction, so that a failure leaves the database as it was, its records, histories and task counter included. Lab records are accounts, substances, vocabulary terms, articles, tasks, items, delivery notes, bulk lots, entered consumption values, stored planning parameters, change-history records and the demo mark. The command writes only with `ORGSYNDB_DEMO` true:
+`manage.py demo_data` SHALL write the demo data set as of today in `Europe/Berlin`, `D`, into the database, all in one transaction, so that a failure leaves the database as it was, its records, histories and task counter included. Lab records are accounts, substances, vocabulary terms, articles, tasks, items, delivery notes, bulk lots, entered consumption values, stored planning parameters, the collection's imports with their procedures, scope entries and sequences (collection-import "Imported rows"), change-history records and the demo mark. The command writes only with `ORGSYNDB_DEMO` true:
 
 - without options, it exits 1 with a message and changes nothing when `ORGSYNDB_DEMO` is not true, the message naming `ORGSYNDB_DEMO`, or when the database holds lab records, the message naming `--replace`;
 - `--replace` deletes every lab record, with the movements, lines and change histories that belong to them, sets the task counter to zero and writes the data set, when the database is a demo database or holds no lab records. On any other database it exits 1 with a message saying it replaces only a demo database, and changes nothing; when `ORGSYNDB_DEMO` is not true, it exits 1 as above;
@@ -58,6 +58,10 @@ A database SHALL be a demo database when it holds the demo mark, which the demo 
 #### Scenario: No index
 - **WHEN** `ORGSYNDB_DEMO` is true, `ORGSYNDB_INDEX` names a file that does not exist, and `demo_data` runs on an empty database
 - **THEN** it exits 0 without a warning, and the data set is written, the substances of the demo registry included
+
+#### Scenario: Replacing after an import
+- **WHEN** the demo data set is written, an import of the demo collection is accepted, and `demo_data --replace` runs with `ORGSYNDB_DEMO` true
+- **THEN** it exits 0, no import, procedure or sequence remains, and the snapshot's `import` is `null`
 
 ### Requirement: Demo accounts
 The data set SHALL hold five accounts:

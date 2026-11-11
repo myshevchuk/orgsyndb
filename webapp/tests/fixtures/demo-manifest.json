@@ -1,0 +1,255 @@
+{
+  "language": "de",
+  "procedures": [
+    {
+      "id": "OSDB-0001",
+      "source": "org",
+      "title": "Salicylsäure",
+      "title_de": "Salicylsäure",
+      "reaction_type": "hydrolysis",
+      "general": false,
+      "entries": [
+        {
+          "substrates": [
+            "methyl-salicylate"
+          ],
+          "products": [
+            {
+              "compound": "salicylic-acid",
+              "yield_percent": 80
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0002",
+      "source": "md",
+      "title": "Aspirin (Acetylsalicylsäure)",
+      "title_de": "Aspirin (Acetylsalicylsäure)",
+      "reaction_type": "acylation",
+      "general": false,
+      "entries": [
+        {
+          "substrates": [
+            "salicylic-acid",
+            "acetic-anhydride"
+          ],
+          "products": [
+            {
+              "compound": "acetylsalicylic-acid",
+              "yield_percent": 75
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0003",
+      "source": "org",
+      "title": "Isopentylacetat",
+      "title_de": "Isopentylacetat",
+      "reaction_type": "esterification",
+      "general": false,
+      "entries": [
+        {
+          "substrates": [
+            "isopentyl-alcohol",
+            "acetic-acid"
+          ],
+          "products": [
+            {
+              "compound": "isopentyl-acetate",
+              "yield_percent": 70
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0004",
+      "source": "org",
+      "title": "4-Acetylbiphenyl",
+      "title_de": "4-Acetylbiphenyl",
+      "reaction_type": "cross-coupling",
+      "general": false,
+      "entries": [
+        {
+          "substrates": [
+            "4-bromoacetophenone",
+            "phenylboronic-acid"
+          ],
+          "products": [
+            {
+              "compound": "4-acetylbiphenyl",
+              "yield_percent": 85
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0005",
+      "source": "md",
+      "title": "1-(Biphenyl-4-yl)ethanol",
+      "title_de": "1-(Biphenyl-4-yl)ethanol",
+      "reaction_type": "reduction",
+      "general": false,
+      "entries": [
+        {
+          "substrates": [
+            "4-acetylbiphenyl"
+          ],
+          "products": [
+            {
+              "compound": "1-biphenyl-4-yl-ethanol",
+              "yield_percent": 90
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0006",
+      "source": "md",
+      "title": "Dibenzylidenaceton",
+      "title_de": "Dibenzylidenaceton",
+      "reaction_type": "aldol-condensation",
+      "general": false,
+      "entries": [
+        {
+          "substrates": [
+            "benzaldehyde",
+            "acetone"
+          ],
+          "products": [
+            {
+              "compound": "dibenzylideneacetone",
+              "yield_percent": 85
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0007",
+      "source": "org",
+      "title": "Zimtsäureethylester",
+      "title_de": "Zimtsäureethylester",
+      "reaction_type": "olefination",
+      "general": false,
+      "entries": [
+        {
+          "substrates": [
+            "benzaldehyde",
+            "ethyl-triphenylphosphoranylidene-acetate"
+          ],
+          "products": [
+            {
+              "compound": "ethyl-cinnamate",
+              "yield_percent": 80
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0008",
+      "source": "md",
+      "title": "Zimtsäure",
+      "title_de": "Zimtsäure",
+      "reaction_type": "hydrolysis",
+      "general": false,
+      "entries": [
+        {
+          "substrates": [
+            "ethyl-cinnamate"
+          ],
+          "products": [
+            {
+              "compound": "cinnamic-acid",
+              "yield_percent": 90
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0009",
+      "source": "md",
+      "title": "Sekundäre Benzylalkohole durch Reduktion mit Natriumborhydrid",
+      "title_de": "Sekundäre Benzylalkohole durch Reduktion mit Natriumborhydrid",
+      "reaction_type": "reduction",
+      "general": true,
+      "entries": [
+        {
+          "substrates": [
+            "4-acetylbiphenyl"
+          ],
+          "products": [
+            {
+              "compound": "1-biphenyl-4-yl-ethanol",
+              "yield_percent": 90
+            }
+          ]
+        },
+        {
+          "substrates": [
+            "acetophenone"
+          ],
+          "products": [
+            {
+              "compound": "1-phenylethanol",
+              "yield_percent": 85
+            }
+          ]
+        },
+        {
+          "substrates": [
+            "4-bromoacetophenone"
+          ],
+          "products": [
+            {
+              "compound": "1-4-bromophenyl-ethanol",
+              "yield_percent": 88
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "sequences": [
+    {
+      "id": "SEQ-0001",
+      "title": "Aspirin aus Wintergrünöl",
+      "title_de": "Aspirin aus Wintergrünöl",
+      "target": "acetylsalicylic-acid",
+      "steps": [
+        {
+          "procedure": "OSDB-0001",
+          "entry": null
+        },
+        {
+          "procedure": "OSDB-0002",
+          "entry": null
+        }
+      ]
+    },
+    {
+      "id": "SEQ-0002",
+      "title": "1-(Biphenyl-4-yl)ethanol aus 4′-Bromacetophenon",
+      "title_de": "1-(Biphenyl-4-yl)ethanol aus 4′-Bromacetophenon",
+      "target": "1-biphenyl-4-yl-ethanol",
+      "steps": [
+        {
+          "procedure": "OSDB-0004",
+          "entry": null
+        },
+        {
+          "procedure": "OSDB-0009",
+          "entry": 1
+        }
+      ]
+    }
+  ]
+}

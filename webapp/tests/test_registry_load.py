@@ -60,6 +60,22 @@ class RoundTripTests(LoadCase):
         load(DEMO_REGISTRY)
         self.assertEqual(without_digest(snapshot.build()),
                          without_digest(demo_registry()))
+        self.assertIsNone(snapshot.build()["import"])
+
+    def test_the_import_of_a_snapshot_is_ignored(self) -> None:
+        """Requirement: Loading a registry (it ignores `digest` and
+        `import`)."""
+        from collection.models import Import
+        data = demo_registry()
+        data["import"] = {
+            "id": 7, "build": "6f1c2d3e-1111-4222-8333-444455556666",
+            "commit": "a" * 40, "snapshot": "d" * 64, "tooling": "b" * 40,
+            "release": "000007-bbbbbbbbbb-aaaaaaaaaa", "language": "de"}
+        load(self.file(data))
+        self.assertEqual(Import.objects.count(), 0)
+        self.assertIsNone(snapshot.build()["import"])
+        self.assertEqual(without_digest(snapshot.build()),
+                         without_digest(demo_registry()))
 
     def test_the_counts_are_printed(self) -> None:
         data = demo_registry()
