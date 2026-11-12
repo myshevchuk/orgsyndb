@@ -158,7 +158,9 @@ class ReverseDelivery(Change):
 class OpenLot(Change):
     """Create the bulk lot KEY of the substance SUBSTANCE, by its key,
     made in the lab or bought as SOURCE says, from SUPPLIER, with its
-    opening amount, in UNIT, dated the change's day."""
+    opening amount, in UNIT, dated the change's day; STEP, when given,
+    is the task step that made it, as the key of its task and its
+    position."""
 
     key: str
     substance: str
@@ -169,6 +171,18 @@ class OpenLot(Change):
     batch: str
     location: str
     made_on: date
+    step: tuple[str, int] | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
+class Withdraw(Change):
+    """Take AMOUNT, in the lot's unit, from LOT into the step at
+    POSITION of the task TASK, dated the change's day."""
+
+    lot: str
+    task: str
+    position: int
+    amount: Decimal
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -262,14 +276,31 @@ class _Size:
 
 
 @dataclass(frozen=True)
+class _StepLot:
+    """A lot of the substance SUBSTANCE, by its key, that the step at
+    POSITION of a synthesis makes on the day MADE, holding AMOUNT in
+    UNIT, and the WITHDRAWALS from it into the synthesis's steps, each
+    a day, a step's position and an amount in UNIT."""
+
+    substance: str
+    unit: str
+    amount: str
+    position: int
+    made: int
+    withdrawals: tuple[tuple[int, int, str], ...] = ()
+
+
+@dataclass(frozen=True)
 class _Synthesis:
     """A task of a substance, its days counted from the opening.
 
     A synthesis follows the sequence SEQUENCE, by its key, or none when
     it is empty; STEPS names the procedures of its steps, in order, and
-    STEPS_DONE the days on which a number of them is done. A synthesis
-    that ends yields a lot the day it ends, which fills its article's
-    items on the days FILLS and keeps REST, in the lot's unit.
+    STEPS_DONE the days on which a number of them is done; its steps
+    make the STEP_LOTS. A synthesis that ends yields its product lot
+    the day it ends, which fills its article's items on the days FILLS
+    and keeps REST, in the lot's unit. A synthesis that FAILED ends that
+    day as failed, with no batch and no lot.
     """
 
     by: str
@@ -280,9 +311,11 @@ class _Synthesis:
     report: int | None = None
     qc: int | None = None
     cancelled: int | None = None
+    failed: int | None = None
     sequence: str = ""
     steps: tuple[str, ...] = ()
     steps_done: tuple[tuple[int, int], ...] = ()
+    step_lots: tuple[_StepLot, ...] = ()
     fills: tuple[int, ...] = ()
     rest: str = "0"
     location: Text = ("Chemikalienschrank 3", "Chemicals cabinet 3")
@@ -367,7 +400,11 @@ ARTICLES = (
         (_Synthesis("tbauer", 85, "tbauer", started=90,
                     ended=115, report=118, qc=122, fills=(116, 180)),
          _Synthesis("tbauer", 245, "jkoch", started=250,
-                    ended=270, report=274, qc=280, fills=(271, 300)))),
+                    ended=270, report=274, qc=280, fills=(271, 300)),
+         _Synthesis("jkoch", 310, "jkoch", started=315, failed=327,
+                    note=("Produkt zersetzt sich bei der Aufarbeitung.",
+                          "The product decomposed during the work-up."))
+         )),
     _Article(
         "CH-0016", "isopentyl-acetate",
         ("Ester", "Esters"), "g",
@@ -402,7 +439,9 @@ ARTICLES = (
                     fills=(111, 200, 300), rest="150"),
          _Synthesis("klehmann", 380, "jkoch", started=388,
                     sequence="SEQ-0002", steps=SEQ_2,
-                    steps_done=((396, 1),))),
+                    steps_done=((396, 1),),
+                    step_lots=(_StepLot("4-acetylbiphenyl", "g", "3", 1,
+                                        396, ((398, 2, "2"),)),))),
         mass="198.26"),
     _Article(
         "1-phenylethanol", "1-phenylethanol",
@@ -410,7 +449,7 @@ ARTICLES = (
         (_Size("100", "mg", final=8, opened=310),),
         (_Synthesis("aschmidt", 280, "aschmidt",
                     started=285, ended=305, report=308, qc=309,
-                    fills=(311,)),),
+                    fills=(311,), rest="150"),),
         numbered=False),
     _Article(
         "NV-0007", "new-compound-7",
@@ -430,13 +469,16 @@ ARTICLES = (
 class _Intermediate:
     """A substance without an article, by its KEY, that a synthesis
     yields a lot of, the day it ends, holding AMOUNT in UNIT: made in
-    the lab, or, with a SUPPLIER, bought from it."""
+    the lab, or, with a SUPPLIER, bought from it; a bought lot has a
+    lot made in the lab beside it, holding MADE in UNIT, with the same
+    batch."""
 
     key: str
     unit: str
     amount: str
     synthesis: _Synthesis
     supplier: str = ""
+    made: str = ""
 
 
 INTERMEDIATES = (
@@ -454,7 +496,7 @@ INTERMEDIATES = (
                          "Lieferanten.",
                          "Contract synthesis; the batch is the "
                          "supplier's.")),
-        supplier="ChemPur GmbH"),
+        supplier="ChemPur GmbH", made="2"),
 )
 
 RECIPIENTS: tuple[Text, ...] = (
@@ -547,9 +589,11 @@ class _Timeline:
         return found
 
 
-# Ranks of the changes of one day.
-ACCOUNT, REGISTRY, PARAMETERS, ITEM, TASK, LOT, FILL, NOTE, REVERSAL, \
-    CORRECTION, ENTRY, HISTORICAL, LOT_CORRECTION, STATUS = range(14)
+# Ranks of the changes of one day: a task ends after its product lot
+# is recorded.
+ACCOUNT, REGISTRY, PARAMETERS, ITEM, TASK, LOT, END, FILL, WITHDRAWAL, \
+    NOTE, REVERSAL, CORRECTION, ENTRY, HISTORICAL, LOT_CORRECTION, \
+    STATUS = range(16)
 
 
 def staff(offset: int, turn: int = 0) -> str:
@@ -619,22 +663,27 @@ def changes(today: date, language: str) -> list[Change]:
     return line.changes()
 
 
-def _batches(line: _Timeline) -> dict[tuple[str, int], str]:
+def _batches(line: _Timeline) -> dict[tuple[str, Any], str]:
     """The batch of each synthesis that ends, by its article, or its
-    intermediate's key, and its position: ``B<yy>-<nnn>``, numbered in
-    the order of their ends."""
+    intermediate's key, and its position, and of each lot a step makes,
+    by its synthesis's key and the lot's position among its step lots:
+    ``B<yy>-<nnn>``, numbered in the order of the days of the ends and
+    the step lots."""
     syntheses = [(article.number, position, synthesis)
                  for article in ARTICLES
                  for position, synthesis in enumerate(article.syntheses)]
     syntheses += [(intermediate.key, 0, intermediate.synthesis)
                   for intermediate in INTERMEDIATES]
-    ended = sorted(
-        ((line.day(synthesis.ended), number, position)
-         for number, position, synthesis in syntheses
-         if synthesis.ended is not None),
-        key=lambda entry: entry[0])
+    made: list[tuple[date, str, Any]] = [
+        (line.day(synthesis.ended), number, position)
+        for number, position, synthesis in syntheses
+        if synthesis.ended is not None]
+    made += [(line.day(lot.made), f"{number}#{position}", index)
+             for number, position, synthesis in syntheses
+             for index, lot in enumerate(synthesis.step_lots)]
     return {(number, position): f"B{day:%y}-{index:03d}"
-            for index, (day, number, position) in enumerate(ended, 1)}
+            for index, (day, number, position)
+            in enumerate(sorted(made, key=lambda entry: entry[0]), 1)}
 
 
 def _article(line: _Timeline, article: _Article,
@@ -645,18 +694,18 @@ def _article(line: _Timeline, article: _Article,
     history = quarter_start(back(quarter_of(line.opening), 1))
     yields = {}
     for position, synthesis in enumerate(article.syntheses):
+        key = f"{article.number}#{position}"
         batch = batches.get((article.number, position), "")
-        _task(line, f"{article.number}#{position}", article.substance,
-              synthesis, batch)
-        if synthesis.ended is not None and synthesis.fills:
+        _task(line, key, article.substance, synthesis, batch)
+        _step_lots(line, key, synthesis, batches)
+        if synthesis.ended is not None:
             yields[position] = batch
     opportunities = sorted(
         (offset, position) for position, synthesis
         in enumerate(article.syntheses) if position in yields
         for offset in synthesis.fills)
-    # An article without an article number has no lots: its syntheses
-    # fill its containers directly.
-    lots = yields if article.numbered else {}
+    # The syntheses of an article without an article number fill its
+    # containers directly, not from their lots.
     taken: dict[int, Decimal] = defaultdict(Decimal)
     found = []
     for turn, size in enumerate(article.sizes):
@@ -664,7 +713,7 @@ def _article(line: _Timeline, article: _Article,
         own = _orders(line, size, history)
         found += [(day, key, count) for day, count in own]
         _size(line, article, turn, size, key, own, opportunities, taken)
-    for position, batch in lots.items():
+    for position, batch in yields.items():
         synthesis = article.syntheses[position]
         made = line.day(synthesis.ended)
         line.add(made, LOT, OpenLot, user=synthesis.by,
@@ -827,28 +876,52 @@ def _entered(line: _Timeline, key: str, size: _Size, turn: int) -> None:
 
 
 def _intermediate(line: _Timeline, intermediate: _Intermediate,
-                  batches: dict[tuple[str, int], str]) -> None:
+                  batches: dict[tuple[str, Any], str]) -> None:
     """Add the task of INTERMEDIATE and the lot it yields the day it
-    ends, made in the lab or bought from the intermediate's
-    supplier."""
+    ends, made in the lab or bought from the intermediate's supplier,
+    and beside a bought lot the lot made in the lab with its batch."""
     synthesis = intermediate.synthesis
     batch = batches[(intermediate.key, 0)]
     key = f"{intermediate.key}#0"
     _task(line, key, intermediate.key, synthesis, batch)
     made = line.day(synthesis.ended)
-    line.add(made, LOT, OpenLot, user=synthesis.by, key=key,
-             substance=intermediate.key,
+    lot = {"user": synthesis.by, "substance": intermediate.key,
+           "unit": intermediate.unit, "batch": batch,
+           "location": line.text(synthesis.location), "made_on": made}
+    line.add(made, LOT, OpenLot, key=key,
              source="bought" if intermediate.supplier else "made",
-             supplier=intermediate.supplier, unit=intermediate.unit,
-             amount=Decimal(intermediate.amount), batch=batch,
-             location=line.text(synthesis.location), made_on=made)
+             supplier=intermediate.supplier,
+             amount=Decimal(intermediate.amount), **lot)
+    if intermediate.made:
+        line.add(made, LOT, OpenLot, key=f"{key}/made", source="made",
+                 supplier="", amount=Decimal(intermediate.made), **lot)
+
+
+def _step_lots(line: _Timeline, key: str, synthesis: _Synthesis,
+               batches: dict[tuple[str, Any], str]) -> None:
+    """Add the lots the steps of the task KEY of SYNTHESIS make, each
+    the day it is made, and the withdrawals from them into its
+    steps."""
+    for index, made in enumerate(synthesis.step_lots):
+        lot = f"{key}/{index}"
+        line.add(line.day(made.made), LOT, OpenLot, user=synthesis.by,
+                 key=lot, substance=made.substance, source="made",
+                 supplier="", unit=made.unit, amount=Decimal(made.amount),
+                 batch=batches[(key, index)],
+                 location=line.text(synthesis.location),
+                 made_on=line.day(made.made), step=(key, made.position))
+        for offset, position, amount in made.withdrawals:
+            line.add(line.day(offset), WITHDRAWAL, Withdraw,
+                     user=synthesis.assignee or synthesis.by, lot=lot,
+                     task=key, position=position, amount=Decimal(amount))
 
 
 def _task(line: _Timeline, key: str, substance: str,
           synthesis: _Synthesis, batch: str) -> None:
     """Add the changes of the task KEY of SYNTHESIS, of the substance
-    SUBSTANCE by its key: its creation, then its start, steps, end,
-    report, QC list and cancellation, each on its day."""
+    SUBSTANCE by its key: its creation, then its start, steps, end or
+    failure, report, QC list and cancellation, each on its day; an end
+    comes after the day's lots."""
     total = len(synthesis.steps) or None
     fields: dict[str, Any] = {
         "substance": substance, "assignee": synthesis.assignee,
@@ -871,15 +944,18 @@ def _task(line: _Timeline, key: str, substance: str,
         if total:
             ended["steps_done"] = total
         later.append((synthesis.ended, ended))
+    if synthesis.failed is not None:
+        later.append((synthesis.failed, {
+            "ended": line.day(synthesis.failed), "failed": True}))
     for offset, name in ((synthesis.report, "report"),
                          (synthesis.qc, "qc_list"),
                          (synthesis.cancelled, "cancelled")):
         if offset is not None:
             later.append((offset, {name: True}))
     for offset, change in sorted(later, key=lambda entry: entry[0]):
-        line.add(line.day(offset), TASK, SaveTask,
-                 user=synthesis.assignee or synthesis.by, key=key,
-                 fields=change)
+        line.add(line.day(offset), END if "ended" in change else TASK,
+                 SaveTask, user=synthesis.assignee or synthesis.by,
+                 key=key, fields=change)
 
 
 def _notes(line: _Timeline, orders: list[tuple[date, str, int]]) -> None:

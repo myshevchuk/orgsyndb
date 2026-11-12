@@ -770,3 +770,45 @@ msgstr "Das Bulk enthält eine andere Substanz."
 
 msgid "Without a molar mass of the substance, enter the amount taken."
 msgstr "Ohne Molmasse der Substanz die entnommene Menge eingeben."
+
+msgid "Withdrawal"
+msgstr "Entnahme"
+
+msgid "Withdraw"
+msgstr "Entnahme"
+
+msgid "Made by step"
+msgstr "Hergestellt in"
+
+msgid "Task step"
+msgstr "Stufe"
+
+msgid "Item or task"
+msgstr "Artikel oder Aufgabe"
+
+msgid "A lot made by a task step is made in the lab."
+msgstr "Ein Bulk aus einer Stufe ist im Labor hergestellt."
+
+msgid "Step %(position)s of task %(number)s does not make %(substance)s."
+msgstr "Stufe %(position)s der Aufgabe %(number)s stellt %(substance)s nicht her."
+
+msgid "Task %(number)s is neither planned nor running."
+msgstr "Die Aufgabe %(number)s ist weder geplant noch in Arbeit."
+
+msgid "Only a withdrawal can be reversed here."
+msgstr "Hier lässt sich nur eine Entnahme stornieren."
+
+msgid "The withdrawal is already reversed."
+msgstr "Die Entnahme ist bereits storniert."
+
+msgid "New bulk lot of %(task)s, %(step)s"
+msgstr "Neues Bulk aus %(task)s, %(step)s"
+
+msgid "Withdrawal from %(lot)s booked."
+msgstr "Entnahme aus %(lot)s gebucht."
+
+msgid "Withdraw from %(lot)s"
+msgstr "Entnahme aus %(lot)s"
+
+msgid "Withdrawal from %(lot)s reversed."
+msgstr "Entnahme aus %(lot)s storniert."

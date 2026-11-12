@@ -196,7 +196,7 @@ class LotAdmin(OpeningOnlyAdmin):
                      "substance__name_de",
                      "substance__article__article_number",
                      "batch", "supplier")
-    readonly_fields = ("substance", "source", "unit", "amount")
+    readonly_fields = ("substance", "source", "unit", "amount", "task_step")
 
 
 class DeliveryLineInline(admin.TabularInline):
@@ -265,7 +265,7 @@ class MovementAdmin(ReadOnlyAdmin):
 @admin.register(LotMovement)
 class LotMovementAdmin(ReadOnlyAdmin):
     list_display = ("lot", "kind", "amount", "amount_after", "date",
-                    "booked_at", "user")
+                    "booked_at", "user", "task_step")
     list_filter = ("kind",)
     list_select_related = ("lot__substance", "user")
     search_fields = ("lot__substance__key", "lot__substance__name",

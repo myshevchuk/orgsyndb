@@ -5,11 +5,11 @@ from datetime import date
 from tasks.models import Task
 
 from . import (berlin, context_form, done_days, edit_data, field_value,
-               frozen, make_task, page, past, sent_messages, substance_for,
-               task_form_data, task_steps, task_url)
+               frozen, make_lot, make_task, page, past, sent_messages,
+               substance_for, task_form_data, task_steps, task_url)
 from .collection_support import (accept, changed_collection,
                                  import_collection, without_ids)
-from .task_support import NEW, TaskCase, history_text
+from .task_support import NEW, TaskCase, history_text, make_product_lot
 
 FIELDS = {"substance", "priority", "assignee", "started", "ended", "sequence",
           "steps_total", "steps_done", "batch", "report", "qc_list",
@@ -69,6 +69,7 @@ class CreateTests(FormCase):
         self.assertIn(f"Task {number} saved.", page(done).text())
 
     def test_all_fields_are_saved(self) -> None:
+        make_lot(self.kl, substance=substance_for("Probe"), batch="B-9")
         self.client.post(NEW, task_form_data(
             substance="probe", priority="low", assignee=str(self.ae.pk),
             started="2025-03-02", ended="2025-03-05", steps_total="5",
@@ -110,14 +111,16 @@ class CreateTests(FormCase):
         names.discard("csrfmiddlewaretoken")
         self.assertEqual(names, FIELDS)
 
-    def test_cancelled_is_on_the_edit_form_only(self) -> None:
+    def test_cancelled_and_failed_are_on_the_edit_form_only(self) -> None:
+        """Requirement: Task forms (cancelled and failed, on the edit
+        form only)."""
         task = make_task(self.kl)
         root = page(self.client.get(task_url(task, "edit")))
         form = root.find("input", name="substance").closest("form")
         names = {e.get("name") for e in
                  form.find_all(("input", "select", "textarea"))}
         names.discard("csrfmiddlewaretoken")
-        self.assertEqual(names, FIELDS | {"cancelled"})
+        self.assertEqual(names, FIELDS | {"cancelled", "failed"})
 
     def test_priority_choices_and_default(self) -> None:
         root = page(self.client.get(NEW))
@@ -160,8 +163,9 @@ class ValidationTests(FormCase):
         self.assertEqual(Task.objects.count(), 0)
 
     def test_same_day_is_allowed(self) -> None:
+        make_lot(self.kl, substance=substance_for("Aspirin"), batch="B-1")
         self.client.post(NEW, task_form_data(
-            started="2025-03-04", ended="2025-03-04"))
+            started="2025-03-04", ended="2025-03-04", batch="B-1"))
         self.assertEqual(self.only_task().state, "ended")
 
     def test_dates_may_not_lie_in_the_future(self) -> None:
@@ -295,7 +299,8 @@ class EditTests(FormCase):
 
     def test_flags_can_be_turned_off(self) -> None:
         task = make_task(self.kl, started=past(1), ended=past(2),
-                         report=True, qc_list=True)
+                         report=True, qc_list=True, batch="B-7")
+        make_product_lot(task)
         data = edit_data(task)
         del data["report"]
         self.client.post(task_url(task, "edit"), data)
@@ -526,8 +531,9 @@ class SequenceFieldTests(FormCase):
     def test_a_withdrawn_sequence_is_kept_by_a_save(self) -> None:
         """Scenario: Sequence gone from the collection (through the
         form)."""
+        make_lot(self.kl, substance=substance_for("Aspirin"), batch="B-1")
         self.create(sequence="SEQ-0001", started="2025-03-01",
-                    ended="2025-03-02")
+                    ended="2025-03-02", batch="B-1")
         task = self.only_task()
         import_collection(without_ids("SEQ-0001"))
         done = self.change(task, report="on")
@@ -623,3 +629,132 @@ class ConsistencyTests(FormCase):
         last.save()
         text = history_text(page(self.client.get(task_url(task))))
         self.assertIn("Stufe 3", text)
+
+
+class ProductLotTests(FormCase):
+    """Requirement: Task record (a task that is ended and has not failed
+    has a batch and a product lot, and a save that would end one without
+    them is refused) and Task forms."""
+
+    def running(self, **fields) -> Task:
+        return make_task(self.kl, "Aspirin", started=past(1), steps=2,
+                         **fields)
+
+    def refused_at(self, response, *fields: str) -> None:
+        """The form is shown again with an error at one of ``fields``."""
+        self.assertEqual(response.status_code, 200)
+        errors = context_form(response).errors
+        self.assertTrue(any(name in errors for name in fields),
+                        f"no error at {fields}: {sorted(errors)}")
+
+    def test_ending_needs_a_product_lot(self) -> None:
+        """Scenario: Ending needs a product lot (through the form)."""
+        task = self.running(batch="B-7")
+        done = self.change(task, ended="2025-03-04")
+        self.refused_at(done, "ended", "batch")
+        task.refresh_from_db()
+        self.assertIsNone(task.ended)
+        self.assertEqual(task.history.count(), 1)
+        make_product_lot(task)
+        done = self.change(task, ended="2025-03-04")
+        self.assertRedirects(done, task_url(task),
+                             fetch_redirect_response=False)
+        task.refresh_from_db()
+        self.assertEqual((task.ended, task.state), (past(4), "ended"))
+
+    def test_ending_needs_a_batch(self) -> None:
+        task = self.running()
+        make_product_lot(task, batch="")
+        self.refused_at(self.change(task, ended="2025-03-04"), "ended",
+                        "batch")
+        task.refresh_from_db()
+        self.assertIsNone(task.ended)
+
+    def test_only_a_made_lot_of_the_substance_and_the_batch_counts(
+            self) -> None:
+        """Requirement: Task record (a made lot of its substance whose
+        batch is the task's batch)."""
+        task = self.running(batch="B-7")
+        make_product_lot(task, source="bought", supplier="Sigma")
+        make_product_lot(task, substance=substance_for("Probe"))
+        make_product_lot(task, batch="B-8")
+        self.refused_at(self.change(task, ended="2025-03-04"), "ended",
+                        "batch")
+        task.refresh_from_db()
+        self.assertIsNone(task.ended)
+
+    def test_a_new_task_that_ended_needs_its_lot_too(self) -> None:
+        data = task_form_data(started="2025-03-01", ended="2025-03-04",
+                              batch="B-7")
+        self.refused_at(self.client.post(NEW, data), "ended", "batch")
+        self.assertEqual(Task.objects.count(), 0)
+        make_lot(self.kl, substance=substance_for("Aspirin"), batch="B-7")
+        self.assertEqual(self.client.post(NEW, data).status_code, 302)
+        self.assertEqual(self.only_task().state, "ended")
+
+    def test_a_task_not_ended_needs_no_lot(self) -> None:
+        task = self.running(batch="B-7")
+        done = self.change(task, note="Notiz")
+        self.assertEqual(done.status_code, 302)
+        task.refresh_from_db()
+        self.assertEqual(task.note, "Notiz")
+
+
+class FailedTaskTests(FormCase):
+    """Requirement: Task forms (failed, on the edit form only; a batch on
+    a failed task is invalid) and Task record."""
+
+    def running(self, **fields) -> Task:
+        return make_task(self.kl, "Aspirin", started=past(1), steps=2,
+                         **fields)
+
+    def test_a_task_is_failed_through_the_form(self) -> None:
+        task = self.running()
+        done = self.change(task, ended="2025-03-04", failed="on")
+        self.assertRedirects(done, task_url(task),
+                             fetch_redirect_response=False)
+        task.refresh_from_db()
+        self.assertEqual((task.state, task.batch, task.ended),
+                         ("failed", "", past(4)))
+        self.assertFalse(task.needs_follow_up)
+        text = page(self.client.get(task_url(task))).text()
+        self.assertIn("Fehlgeschlagen", text)
+
+    def test_a_failed_task_needs_no_product_lot(self) -> None:
+        """Requirement: Task record (a task that is ended and has not
+        failed has a batch and a product lot)."""
+        task = self.running()
+        self.change(task, ended="2025-03-04", failed="on")
+        task = Task.objects.get(pk=task.pk)
+        done = self.change(task, note="Notiz")
+        self.assertEqual(done.status_code, 302)
+        task.refresh_from_db()
+        self.assertEqual((task.note, task.state), ("Notiz", "failed"))
+
+    def test_a_batch_on_a_failed_task_is_refused(self) -> None:
+        """Requirement: Task forms (a batch on a failed task)."""
+        task = self.running(batch="B-8")
+        done = self.change(task, ended="2025-03-04", failed="on")
+        self.assertEqual(done.status_code, 200)
+        errors = context_form(done).errors
+        self.assertTrue("batch" in errors or "failed" in errors,
+                        sorted(errors))
+        task.refresh_from_db()
+        self.assertEqual((task.failed, task.batch, task.ended),
+                         (False, "B-8", None))
+        self.assertEqual(task.history.count(), 1)
+
+    def test_the_flag_can_be_turned_off(self) -> None:
+        task = self.running()
+        self.change(task, ended="2025-03-04", failed="on")
+        task = Task.objects.get(pk=task.pk)
+        data = edit_data(task, ended="")
+        del data["failed"]
+        self.assertEqual(self.client.post(
+            task_url(task, "edit"), data).status_code, 302)
+        task.refresh_from_db()
+        self.assertEqual((task.failed, task.state), (False, "running"))
+
+    def test_the_new_form_has_no_failed_flag(self) -> None:
+        self.client.post(NEW, task_form_data(failed="on"))
+        self.assertFalse(self.only_task().failed)

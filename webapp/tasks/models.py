@@ -9,8 +9,8 @@ from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import F
 from django.utils import timezone
+from django.utils.translation import gettext, pgettext_lazy
 from django.utils.translation import gettext_lazy as _
-from django.utils.translation import pgettext_lazy
 
 from orgsyndb_web.history import RecordedHistory
 
@@ -48,12 +48,13 @@ class State(models.TextChoices):
     PLANNED = "planned", _("Planned")
     RUNNING = "running", _("Running")
     ENDED = "ended", pgettext_lazy("state", "Ended")
+    FAILED = "failed", _("Failed")
     CANCELLED = "cancelled", _("Cancelled")
 
 
 PRIORITY_ORDER = {Priority.HIGH: 0, Priority.MEDIUM: 1, Priority.LOW: 2}
 STATE_ORDER = {State.RUNNING: 0, State.PLANNED: 1, State.ENDED: 2,
-               State.CANCELLED: 3}
+               State.FAILED: 3, State.CANCELLED: 4}
 
 
 class Task(models.Model):
@@ -62,7 +63,9 @@ class Task(models.Model):
 
     A task's number, ``T-`` and at least three digits, is assigned when
     it is first saved and never given again. Its state follows from its
-    dates and its cancelled flag; see ``state``. Its steps are the
+    dates and its cancelled and failed flags; see ``state``. A task
+    that is ended and has not failed has a batch and a product lot; see
+    ``has_product_lot`` and ``clean``. Its steps are the
     ``TaskStep`` rows of ``steps``, which ``tasks.steps`` gives it from
     its ``sequence``, an imported sequence, or as plain steps.
     """
@@ -90,6 +93,7 @@ class Task(models.Model):
     report = models.BooleanField(_("Report"), default=False)
     qc_list = models.BooleanField(_("QC list"), default=False)
     cancelled = models.BooleanField(_("Cancelled"), default=False)
+    failed = models.BooleanField(_("Failed"), default=False)
     note = models.TextField(_("Note"), blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, verbose_name=_("Created by"),
@@ -108,11 +112,13 @@ class Task(models.Model):
 
     @property
     def state(self) -> str:
-        """``cancelled`` when the flag is on, else ``ended`` with an end
-        date, ``running`` with a start date, and ``planned`` without
-        either."""
+        """``cancelled`` when that flag is on, else ``failed`` when that
+        flag is on, else ``ended`` with an end date, ``running`` with a
+        start date, and ``planned`` without either."""
         if self.cancelled:
             return State.CANCELLED
+        if self.failed:
+            return State.FAILED
         if self.ended:
             return State.ENDED
         if self.started:
@@ -126,8 +132,8 @@ class Task(models.Model):
 
     @property
     def needs_follow_up(self) -> bool:
-        """Whether the task is ended, and not cancelled, while its report
-        or QC-list flag is off."""
+        """Whether the task is ended, neither cancelled nor failed, while
+        its report or QC-list flag is off."""
         return self.state == State.ENDED and not (self.report
                                                   and self.qc_list)
 
@@ -153,12 +159,23 @@ class Task(models.Model):
         return (self.state in (State.PLANNED, State.RUNNING)
                 or self.needs_follow_up)
 
+    @property
+    def has_product_lot(self) -> bool:
+        """Whether the task has a batch and a product lot: a lot of its
+        substance, made in the lab, whose batch is the task's."""
+        return bool(self.batch) and self.substance.lots.filter(
+            source="made", batch=self.batch).exists()
+
     def clean(self) -> None:
-        """Check the rules that tie the dates together.
+        """Check the rules that tie the dates, the batch and the product
+        lot together.
 
         Neither date may lie after today, and an end needs a start and
-        may not precede it. Raise ValidationError with the errors by
-        field. The rules of the steps are ``tasks.steps.StepChange``'s.
+        may not precede it. A failed task has no batch. A task that is
+        ended, neither cancelled nor failed, has a batch and a product
+        lot (``has_product_lot``). Raise ValidationError with the errors
+        by field. The rules of the steps are
+        ``tasks.steps.StepChange``'s.
         """
         errors: dict[str, str] = {}
         today = timezone.localdate()
@@ -171,6 +188,18 @@ class Task(models.Model):
                 errors["ended"] = _("An end needs a start.")
             elif self.ended < self.started:
                 errors["ended"] = _("The end may not precede the start.")
+        if self.failed and self.batch:
+            errors["batch"] = _("A failed task has no batch.")
+        elif self.state == State.ENDED and "ended" not in errors \
+                and self.substance_id is not None:
+            if not self.batch:
+                errors["batch"] = _(
+                    "An ended task needs the batch of its product lot.")
+            elif not self.has_product_lot:
+                errors["ended"] = _(
+                    "Record a lot of the product, made in the lab, with "
+                    "the batch %(batch)s before ending the task.") % {
+                        "batch": self.batch}
         if errors:
             raise ValidationError(errors)
 
@@ -241,3 +270,37 @@ class TaskStep(models.Model):
 
     def __str__(self) -> str:
         return f"{self.task.number} {self.position}"
+
+    @property
+    def label(self) -> str:
+        """The step in the active language as ``Step <n>``, its position,
+        followed for a step with an entry by its procedure's ID."""
+        shown = gettext("Step %(position)s") % {"position": self.position}
+        if self.entry_id is None:
+            return shown
+        return f"{shown} · {self.entry.procedure.key}"
+
+    @property
+    def open(self) -> bool:
+        """Whether the step's task is planned or running."""
+        return self.task.state in (State.PLANNED, State.RUNNING)
+
+    def products(self) -> list[Any]:
+        """Return the substances the step makes: its entry's products in
+        their order, or, for a step without an entry, its task's
+        substance."""
+        if self.entry_id is None:
+            return [self.task.substance]
+        return [row.substance for row in self.entry.substances.filter(
+            role="product").select_related("substance").order_by(
+                "position")]
+
+    def substrates(self) -> list[Any] | None:
+        """Return the substances the step takes: its entry's substrates
+        in their order, or None for a step without an entry, which may
+        take any."""
+        if self.entry_id is None:
+            return None
+        return [row.substance for row in self.entry.substances.filter(
+            role="substrate").select_related("substance").order_by(
+                "position")]

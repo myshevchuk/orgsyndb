@@ -6,8 +6,10 @@ from datetime import date
 from urllib.parse import parse_qs, urlsplit
 
 from inventory.models import Lot
+from planning.plan import batch_lots, batch_tasks
 
-from . import field_value, make_substance, make_task, task_url
+from . import (field_value, make_lot, make_substance, make_task,
+               substance_for, task_url)
 from .collection_support import accept
 from .inventory_support import NEW_LOT, lot_data, lot_url
 from .planning_support import PlanningCase
@@ -236,3 +238,100 @@ class NewLotFormTests(BatchCase):
         self.assertEqual(done.status_code, 302)
         lot = Lot.objects.get()
         self.assertEqual((lot.substance.key, lot.batch), ("nv-7", "B-2"))
+
+
+class StepLotTests(BatchCase):
+    """Requirement: Batches between tasks and bulk (a lot made by a step
+    of the task belongs to it too)."""
+
+    def running(self, batch: str = BATCH, steps: int = 2):
+        return make_task(self.kl, substance="CH-0012", batch=batch,
+                         started=date(2026, 10, 1), steps=steps)
+
+    def test_a_lot_made_by_a_step_belongs_to_the_task_whatever_its_batch(
+            self) -> None:
+        task = self.running()
+        step = task.steps.get(position=1)
+        lot = self.lot("CH-0012", batch="B-OTHER", task_step=step)
+        self.assertEqual(batch_lots(task), [lot])
+        self.assertEqual(batch_tasks(lot), [task])
+        self.assertIn(lot_url(lot), hrefs(self.task_page(task)))
+        self.assertIn(task_url(task), hrefs(self.lot_page(lot)))
+
+    def test_a_lot_without_a_batch_made_by_a_step_belongs_too(self) -> None:
+        task = self.running(batch="")
+        lot = self.lot("CH-0012", task_step=task.steps.get(position=2))
+        self.assertEqual(batch_lots(task), [lot])
+        self.assertEqual(batch_tasks(lot), [task])
+
+    def test_an_intermediate_of_another_substance_belongs_to_the_task(
+            self) -> None:
+        task = self.running()
+        lot = make_lot(self.kl, substance=substance_for("acetophenone"),
+                       task_step=task.steps.get(position=1))
+        self.assertEqual(batch_lots(task), [lot])
+        self.assertEqual(batch_tasks(lot), [task])
+        self.assertIn(task_url(task), hrefs(self.lot_page(lot)))
+
+    def test_a_lot_of_the_batch_and_the_step_is_listed_once(self) -> None:
+        task = self.running()
+        lot = self.lot("CH-0012", batch=BATCH,
+                       task_step=task.steps.get(position=2))
+        self.assertEqual(batch_lots(task), [lot])
+        self.assertEqual(batch_tasks(lot), [task])
+
+    def test_the_lots_of_both_kinds_come_in_the_order_of_their_ids(
+            self) -> None:
+        task = self.running()
+        first = self.lot("CH-0012", batch="B-X",
+                         task_step=task.steps.get(position=1))
+        second = self.lot("CH-0012", batch=BATCH)
+        third = self.lot("CH-0012", batch="B-Y",
+                         task_step=task.steps.get(position=2))
+        self.assertEqual(batch_lots(task), [first, second, third])
+
+    def test_the_lot_of_a_step_of_another_task_does_not_belong(self) -> None:
+        task = self.running()
+        other = self.running(batch="B-2")
+        lot = self.lot("CH-0012", batch="B-3",
+                       task_step=other.steps.get(position=1))
+        self.assertEqual(batch_lots(task), [])
+        self.assertEqual(batch_tasks(lot), [other])
+        self.assertNotIn(lot_url(lot), hrefs(self.task_page(task)))
+        self.assertNotIn(task_url(task), hrefs(self.lot_page(lot)))
+
+    def test_a_task_belonging_by_batch_and_another_by_step_are_both_listed(
+            self) -> None:
+        by_step = self.running(batch="B-2")
+        by_batch = make_task(self.kl, substance="CH-0012", batch=BATCH)
+        lot = self.lot("CH-0012", batch=BATCH,
+                       task_step=by_step.steps.get(position=1))
+        self.assertEqual(batch_tasks(lot), [by_step, by_batch])
+
+
+class BulkFromAStepTests(BatchCase):
+
+    def test_bulk_from_a_tasks_step(self) -> None:
+        """Scenario: Bulk from a task's step."""
+        task = make_task(self.kl, substance="CH-0012", batch=BATCH,
+                         started=date(2026, 10, 1), steps=2)
+        last = task.steps.get(position=2)
+        root = self.task_page(task, signed_in=True)
+        items = root.find("ol").find_all("li")
+        links = [a for a in items[-1].find_all("a")
+                 if a.text() in ("Los erfassen", "Record a lot")]
+        self.assertEqual([a.get("href") for a in links],
+                         [f"{NEW_LOT}?step={last.pk}"])
+        href = links[0].get("href")
+        form = self.get(href)
+        done = self.client.post(href, lot_data(
+            substance=field_value(form, "substance"),
+            batch=field_value(form, "batch"),
+            made_on=field_value(form, "made_on"), amount="50"))
+        self.assertEqual(done.status_code, 302)
+        lot = Lot.objects.get()
+        self.assertEqual((lot.substance.key, lot.source, lot.batch,
+                          lot.task_step),
+                         ("cinnamic-acid", "made", BATCH, last))
+        self.assertIn(lot_url(lot), hrefs(self.task_page(task)))
+        self.assertIn(task_url(task), hrefs(self.lot_page(lot)))

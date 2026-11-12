@@ -110,6 +110,32 @@ class ArticleSynthesisTests(PlanningCase):
                   ended=date(2026, 10, 1), cancelled=True)
         self.assertEqual(self.times(), (12, 3))
 
+    def test_a_failed_task_does_not_count(self) -> None:
+        """Scenario: A failed task does not count."""
+        for days, ago in ((10, 300), (12, 200), (15, 100)):
+            self.synthesis("NV-1", days, TODAY - timedelta(days=ago))
+        self.synthesis("NV-1", 40, TODAY - timedelta(days=10),
+                       failed=True)
+        self.assertEqual(self.times(), (15, 3))
+
+    def test_a_failed_task_alone_leaves_the_default(self) -> None:
+        """Requirement: Synthesis time (neither cancelled nor failed)."""
+        self.synthesis("NV-1", 10, TODAY - timedelta(days=100))
+        self.synthesis("NV-1", 60, TODAY - timedelta(days=10),
+                       failed=True)
+        self.assertEqual(self.times(), (21, None))
+
+    def test_a_failed_task_does_not_take_the_place_of_a_synthesis(
+            self) -> None:
+        """Requirement: Synthesis time (the last three that are neither
+        cancelled nor failed)."""
+        for days, ago in ((50, 400), (10, 300), (12, 200), (15, 100)):
+            self.synthesis("NV-1", days, TODAY - timedelta(days=ago))
+        for ago in (20, 10):
+            self.synthesis("NV-1", 90, TODAY - timedelta(days=ago),
+                           failed=True)
+        self.assertEqual(self.times(), (15, 3))
+
     def test_planned_and_running_tasks_are_left_out(self) -> None:
         for days in (10, 11, 12):
             self.synthesis("NV-1", days, date(2026, 9, 1))

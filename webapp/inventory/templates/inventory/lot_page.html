@@ -5,7 +5,8 @@
 {% if user.is_authenticated %}<div class="lab-actions">
 <a href="/lab/inventory/bulk/{{ lot.pk }}/correct/">{% translate "Correct" %}</a>
 <a href="/lab/inventory/bulk/{{ lot.pk }}/edit/">{% translate "Edit" %}</a>
-</div>
+{% if lot.amount %}<a href="/lab/inventory/bulk/{{ lot.pk }}/withdraw/">{% translate "Withdraw" %}</a>
+{% endif %}</div>
 {% endif %}<dl class="metadata">
 <dt>{% translate "Substance" %}</dt>
 <dd>{% substance lot.substance %}</dd>
@@ -24,26 +25,29 @@
 <dd>{{ lot.location|default:"–" }}</dd>
 <dt>{% translate "Date" %}</dt>
 <dd>{{ lot.made_on|default_if_none:"–" }}</dd>
-</dl>
+{% if lot.task_step %}<dt>{% translate "Made by step" %}</dt>
+<dd><a href="/lab/tasks/{{ lot.task_step.task.number }}/">{{ lot.task_step.task.number }}</a> · {{ lot.task_step.label }}</dd>
+{% endif %}</dl>
 {% if lot.note %}<h2>{% translate "Note" context "inventory" %}</h2>
 <div class="lab-note">{{ lot.note|linebreaks }}</div>
 {% endif %}<h2>{% translate "Movements" %}</h2>
 <div class="table-scroll">
 <table class="inventory-table">
 <thead>
-<tr><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Booked at" %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col">{% translate "Amount" %}</th><th scope="col">{% translate "Amount after" %}</th><th scope="col">{% translate "User" %}</th><th scope="col">{% translate "Item" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th></tr>
+<tr><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Booked at" %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col">{% translate "Amount" %}</th><th scope="col">{% translate "Amount after" %}</th><th scope="col">{% translate "User" %}</th><th scope="col">{% translate "Item or task" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th></tr>
 </thead>
 <tbody>
-{% for movement, item in ledger %}<tr>
+{% for row in ledger %}{% with movement=row.movement item=row.item %}<tr>
 <td>{{ movement.date }}</td>
 <td>{{ movement.booked_at }}</td>
 <td>{{ movement.get_kind_display }}</td>
 <td class="number">{{ movement.amount|in_lot_unit:lot }}</td>
 <td class="number">{{ movement.amount_after|in_lot_unit:lot }}</td>
 <td>{% person movement.user %}</td>
-<td>{% if item %}<a href="/lab/inventory/items/{{ item.pk }}/">{% if item.article_number %}{{ item.article_number }} · {% endif %}{{ item.container }}</a>{% endif %}</td>
+<td>{% if item %}<a href="/lab/inventory/items/{{ item.pk }}/">{% if item.article_number %}{{ item.article_number }} · {% endif %}{{ item.container }}</a>{% elif movement.task_step %}<a href="/lab/tasks/{{ movement.task_step.task.number }}/">{{ movement.task_step.task.number }}</a> · {{ movement.task_step.label }}{% elif movement.reverses %}{{ movement.reverses.get_kind_display }} {{ movement.reverses.date }}{% endif %}{% if row.reversible and user.is_authenticated %}
+<form method="post" action="/lab/inventory/bulk/movements/{{ movement.pk }}/reverse/">{% csrf_token %}<button type="submit">{% translate "Reverse" %}</button></form>{% endif %}</td>
 <td>{{ movement.note }}</td>
-</tr>
+</tr>{% endwith %}
 {% endfor %}</tbody>
 </table>
 </div>

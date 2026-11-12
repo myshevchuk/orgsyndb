@@ -7,7 +7,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
 from django.test import SimpleTestCase, TestCase
 
-from tasks.models import Task
+from tasks.models import State, Task
 
 from . import (berlin, done_days, frozen, make_task, make_user, past,
                substance_for, task_steps, task_url)
@@ -38,6 +38,37 @@ class StateTests(SimpleTestCase):
         self.assertEqual(
             Task(started=past(1), cancelled=True).state,
             "cancelled")
+
+    def test_a_failed_task_is_failed(self) -> None:
+        """Scenario: A failed synthesis (the state `failed`)."""
+        task = Task(started=past(1), ended=past(2), failed=True)
+        self.assertEqual(task.state, "failed")
+        self.assertEqual(State.FAILED, "failed")
+        self.assertIn("failed", State.values)
+
+    def test_a_failed_task_needs_no_follow_up(self) -> None:
+        """Scenario: A failed synthesis (it needs no follow-up)."""
+        for report, qc_list in ((False, False), (True, False),
+                                (True, True)):
+            with self.subTest(report=report, qc_list=qc_list):
+                task = Task(started=past(1), ended=past(2), failed=True,
+                            report=report, qc_list=qc_list)
+                self.assertFalse(task.needs_follow_up)
+
+    def test_cancelled_outranks_failed(self) -> None:
+        """Requirement: Task record (the state is `cancelled` when that
+        flag is on, else `failed`)."""
+        task = Task(started=past(1), ended=past(2), failed=True,
+                    cancelled=True)
+        self.assertEqual(task.state, "cancelled")
+        self.assertFalse(task.needs_follow_up)
+
+    def test_failed_outranks_the_dates(self) -> None:
+        for dates in ({}, {"started": past(1)},
+                      {"started": past(1), "ended": past(2)}):
+            with self.subTest(dates=dates):
+                self.assertEqual(Task(failed=True, **dates).state,
+                                 "failed")
 
     def test_follow_up(self) -> None:
         """Scenario: Follow-up."""
@@ -87,6 +118,7 @@ class DefaultTests(TestCase):
         self.assertFalse(task.report)
         self.assertFalse(task.qc_list)
         self.assertFalse(task.cancelled)
+        self.assertIs(task.failed, False)
         self.assertFalse(task.note)
         self.assertEqual(task.created_by, self.kl)
         self.assertIsNotNone(task.created_at)
@@ -178,6 +210,19 @@ class HistoryTests(TestCase):
         self.assertEqual(newest.history_user, self.kl)
         self.assertEqual(newest.priority, "high")
         self.assertEqual(task.history.last().priority, "medium")
+
+    def test_the_failed_flag_is_kept_in_the_history(self) -> None:
+        """Requirement: Task record (`failed`; tasks keep a change
+        history)."""
+        task = make_task(self.kl, started=past(1), batch="B-8")
+        task._history_user = self.kl
+        task.failed = True
+        task.batch = ""
+        task.ended = past(1)
+        task.save()
+        newest = task.history.first()
+        self.assertEqual((newest.failed, newest.batch), (True, ""))
+        self.assertIs(task.history.last().failed, False)
 
     def test_history_names_the_task(self) -> None:
         task = make_task(self.kl)

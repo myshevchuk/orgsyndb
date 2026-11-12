@@ -109,13 +109,21 @@ def clear() -> None:
     first.
 
     Reversals go before the movements they reverse, movements before
-    the notes and lots they name, records before the substances and
-    terms they name, tasks and their steps before the sequences, entries
-    and imports they name, sequence steps before the entries they name,
-    and terms and imports are taken out of their trees and chains before
-    they are deleted, as each protects the other otherwise.
+    the notes, lots and task steps they name, lots before the task steps
+    that made them, records before the substances and terms they name,
+    tasks and their steps before the sequences, entries and imports they
+    name, sequence steps before the entries they name, and terms and
+    imports are taken out of their trees and chains before they are
+    deleted, as each protects the other otherwise.
     """
     lock.hold()
+    Movement.objects.exclude(reverses=None).delete()
+    Movement.objects.all().delete()
+    DeliveryLine.objects.all().delete()
+    DeliveryNote.objects.all().delete()
+    LotMovement.objects.exclude(reverses=None).delete()
+    LotMovement.objects.all().delete()
+    Lot.objects.all().delete()
     TaskStep.objects.all().delete()
     Task.objects.all().delete()
     Step.objects.all().delete()
@@ -125,12 +133,6 @@ def clear() -> None:
     Procedure.objects.all().delete()
     Import.objects.update(base=None)
     Import.objects.all().delete()
-    Movement.objects.exclude(reverses=None).delete()
-    Movement.objects.all().delete()
-    DeliveryLine.objects.all().delete()
-    DeliveryNote.objects.all().delete()
-    LotMovement.objects.all().delete()
-    Lot.objects.all().delete()
     EnteredConsumption.objects.all().delete()
     Item.objects.all().delete()
     Article.objects.all().delete()
@@ -237,7 +239,14 @@ class _Writer:
                     source=change.source, supplier=change.supplier,
                     unit=change.unit, amount=change.amount,
                     batch=change.batch, location=change.location,
-                    made_on=change.made_on, date=day)
+                    made_on=change.made_on, date=day,
+                    task_step=self.step(*change.step) if change.step
+                    else None)
+            case data.Withdraw():
+                bookings.withdraw(user, self.lots[change.lot],
+                                  task_step=self.step(change.task,
+                                                      change.position),
+                                  amount=change.amount, date=day)
             case data.Fill():
                 bookings.fill(user, self.items[change.item],
                               count=change.count, date=day,
@@ -260,6 +269,10 @@ class _Writer:
                 self.save_task(user, change.key, change.fields)
             case _:
                 raise TypeError(f"unknown change: {change!r}")
+
+    def step(self, task: str, position: int) -> TaskStep:
+        """Return the step at POSITION of the task TASK."""
+        return self.tasks[task].steps.get(position=position)
 
     def account(self, change: data.CreateAccount) -> Any:
         """Create the account of CHANGE, with the password

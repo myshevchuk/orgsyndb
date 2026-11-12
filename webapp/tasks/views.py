@@ -1,7 +1,7 @@
 """The task list, the task page, its actions and its forms."""
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from django.contrib import messages
@@ -15,6 +15,7 @@ from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy, pgettext_lazy
 from django.views.decorators.http import require_POST
 
+from inventory.models import Lot, LotMovement
 from orgsyndb_web import lock
 from planning.plan import Plan, TaskPriority, batch_lots, bulk_link
 from tasks.forms import TaskEditForm, TaskForm
@@ -130,50 +131,84 @@ def task_list(request: HttpRequest) -> HttpResponse:
 
 @dataclass(frozen=True)
 class Step:
-    """A step of a task as its page lists it: its POSITION; its
+    """A step of a task as its page lists it: its ID and POSITION; its
     PROCEDURE's ID, empty for a step without an entry, and whether the
     procedure is KNOWN, not withdrawn; the NUMBER of its entry, its
     position, for an entry of a general procedure that is not
     withdrawn, else None; the SIGNATURE of its entry when the entry is
-    withdrawn, else empty; and the day it was DONE_ON, or None."""
+    withdrawn, else empty; the day it was DONE_ON, or None; the LOTS it
+    made and the WITHDRAWALS booked into it, in the order of their IDs;
+    and the open lots OFFERED for a withdrawal into it, empty unless
+    the page offers one."""
 
+    id: int
     position: int
     procedure: str
     known: bool
     number: int | None
     signature: str
     done_on: Any
+    lots: list[Lot] = field(default_factory=list)
+    withdrawals: list[LotMovement] = field(default_factory=list)
+    offered: list[Lot] = field(default_factory=list)
 
 
-def shown_step(step: TaskStep) -> Step:
+def shown_step(step: TaskStep, offer: bool = False) -> Step:
     """Return STEP, its entry and procedure read, as its task's page
-    lists it."""
+    lists it, with the lots it made and the withdrawals into it; when
+    OFFER, with the open lots of its substrates, or of any substance
+    for a step without an entry, as those offered for a withdrawal."""
+    records = {
+        "id": step.pk, "position": step.position, "done_on": step.done_on,
+        "lots": list(step.lots.select_related("substance").order_by("id")),
+        "withdrawals": list(step.lot_movements.filter(
+            kind=LotMovement.Kind.WITHDRAWAL).select_related(
+                "lot__substance", "reversal").order_by("id")),
+        "offered": offered_lots(step) if offer else []}
     entry = step.entry
     if entry is None:
-        return Step(position=step.position, procedure="", known=False,
-                    number=None, signature="", done_on=step.done_on)
+        return Step(procedure="", known=False, number=None, signature="",
+                    **records)
     procedure = entry.procedure
     return Step(
-        position=step.position, procedure=procedure.key,
-        known=not procedure.withdrawn,
+        procedure=procedure.key, known=not procedure.withdrawn,
         number=entry.position if procedure.general and not entry.withdrawn
         else None,
-        signature=entry.signature if entry.withdrawn else "",
-        done_on=step.done_on)
+        signature=entry.signature if entry.withdrawn else "", **records)
+
+
+def offered_lots(step: TaskStep) -> list[Lot]:
+    """Return the open lots a withdrawal into STEP may come from: those
+    of its substrates, or of any substance for a step without an entry,
+    by substance key and then by ID."""
+    lots = Lot.objects.filter(amount__gt=0).select_related("substance")
+    substrates = step.substrates()
+    if substrates is not None:
+        lots = lots.filter(substance__in=substrates)
+    return list(lots.order_by("substance__key", "id"))
 
 
 def task_page(request: HttpRequest, number: str) -> HttpResponse:
     """Show the task NUMBER with its priority, sequence, steps, actions,
-    the forecast of each article it matches, the lots of its batch and
-    its history; answer 404 for an unknown number."""
+    the forecast of each article it matches, the lots that belong to it
+    and its history; answer 404 for an unknown number.
+
+    Each step lists the lots it made and the withdrawals into it. For a
+    signed-in user, while the task is planned or running, each step
+    offers to record a lot it made and a withdrawal from the open lots
+    ``offered_lots`` gives.
+    """
     task = get_object_or_404(Task.objects.select_related(
         "assignee", "created_by", "substance", "sequence"), number=number)
     plan = Plan(timezone.localdate())
     steps = task.steps.select_related("entry__procedure").order_by(
         "position")
+    recording = request.user.is_authenticated and task.state in (
+        State.PLANNED, State.RUNNING)
     return render(request, "tasks/page.html", {
         "task": task,
-        "steps": [shown_step(step) for step in steps],
+        "steps": [shown_step(step, recording) for step in steps],
+        "recording": recording,
         "sequence_known": task.sequence is not None
         and not task.sequence.withdrawn,
         "actions": [(name, action.label)
@@ -247,6 +282,13 @@ def _end(task: Task) -> str:
     return _("Task %(number)s ended.")
 
 
+def _fail(task: Task) -> str:
+    task.failed = True
+    task.batch = ""
+    task.ended = timezone.localdate()
+    return _("Task %(number)s failed.")
+
+
 def _report(task: Task) -> str:
     task.report = True
     return _("The report of task %(number)s is done.")
@@ -283,8 +325,17 @@ ACTIONS = {
         gettext_lazy("Only a running task with steps left can finish a "
                      "step."), ()),
     "end": Action(
-        gettext_lazy("End"), lambda t: t.state == State.RUNNING, _end,
-        gettext_lazy("Only a running task can be ended."), ("ended",)),
+        gettext_lazy("End"),
+        lambda t: t.state == State.RUNNING and t.has_product_lot, _end,
+        gettext_lazy("Only a running task with a batch and a product lot, "
+                     "a lot of its product made in the lab with that "
+                     "batch, can be ended."), ("ended",)),
+    "fail": Action(
+        gettext_lazy("Failed"),
+        lambda t: t.state == State.RUNNING and not t.has_product_lot,
+        _fail,
+        gettext_lazy("Only a running task without a product lot can "
+                     "fail."), ("failed", "batch", "ended")),
     "report": Action(
         gettext_lazy("Report done"),
         lambda t: t.state == State.ENDED and not t.report, _report,

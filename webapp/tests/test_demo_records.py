@@ -579,6 +579,8 @@ class TaskTests(SeededCase):
         self.assertTrue(Task.objects.filter(assignee=None).exists())
 
     def test_the_position_without_a_number_has_its_task(self) -> None:
+        """Requirement: Demo tasks and parameters (an ended task of
+        `1-phenylethanol` with a batch and its product lot)."""
         from planning.plan import batch_lots
         from tasks.models import State, Task
         tasks = list(Task.objects.filter(substance__key=NUMBERLESS[1]))
@@ -588,14 +590,13 @@ class TaskTests(SeededCase):
         for task in ended:
             with self.subTest(task=task.number):
                 self.assertTrue(task.batch)
-                self.assertEqual(batch_lots(task), [])
+                self.assertTrue(batch_lots(task))
 
     def test_batches_link_tasks_and_lots(self) -> None:
         from inventory.models import Lot
         from planning.plan import batch_lots, batch_tasks
         from tasks.models import State, Task
         batched = [task for task in Task.objects.exclude(batch="")
-                   .exclude(substance__key=NUMBERLESS[1])
                    if task.state == State.ENDED]
         self.assertTrue(batched)
         for task in batched:
@@ -604,6 +605,84 @@ class TaskTests(SeededCase):
         for lot in Lot.objects.all():
             with self.subTest(lot=str(lot)):
                 self.assertTrue(batch_tasks(lot))
+
+    def test_ended_tasks_have_their_lots(self) -> None:
+        """Scenario: Ended tasks have their lots (every ended task that
+        has not failed has a batch and a product lot)."""
+        from inventory.models import Lot
+        from planning.plan import batch_lots
+        from tasks.models import State, Task
+        ended = [task for task in Task.objects.all()
+                 if task.state == State.ENDED]
+        self.assertTrue(ended)
+        for task in ended:
+            with self.subTest(task=task.number):
+                self.assertTrue(task.batch)
+                self.assertFalse(task.failed)
+                product = Lot.objects.filter(
+                    source="made", substance=task.substance,
+                    batch=task.batch)
+                self.assertTrue(product.exists())
+                self.assertTrue(set(product) <= set(batch_lots(task)))
+
+    def test_one_task_failed(self) -> None:
+        """Scenario: Ended tasks have their lots (one task is failed and
+        has no batch)."""
+        from tasks.models import State, Task
+        failed = Task.objects.filter(failed=True)
+        self.assertEqual(failed.count(), 1)
+        task = failed.get()
+        self.assertEqual(task.state, State.FAILED)
+        self.assertEqual(task.batch, "")
+        self.assertIsNotNone(task.ended)
+        self.assertFalse(task.needs_follow_up)
+        self.assertIn("Fehlgeschlagen",
+                      self.get(f"/lab/tasks/{task.number}/").text())
+
+    def test_a_step_made_a_lot_withdrawn_in_part_into_the_next(
+            self) -> None:
+        """Scenario: Ended tasks have their lots (one lot was made by a
+        task step and has a withdrawal into another step of the same
+        task); Requirement: Demo tasks and parameters (a running task of
+        a sequence with the first step done, which made a lot of its
+        intermediate, withdrawn in part into the second)."""
+        from inventory.models import Lot, LotMovement
+        from tasks.models import State, Task
+        made = list(Lot.objects.exclude(task_step=None))
+        self.assertTrue(made)
+        withdrawn = [
+            lot for lot in made
+            if lot.movements.filter(
+                kind=LotMovement.Kind.WITHDRAWAL,
+                task_step__task=lot.task_step.task).exclude(
+                    task_step=lot.task_step).exists()]
+        self.assertTrue(withdrawn)
+        found = []
+        for lot in withdrawn:
+            task = lot.task_step.task
+            first, second = task.steps.order_by("position")
+            if (task.state == State.RUNNING and task.sequence is not None
+                    and lot.task_step == first and first.done_on
+                    and second.done_on is None):
+                found.append((lot, task, first, second))
+        self.assertTrue(found)
+        for lot, task, first, second in found:
+            with self.subTest(lot=str(lot)):
+                self.assertEqual(lot.source, "made")
+                self.assertTrue(first.entry.substances.filter(
+                    role="product", substance=lot.substance).exists())
+                taken = lot.movements.get(
+                    kind=LotMovement.Kind.WITHDRAWAL)
+                self.assertEqual(taken.task_step, second)
+                self.assertGreater(lot.amount, 0)
+                self.assertLess(
+                    lot.amount,
+                    lot.movements.get(kind=LotMovement.Kind.OPENING)
+                    .amount)
+                self.assertEqual(
+                    lot.amount, taken.amount_after)
+                text = self.get(f"/lab/inventory/bulk/{lot.pk}/").text()
+                self.assertIn(task.number, text)
 
     def test_numbers_follow_creation(self) -> None:
         from tasks.models import Task

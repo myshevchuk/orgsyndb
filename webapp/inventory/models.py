@@ -285,8 +285,9 @@ class Lot(models.Model):
 
     The amount is kept in the base unit of the lot's unit, mg or µmol,
     and changes only by the lot's movements. A lot at zero is used up.
-    The substance, source and unit are fixed once the lot exists. A lot
-    belongs to every item of its substance's article.
+    A lot made in the lab may name the TASK_STEP that made it, never a
+    bought one. The substance, source, unit and step are fixed once the
+    lot exists. A lot belongs to every item of its substance's article.
     """
 
     substance = models.ForeignKey(
@@ -301,6 +302,10 @@ class Lot(models.Model):
     batch = models.CharField(_("Batch"), max_length=100, blank=True)
     location = models.CharField(_("Location"), max_length=100, blank=True)
     made_on = models.DateField(_("Date"), null=True, blank=True)
+    task_step = models.ForeignKey(
+        "tasks.TaskStep", verbose_name=_("Made by step"),
+        on_delete=models.PROTECT, null=True, blank=True,
+        related_name="lots")
     note = models.TextField(pgettext_lazy("inventory", "Note"), blank=True)
 
     history = RecordedHistory(excluded_fields=["amount"])
@@ -312,7 +317,35 @@ class Lot(models.Model):
         constraints = [
             models.CheckConstraint(condition=Q(amount__gte=0),
                                    name="inventory_lot_amount_not_negative"),
+            models.CheckConstraint(
+                condition=Q(task_step__isnull=True) | Q(source=Source.MADE),
+                name="inventory_lot_step_made"),
         ]
+
+    def clean(self) -> None:
+        """Refuse a change of the batch of a made lot that would leave a
+        task without its product lot: an ended task of the lot's
+        substance and old batch that has neither failed nor been
+        cancelled, when no other made lot of that substance carries the
+        old batch."""
+        super().clean()
+        if self.pk is None or self.source != "made":
+            return
+        stored = type(self).objects.filter(pk=self.pk).values_list(
+            "batch", flat=True).first()
+        if not stored or stored == self.batch:
+            return
+        from tasks.models import Task
+        orphaned = Task.objects.filter(
+            substance_id=self.substance_id, batch=stored,
+            ended__isnull=False, cancelled=False, failed=False).exists()
+        others = type(self).objects.filter(
+            substance_id=self.substance_id, source="made",
+            batch=stored).exclude(pk=self.pk).exists()
+        if orphaned and not others:
+            raise ValidationError({"batch": _(
+                "An ended task has this lot as its only product lot; "
+                "its batch cannot change.")})
 
     def __str__(self) -> str:
         shown = f"{self.substance.shown_name} {self.batch or f'#{self.pk}'}"
@@ -345,11 +378,18 @@ class Lot(models.Model):
 
 class LotMovement(models.Model):
     """A change of a lot's amount: AMOUNT in the lot's base unit, and
-    AMOUNT_AFTER, the lot's amount once it was booked."""
+    AMOUNT_AFTER, the lot's amount once it was booked.
+
+    A withdrawal names the TASK_STEP the amount went into; no other kind
+    names a step. The reversal of a withdrawal names it as REVERSES, and
+    a withdrawal is reversed at most once; the reversal of a filling is
+    named by the item's movement instead.
+    """
 
     class Kind(models.TextChoices):
         OPENING = "opening", _("Opening amount")
         FILLING = "filling", _("Filling")
+        WITHDRAWAL = "withdrawal", _("Withdrawal")
         CORRECTION = "correction", _("Correction")
         REVERSAL = "reversal", _("Reversal")
 
@@ -367,11 +407,27 @@ class LotMovement(models.Model):
                              verbose_name=_("User"),
                              on_delete=models.PROTECT, related_name="+")
     note = models.TextField(pgettext_lazy("inventory", "Note"), blank=True)
+    task_step = models.ForeignKey(
+        "tasks.TaskStep", verbose_name=_("task step"),
+        on_delete=models.PROTECT, null=True, blank=True,
+        related_name="lot_movements")
+    reverses = models.OneToOneField(
+        "self", verbose_name=_("Reverses"), on_delete=models.PROTECT,
+        null=True, blank=True, related_name="reversal")
 
     class Meta:
         ordering = ["-id"]
         verbose_name = _("bulk movement")
         verbose_name_plural = _("bulk movements")
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(kind="withdrawal", task_step__isnull=False)
+                | (~Q(kind="withdrawal") & Q(task_step__isnull=True)),
+                name="inventory_lotmovement_withdrawal_step"),
+            models.CheckConstraint(
+                condition=Q(reverses__isnull=True) | Q(kind="reversal"),
+                name="inventory_lotmovement_reverses"),
+        ]
 
     def __str__(self) -> str:
         return f"{self.lot} {self.get_kind_display()}"

@@ -5,16 +5,17 @@ from datetime import date, datetime, timezone
 from django.contrib import messages
 
 from . import (berlin, done_days, frozen, make_task, page, past,
-               sent_messages, task_steps, task_url)
+               sent_messages, substance_for, task_steps, task_url)
 from .collection_support import accept
-from .task_support import TaskCase, history_text
+from .task_support import TaskCase, history_text, make_product_lot
 
-ACTIONS = ("start", "step", "end", "report", "qc-list")
+ACTIONS = ("start", "step", "end", "fail", "report", "qc-list")
 LABELS_DE = {"start": "Beginnen", "step": "Stufe erledigt",
-             "end": "Abschließen", "report": "Bericht erledigt",
-             "qc-list": "Auf QC-Liste"}
+             "end": "Abschließen", "fail": "Fehlgeschlagen",
+             "report": "Bericht erledigt", "qc-list": "Auf QC-Liste"}
 LABELS_EN = {"start": "Start", "step": "Step done", "end": "End",
-             "report": "Report done", "qc-list": "On QC list"}
+             "fail": "Failed", "report": "Report done",
+             "qc-list": "On QC list"}
 TODAY = date(2026, 11, 4)
 
 
@@ -180,7 +181,9 @@ class EndTests(ActionCase):
     def test_end_completes_the_open_steps(self) -> None:
         """Requirement: Task actions (`end` marks every step not done as
         done today)."""
-        task = make_task(self.kl, started=past(1), steps=4, done=1)
+        task = make_task(self.kl, started=past(1), steps=4, done=1,
+                         batch="B-7")
+        make_product_lot(task)
         done = self.act(task, "end", berlin(2026, 11, 6))
         self.assertRedirects(done, task_url(task),
                              fetch_redirect_response=False)
@@ -191,7 +194,8 @@ class EndTests(ActionCase):
         self.assertEqual(task.progress, 100)
 
     def test_end_without_steps(self) -> None:
-        task = make_task(self.kl, started=past(1))
+        task = make_task(self.kl, started=past(1), batch="B-7")
+        make_product_lot(task)
         self.act(task, "end")
         task.refresh_from_db()
         self.assertEqual(task.ended, TODAY)
@@ -213,7 +217,8 @@ class EndTests(ActionCase):
     def test_the_steps_changes_are_recorded(self) -> None:
         """Requirement: Task actions (records the change in its
         history)."""
-        task = make_task(self.kl, started=past(1), steps=2)
+        task = make_task(self.kl, started=past(1), steps=2, batch="B-7")
+        make_product_lot(task)
         self.act(task, "end")
         for step in task.steps.all():
             with self.subTest(position=step.position):
@@ -224,8 +229,9 @@ class EndTests(ActionCase):
     def test_steps_through_actions(self) -> None:
         """Scenario: Steps through actions."""
         with frozen(berlin(2026, 11, 3)):
-            self.create(steps_total="2")
+            self.create(steps_total="2", batch="B-7")
         task = self.only_task()
+        make_product_lot(task)
         self.act(task, "start", berlin(2026, 11, 4))
         self.act(task, "step", berlin(2026, 11, 5, 15))
         self.act(task, "end", berlin(2026, 11, 6))
@@ -249,6 +255,169 @@ class EndTests(ActionCase):
         self.assertEqual(task.steps.get(position=1).history.count(), 2)
         self.assertEqual(task.steps.get(position=2).history.count(), 2)
         self.assertIn("Angelegt", text)
+
+
+class ProductLotTests(ActionCase):
+    """Requirement: Task record (a task that is ended and has not failed
+    has a batch and a product lot) and Task actions (`end`)."""
+
+    def running(self, **fields):
+        return make_task(self.kl, "Aspirin", started=past(1), steps=2,
+                         **fields)
+
+    def test_ending_needs_a_product_lot(self) -> None:
+        """Scenario: Ending needs a product lot."""
+        task = self.running(batch="B-7")
+        done = self.act(task, "end")
+        self.assertRedirects(done, task_url(task),
+                             fetch_redirect_response=False)
+        task.refresh_from_db()
+        self.assertIsNone(task.ended)
+        self.assertEqual(task.state, "running")
+        self.assertEqual(done_days(task), [None, None])
+        self.assertEqual(task.history.count(), 1)
+        self.assertEqual([m.level for m in sent_messages(done)],
+                         [messages.ERROR])
+        make_product_lot(task)
+        self.act(task, "end")
+        task.refresh_from_db()
+        self.assertEqual(task.ended, TODAY)
+        self.assertEqual(task.state, "ended")
+
+    def test_ending_needs_a_batch(self) -> None:
+        task = self.running()
+        make_product_lot(task, batch="B-7")
+        done = self.act(task, "end")
+        task.refresh_from_db()
+        self.assertIsNone(task.ended)
+        self.assertEqual(sent_messages(done)[0].level, messages.ERROR)
+
+    def test_only_a_made_lot_of_the_substance_and_the_batch_counts(
+            self) -> None:
+        """Requirement: Task record (a made lot of its substance whose
+        batch is the task's batch)."""
+        task = self.running(batch="B-7")
+        make_product_lot(task, source="bought", supplier="Sigma")
+        make_product_lot(task, substance=substance_for("Probe"))
+        make_product_lot(task, batch="B-8")
+        make_product_lot(task, batch="B-77")
+        self.act(task, "end")
+        task.refresh_from_db()
+        self.assertIsNone(task.ended)
+
+    def test_a_lot_of_a_step_with_another_batch_is_no_product_lot(
+            self) -> None:
+        task = self.running(batch="B-7")
+        make_product_lot(task, batch="B-8", task_step=task.steps.first())
+        self.act(task, "end")
+        task.refresh_from_db()
+        self.assertIsNone(task.ended)
+
+
+class FailTests(ActionCase):
+
+    def running(self, **fields):
+        return make_task(self.kl, "Aspirin", started=past(1), steps=2,
+                         done=1, **fields)
+
+    def test_a_failed_synthesis(self) -> None:
+        """Scenario: A failed synthesis."""
+        task = self.running(batch="B-8")
+        done = self.act(task, "fail")
+        self.assertRedirects(done, task_url(task),
+                             fetch_redirect_response=False)
+        task.refresh_from_db()
+        self.assertEqual((task.ended, task.batch, task.failed),
+                         (TODAY, "", True))
+        self.assertEqual(task.state, "failed")
+        self.assertFalse(task.needs_follow_up)
+        self.assertEqual(len(sent_messages(done)), 1)
+        self.assertNotEqual(sent_messages(done)[0].level, messages.ERROR)
+
+    def test_the_steps_stay_as_they_are(self) -> None:
+        """Requirement: Task actions (`fail` leaves its steps as they
+        are)."""
+        task = self.running(batch="B-8")
+        self.act(task, "fail")
+        task.refresh_from_db()
+        self.assertEqual(task.ended, TODAY)
+        self.assertEqual(done_days(task), [past(2), None])
+
+    def test_a_task_without_a_batch_fails_too(self) -> None:
+        task = self.running()
+        self.act(task, "fail")
+        task.refresh_from_db()
+        self.assertEqual((task.failed, task.batch, task.ended),
+                         (True, "", TODAY))
+
+    def test_the_change_is_recorded(self) -> None:
+        """Requirement: Task actions (records the change in its
+        history)."""
+        task = self.running(batch="B-8")
+        self.act(task, "fail")
+        newest = task.history.first()
+        self.assertEqual((newest.history_type, newest.history_user,
+                          newest.failed, newest.batch, newest.ended),
+                         ("~", self.kl, True, "", TODAY))
+
+    def test_the_page_shows_the_state(self) -> None:
+        task = self.running(batch="B-8")
+        self.act(task, "fail")
+        text = page(self.client.get(task_url(task))).text()
+        self.assertIn("Fehlgeschlagen", text)
+        self.assertNotIn("Nacharbeit", text)
+
+    def test_a_task_with_a_product_lot_cannot_fail(self) -> None:
+        """Requirement: Task actions (`fail` on a running task without a
+        product lot)."""
+        task = self.running(batch="B-8")
+        make_product_lot(task)
+        done = self.act(task, "fail")
+        task.refresh_from_db()
+        self.assertEqual((task.failed, task.batch, task.ended),
+                         (False, "B-8", None))
+        self.assertEqual(task.history.count(), 1)
+        self.assertEqual([m.level for m in sent_messages(done)],
+                         [messages.ERROR])
+
+    def test_fail_does_not_apply_to_other_states(self) -> None:
+        for state, fields in (
+                ("planned", {}),
+                ("ended", {"started": past(1), "ended": past(2),
+                           "failed": True}),
+                ("cancelled", {"started": past(1), "cancelled": True})):
+            with self.subTest(state=state):
+                task = make_task(self.kl, "Aspirin", batch="B-8",
+                                 **fields)
+                before = (task.failed, task.batch, task.ended,
+                          task.history.count())
+                done = self.act(task, "fail")
+                self.assertRedirects(done, task_url(task),
+                                     fetch_redirect_response=False)
+                task.refresh_from_db()
+                self.assertEqual((task.failed, task.batch, task.ended,
+                                  task.history.count()), before)
+                self.assertEqual(sent_messages(done)[-1].level,
+                                 messages.ERROR)
+
+    def test_an_ended_task_that_has_not_failed_cannot_fail(self) -> None:
+        task = make_task(self.kl, "Aspirin", started=past(1),
+                         ended=past(2), batch="B-8")
+        self.act(task, "fail")
+        task.refresh_from_db()
+        self.assertFalse(task.failed)
+        self.assertEqual(task.batch, "B-8")
+
+    def test_no_action_applies_to_a_failed_task(self) -> None:
+        task = self.running(batch="B-8")
+        self.act(task, "fail")
+        for action in ("start", "step", "end", "fail", "report",
+                       "qc-list"):
+            with self.subTest(action=action):
+                done = self.act(task, action)
+                self.assertEqual(sent_messages(done)[-1].level,
+                                 messages.ERROR)
+        self.assertEqual(set(self.offered(task)), set())
 
 
 class FlagTests(ActionCase):
@@ -294,9 +463,12 @@ class ButtonTests(ActionCase):
     def test_the_actions_that_apply_are_offered(self) -> None:
         cases = [
             ({}, {"start"}),
-            ({"started": past(1), "steps": 2}, {"step", "end"}),
-            ({"started": past(1), "steps": 2, "done": 2}, {"end"}),
-            ({"started": past(1)}, {"end"}),
+            ({"started": past(1), "steps": 2}, {"step", "fail"}),
+            ({"started": past(1), "steps": 2, "done": 2}, {"fail"}),
+            ({"started": past(1)}, {"fail"}),
+            ({"started": past(1), "steps": 2, "batch": "B-7",
+              "lot": True}, {"step", "end"}),
+            ({"started": past(1), "batch": "B-7", "lot": True}, {"end"}),
             ({"started": past(1), "ended": past(2)},
              {"report", "qc-list"}),
             ({"started": past(1), "ended": past(2), "report": True},
@@ -307,18 +479,30 @@ class ButtonTests(ActionCase):
               "qc_list": True}, set()),
             ({"cancelled": True}, set()),
             ({"started": past(1), "cancelled": True}, set()),
+            ({"started": past(1), "ended": past(2), "failed": True},
+             set()),
         ]
         for fields, expected in cases:
             with self.subTest(fields=fields):
+                fields = dict(fields)
+                lot = fields.pop("lot", False)
                 task = make_task(self.kl, **fields)
+                if lot:
+                    make_product_lot(task)
                 self.assertEqual(set(self.offered(task)), expected)
+
+    def stocked(self):
+        """A running task with a batch and its product lot."""
+        task = make_task(self.kl, started=past(1), steps=2, batch="B-7")
+        make_product_lot(task)
+        return task
 
     def test_buttons_are_labelled(self) -> None:
         task = make_task(self.kl, started=past(1), steps=2)
         planned = make_task(self.kl)
         ended = make_task(self.kl, started=past(1), ended=past(2))
         for shown in (self.offered(task), self.offered(planned),
-                      self.offered(ended)):
+                      self.offered(ended), self.offered(self.stocked())):
             for action, form in shown.items():
                 with self.subTest(action=action):
                     self.assertEqual(form.find("button").text(),
@@ -329,7 +513,8 @@ class ButtonTests(ActionCase):
         task = make_task(self.kl, started=past(1), steps=2)
         ended = make_task(self.kl, started=past(1), ended=past(2))
         shown = {**self.offered(task), **self.offered(ended),
-                 **self.offered(make_task(self.kl))}
+                 **self.offered(make_task(self.kl)),
+                 **self.offered(self.stocked())}
         self.assertEqual(set(shown), set(ACTIONS))
         for action, form in shown.items():
             with self.subTest(action=action):

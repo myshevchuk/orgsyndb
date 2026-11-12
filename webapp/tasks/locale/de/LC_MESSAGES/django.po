@@ -196,9 +196,6 @@ msgstr "Nur bei einer Aufgabe in Arbeit mit offenen Stufen kann eine Stufe erled
 msgid "End"
 msgstr "Abschließen"
 
-msgid "Only a running task can be ended."
-msgstr "Nur eine Aufgabe in Arbeit kann abgeschlossen werden."
-
 msgid "Report done"
 msgstr "Bericht erledigt"
 
@@ -272,3 +269,39 @@ msgstr "Eintrag %(number)s"
 
 msgid "done on %(day)s"
 msgstr "erledigt am %(day)s"
+
+msgid "Failed"
+msgstr "Fehlgeschlagen"
+
+msgid "A failed task has no batch."
+msgstr "Eine fehlgeschlagene Aufgabe hat keine Charge."
+
+msgid "An ended task needs the batch of its product lot."
+msgstr "Eine abgeschlossene Aufgabe braucht die Charge ihres Produkt-Bulks."
+
+msgid "Record a lot of the product, made in the lab, with the batch %(batch)s before ending the task."
+msgstr "Vor dem Abschluss bitte ein im Labor hergestelltes Bulk des Produkts mit der Charge %(batch)s erfassen."
+
+msgid "Task %(number)s failed."
+msgstr "Aufgabe %(number)s ist fehlgeschlagen."
+
+msgid "Only a running task with a batch and a product lot, a lot of its product made in the lab with that batch, can be ended."
+msgstr "Nur eine Aufgabe in Arbeit mit Charge und Produkt-Bulk, einem im Labor hergestellten Bulk ihres Produkts mit dieser Charge, kann abgeschlossen werden."
+
+msgid "Only a running task without a product lot can fail."
+msgstr "Nur eine Aufgabe in Arbeit ohne Produkt-Bulk kann fehlschlagen."
+
+msgid "A step that made a lot or took a withdrawal cannot be removed."
+msgstr "Eine Stufe, die ein Bulk hergestellt oder eine Entnahme erhalten hat, lässt sich nicht entfernen."
+
+msgid "Made:"
+msgstr "Hergestellt:"
+
+msgid "Withdrawn:"
+msgstr "Entnommen:"
+
+msgid "Record a lot"
+msgstr "Los erfassen"
+
+msgid "Book a withdrawal"
+msgstr "Entnahme buchen"

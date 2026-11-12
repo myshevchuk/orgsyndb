@@ -117,7 +117,8 @@ class TaskForm(forms.ModelForm):
 
 
 class TaskEditForm(TaskForm):
-    """The fields of an existing task, among them its cancelled flag."""
+    """The fields of an existing task, among them its cancelled and
+    failed flags."""
 
     class Meta(TaskForm.Meta):
-        fields = [*TaskForm.Meta.fields[:-1], "cancelled", "note"]
+        fields = [*TaskForm.Meta.fields[:-1], "cancelled", "failed", "note"]

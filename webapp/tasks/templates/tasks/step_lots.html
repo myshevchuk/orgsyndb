@@ -1,0 +1,7 @@
+{% load i18n inventory %}{% if step.lots %}
+<div class="lab-step-lots">{% translate "Made:" %} {% for lot in step.lots %}<a href="/lab/inventory/bulk/{{ lot.pk }}/">{{ lot }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}{% if step.withdrawals %}
+<div class="lab-step-lots">{% translate "Withdrawn:" %} {% for movement in step.withdrawals %}<a href="/lab/inventory/bulk/{{ movement.lot.pk }}/">{{ movement.lot }}</a> {{ movement.amount|in_lot_unit:movement.lot }}{% if movement.reversal %} <span class="badge badge--reversed">{% translate "reversed" %}</span>{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}{% if recording %}
+<div class="lab-step-actions"><a href="/lab/inventory/bulk/new/?step={{ step.id }}">{% translate "Record a lot" %}</a>{% if step.offered %}
+<details><summary>{% translate "Book a withdrawal" %}</summary>
+{% for lot in step.offered %}<a href="/lab/inventory/bulk/{{ lot.pk }}/withdraw/?step={{ step.id }}">{{ lot }} · {{ lot.amount|in_lot_unit:lot }}</a>
+{% endfor %}</details>{% endif %}</div>{% endif %}

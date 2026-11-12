@@ -30,8 +30,8 @@ class TaskStepInline(admin.TabularInline):
 class TaskAdmin(SimpleHistoryAdmin):
     list_display = ("number", "substance", "priority", "assignee", "started",
                     "ended", "progress_shown", "batch", "report", "qc_list",
-                    "cancelled")
-    list_filter = ("priority", "cancelled", "report", "qc_list")
+                    "cancelled", "failed")
+    list_filter = ("priority", "cancelled", "failed", "report", "qc_list")
     list_select_related = ("substance", "assignee")
     search_fields = ("number", "substance__key", "substance__name",
                      "substance__name_de", "batch")

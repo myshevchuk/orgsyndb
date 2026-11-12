@@ -15,6 +15,8 @@ from functools import cached_property
 from typing import Any, NamedTuple
 from urllib.parse import urlencode
 
+from django.db.models import Q
+
 from inventory.figures import (Consumption, bulk, consumption, convert,
                                counted_lines, figures_of, molar_mass,
                                quarter_of)
@@ -375,9 +377,9 @@ class Plan:
                   and bulk(item, self.lots).containers > 0))
 
     def _durations(self, article_number: str) -> list[int]:
-        """Return the durations in days of the ended, not cancelled tasks
-        that match ARTICLE_NUMBER, each at least 1, ordered by end date,
-        then start date, then number."""
+        """Return the durations in days of the ended tasks that match
+        ARTICLE_NUMBER and are neither cancelled nor failed, each at
+        least 1, ordered by end date, then start date, then number."""
         ended = sorted(
             (task for task in self.tasks
              if task.state == State.ENDED and task.started
@@ -467,30 +469,35 @@ def task_priority(task: Task, today: date) -> TaskPriority:
 
 
 def batch_lots(task: Task) -> list[Lot]:
-    """Return the lots that belong to TASK: those of its substance with
-    its batch, which is not empty, in the order of their IDs."""
-    if not task.batch:
-        return []
-    return list(Lot.objects.filter(batch=task.batch,
-                                   substance_id=task.substance_id)
-                .select_related("substance").order_by("id"))
+    """Return the lots that belong to TASK, each once, in the order of
+    their IDs: those of its substance with its batch, when it has one,
+    and those a step of TASK made, whatever their substance and
+    batch."""
+    belongs = Q(task_step__task=task)
+    if task.batch:
+        belongs |= Q(batch=task.batch, substance_id=task.substance_id)
+    return list(Lot.objects.filter(belongs).select_related("substance")
+                .order_by("id"))
 
 
 def batch_tasks(lot: Lot) -> list[Task]:
-    """Return the tasks that belong to LOT: those of its substance with
-    its batch, which is not empty, by number."""
-    if not lot.batch:
-        return []
-    return sorted(Task.objects.filter(batch=lot.batch,
-                                      substance_id=lot.substance_id),
+    """Return the tasks that belong to LOT, each once, by number: those
+    of its substance with its batch, when it has one, and the task of
+    the step that made it."""
+    belongs = Q(pk__in=[]) if lot.task_step_id is None else Q(
+        steps=lot.task_step_id)
+    if lot.batch:
+        belongs |= Q(batch=lot.batch, substance_id=lot.substance_id)
+    return sorted(Task.objects.filter(belongs).distinct(),
                   key=lambda task: task.serial)
 
 
 def bulk_link(task: Task) -> str | None:
     """Return the path of the new-lot form filled in from TASK, or None.
 
-    The form is filled in when TASK is ended, not cancelled, and has a
-    batch: with its substance's key, the batch, and the end date.
+    The form is filled in when TASK is ended, neither cancelled nor
+    failed, and has a batch: with its substance's key, the batch, and
+    the end date.
     """
     if task.state != State.ENDED or not task.batch:
         return None

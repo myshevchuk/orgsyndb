@@ -1554,10 +1554,13 @@ accepted.
 Each task has a number such as `T-001`, the substance it makes, priority,
 assignee, start and end dates, ordered steps, calculated progress,
 batch number, report and QC-list flags, and a note. QC means quality control;
-the flag records whether the batch is on the QC list. Dates determine
-whether a task is planned, running or ended; a task can also be
-cancelled. Ended tasks missing the report or QC-list flag show
-**Follow-up** and stay in the active list until both flags are set.
+the flag records whether the batch is on the QC list. A task is
+**Cancelled** when its cancelled flag is set. Otherwise, a set failed
+flag makes it **Fehlgeschlagen** (**Failed**). For the remaining tasks,
+dates determine whether they are planned, running or ended. Ended tasks
+missing the report or QC-list flag show **Follow-up** and stay in the
+active list until both flags are set. Failed tasks have no batch and need
+no follow-up.
 
 To enter a task, sign in and choose **New task**. In **Substance**, enter
 a key from the [substance registry](#substance-registry); the suggestions
@@ -1584,6 +1587,9 @@ With a sequence, the form shows the task's step count and ignores changes
 to **Steps total**. Clearing the sequence gives the task as many plain
 steps as **Steps total** specifies.
 
+A withdrawal records material taken from a bulk lot into a task step.
+A step that made a lot or received a withdrawal cannot be removed.
+
 **Steps done** marks the first that many steps done. Steps already done
 keep their dates; newly done steps take today. The remaining steps have
 their completion dates cleared. An empty value means none done, and the
@@ -1593,9 +1599,21 @@ no progress value.
 
 Use **Beginnen** (**Start**) on the task page to start a planned task.
 On a running task, **Stufe erledigt** (**Step done**) marks the first open
-step done today. **Abschließen** (**End**) sets the end date to today and
-marks every open step done on that date. On an ended task, the report
-and QC-list buttons set those flags.
+step done today. Before ending the task, enter its batch and record a
+product lot: a lot of the task's substance, made in the lab, with that
+batch. **Abschließen** (**End**) is offered only when a running task has
+both. It sets the end date to today and marks every open step done on
+that date. Ending without a batch and product lot is refused. On an
+ended task, the report and QC-list buttons set those flags.
+
+If a running synthesis fails and has no product lot, choose
+**Fehlgeschlagen** (**Failed**). This sets the end date to today, clears
+the batch and leaves the steps as they are.
+
+Choose **Edit** on the task page to change its fields, including the
+**Cancelled** and **Failed** flags. The form refuses a batch on a failed
+task. Unless the task is cancelled or failed, saving an end date requires
+a batch and a product lot.
 
 The task page links its sequence and lists steps in order. A step with a
 scope entry links to its procedure by ID at `/procedures/<id>/`, with the
@@ -1603,6 +1621,15 @@ ID in lowercase. For a general procedure, **Eintrag &lt;n&gt;**
 (**Entry &lt;n&gt;**) identifies the entry. A plain step appears as
 **Stufe &lt;n&gt;** (**Step &lt;n&gt;**). A done step shows
 **erledigt am &lt;date&gt;** (**done on &lt;date&gt;**).
+
+Under each step, the page lists the lots it made and the withdrawals
+booked into it, each linking to its lot. While the task is planned or
+running, you can sign in and choose **Los erfassen** (**Record a lot**)
+to open `/lab/inventory/bulk/new/?step=<id>` for that step. When open lots
+are available, **Entnahme buchen** (**Book a withdrawal**) lists those of
+the step's substrates, the substances it takes. For a plain step, it
+lists every open lot. Choose a lot to open its withdrawal form with the
+step filled in.
 
 A withdrawn sequence or procedure appears without a link, marked
 **nicht in der Sammlung** (**not in the collection**). A step whose entry
@@ -1640,8 +1667,9 @@ task counts only its remaining synthesis time, so its priority can differ
 from the article's priority for starting a new synthesis.
 
 The task page links to bulk lots with the same nonempty batch when the
-task and lot name the same substance. If you are signed in, an ended
-task with a batch offers **Als Bulk erfassen** (**Record as bulk**).
+task and lot name the same substance. It also includes lots made by the
+task's steps, whatever their substance or batch. If you are signed in,
+an ended task with a batch offers **Als Bulk erfassen** (**Record as bulk**).
 This opens the new-lot form with the substance, batch and end date filled
 in, including for a substance without an article.
 
@@ -1650,7 +1678,8 @@ in, including for a substance without an article.
 Use a separate test deployment to explore the lab with invented records:
 substances and vocabularies, inventory and stock levels, delivery notes,
 bulk lots and fillings, tasks in every state, and planning priorities and
-actions, all with histories.
+actions, all with histories. One task for `CH-0013` is failed and has no
+batch. Every ended task that has not failed has its product lot.
 **Never set `ORGSYNDB_DEMO=true` on a stack that keeps real records.**
 
 Before the first start and before creating accounts, set these values in
@@ -1676,7 +1705,9 @@ collection from `webapp/demo/manifest.json` on that opening day. It uses
 a commit of forty zeros, release `demo` and trigger `catch-up`. This lets
 you use the demo before any collection build. Its tasks follow the
 imported sequences `SEQ-0001` and `SEQ-0002`; one is running with the
-first of its two steps done.
+first of its two steps done. This running `SEQ-0002` task's first step
+made a lot of `4-acetylbiphenyl`. Part of that lot was withdrawn into its
+second step.
 
 The inventory contains seven numbered articles: `CH-0001`, `CH-0002`,
 `CH-0010`, `CH-0012`, `CH-0013` and `CH-0016`, the six delivered final products of
@@ -1691,11 +1722,11 @@ and when their target pages are available.
 There is also an item **1-Phenylethanol** without an article number. It
 enters stock later, is filled without a bulk lot and is never delivered.
 Its synthesis task names the substance `1-phenylethanol` and has a batch
-but no lot. The item links to its substance and has no forecast.
+and a product lot. The item links to its substance and has no forecast.
 
-The bulk list also includes `ethyl-cinnamate` bought from **ChemPur GmbH**
-and the intermediate `4-acetylbiphenyl` made in the lab, with a task for
-each substance.
+The bulk list also includes a made lot of `ethyl-cinnamate` beside one
+bought from **ChemPur GmbH**, and the intermediate `4-acetylbiphenyl`
+made in the lab, with a task for each substance.
 
 Every demo item has a compartment and a box. The item list shows all
 seven stock levels on any seeding day.
@@ -2334,6 +2365,14 @@ The same substance can have made and bought lots. Enter the amount in
 `mg`, `g`, `µmol` or `mmol`, batch, location, date and note. The substance,
 source and unit cannot change after creation.
 
+To record material made by a task step, choose **Record a lot** under
+that step on the task page. The form at
+`/lab/inventory/bulk/new/?step=<id>` fills in the step's first product,
+or the task's substance for a plain step, and today's date. It also
+fills in the task's batch when that substance is the task's substance.
+Enter the amount and save. The form refuses a substance the step does
+not make and a bought source. The lot's step cannot change after creation.
+
 The bulk list shows all open lots, including substances without an
 article. It shows the substance's name, article number when present and
 source, with the supplier beside it when given. Each lot's page has its
@@ -2341,10 +2380,22 @@ own ledger; correcting its amount requires a note. A lot at zero is used
 up and leaves the bulk list unless you tick **Used-up lots too**.
 
 The lot page links to tasks with the same nonempty batch and substance.
+For a lot made by a step, it shows that step and links to its task.
+Each withdrawal shows the task and step that received the material,
+with a link to the task. A reversal identifies the withdrawal it reverses.
 The new-lot form at `/lab/inventory/bulk/new/` accepts `substance`, `batch`
 and `made_on` in the query to fill in the substance key, batch and date.
 The task page's **Record as bulk** link supplies these values from the
 ended task.
+
+To record material taken into a synthesis, sign in and choose **Entnahme**
+(**Withdraw**) on an open lot's page. At
+`/lab/inventory/bulk/<id>/withdraw/`, choose a step of a planned or running
+task, enter the amount in the lot's unit and a date, and save. The amount
+must be greater than zero and cannot exceed the lot's remaining amount.
+To undo a withdrawal, choose **Stornieren** (**Reverse**) beside it on
+the lot page. This returns its amount to the lot; each withdrawal can be
+reversed only once.
 
 On an item page, choose **Fill** to add containers. You may select an
 open bulk lot of the same substance and enter the amount taken in the
@@ -2391,9 +2442,9 @@ largest container size with demand, at least zero, so that the amount
 counted can fill whole containers.
 
 The synthesis time is the longest of the article's last three completed
-syntheses; cancelled tasks do not count. Until three exist, the default
-of 21 days also counts. **Slack** is runway minus the buffer for QC,
-filling and the unforeseen, minus synthesis time. **Latest start** is
+syntheses; cancelled and failed tasks do not count. Until three exist,
+the default of 21 days also counts. **Slack** is runway minus the buffer
+for QC, filling and the unforeseen, minus synthesis time. **Latest start** is
 today plus that slack. By default, priority is high below 14 days of
 slack, medium from 14 to below 56, and low from 56. Work already under way
 does not change the article's priority.

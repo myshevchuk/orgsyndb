@@ -5,11 +5,12 @@ from datetime import date
 
 from tasks.models import Task
 
-from . import (NOT_IN_COLLECTION, berlin, frozen, make_article, make_task,
-               page, past, substance_for, task_form_data, task_url)
+from . import (NOT_IN_COLLECTION, Element, berlin, frozen, make_article,
+               make_lot, make_task, make_withdrawal, page, past,
+               substance_for, task_form_data, task_url)
 from .collection_support import (accept, changed_collection,
                                  import_collection, without_ids)
-from .task_support import TaskCase, history_text
+from .task_support import TaskCase, history_text, steps_of
 
 
 class PageCase(TaskCase):
@@ -441,3 +442,175 @@ class StepHistoryTests(PageCase):
         self.assertIn("Angelegt", text)
         self.assertIn("Stufe 1", text)
         self.assertIn("Stufe 2", text)
+
+
+def lot_href(lot, action: str = "", step=None) -> str:
+    path = f"/lab/inventory/bulk/{lot.pk}/" + (
+        f"{action}/" if action else "")
+    return f"{path}?step={step.pk}" if step else path
+
+
+def step_items(root) -> list[Element]:
+    """The items of the task page's list of steps, in order."""
+    return [item for item in root.find("ol").children
+            if isinstance(item, Element) and item.tag == "li"]
+
+
+def hrefs(item: Element) -> list[str]:
+    return [a.get("href") for a in item.find_all("a")]
+
+
+class FailedPageTests(PageCase):
+
+    def test_a_failed_task_shows_its_state_and_no_follow_up(self) -> None:
+        """Requirement: Task record (the state `failed`; a failed task
+        needs no follow-up)."""
+        task = make_task(self.kl, started=past(1), ended=past(2),
+                         failed=True)
+        text = self.show(task).text()
+        self.assertIn("Fehlgeschlagen", text)
+        self.assertNotIn("Nacharbeit", text)
+        self.assertNotIn("Abgeschlossen", text)
+
+    def test_the_state_in_english(self) -> None:
+        task = make_task(self.kl, started=past(1), ended=past(2),
+                         failed=True)
+        accept(language="en")
+        text = self.show(task).text()
+        self.assertIn("Failed", text)
+        self.assertNotIn("Follow-up", text)
+
+    def test_a_failed_task_offers_no_record_as_bulk(self) -> None:
+        task = make_task(self.kl, started=past(1), ended=past(2),
+                         failed=True)
+        self.client.force_login(self.kl)
+        self.assertNotIn("Als Bulk erfassen", self.show(task).text())
+
+
+class StepLotsPageTests(PageCase):
+    """Requirement: Task page (under each step the lots it made and the
+    withdrawals booked into it, and the links to record either)."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.task = make_task(self.kl, "Aspirin", started=past(1), steps=2)
+        self.first, self.second = steps_of(self.task)
+
+    def sequence_task(self) -> Task:
+        self.client.force_login(self.kl)
+        self.create(substance="1-biphenyl-4-yl-ethanol",
+                    sequence="SEQ-0002", started="2025-03-01")
+        self.client.logout()
+        return Task.objects.order_by("-pk").first()
+
+    def test_a_step_lists_the_lots_it_made(self) -> None:
+        lot = make_lot(self.kl, substance=self.task.substance,
+                       task_step=self.first)
+        first, second = step_items(self.show(self.task))
+        self.assertIn(lot_href(lot), hrefs(first))
+        self.assertNotIn(lot_href(lot), hrefs(second))
+
+    def test_a_step_lists_the_withdrawals_into_it(self) -> None:
+        lot = make_lot(self.kl, substance=self.task.substance)
+        make_withdrawal(self.kl, lot, self.second, "1")
+        first, second = step_items(self.show(self.task))
+        self.assertIn(lot_href(lot), hrefs(second))
+        self.assertNotIn(lot_href(lot), hrefs(first))
+
+    def test_the_lots_of_other_tasks_are_not_listed(self) -> None:
+        other = make_task(self.kl, "Aspirin", started=past(1), steps=1)
+        lot = make_lot(self.kl, substance=other.substance,
+                       task_step=other.steps.get())
+        for item in step_items(self.show(self.task)):
+            self.assertNotIn(lot_href(lot), hrefs(item))
+
+    def test_each_step_of_an_open_task_offers_to_record_a_lot(self) -> None:
+        """Requirement: Task page (`Los erfassen` to
+        `/lab/inventory/bulk/new/?step=<id>`)."""
+        self.client.force_login(self.kl)
+        planned = make_task(self.kl, "Aspirin", steps=2)
+        for task in (self.task, planned):
+            items = step_items(self.show(task))
+            for step, item in zip(steps_of(task), items, strict=True):
+                with self.subTest(task=task.number, step=step.position):
+                    links = [a for a in item.find_all("a")
+                             if a.text() == "Los erfassen"]
+                    self.assertEqual(
+                        [a.get("href") for a in links],
+                        [f"/lab/inventory/bulk/new/?step={step.pk}"])
+
+    def test_the_link_in_english(self) -> None:
+        self.client.force_login(self.kl)
+        accept(language="en")
+        item = step_items(self.show(self.task))[0]
+        self.assertIn("Record a lot", [a.text() for a in item.find_all("a")])
+
+    def test_no_links_to_record_without_a_sign_in(self) -> None:
+        for item in step_items(self.show(self.task)):
+            self.assertEqual([a for a in item.find_all("a")
+                              if a.text() in ("Los erfassen",
+                                              "Entnahme buchen")], [])
+
+    def test_no_links_to_record_on_a_task_that_is_not_open(self) -> None:
+        """Requirement: Task page (while the task is planned or
+        running)."""
+        self.client.force_login(self.kl)
+        ended = make_task(self.kl, "Aspirin", started=past(2),
+                          ended=past(1), steps=1, report=True,
+                          qc_list=True)
+        failed = make_task(self.kl, "Aspirin", started=past(2),
+                           ended=past(1), steps=1, failed=True)
+        cancelled = make_task(self.kl, "Aspirin", steps=1, cancelled=True)
+        for task in (ended, failed, cancelled):
+            with self.subTest(task=task.number):
+                (item,) = step_items(self.show(task))
+                self.assertEqual(
+                    [a for a in item.find_all("a")
+                     if a.text() in ("Los erfassen", "Entnahme buchen")],
+                    [])
+
+    def test_a_withdrawal_may_be_booked_from_the_open_lots_of_the_substrates(
+            self) -> None:
+        """Requirement: Task page (`Entnahme buchen`, listing the open
+        lots of the step's substrates)."""
+        task = self.sequence_task()
+        first, second = steps_of(task)
+        self.client.force_login(self.kl)
+        open_lot = make_lot(self.kl, substance=substance_for(
+            "4-acetylbiphenyl"))
+        used_up = make_lot(self.kl, substance=substance_for(
+            "4-acetylbiphenyl"), amount="0")
+        other = make_lot(self.kl, substance=substance_for("cinnamic-acid"))
+        items = step_items(self.show(task))
+        self.assertIn("Entnahme buchen", items[1].text())
+        self.assertIn(lot_href(open_lot, "withdraw", second),
+                      hrefs(items[1]))
+        for lot in (used_up, other):
+            with self.subTest(lot=lot.pk):
+                self.assertNotIn(lot_href(lot, "withdraw", second),
+                                 hrefs(items[1]))
+        self.assertNotIn(lot_href(open_lot, "withdraw", first),
+                         hrefs(items[0]))
+
+    def test_a_step_without_an_entry_offers_every_open_lot(self) -> None:
+        self.client.force_login(self.kl)
+        mine = make_lot(self.kl, substance=self.task.substance)
+        other = make_lot(self.kl, substance=substance_for("cinnamic-acid"))
+        used_up = make_lot(self.kl, substance=self.task.substance,
+                           amount="0")
+        first, second = step_items(self.show(self.task))
+        for item, step in ((first, self.first), (second, self.second)):
+            with self.subTest(step=step.position):
+                self.assertIn("Entnahme buchen", item.text())
+                self.assertIn(lot_href(mine, "withdraw", step), hrefs(item))
+                self.assertIn(lot_href(other, "withdraw", step),
+                              hrefs(item))
+                self.assertNotIn(lot_href(used_up, "withdraw", step),
+                                 hrefs(item))
+
+    def test_the_withdrawal_link_in_english(self) -> None:
+        self.client.force_login(self.kl)
+        make_lot(self.kl, substance=self.task.substance)
+        accept(language="en")
+        item = step_items(self.show(self.task))[0]
+        self.assertIn("Book a withdrawal", item.text())

@@ -32,6 +32,7 @@ from inventory.models import (BASE_UNIT, Article, DeliveryLine,
                               LotMovement, Movement, Source, Unit, shown)
 from orgsyndb_web import lock
 from registry.models import Substance
+from tasks.models import State, Task, TaskStep
 
 
 class Refused(ValidationError):
@@ -151,10 +152,11 @@ def _movement(user: Any, item: Item, kind: str, count: int, after: int,
 
 
 def _lot_movement(user: Any, lot: Lot, kind: str, amount: Decimal,
-                  after: Decimal, day: Date, note: str = "") -> LotMovement:
+                  after: Decimal, day: Date, note: str = "",
+                  **fields: Any) -> LotMovement:
     return LotMovement.objects.create(
         lot=lot, kind=kind, amount=amount, amount_after=after, date=day,
-        booked_at=timezone.now(), user=user, note=note)
+        booked_at=timezone.now(), user=user, note=note, **fields)
 
 
 def _number(article_number: str | None) -> str | None:
@@ -578,24 +580,38 @@ def create_lot(user: Any, *, substance: Substance, unit: str,
                amount: Decimal, source: str = Source.MADE,
                supplier: str = "", batch: str = "", location: str = "",
                made_on: Date | None = None, note: str = "",
-               date: Date | None = None) -> Lot:
+               date: Date | None = None, task_step: TaskStep | None = None
+               ) -> Lot:
     """Create a bulk lot of SUBSTANCE holding AMOUNT of UNIT, made in
     the lab or bought as SOURCE says, from SUPPLIER, with its opening
     movement booked by USER and dated DATE, today by default.
 
-    The amount is kept in the base unit of UNIT, rounded half up to six
-    places. Refuse an AMOUNT below zero, an unknown UNIT or SOURCE, a
-    DATE after today and a value too long for its field.
+    A lot made by the task step TASK_STEP names it. The amount is kept
+    in the base unit of UNIT, rounded half up to six places. Refuse an
+    AMOUNT below zero, an unknown UNIT or SOURCE, a DATE after today, a
+    value too long for its field, a TASK_STEP for a bought lot, and a
+    SUBSTANCE the step does not make (``TaskStep.products``).
     """
     day = _day(date)
     if unit not in BASE_UNIT:
         raise Refused({"unit": _("The unit is mg, g, µmol or mmol.")})
     if amount < 0:
         raise Refused({"amount": _("The amount may not be negative.")})
+    if task_step is not None:
+        if source != Source.MADE:
+            raise Refused({"source": _(
+                "A lot made by a task step is made in the lab.")})
+        if substance not in task_step.products():
+            raise Refused({"substance": _(
+                "Step %(position)s of task %(number)s does not make "
+                "%(substance)s.") % {
+                    "position": task_step.position,
+                    "number": task_step.task.number,
+                    "substance": substance.key}})
     base = to_base(amount, unit)
     lot = Lot(substance=substance, source=source, supplier=supplier,
               unit=unit, amount=base, batch=batch, location=location,
-              made_on=made_on, note=note)
+              made_on=made_on, note=note, task_step=task_step)
     _checked(lot)
     with transaction.atomic():
         _attributed(lot, user).save()
@@ -620,3 +636,55 @@ def correct_lot(user: Any, lot: Lot, *, amount: Decimal, note: str,
         Lot.objects.filter(pk=lot.pk).update(amount=base)
         return _lot_movement(user, lot, LotMovement.Kind.CORRECTION, base,
                              _amount(lot.pk), day, text)
+
+
+def withdraw(user: Any, lot: Lot, *, task_step: TaskStep, amount: Decimal,
+             date: Date | None = None, note: str = "") -> LotMovement:
+    """Book AMOUNT, in the lot's unit, taken from LOT into the task step
+    TASK_STEP by USER, dated DATE, today by default, and return the
+    withdrawal.
+
+    Refuse an AMOUNT that is not above zero or rounds to zero in six
+    places of the base unit, an AMOUNT above the lot's, a lot that is
+    used up, a DATE after today, and a step whose task is neither
+    planned nor running; the task's row is locked while its state is
+    checked.
+    """
+    day = _day(date)
+    base = to_base(amount, lot.unit)
+    if base <= 0:
+        raise Refused({"amount": _(
+            "The amount taken must be above zero.")})
+    with transaction.atomic():
+        task = Task.objects.select_for_update().get(pk=task_step.task_id)
+        if task.state not in (State.PLANNED, State.RUNNING):
+            raise Refused({"step": _(
+                "Task %(number)s is neither planned nor running.")
+                % {"number": task.number}})
+        return _lot_movement(user, lot, LotMovement.Kind.WITHDRAWAL, base,
+                             _lot_change(lot, -base), day, note,
+                             task_step=task_step)
+
+
+def reverse_withdrawal(user: Any, movement: LotMovement) -> LotMovement:
+    """Reverse the withdrawal MOVEMENT by USER, dated today: its amount
+    returns to its lot, and the reversal names it as ``reverses``.
+    Return the reversal.
+
+    Refuse a movement of another kind and a withdrawal already
+    reversed.
+    """
+    if movement.kind != LotMovement.Kind.WITHDRAWAL:
+        raise Refused(_("Only a withdrawal can be reversed here."))
+    done = _("The withdrawal is already reversed.")
+    try:
+        with transaction.atomic():
+            if LotMovement.objects.filter(reverses=movement).exists():
+                raise Refused(done)
+            lot = movement.lot
+            return _lot_movement(
+                user, lot, LotMovement.Kind.REVERSAL, movement.amount,
+                _lot_change(lot, movement.amount), timezone.localdate(),
+                reverses=movement)
+    except IntegrityError as error:
+        raise Refused(done) from error

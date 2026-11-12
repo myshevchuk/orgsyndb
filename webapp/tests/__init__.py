@@ -322,11 +322,12 @@ def make_lot(user: Any, article: str = "CH-0001", unit: str = "mg",
              amount: str = "50", batch: str = "", location: str = "",
              made_on: date | None = None, note: str = "",
              substance: Any = None, source: str = "made",
-             supplier: str = "", mw: Any = None) -> Any:
+             supplier: str = "", mw: Any = None,
+             task_step: Any = None) -> Any:
     """A lot holding ``amount`` of ``unit``, kept in the base unit, with
     its opening movement. It is of ``substance``, or of the substance
     ``substance_for(article)``, which ``make_item`` gives to the item of
-    that article number."""
+    that article number; ``task_step`` is the step that made it."""
     from decimal import Decimal
     from django.utils import timezone
     from inventory.models import Lot, LotMovement
@@ -338,7 +339,8 @@ def make_lot(user: Any, article: str = "CH-0001", unit: str = "mg",
     base = Decimal(amount) * BASE_FACTOR[unit]
     lot = Lot(substance=substance, source=source, supplier=supplier,
               unit=unit, amount=base, batch=batch, location=location,
-              made_on=made_on, note=note)
+              made_on=made_on, note=note,
+              **({"task_step": task_step} if task_step else {}))
     lot._history_user = user
     lot.save()
     LotMovement.objects.create(
@@ -346,6 +348,24 @@ def make_lot(user: Any, article: str = "CH-0001", unit: str = "mg",
         amount_after=base, date=timezone.localdate(),
         booked_at=timezone.now(), user=user)
     return lot
+
+
+def make_withdrawal(user: Any, lot: Any, step: Any, amount: str,
+                    day: date | None = None) -> Any:
+    """A withdrawal of ``amount`` in the lot's unit from ``lot`` into
+    the task step ``step``, booked as the booking would: the lot's
+    amount falls and the movement names the step."""
+    from decimal import Decimal
+    from django.utils import timezone
+    from inventory.models import Lot, LotMovement
+    base = Decimal(amount) * BASE_FACTOR[lot.unit]
+    left = lot.amount - base
+    Lot.objects.filter(pk=lot.pk).update(amount=left)
+    lot.amount = left
+    return LotMovement.objects.create(
+        lot=lot, kind=LotMovement.Kind.WITHDRAWAL, amount=base,
+        amount_after=left, date=day or timezone.localdate(),
+        booked_at=timezone.now(), user=user, task_step=step)
 
 
 def load_demo_registry() -> None:
@@ -383,8 +403,8 @@ def edit_data(task: Any, **over: Any) -> dict[str, str]:
         steps_total=str(task.steps.count() or ""),
         steps_done=str(task.steps.filter(done_on__isnull=False).count()),
         batch=task.batch or "", note=task.note or "")
-    for flag in ("report", "qc_list", "cancelled"):
-        if getattr(task, flag):
+    for flag in ("report", "qc_list", "cancelled", "failed"):
+        if getattr(task, flag, False):
             data[flag] = "on"
     data.update(over)
     return data

@@ -18,6 +18,7 @@ from django.utils.translation import pgettext_lazy
 from inventory.bookings import Refused
 from inventory.models import DeliveryNote, Item, Lot, Source
 from registry.forms import SubstanceKeyField, decimal_field
+from tasks.models import TaskStep
 
 DATE = forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
 ARTICLE_NUMBER = forms.TextInput(attrs={"autocomplete": "off"})
@@ -388,6 +389,39 @@ class LotForm(forms.ModelForm):
     def clean_source(self) -> str:
         """Return the source chosen, ``made`` when none is."""
         return self.cleaned_data.get("source") or Source.MADE
+
+
+class StepField(forms.ModelChoiceField):
+    """A choice among the steps of the tasks that are planned or
+    running, each shown as its task's number and product and the step's
+    label (``TaskStep.label``)."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(
+            queryset=TaskStep.objects.filter(
+                task__cancelled=False, task__failed=False,
+                task__ended__isnull=True).select_related(
+                    "task__substance", "entry__procedure").order_by(
+                        "task_id", "position"),
+            **kwargs)
+
+    def label_from_instance(self, obj: Any) -> str:
+        task = obj.task
+        return f"{task.number} {task.substance.shown_name} · {obj.label}"
+
+
+class WithdrawalForm(forms.Form):
+    """An amount taken from a lot into a step of a task that is planned
+    or running, in the lot's unit."""
+
+    step = StepField(label=_("Task step"), empty_label="–")
+    amount = decimal_field(_("Amount taken"))
+    date = forms.DateField(label=_("Date"), widget=DATE,
+                           validators=[not_in_future])
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.fields["date"].initial = timezone.localdate()
 
 
 class LotEditForm(MetadataForm):

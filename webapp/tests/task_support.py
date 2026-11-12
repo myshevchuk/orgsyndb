@@ -11,11 +11,15 @@ from typing import Any
 
 from django.test import TestCase
 
-from . import (edit_data, load_demo_registry, make_demo_accounts, make_user,
-               substance_for, task_form_data, task_url)
+from . import (berlin, edit_data, load_demo_registry, make_demo_accounts,
+               make_lot, make_user, substance_for, task_form_data, task_url,
+               ticking)
 from .collection_support import import_collection
 
 NEW = "/lab/tasks/new/"
+NEW_LOT = "/lab/inventory/bulk/new/"
+NOW = berlin(2026, 11, 4, 8)
+TODAY_ISO = "2026-11-04"
 
 
 class TaskCase(TestCase):
@@ -59,3 +63,42 @@ def history_text(root) -> str:
         if heading in text:
             return text.split(heading, 1)[1]
     raise AssertionError("the page shows no history")
+
+
+def make_product_lot(task: Any, amount: str = "5", unit: str = "g",
+                     **extra: Any) -> Any:
+    """A made lot of ``task``'s substance with ``task``'s batch, which
+    is the task's product lot (task-tracker "Task record"), booked by
+    the task's creator; ``extra`` replaces what ``make_lot`` takes."""
+    return make_lot(task.created_by, **{
+        "substance": task.substance, "batch": task.batch, "unit": unit,
+        "amount": amount, "source": "made", **extra})
+
+
+def steps_of(task: Any) -> list[Any]:
+    """The steps of ``task``, in order."""
+    return list(task.steps.order_by("position"))
+
+
+class StepCase(TaskCase):
+    """The task case with a clock that stands at 2026-11-04 and ticks,
+    for the tests of lots made by a step and of withdrawals into one;
+    ``cls.first`` is the demo collection's import, whose sequence
+    ``SEQ-0002`` has the steps ``OSDB-0004``, making
+    ``4-acetylbiphenyl``, and entry 1 of ``OSDB-0009``, which takes it
+    and makes ``1-biphenyl-4-yl-ethanol``."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.enterContext(ticking(NOW))
+
+    def follow(self, sequence: str = "SEQ-0002", **fields: str) -> Any:
+        """The only task, made through the form for a task of
+        ``sequence`` that started on 2025-03-01 (``fields`` replace the
+        form's values), with the sequence's product as its substance."""
+        from collection.models import Sequence
+        from tasks.models import Task
+        target = Sequence.objects.get(key=sequence).target.key
+        self.create(**{"substance": target, "sequence": sequence,
+                       "started": "2025-03-01", **fields})
+        return Task.objects.get()

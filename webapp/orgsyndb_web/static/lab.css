@@ -67,7 +67,8 @@
 .task-table td:first-child { white-space: nowrap; }
 .task-table td:first-child a { text-decoration: none; }
 .task-table td:first-child a:hover { text-decoration: underline; }
-.task-table tr[data-state="cancelled"] td { color: var(--muted); }
+.task-table tr[data-state="cancelled"] td,
+.task-table tr[data-state="failed"] td { color: var(--muted); }
 .task-table progress { width: 4rem; vertical-align: middle; }
 
 /* A name the collection lacks. */
@@ -77,6 +78,7 @@
 .badge--running { background: var(--checked-bg); color: var(--checked-fg); }
 .badge--ended { background: var(--retired-bg); color: var(--retired-fg); }
 .badge--cancelled { background: transparent; color: var(--muted); border-color: var(--border); }
+.badge--failed { background: transparent; color: var(--banner-fg); border-color: var(--banner-border); }
 .badge--followup { background: var(--draft-bg); color: var(--draft-fg); }
 
 .lab-state { margin: 0 0 var(--space-3); }
@@ -90,6 +92,11 @@
 }
 .lab-actions form { margin: 0; }
 .lab-note { max-width: var(--measure); }
+
+/* The lots a task step made and took, and the links to record either. */
+.lab-step-lots, .lab-step-actions { font-size: 0.875rem; margin: var(--space-1) 0 0; }
+.lab-step-actions { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); font-family: var(--font-ui); }
+.lab-step-actions details a { display: block; }
 
 .lab-form { max-width: 40rem; font-family: var(--font-ui); }
 .lab-field { margin: 0 0 var(--space-3); }

@@ -61,15 +61,22 @@ class StepChange:
         A sequence set or changed may not be withdrawn; the sequence may
         not be set, changed or cleared while a stored step is done; the
         steps done may not exceed the steps the task has after the save;
-        and, without a sequence, the total may not fall below the stored
-        steps done.
+        without a sequence, the total may not fall below the stored
+        steps done; and a step that made a lot or took a withdrawal may
+        not be removed.
         """
         errors = {}
         done_before = sum(step.done_on is not None for step in self.stored)
+        booked = any(step.lots.exists() or step.lot_movements.exists()
+                     for step in self.stored)
         if self.replaces and done_before:
             errors["sequence"] = _(
                 "The sequence cannot be set, changed or cleared while a "
                 "step is done.")
+        elif self.replaces and booked:
+            errors["sequence"] = _(
+                "The sequence cannot be set, changed or cleared while a "
+                "step has made a lot or taken a withdrawal.")
         elif self.replaces and self.sequence is not None \
                 and self.sequence.withdrawn:
             errors["sequence"] = _(
@@ -80,6 +87,12 @@ class StepChange:
                 "The steps total may not be below the %(done)s steps "
                 "done.") % {"done": done_before}
         count = len(self.planned())
+        if "sequence" not in errors and "steps_total" not in errors and any(
+                step.lots.exists() or step.lot_movements.exists()
+                for step in self.stored[count:]):
+            errors["sequence" if self.replaces else "steps_total"] = _(
+                "A step that made a lot or took a withdrawal cannot be "
+                "removed.")
         if self.done > count:
             errors["steps_done"] = (
                 _("Steps done may not exceed the %(count)s steps of the "

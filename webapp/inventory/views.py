@@ -15,7 +15,7 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Count
 from django.forms import BaseForm
-from django.http import HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.formats import localize_input
@@ -23,6 +23,7 @@ from django.utils.text import capfirst
 from django.utils.translation import gettext as _
 from django.utils.translation import pgettext
 from django.utils.translation import gettext_lazy
+from django.views.decorators.http import require_POST
 
 from inventory import bookings
 from inventory.bookings import Refused
@@ -33,12 +34,14 @@ from inventory.forms import (ROWS, ConsumptionForm, CorrectionForm,
                              FillForm, ItemEditForm, ItemForm,
                              LotCorrectionForm, LotEditForm, LotForm,
                              NoteEditForm, NoteForm, ReversalForm,
-                             show_refusal)
+                             WithdrawalForm, show_refusal)
 from inventory.history import history_entries
 from inventory.models import (FACTOR, LEVEL_ORDER, Article, DeliveryNote,
-                              Item, Level, Lot, Movement, plain)
+                              Item, Level, Lot, LotMovement, Movement,
+                              Source, plain)
 from inventory.statistics import Statistics, statistics
 from planning import plan
+from tasks.models import TaskStep
 
 LIST = "/lab/inventory/end-products/"
 BULK = "/lab/inventory/end-products/bulk/"
@@ -532,18 +535,36 @@ def item_page(request: HttpRequest, pk: int) -> HttpResponse:
     })
 
 
+@dataclass(frozen=True)
+class LotLedgerRow:
+    """A movement of a lot as its page shows it: the ITEM a filling
+    filled, or None, and whether a withdrawal may still be REVERSIBLE."""
+
+    movement: LotMovement
+    item: Item | None
+    reversible: bool
+
+
 def lot_page(request: HttpRequest, pk: int) -> HttpResponse:
-    """Show the lot PK with its movements, the tasks of its batch and its
-    history; answer 404 for an unknown ID."""
+    """Show the lot PK with its movements, the step that made it, the
+    tasks that belong to it and its history; answer 404 for an unknown
+    ID."""
     lot = get_object_or_404(Lot.objects.select_related(
-        "substance__article"), pk=pk)
+        "substance__article", "task_step__task",
+        "task_step__entry__procedure"), pk=pk)
     movements = lot.movements.select_related(
-        "user", "item_movement__item__article").order_by("-id")
+        "user", "item_movement__item__article", "task_step__task",
+        "task_step__entry__procedure", "reverses", "reversal").order_by(
+            "-id")
     return render(request, "inventory/lot_page.html", {
         "lot": lot,
-        "ledger": [(movement, movement.item_movement.item
-                    if hasattr(movement, "item_movement") else None)
-                   for movement in movements],
+        "ledger": [LotLedgerRow(
+            movement=movement,
+            item=movement.item_movement.item
+            if hasattr(movement, "item_movement") else None,
+            reversible=movement.kind == LotMovement.Kind.WITHDRAWAL
+            and not hasattr(movement, "reversal"))
+            for movement in movements],
         "tasks": plan.batch_tasks(lot),
         "history": history_entries(lot),
     })
@@ -852,24 +873,98 @@ def locations() -> Any:
         .values_list("location", flat=True).distinct()
 
 
+def query_step(request: HttpRequest) -> TaskStep | None:
+    """Return the task step whose ID the query's ``step`` names, or None
+    when the query names none; answer 404 for an unknown or malformed
+    ID."""
+    value = request.GET.get("step", "")
+    if not value:
+        return None
+    if not value.isdigit():
+        raise Http404
+    return get_object_or_404(TaskStep.objects.select_related(
+        "task__substance", "entry__procedure"), pk=int(value))
+
+
+def step_initial(step: TaskStep) -> dict[str, Any]:
+    """Return the values the new-lot form takes from STEP: the first
+    substance the step makes, made in the lab, today, and its task's
+    batch when that substance is the task's."""
+    products = step.products()
+    substance = products[0] if products else None
+    task = step.task
+    return {"substance": substance.key if substance else "",
+            "source": Source.MADE,
+            "batch": task.batch if substance == task.substance else "",
+            "made_on": timezone.localdate()}
+
+
 @login_required
 def lot_new(request: HttpRequest) -> HttpResponse:
     """Create a bulk lot with its opening amount, booked by the
     signed-in user; ``substance``, ``batch`` and ``made_on`` in the
-    query fill in the substance's key, the batch and the date."""
+    query fill in the substance's key, the batch and the date.
+
+    ``step`` in the query makes the lot one made by that task step and
+    fills in the form from it (``step_initial``); a substance the step
+    does not make is refused at the substance. An unknown step answers
+    404.
+    """
+    step = query_step(request)
 
     def book(data: dict[str, Any]) -> HttpResponse:
-        lot = bookings.create_lot(request.user, **data)
+        lot = bookings.create_lot(request.user, task_step=step, **data)
         return saved(request, _("Bulk lot %(lot)s created.") % {"lot": lot},
                      lot_url(lot))
 
-    form = LotForm(request.POST or None, initial={
+    initial = step_initial(step) if step is not None else {
         "substance": request.GET.get("substance", ""),
         "batch": request.GET.get("batch", ""),
-        "made_on": request.GET.get("made_on", "")})
-    return form_page(request, form, book,
-                     {"title": _("New bulk lot"), "cancel": BULK,
-                      "substances": True, "locations": locations()})
+        "made_on": request.GET.get("made_on", "")}
+    title = _("New bulk lot") if step is None else _(
+        "New bulk lot of %(task)s, %(step)s") % {
+            "task": step.task.number, "step": step.label}
+    return form_page(request, LotForm(request.POST or None, initial=initial),
+                     book, {"title": title, "cancel": BULK,
+                            "substances": True, "locations": locations()})
+
+
+@login_required
+def lot_withdraw(request: HttpRequest, pk: int) -> HttpResponse:
+    """Book a withdrawal from the lot PK into a task step, chosen in the
+    form or filled in from ``step`` in the query; answer 404 for an
+    unknown lot."""
+    lot = get_object_or_404(Lot, pk=pk)
+
+    def book(data: dict[str, Any]) -> HttpResponse:
+        bookings.withdraw(request.user, lot, task_step=data["step"],
+                          amount=data["amount"], date=data["date"])
+        return saved(request, _("Withdrawal from %(lot)s booked.")
+                     % {"lot": lot}, lot_url(lot))
+
+    return form_page(
+        request, WithdrawalForm(request.POST or None, initial={
+            "step": request.GET.get("step", "")}), book,
+        {"title": _("Withdraw from %(lot)s") % {"lot": lot},
+         "cancel": lot_url(lot), "unit": lot.unit_label})
+
+
+@login_required
+@require_POST
+def lot_movement_reverse(request: HttpRequest, pk: int) -> HttpResponse:
+    """Reverse the withdrawal PK and return to its lot's page with a
+    message; a refusal leaves an error message. Answer 404 for an
+    unknown movement and 405 for a request other than POST."""
+    movement = get_object_or_404(LotMovement.objects.select_related("lot"),
+                                 pk=pk)
+    lot = movement.lot
+    try:
+        bookings.reverse_withdrawal(request.user, movement)
+    except Refused as refused:
+        messages.error(request, " ".join(refused.messages))
+        return redirect(lot_url(lot))
+    return saved(request, _("Withdrawal from %(lot)s reversed.")
+                 % {"lot": lot}, lot_url(lot))
 
 
 @login_required

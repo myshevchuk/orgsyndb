@@ -29,4 +29,8 @@ urlpatterns = [
     path("bulk/<int:pk>/", views.lot_page, name="lot"),
     path("bulk/<int:pk>/edit/", views.lot_edit, name="lot_edit"),
     path("bulk/<int:pk>/correct/", views.lot_correct, name="lot_correct"),
+    path("bulk/<int:pk>/withdraw/", views.lot_withdraw,
+         name="lot_withdraw"),
+    path("bulk/movements/<int:pk>/reverse/", views.lot_movement_reverse,
+         name="lot_movement_reverse"),
 ]
