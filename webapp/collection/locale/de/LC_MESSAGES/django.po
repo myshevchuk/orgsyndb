@@ -158,3 +158,15 @@ msgstr "Noch keine Importe."
 
 msgid "General"
 msgstr "Allgemein"
+
+msgid "Enter OSDB- or SEQ- and four digits."
+msgstr "OSDB- oder SEQ- und vier Ziffern eingeben."
+
+msgid "Issued"
+msgstr "Vergeben"
+
+msgid "issued ID"
+msgstr "vergebene ID"
+
+msgid "issued IDs"
+msgstr "vergebene IDs"

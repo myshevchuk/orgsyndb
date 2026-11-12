@@ -28,6 +28,7 @@ from . import BERLIN, load_demo_registry, make_demo_accounts
 
 MANIFEST = "/lab/collection/manifest/"
 IMPORTS = "/lab/collection/"
+IDS = "/lab/collection/ids/"
 TOKEN = "s3cret"
 FIXTURE = Path(__file__).resolve().parents[1] / "demo" / "manifest.json"
 TOOLING = "b" * 40
@@ -152,6 +153,66 @@ def accepts(case: TestCase, make: Any) -> Any:
     return record
 
 
+# --- issued IDs and access tokens -------------------------------------------
+
+
+def issue_ids(*keys: str) -> None:
+    """Record each of ``keys`` as an issued ID, to no account, unless it
+    is issued already: what ``adopt_ids`` does. Does nothing while the
+    application has no issued IDs to record."""
+    from django.apps import apps
+    from django.utils import timezone
+    try:
+        model = apps.get_model("collection", "IssuedId")
+    except LookupError:
+        return
+    for key in keys:
+        model.objects.get_or_create(
+            key=key, defaults={"issued_at": timezone.now()})
+
+
+def issued_keys() -> list[str]:
+    """The key of every issued ID, in order."""
+    from collection.models import IssuedId
+    return sorted(IssuedId.objects.values_list("key", flat=True))
+
+
+def issued_to(key: str) -> str | None:
+    """The user name of the account the issued ID ``key`` was issued
+    to, or None for an adopted one."""
+    from collection.models import IssuedId
+    found = IssuedId.objects.select_related("user").get(key=key)
+    return None if found.user is None else found.user.username
+
+
+def make_token(username: str, name: str = "Laptop") -> str:
+    """A new access token of the account ``username``; return the token
+    itself."""
+    from django.contrib.auth import get_user_model
+
+    from accounts.models import AccessToken
+    return AccessToken.create_for(
+        get_user_model().objects.get(username=username), name)[1]
+
+
+def request_id(client: Any, kind: Any, token: str | None = None,
+               **extra: Any) -> Any:
+    """Post the kind ``kind`` to the ID path, signed with the access
+    token ``token`` unless it is None."""
+    headers = ({} if token is None
+               else {"HTTP_AUTHORIZATION": f"Bearer {token}"})
+    return client.post(IDS, json.dumps({"kind": kind}),
+                       content_type="application/json", **headers,
+                       **extra)
+
+
+def ids_of(data: dict[str, Any]) -> list[str]:
+    """The IDs of the procedures and sequences of the collection half
+    ``data`` of a manifest."""
+    return [*(item["id"] for item in data["procedures"]),
+            *(item["id"] for item in data["sequences"])]
+
+
 # --- rows made directly, without the manifest view -------------------------
 
 
@@ -177,6 +238,7 @@ def make_procedure(last_import: Any, key: str = "OSDB-0002",
                    **fields: Any) -> Any:
     from collection.models import Procedure
     from vocabulary.models import ReactionType
+    issue_ids(key)
     values = {"key": key, "source": "md", "title": "Aspirin",
               "reaction_type": ReactionType.objects.get(key="acylation"),
               "general": False, "last_import": last_import}
@@ -205,6 +267,7 @@ def make_sequence(last_import: Any, key: str = "SEQ-0001",
                   **fields: Any) -> Any:
     from collection.models import Sequence
     from registry.models import Substance
+    issue_ids(key)
     values = {"key": key, "title": "Aspirin from wintergreen",
               "target": Substance.objects.get(key=target),
               "last_import": last_import}
@@ -238,11 +301,14 @@ def import_collection(collection: dict[str, Any] | None = None,
     ``collection`` (the demo's by default) built after the latest
     accepted import against the registry as it is now, with ``over``
     replacing keys; assert that it is accepted and return the import.
-    The database must hold the demo registry or the substances the
-    collection names."""
+    The IDs of the collection are issued first, as ``adopt_ids`` would
+    issue them. The database must hold the demo registry or the
+    substances the collection names."""
     from django.test import Client
 
     from collection.models import Import
+    issue_ids(*ids_of(demo_collection() if collection is None
+                      else collection))
     latest = latest_import()
     body = manifest(collection, **{
         "base": None if latest is None else latest.pk, **over})

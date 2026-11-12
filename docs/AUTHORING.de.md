@@ -41,13 +41,49 @@ orgsyndb new --md --lang de "Produktname"
 ```
 
 Der Befehl wird im Ordner der Sammlung ausgeführt. Er legt eine Datei wie
-`md/procedures/OSDB-0003-produktname.de.md` an und trägt die nächste
-freie Vorschriftennummer, den Seitennamen, den Titel und beide Zeitangaben
+`md/procedures/OSDB-0003-produktname.de.md` an und trägt die zugeteilte
+Vorschriftennummer, den Seitennamen, den Titel und beide Zeitangaben
 ein. Umlaute und ß im Titel werden im Dateinamen ausgeschrieben: aus
 „Größe“ wird `groesse`.
 
-Wenn Sie die Vorlage selbst kopieren, fragen Sie zuerst nach der nächsten
-`OSDB-NNNN`-Nummer. Ersetzen Sie `OSDB-0000` in `id` und im Dateinamen und
+Ist `registry` in der `orgsyndb.toml` der Sammlung eine HTTP- oder
+HTTPS-Adresse, teilt die Laboranwendung die Nummer zu. Sie brauchen einen
+persönlichen Zugangsschlüssel: einen geheimen Wert, mit dem der Befehl eine
+Nummer für Ihr Konto anfordert. Melden Sie sich in der Laboranwendung an
+und wählen Sie **Zugangsschlüssel** neben Ihren Initialen oder öffnen Sie
+`/lab/accounts/tokens/`. Tragen Sie unter **Name** einen Namen ein und wählen
+Sie **Anlegen**. Kopieren Sie den Schlüssel sofort; er wird nur einmal
+angezeigt.
+
+Schreiben Sie ihn auf dem Rechner, der den Befehl ausführt, in die erste
+Zeile von `~/.config/orgsyndb/token`. Ist `XDG_CONFIG_HOME` gesetzt und
+nicht leer, verwenden Sie stattdessen `$XDG_CONFIG_HOME/orgsyndb/token`.
+Sie können auch `ORGSYNDB_TOKEN` in der Umgebung des Befehls setzen; ein
+nicht leerer Wert hat Vorrang vor der Datei. Bewahren Sie den Schlüssel
+außerhalb der Sammlung auf. Mit **Widerrufen** auf derselben Seite machen
+Sie ihn unbrauchbar. Auch das Deaktivieren des Kontos setzt ihn außer Kraft.
+
+Fehlt ein Schlüssel, meldet der Befehl `no access token`. Ist die Anwendung
+nicht erreichbar oder lehnt sie die Anfrage ab, zeigt er Adresse und Grund.
+In jedem Fall endet er mit Rückgabewert 1 und legt keine Datei an. Er wartet
+bis zu 30 Sekunden; offline können Sie keine Nummer erhalten. Prüfen Sie
+bei Status 401 Ihren Schlüssel und ob Ihr Konto aktiv ist. Bei Status 409 mit
+`no import of the collection has been accepted yet, so its IDs are not known`
+bitten Sie die verantwortliche Person, den ersten Import der Sammlung
+annehmen zu lassen, und versuchen es danach erneut.
+
+Ist das Register eine Datei oder fehlt die Einstellung `registry`, nimmt
+der Befehl die nächste Nummer oberhalb der Nummern in Vorschriftenquellen,
+Exporten und der gesamten verfügbaren Git-Geschichte. Gelöschte Nummern
+werden nicht erneut vergeben. Fehlt die Geschichte oder enthält die Kopie
+nur einen Teil davon (flacher Klon), warnt er: Ältere gelöschte Nummern
+können dann unbemerkt bleiben.
+`ORGSYNDB_REGISTRY` ändert nicht, woher `new` seine Nummer bekommt.
+
+Wenn Sie die Vorlage selbst kopieren, bitten Sie zuerst die verantwortliche
+Person, mit `orgsyndb new --md --lang de` ein Gerüst für diese Datei
+anzulegen und Ihnen dessen `OSDB-NNNN`-Nummer zu geben. Ersetzen Sie
+`OSDB-0000` in `id` und im Dateinamen und
 `osdb-0000` in `slug` durch dieselbe Nummer in Kleinbuchstaben. Speichern
 Sie die Datei nach diesem Muster:
 
@@ -676,14 +712,31 @@ Der Syntheseweg hält den Weg fest, den Ihre Gruppe durchführt; den Baum
 **Herstellungswege** auf der Verbindungsseite leitet die Website aus den
 Vorschriften der Sammlung ab.
 
-Kopieren Sie [templates/sequence.md](../templates/sequence.md) nach
-`md/sequences/` der Sammlung. `orgsyndb init` legt diesen Ordner an.
-`orgsyndb new` erzeugt Vorschriftengerüste, daher kopieren Sie die
-Synthesewegvorlage von Hand. Fragen Sie nach einer freien `SEQ-NNNN`-Nummer
-von `0001` bis `9999`. Ersetzen Sie `SEQ-0000` in `id` und `seq-0000` in
-`slug`; speichern Sie als `SEQ-NNNN-short-slug.de.md`. Der kurze Slug besteht
-aus Kleinbuchstaben, Ziffern und einzelnen Bindestrichen. Synthesewege sind
-Markdown-Dateien, auch wenn ihre Stufen Org-Vorschriften verwenden.
+Legen Sie im Ordner der Sammlung ein Gerüst an:
+
+```sh
+orgsyndb new --sequence "Aspirin-Synthese"
+```
+
+Der Befehl verwendet [templates/sequence.md](../templates/sequence.md) und
+erzeugt `md/sequences/SEQ-NNNN-aspirin-synthese.md`; `NNNN` ist die zugeteilte
+Nummer von `0001` bis `9999`. `orgsyndb init` legt diesen Ordner an. Der
+Befehl füllt `id`, den kleingeschriebenen `slug`, den Titel und beide
+Zeitangaben aus. Lassen Sie `id` und `slug` stehen. Bei einer
+Registeradresse fordert er die Nummer mit Ihrem Zugangsschlüssel von der
+Laboranwendung an, wie in Abschnitt 1 erklärt. Bei einer Registerdatei
+oder ohne Einstellung nimmt er die nächste Nummer oberhalb der Nummern
+in `md/sequences/` und dessen gesamter verfügbarer Git-Geschichte,
+einschließlich gelöschter Dateien. Dieselben Fehlermeldungen und Warnungen
+zur Geschichte gelten.
+
+Synthesewege sind Markdown-Dateien, auch wenn ihre Stufen Org-Vorschriften
+verwenden. Fügen Sie `--sequence` weder `--md` noch `--lang` hinzu; beide
+Kombinationen enden mit Rückgabewert 2. Der Dateiname hat die Form
+`SEQ-NNNN-short-slug.md`; der kurze Slug besteht aus Kleinbuchstaben,
+Ziffern und einzelnen Bindestrichen. Kopieren Sie die Datei für eine
+deutsche Fassung mit `.de` vor `.md` und übersetzen Sie Titel und
+Anmerkungen. Eine deutsche Synthesewegvorlage gibt es nicht.
 
 Behalten Sie die beiden `+++`-Zeilen. Setzen Sie `title` und schreiben Sie
 `date` und `lastmod` wie bei einer Vorschrift ohne Anführungszeichen und mit

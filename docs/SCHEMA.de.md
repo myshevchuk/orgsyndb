@@ -724,10 +724,22 @@ die Seite die vollständige Tabelle und einen entsprechenden Hinweis.
 
 Ein Syntheseweg hält eine geordnete Folge von mindestens zwei Vorschriften
 fest. Schreiben Sie ihn in Markdown, auch wenn seine Stufen Org-Vorschriften
-verwenden. Kopieren Sie [templates/sequence.md](../templates/sequence.md) nach
-`md/sequences/` der Sammlung. `orgsyndb init` legt diesen Ordner an; ein
-fehlender Ordner enthält keine Synthesewege. `orgsyndb new` erzeugt
-Vorschriften, daher kopieren Sie die Vorlage für Synthesewege von Hand.
+verwenden. Legen Sie im Ordner der Sammlung mit
+`orgsyndb new --sequence "Aspirin-Synthese"` ein Gerüst aus
+[templates/sequence.md](../templates/sequence.md) an. Der Befehl schreibt
+die Datei nach `md/sequences/` und füllt `id`, `slug`, den Titel und beide
+Zeitangaben aus. Ist `registry` in der `orgsyndb.toml` der Sammlung eine
+HTTP- oder HTTPS-Adresse, vergibt die Laboranwendung die Nummer mit Ihrem
+persönlichen Zugangsschlüssel. Bei einer Registerdatei oder ohne Einstellung
+nimmt der Befehl die nächste Nummer oberhalb der Nummern in `md/sequences/`
+und dessen gesamter verfügbarer Git-Geschichte, einschließlich gelöschter
+Dateien. Wie Sie den Schlüssel einrichten und auf Fehler reagieren, steht
+unter [Eine Vorschriftendatei bekommen](AUTHORING.de.md#1-eine-vorschriftendatei-bekommen).
+`--sequence` akzeptiert weder `--md` noch `--lang`; beide Kombinationen
+enden mit Rückgabewert 2. Eine deutsche Synthesewegvorlage gibt es nicht;
+kopieren Sie die Datei für eine deutsche Fassung mit `.de` vor `.md`.
+`orgsyndb init` legt den Ordner an; ein fehlender Ordner enthält keine
+Synthesewege.
 
 Ein Syntheseweg hält den Weg fest, den Ihre Gruppe durchführt. Den Baum
 **Herstellungswege** auf der Verbindungsseite leitet die Website aus den
@@ -735,9 +747,10 @@ Vorschriften der Sammlung ab.
 
 Der Dateiname ist `SEQ-NNNN-short-slug.md`, optional mit `.de` oder `.en` vor
 `.md`. Der kurze Slug entspricht `[a-z0-9]+(-[a-z0-9]+)*`. Die Nummer im
-Dateinamen muss gleich `id` sein. Ersetzen Sie die Vorlagenwerte `SEQ-0000`
-und `seq-0000` durch eine freie Nummer von `SEQ-0001` bis `SEQ-9999` und ihre
-Kleinschreibung. Die Seite steht unter `/sequences/seq-NNNN/`.
+Dateinamen muss gleich `id` sein. `SEQ-0000` und `seq-0000` sind
+Vorlagenwerte; `orgsyndb new --sequence` ersetzt sie durch die zugeteilte
+Nummer von `SEQ-0001` bis `SEQ-9999` und ihre Kleinschreibung. Lassen Sie
+diese Werte stehen. Die Seite steht unter `/sequences/seq-NNNN/`.
 
 Der Validator liest nur die oberste Ebene. Unterordner sind Fehler;
 versteckte Dateien und `_index.md` überspringt er stillschweigend. Eine Datei
@@ -1302,7 +1315,7 @@ TOML-Fehler folgen denselben Regeln wie bei Vorschriften.
 |---|---|---|
 | Jedes Pflichtfeld | `required field missing` | Das Feld aus der Feldtabelle ergänzen. |
 | `id` | `must match SEQ-NNNN` oder `must be between SEQ-0001 and SEQ-9999` | `SEQ-` und vier Ziffern von `0001` bis `9999` verwenden. |
-| `id` | `duplicate id <id>, also used by <path>` | Eine freie Nummer vergeben; je Sprachkürzel und einmal ohne Kürzel darf eine Datei sie teilen. |
+| `id` | `duplicate id <id>, also used by <path>` | Für einen anderen Weg mit `orgsyndb new --sequence "Titel des Wegs"` ein Gerüst anlegen und Ziel, Stufen und Anmerkungen des anderen Wegs dorthin übertragen. Neue `id` und neuen `slug` behalten. Übersetzungen desselben Wegs dürfen sich je Sprachkürzel und einmal ohne Kürzel eine Nummer teilen. |
 | `slug` | `must be "<value>" (the lowercased id)` | Die `id` in Kleinbuchstaben verwenden. |
 | `file_name` | `must be named SEQ-NNNN-short-slug.md` oder `does not match id <id>` | Dateinamen oder Nummer korrigieren. |
 | `target` | `unknown compound "<key>"; the registry has no substance of this key` | Schlüssel korrigieren oder Stoff in der Laboranwendung anlegen. |

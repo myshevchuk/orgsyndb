@@ -164,16 +164,18 @@ A failing step stops the command with exit 1. Any other value of `ORGSYNDB_LAB` 
 - **THEN** it exits 1, and stderr names the failing PDF
 
 ### Requirement: new subcommand
-`tools/orgsyndb new [--md] TITLE...` SHALL create one procedure stub in the collection with `pipeline.new_procedure(collection, words, md, now, language)`, and print the created file's path relative to the collection. `new_procedure` is the only place that checks the title and the `--lang` value; a bad value raises `pipeline.UsageError`, and the program exits 2. The stub is created as follows:
+`tools/orgsyndb new [--md | --sequence] TITLE...` SHALL create one procedure stub in the collection with `pipeline.new_procedure(collection, words, md, now, language)`, or with `--sequence` one sequence stub with `pipeline.new_sequence(collection, words, now)`, and print the created file's path relative to the collection. `--sequence` with `--md` or `--lang` is a usage error. `new_procedure` and `new_sequence` check the title, and `new_procedure` the `--lang` value; a bad value raises `pipeline.UsageError`, and the program exits 2. When no ID can be had, they raise `validate.ConfigError`, printed as `orgsyndb: error: <message>` with exit 1, and create nothing. The stub is created as follows:
 - The title is the words of `TITLE...` joined by single spaces and trimmed. It must not be empty or contain a newline.
-- The file is `org/procedures/<ID>-<slug>.org`, or `md/procedures/<ID>-<slug>.md` with `--md`. It is copied from the application's `templates/procedure.org` or `templates/procedure.md` and filled by `pipeline.fill_template`.
+- A procedure stub is `org/procedures/<ID>-<slug>.org`, or `md/procedures/<ID>-<slug>.md` with `--md`, copied from the application's `templates/procedure.org` or `templates/procedure.md` and filled by `pipeline.fill_template` with the kind `org` or `md`. A sequence stub is `md/sequences/<ID>-<slug>.md`, copied from `templates/sequence.md` and filled with the kind `sequence`: every `SEQ-0000` becomes the ID and every `seq-0000` its lowercase form, and the `title`, `date` and `lastmod` lines take the title and the time as in a Markdown procedure stub.
 - It is created with exclusive creation, so an existing file is never overwritten.
-- `ID` is `pipeline.next_id` over the candidate names, and `slug` is `pipeline.slugify(title)`.
+- `ID` is `pipeline.take_id(collection, kind)`, the kind `procedure` or `sequence`. When the `registry` that the collection's `orgsyndb.toml` names is an address, whatever `ORGSYNDB_REGISTRY` holds, the lab application issues it: `take_id` posts `{"kind": <kind>}` to `<origin>/lab/collection/ids/` (collection-import "Issued IDs"), `<origin>` being the address's scheme, host and port, with a timeout of 30 seconds and `Authorization: Bearer <token>`. The token is `ORGSYNDB_TOKEN` when it is set and not empty, else the first line of `$XDG_CONFIG_HOME/orgsyndb/token`, `XDG_CONFIG_HOME` being `~/.config` when unset or empty; without one, `take_id` fails with a message naming both. An answer other than 201 with an `id` of the kind fails with a message naming the address, the status and the answer's `error` when it has one. When the collection's `registry` is a path or is not named, `ID` is `pipeline.next_id(<candidate names>, <prefix>)`, the prefix `OSDB` or `SEQ`. `slug` is `pipeline.slugify(title)`.
 - The stub records no AI model. An Org stub has no `#+AI_MODEL` line, even when the template has one, and a Markdown stub has no `ai_model` key; the Markdown template's commented-out `ai_model` line stays commented out.
 
-The candidate names for `next_id` are:
+`pipeline.next_id(names, prefix="OSDB")` returns the ID one above the highest `<prefix>-NNNN` that a name begins with, in any case, and `<prefix>-0001` when none does; it raises `ValueError` when the highest is `<prefix>-9999`. The candidate names of a procedure are:
 - the top-level entry names of the collection's `org/procedures/`, `md/procedures/` and `build/export/`;
 - the base names of every path that `git -C <collection> log --all --no-renames --format= --name-only -- org/procedures md/procedures` reports.
+
+Those of a sequence are the top-level entry names of `md/sequences/` and the base names of the paths that the same command reports for `md/sequences`.
 
 When `git` is unavailable or the collection is not inside a git work tree, `new` prints a warning to stderr and uses the directories alone. When the work tree is a shallow clone, `new` still scans the history it has, and prints a warning to stderr containing `shallow`, because IDs deleted before the shallow boundary cannot be seen.
 
@@ -228,6 +230,31 @@ When `git` is unavailable or the collection is not inside a git work tree, `new`
 - **THEN** the created file is `md/procedures/OSDB-0001-bob-s-best-ester.md`
 - **AND** its front matter parses with `tomllib`, with `title` equal to `Bob's "best" ester`, `date` and `lastmod` equal to `2026-10-19T17:42:05+02:00`, `id` equal to `OSDB-0001`, and no `ai_model` key
 - **AND** `tools/validate.py` on its directory exits 0 and prints nothing to stdout
+
+#### Scenario: An ID from the application
+- **WHEN** a test serves an ID endpoint answering `{"id": "OSDB-0042"}` beside a snapshot, points a collection's registry at that snapshot, sets `ORGSYNDB_TOKEN`, and runs `tools/orgsyndb new --md "Test product"`
+- **THEN** it creates `md/procedures/OSDB-0042-test-product.md`, and the endpoint received the kind `procedure` with that token
+
+#### Scenario: No token
+- **WHEN** the same test runs `new` without `ORGSYNDB_TOKEN` and with no token file under the home directory
+- **THEN** it exits 1, creates nothing, and stderr names `ORGSYNDB_TOKEN` and `~/.config/orgsyndb/token`
+
+#### Scenario: Refused by the application
+- **WHEN** the endpoint of the same test answers 409 with `{"error": "no import yet"}`
+- **THEN** `new` exits 1, creates nothing, and stderr contains `409` and `no import yet`
+
+#### Scenario: The registry setting decides
+- **WHEN** the same test sets `ORGSYNDB_REGISTRY` to a snapshot file and runs `new --md "Test product"` with a token
+- **THEN** the endpoint is still asked, and the file created is `md/procedures/OSDB-0042-test-product.md`
+
+#### Scenario: Next sequence ID
+- **WHEN** a test calls `next_id` with `SEQ-0002-a.md`, `OSDB-0007-b.md` and `seq-0004-c.md` and the prefix `SEQ`
+- **THEN** it returns `SEQ-0005`
+
+#### Scenario: A sequence stub
+- **WHEN** a test makes a temporary git repository holding a collection whose registry is a file, commits `md/sequences/SEQ-0002-a.md` and `md/sequences/SEQ-0004-old.md`, deletes the second in another commit, and calls `new_sequence` on it for the title `Aspirin route` at `2026-10-19T17:42:05+02:00`
+- **THEN** it creates `md/sequences/SEQ-0005-aspirin-route.md`, whose front matter parses with `tomllib` to `id` `SEQ-0005`, `slug` `seq-0005`, `title` `Aspirin route`, and `date` and `lastmod` `2026-10-19T17:42:05+02:00`
+- **AND** `tools/orgsyndb new --sequence --md "Aspirin route"` exits 2 and creates nothing
 
 ### Requirement: clean subcommand
 `tools/orgsyndb clean` SHALL remove the collection's `build/`, `public/` and `pdf/`. `clean --all` also removes the application's `.emacs-batch/` and `.tools/`. Both forms touch no other path, and both succeed when there is nothing to remove.
@@ -348,6 +375,8 @@ The application's `.gitignore` SHALL keep `__pycache__/` and `.pytest_cache/`, a
 - `procedures`: one table per procedure ID among the files of `build/export/` and `md/procedures/` whose names the validator's procedure file-name pattern accepts, ordered by ID, each with `id`; `source`, `org` when the variant the site publishes for that ID (localization "Choosing the variant to publish") is an export of an Org source, else `md`; `title`, that variant's title; `title_de`, the title of the ID's file tagged `de`, or `null` when it has none; `reaction_type`, the one element of that variant's `reaction_types`; `general`, whether the procedure has `scope`; and `entries`, the procedure's scope entries in file order, one per element of `scope` for a general procedure, else one made of the top-level `substrates` and `products`, each a table of `substrates`, a list of keys in file order, and `products`, a list of tables of `compound` and `yield_percent`, in file order;
 - `sequences`: one table per sequence ID among the files of `md/sequences/` whose names the sequence file-name pattern accepts, ordered by ID, each with `id`; `title`, the title of the variant the site publishes; `title_de`, as for a procedure; `target`; and `steps`, a list of tables of `procedure` and `entry`, the number, counted from 1, of the entry the step names (synthesis-sequences "Sequence fields"), or `null` for a step of a specific procedure.
 
+- `deleted`: the procedure and sequence IDs, in upper case and in order, that the base name of a path under `org/procedures`, `md/procedures` or `md/sequences` in the collection's git history begins with, read as `new` reads it (new subcommand), and that `procedures` and `sequences` do not name. Without usable git history, or in a shallow clone, it warns on stderr as `new` does.
+
 It reads no registry and checks no value: it runs after a build that validated the collection.
 
 #### Scenario: Manifest of the demo
@@ -369,4 +398,12 @@ It reads no registry and checks no value: it runs after a build that validated t
 #### Scenario: Arguments are refused
 - **WHEN** a test runs `tools/orgsyndb -C <collection> manifest all`
 - **THEN** it exits 2, and stderr contains the word `usage`
+
+#### Scenario: Deleted IDs
+- **WHEN** a test makes a temporary git repository holding a collection, commits `md/procedures/OSDB-0012-old.md` and `md/sequences/SEQ-0004-old.md`, deletes both in a second commit, and calls `manifest_data` on it
+- **THEN** its `deleted` is `["OSDB-0012", "SEQ-0004"]`
+
+#### Scenario: Nothing deleted from the demo
+- **WHEN** a test builds a copy of the demo collection and runs `tools/orgsyndb -C <collection> manifest`
+- **THEN** its `deleted` is `[]`
 

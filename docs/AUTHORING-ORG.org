@@ -41,6 +41,7 @@
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-11 Wed 18:03] -- collection registry, built-in fields, images, vocabularies and validation
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-12 Thu 09:06] -- sequence entry keys, examples, messages, scope uniqueness and Emacs completion
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-12 Thu 18:50] -- author accounts, validation, pages, names and Emacs completion
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-12 Thu 20:59] -- issued IDs, access tokens and sequence stubs
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -58,16 +59,44 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   orgsyndb new "Product name"
 #+end_src
 
-  The command chooses the next free identifier across the Org sources,
-  Markdown sources, existing exports, and available Git history. It creates
-  a file such as ~org/procedures/OSDB-0003-product-name.org~ and fills its
+  The command creates a file such as
+  ~org/procedures/OSDB-0003-product-name.org~ and fills its
   identifier, slug, title, and current Europe/Berlin timestamps.
+
+  When ~registry~ in the collection's ~orgsyndb.toml~ is an HTTP or HTTPS
+  address, the lab application assigns the identifier. You need a personal
+  access token: a secret that lets the command request an ID as your
+  account. Sign in to the application, choose *Access tokens* beside your
+  initials or open ~/lab/accounts/tokens/~, enter a *Name* and choose
+  *Create*. Copy the token immediately; it is shown only once.
+
+  Put it on the first line of =~/.config/orgsyndb/token= on the computer
+  running the command. If ~XDG_CONFIG_HOME~ is set and not empty, use
+  ~$XDG_CONFIG_HOME/orgsyndb/token~ instead. You can also set ~ORGSYNDB_TOKEN~
+  in the command's environment; a non-empty value takes precedence over
+  the file. Keep the token outside the collection. To stop a token working,
+  choose *Revoke* on the same page. Deactivating its account also stops it.
+
+  If no token is available, the command reports ~no access token~. If the
+  application is unreachable or refuses the request, it shows the address
+  and reason. In each case it exits 1 and creates no file. It waits up to
+  30 seconds; you cannot get an ID offline. For status 401, check your
+  token and whether your account is active. For status 409 with
+  ~no import of the collection has been accepted yet, so its IDs are not known~,
+  ask the owner to get the first collection import accepted, then try again.
+
+  With a registry file or no ~registry~ setting, the command takes the next
+  ID above those in the Org sources, Markdown sources, exports and
+  all available Git history. Deleted IDs are not reused. It warns if
+  history is unavailable or the copy holds only part of it (a shallow clone),
+  because older deleted IDs may be unseen. ~ORGSYNDB_REGISTRY~ does not
+  change where ~new~ gets its ID. ~M-x orgsyndb-new-procedure~ runs the same
+  command and uses the
+  same token; Emacs waits for the request and shows its error if it fails.
 
   The stub records no AI model. To record an assisting model, add
   ~#+AI_MODEL: example-model-1~ by hand. The command creates the file
-  exclusively and never overwrites an existing file. It prints a warning if
-  Git history is unavailable or the clone is shallow, because it may then be
-  unable to see a deleted identifier.
+  exclusively and never overwrites an existing file.
 
   The source template is [[file:../templates/procedure.org][templates/procedure.org]]. The complete field rules
   are in [[file:SCHEMA.md][the procedure schema]].
@@ -693,12 +722,28 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   A sequence records the route your group runs; the compound page's
   *Routes* tree is derived from the collection's procedures.
 
-  Copy [[file:../templates/sequence.md][templates/sequence.md]] into the collection's ~md/sequences/~.
-  ~orgsyndb init~ creates this directory. ~orgsyndb new~ creates procedure
-  stubs, so copy the sequence template by hand. Choose an unused ~SEQ-NNNN~
-  number from ~0001~ to ~9999~. Replace ~SEQ-0000~ in ~id~ and ~seq-0000~ in
-  ~slug~; save as ~SEQ-NNNN-short-slug.md~. Use lowercase letters, digits and
-  single hyphens for the short slug.
+  From inside the collection, create a stub with:
+
+#+begin_src sh
+  orgsyndb new --sequence "Aspirin route"
+#+end_src
+
+  The command uses [[file:../templates/sequence.md][templates/sequence.md]] to create
+  ~md/sequences/SEQ-NNNN-aspirin-route.md~, where ~NNNN~ is the assigned
+  number from ~0001~ to ~9999~. ~orgsyndb init~ creates this directory.
+  The command fills ~id~, its lowercase ~slug~, the title and both dates.
+  Leave ~id~ and ~slug~ as supplied. With a registry address it requests
+  the ID from the lab application using your token, as for a procedure.
+  With a registry file or no setting it takes the next ID above those in
+  ~md/sequences/~ and all its available Git history, including deleted
+  files. The same failure messages and history warnings apply.
+
+  Do not add ~--md~ or ~--lang~ to ~--sequence~; either combination exits 2.
+  There is no Emacs command for creating a sequence. The file name has the
+  form ~SEQ-NNNN-short-slug.md~; use lowercase letters, digits and single
+  hyphens in the short slug. For a German version, copy the file with ~.de~
+  before ~.md~ and translate the title and notes. There is no German sequence
+  template.
 
   The information block is TOML, between two ~+++~ lines. Text values use
   double quotes; lists of compound keys use square brackets. Fill ~title~,

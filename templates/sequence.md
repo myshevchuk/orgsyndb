@@ -14,13 +14,13 @@
 # - Numbers have no quotes: 2
 # Keep the two +++ lines exactly as they are.
 
-# id: the sequence number, SEQ- and four digits, e.g. "SEQ-0001". Use
-# the next number not yet taken in md/sequences/. It must match the
-# start of the file name.
+# id: the sequence number, SEQ- and four digits, e.g. "SEQ-0001".
+# orgsyndb new --sequence fills it in for you; do not change it. It
+# must match the start of the file name.
 id = "SEQ-0000"
 
 # slug: the web address of the page. Always the id in lowercase, e.g.
-# "seq-0001".
+# "seq-0001". orgsyndb new --sequence fills it in for you.
 slug = "seq-0000"
 
 # title: the name of the sequence, as shown in the page heading.

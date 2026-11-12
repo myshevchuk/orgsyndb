@@ -11,6 +11,7 @@ and tests apply, from drifting from what the program prints.
 
 import json
 import shutil
+import subprocess
 import tempfile
 import unittest
 import unittest.mock
@@ -18,9 +19,10 @@ from pathlib import Path
 from typing import Any
 
 import pipeline_support as ps
-from pipeline_support import (DEMO, REPO, TEST_COLLECTION,
-                              keep_registry_inside, make_path, make_sandbox,
-                              pipeline, pipeline_function, snapshot)
+from pipeline_support import (DEMO, GIT_QUIET, REPO, TEST_COLLECTION,
+                              captured, keep_registry_inside, make_path,
+                              make_sandbox, pipeline, pipeline_function,
+                              snapshot)
 
 FIXTURE = REPO / "webapp" / "demo" / "manifest.json"
 PROCEDURE_KEYS = {"id", "source", "title", "title_de", "reaction_type",
@@ -92,7 +94,7 @@ class ManifestDataTests(unittest.TestCase):
     def test_keys(self) -> None:
         """Requirement: manifest subcommand (the table's keys)."""
         self.assertEqual(set(self.data),
-                         {"language", "procedures", "sequences"})
+                         {"language", "procedures", "sequences", "deleted"})
         self.assertEqual(self.data["language"], pipeline().site_language(
             pipeline().APP / "site"))
 
@@ -399,6 +401,143 @@ class ManifestDataTests(unittest.TestCase):
         self.assertFalse((self.root / "build").exists())
 
 
+def git(root: Path, *args: str | Path) -> None:
+    subprocess.run(["git", *GIT_QUIET, "-C", str(root), *map(str, args)],
+                   check=True, capture_output=True, timeout=60)
+
+
+def write(root: Path, name: str) -> Path:
+    """Write the file ``name`` of the collection ``root``, which
+    holds a line of text."""
+    path = root / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("x\n", encoding="utf-8")
+    return path
+
+
+@unittest.skipUnless(shutil.which("git"), "git not found")
+class DeletedTests(unittest.TestCase):
+    """Requirement: manifest subcommand (`deleted`)."""
+
+    def setUp(self) -> None:
+        self.root = copy_collection(self, TEST_COLLECTION)
+        git(self.root, "init", "-q")
+        git(self.root, "add", "-A")
+        git(self.root, "commit", "-q", "-m", "the collection")
+
+    def deleted(self) -> list[str]:
+        found, _out, _err = captured(manifest_of, self.root)
+        return found.get("deleted")
+
+    def test_deleted_ids(self) -> None:
+        """Scenario: Deleted IDs."""
+        old = [write(self.root, "md/procedures/OSDB-0012-old.md"),
+               write(self.root, "md/sequences/SEQ-0004-old.md")]
+        git(self.root, "add", "-A")
+        git(self.root, "commit", "-q", "-m", "add old files")
+        for path in old:
+            path.unlink()
+        git(self.root, "commit", "-q", "-a", "-m", "delete them")
+        self.assertEqual(self.deleted(), ["OSDB-0012", "SEQ-0004"])
+
+    def test_nothing_deleted(self) -> None:
+        """Requirement: manifest subcommand (the IDs that `procedures`
+        and `sequences` do not name)."""
+        self.assertEqual(self.deleted(), [])
+
+    def test_the_ids_are_in_upper_case_and_in_order(self) -> None:
+        """Requirement: manifest subcommand (in upper case and in
+        order, read as `new` reads it)."""
+        old = [write(self.root, "md/sequences/seq-0006-old.md"),
+               write(self.root, "org/procedures/OSDB-0014-old.org"),
+               write(self.root, "md/procedures/osdb-0013-old.md"),
+               write(self.root, "md/procedures/OSDB-0012-old.de.md"),
+               write(self.root, "md/procedures/OSDB-0012-old.md"),
+               write(self.root, "md/sequences/SEQ-0004-old.md")]
+        git(self.root, "add", "-A")
+        git(self.root, "commit", "-q", "-m", "add old files")
+        for path in old:
+            path.unlink()
+        git(self.root, "commit", "-q", "-a", "-m", "delete them")
+        self.assertEqual(
+            self.deleted(), ["OSDB-0012", "OSDB-0013", "OSDB-0014",
+                             "SEQ-0004", "SEQ-0006"])
+
+    def test_an_id_the_files_name_is_not_deleted(self) -> None:
+        """Requirement: manifest subcommand (that `procedures` and
+        `sequences` do not name)."""
+        old = [write(self.root, "md/procedures/OSDB-0002-old-name.md"),
+               write(self.root, "md/sequences/SEQ-0001-old-name.md"),
+               write(self.root, "md/procedures/OSDB-0020-old.md")]
+        git(self.root, "add", "-A")
+        git(self.root, "commit", "-q", "-m", "add old files")
+        for path in old:
+            path.unlink()
+        git(self.root, "commit", "-q", "-a", "-m", "delete them")
+        self.assertEqual(self.deleted(), ["OSDB-0020"])
+
+    def test_an_id_in_a_branch_is_deleted_too(self) -> None:
+        """Requirement: manifest subcommand (the collection's git
+        history, read as `new` reads it: all refs)."""
+        git(self.root, "checkout", "-q", "-b", "other")
+        old = write(self.root, "md/procedures/OSDB-0031-branch.md")
+        git(self.root, "add", "-A")
+        git(self.root, "commit", "-q", "-m", "add on a branch")
+        old.unlink()
+        git(self.root, "commit", "-q", "-a", "-m", "delete on a branch")
+        git(self.root, "checkout", "-q", "-")
+        self.assertEqual(self.deleted(), ["OSDB-0031"])
+
+    def test_the_list_is_plain_json(self) -> None:
+        """Requirement: manifest subcommand (strict JSON)."""
+        write(self.root, "md/procedures/OSDB-0012-old.md")
+        git(self.root, "add", "-A")
+        git(self.root, "commit", "-q", "-m", "add old file")
+        (self.root / "md" / "procedures" / "OSDB-0012-old.md").unlink()
+        git(self.root, "commit", "-q", "-a", "-m", "delete it")
+        data, _out, _err = captured(manifest_of, self.root)
+        self.assertEqual(data.get("deleted"), ["OSDB-0012"])
+        self.assertEqual(json.loads(json.dumps(data, allow_nan=False)),
+                         data)
+
+    def test_a_shallow_clone_warns(self) -> None:
+        """Requirement: manifest subcommand (in a shallow clone it warns
+        on stderr as `new` does)."""
+        old = write(self.root, "md/procedures/OSDB-0012-old.md")
+        git(self.root, "add", "-A")
+        git(self.root, "commit", "-q", "-m", "add old file")
+        old.unlink()
+        git(self.root, "commit", "-q", "-a", "-m", "delete it")
+        clone = self.root.parent / "shallow clone"
+        git(self.root.parent, "clone", "-q", "--depth", "1",
+            self.root.as_uri(), clone)
+        data, _out, err = captured(manifest_of, clone)
+        self.assertIn("shallow", err)
+        self.assertEqual(data.get("deleted"), [])
+
+
+class DeletedWithoutHistoryTests(unittest.TestCase):
+
+    def test_a_collection_outside_a_work_tree_warns(self) -> None:
+        """Requirement: manifest subcommand (without usable git history
+        it warns on stderr as `new` does)."""
+        root = copy_collection(self, TEST_COLLECTION)
+        data, _out, err = captured(manifest_of, root)
+        self.assertIn("warning", err)
+        self.assertIn("git", err)
+        self.assertEqual(data.get("deleted"), [])
+
+    def test_the_program_warns_and_prints_the_list(self) -> None:
+        """Requirement: manifest subcommand (the program prints the
+        table's JSON; the warning goes to stderr)."""
+        sandbox = make_sandbox(self)
+        result = sandbox.build("manifest")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout).get("deleted"), [])
+        self.assertEqual(result.stdout.count("\n"), 1)
+        self.assertIn("warning", result.stderr)
+
+
 class ManifestSubcommandTests(unittest.TestCase):
     def test_markdown_only(self) -> None:
         """Scenario: Markdown only."""
@@ -490,6 +629,11 @@ class DemoManifestFileTests(unittest.TestCase):
             {p["id"]: p.get("authors") for p in data["procedures"]},
             DEMO_CREDITS)
 
+    def test_the_file_deletes_no_id(self) -> None:
+        """Scenario: Nothing deleted from the demo."""
+        data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        self.assertEqual(data.get("deleted"), [])
+
 
 class DemoManifestTests(unittest.TestCase):
     @classmethod
@@ -507,6 +651,7 @@ class DemoManifestTests(unittest.TestCase):
         self.assertEqual(result.stdout.count("\n"), 1)
         data = json.loads(result.stdout)
         self.assertEqual(data["language"], "de")
+        self.assertEqual(data.get("deleted"), [])
         procedures = data["procedures"]
         self.assertEqual([p["id"] for p in procedures], IDS)
         self.assertEqual(by_id(procedures, "OSDB-0001")["source"], "org")

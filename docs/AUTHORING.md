@@ -34,11 +34,41 @@ orgsyndb new --md "Product name"
 ```
 
 Run it inside the collection folder. This creates a file such as
-`md/procedures/OSDB-0003-product-name.md`. It fills in the next procedure
+`md/procedures/OSDB-0003-product-name.md`. It fills in the assigned procedure
 number, the web-page name, the title, and both dates.
 
-If you copy the template yourself, first ask the owner for the next
-`OSDB-NNNN` number. Replace `OSDB-0000` in `id` and in the file name. Replace
+When `registry` in the collection's `orgsyndb.toml` is an HTTP or HTTPS
+address, the lab application assigns the number. You need a personal
+access token: a secret that lets the command request a number as your
+account. Sign in to the lab application, choose **Access tokens** beside
+your initials or open `/lab/accounts/tokens/`, enter a **Name** and choose
+**Create**. Copy the token immediately; it is shown only once.
+
+Put it on the first line of `~/.config/orgsyndb/token` on the computer
+running the command. If `XDG_CONFIG_HOME` is set and not empty, use
+`$XDG_CONFIG_HOME/orgsyndb/token` instead. You can also set `ORGSYNDB_TOKEN`
+in the command's environment; a non-empty value takes precedence over the
+file. Keep the token outside the collection. To stop a token working,
+choose **Revoke** on the same page. Deactivating its account also stops it.
+
+If no token is available, the command reports `no access token`. If the
+application is unreachable or refuses the request, the command shows the
+address and reason. In each case it exits 1 and creates no file. It waits
+up to 30 seconds; you cannot get an ID offline. For status 401, check your
+token and whether your account is active. For status 409 with
+`no import of the collection has been accepted yet, so its IDs are not known`,
+ask the owner to get the collection's first import accepted, then try again.
+
+With a registry file or no `registry` setting, the command takes the next
+number above those in the procedure sources, exports and available Git
+history. Deleted numbers are not reused. It warns if history is unavailable
+or the copy holds only part of it (a shallow clone), because older deleted
+numbers may be unseen. `ORGSYNDB_REGISTRY` does not change where `new`
+gets its number.
+
+If you copy the template yourself, first ask the owner to create a stub
+with `orgsyndb new --md` for this file and give you its `OSDB-NNNN` number.
+Replace `OSDB-0000` in `id` and in the file name. Replace
 `osdb-0000` in `slug` with the same number in lowercase. Save the file with
 this pattern:
 
@@ -574,13 +604,28 @@ the steps connect and calculates their overall yield.
 The sequence records the route your group runs; the compound page's
 **Routes** tree is derived from the collection's procedures.
 
-Copy [templates/sequence.md](../templates/sequence.md) into the collection's
-`md/sequences/`. `orgsyndb init` creates this folder. `orgsyndb new` creates
-procedure stubs, so copy the sequence template by hand. Ask the owner for a
-free `SEQ-NNNN` number from `0001` to `9999`. Replace `SEQ-0000` in `id` and
-`seq-0000` in `slug`; save as `SEQ-NNNN-short-slug.md`. Use lowercase letters,
-digits and single hyphens in the short slug. Sequences are Markdown files,
-even when their steps use Org procedures.
+From inside the collection, create a stub with:
+
+```sh
+orgsyndb new --sequence "Aspirin route"
+```
+
+The command uses [templates/sequence.md](../templates/sequence.md) to create
+`md/sequences/SEQ-NNNN-aspirin-route.md`, where `NNNN` is the assigned
+number from `0001` to `9999`. `orgsyndb init` creates this folder. The
+command fills `id`, its lowercase `slug`, the title and both dates. Leave
+`id` and `slug` as supplied. With a registry address it requests the ID
+from the lab application using your token, as in section 1. With a registry
+file or no setting it takes the next ID above those in `md/sequences/`
+and all its available Git history, including deleted files. The same
+failure messages and history warnings apply.
+
+Sequences are Markdown files, even when their steps use Org procedures.
+Do not add `--md` or `--lang` to `--sequence`; either combination exits 2.
+The file name has the form `SEQ-NNNN-short-slug.md`; use lowercase letters,
+digits and single hyphens in the short slug. For a German version, copy the
+file with `.de` before `.md` and translate the title and notes. There is
+no German sequence template.
 
 Keep the two `+++` lines. Set `title` and give `date` and `lastmod` as
 unquoted datetimes with their UTC offsets, as for a procedure. `lastmod`

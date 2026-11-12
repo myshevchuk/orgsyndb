@@ -9,7 +9,7 @@ from django.test import Client, override_settings
 
 from . import make_user
 from .collection_support import (MANIFEST, TOKEN, ImportCase, counts,
-                                 manifest, post, refused)
+                                 demo_collection, manifest, post, refused)
 
 
 def no_import(case: ImportCase) -> None:
@@ -191,6 +191,62 @@ class MalformedTests(ImportCase):
         """The bodies above break a manifest the view takes."""
         done = post(self.client, manifest())
         self.assertEqual(done.status_code, 200, done.content)
+
+
+class DeletedTests(ImportCase):
+    """Requirement: Manifest (for `built`, `deleted` as `tools/orgsyndb
+    manifest` prints it)."""
+
+    def test_a_built_manifest_needs_deleted(self) -> None:
+        """Requirement: Manifest (for `built`, `release`, `language`,
+        `procedures`, `sequences` and `deleted`)."""
+        body = manifest()
+        body.pop("deleted", None)
+        done = post(self.client, body)
+        self.assertEqual(done.status_code, 400, done.content)
+        self.assertIn("deleted", json_answer(self, done)["error"])
+        no_import(self)
+
+    def test_deleted_that_is_no_list_of_text(self) -> None:
+        """Requirement: Manifest (a body that is not a JSON object of
+        these keys and types answers 400)."""
+        for name, value in {
+                "text": "OSDB-0012", "a table": {"OSDB-0012": True},
+                "null": None, "a number": 12,
+                "a list holding a number": ["OSDB-0012", 12],
+                "a list holding null": [None],
+                "a list holding a list": [["OSDB-0012"]]}.items():
+            with self.subTest(deleted=name):
+                done = post(self.client, manifest(deleted=value))
+                self.assertEqual(done.status_code, 400, done.content)
+                self.assertTrue(json_answer(self, done)["error"])
+        no_import(self)
+
+    def test_deleted_may_be_empty(self) -> None:
+        """Requirement: Manifest (`deleted`, a list of IDs, which may
+        be empty)."""
+        done = self.send(self.follow(deleted=[]))
+        self.assertEqual(done.status_code, 200, done.content)
+        self.assertEqual(done.json()["outcome"], "accepted")
+
+    def test_deleted_may_hold_ids(self) -> None:
+        """Requirement: Manifest (`deleted`, a list of IDs)."""
+        done = self.send(self.follow(deleted=["OSDB-0012", "SEQ-0004"]))
+        self.assertEqual(done.status_code, 200, done.content)
+        self.assertEqual(done.json()["outcome"], "accepted")
+
+    def test_a_refusal_needs_no_deleted(self) -> None:
+        """Requirement: Manifest (for `refused`, `errors` and nothing
+        of the collection half)."""
+        body = refused(["x: error: y"])
+        self.assertNotIn("deleted", body)
+        done = post(self.client, body)
+        self.assertEqual(done.status_code, 200, done.content)
+
+    def test_the_demo_manifest_lists_no_deleted_id(self) -> None:
+        """Scenario: Nothing deleted from the demo (the file the demo
+        data applies)."""
+        self.assertEqual(demo_collection().get("deleted"), [])
 
 
 class MethodTests(ImportCase):

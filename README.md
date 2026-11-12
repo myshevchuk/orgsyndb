@@ -215,7 +215,11 @@ orgsyndb new --md "Ethyl acetate"
 ```
 
 Inside a collection, or any directory below it, every command finds the
-collection by itself. Before building, set `registry` in `orgsyndb.toml` to
+collection by itself. This new collection has no `registry` setting yet,
+so its first stub gets an ID locally. The lab application's first accepted
+import adopts it. For an existing collection whose registry is an address,
+set up an [access token](#access-tokens) before running `new`.
+Before building, set `registry` in `orgsyndb.toml` to
 your lab application's snapshot address or a snapshot file; `init` includes
 a commented example. Fill in the procedure stub and find or add its
 compounds in the [registry](#compound-registry). From anywhere else, name
@@ -256,10 +260,20 @@ reload after an edit; stop it and run `serve` again. The server tells the
 browser to revalidate every file, so the next page load shows the new
 build.
 
-`new` selects the next free `OSDB-NNNN` identifier across the Org sources,
-Markdown sources, exports, and available Git history of the collection. It
-fills the file name, slug, title, and current Europe/Berlin timestamps. New
-stubs record no AI model. To record an assisting model, add it by hand as
+`new` gets its `OSDB-NNNN` identifier from the lab application when
+`registry` in the collection's `orgsyndb.toml` is an HTTP or HTTPS address.
+It needs a personal [access token](#access-tokens) and a reachable application.
+The application must have accepted the collection's first import before it
+can issue an ID. `ORGSYNDB_REGISTRY` does not change where `new` gets IDs.
+
+With a registry file or no `registry` setting, `new` selects the next ID
+above those in the Org sources, Markdown sources, exports and available
+Git history across all refs. It does not reuse deleted IDs. It warns when
+history is unavailable or the clone is shallow, because deleted IDs may
+then be unseen. The demo collection uses a registry file and takes IDs locally.
+
+The command fills the file name, slug, title and current Europe/Berlin
+timestamps. New stubs record no AI model. To record an assisting model, add it by hand as
 `#+AI_MODEL: example-model-1` in Org or `ai_model = "example-model-1"` in
 Markdown. Add `--lang de` for a German stub; see [Languages](#languages).
 
@@ -426,12 +440,22 @@ steps connect and calculates the overall yield from their product yields.
 The **Routes** tree on a compound page is derived from the collection's
 procedures.
 
-Copy [`templates/sequence.md`](templates/sequence.md) into the collection's
-`md/sequences/`, named `SEQ-NNNN-short-slug.md`. Choose an unused number from
-`0001` to `9999`; replace the template's `SEQ-0000` and `seq-0000` with that
-ID and its lowercase form. Sequences are written in Markdown, even in a
-collection of Org procedures. `orgsyndb new` creates procedure stubs; copy the
-sequence template yourself.
+Create a sequence from inside the collection:
+
+```sh
+orgsyndb new --sequence "Aspirin route"
+```
+
+The command fills [`templates/sequence.md`](templates/sequence.md) and
+creates `md/sequences/SEQ-NNNN-aspirin-route.md`, where `NNNN` is the
+assigned number. It sets `id`, its lowercase `slug`, the title and both
+dates. Leave `id` and `slug` as supplied. It gets the ID from the lab
+application with your [access token](#access-tokens) when the collection's
+registry is an address. With a registry file or no setting, it takes the
+next ID above those in `md/sequences/` and its Git history across all refs,
+including deleted files. Sequences are written in Markdown, even in a
+collection of Org procedures. `--sequence` accepts neither `--md` nor
+`--lang`; either combination exits 2.
 
 Use lowercase letters, digits and single hyphens in the short slug.
 
@@ -869,8 +893,9 @@ combine a sequence and its procedures into one PDF.
 3. Update `#+LAST_MODIFIED` in Org or `lastmod` in Markdown whenever you
    change the procedure.
 4. Run `orgsyndb validate`. Fix every error and review every warning.
-5. For a route of two or more procedures, copy the sequence template into
-   `md/sequences/`, fill its target, steps and notes, then validate again.
+5. For a route of two or more procedures, run
+   `orgsyndb new --sequence "Route title"`, replace its example target,
+   steps and notes, then validate again.
 6. Run `orgsyndb serve`, then open <http://127.0.0.1:8000/> to inspect the
    built page.
 7. Run `orgsyndb pdf` when you need printable A4 files.
@@ -1013,6 +1038,10 @@ Emacs, save a collection file or run `M-x orgsyndb-refresh-index`.
 
 - `M-x orgsyndb-new-procedure` creates a stub through `orgsyndb new`.
   With `C-u M-x orgsyndb-new-procedure`, choose the format and language.
+  When the collection's registry is an address, it uses your access token
+  to request the ID from the lab application. It waits up to 30 seconds
+  and shows the error if the request fails. There is no Emacs command for
+  creating a sequence; run `orgsyndb new --sequence "Route title"` instead.
 - `M-x orgsyndb-visit-variant` opens another language variant of the
   procedure or sequence. `M-x orgsyndb-create-translation` creates a
   procedure variant beside the source, keeping its front matter with new
@@ -1057,13 +1086,14 @@ prefix are relative to the collection.
 | `build` | Reads the registry, runs export and validation, stages the registry's substances and account names for the site, builds into `public/` with Hugo, then indexes it with Pagefind. A validation error stops the command before Hugo. |
 | `serve [--port N]` | Runs `build`, then serves `public/` on `http://127.0.0.1:N/` until `Ctrl-C`. The default port is `8000`. |
 | `pdf` | Runs `build`, removes the previous `pdf/`, and renders every procedure to `pdf/<source-file-name>.pdf` with WeasyPrint. |
-| `new [--md] [--lang LANG] TITLE...` | Creates an Org stub with the next free ID, or a Markdown stub with `--md`. `--lang de` or `--lang en` creates a stub in that language named `<ID>-<slug>.<LANG>.org` or `.md`. It never overwrites an existing file. |
+| `new [--md] [--lang LANG] TITLE...` | Creates an Org stub, or a Markdown stub with `--md`. The lab application issues the ID with your access token when the collection's own registry is an address; otherwise it takes the next ID above those in the clone and its history. `--lang de` or `--lang en` creates a stub in that language named `<ID>-<slug>.<LANG>.org` or `.md`. It never overwrites an existing file. |
+| `new --sequence TITLE...` | Creates a Markdown sequence stub in `md/sequences/`, with its ID obtained in the same way as a procedure's. Sets `id`, `slug`, title and dates; replace the example target and steps. Combining it with `--md` or `--lang` is a usage error. |
 | `init DIR` | Creates an empty collection in `DIR`: `orgsyndb.toml` with a commented registry-address example, a `.gitignore` for the generated directories, and empty `org/procedures/`, `md/procedures/`, `md/sequences/` and `static/structures/` directories. It refuses a directory that already holds `orgsyndb.toml`, and it does not run `git init`. |
 | `clean` | Removes `build/`, `public/`, and `pdf/`. |
 | `clean --all` | Also removes the application's `.emacs-batch/` and `.tools/`. Their contents are fetched again on the next relevant run. |
 | `check-deps` | Reports required tools; optional Emacs, Git, and Caddy; fetched tools; and the missing tool names when a required tool is missing. |
 | `index` | Reads the registry and prints the site language, procedure and sequence schema, registry source and digest, four compound fields, procedure declarations, accounts, vocabularies, substances, procedures and sequences as one line of JSON for an editor. Needs a collection but no external tool, takes no arguments and writes nothing. Lists Markdown files it cannot parse with the reason instead of failing. Org procedures are listed by file name only. Exits 1 on a configuration error, including an unreadable registry without a matching kept copy. |
-| `manifest` | After a build, prints the site language, published procedures with their author user names in file order and their scope entries, and sequences with their steps as one line of JSON for the lab application's import. Takes no arguments, reads no registry and writes no files. Collections with Org sources need `build/export/`; run `build` first. |
+| `manifest` | After a build, prints the site language, published procedures with their author user names in file order and their scope entries, sequences with their steps, and `deleted` IDs as one line of JSON for the lab application's import. Warns on stderr when Git history is unavailable or shallow. Takes no arguments, reads no registry and writes no files. Collections with Org sources need `build/export/`; run `build` first. |
 | `help` | Prints the command summary. `-h` and `--help` do the same. |
 
 The program exits 0 on success, 1 on failure, and 2 on a usage error.
@@ -1176,6 +1206,7 @@ input files and collection directories must be available inside `app`.
 |---|---|
 | `registry_import COLLECTION` | Fills an empty lab registry from a collection in the old layout, containing `compounds/` and four vocabularies under `vocabularies/`. See [Substance registry](#substance-registry) for required fields and fields left out. |
 | `registry_load FILE` | Fills an empty lab registry from a JSON snapshot, including article numbers. Ignores accounts and creates none. Invalid input leaves the registry unchanged. |
+| `adopt_ids ID...` | Records each named `OSDB-NNNN` or `SEQ-NNNN` as issued, with no account, for recovery after a restore. Prints `adopted <ID>` for a new record or `<ID> was issued` for an existing one. An invalid argument exits 1 and adopts nothing. See [Back up and restore lab records](#back-up-and-restore-lab-records). |
 | `demo_data [--replace \| --if-empty]` | Loads the demo registry and invented lab records. Requires `ORGSYNDB_DEMO=true`; see [Demo deployment](#demo-deployment) for the replacement and startup rules. |
 | `schema_diagram [--check] [--output PATH]` | Writes the database diagram, or checks it without writing with `--check`. See [Lab application tests and local server](#lab-application-tests-and-local-server). |
 
@@ -1519,6 +1550,45 @@ repository, such as a mirror on the intranet. `APP_REF` must be a branch
 or a tag. `ORGSYNDB_APP_REPO` and `ORGSYNDB_APP_REF` default to the same
 values.
 
+### Access tokens
+
+To create procedures and sequences in a collection whose registry is an
+address, give `orgsyndb new` a personal access token. This is a secret
+that lets the command request IDs as your account.
+
+Sign in with your [lab account](#first-account-and-tasks), then choose
+**Zugangsschlüssel** (**Access tokens**) beside your initials in the
+header, or open `/lab/accounts/tokens/`. Under **Neuer Zugangsschlüssel**
+(**New access token**), enter a **Name** of at most 100 characters and
+choose **Anlegen** (**Create**). Copy the token now: it is shown only
+once. It begins with `osdb_` followed by 43 characters. The application
+stores only its SHA-256 digest, a fingerprint from which it cannot recover
+the token.
+
+On the computer where you run `new`, put the token on the first line of
+`~/.config/orgsyndb/token`. If `XDG_CONFIG_HOME` is set and not empty, use
+`$XDG_CONFIG_HOME/orgsyndb/token` instead. Alternatively, set
+`ORGSYNDB_TOKEN` in the command's environment. A non-empty `ORGSYNDB_TOKEN`
+takes precedence over the file. Keep the token outside the collection.
+
+The page lists each token's name, creation time and last use, with **nie**
+(**never**) until used. Choose **Widerrufen** (**Revoke**) to delete a
+token; it stops working immediately. Deactivating an account also stops
+its tokens from working. Staff can list and delete tokens in the admin,
+but cannot create or edit them there. A token authorizes only ID requests;
+it does not sign you in to pages. Signing in through the browser alone
+does not authorize `new`.
+
+If no token is available, `new` exits 1 with `no access token` and names
+the variable and file. If the application cannot be reached or refuses
+the request, it also exits 1 and creates no file. The request waits up to
+30 seconds; IDs cannot be taken offline. For status 401, check the token
+and whether its account is active. Status 409 with
+`no import of the collection has been accepted yet, so its IDs are not known`
+means the operator must get the first collection import accepted before
+authors can request IDs. Status 409 also occurs when ID `9999` of the
+requested kind has been issued.
+
 ### First account and tasks
 
 To create the first administrator account, run this from `deploy/`:
@@ -1546,9 +1616,9 @@ by clearing its **Active** flag in the admin.
 
 Open `/lab/` for the [lab overview](#lab-overview). Choose **Aufgaben**
 (**Tasks**) or open `/lab/tasks/` for the task list. Signing in still
-leads to the task list. Reading needs no sign-in; every change requires
-a signed-in account. The interface uses the latest accepted collection
-import's German or English language, or German until an import is
+leads to the task list. Reading lab data needs no sign-in; changes through
+the browser require a signed-in account. The interface uses the latest
+accepted collection import's German or English language, or German until an import is
 accepted.
 
 Each task has a number such as `T-001`, the substance it makes, priority,
@@ -1701,8 +1771,11 @@ compound 7**). That substance's history starts on the demo's opening day,
 recorded by `klehmann`.
 
 The command then records the data set's own accepted import of the demo
-collection from `webapp/demo/manifest.json` on that opening day. It uses
-a commit of forty zeros, release `demo` and trigger `catch-up`. This lets
+collection from `webapp/demo/manifest.json` on that opening day. This
+adopts `OSDB-0001` through `OSDB-0009`, `SEQ-0001` and `SEQ-0002`, with
+no account; the next IDs the application issues are `OSDB-0010` and
+`SEQ-0003`. It uses a commit of forty zeros, release `demo` and trigger
+`catch-up`. This lets
 you use the demo before any collection build. Its tasks follow the
 imported sequences `SEQ-0001` and `SEQ-0002`; one is running with the
 first of its two steps done. This running `SEQ-0002` task's first step
@@ -1775,8 +1848,9 @@ docker compose exec app python manage.py demo_data --replace
 
 This deletes every lab record and its history, including the registry,
 collection imports, imported procedures with their scope entries,
-sequences with their steps, and records you added after seeding. It
-restarts task numbering at `T-001` and writes the demo data set again.
+sequences with their steps, issued IDs, access tokens and records you
+added after seeding. It restarts task numbering at `T-001` and writes the
+demo data set again.
 The only import left is the data set's own. The builder's next cycle
 builds the real collection with that import as its base, keeping the
 entries that the demo tasks name.
@@ -1929,10 +2003,15 @@ a sequence with an unknown target
 substance or a step naming a procedure outside the collection or an entry
 that procedure does not have. An unknown author reports
 `<ID>: unknown author "<name>"`. A procedure must have at least one entry.
+After the first accepted import, the app also refuses an import containing
+an ID it has not issued: `<ID>: not issued by the lab application`.
+Use `orgsyndb new` for new procedures and sequences; after restoring an
+older database, follow [the restore steps](#back-up-and-restore-lab-records).
 The refused import records every error and changes no procedure, entry
-or sequence. Staff can inspect imports, procedures and sequences in
+or sequence. Staff can inspect imports, procedures, sequences and issued IDs in
 `/lab/admin/`, including each procedure's author rows; these records are
-read-only, with no add, edit or delete actions.
+read-only, with no add, edit or delete actions. Each issued ID shows its
+account and time; an adopted ID has no account.
 
 #### Add substances and vocabulary terms
 
@@ -2591,12 +2670,17 @@ The builder then posts the manifest to `ORGSYNDB_MANIFEST_URL`, with
 `Authorization: Bearer <token>` using `ORGSYNDB_BUILDER_TOKEN`, the
 snapshot request's `Host`, and a 30-second timeout. The manifest describes
 the collection's language, procedures with their author user names in file
-order, scope entries, sequences and steps. It also identifies the build,
-commits, registry digest, latest
+order, scope entries, sequences and steps. Its `deleted` list holds the
+procedure and sequence IDs found in file names in the collection's Git
+history under `org/procedures/`, `md/procedures/` and `md/sequences/` that
+its current files no longer have. These IDs are uppercase and sorted;
+the demo's list is empty. `orgsyndb manifest` warns on stderr without
+usable history or in a shallow clone, where older deleted IDs may be unseen.
+The manifest also identifies the build, commits, registry digest, latest
 accepted import used as its base, trigger and staged release. The app
 accepts a build only while that base is still the latest accepted import
 and the registry digest is still current, and after checking the
-collection's references.
+collection's references and issued IDs.
 
 | App response | What the builder does |
 |---|---|
@@ -2666,6 +2750,32 @@ branch reaches the site's builder within one interval. The default,
 brings the newest work, untested on the server, so use it only for a
 trial server.
 
+#### Issue and adopt IDs
+
+The first accepted import adopts all IDs named by its procedures,
+sequences and `deleted` list, recording them with no account. A refused
+import adopts nothing. Later imports ignore `deleted` and refuse a
+procedure or sequence ID the application has not issued, with
+`<ID>: not issued by the lab application`. The imports page at
+`/lab/collection/` lists those errors.
+
+Authors request new IDs through `orgsyndb new`. With a registry address
+in the collection's own `orgsyndb.toml`, it posts
+`{"kind": "procedure"}` or `{"kind": "sequence"}` to
+`<origin>/lab/collection/ids/`. The origin is the registry address's
+scheme, host and port. Each request carries
+`Authorization: Bearer <token>` with the author's personal access token,
+not the builder's service token, and has a 30-second timeout. A valid
+request returns 201 with `{"id": <ID>}`; the application records the
+account and time. It issues one above the highest issued ID of that kind
+and never fills gaps. ID requests and imports take the same lock, so
+requests cannot take the same ID or race with adoption.
+
+The ID endpoint returns 401 without a valid token of an active account,
+even with a browser session; 400 for an invalid body; 405 for a method
+other than POST; and 409 before the first accepted import or when `9999`
+of that kind has been issued. These responses issue no ID.
+
 ### Update the lab application
 
 Update the lab application deliberately so you can back up its records
@@ -2710,6 +2820,27 @@ sudo cat 'backups/lab-<UTC time>.dump' | docker compose exec -T db sh -c \
   'pg_restore --clean --if-exists -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 docker compose start app
 ```
+
+Immediately reconcile IDs issued since the dump. The restored database
+has forgotten them, but the collection still has their files. Until you
+adopt those IDs, the application may issue one again; the validator then
+refuses the duplicate when both files meet.
+
+The next builder import is refused with one
+`<ID>: not issued by the lab application` error per missing ID. Open
+`/lab/collection/` to find them. From `deploy/`, replace `ID...` with those
+IDs, separated by spaces, then allow the builder to try the build again:
+
+```sh
+docker compose exec app python manage.py adopt_ids ID...
+docker compose exec builder orgsyndb-deploy retry
+```
+
+`adopt_ids` prints `adopted <ID>` for each new record and
+`<ID> was issued` for an existing one. Each argument must have the form
+`OSDB-NNNN` or `SEQ-NNNN`; an invalid argument exits 1 and adopts nothing.
+Check `/lab/collection/` after the builder's next cycle for the accepted
+import.
 
 ### HTTPS
 

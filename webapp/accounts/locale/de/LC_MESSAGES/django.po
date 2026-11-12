@@ -61,3 +61,51 @@ msgid ""
 msgstr ""
 "Höchstens 40 Buchstaben oder Ziffern, mit einzelnen Punkten, Bindestrichen "
 "oder Unterstrichen dazwischen. Er lässt sich später nicht ändern."
+
+msgid "Access tokens"
+msgstr "Zugangsschlüssel"
+
+msgid "access token"
+msgstr "Zugangsschlüssel"
+
+msgid "access tokens"
+msgstr "Zugangsschlüssel"
+
+msgid "New access token"
+msgstr "Neuer Zugangsschlüssel"
+
+msgid "No access tokens yet."
+msgstr "Noch keine Zugangsschlüssel."
+
+msgid "Copy the token now; it is not shown again."
+msgstr "Kopieren Sie den Schlüssel jetzt; er wird nicht wieder angezeigt."
+
+msgid "Access token “%(name)s” revoked."
+msgstr "Zugangsschlüssel „%(name)s“ widerrufen."
+
+msgid "Account"
+msgstr "Konto"
+
+msgid "Name"
+msgstr "Name"
+
+msgid "Digest"
+msgstr "Prüfsumme"
+
+msgid "Created"
+msgstr "Angelegt"
+
+msgid "Last used"
+msgstr "Zuletzt benutzt"
+
+msgid "never"
+msgstr "nie"
+
+msgid "Revoke"
+msgstr "Widerrufen"
+
+msgid "Create"
+msgstr "Anlegen"
+
+msgid "Enter 64 lower-case hexadecimal digits."
+msgstr "64 hexadezimale Ziffern in Kleinbuchstaben eingeben."

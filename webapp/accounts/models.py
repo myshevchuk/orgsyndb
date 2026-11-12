@@ -1,10 +1,15 @@
-"""The application's user model."""
+"""The application's user model and the accounts' access tokens."""
 
+import hashlib
+import secrets
+from datetime import datetime
 from typing import Any
 
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser, UserManager
 from django.core.validators import RegexValidator
 from django.db import models, transaction
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from orgsyndb_web import lock
@@ -95,3 +100,82 @@ class User(AbstractUser):
         put the initials in upper case."""
         super().clean()
         self.initials = (self.initials or "").upper()
+
+
+# The text every access token begins with.
+TOKEN_PREFIX = "osdb_"
+# The number of random bytes of a token, 43 characters in URL-safe
+# base64.
+TOKEN_BYTES = 32
+
+
+def current_time() -> datetime:
+    """Return the current time, as ``django.utils.timezone.now`` gives
+    it at the moment of the call."""
+    return timezone.now()
+
+
+def token_digest(token: str) -> str:
+    """Return the SHA-256 digest of the access token TOKEN, 64
+    lower-case hexadecimal digits."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+class AccessToken(models.Model):
+    """A personal access token, by which a program outside the browser
+    acts as the account ``user``.
+
+    The token itself is never stored, only its SHA-256 ``digest``, so it
+    cannot be recovered from the row. Deleting the row revokes the
+    token; deleting the account deletes its tokens. ``last_used_at`` is
+    None until a request is made with the token.
+    """
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL,
+                             verbose_name=_("Account"),
+                             on_delete=models.CASCADE,
+                             related_name="access_tokens")
+    name = models.CharField(_("Name"), max_length=100)
+    digest = models.CharField(
+        _("Digest"), max_length=64, unique=True,
+        validators=[RegexValidator(
+            r"\A[0-9a-f]{64}\Z",
+            _("Enter 64 lower-case hexadecimal digits."))])
+    created_at = models.DateTimeField(_("Created"), default=current_time)
+    last_used_at = models.DateTimeField(_("Last used"), null=True,
+                                        blank=True)
+
+    class Meta:
+        ordering = ["user", "created_at", "pk"]
+        verbose_name = _("access token")
+        verbose_name_plural = _("access tokens")
+
+    def __str__(self) -> str:
+        return self.name
+
+    @classmethod
+    def create_for(cls, user: Any, name: str) -> tuple["AccessToken", str]:
+        """Create a token named NAME for the account USER; return the
+        saved row and the token, ``osdb_`` followed by 43 URL-safe
+        characters from a secure random source. The token is returned
+        only here."""
+        token = TOKEN_PREFIX + secrets.token_urlsafe(TOKEN_BYTES)
+        row = cls.objects.create(user=user, name=name,
+                                 digest=token_digest(token))
+        return row, token
+
+    @classmethod
+    def authenticate(cls, header: str) -> Any:
+        """Return the account that the ``Authorization`` header value
+        HEADER signs a request with, and record the time as the last
+        use of its token; return None, recording nothing, unless HEADER
+        is ``Bearer <token>`` with the token of an active account."""
+        scheme, _space, given = header.partition(" ")
+        if scheme != "Bearer" or not given:
+            return None
+        found = cls.objects.select_related("user").filter(
+            digest=token_digest(given), user__is_active=True).first()
+        if found is None:
+            return None
+        cls.objects.filter(pk=found.pk).update(last_used_at=timezone.now())
+        return found.user

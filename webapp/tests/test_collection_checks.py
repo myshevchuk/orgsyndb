@@ -6,7 +6,8 @@ from typing import Any
 
 from .collection_support import (ImportCase, author_rows, authors_of, by_id,
                                  counts, credited, demo_collection, dump,
-                                 manifest)
+                                 issued_keys, make_token, manifest,
+                                 request_id)
 
 
 class CheckCase(ImportCase):
@@ -208,6 +209,94 @@ class EachCheckTests(CheckCase):
         self.only_error(
             data, "SEQ-0001: step 2 names OSDB-0002, which is not in the "
                   "collection")
+
+
+class IssuedCheckTests(CheckCase):
+    """Requirement: Import checks (after the first accepted import, an
+    ID the application has not issued)."""
+
+    NOT_ISSUED = "{}: not issued by the lab application"
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.accept()
+
+    def with_new(self, ident: str, sequence: bool = False
+                 ) -> dict[str, Any]:
+        """The demo collection with a copy of a procedure, or with
+        ``sequence`` a sequence, as ``ident``."""
+        data = demo_collection()
+        kind, source = (("sequences", "SEQ-0001") if sequence
+                        else ("procedures", "OSDB-0008"))
+        new = copy.deepcopy(by_id(data[kind], source))
+        new["id"] = ident
+        data[kind].append(new)
+        return data
+
+    def test_an_id_not_issued(self) -> None:
+        """Scenario: An ID not issued."""
+        from collection.models import Procedure
+        data = self.with_new("OSDB-0010")
+        self.only_error(data, self.NOT_ISSUED.format("OSDB-0010"))
+        self.assertFalse(Procedure.objects.filter(
+            key="OSDB-0010").exists())
+        done = request_id(self.client, "procedure",
+                          make_token("klehmann"))
+        self.assertEqual(done.json(), {"id": "OSDB-0010"})
+        self.accept(data)
+        self.assertTrue(Procedure.objects.filter(
+            key="OSDB-0010").exists())
+
+    def test_a_sequence_not_issued(self) -> None:
+        """Requirement: Import checks (an ID the application has not
+        issued, among the sequences)."""
+        from collection.models import Sequence
+        data = self.with_new("SEQ-0003", sequence=True)
+        self.only_error(data, self.NOT_ISSUED.format("SEQ-0003"))
+        self.assertFalse(Sequence.objects.filter(key="SEQ-0003").exists())
+        done = request_id(self.client, "sequence", make_token("tbauer"))
+        self.assertEqual(done.json(), {"id": "SEQ-0003"})
+        self.accept(data)
+        self.assertTrue(Sequence.objects.filter(key="SEQ-0003").exists())
+
+    def test_each_id_is_one_error(self) -> None:
+        """Requirement: Import checks (one error for each, each
+        beginning with the ID it concerns)."""
+        data = self.with_new("OSDB-0010")
+        data["procedures"] += self.with_new("OSDB-0012")["procedures"][-1:]
+        data["sequences"] += self.with_new(
+            "SEQ-0004", sequence=True)["sequences"][-1:]
+        errors = self.refused_by(data)
+        self.assertEqual(sorted(errors), [
+            self.NOT_ISSUED.format("OSDB-0010"),
+            self.NOT_ISSUED.format("OSDB-0012"),
+            self.NOT_ISSUED.format("SEQ-0004")])
+
+    def test_it_comes_with_the_other_errors(self) -> None:
+        """Requirement: Import checks (one error for each of these)."""
+        data = self.with_new("OSDB-0010")
+        by_id(data["procedures"], "OSDB-0010")["entries"][0][
+            "substrates"] = ["no-such-substance"]
+        errors = self.refused_by(data)
+        self.assertEqual(sorted(errors), sorted([
+            self.NOT_ISSUED.format("OSDB-0010"),
+            'OSDB-0010: unknown substance "no-such-substance"']))
+
+    def test_a_refusal_issues_nothing(self) -> None:
+        """Requirement: Issued IDs (a refused import adopts nothing)."""
+        before = issued_keys()
+        self.refused_by(self.with_new("OSDB-0010"))
+        self.assertEqual(issued_keys(), before)
+
+    def test_a_procedure_that_went_may_come_back(self) -> None:
+        """Requirement: Import checks (an ID is issued for good: a
+        withdrawn procedure keeps its ID)."""
+        data = demo_collection()
+        data["procedures"] = [p for p in data["procedures"]
+                              if p["id"] != "OSDB-0003"]
+        self.accept(data)
+        self.accept()
+        self.assertEqual(counts()["Procedure"], 9)
 
 
 class StepEntryTests(CheckCase):

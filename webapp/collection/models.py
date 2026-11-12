@@ -1,12 +1,14 @@
-"""The imported rows: the imports the builder reported, and the
-procedures with their authors, scope entries and sequences of the
-collection as the accepted imports left them.
+"""The imported rows: the imports the builder reported, the procedures
+with their authors, scope entries and sequences of the collection as the
+accepted imports left them, and the procedure and sequence IDs the
+application issued.
 
-Only the manifest view and the demo data command write these rows,
-both through ``collection.importing``. An
-import never deletes a procedure, scope entry or sequence: one that is
-gone from the collection is marked withdrawn. A substance, reaction type
-or scope entry that a row names cannot be deleted.
+Only the manifest view and the demo data command write the imported
+rows, both through ``collection.importing``; issued IDs are written
+through ``collection.issuing`` too. An import never deletes a
+procedure, scope entry or sequence: one that is gone from the
+collection is marked withdrawn. A substance, reaction type, scope entry
+or account that a row names cannot be deleted.
 """
 
 from django.conf import settings
@@ -16,6 +18,7 @@ from django.db import models
 from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
+from accounts.models import current_time
 from registry.models import Substance
 from vocabulary.models import ReactionType
 
@@ -26,6 +29,8 @@ commit_rule = RegexValidator(
     r"^[0-9a-f]{40}$", _("Enter 40 lower-case hexadecimal digits."))
 digest_rule = RegexValidator(
     r"^[0-9a-f]{64}$", _("Enter 64 lower-case hexadecimal digits."))
+# An issued ID: a procedure's OSDB-NNNN or a sequence's SEQ-NNNN.
+ISSUED_ID = r"\A(?:OSDB|SEQ)-[0-9]{4}\Z"
 
 
 class Outcome(models.TextChoices):
@@ -281,6 +286,30 @@ class Step(models.Model):
 
     def __str__(self) -> str:
         return f"{self.sequence.key} {self.position}"
+
+
+class IssuedId(models.Model):
+    """A procedure or sequence ID the application issued, ``key``, kept
+    once: issued to the account ``user``, or adopted, with no account,
+    from a collection that had it already; ``issued_at`` is when."""
+
+    key = models.CharField(
+        _("ID"), max_length=9, unique=True,
+        validators=[RegexValidator(
+            ISSUED_ID, _("Enter OSDB- or SEQ- and four digits."))])
+    user = models.ForeignKey(settings.AUTH_USER_MODEL,
+                             verbose_name=_("Account"), null=True,
+                             blank=True, on_delete=models.PROTECT,
+                             related_name="issued_ids")
+    issued_at = models.DateTimeField(_("Issued"), default=current_time)
+
+    class Meta:
+        ordering = ["key"]
+        verbose_name = _("issued ID")
+        verbose_name_plural = _("issued IDs")
+
+    def __str__(self) -> str:
+        return self.key
 
 
 def latest_accepted() -> Import | None:

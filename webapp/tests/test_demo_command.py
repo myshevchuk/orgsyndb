@@ -9,8 +9,10 @@ from django.test import TestCase, override_settings
 from . import (BERLIN, frozen, make_group, make_substance, make_task,
                make_user)
 from .collection_support import (PROCEDURES, SEQUENCES, TOKEN, accept, by_id,
-                                 demo_collection, import_collection,
-                                 make_import, manifest, post)
+                                 demo_collection, ids_of, import_collection,
+                                 issue_ids, issued_keys, issued_to,
+                                 make_import, make_token, manifest, post,
+                                 request_id)
 from .demo_support import (ACCOUNTS, DAY, lab_records, noon, opening, run,
                            seed, task_counter)
 
@@ -434,6 +436,99 @@ class ImportedRowsTests(TestCase):
             run("--replace")
         self.assertEqual(imported_rows(), before)
         self.assertEqual(snapshot.build()["import"], latest)
+
+
+def demo_ids() -> list[str]:
+    """The IDs of the demo collection, in order."""
+    return sorted(ids_of(demo_collection()))
+
+
+def tokens() -> int:
+    from accounts.models import AccessToken
+    return AccessToken.objects.count()
+
+
+@override_settings(ORGSYNDB_BUILDER_TOKEN=TOKEN)
+class IssuedIdTests(TestCase):
+    """The issued IDs and access tokens are lab records (lab-demo: Demo
+    data command)."""
+
+    def test_the_data_set_adopts_its_ids(self) -> None:
+        """Scenario: The data set's import (its IDs are adopted, to no
+        account)."""
+        seed(DAY)
+        self.assertEqual(issued_keys(), demo_ids())
+        self.assertEqual(
+            sorted(key for key in issued_keys() if issued_to(key)), [])
+
+    def test_replacing_deletes_issued_ids_and_tokens(self) -> None:
+        """Requirement: Demo data command (`--replace` deletes every lab
+        record: accounts with their access tokens, issued IDs)."""
+        seed(DAY)
+        import_collection(with_extra_procedure())
+        issue_ids("OSDB-0012")
+        done = request_id(self.client, "procedure",
+                          make_token("klehmann"))
+        self.assertEqual(done.status_code, 201, done.content)
+        make_token("tbauer", "Server")
+        self.assertEqual(tokens(), 2)
+        self.assertEqual(len(issued_keys()), 11 + 1 + 1 + 1)
+        with frozen(noon(DAY)):
+            out, _err = run("--replace")
+        self.assertTrue(out.strip())
+        self.assertEqual(issued_keys(), demo_ids())
+        self.assertEqual(
+            sorted(key for key in issued_keys() if issued_to(key)), [])
+        self.assertEqual(tokens(), 0)
+
+    def test_the_next_id_after_replacing(self) -> None:
+        """Requirement: Demo data command (`--replace` writes the data
+        set again: the next ID lies above its own)."""
+        seed(DAY)
+        request_id(self.client, "procedure", make_token("klehmann"))
+        with frozen(noon(DAY)):
+            run("--replace")
+        done = request_id(self.client, "procedure",
+                          make_token("klehmann"))
+        self.assertEqual(done.json(), {"id": "OSDB-0010"})
+
+    def test_issued_ids_alone_are_lab_records(self) -> None:
+        """Requirement: Demo data command (issued IDs are lab
+        records)."""
+        issue_ids("OSDB-0012")
+        with frozen(noon(DAY)), self.assertRaises(CommandError) as caught:
+            run()
+        self.assertIn("--replace", str(caught.exception))
+        with frozen(noon(DAY)), self.assertRaises(CommandError):
+            run("--replace")
+        with frozen(noon(DAY)):
+            run("--if-empty")
+        self.assertEqual(issued_keys(), ["OSDB-0012"])
+        self.assertEqual(lab_records(), EMPTY)
+        self.assertEqual(demo_marks(), 0)
+
+    def test_a_failed_replacement_keeps_them(self) -> None:
+        """Scenario: Failure changes nothing (replace, with issued IDs
+        and tokens)."""
+        from inventory import bookings
+        seed(DAY)
+        issue_ids("OSDB-0012")
+        make_token("klehmann")
+        before = (issued_keys(), tokens())
+        real = bookings.book_note
+        calls = {"count": 0}
+
+        def book_note(*args, **kwargs):
+            calls["count"] += 1
+            if calls["count"] > 5:
+                raise bookings.Refused("refused by the test")
+            return real(*args, **kwargs)
+
+        with frozen(noon(DAY)), mock.patch(
+                "inventory.bookings.book_note", side_effect=book_note), \
+                self.assertRaises(CommandError):
+            run("--replace")
+        self.assertEqual((issued_keys(), tokens()), before)
 
 
 class SummaryTests(TestCase):

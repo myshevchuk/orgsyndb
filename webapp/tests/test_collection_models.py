@@ -551,3 +551,107 @@ class AdminTests(ImportCase):
         self.assertEqual(procedure.title, "Aspirin")
         self.assertFalse(procedure.withdrawn)
         self.assertEqual(counts()["Procedure"], 1)
+
+
+class IssuedIdModelTests(ImportCase):
+    """Requirement: Imported rows (an issued ID: `key`, `user` and
+    `issued_at`)."""
+
+    def row(self, key: str = "OSDB-0010", **fields: Any) -> Any:
+        from collection.models import IssuedId
+        return IssuedId(key=key, **fields)
+
+    def test_an_issued_id_keeps_its_fields(self) -> None:
+        """Requirement: Imported rows (an issued ID: `key`, the account
+        it was issued to and when it was issued)."""
+        from collection.models import IssuedId
+        kl = get_user_model().objects.get(username="klehmann")
+        before = timezone.now()
+        made = IssuedId.objects.create(key="OSDB-0010", user=kl)
+        found = IssuedId.objects.get(pk=made.pk)
+        self.assertEqual((found.key, found.user), ("OSDB-0010", kl))
+        self.assertGreaterEqual(found.issued_at, before)
+        self.assertLessEqual(found.issued_at, timezone.now())
+
+    def test_an_adopted_id_has_no_account(self) -> None:
+        """Requirement: Imported rows (none for an adopted ID)."""
+        found = accepts(self, lambda: self.row("SEQ-0001"))
+        self.assertIsNone(found.user)
+        found.refresh_from_db()
+        self.assertIsNone(found.user)
+
+    def test_a_key_is_taken_once(self) -> None:
+        """Requirement: Imported rows (`key`, unique)."""
+        from collection.models import IssuedId
+        IssuedId.objects.create(key="OSDB-0010")
+        refuses(self, lambda: self.row("OSDB-0010"))
+        accepts(self, lambda: self.row("OSDB-0011"))
+
+    def test_a_key_is_a_procedure_or_sequence_id(self) -> None:
+        """Requirement: Imported rows (an `OSDB-NNNN` or `SEQ-NNNN`)."""
+        accepts(self, lambda: self.row("OSDB-0001"))
+        accepts(self, lambda: self.row("SEQ-9999"))
+        for key in ("OSDB-001", "OSDB-00010", "SEQ-12", "XYZ-0001",
+                    "osdb-0010", "seq-0001", "OSDB0010", " OSDB-0010",
+                    ""):
+            with self.subTest(key=key):
+                refuses(self, lambda: self.row(key))
+
+    def test_an_account_with_issued_ids_cannot_be_deleted(self) -> None:
+        """Requirement: Imported rows (an account that a row names
+        cannot be deleted)."""
+        from collection.models import IssuedId
+        kl = get_user_model().objects.get(username="klehmann")
+        IssuedId.objects.create(key="OSDB-0010", user=kl)
+        with self.assertRaises(ProtectedError):
+            kl.delete()
+        self.assertTrue(get_user_model().objects.filter(pk=kl.pk).exists())
+        self.assertTrue(IssuedId.objects.filter(key="OSDB-0010").exists())
+
+
+class IssuedIdAdminTests(ImportCase):
+    """Requirement: Imported rows (the admin lists issued IDs for staff,
+    read-only)."""
+
+    def setUp(self) -> None:
+        from collection.models import IssuedId
+        super().setUp()
+        self.staff = make_user("boss", "BO", is_staff=True,
+                               is_superuser=True)
+        self.client.force_login(self.staff)
+        self.record = IssuedId.objects.create(
+            key="OSDB-0010",
+            user=get_user_model().objects.get(username="klehmann"))
+
+    def test_staff_see_the_list(self) -> None:
+        done = self.client.get(f"{ADMIN}issuedid/")
+        self.assertEqual(done.status_code, 200)
+        self.assertIn("OSDB-0010", done.content.decode("utf-8"))
+
+    def test_users_who_are_not_staff_are_kept_out(self) -> None:
+        self.client.force_login(make_user("kl", "KL"))
+        done = self.client.get(f"{ADMIN}issuedid/")
+        self.assertIn(done.status_code, (302, 403))
+
+    def test_read_only_in_the_admin(self) -> None:
+        """Scenario: Read-only in the admin (an issued ID)."""
+        from collection.models import IssuedId
+        change = f"{ADMIN}issuedid/{self.record.pk}/change/"
+        done = self.client.get(change)
+        self.assertEqual(done.status_code, 200)
+        names = {e.get("name") for e in
+                 page(done).find_all(("input", "select", "textarea"))
+                 if e.get("name") and e.get("name") != "csrfmiddlewaretoken"}
+        self.assertFalse(names & {f.name for f in IssuedId._meta.fields},
+                         names)
+        self.assertEqual(self.client.get(
+            f"{ADMIN}issuedid/add/").status_code, 403)
+        self.assertEqual(self.client.post(
+            f"{ADMIN}issuedid/add/", {"key": "OSDB-0011"}).status_code, 403)
+        self.assertEqual(self.client.post(
+            change, {"key": "OSDB-0099"}).status_code, 403)
+        self.assertEqual(self.client.post(
+            f"{ADMIN}issuedid/{self.record.pk}/delete/",
+            {"post": "yes"}).status_code, 403)
+        self.record.refresh_from_db()
+        self.assertEqual(self.record.key, "OSDB-0010")

@@ -21,7 +21,8 @@ from django.test import TestCase, TransactionTestCase, override_settings
 from . import (load_demo_registry, make_article, make_class,
                make_demo_accounts, make_group, make_substance, make_user,
                page)
-from .collection_support import TOKEN, manifest, post, refused
+from .collection_support import (TOKEN, import_collection, make_token,
+                                 manifest, post, refused, request_id)
 from .registry_support import (NEW_SUBSTANCE, OLD_LAYOUT, small_snapshot,
                                term_url, write_json)
 from .test_registry_forms import substance_data
@@ -415,6 +416,52 @@ class ManifestTests(LockCase):
             done = post(self.client, manifest(base=999))
         self.assertEqual(done.status_code, 409, done.content)
         self.assertLocked(calls)
+
+
+class IssuedIdTests(LockCase):
+    """Requirement: One lock (the ID view and `adopt_ids` take it)."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        load_demo_registry()
+        make_demo_accounts()
+        import_collection()
+
+    def test_issuing_an_id(self) -> None:
+        """Scenario: Two IDs in turn (the lock is taken in the
+        transaction that issues, before the ID is recorded)."""
+        from collection.models import IssuedId
+        token = make_token("kl")
+        with self.recording(lambda: IssuedId.objects.filter(
+                key="OSDB-0010").exists()) as calls:
+            done = request_id(self.client, "procedure", token)
+        self.assertEqual(done.status_code, 201, done.content)
+        self.assertTrue(IssuedId.objects.filter(key="OSDB-0010").exists())
+        self.assertLocked(calls, before=False)
+
+    def test_adopting_an_id(self) -> None:
+        """Requirement: One lock (`adopt_ids` takes it)."""
+        from collection.models import IssuedId
+        with self.recording(lambda: IssuedId.objects.filter(
+                key="OSDB-0012").exists()) as calls:
+            call_command("adopt_ids", "OSDB-0012", stdout=io.StringIO())
+        self.assertTrue(IssuedId.objects.filter(key="OSDB-0012").exists())
+        self.assertLocked(calls, before=False)
+
+
+class AdoptionTests(LockCase):
+    """Requirement: One lock (the manifest view takes it, so that an
+    import never adopts an ID at the moment one is issued)."""
+
+    def test_the_first_accepted_import_adopts_under_the_lock(self) -> None:
+        from collection.models import IssuedId
+        load_demo_registry()
+        make_demo_accounts()
+        with self.recording(IssuedId.objects.count) as calls:
+            done = post(self.client, manifest())
+        self.assertEqual(done.status_code, 200, done.content)
+        self.assertEqual(IssuedId.objects.count(), 11)
+        self.assertLocked(calls, before=0)
 
 
 class AccountWritesTests(LockCase):

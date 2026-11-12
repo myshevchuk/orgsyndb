@@ -1,5 +1,5 @@
-"""The collection's pages: the manifest the builder posts, and the list
-of imports."""
+"""The collection's pages: the manifest the builder posts, the ID path
+that issues procedure and sequence IDs, and the list of imports."""
 
 import hmac
 import json
@@ -9,7 +9,8 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 
-from collection import importing
+from accounts.models import AccessToken
+from collection import importing, issuing
 from collection.models import Import, Procedure, Sequence, latest_accepted
 
 
@@ -51,6 +52,48 @@ def manifest(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"error": str(error)}, status=400)
     status, answer = importing.receive(read)
     return JsonResponse(answer, status=status)
+
+
+@csrf_exempt
+def ids(request: HttpRequest) -> JsonResponse:
+    """Issue a procedure or sequence ID to the account whose access token
+    signs the request, and answer 201 with ``{"id": <ID>}``
+    (``issuing.issue``).
+
+    The body is ``{"kind": "procedure"}`` or ``{"kind": "sequence"}``.
+    A method other than POST answers 405; a request without the
+    ``Bearer`` token of an active account 401, whatever session it
+    carries; another body 400; and a request the application cannot
+    issue an ID for now 409. These answers carry the reason under
+    ``error`` and issue nothing.
+    """
+    if request.method != "POST":
+        answer = JsonResponse({"error": "only POST is allowed"}, status=405)
+        answer["Allow"] = "POST"
+        return answer
+    user = AccessToken.authenticate(request.headers.get("Authorization",
+                                                        ""))
+    if user is None:
+        answer = JsonResponse(
+            {"error": "an access token of an active account is needed"},
+            status=401)
+        answer["WWW-Authenticate"] = "Bearer"
+        return answer
+    try:
+        body = json.loads(request.body)
+    except ValueError as error:
+        return JsonResponse({"error": f"not JSON: {error}"}, status=400)
+    kind = body.get("kind") if isinstance(body, dict) else None
+    if not isinstance(kind, str) or kind not in issuing.PREFIXES \
+            or len(body) != 1:
+        return JsonResponse(
+            {"error": 'the body is not {"kind": "procedure"} or '
+                      '{"kind": "sequence"}'}, status=400)
+    try:
+        key = issuing.issue(kind, user)
+    except issuing.Unavailable as error:
+        return JsonResponse({"error": str(error)}, status=409)
+    return JsonResponse({"id": key}, status=201)
 
 
 def imports(request: HttpRequest) -> HttpResponse:

@@ -650,19 +650,29 @@ note explaining this.
 ## Synthesis sequences
 
 A sequence records an ordered route through at least two procedures. Write it
-in Markdown, including when its steps refer to Org procedures. Copy
-[templates/sequence.md](../templates/sequence.md) into the collection's
-`md/sequences/`. `orgsyndb init` creates this directory; a missing directory
-holds no sequences. `orgsyndb new` creates procedures, so sequence files are
-copied by hand.
+in Markdown, including when its steps refer to Org procedures. Create a
+stub from [templates/sequence.md](../templates/sequence.md) with
+`orgsyndb new --sequence "Aspirin route"` inside the collection. It writes
+the file in `md/sequences/` and fills `id`, `slug`, the title and both dates.
+With an HTTP or HTTPS `registry` in the collection's `orgsyndb.toml`, the
+lab application issues the ID using your personal access token. With a
+registry file or no setting, the command takes the next ID above those in
+`md/sequences/` and all its available Git history, including deleted files.
+See [Get a procedure file](AUTHORING.md#1-get-a-procedure-file) for token
+setup and request failures. `--sequence` accepts neither `--md` nor `--lang`;
+either combination exits 2. There is no German sequence template; copy the
+file with `.de` before `.md` for a German version. `orgsyndb init` creates
+the directory; a missing directory holds no sequences.
 
 A sequence records the route your group runs. The compound page's
 **Routes** tree is derived from the collection's procedures.
 
 Name the file `SEQ-NNNN-short-slug.md`, optionally with `.de` or `.en` before
 `.md`. The short slug matches `[a-z0-9]+(-[a-z0-9]+)*`. The filename's ID must
-equal `id`. `SEQ-0000` and `seq-0000` are template placeholders; replace them
-with an unused ID from `SEQ-0001` through `SEQ-9999` and its lowercase form.
+equal `id`. `SEQ-0000` and `seq-0000` are template placeholders;
+`orgsyndb new --sequence` replaces them with the assigned ID from
+`SEQ-0001` through `SEQ-9999` and its lowercase form. Leave these values
+as supplied.
 The page URL is `/sequences/seq-NNNN/`.
 
 The validator reads only the directory's top level. Subdirectories are errors;
@@ -1191,7 +1201,7 @@ rules as procedures.
 |---|---|---|
 | Any required key | `required field missing` | Add the key from the sequence field table. |
 | `id` | `must match SEQ-NNNN` or `must be between SEQ-0001 and SEQ-9999` | Use `SEQ-` and four digits from `0001` through `9999`. |
-| `id` | `duplicate id <id>, also used by <path>` | Assign a free ID; one file per language code, and one untagged file, may share it. |
+| `id` | `duplicate id <id>, also used by <path>` | For a different route, create a stub with `orgsyndb new --sequence "Route title"` and move that route's target, steps and notes into it. Keep the new `id` and `slug`. One file per language code, and one untagged file, may share an ID for translations of the same route. |
 | `slug` | `must be "<value>" (the lowercased id)` | Use the lowercase `id`. |
 | `file_name` | `must be named SEQ-NNNN-short-slug.md` or `does not match id <id>` | Correct the file name or its ID. |
 | `target` | `unknown compound "<key>"; the registry has no substance of this key` | Correct the key or add the substance in the lab application. |

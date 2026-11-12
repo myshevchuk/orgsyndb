@@ -22,6 +22,7 @@
 </nav>
 <div class="lab-account">
 {% if user.is_authenticated %}<a href="/lab/accounts/password/" title="{% blocktranslate with name=user.display_name %}{{ name }}: change password{% endblocktranslate %}">{{ user.initials }}</a>
+<a href="/lab/accounts/tokens/">{% translate "Access tokens" %}</a>
 <form method="post" action="/lab/accounts/logout/">{% csrf_token %}<button type="submit">{% translate "Sign out" %}</button></form>
 {% else %}<a href="/lab/accounts/login/?next={{ request.path|urlencode }}">{% translate "Sign in" %}</a>
 {% endif %}</div>

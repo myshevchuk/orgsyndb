@@ -5,7 +5,9 @@ The digest covers the substances, their chemical classes, the terms of
 the four vocabularies and the articles' numbers. Every write of those
 rows takes the lock in the transaction that writes, and so does the
 manifest view while it checks and applies an import, so that an import
-is checked against the registry it is applied to.
+is checked against the registry it is applied to. Issuing and adopting
+procedure and sequence IDs take it too (``collection.issuing``), so that
+no ID is issued twice or at the moment an import adopts it.
 """
 
 from typing import Any

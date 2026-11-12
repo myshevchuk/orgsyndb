@@ -50,10 +50,11 @@ FAKE_MANIFEST = {
         "id": "SEQ-0001", "title": "Salicylsäure", "title_de": None,
         "target": "salicylic-acid",
         "steps": [{"procedure": "OSDB-0001", "entry": None}]}],
+    "deleted": ["OSDB-0002"],
 }
 BUILT_KEYS = {"format", "build", "commit", "committed_at", "base",
               "snapshot", "tooling", "trigger", "outcome", "release",
-              "language", "procedures", "sequences"}
+              "language", "procedures", "sequences", "deleted"}
 REFUSED_KEYS = {"format", "build", "commit", "committed_at", "base",
                 "snapshot", "tooling", "trigger", "outcome", "errors"}
 # The line the fake build prints, on standard output, when it fails.
@@ -701,7 +702,7 @@ class UpdaterTests(unittest.TestCase):
         self.assertEqual(body["trigger"], "catch-up")
         self.assertEqual(body["outcome"], "built")
         self.assertEqual(body["release"], self.current())
-        for key in ("language", "procedures", "sequences"):
+        for key in ("language", "procedures", "sequences", "deleted"):
             with self.subTest(key=key):
                 self.assertEqual(body[key], FAKE_MANIFEST[key])
         self.assertEqual(received.headers["authorization"],

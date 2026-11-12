@@ -1,8 +1,9 @@
-"""The imports, procedures with their authors and sequences in the
-admin, for staff to read.
+"""The imports, procedures with their authors, sequences and issued IDs
+in the admin, for staff to read.
 
-Only an accepted import writes these rows, so the admin shows them
-read-only: it adds, changes and deletes none.
+Only an accepted import, the ID path and ``adopt_ids`` write these
+rows, so the admin shows them read-only: it adds, changes and deletes
+none.
 """
 
 from typing import Any
@@ -10,8 +11,8 @@ from typing import Any
 from django.contrib import admin
 from django.http import HttpRequest
 
-from collection.models import (Import, Procedure, ProcedureAuthor,
-                               ScopeEntry, Sequence, Step)
+from collection.models import (Import, IssuedId, Procedure,
+                               ProcedureAuthor, ScopeEntry, Sequence, Step)
 
 
 class ReadOnly(admin.ModelAdmin):
@@ -89,3 +90,10 @@ class SequenceAdmin(ReadOnly):
     list_filter = ("withdrawn",)
     search_fields = ("key", "title", "title_de")
     inlines = [StepInline]
+
+
+@admin.register(IssuedId)
+class IssuedIdAdmin(ReadOnly):
+    list_display = ("key", "user", "issued_at")
+    list_select_related = ("user",)
+    search_fields = ("key", "user__username")

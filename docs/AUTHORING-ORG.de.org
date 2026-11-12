@@ -37,6 +37,7 @@
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-11 Wed 18:17] -- Laborregister, feste Verbindungsfelder, Bilder, Vokabulare und Validierung
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-12 Thu 09:11] -- Stufenfelder, Beispiele, Meldungen, eindeutige Scope-Einträge und Emacs-Vervollständigung
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-12 Thu 18:56] -- Autorenkonten, Prüfmeldungen, Seiten, Namen, Emacs-Vervollständigung und Übersetzungen
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-12 Thu 20:59] -- vergebene IDs, Zugangsschlüssel und Syntheseweggerüste
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
@@ -66,19 +67,54 @@ Meldungen.
   orgsyndb new --lang de "Produktname"
 #+end_src
 
-  Der Befehl wählt die nächste freie Nummer über Org-Quellen,
-  Markdown-Quellen, vorhandene Exporte und die verfügbare Git-Geschichte.
-  Er legt eine Datei wie ~org/procedures/OSDB-0003-produktname.de.org~ an
+  Der Befehl legt eine Datei wie
+  ~org/procedures/OSDB-0003-produktname.de.org~ an
   und trägt Nummer, Slug, Titel und die aktuellen Zeitstempel in Berliner
   Zeit ein. Umlaute und ß im Titel werden im Dateinamen ausgeschrieben:
   aus ~Größe~ wird ~groesse~.
 
+  Ist ~registry~ in der ~orgsyndb.toml~ der Sammlung eine HTTP- oder
+  HTTPS-Adresse, teilt die Laboranwendung die Nummer zu. Sie brauchen einen
+  persönlichen Zugangsschlüssel: einen geheimen Wert, mit dem der Befehl
+  eine Nummer für Ihr Konto anfordert. Melden Sie sich in der Anwendung an
+  und wählen Sie *Zugangsschlüssel* neben Ihren Initialen oder öffnen Sie
+  ~/lab/accounts/tokens/~. Tragen Sie unter *Name* einen Namen ein und wählen
+  Sie *Anlegen*. Kopieren Sie den Schlüssel sofort; er wird nur einmal
+  angezeigt.
+
+  Schreiben Sie ihn auf dem Rechner, der den Befehl ausführt, in die erste
+  Zeile von =~/.config/orgsyndb/token=. Ist ~XDG_CONFIG_HOME~ gesetzt und
+  nicht leer, verwenden Sie stattdessen ~$XDG_CONFIG_HOME/orgsyndb/token~.
+  Sie können auch ~ORGSYNDB_TOKEN~ in der Umgebung des Befehls setzen; ein
+  nicht leerer Wert hat Vorrang vor der Datei. Bewahren Sie den Schlüssel
+  außerhalb der Sammlung auf. Mit *Widerrufen* auf derselben Seite machen
+  Sie ihn unbrauchbar. Auch das Deaktivieren des Kontos setzt ihn außer Kraft.
+
+  Fehlt ein Schlüssel, meldet der Befehl ~no access token~. Ist die
+  Anwendung nicht erreichbar oder lehnt sie die Anfrage ab, zeigt er Adresse
+  und Grund. In jedem Fall endet er mit Rückgabewert 1 und legt keine Datei
+  an. Er wartet bis zu 30 Sekunden; offline können Sie keine Nummer erhalten.
+  Prüfen Sie bei Status 401 Ihren Schlüssel und ob Ihr Konto aktiv ist.
+  Bei Status 409 mit
+  ~no import of the collection has been accepted yet, so its IDs are not known~
+  bitten Sie die verantwortliche Person, den ersten Import der Sammlung
+  annehmen zu lassen, und versuchen es danach erneut.
+
+  Ist das Register eine Datei oder fehlt die Einstellung ~registry~, nimmt
+  der Befehl die nächste Nummer oberhalb der Nummern in Org-Quellen,
+  Markdown-Quellen, Exporten und der gesamten verfügbaren Git-Geschichte.
+  Gelöschte Nummern werden nicht erneut vergeben. Fehlt die Geschichte oder
+  enthält die Kopie nur einen Teil davon (flacher Klon), warnt er: Ältere
+  gelöschte Nummern können dann unbemerkt bleiben.
+  ~ORGSYNDB_REGISTRY~ ändert nicht, woher
+  ~new~ seine Nummer bekommt. ~M-x orgsyndb-new-procedure~ führt denselben
+  Befehl aus und verwendet denselben Schlüssel; Emacs wartet auf die Anfrage
+  und zeigt bei einem Fehlschlag die Fehlermeldung.
+
   Das Gerüst erfasst kein KI-Modell. Wenn Sie ein Modell angeben möchten,
   das beim Schreiben geholfen hat, fügen Sie
   ~#+AI_MODEL: example-model-1~ von Hand hinzu. Der Befehl legt die Datei
-  exklusiv an und überschreibt nie eine vorhandene. Er warnt, wenn keine Git-Geschichte
-  verfügbar oder der Klon flach ist, weil er dann eine gelöschte Nummer
-  übersehen kann.
+  exklusiv an und überschreibt nie eine vorhandene.
 
   Die Vorlage ist [[file:../templates/procedure.de.org][templates/procedure.de.org]]. Die vollständigen Feldregeln
   stehen in der [[file:SCHEMA.de.md][Schema-Referenz]].
@@ -784,13 +820,30 @@ Meldungen.
   *Herstellungswege* auf der Verbindungsseite leitet die Website aus den
   Vorschriften der Sammlung ab.
 
-  Kopieren Sie [[file:../templates/sequence.md][templates/sequence.md]] nach ~md/sequences/~ der Sammlung.
-  ~orgsyndb init~ legt diesen Ordner an. ~orgsyndb new~ erzeugt
-  Vorschriftengerüste, daher kopieren Sie die Synthesewegvorlage von Hand.
-  Wählen Sie eine freie ~SEQ-NNNN~-Nummer von ~0001~ bis ~9999~. Ersetzen Sie
-  ~SEQ-0000~ in ~id~ und ~seq-0000~ in ~slug~; speichern Sie als
-  ~SEQ-NNNN-short-slug.de.md~. Der kurze Slug besteht aus Kleinbuchstaben,
-  Ziffern und einzelnen Bindestrichen.
+  Legen Sie im Ordner der Sammlung ein Gerüst an:
+
+#+begin_src sh
+  orgsyndb new --sequence "Aspirin-Synthese"
+#+end_src
+
+  Der Befehl verwendet [[file:../templates/sequence.md][templates/sequence.md]] und erzeugt
+  ~md/sequences/SEQ-NNNN-aspirin-synthese.md~; ~NNNN~ ist die zugeteilte Nummer
+  von ~0001~ bis ~9999~. ~orgsyndb init~ legt diesen Ordner an. Der Befehl
+  füllt ~id~, den kleingeschriebenen ~slug~, den Titel und beide Zeitangaben
+  aus. Lassen Sie ~id~ und ~slug~ stehen. Bei einer Registeradresse fordert
+  er die Nummer mit Ihrem Zugangsschlüssel von der Laboranwendung an, wie
+  bei einer Vorschrift. Bei einer Registerdatei oder ohne Einstellung nimmt
+  er die nächste Nummer oberhalb der Nummern in ~md/sequences/~ und dessen
+  gesamter verfügbarer Git-Geschichte, einschließlich gelöschter Dateien.
+  Dieselben Fehlermeldungen und Warnungen zur Geschichte gelten.
+
+  Fügen Sie ~--sequence~ weder ~--md~ noch ~--lang~ hinzu; beide Kombinationen
+  enden mit Rückgabewert 2. Es gibt keinen Emacs-Befehl zum Anlegen eines
+  Synthesewegs. Der Dateiname hat die Form ~SEQ-NNNN-short-slug.md~; der kurze
+  Slug besteht aus Kleinbuchstaben, Ziffern und einzelnen Bindestrichen.
+  Kopieren Sie die Datei für eine deutsche Fassung mit ~.de~ vor ~.md~ und
+  übersetzen Sie Titel und Anmerkungen. Eine deutsche Synthesewegvorlage gibt
+  es nicht.
 
   Der Datenblock ist TOML zwischen zwei ~+++~-Zeilen. Text steht in doppelten
   Anführungszeichen; Listen von Verbindungsschlüsseln stehen in eckigen

@@ -173,9 +173,12 @@ translated in place."
 
 ;;;###autoload
 (defun orgsyndb-new-procedure (title &optional format language)
-  "Create a procedure stub titled TITLE with the next free ID, and visit it.
+  "Create a procedure stub titled TITLE with `orgsyndb new', and visit it.
 FORMAT is `org', the default, or `md'; LANGUAGE is `none', the default,
-`de' or `en'.  Interactively, a prefix argument asks for both."
+`de' or `en'.  Interactively, a prefix argument asks for both.
+When the collection's registry is an address, the lab application
+issues the ID, and the command signals an error when it cannot be
+reached or refuses; otherwise the ID is the next one free in the clone."
   (interactive
    (let ((format (if current-prefix-arg
                      (completing-read "Format: " '("org" "md") nil t nil nil

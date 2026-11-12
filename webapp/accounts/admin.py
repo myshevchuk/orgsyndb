@@ -1,4 +1,5 @@
-"""Accounts in the admin, where staff create and change them."""
+"""Accounts in the admin, where staff create and change them, and the
+accounts' access tokens, which staff see and delete."""
 
 from typing import Any
 
@@ -7,7 +8,7 @@ from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import AdminUserCreationForm, UserChangeForm
 from django.utils.translation import gettext_lazy as _
 
-from accounts.models import User
+from accounts.models import AccessToken, User
 
 
 class CreationForm(AdminUserCreationForm):
@@ -57,4 +58,24 @@ class AccountAdmin(UserAdmin):
                               ) -> bool:
         """Refuse every deletion: an account's name stays on the records
         and history it touched. Staff deactivate an account instead."""
+        return False
+
+
+@admin.register(AccessToken)
+class AccessTokenAdmin(admin.ModelAdmin):
+    """The access tokens, which staff list and delete; a token is made
+    only by its account, on the token page, so the admin adds and
+    changes none."""
+
+    list_display = ("name", "user", "created_at", "last_used_at")
+    list_select_related = ("user",)
+    search_fields = ("name", "user__username")
+    fields = ("user", "name", "created_at", "last_used_at")
+    readonly_fields = fields
+
+    def has_add_permission(self, request: Any, obj: Any = None) -> bool:
+        return False
+
+    def has_change_permission(self, request: Any, obj: Any = None
+                              ) -> bool:
         return False

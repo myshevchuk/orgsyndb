@@ -8,8 +8,8 @@ from django.test import SimpleTestCase
 
 from .collection_support import (DEMO_CREDITS, ImportCase, author_rows,
                                  authors_of, by_id, counts, credited,
-                                 demo_collection, dump, entries_of, steps_of,
-                                 substances_of)
+                                 demo_collection, dump, entries_of, issue_ids,
+                                 steps_of, substances_of)
 
 SPECIFIC = "acetic-anhydride + salicylic-acid >> acetylsalicylic-acid"
 GENERAL = ["4-acetylbiphenyl >> 1-biphenyl-4-yl-ethanol",
@@ -309,6 +309,7 @@ class ChangedValuesTests(ImportCase):
         is created)."""
         from collection.models import Procedure
         first = self.accept()
+        issue_ids("OSDB-0010")
         data = demo_collection()
         new = copy.deepcopy(procedure_of(data, "OSDB-0008"))
         new["id"] = "OSDB-0010"
@@ -598,7 +599,8 @@ class WithdrawnTests(ImportCase):
             self.assertGreaterEqual(after[name], before[name], name)
         self.assertEqual(after["Procedure"], 9)
         self.assertEqual(after["Sequence"], 2)
-        self.accept({"language": "de", "procedures": [], "sequences": []})
+        self.accept({"language": "de", "procedures": [], "sequences": [],
+                     "deleted": []})
         self.assertEqual(counts()["Procedure"], 9)
         self.assertEqual(counts()["Sequence"], 2)
         from collection.models import Procedure, Sequence

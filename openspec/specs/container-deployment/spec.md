@@ -200,5 +200,5 @@ For a build that succeeded: on `200` with `accepted` the cycle publishes the rel
 
 #### Scenario: What a manifest holds
 - **WHEN** a test runs `sync` once against a fake application that records each manifest
-- **THEN** the recorded manifest has `format` 1, a UUID `build`, the collection commit, the snapshot's digest, the application commit as `tooling`, `base` `null`, the outcome `built`, the published release's name, and the `language`, `procedures` and `sequences` the fake `manifest` printed, and was sent with the token and the `Host` of the snapshot request
+- **THEN** the recorded manifest has `format` 1, a UUID `build`, the collection commit, the snapshot's digest, the application commit as `tooling`, `base` `null`, the outcome `built`, the published release's name, and the `language`, `procedures`, `sequences` and `deleted` the fake `manifest` printed, and was sent with the token and the `Host` of the snapshot request
 

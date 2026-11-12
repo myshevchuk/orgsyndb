@@ -30,9 +30,10 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from collection import importing
-from collection.models import (EntrySubstance, Import, Outcome, Procedure,
-                               ScopeEntry, Sequence, Step, Trigger,
-                               latest_accepted)
+from accounts.models import AccessToken
+from collection.models import (EntrySubstance, Import, IssuedId, Outcome,
+                               Procedure, ScopeEntry, Sequence, Step,
+                               Trigger, latest_accepted)
 from demo import data
 from demo.models import DemoMark
 from inventory import bookings
@@ -79,15 +80,15 @@ def histories() -> list[type]:
 
 
 def holds_records() -> bool:
-    """Whether the database holds lab records: an account, substance,
-    vocabulary term, article, task, item, delivery note, bulk lot,
-    entered consumption value, stored planning parameters, import of
-    the collection, imported procedure or sequence, change-history
-    record or the demo mark."""
+    """Whether the database holds lab records: an account, access token,
+    substance, vocabulary term, article, task, item, delivery note, bulk
+    lot, entered consumption value, stored planning parameters, import
+    of the collection, imported procedure or sequence, issued ID,
+    change-history record or the demo mark."""
     return any(model.objects.exists() for model in (
-        get_user_model(), Substance, *TERMS, Article, Task, Item,
-        DeliveryNote, Lot, EnteredConsumption, Parameters, Import,
-        Procedure, Sequence, DemoMark, *histories()))
+        get_user_model(), AccessToken, Substance, *TERMS, Article, Task,
+        Item, DeliveryNote, Lot, EnteredConsumption, Parameters, Import,
+        Procedure, Sequence, IssuedId, DemoMark, *histories()))
 
 
 def language() -> str:
@@ -112,7 +113,8 @@ def clear() -> None:
     the notes, lots and task steps they name, lots before the task steps
     that made them, records before the substances and terms they name,
     tasks and their steps before the sequences, entries and imports they
-    name, sequence steps before the entries they name, and terms and
+    name, sequence steps before the entries they name, issued IDs and
+    access tokens before the accounts they name, and terms and
     imports are taken out of their trees and chains before they are
     deleted, as each protects the other otherwise.
     """
@@ -146,6 +148,8 @@ def clear() -> None:
     DemoMark.objects.all().delete()
     for model in histories():
         model.objects.all().delete()
+    IssuedId.objects.all().delete()
+    AccessToken.objects.all().delete()
     get_user_model().objects.all().delete()
     Counter.objects.filter(name="task").update(value=0)
 
@@ -338,8 +342,9 @@ def record_import(moment: datetime, language: str) -> Import:
     tooling of forty zeros, the release ``demo``, the trigger
     ``catch-up``, no base, the current snapshot's digest and LANGUAGE,
     through ``collection.importing`` as the manifest view receives a
-    manifest; return it. The database must hold the registry the
-    manifest names and no accepted import. Raise ValidationError when
+    manifest, which adopts the IDs the manifest names; return it. The
+    database must hold the registry the manifest names and no accepted
+    import. Raise ValidationError when
     the import is not accepted."""
     collection = json.loads(MANIFEST.read_text(encoding="utf-8"))
     body = {**collection, "format": importing.FORMAT,

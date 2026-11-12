@@ -95,6 +95,47 @@ class NextIdTests(unittest.TestCase):
             pipeline().next_id(["OSDB-9999-last.md"])
 
 
+    def test_next_sequence_id(self) -> None:
+        """Scenario: Next sequence ID."""
+        names = ["SEQ-0002-a.md", "OSDB-0007-b.md", "seq-0004-c.md"]
+        self.assertEqual(pipeline().next_id(names, "SEQ"), "SEQ-0005")
+        self.assertEqual(pipeline().next_id(names, prefix="SEQ"),
+                         "SEQ-0005")
+
+    def test_the_default_prefix_is_osdb(self) -> None:
+        """Requirement: new subcommand (`next_id(names, prefix=\"OSDB\")`
+        counts the names of its own prefix only)."""
+        names = ["SEQ-0002-a.md", "OSDB-0007-b.md", "seq-0004-c.md"]
+        self.assertEqual(pipeline().next_id(names), "OSDB-0008")
+        self.assertEqual(pipeline().next_id(names, "OSDB"), "OSDB-0008")
+        self.assertEqual(pipeline().next_id(["SEQ-0009-a.md"]),
+                         "OSDB-0001")
+
+    def test_first_sequence_id(self) -> None:
+        """Requirement: new subcommand (`<prefix>-0001` when no name
+        begins with one)."""
+        self.assertEqual(
+            pipeline().next_id(["OSDB-0003-a.md", "notes.txt"], "SEQ"),
+            "SEQ-0001")
+        self.assertEqual(pipeline().next_id([], "SEQ"), "SEQ-0001")
+
+    def test_exhausted_sequence_id_space_is_an_error(self) -> None:
+        """Requirement: new subcommand (a `ValueError` when the highest
+        is `<prefix>-9999`)."""
+        with self.assertRaises(ValueError):
+            pipeline().next_id(["SEQ-9999-last.md"], "SEQ")
+        self.assertEqual(
+            pipeline().next_id(["SEQ-9999-last.md", "OSDB-0001-a.md"]),
+            "OSDB-0002")
+
+    def test_a_name_only_begins_with_its_prefix(self) -> None:
+        """Requirement: new subcommand (a name begins with
+        `<prefix>-NNNN`)."""
+        self.assertEqual(
+            pipeline().next_id(["XSEQ-0009-a.md", "SEQ-12-b.md",
+                                "a-SEQ-0007.md"], "SEQ"), "SEQ-0001")
+
+
 @unittest.skipUnless(shutil.which("git"), "git not found")
 class NewWithGitHistoryTests(unittest.TestCase):
     def committed_repo(self) -> Path:
@@ -265,6 +306,43 @@ class StubTests(unittest.TestCase):
                  stub.parent])
         self.assertEqual(checked.returncode, 0, checked.stderr)
         self.assertEqual(checked.stdout, "")
+
+    def test_a_sequence_template_is_filled(self) -> None:
+        """Requirement: new subcommand (`fill_template` with the kind
+        `sequence`: every `SEQ-0000` becomes the ID and every `seq-0000`
+        its lowercase form, and the `title`, `date` and `lastmod` lines
+        take the title and the time)."""
+        text = (REPO / "templates" / "sequence.md").read_text(
+            encoding="utf-8")
+        filled = pipeline().fill_template(
+            text, "sequence", "SEQ-0005", 'Bob\'s "best" route',
+            dt.datetime.fromisoformat(NOW))
+        self.assertNotIn("SEQ-0000", filled)
+        self.assertNotIn("seq-0000", filled)
+        data = front_matter(filled)
+        moment = dt.datetime.fromisoformat(NOW)
+        self.assertEqual(
+            (data["id"], data["slug"], data["title"], data["date"],
+             data["lastmod"]),
+            ("SEQ-0005", "seq-0005", 'Bob\'s "best" route', moment,
+             moment))
+        self.assertNotIn("ai_model", data)
+        self.assertEqual(data["steps"], front_matter(text)["steps"])
+
+    def test_every_placeholder_of_a_sequence_template_is_replaced(
+            self) -> None:
+        """Requirement: new subcommand (every `SEQ-0000`, every
+        `seq-0000`)."""
+        text = ('+++\nid = "SEQ-0000"\nslug = "seq-0000"\n'
+                'title = "T"\ndate = 2026-10-23T09:15:00+02:00\n'
+                'lastmod = 2026-10-23T09:15:00+02:00\n+++\n\n'
+                'See SEQ-0000 and seq-0000.\n')
+        filled = pipeline().fill_template(
+            text, "sequence", "SEQ-0012", "T", dt.datetime.fromisoformat(
+                NOW))
+        self.assertEqual(filled.count("SEQ-0012"), 2)
+        self.assertEqual(filled.count("seq-0012"), 2)
+        self.assertNotIn("0000", filled)
 
     def test_template_filling_rejects_a_missing_anchor_line(self) -> None:
         """Scenario: Template filling (design D1: ValueError on a missing

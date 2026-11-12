@@ -62,3 +62,6 @@ msgstr "nein"
 #, python-format
 msgid "Demo: All records are invented (as of %(day)s)."
 msgstr "Demo: Alle Einträge sind erfunden (Stand: %(day)s)."
+
+msgid "Access tokens"
+msgstr "Zugangsschlüssel"

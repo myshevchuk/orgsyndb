@@ -1,10 +1,11 @@
 """Testable logic behind tools/orgsyndb.
 
 The reading of the collection's registry, the Org source names the
-export needs, the recoverable replacement of ``build/export/``, next-ID
-allocation, slugs, template filling, the Hugo overlay, the site's
-substance, field, reaction-type and route data, the collection index,
-PDF jobs and the Pagefind download.
+export needs, the recoverable replacement of ``build/export/``, the
+procedure and sequence IDs of new stubs, slugs, template filling, the
+Hugo overlay, the site's substance, field, reaction-type and route
+data, the collection index, the manifest, PDF jobs and the Pagefind
+download.
 File discovery and the reading of the collection settings come from
 ``validate.py`` in the same directory. No Org source is read here: of
 ``org/procedures/`` only the entry names are, and Emacs examines and
@@ -39,9 +40,13 @@ from validate import step_entry
 APP = Path(__file__).resolve().parent.parent
 TEMPLATES = APP / "templates"
 
-ID_PREFIX_RE = re.compile(r"^OSDB-(\d{4})", re.IGNORECASE)
+# The prefix of the IDs of each kind of file ``orgsyndb new`` creates.
+ID_PREFIXES = {"procedure": "OSDB", "sequence": "SEQ"}
+# The start of a file name that names a procedure or sequence ID.
+ANY_ID_RE = re.compile(r"^(OSDB|SEQ)-([0-9]{4})", re.IGNORECASE)
 SLUG_LIMIT = 40
 SOURCE_TREES = ("org/procedures", "md/procedures")
+SEQUENCE_TREE = "md/sequences"
 
 EXPORT = "export"
 STAGING = ".export-staging"
@@ -151,18 +156,20 @@ def slugify(title: str, language: str | None = None) -> str:
     return slug
 
 
-def next_id(names: Iterable[str]) -> str:
+def next_id(names: Iterable[str], prefix: str = "OSDB") -> str:
     """Return the ID one above the highest found at the start of ``names``.
 
-    A name counts when it begins with ``OSDB-NNNN``, in any case. Returns
-    ``OSDB-0001`` when none does, and raises ValueError when the highest
-    is ``OSDB-9999``.
+    A name counts when it begins with ``<prefix>-NNNN``, in any case.
+    Returns ``<prefix>-0001`` when none does, and raises ValueError when
+    the highest is ``<prefix>-9999``.
     """
-    numbers = [int(m.group(1)) for m in map(ID_PREFIX_RE.match, names) if m]
+    pattern = re.compile(rf"^{re.escape(prefix)}-([0-9]{{4}})",
+                         re.IGNORECASE)
+    numbers = [int(m.group(1)) for m in map(pattern.match, names) if m]
     highest = max(numbers, default=0)
     if highest >= 9999:
-        raise ValueError("no procedure ID is left above OSDB-9999")
-    return f"OSDB-{highest + 1:04d}"
+        raise ValueError(f"no ID is left above {prefix}-9999")
+    return f"{prefix}-{highest + 1:04d}"
 
 
 def _berlin_local(moment: dt.datetime) -> dt.datetime:
@@ -223,21 +230,26 @@ def _replace_once(text: str, pattern: str, line: str, what: str,
 
 def fill_template(text: str, kind: str, ident: str, title: str,
                   now: dt.datetime) -> str:
-    """Fill a procedure template for ``orgsyndb new``.
+    """Fill a procedure or sequence template for ``orgsyndb new``.
 
-    ``kind`` is ``"org"`` or ``"md"``. Every ``OSDB-0000`` becomes
-    ``ident`` and every ``osdb-0000`` its lowercase form. The title and
-    both timestamps (from aware ``now``) are written into their anchor
-    lines; ``title`` is a single line, as ``new_procedure`` checks. The
-    stub records no AI model: ``#+AI_MODEL`` lines are dropped. Raises
-    ValueError for an unknown ``kind`` or a malformed ``ident``, and
-    when an anchor line is missing or repeated.
+    ``kind`` is ``"org"`` or ``"md"`` for a procedure template, whose
+    every ``OSDB-0000`` becomes ``ident`` and every ``osdb-0000`` its
+    lowercase form, or ``"sequence"`` for the Markdown sequence
+    template, whose ``SEQ-0000`` and ``seq-0000`` are replaced alike.
+    The title and both timestamps (from aware ``now``) are written into
+    their anchor lines; ``title`` is a single line, as ``new_procedure``
+    checks. The stub records no AI model: ``#+AI_MODEL`` lines are
+    dropped. Raises ValueError for an unknown ``kind`` or an ``ident``
+    that is no ID of the kind, and when an anchor line is missing or
+    repeated.
     """
-    if kind not in ("org", "md"):
+    if kind not in ("org", "md", "sequence"):
         raise ValueError(f"unknown template kind {kind!r}")
-    if validate.id_number(ident) is None:
-        raise ValueError(f"{ident!r} is not a procedure ID")
-    text = text.replace("OSDB-0000", ident).replace("osdb-0000",
+    prefix = ID_PREFIXES["sequence" if kind == "sequence" else "procedure"]
+    if validate.id_number(ident, prefix) is None:
+        raise ValueError(f"{ident!r} is not an ID {prefix}-NNNN")
+    placeholder = f"{prefix}-0000"
+    text = text.replace(placeholder, ident).replace(placeholder.lower(),
                                                     ident.lower())
     if kind == "org":
         stamp = org_timestamp(now)
@@ -425,7 +437,12 @@ def org_error_reported(report: str, paths: Iterable[str]) -> bool:
 
 
 # --------------------------------------------------------------------------
-# Next ID
+# IDs
+
+
+ID_PATH = "/lab/collection/ids/"
+TOKEN_VARIABLE = "ORGSYNDB_TOKEN"
+TOKEN_FILE = Path("orgsyndb") / "token"
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -434,41 +451,165 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
                           capture_output=True, text=True, timeout=120)
 
 
-def candidate_names(collection: Path,
-                    warn: Callable[[str], None]) -> list[str]:
-    """Return every name ``next_id`` must stay above, for ``collection``.
+def history_names(collection: Path, trees: Sequence[str],
+                  warn: Callable[[str], None]) -> list[str]:
+    """Return the base names of every path under ``trees`` in the git
+    history of all refs of ``collection``.
 
-    These are the top-level entries of the source trees and of
-    ``build/export/``, and the base names of every source-tree path in
-    the git history of all refs. The collection may be anywhere inside a
-    work tree; the history paths are relative to it. Without usable git
-    history, or in a shallow clone, ``warn`` is called with the reason.
+    The collection may be anywhere inside a work tree; ``trees`` are
+    relative to it. Without usable git history the list is empty; then,
+    and in a shallow clone, ``warn`` is called with the reason.
     """
     repo = Path(collection)
-    names: list[str] = []
-    for tree in (*SOURCE_TREES, "build/export"):
-        if (repo / tree).is_dir():
-            names += os.listdir(repo / tree)
     if shutil.which("git") is None:
-        warn("git not found; IDs of deleted procedures cannot be seen")
-        return names
+        warn("git not found; IDs of deleted files cannot be seen")
+        return []
     inside = _git(repo, "rev-parse", "--is-inside-work-tree")
     if inside.returncode != 0 or inside.stdout.strip() != "true":
         warn(f"{repo} is not inside a git work tree; IDs of deleted "
-             "procedures cannot be seen")
-        return names
+             "files cannot be seen")
+        return []
     shallow = _git(repo, "rev-parse", "--is-shallow-repository")
     if shallow.stdout.strip() == "true":
         warn("this is a shallow clone; IDs deleted before its oldest "
              "commit cannot be seen")
     log = _git(repo, "-c", "core.quotePath=false", "log", "--all",
                "--no-renames", "--format=", "--name-only", "-z", "--",
-               *SOURCE_TREES)
+               *trees)
     if log.returncode != 0:
         warn("cannot read the git history: " + log.stderr.strip())
-        return names
-    names += [Path(p).name for p in log.stdout.split("\0") if p.strip()]
-    return names
+        return []
+    return [Path(p).name for p in log.stdout.split("\0") if p.strip()]
+
+
+def candidate_names(collection: Path, warn: Callable[[str], None],
+                    kind: str = "procedure") -> list[str]:
+    """Return every name ``next_id`` must stay above for a new file of
+    ``kind``, ``procedure`` or ``sequence``, in ``collection``.
+
+    For a procedure these are the top-level entries of the source trees
+    and of ``build/export/``, for a sequence those of ``md/sequences/``,
+    and the base names of every path of those trees, ``build/export/``
+    aside, in the git history (``history_names``, which calls ``warn``).
+    """
+    repo = Path(collection)
+    trees = SOURCE_TREES if kind == "procedure" else (SEQUENCE_TREE,)
+    names: list[str] = []
+    for tree in (*trees, "build/export") if kind == "procedure" else trees:
+        if (repo / tree).is_dir():
+            names += os.listdir(repo / tree)
+    return names + history_names(repo, trees, warn)
+
+
+def deleted_ids(collection: Path, present: Iterable[str],
+                warn: Callable[[str], None]) -> list[str]:
+    """Return, in upper case and in order, the procedure and sequence IDs
+    that a base name in the git history of the procedure and sequence
+    trees of ``collection`` begins with (``history_names``, which calls
+    ``warn``), leaving out the IDs of ``present``."""
+    names = history_names(collection, (*SOURCE_TREES, SEQUENCE_TREE), warn)
+    found = {f"{m.group(1).upper()}-{m.group(2)}"
+             for m in map(ANY_ID_RE.match, names) if m}
+    return sorted(found - set(present))
+
+
+def access_token() -> str:
+    """Return the access token ``orgsyndb new`` signs its request with:
+    ``ORGSYNDB_TOKEN`` when it is set and not empty, else the first line
+    of ``$XDG_CONFIG_HOME/orgsyndb/token``, ``XDG_CONFIG_HOME`` being
+    ``~/.config`` when unset or empty, without surrounding white space.
+
+    Raises ``validate.ConfigError``, naming the variable and the file,
+    when neither gives a token.
+    """
+    token = os.environ.get(TOKEN_VARIABLE, "")
+    if token:
+        return token
+    config = os.environ.get("XDG_CONFIG_HOME", "")
+    path = Path(config or Path.home() / ".config") / TOKEN_FILE
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        lines = []
+    if lines and lines[0].strip():
+        return lines[0].strip()
+    shown = path if config else f"~/.config/{TOKEN_FILE.as_posix()}"
+    raise validate.ConfigError(
+        f"no access token: set {TOKEN_VARIABLE} or write the token to "
+        f"{shown}; an account makes one on the lab application's page "
+        "/lab/accounts/tokens/")
+
+
+def origin(address: str) -> str:
+    """Return the scheme, host and port of the URL ``address``, as
+    ``https://lab.example:8443``."""
+    parts = urllib.parse.urlsplit(address)
+    return f"{parts.scheme}://{parts.netloc.rpartition('@')[2]}"
+
+
+def _issued_id(address: str, kind: str) -> str:
+    """Return the ID of ``kind`` that the lab application at the origin
+    of ``address`` issues to the account of ``access_token()``.
+
+    Raises ``validate.ConfigError`` without a token, and, naming the ID
+    path, when the request fails or times out after REGISTRY_TIMEOUT
+    seconds, or the answer is not 201 with an ``id`` of the kind; the
+    message then carries the status and the answer's ``error``.
+    """
+    token = access_token()
+    url = origin(address) + ID_PATH
+    request = urllib.request.Request(
+        url, data=json.dumps({"kind": kind}).encode("utf-8"),
+        method="POST", headers={"Content-Type": "application/json",
+                                "Accept": "application/json",
+                                "Authorization": f"Bearer {token}"})
+    try:
+        try:
+            with urllib.request.urlopen(request,
+                                        timeout=REGISTRY_TIMEOUT) as answer:
+                status, body = answer.status, answer.read()
+        except urllib.error.HTTPError as exc:
+            status, body = exc.code, exc.read()
+    except (OSError, http.client.HTTPException, ValueError) as exc:
+        raise validate.ConfigError(f"{url}: {exc}") from None
+    try:
+        data = json.loads(body)
+    except ValueError:
+        data = None
+    table = data if isinstance(data, dict) else {}
+    ident = table.get("id")
+    if status == 201 and isinstance(ident, str) and re.fullmatch(
+            rf"{ID_PREFIXES[kind]}-[0-9]{{4}}", ident):
+        return ident
+    error = table.get("error")
+    reason = (f": {error}" if isinstance(error, str) and error
+              else f", with no {kind} ID" if status == 201 else "")
+    raise validate.ConfigError(f"{url}: answered with status "
+                               f"{status}{reason}")
+
+
+def take_id(collection: Path, kind: str) -> str:
+    """Return the ID of a new file of ``kind``, ``procedure`` or
+    ``sequence``, in ``collection``.
+
+    When the ``registry`` of the collection's ``orgsyndb.toml`` is an
+    address, whatever ``ORGSYNDB_REGISTRY`` holds, the lab application
+    at its origin issues the ID (``_issued_id``). Otherwise it is
+    ``next_id`` of the candidate names of ``kind``, warning on stderr as
+    ``candidate_names`` does. Raises ``validate.ConfigError`` when the
+    settings file breaks a rule of ``validate.read_settings`` and when
+    no ID can be had.
+    """
+    collection = Path(collection)
+    named = validate.read_settings(
+        collection / validate.DEFAULT_SETTINGS).get("registry")
+    if named is not None and is_address(named):
+        return _issued_id(named, kind)
+    try:
+        return next_id(candidate_names(collection, _warn, kind),
+                       ID_PREFIXES[kind])
+    except ValueError as exc:
+        raise validate.ConfigError(str(exc)) from None
 
 
 # --------------------------------------------------------------------------
@@ -1549,7 +1690,9 @@ def manifest_data(collection: Path) -> dict[str, Any]:
     ``procedures``, one table per procedure ID among the files of
     ``build/export/`` and ``md/procedures/`` whose names the
     validator's file-name pattern accepts, ordered by ID; and
-    ``sequences``, likewise for ``md/sequences/``. Each describes the
+    ``sequences``, likewise for ``md/sequences/``; and ``deleted``, the
+    IDs ``deleted_ids`` finds that neither names, warning on stderr as
+    it does. Each of the procedures and sequences describes the
     variant the site publishes (``choose_variants``): a procedure by
     its ``id``, ``source`` (``org`` for an export, else ``md``),
     ``title``, ``title_de`` (the title of the ID's file tagged ``de``,
@@ -1593,7 +1736,7 @@ def manifest_data(collection: Path) -> dict[str, Any]:
         data = published.get(step.get("procedure"))
         return None if data is None else step_entry(step, data)
 
-    return {
+    listed = {
         "language": language,
         "procedures": [
             _procedure_data(path, data, export,
@@ -1609,6 +1752,9 @@ def manifest_data(collection: Path) -> dict[str, Any]:
                        for step in data.get("steps") or ()]}
             for _, data in choose_variants(sequences, language)],
     }
+    present = [item["id"] for item in (*listed["procedures"],
+                                       *listed["sequences"])]
+    return {**listed, "deleted": deleted_ids(collection, present, _warn)}
 
 
 def hugo_overlay(site: Path, collection: Path, language: str,
@@ -1809,7 +1955,7 @@ def render_pdfs(jobs: Sequence[PdfJob]) -> list[PdfJob]:
 
 
 # --------------------------------------------------------------------------
-# Procedure stubs
+# Procedure and sequence stubs
 
 
 class UsageError(Exception):
@@ -1839,6 +1985,28 @@ def template_path(kind: str, language: str | None) -> Path:
     return TEMPLATES / f"procedure.{language}.{kind}"
 
 
+def _write_stub(collection: Path, relative: Path, text: str) -> Path:
+    """Create the file ``relative`` of ``collection``, and the
+    directories it needs, holding ``text``; return ``relative``. Raises
+    ValueError when the file exists, which is left as it is."""
+    target = collection / relative
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with open(target, "x", encoding="utf-8") as handle:
+            handle.write(text)
+    except FileExistsError:
+        raise ValueError(f"{relative} already exists") from None
+    return relative
+
+
+def _now(now: dt.datetime | None) -> dt.datetime:
+    """Return ``now``, or when it is None the current time in Berlin to
+    the second."""
+    if now is None:
+        return dt.datetime.now(berlin()).replace(microsecond=0)
+    return now
+
+
 def new_procedure(collection: Path, words: Sequence[str], md: bool,
                   now: dt.datetime | None = None,
                   language: str | None = None) -> Path:
@@ -1847,8 +2015,11 @@ def new_procedure(collection: Path, words: Sequence[str], md: bool,
     Without ``language`` the stub is the English template under a name
     without a language code. With one, it is that language's template,
     and the name carries the code, as in ``OSDB-0009-titel.de.org``.
-    Raises UsageError for a bad title or language, and
-    ValueError when the file exists or the template cannot be filled.
+    The ID is ``take_id(collection, "procedure")``, taken once the title
+    and language are checked. Raises UsageError for a bad title or
+    language, ``validate.ConfigError`` when no ID can be had, and
+    ValueError when the file exists or the template cannot be filled;
+    on each, nothing is created.
     """
     if language is not None and language not in validate.LANGUAGES:
         raise UsageError(f"--lang {language!r} must be one of "
@@ -1858,22 +2029,36 @@ def new_procedure(collection: Path, words: Sequence[str], md: bool,
         slug = slugify(title, language)
     except ValueError as exc:
         raise UsageError(str(exc)) from None
-    if now is None:
-        now = dt.datetime.now(berlin()).replace(microsecond=0)
     collection = Path(collection)
     kind = "md" if md else "org"
-    ident = next_id(candidate_names(collection, _warn))
-    template = template_path(kind, language)
-    text = fill_template(template.read_text(encoding="utf-8"), kind, ident,
-                         title, now)
+    template = template_path(kind, language).read_text(encoding="utf-8")
+    ident = take_id(collection, "procedure")
+    text = fill_template(template, kind, ident, title, _now(now))
     code = "" if language is None else f".{language}"
-    relative = (Path(SOURCE_TREES[kind == "md"])
-                / f"{ident}-{slug}{code}.{kind}")
-    target = collection / relative
-    target.parent.mkdir(parents=True, exist_ok=True)
+    return _write_stub(collection, Path(SOURCE_TREES[kind == "md"])
+                       / f"{ident}-{slug}{code}.{kind}", text)
+
+
+def new_sequence(collection: Path, words: Sequence[str],
+                 now: dt.datetime | None = None) -> Path:
+    """Create a sequence stub in ``collection`` from the application's
+    ``templates/sequence.md``; return its relative path,
+    ``md/sequences/<ID>-<slug>.md``.
+
+    The ID is ``take_id(collection, "sequence")``, taken once the title
+    is checked. Raises UsageError for a bad title,
+    ``validate.ConfigError`` when no ID can be had, and ValueError when
+    the file exists or the template cannot be filled; on each, nothing
+    is created.
+    """
+    title = _new_title(words)
     try:
-        with open(target, "x", encoding="utf-8") as handle:
-            handle.write(text)
-    except FileExistsError:
-        raise ValueError(f"{relative} already exists") from None
-    return relative
+        slug = slugify(title)
+    except ValueError as exc:
+        raise UsageError(str(exc)) from None
+    collection = Path(collection)
+    template = (TEMPLATES / "sequence.md").read_text(encoding="utf-8")
+    ident = take_id(collection, "sequence")
+    text = fill_template(template, "sequence", ident, title, _now(now))
+    return _write_stub(collection, Path(SEQUENCE_TREE) / f"{ident}-{slug}.md",
+                       text)

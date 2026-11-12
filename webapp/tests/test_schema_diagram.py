@@ -25,7 +25,8 @@ APP_TABLES = {
     "demo_demomark",
     "collection_import", "collection_procedure", "collection_scopeentry",
     "collection_entrysubstance", "collection_sequence", "collection_step",
-    "collection_procedureauthor"}
+    "collection_procedureauthor", "collection_issuedid",
+    "accounts_accesstoken"}
 
 
 def by_name(items: tuple, name: str):
@@ -640,6 +641,8 @@ class PageTests(unittest.TestCase):
                     ("tasks_task", "assignee_id"),
                     ("tasks_task", "created_by_id"),
                     ("collection_procedureauthor", "user_id"),
+                    ("collection_issuedid", "user_id"),
+                    ("accounts_accesstoken", "user_id"),
                     (sd.HISTORY, "history_user_id")]))
         self.assertTrue(all(e["class"] == "kind-user" for e in to_people))
         self.assertIn(">set null<",

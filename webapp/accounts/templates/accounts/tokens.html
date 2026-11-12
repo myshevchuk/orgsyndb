@@ -1,0 +1,35 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n %}
+{% block title %}{% translate "Access tokens" %}{% endblock %}
+{% block main %}
+<h1>{% translate "Access tokens" %}</h1>
+{% if created %}<div class="lab-message lab-message--success" role="status">
+<p>{% translate "Copy the token now; it is not shown again." %}</p>
+<p><code>{{ created }}</code></p>
+</div>
+{% endif %}{% if tokens %}<div class="table-scroll">
+<table class="inventory-table">
+<thead>
+<tr><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Created" %}</th><th scope="col">{% translate "Last used" %}</th><th scope="col"><span class="visually-hidden">{% translate "Revoke" %}</span></th></tr>
+</thead>
+<tbody>
+{% for token in tokens %}<tr>
+<td>{{ token.name }}</td>
+<td>{{ token.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+<td>{% if token.last_used_at %}{{ token.last_used_at|date:"SHORT_DATETIME_FORMAT" }}{% else %}{% translate "never" %}{% endif %}</td>
+<td><form method="post" action="/lab/accounts/tokens/{{ token.pk }}/revoke/">{% csrf_token %}<button type="submit">{% translate "Revoke" %}</button></form></td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% else %}<p>{% translate "No access tokens yet." %}</p>
+{% endif %}<h2>{% translate "New access token" %}</h2>
+<form class="lab-form" method="post" action="/lab/accounts/tokens/">{% csrf_token %}
+{{ form.non_field_errors }}
+{% for field in form %}<div class="lab-field{% if field.errors %} lab-field--error{% endif %}">
+{{ field.label_tag }}
+{{ field }}
+{{ field.errors }}
+</div>
+{% endfor %}<p class="lab-buttons"><button type="submit">{% translate "Create" %}</button></p>
+</form>
+{% endblock %}

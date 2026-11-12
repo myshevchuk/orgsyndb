@@ -460,14 +460,14 @@ def run_tool(config: Settings, collection: Path, command: str,
 
 
 def collection_half(text: str) -> dict:
-    """Return the ``language``, ``procedures`` and ``sequences`` of
-    TEXT, the output of ``orgsyndb manifest``; raise BuildFailure when
-    it is not a JSON table of them."""
+    """Return the ``language``, ``procedures``, ``sequences`` and
+    ``deleted`` of TEXT, the output of ``orgsyndb manifest``; raise
+    BuildFailure when it is not a JSON table of them."""
     try:
         table = json.loads(text)
     except ValueError as exc:
         raise BuildFailure(f"manifest printed no JSON: {exc}", []) from None
-    keys = ("language", "procedures", "sequences")
+    keys = ("language", "procedures", "sequences", "deleted")
     if not (isinstance(table, dict) and all(key in table for key in keys)):
         raise BuildFailure("manifest printed no table of "
                            + ", ".join(keys), [])

@@ -138,14 +138,14 @@ class Schema:
 
 GRID = (
     (("inventory_deliverynote",), ("inventory_movement",),
-     ("inventory_lotmovement",), (HUB,),
+     ("inventory_lotmovement",), (HUB, "accounts_accesstoken"),
      ("collection_import", "collection_procedureauthor")),
     (("inventory_deliveryline",), ("inventory_item",),
      ("inventory_enteredconsumption",), ("inventory_lot",),
      ("collection_procedure", "collection_scopeentry")),
     (("inventory_article",), ("registry_substance",),
      ("registry_substanceclass",), ("tasks_task", "tasks_taskstep"),
-     ("collection_entrysubstance",)),
+     ("collection_entrysubstance", "collection_issuedid")),
     (("vocabulary_group", "vocabulary_project"),
      ("vocabulary_chemicalclass", "vocabulary_reactiontype"),
      ("tasks_counter", HISTORY), ("planning_parameters", "demo_demomark"),

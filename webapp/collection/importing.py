@@ -8,6 +8,9 @@ built after (``base``), the registry digest it was built with
 (``snapshot``), the application commit that built it (``tooling``), the
 trigger and the outcome; a build that succeeded adds the collection half
 that ``tools/orgsyndb manifest`` prints, one that failed its errors.
+The first import the application accepts adopts the IDs its manifest
+names (``collection.issuing``); every import is refused an ID that is
+not issued.
 """
 
 import re
@@ -19,6 +22,7 @@ from typing import Any
 from django.contrib.auth import get_user_model
 from django.db import transaction
 
+from collection import issuing
 from collection.models import (KEY_LENGTH, RELEASE_LENGTH, EntrySubstance,
                                Import, Language, Outcome, Procedure,
                                ProcedureAuthor, Role, ScopeEntry,
@@ -32,6 +36,8 @@ from vocabulary.models import ReactionType
 FORMAT = 1
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
+# The error of an ID the application has not issued, after the ID.
+NOT_ISSUED = "not issued by the lab application"
 
 
 class Malformed(Exception):
@@ -224,8 +230,9 @@ def read(body: Any) -> dict[str, Any]:
     the manifest's keys and types (collection-import "Manifest"), or
     when a product's yield is outside 0 to 100, a key occurs twice in
     one role of an entry, a user name twice among a procedure's
-    authors, an error is blank, or a procedure that is not general has
-    more than one entry.
+    authors, an error is blank, a procedure that is not general has
+    more than one entry, or ``deleted`` holds an item that is not a
+    procedure or sequence ID.
     """
     if not isinstance(body, dict):
         raise Malformed("the manifest is not a table")
@@ -267,8 +274,12 @@ def read(body: Any) -> dict[str, Any]:
                    for error in errors):
             raise Malformed("errors: not a list of non-blank strings")
         return {**manifest, "errors": errors}
+    deleted = _list(body, "deleted")
+    if not all(issuing.is_id(item) for item in deleted):
+        raise Malformed("deleted: not a list of procedure and sequence IDs")
     return {
         **manifest,
+        "deleted": deleted,
         "release": _text(body, "release", "", RELEASE_LENGTH),
         "language": _choice(body, "language", Language.values),
         "procedures": [_procedure(table, number) for number, table
@@ -294,20 +305,22 @@ def _entry_signature(entry: dict[str, Any]) -> str:
 
 
 def problems(manifest: dict[str, Any], substances: set[str],
-             reaction_types: set[str], accounts: set[str]) -> list[str]:
+             reaction_types: set[str], accounts: set[str],
+             issued: set[str]) -> list[str]:
     """Return the errors that refuse the read, built MANIFEST against a
     registry holding the substance keys SUBSTANCES and the reaction type
     keys REACTION_TYPES, and an application whose accounts have the user
-    names ACCOUNTS, in the order the checks find them: each procedure in
-    the manifest's order, then each sequence. An empty list accepts it.
+    names ACCOUNTS and that counts the IDs ISSUED as issued, in the
+    order the checks find them: each procedure in the manifest's order,
+    then each sequence. An empty list accepts it.
 
     Each error begins with the ID it concerns: an ID named twice among
-    the procedures or the sequences, an unknown reaction type, author,
-    substance or target, two entries of one procedure with one signature, a
-    procedure without an entry, and a step that names a procedure the
-    manifest lacks or no entry of the one it names (collection-import
-    "Import checks"). A second table of an ID named twice is not
-    checked further.
+    the procedures or the sequences, an ID not issued, an unknown
+    reaction type, author, substance or target, two entries of one
+    procedure with one signature, a procedure without an entry, and a
+    step that names a procedure the manifest lacks or no entry of the
+    one it names (collection-import "Import checks"). A second table of
+    an ID named twice is not checked further.
     """
     errors: list[str] = []
     procedures: dict[str, dict[str, Any]] = {}
@@ -320,6 +333,8 @@ def problems(manifest: dict[str, Any], substances: set[str],
                 errors.append(f"{ident}: named twice")
             continue
         procedures[ident] = procedure
+        if ident not in issued:
+            errors.append(f"{ident}: {NOT_ISSUED}")
         if procedure["reaction_type"] not in reaction_types:
             errors.append(f'{ident}: unknown reaction type '
                           f'"{procedure["reaction_type"]}"')
@@ -349,6 +364,8 @@ def problems(manifest: dict[str, Any], substances: set[str],
                 errors.append(f"{ident}: named twice")
             continue
         sequences.add(ident)
+        if ident not in issued:
+            errors.append(f"{ident}: {NOT_ISSUED}")
         if sequence["target"] not in substances:
             errors.append(f'{ident}: unknown target "{sequence["target"]}"')
         for number, step in enumerate(sequence["steps"], start=1):
@@ -580,6 +597,17 @@ def _record(manifest: dict[str, Any], base: Import | None,
         trigger=manifest["trigger"], **fields)
 
 
+def _adoptable(manifest: dict[str, Any]) -> list[str]:
+    """Return the IDs the read, built MANIFEST names, each once: those
+    of its procedures and sequences that are IDs of their kind, and its
+    ``deleted``."""
+    found = [procedure["id"] for procedure in manifest["procedures"]
+             if issuing.is_id(procedure["id"], "procedure")]
+    found += [sequence["id"] for sequence in manifest["sequences"]
+              if issuing.is_id(sequence["id"], "sequence")]
+    return list(dict.fromkeys([*found, *manifest["deleted"]]))
+
+
 def receive(manifest: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     """Handle the read MANIFEST in one transaction holding the lock
     (``orgsyndb_web.lock``); return the status and the table to answer
@@ -592,7 +620,10 @@ def receive(manifest: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     stale: 409 with ``{"outcome": "stale"}``, recorded nowhere. One the
     checks refuse (``problems``) is recorded as refused with every
     error; any other is applied (``apply``) and recorded as accepted.
-    A recorded import is answered 200 with its outcome and its id.
+    While no import is accepted, the IDs the manifest names count as
+    issued, and an accepted import adopts them; after that, an ID
+    counts as issued only when it is. A recorded import is answered 200
+    with its outcome and its id.
     """
     with transaction.atomic():
         lock.hold()
@@ -609,16 +640,21 @@ def receive(manifest: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         if manifest["base"] != (None if latest is None else latest.pk) \
                 or manifest["snapshot"] != snapshot.build()["digest"]:
             return 409, {"outcome": "stale"}
+        adopted = _adoptable(manifest) if latest is None else []
+        named = [item["id"] for item in (*manifest["procedures"],
+                                         *manifest["sequences"])]
         errors = problems(
             manifest,
             set(Substance.objects.values_list("key", flat=True)),
             set(ReactionType.objects.values_list("key", flat=True)),
             set(get_user_model().objects.values_list("username",
-                                                      flat=True)))
+                                                      flat=True)),
+            issuing.issued(named) | set(adopted))
         if errors:
             return _answer(_record(manifest, latest,
                                    outcome=Outcome.REFUSED,
                                    errors="\n".join(errors)))
+        issuing.adopt(adopted)
         record = _record(manifest, latest, outcome=Outcome.ACCEPTED,
                          release=manifest["release"],
                          language=manifest["language"])

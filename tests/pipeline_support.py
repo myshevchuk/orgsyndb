@@ -371,6 +371,50 @@ class FakeApp(SnapshotServer):
         handler.wfile.write(text)
 
 
+IDS_PATH = "/lab/collection/ids/"
+
+
+class IdApp(SnapshotServer):
+    """The lab application as ``orgsyndb new`` sees it: the snapshot of
+    ``SnapshotServer`` and ``POST /lab/collection/ids/``.
+
+    Each request to the ID path is kept in ``requests``, a ``Received``
+    with its parsed JSON ``body`` (the text when it is no JSON) and its
+    ``headers``, and answered with ``status`` and ``payload``, a table
+    sent as JSON; with ``payload`` a string, that text is sent as it is.
+    By default it answers 201 ``{"id": "OSDB-0042"}``.
+    """
+
+    def __init__(self, status: int = 201,
+                 payload: dict[str, Any] | str | None = None) -> None:
+        super().__init__({})
+        self.requests: list[Received] = []
+        self.status = status
+        self.payload: dict[str, Any] | str = (
+            {"id": "OSDB-0042"} if payload is None else payload)
+
+    def post(self, handler: BaseHTTPRequestHandler) -> None:
+        length = int(handler.headers.get("Content-Length", "0"))
+        raw = handler.rfile.read(length).decode("utf-8")
+        if handler.path != IDS_PATH:
+            handler.send_error(404)
+            return
+        try:
+            body: Any = json.loads(raw)
+        except ValueError:
+            body = raw
+        self.requests.append(Received(
+            body, {name.lower(): value
+                   for name, value in handler.headers.items()}, None))
+        text = (self.payload if isinstance(self.payload, str)
+                else json.dumps(self.payload)).encode("utf-8")
+        handler.send_response(self.status)
+        handler.send_header("Content-Type", "application/json")
+        handler.send_header("Content-Length", str(len(text)))
+        handler.end_headers()
+        handler.wfile.write(text)
+
+
 def serve_snapshot(case: unittest.TestCase,
                    table: dict[str, Any]) -> SnapshotServer:
     """Serve the snapshot ``table`` until ``case`` cleans up."""
