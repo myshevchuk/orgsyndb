@@ -9,9 +9,10 @@ from django.test import TestCase
 from registry import snapshot
 from registry.models import Substance
 
-from . import (load_demo_registry, make_article, make_group,
-               make_substance)
+from . import (load_demo_registry, make_article, make_demo_accounts,
+               make_group, make_substance, make_user)
 from .collection_support import make_import
+from .demo_support import ACCOUNTS, SeededCase
 from .registry_support import (SNAPSHOT, RegistryCase, wipe_registry,
                                without_digest)
 
@@ -35,7 +36,7 @@ class ShapeTests(RegistryCase):
     def test_the_top_level(self) -> None:
         built = snapshot.build()
         self.assertEqual(set(built), {"format", "digest", "vocabularies",
-                                      "substances", "import"})
+                                      "substances", "accounts", "import"})
         self.assertEqual(built["format"], 1)
         self.assertEqual(set(built["vocabularies"]), set(VOCABULARIES))
 
@@ -122,6 +123,116 @@ class ShapeTests(RegistryCase):
         self.assertEqual(built["vocabularies"],
                          {name: [] for name in VOCABULARIES})
         self.assertEqual(built["digest"], digest_of(built))
+
+
+class AccountTests(RegistryCase):
+    """Requirement: Snapshot (`accounts`: every account, active or not,
+    ordered by user name, each a table of `username` and `name`)."""
+
+    def listed(self) -> list[dict[str, str]]:
+        return snapshot.build().get("accounts")
+
+    def test_the_accounts(self) -> None:
+        self.assertEqual(self.listed(), [
+            {"username": "boss", "name": "boss"},
+            {"username": "kl", "name": "Klara Lehmann"}])
+
+    def test_each_account_is_a_table_of_two_keys(self) -> None:
+        for account in self.listed():
+            with self.subTest(username=account["username"]):
+                self.assertEqual(set(account), {"username", "name"})
+
+    def test_the_name_is_the_full_name_or_the_user_name(self) -> None:
+        """Requirement: Snapshot (`name`, its display name)."""
+        names = {a["username"]: a["name"] for a in self.listed()}
+        self.assertEqual(names["kl"], "Klara Lehmann")
+        self.assertEqual(names["boss"], "boss")
+        make_user("only.first", "OF", first_name="Olga")
+        names = {a["username"]: a["name"] for a in self.listed()}
+        self.assertEqual(names["only.first"], "Olga")
+
+    def test_the_accounts_are_ordered_by_user_name(self) -> None:
+        make_user("zz", "ZZ")
+        make_user("a.first", "AF", "Anna", "First")
+        make_user("a-second", "AS")
+        users = [a["username"] for a in self.listed()]
+        self.assertEqual(users, sorted(users))
+        self.assertEqual(users, ["a-second", "a.first", "boss", "kl", "zz"])
+
+    def test_an_account_that_is_not_active_is_listed(self) -> None:
+        self.kl.is_active = False
+        self.kl.save()
+        self.assertIn("kl", [a["username"] for a in self.listed()])
+
+    def test_an_account_without_a_password_is_listed(self) -> None:
+        make_user("student", "ST", "Sven", "Thom", password=None)
+        names = {a["username"]: a["name"] for a in self.listed()}
+        self.assertEqual(names["student"], "Sven Thom")
+
+    def test_no_account(self) -> None:
+        from accounts.models import User
+        User.objects.all().delete()
+        self.assertEqual(self.listed(), [])
+
+    def test_the_accounts_are_inside_the_digest(self) -> None:
+        built = snapshot.build()
+        self.assertEqual(built["digest"], digest_of(built))
+        without = {key: value for key, value in built.items()
+                   if key != "accounts"}
+        self.assertNotEqual(built["digest"], digest_of(without))
+
+    def test_a_new_name_changes_the_digest(self) -> None:
+        """Requirement: Snapshot (renaming a person changes the
+        digest)."""
+        before = snapshot.build()["digest"]
+        self.kl.last_name = "Lehmann-Weiß"
+        self.kl.save()
+        after = snapshot.build()
+        self.assertNotEqual(after["digest"], before)
+        self.assertEqual(after["digest"], digest_of(after))
+
+    def test_a_new_account_changes_the_digest(self) -> None:
+        before = snapshot.build()["digest"]
+        make_user("newcomer", "NC")
+        self.assertNotEqual(snapshot.build()["digest"], before)
+
+    def test_what_the_snapshot_leaves_out_leaves_the_digest(self) -> None:
+        """Requirement: Snapshot (an account is its user name and
+        name)."""
+        before = snapshot.build()
+        self.kl.email = "kl@example.invalid"
+        self.kl.initials = "LK"
+        self.kl.is_staff = True
+        self.kl.save()
+        self.assertEqual(snapshot.build(), before)
+
+    def test_the_answer_over_http_lists_them(self) -> None:
+        answer = self.client.get(SNAPSHOT).json()
+        self.assertIn("accounts", answer)
+        self.assertEqual(answer["accounts"], self.listed())
+
+
+class DemoAccountsTests(SeededCase):
+    """Scenario: Accounts in the snapshot."""
+
+    def test_accounts_in_the_snapshot(self) -> None:
+        from accounts.models import User
+        first = snapshot.build()
+        self.assertEqual(
+            {a["username"]: a["name"] for a in first.get("accounts", [])},
+            {user: name for user, (name, _initials) in ACCOUNTS.items()})
+        self.assertEqual(
+            [a["username"] for a in first.get("accounts", [])],
+            sorted(ACCOUNTS))
+        self.assertIn({"username": "klehmann", "name": "Katrin Lehmann"},
+                      first.get("accounts", []))
+        bauer = User.objects.get(username="tbauer")
+        bauer.last_name = "Bauer-Weiß"
+        bauer.save()
+        second = snapshot.build()
+        self.assertNotEqual(first["digest"], second["digest"])
+        self.assertIn({"username": "tbauer", "name": "Tobias Bauer-Weiß"},
+                      second.get("accounts", []))
 
 
 class ImportTests(RegistryCase):
@@ -275,6 +386,7 @@ class DemoImportTests(TestCase):
         from django.test import override_settings
         from .collection_support import TOKEN, manifest, post
         load_demo_registry()
+        make_demo_accounts()
         first = snapshot.build()
         with override_settings(ORGSYNDB_BUILDER_TOKEN=TOKEN):
             done = post(self.client, manifest())

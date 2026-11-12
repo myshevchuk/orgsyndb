@@ -4,7 +4,8 @@ snapshot back into an empty registry.
 A snapshot is a table of ``format``, ``1``; ``vocabularies``, a table
 of the four vocabularies by their collection names, each a list of its
 terms, a parent before the terms filed under it and siblings in key
-order; ``substances``, ordered by key; ``import``, the latest accepted
+order; ``substances``, ordered by key; ``accounts``, every account by
+user name with its display name; ``import``, the latest accepted
 import of the collection or ``null``; and ``digest``, the SHA-256 of the
 rest but ``import``. Empty text, a missing molar mass and a missing
 article number are ``null``.
@@ -16,6 +17,7 @@ from collections.abc import Iterable
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
@@ -81,10 +83,20 @@ def latest_import() -> dict[str, Any] | None:
             "language": record.language}
 
 
+def accounts() -> list[dict[str, str]]:
+    """Return every account, active or not, as a table of ``username``
+    and ``name``, its display name, ordered by user name as Python
+    orders strings."""
+    return sorted(({"username": user.username, "name": user.display_name}
+                   for user in get_user_model().objects.all()),
+                  key=lambda account: account["username"])
+
+
 def build() -> dict[str, Any]:
     """Return the registry as a table that ``json.dumps`` serializes:
-    the format, the vocabularies, the substances, the latest accepted
-    import and the digest, which does not cover the import."""
+    the format, the vocabularies, the substances, the accounts, the
+    latest accepted import and the digest, which does not cover the
+    import."""
     vocabularies = {}
     for name, model in VOCABULARIES.items():
         terms = list(model.objects.all())
@@ -111,6 +123,7 @@ def build() -> dict[str, Any]:
     table: dict[str, Any] = {"format": FORMAT,
                              "vocabularies": vocabularies,
                              "substances": substances,
+                             "accounts": accounts(),
                              "import": latest_import()}
     table["digest"] = digest(table)
     return table
@@ -247,8 +260,9 @@ def load(table: Any, user: Any = None) -> tuple[int, int, int]:
     named before the terms filed under it, then the substances with
     their classes, and an article for each substance that names an
     article number; each gets a creation in its history, all in one
-    transaction holding the lock (``orgsyndb_web.lock``). The digest and
-    the import are ignored, and a vocabulary that is missing is empty.
+    transaction holding the lock (``orgsyndb_web.lock``). The digest, the
+    import and the accounts are ignored, and no account is created; a
+    vocabulary that is missing is empty.
     Raise Broken, writing nothing, when the registry holds a substance
     or a term, the format is not ``1``, a term or substance names a key
     that does not exist, or a value breaks a rule the forms check.

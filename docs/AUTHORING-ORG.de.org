@@ -36,6 +36,7 @@
 #+AI_PASS: fact-check claude-opus-5-5 [2026-11-07 Sat 11:49] -- doc-writer pass line corrected from gpt-6 to the pinned run model
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-11 Wed 18:17] -- Laborregister, feste Verbindungsfelder, Bilder, Vokabulare und Validierung
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-12 Thu 09:11] -- Stufenfelder, Beispiele, Meldungen, eindeutige Scope-Einträge und Emacs-Vervollständigung
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-12 Thu 18:56] -- Autorenkonten, Prüfmeldungen, Seiten, Namen, Emacs-Vervollständigung und Übersetzungen
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
@@ -195,9 +196,21 @@ Meldungen.
   nächsten Abschnitt beschrieben.
 
   Verwenden Sie die Anführungs- und Listenformen der Vorlage. Autoren und
-  Gefahren sind zum Beispiel gequotete Lisp-Listen wie
-  ~'("A. Example" "B. Example")~. Die genauen Pflichtwerte, die optionalen
-  Felder, die Reaktionstypen und die Regeln für Dateinamen stehen in
+  Gefahren stehen in gequoteten Lisp-Listen. Nennen Sie unter ~authors~
+  die Benutzernamen der Laborkonten aller, die die Vorschrift geschrieben
+  haben, jeden genau einmal, zum Beispiel
+  ~:authors '("klehmann" "aschmidt")~. Jedes Konto muss im
+  Register-Snapshot der Sammlung stehen. Das ist die gespeicherte Kopie
+  des Laborregisters. Das Konto darf inaktiv sein. Ersetzen Sie das
+  ~a.example~ der Vorlage vor der Prüfung durch Ihren Benutzernamen.
+  ~checked_by~ ist eine getrennte, freie Liste von Namen.
+
+  In Emacs bietet die Vervollständigung für ~authors~ die Benutzernamen der
+  Konten im Register an, jeweils mit dem Namen des Kontos als Zusatz. Für
+  ~checked_by~ bietet sie Namen an, die Vorschriften bereits unter diesem
+  Schlüssel verwenden; Sie können auch andere Namen eingeben.
+  Die genauen Pflichtwerte, die optionalen Felder, die Reaktionstypen und
+  die Regeln für Dateinamen stehen in
   [[file:SCHEMA.de.md][docs/SCHEMA.de.md]].
 
   Ersetzen Sie bei einer allgemeinen Vorschrift ~:products~ und ~:substrates~
@@ -395,10 +408,14 @@ Meldungen.
   Feld *Synthesewege* mit verlinkten Titeln, nach Nummer geordnet. Ziffern
   der Summenformel erscheinen tiefgestellt. Molmasse und Ausbeute erscheinen
   mit Dezimalkomma, ~g/mol~ und Prozentzeichen; neben SMILES steht eine
-  Schaltfläche *Kopieren*. Reaktionstyp, Schlagwörter und Autoren verlinken auf
-  Seiten mit verwandten Vorschriften. Autorennamen werden mit großem
-  Anfangsbuchstaben angezeigt, aus ~van~ wird ~Van~. Die acht Abschnitte des
-  Textes stehen auf einem breiten Bildschirm neben dem Datenfeld, in einem
+  Schaltfläche *Kopieren*. Reaktionstyp und Schlagwörter verlinken auf
+  Seiten mit verwandten Vorschriften. Unter *Autoren* verlinkt der Name
+  jedes Kontos auf ~/authors/<user name>/~, zum Beispiel
+  ~/authors/klehmann/~. Die Website zeigt die Namen genau wie in den Konten
+  gespeichert, einschließlich der Groß- und Kleinschreibung. Das
+  Autorenverzeichnis, die Autorenseiten und der Filter *Autor* im Katalog
+  zeigen ebenfalls diese Namen. Die acht Abschnitte des Textes stehen auf
+  einem breiten Bildschirm neben dem Datenfeld, in einem
   schmalen Fenster und im Ausdruck danach.
 
   Nach jedem Produkt- oder Ausgangsstofflink zeigt das Datenfeld
@@ -537,6 +554,8 @@ Meldungen.
      stehen.
   2. Übersetzen Sie ~#+TITLE~, ~:hazards~ und bei Bedarf ~:references~.
      ~:scale~, ~:authors~ und ~:checked_by~ dürfen Sie anpassen.
+     Nennen Sie unter ~:authors~ weiterhin Benutzernamen von Laborkonten im
+     Register-Snapshot der Sammlung, jeden genau einmal.
   3. Setzen Sie ~#+CREATED~ und ~#+LAST_MODIFIED~ auf den Zeitpunkt der
      Übersetzung. Das optionale ~#+AI_MODEL~ kann die Kennung des Modells
      enthalten, das beim Übersetzen geholfen hat; die Zeile darf fehlen.
@@ -667,6 +686,16 @@ Meldungen.
   eine deutsche Datei
   ~missing section "Summary"~, fehlt ihrem Namen das ~.de~. Die
   Schema-Referenz erklärt jedes Feld und die Rückgabewerte.
+
+  Ein Fehler ~unknown author~ unter ~authors~ bedeutet, dass im
+  Register-Snapshot kein Konto mit diesem Benutzernamen steht. Prüfen Sie
+  die Schreibweise und bitten Sie bei Bedarf die zuständigen Mitarbeitenden,
+  das Konto anzulegen. Bei ~"<name>" is named twice~ entfernen Sie den
+  wiederholten Benutzernamen. ~must be a list of user names, e.g. ["a.example"]~
+  verlangt eine Liste von Benutzernamen in Anführungszeichen;
+  ~must not be empty~ verlangt mindestens einen Autor. Verwenden Sie den
+  Schlüssel ~authors~ in der Mehrzahl; ~author~ meldet
+  ~use authors, a list of user names~.
 
   ~scope[2].time~ nennt die Zeit in Eintrag 2;
   ~scope[2].products[1].yield_percent~ nennt dessen erste Produktausbeute.

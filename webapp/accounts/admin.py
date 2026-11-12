@@ -46,6 +46,13 @@ class AccountAdmin(UserAdmin):
                            "password2")}),
     )
 
+    def get_readonly_fields(self, request: Any, obj: Any = None
+                            ) -> tuple[str, ...]:
+        """Show the user name of an existing account read-only: files name
+        authors by it, so a value posted for it is ignored."""
+        fixed = tuple(super().get_readonly_fields(request, obj))
+        return fixed if obj is None else (*fixed, "username")
+
     def has_delete_permission(self, request: Any, obj: Any = None
                               ) -> bool:
         """Refuse every deletion: an account's name stays on the records

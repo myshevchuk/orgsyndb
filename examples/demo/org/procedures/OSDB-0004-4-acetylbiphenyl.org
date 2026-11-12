@@ -6,7 +6,7 @@
 #+HUGO_SLUG: osdb-0004
 #+HUGO_TAGS: sample-data suzuki-coupling biphenyl
 #+HUGO_CUSTOM_FRONT_MATTER: :id "OSDB-0004"
-#+HUGO_CUSTOM_FRONT_MATTER: :authors '("C. Example" "E. Example")
+#+HUGO_CUSTOM_FRONT_MATTER: :authors '("aschmidt" "mwolf")
 #+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
 #+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("cross-coupling")
 #+HUGO_CUSTOM_FRONT_MATTER: :scale "10 mmol"

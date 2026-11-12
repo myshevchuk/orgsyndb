@@ -1,4 +1,5 @@
-"""The imports, procedures and sequences in the admin, for staff to read.
+"""The imports, procedures with their authors and sequences in the
+admin, for staff to read.
 
 Only an accepted import writes these rows, so the admin shows them
 read-only: it adds, changes and deletes none.
@@ -9,8 +10,8 @@ from typing import Any
 from django.contrib import admin
 from django.http import HttpRequest
 
-from collection.models import (Import, Procedure, ScopeEntry, Sequence,
-                               Step)
+from collection.models import (Import, Procedure, ProcedureAuthor,
+                               ScopeEntry, Sequence, Step)
 
 
 class ReadOnly(admin.ModelAdmin):
@@ -58,6 +59,11 @@ class ImportAdmin(ReadOnly):
         return record.commit[:10]
 
 
+class AuthorInline(ReadOnlyInline):
+    model = ProcedureAuthor
+    fields = ("position", "user")
+
+
 class EntryInline(ReadOnlyInline):
     model = ScopeEntry
     fields = ("position", "signature", "withdrawn")
@@ -69,7 +75,7 @@ class ProcedureAdmin(ReadOnly):
                     "last_import")
     list_filter = ("withdrawn", "source")
     search_fields = ("key", "title", "title_de")
-    inlines = [EntryInline]
+    inlines = [AuthorInline, EntryInline]
 
 
 class StepInline(ReadOnlyInline):

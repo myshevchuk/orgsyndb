@@ -579,5 +579,63 @@
       "article_number": null
     }
   ],
-  "digest": "9ba24cf30fd235f478ee3228b65c3935cf83277ade1a8a03b7cbf1b07527fced"
+  "accounts": [
+    {
+      "username": "a.example",
+      "name": "A. Example"
+    },
+    {
+      "username": "ae.mueller",
+      "name": "Ä. Müller"
+    },
+    {
+      "username": "aschmidt",
+      "name": "Anna Schmidt"
+    },
+    {
+      "username": "b.example",
+      "name": "B. Example"
+    },
+    {
+      "username": "c.example",
+      "name": "C. Example"
+    },
+    {
+      "username": "d.example",
+      "name": "D. Example"
+    },
+    {
+      "username": "e.example",
+      "name": "E. Example"
+    },
+    {
+      "username": "f.example",
+      "name": "F. Example"
+    },
+    {
+      "username": "g.example",
+      "name": "G. Example"
+    },
+    {
+      "username": "h.muster",
+      "name": "H. Muster"
+    },
+    {
+      "username": "jkoch",
+      "name": "Jonas Koch"
+    },
+    {
+      "username": "klehmann",
+      "name": "Katrin Lehmann"
+    },
+    {
+      "username": "mwolf",
+      "name": "Miriam Wolf"
+    },
+    {
+      "username": "tbauer",
+      "name": "Tobias Bauer"
+    }
+  ],
+  "digest": "049c4388eea3e22acd7c60a7015fb3ea38af14c69639c3d017797ce698539b58"
 }

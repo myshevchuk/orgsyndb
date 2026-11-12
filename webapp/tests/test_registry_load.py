@@ -57,9 +57,29 @@ class RoundTripTests(LoadCase):
     def test_round_trip(self) -> None:
         """Scenario: Round trip."""
         load(DEMO_REGISTRY)
-        self.assertEqual(without_digest(snapshot.build()),
-                         without_digest(demo_registry()))
+        self.assertEqual(without_digest(snapshot.build(), "accounts"),
+                         without_digest(demo_registry(), "accounts"))
         self.assertIsNone(snapshot.build()["import"])
+        self.assertEqual(snapshot.build().get("accounts"), [])
+
+    def loaded_with(self, accounts: Any) -> None:
+        """Load the small snapshot with ``accounts`` as its `accounts`:
+        it loads, and creates no account."""
+        from django.contrib.auth import get_user_model
+        data = small_snapshot()
+        data["accounts"] = accounts
+        load(self.file(data))
+        self.assertEqual(get_user_model().objects.count(), 0)
+        self.assertEqual(snapshot.build().get("accounts"), [])
+
+    def test_the_accounts_of_a_snapshot_are_ignored(self) -> None:
+        """Requirement: Loading a registry (it ignores `accounts`, which
+        it does not create)."""
+        self.loaded_with([{"username": "z.new", "name": "Z. New"}])
+
+    def test_accounts_that_are_no_list_are_ignored_too(self) -> None:
+        """Requirement: Loading a registry (it ignores `accounts`)."""
+        self.loaded_with("not a list")
 
     def test_the_import_of_a_snapshot_is_ignored(self) -> None:
         """Requirement: Loading a registry (it ignores `digest` and
@@ -73,8 +93,8 @@ class RoundTripTests(LoadCase):
         load(self.file(data))
         self.assertEqual(Import.objects.count(), 0)
         self.assertIsNone(snapshot.build()["import"])
-        self.assertEqual(without_digest(snapshot.build()),
-                         without_digest(demo_registry()))
+        self.assertEqual(without_digest(snapshot.build(), "accounts"),
+                         without_digest(demo_registry(), "accounts"))
 
     def test_the_counts_are_printed(self) -> None:
         data = demo_registry()
@@ -160,7 +180,8 @@ class RoundTripTests(LoadCase):
     def test_the_registry_a_loaded_file_makes_is_reproducible(self) -> None:
         load(self.file(small_snapshot()))
         built = snapshot.build()
-        self.assertEqual(without_digest(built), small_snapshot())
+        self.assertEqual(without_digest(built, "accounts"),
+                         small_snapshot())
 
     def test_a_missing_vocabulary_is_empty(self) -> None:
         data = small_snapshot()

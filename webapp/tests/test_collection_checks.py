@@ -4,8 +4,9 @@ Import checks)."""
 import copy
 from typing import Any
 
-from .collection_support import (ImportCase, by_id, counts, demo_collection,
-                                 dump, manifest)
+from .collection_support import (ImportCase, author_rows, authors_of, by_id,
+                                 counts, credited, demo_collection, dump,
+                                 manifest)
 
 
 class CheckCase(ImportCase):
@@ -62,6 +63,45 @@ class EachCheckTests(CheckCase):
             "no-such-type"
         self.only_error(
             data, 'OSDB-0003: unknown reaction type "no-such-type"')
+
+    def test_an_unknown_author(self) -> None:
+        """Scenario: Unknown author."""
+        from collection.models import Procedure
+        data = demo_collection()
+        by_id(data["procedures"], "OSDB-0002")["authors"] = ["nobody"]
+        self.only_error(data, 'OSDB-0002: unknown author "nobody"')
+        self.assertEqual(Procedure.objects.count(), 0)
+        self.assertEqual(author_rows(), [])
+
+    def test_the_name_of_a_person_is_no_user_name(self) -> None:
+        """Requirement: Import checks (an author whose user name no
+        account has)."""
+        data = demo_collection()
+        by_id(data["procedures"], "OSDB-0003")["authors"] = [
+            "tbauer", "Jonas Koch"]
+        self.only_error(data, 'OSDB-0003: unknown author "Jonas Koch"')
+
+    def test_each_unknown_author_is_an_error(self) -> None:
+        """Requirement: Import checks (one error for each)."""
+        data = demo_collection()
+        by_id(data["procedures"], "OSDB-0002")["authors"] = [
+            "klehmann", "nobody", "also-nobody"]
+        by_id(data["procedures"], "OSDB-0005")["authors"] = ["nobody"]
+        errors = self.refused_by(data)
+        self.assertEqual(sorted(errors), sorted([
+            'OSDB-0002: unknown author "nobody"',
+            'OSDB-0002: unknown author "also-nobody"',
+            'OSDB-0005: unknown author "nobody"']))
+
+    def test_an_account_that_is_not_active_is_known(self) -> None:
+        """Requirement: Import checks (an author whose user name no
+        account has: an account that is not active is one)."""
+        from django.contrib.auth import get_user_model
+        get_user_model().objects.filter(username="mwolf").update(
+            is_active=False)
+        self.accept(credited())
+        self.assertEqual(counts()["Import"], 1)
+        self.assertEqual(authors_of("OSDB-0005"), ["mwolf"])
 
     def test_unknown_substance(self) -> None:
         """Scenario: Unknown substance."""

@@ -38,7 +38,7 @@ value as separate words. */ -}}
 {{ end -}}
 {{ with .GetTerms "authors" -}}
 <dt>{{ T "label_authors" }}</dt>
-<dd>{{ range $i, $term := . }}{{ if $i }}, {{ end }}<a href="{{ $term.RelPermalink }}">{{ $term.Title }}</a>{{ end }}</dd>
+<dd>{{ range $i, $term := . }}{{ if $i }}, {{ end }}<a href="{{ $term.RelPermalink }}">{{ partial "author-label.html" $term.Data.Term }}</a>{{ end }}</dd>
 {{ end -}}
 {{ if ne $p.status "checked" }}{{ with $p.checked_by -}}
 <dt>{{ T "label_checked_by" }}</dt>

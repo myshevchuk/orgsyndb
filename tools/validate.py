@@ -261,14 +261,16 @@ def parse_front_matter(text: str) -> FrontMatter | Problem:
 @dataclass
 class Context:
     """Settings shared by the checks of one run: the registry's reaction
-    types and compound keys, the static directory, the time zone, and
-    the procedure fields the collection declares, in declared order."""
+    types and compound keys, the static directory, the time zone, the
+    procedure fields the collection declares, in declared order, and the
+    user names of the registry's accounts."""
 
     reaction_types: frozenset[str]
     static_dir: Path
     zone: dt.tzinfo
     compounds: frozenset[str] = frozenset()
     fields: tuple[Declaration, ...] = ()
+    accounts: frozenset[str] = frozenset()
 
 
 def check_string(name: str, value: object) -> list[Problem]:
@@ -374,6 +376,26 @@ def check_reaction_types(value: object,
         return [error(name, f'unknown reaction type "{value[0]}"; the '
                       "registry has no such reaction type")]
     return []
+
+
+def check_authors(value: object,
+                  accounts: frozenset[str]) -> list[Problem]:
+    """Check that VALUE, an ``authors`` field, is a non-empty list of
+    user names among ACCOUNTS, each named once: one error under
+    ``authors`` for each name ACCOUNTS lacks and for each name given
+    more than once."""
+    name = "authors"
+    if not is_string_list(value):
+        return [error(name, "must be a list of user names, "
+                      'e.g. ["a.example"]')]
+    if not value:
+        return [error(name, "must not be empty")]
+    found = [error(name, f'unknown author "{author}"; the registry has '
+                   "no account of this user name")
+             for author in dict.fromkeys(value) if author not in accounts]
+    found += [error(name, f'"{author}" is named twice')
+              for author in repeated(value)]
+    return found
 
 
 def check_tags(value: object) -> list[Problem]:
@@ -678,7 +700,7 @@ def check_extra_key(key: str, value: object) -> list[Problem]:
         return [] if isinstance(value, int) and not isinstance(
             value, bool) else [error(key, "must be an integer")]
     if key == "author":
-        return [error(key, "use authors, a list of names")]
+        return [error(key, "use authors, a list of user names")]
     if key == "url":
         return [error(key, "remove url; the URL is derived from slug")]
     return [warning(key, "unknown field")]
@@ -731,7 +753,9 @@ def check_fields(data: dict[str, Any], ctx: Context) -> list[Problem]:
                 found += check_datetime(key, value, ctx.zone)
             case "lastmod":
                 found += check_lastmod(value, data.get("date"), ctx.zone)
-            case "authors" | "hazards":
+            case "authors":
+                found += check_authors(value, ctx.accounts)
+            case "hazards":
                 found += check_string_list(key, value, non_empty=True)
             case "status":
                 found += check_status(value)
@@ -1264,6 +1288,28 @@ def _substance_problem(number: int, entry: object) -> str | None:
     return None
 
 
+def _accounts_problem(accounts: object) -> str | None:
+    """Return why ACCOUNTS, a snapshot's ``accounts``, is no list of
+    accounts, or None when it is one: tables of a non-empty string
+    ``username``, no user name twice, and a string ``name``."""
+    if not isinstance(accounts, list):
+        return "accounts must be a list of accounts"
+    names: set[str] = set()
+    for number, entry in enumerate(accounts, start=1):
+        at = f"accounts[{number}]"
+        if not isinstance(entry, dict):
+            return f"{at} must be a table"
+        username = entry.get("username")
+        if not isinstance(username, str) or not username:
+            return f"{at}.username must be a non-empty string"
+        if username in names:
+            return f"accounts lists the user name {username} twice"
+        if not isinstance(entry.get("name"), str):
+            return f"{at}.name must be a string"
+        names.add(username)
+    return None
+
+
 def snapshot_problem(table: object) -> str | None:
     """Return why TABLE, a decoded JSON value, is not a registry
     snapshot, or None when it is one.
@@ -1273,8 +1319,9 @@ def snapshot_problem(table: object) -> str | None:
     VOCABULARIES as a list of terms, each a table of ``key``, ``label``
     and optionally ``label_de`` and ``parent``; and whose
     ``substances`` is a list of tables, each with a ``key``, no key
-    twice (``_substance_problem``). Other keys, ``digest`` among them, are not
-    checked.
+    twice (``_substance_problem``); and whose ``accounts``, when it has
+    them, is a list of tables of ``username`` and ``name``, no user name
+    twice. Other keys, ``digest`` among them, are not checked.
     """
     if not isinstance(table, dict):
         return "it is not a JSON object"
@@ -1302,6 +1349,8 @@ def snapshot_problem(table: object) -> str | None:
         if entry["key"] in keys:
             return f"substances lists the key {entry['key']} twice"
         keys.add(entry["key"])
+    if "accounts" in table:
+        return _accounts_problem(table["accounts"])
     return None
 
 
@@ -1347,6 +1396,14 @@ def registry_terms(registry: dict[str, Any]) -> dict[str, dict[str, Term]]:
                                       entry.get("parent"))
                    for entry in registry["vocabularies"][name]}
             for name in VOCABULARIES}
+
+
+def registry_accounts(registry: dict[str, Any]) -> dict[str, str]:
+    """Return the accounts of the snapshot REGISTRY, each user name
+    mapped to its name, in the snapshot's order; a snapshot without
+    ``accounts`` has none."""
+    return {entry["username"]: entry["name"]
+            for entry in registry.get("accounts", [])}
 
 
 # The key of the registry field shown as tabs, which names the directory
@@ -2178,7 +2235,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         ctx = Context(frozenset(vocabularies[REACTION_TYPES]),
                       args.static_dir, load_zone(),
                       frozenset(entry["key"]
-                                for entry in table["substances"]), fields)
+                                for entry in table["substances"]), fields,
+                      frozenset(registry_accounts(table)))
     except ConfigError as exc:
         print(f"validate.py: error: {exc}", file=sys.stderr)
         return 2

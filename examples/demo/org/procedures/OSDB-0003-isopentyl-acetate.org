@@ -6,7 +6,7 @@
 #+HUGO_SLUG: osdb-0003
 #+HUGO_TAGS: sample-data fischer-esterification fragrance
 #+HUGO_CUSTOM_FRONT_MATTER: :id "OSDB-0003"
-#+HUGO_CUSTOM_FRONT_MATTER: :authors '("B. Example" "D. Example")
+#+HUGO_CUSTOM_FRONT_MATTER: :authors '("tbauer" "jkoch")
 #+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
 #+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("esterification")
 #+HUGO_CUSTOM_FRONT_MATTER: :scale "50 mmol"

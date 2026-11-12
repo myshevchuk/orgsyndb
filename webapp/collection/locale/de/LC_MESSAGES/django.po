@@ -104,6 +104,15 @@ msgstr "Signatur"
 msgid "Position"
 msgstr "Position"
 
+msgid "Account"
+msgstr "Konto"
+
+msgid "procedure author"
+msgstr "Autor einer Vorschrift"
+
+msgid "procedure authors"
+msgstr "Autoren von Vorschriften"
+
 msgid "scope entry"
 msgstr "Eintrag des Anwendungsbereichs"
 

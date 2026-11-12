@@ -1,6 +1,6 @@
 """The imported rows: the imports the builder reported, and the
-procedures, scope entries and sequences of the collection as the
-accepted imports left them.
+procedures with their authors, scope entries and sequences of the
+collection as the accepted imports left them.
 
 Only the manifest view and the demo data command write these rows,
 both through ``collection.importing``. An
@@ -9,6 +9,7 @@ gone from the collection is marked withdrawn. A substance, reaction type
 or scope entry that a row names cannot be deleted.
 """
 
+from django.conf import settings
 from django.core.validators import (MaxValueValidator, MinValueValidator,
                                     RegexValidator)
 from django.db import models
@@ -137,6 +138,37 @@ class Procedure(models.Model):
 
     def __str__(self) -> str:
         return self.key
+
+
+class ProcedureAuthor(models.Model):
+    """An account credited as an author of a procedure, at its
+    ``position`` among the procedure's authors, from 1; each account is
+    an author of a procedure once."""
+
+    procedure = models.ForeignKey(Procedure, verbose_name=_("procedure"),
+                                  on_delete=models.CASCADE,
+                                  related_name="authors")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL,
+                             verbose_name=_("Account"),
+                             on_delete=models.PROTECT, related_name="+")
+    position = models.PositiveIntegerField(
+        _("Position"), validators=[MinValueValidator(1)])
+
+    class Meta:
+        ordering = ["procedure__key", "position"]
+        verbose_name = _("procedure author")
+        verbose_name_plural = _("procedure authors")
+        constraints = [
+            models.UniqueConstraint(fields=["procedure", "user"],
+                                    name="collection_procedureauthor_once"),
+            models.UniqueConstraint(
+                fields=["procedure", "position"],
+                name="collection_procedureauthor_place"),
+            from_one("collection_procedureauthor_position"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.procedure.key} {self.position}"
 
 
 class ScopeEntry(models.Model):

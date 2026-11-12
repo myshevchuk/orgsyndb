@@ -37,7 +37,7 @@ A row's tooltip names the column, its type and nullability, the table and column
 
 #### Scenario: Only the application's tables
 - **WHEN** a test generates the diagram
-- **THEN** its boxes are exactly `accounts_user`, `registry_substance`, `registry_substanceclass`, `vocabulary_chemicalclass`, `vocabulary_group`, `vocabulary_project`, `vocabulary_reactiontype`, `inventory_article`, `inventory_item`, `inventory_movement`, `inventory_deliverynote`, `inventory_deliveryline`, `inventory_lot`, `inventory_lotmovement`, `inventory_enteredconsumption`, `tasks_task`, `tasks_taskstep`, `tasks_counter`, `collection_import`, `collection_procedure`, `collection_scopeentry`, `collection_entrysubstance`, `collection_sequence`, `collection_step`, `planning_parameters`, `demo_demomark` and the box of the history tables
+- **THEN** its boxes are exactly `accounts_user`, `registry_substance`, `registry_substanceclass`, `vocabulary_chemicalclass`, `vocabulary_group`, `vocabulary_project`, `vocabulary_reactiontype`, `inventory_article`, `inventory_item`, `inventory_movement`, `inventory_deliverynote`, `inventory_deliveryline`, `inventory_lot`, `inventory_lotmovement`, `inventory_enteredconsumption`, `tasks_task`, `tasks_taskstep`, `tasks_counter`, `collection_import`, `collection_procedure`, `collection_procedureauthor`, `collection_scopeentry`, `collection_entrysubstance`, `collection_sequence`, `collection_step`, `planning_parameters`, `demo_demomark` and the box of the history tables
 
 #### Scenario: An article's key
 - **WHEN** a test generates the diagram
@@ -64,7 +64,7 @@ A line's tooltip names its two columns and, for a foreign key, its delete rule, 
 
 #### Scenario: Links to people
 - **WHEN** a test generates the diagram
-- **THEN** there is one line of kind `user` for each of `inventory_deliverynote.created_by_id`, `inventory_movement.user_id`, `inventory_lotmovement.user_id`, `inventory_enteredconsumption.entered_by_id`, `tasks_task.assignee_id`, `tasks_task.created_by_id` and the history box's `history_user_id`, the last carrying `set null`, and no line of another kind ends at `accounts_user`
+- **THEN** there is one line of kind `user` for each of `inventory_deliverynote.created_by_id`, `inventory_movement.user_id`, `inventory_lotmovement.user_id`, `inventory_enteredconsumption.entered_by_id`, `tasks_task.assignee_id`, `tasks_task.created_by_id`, `collection_procedureauthor.user_id` and the history box's `history_user_id`, the last carrying `set null`, and no line of another kind ends at `accounts_user`
 
 #### Scenario: Links of a task
 - **WHEN** a test generates the diagram

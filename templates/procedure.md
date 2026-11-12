@@ -28,8 +28,9 @@ date = 2026-10-19T22:32:22+02:00
 # edit. It must not be earlier than date.
 lastmod = 2026-10-19T22:32:22+02:00
 
-# Everyone who wrote the procedure, as a list of names.
-authors = ["A. Example"]
+# Everyone who wrote the procedure, as a list of the user names of
+# their lab accounts.
+authors = ["a.example"]
 
 # Where the procedure stands: "draft" while you are writing it,
 # "checked" once someone has checked it, "retired" when it should no

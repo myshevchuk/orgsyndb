@@ -6,8 +6,8 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 
-from . import (PASSWORD, done_days, edit_data, make_task, make_user, page,
-               substance_for, task_form_data, task_url)
+from . import (PASSWORD, done_days, edit_data, field_value, make_task,
+               make_user, page, substance_for, task_form_data, task_url)
 
 User = get_user_model()
 LOGIN = "/lab/accounts/login/"
@@ -67,6 +67,117 @@ class InitialsTests(TestCase):
                 self.assertIn(
                     "initials",
                     validation_errors(self.candidate("bad", initials)))
+
+
+VALID_USER_NAMES = ["ab", "a", "7", "a.example", "ae.mueller", "A.B",
+                    "klehmann", "lab-worker-kl", "a_b-c.d", "x" * 40,
+                    "a1.b2-c3_d4"]
+INVALID_USER_NAMES = ["a..b", "-ab", "ab-", ".ab", "ab.", "_ab", "ab_",
+                      "a--b", "a._b", "a-_b", "a__b", "Ä.müller", "ä", "a b",
+                      "a@b", "a+b", "a/b", "a,b", "ab\n", "x" * 41, ""]
+
+
+class UserNameTests(TestCase):
+    """Requirement: Accounts and sign-in (a user name of at most 40
+    letters and digits, single `.`, `-` or `_` allowed between them)."""
+
+    def candidate(self, name: str):
+        user = User(username=name, initials="UN")
+        user.set_unusable_password()
+        return user
+
+    def test_the_names_the_rule_allows(self) -> None:
+        """Scenario: User names (`a.example`)."""
+        for name in VALID_USER_NAMES:
+            with self.subTest(username=name):
+                self.assertNotIn("username",
+                                 validation_errors(self.candidate(name)))
+
+    def test_the_names_the_rule_refuses(self) -> None:
+        """Scenario: User names (`a..b`, `-ab`, `ab-` and `Ä.müller`)."""
+        for name in INVALID_USER_NAMES:
+            with self.subTest(username=name):
+                self.assertIn("username",
+                              validation_errors(self.candidate(name)))
+
+    def test_a_user_name_has_at_most_forty_characters(self) -> None:
+        self.assertEqual(User._meta.get_field("username").max_length, 40)
+
+    def test_an_account_with_a_valid_name_is_created(self) -> None:
+        user = make_user("a.example", "AE")
+        self.assertEqual(User.objects.get(pk=user.pk).username, "a.example")
+
+
+class UserNameAdminTests(TestCase):
+    """Scenario: User names (in the admin)."""
+
+    ADD = "/lab/admin/accounts/user/add/"
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        cls.staff = make_user("boss", "BO", is_staff=True,
+                              is_superuser=True)
+
+    def setUp(self) -> None:
+        self.client.force_login(self.staff)
+
+    def add(self, name: str, initials: str):
+        return self.client.post(self.ADD, {
+            "username": name, "initials": initials, "first_name": "Test",
+            "last_name": name, "usable_password": "false"})
+
+    def test_only_the_valid_name_is_created(self) -> None:
+        """Scenario: User names."""
+        names = ["a.example", "a..b", "-ab", "ab-", "Ä.müller"]
+        for number, name in enumerate(names):
+            with self.subTest(username=name):
+                self.add(name, f"N{number}")
+        self.assertEqual(
+            sorted(User.objects.exclude(pk=self.staff.pk).values_list(
+                "username", flat=True)), ["a.example"])
+
+    def test_the_add_page_takes_a_user_name(self) -> None:
+        shown = page(self.client.get(self.ADD))
+        self.assertIsNotNone(shown.find("input", name="username"))
+
+    def change_url(self, user) -> str:
+        return f"/lab/admin/accounts/user/{user.pk}/change/"
+
+    def test_the_user_name_of_an_account_cannot_be_changed(self) -> None:
+        """Scenario: User names (then changes the user name of
+        `a.example`)."""
+        self.add("a.example", "AX")
+        user = User.objects.get(username="a.example")
+        shown = self.client.get(self.change_url(user))
+        self.assertEqual(shown.status_code, 200)
+        root = page(shown)
+        self.assertIsNone(root.find("input", name="username"))
+        data = form_data(root)
+        data["username"] = "b.example"
+        data["first_name"] = "Changed"
+        self.client.post(self.change_url(user), data)
+        user.refresh_from_db()
+        self.assertEqual(user.first_name, "Changed", "the form was refused")
+        self.assertEqual(user.username, "a.example")
+        self.assertFalse(User.objects.filter(username="b.example").exists())
+
+
+def form_data(root) -> dict[str, str]:
+    """The values the controls of the first form of ``root`` submit as
+    they stand: checked boxes and the others' values."""
+    data = {}
+    for control in root.find_all(("input", "select", "textarea")):
+        name = control.get("name")
+        if not name or control.get("type") in ("submit", "button"):
+            continue
+        if control.get("type") in ("checkbox", "radio"):
+            if "checked" in control.attrs:
+                data[name] = control.get("value", "on")
+            continue
+        value = field_value(root, name)
+        if value is not None:
+            data[name] = value
+    return data
 
 
 class SignInTests(TestCase):

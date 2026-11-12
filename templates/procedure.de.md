@@ -30,8 +30,9 @@ date = 2026-10-22T20:20:00+02:00
 # Änderung aktualisieren. Darf nicht vor date liegen.
 lastmod = 2026-10-22T20:20:00+02:00
 
-# Alle, die die Vorschrift geschrieben haben, als Liste von Namen.
-authors = ["A. Example"]
+# Alle, die die Vorschrift geschrieben haben, als Liste der
+# Benutzernamen ihrer Laborkonten.
+authors = ["a.example"]
 
 # Stand der Vorschrift, immer englisch geschrieben: "draft", solange Sie
 # daran schreiben, "checked", sobald jemand sie geprüft hat, "retired",

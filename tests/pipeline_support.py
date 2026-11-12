@@ -899,8 +899,9 @@ def put_compounds(sandbox: Sandbox, *keys: str) -> list[str]:
     files hold for them into ``static/structures/``. A substance the
     registry already holds is kept. Returns the keys added."""
     table = read_snapshot(sandbox)
+    before = json.dumps(table, sort_keys=True)
     added = with_fixture_substances(table, *keys)
-    if added:
+    if json.dumps(table, sort_keys=True) != before:
         write_snapshot(sandbox, table)
     for key in keys:
         for suffix in (".svg", ".png"):
@@ -1327,6 +1328,20 @@ def read_registry(sandbox: Sandbox) -> dict[str, dict[str, Any]]:
     """Each substance of the sandbox collection's registry, by key, as
     ``compounds_of`` states."""
     return compounds_of(read_snapshot(sandbox), sandbox.root / "static")
+
+
+def account_names(sandbox: Sandbox) -> dict[str, str]:
+    """The name of each account of the sandbox collection's registry, by
+    user name: what the site writes for an author (procedure-authors
+    "Author data for the site")."""
+    return {account["username"]: account["name"]
+            for account in read_snapshot(sandbox)["accounts"]}
+
+
+def author_name(names: dict[str, str], username: str) -> str:
+    """What the site writes for the author ``username``: the account's
+    name in ``names``, or the user name when ``names`` lacks it."""
+    return names.get(username, username)
 
 
 def shown_name(compound: dict[str, Any], locale: str) -> str:

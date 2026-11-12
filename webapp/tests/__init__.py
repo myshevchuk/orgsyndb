@@ -65,6 +65,31 @@ def make_user(username: str, initials: str, first_name: str = "",
         first_name=first_name, last_name=last_name, **extra)
 
 
+# The demo's accounts by user name, with their first and last names and
+# initials that no other account of the tests has, so that tests may add
+# the accounts a collection's authors name next to their own.
+DEMO_USERS = {
+    "klehmann": ("Katrin", "Lehmann", "ZKL"),
+    "tbauer": ("Tobias", "Bauer", "ZTB"),
+    "aschmidt": ("Anna", "Schmidt", "ZAS"),
+    "jkoch": ("Jonas", "Koch", "ZJK"),
+    "mwolf": ("Miriam", "Wolf", "ZMW"),
+}
+
+
+def make_demo_accounts() -> list[Any]:
+    """The five demo accounts, which the demo collection's procedures
+    credit, each created when it does not exist; return them in the
+    order of ``DEMO_USERS``."""
+    from django.contrib.auth import get_user_model
+    found = []
+    for username, (first, last, initials) in DEMO_USERS.items():
+        account = get_user_model().objects.filter(username=username).first()
+        found.append(account or make_user(
+            username, initials, first, last, password=None))
+    return found
+
+
 def slug(text: str) -> str:
     """``text`` as a registry key: lower case ASCII letters and digits
     joined by single hyphens, as ``Neuverbindung 9`` gives

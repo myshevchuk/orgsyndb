@@ -4,7 +4,7 @@
 #+AI_MODEL: none
 #+HUGO_SLUG: osdb-0215
 #+HUGO_TAGS: sample-data
-#+HUGO_CUSTOM_FRONT_MATTER: :id "OSDB-0215" :authors '("A. Example")
+#+HUGO_CUSTOM_FRONT_MATTER: :id "OSDB-0215" :authors '("a.example")
 #+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
 #+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("esterification")
 #+HUGO_CUSTOM_FRONT_MATTER: :scale "25 mmol"

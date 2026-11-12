@@ -88,7 +88,12 @@ Füllen Sie diese Pflichtfelder aus:
 - `date`: wann die Vorschrift zuerst geschrieben wurde.
 - `lastmod`: wann die Vorschrift zuletzt geändert wurde. Nach jeder
   späteren Änderung aktualisieren.
-- `authors`: alle, die die Vorschrift geschrieben haben.
+- `authors`: die Benutzernamen der Laborkonten aller, die die Vorschrift
+  geschrieben haben, jeden genau einmal, zum Beispiel
+  `authors = ["klehmann", "aschmidt"]`. Jedes Konto muss im
+  Register-Snapshot der Sammlung stehen. Das ist die gespeicherte Kopie
+  des Laborregisters. Das Konto darf inaktiv sein. Ersetzen Sie das
+  `a.example` der Vorlage vor der Prüfung durch Ihren Benutzernamen.
 - `status`: ob die Vorschrift ein Entwurf (`"draft"`), geprüft
   (`"checked"`) oder zurückgezogen (`"retired"`) ist. Der Wert bleibt
   englisch; die deutsche Seite zeigt *Entwurf*, *Geprüft* oder
@@ -117,7 +122,13 @@ Füllen Sie diese Pflichtfelder aus:
 Die Vorlage enthält außerdem auskommentierte, optionale Felder für
 Ausgangsstoffe (`substrates`), Prüfende, Literaturangaben und ein KI-Modell.
 Löschen Sie das `#` am Zeilenanfang, wenn Sie ein Feld brauchen. Lassen Sie
-die Zeile auskommentiert, wenn es nicht zutrifft.
+die Zeile auskommentiert, wenn es nicht zutrifft. `checked_by` ist eine
+freie Liste von Namen.
+
+In Emacs bietet die Vervollständigung für `authors` die Benutzernamen der
+Konten im Register an, jeweils mit dem Namen des Kontos als Zusatz. Für
+`checked_by` bietet sie Namen an, die Vorschriften bereits unter diesem
+Schlüssel verwenden; Sie können auch andere Namen eingeben.
 
 Prüfen Sie `orgsyndb.toml` auf Felder unter `[[fields.procedure]]`. Das sind
 zusätzliche Vorschriftenangaben Ihrer Sammlung, etwa ein Laborjournalverweis
@@ -358,10 +369,14 @@ Ihre Vorschrift eine Stufe eines Synthesewegs ist, folgt auf **Verwendet in**
 das Feld **Synthesewege** mit verlinkten Titeln, nach Nummer geordnet. Ziffern
 der Summenformel erscheinen tiefgestellt. Molmasse und Ausbeute erscheinen mit
 Dezimalkomma, mit `g/mol` und Prozentzeichen; neben SMILES steht eine
-Schaltfläche **Kopieren**. Reaktionstyp, Schlagwörter und Autoren verlinken auf
-Seiten mit verwandten Vorschriften. Autorennamen werden mit großem
-Anfangsbuchstaben angezeigt, aus `van` wird also `Van`. Die acht Abschnitte des
-Textes stehen auf einem breiten Bildschirm neben dem Datenfeld, in einem
+Schaltfläche **Kopieren**. Reaktionstyp und Schlagwörter verlinken auf
+Seiten mit verwandten Vorschriften. Unter **Autoren** verlinkt der Name
+jedes Kontos auf `/authors/<user name>/`, zum Beispiel
+`/authors/klehmann/`. Die Website zeigt die Namen genau wie in den Konten
+gespeichert, einschließlich der Groß- und Kleinschreibung. Das
+Autorenverzeichnis, die Autorenseiten und der Filter **Autor** im Katalog
+zeigen ebenfalls diese Namen. Die acht Abschnitte des Textes stehen auf
+einem breiten Bildschirm neben dem Datenfeld, in einem
 schmalen Fenster und im Ausdruck danach.
 
 Nach jedem Produkt- oder Ausgangsstofflink zeigt das Datenfeld
@@ -500,6 +515,16 @@ Korrektur erneut aus. Die letzte Zeile nennt die Zahl der Dateien, Fehler
 und Warnungen; die Dateizahl umfasst Vorschriften und Synthesewegdateien,
 einschließlich der Sprachfassungen.
 
+Ein Fehler `unknown author` unter `authors` bedeutet, dass im
+Register-Snapshot kein Konto mit diesem Benutzernamen steht. Prüfen Sie
+die Schreibweise und bitten Sie bei Bedarf die zuständigen Mitarbeitenden,
+das Konto anzulegen. Bei `"<name>" is named twice` entfernen Sie den
+wiederholten Benutzernamen. `must be a list of user names, e.g. ["a.example"]`
+verlangt eine Liste von Benutzernamen in Anführungszeichen;
+`must not be empty` verlangt mindestens einen Autor. Verwenden Sie den
+Schlüssel `authors` in der Mehrzahl; `author` meldet
+`use authors, a list of user names`.
+
 Bei einer allgemeinen Vorschrift bedeutet `scope[2].products[1].yield_percent`
 die Ausbeute des ersten Produkts in Eintrag 2. `must not be empty` unter
 `scope` verlangt mindestens einen Eintrag. Meldet ein Feld auf oberster Ebene
@@ -612,7 +637,8 @@ also auf der deutschen Website das englische Original.
    übrige Name bleibt gleich.
 2. Übersetzen Sie `title`, `hazards` und bei
    Bedarf `references`. `scale`, `authors` und `checked_by` dürfen Sie
-   anpassen.
+   anpassen. Nennen Sie unter `authors` weiterhin Benutzernamen von
+   Laborkonten im Register-Snapshot der Sammlung, jeden genau einmal.
 3. Setzen Sie `date` und `lastmod` auf den Zeitpunkt der Übersetzung.
    Steht im Original `language = "en"`, ändern Sie es in `"de"` oder
    löschen Sie die Zeile.

@@ -11,11 +11,30 @@ from pathlib import Path
 
 import sample_support as sup
 import test_theme_static as tts
-from pipeline_support import DEMO, FIXTURES, REPO
+from pipeline_support import DEMO, FIXTURES, REPO, snapshot_digest
 
 ORG_SEED = DEMO / "org" / "procedures" / "OSDB-0001-salicylic-acid.org"
 MD_SEED = DEMO / "md" / "procedures" / "OSDB-0002-aspirin.md"
 COLLECTION = FIXTURES / "collection"
+DEMO_REGISTRY = REPO / "webapp" / "demo" / "registry.json"
+# The demo's accounts (lab-demo "Demo accounts") and, per sample ID, the
+# user names its procedures credit (sample-procedures "Sample marking").
+DEMO_ACCOUNTS = {"aschmidt": "Anna Schmidt", "jkoch": "Jonas Koch",
+                 "klehmann": "Katrin Lehmann", "mwolf": "Miriam Wolf",
+                 "tbauer": "Tobias Bauer"}
+DEMO_CREDITS = {
+    "OSDB-0001": ["klehmann", "tbauer"], "OSDB-0002": ["klehmann", "aschmidt"],
+    "OSDB-0003": ["tbauer", "jkoch"], "OSDB-0004": ["aschmidt", "mwolf"],
+    "OSDB-0005": ["mwolf"], "OSDB-0006": ["jkoch", "klehmann"],
+    "OSDB-0007": ["aschmidt"], "OSDB-0008": ["aschmidt", "tbauer"],
+    "OSDB-0009": ["mwolf"]}
+USER_NAME = re.compile(r"^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$")
+
+
+def accounts_of(path: Path) -> dict[str, str]:
+    """The user names and names of the snapshot ``path``'s accounts."""
+    table = json.loads(path.read_text(encoding="utf-8"))
+    return {a["username"]: a["name"] for a in table["accounts"]}
 
 
 def samples() -> list[sup.Sample]:
@@ -59,9 +78,42 @@ class SampleMarkingTests(unittest.TestCase):
                 authors = sample.data.get("authors", [])
                 self.assertTrue(authors)
                 for author in authors:
-                    self.assertRegex(author, r"^[A-Z]\. Example$")
+                    self.assertIn(author, accounts_of(DEMO_REGISTRY))
                 self.assertIn(sample.terms["unverified"],
                               " ".join(sample.summary.split()))
+
+
+class DemoAuthorsTests(unittest.TestCase):
+    """Requirement: Sample marking (the demo's authors are those of the
+    demo accounts), with lab-demo "Demo accounts"."""
+
+    def test_the_demo_registry_lists_the_demo_accounts(self) -> None:
+        """Scenario: Seeds are marked as samples (the demo's registry
+        lists its five accounts)."""
+        table = json.loads(DEMO_REGISTRY.read_text(encoding="utf-8"))
+        self.assertEqual(
+            table.get("accounts"),
+            [{"username": user, "name": name}
+             for user, name in sorted(DEMO_ACCOUNTS.items())])
+
+    def test_the_demos_digest_covers_its_accounts(self) -> None:
+        """Requirement: Snapshot (`accounts` is inside the digest)."""
+        table = json.loads(DEMO_REGISTRY.read_text(encoding="utf-8"))
+        self.assertEqual(table["digest"], snapshot_digest(table))
+        without = {k: v for k, v in table.items() if k != "accounts"}
+        self.assertNotEqual(table["digest"], snapshot_digest(without))
+
+    def test_each_procedure_credits_its_demo_accounts(self) -> None:
+        """Requirement: Sample marking (the demo's procedures credit
+        the demo accounts, `A.` to `klehmann` and so on)."""
+        found = {}
+        for sample in samples():
+            ident = sample.data["id"]
+            with self.subTest(sample=sample.path.name):
+                self.assertEqual(sample.data["authors"],
+                                 DEMO_CREDITS[ident])
+            found[ident] = sample.data["authors"]
+        self.assertEqual(sorted(found), sorted(DEMO_CREDITS))
 
 
 class SampleQuantityTests(unittest.TestCase):
@@ -917,9 +969,19 @@ class TestCollectionTests(unittest.TestCase):
         self.assertEqual(
             {p for p in relative_files(COLLECTION / "static")},
             relative_files(DEMO / "static"), "static/ files")
+        demo_table = json.loads(DEMO_REGISTRY.read_text(encoding="utf-8"))
+        test_table = json.loads(
+            (COLLECTION / "registry.json").read_text(encoding="utf-8"))
+        for table in (demo_table, test_table):
+            table.pop("accounts", None)
+            table.pop("digest")
+        self.assertEqual(test_table, demo_table)
+        test_accounts = accounts_of(COLLECTION / "registry.json")
         self.assertEqual(
-            (COLLECTION / "registry.json").read_bytes(),
-            (REPO / "webapp" / "demo" / "registry.json").read_bytes())
+            {user: name for user, name in test_accounts.items()
+             if user in DEMO_ACCOUNTS}, DEMO_ACCOUNTS)
+        self.assertIn("a.example", test_accounts)
+        self.assertEqual(test_accounts["ae.mueller"], "Ä. Müller")
         demo = tomllib.loads(
             (DEMO / "orgsyndb.toml").read_text(encoding="utf-8"))
         test = tomllib.loads(
@@ -955,6 +1017,21 @@ class TestCollectionTests(unittest.TestCase):
                 self.assertEqual(
                     (COLLECTION / "md" / "procedures"
                      / path.name).read_bytes(), path.read_bytes())
+
+    def test_the_collections_procedures_credit_the_demo_accounts(
+            self) -> None:
+        """Requirement: Sample marking (the test collection's copies of
+        the demo's procedures credit the same accounts, which its
+        registry lists)."""
+        accounts = accounts_of(COLLECTION / "registry.json")
+        for path in sorted((COLLECTION / "md" / "procedures").glob("*.md")):
+            data = sup.read_markdown(path).data
+            with self.subTest(file=path.name):
+                self.assertEqual(data["authors"],
+                                 DEMO_CREDITS[data["id"]])
+                for author in data["authors"]:
+                    self.assertIn(author, accounts)
+                    self.assertRegex(author, USER_NAME)
 
     def test_converted_samples_agree_with_their_org_sources(self) -> None:
         """Scenario: Converted samples agree with their Org sources."""

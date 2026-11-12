@@ -47,3 +47,17 @@ msgstr "Demo-Konten"
 #, python-format
 msgid "Password for all: %(password)s"
 msgstr "Passwort für alle: %(password)s"
+
+msgid ""
+"Enter at most 40 letters or digits, with single dots, hyphens or "
+"underscores between them."
+msgstr ""
+"Geben Sie höchstens 40 Buchstaben oder Ziffern ein, mit einzelnen Punkten, "
+"Bindestrichen oder Unterstrichen dazwischen."
+
+msgid ""
+"At most 40 letters or digits, with single dots, hyphens or underscores "
+"between them. It cannot be changed later."
+msgstr ""
+"Höchstens 40 Buchstaben oder Ziffern, mit einzelnen Punkten, Bindestrichen "
+"oder Unterstrichen dazwischen. Er lässt sich später nicht ändern."

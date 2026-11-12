@@ -6,7 +6,7 @@
 #+HUGO_SLUG: osdb-0001
 #+HUGO_TAGS: sample-data saponification
 #+HUGO_CUSTOM_FRONT_MATTER: :id "OSDB-0001"
-#+HUGO_CUSTOM_FRONT_MATTER: :authors '("A. Example" "B. Example")
+#+HUGO_CUSTOM_FRONT_MATTER: :authors '("klehmann" "tbauer")
 #+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
 #+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("hydrolysis")
 #+HUGO_CUSTOM_FRONT_MATTER: :scale "50 mmol"

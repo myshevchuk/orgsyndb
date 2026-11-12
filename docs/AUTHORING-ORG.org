@@ -40,6 +40,7 @@
 #+AI_PASS: fact-check claude-opus-5-5 [2026-11-07 Sat 11:49] -- doc-writer pass line corrected from gpt-6 to the pinned run model
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-11 Wed 18:03] -- collection registry, built-in fields, images, vocabularies and validation
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-12 Thu 09:06] -- sequence entry keys, examples, messages, scope uniqueness and Emacs completion
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-12 Thu 18:50] -- author accounts, validation, pages, names and Emacs completion
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -170,8 +171,18 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   Product names and chemical data come from the lab registry. Structure
   images belong in the collection’s ~static/structures/~, as described next.
 
-  Use the template's quoting and list forms. For example, authors and hazards
-  use quoted Lisp lists such as ~'("A. Example" "B. Example")~. Consult
+  Use the template's quoting and list forms. Authors and hazards use quoted
+  Lisp lists. For authors, write the lab account user names of everyone who
+  wrote the procedure, each once, for example
+  ~:authors '("klehmann" "aschmidt")~. Each account must appear in the
+  collection's registry snapshot; it may be inactive. Replace the template's
+  ~a.example~ with your user name before validating. ~checked_by~ is a
+  separate, free-text list of names.
+
+  In Emacs, completion for ~authors~ offers the registry's account user names,
+  each annotated with the account's name. Completion for ~checked_by~ offers
+  names already used under that key in procedures; you can also enter other
+  names. Consult
   [[file:SCHEMA.md][docs/SCHEMA.md]] for the exact required values, optional fields, reaction
   vocabulary, and file-name rules.
 
@@ -348,8 +359,11 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   follows *Used in* and links those sequences by title, ordered by sequence
   ID. Formula digits appear as subscripts. Molecular weight gains
   ~g/mol~, yield gains a percent sign, and SMILES has a *Copy* button. Reaction
-  type, tag, and author values link to pages that list related procedures. The
-  site title-cases author names for display, so ~van~ appears as ~Van~. The
+  type and tag values link to pages that list related procedures. Under
+  *Authors*, each account's name links to ~/authors/<user name>/~, for
+  example ~/authors/klehmann/~. The site shows names exactly as the accounts
+  have them, including capitalization. The author directory, author pages
+  and catalogue's *Author* filter show these names too. The
   eight body sections appear beside the panel on a wide screen and after it in
   a narrow window or in print.
 
@@ -531,6 +545,15 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   site’s group-tab directory. The lab application refuses this key, so the
   snapshot file was made another way; give the substance another key there. The
   summary counts procedure and sequence files, including language variants.
+
+  An ~unknown author~ error under ~authors~ means the registry snapshot has
+  no account with that user name. Check the spelling and ask staff to create
+  the account if needed. ~"<name>" is named twice~ means you must remove the
+  repeated user name. ~must be a list of user names, e.g. ["a.example"]~
+  asks for a list of quoted user names; ~must not be empty~ asks for at least
+  one author. Use the plural key ~authors~; ~author~ reports
+  ~use authors, a list of user names~.
+
   For scope entries, ~scope[2].time~ means the time in entry 2;
   ~scope[2].products[1].yield_percent~ means that entry's first product yield. ~must not be empty~ under ~scope~ requires at
   least one entry. A top-level field with

@@ -579,5 +579,27 @@
       "article_number": null
     }
   ],
-  "digest": "9ba24cf30fd235f478ee3228b65c3935cf83277ade1a8a03b7cbf1b07527fced"
+  "accounts": [
+    {
+      "username": "aschmidt",
+      "name": "Anna Schmidt"
+    },
+    {
+      "username": "jkoch",
+      "name": "Jonas Koch"
+    },
+    {
+      "username": "klehmann",
+      "name": "Katrin Lehmann"
+    },
+    {
+      "username": "mwolf",
+      "name": "Miriam Wolf"
+    },
+    {
+      "username": "tbauer",
+      "name": "Tobias Bauer"
+    }
+  ],
+  "digest": "00cedd41d2b329857eab160f50ded0c3e96ee7beae5a1892e4f1e55ee13bef8b"
 }

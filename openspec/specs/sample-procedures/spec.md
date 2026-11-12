@@ -13,13 +13,13 @@ The repository SHALL ship at least these two seed procedures, linked through the
 - **THEN** both exist, their `id` values are `OSDB-0001` and `OSDB-0002`, their reaction types are `hydrolysis` and `acylation`, the Org seed's one product is `salicylic-acid`, and the Markdown seed's `substrates` is `["salicylic-acid", "acetic-anhydride"]`
 
 ### Requirement: Sample marking
-Every sample procedure SHALL have `status = "draft"` and `sample-data` among its `tags`. Its `authors` are fictitious names of the form `<Initial>. Example`.
+Every sample procedure SHALL have `status = "draft"` and `sample-data` among its `tags`. Its `authors` are user names of its registry's accounts: in the demo collection those of the demo accounts (lab-demo "Demo accounts"), elsewhere fictitious accounts with user names of the form `<initial>.example` and names `<Initial>. Example`.
 
 The Summary section states that the procedure is sample data whose quantities are not experimentally verified; a German sample's `Zusammenfassung` says `nicht experimentell überprüft`.
 
 #### Scenario: Seeds are marked as samples
 - **WHEN** a test reads every sample procedure, in either language
-- **THEN** each has `status` equal to `draft`, `sample-data` in its tags, and every author matches `^[A-Z]\. Example$`
+- **THEN** each has `status` equal to `draft`, `sample-data` in its tags, and every author is a user name of its registry's accounts
 - **AND** its Summary section, with whitespace collapsed, contains `not experimentally verified`, or its `Zusammenfassung` contains `nicht experimentell überprüft`
 
 <!-- Reason: German tables have German columns and decimal commas. -->
@@ -120,7 +120,7 @@ Every sample procedure of the theme sample set, the seeds and the demo general p
 
 ### Requirement: Test collection
 The repository SHALL ship the test collection `tests/fixtures/collection/`, a complete collection as the `collection` capability defines it that holds every sample procedure of the demo collection, in either language, as a Markdown procedure, and that has no `org/` directory. The paths in this requirement are written out in full. The test collection meets all of the following:
-- **Copies.** `tests/fixtures/collection/.gitignore` and every file under `tests/fixtures/collection/static/` and `tests/fixtures/collection/md/sequences/` are byte-identical to the demo collection's files at the same relative paths, and the test collection's `static/` and `md/sequences/` hold no other file. `tests/fixtures/collection/registry.json` is byte-identical to the demo registry, `webapp/demo/registry.json`, and `tests/fixtures/collection/orgsyndb.toml` is the demo's with `registry = "registry.json"` in place of its `registry`. The test collection has no `compounds/` and no `vocabularies/`.
+- **Copies.** `tests/fixtures/collection/.gitignore` and every file under `tests/fixtures/collection/static/` and `tests/fixtures/collection/md/sequences/` are byte-identical to the demo collection's files at the same relative paths, and the test collection's `static/` and `md/sequences/` hold no other file. `tests/fixtures/collection/registry.json` is the demo registry, `webapp/demo/registry.json`, with the test fixtures' fictitious accounts added to its `accounts` and its `digest` made to agree, and `tests/fixtures/collection/orgsyndb.toml` is the demo's with `registry = "registry.json"` in place of its `registry`. The test collection has no `compounds/` and no `vocabularies/`.
 - **File names.** `tests/fixtures/collection/md/procedures/` holds exactly one file for each sample procedure file of the demo collection, `examples/demo/org/procedures/<stem>.org` or `examples/demo/md/procedures/<stem>.md`, named `<stem>.md`, and no other file.
 - **Markdown samples.** The file for a Markdown sample is byte-identical to it.
 - **Converted samples.** The file for an Org sample is a hand-written Markdown procedure, in the form of the demo's Markdown samples, that agrees with its Org source as follows:
@@ -134,7 +134,7 @@ Integration tests that build, validate, serve or print a collection and do not e
 
 #### Scenario: The test collection mirrors the demo
 - **WHEN** a test lists `tests/fixtures/collection/` and compares it with `examples/demo/`
-- **THEN** `.gitignore` and every file under `static/` are byte-identical to the demo's, `static/structures/isopentyl-acetate.svg` among them, `registry.json` is byte-identical to the demo registry, `orgsyndb.toml` differs from the demo's only in `registry`, and no `org/` directory exists
+- **THEN** `.gitignore` and every file under `static/` are byte-identical to the demo's, `static/structures/isopentyl-acetate.svg` among them, `registry.json` equals the demo registry but for its `accounts`, which add the test fixtures' fictitious accounts to the demo's, and its `digest`, `orgsyndb.toml` differs from the demo's only in `registry`, and no `org/` directory exists
 - **AND** `md/procedures/` holds exactly the 18 file names derived from the demo's sample procedure files, and the file for each of the ten Markdown sample files is byte-identical to it
 
 #### Scenario: Converted samples agree with their Org sources

@@ -209,8 +209,8 @@ class PlainCatalogueTests(cs.CatalogueCase):
                   "cinnamate"),
                  ("reaction_types/hydrolysis/index.html", "type",
                   "hydrolysis", "Hydrolysis"),
-                 ("authors/a.-example/index.html", "author", "a. example",
-                  "A. Example")]
+                 ("authors/klehmann/index.html", "author", "klehmann",
+                  "Katrin Lehmann")]
         for relative, facet, key, name in cases:
             page = self.page(relative)
             with self.subTest(page=relative):
@@ -455,13 +455,34 @@ class CatalogueFixtureTests(DetailsChecks, cs.CatalogueCase):
                                  f"OSDB-092{number} {key}")
         authors = json.loads(page.find("tr", data_id="OSDB-0921")
                              .attrs["data-author"])
-        self.assertEqual(authors, ["ä. müller", "a. example"])
+        self.assertEqual(authors, ["ae.mueller", "a.example"])
         kinds = {row.attrs["data-id"]: row.attrs["data-kind"]
                  for row in rows}
         self.assertEqual(
             sorted(i for i, kind in kinds.items() if kind == "general"),
             ["OSDB-0009"])
         self.assertEqual(set(kinds.values()), {"specific", "general"})
+
+    def test_authors_are_user_names_with_the_accounts_names(self) -> None:
+        """Scenario: An author's page (the user name is the key and the
+        URL, the account's name the text)."""
+        term = self.page("authors/ae.mueller/index.html")
+        self.assertEqual([t for lv, t in term.headings() if lv == 1],
+                         ["Ä. Müller"])
+        panel = self.page("procedures/osdb-0921/index.html")
+        pairs = {p.label: p for p in panel.definition_pairs(
+            panel.find("dl", "metadata"))}
+        self.assertEqual(
+            [(link.target, link.node.norm())
+             for link in panel.links(pairs["Authors"].definition)],
+            [("/authors/ae.mueller/", "Ä. Müller"),
+             ("/authors/a.example/", "A. Example")])
+        listing = self.page("authors/index.html")
+        shown = {link.target: link.node.norm()
+                 for link in listing.links(listing.find("ul", "term-list"))}
+        self.assertEqual(shown["/authors/ae.mueller/"], "Ä. Müller")
+        self.assertEqual(shown["/authors/a.example/"], "A. Example")
+        self.assertNotIn("/authors/ä.-müller/", shown)
 
     def test_details_markup(self) -> None:
         """Scenario: Details markup."""

@@ -70,7 +70,7 @@ The mode SHALL put `orgsyndb-completion-at-point` on the buffer's `completion-at
 - Inside a double-quoted string that is the value, or an entry of the array value, of a key, the values of that key. The key is the innermost one whose value encloses the string, so that `compound` inside a `products` table and `substrates` inside a `scope` entry count as themselves:
   - `status`: the statuses; `language`: the languages;
   - `reaction_types`: the collection's reaction types, annotated with their labels;
-  - `tags`: the tags that the collection's procedures use; `authors` and `checked_by`: the names that the procedures use under either key;
+  - `tags`: the tags that the collection's procedures use; `authors`: the user names of the index's accounts, each annotated with its name; `checked_by`: the names that the procedures use under that key;
   - `substrates` and `compound`: the registry's compound keys, annotated with name and formula;
   - `scheme_image`: `structures/<name>` for each `.svg` or `.png` file directly in the collection's `static/structures/`;
   - a declared `choice` field: the values of its vocabulary, annotated with the labels of the value's ancestors and its own, outermost first, joined by ` › `.

@@ -21,7 +21,7 @@ from pipeline_support import (DEMO, TEST_COLLECTION, closed_address,
                               make_sandbox, name_registry, pipeline,
                               pipeline_function, serve_snapshot, snapshot,
                               snapshot_digest)
-from support import load_snapshot
+from support import load_snapshot, write_snapshot
 
 
 def copy_collection(case: unittest.TestCase, source: Path) -> Path:
@@ -64,8 +64,8 @@ class IndexOfTheTestCollectionTests(unittest.TestCase):
         """Index data: the index has these keys and nothing else."""
         self.assertEqual(set(self.index),
                          {"site_language", "schema", "registry", "fields",
-                          "vocabularies", "compounds", "procedures",
-                          "sequences"})
+                          "accounts", "vocabularies", "compounds",
+                          "procedures", "sequences"})
         self.assertEqual(self.index["site_language"],
                          pipeline().site_language(
                              pipeline().APP / "site"))
@@ -112,6 +112,32 @@ class IndexOfTheTestCollectionTests(unittest.TestCase):
         self.assertEqual(set(self.index["vocabularies"]),
                          {"chemical-classes", "inventory-groups", "projects",
                           "reaction-types"})
+
+    def test_accounts(self) -> None:
+        """Index data: `accounts` lists the registry's accounts as the
+        snapshot lists them."""
+        listed = load_snapshot(TEST_COLLECTION / "registry.json")["accounts"]
+        self.assertIn("accounts", self.index)
+        self.assertEqual(self.index["accounts"], listed)
+        for item in self.index["accounts"]:
+            self.assertEqual(set(item), {"username", "name"})
+        names = {a["username"]: a["name"] for a in self.index["accounts"]}
+        self.assertEqual(names["a.example"], "A. Example")
+        self.assertEqual(names["ae.mueller"], "Ä. Müller")
+        self.assertEqual(names["klehmann"], "Katrin Lehmann")
+        users = [a["username"] for a in self.index["accounts"]]
+        self.assertEqual(users, sorted(users))
+
+    def test_the_index_follows_a_renamed_account(self) -> None:
+        """Index data: `accounts` reads the registry's snapshot."""
+        table = load_snapshot(self.root / "registry.json")
+        for account in table["accounts"]:
+            if account["username"] == "jkoch":
+                account["name"] = "Jonas Koch-Meier"
+        write_snapshot(self.root / "registry.json", table)
+        found = {a["username"]: a["name"]
+                 for a in index_of(self.root).get("accounts", [])}
+        self.assertEqual(found["jkoch"], "Jonas Koch-Meier")
 
     def test_registry(self) -> None:
         """Index data: `registry` gives the source and the digest."""
@@ -262,6 +288,7 @@ class RegistryAtAnAddressTests(unittest.TestCase):
                 f"{item['key']}/")
         self.assertEqual(index["registry"],
                          {"source": server.url, "digest": table["digest"]})
+        self.assertEqual(index["accounts"], table["accounts"])
         self.assertFalse((root / "build").exists())
 
     def test_the_environment_names_the_registry(self) -> None:
@@ -378,7 +405,7 @@ def write_registry(root: Path, **vocabularies: list) -> None:
     for name, terms in vocabularies.items():
         names[name.replace("_", "-")] = terms
     table: dict[str, Any] = {"format": 1, "vocabularies": names,
-                             "substances": []}
+                             "substances": [], "accounts": []}
     table["digest"] = snapshot_digest(table)
     (root / "registry.json").write_text(json.dumps(table), encoding="utf-8")
 
@@ -465,6 +492,7 @@ class EmptyAndBrokenCollectionTests(unittest.TestCase):
         self.assertEqual((index["compounds"], index["procedures"],
                           index["sequences"]), ([], [], []))
         self.assertEqual(index["fields"]["procedure"], [])
+        self.assertEqual(index["accounts"], [])
         self.assertEqual(
             [f["key"] for f in index["fields"]["compound"]],
             ["article_number", "short_name", "chemical_class", "group"])

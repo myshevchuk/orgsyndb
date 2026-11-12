@@ -139,6 +139,14 @@ class RegistryTests(SeededCase):
             without_digest(registry_snapshot.build()),
             without_digest(demo_registry()))
 
+    def test_the_registry_file_lists_the_demo_accounts(self) -> None:
+        """Requirement: Demo accounts (the registry file lists the five
+        accounts, as the snapshot does)."""
+        self.assertEqual(
+            demo_registry().get("accounts"),
+            [{"username": user, "name": ACCOUNTS[user][0]}
+             for user in sorted(ACCOUNTS)])
+
     def test_the_registry_holds_the_substances_of_the_collection(
             self) -> None:
         from registry.models import Substance
@@ -183,6 +191,23 @@ class RegistryTests(SeededCase):
             with self.subTest(article=article.article_number):
                 self.assertEqual(first.article_number,
                                  article.article_number)
+
+
+class AuthorTests(SeededCase):
+    """The procedures of the demo import credit the demo accounts
+    (sample-procedures: Sample marking)."""
+
+    def test_each_procedure_credits_its_demo_accounts(self) -> None:
+        from .collection_support import DEMO_CREDITS, authors_of
+        for key, users in DEMO_CREDITS.items():
+            with self.subTest(procedure=key):
+                self.assertEqual(authors_of(key), users)
+
+    def test_the_authors_are_the_demo_accounts(self) -> None:
+        from .collection_support import author_rows
+        rows = author_rows()
+        self.assertTrue(rows)
+        self.assertEqual({user for _, user, _ in rows}, set(ACCOUNTS))
 
 
 class InventoryTests(SeededCase):

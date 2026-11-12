@@ -6,8 +6,10 @@ from typing import Any
 
 from django.test import SimpleTestCase
 
-from .collection_support import (ImportCase, by_id, counts, demo_collection,
-                                 dump, entries_of, steps_of, substances_of)
+from .collection_support import (DEMO_CREDITS, ImportCase, author_rows,
+                                 authors_of, by_id, counts, credited,
+                                 demo_collection, dump, entries_of, steps_of,
+                                 substances_of)
 
 SPECIFIC = "acetic-anhydride + salicylic-acid >> acetylsalicylic-acid"
 GENERAL = ["4-acetylbiphenyl >> 1-biphenyl-4-yl-ethanol",
@@ -337,6 +339,112 @@ class ChangedValuesTests(ImportCase):
             [*GENERAL, "benzaldehyde >> 1-phenylethanol"])
         self.assertEqual(
             Procedure.objects.get(key="OSDB-0009").last_import, second)
+
+
+class ManifestFileTests(SimpleTestCase):
+    """Requirement: Sample marking (the demo manifest, which the demo
+    data applies, names the authors of the demo's procedures)."""
+
+    def test_the_file_credits_the_demo_accounts(self) -> None:
+        self.assertEqual(
+            {p["id"]: p.get("authors")
+             for p in demo_collection()["procedures"]}, DEMO_CREDITS)
+
+
+class AuthorsTests(ImportCase):
+    """Requirement: Applying an import (a procedure's authors are
+    replaced by the manifest's, in its order, whenever they differ)."""
+
+    def test_a_first_import_writes_the_authors_in_order(self) -> None:
+        """Requirement: Imported rows (a procedure author)."""
+        self.accept(credited())
+        for key, users in DEMO_CREDITS.items():
+            with self.subTest(procedure=key):
+                self.assertEqual(authors_of(key), users)
+        self.assertEqual(
+            [position for key, _, position in author_rows()
+             if key == "OSDB-0002"], [1, 2])
+        self.assertEqual(len(author_rows()),
+                         sum(len(users) for users in DEMO_CREDITS.values()))
+
+    def test_the_demo_manifest_credits_the_demo_accounts(self) -> None:
+        """Scenario: Manifest of the demo (as the lab application applies
+        it)."""
+        self.accept()
+        for key, users in DEMO_CREDITS.items():
+            with self.subTest(procedure=key):
+                self.assertEqual(authors_of(key), users)
+
+    def test_a_new_order_replaces_the_authors(self) -> None:
+        from collection.models import Procedure
+        first = self.accept(credited())
+        second = self.accept(credited(OSDB_0002=["aschmidt", "klehmann"]))
+        self.assertEqual(authors_of("OSDB-0002"), ["aschmidt", "klehmann"])
+        self.assertEqual(
+            Procedure.objects.get(key="OSDB-0002").last_import, second)
+        self.assertEqual(
+            Procedure.objects.get(key="OSDB-0003").last_import, first)
+        self.assertEqual(authors_of("OSDB-0003"), DEMO_CREDITS["OSDB-0003"])
+
+    def test_another_author_replaces_the_authors(self) -> None:
+        from collection.models import Procedure
+        self.accept(credited())
+        second = self.accept(credited(OSDB_0005=["mwolf", "jkoch", "tbauer"]))
+        self.assertEqual(authors_of("OSDB-0005"),
+                         ["mwolf", "jkoch", "tbauer"])
+        third = self.accept(credited(OSDB_0005=["tbauer"]))
+        self.assertEqual(authors_of("OSDB-0005"), ["tbauer"])
+        self.assertEqual(
+            [row for row in author_rows() if row[0] == "OSDB-0005"],
+            [("OSDB-0005", "tbauer", 1)])
+        self.assertEqual(
+            Procedure.objects.get(key="OSDB-0005").last_import, third)
+        self.assertNotEqual(second, third)
+
+    def test_unchanged_authors_keep_their_rows(self) -> None:
+        """Requirement: Applying an import (replaced whenever they
+        differ; a row keeps its import otherwise)."""
+        from collection.models import Procedure, ProcedureAuthor
+        first = self.accept(credited())
+        before = list(ProcedureAuthor.objects.order_by("pk").values_list(
+            "pk", "procedure_id", "user_id", "position"))
+        self.accept(credited())
+        self.assertEqual(
+            list(ProcedureAuthor.objects.order_by("pk").values_list(
+                "pk", "procedure_id", "user_id", "position")), before)
+        self.assertEqual(
+            set(Procedure.objects.values_list("last_import", flat=True)),
+            {first.pk})
+
+    def test_only_the_authors_change(self) -> None:
+        """Requirement: Applying an import (`last_import` becomes the
+        accepted import when any of its authors change)."""
+        from collection.models import Procedure
+        first = self.accept(credited())
+        (entry,) = entries_of("OSDB-0002")
+        second = self.accept(credited(OSDB_0002=["klehmann"]))
+        self.assertEqual(
+            Procedure.objects.get(key="OSDB-0002").last_import, second)
+        self.assertEqual(entries_of("OSDB-0002")[0].pk, entry.pk)
+        self.assertEqual(
+            Procedure.objects.get(key="OSDB-0001").last_import, first)
+
+    def test_a_new_procedure_gets_its_authors(self) -> None:
+        data = credited()
+        new = copy.deepcopy(procedure_of(data, "OSDB-0008"))
+        new.update(id="OSDB-0010", authors=["jkoch", "mwolf"])
+        data["procedures"].append(new)
+        self.accept(data)
+        self.assertEqual(authors_of("OSDB-0010"), ["jkoch", "mwolf"])
+
+    def test_an_account_that_is_not_active_can_be_an_author(self) -> None:
+        """Requirement: Authors are accounts (an account named as an
+        author need not be active)."""
+        from django.contrib.auth import get_user_model
+        get_user_model().objects.filter(username="tbauer").update(
+            is_active=False)
+        self.accept(credited())
+        self.assertEqual(authors_of("OSDB-0001"), ["klehmann", "tbauer"])
 
 
 class ChangedSubstancesTests(ImportCase):

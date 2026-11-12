@@ -1071,7 +1071,7 @@ Return what `osdb-org-examine' returns for its directory."
     (should (equal (alist-get 'tags front-matter)
                    '("sample-data" "wittig" "cinnamate")))
     (should (equal (alist-get 'id front-matter) "OSDB-0007"))
-    (should (equal (alist-get 'authors front-matter) '("G. Example")))
+    (should (equal (alist-get 'authors front-matter) '("aschmidt")))
     (should (equal (alist-get 'working_time front-matter) 5))
     (should (eq (alist-get 'inert_atmosphere front-matter) 'true))
     (should (equal (alist-get 'products front-matter)

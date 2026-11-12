@@ -16,11 +16,13 @@ from collections.abc import Iterable
 from datetime import datetime
 from typing import Any
 
+from django.contrib.auth import get_user_model
 from django.db import transaction
 
 from collection.models import (KEY_LENGTH, RELEASE_LENGTH, EntrySubstance,
-                               Import, Language, Outcome, Procedure, Role,
-                               ScopeEntry, Sequence, Source, Step, Trigger,
+                               Import, Language, Outcome, Procedure,
+                               ProcedureAuthor, Role, ScopeEntry,
+                               Sequence, Source, Step, Trigger,
                                latest_accepted)
 from orgsyndb_web import lock
 from registry import snapshot
@@ -128,6 +130,18 @@ def _keys(items: list[Any], where: str) -> list[str]:
     return items
 
 
+def _authors(table: dict[str, Any], where: str) -> list[str]:
+    """Return the ``authors`` of the procedure TABLE, user names in file
+    order; raise Malformed when they are not a list of non-empty strings
+    or one occurs twice."""
+    found = _list(table, "authors", where)
+    if not all(isinstance(item, str) and item for item in found):
+        raise Malformed(f"{where}authors: not a list of user names")
+    if len(set(found)) != len(found):
+        raise Malformed(f"{where}authors: a user name occurs twice")
+    return found
+
+
 def _entry(table: dict[str, Any], where: str) -> dict[str, Any]:
     """Return the scope entry TABLE as the manifest gives it, a table of
     ``substrates``, keys, and ``products``, tables of ``compound`` and
@@ -173,6 +187,7 @@ def _procedure(table: dict[str, Any], number: int) -> dict[str, Any]:
             "title_de": _optional_text(table, "title_de", where),
             "reaction_type": _text(table, "reaction_type", where),
             "general": general,
+            "authors": _authors(table, where),
             "entries": entries}
 
 
@@ -208,8 +223,9 @@ def read(body: Any) -> dict[str, Any]:
     Raise Malformed, saying what is wrong, when BODY is not a table of
     the manifest's keys and types (collection-import "Manifest"), or
     when a product's yield is outside 0 to 100, a key occurs twice in
-    one role of an entry, an error is blank, or a procedure that is not
-    general has more than one entry.
+    one role of an entry, a user name twice among a procedure's
+    authors, an error is blank, or a procedure that is not general has
+    more than one entry.
     """
     if not isinstance(body, dict):
         raise Malformed("the manifest is not a table")
@@ -278,16 +294,16 @@ def _entry_signature(entry: dict[str, Any]) -> str:
 
 
 def problems(manifest: dict[str, Any], substances: set[str],
-             reaction_types: set[str]) -> list[str]:
+             reaction_types: set[str], accounts: set[str]) -> list[str]:
     """Return the errors that refuse the read, built MANIFEST against a
     registry holding the substance keys SUBSTANCES and the reaction type
-    keys REACTION_TYPES, in the order the checks find them: each
-    procedure in the manifest's order, then each sequence. An empty list
-    accepts it.
+    keys REACTION_TYPES, and an application whose accounts have the user
+    names ACCOUNTS, in the order the checks find them: each procedure in
+    the manifest's order, then each sequence. An empty list accepts it.
 
     Each error begins with the ID it concerns: an ID named twice among
-    the procedures or the sequences, an unknown reaction type, substance
-    or target, two entries of one procedure with one signature, a
+    the procedures or the sequences, an unknown reaction type, author,
+    substance or target, two entries of one procedure with one signature, a
     procedure without an entry, and a step that names a procedure the
     manifest lacks or no entry of the one it names (collection-import
     "Import checks"). A second table of an ID named twice is not
@@ -307,6 +323,8 @@ def problems(manifest: dict[str, Any], substances: set[str],
         if procedure["reaction_type"] not in reaction_types:
             errors.append(f'{ident}: unknown reaction type '
                           f'"{procedure["reaction_type"]}"')
+        errors += [f'{ident}: unknown author "{name}"'
+                   for name in procedure["authors"] if name not in accounts]
         unknown: list[str] = []
         for entry in procedure["entries"]:
             unknown += [key for key in _entry_keys(entry)
@@ -391,6 +409,23 @@ def _apply_substances(row: ScopeEntry, entry: dict[str, Any],
     return True
 
 
+def _apply_authors(row: Procedure, authors: list[str],
+                   accounts: dict[str, Any]) -> bool:
+    """Make the author rows of the procedure ROW the read AUTHORS, user
+    names in order, writing them again only when they differ; return
+    whether they did. ACCOUNTS maps user names to the accounts."""
+    held = list(row.authors.order_by("position").values_list(
+        "user__username", flat=True))
+    if held == authors:
+        return False
+    row.authors.all().delete()
+    ProcedureAuthor.objects.bulk_create(
+        ProcedureAuthor(procedure=row, user=accounts[name],
+                        position=position)
+        for position, name in enumerate(authors, start=1))
+    return True
+
+
 def _apply_entries(row: Procedure, entries: list[dict[str, Any]],
                    substances: dict[str, Substance]
                    ) -> tuple[bool, list[ScopeEntry]]:
@@ -426,10 +461,15 @@ def _apply_entries(row: Procedure, entries: list[dict[str, Any]],
 def _apply_procedures(manifest: dict[str, Any], record: Import,
                       substances: dict[str, Substance]
                       ) -> dict[str, list[ScopeEntry]]:
-    """Make the procedure rows those of the read MANIFEST, accepted as
-    the import RECORD, and withdraw those it lacks; return the entry
-    rows of each of its procedures by ID, in the manifest's order."""
+    """Make the procedure rows, with their authors, those of the read
+    MANIFEST, accepted as the import RECORD, and withdraw those it
+    lacks; return the entry rows of each of its procedures by ID, in the
+    manifest's order."""
     types = {term.key: term for term in ReactionType.objects.all()}
+    accounts = {user.username: user for user in
+                get_user_model().objects.filter(username__in={
+                    name for procedure in manifest["procedures"]
+                    for name in procedure["authors"]})}
     held = {row.key: row for row in Procedure.objects.all()}
     entries: dict[str, list[ScopeEntry]] = {}
     for procedure in manifest["procedures"]:
@@ -446,9 +486,10 @@ def _apply_procedures(manifest: dict[str, Any], record: Import,
             changed = False
         else:
             changed = _assign(row, values)
+        credited = _apply_authors(row, procedure["authors"], accounts)
         moved, entries[row.key] = _apply_entries(
             row, procedure["entries"], substances)
-        if changed or moved:
+        if changed or credited or moved:
             row.last_import = record
             row.save()
     for gone in held.values():
@@ -506,8 +547,9 @@ def apply(manifest: dict[str, Any], record: Import) -> None:
 
     Procedures and sequences are matched by ID and scope entries within
     their procedure by signature; what the manifest lacks is withdrawn,
-    never deleted. A procedure or sequence that is created or whose
-    values, entries or steps change, withdrawal included, takes RECORD
+    never deleted; a procedure's authors are replaced when they differ.
+    A procedure or sequence that is created or whose values, authors,
+    entries or steps change, withdrawal included, takes RECORD
     as its ``last_import``. The caller provides the transaction.
     """
     keys = {key for procedure in manifest["procedures"]
@@ -570,7 +612,9 @@ def receive(manifest: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         errors = problems(
             manifest,
             set(Substance.objects.values_list("key", flat=True)),
-            set(ReactionType.objects.values_list("key", flat=True)))
+            set(ReactionType.objects.values_list("key", flat=True)),
+            set(get_user_model().objects.values_list("username",
+                                                      flat=True)))
         if errors:
             return _answer(_record(manifest, latest,
                                    outcome=Outcome.REFUSED,

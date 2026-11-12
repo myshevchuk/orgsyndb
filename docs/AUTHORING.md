@@ -71,7 +71,10 @@ Fill in these required fields:
 - `date`: when the procedure was first written.
 - `lastmod`: when the procedure was last changed. Update it after every
   later edit.
-- `authors`: everyone who wrote the procedure.
+- `authors`: the lab account user names of everyone who wrote the procedure,
+  each once, for example `authors = ["klehmann", "aschmidt"]`. Each account
+  must appear in the collection's registry snapshot; it may be inactive.
+  Replace the template's `a.example` with your user name before validating.
 - `status`: whether the procedure is a draft, checked, or retired.
 - `reaction_types`: one category from the lab registry’s `reaction-types`
   vocabulary.
@@ -89,7 +92,13 @@ Fill in these required fields:
 The template also contains optional, commented fields for starting
 materials (`substrates`), checkers, literature references and an AI model.
 Delete the `#` at the start of an optional line when you need it. Leave the
-line commented when it does not apply.
+line commented when it does not apply. `checked_by` is a free-text list of
+names.
+
+In Emacs, completion for `authors` offers the registry's account user names,
+each annotated with the account's name. Completion for `checked_by` offers
+names already used under that key in procedures; you can also enter other
+names.
 
 Check `orgsyndb.toml` for fields under `[[fields.procedure]]`. These are
 extra procedure details chosen by your collection, such as a lab-notebook
@@ -301,9 +310,12 @@ step of a sequence,
 **Sequences** follows **Used in** and links those sequences by title, ordered
 by sequence ID. Formula digits appear as subscripts. Molecular
 weight gains `g/mol`, yield gains a percent sign, and SMILES has a **Copy**
-button. Reaction type, tag, and author values link to pages that list related
-procedures. The site title-cases author names for display, so a name entered as
-`van` appears as `Van`. The eight body sections appear beside the panel on a
+button. Reaction type and tag values link to pages that list related
+procedures. Under **Authors**, each account's name links to
+`/authors/<user name>/`, for example `/authors/klehmann/`. The site shows
+names exactly as the accounts have them, including capitalization. The
+author directory, author pages and catalogue's **Author** filter show these
+names too. The eight body sections appear beside the panel on a
 wide screen and after it in a narrow window or in print.
 
 After each product or starting-material link, the panel shows the substance’s
@@ -418,6 +430,14 @@ A line naming `body` tells you to inspect the section headings. Run the
 command again after correcting the file. The last line reports how many
 files, errors, and warnings were found; its file count includes procedures
 and sequences, including language variants.
+
+An `unknown author` error under `authors` means the registry snapshot has
+no account with that user name. Check the spelling and ask staff to create
+the account if needed. `"<name>" is named twice` means you must remove the
+repeated user name. `must be a list of user names, e.g. ["a.example"]`
+asks for a list of quoted user names; `must not be empty` asks for at least
+one author. Use the plural key `authors`; `author` reports
+`use authors, a list of user names`.
 
 For a general procedure, `scope[2].products[1].yield_percent` means the yield
 of the first product in entry 2. `must not be empty` under `scope` means you

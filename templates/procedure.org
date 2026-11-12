@@ -6,7 +6,7 @@
 #+HUGO_SLUG: osdb-0000
 #+HUGO_TAGS: change-me
 #+HUGO_CUSTOM_FRONT_MATTER: :id "OSDB-0000"
-#+HUGO_CUSTOM_FRONT_MATTER: :authors '("A. Example")
+#+HUGO_CUSTOM_FRONT_MATTER: :authors '("a.example")
 #+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
 #+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("esterification")
 #+HUGO_CUSTOM_FRONT_MATTER: :scale "25 mmol"

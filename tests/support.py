@@ -570,9 +570,15 @@ def canonical_terms(terms: list[Table]) -> list[Table]:
 def with_fixture_substances(table: Table, *keys: str) -> list[str]:
     """Add to the snapshot ``table`` the substances ``keys`` of the
     fixture registry that it lacks, with the terms of their group and
-    classes that it lacks, and keep its vocabularies in snapshot order.
-    Returns the keys added."""
+    classes that it lacks, and keep its vocabularies in snapshot order;
+    add the fixture registry's accounts that it lacks too, since
+    fixture procedures name them as authors. Returns the keys added."""
     fixture = load_snapshot(REGISTRY)
+    accounts = {entry["username"]: entry
+                for entry in table.get("accounts", [])}
+    for entry in fixture.get("accounts", []):
+        accounts.setdefault(entry["username"], entry)
+    table["accounts"] = [accounts[name] for name in sorted(accounts)]
     offered = {entry["key"]: entry for entry in fixture["substances"]}
     held = {entry["key"] for entry in table["substances"]}
     added = []
@@ -619,12 +625,16 @@ def insert_after(anchor: str, line: str) -> Edit:
 @contextlib.contextmanager
 def template_registry() -> Iterator[Path]:
     """A temporary snapshot file holding the substance
-    ``example-compound`` and the reaction type that
-    ``templates/procedure.md`` names."""
+    ``example-compound``, the reaction type that
+    ``templates/procedure.md`` names and an account for each of its
+    authors."""
     text = PROCEDURE_TEMPLATE.read_text(encoding="utf-8")
     found = re.search(r'(?m)^reaction_types\s*=\s*\["([^"]+)"\]', text)
     if found is None:
         raise AssertionError("the template names no reaction type")
+    named = re.search(r'(?m)^authors\s*=\s*\[([^\]]*)\]', text)
+    if named is None:
+        raise AssertionError("the template names no authors")
     table: Table = {
         "format": 1,
         "vocabularies": {
@@ -636,7 +646,9 @@ def template_registry() -> Iterator[Path]:
                                     tree=False)]},
         "substances": [substance("example-compound", "Example compound",
                                  formula="C2H6O", mw=46.07,
-                                 smiles="CCO")]}
+                                 smiles="CCO")],
+        "accounts": [{"username": name, "name": name}
+                     for name in re.findall(r'"([^"]*)"', named.group(1))]}
     with tempfile.TemporaryDirectory() as tmp:
         registry = Path(tmp) / "registry.json"
         write_snapshot(registry, table)

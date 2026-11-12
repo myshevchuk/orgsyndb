@@ -24,14 +24,31 @@ from pipeline_support import (DEMO, REPO, TEST_COLLECTION,
 
 FIXTURE = REPO / "webapp" / "demo" / "manifest.json"
 PROCEDURE_KEYS = {"id", "source", "title", "title_de", "reaction_type",
-                  "general", "entries"}
+                  "general", "authors", "entries"}
+# The user names the demo's procedures credit (sample-procedures "Sample
+# marking").
+DEMO_CREDITS = {
+    "OSDB-0001": ["klehmann", "tbauer"], "OSDB-0002": ["klehmann", "aschmidt"],
+    "OSDB-0003": ["tbauer", "jkoch"], "OSDB-0004": ["aschmidt", "mwolf"],
+    "OSDB-0005": ["mwolf"], "OSDB-0006": ["jkoch", "klehmann"],
+    "OSDB-0007": ["aschmidt"], "OSDB-0008": ["aschmidt", "tbauer"],
+    "OSDB-0009": ["mwolf"]}
 SEQUENCE_KEYS = {"id", "title", "title_de", "target", "steps"}
 IDS = [f"OSDB-{number:04d}" for number in range(1, 10)]
 FRONT_MATTER = ('+++\nid = "{id}"\ntitle = "{title}"\n'
+                'authors = {authors}\n'
                 'reaction_types = ["hydrolysis"]\n'
                 'substrates = ["ethyl-cinnamate"]\n'
                 'products = [{{ compound = "cinnamic-acid", '
                 'yield_percent = 90 }}]\n+++\n')
+
+
+def procedure_text(ident: str, title: str,
+                   authors: tuple[str, ...] = ("a.example",)) -> str:
+    """The front matter of a minimal procedure."""
+    return FRONT_MATTER.format(
+        id=ident, title=title,
+        authors="[" + ", ".join(f'"{a}"' for a in authors) + "]")
 
 
 def copy_collection(case: unittest.TestCase, source: Path) -> Path:
@@ -104,6 +121,52 @@ class ManifestDataTests(unittest.TestCase):
             "substrates": ["salicylic-acid", "acetic-anhydride"],
             "products": [{"compound": "acetylsalicylic-acid",
                           "yield_percent": 75}]}])
+
+    def test_a_procedure_lists_its_authors_in_file_order(self) -> None:
+        """Requirement: manifest subcommand (`authors`, the user names of
+        the variant's `authors`, in order)."""
+        for ident, authors in DEMO_CREDITS.items():
+            with self.subTest(id=ident):
+                found = by_id(self.data["procedures"], ident)
+                self.assertEqual(found["authors"], authors)
+        path = (self.root / "md" / "procedures"
+                / "OSDB-0002-aspirin.de.md")
+        path.write_text(path.read_text(encoding="utf-8").replace(
+            'authors = ["klehmann", "aschmidt"]',
+            'authors = ["aschmidt", "klehmann"]'), encoding="utf-8")
+        with site_app(self, "de"):
+            data = manifest_of(self.root)
+        self.assertEqual(
+            by_id(data["procedures"], "OSDB-0002")["authors"],
+            ["aschmidt", "klehmann"])
+
+    def test_the_authors_are_the_published_variants(self) -> None:
+        """Requirement: manifest subcommand (`authors` of the variant the
+        site publishes)."""
+        export = self.root / "build" / "export"
+        export.mkdir(parents=True)
+        (export / "OSDB-0050-from-org.de.md").write_text(
+            procedure_text("OSDB-0050", "Aus Org", ("tbauer",)),
+            encoding="utf-8")
+        (self.root / "md" / "procedures" / "OSDB-0050-from-org.md"
+         ).write_text(procedure_text("OSDB-0050", "Plain", ("jkoch",)),
+                      encoding="utf-8")
+        for locale, authors in (("en", ["jkoch"]), ("de", ["tbauer"])):
+            with self.subTest(locale=locale), site_app(self, locale):
+                found = by_id(manifest_of(self.root)["procedures"],
+                              "OSDB-0050")
+                self.assertEqual(found["authors"], authors)
+
+    def test_an_author_is_listed_as_written(self) -> None:
+        """Requirement: manifest subcommand (it checks no value, so a
+        user name the registry lacks is listed)."""
+        (self.root / "registry.json").unlink()
+        (self.root / "md" / "procedures" / "OSDB-0050-nobody.md"
+         ).write_text(procedure_text("OSDB-0050", "Nobody",
+                                     ("z.nobody", "Z. Nobody")),
+                      encoding="utf-8")
+        found = by_id(manifest_of(self.root)["procedures"], "OSDB-0050")
+        self.assertEqual(found["authors"], ["z.nobody", "Z. Nobody"])
 
     def test_a_general_procedure_has_an_entry_per_scope_line(self) -> None:
         """Requirement: manifest subcommand (one entry per element of
@@ -266,7 +329,7 @@ class ManifestDataTests(unittest.TestCase):
         export = self.root / "build" / "export"
         export.mkdir(parents=True)
         (export / "OSDB-0050-from-org.md").write_text(
-            FRONT_MATTER.format(id="OSDB-0050", title="From Org"),
+            procedure_text("OSDB-0050", "From Org"),
             encoding="utf-8")
         data = manifest_of(self.root)
         self.assertEqual([p["id"] for p in data["procedures"]],
@@ -283,10 +346,10 @@ class ManifestDataTests(unittest.TestCase):
         export = self.root / "build" / "export"
         export.mkdir(parents=True)
         (export / "OSDB-0050-from-org.de.md").write_text(
-            FRONT_MATTER.format(id="OSDB-0050", title="Aus Org"),
+            procedure_text("OSDB-0050", "Aus Org", ("tbauer",)),
             encoding="utf-8")
         (self.root / "md" / "procedures" / "OSDB-0050-from-org.md"
-         ).write_text(FRONT_MATTER.format(id="OSDB-0050", title="Plain"),
+         ).write_text(procedure_text("OSDB-0050", "Plain", ("jkoch",)),
                       encoding="utf-8")
         with site_app(self, "en"):
             published = by_id(manifest_of(self.root)["procedures"],
@@ -417,6 +480,17 @@ class ManifestSubcommandTests(unittest.TestCase):
         self.assertEqual(result.stdout, "")
 
 
+class DemoManifestFileTests(unittest.TestCase):
+    """Scenario: Manifest of the demo (the file the lab application's
+    demo data applies names the authors of the demo's procedures)."""
+
+    def test_the_file_credits_the_demo_accounts(self) -> None:
+        data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        self.assertEqual(
+            {p["id"]: p.get("authors") for p in data["procedures"]},
+            DEMO_CREDITS)
+
+
 class DemoManifestTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -437,6 +511,8 @@ class DemoManifestTests(unittest.TestCase):
         self.assertEqual([p["id"] for p in procedures], IDS)
         self.assertEqual(by_id(procedures, "OSDB-0001")["source"], "org")
         self.assertEqual(by_id(procedures, "OSDB-0002")["source"], "md")
+        self.assertEqual({p["id"]: p.get("authors") for p in procedures},
+                         DEMO_CREDITS)
         general = by_id(procedures, "OSDB-0009")
         self.assertEqual(len(general["entries"]), 3)
         self.assertEqual(general["entries"][0], {

@@ -352,7 +352,7 @@ In ERT scenarios, an Org fixture path such as `org-invalid/missing-created/org/O
 
 #### Scenario: Demo source
 - **WHEN** an ERT test calls `osdb-org-front-matter` on the text of `examples/demo/org/procedures/OSDB-0007-ethyl-cinnamate.org`
-- **THEN** `title` is `"Ethyl cinnamate"`, `slug` is `"osdb-0007"`, `tags` is `("sample-data" "wittig" "cinnamate")`, `id` is `"OSDB-0007"`, `authors` is `("G. Example")`, `working_time` is `5`, `inert_atmosphere` is the symbol `true`, and `products` is `(((compound . "ethyl-cinnamate") (yield_percent . 80)))`
+- **THEN** `title` is `"Ethyl cinnamate"`, `slug` is `"osdb-0007"`, `tags` is `("sample-data" "wittig" "cinnamate")`, `id` is `"OSDB-0007"`, `authors` is `("aschmidt")`, `working_time` is `5`, `inert_atmosphere` is the symbol `true`, and `products` is `(((compound . "ethyl-cinnamate") (yield_percent . 80)))`
 - **AND** the keys come in the order `title`, `slug`, `tags`, `id`, `authors`, `status`, `reaction_types`, `scale`, `notebook`, `project`, `working_time`, `inert_atmosphere`, `substrates`, `hazards`, `references`, `products`
 
 #### Scenario: Scope table

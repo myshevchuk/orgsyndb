@@ -534,6 +534,60 @@ class ReactionTypeDataStagingTests(BuildTestCase):
         self.assertFalse((self.sandbox.root / "public").exists())
 
 
+class AuthorDataStagingTests(BuildTestCase):
+    """Requirement: build subcommand (the author data); scenario:
+    Author data is staged."""
+
+    def authors_json(self) -> dict:
+        path = self.sandbox.root / "build" / "data" / "authors.json"
+        self.assertTrue(path.is_file(), "build/data/authors.json is missing")
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def expected(self) -> dict:
+        return ps.pipeline_function("authors_data")(
+            ps.read_snapshot(self.sandbox))
+
+    def test_author_data_is_staged(self) -> None:
+        """Scenario: Author data is staged."""
+        self.assert_ok(self.build("build"))
+        data = self.authors_json()
+        self.assertEqual(data, self.expected())
+        self.assertEqual(data["klehmann"], "Katrin Lehmann")
+        self.assertEqual(data["ae.mueller"], "Ä. Müller")
+
+    def test_a_second_build_stages_the_renamed_account(self) -> None:
+        """Requirement: build subcommand (the author data is written on
+        every build, from the registry read for it)."""
+        self.assert_ok(self.build("build"))
+
+        def rename(table: dict) -> None:
+            (found,) = [a for a in table["accounts"]
+                        if a["username"] == "tbauer"]
+            found["name"] = "Tobias Bauer-Weiß"
+        ps.edit_snapshot(self.sandbox, rename)
+        self.assert_ok(self.build("build"))
+        data = self.authors_json()
+        self.assertEqual(data, self.expected())
+        self.assertEqual(data["tbauer"], "Tobias Bauer-Weiß")
+
+    def test_an_unknown_author_stops_the_build_before_staging(self) -> None:
+        """Requirement: build subcommand (validation precedes the
+        staging)."""
+        def drop(table: dict) -> None:
+            table["accounts"] = [a for a in table["accounts"]
+                                 if a["username"] != "klehmann"]
+        ps.edit_snapshot(self.sandbox, drop)
+        result = self.build("build")
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        lines = problem_lines(result.stdout)
+        self.assertTrue(lines, result.stdout)
+        for line in lines:
+            self.assertIn(':authors: error: unknown author "klehmann"',
+                          line)
+        self.assertFalse((self.sandbox.root / "build" / "data").exists())
+        self.assertFalse((self.sandbox.root / "public").exists())
+
+
 class StagedSubstanceDataTests(BuildTestCase):
     """site-build "Hugo configuration": ``build/data/compounds/``."""
 

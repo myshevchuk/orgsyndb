@@ -495,7 +495,7 @@ class ShippedSiteTests(SiteCase):
                       for key in ("salicylic-acid", "acetic-anhydride")))
         for label, texts in (("Reaction type", ["Acylation"]),
                              ("Tags", ["sample-data", "acetylation"]),
-                             ("Authors", ["A. Example", "C. Example"])):
+                             ("Authors", ["Katrin Lehmann", "Anna Schmidt"])):
             links = page.links(panel[label].definition)
             self.assertEqual([l.node.norm() for l in links], texts, label)
             for link in links:
@@ -504,6 +504,10 @@ class ShippedSiteTests(SiteCase):
                 self.assertEqual(
                     [t for lv, t in term.headings() if lv == 1],
                     [link.node.norm()])
+        self.assertEqual(
+            [page.resolve(l.attrs["href"]) for l in
+             panel["Authors"].definition.find_all("a")],
+            ["/authors/klehmann/", "/authors/aschmidt/"])
         for label, stamp, shown in (
                 ("Created", "2026-10-19T23:46:11+02:00", "2026-10-19 23:46"),
                 ("Modified", "2026-10-19T23:50:11+02:00",
@@ -944,7 +948,7 @@ class ShippedSiteTests(SiteCase):
                  "authors/index.html": within,
                  "reaction_types/index.html": within,
                  "tags/sample-data/index.html": within,
-                 "authors/a.-example/index.html": within,
+                 "authors/klehmann/index.html": within,
                  "reaction_types/hydrolysis/index.html": within,
                  "compounds/index.html": {"/compounds/": "page"},
                  "compounds/salicylic-acid/index.html": {
@@ -1113,6 +1117,7 @@ class ShippedSiteTests(SiteCase):
     def test_every_term_page_lists_the_right_procedures(self) -> None:
         """Scenario: Every term page lists the right procedures."""
         labels = self.labels()
+        accounts = ps.account_names(self.sandbox)
         for taxonomy, heading in TAXONOMIES.items():
             path = self.public / taxonomy / "index.html"
             with self.subTest(taxonomy=taxonomy):
@@ -1125,8 +1130,9 @@ class ShippedSiteTests(SiteCase):
                 entries = listing.find_all("li")
                 expected = {}
                 for term, count in self.term_counts()[taxonomy].items():
-                    name = labels[term] if taxonomy == "reaction_types" \
-                        else term
+                    name = (labels[term] if taxonomy == "reaction_types"
+                            else ps.author_name(accounts, term)
+                            if taxonomy == "authors" else term)
                     expected[name] = (term, count)
                 shown = [page.links(entry)[0] for entry in entries]
                 self.assertEqual([l.node.norm() for l in shown],
@@ -1140,6 +1146,9 @@ class ShippedSiteTests(SiteCase):
                         self.assertIsNotNone(counter, "no span.count")
                         self.assertEqual(counter.norm(), f"({count})")
                         self.assertIs(entry.elements()[0], link.node)
+                        if taxonomy == "authors":
+                            self.assertEqual(link.target,
+                                             f"/authors/{term.lower()}/")
                         self.check_term_page(link.target, name, taxonomy,
                                              term)
 
@@ -1241,6 +1250,7 @@ class ShippedSiteTests(SiteCase):
         """Scenario: Metadata inside the body, chrome outside."""
         navigation = " ".join(text for _, text in NAVIGATION)
         registry = self.registry()
+        accounts = ps.account_names(self.sandbox)
         for item, page in self.procedure_pages():
             with self.subTest(procedure=item.id):
                 bodies = page.indexed_bodies()
@@ -1248,7 +1258,8 @@ class ShippedSiteTests(SiteCase):
                 text = bodies[0].norm()
                 compounds = [registry[e["compound"]] for e in item.products]
                 expected = [item.id, *item.tags,
-                            *item.data.get("authors", [])]
+                            *(ps.author_name(accounts, author) for author
+                              in item.data.get("authors", []))]
                 expected += [registry[key]["name"]
                              for key in item.substrates]
                 terms_text = [item.id]

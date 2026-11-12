@@ -6,7 +6,7 @@
 #+HUGO_SLUG: osdb-0007
 #+HUGO_TAGS: sample-data wittig cinnamate
 #+HUGO_CUSTOM_FRONT_MATTER: :id "OSDB-0007"
-#+HUGO_CUSTOM_FRONT_MATTER: :authors '("G. Example")
+#+HUGO_CUSTOM_FRONT_MATTER: :authors '("aschmidt")
 #+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
 #+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("olefination")
 #+HUGO_CUSTOM_FRONT_MATTER: :scale "5 mmol"

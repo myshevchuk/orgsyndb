@@ -37,6 +37,16 @@ texts."
               annotations)))
     (orgsyndb--candidates (nreverse keys) annotations)))
 
+(defun orgsyndb--account-candidates (root)
+  "Return the user names of the accounts of ROOT, annotated with their
+names."
+  (let (names annotations)
+    (dolist (entry (orgsyndb--accounts root))
+      (let ((username (alist-get 'username entry)))
+        (push username names)
+        (push (cons username (alist-get 'name entry)) annotations)))
+    (orgsyndb--candidates (nreverse names) annotations)))
+
 (defun orgsyndb--term-path (terms value)
   "Return the labels of VALUE's ancestors in TERMS and its own, outermost
 first, joined by ` › '."
@@ -142,8 +152,9 @@ names."
        (orgsyndb--vocabulary-candidates root "reaction-types"))
       (`(procedure . "tags")
        (orgsyndb--candidates (orgsyndb--in-use root '(tags))))
-      (`(procedure . ,(or "authors" "checked_by"))
-       (orgsyndb--candidates (orgsyndb--in-use root '(authors checked_by))))
+      (`(procedure . "authors") (orgsyndb--account-candidates root))
+      (`(procedure . "checked_by")
+       (orgsyndb--candidates (orgsyndb--in-use root '(checked_by))))
       (`(procedure . ,(or "substrates" "compound"))
        (orgsyndb--compound-candidates root))
       (`(sequence . "target") (orgsyndb--compound-candidates root))

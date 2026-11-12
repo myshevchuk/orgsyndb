@@ -5,7 +5,7 @@
 #+HUGO_SLUG: osdb-0901
 #+HUGO_TAGS: sample-data
 #+HUGO_CUSTOM_FRONT_MATTER: :products '(((compound . "propyl-acetate") (yield_percent . 85)) ((compound . "ethanol") (yield_percent . 10)))
-#+HUGO_CUSTOM_FRONT_MATTER: :id "OSDB-0901" :authors '("A. Example")
+#+HUGO_CUSTOM_FRONT_MATTER: :id "OSDB-0901" :authors '("a.example")
 #+HUGO_CUSTOM_FRONT_MATTER: :status "draft"
 #+HUGO_CUSTOM_FRONT_MATTER: :reaction_types '("esterification")
 #+HUGO_CUSTOM_FRONT_MATTER: :scale "25 mmol"

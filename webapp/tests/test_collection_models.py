@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from django.apps import apps
+from django.contrib.auth import get_user_model
 from django.db.models import ProtectedError
 from django.test import TestCase
 from django.utils import timezone
@@ -14,9 +15,10 @@ from vocabulary.models import ReactionType
 
 from . import BERLIN, make_user, page
 from .collection_support import (TOOLING, ImportCase, accepts, commit_id,
-                                 counts, make_entry, make_entry_substance,
-                                 make_import, make_procedure, make_sequence,
-                                 make_step, refuses)
+                                 counts, make_author, make_entry,
+                                 make_entry_substance, make_import,
+                                 make_procedure, make_sequence, make_step,
+                                 refuses)
 
 ADMIN = "/lab/admin/collection/"
 HEX40 = "a" * 40
@@ -32,8 +34,8 @@ class AppTests(TestCase):
         names = {model.__name__ for model in
                  apps.get_app_config("collection").get_models()}
         self.assertLessEqual(
-            {"Import", "Procedure", "ScopeEntry", "EntrySubstance",
-             "Sequence", "Step"}, names)
+            {"Import", "Procedure", "ProcedureAuthor", "ScopeEntry",
+             "EntrySubstance", "Sequence", "Step"}, names)
 
 
 class ImportModelTests(ImportCase):
@@ -170,6 +172,63 @@ def _unsaved_procedure(last_import: Any, key: str, **fields: Any) -> Any:
               "reaction_type": ReactionType.objects.get(key="acylation"),
               "general": False, "last_import": last_import}
     return Procedure(**{**values, **fields})
+
+
+class ProcedureAuthorModelTests(ImportCase):
+    """Requirement: Imported rows (a procedure author: its `procedure`,
+    a `user`, an account, and `position`, from 1, each account once per
+    procedure)."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.first = make_import()
+        self.procedure = make_procedure(self.first, "OSDB-0002")
+        self.klehmann = get_user_model().objects.get(username="klehmann")
+
+    def row(self, **fields: Any) -> Any:
+        from collection.models import ProcedureAuthor
+        values = {"procedure": self.procedure, "user": self.klehmann,
+                  "position": 1}
+        return ProcedureAuthor(**{**values, **fields})
+
+    def test_a_row_holds_its_fields(self) -> None:
+        from collection.models import ProcedureAuthor
+        made = make_author(self.procedure, "klehmann", 1)
+        found = ProcedureAuthor.objects.get(pk=made.pk)
+        self.assertEqual((found.procedure, found.user, found.position),
+                         (self.procedure, self.klehmann, 1))
+
+    def test_a_procedure_lists_its_authors(self) -> None:
+        """Requirement: Imported rows (the related name `authors`)."""
+        make_author(self.procedure, "aschmidt", 2)
+        make_author(self.procedure, "klehmann", 1)
+        self.assertEqual(
+            [row.user.username
+             for row in self.procedure.authors.order_by("position")],
+            ["klehmann", "aschmidt"])
+        other = make_procedure(self.first, "OSDB-0003")
+        self.assertEqual(other.authors.count(), 0)
+
+    def test_a_position_counts_from_1(self) -> None:
+        """Requirement: Imported rows (`position`, from 1)."""
+        refuses(self, lambda: self.row(position=0))
+        accepts(self, lambda: self.row(position=1))
+
+    def test_an_account_is_an_author_once_per_procedure(self) -> None:
+        """Requirement: Imported rows (each account once per
+        procedure)."""
+        make_author(self.procedure, "klehmann", 1)
+        refuses(self, lambda: self.row(position=2))
+        other = make_procedure(self.first, "OSDB-0003")
+        accepts(self, lambda: self.row(procedure=other, position=1))
+        accepts(self, lambda: self.row(
+            position=2,
+            user=get_user_model().objects.get(username="aschmidt")))
+
+    def test_an_author_names_a_procedure_and_an_account(self) -> None:
+        """Requirement: Imported rows (its `procedure` and its `user`)."""
+        refuses(self, lambda: self.row(procedure=None))
+        refuses(self, lambda: self.row(user=None))
 
 
 class EntryModelTests(ImportCase):

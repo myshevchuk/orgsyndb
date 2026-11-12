@@ -165,11 +165,13 @@ def demo_registry() -> dict[str, Any]:
     return json.loads(DEMO_REGISTRY.read_text(encoding="utf-8"))
 
 
-def without_digest(snapshot: dict[str, Any]) -> dict[str, Any]:
+def without_digest(snapshot: dict[str, Any], *more: str
+                   ) -> dict[str, Any]:
     """``snapshot`` without its ``digest`` and its ``import``, the two
-    keys a file of the registry may lack."""
+    keys a file of the registry may lack, and without the keys ``more``
+    names."""
     return {key: value for key, value in snapshot.items()
-            if key not in ("digest", "import")}
+            if key not in ("digest", "import", *more)}
 
 
 def small_snapshot() -> dict[str, Any]:

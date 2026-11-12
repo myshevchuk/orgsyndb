@@ -64,8 +64,10 @@ The demo names [`webapp/demo/registry.json`](webapp/demo/registry.json)
 as its registry with `registry = "../../webapp/demo/registry.json"` in
 `orgsyndb.toml`. This snapshot, a saved copy of the lab application's
 registry, lets you build the demo without running the lab application.
-The collection contains procedures and images; its compounds and
-vocabularies come from the snapshot.
+The collection contains procedures and images; its compounds,
+vocabularies and author accounts come from the snapshot. The nine
+procedures credit the demo's five accounts: `klehmann`, `tbauer`,
+`aschmidt`, `jkoch` and `mwolf`.
 
 The registry has 21 substances. Its chemical-class vocabulary has 13 values
 on three levels, and every substance has at least one chemical class and a
@@ -401,7 +403,13 @@ Any procedure may set `scheme_image`, for example
 It replaces product structures in the title block. A general procedure without
 a scheme shows the placeholder.
 
-Before validating a new stub, replace its `example-compound` product key with
+List everyone who wrote the procedure in `authors`, using their lab account
+user names, each once, for example `authors = ["klehmann", "aschmidt"]`.
+Each account must appear in the collection's registry snapshot; it may be
+inactive. `checked_by` remains a free-text list of names.
+
+Before validating a new stub, replace its `a.example` author with your user
+name. Replace its `example-compound` product key with
 your product's key and add the substance in the lab application if it does
 not exist. `new` creates the procedure file only. Chemical data belongs in
 the registry and structure images in the collection's `static/structures/`;
@@ -524,8 +532,11 @@ placeholder is **Product, CAS, SMILES or keyword** and its accessible name is
   compound pages under **Product** or **Products**, including when the name
   equals the title. Formula, molecular weight, CAS when supplied and SMILES
   appear there only for one product; for several, follow the compound links to
-  those data. **Starting materials** links the compounds in `substrates`. For a
-  general procedure, both lists include all entries, each compound once in
+  those data. **Authors** links each account's name to
+  `/authors/<user name>/`, for example `/authors/klehmann/`. Names appear
+  exactly as the account has them. **Starting materials** links the compounds
+  in `substrates`. For a general procedure, both lists include all entries,
+  each compound once in
   order of first appearance. **Precursors** lists other procedures that make
   one of those starting materials; **Used in** lists procedures that start from
   one of the products. Both lists are derived and ordered by procedure ID,
@@ -550,7 +561,8 @@ placeholder is **Product, CAS, SMILES or keyword** and its accessible name is
   mark **Procedures** as the current section in the site navigation. Each term
   page is a catalogue limited to that reaction type, tag or author. For
   example, `/reaction_types/esterification/`, `/tags/sample-data/`, and
-  `/authors/a.-example/` are term-page URLs. Search and filters stay within
+  `/authors/klehmann/` are term-page URLs. The author directory and author
+  pages show account names. Search and filters stay within
   that term. The line stating the term restriction links only to **Browse all
   procedures**, which removes the restriction and carries your query, other
   filters, sort and view to `/procedures/`. You can reach the directories from
@@ -681,8 +693,9 @@ is **Search these procedures** and the accessible name **Search general
 procedures**. Full-text search uses the Pagefind index and finds procedures by
 ID, every product's name, formula, CAS number (a chemical registry identifier)
 and SMILES string (a text notation for a molecular structure), every starting
-material's name, tag, or word in the procedure text. SMILES fragments match any
-product's structure, including products from every scope entry.
+material's name, author's account name, tag, or word in the procedure text.
+SMILES fragments match any product's structure, including products from
+every scope entry.
 Starting-material terms also include all entries. SMILES searches ignore
 punctuation and compare only letters and digits. A fragment may therefore match
 more than one compound. Search results contain procedures only; compound and
@@ -700,7 +713,8 @@ combine with AND. For example, selecting two reaction types and the status
 with an empty search field. Each value's count includes the query and all other
 facets, leaving out that facet's own selections. Unselected values with zero
 matches are hidden; selected values stay visible and removable even at zero.
-The result count shows how many procedures match.
+The result count shows how many procedures match. The **Author** facet
+shows account names; its values are the accounts' user names.
 
 A boolean or choice procedure field declared with `facet = true` adds a filter
 between **Status** and **Tag**, in declaration order. These filters start open
@@ -735,7 +749,8 @@ returns to the compact view; both views keep the same matches and order.
 
 To share a catalogue selection, copy its address. It records the query in `q`,
 filters in `type`, `kind`, `status`, `tag` and `author` (repeated for multiple
-values), and the chosen `sort` and `view`. Kind values are `specific` and
+values), and the chosen `sort` and `view`. An `author` value is a user name,
+for example `/procedures/?author=klehmann`. Kind values are `specific` and
 `general`. On `/general-procedures/`, the kind is fixed by the page and cannot
 be changed through the address. Reloading or following a shared link restores
 those choices; the browser's Back and Forward buttons restore earlier choices.
@@ -791,7 +806,8 @@ Procedure variants share their ID, base name and language-neutral facts: `status
 Only each scope entry's `note` may be translated; entry order and other scope
 values must agree. `orgsyndb validate` reports any difference as an error.
 Numeric yields compare by value, so `85` and `85.0` agree. Title, scale,
-hazards, references, authors, timestamps and the body are translated freely.
+hazards, references, timestamps and the body are translated freely. Author
+lists may differ between variants; each lists lab account user names.
 Compound names come from `name` and `name_de` in the shared registry,
 independently of the procedure's language.
 
@@ -941,7 +957,10 @@ in Org, it works on `#+HUGO_CUSTOM_FRONT_MATTER` and `#+HUGO_TAGS` lines
 and in the `substrates` and `products` columns of the table named `scope`.
 It offers statuses, languages, reaction types, tags, authors, compound
 keys, scheme images and the collection's declared choice and boolean
-fields. Labels and compound names help you choose. Sequences also offer
+fields. Labels and compound names help you choose. For `authors`, it offers
+the registry's account user names, each annotated with the account's name.
+For `checked_by`, it offers names already used under that key in procedures;
+you can also enter other names. Sequences also offer
 procedure IDs and target substance keys. Inside a step's `product` string,
 completion offers the named general procedure's products, each once in file
 order, annotated with the entry numbers that make it. This works for Markdown
@@ -1035,7 +1054,7 @@ prefix are relative to the collection.
 |---|---|
 | `export` | Checks the top-level entries in `org/procedures/`, reports Org file-name, keyword, scope-table and forbidden-route problems on standard output, then exports every `*.org` source into `build/export/` if it finds no error. An Org error stops the export before ox-hugo is fetched and leaves `build/export/` unchanged. When it finds no Org source or reportable entry, it leaves that directory empty and starts no Emacs. |
 | `validate` | Reads the registry, then runs `export`. An Org error stops the command there; otherwise the Markdown-only validator checks procedures in `build/export/` and `md/procedures/` and sequences in `md/sequences/` against the snapshot, using the collection's `static/` for scheme images. Errors fail the command; warnings do not. |
-| `build` | Reads the registry, runs export and validation, stages the registry's substances for the site, builds into `public/` with Hugo, then indexes it with Pagefind. A validation error stops the command before Hugo. |
+| `build` | Reads the registry, runs export and validation, stages the registry's substances and account names for the site, builds into `public/` with Hugo, then indexes it with Pagefind. A validation error stops the command before Hugo. |
 | `serve [--port N]` | Runs `build`, then serves `public/` on `http://127.0.0.1:N/` until `Ctrl-C`. The default port is `8000`. |
 | `pdf` | Runs `build`, removes the previous `pdf/`, and renders every procedure to `pdf/<source-file-name>.pdf` with WeasyPrint. |
 | `new [--md] [--lang LANG] TITLE...` | Creates an Org stub with the next free ID, or a Markdown stub with `--md`. `--lang de` or `--lang en` creates a stub in that language named `<ID>-<slug>.<LANG>.org` or `.md`. It never overwrites an existing file. |
@@ -1043,8 +1062,8 @@ prefix are relative to the collection.
 | `clean` | Removes `build/`, `public/`, and `pdf/`. |
 | `clean --all` | Also removes the application's `.emacs-batch/` and `.tools/`. Their contents are fetched again on the next relevant run. |
 | `check-deps` | Reports required tools; optional Emacs, Git, and Caddy; fetched tools; and the missing tool names when a required tool is missing. |
-| `index` | Reads the registry and prints the site language, procedure and sequence schema, registry source and digest, four compound fields, procedure declarations, vocabularies, substances, procedures and sequences as one line of JSON for an editor. Needs a collection but no external tool, takes no arguments and writes nothing. Lists Markdown files it cannot parse with the reason instead of failing. Org procedures are listed by file name only. Exits 1 on a configuration error, including an unreadable registry without a matching kept copy. |
-| `manifest` | After a build, prints the site language, published procedures with their scope entries, and sequences with their steps as one line of JSON for the lab application's import. Takes no arguments, reads no registry and writes no files. Collections with Org sources need `build/export/`; run `build` first. |
+| `index` | Reads the registry and prints the site language, procedure and sequence schema, registry source and digest, four compound fields, procedure declarations, accounts, vocabularies, substances, procedures and sequences as one line of JSON for an editor. Needs a collection but no external tool, takes no arguments and writes nothing. Lists Markdown files it cannot parse with the reason instead of failing. Org procedures are listed by file name only. Exits 1 on a configuration error, including an unreadable registry without a matching kept copy. |
+| `manifest` | After a build, prints the site language, published procedures with their author user names in file order and their scope entries, and sequences with their steps as one line of JSON for the lab application's import. Takes no arguments, reads no registry and writes no files. Collections with Org sources need `build/export/`; run `build` first. |
 | `help` | Prints the command summary. `-h` and `--help` do the same. |
 
 The program exits 0 on success, 1 on failure, and 2 on a usage error.
@@ -1071,18 +1090,25 @@ procedure with a future date is built immediately.
 
 For a direct validator invocation, `--registry FILE` chooses the snapshot;
 it defaults to `build/registry.json` in the working directory. The snapshot
-supplies substance keys, reaction types and the terms of procedure choice
-fields. A registry with no reaction-type terms makes every procedure's
+supplies account user names, substance keys, reaction types and the terms of
+procedure choice fields. A registry with no reaction-type terms makes every procedure's
 reaction type unknown. The lab application checks substance values. The
 validator also refuses a substance keyed `group`, which the lab application
 does not create, reporting field `substances` on the registry path as
 given. Unknown references report:
 
 ```text
+unknown author "<name>"; the registry has no account of this user name
 unknown compound "<key>"; the registry has no substance of this key
 unknown reaction type "<value>"; the registry has no such reaction type
 unknown value "<value>" of the vocabulary <name>
 ```
+
+Under `authors`, a repeated user name reports `"<name>" is named twice`.
+A value that is not a list of strings reports
+`must be a list of user names, e.g. ["a.example"]`; an empty list reports
+`must not be empty`. The singular `author` key reports
+`use authors, a list of user names`.
 
 `--settings FILE` chooses the collection's `orgsyndb.toml` for a direct
 validator invocation. Its declarations check procedures, including Org
@@ -1102,10 +1128,11 @@ to standard error with no standard output. The options `--compounds` and
 `--vocabulary` are usage errors with exit 2.
 
 The JSON from `orgsyndb index` has the keys `site_language`, `schema`,
-`registry`, `fields`, `vocabularies`, `compounds`, `procedures` and
+`registry`, `fields`, `accounts`, `vocabularies`, `compounds`, `procedures` and
 `sequences`. `schema` describes procedures and sequences. `registry`
 holds `source` and `digest`; `fields.compound` lists the four built-in
-fields and `fields.procedure` the collection's declarations. Each
+fields and `fields.procedure` the collection's declarations. `accounts`
+lists the snapshot's accounts, each with `username` and `name`. Each
 `compounds` entry holds `key`, `data` as staged for the site, and `url`.
 For an HTTP registry, `url` is
 `<origin>/lab/registry/substances/<key>/`, using the registry address's
@@ -1148,7 +1175,7 @@ input files and collection directories must be available inside `app`.
 | Command | What it does |
 |---|---|
 | `registry_import COLLECTION` | Fills an empty lab registry from a collection in the old layout, containing `compounds/` and four vocabularies under `vocabularies/`. See [Substance registry](#substance-registry) for required fields and fields left out. |
-| `registry_load FILE` | Fills an empty lab registry from a JSON snapshot, including article numbers. Invalid input leaves the registry unchanged. |
+| `registry_load FILE` | Fills an empty lab registry from a JSON snapshot, including article numbers. Ignores accounts and creates none. Invalid input leaves the registry unchanged. |
 | `demo_data [--replace \| --if-empty]` | Loads the demo registry and invented lab records. Requires `ORGSYNDB_DEMO=true`; see [Demo deployment](#demo-deployment) for the replacement and startup rules. |
 | `schema_diagram [--check] [--output PATH]` | Writes the database diagram, or checks it without writing with `--check`. See [Lab application tests and local server](#lab-application-tests-and-local-server). |
 
@@ -1159,7 +1186,7 @@ These directories are generated and must not be committed. The collection's
 
 | Directory | Where | Contents |
 |---|---|---|
-| `build/` | collection | The snapshot last read in `registry.json` and its source in `registry.source`, Org exports, selected procedure and sequence variants under `content/`, one JSON file per substance in `data/compounds/`, registry fields and procedure declarations with display and filter settings and vocabulary labels, paths, ancestors and tree order in `data/fields.json`, reaction-type labels in `data/reaction_types.json`, derived routes in `data/routes.json`, the generated Hugo configuration overlay, Hugo's resource cache, temporary export data, and `export.log`. |
+| `build/` | collection | The snapshot last read in `registry.json` and its source in `registry.source`, Org exports, selected procedure and sequence variants under `content/`, one JSON file per substance in `data/compounds/`, registry fields and procedure declarations with display and filter settings and vocabulary labels, paths, ancestors and tree order in `data/fields.json`, reaction-type labels in `data/reaction_types.json`, account user names mapped to their names in `data/authors.json`, derived routes in `data/routes.json`, the generated Hugo configuration overlay, Hugo's resource cache, temporary export data, and `export.log`. |
 | `public/` | collection | The complete static website and Pagefind index. |
 | `pdf/` | collection | One generated PDF per procedure. |
 | `.emacs-batch/` | application | The application's own ox-hugo and tomelr installations. |
@@ -1500,11 +1527,18 @@ To create the first administrator account, run this from `deploy/`:
 docker compose exec app python manage.py createsuperuser
 ```
 
-The command asks for a user name, email, initials and password. Sign in
-at `/lab/admin/` to create further accounts. The admin requires staff
+The command asks for a user name, email, initials and password. User names
+follow Forgejo's rule: at most 40 characters, using ASCII letters and
+digits with single `.`, `-` or `_` between them. A user name must start and
+end with a letter or digit. Choose it before creating the account: it
+cannot change later, and the admin shows it read-only.
+
+Sign in at `/lab/admin/` to create further accounts. The admin requires staff
 status. You can assign tasks to an account without a usable password
 for a person who never signs in. Users change their own password through
-their initials in the header, at `/lab/accounts/password/`.
+their initials in the header, at `/lab/accounts/password/`. Procedure files
+credit authors by user name. The site displays their account names; changing
+a person's name changes the registry digest and triggers a site rebuild.
 
 You cannot delete accounts in the admin, so their names stay on the task
 history they wrote. To remove someone's access, deactivate their account
@@ -1631,7 +1665,8 @@ ORGSYNDB_DEMO=true
 The command loads the demo registry from `webapp/demo/registry.json`
 after creating the accounts, before entering stock and tasks. This is also
 the snapshot named by `examples/demo/orgsyndb.toml`; the demo collection
-has no compound or vocabulary files. It contains 21 substances and four
+has no compound or vocabulary files. The snapshot lists all five demo
+accounts with their names. It contains 21 substances and four
 vocabularies, including `new-compound-7` (**Neuverbindung 7** / **New
 compound 7**). That substance's history starts on the demo's opening day,
 recorded by `klehmann`.
@@ -1843,8 +1878,8 @@ show their first ten characters. Triggers are **Commit**, **Registry**,
 A refused import lists its errors, one per line. Before any import, the
 page shows **No imports yet.**
 
-Only an accepted import writes the collection's procedures, scope entries
-and their substances, sequences and steps into the app's database. A
+Only an accepted import writes the collection's procedures, their authors,
+scope entries and their substances, sequences and steps into the app's database. A
 **scope entry** is one combination of substrates and products in a
 procedure. The app matches it within its procedure by the sorted
 substance keys on each side of `substrates >> products`. Changing yields
@@ -1853,15 +1888,20 @@ entry and withdraws the old one. A procedure or sequence absent from an
 accepted import is marked withdrawn rather than deleted. Within an
 imported procedure, an entry removed from its scope is also withdrawn.
 
+The app keeps each procedure's authors as account rows, in file order.
+An accepted import replaces that list when it differs from the manifest.
+
 The app refuses an import when a procedure names an unknown substance or
-reaction type, two entries of one procedure have the same substances, or
-an ID occurs twice. It also refuses a sequence with an unknown target
+reaction type, an author's user name has no account, two entries of one
+procedure have the same substances, or an ID occurs twice. It also refuses
+a sequence with an unknown target
 substance or a step naming a procedure outside the collection or an entry
-that procedure does not have. A procedure must have at least one entry.
+that procedure does not have. An unknown author reports
+`<ID>: unknown author "<name>"`. A procedure must have at least one entry.
 The refused import records every error and changes no procedure, entry
 or sequence. Staff can inspect imports, procedures and sequences in
-`/lab/admin/`; these records are read-only, with no add, edit or delete
-actions.
+`/lab/admin/`, including each procedure's author rows; these records are
+read-only, with no add, edit or delete actions.
 
 #### Add substances and vocabulary terms
 
@@ -1919,9 +1959,15 @@ each.
 To copy substance and vocabulary data from another lab, save
 `/lab/registry/snapshot.json` from that server and load the saved file
 with `registry_load FILE`. This JSON **snapshot** includes the four
-vocabularies, substances and article numbers, with a format number and a
-digest, a fingerprint that changes with the registry's contents.
-Downloading it needs no sign-in. Both commands load everything in one transaction;
+vocabularies, substances and article numbers. Its `accounts` list contains
+every account, active or not, ordered by user name, with `username` and
+`name`, the account's display name. It also includes a format number, the
+latest accepted collection import and a digest, a fingerprint of its
+contents. The digest covers accounts, so changing a person's name triggers
+a site rebuild; accepting an import does not change the digest.
+`registry_load` ignores accounts and creates none. Create accounts in the
+lab application's admin. Downloading the snapshot needs no sign-in.
+Both commands load substance and vocabulary data in one transaction;
 an unknown format, broken reference or invalid value leaves the registry
 unchanged. Errors identify the record and field. The
 [command reference](#lab-application-commands) gives local and container
@@ -1932,8 +1978,8 @@ the collection, as described under [Compound registry](#compound-registry).
 A rebuild accepted by the lab application publishes changes to substances
 and terms on the static site; refresh the Emacs index to read those
 changes in the editor. The lab application reads the collection's
-procedures, scope entries, sequences and their steps from accepted
-imports stored in its database. Tasks use these imported sequences and
+procedures, their authors, scope entries, sequences and their steps from
+accepted imports stored in its database. Tasks use these imported sequences and
 scope entries. The latest accepted import supplies the interface language
 and determines when substance pages link to the collection. Substance
 names, molar masses and article numbers come directly from the lab registry.
@@ -2463,8 +2509,9 @@ builds nothing. Its log begins `ORGSYNDB_BUILDER_TOKEN is not set`.
 A build is needed when the collection commit, registry digest or
 application commit differs from the latest accepted import's, or that
 import's release is missing. The digest is a fingerprint of the registry's
-contents. Accepting an import does not change it. The manifest records
-the first matching trigger in this order:
+contents, including accounts and their names. Changing a person's name
+therefore triggers a rebuild. Accepting an import does not change the
+digest. The manifest records the first matching trigger in this order:
 
 | Trigger | When it applies |
 |---|---|
@@ -2492,8 +2539,9 @@ Staging leaves the served site in place.
 The builder then posts the manifest to `ORGSYNDB_MANIFEST_URL`, with
 `Authorization: Bearer <token>` using `ORGSYNDB_BUILDER_TOKEN`, the
 snapshot request's `Host`, and a 30-second timeout. The manifest describes
-the collection's language, procedures, scope entries, sequences and
-steps. It also identifies the build, commits, registry digest, latest
+the collection's language, procedures with their author user names in file
+order, scope entries, sequences and steps. It also identifies the build,
+commits, registry digest, latest
 accepted import used as its base, trigger and staged release. The app
 accepts a build only while that base is still the latest accepted import
 and the registry digest is still current, and after checking the

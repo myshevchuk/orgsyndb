@@ -54,10 +54,11 @@ HELP_STAGED = Path("content") / "help"
 # The data of each substance, which Hugo reads as site.Data.compounds,
 # under build/.
 COMPOUNDS_STAGED = Path("data") / "compounds"
-# The field, reaction-type and route data Hugo reads as
+# The field, reaction-type, author and route data Hugo reads as
 # site.Data.collection, under build/.
 FIELDS_STAGED = Path("data") / "fields.json"
 REACTION_TYPES_STAGED = Path("data") / "reaction_types.json"
+AUTHORS_STAGED = Path("data") / "authors.json"
 ROUTES_STAGED = Path("data") / "routes.json"
 # The depth limit and the step budget of the route trees the build
 # derives.
@@ -1143,6 +1144,14 @@ def reaction_types_data(registry: dict[str, Any],
             for value, term in terms.items()}
 
 
+def authors_data(registry: dict[str, Any]) -> dict[str, str]:
+    """Return the author data that the site reads for the collection
+    whose registry snapshot is REGISTRY: the user name of every account
+    of the registry, in the snapshot's order, mapped to the account's
+    name. A registry without accounts gives an empty table."""
+    return validate.registry_accounts(registry)
+
+
 def compound_data(substance: dict[str, Any],
                   static: Path) -> dict[str, Any]:
     """Return the data the site reads for SUBSTANCE, a substance of a
@@ -1390,7 +1399,9 @@ def index_data(collection: Path) -> dict[str, Any]:
     ``registry_source`` names it and the snapshot's ``digest``;
     ``fields``, the registry fields under ``compound`` and the
     collection's procedure declarations under ``procedure``, each with
-    the options of its type and its defaults applied; ``vocabularies``,
+    the options of its type and its defaults applied; ``accounts``, the
+    registry's accounts in the snapshot's order, each a table of
+    ``username`` and ``name``; ``vocabularies``,
     the registry's vocabularies, each mapping its terms, in the
     snapshot's order, to their ``label``, ``label_de`` and ``parent``;
     ``compounds``, one entry per substance, by key, with its ``key``,
@@ -1447,6 +1458,9 @@ def index_data(collection: Path) -> dict[str, Any]:
                 field, validate.FIELD_OPTIONS
                 + validate.TYPE_OPTIONS[field.type])
                 for field in procedure]},
+        "accounts": [{"username": username, "name": name}
+                     for username, name
+                     in validate.registry_accounts(table).items()],
         "vocabularies": {name: _terms_data(terms)
                          for name, terms in vocabularies.items()},
         "compounds": sorted(compounds, key=lambda item: item["key"]),
@@ -1522,6 +1536,7 @@ def _procedure_data(path: Path, data: dict[str, Any], export: Path,
             "title_de": title_de,
             "reaction_type": types[0],
             "general": bool(scope),
+            "authors": list(data.get("authors") or ()),
             "entries": entries}
 
 
@@ -1539,7 +1554,8 @@ def manifest_data(collection: Path) -> dict[str, Any]:
     its ``id``, ``source`` (``org`` for an export, else ``md``),
     ``title``, ``title_de`` (the title of the ID's file tagged ``de``,
     or None), ``reaction_type`` (the first of ``reaction_types``),
-    ``general`` (whether it has ``scope``) and ``entries``, one per
+    ``general`` (whether it has ``scope``), ``authors`` (the user names
+    of ``authors``, in file order) and ``entries``, one per
     element of ``scope`` or else one of the top-level substrates and
     products, each a table of ``substrates``, keys in file order, and
     ``products``, tables of ``compound`` and ``yield_percent``; a

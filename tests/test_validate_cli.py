@@ -76,7 +76,9 @@ class CommandLineInterfaceTests(ValidatorTestCase):
                     "reaction-types": [term("esterification",
                                             "Esterification",
                                             tree=False)]},
-                "substances": [substance("ethyl-acetate")]})
+                "substances": [substance("ethyl-acetate")],
+                "accounts": [{"username": "a.example",
+                              "name": "A. Example"}]})
             result = run_validator(
                 ["--settings", SETTINGS, "--static-dir", STATIC_DIR,
                  "--registry", registry, BASELINE.parent])

@@ -134,7 +134,7 @@ class TranslatedFileTests(ValidatorTestCase):
                 replace("title", 'title = "Essigsäureethylester"'),
                 replace("hazards", 'hazards = ["Entzündbare Flüssigkeit"]'),
                 replace("scale", 'scale = "25,0 mmol"'),
-                replace("authors", 'authors = ["Ü. Example"]'))),
+                replace("authors", 'authors = ["b.example"]'))),
         }))
 
     def test_two_files_of_one_language_with_one_id(self) -> None:

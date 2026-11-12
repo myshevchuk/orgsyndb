@@ -204,6 +204,7 @@ class CatalogueCase(fs.ProcedureFieldsMixin, ps.ThemeBuildCase):
         the three statuses) with its display label. A declared facet
         lists its values in the order the catalogue shows them."""
         labels = self.labels()
+        names = ps.account_names(self.sandbox)
         found: dict[str, dict[str, str]] = {
             "type": {}, "kind": dict(self.texts["kinds"]),
             "status": dict(self.texts["status"]), "tag": {}, "author": {}}
@@ -218,7 +219,8 @@ class CatalogueCase(fs.ProcedureFieldsMixin, ps.ThemeBuildCase):
                 found["tag"][ps.term_key("tags", tag)] = tag
             for author in item.data["authors"]:
                 found["author"].setdefault(
-                    ps.term_key("authors", author), author)
+                    ps.term_key("authors", author),
+                    ps.author_name(names, author))
         return found
 
     def term_names(self, taxonomy: str) -> dict[str, str]:

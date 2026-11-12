@@ -24,7 +24,8 @@ APP_TABLES = {
     "tasks_task", "tasks_taskstep", "tasks_counter", "planning_parameters",
     "demo_demomark",
     "collection_import", "collection_procedure", "collection_scopeentry",
-    "collection_entrysubstance", "collection_sequence", "collection_step"}
+    "collection_entrysubstance", "collection_sequence", "collection_step",
+    "collection_procedureauthor"}
 
 
 def by_name(items: tuple, name: str):
@@ -638,6 +639,7 @@ class PageTests(unittest.TestCase):
                     ("inventory_enteredconsumption", "entered_by_id"),
                     ("tasks_task", "assignee_id"),
                     ("tasks_task", "created_by_id"),
+                    ("collection_procedureauthor", "user_id"),
                     (sd.HISTORY, "history_user_id")]))
         self.assertTrue(all(e["class"] == "kind-user" for e in to_people))
         self.assertIn(">set null<",

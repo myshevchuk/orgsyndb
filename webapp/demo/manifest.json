@@ -8,6 +8,10 @@
       "title_de": "Salicylsäure",
       "reaction_type": "hydrolysis",
       "general": false,
+      "authors": [
+        "klehmann",
+        "tbauer"
+      ],
       "entries": [
         {
           "substrates": [
@@ -29,6 +33,10 @@
       "title_de": "Aspirin (Acetylsalicylsäure)",
       "reaction_type": "acylation",
       "general": false,
+      "authors": [
+        "klehmann",
+        "aschmidt"
+      ],
       "entries": [
         {
           "substrates": [
@@ -51,6 +59,10 @@
       "title_de": "Isopentylacetat",
       "reaction_type": "esterification",
       "general": false,
+      "authors": [
+        "tbauer",
+        "jkoch"
+      ],
       "entries": [
         {
           "substrates": [
@@ -73,6 +85,10 @@
       "title_de": "4-Acetylbiphenyl",
       "reaction_type": "cross-coupling",
       "general": false,
+      "authors": [
+        "aschmidt",
+        "mwolf"
+      ],
       "entries": [
         {
           "substrates": [
@@ -95,6 +111,9 @@
       "title_de": "1-(Biphenyl-4-yl)ethanol",
       "reaction_type": "reduction",
       "general": false,
+      "authors": [
+        "mwolf"
+      ],
       "entries": [
         {
           "substrates": [
@@ -116,6 +135,10 @@
       "title_de": "Dibenzylidenaceton",
       "reaction_type": "aldol-condensation",
       "general": false,
+      "authors": [
+        "jkoch",
+        "klehmann"
+      ],
       "entries": [
         {
           "substrates": [
@@ -138,6 +161,9 @@
       "title_de": "Zimtsäureethylester",
       "reaction_type": "olefination",
       "general": false,
+      "authors": [
+        "aschmidt"
+      ],
       "entries": [
         {
           "substrates": [
@@ -160,6 +186,10 @@
       "title_de": "Zimtsäure",
       "reaction_type": "hydrolysis",
       "general": false,
+      "authors": [
+        "aschmidt",
+        "tbauer"
+      ],
       "entries": [
         {
           "substrates": [
@@ -181,6 +211,9 @@
       "title_de": "Sekundäre Benzylalkohole durch Reduktion mit Natriumborhydrid",
       "reaction_type": "reduction",
       "general": true,
+      "authors": [
+        "mwolf"
+      ],
       "entries": [
         {
           "substrates": [

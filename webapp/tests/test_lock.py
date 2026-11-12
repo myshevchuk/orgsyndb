@@ -19,7 +19,8 @@ from django.db.models.signals import post_save
 from django.test import TestCase, TransactionTestCase, override_settings
 
 from . import (load_demo_registry, make_article, make_class,
-               make_group, make_substance, make_user, page)
+               make_demo_accounts, make_group, make_substance, make_user,
+               page)
 from .collection_support import TOKEN, manifest, post, refused
 from .registry_support import (NEW_SUBSTANCE, OLD_LAYOUT, small_snapshot,
                                term_url, write_json)
@@ -392,6 +393,7 @@ class ManifestTests(LockCase):
     def setUp(self) -> None:
         super().setUp()
         load_demo_registry()
+        make_demo_accounts()
 
     def test_an_accepted_manifest(self) -> None:
         from collection.models import Import
@@ -412,4 +414,28 @@ class ManifestTests(LockCase):
         with self.recording() as calls:
             done = post(self.client, manifest(base=999))
         self.assertEqual(done.status_code, 409, done.content)
+        self.assertLocked(calls)
+
+
+class AccountWritesTests(LockCase):
+    """Scenario: Account writes take the lock."""
+
+    def test_a_rename_takes_the_lock(self) -> None:
+        self.kl.last_name = "Lange"
+        with self.recording() as calls:
+            self.kl.save()
+        self.assertLocked(calls)
+
+    def test_a_sign_in_takes_no_lock(self) -> None:
+        self.kl.set_password("demo")
+        self.kl.save()
+        with self.recording() as calls:
+            self.assertTrue(self.client.login(username="kl",
+                                              password="demo"))
+        self.assertEqual(calls, [])
+
+    def test_a_bulk_rename_takes_the_lock(self) -> None:
+        from accounts.models import User
+        with self.recording() as calls:
+            User.objects.filter(pk=self.kl.pk).update(last_name="Lange")
         self.assertLocked(calls)

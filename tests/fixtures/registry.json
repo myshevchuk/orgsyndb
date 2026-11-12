@@ -292,5 +292,43 @@
       "article_number": null
     }
   ],
-  "digest": "97b8db1cee56f7136991ac5eb65b2fd280b2c12417f6199bbfa3753bd3ee43f4"
+  "accounts": [
+    {
+      "username": "a.example",
+      "name": "A. Example"
+    },
+    {
+      "username": "ae.mueller",
+      "name": "Ä. Müller"
+    },
+    {
+      "username": "b.example",
+      "name": "B. Example"
+    },
+    {
+      "username": "c.example",
+      "name": "C. Example"
+    },
+    {
+      "username": "d.example",
+      "name": "D. Example"
+    },
+    {
+      "username": "e.example",
+      "name": "E. Example"
+    },
+    {
+      "username": "f.example",
+      "name": "F. Example"
+    },
+    {
+      "username": "g.example",
+      "name": "G. Example"
+    },
+    {
+      "username": "h.muster",
+      "name": "H. Muster"
+    }
+  ],
+  "digest": "c478cbb1af6253b9256c73ce09e46742d7175a13e70b3d927326163724fc2df8"
 }

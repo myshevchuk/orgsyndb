@@ -24,7 +24,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 
-from . import BERLIN, load_demo_registry
+from . import BERLIN, load_demo_registry, make_demo_accounts
 
 MANIFEST = "/lab/collection/manifest/"
 IMPORTS = "/lab/collection/"
@@ -34,6 +34,14 @@ TOOLING = "b" * 40
 # The numbers of the demo collection's procedures and sequences.
 PROCEDURES = 9
 SEQUENCES = 2
+# The user names the demo's procedures credit, in the order of their
+# files (sample-procedures "Sample marking").
+DEMO_CREDITS = {
+    "OSDB-0001": ["klehmann", "tbauer"], "OSDB-0002": ["klehmann", "aschmidt"],
+    "OSDB-0003": ["tbauer", "jkoch"], "OSDB-0004": ["aschmidt", "mwolf"],
+    "OSDB-0005": ["mwolf"], "OSDB-0006": ["jkoch", "klehmann"],
+    "OSDB-0007": ["aschmidt"], "OSDB-0008": ["aschmidt", "tbauer"],
+    "OSDB-0009": ["mwolf"]}
 
 _commits = itertools.count(1)
 
@@ -47,6 +55,21 @@ def commit_id() -> str:
 def demo_collection() -> dict[str, Any]:
     """The collection half of the demo's manifest, as a new copy."""
     return json.loads(FIXTURE.read_text(encoding="utf-8"))
+
+
+def credited(collection: dict[str, Any] | None = None,
+             **authors: list[str]) -> dict[str, Any]:
+    """The collection half of a manifest, the demo's by default, as a
+    new copy in which each procedure's ``authors`` are those of
+    ``DEMO_CREDITS``, but for the procedures ``authors`` names by ID
+    with an underscore in place of the hyphen (``OSDB_0002``)."""
+    data = copy.deepcopy(demo_collection() if collection is None
+                         else collection)
+    for procedure in data["procedures"]:
+        key = procedure["id"]
+        procedure["authors"] = list(
+            authors.get(key.replace("-", "_"), DEMO_CREDITS[key]))
+    return data
 
 
 def current_digest() -> str:
@@ -265,6 +288,35 @@ def rows(model: str) -> list[dict[str, Any]]:
         "pk").values())
 
 
+def author_rows() -> list[tuple[str, str, int]]:
+    """The procedure, the user name and the position of every row of
+    the procedure authors, by procedure and position."""
+    from collection.models import ProcedureAuthor
+    return [(row.procedure.key, row.user.username, row.position)
+            for row in ProcedureAuthor.objects.select_related(
+                "procedure", "user").order_by("procedure__key", "position")]
+
+
+def authors_of(key: str) -> list[str]:
+    """The user names of the authors of the procedure ``key``, by
+    position."""
+    from collection.models import ProcedureAuthor
+    return [row.user.username for row in ProcedureAuthor.objects.filter(
+        procedure__key=key).select_related("user").order_by("position")]
+
+
+def make_author(procedure: Any, username: str, position: int = 1,
+                **fields: Any) -> Any:
+    """The account ``username`` as an author of ``procedure``."""
+    from django.contrib.auth import get_user_model
+
+    from collection.models import ProcedureAuthor
+    return ProcedureAuthor.objects.create(
+        procedure=procedure,
+        user=get_user_model().objects.get(username=username),
+        position=position, **fields)
+
+
 def counts() -> dict[str, int]:
     """The number of rows of each model of the app ``collection``."""
     from django.apps import apps
@@ -309,12 +361,13 @@ def steps_of(key: str) -> list[tuple[str, int]]:
 
 @override_settings(ORGSYNDB_BUILDER_TOKEN=TOKEN)
 class ImportCase(TestCase):
-    """A test case whose database holds the demo registry, with the
-    builder's token set."""
+    """A test case whose database holds the demo registry and the demo
+    accounts, with the builder's token set."""
 
     @classmethod
     def setUpTestData(cls) -> None:
         load_demo_registry()
+        make_demo_accounts()
 
     def send(self, body: Any, token: str | None = TOKEN) -> Any:
         """Post ``body`` to the manifest view."""

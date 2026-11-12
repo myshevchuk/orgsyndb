@@ -558,6 +558,61 @@ test collection; SPEC is (ROOT), the variable that holds the copy."
                               (orgsyndb-test-annotation
                                result "first-year-practical"))))))
 
+(ert-deftest orgsyndb-test-complete-authors ()
+  "Scenario: Authors (the user names of the index's accounts, each
+annotated with its name)."
+  (orgsyndb-test-in-aspirin (_root)
+    (orgsyndb-test-put-line "authors = " "authors = [\"ae¦\"]")
+    (let ((result (orgsyndb-test-complete)))
+      (should (equal (car result) '("ae.mueller")))
+      (should (string-match-p "Ä. Müller"
+                              (orgsyndb-test-annotation result
+                                                        "ae.mueller"))))))
+
+(ert-deftest orgsyndb-test-complete-authors-in-a-later-element ()
+  "Scenario: Authors (an entry of the array value)."
+  (orgsyndb-test-in-aspirin (_root)
+    (orgsyndb-test-put-line "authors = "
+                            "authors = [\"klehmann\", \"a¦\"]")
+    (let ((result (orgsyndb-test-complete)))
+      (should (equal (sort (copy-sequence (car result)) #'string<)
+                     '("a.example" "ae.mueller" "aschmidt")))
+      (should (string-match-p "Anna Schmidt"
+                              (orgsyndb-test-annotation result
+                                                        "aschmidt"))))))
+
+(ert-deftest orgsyndb-test-complete-an-account-no-procedure-names ()
+  "Scenario: Authors (every account of the registry, whether or not a
+procedure names it)."
+  (orgsyndb-test-in-aspirin (_root)
+    (orgsyndb-test-put-line "authors = " "authors = [\"h.m¦\"]")
+    (let ((result (orgsyndb-test-complete)))
+      (should (equal (car result) '("h.muster")))
+      (should (string-match-p "H. Muster"
+                              (orgsyndb-test-annotation result
+                                                        "h.muster"))))))
+
+(ert-deftest orgsyndb-test-complete-checkers-from-the-names-in-use ()
+  "Scenario: Authors (`checked_by' offers the names that the procedures
+use under that key, and `authors' offers none of them)."
+  (orgsyndb-test-with (root orgsyndb-test-collection)
+    (let* ((file "md/procedures/OSDB-0003-isopentyl-acetate.md")
+           (text (with-temp-buffer
+                   (insert-file-contents (expand-file-name file root))
+                   (buffer-string))))
+      (orgsyndb-test-write
+       root file
+       (string-replace "status = \"draft\"\n"
+                       "status = \"draft\"\nchecked_by = [\"Zed Checker\"]\n"
+                       text)))
+    (with-current-buffer (orgsyndb-test-visit
+                          root "md/procedures/OSDB-0002-aspirin.md")
+      (orgsyndb-test-put "status = \"draft\""
+                         "status = \"draft\"\nchecked_by = [\"Zed¦\"]")
+      (should (equal (car (orgsyndb-test-complete)) '("Zed Checker")))
+      (orgsyndb-test-put-line "authors = " "authors = [\"Zed¦\"]")
+      (should-not (car (orgsyndb-test-complete))))))
+
 (ert-deftest orgsyndb-test-complete-keys-not-yet-set ()
   "Scenario: Keys not yet set."
   (orgsyndb-test-in-aspirin (_root)
@@ -627,6 +682,16 @@ a Summary, visit it, put point at its mark and complete."
                                       "'(((compound . \"ethyl-c¦\") "
                                       "(yield_percent . 80)))\n")))
                    '("ethyl-cinnamate")))))
+
+(ert-deftest orgsyndb-test-complete-authors-in-an-org-source ()
+  "Scenario: Authors (in an Org source, from the demo's accounts)."
+  (orgsyndb-test-with (root orgsyndb-test-demo)
+    (let ((result (orgsyndb-test-org-complete
+                   root (concat "#+HUGO_CUSTOM_FRONT_MATTER: "
+                                ":authors '(\"tb¦\")\n"))))
+      (should (equal (car result) '("tbauer")))
+      (should (string-match-p "Tobias Bauer"
+                              (orgsyndb-test-annotation result "tbauer"))))))
 
 (ert-deftest orgsyndb-test-complete-tags ()
   "Scenario: Tags."

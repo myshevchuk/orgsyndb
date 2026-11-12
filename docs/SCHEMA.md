@@ -73,7 +73,7 @@ The site derives the kind from `scope`; do not add a `kind` field.
 | `title` | The procedure heading, usually naming what it makes. | Non-empty string | Yes | Must not be empty. | `title = "Product Name"` |
 | `date` | When the procedure was created. | Offset datetime | Yes | Must be unquoted. Its offset should be the Europe/Berlin offset in force at that instant. | `date = 2026-10-19T17:42:05+02:00` |
 | `lastmod` | When the procedure was last changed. | Offset datetime | Yes | Must be unquoted, must not be earlier than `date`, and should use the Europe/Berlin offset in force at that instant. | `lastmod = 2026-10-19T17:42:05+02:00` |
-| `authors` | Everyone who wrote the procedure. | Non-empty array of non-empty strings | Yes | Must contain at least one name. | `authors = ["A. Example"]` |
+| `authors` | The lab accounts of everyone who wrote the procedure. | Non-empty array of user-name strings | Yes | Each user name must belong to an account listed in the collection's registry, active or not, and occur only once. | `authors = ["klehmann", "aschmidt"]` |
 | `status` | The procedure's workflow state. | String | Yes | Must be exactly `draft`, `checked`, or `retired`. | `status = "draft"` |
 | `reaction_types` | The controlled reaction category. | Array of strings | Yes | Must contain exactly one slug from the registry's `reaction-types` vocabulary. | `reaction_types = ["esterification"]` |
 | `tags` | Search terms for the procedure. | Non-empty array of strings | Yes | Every tag must contain lowercase letters or digits, with single hyphens between groups. | `tags = ["acid-catalysed"]` |
@@ -85,6 +85,25 @@ A date with a non-Berlin offset is still an exact instant, so it produces a
 warning rather than an error. A quoted datetime, a datetime without an
 offset, or a bare date is an error. The validator compares `date` and
 `lastmod` as instants, including their offsets.
+
+### Authors
+
+Use lab account user names in `authors`, each once. The registry snapshot
+lists accounts under `accounts`, each with `username` and `name`, its
+display name. Replace the template's `a.example` with your user name
+before validating.
+
+When staff create an account, its user name must follow Forgejo's rule:
+at most 40 characters, using ASCII letters and digits with single `.`,
+`-` or `_` between them. It must start and end with a letter or digit.
+The user name cannot change after account creation; the admin shows it
+read-only.
+
+The site shows the account's name as stored, including its capitalization.
+The **Authors** links in a procedure's metadata panel lead to
+`/authors/<user name>/`, for example `/authors/klehmann/`. The author
+directory, author pages and catalogue's **Author** facet also show account
+names. `checked_by` is a separate, free-text list of names.
 
 ### Products and starting materials
 
@@ -480,7 +499,10 @@ invalid regular expressions, non-finite bounds, `min` greater than `max`
 and duplicate declarations. A file explicitly named by `--settings` must
 exist. Settings must be readable UTF-8 TOML. A registry file must exist,
 be readable UTF-8 JSON and contain a format-1 snapshot with the four
-vocabularies and a list of substances.
+vocabularies and a list of substances. If it contains `accounts`, that
+value must be a list of tables, each with a non-empty string `username`
+and a string `name`, with no user name repeated. A snapshot without
+`accounts` lists no accounts, so no procedure author can be resolved.
 
 These are configuration errors: exit status 2, nothing on standard output,
 and `validate.py: error: ...` on standard error. Messages identify the
@@ -511,8 +533,9 @@ compounds have the registry's`. A single `[fields.procedure]` table produces
 
 The declaration number is its position within `fields.procedure`. Key errors,
 including duplicates and invalid spelling, identify `fields.procedure`.
-Malformed snapshot errors identify the offending vocabulary, term or
-substance. These check the snapshot's shape and types, not substance values.
+Malformed snapshot errors identify the offending vocabulary, term,
+substance or account. These check the snapshot's shape and types, not
+substance values.
 
 Commands that read the registry also require a registry source. Without
 `registry` or a non-empty `ORGSYNDB_REGISTRY`, they report `no registry named; set
@@ -739,7 +762,7 @@ The following keys are rejected:
 | Key or value | Why it is rejected | Use instead |
 |---|---|---|
 | `draft = true` | Workflow state belongs in the schema, and a true Hugo draft is not published. | `status = "draft"` and omit `draft`, or keep `draft = false` when an exporter emits it. |
-| `author = ["A. Example"]` | The schema uses the plural field. | `authors = ["A. Example"]` |
+| `author = ["klehmann"]` | The schema uses the plural field; the error is `use authors, a list of user names`. | `authors = ["klehmann"]` |
 | `url = "/procedures/osdb-0001/"` | The URL is derived from `slug`. | `slug = "osdb-0001"` |
 
 A key declared under `fields.procedure` is checked as a procedure field
@@ -1038,8 +1061,8 @@ Each positional `CONTENT_ROOT` is a directory of Markdown procedures.
 It resolves a procedure's `scheme_image` under that directory.
 `--registry` defaults to `build/registry.json` in the current directory.
 It takes a snapshot file, not an address. The validator checks procedure
-and sequence compound keys, reaction types and declared procedure values
-against that snapshot. It checks no substance values. An unreadable file
+and sequence compound keys, author user names, reaction types and declared
+procedure values against that snapshot. It checks no substance values. An unreadable file
 or a file that is not a snapshot is a configuration error, exit status 2.
 `--compounds` and `--vocabulary` are not accepted; either is a usage error,
 also exit status 2.
@@ -1074,6 +1097,15 @@ entry is reported under `products[n]`. A registry error uses the snapshot
 path as passed to `--registry` and field `substances`: a substance keyed
 `group` conflicts with the group tabs. Change its key in the lab application.
 Other possible fields are `file_name`, `front_matter`, `toml` and `body`.
+
+Author errors appear under `authors`:
+
+| Message | Correction |
+|---|---|
+| `must be a list of user names, e.g. ["a.example"]` | Use a list of quoted lab account user names. |
+| `must not be empty` | Name at least one author. |
+| `unknown author "<name>"; the registry has no account of this user name` | Check the user name and that the collection's registry snapshot lists the account. |
+| `"<name>" is named twice` | Keep each user name once. |
 
 Declared procedure-field errors name the Markdown source or Org export
 and the declared key, such as `notebook` or `project`. Look up their type,

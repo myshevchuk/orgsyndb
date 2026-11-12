@@ -19,7 +19,7 @@ The indexed text includes the metadata panel and the index-terms element. The pa
 - every starting material's name;
 - each tag;
 - the reaction-type label;
-- each author.
+- each author's name (procedure-authors "Author data for the site").
 
 #### Scenario: Metadata inside the body, chrome outside
 - **WHEN** a test scans every procedure page after a theme build

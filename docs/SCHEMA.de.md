@@ -84,7 +84,7 @@ Website leitet die Art aus `scope` ab; legen Sie kein Feld `kind` an.
 | `title` | Die Überschrift der Vorschrift, meist der Name des Produkts. | Nicht leerer String | Ja | Darf nicht leer sein. | `title = "Produktname"` |
 | `date` | Wann die Vorschrift angelegt wurde. | Datum mit Zeitzonenversatz | Ja | Ohne Anführungszeichen. Der Versatz sollte der zu diesem Zeitpunkt geltende von Europe/Berlin sein. | `date = 2026-10-19T17:42:05+02:00` |
 | `lastmod` | Wann die Vorschrift zuletzt geändert wurde. | Datum mit Zeitzonenversatz | Ja | Ohne Anführungszeichen, nicht früher als `date`, mit dem zu diesem Zeitpunkt geltenden Versatz von Europe/Berlin. | `lastmod = 2026-10-19T17:42:05+02:00` |
-| `authors` | Alle, die die Vorschrift geschrieben haben. | Nicht leeres Array nicht leerer Strings | Ja | Mindestens ein Name. | `authors = ["A. Example"]` |
+| `authors` | Die Laborkonten aller, die die Vorschrift geschrieben haben. | Nicht leeres Array von Benutzernamen als Strings | Ja | Jeder Benutzername muss zu einem Konto im Register der Sammlung gehören, ob aktiv oder nicht, und darf nur einmal vorkommen. | `authors = ["klehmann", "aschmidt"]` |
 | `status` | Der Bearbeitungsstand. | String | Ja | Genau `draft`, `checked` oder `retired`. Eine deutsche Website zeigt *Entwurf*, *geprüft* oder *zurückgezogen*. | `status = "draft"` |
 | `reaction_types` | Die festgelegte Reaktionsklasse. | String-Array | Ja | Genau ein Kürzel aus dem Vokabular `reaction-types` des Registers. | `reaction_types = ["esterification"]` |
 | `tags` | Suchbegriffe. | Nicht leeres String-Array | Ja | Jedes Schlagwort besteht aus Kleinbuchstaben oder Ziffern mit einzelnen Bindestrichen zwischen den Gruppen. | `tags = ["acid-catalysed"]` |
@@ -97,6 +97,28 @@ genauen Zeitpunkt und ergibt deshalb nur eine Warnung. Ein Datum in
 Anführungszeichen, ein Datum ohne Versatz oder ein bloßes Datum ist ein
 Fehler. Der Validator vergleicht `date` und `lastmod` als Zeitpunkte,
 einschließlich ihres Versatzes.
+
+### Autoren
+
+Verwenden Sie in `authors` die Benutzernamen der Laborkonten, jeden genau
+einmal. Der Register-Snapshot, die gespeicherte Kopie des Laborregisters,
+führt die Konten unter `accounts` auf. Jedes hat `username` und `name`,
+seinen Anzeigenamen. Ersetzen Sie das `a.example` der Vorlage vor der
+Prüfung durch Ihren Benutzernamen.
+
+Wenn die zuständigen Mitarbeitenden ein Konto anlegen, muss dessen
+Benutzername der Regel von Forgejo entsprechen: höchstens 40 Zeichen,
+ASCII-Buchstaben und Ziffern mit einzelnen `.`, `-` oder `_` dazwischen.
+Er muss mit einem Buchstaben oder einer Ziffer beginnen und enden. Nach
+dem Anlegen des Kontos kann der Benutzername nicht mehr geändert werden;
+die Verwaltung zeigt ihn schreibgeschützt an.
+
+Die Website zeigt den Namen des Kontos wie gespeichert, einschließlich
+der Groß- und Kleinschreibung. Die Links unter **Autoren** im Datenfeld
+einer Vorschrift führen zu `/authors/<user name>/`, zum Beispiel
+`/authors/klehmann/`. Das Autorenverzeichnis, die Autorenseiten und der
+Filter **Autor** im Katalog zeigen ebenfalls die Namen der Konten.
+`checked_by` ist eine getrennte, freie Liste von Namen.
 
 ### Produkte und Ausgangsstoffe
 
@@ -532,7 +554,11 @@ größer als `max` und doppelte Deklarationen. Eine mit `--settings`
 ausdrücklich benannte Datei muss vorhanden sein. Einstellungen müssen als
 UTF-8-TOML lesbar sein. Eine Registerdatei muss vorhanden und als UTF-8-JSON
 lesbar sein und einen Snapshot im Format 1 mit den vier Vokabularen und
-einer Stoffliste enthalten.
+einer Stoffliste enthalten. Enthält er `accounts`, muss dieser Wert eine
+Liste von Tabellen sein, jede mit einem nicht leeren String `username`
+und einem String `name`. Kein Benutzername darf mehrfach vorkommen. Ein
+Snapshot ohne `accounts` führt keine Konten auf; damit lässt sich kein
+Vorschriftenautor einem Konto zuordnen.
 
 Dies sind Konfigurationsfehler: Rückgabewert 2, keine Standardausgabe
 und `validate.py: error: ...` auf der Standardfehlerausgabe. Die Meldungen
@@ -565,8 +591,8 @@ Eine einzelne Tabelle `[fields.procedure]` ergibt
 Die Deklarationsnummer ist die Position innerhalb von `fields.procedure`.
 Schlüsselfehler, auch doppelte oder falsch geschriebene Schlüssel, nennen
 `fields.procedure`. Fehlerhafte Snapshots nennen das beanstandete Vokabular,
-den Begriff oder den Stoff. Diese Prüfungen betreffen Aufbau und Typen des
-Snapshots, nicht die Werte der Stoffe.
+den Begriff, den Stoff oder das Konto. Diese Prüfungen betreffen Aufbau
+und Typen des Snapshots, nicht die Werte der Stoffe.
 
 Befehle, die das Register lesen, benötigen außerdem eine Registerquelle.
 Ohne `registry` oder eine nicht leere Umgebungsvariable `ORGSYNDB_REGISTRY`
@@ -818,7 +844,7 @@ Diese Felder werden abgelehnt:
 | Feld oder Wert | Warum abgelehnt | Stattdessen |
 |---|---|---|
 | `draft = true` | Der Bearbeitungsstand gehört ins Schema, und ein echter Hugo-Entwurf wird nicht veröffentlicht. | `status = "draft"` und `draft` weglassen, oder `draft = false` behalten, wenn ein Exporter es schreibt. |
-| `author = ["A. Example"]` | Das Schema verwendet die Mehrzahl. | `authors = ["A. Example"]` |
+| `author = ["klehmann"]` | Das Schema verwendet die Mehrzahl; die Fehlermeldung lautet `use authors, a list of user names`. | `authors = ["klehmann"]` |
 | `url = "/procedures/osdb-0001/"` | Die URL ergibt sich aus `slug`. | `slug = "osdb-0001"` |
 
 Ein unter `fields.procedure` deklarierter Schlüssel wird als
@@ -1078,6 +1104,9 @@ Die Fassungen einer Vorschrift
   `scale`, `hazards`, `references`, `authors`, `checked_by`, `ai_model`,
   `language`, `date` und `lastmod`.
 
+Auch bei abweichenden `authors` muss jeder Benutzername genau einmal
+vorkommen und zu einem Konto im Register-Snapshot der Sammlung gehören.
+
 Der Validator vergleicht jede Fassung mit einer Bezugsfassung: der Datei ohne
 Kürzel, sonst der `.de`-Datei. Jede Abweichung ist ein Fehler an der anderen
 Fassung, der die Bezugsfassung nennt. Ein geänderter Produktschlüssel oder eine
@@ -1129,10 +1158,11 @@ Ohne Angabe ist `--static-dir` gleich `static` im aktuellen Verzeichnis.
 Der Validator sucht das `scheme_image` einer Vorschrift darunter.
 `--registry` ist ohne Angabe `build/registry.json` im aktuellen Verzeichnis.
 Die Option erwartet eine Snapshot-Datei, keine Adresse. Der Validator prüft
-Verbindungsschlüssel der Vorschriften und Synthesewege, Reaktionstypen und
-deklarierte Vorschriftenwerte gegen diesen Snapshot. Er prüft keine Werte
-der Stoffe. Eine nicht lesbare Datei oder eine Datei, die kein Snapshot
-ist, ergibt einen Konfigurationsfehler mit Rückgabewert 2. `--compounds` und
+Verbindungsschlüssel der Vorschriften und Synthesewege, Benutzernamen der
+Autoren, Reaktionstypen und deklarierte Vorschriftenwerte gegen diesen
+Snapshot. Er prüft keine Werte der Stoffe. Eine nicht lesbare Datei oder
+eine Datei, die kein Snapshot ist, ergibt einen Konfigurationsfehler mit
+Rückgabewert 2. `--compounds` und
 `--vocabulary` werden nicht akzeptiert; beide ergeben einen Aufruffehler,
 ebenfalls mit Rückgabewert 2.
 
@@ -1173,6 +1203,15 @@ Die Laboranwendung lässt diesen Schlüssel nicht zu; die Snapshot-Datei
 wurde also anders erzeugt. Geben Sie dem Stoff dort einen anderen Schlüssel.
 Weitere mögliche Felder sind `file_name`,
 `front_matter`, `toml` und `body`. Die Meldungen sind englisch.
+
+Autorenfehler erscheinen unter `authors`:
+
+| Meldung | Korrektur |
+|---|---|
+| `must be a list of user names, e.g. ["a.example"]` | Eine Liste von Benutzernamen der Laborkonten in Anführungszeichen angeben. |
+| `must not be empty` | Mindestens einen Autor nennen. |
+| `unknown author "<name>"; the registry has no account of this user name` | Den Benutzernamen prüfen und sicherstellen, dass der Register-Snapshot der Sammlung das Konto aufführt. |
+| `"<name>" is named twice` | Jeden Benutzernamen nur einmal behalten. |
 
 Fehler deklarierter Vorschriftenfelder nennen die Markdown-Quelle oder
 den Org-Export und den deklarierten Schlüssel, etwa `notebook` oder `project`.

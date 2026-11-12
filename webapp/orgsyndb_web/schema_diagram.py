@@ -138,7 +138,8 @@ class Schema:
 
 GRID = (
     (("inventory_deliverynote",), ("inventory_movement",),
-     ("inventory_lotmovement",), (HUB,), ("collection_import",)),
+     ("inventory_lotmovement",), (HUB,),
+     ("collection_import", "collection_procedureauthor")),
     (("inventory_deliveryline",), ("inventory_item",),
      ("inventory_enteredconsumption",), ("inventory_lot",),
      ("collection_procedure", "collection_scopeentry")),

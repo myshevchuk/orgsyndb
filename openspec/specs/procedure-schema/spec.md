@@ -61,7 +61,7 @@ Every procedure SHALL carry, in its TOML front matter, each of the following key
 - `title`: non-empty string, the procedure's heading, usually naming what it makes
 - `date`: offset datetime
 - `lastmod`: offset datetime
-- `authors`: non-empty list of non-empty strings
+- `authors`: non-empty list of user names of the registry's accounts (procedure-authors "Authors are accounts")
 - `status`: string
 - `reaction_types`: list of strings
 - `tags`: non-empty list of strings

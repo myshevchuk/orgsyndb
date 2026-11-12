@@ -460,6 +460,11 @@ of value symbols to their labels and parents."
 its registry, each an alist of `key', `data' and `url'."
   (alist-get 'compounds (orgsyndb-index root)))
 
+(defun orgsyndb--accounts (root)
+  "Return the account entries of the index of ROOT, one per account of
+its registry, each an alist of `username' and `name'."
+  (alist-get 'accounts (orgsyndb-index root)))
+
 (defun orgsyndb--compound (root key)
   "Return the data of the compound KEY in ROOT, or nil."
   (alist-get 'data (cl-find key (orgsyndb--compounds root)

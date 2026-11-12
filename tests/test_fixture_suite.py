@@ -123,8 +123,8 @@ class CatalogueFixtureTests(ValidatorTestCase):
         checked = [d for d in docs if d["status"] == "checked"]
         self.assertTrue(all(d.get("checked_by") for d in checked))
         authors = {a for d in docs for a in d["authors"]}
-        self.assertIn("Ä. Müller", authors)
-        self.assertIn("A. Example", authors)
+        self.assertIn("ae.mueller", authors)
+        self.assertIn("a.example", authors)
         self.assertTrue(any(len(d["authors"]) > 1 for d in docs))
         self.assertTrue(any(len(d["tags"]) > 2 for d in docs))
         self.assertEqual(
@@ -210,7 +210,7 @@ class FixtureRegistryTests(ValidatorTestCase):
         table = load_snapshot(REGISTRY)
         self.assertEqual(
             list(table), ["format", "vocabularies", "substances",
-                          "digest"])
+                          "accounts", "digest"])
         self.assertEqual(table["format"], 1)
         self.assertEqual(table["digest"], snapshot_digest(table))
         self.assertEqual(
@@ -219,6 +219,29 @@ class FixtureRegistryTests(ValidatorTestCase):
              "reaction-types"])
         keys = [entry["key"] for entry in table["substances"]]
         self.assertEqual(keys, sorted(keys))
+
+    def test_registry_lists_the_accounts_the_fixtures_name(self) -> None:
+        """Requirement: Fixture suite (the fixture registry lists an
+        account for every author a committed fixture names, by user name
+        `<initial>.example` with the name `<Initial>. Example`)."""
+        named: set[str] = set()
+        for path in sorted(FIXTURES.rglob("*")):
+            if (path.suffix not in (".md", ".org")
+                    or "collection" in path.relative_to(FIXTURES).parts):
+                continue
+            text = path.read_text(encoding="utf-8")
+            for found in re.findall(
+                    r"(?m)^authors = \[([^\]]*)\]|:authors '\(([^)]*)\)",
+                    text):
+                named.update(re.findall(r'"([^"]*)"', "".join(found)))
+        self.assertTrue(named)
+        accounts = {a["username"]: a["name"]
+                    for a in load_snapshot(REGISTRY)["accounts"]}
+        self.assertLessEqual(named, set(accounts))
+        self.assertEqual(accounts["a.example"], "A. Example")
+        self.assertEqual(accounts["ae.mueller"], "Ä. Müller")
+        users = [a["username"] for a in load_snapshot(REGISTRY)["accounts"]]
+        self.assertEqual(users, sorted(users))
 
     def test_registry_holds_the_named_compounds_and_no_others(self) -> None:
         """Requirement: Fixture suite (a substance for every compound key
