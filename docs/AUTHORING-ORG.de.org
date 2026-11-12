@@ -35,6 +35,7 @@
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-07 Sat 11:46] -- Artikelnummern, Pflichtfelder und Verbindungslink der Beispielsammlung
 #+AI_PASS: fact-check claude-opus-5-5 [2026-11-07 Sat 11:49] -- doc-writer pass line corrected from gpt-6 to the pinned run model
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-11 Wed 18:17] -- Laborregister, feste Verbindungsfelder, Bilder, Vokabulare und Validierung
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-12 Thu 09:11] -- Stufenfelder, Beispiele, Meldungen, eindeutige Scope-Einträge und Emacs-Vervollständigung
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
@@ -318,7 +319,10 @@ Meldungen.
   Ausgangsstoff und ein Produkt. Nennen Sie darin keinen Schlüssel doppelt und
   kein Produkt auch als Ausgangsstoff. Eine Verbindung darf Ausgangsstoff in
   einem Eintrag und Produkt in einem anderen sein. Die Einträge sind in
-  Zeilenreihenfolge ab 1 nummeriert.
+  Zeilenreihenfolge ab 1 nummeriert. Zwei Einträge derselben Vorschrift dürfen
+  nicht dieselben Ausgangsstoffe und dieselben Produktverbindungen haben,
+  auch nicht in anderer Reihenfolge oder mit anderen Ausbeuten. So kann eine
+  Synthesewegstufe anhand der Verbindungen einen Eintrag auswählen.
 
   Optional sind die Spalten ~scale~, ~time~, ~temperature~ und ~note~. Die
   Ansatzgröße ist Text mit Zahl und Einheit, etwa ~5 mmol~. Eine Zeit besteht
@@ -671,9 +675,18 @@ Meldungen.
   verschieben Sie das Feld von der obersten Ebene in die passenden Einträge.
   Zeitfehler verlangen eine Zahl mit ~min~, ~h~ oder ~d~; Temperaturfehler eine
   Zahl in °C ohne Anführungszeichen.
+  ~has the same substrates and products as entry <m>~ unter ~scope[n]~
+  bedeutet, dass Eintrag n die Verbindungen von Eintrag m wiederholt; behalten
+  Sie nur einen solchen Eintrag.
 
-  Bei Synthesewegen nennt ~steps[2].entry~ den gewählten Scope-Eintrag in
-  Stufe 2. ~must list at least two steps~ verlangt mehr Stufen;
+  Bei Synthesewegen nennt ~steps[2].product~ das Produkt, mit dem Sie den
+  Scope-Eintrag für Stufe 2 auswählen. ~name its entry by a product: <keys>~
+  fordert Sie auf, einen Produktschlüssel zu wählen. Meldet der Validator,
+  dass das Produkt in mehreren Einträgen vorkommt, geben Sie statt ~product~
+  die vollständigen Listen ~substrates~ und ~products~ des gewählten Eintrags
+  an. Unter ~steps[2].entry~ steht die Meldung
+  ~not a key of a step; name the entry by its product~.
+  ~must list at least two steps~ verlangt mehr Stufen;
   ~not found in any content root~ bedeutet, dass eine Vorschriftennummer
   fehlt. ~starts from none of the products of step 1~ unter ~steps[2]~
   heißt, dass Stufe 2 kein Produkt von Stufe 1 als Ausgangsstoff verwendet.
@@ -751,9 +764,10 @@ Meldungen.
   Ziffern und einzelnen Bindestrichen.
 
   Der Datenblock ist TOML zwischen zwei ~+++~-Zeilen. Text steht in doppelten
-  Anführungszeichen; ~entry~ ist eine Ganzzahl ohne Anführungszeichen. Füllen
-  Sie ~title~, ~date~ und ~lastmod~ aus. Anders als Org-Zeitstempel sind diese
-  Zeitangaben ohne Anführungszeichen und mit UTC-Versatz, ~+01:00~ im Berliner
+  Anführungszeichen; Listen von Verbindungsschlüsseln stehen in eckigen
+  Klammern. Füllen Sie ~title~, ~date~ und ~lastmod~ aus. Anders als
+  Org-Zeitstempel sind diese Zeitangaben ohne Anführungszeichen und mit
+  UTC-Versatz, ~+01:00~ im Berliner
   Winter oder ~+02:00~ im Sommer. ~lastmod~ darf nicht vor ~date~ liegen.
   Setzen Sie ~target~ auf den Registerschlüssel der Zielverbindung und
   ersetzen Sie die Stufen der Vorlage durch Ihre Vorschriften in
@@ -767,7 +781,7 @@ Meldungen.
   date = 2026-10-23T10:05:00+02:00
   lastmod = 2026-10-23T10:20:00+02:00
   target = "1-biphenyl-4-yl-ethanol"
-  steps = [{ procedure = "OSDB-0004" }, { procedure = "OSDB-0009", entry = 1 }]
+  steps = [{ procedure = "OSDB-0004" }, { procedure = "OSDB-0009", product = "1-biphenyl-4-yl-ethanol" }]
   +++
 
   ## Anmerkungen
@@ -777,8 +791,33 @@ Meldungen.
 #+end_src
 
   Jedes ~procedure~ nennt eine vorhandene Vorschriftennummer; mindestens zwei
-  Stufen sind nötig. Eine allgemeine Vorschrift verlangt ~entry~, die
-  Scope-Eintragsnummer ab 1. Bei einer Einzelvorschrift ist ~entry~ verboten.
+  Stufen sind nötig. Setzen Sie bei einer allgemeinen Vorschrift ~product~
+  auf einen Verbindungsschlüssel, der in genau einem Scope-Eintrag als Produkt
+  vorkommt. Kommt das Produkt in mehreren Einträgen vor, geben Sie stattdessen
+  ~substrates~ und ~products~ an. Beide Listen müssen die Verbindungsschlüssel
+  des gewählten Eintrags vollständig enthalten, in beliebiger Reihenfolge und
+  ohne Wiederholungen. Schreiben Sie Produktschlüssel ohne Ausbeuten. Dies
+  sind die vollständigen Listen für denselben Beispieleintrag:
+
+#+begin_src toml
+  { procedure = "OSDB-0009", substrates = ["4-acetylbiphenyl"], products = ["1-biphenyl-4-yl-ethanol"] }
+#+end_src
+
+  Verwenden Sie nur eine der beiden Formen. Bei einer Einzelvorschrift sind
+  ~product~, ~substrates~ und ~products~ verboten. ~entry~ ist kein Feld einer
+  Stufe. Wenn Sie die Scope-Einträge der Vorschrift umordnen, führt die Stufe
+  weiterhin dieselbe Reaktion aus. Der Build ermittelt die Eintragsnummer für
+  die Seite und das Manifest.
+
+  Vervollständigen Sie in Emacs innerhalb der Zeichenkette von ~product~, um
+  ein Produkt der genannten allgemeinen Vorschrift auszuwählen. Jedes Produkt
+  erscheint einmal in der Reihenfolge in der Datei, mit den Nummern der
+  Einträge, die es herstellen. Das gilt für allgemeine Vorschriften in
+  Markdown und Org. Innerhalb der Listen ~substrates~ und ~products~ bietet
+  die Vervollständigung Verbindungsschlüssel an. Bei einer Einzelvorschrift
+  gibt es keine Vorschläge für ~product~; nach ~entry =~ gibt es keine
+  Vervollständigung.
+
   Jede Stufe nach der ersten muss ein Produkt der vorigen Stufe als
   Ausgangsstoff verwenden; bei allgemeinen Vorschriften zählen nur die
   Ausgangsstoffe und Produkte des gewählten Eintrags. Das Ziel muss ein
@@ -798,9 +837,11 @@ Meldungen.
   Syntheseweg selbst keine Ausbeute ein.
 
   Für eine Übersetzung kopieren Sie die Datei mit ~.de~ oder ~.en~ vor ~.md~.
-  Behalten Sie Grundnamen, ~id~, ~slug~, ~target~ und die geordneten ~steps~;
-  übersetzen Sie Titel und Anmerkungen und setzen Sie die Zeitangaben für
-  diese Fassung. Beide Beispielwege haben deutsche Fassungen. Die Website
+  Behalten Sie Grundnamen, ~id~, ~slug~, ~target~ und die geordneten ~steps~
+  genau wie geschrieben, einschließlich der Reihenfolge innerhalb der Listen
+  ~substrates~ und ~products~. Übersetzen Sie Titel und Anmerkungen und setzen
+  Sie die Zeitangaben für diese Fassung. Beide Beispielwege haben deutsche
+  Fassungen. Die Website
   veröffentlicht je Nummer eine Fassung: zuerst die Sprache der Website,
   dann eine Datei ohne Kürzel, dann die andere Sprache. Prüfen Sie mit
   ~orgsyndb validate~ und starten Sie ~orgsyndb serve~ neu, um den Weg und

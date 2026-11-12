@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 import zoneinfo
 from pathlib import Path
@@ -1126,6 +1127,143 @@ class RouteDataTests(unittest.TestCase):
     def test_no_procedure_gives_no_routes(self) -> None:
         """Requirement: Derived routes (no procedure, no key)."""
         self.assertEqual(self.routes(), {})
+
+
+class StepEntryTests(unittest.TestCase):
+    """synthesis-sequences "Sequence fields" and "Sequence continuity":
+    ``pipeline.step_entry``, the one resolver that the validator, the
+    staging of sequences, the manifest and continuity share."""
+
+    # The scope of tests/fixtures/general/OSDB-0140-general.md.
+    SCOPE = [(["acetic-acid", "ethanol"], {"ethyl-acetate": 85}),
+             (["acetic-acid"], {"benzyl-acetate": 78,
+                                "propyl-acetate": 64}),
+             (["ethanol"], {"methyl-benzoate": 72})]
+
+    def entry(self, step: dict, *scope: tuple[list[str], dict[str, int]]
+              ) -> int | None:
+        """The number ``step_entry`` gives ``step`` for a general
+        procedure of ``scope``, that of ``SCOPE`` when it is empty."""
+        _, data = general("OSDB-0140", *(scope or self.SCOPE))
+        return pipeline_function("step_entry")(
+            {"procedure": "OSDB-0140", **step}, data)
+
+    def test_a_product_names_its_entry(self) -> None:
+        """Requirement: Sequence fields (product, a product of exactly
+        one entry)."""
+        self.assertEqual(self.entry({"product": "ethyl-acetate"}), 1)
+        self.assertEqual(self.entry({"product": "benzyl-acetate"}), 2)
+        self.assertEqual(self.entry({"product": "propyl-acetate"}), 2)
+        self.assertEqual(self.entry({"product": "methyl-benzoate"}), 3)
+
+    def test_the_number_counts_the_scope_from_one(self) -> None:
+        """Requirement: Sequence fields (the number, counted from 1 in
+        file order)."""
+        scope = [(["a"], {"b": 80}), (["c"], {"d": 80}), (["e"], {"f": 80}),
+                 (["g"], {"h": 80})]
+        for number, (_, made) in enumerate(scope, 1):
+            with self.subTest(entry=number):
+                (key,) = made
+                self.assertEqual(self.entry({"product": key}, *scope),
+                                 number)
+
+    def test_a_product_of_two_entries_names_none(self) -> None:
+        """Requirement: Sequence fields (a product alone that names more
+        than one entry names none)."""
+        scope = [*self.SCOPE[:2], (["ethanol"], {"benzyl-acetate": 72})]
+        self.assertIsNone(self.entry({"product": "benzyl-acetate"}, *scope))
+        self.assertEqual(self.entry({"product": "propyl-acetate"}, *scope),
+                         2)
+
+    def test_a_product_of_no_entry_names_none(self) -> None:
+        """Requirement: Sequence fields (a product of no entry)."""
+        self.assertIsNone(self.entry({"product": "ethanol"}))
+        self.assertIsNone(self.entry({"product": "no-such-compound"}))
+
+    def test_the_full_signature_names_its_entry(self) -> None:
+        """Requirement: Sequence fields (substrates and products, the
+        compounds of one entry in any order)."""
+        for substrates, products, number in (
+                (["acetic-acid"], ["benzyl-acetate", "propyl-acetate"], 2),
+                (["acetic-acid"], ["propyl-acetate", "benzyl-acetate"], 2),
+                (["acetic-acid", "ethanol"], ["ethyl-acetate"], 1),
+                (["ethanol", "acetic-acid"], ["ethyl-acetate"], 1),
+                (["ethanol"], ["methyl-benzoate"], 3)):
+            with self.subTest(substrates=substrates, products=products):
+                self.assertEqual(self.entry(
+                    {"substrates": substrates, "products": products}),
+                    number)
+
+    def test_the_full_signature_names_what_a_product_does_not(self) -> None:
+        """Scenario: A product of two entries (naming the entry by its
+        substrates and products)."""
+        scope = [*self.SCOPE[:2], (["ethanol"], {"benzyl-acetate": 72})]
+        self.assertEqual(self.entry(
+            {"substrates": ["acetic-acid"],
+             "products": ["propyl-acetate", "benzyl-acetate"]}, *scope), 2)
+        self.assertEqual(self.entry(
+            {"substrates": ["ethanol"], "products": ["benzyl-acetate"]},
+            *scope), 3)
+
+    def test_a_signature_in_part_names_none(self) -> None:
+        """Requirement: Sequence fields (an entry's compounds in full)."""
+        for substrates, products in (
+                (["acetic-acid"], ["benzyl-acetate"]),
+                (["acetic-acid"], ["benzyl-acetate", "propyl-acetate",
+                                   "ethyl-acetate"]),
+                (["acetic-acid"], ["ethyl-acetate"]),
+                (["ethanol"], ["benzyl-acetate", "propyl-acetate"]),
+                (["acetic-acid", "ethanol"], ["benzyl-acetate",
+                                              "propyl-acetate"])):
+            with self.subTest(substrates=substrates, products=products):
+                self.assertIsNone(self.entry(
+                    {"substrates": substrates, "products": products}))
+
+    def test_a_step_that_names_no_entry_gives_none(self) -> None:
+        """Requirement: Sequence fields (a general procedure's step that
+        names no entry)."""
+        self.assertIsNone(self.entry({}))
+
+    def test_a_specific_procedure_has_no_entry(self) -> None:
+        """Requirement: Sequence fields (a specific procedure refuses all
+        three keys)."""
+        _, data = specific("OSDB-0002", "ethyl-acetate", "propyl-acetate")
+        step_entry = pipeline_function("step_entry")
+        for step in ({"procedure": "OSDB-0002"},
+                     {"procedure": "OSDB-0002", "product": "ethyl-acetate"},
+                     {"procedure": "OSDB-0002",
+                      "substrates": ["propyl-acetate"],
+                      "products": ["ethyl-acetate"]}):
+            with self.subTest(step=step):
+                self.assertIsNone(step_entry(step, data))
+
+    def test_a_reordered_scope_keeps_the_chemistry(self) -> None:
+        """Scenario: A reordered scope table (the step resolves to entry
+        3)."""
+        scope = [self.SCOPE[0], self.SCOPE[2], self.SCOPE[1]]
+        self.assertEqual(self.entry({"product": "benzyl-acetate"}, *scope),
+                         3)
+        self.assertEqual(self.entry(
+            {"substrates": ["acetic-acid"],
+             "products": ["propyl-acetate", "benzyl-acetate"]}, *scope), 3)
+
+    def test_the_fixture_procedure_resolves_as_the_specification_says(
+            self) -> None:
+        """Requirement: Sequence fields (the general baseline)."""
+        text = (FIXTURES / "general" / "OSDB-0140-general.md").read_text(
+            encoding="utf-8")
+        data = tomllib.loads(text.split("+++\n")[1])
+        step_entry = pipeline_function("step_entry")
+        self.assertEqual(
+            [step_entry({"procedure": "OSDB-0140", "product": key}, data)
+             for key in ("ethyl-acetate", "benzyl-acetate",
+                         "propyl-acetate", "methyl-benzoate")],
+            [1, 2, 2, 3])
+
+    def test_the_number_is_an_integer(self) -> None:
+        """Requirement: Sequence fields (the number of the entry)."""
+        found = self.entry({"product": "benzyl-acetate"})
+        self.assertIs(type(found), int)
 
 
 class HelperModuleTests(unittest.TestCase):

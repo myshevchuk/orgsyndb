@@ -302,8 +302,9 @@ def run_build(collection: Path) -> list[tuple[Path, dict]]:
     sequences = pipeline.choose_variants(
         pipeline.content_files(existing((SEQUENCE_ROOT,))), language)
     step(f"build: staging {len(sequences)} sequences")
-    pipeline.stage_content(sequences,
-                           Path("build") / pipeline.SEQUENCES_STAGED)
+    pipeline.stage_sequences(
+        sequences, {data["id"]: data for _, data in chosen},
+        Path("build") / pipeline.SEQUENCES_STAGED)
     count = pipeline.stage_help(APP / "docs",
                                 Path("build") / pipeline.HELP_STAGED)
     step(f"build: staging {count} help pages from docs/")

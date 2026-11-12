@@ -283,6 +283,22 @@ def sequence_variant_run(change: Callable[[Path], None]) -> Result:
             "valid/md", "sequences-procedures", sequences=directory)
 
 
+def sequence_general_variant_run(
+        general: Sequence[Edit],
+        change: Callable[[Path], None] = lambda directory: None) -> Result:
+    """Sequence general variant run: a sequence variant run in which the
+    general baseline, ``tests/fixtures/general/OSDB-0140-general.md``,
+    is read with the text edits ``general`` applied, and ``change``
+    edits the copy of tests/fixtures/sequences/ as for
+    ``sequence_variant_run``."""
+    with sequences_copy() as directory, _edited_root(
+            GENERAL, GENERAL.name, general) as root:
+        change(directory)
+        return fixture_run(
+            "valid/md", "sequences-procedures", root,
+            extra=["--sequences", directory])
+
+
 def edit_sequence(name: str, *edits: Edit,
                   rename: str | None = None) -> Callable[[Path], None]:
     """A sequence change applying text edits to the sequence ``name``,

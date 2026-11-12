@@ -239,7 +239,9 @@ Each entry requires non-empty `substrates` and `products`. Products use the
 same `compound` and `yield_percent` fields as above. Entries are numbered from
 1 in their order. Within each entry, do not repeat a key or list a product as a
 starting material. A compound may be a starting material in one entry and a
-product in another.
+product in another. Two entries of one procedure must not have the same
+substrates and the same product compounds, even in a different order or with
+different yields. This lets a sequence step identify one entry by its compounds.
 
 You may add `scale`, `time`, `temperature` and `note` to an entry. Write a time
 as a number followed by `min`, `h` or `d`, such as `"30 min"`. Write
@@ -423,9 +425,14 @@ need at least one entry. If a top-level field reports
 `a general procedure lists them in scope; move <key> into its entries`, remove
 that line and put the data inside the relevant entries. A time error asks for a
 number followed by `min`, `h` or `d`; a temperature error asks for an unquoted
-number in °C.
+number in °C. `has the same substrates and products as entry <m>` under
+`scope[n]` means entry n repeats entry m's compounds; keep only one such entry.
 
-For a sequence, `steps[2].entry` names the scope entry selected for step 2.
+For a sequence, `steps[2].product` names the product used to select step 2's
+scope entry. `name its entry by a product: <keys>` asks you to choose a product
+key. If the message says it is a product of several entries, give the chosen
+entry's complete `substrates` and `products` lists instead of `product`.
+`steps[2].entry` reports `not a key of a step; name the entry by its product`.
 `must list at least two steps` requires a longer sequence; `not found in any
 content root` means a step's procedure ID is missing. `starts from none of the
 products of step 1` under `steps[2]` means that step 2 takes no product of step
@@ -569,7 +576,7 @@ title = "1-(Biphenyl-4-yl)ethanol from 4′-bromoacetophenone"
 date = 2026-10-23T10:05:00+02:00
 lastmod = 2026-10-23T10:20:00+02:00
 target = "1-biphenyl-4-yl-ethanol"
-steps = [{ procedure = "OSDB-0004" }, { procedure = "OSDB-0009", entry = 1 }]
+steps = [{ procedure = "OSDB-0004" }, { procedure = "OSDB-0009", product = "1-biphenyl-4-yl-ethanol" }]
 +++
 
 ## Notes
@@ -579,10 +586,31 @@ general procedure.
 ```
 
 You need at least two steps. Each `procedure` must name an existing procedure.
-A general procedure requires `entry`, its scope entry number counted from 1.
-A specific procedure forbids `entry`. Each step after the first must start
-from a product of the previous step; for general procedures, use only the
-chosen entry's starting materials and products. The target must be a product
+For a general procedure, set `product` to a compound key made by exactly one
+scope entry. If that product belongs to several entries, give `substrates`
+and `products` instead. Both lists must contain the chosen entry's compound
+keys in full, in any order, without repeats. Write product keys without yields.
+This is the complete-list form for the same demo entry:
+
+```toml
+{ procedure = "OSDB-0009", substrates = ["4-acetylbiphenyl"], products = ["1-biphenyl-4-yl-ethanol"] }
+```
+
+Use one form only. A specific procedure takes none of `product`, `substrates`
+or `products`. `entry` is not a step key. Reordering the procedure's scope
+keeps the step on the same chemistry; the build determines the entry number
+for the page and manifest.
+
+In Emacs, complete inside the `product` string to choose from the named
+general procedure's products. Each appears once in file order, with the entry
+numbers that make it, for Markdown and Org general procedures alike.
+Completion inside `substrates` and `products` lists offers compound keys.
+A specific procedure offers no `product` candidates; there is no completion
+after `entry =`.
+
+Each step after the first must start from a product of the previous step;
+for general procedures, use only the chosen entry's starting materials and
+products. The target must be a product
 of the last step. Do not add `authors`: the steps credit their procedures'
 authors. The body holds notes, such as which intermediate you dry or purify;
 it does not need a procedure's eight sections.
@@ -597,9 +625,10 @@ first in product order. The displayed result rounds to a whole percent, with
 halves rounded up. Enter no yield in the sequence itself.
 
 To translate it, copy the file with `.de` or `.en` before `.md`. Keep the
-base name, `id`, `slug`, `target` and ordered `steps`; translate the title and
-notes and set the dates for that version. Both demo sequences have German
-variants. The site publishes one variant per ID: the site's language first,
-then an untagged file, then the other language. Run `orgsyndb validate` and
+base name, `id`, `slug`, `target` and ordered `steps` exactly as written,
+including the order within `substrates` and `products` lists. Translate the
+title and notes and set the dates for that version. Both demo sequences have
+German variants. The site publishes one variant per ID: the site's language
+first, then an untagged file, then the other language. Run `orgsyndb validate` and
 restart `orgsyndb serve` to check the sequence and its links. The
 [schema reference](SCHEMA.md#synthesis-sequences) gives the exact rules.

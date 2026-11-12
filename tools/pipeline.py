@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 import validate
+from validate import step_entry
 
 APP = Path(__file__).resolve().parent.parent
 TEMPLATES = APP / "templates"
@@ -679,6 +680,74 @@ def stage_content(chosen: Iterable[tuple[Path, dict[str, Any]]],
             text = f"{first}\nlanguage = {toml_string(code)}\n{rest}"
         (target / f"{validate.base_name(name)}.md").write_text(
             link_notes(text), encoding="utf-8")
+
+
+_BARE_KEY_RE = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def toml_value(value: Any) -> str:
+    """Return VALUE as a TOML value on one line.
+
+    VALUE is what ``tomllib`` returns: a string, boolean, integer,
+    float, date or time value, or a list or table of these, written as
+    an array or an inline table. Raises TypeError for any other type.
+    """
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, str):
+        return toml_string(value)
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return ("nan" if math.isnan(value) else
+                "inf" if value == math.inf else
+                "-inf" if value == -math.inf else repr(value))
+    if isinstance(value, (dt.datetime, dt.date, dt.time)):
+        return value.isoformat()
+    if isinstance(value, list):
+        return "[" + ", ".join(toml_value(item) for item in value) + "]"
+    if isinstance(value, dict):
+        return "{ " + ", ".join(
+            f"{toml_key(key)} = {toml_value(item)}"
+            for key, item in value.items()) + " }" if value else "{}"
+    raise TypeError(f"no TOML form for {type(value).__name__}")
+
+
+def toml_key(key: str) -> str:
+    """Return KEY as a TOML key, quoted unless it is a bare key."""
+    return key if _BARE_KEY_RE.fullmatch(key) else toml_string(key)
+
+
+def stage_sequences(chosen: Iterable[tuple[Path, dict[str, Any]]],
+                    procedures: dict[str, dict[str, Any]],
+                    target: Path) -> None:
+    """Stage the chosen sequence files into TARGET as ``stage_content``
+    does, each step of a general procedure carrying ``entry``.
+
+    PROCEDURES maps procedure IDs to front matter. ``entry`` is the
+    number that ``step_entry`` gives the step; a step that names no
+    entry, or whose procedure is not in PROCEDURES, or that is of a
+    specific procedure, is staged as written. The front matter of a
+    staged file is rewritten from its parsed form, so that its comments
+    and layout are not kept; the body is kept as it is.
+    """
+    stage_content(chosen, target)
+    for path in sorted(Path(target).iterdir()):
+        parsed = validate.parse_front_matter(path.read_text(encoding="utf-8"))
+        if isinstance(parsed, validate.Problem):
+            raise ValueError(f"{path}: {parsed.message}")
+        steps = parsed.data.get("steps")
+        if not isinstance(steps, list):
+            continue
+        for step in steps:
+            data = procedures.get(step.get("procedure")) if isinstance(
+                step, dict) else None
+            number = None if data is None else step_entry(step, data)
+            if number is not None:
+                step["entry"] = number
+        front = "".join(f"{toml_key(key)} = {toml_value(value)}\n"
+                        for key, value in parsed.data.items())
+        path.write_text(f"+++\n{front}+++\n{parsed.body}", encoding="utf-8")
 
 
 # --------------------------------------------------------------------------
@@ -1475,8 +1544,9 @@ def manifest_data(collection: Path) -> dict[str, Any]:
     products, each a table of ``substrates``, keys in file order, and
     ``products``, tables of ``compound`` and ``yield_percent``; a
     sequence by its ``id``, ``title``, ``title_de``, ``target`` and
-    ``steps``, tables of ``procedure`` and ``entry``, None when the
-    step gives none.
+    ``steps``, tables of ``procedure`` and ``entry``, the number that
+    ``step_entry`` gives the step in the published variant of its
+    procedure, None when it gives none.
 
     No registry is read, no value is checked and nothing is written.
     Raises ValueError when ``org/procedures/`` holds an Org source and
@@ -1500,6 +1570,13 @@ def manifest_data(collection: Path) -> dict[str, Any]:
                              validate.SEQUENCE)
     procedure_titles = _german_titles(procedures)
     sequence_titles = _german_titles(sequences)
+    published = {data["id"]: data
+                 for _, data in choose_variants(procedures, language)}
+
+    def entry_of(step: Any) -> int | None:
+        data = published.get(step.get("procedure"))
+        return None if data is None else step_entry(step, data)
+
     return {
         "language": language,
         "procedures": [
@@ -1512,7 +1589,7 @@ def manifest_data(collection: Path) -> dict[str, Any]:
              "title_de": sequence_titles.get(data["id"]),
              "target": data.get("target"),
              "steps": [{"procedure": step.get("procedure"),
-                        "entry": step.get("entry")}
+                        "entry": entry_of(step)}
                        for step in data.get("steps") or ()]}
             for _, data in choose_variants(sequences, language)],
     }

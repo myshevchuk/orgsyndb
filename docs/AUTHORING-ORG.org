@@ -39,6 +39,7 @@
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-07 Sat 11:46] -- demo article numbers, required compound fields and compound-link example
 #+AI_PASS: fact-check claude-opus-5-5 [2026-11-07 Sat 11:49] -- doc-writer pass line corrected from gpt-6 to the pinned run model
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-11 Wed 18:03] -- collection registry, built-in fields, images, vocabularies and validation
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-12 Thu 09:06] -- sequence entry keys, examples, messages, scope uniqueness and Emacs completion
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -277,7 +278,10 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   ~%~. Each entry needs at least one starting material and product. Within an
   entry, do not repeat a key or list a product as a starting material. A
   compound may be a starting material in one entry and a product in another.
-  Entries are numbered from 1 in row order.
+  Entries are numbered from 1 in row order. Two entries of one procedure must
+  not have the same substrates and the same product compounds, even in a
+  different order or with different yields. This lets a sequence step identify
+  one entry by its compounds.
 
   Optional columns are ~scale~, ~time~, ~temperature~ and ~note~. Scale is text
   with a number and unit, such as ~5 mmol~. Time is a number followed by ~min~,
@@ -534,9 +538,16 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   be moved into the relevant entries. Time errors ask for a number followed by
   ~min~, ~h~ or ~d~; temperature errors ask for an unquoted number in °C. The
   schema explains every field and the validator's exit statuses.
+  ~has the same substrates and products as entry <m>~ under ~scope[n]~ means
+  entry n repeats entry m's compounds; keep only one such entry.
 
-  Sequence fields such as ~steps[2].entry~ name the chosen scope entry in
-  step 2. ~must list at least two steps~ requires a longer sequence;
+  Sequence fields such as ~steps[2].product~ name the product used to select
+  step 2's scope entry. ~name its entry by a product: <keys>~ asks you to choose
+  a product key. If the message says it is a product of several entries, give
+  the chosen entry's complete ~substrates~ and ~products~ lists instead of
+  ~product~. ~steps[2].entry~ reports
+  ~not a key of a step; name the entry by its product~.
+  ~must list at least two steps~ requires a longer sequence;
   ~not found in any content root~ means the procedure ID is missing.
   ~starts from none of the products of step 1~ under ~steps[2]~ means that
   step 2 takes no product of step 1 as a starting material. Check the order
@@ -667,8 +678,9 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   single hyphens for the short slug.
 
   The information block is TOML, between two ~+++~ lines. Text values use
-  double quotes; ~entry~ is an unquoted integer. Fill ~title~, ~date~ and
-  ~lastmod~. Unlike Org timestamps, these dates are unquoted offset datetimes,
+  double quotes; lists of compound keys use square brackets. Fill ~title~,
+  ~date~ and ~lastmod~. Unlike Org timestamps, these dates are unquoted offset
+  datetimes,
   with ~+01:00~ in Berlin winter time or ~+02:00~ in summer. ~lastmod~ must
   not precede ~date~. Set ~target~ to the final compound's registry key and
   replace the template's steps with your procedures in execution order.
@@ -682,7 +694,7 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   date = 2026-10-23T10:05:00+02:00
   lastmod = 2026-10-23T10:20:00+02:00
   target = "1-biphenyl-4-yl-ethanol"
-  steps = [{ procedure = "OSDB-0004" }, { procedure = "OSDB-0009", entry = 1 }]
+  steps = [{ procedure = "OSDB-0004" }, { procedure = "OSDB-0009", product = "1-biphenyl-4-yl-ethanol" }]
   +++
 
   ## Notes
@@ -692,10 +704,31 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
 #+end_src
 
   Each step's ~procedure~ must name an existing procedure; at least two steps
-  are required. A general procedure requires ~entry~, its scope entry number
-  counted from 1. A specific procedure forbids ~entry~. Each step after the
-  first must start from a product of the previous step; for a general
-  procedure, use only the chosen entry's starting materials and products.
+  are required. For a general procedure, set ~product~ to a compound key made
+  by exactly one scope entry. If that product belongs to several entries, give
+  ~substrates~ and ~products~ instead. Both lists must contain the chosen
+  entry's compound keys in full, in any order, without repeats. Write product
+  keys without yields. This is the complete-list form for the same demo entry:
+
+#+begin_src toml
+  { procedure = "OSDB-0009", substrates = ["4-acetylbiphenyl"], products = ["1-biphenyl-4-yl-ethanol"] }
+#+end_src
+
+  Use one form only. A specific procedure takes none of ~product~, ~substrates~
+  or ~products~. ~entry~ is not a step key. Reordering the procedure's scope
+  keeps the step on the same chemistry; the build determines the entry number
+  for the page and manifest.
+
+  In Emacs, complete inside the ~product~ string to choose from the named
+  general procedure's products. Each appears once in file order, with the entry
+  numbers that make it, for Markdown and Org general procedures alike.
+  Completion inside ~substrates~ and ~products~ lists offers compound keys.
+  A specific procedure offers no ~product~ candidates; there is no completion
+  after ~entry =~.
+
+  Each step after the first must start from a product of the previous step;
+  for a general procedure, use only the chosen entry's starting materials and
+  products.
   The target must be a product of the last step. Add no ~authors~: the steps
   credit their procedures' authors. The Markdown body holds notes, such as
   which intermediate is dried or purified. It needs none of the eight
@@ -711,8 +744,9 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   halves rounded up. Enter no yield in the sequence itself.
 
   For a translation, copy the file with ~.de~ or ~.en~ before ~.md~. Keep
-  the base name, ~id~, ~slug~, ~target~ and ordered ~steps~ the same;
-  translate the title and notes and set the dates for that version. Both
+  the base name, ~id~, ~slug~, ~target~ and ordered ~steps~ exactly as written,
+  including the order within ~substrates~ and ~products~ lists. Translate the
+  title and notes and set the dates for that version. Both
   demo sequences have German variants. The site publishes one variant per
   ID: the site's language first, then an untagged file, then the other
   language. Run ~orgsyndb validate~ and restart ~orgsyndb serve~ to check

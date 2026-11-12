@@ -203,7 +203,8 @@ class SequenceTemplateTests(ValidatorTestCase):
         front = text.split("+++\n")[1]
         lines = front.splitlines()
         comments = [ln for ln in lines if ln.startswith("#")]
-        for key in [*self.KEYS, "procedure", "entry"]:
+        for key in [*self.KEYS, "procedure", "product", "substrates",
+                    "products"]:
             with self.subTest(key=key):
                 self.assertTrue(any(re.search(rf"\b{key}\b", ln)
                                     for ln in comments), "not explained")
@@ -213,6 +214,13 @@ class SequenceTemplateTests(ValidatorTestCase):
                                     for ln in lines), "not set")
         self.assertFalse(any(re.match(r"#?\s*authors\s*=", ln)
                              for ln in lines))
+
+    def test_template_names_no_entry_number(self) -> None:
+        """Requirement: Sequence template (every key in a comment: the
+        keys of a step are procedure, product, substrates and products,
+        and a step is never given an entry number)."""
+        front = read_template(SEQUENCE_TEMPLATE).split("+++\n")[1]
+        self.assertFalse(re.search(r"\bentry\s*=", front))
 
 
 if __name__ == "__main__":

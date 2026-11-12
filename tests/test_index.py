@@ -327,6 +327,8 @@ class SchemaTests(unittest.TestCase):
         self.assertEqual(schema["sequence"], {
             "keys": list(validate.SEQUENCE_KEYS),
             "step": list(validate.STEP_KEYS)})
+        self.assertEqual(schema["sequence"]["step"],
+                         ["procedure", "product", "substrates", "products"])
 
         self.assertEqual(procedure["statuses"],
                          ["draft", "checked", "retired"])

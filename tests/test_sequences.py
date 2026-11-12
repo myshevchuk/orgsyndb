@@ -5,9 +5,13 @@ directory", "Problem report format" and "Fixture suite").
 
 The sequence fixtures are tests/fixtures/sequences/ (the baseline
 ``SEQ-0001-baseline.md`` and ``SEQ-0002-general-entry.md``, whose first
-step names entry 2 of the general baseline), the procedures they chain in
+step names entry 2 of the general baseline by its product
+``benzyl-acetate``), the procedures they chain in
 tests/fixtures/sequences-procedures/ and the fixtures of
-tests/fixtures/sequences-invalid/.
+tests/fixtures/sequences-invalid/. The general baseline's entries are
+numbered 1 to 3: entry 1 makes ``ethyl-acetate`` from ``acetic-acid`` and
+``ethanol``, entry 2 makes ``benzyl-acetate`` and ``propyl-acetate`` from
+``acetic-acid``, entry 3 makes ``methyl-benzoate`` from ``ethanol``.
 """
 
 import re
@@ -17,18 +21,34 @@ import tomllib
 import unittest
 from pathlib import Path
 
+from pipeline_support import pipeline
 from support import (FIXTURES, REGISTRY, SEQUENCE_BASELINE, SEQUENCES,
-                     SETTINGS, STATIC_DIR, ValidatorTestCase, add_file,
-                     add_sequence, changes, edit_sequence, fixture_run,
-                     insert_line, remove_line, remove_sequence,
+                     SETTINGS, STATIC_DIR, Edit, Result, ValidatorTestCase,
+                     add_file, add_sequence, changes, edit_sequence,
+                     fixture_run, insert_line, remove_line, remove_sequence,
                      replace_line, replace_text, run_validator,
-                     sequence_fixture_run, sequence_variant_run)
+                     sequence_fixture_run, sequence_general_variant_run,
+                     sequence_variant_run)
 
 BASELINE = "SEQ-0001-baseline.md"
 GENERAL = "SEQ-0002-general-entry.md"
 STEP_1 = '{ procedure = "OSDB-0002" }'
 STEP_2 = '{ procedure = "OSDB-0160" }'
-GENERAL_STEP = '{ procedure = "OSDB-0140", entry = 2 }'
+GENERAL_STEP = '{ procedure = "OSDB-0140", product = "benzyl-acetate" }'
+ENTRY_2 = ('  { substrates = ["acetic-acid"], products = [{ compound = '
+           '"benzyl-acetate", yield_percent = 78 }, { compound = '
+           '"propyl-acetate", yield_percent = 64.5 }] },\n')
+ENTRY_3 = ('  { substrates = ["ethanol"], products = [{ compound = '
+           '"methyl-benzoate", yield_percent = 72.5 }] },\n')
+# The general baseline with its second entry moved to the end of its scope
+# table, so that the entry that made benzyl-acetate is entry 3.
+ENTRY_2_LAST = (replace_text(ENTRY_2, ""),
+                replace_text(ENTRY_3, ENTRY_3 + ENTRY_2))
+# The general baseline with benzyl-acetate in place of methyl-benzoate in
+# its third entry, so that benzyl-acetate is a product of two entries.
+BENZYL_IN_TWO = (replace_text(
+    '{ compound = "methyl-benzoate", yield_percent = 72.5 }',
+    '{ compound = "benzyl-acetate", yield_percent = 72.5 }'),)
 SWAPPED = replace_line("steps", f"steps = [{STEP_2}, {STEP_1}]")
 GERMAN_TITLE = replace_line("title", 'title = "Benzylacetat aus Propylacetat"')
 GERMAN_NOTES = replace_text(
@@ -52,9 +72,46 @@ def general_run(*edits):
     return sequence_variant_run(edit_sequence(GENERAL, *edits))
 
 
+def keys_text(keys: list[str]) -> str:
+    """A TOML array of the strings ``keys``."""
+    return "[" + ", ".join(f'"{key}"' for key in keys) + "]"
+
+
+def named_by(substrates: list[str], products: list[str],
+             procedure: str = "OSDB-0140") -> str:
+    """A step that names its entry by its substrates and products."""
+    return (f'{{ procedure = "{procedure}", substrates = '
+            f"{keys_text(substrates)}, products = {keys_text(products)} }}")
+
+
+def with_step(step: str) -> Edit:
+    """An edit of the general sequence that puts ``step`` in place of its
+    first step."""
+    return replace_text(GENERAL_STEP, step)
+
+
+ENTRY_2_STEP = named_by(["acetic-acid"], ["benzyl-acetate", "propyl-acetate"])
+
+
 def valid_run():
     return sequence_fixture_run("valid/md", "sequences-procedures",
                                 sequences="sequences")
+
+
+def assert_error_on_step(case: unittest.TestCase, result: Result,
+                         field: str | tuple[str, ...], text: str) -> None:
+    """The run failed, one of its errors is on ``field`` (any of them
+    when it is a tuple) with a message containing ``text``, and no
+    problem is reported on another step."""
+    fields = (field,) if isinstance(field, str) else field
+    case.assertEqual(result.returncode, 1, result.stdout)
+    case.assertTrue(
+        [p for p in result.problems if p.severity == "error"
+         and p.field in fields and text in p.message],
+        f"no error on {fields} containing {text!r}:\n{result.stdout}")
+    for problem in result.problems:
+        case.assertTrue(problem.field.startswith("steps[1]"),
+                        f"a problem outside step 1:\n{result.stdout}")
 
 
 class SequenceFixtureTests(ValidatorTestCase):
@@ -69,7 +126,8 @@ class SequenceFixtureTests(ValidatorTestCase):
     def test_the_fixtures_have_the_shape_the_specification_gives(
             self) -> None:
         """Harness: the baseline has two steps and no authors, another
-        sequence names entry 2 of the general baseline."""
+        sequence names entry 2 of the general baseline by its product,
+        and no step names an entry by its number."""
         baseline = front_matter(SEQUENCE_BASELINE)
         self.assertEqual(baseline["id"], "SEQ-0001")
         self.assertEqual(len(baseline["steps"]), 2)
@@ -77,9 +135,12 @@ class SequenceFixtureTests(ValidatorTestCase):
         found = [step for path in sorted(SEQUENCES.glob("SEQ-*.md"))
                  for step in front_matter(path)["steps"]
                  if step.get("procedure") == "OSDB-0140"]
-        self.assertTrue(any(step.get("entry") == 2 for step in found))
+        self.assertTrue(any(step.get("product") == "benzyl-acetate"
+                            for step in found))
         for path in sorted(SEQUENCES.glob("SEQ-*.md")):
             self.assertNotIn("authors", front_matter(path), path.name)
+            for step in front_matter(path)["steps"]:
+                self.assertNotIn("entry", step, path.name)
 
     def test_the_mismatch_fixture_names_another_id(self) -> None:
         """Harness: SEQ-0002-mismatch.md carries the ID SEQ-0003."""
@@ -354,28 +415,56 @@ class StepTests(ValidatorTestCase):
 
     def test_a_general_procedure_without_an_entry(self) -> None:
         """Scenario: General procedure without an entry."""
-        result = general_run(replace_text(GENERAL_STEP,
-                                          '{ procedure = "OSDB-0140" }'))
-        self.assert_one(result, "error", "steps[1].entry",
-                        "OSDB-0140 is a general procedure; name one of "
-                        "its entries 1 to 3")
+        result = general_run(with_step('{ procedure = "OSDB-0140" }'))
+        problem = self.assert_one(
+            result, "error", "steps[1].product", "is a general procedure")
+        self.assertIn("OSDB-0140 is a general procedure; name its entry by "
+                      "a product: ", problem.message)
+        keys = ["ethyl-acetate", "benzyl-acetate", "propyl-acetate",
+                "methyl-benzoate"]
+        places = [problem.message.find(key) for key in keys]
+        self.assertNotIn(-1, places, problem.message)
+        self.assertEqual(places, sorted(places), "the products of the "
+                         "entries in file order")
 
-    def test_an_entry_out_of_range(self) -> None:
-        """Requirement: Sequence fields (entry, from 1 to the count)."""
-        for value in (0, 4, -1):
+    def test_an_entry_number(self) -> None:
+        """Scenario: An entry number."""
+        for value in (2, 1, 3, 0, 4, -1):
             with self.subTest(entry=value):
-                result = general_run(replace_text(
-                    "entry = 2", f"entry = {value}"))
-                self.assert_one(result, "error", "steps[1].entry",
-                                "must be between 1 and 3")
+                result = general_run(with_step(
+                    f'{{ procedure = "OSDB-0140", entry = {value} }}'))
+                assert_error_on_step(self, result, "steps[1].entry",
+                                     "name the entry by its product")
+
+    def test_an_entry_beside_a_product(self) -> None:
+        """Requirement: Sequence fields (entry is not a key of a step)."""
+        result = general_run(with_step(
+            '{ procedure = "OSDB-0140", product = "benzyl-acetate", '
+            "entry = 2 }"))
+        assert_error_on_step(self, result, "steps[1].entry",
+                             "not a key of a step")
 
     def test_an_entry_of_a_specific_procedure(self) -> None:
-        """Requirement: Sequence fields (entry, refused for a specific
-        procedure)."""
+        """Requirement: Sequence fields (entry is not a key of a step,
+        also of a specific procedure)."""
         result = baseline_run(replace_text(
             STEP_1, '{ procedure = "OSDB-0002", entry = 1 }'))
-        self.assert_one(result, "error", "steps[1].entry",
-                        "OSDB-0002 has no scope entries")
+        assert_error_on_step(self, result, "steps[1].entry",
+                             "not a key of a step")
+
+    def test_the_step_keys_are_the_four_the_specification_names(
+            self) -> None:
+        """Requirement: Sequence fields (the keys of a step)."""
+        self.assertEqual(tuple(pipeline().validate.STEP_KEYS),
+                         ("procedure", "product", "substrates", "products"))
+
+    def test_an_unknown_key_beside_a_product_is_a_warning(self) -> None:
+        """Requirement: Sequence fields (any other key in a step a
+        warning under steps[n].<key>)."""
+        result = general_run(with_step(
+            '{ procedure = "OSDB-0140", product = "benzyl-acetate", '
+            'note = "x" }'))
+        self.assert_one(result, "warning", "steps[1].note", "unknown field")
 
     def test_one_step_only(self) -> None:
         """Scenario: One step only."""
@@ -388,6 +477,200 @@ class StepTests(ValidatorTestCase):
         result = baseline_run(replace_line("steps", "steps = []"))
         self.assert_one(result, "error", "steps",
                         "must list at least two steps")
+
+
+class ProductStepTests(ValidatorTestCase):
+    """A step of a general procedure names its entry by a product
+    (synthesis-sequences "Sequence fields")."""
+
+    def test_a_product_that_is_not_the_first_of_its_entry(self) -> None:
+        """Scenario: Valid sequences (a product names its entry)."""
+        result = general_run(with_step(
+            '{ procedure = "OSDB-0140", product = "propyl-acetate" }'))
+        self.assert_clean(result)
+
+    def test_a_product_of_no_entry(self) -> None:
+        """Requirement: Sequence fields (steps[n].product, a product of no
+        entry)."""
+        result = general_run(with_step(
+            '{ procedure = "OSDB-0140", product = "ethanol" }'))
+        self.assert_one(result, "error", "steps[1].product",
+                        "ethanol is a product of no entry of OSDB-0140")
+
+    def test_a_product_that_is_no_compound(self) -> None:
+        """Requirement: Sequence fields (steps[n].product, a product of no
+        entry)."""
+        result = general_run(with_step(
+            '{ procedure = "OSDB-0140", product = "no-such-compound" }'))
+        assert_error_on_step(
+            self, result, "steps[1].product",
+            "no-such-compound is a product of no entry of OSDB-0140")
+
+    def test_a_product_of_two_entries(self) -> None:
+        """Scenario: A product of two entries."""
+        result = sequence_general_variant_run(BENZYL_IN_TWO)
+        self.assert_one(
+            result, "error", "steps[1].product",
+            "benzyl-acetate is a product of entries 2 and 3 of OSDB-0140; "
+            "name the entry by its substrates and products")
+
+    def test_the_full_signature_names_what_a_product_does_not(self) -> None:
+        """Scenario: A product of two entries (naming the entry by its
+        substrates and products reports nothing)."""
+        result = sequence_general_variant_run(BENZYL_IN_TWO, edit_sequence(
+            GENERAL, with_step(named_by(
+                ["acetic-acid"], ["propyl-acetate", "benzyl-acetate"]))))
+        self.assert_clean(result)
+
+    def test_a_product_of_a_specific_procedure(self) -> None:
+        """Requirement: Sequence fields (steps[n].product, a specific
+        procedure)."""
+        result = baseline_run(replace_text(
+            STEP_1, '{ procedure = "OSDB-0002", product = "ethyl-acetate" }'))
+        self.assert_one(result, "error", "steps[1].product",
+                        "OSDB-0002 has no scope entries; remove product")
+
+    def test_a_step_with_a_product_and_the_full_signature(self) -> None:
+        """Requirement: Sequence fields (not both)."""
+        result = general_run(with_step(
+            '{ procedure = "OSDB-0140", product = "benzyl-acetate", '
+            'substrates = ["acetic-acid"], products = ["benzyl-acetate", '
+            '"propyl-acetate"] }'))
+        assert_error_on_step(
+            self, result, "steps[1]",
+            "name the entry by product or by substrates and products, "
+            "not both")
+
+
+class SignatureStepTests(ValidatorTestCase):
+    """A step of a general procedure names its entry by its substrates
+    and products (synthesis-sequences "Sequence fields")."""
+
+    def test_the_products_in_any_order(self) -> None:
+        """Requirement: Sequence fields (substrates and products, in any
+        order)."""
+        for products in (["benzyl-acetate", "propyl-acetate"],
+                         ["propyl-acetate", "benzyl-acetate"]):
+            with self.subTest(products=products):
+                self.assert_clean(general_run(with_step(
+                    named_by(["acetic-acid"], products))))
+
+    def test_the_substrates_in_any_order(self) -> None:
+        """Requirement: Sequence fields (substrates and products, in any
+        order)."""
+        for substrates in (["acetic-acid", "ethanol"],
+                           ["ethanol", "acetic-acid"]):
+            with self.subTest(substrates=substrates):
+                result = general_run(
+                    replace_line("steps", "steps = [" + named_by(
+                        substrates, ["ethyl-acetate"]) + f", {STEP_2}]"),
+                    replace_line("target", 'target = "benzyl-acetate"'))
+                self.assert_clean(result)
+
+    def test_fewer_products_than_the_entry_has(self) -> None:
+        """Requirement: Sequence fields (an entry's compounds in full)."""
+        result = general_run(with_step(
+            named_by(["acetic-acid"], ["benzyl-acetate"])))
+        assert_error_on_step(
+            self, result, ("steps[1].substrates", "steps[1].products"),
+            "no entry of OSDB-0140 has these substrates and products")
+
+    def test_more_products_than_the_entry_has(self) -> None:
+        """Requirement: Sequence fields (an entry's compounds in full)."""
+        result = general_run(with_step(named_by(
+            ["acetic-acid"],
+            ["benzyl-acetate", "propyl-acetate", "ethyl-acetate"])))
+        assert_error_on_step(
+            self, result, ("steps[1].substrates", "steps[1].products"),
+            "no entry of OSDB-0140 has these substrates and products")
+
+    def test_fewer_substrates_than_the_entry_has(self) -> None:
+        """Requirement: Sequence fields (an entry's compounds in full)."""
+        result = general_run(with_step(
+            named_by(["acetic-acid"], ["ethyl-acetate"])))
+        assert_error_on_step(
+            self, result, ("steps[1].substrates", "steps[1].products"),
+            "no entry of OSDB-0140 has these substrates and products")
+
+    def test_the_substrates_of_one_entry_and_the_products_of_another(
+            self) -> None:
+        """Requirement: Sequence fields (the substrates and the product
+        compounds of one entry)."""
+        result = general_run(with_step(
+            named_by(["ethanol"], ["benzyl-acetate", "propyl-acetate"])))
+        assert_error_on_step(
+            self, result, ("steps[1].substrates", "steps[1].products"),
+            "no entry of OSDB-0140 has these substrates and products")
+
+    def test_substrates_without_products(self) -> None:
+        """Requirement: Sequence fields (steps[n].substrates, must be
+        given with products)."""
+        result = general_run(with_step(
+            '{ procedure = "OSDB-0140", substrates = ["acetic-acid"] }'))
+        assert_error_on_step(self, result, "steps[1].substrates",
+                             "must be given with products")
+
+    def test_products_without_substrates(self) -> None:
+        """Requirement: Sequence fields (steps[n].products, must be given
+        with substrates)."""
+        result = general_run(with_step(
+            '{ procedure = "OSDB-0140", products = ["benzyl-acetate", '
+            '"propyl-acetate"] }'))
+        assert_error_on_step(self, result, "steps[1].products",
+                             "must be given with substrates")
+
+    def test_substrates_that_are_no_list_of_keys(self) -> None:
+        """Requirement: Sequence fields (steps[n].substrates, must be a
+        list of compound keys)."""
+        for value in ('"acetic-acid"', "[1]"):
+            with self.subTest(value=value):
+                result = general_run(with_step(
+                    '{ procedure = "OSDB-0140", substrates = '
+                    f'{value}, products = ["benzyl-acetate", '
+                    '"propyl-acetate"] }'))
+                assert_error_on_step(self, result, "steps[1].substrates",
+                                     "must be a list of compound keys")
+
+    def test_products_that_are_no_list_of_keys(self) -> None:
+        """Requirement: Sequence fields (steps[n].products, must be a list
+        of compound keys)."""
+        for value in ('"benzyl-acetate"', "[1]", '[{ compound = "x" }]'):
+            with self.subTest(value=value):
+                result = general_run(with_step(
+                    '{ procedure = "OSDB-0140", substrates = '
+                    f'["acetic-acid"], products = {value} }}'))
+                assert_error_on_step(self, result, "steps[1].products",
+                                     "must be a list of compound keys")
+
+    def test_a_substrate_named_twice(self) -> None:
+        """Requirement: Sequence fields (its lists name no compound
+        twice)."""
+        result = general_run(with_step(named_by(
+            ["acetic-acid", "acetic-acid"],
+            ["benzyl-acetate", "propyl-acetate"])))
+        assert_error_on_step(self, result, "steps[1].substrates",
+                             "must not list a compound twice")
+
+    def test_a_product_named_twice(self) -> None:
+        """Requirement: Sequence fields (its lists name no compound
+        twice)."""
+        result = general_run(with_step(named_by(
+            ["acetic-acid"],
+            ["benzyl-acetate", "propyl-acetate", "benzyl-acetate"])))
+        assert_error_on_step(self, result, "steps[1].products",
+                             "must not list a compound twice")
+
+    def test_the_lists_of_a_specific_procedure(self) -> None:
+        """Requirement: Sequence fields (a specific procedure refuses all
+        three keys)."""
+        result = baseline_run(replace_text(STEP_1, named_by(
+            ["propyl-acetate"], ["ethyl-acetate"], "OSDB-0002")))
+        assert_error_on_step(
+            self, result, "steps[1].substrates",
+            "OSDB-0002 has no scope entries; remove substrates")
+        assert_error_on_step(
+            self, result, "steps[1].products",
+            "OSDB-0002 has no scope entries; remove products")
 
 
 class ContinuityTests(ValidatorTestCase):
@@ -413,13 +696,48 @@ class ContinuityTests(ValidatorTestCase):
     def test_the_entry_decides_the_substrates_and_products(self) -> None:
         """Requirement: Sequence continuity (of its entry, for a general
         procedure)."""
-        for value in (1, 3):
-            with self.subTest(entry=value):
-                result = general_run(replace_text(
-                    "entry = 2", f"entry = {value}"))
+        for product in ("ethyl-acetate", "methyl-benzoate"):
+            with self.subTest(product=product):
+                result = general_run(with_step(
+                    '{ procedure = "OSDB-0140", product = '
+                    f'"{product}" }}'))
                 self.assert_one(result, "error", "steps[2]",
                                 "starts from none of the products of "
                                 "step 1")
+
+    def test_an_entry_named_by_its_signature_decides_too(self) -> None:
+        """Requirement: Sequence continuity (of its entry, for a general
+        procedure, named by its substrates and products)."""
+        result = general_run(with_step(
+            named_by(["ethanol"], ["methyl-benzoate"])))
+        self.assert_one(result, "error", "steps[2]",
+                        "starts from none of the products of step 1")
+
+    def test_a_step_that_names_no_entry_is_left_out(self) -> None:
+        """Requirement: Sequence continuity (a step whose entry cannot be
+        resolved is left out of these checks)."""
+        result = general_run(with_step(
+            '{ procedure = "OSDB-0140", product = "ethanol" }'))
+        self.assert_one(result, "error", "steps[1].product",
+                        "is a product of no entry")
+        result = sequence_general_variant_run(BENZYL_IN_TWO)
+        self.assert_one(result, "error", "steps[1].product",
+                        "entries 2 and 3")
+
+    def test_a_reordered_scope_table_keeps_the_chemistry(self) -> None:
+        """Scenario: A reordered scope table."""
+        result = sequence_general_variant_run(ENTRY_2_LAST)
+        self.assert_clean(result)
+
+    def test_a_reordered_scope_table_keeps_a_broken_chain_broken(
+            self) -> None:
+        """Scenario: A reordered scope table (the step names the entry by
+        its chemistry, not by its place)."""
+        result = sequence_general_variant_run(
+            ENTRY_2_LAST, edit_sequence(GENERAL, with_step(
+                '{ procedure = "OSDB-0140", product = "methyl-benzoate" }')))
+        self.assert_one(result, "error", "steps[2]",
+                        "starts from none of the products of step 1")
 
     def test_any_product_of_a_step_may_carry_on(self) -> None:
         """Requirement: Sequence continuity (some product, not only the
@@ -427,7 +745,7 @@ class ContinuityTests(ValidatorTestCase):
         result = general_run(
             replace_line(
                 "steps", 'steps = [{ procedure = "OSDB-0001" }, '
-                '{ procedure = "OSDB-0140", entry = 3 }]'),
+                '{ procedure = "OSDB-0140", product = "methyl-benzoate" }]'),
             replace_line("target", 'target = "methyl-benzoate"'))
         self.assert_clean(result)
 
@@ -460,6 +778,36 @@ class VariantTests(ValidatorTestCase):
         problem = self.assert_one(result, "error", "target", BASELINE,
                                   path_suffix="SEQ-0001-baseline.de.md")
         self.assertIn("SEQ-0001-baseline.md", problem.message)
+
+    def test_variants_compare_the_way_a_step_names_its_entry(self) -> None:
+        """Requirement: Sequence files (the same steps, compared as
+        written)."""
+        result = sequence_variant_run(add_sequence(
+            "SEQ-0002-general-entry.de.md", GERMAN_TITLE,
+            with_step(ENTRY_2_STEP), source=GENERAL))
+        self.assert_one(result, "error", "steps", GENERAL,
+                        path_suffix="SEQ-0002-general-entry.de.md")
+
+    def test_variants_compare_the_lists_of_a_step_in_order(self) -> None:
+        """Requirement: Sequence files (the same steps, compared as
+        written, lists in order)."""
+        reversed_step = named_by(["acetic-acid"],
+                                 ["propyl-acetate", "benzyl-acetate"])
+        result = sequence_variant_run(changes(
+            add_sequence("SEQ-0002-general-entry.de.md", GERMAN_TITLE,
+                         with_step(reversed_step), source=GENERAL),
+            edit_sequence(GENERAL, with_step(ENTRY_2_STEP))))
+        self.assert_one(result, "error", "steps", GENERAL,
+                        path_suffix="SEQ-0002-general-entry.de.md")
+
+    def test_variants_with_the_same_lists_agree(self) -> None:
+        """Requirement: Sequence files (the same steps, compared as
+        written)."""
+        result = sequence_variant_run(changes(
+            add_sequence("SEQ-0002-general-entry.de.md", GERMAN_TITLE,
+                         with_step(ENTRY_2_STEP), source=GENERAL),
+            edit_sequence(GENERAL, with_step(ENTRY_2_STEP))))
+        self.assert_clean(result)
 
     def test_steps_must_agree(self) -> None:
         """Requirement: Sequence files (the same steps)."""

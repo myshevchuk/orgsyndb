@@ -251,6 +251,45 @@ class ScopeProblemTests(ValidatorTestCase):
                      'compound = "methyl-benzoate"'))
         self.assert_clean(result)
 
+    def test_two_entries_of_one_signature(self) -> None:
+        """Scenario: Two entries of one signature."""
+        result = general_variant_run(
+            "OSDB-0140-same-signature.md",
+            in_entry(ENTRY_3, '{ substrates = ["acetic-acid"], products = '
+                     '[{ compound = "propyl-acetate", yield_percent = 60 }, '
+                     '{ compound = "benzyl-acetate", yield_percent = 70 }] '
+                     '}'))
+        self.assert_one(result, "error", "scope[3]",
+                        "the same substrates and products as entry 2")
+
+    def test_the_substrates_of_a_signature_are_compared_as_a_set(
+            self) -> None:
+        """Requirement: Scope entries (the same substrates and the same
+        product compounds, each compared as a set)."""
+        result = general_variant_run(
+            "OSDB-0140-same-substrates.md",
+            in_entry(ENTRY_3, '{ substrates = ["ethanol", "acetic-acid"], '
+                     'products = [{ compound = "ethyl-acetate", '
+                     'yield_percent = 50 }] }'))
+        self.assert_one(result, "error", "scope[3]",
+                        "the same substrates and products as entry 1")
+
+    def test_entries_that_differ_in_one_list_are_not_one_signature(
+            self) -> None:
+        """Requirement: Scope entries (the same substrates and the same
+        product compounds)."""
+        for name, entry in (
+                ("same-substrates-fewer-products",
+                 '{ substrates = ["acetic-acid"], products = [{ compound = '
+                 '"benzyl-acetate", yield_percent = 70 }] }'),
+                ("same-products-other-substrates",
+                 '{ substrates = ["ethanol"], products = [{ compound = '
+                 '"benzyl-acetate", yield_percent = 70 }, { compound = '
+                 '"propyl-acetate", yield_percent = 60 }] }')):
+            with self.subTest(entry=name):
+                self.assert_clean(general_variant_run(
+                    f"OSDB-0140-{name}.md", in_entry(ENTRY_3, entry)))
+
     def test_a_compound_may_be_a_product_of_two_entries(self) -> None:
         """Requirement: Scope entries (the same product in two entries)."""
         result = general_variant_run(

@@ -141,8 +141,11 @@ arrays. Top-level `scale` remains required and gives the typical scale.
 | `scope[n].note` | A comment on this entry. | Non-empty string | No | Must not be empty when present; may be translated. | `note = "Reflux"` |
 
 Each entry is checked on its own. A compound may be a substrate of one entry
-and a product of another. In Markdown, write `scope` as an array of inline
-tables; the demo's
+and a product of another. Two entries of one procedure must not have the
+same substrates and the same product compounds. Compare each list as a set:
+order and yields do not distinguish entries. This lets a sequence step name
+exactly one entry by its compounds. In Markdown, write `scope` as an array of
+inline tables; the demo's
 [OSDB-0009](../examples/demo/md/procedures/OSDB-0009-benzylic-alcohols.md)
 shows three entries. For Org, use the [named scope table](#org-scope-table).
 
@@ -652,8 +655,9 @@ credits its procedure's authors. The procedure taxonomy keys `authors`,
 `tags` and `reaction_types` are errors in a sequence, which stop the build:
 Hugo would otherwise list the sequence among the procedures of an author,
 tag or reaction type. Every other key outside this schema produces an
-`unknown field` warning. Unknown step keys produce a warning under
-`steps[n].<key>`.
+`unknown field` warning. A step accepts only `procedure`, `product`,
+`substrates` and `products`. `entry` is an error; any other unknown step key
+produces a warning under `steps[n].<key>`.
 
 | Field | TOML type | Required | Rule | Example |
 |---|---|---|---|---|
@@ -665,7 +669,15 @@ tag or reaction type. Every other key outside this schema produces an
 | `target` | String | Yes | Existing substance key in the registry; a product of the last step. | `target = "acetylsalicylic-acid"` |
 | `steps` | Array of tables | Yes | At least two steps, in execution order. | `steps = [{ procedure = "OSDB-0001" }, { procedure = "OSDB-0002" }]` |
 | `steps[n].procedure` | String | In every step | Procedure ID found in the validated content roots, whether exported from Org or written in Markdown. | `procedure = "OSDB-0009"` |
-| `steps[n].entry` | Integer | For general procedures only | Scope entry number from 1 through the number of entries; forbidden for a specific procedure. A boolean is not an integer. | `entry = 1` |
+| `steps[n].product` | String | For a general procedure, unless both lists below are given | A compound key made by exactly one scope entry of this procedure. Forbidden for a specific procedure. | `product = "1-biphenyl-4-yl-ethanol"` |
+| `steps[n].substrates` | Array of strings | With `products`, when naming the entry by both lists | All the chosen entry's substrate keys, in any order, without repeats. Forbidden for a specific procedure. | `substrates = ["4-acetylbiphenyl"]` |
+| `steps[n].products` | Array of strings | With `substrates`, when naming the entry by both lists | All the chosen entry's product compound keys, in any order, without repeats. Forbidden for a specific procedure. | `products = ["1-biphenyl-4-yl-ethanol"]` |
+
+For a general procedure, name the entry by `product`. If the product belongs
+to more than one entry, give both `substrates` and `products` instead. The
+lists must match one entry's compounds in full. In a step, `products` is a
+list of compound keys; it contains no yields. Do not combine `product` with
+either list. A specific procedure takes only `procedure`.
 
 Write notes after the closing `+++`, for example under `## Notes`. The eight
 procedure-body sections are not required for a sequence. The demo's
@@ -674,8 +686,12 @@ shows a step through a general procedure:
 
 ```toml
 target = "1-biphenyl-4-yl-ethanol"
-steps = [{ procedure = "OSDB-0004" }, { procedure = "OSDB-0009", entry = 1 }]
+steps = [{ procedure = "OSDB-0004" }, { procedure = "OSDB-0009", product = "1-biphenyl-4-yl-ethanol" }]
 ```
+
+Reordering a procedure's scope table keeps the sequence on the same
+chemistry. The build determines the chosen entry's number, counted from 1 in
+file order, for the sequence page and the manifest.
 
 ### Continuity, variants and yield
 
@@ -684,11 +700,13 @@ as a starting material. For a general procedure, only the chosen scope entry's
 substrates and products count. The target must be a product of the last step.
 The validator checks continuity on the reference sequence variant only: the
 untagged file, otherwise the `.de` file, otherwise `.en`. These checks require
-at least two step tables. A step with an unresolved procedure or an absent,
-invalid or forbidden entry is omitted from continuity checks. The target
-check also requires a known compound key.
+at least two step tables. A step with an unresolved procedure, an entry that
+cannot be resolved, or entry keys on a specific procedure is omitted from
+continuity checks. The target check also requires a known compound key.
 
 Variants share the base name, `id`, `slug`, `target` and ordered `steps`.
+Steps must match as written, including the order within `substrates` and
+`products` lists, even though entry matching ignores that order.
 Each language code, and the absence of a code, may occur once per ID. Title,
 dates and body may differ. Differences in shared fields are errors on the
 other variant, naming the reference file. The build publishes one variant:
@@ -1073,6 +1091,7 @@ is reported under `scope[n]`. An unknown key in an entry produces an
 |---|---|---|
 | `products` or `substrates` | `a general procedure lists them in scope; move <key> into its entries` | Remove the top-level field and put its data in the relevant entries. |
 | `scope` | `must not be empty` | Supply at least one entry. |
+| `scope[n]` | `has the same substrates and products as entry <m>` | Keep only one entry for this combination of substrates and product compounds; changing order or yields does not distinguish them. |
 | `scope` or `scope[n]` | `must be an array of tables` or `must be a table` | Correct the TOML shape. The message also gives an example. |
 | `scope[n].time` | `"<value>" must be a number followed by min, h or d, e.g. "2 h"` | Supply a number and one of the three units. |
 | `scope[n].temperature` | `must be a number in °C, unquoted, e.g. 80` | Remove quotes and units; use a finite number. |
@@ -1147,11 +1166,20 @@ rules as procedures.
 | `steps` | `must list at least two steps` | Add enough steps to describe a sequence. |
 | `steps` or `steps[n]` | `must be an array of tables` or `must be a table` | Use the TOML forms shown above. |
 | `steps[n].procedure` | `<id> not found in any content root` | Use an existing procedure ID; include its directory in a direct validator call. |
-| `steps[n].entry` | `OSDB-NNNN is a general procedure; name one of its entries 1 to <count>` | Add the chosen scope entry number. |
-| `steps[n].entry` | `OSDB-NNNN has no scope entries; remove entry` | Remove `entry` for a specific procedure. |
-| `steps[n].entry` | `must be between 1 and <count>, the number of an entry of OSDB-NNNN's scope` | Choose an existing entry as an unquoted integer. |
+| `steps[n].product` | `OSDB-NNNN is a general procedure; name its entry by a product: <keys>` | Choose a product key from the list; each appears once in scope file order. |
+| `steps[n].product` | `<key> is a product of no entry of OSDB-NNNN` | Use a product key from this procedure's scope. |
+| `steps[n].product` | `<key> is a product of entries <m> and <n> of OSDB-NNNN; name the entry by its substrates and products` | Give the chosen entry's complete `substrates` and `products` lists in place of `product`. The message names all matching entries. |
+| `steps[n].product` | `must be a string, e.g. "ethyl-acetate"` | Write a quoted compound key. |
+| `steps[n].product`, `steps[n].substrates` or `steps[n].products` | `OSDB-NNNN has no scope entries; remove <key>` | Remove the named key for a specific procedure. |
+| `steps[n].substrates` | `no entry of OSDB-NNNN has these substrates and products` | Match one scope entry's substrate and product compound keys in full. |
+| `steps[n].substrates` | `must be given with products` | Add the entry's complete product-key list. |
+| `steps[n].products` | `must be given with substrates` | Add the entry's complete substrate-key list. |
+| `steps[n].substrates` or `steps[n].products` | `must be a list of compound keys, e.g. ["ethanol"]` | Use an array of quoted keys, with no product tables or yields. |
+| `steps[n].substrates` or `steps[n].products` | `must not list a compound twice` | Keep each key once in each list. |
+| `steps[n]` | `name the entry by product or by substrates and products, not both` | Use `product` alone or both complete lists. |
+| `steps[n].entry` | `not a key of a step; name the entry by its product` | Use `product`, or both complete lists when the product belongs to several entries. |
 | `steps[n]` | `starts from none of the products of step <k> (<keys>)` | Check step order and the selected entries' starting materials and products. |
 | `target` | `<key> is not a product of the last step, step N` | Check the target and final procedure or entry. |
-| `target` or `steps` | `must equal the value in <path>` | Keep the same target and ordered steps in every variant. |
+| `target` or `steps` | `must equal the value in <path>` | Keep the same target and steps as written in every variant, including list order. |
 | `authors`, `tags` or `reaction_types` | `must not be set; a sequence joins no procedure taxonomy` | Remove the key; the steps' procedures carry these. |
 | Any other key | `unknown field` | Remove or correct the key. |

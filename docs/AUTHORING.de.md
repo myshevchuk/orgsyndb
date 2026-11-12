@@ -290,7 +290,10 @@ verwenden dieselben Felder `compound` und `yield_percent` wie oben. Die
 Einträge sind in ihrer Reihenfolge ab 1 nummeriert. Nennen Sie innerhalb eines
 Eintrags keinen Schlüssel doppelt und kein Produkt auch als Ausgangsstoff. Eine
 Verbindung darf Ausgangsstoff in einem Eintrag und Produkt in einem anderen
-sein.
+sein. Zwei Einträge derselben Vorschrift dürfen nicht dieselben
+Ausgangsstoffe und dieselben Produktverbindungen haben, auch nicht in anderer
+Reihenfolge oder mit anderen Ausbeuten. So kann eine Synthesewegstufe anhand
+der Verbindungen einen Eintrag auswählen.
 
 Optional sind `scale`, `time`, `temperature` und `note` je Eintrag. Eine Zeit
 besteht aus Zahl und `min`, `h` oder `d`, etwa `"30 min"`. Eine Temperatur ist
@@ -504,9 +507,18 @@ die Ausbeute des ersten Produkts in Eintrag 2. `must not be empty` unter
 entfernen Sie die Zeile und tragen die Daten in den passenden Einträgen ein.
 Ein Zeitfehler verlangt eine Zahl mit `min`, `h` oder `d`, ein Temperaturfehler
 eine Zahl in °C ohne Anführungszeichen.
+`has the same substrates and products as entry <m>` unter `scope[n]`
+bedeutet, dass Eintrag n die Verbindungen von Eintrag m wiederholt; behalten
+Sie nur einen solchen Eintrag.
 
-Bei einem Syntheseweg nennt `steps[2].entry` den für Stufe 2 gewählten
-Scope-Eintrag. `must list at least two steps` verlangt mehr Stufen;
+Bei einem Syntheseweg nennt `steps[2].product` das Produkt, mit dem Sie den
+Scope-Eintrag für Stufe 2 auswählen. `name its entry by a product: <keys>`
+fordert Sie auf, einen Produktschlüssel zu wählen. Meldet der Validator,
+dass das Produkt in mehreren Einträgen vorkommt, geben Sie statt `product`
+die vollständigen Listen `substrates` und `products` des gewählten Eintrags
+an. Unter `steps[2].entry` steht die Meldung
+`not a key of a step; name the entry by its product`.
+`must list at least two steps` verlangt mehr Stufen;
 `not found in any content root` bedeutet, dass eine Vorschriftennummer nicht
 gefunden wurde. `starts from none of the products of step 1` unter `steps[2]`
 heißt, dass Stufe 2 kein Produkt von Stufe 1 als Ausgangsstoff verwendet.
@@ -662,7 +674,7 @@ title = "1-(Biphenyl-4-yl)ethanol aus 4′-Bromacetophenon"
 date = 2026-10-23T10:05:00+02:00
 lastmod = 2026-10-23T10:20:00+02:00
 target = "1-biphenyl-4-yl-ethanol"
-steps = [{ procedure = "OSDB-0004" }, { procedure = "OSDB-0009", entry = 1 }]
+steps = [{ procedure = "OSDB-0004" }, { procedure = "OSDB-0009", product = "1-biphenyl-4-yl-ethanol" }]
 +++
 
 ## Anmerkungen
@@ -672,8 +684,33 @@ allgemeinen Vorschrift reduziert.
 ```
 
 Sie brauchen mindestens zwei Stufen. Jedes `procedure` nennt eine vorhandene
-Vorschriftennummer. Eine allgemeine Vorschrift verlangt `entry`, die
-Scope-Eintragsnummer ab 1. Bei einer Einzelvorschrift ist `entry` verboten.
+Vorschriftennummer. Setzen Sie bei einer allgemeinen Vorschrift `product`
+auf einen Verbindungsschlüssel, der in genau einem Scope-Eintrag als Produkt
+vorkommt. Kommt das Produkt in mehreren Einträgen vor, geben Sie stattdessen
+`substrates` und `products` an. Beide Listen müssen die Verbindungsschlüssel
+des gewählten Eintrags vollständig enthalten, in beliebiger Reihenfolge und
+ohne Wiederholungen. Schreiben Sie Produktschlüssel ohne Ausbeuten. Dies
+sind die vollständigen Listen für denselben Beispieleintrag:
+
+```toml
+{ procedure = "OSDB-0009", substrates = ["4-acetylbiphenyl"], products = ["1-biphenyl-4-yl-ethanol"] }
+```
+
+Verwenden Sie nur eine der beiden Formen. Bei einer Einzelvorschrift sind
+`product`, `substrates` und `products` verboten. `entry` ist kein Feld einer
+Stufe. Wenn Sie die Scope-Einträge der Vorschrift umordnen, führt die Stufe
+weiterhin dieselbe Reaktion aus. Der Build ermittelt die Eintragsnummer für
+die Seite und das Manifest.
+
+Vervollständigen Sie in Emacs innerhalb der Zeichenkette von `product`, um
+ein Produkt der genannten allgemeinen Vorschrift auszuwählen. Jedes Produkt
+erscheint einmal in der Reihenfolge in der Datei, mit den Nummern der
+Einträge, die es herstellen. Das gilt für allgemeine Vorschriften in
+Markdown und Org. Innerhalb der Listen `substrates` und `products` bietet
+die Vervollständigung Verbindungsschlüssel an. Bei einer Einzelvorschrift
+gibt es keine Vorschläge für `product`; nach `entry =` gibt es keine
+Vervollständigung.
+
 Jede Stufe nach der ersten muss ein Produkt der vorigen Stufe als
 Ausgangsstoff verwenden; bei allgemeinen Vorschriften zählen nur die
 Ausgangsstoffe und Produkte des gewählten Eintrags. Das Ziel muss ein Produkt
@@ -693,9 +730,11 @@ ganze Prozent, bei genau einem halben Prozent nach oben. Tragen Sie im
 Syntheseweg selbst keine Ausbeute ein.
 
 Für eine Übersetzung kopieren Sie die Datei mit `.de` oder `.en` vor `.md`.
-Behalten Sie Grundnamen, `id`, `slug`, `target` und die geordneten `steps`;
-übersetzen Sie Titel und Anmerkungen und setzen Sie die Zeitangaben für diese
-Fassung. Beide Beispielwege haben deutsche Fassungen. Die Website
+Behalten Sie Grundnamen, `id`, `slug`, `target` und die geordneten `steps`
+genau wie geschrieben, einschließlich der Reihenfolge innerhalb der Listen
+`substrates` und `products`. Übersetzen Sie Titel und Anmerkungen und setzen
+Sie die Zeitangaben für diese Fassung. Beide Beispielwege haben deutsche
+Fassungen. Die Website
 veröffentlicht je Nummer eine Fassung: zuerst die Sprache der Website, dann
 eine Datei ohne Kürzel, dann die andere Sprache. Prüfen Sie mit
 `orgsyndb validate` und starten Sie `orgsyndb serve` neu, um den Weg und seine

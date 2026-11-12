@@ -95,27 +95,43 @@ the file that a file in LANGUAGE refers to."
                                                root id language)))))
              ids))))
 
-(defun orgsyndb--entry-candidates (root id language)
-  "Return the entry numbers of the general procedure ID of ROOT, each
-annotated with the compound keys of that entry's products."
+(defun orgsyndb--product-candidates (root id language)
+  "Return the products of the entries of the general procedure ID of ROOT.
+Each product key appears once, in file order, annotated with the
+numbers of the entries it is a product of; the front matter is the one
+a file in LANGUAGE refers to.  Return nil for a specific procedure or
+an unknown ID."
   (let* ((record (orgsyndb--definition root id language))
          (scope (alist-get 'scope (alist-get 'front_matter record)))
          (number 0)
-         numbers annotations)
+         keys annotations)
     (when (listp scope)
       (dolist (entry scope)
-        (let ((label (number-to-string (cl-incf number))))
-          (push label numbers)
-          (push (cons label
-                      (mapconcat (lambda (product)
-                                   (or (alist-get 'compound product) "?"))
-                                 (alist-get 'products entry) ", "))
-                annotations))))
-    (and numbers (orgsyndb--candidates (nreverse numbers) annotations))))
+        (cl-incf number)
+        (dolist (product (alist-get 'products entry))
+          (let ((key (alist-get 'compound product)))
+            (when (stringp key)
+              (unless (member key keys)
+                (push key keys))
+              (let ((cell (assoc key annotations)))
+                (if cell
+                    (unless (member number (cdr cell))
+                      (setcdr cell (append (cdr cell) (list number))))
+                  (push (list key number) annotations))))))))
+    (and keys
+         (orgsyndb--candidates
+          (nreverse keys)
+          (mapcar (lambda (cell)
+                    (cons (car cell)
+                          (mapconcat #'number-to-string (cdr cell) ", ")))
+                  annotations)))))
 
-(defun orgsyndb--value-candidates (root entity key)
+(defun orgsyndb--value-candidates (root entity key &optional open)
   "Return the candidates for a string value of KEY, a string, in a file
-of ENTITY, `procedure' or `sequence', of ROOT, or nil."
+of ENTITY, `procedure' or `sequence', of ROOT, or nil.
+OPEN is the position where the inline table that holds KEY begins; the
+`product' of a step is completed from the procedure that table
+names."
   (let ((language (orgsyndb--language-code buffer-file-name)))
     (pcase (cons entity key)
       (`(procedure . "status")
@@ -132,6 +148,11 @@ of ENTITY, `procedure' or `sequence', of ROOT, or nil."
        (orgsyndb--compound-candidates root))
       (`(sequence . "target") (orgsyndb--compound-candidates root))
       (`(sequence . "procedure") (orgsyndb--procedure-ids root language))
+      (`(sequence . ,(or "substrates" "products"))
+       (orgsyndb--compound-candidates root))
+      (`(sequence . "product")
+       (let ((id (and open (orgsyndb--step-procedure open))))
+         (and id (orgsyndb--product-candidates root id language))))
       (`(procedure . "scheme_image")
        (orgsyndb--candidates (orgsyndb--structure-images root)))
       (`(procedure . ,_)
@@ -312,26 +333,19 @@ Return one of:
 (defun orgsyndb--complete-toml (entity beg end)
   "Complete at point in TOML text of ENTITY from BEG to END."
   (when (and (<= beg (point)) (<= (point) end))
-    (let ((root orgsyndb--root)
-          (language (orgsyndb--language-code buffer-file-name)))
+    (let ((root orgsyndb--root))
       (pcase (orgsyndb--toml-context beg)
         (`(key ,start)
          (orgsyndb--capf start (point)
                          (orgsyndb--key-candidates
                           root entity (orgsyndb--keys-set beg end))))
-        (`(string ,key ,start ,stop ,_open)
+        (`(string ,key ,start ,stop ,open)
          (orgsyndb--capf start stop
-                         (orgsyndb--value-candidates root entity key)))
-        (`(bare ,key ,start ,open)
-         (cond
-          ((orgsyndb--boolean-p root entity key)
+                         (orgsyndb--value-candidates root entity key open)))
+        (`(bare ,key ,start ,_open)
+         (when (orgsyndb--boolean-p root entity key)
            (orgsyndb--capf start (point)
-                           (orgsyndb--candidates '("true" "false"))))
-          ((and (eq entity 'sequence) (equal key "entry"))
-           (let ((id (orgsyndb--step-procedure open)))
-             (and id (orgsyndb--capf start (point)
-                                     (orgsyndb--entry-candidates
-                                      root id language)))))))))))
+                           (orgsyndb--candidates '("true" "false")))))))))
 
 ;;;; Org sources
 

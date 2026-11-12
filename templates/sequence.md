@@ -42,10 +42,15 @@ target = "acetylsalicylic-acid"
 # steps: the procedures in the order they are run, at least two. Each
 # step is { procedure = "OSDB-NNNN" }, the procedure's number; each step
 # must start from a product of the step before it.
-# For a general procedure, one with a scope table, add entry, the number
-# of the scope entry the step runs, counted from 1:
-# { procedure = "OSDB-0009", entry = 1 }. A specific procedure takes no
-# entry.
+# For a general procedure, one with a scope table, add product, a
+# compound the step makes, to say which scope entry it runs:
+# { procedure = "OSDB-0009", product = "1-biphenyl-4-yl-ethanol" }.
+# If another entry of the same procedure makes that compound too, give
+# substrates and products instead, the compounds of the entry in full,
+# in any order, each a list of registry keys:
+# { procedure = "OSDB-0009", substrates = ["4-acetylbiphenyl"],
+#   products = ["1-biphenyl-4-yl-ethanol"] }. A specific procedure takes
+# none of the three.
 steps = [{ procedure = "OSDB-0001" }, { procedure = "OSDB-0002" }]
 +++
 

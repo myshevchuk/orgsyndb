@@ -671,35 +671,115 @@ a Summary, visit it, put point at its mark and complete."
                                 (orgsyndb-test-annotation result
                                                           "OSDB-0007")))))))
 
-(ert-deftest orgsyndb-test-complete-step-entry ()
-  "Scenario: Step entry."
-  (orgsyndb-test-with (root orgsyndb-test-demo)
-    (with-current-buffer (orgsyndb-test-visit
-                          root
-                          "md/sequences/SEQ-0001-aspirin-from-wintergreen.md")
-      (orgsyndb-test-put-line
-       "steps = " "steps = [{ procedure = \"OSDB-0009\", entry = ¦}]")
-      (let ((result (orgsyndb-test-complete)))
-        (should (equal (car result) '("1" "2" "3")))
-        (should (string-match-p "1-biphenyl-4-yl-ethanol"
-                                (orgsyndb-test-annotation result "1")))))))
+(defconst orgsyndb-test-step-sequence
+  "md/sequences/SEQ-0001-aspirin-from-wintergreen.md"
+  "A sequence of the demo, whose `steps' line the tests rewrite.")
 
-(ert-deftest orgsyndb-test-complete-step-entry-of-an-org-general-procedure ()
-  "Scenario: Step entry of an Org general procedure."
+(defun orgsyndb-test-complete-step (root step)
+  "Complete in the first sequence of ROOT with the `steps' line made of
+STEP, an inline table, in which `¦' marks point.
+Return what `orgsyndb-test-complete' returns."
+  (with-current-buffer (orgsyndb-test-visit root orgsyndb-test-step-sequence)
+    (orgsyndb-test-put-line "steps = " (format "steps = [%s]" step))
+    (orgsyndb-test-complete)))
+
+(ert-deftest orgsyndb-test-complete-step-product ()
+  "Scenario: Step product."
+  (orgsyndb-test-with (root orgsyndb-test-demo)
+    (let ((result (orgsyndb-test-complete-step
+                   root "{ procedure = \"OSDB-0009\", product = \"¦\" }")))
+      (should (equal (car result)
+                     '("1-biphenyl-4-yl-ethanol" "1-phenylethanol"
+                       "1-4-bromophenyl-ethanol")))
+      (should (string-match-p
+               "1" (orgsyndb-test-annotation result
+                                             "1-biphenyl-4-yl-ethanol")))
+      (should (string-match-p
+               "2" (orgsyndb-test-annotation result "1-phenylethanol")))
+      (should (string-match-p
+               "3" (orgsyndb-test-annotation result
+                                             "1-4-bromophenyl-ethanol"))))))
+
+(ert-deftest orgsyndb-test-complete-step-product-of-an-org-general-procedure ()
+  "Scenario: Step product of an Org general procedure."
   (orgsyndb-test-with (root orgsyndb-test-demo)
     (copy-file (expand-file-name "export/OSDB-0909-scope-table.org"
                                  orgsyndb-test-fixtures)
                (expand-file-name "org/procedures/" root))
-    (with-current-buffer (orgsyndb-test-visit
-                          root
-                          "md/sequences/SEQ-0001-aspirin-from-wintergreen.md")
-      (orgsyndb-test-put-line
-       "steps = " "steps = [{ procedure = \"OSDB-0909\", entry = ¦}]")
-      (let* ((result (orgsyndb-test-complete))
-             (annotation (orgsyndb-test-annotation result "1")))
-        (should (equal (car result) '("1" "2" "3")))
-        (should (string-match-p "ethyl-acetate" annotation))
-        (should (string-match-p "propyl-acetate" annotation))))))
+    (let ((result (orgsyndb-test-complete-step
+                   root "{ procedure = \"OSDB-0909\", product = \"¦\" }")))
+      (should (equal (car result)
+                     '("ethyl-acetate" "propyl-acetate" "benzyl-acetate"
+                       "methyl-benzoate")))
+      (should (string-match-p
+               "1" (orgsyndb-test-annotation result "propyl-acetate"))))))
+
+(ert-deftest orgsyndb-test-complete-step-product-of-two-entries ()
+  "Requirement: Completion in sequences (each product once, in file
+order, annotated with the numbers of the entries it is a product of)."
+  (orgsyndb-test-with (root orgsyndb-test-demo)
+    (orgsyndb-test-write
+     root "md/procedures/OSDB-0140-general.md"
+     (string-replace
+      "{ compound = \"methyl-benzoate\", yield_percent = 72.5 }"
+      "{ compound = \"benzyl-acetate\", yield_percent = 72.5 }"
+      (orgsyndb-test-file-text
+       (expand-file-name "general/OSDB-0140-general.md"
+                         orgsyndb-test-fixtures))))
+    (let ((result (orgsyndb-test-complete-step
+                   root "{ procedure = \"OSDB-0140\", product = \"¦\" }")))
+      (should (equal (car result)
+                     '("ethyl-acetate" "benzyl-acetate" "propyl-acetate")))
+      (let ((both (orgsyndb-test-annotation result "benzyl-acetate"))
+            (first (orgsyndb-test-annotation result "ethyl-acetate")))
+        (should (string-match-p "2" both))
+        (should (string-match-p "3" both))
+        (should (string-match-p "1" first))
+        (should-not (string-match-p "[23]" first))))))
+
+(ert-deftest orgsyndb-test-complete-the-product-of-a-specific-procedure ()
+  "Requirement: Completion in sequences (nothing when the step names a
+specific procedure)."
+  (orgsyndb-test-with (root orgsyndb-test-demo)
+    (should-not (car (orgsyndb-test-complete-step
+                      root (concat "{ procedure = \"OSDB-0002\", "
+                                   "product = \"¦\" }"))))))
+
+(ert-deftest orgsyndb-test-complete-the-product-by-its-prefix ()
+  "Requirement: Completion in sequences (the product keys of the entries
+of the general procedure that the step's `procedure' names)."
+  (orgsyndb-test-with (root orgsyndb-test-demo)
+    (should (equal (car (orgsyndb-test-complete-step
+                         root (concat "{ procedure = \"OSDB-0009\", "
+                                      "product = \"1-ph¦\" }")))
+                   '("1-phenylethanol")))))
+
+(ert-deftest orgsyndb-test-complete-no-entry-number-in-a-step ()
+  "Requirement: Completion in sequences (a step names its entry by its
+product, so no entry number is offered)."
+  (orgsyndb-test-with (root orgsyndb-test-demo)
+    (should-not (car (orgsyndb-test-complete-step
+                      root "{ procedure = \"OSDB-0009\", entry = ¦ }")))))
+
+(ert-deftest orgsyndb-test-complete-the-substrates-of-a-step ()
+  "Requirement: Completion in sequences (inside a list of `substrates'
+in a step, the compound keys)."
+  (orgsyndb-test-with (root orgsyndb-test-demo)
+    (let ((result (orgsyndb-test-complete-step
+                   root (concat "{ procedure = \"OSDB-0009\", "
+                                "substrates = [\"4-acet¦\"] }"))))
+      (should (equal (car result) '("4-acetylbiphenyl")))
+      (should (orgsyndb-test-annotation result "4-acetylbiphenyl")))))
+
+(ert-deftest orgsyndb-test-complete-the-products-of-a-step ()
+  "Requirement: Completion in sequences (inside a list of `products' in
+a step, the compound keys)."
+  (orgsyndb-test-with (root orgsyndb-test-demo)
+    (should (equal (car (orgsyndb-test-complete-step
+                         root (concat "{ procedure = \"OSDB-0009\", "
+                                      "substrates = [\"4-acetylbiphenyl\"], "
+                                      "products = [\"1-biphenyl-4-¦\"] }")))
+                   '("1-biphenyl-4-yl-ethanol")))))
 
 (ert-deftest orgsyndb-test-complete-the-target-of-a-sequence ()
   "Requirement: Completion in sequences (the compound keys inside the

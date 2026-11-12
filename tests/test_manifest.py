@@ -194,6 +194,72 @@ class ManifestDataTests(unittest.TestCase):
             {"procedure": "OSDB-0004", "entry": None},
             {"procedure": "OSDB-0009", "entry": 1}])
 
+    def edit_files(self, directory: str, pattern: str, old: str,
+                   new: str) -> None:
+        """Replace ``old`` by ``new`` in each file of ``md/<directory>/``
+        that ``pattern`` matches, which must hold ``old`` once."""
+        paths = sorted((self.root / "md" / directory).glob(pattern))
+        self.assertTrue(paths, pattern)
+        for path in paths:
+            text = path.read_text(encoding="utf-8")
+            self.assertEqual(text.count(old), 1, f"{path.name}: {old!r}")
+            path.write_text(text.replace(old, new), encoding="utf-8")
+
+    def second_step_of_seq_0002(self) -> dict[str, Any]:
+        steps = by_id(manifest_of(self.root)["sequences"],
+                      "SEQ-0002")["steps"]
+        self.assertEqual(steps[0], {"procedure": "OSDB-0004",
+                                    "entry": None})
+        return steps[1]
+
+    def test_a_step_gives_the_entry_its_product_names(self) -> None:
+        """Requirement: manifest subcommand (`steps`, tables of
+        `procedure` and `entry`, the number of the entry the step
+        names)."""
+        for sequence in self.data["sequences"]:
+            for step in sequence["steps"]:
+                self.assertEqual(set(step), {"procedure", "entry"})
+        self.assertEqual(self.second_step_of_seq_0002(),
+                         {"procedure": "OSDB-0009", "entry": 1})
+
+    def test_a_reordered_scope_table_gives_the_new_number(self) -> None:
+        """Scenario: A reordered scope table (the manifest's step gives
+        entry 3)."""
+        entry_1 = ('  { substrates = ["4-acetylbiphenyl"], time = "30 min", '
+                   'products = [{ compound = "1-biphenyl-4-yl-ethanol", '
+                   "yield_percent = 90 }] },\n")
+        self.edit_files("procedures", "OSDB-0009-*.md", entry_1, "")
+        self.edit_files("procedures", "OSDB-0009-*.md", "]\nhazards",
+                        entry_1 + "]\nhazards")
+        data = manifest_of(self.root)
+        general = by_id(data["procedures"], "OSDB-0009")
+        self.assertEqual(
+            [e["products"][0]["compound"] for e in general["entries"]],
+            ["1-phenylethanol", "1-4-bromophenyl-ethanol",
+             "1-biphenyl-4-yl-ethanol"])
+        self.assertEqual(self.second_step_of_seq_0002(),
+                         {"procedure": "OSDB-0009", "entry": 3})
+
+    def test_a_step_named_by_its_signature_gives_its_entry(self) -> None:
+        """Requirement: manifest subcommand (`entry`, the number of the
+        entry the step names, by its substrates and products)."""
+        self.edit_files(
+            "sequences", "SEQ-0002-*.md",
+            'product = "1-biphenyl-4-yl-ethanol"',
+            'substrates = ["4-acetylbiphenyl"], '
+            'products = ["1-biphenyl-4-yl-ethanol"]')
+        self.assertEqual(self.second_step_of_seq_0002(),
+                         {"procedure": "OSDB-0009", "entry": 1})
+
+    def test_a_step_of_the_second_entry(self) -> None:
+        """Requirement: manifest subcommand (`entry`, the number of the
+        entry the step names)."""
+        self.edit_files("sequences", "SEQ-0002-*.md",
+                        'product = "1-biphenyl-4-yl-ethanol"',
+                        'product = "1-phenylethanol"')
+        self.assertEqual(self.second_step_of_seq_0002(),
+                         {"procedure": "OSDB-0009", "entry": 2})
+
     def test_the_export_holds_the_org_procedures(self) -> None:
         """Requirement: manifest subcommand (the files of
         `build/export/`: `source` is `org` for an export)."""

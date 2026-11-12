@@ -377,7 +377,9 @@ non-empty `scope` array. Each entry requires non-empty `substrates` and
 number in °C) and `note`. Entries are numbered from 1 in their order. Duplicate
 and product-versus-starting-material checks apply within each entry, so a
 compound may be a substrate of one entry and a product of another. The site
-derives links and search terms from every entry.
+derives links and search terms from every entry. Two entries of one
+procedure must not have the same substrates and the same product compounds,
+regardless of their order or yields.
 
 In Markdown, write `scope` as an array of inline tables, as in
 [OSDB-0009](examples/demo/md/procedures/OSDB-0009-benzylic-alcohols.md). In
@@ -432,20 +434,28 @@ with your route. For example, the demo's second sequence uses:
 
 ```toml
 target = "1-biphenyl-4-yl-ethanol"
-steps = [{ procedure = "OSDB-0004" }, { procedure = "OSDB-0009", entry = 1 }]
+steps = [{ procedure = "OSDB-0004" }, { procedure = "OSDB-0009", product = "1-biphenyl-4-yl-ethanol" }]
 ```
 
 List at least two steps in execution order. Each `procedure` must exist in the
-collection. Add `entry` for a general procedure, counting its scope entries
-from 1; omit it for a specific procedure. Each step after the first must take
-a product of the previous step as a starting material. The target must be a
-product of the last step. For a general procedure these checks use only the
+collection. For a general procedure, set `product` to a compound key made by
+exactly one of its scope entries. If that product belongs to several entries,
+give `substrates` and `products` instead: both lists must contain the chosen
+entry's compound keys in full, in any order, without repeats. Use one form
+only. A specific procedure takes none of these three keys. `entry` is not a
+step key. Reordering the scope table keeps the step on the same chemistry;
+the build determines the entry number for the page and manifest.
+
+Each step after the first must take a product of the previous step as a
+starting material. The target must be a product of the last step. For a
+general procedure these checks use only the
 chosen entry. Do not add `authors`: each step credits its procedure's authors.
 Write notes below the closing `+++`, such as which intermediate is dried
 before use. Run `orgsyndb validate`, then `orgsyndb serve` to inspect the route.
 
 To translate a sequence, copy it with `.de` or `.en` before `.md`. Keep the
-base name, `id`, `slug`, `target` and ordered `steps` the same. Translate the
+base name, `id`, `slug`, `target` and ordered `steps` the same, including
+the order within `substrates` and `products` lists. Translate the
 title and notes and set the dates for that version. The build chooses one
 variant per ID by the same language rules as procedures. The
 [schema reference](docs/SCHEMA.md#synthesis-sequences) gives all field rules.
@@ -932,7 +942,12 @@ and in the `substrates` and `products` columns of the table named `scope`.
 It offers statuses, languages, reaction types, tags, authors, compound
 keys, scheme images and the collection's declared choice and boolean
 fields. Labels and compound names help you choose. Sequences also offer
-procedure IDs, general-procedure entry numbers and target substance keys.
+procedure IDs and target substance keys. Inside a step's `product` string,
+completion offers the named general procedure's products, each once in file
+order, annotated with the entry numbers that make it. This works for Markdown
+and Org general procedures. Inside a step's `substrates` and `products` lists,
+it offers compound keys. A specific procedure offers no `product` candidates;
+there is no completion after `entry =`.
 Compound keys and vocabulary terms come from the registry through the
 index. Completion leaves body text to your other completion functions.
 
@@ -1100,13 +1115,20 @@ General-procedure fields use `scope[n].<key>` and `scope[n].products[m].<key>`,
 with indices starting at 1. An empty `scope` reports `must not be empty`;
 top-level `products` or `substrates` report
 `a general procedure lists them in scope; move <key> into its entries`. Time
-and temperature errors explain the required units or numeric form. Malformed
+and temperature errors explain the required units or numeric form. Under
+`scope[n]`, `has the same substrates and products as entry <m>` means two
+entries name the same chemistry; keep only one such entry. Malformed
 Org scope tables report field `scope` and stop export before Markdown
 validation. The [schema reference](docs/SCHEMA.md#org-scope-table) lists each
 table error and its correction.
 
-Sequence fields use `steps[n].procedure` and `steps[n].entry`, counting from
-1. A missing procedure reports `<id> not found in any content root`; a broken
+Sequence fields use `steps[n].procedure`, `steps[n].product`,
+`steps[n].substrates` and `steps[n].products`, counting from 1. A missing entry
+choice reports `name its entry by a product: <keys>` under `product`. If the
+message names several entries for that product, give the entry's complete
+`substrates` and `products` lists instead. `steps[n].entry` reports
+`not a key of a step; name the entry by its product`.
+A missing procedure reports `<id> not found in any content root`; a broken
 chain reports `starts from none of the products of step <k>` under the next
 step. A wrong target reports `is not a product of the last step`. For a direct
 validator invocation, `--sequences DIR` selects the sequence directory and

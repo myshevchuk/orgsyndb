@@ -156,8 +156,14 @@ dort Pflicht und nennt die typische Ansatzgröße.
 | `scope[n].note` | Anmerkung zu diesem Eintrag. | Nicht leerer String | Nein | Darf nicht leer sein, wenn vorhanden; darf übersetzt werden. | `note = "Rückfluss"` |
 
 Jeder Eintrag wird für sich geprüft. Eine Verbindung darf Ausgangsstoff in
-einem Eintrag und Produkt in einem anderen sein. Schreiben Sie `scope` in
-Markdown als Array von Tabellen in geschweiften Klammern. Die
+einem Eintrag und Produkt in einem anderen sein. Zwei Einträge derselben
+Vorschrift dürfen nicht dieselben Ausgangsstoffe und dieselben
+Produktverbindungen haben. Beim Vergleich zählt nur, welche Verbindungen
+jede Liste enthält. Reihenfolge und Ausbeuten unterscheiden die Einträge
+nicht. So kann eine
+Synthesewegstufe anhand der Verbindungen genau einen Eintrag auswählen.
+Schreiben Sie `scope` in Markdown als Array von Tabellen in geschweiften
+Klammern. Die
 [Beispielvorschrift
 OSDB-0009](../examples/demo/md/procedures/OSDB-0009-benzylic-alcohols.de.md)
 zeigt drei Einträge. In Org verwenden Sie die [benannte
@@ -721,8 +727,9 @@ der Vorschriften, `authors`, `tags` und `reaction_types`, sind in einem
 Syntheseweg Fehler und halten den Build an: Hugo würde den Syntheseweg
 sonst unter den Vorschriften eines Autors, Schlagworts oder Reaktionstyps
 führen. Jedes andere Feld außerhalb dieses Schemas ergibt eine Warnung
-`unknown field`. Unbekannte Felder einer Stufe erscheinen unter
-`steps[n].<key>`.
+`unknown field`. Eine Stufe erlaubt nur `procedure`, `product`, `substrates`
+und `products`. `entry` ist ein Fehler; jedes andere unbekannte Feld einer
+Stufe ergibt eine Warnung unter `steps[n].<key>`.
 
 | Feld | TOML-Typ | Pflicht | Regel | Beispiel |
 |---|---|---|---|---|
@@ -734,7 +741,16 @@ führen. Jedes andere Feld außerhalb dieses Schemas ergibt eine Warnung
 | `target` | String | Ja | Vorhandener Stoffschlüssel im Register; ein Produkt der letzten Stufe. | `target = "acetylsalicylic-acid"` |
 | `steps` | Array von Tabellen | Ja | Mindestens zwei Stufen, in Ausführungsreihenfolge. | `steps = [{ procedure = "OSDB-0001" }, { procedure = "OSDB-0002" }]` |
 | `steps[n].procedure` | String | In jeder Stufe | Vorschriftennummer aus den geprüften Inhaltsverzeichnissen, aus Org exportiert oder in Markdown geschrieben. | `procedure = "OSDB-0009"` |
-| `steps[n].entry` | Ganzzahl | Nur bei allgemeinen Vorschriften | Eintragsnummer von 1 bis zur Zahl der Scope-Einträge; bei Einzelvorschriften verboten. Kein Wahrheitswert. | `entry = 1` |
+| `steps[n].product` | String | Bei allgemeinen Vorschriften, sofern nicht beide folgenden Listen angegeben sind | Ein Verbindungsschlüssel, der in genau einem Scope-Eintrag dieser Vorschrift als Produkt vorkommt. Bei Einzelvorschriften verboten. | `product = "1-biphenyl-4-yl-ethanol"` |
+| `steps[n].substrates` | String-Array | Zusammen mit `products`, wenn beide Listen den Eintrag auswählen | Alle Ausgangsstoffschlüssel des gewählten Eintrags, in beliebiger Reihenfolge, ohne Wiederholungen. Bei Einzelvorschriften verboten. | `substrates = ["4-acetylbiphenyl"]` |
+| `steps[n].products` | String-Array | Zusammen mit `substrates`, wenn beide Listen den Eintrag auswählen | Alle Schlüssel der Produktverbindungen des gewählten Eintrags, in beliebiger Reihenfolge, ohne Wiederholungen. Bei Einzelvorschriften verboten. | `products = ["1-biphenyl-4-yl-ethanol"]` |
+
+Wählen Sie bei einer allgemeinen Vorschrift den Eintrag mit `product` aus.
+Kommt das Produkt in mehreren Einträgen vor, geben Sie stattdessen sowohl
+`substrates` als auch `products` an. Die Listen müssen die Verbindungen
+eines Eintrags vollständig wiedergeben. In einer Stufe ist `products` eine
+Liste von Verbindungsschlüsseln ohne Ausbeuten. Kombinieren Sie `product`
+mit keiner der beiden Listen. Eine Einzelvorschrift erhält nur `procedure`.
 
 Schreiben Sie nach der schließenden `+++`-Zeile Anmerkungen, etwa unter
 `## Anmerkungen`. Die acht Textabschnitte einer Vorschrift sind nicht
@@ -744,8 +760,13 @@ zeigt eine Stufe mit einer allgemeinen Vorschrift:
 
 ```toml
 target = "1-biphenyl-4-yl-ethanol"
-steps = [{ procedure = "OSDB-0004" }, { procedure = "OSDB-0009", entry = 1 }]
+steps = [{ procedure = "OSDB-0004" }, { procedure = "OSDB-0009", product = "1-biphenyl-4-yl-ethanol" }]
 ```
+
+Wenn Sie die Scope-Tabelle einer Vorschrift umordnen, führt der Syntheseweg
+weiterhin dieselben Reaktionen aus. Der Build ermittelt die Nummer des
+gewählten Eintrags für die Synthesewegseite und das Manifest. Die Zählung
+beginnt bei 1 und folgt der Reihenfolge in der Datei.
 
 ### Zusammenhang der Stufen, Fassungen und Ausbeute
 
@@ -755,11 +776,14 @@ Ausgangsstoffe und Produkte des gewählten Eintrags. Das Ziel muss ein Produkt
 der letzten Stufe sein. Der Validator prüft diesen Zusammenhang nur an der
 Bezugsfassung: der Datei ohne Sprachkürzel, sonst `.de`, sonst `.en`. Dafür
 müssen mindestens zwei Stufentabellen vorliegen. Eine Stufe mit unbekannter
-Vorschrift oder fehlendem, ungültigem oder verbotenem Eintrag bleibt bei der
-Zusammenhangsprüfung unberücksichtigt. Die Zielprüfung setzt zusätzlich einen
-bekannten Verbindungsschlüssel voraus.
+Vorschrift, nicht bestimmbarem Eintrag oder Feldern zur Eintragsauswahl bei
+einer Einzelvorschrift bleibt bei der Zusammenhangsprüfung unberücksichtigt.
+Die Zielprüfung setzt zusätzlich einen bekannten Verbindungsschlüssel voraus.
 
 Fassungen teilen Grundnamen, `id`, `slug`, `target` und die geordneten `steps`.
+Die Stufen müssen genau wie geschrieben übereinstimmen, einschließlich der
+Reihenfolge innerhalb der Listen `substrates` und `products`. Für die Auswahl
+des Eintrags spielt diese Reihenfolge dagegen keine Rolle.
 Jedes Sprachkürzel und das Fehlen eines Kürzels darf je Nummer einmal
 vorkommen. Titel, Zeitangaben und Text dürfen sich unterscheiden. Abweichungen
 der gemeinsamen Felder sind Fehler an der anderen Fassung, die die
@@ -1166,6 +1190,7 @@ Eintrag ergibt eine Warnung `unknown field` unter dem vollen Feldnamen.
 |---|---|---|
 | `products` oder `substrates` | `a general procedure lists them in scope; move <key> into its entries` | Feld auf oberster Ebene entfernen und Daten den passenden Einträgen zuordnen. |
 | `scope` | `must not be empty` | Mindestens einen Eintrag angeben. |
+| `scope[n]` | `has the same substrates and products as entry <m>` | Nur einen Eintrag für diese Kombination von Ausgangsstoffen und Produktverbindungen behalten; eine andere Reihenfolge oder andere Ausbeuten unterscheiden die Einträge nicht. |
 | `scope` oder `scope[n]` | `must be an array of tables` oder `must be a table` | TOML-Form korrigieren; die Meldung zeigt auch ein Beispiel. |
 | `scope[n].time` | `"<value>" must be a number followed by min, h or d, e.g. "2 h"` | Eine Zahl mit einer der drei Einheiten angeben. |
 | `scope[n].temperature` | `must be a number in °C, unquoted, e.g. 80` | Anführungszeichen und Einheit entfernen; eine endliche Zahl verwenden. |
@@ -1245,11 +1270,20 @@ TOML-Fehler folgen denselben Regeln wie bei Vorschriften.
 | `steps` | `must list at least two steps` | Genügend Stufen für einen Syntheseweg angeben. |
 | `steps` oder `steps[n]` | `must be an array of tables` oder `must be a table` | Die oben gezeigten TOML-Formen verwenden. |
 | `steps[n].procedure` | `<id> not found in any content root` | Vorhandene Vorschriftennummer verwenden; beim direkten Aufruf deren Verzeichnis mitgeben. |
-| `steps[n].entry` | `OSDB-NNNN is a general procedure; name one of its entries 1 to <count>` | Die gewählte Eintragsnummer ergänzen. |
-| `steps[n].entry` | `OSDB-NNNN has no scope entries; remove entry` | `entry` bei einer Einzelvorschrift entfernen. |
-| `steps[n].entry` | `must be between 1 and <count>, the number of an entry of OSDB-NNNN's scope` | Einen vorhandenen Eintrag als Ganzzahl ohne Anführungszeichen wählen. |
+| `steps[n].product` | `OSDB-NNNN is a general procedure; name its entry by a product: <keys>` | Einen Produktschlüssel aus der Liste wählen; jeder erscheint einmal in der Reihenfolge seines ersten Auftretens in `scope`. |
+| `steps[n].product` | `<key> is a product of no entry of OSDB-NNNN` | Einen Produktschlüssel aus dem Anwendungsbereich dieser Vorschrift verwenden. |
+| `steps[n].product` | `<key> is a product of entries <m> and <n> of OSDB-NNNN; name the entry by its substrates and products` | Statt `product` die vollständigen Listen `substrates` und `products` des gewählten Eintrags angeben. Die Meldung nennt alle passenden Einträge. |
+| `steps[n].product` | `must be a string, e.g. "ethyl-acetate"` | Einen Verbindungsschlüssel in Anführungszeichen schreiben. |
+| `steps[n].product`, `steps[n].substrates` oder `steps[n].products` | `OSDB-NNNN has no scope entries; remove <key>` | Das genannte Feld bei einer Einzelvorschrift entfernen. |
+| `steps[n].substrates` | `no entry of OSDB-NNNN has these substrates and products` | Die Schlüssel der Ausgangsstoffe und Produktverbindungen eines Scope-Eintrags vollständig wiedergeben. |
+| `steps[n].substrates` | `must be given with products` | Die vollständige Liste der Produktschlüssel des Eintrags ergänzen. |
+| `steps[n].products` | `must be given with substrates` | Die vollständige Liste der Ausgangsstoffschlüssel des Eintrags ergänzen. |
+| `steps[n].substrates` oder `steps[n].products` | `must be a list of compound keys, e.g. ["ethanol"]` | Ein Array von Schlüsseln in Anführungszeichen verwenden, ohne Produkttabellen oder Ausbeuten. |
+| `steps[n].substrates` oder `steps[n].products` | `must not list a compound twice` | Jeden Schlüssel in jeder Liste nur einmal behalten. |
+| `steps[n]` | `name the entry by product or by substrates and products, not both` | Nur `product` oder beide vollständigen Listen verwenden. |
+| `steps[n].entry` | `not a key of a step; name the entry by its product` | `product` verwenden oder beide vollständigen Listen, wenn das Produkt in mehreren Einträgen vorkommt. |
 | `steps[n]` | `starts from none of the products of step <k> (<keys>)` | Stufenreihenfolge und Ausgangsstoffe und Produkte der gewählten Einträge prüfen. |
 | `target` | `<key> is not a product of the last step, step N` | Ziel und letzte Vorschrift oder letzten Eintrag prüfen. |
-| `target` oder `steps` | `must equal the value in <path>` | In jeder Fassung dasselbe Ziel und dieselben geordneten Stufen verwenden. |
+| `target` oder `steps` | `must equal the value in <path>` | In jeder Fassung dasselbe Ziel und genau dieselben Stufen wie geschrieben verwenden, einschließlich der Listenreihenfolge. |
 | `authors`, `tags` oder `reaction_types` | `must not be set; a sequence joins no procedure taxonomy` | Feld entfernen; die Vorschriften der Stufen tragen diese Angaben. |
 | Jedes andere Feld | `unknown field` | Feld entfernen oder korrigieren. |

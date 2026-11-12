@@ -49,12 +49,33 @@ class StepFacts(NamedTuple):
     yield_percent: int | float
 
 
+def entry_number(item: Content, step: dict[str, Any]) -> int | None:
+    """The number, from 1, of the entry of the general procedure ``item``
+    that ``step`` names: by its ``product``, a product of exactly one
+    entry, or by its ``substrates`` and ``products``, which are exactly
+    the substrates and the product compounds of one entry, in any order.
+    None for a specific procedure or a step that names none or several.
+    Stated here from the specification, not from the pipeline."""
+    if not item.is_general:
+        return None
+    made = [{p["compound"] for p in entry["products"]}
+            for entry in item.scope]
+    if "product" in step:
+        found = [n for n, products in enumerate(made, 1)
+                 if step["product"] in products]
+    else:
+        found = [n for n, entry in enumerate(item.scope, 1)
+                 if set(entry["substrates"]) == set(step["substrates"])
+                 and made[n - 1] == set(step["products"])]
+    return found[0] if len(found) == 1 else None
+
+
 def run_of(item: Content, step: dict[str, Any]
            ) -> tuple[list[str], list[dict[str, Any]]]:
     """The substrates and products of the run a step names: those of the
     procedure, or of the entry of a general procedure."""
     if item.is_general:
-        entry = item.scope[step["entry"] - 1]
+        entry = item.scope[entry_number(item, step) - 1]
         return list(entry["substrates"]), list(entry["products"])
     return item.substrates, item.products
 
@@ -76,9 +97,9 @@ def step_facts(sequence: Sequence, by_id: dict[str, Content]
         else:
             carried = sequence.target
         made = next(p for p in products if p["compound"] == carried)
-        found.append(StepFacts(by_id[step["procedure"]], step.get("entry"),
-                               substrates, products, carried,
-                               made["yield_percent"]))
+        item = by_id[step["procedure"]]
+        found.append(StepFacts(item, entry_number(item, step), substrates,
+                               products, carried, made["yield_percent"]))
     return found
 
 

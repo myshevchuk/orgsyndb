@@ -559,7 +559,8 @@ DEMO_SEQUENCES = {
         "title_de": "1-(Biphenyl-4-yl)ethanol aus 4′-Bromacetophenon",
         "target": "1-biphenyl-4-yl-ethanol",
         "steps": [{"procedure": "OSDB-0004"},
-                  {"procedure": "OSDB-0009", "entry": 1}],
+                  {"procedure": "OSDB-0009",
+                   "product": "1-biphenyl-4-yl-ethanol"}],
         "notes": None},
 }
 
@@ -634,9 +635,16 @@ class DemoSequenceTests(unittest.TestCase):
                 with self.subTest(sequence=stem, step=step):
                     sample = samples[step["procedure"]]
                     entries = sample.data.get("scope")
-                    self.assertEqual("entry" in step, entries is not None)
-                    if entries is not None:
-                        self.assertLessEqual(step["entry"], len(entries))
+                    self.assertNotIn("entry", step)
+                    self.assertEqual("product" in step, entries is not None)
+                    if entries is None:
+                        self.assertEqual(set(step), {"procedure"})
+                        continue
+                    named = [entry for entry in entries
+                             if step["product"] in
+                             [p["compound"] for p in entry["products"]]]
+                    self.assertEqual(len(named), 1,
+                                     "a product of exactly one entry")
 
 
 class DemoFieldTests(unittest.TestCase):

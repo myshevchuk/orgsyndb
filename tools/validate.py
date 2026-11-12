@@ -527,7 +527,9 @@ def check_scope(value: object, compounds: frozenset[str]) -> list[Problem]:
     that is not a table under ``scope[n]``. Each entry's ``substrates``
     and ``products`` are checked as the top-level fields are, against
     that entry alone and the registry keys ``compounds``; an entry key
-    outside SCOPE_ENTRY_KEYS is a warning.
+    outside SCOPE_ENTRY_KEYS is a warning. An entry whose substrates and
+    product compounds, each as a set, are those of an earlier entry is
+    an error under ``scope[n]``, naming that entry.
     """
     if not isinstance(value, list):
         return [error("scope", "must be an array of tables, e.g. "
@@ -537,6 +539,7 @@ def check_scope(value: object, compounds: frozenset[str]) -> list[Problem]:
     if not value:
         return [error("scope", "must not be empty")]
     found: list[Problem] = []
+    signatures: dict[tuple[frozenset[str], frozenset[str]], int] = {}
     for number, entry in enumerate(value, start=1):
         prefix = f"scope[{number}]"
         if not isinstance(entry, dict):
@@ -545,6 +548,14 @@ def check_scope(value: object, compounds: frozenset[str]) -> list[Problem]:
                                '[{ compound = "ethyl-acetate", '
                                "yield_percent = 85 }] }"))
             continue
+        run = entry_run(entry)
+        signature = (frozenset(run.substrates), frozenset(run.products))
+        if signature in signatures:
+            found.append(error(prefix, "has the same substrates and "
+                               "products as entry "
+                               f"{signatures[signature]}"))
+        else:
+            signatures[signature] = number
         for key in ("substrates", "products"):
             if key not in entry:
                 found.append(error(f"{prefix}.{key}",
@@ -1403,7 +1414,7 @@ SEQUENCE_KEYS = ("id", "slug", "title", "date", "lastmod", "target",
 # Hugo would file a sequence carrying one of these under the procedures'
 # taxonomies, beside the procedures.
 TAXONOMY_KEYS = ("authors", "tags", "reaction_types")
-STEP_KEYS = ("procedure", "entry")
+STEP_KEYS = ("procedure", "product", "substrates", "products")
 
 
 class Run(NamedTuple):
@@ -1414,17 +1425,59 @@ class Run(NamedTuple):
     products: list[str]
 
 
-def entry_count(data: dict[str, Any]) -> int:
-    """Return the number of scope entries of the procedure front matter
-    DATA, 0 when its ``scope`` is not an array."""
-    scope = data.get("scope")
-    return len(scope) if isinstance(scope, list) else 0
+def entry_run(source: object) -> Run:
+    """Return the run of SOURCE, a procedure's front matter or one entry
+    of its ``scope``, in file order.
+
+    A ``substrates`` that is not a list of strings, and any product that
+    is not a table with a string ``compound``, count for nothing; so does
+    a SOURCE that is not a table.
+    """
+    if not isinstance(source, dict):
+        return Run([], [])
+    substrates = source.get("substrates")
+    return Run(substrates if is_string_list(substrates) else [],
+               product_keys(source.get("products")))
 
 
-def is_entry_number(value: object, count: int) -> bool:
-    """Whether VALUE is an integer from 1 to COUNT."""
-    return (isinstance(value, int) and not isinstance(value, bool)
-            and 1 <= value <= count)
+def scope_runs(procedure: dict[str, Any]) -> list[Run]:
+    """Return the run of each scope entry of PROCEDURE, in file order;
+    empty when its ``scope`` is not an array."""
+    scope = procedure.get("scope")
+    if not isinstance(scope, list):
+        return []
+    return [entry_run(entry) for entry in scope]
+
+
+def step_entry(step: object, procedure: dict[str, Any]) -> int | None:
+    """Return the number, counted from 1 in file order, of the scope
+    entry that the sequence step STEP names in PROCEDURE, the front
+    matter of its procedure, or None.
+
+    A step names its entry by its ``product`` when exactly one entry has
+    that compound among its products, else by its ``substrates`` and
+    ``products``, each compared as a set with an entry's substrates and
+    product compounds. The result is None for a specific procedure, one
+    without ``scope``, and for a step that names no entry or more than
+    one.
+    """
+    if not isinstance(step, dict):
+        return None
+    runs = scope_runs(procedure)
+    product = step.get("product")
+    if isinstance(product, str):
+        found = [number for number, run in enumerate(runs, start=1)
+                 if product in run.products]
+        if len(found) == 1:
+            return found[0]
+    substrates, products = step.get("substrates"), step.get("products")
+    if is_string_list(substrates) and is_string_list(products):
+        found = [number for number, run in enumerate(runs, start=1)
+                 if set(run.substrates) == set(substrates)
+                 and set(run.products) == set(products)]
+        if len(found) == 1:
+            return found[0]
+    return None
 
 
 def step_run(step: object,
@@ -1433,9 +1486,10 @@ def step_run(step: object,
 
     PROCEDURES maps each procedure ID of the content roots to its front
     matter. The run is that of the step's entry for a general procedure,
-    one with ``scope``, and that of the procedure otherwise. None means
-    the step names no run: it is not a table, its procedure is not
-    found, or its entry is missing, out of range or refused.
+    one with ``scope`` (``step_entry``), and that of the procedure
+    otherwise. None means the step names no run: it is not a table, its
+    procedure is not found, it names no entry of a general procedure, or
+    it carries a key that names an entry for a specific one.
     """
     if not isinstance(step, dict) or not isinstance(step.get("procedure"),
                                                     str):
@@ -1443,18 +1497,81 @@ def step_run(step: object,
     data = procedures.get(step["procedure"])
     if data is None:
         return None
-    source: object = data
     if "scope" in data:
-        if not is_entry_number(step.get("entry"), entry_count(data)):
-            return None
-        source = data["scope"][step["entry"] - 1]
-    elif "entry" in step:
+        number = step_entry(step, data)
+        return None if number is None else scope_runs(data)[number - 1]
+    if any(key in step for key in STEP_KEYS[1:]):
         return None
-    if not isinstance(source, dict):
-        return None
-    substrates = source.get("substrates")
-    return Run(substrates if is_string_list(substrates) else [],
-               product_keys(source.get("products")))
+    return entry_run(data)
+
+
+def numbers_in_prose(numbers: list[int]) -> str:
+    """Return NUMBERS, at least one, as prose: ``2``, ``2 and 3``,
+    ``2, 3 and 4``."""
+    words = [str(number) for number in numbers]
+    if len(words) == 1:
+        return words[0]
+    return ", ".join(words[:-1]) + " and " + words[-1]
+
+
+def check_entry_name(prefix: str, step: dict[str, Any], ident: str,
+                     data: dict[str, Any]) -> list[Problem]:
+    """Check how the sequence step STEP names its entry, reporting under
+    PREFIX, ``steps[n]``.
+
+    IDENT is the ID of the step's procedure and DATA its front matter.
+    A general procedure, one with ``scope``, needs the entry named by
+    ``product`` or by ``substrates`` and ``products``, not both; a
+    specific procedure refuses all three keys.
+    """
+    if "scope" not in data:
+        return [error(f"{prefix}.{key}",
+                      f"{ident} has no scope entries; remove {key}")
+                for key in STEP_KEYS[1:] if key in step]
+    runs = scope_runs(data)
+    listed = [key for key in ("substrates", "products") if key in step]
+    if "product" in step and listed:
+        return [error(prefix, "name the entry by product or by substrates "
+                      "and products, not both")]
+    if "product" in step:
+        product = step["product"]
+        name = f"{prefix}.product"
+        if not isinstance(product, str):
+            return [error(name, 'must be a string, e.g. "ethyl-acetate"')]
+        having = [number for number, run in enumerate(runs, start=1)
+                  if product in run.products]
+        if not having:
+            return [error(name, f"{product} is a product of no entry of "
+                          f"{ident}")]
+        if len(having) > 1:
+            return [error(name, f"{product} is a product of entries "
+                          f"{numbers_in_prose(having)} of {ident}; name "
+                          "the entry by its substrates and products")]
+        return []
+    if not listed:
+        keys = dict.fromkeys(key for run in runs for key in run.products)
+        return [error(f"{prefix}.product", f"{ident} is a general "
+                      "procedure; name its entry by a product: "
+                      + ", ".join(keys))]
+    found: list[Problem] = []
+    for key, other in (("substrates", "products"),
+                       ("products", "substrates")):
+        if key in step and other not in step:
+            found.append(error(f"{prefix}.{key}",
+                               f"must be given with {other}"))
+    for key in listed:
+        value = step[key]
+        if not is_string_list(value):
+            found.append(error(f"{prefix}.{key}", "must be a list of "
+                               'compound keys, e.g. ["ethanol"]'))
+        elif repeated(value):
+            found.append(error(f"{prefix}.{key}",
+                               "must not list a compound twice"))
+    if not found and step_entry(step, data) is None:
+        found.append(error(f"{prefix}.substrates",
+                           f"no entry of {ident} has these substrates and "
+                           "products"))
+    return found
 
 
 def check_step(prefix: str, step: object,
@@ -1462,9 +1579,10 @@ def check_step(prefix: str, step: object,
     """Check one sequence step, reporting under PREFIX, ``steps[n]``.
 
     STEP must be a table whose ``procedure`` is a key of PROCEDURES,
-    which maps procedure IDs to front matter. ``entry`` is required for a
-    general procedure and must count one of its scope entries from 1; a
-    specific procedure refuses it. Other keys are warnings.
+    which maps procedure IDs to front matter. A general procedure needs
+    its entry named by ``product`` or by ``substrates`` and
+    ``products``; a specific procedure refuses all three. ``entry`` is
+    refused for every procedure. Other keys are warnings.
     """
     if not isinstance(step, dict):
         return [error(prefix, 'must be a table, e.g. '
@@ -1482,21 +1600,12 @@ def check_step(prefix: str, step: object,
     else:
         data = procedures[ident]
     if data is not None:
-        name = f"{prefix}.entry"
-        count = entry_count(data)
-        if "scope" not in data:
-            if "entry" in step:
-                found.append(error(name, f"{ident} has no scope entries; "
-                                   "remove entry"))
-        elif "entry" not in step:
-            found.append(error(name, f"{ident} is a general procedure; "
-                               f"name one of its entries 1 to {count}"))
-        elif not is_entry_number(step["entry"], count):
-            found.append(error(name, f"must be between 1 and {count}, "
-                               "the number of an entry of "
-                               f"{ident}'s scope"))
+        found += check_entry_name(prefix, step, ident, data)
+    if "entry" in step:
+        found.append(error(f"{prefix}.entry", "not a key of a step; name "
+                           "the entry by its product"))
     found += [warning(f"{prefix}.{key}", "unknown field")
-              for key in step if key not in STEP_KEYS]
+              for key in step if key not in STEP_KEYS and key != "entry"]
     return found
 
 
