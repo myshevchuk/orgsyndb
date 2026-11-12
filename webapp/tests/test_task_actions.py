@@ -3,10 +3,11 @@
 from datetime import date, datetime, timezone
 
 from django.contrib import messages
-from django.test import TestCase
 
-from . import (IndexMixin, berlin, build_index, demo_index, frozen,
-               make_task, make_user, page, past, sent_messages, task_url)
+from . import (berlin, done_days, frozen, make_task, page, past,
+               sent_messages, task_steps, task_url)
+from .collection_support import accept
+from .task_support import TaskCase, history_text
 
 ACTIONS = ("start", "step", "end", "report", "qc-list")
 LABELS_DE = {"start": "Beginnen", "step": "Stufe erledigt",
@@ -17,15 +18,7 @@ LABELS_EN = {"start": "Start", "step": "Step done", "end": "End",
 TODAY = date(2026, 11, 4)
 
 
-class ActionCase(IndexMixin, TestCase):
-
-    @classmethod
-    def setUpTestData(cls) -> None:
-        cls.kl = make_user("kl", "KL")
-
-    def setUp(self) -> None:
-        self.use_index(demo_index())
-        self.client.force_login(self.kl)
+class ActionCase(TaskCase):
 
     def act(self, task, action: str, moment=None):
         with frozen(moment or berlin(2026, 11, 4)):
@@ -100,106 +93,161 @@ class StartTests(ActionCase):
 
 class StepTests(ActionCase):
 
-    def test_step_adds_one(self) -> None:
-        task = make_task(self.kl, started=past(1), steps_total=3)
+    def test_step_marks_the_first_open_step_done_today(self) -> None:
+        """Requirement: Task actions (`step` marks its first step not
+        done as done today)."""
+        task = make_task(self.kl, started=past(1), steps=3)
         done = self.act(task, "step")
         self.assertRedirects(done, task_url(task),
                              fetch_redirect_response=False)
-        task.refresh_from_db()
-        self.assertEqual(task.steps_done, 1)
-        self.act(task, "step")
-        task.refresh_from_db()
-        self.assertEqual(task.steps_done, 2)
+        self.assertEqual(done_days(task), [TODAY, None, None])
         self.assertNotEqual(sent_messages(done)[0].level, messages.ERROR)
+        self.act(task, "step", berlin(2026, 11, 5))
+        self.assertEqual(done_days(task),
+                         [TODAY, date(2026, 11, 5), None])
+
+    def test_step_skips_the_steps_done(self) -> None:
+        """Requirement: Task actions (its first such step)."""
+        task = make_task(self.kl, started=past(1), steps=3)
+        task.steps.filter(position=1).update(done_on=past(2))
+        task.steps.filter(position=3).update(done_on=past(3))
+        self.act(task, "step")
+        self.assertEqual(done_days(task), [past(2), TODAY, past(3)])
+
+    def test_the_change_is_recorded_in_the_steps_history(self) -> None:
+        """Requirement: Task actions (records the change in its
+        history)."""
+        task = make_task(self.kl, started=past(1), steps=2)
+        self.act(task, "step")
+        first = task.steps.get(position=1)
+        newest = first.history.first()
+        self.assertEqual((newest.history_type, newest.done_on,
+                          newest.history_user), ("~", TODAY, self.kl))
+        self.assertEqual(task.steps.get(position=2).history.count(), 1)
 
     def test_action_out_of_state(self) -> None:
         """Scenario: Action out of state."""
-        task = make_task(self.kl, steps_total=2)
+        task = make_task(self.kl, steps=2)
         before = task.history.count()
+        step_records = sum(s.history.count() for s in task.steps.all())
         done = self.act(task, "step")
         self.assertRedirects(done, task_url(task),
                              fetch_redirect_response=False)
         task.refresh_from_db()
-        self.assertEqual(task.steps_done, 0)
+        self.assertEqual(done_days(task), [None, None])
         self.assertIsNone(task.started)
         self.assertEqual(task.history.count(), before)
+        self.assertEqual(
+            sum(s.history.count() for s in task.steps.all()), step_records)
         error = sent_messages(done)
         self.assertEqual([m.level for m in error], [messages.ERROR])
         shown = page(self.client.get(task_url(task)))
         self.assertIn(error[0].message, shown.text())
 
-    def test_step_stops_at_the_total(self) -> None:
-        task = make_task(self.kl, started=past(1), steps_total=2,
-                         steps_done=2)
+    def test_step_needs_a_step_left(self) -> None:
+        task = make_task(self.kl, started=past(1), steps=2, done=2)
         done = self.act(task, "step")
-        task.refresh_from_db()
-        self.assertEqual(task.steps_done, 2)
+        self.assertEqual(done_days(task), [past(2), past(2)])
         self.assertEqual(sent_messages(done)[0].level, messages.ERROR)
 
-    def test_step_needs_a_total(self) -> None:
+    def test_step_needs_steps(self) -> None:
         task = make_task(self.kl, started=past(1))
         done = self.act(task, "step")
-        task.refresh_from_db()
-        self.assertEqual(task.steps_done, 0)
+        self.assertEqual(task.steps.count(), 0)
         self.assertEqual(sent_messages(done)[0].level, messages.ERROR)
 
     def test_step_does_not_apply_to_ended_or_cancelled_tasks(self) -> None:
         for fields in ({"ended": past(2)}, {"cancelled": True}):
             with self.subTest(fields=fields):
-                task = make_task(self.kl, started=past(1), steps_total=3,
-                                 steps_done=1, **fields)
+                task = make_task(self.kl, started=past(1), steps=3,
+                                 done=1, **fields)
                 self.act(task, "step")
-                task.refresh_from_db()
-                self.assertEqual(task.steps_done, 1)
+                self.assertEqual(done_days(task),
+                                 [past(2), None, None])
+
+    def test_step_on_a_task_with_a_sequence(self) -> None:
+        """Requirement: Task actions (the steps of a sequence)."""
+        self.create(sequence="SEQ-0002", started="2025-03-01")
+        task = self.only_task()
+        self.act(task, "step")
+        self.assertEqual(task_steps(task), [
+            (("OSDB-0004", 1), self.first, TODAY),
+            (("OSDB-0009", 1), self.first, None)])
 
 
 class EndTests(ActionCase):
 
-    def test_end_completes_the_steps(self) -> None:
-        task = make_task(self.kl, started=past(1), steps_total=4,
-                         steps_done=1)
+    def test_end_completes_the_open_steps(self) -> None:
+        """Requirement: Task actions (`end` marks every step not done as
+        done today)."""
+        task = make_task(self.kl, started=past(1), steps=4, done=1)
         done = self.act(task, "end", berlin(2026, 11, 6))
         self.assertRedirects(done, task_url(task),
                              fetch_redirect_response=False)
         task.refresh_from_db()
         self.assertEqual(task.ended, date(2026, 11, 6))
-        self.assertEqual(task.steps_done, 4)
+        self.assertEqual(done_days(task), [past(2)] + [date(2026, 11, 6)] * 3)
         self.assertEqual(task.state, "ended")
+        self.assertEqual(task.progress, 100)
 
-    def test_end_without_a_total(self) -> None:
+    def test_end_without_steps(self) -> None:
         task = make_task(self.kl, started=past(1))
         self.act(task, "end")
         task.refresh_from_db()
         self.assertEqual(task.ended, TODAY)
-        self.assertEqual(task.steps_done, 0)
-        self.assertIsNone(task.steps_total)
+        self.assertEqual(task.steps.count(), 0)
+        self.assertIsNone(task.progress)
 
     def test_end_does_not_apply_to_other_states(self) -> None:
         for fields in ({}, {"started": past(1), "ended": past(2)},
                        {"started": past(1), "cancelled": True}):
             with self.subTest(fields=fields):
-                task = make_task(self.kl, steps_total=3, **fields)
-                before = (task.ended, task.steps_done)
+                task = make_task(self.kl, steps=3, **fields)
+                before = (task.ended, done_days(task))
                 done = self.act(task, "end")
                 task.refresh_from_db()
-                self.assertEqual((task.ended, task.steps_done), before)
+                self.assertEqual((task.ended, done_days(task)), before)
                 self.assertEqual(sent_messages(done)[0].level,
                                  messages.ERROR)
 
+    def test_the_steps_changes_are_recorded(self) -> None:
+        """Requirement: Task actions (records the change in its
+        history)."""
+        task = make_task(self.kl, started=past(1), steps=2)
+        self.act(task, "end")
+        for step in task.steps.all():
+            with self.subTest(position=step.position):
+                newest = step.history.first()
+                self.assertEqual((newest.history_type, newest.history_user),
+                                 ("~", self.kl))
+
     def test_steps_through_actions(self) -> None:
         """Scenario: Steps through actions."""
-        task = make_task(self.kl, steps_total=2)
+        with frozen(berlin(2026, 11, 3)):
+            self.create(steps_total="2")
+        task = self.only_task()
         self.act(task, "start", berlin(2026, 11, 4))
-        self.act(task, "step", berlin(2026, 11, 4, 15))
+        self.act(task, "step", berlin(2026, 11, 5, 15))
         self.act(task, "end", berlin(2026, 11, 6))
         task.refresh_from_db()
         self.assertEqual(task.started, date(2026, 11, 4))
         self.assertEqual(task.ended, date(2026, 11, 6))
-        self.assertEqual(task.steps_done, 2)
-        changes = task.history.filter(history_type="~")
-        self.assertEqual(changes.count(), 3)
-        self.assertEqual({h.history_user for h in changes}, {self.kl})
-        text = page(self.client.get(task_url(task))).text()
+        self.assertEqual(done_days(task),
+                         [date(2026, 11, 5), date(2026, 11, 6)])
+        text = history_text(page(self.client.get(task_url(task))))
+        for day in ("06.11.2026", "05.11.2026", "04.11.2026",
+                    "03.11.2026"):
+            with self.subTest(day=day):
+                self.assertIn(day, text)
+        positions = [text.index(day) for day in
+                     ("06.11.2026", "05.11.2026", "04.11.2026",
+                      "03.11.2026")]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("Stufe 1", text[text.index("05.11.2026"):
+                                      text.index("04.11.2026")])
+        self.assertIn("Stufe 2", text[:text.index("05.11.2026")])
+        self.assertEqual(task.steps.get(position=1).history.count(), 2)
+        self.assertEqual(task.steps.get(position=2).history.count(), 2)
         self.assertIn("Angelegt", text)
 
 
@@ -246,9 +294,8 @@ class ButtonTests(ActionCase):
     def test_the_actions_that_apply_are_offered(self) -> None:
         cases = [
             ({}, {"start"}),
-            ({"started": past(1), "steps_total": 2}, {"step", "end"}),
-            ({"started": past(1), "steps_total": 2, "steps_done": 2},
-             {"end"}),
+            ({"started": past(1), "steps": 2}, {"step", "end"}),
+            ({"started": past(1), "steps": 2, "done": 2}, {"end"}),
             ({"started": past(1)}, {"end"}),
             ({"started": past(1), "ended": past(2)},
              {"report", "qc-list"}),
@@ -267,7 +314,7 @@ class ButtonTests(ActionCase):
                 self.assertEqual(set(self.offered(task)), expected)
 
     def test_buttons_are_labelled(self) -> None:
-        task = make_task(self.kl, started=past(1), steps_total=2)
+        task = make_task(self.kl, started=past(1), steps=2)
         planned = make_task(self.kl)
         ended = make_task(self.kl, started=past(1), ended=past(2))
         for shown in (self.offered(task), self.offered(planned),
@@ -278,8 +325,8 @@ class ButtonTests(ActionCase):
                                      LABELS_DE[action])
 
     def test_buttons_are_labelled_in_english(self) -> None:
-        self.use_index(build_index("en"))
-        task = make_task(self.kl, started=past(1), steps_total=2)
+        accept(language="en")
+        task = make_task(self.kl, started=past(1), steps=2)
         ended = make_task(self.kl, started=past(1), ended=past(2))
         shown = {**self.offered(task), **self.offered(ended),
                  **self.offered(make_task(self.kl))}

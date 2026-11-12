@@ -7,8 +7,8 @@ from typing import Any
 
 from django.test import TestCase
 
-from . import (IndexMixin, berlin, context_form, demo_index, make_item,
-               make_lot, make_user, sent_messages, substance_for, ticking)
+from . import (berlin, context_form, make_item, make_lot, make_user,
+               sent_messages, substance_for, ticking)
 
 NOW = berlin(2026, 11, 4, 8)
 TODAY = date(2026, 11, 4)
@@ -173,7 +173,7 @@ def note_blocks(root: Any) -> list[tuple[Any, Any]]:
     return blocks
 
 
-class InventoryCase(IndexMixin, TestCase):
+class InventoryCase(TestCase):
     """A test case with two accounts, the demo collection and a clock
     that stands at 2026-11-04 and ticks."""
 
@@ -183,7 +183,6 @@ class InventoryCase(IndexMixin, TestCase):
         cls.ae = make_user("ae", "AE", "Anna", "Eisele")
 
     def setUp(self) -> None:
-        self.use_index(demo_index())
         self.enterContext(ticking(NOW))
 
     def item(self, article: str = "CH-0001", name: str | None = None,

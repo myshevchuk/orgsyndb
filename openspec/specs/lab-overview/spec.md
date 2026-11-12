@@ -44,7 +44,7 @@ The stock bar and the figures are the page's summary, which `/lab/summary/` show
 - **THEN** the page answers 200, the stock bar holds no link, the figures read 0, `Keine Prognosen.` replaces the table, the `svg` holds twelve bars and twelve bars `.previous`, all of height 0, and each list shows `Keine Abgaben.`
 
 #### Scenario: Overview in English
-- **WHEN** the index's language is `en` and a test client requests `/lab/`
+- **WHEN** the latest accepted import's language is `en` and a test client requests `/lab/`
 - **THEN** the `h1` reads `Lab at a glance` and the headings `Inventory`, `Next syntheses`, `Deliveries per month` and `Latest delivery notes`
 
 ### Requirement: Summary for the home page

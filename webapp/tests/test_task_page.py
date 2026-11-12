@@ -1,26 +1,22 @@
 """Tests of the task page (task-tracker: Task page, Change history)."""
 
 import re
-
-from django.test import TestCase
+from datetime import date
 
 from tasks.models import Task
 
-from . import (NOT_IN_COLLECTION, IndexMixin, build_index, demo_index,
-               edit_data, make_article, make_task, make_user, page, past,
-               procedure, sequence, substance_for, task_form_data,
-               task_url)
+from . import (NOT_IN_COLLECTION, berlin, frozen, make_article, make_task,
+               page, past, substance_for, task_form_data, task_url)
+from .collection_support import (accept, changed_collection,
+                                 import_collection, without_ids)
+from .task_support import TaskCase, history_text
 
 
-class PageCase(IndexMixin, TestCase):
-
-    @classmethod
-    def setUpTestData(cls) -> None:
-        cls.kl = make_user("kl", "KL", "Klara", "Lehmann")
-        cls.ae = make_user("ae", "AE", "Anna", "Eisele")
+class PageCase(TaskCase):
 
     def setUp(self) -> None:
-        self.use_index(demo_index())
+        super().setUp()
+        self.client.logout()
 
     def show(self, task: Task):
         response = self.client.get(task_url(task))
@@ -42,7 +38,7 @@ class DetailTests(PageCase):
     def test_the_page_shows_the_record(self) -> None:
         task = make_task(
             self.kl, substance="Probe", priority="high", assignee=self.ae,
-            started=past(3, 11), steps_total=5, steps_done=2,
+            started=past(3, 11), steps=5, done=2,
             batch="B-17", report=True,
             note="Zeile eins\nZeile zwei")
         root = self.show(task)
@@ -84,7 +80,7 @@ class DetailTests(PageCase):
             self) -> None:
         """Every substance is in the registry."""
         for language in ("de", "en"):
-            self.use_index(build_index(language))
+            accept(language=language)
             task = make_task(self.kl, substance="Probe")
             self.assertNotIn(NOT_IN_COLLECTION[language],
                              self.show(task).text())
@@ -118,7 +114,7 @@ class DetailTests(PageCase):
         self.assertEqual([a.text() for a in links], ["Bearbeiten"])
 
     def test_english_page(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         task = make_task(self.kl, substance="Probe", priority="high",
                          started=past(3, 11))
         text = self.show(task).text()
@@ -131,93 +127,193 @@ class DetailTests(PageCase):
                 "a", href=task_url(task, "edit"))], ["Edit"])
 
 
+def sequence_links(root) -> list[str]:
+    return [a.get("href") for a in root.find_all("a")
+            if re.match(r"/sequences/[^/]+/\Z", a.get("href", ""))]
+
+
 class SequenceTests(PageCase):
+    """The sequence and the steps the page lists (task-tracker: Task
+    page)."""
+
+    def follow(self, sequence: str, **fields: str) -> Task:
+        """A task of ``sequence``, saved through the form."""
+        self.client.force_login(self.kl)
+        self.create(sequence=sequence, **fields)
+        self.client.logout()
+        return self.only_task()
+
+    def steps(self, task: Task) -> list:
+        return self.show(task).find("ol").find_all("li")
 
     def test_task_with_a_sequence(self) -> None:
         """Scenario: Task with a sequence."""
-        task = make_task(self.kl, sequence="SEQ-0001",
-                         sequence_steps=["OSDB-0001", "OSDB-0002"],
-                         steps_total=2, steps_done=1, started=past(1))
+        task = self.follow("SEQ-0002")
+        task.steps.filter(position=1).update(done_on=date(2026, 11, 3))
         root = self.show(task)
         self.assertIsNone(root.find("a", href=task_url(task, "edit")))
-        items = root.find("ol").find_all("li")
-        self.assertEqual(len(items), 2)
-        first, second = items
-        self.assertIn("OSDB-0001", first.text())
-        self.assertIn("erledigt", first.text())
-        self.assertIn("OSDB-0002", second.text())
+        first, second = self.steps(task)
+        self.assertIn("OSDB-0004", first.text())
+        self.assertIn("erledigt am 03.11.2026", first.text())
+        self.assertNotIn("Eintrag", first.text())
+        self.assertIn("OSDB-0009", second.text())
+        self.assertIn("Eintrag 1", second.text())
         self.assertNotIn("erledigt", second.text())
-        self.assertEqual(
-            [a.get("href") for a in first.find_all("a")],
-            ["/procedures/osdb-0001/"])
-        self.assertEqual(
-            [a.get("href") for a in second.find_all("a")],
-            ["/procedures/osdb-0002/"])
-        self.assertEqual(first.find("a").text(), "OSDB-0001")
-
-    def test_done_steps_follow_steps_done(self) -> None:
-        for done, marked in ((0, 0), (2, 2)):
-            with self.subTest(done=done):
-                task = make_task(self.kl, sequence="SEQ-0001",
-                                 sequence_steps=["OSDB-0001", "OSDB-0002"],
-                                 steps_total=2, steps_done=done,
-                                 started=past(1))
-                items = self.show(task).find("ol").find_all("li")
-                self.assertEqual(
-                    sum("erledigt" in i.text() for i in items), marked)
+        self.assertEqual([a.get("href") for a in first.find_all("a")],
+                         ["/procedures/osdb-0004/"])
+        self.assertEqual([a.get("href") for a in second.find_all("a")],
+                         ["/procedures/osdb-0009/"])
+        self.assertEqual(first.find("a").text(), "OSDB-0004")
 
     def test_the_sequence_links_to_its_page(self) -> None:
-        task = make_task(self.kl, sequence="SEQ-0001",
-                         sequence_steps=["OSDB-0001"], steps_total=1)
-        root = self.show(task)
-        links = root.find_all("a", href="/sequences/seq-0001/")
+        """Requirement: Task page (the sequence's ID linking to
+        `/sequences/<ID in lower case>/`)."""
+        task = self.follow("SEQ-0001")
+        links = self.show(task).find_all("a", href="/sequences/seq-0001/")
         self.assertEqual([a.text() for a in links], ["SEQ-0001"])
 
-    def test_a_task_without_a_sequence_lists_no_steps(self) -> None:
-        self.assertIsNone(self.show(make_task(self.kl)).find("ol"))
+    def test_a_task_without_a_sequence_shows_none(self) -> None:
+        root = self.show(make_task(self.kl))
+        self.assertEqual(sequence_links(root), [])
+        self.assertIsNone(root.find("ol"))
 
-    def test_procedure_missing_from_the_index(self) -> None:
-        task = make_task(self.kl, sequence="SEQ-0001",
-                         sequence_steps=["OSDB-0001", "OSDB-9999"],
-                         steps_total=2)
-        items = self.show(task).find("ol").find_all("li")
-        self.assertEqual(len(items[0].find_all("a")), 1)
-        self.assertIn("OSDB-9999", items[1].text())
-        self.assertIn(NOT_IN_COLLECTION["de"], items[1].text())
-        self.assertEqual(items[1].find_all("a"), [])
-        self.assertNotIn(NOT_IN_COLLECTION["de"], items[0].text())
+    def test_entry_numbers_only_for_general_procedures(self) -> None:
+        """Requirement: Task page (`Eintrag <n>` appears only for an
+        entry of a procedure the import marked general)."""
+        from collection.models import ScopeEntry
+        from tasks.models import TaskStep
+        task = make_task(self.kl)
+        for position, (procedure, number) in enumerate(
+                (("OSDB-0009", 2), ("OSDB-0009", 3), ("OSDB-0002", 1)),
+                start=1):
+            TaskStep.objects.create(
+                task=task, position=position, planned_import=self.first,
+                entry=ScopeEntry.objects.get(procedure__key=procedure,
+                                             position=number))
+        first, second, third = self.steps(task)
+        self.assertIn("Eintrag 2", first.text())
+        self.assertIn("Eintrag 3", second.text())
+        self.assertIn("OSDB-0002", third.text())
+        self.assertNotIn("Eintrag", third.text())
+        self.assertEqual([a.get("href") for a in third.find_all("a")],
+                         ["/procedures/osdb-0002/"])
 
-    def test_sequence_missing_from_the_index(self) -> None:
-        task = make_task(self.kl, sequence="SEQ-9999",
-                         sequence_steps=["OSDB-0001"], steps_total=1)
+    def test_a_step_without_an_entry_shows_its_position(self) -> None:
+        """Requirement: Task page (a step without an entry as `Stufe
+        <n>`)."""
+        task = make_task(self.kl, steps=3, done=1)
+        first, second, third = self.steps(task)
+        self.assertIn("Stufe 1", first.text())
+        self.assertIn("erledigt am 02.03.2025", first.text())
+        self.assertIn("Stufe 2", second.text())
+        self.assertIn("Stufe 3", third.text())
+        self.assertNotIn("erledigt", second.text() + third.text())
+        for item in (first, second, third):
+            self.assertEqual(item.find_all("a"), [])
+
+    def test_the_steps_in_english(self) -> None:
+        """Requirement: Task page (`Step <n>`, `Entry <n>`, `done on
+        <date>`)."""
+        task = self.follow("SEQ-0002")
+        task.steps.filter(position=2).update(done_on=date(2026, 11, 3))
+        plain = make_task(self.kl, steps=2, done=1)
+        accept(language="en")
+        first, second = self.steps(task)
+        self.assertIn("OSDB-0004", first.text())
+        self.assertIn("OSDB-0009", second.text())
+        self.assertIn("Entry 1", second.text())
+        self.assertIn("done on 2026-11-03", second.text())
+        one, two = self.steps(plain)
+        self.assertIn("Step 1", one.text())
+        self.assertIn("done on 2025-03-02", one.text())
+        self.assertIn("Step 2", two.text())
+
+    def test_a_withdrawn_sequence_has_no_link(self) -> None:
+        """Requirement: Task page (a withdrawn sequence shows with the
+        mark and no link)."""
+        task = self.follow("SEQ-0001")
+        import_collection(without_ids("SEQ-0001"))
         root = self.show(task)
-        self.assertIn("SEQ-9999", root.text())
+        self.assertIn("SEQ-0001", root.text())
         self.assertIn(NOT_IN_COLLECTION["de"], root.text())
-        self.assertEqual(
-            [a for a in root.find_all("a")
-             if re.match(r"/sequences/[^/]+/\Z", a.get("href", ""))], [])
-        self.assertEqual(len(root.find("ol").find_all("li")), 1)
+        self.assertEqual(sequence_links(root), [])
+        self.assertEqual(len(self.steps(task)), 2)
 
-    def test_the_steps_come_from_the_task_not_the_index(self) -> None:
-        task = make_task(self.kl, sequence="SEQ-0001",
-                         sequence_steps=["OSDB-0001", "OSDB-0002"],
-                         steps_total=2)
-        self.use_index(build_index(
-            "de", procedures=[procedure("OSDB-0001"), procedure("OSDB-0002"),
-                              procedure("OSDB-0003")],
-            sequences=[sequence("SEQ-0001", ["OSDB-0003"])]))
-        items = self.show(task).find("ol").find_all("li")
-        self.assertEqual([i.find("a").text() for i in items],
+    def test_a_sequence_in_the_collection_is_not_marked(self) -> None:
+        task = self.follow("SEQ-0001")
+        self.assertNotIn(NOT_IN_COLLECTION["de"], self.show(task).text())
+
+    def test_a_withdrawn_procedure_has_no_link(self) -> None:
+        """Requirement: Task page (a withdrawn procedure shows with the
+        mark and no link)."""
+        from collection.models import ScopeEntry
+        from tasks.models import TaskStep
+        task = make_task(self.kl)
+        for position, key in enumerate(("OSDB-0006", "OSDB-0008"),
+                                       start=1):
+            TaskStep.objects.create(
+                task=task, position=position, planned_import=self.first,
+                entry=ScopeEntry.objects.get(procedure__key=key))
+        import_collection(without_ids("OSDB-0006"))
+        gone, kept = self.steps(task)
+        self.assertIn("OSDB-0006", gone.text())
+        self.assertIn(NOT_IN_COLLECTION["de"], gone.text())
+        self.assertEqual(gone.find_all("a"), [])
+        self.assertEqual([a.get("href") for a in kept.find_all("a")],
+                         ["/procedures/osdb-0008/"])
+        self.assertNotIn(NOT_IN_COLLECTION["de"], kept.text())
+
+    def test_a_withdrawn_entry(self) -> None:
+        """Scenario: A withdrawn entry."""
+        task = self.follow("SEQ-0002")
+        import_collection(changed_collection("OSDB-0009"))
+        first, second = self.steps(task)
+        self.assertIn("OSDB-0009", second.text())
+        self.assertIn("4-acetylbiphenyl >> 1-biphenyl-4-yl-ethanol",
+                      second.text())
+        self.assertIn(NOT_IN_COLLECTION["de"], second.text())
+        self.assertNotIn("Eintrag 1", second.text())
+        self.assertEqual(second.find_all("a"), [])
+        self.assertIn("OSDB-0004", first.text())
+        self.assertNotIn(NOT_IN_COLLECTION["de"], first.text())
+        self.assertEqual([a.get("href") for a in first.find_all("a")],
+                         ["/procedures/osdb-0004/"])
+
+    def test_a_withdrawn_entry_of_a_specific_procedure(self) -> None:
+        """Requirement: Task page (a step whose entry is withdrawn,
+        shown by its procedure's ID and the entry's signature)."""
+        task = self.follow("SEQ-0002")
+        import_collection(changed_collection("OSDB-0004"))
+        first, second = self.steps(task)
+        self.assertIn("OSDB-0004", first.text())
+        self.assertIn("4-bromoacetophenone + phenylboronic-acid >> "
+                      "4-acetylbiphenyl", first.text())
+        self.assertIn(NOT_IN_COLLECTION["de"], first.text())
+        self.assertEqual(first.find_all("a"), [])
+        self.assertNotIn(NOT_IN_COLLECTION["de"], second.text())
+
+    def test_a_withdrawn_entry_in_english(self) -> None:
+        task = self.follow("SEQ-0002")
+        import_collection(changed_collection("OSDB-0009"))
+        accept(language="en")
+        second = self.steps(task)[1]
+        self.assertIn(NOT_IN_COLLECTION["en"], second.text())
+        self.assertNotIn("Entry 1", second.text())
+
+    def test_the_steps_come_from_the_task_not_the_collection(self) -> None:
+        """Requirement: Task record (the steps keep their entries)."""
+        task = self.follow("SEQ-0001")
+        import_collection(changed_collection("OSDB-0002"))
+        items = self.steps(task)
+        self.assertEqual([i.text().split()[0] for i in items],
                          ["OSDB-0001", "OSDB-0002"])
 
-    def test_missing_procedure_in_english(self) -> None:
-        self.use_index(build_index("en"))
-        task = make_task(self.kl, sequence="SEQ-0001",
-                         sequence_steps=["OSDB-0001"], steps_total=1,
-                         steps_done=1, started=past(1))
-        item = self.show(task).find("ol").find("li")
-        self.assertIn(NOT_IN_COLLECTION["en"], item.text())
-        self.assertIn("done", item.text())
+    def test_the_progress_counts_the_steps_done(self) -> None:
+        """Requirement: Task page (progress)."""
+        task = self.follow("SEQ-0001", started="2025-03-01")
+        task.steps.filter(position=1).update(done_on=past(2))
+        root = self.show(task)
+        self.assertIn("50", root.find("progress").parent.text())
 
 
 class HistoryTests(PageCase):
@@ -229,8 +325,7 @@ class HistoryTests(PageCase):
             substance="aspirin", priority="medium"))
         task = Task.objects.get()
         self.client.force_login(changer)
-        done = self.client.post(task_url(task, "edit"),
-                                edit_data(task, priority="high"))
+        done = self.change(task, priority="high")
         self.assertEqual(done.status_code, 302)
         self.client.logout()
         return task
@@ -262,9 +357,87 @@ class HistoryTests(PageCase):
         self.assertIn("Angelegt", self.show(make_task(self.kl)).text())
 
     def test_english_history(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         task = self.change_priority(self.kl, self.kl)
         text = self.show(task).text()
         for expected in ("Priority", "medium", "high", "Created"):
             with self.subTest(expected=expected):
                 self.assertIn(expected, text)
+
+
+class StepHistoryTests(PageCase):
+    """The change history lists the task's changes and its steps'
+    (task-tracker: Task page)."""
+
+    def make(self, steps: str = "2") -> Task:
+        self.client.force_login(self.kl)
+        with frozen(berlin(2026, 11, 1)):
+            self.create(steps_total=steps, started="2026-11-01")
+        task = self.only_task()
+        return task
+
+    def test_a_steps_change_is_headed_with_its_position(self) -> None:
+        """Requirement: Task page (a step's change is headed `Stufe
+        <n>`)."""
+        task = self.make()
+        with frozen(berlin(2026, 11, 2)):
+            self.change(task, steps_done="1")
+        self.client.logout()
+        text = history_text(self.show(task))
+        newest = text[text.index("02.11.2026"):text.index("01.11.2026")]
+        self.assertIn("Stufe 1", newest)
+
+    def test_the_history_runs_from_the_newest_change(self) -> None:
+        """Requirement: Task page (newest first, the task's changes and
+        its steps' together)."""
+        task = self.make()
+        with frozen(berlin(2026, 11, 2)):
+            self.change(task, steps_done="1")
+        with frozen(berlin(2026, 11, 3)):
+            self.change(self.only_task(), priority="high")
+        with frozen(berlin(2026, 11, 4)):
+            self.change(self.only_task(), steps_done="2")
+        self.client.logout()
+        text = history_text(self.show(task))
+        positions = [text.index(day) for day in
+                     ("04.11.2026", "03.11.2026", "02.11.2026",
+                      "01.11.2026")]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("Stufe 2", text[:text.index("03.11.2026")])
+        self.assertIn("Priorität", text[text.index("03.11.2026"):
+                                         text.index("02.11.2026")])
+
+    def test_a_removed_step(self) -> None:
+        """Requirement: Task page (a removed step's `Stufe <n>
+        entfernt`)."""
+        task = self.make("3")
+        with frozen(berlin(2026, 11, 2)):
+            self.change(task, steps_total="2")
+        self.client.logout()
+        text = history_text(self.show(task))
+        newest = text[text.index("02.11.2026"):text.index("01.11.2026")]
+        self.assertIn("Stufe 3 entfernt", newest)
+        self.assertNotIn("Stufe 2 entfernt", text)
+
+    def test_the_headings_in_english(self) -> None:
+        """Requirement: Task page (`Step <n>`, `Step <n> removed`)."""
+        task = self.make("3")
+        with frozen(berlin(2026, 11, 2)):
+            self.change(task, steps_total="2", steps_done="1")
+        self.client.logout()
+        accept(language="en")
+        text = history_text(self.show(task))
+        self.assertIn("Step 3 removed", text)
+        self.assertIn("Step 1", text)
+
+    def test_the_steps_of_a_sequence_are_in_the_history(self) -> None:
+        """Requirement: Task record (tasks and their steps keep a change
+        history)."""
+        self.client.force_login(self.kl)
+        self.create(sequence="SEQ-0001")
+        task = self.only_task()
+        self.client.logout()
+        text = history_text(self.show(task))
+        self.assertIn("Angelegt", text)
+        self.assertIn("Stufe 1", text)
+        self.assertIn("Stufe 2", text)

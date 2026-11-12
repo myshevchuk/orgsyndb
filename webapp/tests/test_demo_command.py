@@ -1,15 +1,18 @@
 """Tests of ``manage.py demo_data`` (lab-demo: Demo data command)."""
 
+import copy
 from unittest import mock
 
 from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
 
-from . import (IndexMixin, demo_index, frozen, make_group, make_substance,
-               make_task, make_user)
-from .collection_support import TOKEN, make_import, manifest, post
-from .demo_support import (ACCOUNTS, DAY, lab_records, noon, run, seed,
-                           task_counter)
+from . import (BERLIN, frozen, make_group, make_substance, make_task,
+               make_user)
+from .collection_support import (PROCEDURES, SEQUENCES, TOKEN, accept, by_id,
+                                 demo_collection, import_collection,
+                                 make_import, manifest, post)
+from .demo_support import (ACCOUNTS, DAY, lab_records, noon, opening, run,
+                           seed, task_counter)
 
 EMPTY = {"accounts": 0, "substances": 0, "terms": 0, "articles": 0,
          "tasks": 0, "items": 0, "movements": 0, "notes": 0, "lots": 0,
@@ -21,26 +24,26 @@ def demo_marks() -> int:
     return DemoMark.objects.count()
 
 
-class FlagOffTests(IndexMixin, TestCase):
+class FlagOffTests(TestCase):
 
     def test_flag_off(self) -> None:
         """Scenario: Flag off."""
         for args in ((), ("--replace",)):
             with self.subTest(args=args), frozen(noon(DAY)):
                 with self.assertRaises(CommandError) as caught:
-                    run(*args, demo=False, index=demo_index())
+                    run(*args, demo=False)
                 self.assertIn("ORGSYNDB_DEMO", str(caught.exception))
                 self.assertEqual(lab_records(), EMPTY)
                 self.assertEqual(demo_marks(), 0)
 
 
-class RecordsPresentTests(IndexMixin, TestCase):
+class RecordsPresentTests(TestCase):
 
     def test_records_present(self) -> None:
         """Scenario: Records present."""
         make_user("kl", "KL")
         with frozen(noon(DAY)), self.assertRaises(CommandError) as caught:
-            run(index=demo_index())
+            run()
         self.assertIn("--replace", str(caught.exception))
         self.assertEqual(lab_records(), {**EMPTY, "accounts": 1})
         self.assertEqual(demo_marks(), 0)
@@ -53,7 +56,7 @@ class RecordsPresentTests(IndexMixin, TestCase):
         self.assertEqual((before["accounts"], before["tasks"],
                           before["substances"]), (1, 1, 1))
         with frozen(noon(DAY)), self.assertRaises(CommandError):
-            run("--replace", index=demo_index())
+            run("--replace")
         self.assertEqual(lab_records(), before)
         self.assertEqual(demo_marks(), 0)
 
@@ -64,7 +67,7 @@ class RecordsPresentTests(IndexMixin, TestCase):
         for args in ((), ("--replace",)):
             with self.subTest(args=args), frozen(noon(DAY)), \
                     self.assertRaises(CommandError) as caught:
-                run(*args, index=demo_index())
+                run(*args)
             if not args:
                 self.assertIn("--replace", str(caught.exception))
             self.assertEqual(lab_records(), before)
@@ -75,7 +78,7 @@ class RecordsPresentTests(IndexMixin, TestCase):
         before = lab_records()
         self.assertEqual(before["terms"], 1)
         with frozen(noon(DAY)), self.assertRaises(CommandError) as caught:
-            run(index=demo_index())
+            run()
         self.assertIn("--replace", str(caught.exception))
         self.assertEqual(lab_records(), before)
         self.assertEqual(demo_marks(), 0)
@@ -95,9 +98,9 @@ class RecordsPresentTests(IndexMixin, TestCase):
         for args in ((), ("--replace",)):
             with self.subTest(args=args), frozen(noon(DAY)), \
                     self.assertRaises(CommandError):
-                run(*args, index=demo_index())
+                run(*args)
         with frozen(noon(DAY)):
-            run("--if-empty", index=demo_index())
+            run("--if-empty")
         self.assertEqual(Task.history.count(), histories)
         self.assertEqual(demo_marks(), 0)
 
@@ -106,18 +109,18 @@ class RecordsPresentTests(IndexMixin, TestCase):
         from tasks.models import Counter, Task
         Counter.objects.create(name="task", value=42)
         with frozen(noon(DAY)):
-            run("--replace", index=demo_index())
+            run("--replace")
         first = Task.objects.order_by("created_at", "id").first()
         self.assertEqual(first.number, "T-001")
 
     def test_replace_writes_an_empty_database(self) -> None:
         with frozen(noon(DAY)):
-            run("--replace", index=demo_index())
+            run("--replace")
         self.assertEqual(lab_records()["accounts"], len(ACCOUNTS))
         self.assertEqual(demo_marks(), 1)
 
 
-class ReplaceTests(IndexMixin, TestCase):
+class ReplaceTests(TestCase):
 
     def test_replace_a_demo_database(self) -> None:
         """Scenario: Replace a demo database."""
@@ -131,7 +134,7 @@ class ReplaceTests(IndexMixin, TestCase):
         make_substance("stray-substance")
         make_group("stray-group")
         with frozen(noon(DAY)):
-            run("--replace", index=demo_index())
+            run("--replace")
         self.assertFalse(Substance.objects.filter(
             key="stray-substance").exists())
         self.assertFalse(Group.objects.filter(key="stray-group").exists())
@@ -150,7 +153,7 @@ class ReplaceTests(IndexMixin, TestCase):
         seed(DAY)
         before = lab_records()
         with frozen(noon(DAY)):
-            run("--replace", index=demo_index())
+            run("--replace")
         self.assertEqual(lab_records(), before)
 
     def test_replace_removes_the_histories(self) -> None:
@@ -158,16 +161,16 @@ class ReplaceTests(IndexMixin, TestCase):
         seed(DAY)
         before = Task.history.count()
         with frozen(noon(DAY)):
-            run("--replace", index=demo_index())
+            run("--replace")
         self.assertEqual(Task.history.count(), before)
 
 
-class AtStartTests(IndexMixin, TestCase):
+class AtStartTests(TestCase):
 
     def test_flag_off_changes_nothing(self) -> None:
         """Scenario: At start (flag off)."""
         with frozen(noon(DAY)):
-            out, _err = run("--if-empty", demo=False, index=demo_index())
+            out, _err = run("--if-empty", demo=False)
         self.assertTrue(out.strip())
         self.assertEqual(lab_records(), EMPTY)
         self.assertEqual(demo_marks(), 0)
@@ -176,7 +179,7 @@ class AtStartTests(IndexMixin, TestCase):
         """Scenario: At start (records present)."""
         make_user("kl", "KL")
         with frozen(noon(DAY)):
-            out, _err = run("--if-empty", index=demo_index())
+            out, _err = run("--if-empty")
         self.assertTrue(out.strip())
         self.assertEqual(lab_records(), {**EMPTY, "accounts": 1})
         self.assertEqual(demo_marks(), 0)
@@ -184,7 +187,7 @@ class AtStartTests(IndexMixin, TestCase):
     def test_empty_database_is_seeded(self) -> None:
         """Scenario: At start (empty)."""
         with frozen(noon(DAY)):
-            run("--if-empty", index=demo_index())
+            run("--if-empty")
         self.assertEqual(lab_records()["accounts"], len(ACCOUNTS))
         self.assertEqual(demo_marks(), 1)
 
@@ -192,20 +195,20 @@ class AtStartTests(IndexMixin, TestCase):
         seed(DAY)
         before = lab_records()
         with frozen(noon(DAY)):
-            run("--if-empty", index=demo_index())
+            run("--if-empty")
         self.assertEqual(lab_records(), before)
 
 
-class OptionsTogetherTests(IndexMixin, TestCase):
+class OptionsTogetherTests(TestCase):
 
     def test_options_together(self) -> None:
         """Scenario: Options together."""
         with frozen(noon(DAY)), self.assertRaises(CommandError):
-            run("--replace", "--if-empty", index=demo_index())
+            run("--replace", "--if-empty")
         self.assertEqual(lab_records(), EMPTY)
 
 
-class FailureTests(IndexMixin, TestCase):
+class FailureTests(TestCase):
 
     def failing_notes(self) -> mock._patch:
         """A patch that lets the first five delivery notes be booked and
@@ -227,7 +230,7 @@ class FailureTests(IndexMixin, TestCase):
         """Scenario: Failure changes nothing (empty database)."""
         with frozen(noon(DAY)), self.failing_notes(), \
                 self.assertRaises(CommandError):
-            run(index=demo_index())
+            run()
         self.assertEqual(lab_records(), EMPTY)
         self.assertEqual(demo_marks(), 0)
         self.assertEqual(task_counter(), 0)
@@ -241,29 +244,20 @@ class FailureTests(IndexMixin, TestCase):
         counter = task_counter()
         with frozen(noon(DAY)), self.failing_notes(), \
                 self.assertRaises(CommandError):
-            run("--replace", index=demo_index())
+            run("--replace")
         self.assertEqual(lab_records(), before)
         self.assertEqual(Task.history.count(), histories)
         self.assertEqual(task_counter(), counter)
         self.assertEqual(demo_marks(), 1)
 
 
-class NoIndexTests(IndexMixin, TestCase):
+class StderrTests(TestCase):
 
-    def test_no_index(self) -> None:
-        """Scenario: No index."""
-        from registry.models import Substance
-        path = self.use_index(None)
-        with frozen(noon(DAY)):
-            out, err = run(index=path)
-        self.assertEqual(err.strip(), "")
-        self.assertEqual(lab_records()["accounts"], len(ACCOUNTS))
-        self.assertEqual(Substance.objects.count(), 21)
-        self.assertEqual(demo_marks(), 1)
-
-    def test_the_demo_index_gives_no_warning(self) -> None:
+    def test_the_data_set_is_written_without_a_warning(self) -> None:
         _out, err = seed(DAY)
         self.assertEqual(err.strip(), "")
+        self.assertEqual(lab_records()["accounts"], len(ACCOUNTS))
+        self.assertEqual(demo_marks(), 1)
 
 
 def imported_rows() -> dict[str, int]:
@@ -272,55 +266,146 @@ def imported_rows() -> dict[str, int]:
     return counts()
 
 
+def with_extra_procedure() -> dict:
+    """The demo collection with a tenth procedure, which the demo
+    manifest lacks."""
+    data = demo_collection()
+    extra = copy.deepcopy(by_id(data["procedures"], "OSDB-0008"))
+    extra["id"] = "OSDB-0010"
+    data["procedures"].append(extra)
+    return data
+
+
+class DataSetImportTests(TestCase):
+    """The data set records an accepted import of the demo collection
+    (lab-demo: Demo data command)."""
+
+    def test_the_data_sets_import(self) -> None:
+        """Scenario: The data set's import."""
+        from collection.models import Import, Procedure, Sequence
+        with frozen(noon(DAY)):
+            out, _err = run()
+        self.assertTrue(out.strip())
+        (own,) = Import.objects.all()
+        self.assertEqual((own.outcome, own.release, own.trigger),
+                         ("accepted", "demo", "catch-up"))
+        self.assertEqual(
+            sorted(Procedure.objects.values_list("key", flat=True)),
+            [f"OSDB-{number:04d}" for number in range(1, 10)])
+        self.assertEqual(
+            sorted(Sequence.objects.values_list("key", flat=True)),
+            ["SEQ-0001", "SEQ-0002"])
+        self.assertFalse(Procedure.objects.filter(withdrawn=True).exists())
+        self.assertFalse(Sequence.objects.filter(withdrawn=True).exists())
+
+    def test_the_import_is_the_manifest_applied(self) -> None:
+        """Requirement: Demo data command (the import is recorded as the
+        manifest view applies one: with the commit of forty zeros, no
+        base, the current snapshot's digest, and the language of the
+        demo texts)."""
+        from collection.models import Import
+        from registry import snapshot
+        seed(DAY)
+        (own,) = Import.objects.all()
+        self.assertEqual(own.commit, "0" * 40)
+        self.assertIsNone(own.base)
+        self.assertEqual(own.snapshot, snapshot.build()["digest"])
+        self.assertEqual(own.language, "de")
+        self.assertEqual(snapshot.build()["import"]["id"], own.pk)
+        self.assertEqual(
+            {name: imported_rows()[name]
+             for name in ("Procedure", "ScopeEntry", "Sequence", "Step")},
+            {"Procedure": PROCEDURES, "ScopeEntry": 11,
+             "Sequence": SEQUENCES, "Step": 4})
+
+    def test_the_rows_are_the_manifests(self) -> None:
+        """Requirement: Demo data command (the rows `webapp/demo/
+        manifest.json` describes, general procedures marked)."""
+        from collection.models import Procedure
+        seed(DAY)
+        for body in demo_collection()["procedures"]:
+            with self.subTest(id=body["id"]):
+                row = Procedure.objects.get(key=body["id"])
+                self.assertEqual(row.general, body["general"])
+                self.assertEqual(row.title, body["title"])
+                self.assertEqual(row.entries.count(), len(body["entries"]))
+
+    def test_the_import_is_recorded_on_the_opening_day(self) -> None:
+        """Requirement: Demo data command (on `O`, after the
+        registry)."""
+        from collection.models import Import
+        from registry.models import Substance
+        seed(DAY)
+        (own,) = Import.objects.all()
+        self.assertEqual(own.received_at.astimezone(BERLIN).date(),
+                         opening(DAY))
+        created = Substance.history.filter(history_type="+").order_by(
+            "history_date").first().history_date
+        self.assertGreaterEqual(own.received_at, created)
+
+    def test_the_import_has_the_language_of_the_texts(self) -> None:
+        """Requirement: Demo data command (the language of the demo
+        texts)."""
+        from collection.models import Import
+        seed(DAY)
+        accept(language="en")
+        with frozen(noon(DAY)):
+            run("--replace")
+        (own,) = Import.objects.all()
+        self.assertEqual(own.language, "en")
+
+
 @override_settings(ORGSYNDB_BUILDER_TOKEN=TOKEN)
-class ImportedRowsTests(IndexMixin, TestCase):
+class ImportedRowsTests(TestCase):
     """The collection's imports are lab records (lab-demo: Demo data
     command)."""
 
-    def import_demo(self) -> int:
-        """Accept the demo collection's manifest; return the import's
-        id."""
-        done = post(self.client, manifest())
-        self.assertEqual(done.json()["outcome"], "accepted", done.content)
-        return done.json()["import"]
-
     def test_replacing_after_an_import(self) -> None:
         """Scenario: Replacing after an import."""
+        from collection.models import Import, Procedure, Sequence
         from registry import snapshot
         seed(DAY)
-        self.import_demo()
-        self.assertIsNotNone(snapshot.build()["import"])
-        self.assertGreater(imported_rows()["Procedure"], 0)
+        later = import_collection(with_extra_procedure())
+        self.assertEqual(snapshot.build()["import"]["id"], later.pk)
+        self.assertEqual(Procedure.objects.count(), PROCEDURES + 1)
         with frozen(noon(DAY)):
-            run("--replace", index=demo_index())
-        self.assertEqual({name: n for name, n in imported_rows().items()
-                          if n}, {})
-        self.assertIsNone(snapshot.build()["import"])
+            out, _err = run("--replace")
+        self.assertTrue(out.strip())
+        (own,) = Import.objects.all()
+        self.assertEqual(own.release, "demo")
+        self.assertNotEqual(own.pk, later.pk)
+        self.assertEqual(snapshot.build()["import"]["id"], own.pk)
+        self.assertEqual(
+            sorted(Procedure.objects.values_list("key", flat=True)),
+            sorted(p["id"] for p in demo_collection()["procedures"]))
+        self.assertEqual(
+            sorted(Sequence.objects.values_list("key", flat=True)),
+            sorted(s["id"] for s in demo_collection()["sequences"]))
         self.assertEqual(demo_marks(), 1)
 
-    def test_the_collection_is_imported_again_after_a_replacement(
+    def test_the_collection_is_built_after_the_data_sets_import(
             self) -> None:
-        """Requirement: Demo data command (after the replacement the
-        snapshot's `import` is `null`, so a build is accepted with no
-        base)."""
-        seed(DAY)
-        self.import_demo()
-        with frozen(noon(DAY)):
-            run("--replace", index=demo_index())
-        done = post(self.client, manifest())
-        self.assertEqual(done.json()["outcome"], "accepted", done.content)
+        """Requirement: Demo data command (the builder's next cycle
+        builds with the data set's import as its base)."""
         from collection.models import Import
-        self.assertIsNone(Import.objects.get().base)
+        seed(DAY)
+        (own,) = Import.objects.all()
+        stale = post(self.client, manifest())
+        self.assertEqual(stale.status_code, 409, stale.content)
+        done = post(self.client, manifest(base=own.pk))
+        self.assertEqual(done.json()["outcome"], "accepted", done.content)
+        self.assertEqual(Import.objects.get(pk=done.json()["import"]).base,
+                         own)
 
     def test_a_database_holding_an_import_has_lab_records(self) -> None:
         """Requirement: Demo data command (the imports are lab
         records)."""
         make_import()
         with frozen(noon(DAY)), self.assertRaises(CommandError) as caught:
-            run(index=demo_index())
+            run()
         self.assertIn("--replace", str(caught.exception))
         with frozen(noon(DAY)):
-            run("--if-empty", index=demo_index())
+            run("--if-empty")
         self.assertEqual(lab_records(), EMPTY)
         self.assertEqual(imported_rows()["Import"], 1)
         self.assertEqual(demo_marks(), 0)
@@ -331,7 +416,7 @@ class ImportedRowsTests(IndexMixin, TestCase):
         from inventory import bookings
         from registry import snapshot
         seed(DAY)
-        self.import_demo()
+        import_collection(with_extra_procedure())
         before = imported_rows()
         latest = snapshot.build()["import"]
         real = bookings.book_note
@@ -346,12 +431,12 @@ class ImportedRowsTests(IndexMixin, TestCase):
         with frozen(noon(DAY)), mock.patch(
                 "inventory.bookings.book_note", side_effect=book_note), \
                 self.assertRaises(CommandError):
-            run("--replace", index=demo_index())
+            run("--replace")
         self.assertEqual(imported_rows(), before)
         self.assertEqual(snapshot.build()["import"], latest)
 
 
-class SummaryTests(IndexMixin, TestCase):
+class SummaryTests(TestCase):
 
     def test_success_prints_what_was_written(self) -> None:
         from inventory.models import DeliveryNote, Item

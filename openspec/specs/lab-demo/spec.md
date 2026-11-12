@@ -25,7 +25,7 @@ A database SHALL be a demo database when it holds the demo mark, which the demo 
 - `--replace` deletes every lab record, with the movements, lines and change histories that belong to them, sets the task counter to zero and writes the data set, when the database is a demo database or holds no lab records. On any other database it exits 1 with a message saying it replaces only a demo database, and changes nothing; when `ORGSYNDB_DEMO` is not true, it exits 1 as above;
 - `--if-empty` writes the data set when `ORGSYNDB_DEMO` is true and the database holds no lab records, and otherwise exits 0, saying why, without changing anything.
 
-`--replace` and `--if-empty` together are refused as a usage error, changing nothing. After the accounts, as the data set's first changes, on `O` and made by `klehmann` (Recorded past), the command loads the demo registry, `webapp/demo/registry.json`, as `registry_load` does (lab-registry "Loading a registry"). On success it prints how many accounts, substances, items, delivery notes and tasks it wrote.
+`--replace` and `--if-empty` together are refused as a usage error, changing nothing. After the accounts, as the data set's first changes, on `O` and made by `klehmann` (Recorded past), the command loads the demo registry, `webapp/demo/registry.json`, as `registry_load` does (lab-registry "Loading a registry"). Then, on `O`, it records an accepted import of the demo collection from `webapp/demo/manifest.json`, the output of `tools/orgsyndb manifest` for the demo collection, as the manifest view applies one (collection-import "Applying an import"), with the commit of forty zeros, the release `demo`, the trigger `catch-up`, no base, the current snapshot's digest and the language of the demo texts (Language of the demo texts); the builder's next cycle replaces it with an import of a real build. On success it prints how many accounts, substances, items, delivery notes and tasks it wrote.
 
 #### Scenario: Flag off
 - **WHEN** `ORGSYNDB_DEMO` is unset and `demo_data` runs once without options and once with `--replace` on an empty database
@@ -55,13 +55,13 @@ A database SHALL be a demo database when it holds the demo mark, which the demo 
 - **WHEN** `demo_data --replace --if-empty` runs
 - **THEN** it is refused as a usage error and the database is unchanged
 
-#### Scenario: No index
-- **WHEN** `ORGSYNDB_DEMO` is true, `ORGSYNDB_INDEX` names a file that does not exist, and `demo_data` runs on an empty database
-- **THEN** it exits 0 without a warning, and the data set is written, the substances of the demo registry included
+#### Scenario: The data set's import
+- **WHEN** `ORGSYNDB_DEMO` is true and `demo_data` runs on an empty database
+- **THEN** it exits 0, one accepted import exists, with the release `demo` and the trigger `catch-up`, and the procedures `OSDB-0001` to `OSDB-0009` and the sequences `SEQ-0001` and `SEQ-0002` exist, none withdrawn
 
 #### Scenario: Replacing after an import
 - **WHEN** the demo data set is written, an import of the demo collection is accepted, and `demo_data --replace` runs with `ORGSYNDB_DEMO` true
-- **THEN** it exits 0, no import, procedure or sequence remains, and the snapshot's `import` is `null`
+- **THEN** it exits 0, the only import is the data set's own, the snapshot's `import` names it, and no procedure or sequence remains that the demo manifest lacks
 
 ### Requirement: Demo accounts
 The data set SHALL hold five accounts:
@@ -116,7 +116,7 @@ The data set SHALL hold tasks for the articles of the demo inventory and for its
 
 - tasks in each state: planned, running, ended with `report` and `qc_list` on, ended needing follow-up, and cancelled; on `D` the task list's default filter counts at least two planned, three running and two follow-up tasks;
 - at least three ended tasks matching `CH-0012`, so that its synthesis time is `längste der letzten 3 Synthesen`;
-- tasks of the sequences `SEQ-0001`, of the substance of `CH-0010`, with the steps `OSDB-0001` and `OSDB-0002`, and `SEQ-0002`, of the substance of `CH-0002`, with the steps `OSDB-0004` and `OSDB-0009`, the steps written from the data set and not read from the index; one of them running with one of two steps done;
+- tasks of the sequences `SEQ-0001`, of the substance of `CH-0010`, and `SEQ-0002`, of the substance of `CH-0002`, of the data set's import, each with one step per step of its sequence (task-tracker "Task record"); one of them running with the first of its two steps done;
 - one task without an assignee;
 - an ended task of `1-phenylethanol`, whose article has no article number, with a batch and no lot;
 - other ended tasks with batches, and bulk lots of the same batches, so that each such task lists its lots and each lot its task.
@@ -162,13 +162,13 @@ The data set SHALL be written as a sequence of changes, each made at its own mom
 - **THEN** every `booked_at`, `created_at`, `entered_at` and change-history time lies from `O` to `D`, and every movement's date and task's start and end lies on or before `D`
 
 ### Requirement: Language of the demo texts
-The data set's free texts, categories, notes, recipients and locations, SHALL be written in the language of the collection index, German when it has none. Its substances have names in both languages, shown as the language chooses (lab-registry "Substances").
+The data set's free texts, categories, notes, recipients and locations, SHALL be written in the language of the latest accepted import the database holds before the command deletes anything, German when it holds none. Its substances have names in both languages, shown as the language chooses (lab-registry "Substances").
 
-#### Scenario: English index
-- **WHEN** the data set is written with an index whose language is `en`
+#### Scenario: English collection
+- **WHEN** an import of language `en` was accepted and the data set is written with `--replace`
 - **THEN** the item `NV-0007` is named `New compound 7` and the item `CH-0012` `(E)-Cinnamic acid`
 
-#### Scenario: Same records whatever the index
-- **WHEN** the data set is written as of one day, once with the demo collection's index and once with no index
+#### Scenario: Same records whatever the language
+- **WHEN** the data set is written as of one day, once over an accepted import of language `en` and once on an empty database
 - **THEN** both databases hold the same items by article number, size, unit and quantity, the same movements by kind, count and date, the same lots by batch and amount, and the same tasks by number, substance and dates
 

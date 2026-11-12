@@ -8,9 +8,9 @@ from pathlib import Path
 from django.contrib.staticfiles import finders
 from django.test import SimpleTestCase, TestCase
 
-from . import (REPO, IndexMixin, berlin, build_index, demo_index, make_item,
-               make_lot, make_task, make_user, page, substance_for, table,
-               task_url, ticking, write_index)
+from . import (REPO, berlin, frozen, make_item, make_lot, make_task,
+               make_user, page, substance_for, table, task_url, ticking)
+from .collection_support import accept, make_import
 
 CSS = REPO / "site" / "assets" / "css"
 STYLESHEETS = ["tokens.css", "base.css", "screen.css", "print.css"]
@@ -26,15 +26,12 @@ def site_title() -> str:
     return tomllib.loads(path.read_text(encoding="utf-8"))["title"]
 
 
-class ShellTests(IndexMixin, TestCase):
+class ShellTests(TestCase):
 
     @classmethod
     def setUpTestData(cls) -> None:
         cls.kl = make_user("kl", "KL", "Klara", "Lehmann")
         cls.task = make_task(cls.kl, substance="CH-0012")
-
-    def setUp(self) -> None:
-        self.use_index(demo_index())
 
     def shell(self, signed_in: bool, path: str = "/lab/tasks/"):
         if signed_in:
@@ -163,14 +160,13 @@ class ShellTests(IndexMixin, TestCase):
         self.assertEqual(len(hrefs), 5)
 
 
-class InventoryShellTests(IndexMixin, TestCase):
+class InventoryShellTests(TestCase):
 
     @classmethod
     def setUpTestData(cls) -> None:
         cls.kl = make_user("kl", "KL", "Klara", "Lehmann")
 
     def setUp(self) -> None:
-        self.use_index(demo_index())
         self.enterContext(ticking(berlin(2026, 11, 4, 8)))
         self.item = make_item(self.kl, "CH-0012", quantity=5)
         self.lot = make_lot(self.kl, "CH-0012")
@@ -211,7 +207,7 @@ class InventoryShellTests(IndexMixin, TestCase):
                                  ["true", None, None, None])
 
     def test_the_english_label(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         response = self.client.get("/lab/inventory/end-products/")
         links = page(response).find("header", cls="site-header").find(
             "nav").find_all("a")
@@ -271,14 +267,11 @@ class InventoryShellTests(IndexMixin, TestCase):
         self.assertIsNotNone(root.find("ul", cls="lab-messages"))
 
 
-class PlanningShellTests(IndexMixin, TestCase):
+class PlanningShellTests(TestCase):
 
     @classmethod
     def setUpTestData(cls) -> None:
         cls.kl = make_user("kl", "KL", "Klara", "Lehmann")
-
-    def setUp(self) -> None:
-        self.use_index(demo_index())
 
     def marks(self, path: str) -> list:
         response = self.client.get(path)
@@ -316,7 +309,7 @@ class PlanningShellTests(IndexMixin, TestCase):
                     + ["/lab/static/lab.css"])
 
     def test_the_english_label(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         links = page(self.client.get("/lab/planning/")).find(
             "header", cls="site-header").find("nav").find_all("a")
         self.assertEqual(links[1].text(), "Planning")
@@ -329,15 +322,12 @@ class PlanningShellTests(IndexMixin, TestCase):
                          ["page", None, None, None])
 
 
-class RegistryShellTests(IndexMixin, TestCase):
+class RegistryShellTests(TestCase):
 
     @classmethod
     def setUpTestData(cls) -> None:
         cls.kl = make_user("kl", "KL", "Klara", "Lehmann")
         cls.substance = substance_for("CH-0012")
-
-    def setUp(self) -> None:
-        self.use_index(demo_index())
 
     def marks(self, path: str) -> list:
         response = self.client.get(path)
@@ -380,7 +370,7 @@ class RegistryShellTests(IndexMixin, TestCase):
                          [None, "page", None, None])
 
     def test_the_english_label(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         links = page(self.client.get("/lab/registry/")).find(
             "header", cls="site-header").find("nav").find_all("a")
         self.assertEqual(links[3].text(), "Substances")
@@ -416,15 +406,20 @@ class StaticFilesTests(SimpleTestCase):
         self.assertTrue(finders.find("lab.css"))
 
 
-class LanguageTests(IndexMixin, TestCase):
+class LanguageTests(TestCase):
 
     @classmethod
     def setUpTestData(cls) -> None:
         cls.kl = make_user("kl", "KL", "Klara", "Lehmann")
         cls.task = make_task(cls.kl, substance="X", started=date(2026, 11, 3))
 
+    def language(self, path: str = "/lab/tasks/") -> str:
+        response = self.client.get(path)
+        self.assertEqual(response.status_code, 200)
+        return page(response).find("html").get("lang")
+
     def test_german_site(self) -> None:
-        self.use_index(demo_index())
+        accept(language="de")
         response = self.client.get("/lab/tasks/?state=all")
         root = page(response)
         self.assertEqual(root.find("html").get("lang"), "de")
@@ -433,7 +428,7 @@ class LanguageTests(IndexMixin, TestCase):
 
     def test_english_site(self) -> None:
         """Scenario: English site."""
-        self.use_index(build_index("en"))
+        accept(language="en")
         response = self.client.get("/lab/tasks/?state=all")
         root = page(response)
         self.assertEqual(root.find("html").get("lang"), "en")
@@ -451,33 +446,65 @@ class LanguageTests(IndexMixin, TestCase):
         self.assertEqual(rows[0]["Started"].text(), "2026-11-03")
 
     def test_english_site_dates_on_the_task_page(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.assertIn("2026-11-03",
                       page(self.client.get(task_url(self.task))).text())
 
     def test_german_site_dates_on_the_task_page(self) -> None:
-        self.use_index(build_index("de"))
+        accept(language="de")
         self.assertIn("03.11.2026",
                       page(self.client.get(task_url(self.task))).text())
 
-    def test_no_index_serves_german(self) -> None:
-        """Scenario: No index."""
-        self.use_index(None)
+    def test_before_any_import(self) -> None:
+        """Scenario: Before any import."""
         response = self.client.get("/lab/tasks/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(page(response).find("html").get("lang"), "de")
+        self.assertEqual(response["Content-Language"], "de")
 
-    def test_language_follows_a_replaced_index(self) -> None:
-        path = self.use_index(build_index("en"))
-        self.assertEqual(page(self.client.get("/lab/tasks/")
-                              ).find("html").get("lang"), "en")
-        write_index(path, build_index("de"))
-        self.assertEqual(page(self.client.get("/lab/tasks/")
-                              ).find("html").get("lang"), "de")
+    def test_language_follows_the_latest_accepted_import(self) -> None:
+        """Requirement: Interface language (the latest accepted
+        import)."""
+        accept(language="en")
+        self.assertEqual(self.language(), "en")
+        accept(language="de")
+        self.assertEqual(self.language(), "de")
+        accept(language="en")
+        self.assertEqual(self.language(), "en")
+
+    def test_a_refused_import_does_not_change_the_language(self) -> None:
+        """Requirement: Interface language (accepted imports only)."""
+        accept(language="en")
+        make_import(outcome="refused")
+        self.assertEqual(self.language(), "en")
+
+    def test_the_latest_accepted_import_is_the_one_received_last(
+            self) -> None:
+        """Requirement: Accepting an import (the latest accepted import
+        is the accepted import received last)."""
+        with frozen(berlin(2026, 11, 2)):
+            accept(language="en")
+        with frozen(berlin(2026, 11, 1)):
+            accept(language="de")
+        self.assertEqual(self.language(), "en")
 
     def test_sign_in_page_speaks_the_language(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         root = page(self.client.get("/lab/accounts/login/"))
         self.assertEqual(root.find("html").get("lang"), "en")
         header = root.find("header", cls="site-header")
         self.assertIn("Sign in", [a.text() for a in header.find_all("a")])
+
+
+class NoCollectionIndexTests(SimpleTestCase):
+
+    def test_the_setting_is_gone(self) -> None:
+        """Requirement: Settings from the environment (no
+        `ORGSYNDB_INDEX`)."""
+        from django.conf import settings
+        self.assertFalse(hasattr(settings, "ORGSYNDB_INDEX"))
+
+    def test_the_module_is_gone(self) -> None:
+        """Requirement: Collection index (removed)."""
+        import importlib.util
+        self.assertIsNone(importlib.util.find_spec("orgsyndb_web.index"))

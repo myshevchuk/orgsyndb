@@ -6,7 +6,8 @@ from datetime import date
 
 from django.test import SimpleTestCase
 
-from . import berlin, build_index, make_task, page, table, ticking
+from . import berlin, make_task, page, table, ticking
+from .collection_support import accept
 from .planning_support import PlanningCase
 
 OVERVIEW = "/lab/"
@@ -170,7 +171,7 @@ class FigureTests(OverviewCase):
         self.assertEqual(len(requested), 1)
         self.assertIn("CH-0012", requested[0])
         self.assertIn("(E)-Zimtsäure", requested[0])
-        self.use_index(build_index("en"))
+        accept(language="en")
         requested = entries(self.get(), "Most requested in 2026")
         self.assertIn("(E)-Cinnamic acid", requested[0])
 
@@ -336,7 +337,7 @@ class EnglishTests(OverviewCase):
 
     def test_overview_in_english(self) -> None:
         """Scenario: Overview in English."""
-        self.use_index(build_index("en"))
+        accept(language="en")
         root = self.get()
         self.assertEqual(root.find("h1").text(), "Lab at a glance")
         headings = [h.text() for h in root.find_all("h2")]

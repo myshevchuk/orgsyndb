@@ -6,7 +6,8 @@ from typing import Any
 
 from django.test import override_settings
 
-from . import berlin, build_index, frozen, page, table, ticking
+from . import berlin, frozen, page, table, ticking
+from .collection_support import accept, latest_import
 from .collection_support import (IMPORTS, SEQUENCES, TOKEN, ImportCase,
                                  demo_collection, make_import, manifest,
                                  post, refused)
@@ -53,8 +54,8 @@ class AccessTests(ImportCase):
 
     def test_the_heading_in_english(self) -> None:
         """Requirement: Imports page (`Imports`)."""
-        self.use_index(build_index("en"))
         make_import()
+        accept(language="en")
         response = self.client.get(IMPORTS)
         self.assertEqual(page(response).find("h1").text(), "Imports")
 
@@ -67,13 +68,6 @@ class NothingImportedTests(ImportCase):
         self.assertEqual(response.status_code, 200)
         root = page(response)
         self.assertIn("Noch keine Importe.", root.text())
-        self.assertIsNone(root.find("table"))
-
-    def test_nothing_imported_in_english(self) -> None:
-        """Requirement: Imports page (`No imports yet.`)."""
-        self.use_index(build_index("en"))
-        root = page(self.client.get(IMPORTS))
-        self.assertIn("No imports yet.", root.text())
         self.assertIsNone(root.find("table"))
 
     def test_the_table_replaces_the_text(self) -> None:
@@ -91,7 +85,8 @@ class ImportsListedTests(SeededCase):
     def test_imports_listed(self) -> None:
         """Scenario: Imports listed."""
         from collection.models import Import
-        body = manifest()
+        own = latest_import()
+        body = manifest(base=own.pk)
         done = post(self.client, body)
         self.assertEqual(done.json()["outcome"], "accepted", done.content)
         errors = ["OSDB-0002.md:title: error: missing", "build failed"]
@@ -100,14 +95,15 @@ class ImportsListedTests(SeededCase):
                 errors, base=done.json()["import"],
                 trigger="registry"))
         self.assertEqual(report.json()["outcome"], "refused")
-        self.assertEqual(Import.objects.count(), 2)
+        self.assertEqual(Import.objects.count(), 3)
         response = self.client.get(IMPORTS)
         self.assertEqual(response.status_code, 200)
         root = page(response)
         header, rows = table(root)
         self.assertEqual(header, COLUMNS_DE)
-        self.assertEqual(len(rows), 2)
-        newest, oldest = rows
+        self.assertEqual(len(rows), 3)
+        newest, oldest, first = rows
+        self.assertEqual(first["Commit"].text(), own.commit[:10])
         self.assertEqual(newest["Commit"].text(), Import.objects.get(
             outcome="refused").commit[:10])
         self.assertEqual(newest["Ergebnis"].text(), "Abgelehnt")
@@ -162,8 +158,8 @@ class ListTests(ImportCase):
 
     def test_the_english_page(self) -> None:
         """Requirement: Imports page (the English words)."""
-        self.use_index(build_index("en"))
-        made = {trigger: make_import(trigger=trigger)
+        accept(language="en")
+        made = {trigger: make_import(trigger=trigger, language="en")
                 for trigger in TRIGGERS_EN}
         refusal = make_import(outcome="refused",
                               errors="a: error: b\nc: error: d")

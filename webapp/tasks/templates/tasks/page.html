@@ -18,7 +18,7 @@
 <dt>{% translate "Ended" context "date" %}</dt>
 <dd>{{ task.ended|default_if_none:"–" }}</dd>
 <dt>{% translate "Progress" %}</dt>
-<dd>{% if task.steps_total %}{{ task.steps_done }}/{{ task.steps_total }} <progress value="{{ task.steps_done }}" max="{{ task.steps_total }}"></progress> {{ task.progress }} %{% else %}–{% endif %}</dd>
+<dd>{% include "tasks/progress.html" %}{% if task.progress is not None %} {{ task.progress }} %{% else %}–{% endif %}</dd>
 <dt>{% translate "Batch" %}</dt>
 <dd>{{ task.batch|default:"–" }}</dd>
 <dt>{% translate "Report" %}</dt>
@@ -30,9 +30,10 @@
 </dl>
 {% if task.note %}<h2>{% translate "Note" %}</h2>
 <div class="lab-note">{{ task.note|linebreaks }}</div>
-{% endif %}{% if task.sequence %}<h2>{% translate "Sequence" %} {% sequence task.sequence sequence_known %}</h2>
-<ol class="sequence-steps">
-{% for step in steps %}<li>{% procedure step.procedure step.known %}{% if step.done %} <span class="badge badge--checked">{% translate "done" %}</span>{% endif %}</li>
+{% endif %}{% if task.sequence %}<h2>{% translate "Sequence" %} {% sequence task.sequence.key sequence_known %}</h2>
+{% elif steps %}<h2>{% translate "Steps" %}</h2>
+{% endif %}{% if steps %}<ol class="sequence-steps">
+{% for step in steps %}<li>{% if step.signature %}{{ step.procedure }} {% marked step.signature %}{% elif step.procedure %}{% procedure step.procedure step.known %}{% if step.number %} {% blocktranslate with number=step.number %}Entry {{ number }}{% endblocktranslate %}{% endif %}{% else %}{% blocktranslate with position=step.position %}Step {{ position }}{% endblocktranslate %}{% endif %}{% if step.done_on %} <span class="badge badge--checked">{% blocktranslate with day=step.done_on|date %}done on {{ day }}{% endblocktranslate %}</span>{% endif %}</li>
 {% endfor %}</ol>
 {% endif %}{% include "planning/task_forecast.html" %}
 {% if lots %}<h2>{% translate "Bulk" %}</h2>
@@ -42,9 +43,9 @@
 {% endif %}<h2>{% translate "History" %}</h2>
 <ul class="lab-history">
 {% for entry in history %}<li><span class="lab-history__time">{{ entry.time }}</span> {% person entry.user %}
-{% if entry.created %}{% translate "Created" %}{% else %}<ul>
+{% if entry.heading %}<strong>{{ entry.heading }}</strong>
+{% endif %}{% if entry.created %}{% translate "Created" %}{% elif entry.changes %}<ul>
 {% for change in entry.changes %}<li>{{ change.label }}: {{ change.old }} → {{ change.new }}</li>
-{% empty %}<li>{% translate "No field changed" %}</li>
 {% endfor %}</ul>{% endif %}</li>
 {% endfor %}</ul>
 {% endblock %}

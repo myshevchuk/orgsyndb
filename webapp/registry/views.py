@@ -12,8 +12,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 
+from collection.models import latest_accepted
 from inventory.models import Item, Lot
-from orgsyndb_web import index
 from registry import snapshot
 from registry.forms import SubstanceForm
 from registry.models import Substance, SubstanceClass
@@ -67,11 +67,22 @@ def substance_list(request: HttpRequest) -> HttpResponse:
     })
 
 
+def in_collection(substance: Substance) -> bool:
+    """Whether the latest accepted import of the collection was received
+    no earlier than SUBSTANCE was created, the time of the first record
+    of its history: the build of that import had the substance's page.
+    False while no import was accepted, or for a substance without a
+    history."""
+    latest = latest_accepted()
+    created = substance.history.order_by("history_id").first()
+    return (latest is not None and created is not None
+            and latest.received_at >= created.history_date)
+
+
 def substance_page(request: HttpRequest, key: str) -> HttpResponse:
     """Show the substance KEY with its fields, its link to the site's
-    compound page when the collection index lists the key, its
-    article's items, its open lots and its tasks; answer 404 for an
-    unknown key."""
+    compound page (``in_collection``), its article's items, its open
+    lots and its tasks; answer 404 for an unknown key."""
     substance = get_object_or_404(
         Substance.objects.select_related("group"), key=key)
     items = sorted(Item.objects.filter(article_id=substance.pk)
@@ -81,7 +92,7 @@ def substance_page(request: HttpRequest, key: str) -> HttpResponse:
         "substance": substance,
         "classes": [term for term, _depth in tree_order(
             substance.chemical_classes.all())],
-        "in_collection": index.has_compound(substance.key),
+        "in_collection": in_collection(substance),
         "items": items,
         "lots": Lot.objects.filter(substance=substance, amount__gt=0)
         .order_by("made_on", "id"),

@@ -15,11 +15,12 @@ from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy, pgettext_lazy
 from django.views.decorators.http import require_POST
 
-from orgsyndb_web import index
+from orgsyndb_web import lock
 from planning.plan import Plan, TaskPriority, batch_lots, bulk_link
 from tasks.forms import TaskEditForm, TaskForm
 from tasks.history import history_entries
-from tasks.models import Priority, State, Task
+from tasks.models import Priority, State, Task, TaskStep
+from tasks.steps import finish
 
 STATE_FILTERS = [
     ("active", gettext_lazy("Active")),
@@ -104,7 +105,8 @@ def task_list(request: HttpRequest) -> HttpResponse:
     accounts = list(get_user_model().objects.order_by("initials"))
     filters = Filters.from_query(request.GET,
                                  {user.initials for user in accounts})
-    tasks = list(Task.objects.select_related("assignee", "substance"))
+    tasks = list(Task.objects.select_related("assignee", "substance")
+                 .prefetch_related("steps"))
     plan = Plan(timezone.localdate())
     priorities = {task.pk: plan.task_priority(task) for task in tasks}
     counted = selected(tasks, filters, priorities, by_state=False)
@@ -128,37 +130,59 @@ def task_list(request: HttpRequest) -> HttpResponse:
 
 @dataclass(frozen=True)
 class Step:
-    """A step of a task's sequence as its page lists it."""
+    """A step of a task as its page lists it: its POSITION; its
+    PROCEDURE's ID, empty for a step without an entry, and whether the
+    procedure is KNOWN, not withdrawn; the NUMBER of its entry, its
+    position, for an entry of a general procedure that is not
+    withdrawn, else None; the SIGNATURE of its entry when the entry is
+    withdrawn, else empty; and the day it was DONE_ON, or None."""
 
+    position: int
     procedure: str
     known: bool
-    done: bool
+    number: int | None
+    signature: str
+    done_on: Any
+
+
+def shown_step(step: TaskStep) -> Step:
+    """Return STEP, its entry and procedure read, as its task's page
+    lists it."""
+    entry = step.entry
+    if entry is None:
+        return Step(position=step.position, procedure="", known=False,
+                    number=None, signature="", done_on=step.done_on)
+    procedure = entry.procedure
+    return Step(
+        position=step.position, procedure=procedure.key,
+        known=not procedure.withdrawn,
+        number=entry.position if procedure.general and not entry.withdrawn
+        else None,
+        signature=entry.signature if entry.withdrawn else "",
+        done_on=step.done_on)
 
 
 def task_page(request: HttpRequest, number: str) -> HttpResponse:
-    """Show the task NUMBER with its priority, steps, actions, the
-    forecast of each article it matches, the lots of its batch and its
-    history; answer 404 for an unknown number."""
+    """Show the task NUMBER with its priority, sequence, steps, actions,
+    the forecast of each article it matches, the lots of its batch and
+    its history; answer 404 for an unknown number."""
     task = get_object_or_404(Task.objects.select_related(
-        "assignee", "created_by", "substance"), number=number)
+        "assignee", "created_by", "substance", "sequence"), number=number)
     plan = Plan(timezone.localdate())
-    articles = plan.articles_of(task)
-    steps = [Step(procedure=ident,
-                  known=index.procedure_for(ident) is not None,
-                  done=position < task.steps_done)
-             for position, ident in enumerate(task.sequence_steps or [])]
+    steps = task.steps.select_related("entry__procedure").order_by(
+        "position")
     return render(request, "tasks/page.html", {
         "task": task,
-        "steps": steps,
-        "sequence_known": bool(task.sequence)
-        and index.sequence_for(task.sequence) is not None,
+        "steps": [shown_step(step) for step in steps],
+        "sequence_known": task.sequence is not None
+        and not task.sequence.withdrawn,
         "actions": [(name, action.label)
                     for name, action in ACTIONS.items()
                     if action.applies(task)]
         if request.user.is_authenticated else [],
         "history": history_entries(task),
         "shown": plan.task_priority(task),
-        "articles": articles,
+        "articles": plan.articles_of(task),
         "lots": batch_lots(task),
         "bulk_link": bulk_link(task),
     })
@@ -169,21 +193,27 @@ def form_page(request: HttpRequest, form_class: type[TaskForm],
               ) -> HttpResponse:
     """Show FORM_CLASS for TASK, with the INITIAL values given, or save
     the posted form and return to the task's page with a message; a
-    form with errors shows again."""
+    form with errors shows again.
+
+    A posted form is checked and saved in one transaction that holds
+    the import lock and, for an existing task, its row, so that the
+    steps it checks are the steps it changes and a sequence's steps
+    and the latest accepted import are read as one import left them.
+    """
     if request.method == "POST":
-        form = form_class(request.POST, instance=task)
-        if form.is_valid():
-            saved = form.save()
-            messages.success(request, _("Task %(number)s saved.")
-                             % {"number": saved.number})
-            return redirect("task", number=saved.number)
+        with transaction.atomic():
+            lock.hold()
+            if task.pk is not None:
+                task = Task.objects.select_for_update().get(pk=task.pk)
+            form = form_class(request.POST, instance=task)
+            if form.is_valid():
+                saved = form.save()
+                messages.success(request, _("Task %(number)s saved.")
+                                 % {"number": saved.number})
+                return redirect("task", number=saved.number)
     else:
         form = form_class(instance=task, initial=initial)
-    return render(request, "tasks/form.html", {
-        "form": form,
-        "task": task,
-        "sequences": index.current().sequences.values(),
-    })
+    return render(request, "tasks/form.html", {"form": form, "task": task})
 
 
 @login_required
@@ -207,14 +237,13 @@ def _start(task: Task) -> str:
 
 
 def _step(task: Task) -> str:
-    task.steps_done += 1
+    finish(task, timezone.localdate(), first_only=True)
     return _("Step %(done)s of %(total)s of task %(number)s done.")
 
 
 def _end(task: Task) -> str:
     task.ended = timezone.localdate()
-    if task.steps_total:
-        task.steps_done = task.steps_total
+    finish(task, task.ended, first_only=False)
     return _("Task %(number)s ended.")
 
 
@@ -232,8 +261,9 @@ def _qc_list(task: Task) -> str:
 class Action:
     """A button of the task page: its LABEL, whether it APPLIES to a
     task, the CHANGE it makes to one, which returns the message of the
-    change, the REFUSAL shown when it does not apply, and the FIELDS the
-    change sets, the only ones it saves."""
+    change and saves the steps it marks done, the REFUSAL shown when it
+    does not apply, and the FIELDS of the task the change sets, the
+    only ones it saves; a change that sets none saves no task record."""
 
     label: Any
     applies: Callable[[Task], bool]
@@ -248,14 +278,13 @@ ACTIONS = {
         gettext_lazy("Only a planned task can be started."), ("started",)),
     "step": Action(
         gettext_lazy("Step done"),
-        lambda t: (t.state == State.RUNNING and bool(t.steps_total)
-                   and t.steps_done < t.steps_total), _step,
+        lambda t: (t.state == State.RUNNING
+                   and t.steps.filter(done_on=None).exists()), _step,
         gettext_lazy("Only a running task with steps left can finish a "
-                     "step."), ("steps_done",)),
+                     "step."), ()),
     "end": Action(
         gettext_lazy("End"), lambda t: t.state == State.RUNNING, _end,
-        gettext_lazy("Only a running task can be ended."),
-        ("ended", "steps_done")),
+        gettext_lazy("Only a running task can be ended."), ("ended",)),
     "report": Action(
         gettext_lazy("Report done"),
         lambda t: t.state == State.ENDED and not t.report, _report,
@@ -292,11 +321,12 @@ def task_action(request: HttpRequest, number: str, action: str
         applies = chosen.applies(task)
         if applies:
             text = chosen.change(task)
-            task.save(update_fields=chosen.fields)
+            if chosen.fields:
+                task.save(update_fields=chosen.fields)
+            done, total = task.step_counts
     if applies:
         messages.success(request, text % {
-            "number": task.number, "done": task.steps_done,
-            "total": task.steps_total})
+            "number": task.number, "done": done, "total": total})
     else:
         messages.error(request, chosen.refusal)
     return redirect("task", number=task.number)

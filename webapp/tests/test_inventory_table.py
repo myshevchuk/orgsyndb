@@ -12,8 +12,8 @@ from django.test import SimpleTestCase
 
 from inventory.models import Item
 
-from . import (berlin, build_index, field_value, make_substance, page, table,
-               ticking)
+from . import berlin, field_value, make_substance, page, table, ticking
+from .collection_support import accept
 from .inventory_support import LIST, InventoryCase, fresh, item_url, lot_url
 from .test_inventory_colours import (CSS, MINIMUM, balanced, contrast,
                                      split_schemes)
@@ -131,7 +131,7 @@ class ColumnTests(TableCase):
             "Abgegeben": "2026 · Gebinde", "Reichweite": "Quartale"})
 
     def test_the_english_columns(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.item("T-1")
         root = self.listing()
         header, _ = table(root)
@@ -252,7 +252,7 @@ class SortTests(TableCase):
                                  f"1 von 1 Artikel · {order}")
 
     def test_the_english_order_line(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.item("S-1")
         self.item("S-2")
         self.assertEqual(self.summary(self.listing()),
@@ -865,7 +865,7 @@ class HeatTests(TableCase):
         self.assertIsNotNone(scale.find("input", id="heat-switch"))
 
     def test_the_english_scale(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.item("S-1")
         scale = self.listing().find(cls="heat-legend")
         text = scale.text()

@@ -15,7 +15,7 @@ from inventory.models import Article
 from registry.models import Substance
 from vocabulary.models import ChemicalClass, Group, Project, ReactionType
 
-from . import IndexMixin, make_substance
+from . import make_substance
 from .registry_support import OLD_LAYOUT
 
 VOCABULARY_FILES = {
@@ -59,10 +59,9 @@ def counts() -> tuple[int, int, int]:
             Substance.objects.count(), Article.objects.count())
 
 
-class ImportCase(IndexMixin, TestCase):
+class ImportCase(TestCase):
 
     def setUp(self) -> None:
-        self.use_index(None)
         self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
 
     def collection(self, compounds: dict[str, str] | None = None,

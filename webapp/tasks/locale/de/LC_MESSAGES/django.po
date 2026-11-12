@@ -20,12 +20,6 @@ msgstr "Stufen erledigt"
 msgid "A compound of the collection, by its key or item number, or a name."
 msgstr "Eine Verbindung der Sammlung, nach Schlüssel oder Artikelnummer, oder ein Name."
 
-msgid "A synthesis sequence of the collection; its steps set the steps total."
-msgstr "Ein Syntheseweg der Sammlung; seine Stufen bestimmen die Stufenzahl."
-
-msgid "The collection has no sequence %(id)s."
-msgstr "Die Sammlung hat keinen Syntheseweg %(id)s."
-
 msgid "yes"
 msgstr "ja"
 
@@ -73,9 +67,6 @@ msgstr "Ende"
 msgid "Sequence"
 msgstr "Syntheseweg"
 
-msgid "Steps of the sequence"
-msgstr "Stufen des Synthesewegs"
-
 msgid "Steps total"
 msgstr "Stufen gesamt"
 
@@ -114,15 +105,6 @@ msgstr "Ein Ende braucht einen Beginn."
 
 msgid "The end may not precede the start."
 msgstr "Das Ende darf nicht vor dem Beginn liegen."
-
-msgid "Steps done need a steps total."
-msgstr "Erledigte Stufen brauchen eine Stufenzahl."
-
-msgid "Steps done may not exceed the steps total."
-msgstr "Es können nicht mehr Stufen erledigt sein, als es gibt."
-
-msgid "With a sequence, the total is the number of its steps."
-msgstr "Mit einem Syntheseweg ist die Stufenzahl die seiner Stufen."
 
 msgid "Edit %(number)s"
 msgstr "%(number)s bearbeiten"
@@ -169,14 +151,8 @@ msgstr "Bearbeiten"
 msgid "Created"
 msgstr "Angelegt"
 
-msgid "done"
-msgstr "erledigt"
-
 msgid "History"
 msgstr "Änderungen"
-
-msgid "No field changed"
-msgstr "Kein Feld geändert"
 
 msgid "Follow-up"
 msgstr "Nacharbeit"
@@ -248,3 +224,51 @@ msgstr "manuell"
 
 msgid "Record as bulk"
 msgstr "Als Bulk erfassen"
+
+msgid "A synthesis sequence of the collection; its steps become the task's steps."
+msgstr "Ein Syntheseweg der Sammlung; seine Stufen werden die Stufen der Aufgabe."
+
+msgid "The number of steps of a task without a sequence."
+msgstr "Die Zahl der Stufen einer Aufgabe ohne Syntheseweg."
+
+msgid "The sequence cannot be set, changed or cleared while a step is done."
+msgstr "Der Syntheseweg kann nicht gesetzt, geändert oder entfernt werden, solange eine Stufe erledigt ist."
+
+msgid "The sequence %(key)s is no longer in the collection."
+msgstr "Der Syntheseweg %(key)s ist nicht mehr in der Sammlung."
+
+msgid "The steps total may not be below the %(done)s steps done."
+msgstr "Die Stufenzahl darf nicht unter den %(done)s erledigten Stufen liegen."
+
+msgid "Steps done may not exceed the %(count)s steps of the task."
+msgstr "Es können nicht mehr als die %(count)s Stufen der Aufgabe erledigt sein."
+
+msgid "Steps done need steps."
+msgstr "Erledigte Stufen brauchen Stufen."
+
+msgid "task step"
+msgstr "Stufe einer Aufgabe"
+
+msgid "task steps"
+msgstr "Stufen von Aufgaben"
+
+msgid "Planned with import"
+msgstr "Geplant mit Import"
+
+msgid "Done on"
+msgstr "Erledigt am"
+
+msgid "Steps"
+msgstr "Stufen"
+
+msgid "Step %(position)s"
+msgstr "Stufe %(position)s"
+
+msgid "Step %(position)s removed"
+msgstr "Stufe %(position)s entfernt"
+
+msgid "Entry %(number)s"
+msgstr "Eintrag %(number)s"
+
+msgid "done on %(day)s"
+msgstr "erledigt am %(day)s"

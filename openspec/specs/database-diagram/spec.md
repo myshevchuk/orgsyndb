@@ -37,7 +37,7 @@ A row's tooltip names the column, its type and nullability, the table and column
 
 #### Scenario: Only the application's tables
 - **WHEN** a test generates the diagram
-- **THEN** its boxes are exactly `accounts_user`, `registry_substance`, `registry_substanceclass`, `vocabulary_chemicalclass`, `vocabulary_group`, `vocabulary_project`, `vocabulary_reactiontype`, `inventory_article`, `inventory_item`, `inventory_movement`, `inventory_deliverynote`, `inventory_deliveryline`, `inventory_lot`, `inventory_lotmovement`, `inventory_enteredconsumption`, `tasks_task`, `tasks_counter`, `planning_parameters`, `demo_demomark` and the box of the history tables
+- **THEN** its boxes are exactly `accounts_user`, `registry_substance`, `registry_substanceclass`, `vocabulary_chemicalclass`, `vocabulary_group`, `vocabulary_project`, `vocabulary_reactiontype`, `inventory_article`, `inventory_item`, `inventory_movement`, `inventory_deliverynote`, `inventory_deliveryline`, `inventory_lot`, `inventory_lotmovement`, `inventory_enteredconsumption`, `tasks_task`, `tasks_taskstep`, `tasks_counter`, `collection_import`, `collection_procedure`, `collection_scopeentry`, `collection_entrysubstance`, `collection_sequence`, `collection_step`, `planning_parameters`, `demo_demomark` and the box of the history tables
 
 #### Scenario: An article's key
 - **WHEN** a test generates the diagram

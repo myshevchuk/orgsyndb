@@ -7,7 +7,8 @@ from urllib.parse import parse_qs, urlsplit
 
 from inventory.models import Lot
 
-from . import build_index, field_value, make_substance, make_task, task_url
+from . import field_value, make_substance, make_task, task_url
+from .collection_support import accept
 from .inventory_support import NEW_LOT, lot_data, lot_url
 from .planning_support import PlanningCase
 
@@ -131,7 +132,7 @@ class RecordAsBulkTests(BatchCase):
                           "made_on": ["2026-10-30"]})
 
     def test_the_english_label(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         link = self.record_link(self.ended())
         self.assertEqual(link.text(), RECORD_EN)
 

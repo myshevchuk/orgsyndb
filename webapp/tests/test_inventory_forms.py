@@ -8,8 +8,9 @@ from inventory.bookings import book_note, fill
 from inventory.models import (DeliveryNote, EnteredConsumption, Item, Lot,
                               LotMovement, Movement)
 
-from . import (build_index, context_form, datalist, field_value,
-               make_article, make_substance, page, sent_messages)
+from . import (context_form, datalist, field_value, make_article,
+               make_substance, page, sent_messages)
+from .collection_support import accept
 from .inventory_support import (LIST, MICRO, NEW_ITEM, NEW_LOT, NEW_NOTE,
                                 TODAY, FormCase, InventoryCase, fill_data,
                                 fresh, item_data, item_url, lot_data, lot_url,
@@ -403,7 +404,7 @@ class NoteFormTests(FormCase):
         self.assertEqual(box.get("type"), "checkbox")
         self.assertIn("nachgetragen – Bestand bleibt unverändert",
                       root.text())
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.assertIn("entered later – stock unchanged",
                       page(self.client.get(NEW_NOTE)).text())
 
@@ -692,7 +693,7 @@ class FillFormTests(FormCase):
         self.assertEqual(shown, "Menge vorschlagen")
 
     def test_the_english_button(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         root = page(self.client.get(self.url()))
         button = root.find(("button", "input"), name="propose")
         self.assertEqual(button.text() or button.get("value"),

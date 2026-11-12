@@ -12,7 +12,8 @@ from inventory.bookings import book_note, reverse, reverse_historical
 from planning import forecast
 from planning.forecast import OrderModel, QuarterlyModel
 
-from . import build_index, make_task
+from . import make_task
+from .collection_support import accept
 from .inventory_support import (MICRO, TODAY, has_amount, has_number,
                                 item_url, newest_movement)
 from .planning_support import (WINDOW, PlanningCase, has_date, has_days,
@@ -361,7 +362,7 @@ class ForecastPageTests(PageCase):
         self.assertNotIn("Vorgabe", text)
 
     def test_the_english_page(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         item = self.planned_item("NV-1", quantity=10)
         text = self.prognosis(item).text()
         self.assertTrue(has_days(text, 60), text)
@@ -437,7 +438,7 @@ class ForecastPageTests(PageCase):
         self.assertEqual(rough_marks(text), 0)
 
     def test_an_item_without_demand_in_english(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         item = self.item("NV-1", "NV-1", "1", "mg", 10)
         self.assertIn(NO_FORECAST_EN, self.prognosis(item).text())
 

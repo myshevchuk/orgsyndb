@@ -71,11 +71,12 @@ class ProjectFileTests(unittest.TestCase):
             with self.subTest(package=package):
                 self.assertTrue(
                     (WEBAPP / package / "__init__.py").is_file())
-        for module in ("settings.py", "urls.py", "wsgi.py", "index.py",
-                       "config.py"):
+        for module in ("settings.py", "urls.py", "wsgi.py", "config.py"):
             with self.subTest(module=module):
                 self.assertTrue(
                     (WEBAPP / "orgsyndb_web" / module).is_file())
+        self.assertFalse((WEBAPP / "orgsyndb_web" / "index.py").exists(),
+                         "the collection index module is removed")
         self.assertTrue((WEBAPP / "tests" / "__init__.py").is_file())
 
     def test_database_file_is_ignored(self) -> None:

@@ -9,7 +9,7 @@ from django.test import TestCase
 from registry import snapshot
 from registry.models import Substance
 
-from . import (IndexMixin, load_demo_registry, make_article, make_group,
+from . import (load_demo_registry, make_article, make_group,
                make_substance)
 from .collection_support import make_import
 from .registry_support import (SNAPSHOT, RegistryCase, wipe_registry,
@@ -250,7 +250,7 @@ class DigestTests(RegistryCase):
         self.assertNotEqual(snapshot.build()["digest"], before)
 
 
-class DemoRegistryTests(IndexMixin, TestCase):
+class DemoRegistryTests(TestCase):
 
     def test_same_registry_same_digest(self) -> None:
         """Scenario: Same registry, same digest."""
@@ -268,13 +268,12 @@ class DemoRegistryTests(IndexMixin, TestCase):
         self.assertNotEqual(snapshot.build()["digest"], first["digest"])
 
 
-class DemoImportTests(IndexMixin, TestCase):
+class DemoImportTests(TestCase):
 
     def test_an_import_changes_no_digest(self) -> None:
         """Scenario: An import changes no digest."""
         from django.test import override_settings
         from .collection_support import TOKEN, manifest, post
-        self.use_index(None)
         load_demo_registry()
         first = snapshot.build()
         with override_settings(ORGSYNDB_BUILDER_TOKEN=TOKEN):
@@ -291,10 +290,9 @@ class DemoImportTests(IndexMixin, TestCase):
                          (record.commit, record.release))
 
 
-class HttpTests(IndexMixin, TestCase):
+class HttpTests(TestCase):
 
     def setUp(self) -> None:
-        self.use_index(None)
         load_demo_registry()
 
     def test_snapshot_over_http(self) -> None:

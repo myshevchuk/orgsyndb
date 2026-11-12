@@ -437,6 +437,7 @@ def _apply_procedures(manifest: dict[str, Any], record: Import,
                   "title": procedure["title"],
                   "title_de": procedure["title_de"],
                   "reaction_type": types[procedure["reaction_type"]],
+                  "general": procedure["general"],
                   "withdrawn": False}
         row = held.pop(procedure["id"], None)
         if row is None:

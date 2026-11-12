@@ -120,6 +120,38 @@ class FirstImportRowsTests(ImportCase):
         self.assertEqual(substances_of(first, "product"),
                          [("1-biphenyl-4-yl-ethanol", 90)])
 
+    def test_a_procedure_keeps_whether_it_is_general(self) -> None:
+        """Requirement: Applying an import (a procedure takes the
+        manifest's values, `general` among them)."""
+        from collection.models import Procedure
+        self.accept()
+        for body in demo_collection()["procedures"]:
+            with self.subTest(id=body["id"]):
+                self.assertIs(
+                    Procedure.objects.get(key=body["id"]).general,
+                    body["general"])
+        self.assertEqual(
+            list(Procedure.objects.filter(general=True).values_list(
+                "key", flat=True)), ["OSDB-0009"])
+
+    def test_a_change_of_general_is_a_change_of_the_procedure(self) -> None:
+        """Requirement: Applying an import (`general` changes with the
+        manifest, and the procedure's `last_import` with it)."""
+        from collection.models import Procedure
+        first = self.accept()
+        data = demo_collection()
+        procedure_of(data, "OSDB-0006")["general"] = True
+        second = self.accept(data)
+        row = Procedure.objects.get(key="OSDB-0006")
+        self.assertTrue(row.general)
+        self.assertEqual(row.last_import, second)
+        self.assertEqual(
+            Procedure.objects.get(key="OSDB-0005").last_import, first)
+        third = self.accept(demo_collection())
+        row.refresh_from_db()
+        self.assertFalse(row.general)
+        self.assertEqual(row.last_import, third)
+
     def test_the_stored_signature_is_the_helpers(self) -> None:
         """Requirement: Applying an import (a scope entry is matched by
         its signature)."""

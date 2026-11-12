@@ -86,6 +86,14 @@ class LoadRegistry(Change):
 
 
 @dataclass(frozen=True, kw_only=True)
+class RecordImport(Change):
+    """Record the data set's own accepted import of the demo collection,
+    ``manifest.json`` of this package, with its LANGUAGE."""
+
+    language: str
+
+
+@dataclass(frozen=True, kw_only=True)
 class SaveParameters(Change):
     """Store the planning parameters with FIELDS, or change them."""
 
@@ -204,7 +212,8 @@ class CorrectLot(Change):
 @dataclass(frozen=True, kw_only=True)
 class SaveTask(Change):
     """Create the task KEY with FIELDS, or change it; an assignee is
-    given by user name and a substance by its key."""
+    given by user name, a substance and a sequence by their keys, and
+    the steps as the task form's ``steps_total`` and ``steps_done``."""
 
     key: str
     fields: dict[str, Any]
@@ -256,8 +265,11 @@ class _Size:
 class _Synthesis:
     """A task of a substance, its days counted from the opening.
 
-    A synthesis that ends yields a lot the day it ends, which fills its
-    article's items on the days FILLS and keeps REST, in the lot's unit.
+    A synthesis follows the sequence SEQUENCE, by its key, or none when
+    it is empty; STEPS names the procedures of its steps, in order, and
+    STEPS_DONE the days on which a number of them is done. A synthesis
+    that ends yields a lot the day it ends, which fills its article's
+    items on the days FILLS and keeps REST, in the lot's unit.
     """
 
     by: str
@@ -591,6 +603,8 @@ def changes(today: date, language: str) -> list[Change]:
         line.add(line.opening, ACCOUNT, CreateAccount,
                  user=account.username, account=account)
     line.add(line.opening, REGISTRY, LoadRegistry, user="klehmann")
+    line.add(line.opening, REGISTRY, RecordImport, user="klehmann",
+             language=language)
     line.add(line.day(1), PARAMETERS, SaveParameters, user="klehmann",
              fields={**DEFAULTS, "target_days": 180})
     line.add(line.day(200), PARAMETERS, SaveParameters, user="klehmann",
@@ -839,8 +853,7 @@ def _task(line: _Timeline, key: str, substance: str,
     fields: dict[str, Any] = {
         "substance": substance, "assignee": synthesis.assignee,
         "priority": synthesis.priority, "note": line.text(synthesis.note),
-        "sequence": synthesis.sequence,
-        "sequence_steps": list(synthesis.steps), "steps_total": total}
+        "sequence": synthesis.sequence, "steps_total": total}
     if synthesis.started is not None and \
             synthesis.started <= synthesis.created:
         fields["started"] = line.day(synthesis.started)

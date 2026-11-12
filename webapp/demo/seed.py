@@ -2,9 +2,12 @@
 ``demo_data`` command asks of it first.
 
 Every change of ``demo.data.changes`` is made through the application's
-own write paths: the registry through ``registry.snapshot.load``, counts
-and amounts through ``inventory.bookings``, tasks and planning
-parameters through their models' saves after their own validation.
+own write paths: the registry through ``registry.snapshot.load``, the
+data set's import of the collection through ``collection.importing``,
+as the manifest view receives one, counts and amounts through
+``inventory.bookings``, tasks and their steps through their saves after
+the validation the task form applies, and planning parameters through
+their model's save after its own validation.
 Each change is made with ``django.utils.timezone.now`` standing at its
 moment, so that the times the write paths stamp, the
 history records' among them, and the day they take as today are the
@@ -12,6 +15,7 @@ change's.
 """
 
 import json
+import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -22,9 +26,13 @@ from unittest import mock
 
 from django.apps import apps
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+from django.utils import timezone
 
-from collection.models import (EntrySubstance, Import, Procedure,
-                               ScopeEntry, Sequence, Step)
+from collection import importing
+from collection.models import (EntrySubstance, Import, Outcome, Procedure,
+                               ScopeEntry, Sequence, Step, Trigger,
+                               latest_accepted)
 from demo import data
 from demo.models import DemoMark
 from inventory import bookings
@@ -35,12 +43,20 @@ from orgsyndb_web import lock
 from planning.models import Parameters
 from registry import snapshot
 from registry.models import Substance, SubstanceClass
-from tasks.models import Counter, Task
+from tasks.models import Counter, Task, TaskStep
+from tasks.steps import StepChange
 from vocabulary.models import ChemicalClass, Group, Project, ReactionType
 
 # The demo registry: the snapshot of the demo collection's registry and
 # the substance new-compound-7.
 REGISTRY = Path(__file__).resolve().parent / "registry.json"
+# The collection half of the demo collection's manifest, as
+# ``tools/orgsyndb manifest`` prints it.
+MANIFEST = Path(__file__).resolve().parent / "manifest.json"
+# The commit the data set's import names, which no collection has.
+DEMO_COMMIT = "0" * 40
+DEMO_RELEASE = "demo"
+DEFAULT_LANGUAGE = "de"
 TERMS = (ChemicalClass, Group, Project, ReactionType)
 
 
@@ -74,6 +90,13 @@ def holds_records() -> bool:
         Procedure, Sequence, DemoMark, *histories()))
 
 
+def language() -> str:
+    """Return the language of the latest accepted import the database
+    holds, or ``de`` when it holds none."""
+    latest = latest_accepted()
+    return latest.language if latest is not None else DEFAULT_LANGUAGE
+
+
 def is_demo() -> bool:
     """Whether the database holds the demo mark."""
     return DemoMark.objects.exists()
@@ -87,11 +110,14 @@ def clear() -> None:
 
     Reversals go before the movements they reverse, movements before
     the notes and lots they name, records before the substances and
-    terms they name, steps before the entries they name, and terms and
-    imports are taken out of their trees and chains before they are
-    deleted, as each protects the other otherwise.
+    terms they name, tasks and their steps before the sequences, entries
+    and imports they name, sequence steps before the entries they name,
+    and terms and imports are taken out of their trees and chains before
+    they are deleted, as each protects the other otherwise.
     """
     lock.hold()
+    TaskStep.objects.all().delete()
+    Task.objects.all().delete()
     Step.objects.all().delete()
     Sequence.objects.all().delete()
     EntrySubstance.objects.all().delete()
@@ -107,7 +133,6 @@ def clear() -> None:
     Lot.objects.all().delete()
     EnteredConsumption.objects.all().delete()
     Item.objects.all().delete()
-    Task.objects.all().delete()
     Article.objects.all().delete()
     SubstanceClass.objects.all().delete()
     Substance.objects.all().delete()
@@ -132,9 +157,10 @@ def clock(moment: datetime) -> Iterator[None]:
 
 
 def write(today: date, language: str) -> Summary:
-    """Write the data set as of TODAY, its texts in LANGUAGE, into a
-    database without lab records, and mark the database as a demo
-    database seeded on TODAY.
+    """Write the data set as of TODAY, its texts and its own import of
+    the demo collection in LANGUAGE, into a database without lab
+    records, and mark the database as a demo database seeded on
+    TODAY.
 
     The caller provides the transaction. Raise ``bookings.Refused`` or
     ValidationError when a change is refused.
@@ -171,6 +197,8 @@ class _Writer:
             case data.LoadRegistry():
                 snapshot.load(json.loads(REGISTRY.read_text(
                     encoding="utf-8")), user)
+            case data.RecordImport(language=language):
+                record_import(change.moment, language)
             case data.SaveParameters(fields=fields):
                 self.save_parameters(user, fields)
             case data.OpenItem():
@@ -259,16 +287,56 @@ class _Writer:
     def save_task(self, user: Any, key: str, fields: dict[str, Any]
                   ) -> None:
         """Create the task KEY, made by USER, or change it, after the
-        validation the task form applies; its number is assigned on
-        creation."""
+        validation the task form applies, and give it its steps; its
+        number is assigned on creation. Raise ValidationError when the
+        task or its steps are refused."""
         task = self.tasks.get(key) or Task(created_by=user)
+        done, total = task.step_counts
+        sequence = task.sequence
         for name, value in fields.items():
             if name == "assignee":
-                value = self.users[value] if value else None
+                setattr(task, name, self.users[value] if value else None)
             elif name == "substance":
-                value = Substance.objects.get(key=value)
-            setattr(task, name, value)
-        task.full_clean(exclude=["number"])
+                task.substance = Substance.objects.get(key=value)
+            elif name == "sequence":
+                sequence = Sequence.objects.get(key=value) if value \
+                    else None
+            elif name == "steps_total":
+                total = value
+            elif name == "steps_done":
+                done = value
+            else:
+                setattr(task, name, value)
+        task.full_clean(exclude=["number", "sequence"])
+        steps = StepChange(task, sequence, total, done)
+        errors = steps.errors()
+        if errors:
+            raise ValidationError(errors)
+        task.sequence = sequence
         task._history_user = user
         task.save()
+        steps.apply(timezone.localdate(), user)
         self.tasks[key] = task
+
+
+def record_import(moment: datetime, language: str) -> Import:
+    """Record the data set's own accepted import of the demo collection,
+    ``MANIFEST``, committed and received at MOMENT, with the commit and
+    tooling of forty zeros, the release ``demo``, the trigger
+    ``catch-up``, no base, the current snapshot's digest and LANGUAGE,
+    through ``collection.importing`` as the manifest view receives a
+    manifest; return it. The database must hold the registry the
+    manifest names and no accepted import. Raise ValidationError when
+    the import is not accepted."""
+    collection = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    body = {**collection, "format": importing.FORMAT,
+            "build": str(uuid.uuid4()), "commit": DEMO_COMMIT,
+            "committed_at": moment.isoformat(), "base": None,
+            "snapshot": snapshot.build()["digest"], "tooling": DEMO_COMMIT,
+            "trigger": Trigger.CATCH_UP.value, "outcome": "built",
+            "release": DEMO_RELEASE, "language": language}
+    _status, answer = importing.receive(importing.read(body))
+    if answer["outcome"] != Outcome.ACCEPTED:
+        raise ValidationError(
+            f"the demo collection was not accepted: {answer}")
+    return Import.objects.get(pk=answer["import"])

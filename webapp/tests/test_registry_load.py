@@ -15,7 +15,7 @@ from registry import snapshot
 from registry.models import Substance, SubstanceClass
 from vocabulary.models import ChemicalClass, Group, Project, ReactionType
 
-from . import DEMO_REGISTRY, IndexMixin, make_group, make_substance
+from . import DEMO_REGISTRY, make_group, make_substance
 from .registry_support import (demo_registry, load, load_refused,
                                small_snapshot, without_digest, write_json)
 
@@ -32,10 +32,9 @@ def shown(out: str, number: int) -> bool:
     return re.search(rf"(?<![\d.,]){number}(?![\d.,]\d)", out) is not None
 
 
-class LoadCase(IndexMixin, TestCase):
+class LoadCase(TestCase):
 
     def setUp(self) -> None:
-        self.use_index(None)
         self.directory = Path(self.enterContext(
             tempfile.TemporaryDirectory()))
 

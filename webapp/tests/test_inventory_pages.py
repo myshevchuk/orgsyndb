@@ -9,6 +9,7 @@ from inventory.bookings import (book_note, correct, correct_lot, fill, reverse,
                                 reverse_historical)
 
 from . import page
+from .collection_support import accept
 from .inventory_support import (InventoryCase, MICRO, cells,
                                 has_amount, has_number, item_url, ledger,
                                 lot_url, movement_url, note_url, num)
@@ -45,10 +46,9 @@ class ItemHeadTests(PageCase):
         self.assertNotIn("/compounds/cinnamic-acid/", hrefs)
 
     def test_the_substance_is_named_by_language(self) -> None:
-        from . import build_index
         item = self.item("CH-0012")
         self.assertIn("(E)-Zimtsäure", self.show(item_url(item)).text())
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.assertIn("(E)-Cinnamic acid",
                       self.show(item_url(item)).text())
 
@@ -61,8 +61,7 @@ class ItemHeadTests(PageCase):
         self.assertTrue(has_number(text, "13"), text)
 
     def test_the_english_page(self) -> None:
-        from . import build_index
-        self.use_index(build_index("en"))
+        accept(language="en")
         item = self.means_item("CH-0012")
         text = self.show(item_url(item)).text()
         self.assertIn("4.5", text)
@@ -231,8 +230,7 @@ class LedgerTests(PageCase):
         self.assertEqual(self.reversals(item), [movement_url(filling)])
 
     def test_english_links(self) -> None:
-        from . import build_index
-        self.use_index(build_index("en"))
+        accept(language="en")
         item, *_ = self.booked()
         self.client.force_login(self.kl)
         self.assertEqual(

@@ -3,8 +3,8 @@ database)."""
 
 from django.test import TestCase, override_settings
 
-from . import IndexMixin, build_index, demo_index, frozen, make_task, \
-    make_user, page
+from . import frozen, make_task, make_user, page
+from .collection_support import accept
 from .demo_support import (ACCOUNTS, DAY, LOGIN, SIGNING_IN, SeededCase,
                            noon, seed)
 
@@ -45,7 +45,7 @@ class BannerTests(SeededCase):
         self.assertIsNone(page(response).find(cls="lab-demo"))
 
     def test_banner_in_english(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         banner = self.get("/lab/tasks/").find("p", cls="lab-demo")
         self.assertIsNotNone(banner)
         self.assertEqual(banner.text(), BANNER_EN)
@@ -76,20 +76,17 @@ class SignInNoteTests(SeededCase):
         self.assertIn("Passwort für alle: demo", text)
 
     def test_sign_in_note_in_english(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         note = self.get(LOGIN).find(cls="lab-demo-accounts")
         self.assertIn("Password for all: demo", note.text())
 
 
-class NotADemoDatabaseTests(IndexMixin, TestCase):
+class NotADemoDatabaseTests(TestCase):
 
     @classmethod
     def setUpTestData(cls) -> None:
         cls.kl = make_user("kl", "KL", "Klara", "Lehmann")
         make_task(cls.kl, substance="CH-0012")
-
-    def setUp(self) -> None:
-        self.use_index(demo_index())
 
     def test_not_a_demo_database(self) -> None:
         """Scenario: Not a demo database."""
@@ -103,7 +100,7 @@ class NotADemoDatabaseTests(IndexMixin, TestCase):
                     self.assertIsNone(root.find(cls="lab-demo-accounts"))
 
 
-class MarkTests(IndexMixin, TestCase):
+class MarkTests(TestCase):
 
     def test_the_mark_holds_the_seeding_day(self) -> None:
         from demo.models import DemoMark
@@ -114,7 +111,6 @@ class MarkTests(IndexMixin, TestCase):
     def test_banner_shows_the_day_of_the_mark(self) -> None:
         from datetime import date
         seed(date(2026, 3, 31))
-        self.use_index(demo_index())
         with frozen(noon(date(2026, 4, 20))):
             banner = page(self.client.get("/lab/tasks/")).find(
                 "p", cls="lab-demo")

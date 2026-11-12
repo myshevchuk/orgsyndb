@@ -3,8 +3,9 @@
 import re
 from typing import Any
 
-from . import (build_index, compound, make_group, make_item, make_lot,
+from . import (berlin, frozen, make_group, make_item, make_lot,
                make_substance, make_task, table)
+from .collection_support import accept, make_import
 from .demo_support import SeededCase
 from .inventory_support import SUBSTANCE_PAGE
 from .planning_support import section
@@ -39,7 +40,7 @@ class ListTests(RegistryCase):
         self.assertRegex(heading.parent.text(), r"Substanzen\D{0,5}3\b")
 
     def test_the_heading_in_english(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         heading = self.get(REGISTRY).find("h1")
         self.assertEqual(heading.text(), "Substances")
         self.assertRegex(heading.parent.text(), r"Substances\D{0,5}3\b")
@@ -49,7 +50,7 @@ class ListTests(RegistryCase):
         self.assertEqual(header, COLUMNS_DE)
 
     def test_the_english_columns(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         header, _rows = table(self.get(REGISTRY))
         self.assertEqual(header, COLUMNS_EN)
 
@@ -101,7 +102,7 @@ class ListTests(RegistryCase):
                                  ["/lab/collection/"])
 
     def test_the_link_to_the_imports_in_english(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         found = [a for a in self.get(REGISTRY).find_all("a")
                  if a.text() == "Collection imports"]
         self.assertEqual([a.get("href") for a in found],
@@ -118,7 +119,7 @@ class ListTests(RegistryCase):
         self.assertEqual(link.get("href"), substance_url("new"))
 
     def test_the_new_substance_link_in_english(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         root = self.get(REGISTRY, signed_in=True)
         self.assertTrue([a for a in root.find_all("a")
                          if a.text() == "New substance"])
@@ -135,7 +136,7 @@ class SearchTests(RegistryCase):
         self.assertIn("Substanzen suchen", search.parent.text())
 
     def test_the_search_field_in_english(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         search = self.get(REGISTRY).find("input", name="q")
         self.assertIn("Search substances", search.parent.text())
 
@@ -186,7 +187,7 @@ class SubstancePageTests(RegistryCase):
             "Acetophenone")
 
     def test_the_heading_in_english(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.assertEqual(
             self.get(substance_url("cinnamic-acid")).find("h1").text(),
             "(E)-Cinnamic acid")
@@ -212,26 +213,88 @@ class SubstancePageTests(RegistryCase):
         full = self.get(substance_url("cinnamic-acid")).text()
         self.assertLess(full.count("–"), bare.count("–"))
 
-    def test_the_site_link_needs_the_key_in_the_index(self) -> None:
-        self.use_index(build_index("de", [compound("cinnamic-acid")]))
-        listed = self.get(substance_url("cinnamic-acid"))
-        links = [a for a in listed.find_all("a")
-                 if a.text() == "In der Sammlung"]
-        self.assertEqual([a.get("href") for a in links],
-                         ["/compounds/cinnamic-acid/"])
-        unlisted = self.get(substance_url("acetophenone"))
-        self.assertFalse([a for a in unlisted.find_all("a")
-                          if a.text() == "In der Sammlung"])
+    def collection_links(self, key: str, label: str = "In der Sammlung"
+                         ) -> list[str]:
+        """The targets of the links ``label`` on the page of ``key``."""
+        return [a.get("href")
+                for a in self.get(substance_url(key)).find_all("a")
+                if a.text() == label]
 
-    def test_the_site_link_without_an_index(self) -> None:
+    def test_the_site_link_follows_an_accepted_import(self) -> None:
+        """Requirement: Registry pages (a link `In der Sammlung` when an
+        import was accepted no earlier than the substance was
+        created)."""
+        accept(language="de")
+        for key in ("cinnamic-acid", "acetophenone", "new-compound-7"):
+            with self.subTest(key=key):
+                self.assertEqual(self.collection_links(key),
+                                 [f"/compounds/{key}/"])
+
+    def test_the_site_link_without_an_import(self) -> None:
+        """Requirement: Registry pages (no link while no import was
+        accepted)."""
         root = self.get(substance_url("cinnamic-acid"))
         self.assertNotIn("/compounds/cinnamic-acid/", hrefs(root))
+        self.assertEqual(self.collection_links("cinnamic-acid"), [])
+
+    def test_a_refused_import_gives_no_link(self) -> None:
+        """Requirement: Registry pages (accepted imports only)."""
+        make_import(outcome="refused")
+        self.assertEqual(self.collection_links("cinnamic-acid"), [])
+
+    def test_a_substance_added_after_the_import_has_no_link(self) -> None:
+        """Scenario: Not in the collection."""
+        accept(language="de")
+        make_substance("ethyl-acetate", "Ethylacetat")
+        root = self.get(substance_url("ethyl-acetate"))
+        self.assertEqual(root.find("h1").text(), "Ethylacetat")
+        self.assertEqual(self.collection_links("ethyl-acetate"), [])
+        self.assertEqual(self.collection_links("cinnamic-acid"),
+                         ["/compounds/cinnamic-acid/"])
+
+    def test_the_import_and_the_substance_of_one_moment(self) -> None:
+        """Requirement: Registry pages (accepted no earlier than the
+        substance was created)."""
+        with frozen(berlin(2026, 11, 3)):
+            make_substance("same-moment", "Same")
+            accept(language="de")
+        with frozen(berlin(2026, 11, 3, 12, 1)):
+            make_substance("a-minute-later", "Later")
+        self.assertEqual(self.collection_links("same-moment"),
+                         ["/compounds/same-moment/"])
+        self.assertEqual(self.collection_links("a-minute-later"), [])
+
+    def test_the_creation_is_the_first_record_of_the_history(self) -> None:
+        """Requirement: Registry pages (the substance's creation, the
+        first record of its history)."""
+        with frozen(berlin(2026, 11, 1)):
+            made = make_substance("edited-later", "Edited")
+        with frozen(berlin(2026, 11, 2)):
+            accept(language="de")
+        with frozen(berlin(2026, 11, 3)):
+            made.note = "Changed after the import"
+            made.save()
+        self.assertEqual(made.history.count(), 2)
+        self.assertEqual(self.collection_links("edited-later"),
+                         ["/compounds/edited-later/"])
+
+    def test_an_older_import_does_not_cover_a_newer_substance(
+            self) -> None:
+        """Requirement: Registry pages (no link for a substance created
+        after the latest accepted import)."""
+        with frozen(berlin(2026, 11, 1)):
+            accept(language="de")
+        with frozen(berlin(2026, 11, 2)):
+            make_substance("newer", "Newer")
+        self.assertEqual(self.collection_links("newer"), [])
 
     def test_the_site_link_in_english(self) -> None:
-        self.use_index(build_index("en", [compound("cinnamic-acid")]))
+        accept(language="en")
         root = self.get(substance_url("cinnamic-acid"))
-        self.assertTrue([a for a in root.find_all("a")
-                         if a.text() == "In the collection"])
+        self.assertEqual(
+            [a.get("href") for a in root.find_all("a")
+             if a.text() == "In the collection"],
+            ["/compounds/cinnamic-acid/"])
 
     def test_the_edit_link_needs_a_sign_in(self) -> None:
         anonymous = self.get(substance_url("cinnamic-acid"))
@@ -265,7 +328,7 @@ class SectionTests(RegistryCase):
                 self.assertFalse(held.find_all("a"))
 
     def test_the_sections_in_english(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         root = self.get(substance_url("acetophenone"))
         for name in ("Containers", "Bulk lots", "Tasks"):
             with self.subTest(section=name):
@@ -330,7 +393,7 @@ class VocabularyPageTests(RegistryCase):
                 self.assertEqual(
                     self.get(term_url(vocabulary)).find("h1").text(),
                     german)
-        self.use_index(build_index("en"))
+        accept(language="en")
         for vocabulary, (german, english) in VOCABULARIES.items():
             with self.subTest(vocabulary=vocabulary, language="en"):
                 self.assertEqual(
@@ -351,7 +414,7 @@ class VocabularyPageTests(RegistryCase):
                                   "Bezeichnung deutsch", "Verwendet"])
 
     def test_the_english_columns(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         header, _ = table(self.get(term_url("groups")))
         self.assertEqual(header, ["Key", "Label", "German label", "Parent",
                                   "In use"])
@@ -427,7 +490,7 @@ class VocabularyPageTests(RegistryCase):
                                  [term_url(vocabulary, "new")])
 
     def test_the_new_term_link_in_english(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         root = self.get(term_url("groups"), signed_in=True)
         self.assertTrue([a for a in root.find_all("a")
                          if a.text() == "New term"])

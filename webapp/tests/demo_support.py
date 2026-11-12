@@ -12,7 +12,7 @@ from typing import Any
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 
-from . import BERLIN, IndexMixin, demo_index, frozen, parse
+from . import BERLIN, frozen, parse
 
 # The days the data set is seeded as of in the tests that check its
 # outcomes: the start, middle and end of quarters, a day whose order
@@ -53,25 +53,20 @@ def noon(day: date) -> datetime:
     return datetime(day.year, day.month, day.day, 12, tzinfo=BERLIN)
 
 
-def run(*args: str, demo: bool = True, index: Any = None
-        ) -> tuple[str, str]:
-    """Run ``demo_data`` with ARGS, with ``ORGSYNDB_DEMO`` set to DEMO and
-    ``ORGSYNDB_INDEX`` set to INDEX when given; return its output and its
-    errors. CommandError and every other exception propagate."""
+def run(*args: str, demo: bool = True) -> tuple[str, str]:
+    """Run ``demo_data`` with ARGS, with ``ORGSYNDB_DEMO`` set to DEMO;
+    return its output and its errors. CommandError and every other
+    exception propagate."""
     out, err = io.StringIO(), io.StringIO()
-    over: dict[str, Any] = {"ORGSYNDB_DEMO": demo}
-    if index is not None:
-        over["ORGSYNDB_INDEX"] = str(index)
-    with override_settings(**over):
+    with override_settings(ORGSYNDB_DEMO=demo):
         call_command("demo_data", *args, stdout=out, stderr=err)
     return out.getvalue(), err.getvalue()
 
 
-def seed(day: date, index: Any = None) -> tuple[str, str]:
-    """Write the data set as of DAY, with the clock at noon of DAY and
-    the demo collection's index unless INDEX names another."""
+def seed(day: date) -> tuple[str, str]:
+    """Write the data set as of DAY, with the clock at noon of DAY."""
     with frozen(noon(day)):
-        return run(index=index or demo_index())
+        return run()
 
 
 def lab_records() -> dict[str, int]:
@@ -107,10 +102,9 @@ def task_counter() -> int:
     return found.first() or 0
 
 
-class SeededCase(IndexMixin, TestCase):
+class SeededCase(TestCase):
     """A test case whose database holds the data set written as of DAY,
-    with the demo collection's index and the clock at the afternoon of
-    DAY in every test."""
+    with the clock at the afternoon of DAY in every test."""
 
     DAY = DAY
 
@@ -119,7 +113,6 @@ class SeededCase(IndexMixin, TestCase):
         cls.output = seed(cls.DAY)
 
     def setUp(self) -> None:
-        self.use_index(demo_index())
         self.enterContext(frozen(datetime(
             self.DAY.year, self.DAY.month, self.DAY.day, 19,
             tzinfo=BERLIN)))

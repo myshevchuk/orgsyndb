@@ -6,7 +6,8 @@ from django.test import SimpleTestCase
 
 from inventory.figures import level
 
-from . import build_index, compound, page, table, text_field
+from . import page, table
+from .collection_support import accept
 from .inventory_support import (LEVELS, LIST, InventoryCase, item_url,
                                 num, visible_text)
 
@@ -180,10 +181,7 @@ class LevelCellTests(InventoryCase):
                          ["level-low"])
 
     def test_english_labels(self) -> None:
-        self.use_index(build_index("en", [
-            compound("cinnamic-acid", name="(E)-Cinnamic acid",
-                     item_number="CH-0012")],
-            fields=[text_field("item_number")]))
+        accept(language="en")
         for quantity in (0, 1, 2, 4):
             self.with_mean_quarter(
                 self.item(f"L-{quantity}", quantity=quantity), 4)

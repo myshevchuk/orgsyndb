@@ -9,7 +9,6 @@ from django.db import transaction
 from django.utils import timezone
 
 from demo import seed
-from orgsyndb_web import index
 from registry import snapshot
 
 
@@ -34,10 +33,12 @@ class Command(BaseCommand):
                if_empty: bool = False, **options: Any) -> None:
         """Write the data set, refusing as the options say.
 
-        Raise CommandError, changing nothing, outside demo mode (unless
-        IF_EMPTY), when the database holds lab records (unless REPLACE
-        on a demo database, or IF_EMPTY), and when a change of the data
-        set is refused.
+        The data set's texts take the language of the latest accepted
+        import the database holds before anything is deleted, German
+        without one. Raise CommandError, changing nothing, outside demo
+        mode (unless IF_EMPTY), when the database holds lab records
+        (unless REPLACE on a demo database, or IF_EMPTY), and when a
+        change of the data set is refused.
         """
         demo = settings.ORGSYNDB_DEMO
         if if_empty:
@@ -66,9 +67,10 @@ class Command(BaseCommand):
                             "The database holds lab records the demo data "
                             "did not write; --replace replaces only a demo "
                             "database.")
+                language = seed.language()
                 if replace:
                     seed.clear()
-                summary = seed.write(today, index.current().language)
+                summary = seed.write(today, language)
         except snapshot.Broken as error:
             raise CommandError(
                 f"The demo registry could not be loaded: {error}") from error

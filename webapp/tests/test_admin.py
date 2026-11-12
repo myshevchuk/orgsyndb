@@ -5,13 +5,13 @@ from django.test import TestCase
 
 from tasks.models import Task
 
-from . import IndexMixin, demo_index, make_task, make_user, page
+from . import make_task, make_user, page
 
 ADMIN = "/lab/admin/"
 TASKS = "/lab/admin/tasks/task/"
 
 
-class AdminCase(IndexMixin, TestCase):
+class AdminCase(TestCase):
 
     @classmethod
     def setUpTestData(cls) -> None:
@@ -24,7 +24,6 @@ class AdminCase(IndexMixin, TestCase):
         cls.third = make_task(cls.worker, substance="Ferrocen")
 
     def setUp(self) -> None:
-        self.use_index(demo_index())
         self.client.force_login(self.staff)
 
 

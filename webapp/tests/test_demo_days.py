@@ -70,7 +70,8 @@ class DayChecks:
         row = self.rows()["CH-0010"]
         self.assertEqual(self.priority(row), "medium")
         self.assertTrue(any(task.state == State.PLANNED
-                            and task.sequence == "SEQ-0001"
+                            and task.sequence is not None
+                            and task.sequence.key == "SEQ-0001"
                             for task, _text in self.tasks(row)))
         self.assertNotIn(PLAN_SYNTHESIS, row["Maßnahmen"].text())
 

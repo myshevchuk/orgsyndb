@@ -1271,35 +1271,31 @@ regenerating.
 ORGSYNDB_DEBUG=true uv run python manage.py schema_diagram
 ```
 
-To develop with links to the collection and its interface language,
-generate its index from the repository root. Replace `<collection>` with
-your collection's directory, then start the local server:
+To start the local lab server, run from the repository root:
 
 ```sh
-tools/orgsyndb -C '<collection>' index > /tmp/orgsyndb-index.json
 cd webapp
 export ORGSYNDB_DEBUG=true
-export ORGSYNDB_INDEX=/tmp/orgsyndb-index.json
 uv run python manage.py migrate
 uv run python manage.py runserver
 ```
 
 Open <http://127.0.0.1:8000/lab/>. The local database is
 `webapp/db.sqlite3` unless you set `ORGSYNDB_DATABASE_URL`.
-The index supplies the language, compound keys for collection links,
-procedures and sequences. Add substances in the
+The interface uses the latest accepted collection import's language,
+German or English. It uses German until an import is accepted. See
+[Inspect collection imports](#inspect-collection-imports) for the records
+the application reads from a collection. Add substances in the
 [lab registry](#substance-registry), or use `registry_load` to fill an
-empty registry from a snapshot; the index does not supply substance
-names, molar masses or article numbers.
+empty registry from a snapshot. Substance names, molar masses and article
+numbers come from that registry.
 
-To try the lab with invented records, use the demo collection and a
-separate SQLite file. From the repository root:
+To try the lab with invented records, use a separate SQLite file. The
+demo runs without building a collection. From the repository root:
 
 ```sh
-tools/orgsyndb -C examples/demo index > /tmp/orgsyndb-index.json
 cd webapp
 export ORGSYNDB_DEBUG=true
-export ORGSYNDB_INDEX=/tmp/orgsyndb-index.json
 export ORGSYNDB_DEMO=true
 export ORGSYNDB_DATABASE_URL=sqlite:////tmp/orgsyndb-demo.sqlite3
 uv run python manage.py migrate
@@ -1373,8 +1369,8 @@ Five services build and serve the site and keep the lab's records:
   the builder sends manifests directly to `app` over the Compose network.
 - `db` runs PostgreSQL 18 and keeps the lab's records in the `db` volume.
 - `app` runs the lab application, built from the checkout that holds
-  `deploy/compose.yaml`. It reads the published collection's index from
-  the shared `data` volume.
+  `deploy/compose.yaml`. It stores accepted collection imports in the
+  database.
 - `backup` dumps the database daily into `deploy/backups/` on the host.
 
 `builder` and `web` share one image. They and `app` share the `data`
@@ -1449,7 +1445,7 @@ settings:
 | `ORGSYNDB_INTERVAL` | `300` | Seconds between checks for new commits, at least 10 |
 | `ORGSYNDB_PDF` | `false` | Also render one PDF per procedure, served under `/pdf/` |
 | `ORGSYNDB_KEEP_RELEASES` | `2` | Published sites kept besides the current one |
-| `ORGSYNDB_BUILD_TIMEOUT` | `3600` | Seconds the build, manifest and index commands may each take, at least 60 |
+| `ORGSYNDB_BUILD_TIMEOUT` | `3600` | Seconds the build and manifest commands may each take, at least 60 |
 | `ORGSYNDB_REGISTRY_URL` | `http://app:8000/lab/registry/snapshot.json` | Registry snapshot fetched for each cycle |
 | `ORGSYNDB_MANIFEST_URL` | `http://app:8000/lab/collection/manifest/` | App endpoint that receives each build's manifest |
 | `ORGSYNDB_ADDRESS` | `:8080` | Caddy's site address |
@@ -1462,7 +1458,6 @@ settings:
 | `ORGSYNDB_ALLOWED_HOSTS` | required | Comma-separated host names used to reach the site |
 | `ORGSYNDB_DEBUG` | `false` | Show error details; keep off on a reachable site |
 | `ORGSYNDB_DEMO` | `false` | Permit writing invented demo records; at container start, fill an empty database. Test deployments only; never set on a stack that keeps real records |
-| `ORGSYNDB_INDEX` | `/var/lib/orgsyndb/current/index.json` | Published collection index read by the lab application |
 | `ORGSYNDB_APP_UPSTREAM` | `app:8000` | Address to which Caddy forwards `/lab/` |
 | `ORGSYNDB_BACKUP_HOURS` | `24` | Hours between database dumps |
 | `ORGSYNDB_KEEP_BACKUPS` | `14` | Newest database dumps kept |
@@ -1496,28 +1491,72 @@ by clearing its **Active** flag in the admin.
 Open `/lab/` for the [lab overview](#lab-overview). Choose **Aufgaben**
 (**Tasks**) or open `/lab/tasks/` for the task list. Signing in still
 leads to the task list. Reading needs no sign-in; every change requires
-a signed-in account. The interface uses the site's German or English
-language, set by `locale` in
-`site/hugo.toml` and read from the published release's `index.json`.
+a signed-in account. The interface uses the latest accepted collection
+import's German or English language, or German until an import is
+accepted.
 
 Each task has a number such as `T-001`, the substance it makes, priority,
-assignee, start and end dates, steps done and total, calculated progress,
+assignee, start and end dates, ordered steps, calculated progress,
 batch number, report and QC-list flags, and a note. QC means quality control;
 the flag records whether the batch is on the QC list. Dates determine
 whether a task is planned, running or ended; a task can also be
 cancelled. Ended tasks missing the report or QC-list flag show
 **Follow-up** and stay in the active list until both flags are set.
 
-You can choose a synthesis sequence from the collection to set the
-task's steps and list their procedures. Buttons on the task's page let
-you start it, finish a step, end it, and set the report and QC-list
-flags. Every change stays in the task's history.
-
 To enter a task, sign in and choose **New task**. In **Substance**, enter
 a key from the [substance registry](#substance-registry); the suggestions
 pair each key with its name. Add a missing substance in the registry
 first. `/lab/tasks/new/?substance=cinnamic-acid`, for example, fills in
 that key. Search the task list by substance key or either language's name.
+
+In **Sequence**, choose an imported synthesis sequence by ID and title,
+or leave it empty to plan steps yourself. You can choose any sequence
+that is not withdrawn from the collection. Choosing one creates one task
+step per sequence step, in the same order. Each step records the scope
+entry it carries out and the import current when you planned it. A
+**scope entry** is one combination of substrates and products in a
+procedure. The task keeps its sequence, steps, entries and planned
+imports if a later import changes or withdraws that sequence. You can
+set, change or clear the task's sequence only while none of its steps
+is done.
+
+Without a sequence, **Steps total** sets the number of plain steps,
+which have no scope entry or planned import. Increasing it adds steps
+at the end; decreasing it removes the last ones. Leaving it empty
+removes all steps. The total cannot fall below the number already done.
+With a sequence, the form shows the task's step count and ignores changes
+to **Steps total**. Clearing the sequence gives the task as many plain
+steps as **Steps total** specifies.
+
+**Steps done** marks the first that many steps done. Steps already done
+keep their dates; newly done steps take today. The remaining steps have
+their completion dates cleared. An empty value means none done, and the
+value cannot exceed the number of steps. Progress counts done steps over
+all steps, as a whole percentage rounded down. A task without steps has
+no progress value.
+
+Use **Beginnen** (**Start**) on the task page to start a planned task.
+On a running task, **Stufe erledigt** (**Step done**) marks the first open
+step done today. **Abschließen** (**End**) sets the end date to today and
+marks every open step done on that date. On an ended task, the report
+and QC-list buttons set those flags.
+
+The task page links its sequence and lists steps in order. A step with a
+scope entry links to its procedure by ID at `/procedures/<id>/`, with the
+ID in lowercase. For a general procedure, **Eintrag &lt;n&gt;**
+(**Entry &lt;n&gt;**) identifies the entry. A plain step appears as
+**Stufe &lt;n&gt;** (**Step &lt;n&gt;**). A done step shows
+**erledigt am &lt;date&gt;** (**done on &lt;date&gt;**).
+
+A withdrawn sequence or procedure appears without a link, marked
+**nicht in der Sammlung** (**not in the collection**). A step whose entry
+was withdrawn also has no link. It shows the procedure ID and the entry's
+signature, with that mark instead of an entry number. The signature has
+the substrate keys, ` >> ` and the product keys; each side is sorted and
+joined by ` + `. The task page's history combines task and step changes,
+newest first. Step changes are headed **Stufe &lt;n&gt;** (**Step &lt;n&gt;**),
+removals **Stufe &lt;n&gt; entfernt** (**Step &lt;n&gt; removed**).
+Staff can also inspect a task's steps in `/lab/admin/`.
 
 Planned and running tasks use a computed priority when their substance's
 inventory article has a forecast. An article is one substance with its
@@ -1575,15 +1614,22 @@ vocabularies, including `new-compound-7` (**Neuverbindung 7** / **New
 compound 7**). That substance's history starts on the demo's opening day,
 recorded by `klehmann`.
 
+The command then records the data set's own accepted import of the demo
+collection from `webapp/demo/manifest.json` on that opening day. It uses
+a commit of forty zeros, release `demo` and trigger `catch-up`. This lets
+you use the demo before any collection build. Its tasks follow the
+imported sequences `SEQ-0001` and `SEQ-0002`; one is running with the
+first of its two steps done.
+
 The inventory contains seven numbered articles: `CH-0001`, `CH-0002`,
 `CH-0010`, `CH-0012`, `CH-0013` and `CH-0016`, the six delivered final products of
 `examples/demo`, and `NV-0007` (**Neuverbindung 7** / **New compound 7**),
 which no demo procedure names. Their names and molar masses come from the
-lab registry. Conversions between mg and µmol use those molar masses
-regardless of the collection index. The index lists every substance from
-the registry used for the build, so each has a link from its substance
-page to the collection. A substance added after the last build gets the
-link when the next build includes it.
+lab registry. Conversions between mg and µmol use those molar masses.
+The data set's import gives each demo substance a collection link. A
+substance you add later gets its link after a later import is accepted;
+see [Substance registry](#substance-registry) for when these links appear
+and when their target pages are available.
 
 There is also an item **1-Phenylethanol** without an article number. It
 enters stock later, is filled without a bulk lot and is never delivered.
@@ -1614,8 +1660,10 @@ starts serving requests. The command fills the database only when
 it skips seeding and exits successfully without changes. An import of the
 collection counts as a lab record. The flag only permits writing demo
 data; setting it alone does not display demo content.
-If `app` starts before `builder` publishes the first index, seeding writes
-German free text; the registry and stock records are the same.
+The demo's free texts use the latest accepted import's language, read
+before the command deletes anything, or German when there is no accepted
+import. The data set's own import carries that language. Registry and
+stock records are the same in either language.
 
 Every lab page except the admin shows a banner stating that all records
 are invented, with the seeding date. The sign-in page lists the accounts
@@ -1640,8 +1688,10 @@ docker compose exec app python manage.py demo_data --replace
 This deletes every lab record and its history, including the registry,
 collection imports, imported procedures with their scope entries,
 sequences with their steps, and records you added after seeding. It
-restarts task numbering at `T-001`. The builder's next cycle imports the
-collection again.
+restarts task numbering at `T-001` and writes the demo data set again.
+The only import left is the data set's own. The builder's next cycle
+builds the real collection with that import as its base, keeping the
+entries that the demo tasks name.
 It requires `ORGSYNDB_DEMO=true` and accepts only a demo database or one
 without lab records. It refuses other databases unchanged.
 
@@ -1749,9 +1799,12 @@ chemical registry identifier. The list shows substances in name order,
 with their group, chemical classes, formula, molar mass and article number.
 Open a substance's name to see its full record, containers, open bulk lots
 and tasks. **In der Sammlung** (**In the collection**) links to the site's
-compound page when the collection index lists the same key. The index
-includes every substance in the registry read for the build; a newly added
-substance gets this link after the next build.
+compound page when the latest accepted import was received no earlier
+than the substance was created. A substance added later gets the link
+after a subsequent import is accepted. The app cannot tell whether the
+site already serves that import's release. After a lost response to a
+manifest, or for the demo data set's own import before the builder's
+first build, the link can lead to a page the site does not serve yet.
 
 #### Inspect collection imports
 
@@ -1856,10 +1909,11 @@ The site's compound pages, validator and Emacs read the registry named by
 the collection, as described under [Compound registry](#compound-registry).
 A rebuild accepted by the lab application publishes changes to substances
 and terms on the static site; refresh the Emacs index to read those
-changes in the editor. The lab application reads the language and compound
-keys for collection links from the release's `index.json`; tasks read its
-procedures and sequences. The accepted import also stores the collection's
-procedures, scope entries and sequences as database records. Substance
+changes in the editor. The lab application reads the collection's
+procedures, scope entries, sequences and their steps from accepted
+imports stored in its database. Tasks use these imported sequences and
+scope entries. The latest accepted import supplies the interface language
+and determines when substance pages link to the collection. Substance
 names, molar masses and article numbers come directly from the lab registry.
 
 ### End-product inventory
@@ -1920,7 +1974,8 @@ including in the admin, and appears on every size of that article.
 You can still edit the category and the item's note. Clearing the category
 on **Edit** clears it for every size. Change the name on the substance's
 page, which the item links to; that page links to the collection's
-compound when its index lists the substance's key.
+compound when the latest accepted import was received no earlier than
+the substance was created.
 
 To set aside one container size, choose **Edit** on its item page and
 change **Status** from **aktiv** (**active**), the default, to **nicht
@@ -2399,17 +2454,17 @@ the first matching trigger in this order:
 For a combination of application commit, collection commit and registry
 digest that needs building and has not been recorded as failed, the
 builder checks out both commits. It runs `orgsyndb build`, or
-`orgsyndb pdf` with `ORGSYNDB_PDF=true`, followed by `orgsyndb manifest`
-and `orgsyndb index`. `ORGSYNDB_BUILD_TIMEOUT` applies separately to each
-command. Every invocation receives `ORGSYNDB_REGISTRY` naming
-`<data>/registry.json`, so the site and release index use the same
-snapshot. A command that fails or exceeds its timeout counts as a failed
-build.
+`orgsyndb pdf` with `ORGSYNDB_PDF=true`, followed by `orgsyndb manifest`.
+`ORGSYNDB_BUILD_TIMEOUT` applies separately to each command. Every
+invocation receives `ORGSYNDB_REGISTRY` naming
+`<data>/registry.json`, so the site and manifest describe the same
+registry snapshot. A command that fails or exceeds its timeout counts as
+a failed build.
 
 The builder stages a successful build in
-`<data>/releases/<serial>-<app>-<commit>`, with `public/`, `pdf/` when
-PDFs are enabled, and `index.json` for the lab application's tasks. The
-serial starts at `000001`; both commits use their first ten characters.
+`<data>/releases/<serial>-<app>-<commit>`, containing `public/` and, when
+PDFs are enabled, `pdf/`. The serial starts at `000001`; both commits use
+their first ten characters.
 Staging leaves the served site in place.
 
 The builder then posts the manifest to `ORGSYNDB_MANIFEST_URL`, with

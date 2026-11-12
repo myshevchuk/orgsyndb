@@ -9,7 +9,6 @@ from urllib.parse import unquote, urlsplit
 from django.core.exceptions import ImproperlyConfigured
 
 WEBAPP = Path(__file__).resolve().parent.parent
-DEFAULT_INDEX = "/var/lib/orgsyndb/current/index.json"
 DEBUG_SECRET_KEY = "django-insecure-orgsyndb-debug-only"
 DEBUG_HOSTS = ["localhost", "127.0.0.1"]
 TRUE = ("1", "true", "yes", "on")
@@ -77,8 +76,7 @@ def settings_from(environ: Mapping[str, str]) -> dict[str, Any]:
     from ``ORGSYNDB_SECRET_KEY``, ``ALLOWED_HOSTS`` from the
     comma-separated ``ORGSYNDB_ALLOWED_HOSTS``, ``DATABASES`` from
     ``ORGSYNDB_DATABASE_URL`` (by default the SQLite file
-    ``webapp/db.sqlite3``), ``ORGSYNDB_INDEX``, the path of the
-    collection index, ``ORGSYNDB_DEMO`` from the flag of that name,
+    ``webapp/db.sqlite3``), ``ORGSYNDB_DEMO`` from the flag of that name,
     which permits writing the demo data, and ``ORGSYNDB_BUILDER_TOKEN``,
     the token the builder signs its manifests with, empty when unset,
     which turns the manifest path off. With debug on, the secret key
@@ -112,8 +110,6 @@ def settings_from(environ: Mapping[str, str]) -> dict[str, Any]:
         "SECRET_KEY": secret_key,
         "ALLOWED_HOSTS": hosts,
         "DATABASES": {"default": database(url)},
-        "ORGSYNDB_INDEX": (environ.get("ORGSYNDB_INDEX", "").strip()
-                           or DEFAULT_INDEX),
         "ORGSYNDB_DEMO": flag(environ, "ORGSYNDB_DEMO", False),
         "ORGSYNDB_BUILDER_TOKEN": environ.get("ORGSYNDB_BUILDER_TOKEN",
                                               "").strip(),

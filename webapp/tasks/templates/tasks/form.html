@@ -11,9 +11,6 @@
 {{ field.errors }}
 </div>
 {% endfor %}{% substance_datalist %}
-<datalist id="sequence-ids">
-{% for sequence in sequences %}<option value="{{ sequence.id }}"></option>
-{% endfor %}</datalist>
 <p class="lab-buttons"><button type="submit">{% translate "Save" %}</button>
 <a href="{% if task.pk %}/lab/tasks/{{ task.number }}/{% else %}/lab/tasks/{% endif %}">{% translate "Cancel" %}</a></p>
 </form>

@@ -32,7 +32,7 @@ A cycle SHALL fetch the branch or tag `ORGSYNDB_APP_REF` from `ORGSYNDB_APP_REPO
 
 Next the cycle requests the lab application's snapshot at `ORGSYNDB_REGISTRY_URL`, sending as `Host` the first entry of `ORGSYNDB_ALLOWED_HOSTS` that is not `*`, with a leading `.` dropped, or `localhost` when there is none, with a timeout of 30 seconds, and on an answer of status 200 whose body is a snapshot (lab-registry "Snapshot") writes it to `<data>/registry.json`. When the request fails, or the answer is not a snapshot, it logs `cannot fetch the registry` and builds nothing: only the application can accept a build, and a kept copy cannot say which import it accepted last. The snapshot's `import` names the latest accepted import of the collection (lab-registry "Snapshot"); when its release is in `<data>/releases/` and `<data>/current` points elsewhere, the cycle points `current` at it. The registry's digest is part of every combination below, so that a changed registry is built and published like a new commit. Without `ORGSYNDB_BUILDER_TOKEN` the cycle logs that `ORGSYNDB_BUILDER_TOKEN` is not set and builds nothing.
 
-The cycle then tries, in order, the new application commit if there is one and the checked-out one, each with the fetched collection commit and the registry. It stops at the first combination whose application commit, collection commit and digest are the latest accepted import's `tooling`, `commit` and `snapshot` and whose release is in `<data>/releases/`, and skips one that failed before. For any other it checks out both commits, keeping ignored files, and runs `<app>/tools/orgsyndb -C <collection>/<path> build`, or `pdf` when `ORGSYNDB_PDF` is true. It then runs `manifest` and `index` (Releases). Every run of `tools/orgsyndb` in the cycle, has `ORGSYNDB_REGISTRY` naming `<data>/registry.json` (compound-registry "Registry source"), so that the site and the index describe the registry the cycle fetched. When `<path>/orgsyndb.toml` is missing it logs `ORGSYNDB_COLLECTION_PATH` and builds nothing. A build, `manifest` or `index` that exits non-zero or exceeds the timeout fails; the cycle reports the failure to the application (Manifests), logs that the published site is unchanged and records the combination as failed. After the cycle the application's clone is at the commit of the published site, or at the commit it started from.
+The cycle then tries, in order, the new application commit if there is one and the checked-out one, each with the fetched collection commit and the registry. It stops at the first combination whose application commit, collection commit and digest are the latest accepted import's `tooling`, `commit` and `snapshot` and whose release is in `<data>/releases/`, and skips one that failed before. For any other it checks out both commits, keeping ignored files, and runs `<app>/tools/orgsyndb -C <collection>/<path> build`, or `pdf` when `ORGSYNDB_PDF` is true. It then runs `manifest` (Releases). Every run of `tools/orgsyndb` in the cycle, has `ORGSYNDB_REGISTRY` naming `<data>/registry.json` (compound-registry "Registry source"), so that the site and the manifest describe the registry the cycle fetched. When `<path>/orgsyndb.toml` is missing it logs `ORGSYNDB_COLLECTION_PATH` and builds nothing. A build or `manifest` that exits non-zero or exceeds the timeout fails; the cycle reports the failure to the application (Manifests), logs that the published site is unchanged and records the combination as failed. After the cycle the application's clone is at the commit of the published site, or at the commit it started from.
 
 A collection that cannot be fetched is built from its last fetched commit, if any; an application that cannot be fetched stays at its commit.
 
@@ -109,7 +109,7 @@ A collection that cannot be fetched is built from its last fetched commit, if an
 - **THEN** the next `sync` sends a manifest with the trigger `tooling`
 
 ### Requirement: Releases
-A successful build SHALL be staged, with its `pdf/` when PDFs are on, in a new directory `<data>/releases/<serial>-<app>-<collection>`, the serial counting up from `000001` and the commits shortened to ten characters, together with `index.json`, the output of `<app>/tools/orgsyndb -C <collection>/<path> index` run after the build and `manifest`; when either command fails or exceeds the build timeout, the build counts as failed. Only once the application accepts the build's manifest (Manifests) SHALL the relative symlink `<data>/current` be replaced atomically to point to the release; a staged release it refuses or calls stale is removed, and one whose answer is lost is kept, so that a later cycle publishes it when the latest accepted import names it. After a publish and at the end of every cycle all releases are removed, with any partial copy, but the current one, the newest staged release whose answer was lost, and the `ORGSYNDB_KEEP_RELEASES` newest others. `<data>/state.json` records the published commits and release, the serial, and up to 50 failed combinations.
+A successful build SHALL be staged, with its `pdf/` when PDFs are on, in a new directory `<data>/releases/<serial>-<app>-<collection>`, the serial counting up from `000001` and the commits shortened to ten characters; when `<app>/tools/orgsyndb -C <collection>/<path> manifest`, run after the build, fails or exceeds the build timeout, the build counts as failed. Only once the application accepts the build's manifest (Manifests) SHALL the relative symlink `<data>/current` be replaced atomically to point to the release; a staged release it refuses or calls stale is removed, and one whose answer is lost is kept, so that a later cycle publishes it when the latest accepted import names it. After a publish and at the end of every cycle all releases are removed, with any partial copy, but the current one, the newest staged release whose answer was lost, and the `ORGSYNDB_KEEP_RELEASES` newest others. `<data>/state.json` records the published commits and release, the serial, and up to 50 failed combinations.
 
 #### Scenario: Relative symlink
 - **WHEN** a test runs `sync` once
@@ -123,12 +123,8 @@ A successful build SHALL be staged, with its `pdf/` when PDFs are on, in a new d
 - **WHEN** `sync` runs with `ORGSYNDB_PDF=true`
 - **THEN** the build ran `pdf` and the release holds `pdf/`
 
-#### Scenario: Index in the release
-- **WHEN** `sync` publishes a build with the fake `tools/orgsyndb`, whose `index` prints `{"site_language": "de"}`
-- **THEN** `current/index.json` holds that text
-
-#### Scenario: Failing index or manifest
-- **WHEN** the fake `tools/orgsyndb` builds successfully but its `index` or its `manifest` exits 1, or runs past `ORGSYNDB_BUILD_TIMEOUT`
+#### Scenario: Failing manifest
+- **WHEN** the fake `tools/orgsyndb` builds successfully but its `manifest` exits 1, or runs past `ORGSYNDB_BUILD_TIMEOUT`
 - **THEN** `sync` publishes nothing, the release published before stays current, the application received a refused build, and the combination is recorded as failed
 
 #### Scenario: Refused by the application
@@ -151,9 +147,9 @@ A successful build SHALL be staged, with its `pdf/` when PDFs are on, in a new d
 - **WHEN** a commit fails to build while the manifest address does not answer, then the address answers again and `sync` runs once more
 - **THEN** the first `sync` records no failed combination, and the second builds the commit again, reports it as refused and records it as failed
 
-#### Scenario: New application whose index fails
-- **WHEN** a new application commit builds but its `index` exits 1, while the checked-out one works
-- **THEN** `sync` falls back to the checked-out commit and publishes its build with its index
+#### Scenario: New application whose manifest fails
+- **WHEN** a new application commit builds but its `manifest` exits 1, while the checked-out one works
+- **THEN** `sync` falls back to the checked-out commit and publishes its build
 
 ### Requirement: Web server and Compose file
 `deploy/docker/Caddyfile` SHALL serve `/var/lib/orgsyndb/current/public` with `file_server` at the site address `ORGSYNDB_ADDRESS`, `:8080` by default, `/pdf/` from `current/pdf` with a directory listing, answer `404` for every path beginning with `/lab/collection/manifest`, and forward `/lab/` and every other path below it, unchanged, to the application at `ORGSYNDB_APP_UPSTREAM`, `app:8000` by default. It sets the header `Cache-Control: no-cache` on every response and turns Caddy's admin endpoint off.
@@ -176,7 +172,7 @@ A successful build SHALL be staged, with its `pdf/` when PDFs are on, in a new d
 - **THEN** it succeeds, the services are `builder`, `web`, `db`, `app` and `backup`, `builder` runs `orgsyndb-deploy run`, reads the settings and has `ORGSYNDB_LAB` set to `true`, `web` and `app` mount the data volume read-only, `db`'s health check runs `pg_isready`, `app` depends on `db` being healthy, and `app` receives the example's `ORGSYNDB_DATABASE_URL`
 
 ### Requirement: Application image
-`deploy/webapp/Dockerfile` SHALL build an image from `fedora:44` that installs Python 3 and uv, copies `webapp/` and `site/assets/css/` from the build context, the repository root, installs the locked dependencies without the development ones, and collects the static files. It runs as the user `orgsyndb` with UID 1000 and exposes port 8000. Its command applies pending migrations, then runs `manage.py demo_data --if-empty`, which seeds an empty database when `ORGSYNDB_DEMO` is true and otherwise changes nothing (lab-demo "Demo data command"), and then serves `orgsyndb_web.wsgi` with gunicorn on `0.0.0.0:8000`. `ORGSYNDB_INDEX` defaults to `/var/lib/orgsyndb/current/index.json`. `deploy/orgsyndb.env.example` names `ORGSYNDB_DEMO`, commented out, with a comment saying that it fills an empty database with invented records whose accounts share a password shown on the sign-in page, and is for test deployments only.
+`deploy/webapp/Dockerfile` SHALL build an image from `fedora:44` that installs Python 3 and uv, copies `webapp/` and `site/assets/css/` from the build context, the repository root, installs the locked dependencies without the development ones, and collects the static files. It runs as the user `orgsyndb` with UID 1000 and exposes port 8000. Its command applies pending migrations, then runs `manage.py demo_data --if-empty`, which seeds an empty database when `ORGSYNDB_DEMO` is true and otherwise changes nothing (lab-demo "Demo data command"), and then serves `orgsyndb_web.wsgi` with gunicorn on `0.0.0.0:8000`. `deploy/orgsyndb.env.example` names `ORGSYNDB_DEMO`, commented out, with a comment saying that it fills an empty database with invented records whose accounts share a password shown on the sign-in page, and is for test deployments only.
 
 #### Scenario: Image inputs
 - **WHEN** a test reads `deploy/webapp/Dockerfile`

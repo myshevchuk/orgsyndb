@@ -62,18 +62,18 @@ FAKE_PROBLEM = ("md/procedures/OSDB-0001-x.md:title: error: the fake "
 
 FAKE_ORGSYNDB = """\
 #!/usr/bin/env python3
-# Fake tool: -C DIR build|pdf|index|manifest. Every run appends a JSON
+# Fake tool: -C DIR build|pdf|manifest. Every run appends a JSON
 # line of the command, $ORGSYNDB_REGISTRY and the text of the file it
 # names to $FAKE_REGISTRY_LOG. A build fails when the collection
 # holds `fail` or the application's VERSION reads `broken`, printing a
 # problem line and an error line, or silently when it holds
-# `fail-silent`, and appends one line per run to $FAKE_LOG. `index`
-# and `manifest` log nothing. `index` prints a minimal index; it fails
-# when the collection holds `index-fail` or VERSION reads
-# `index-broken`, and sleeps past any timeout when the collection holds
-# `index-slow`. `manifest` prints the fixed collection half of a
-# manifest; it fails and sleeps likewise on `manifest-fail`,
-# `manifest-slow` and VERSION `manifest-broken`.
+# `fail-silent`, and appends one line per run to $FAKE_LOG. `manifest`
+# logs nothing and prints the fixed collection half of a manifest; it
+# fails when the collection holds `manifest-fail` or VERSION reads
+# `manifest-broken`, and sleeps past any timeout when the collection
+# holds `manifest-slow`. `index` is a command the builder must never
+# run: the fake answers it with a minimal index, so that the run shows
+# in the log and in the release.
 import json, os, sys, time
 from pathlib import Path
 app = Path(__file__).resolve().parent.parent
@@ -85,10 +85,6 @@ with open(os.environ["FAKE_REGISTRY_LOG"], "a") as log:
         Path(registry).is_file() else ""
     log.write(json.dumps([sys.argv[3], registry, held]) + "\\n")
 if sys.argv[3] == "index":
-    if (collection / "index-slow").exists():
-        time.sleep(600)
-    if (collection / "index-fail").exists() or version == "index-broken":
-        sys.exit(1)
     print('{"site_language": "de"}')
     sys.exit(0)
 if sys.argv[3] == "manifest":
@@ -414,82 +410,53 @@ class UpdaterTests(unittest.TestCase):
         self.sync()
         self.assertEqual(self.builds(), ["v1 build"] * 3)
 
-    def index_text(self) -> str:
-        return (self.data / "current" / "index.json").read_text().strip()
-
-    def test_index_is_in_the_release(self) -> None:
-        """Scenario: Index in the release."""
+    def test_no_index_is_run_and_no_release_holds_one(self) -> None:
+        """Requirement: Releases (no `index.json` in a release)."""
         done = self.sync()
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
-        self.assertEqual(self.index_text(), '{"site_language": "de"}')
+        self.assertFalse((self.data / "current" / "index.json").exists())
         commit_files(self.collection, {"content.txt": "second\n"})
         self.sync()
+        self.assertEqual(len(self.releases()), 2)
         for release in self.releases():
             with self.subTest(release=release):
-                self.assertTrue(
+                self.assertFalse(
                     (self.data / "releases" / release
-                     / "index.json").is_file())
+                     / "index.json").exists())
+                self.assertTrue(
+                    (self.data / "releases" / release / "public"
+                     / "index.html").is_file())
         self.assertEqual(self.builds(), ["v1 build", "v1 build"])
+        self.assertNotIn("index", [run[0] for run in self.runs()])
 
-    def test_failing_index_keeps_site_and_is_not_retried(self) -> None:
-        """Scenario: Failing index."""
+    def test_the_index_is_never_run(self) -> None:
+        """Requirement: Update cycle (the cycle runs `build` or `pdf`,
+        then `manifest`, and no `index`)."""
         self.sync()
-        bad = commit_files(self.collection, {"index-fail": "",
-                                             "content.txt": "bad\n"})
-        done = self.sync()
-        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
-        self.assertEqual(self.page(), "v1 first")
-        self.assertEqual(self.index_text(), '{"site_language": "de"}')
-        self.assertEqual(len(self.releases()), 1)
-        state = self.state()
-        self.assertEqual(state["deployed"]["collection"], self.col_v1)
-        self.assertEqual(len(state["failed"]), 1)
-        self.assertIn(bad, state["failed"][0])
-        self.assertEqual([m["outcome"] for m in self.sent()],
-                         ["built", "refused"])
+        commit_files(self.collection, {"fail": "", "content.txt": "bad\n"})
         self.sync()
-        self.assertEqual(self.builds(), ["v1 build", "v1 build"])
-        commit_files(self.collection, {"index-fail": None,
+        commit_files(self.collection, {"fail": None,
                                        "content.txt": "ok\n"})
-        self.sync()
-        self.assertEqual(self.page(), "v1 ok")
-        self.assertEqual(self.index_text(), '{"site_language": "de"}')
+        self.sync(ORGSYNDB_PDF="true")
+        commands = [run[0] for run in self.runs()]
+        self.assertTrue(commands)
+        self.assertNotIn("index", commands)
+        self.assertLessEqual(set(commands), {"build", "pdf", "manifest"})
 
-    def test_first_release_needs_a_working_index(self) -> None:
-        commit_files(self.collection, {"index-fail": ""})
+    def test_application_whose_manifest_fails_falls_back(self) -> None:
+        """Scenario: New application whose manifest fails."""
         self.sync()
-        self.assertFalse((self.data / "current").exists())
-        self.assertEqual(len(self.state()["failed"]), 1)
-
-    @unittest.skipUnless(os.environ.get("OSDB_SLOW_TESTS"),
-                         "set OSDB_SLOW_TESTS: waits out the 60-second "
-                         "minimum of ORGSYNDB_BUILD_TIMEOUT")
-    def test_index_past_the_timeout_keeps_site(self) -> None:
-        """Scenario: Failing index (timeout)."""
-        self.sync()
-        commit_files(self.collection, {"index-slow": "",
-                                       "content.txt": "slow\n"})
-        done = self.sync(ORGSYNDB_BUILD_TIMEOUT="60")
-        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
-        self.assertEqual(self.page(), "v1 first")
-        self.assertEqual(len(self.releases()), 1)
-        self.assertEqual(len(self.state()["failed"]), 1)
-
-    def test_application_whose_index_fails_falls_back(self) -> None:
-        """Scenario: New application whose index fails."""
-        self.sync()
-        commit_files(self.upstream, {"VERSION": "index-broken\n"})
+        commit_files(self.upstream, {"VERSION": "manifest-broken\n"})
         commit_files(self.collection, {"content.txt": "second\n"})
         done = self.sync()
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         self.assertEqual(self.page(), "v1 second")
-        self.assertEqual(self.index_text(), '{"site_language": "de"}')
         self.assertEqual(git(self.app, "rev-parse", "HEAD"), self.app_v1)
         self.assertEqual(self.state()["deployed"]["app"], self.app_v1)
         self.assertEqual(len(self.releases()), 2)
         self.sync()
-        self.assertEqual(self.builds(),
-                         ["v1 build", "index-broken build", "v1 build"])
+        self.assertEqual(self.builds(), ["v1 build", "manifest-broken build",
+                                         "v1 build"])
         app_v3 = commit_files(self.upstream, {"VERSION": "v3\n"})
         self.sync()
         self.assertEqual(self.page(), "v3 second")
@@ -532,13 +499,12 @@ class UpdaterTests(unittest.TestCase):
         self.assertFalse((self.data / "registry.source").exists())
 
     def test_every_run_of_the_tools_names_the_snapshot_file(self) -> None:
-        """Scenario: First publish (every `tools/orgsyndb` run, the
-        index included, has `ORGSYNDB_REGISTRY` naming the file)."""
+        """Scenario: First publish (every `tools/orgsyndb` run has
+        `ORGSYNDB_REGISTRY` naming the file)."""
         done = self.sync(ORGSYNDB_REGISTRY="http://elsewhere.invalid/x")
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         runs = self.runs()
-        self.assertEqual([r[0] for r in runs],
-                         ["build", "manifest", "index"])
+        self.assertEqual([r[0] for r in runs], ["build", "manifest"])
         for command, named, held in runs:
             with self.subTest(command=command):
                 self.assertEqual(Path(named),
@@ -753,11 +719,10 @@ class UpdaterTests(unittest.TestCase):
                          ["lab.example.org"])
 
     def test_the_tools_run_in_order(self) -> None:
-        """Requirement: Releases (`manifest` and `index` run after the
-        build)."""
+        """Requirement: Releases (`manifest` runs after the build)."""
         self.sync()
         self.assertEqual([run[0] for run in self.runs()],
-                         ["build", "manifest", "index"])
+                         ["build", "manifest"])
 
     def test_a_release_is_staged_before_its_manifest_is_sent(self) -> None:
         """Requirement: Releases (`current` moves only once the
@@ -768,7 +733,7 @@ class UpdaterTests(unittest.TestCase):
             release = self.data / "releases" / body["release"]
             seen.append((
                 (release / "public" / "index.html").is_file(),
-                (release / "index.json").is_file(), self.current()))
+                (release / "index.json").exists(), self.current()))
 
         self.server.on_manifest = look
         self.sync()
@@ -776,8 +741,8 @@ class UpdaterTests(unittest.TestCase):
         self.sync()
         names = [m["release"] for m in self.sent()]
         self.assertEqual(len(set(names)), 2)
-        self.assertEqual(seen, [(True, True, None),
-                                (True, True, names[0])])
+        self.assertEqual(seen, [(True, False, None),
+                                (True, False, names[0])])
         self.assertEqual(self.current(), names[1])
 
     def test_first_publish_sends_one_manifest(self) -> None:
@@ -1021,10 +986,10 @@ class UpdaterTests(unittest.TestCase):
                             for line in report["errors"]), report["errors"])
         self.assertEqual(len(self.state()["failed"]), 1)
 
-    def test_a_failing_manifest_or_index_is_a_failed_build(self) -> None:
-        """Scenario: Failing index or manifest."""
+    def test_a_failing_manifest_is_a_failed_build(self) -> None:
+        """Scenario: Failing manifest."""
         self.sync()
-        for marker in ("manifest-fail", "index-fail"):
+        for marker in ("manifest-fail",):
             with self.subTest(marker=marker):
                 bad = commit_files(self.collection, {
                     marker: "", "content.txt": marker})
@@ -1047,7 +1012,7 @@ class UpdaterTests(unittest.TestCase):
                          "set OSDB_SLOW_TESTS: waits out the 60-second "
                          "minimum of ORGSYNDB_BUILD_TIMEOUT")
     def test_a_manifest_past_the_timeout_is_a_failed_build(self) -> None:
-        """Scenario: Failing index or manifest (timeout)."""
+        """Scenario: Failing manifest (timeout)."""
         self.sync()
         commit_files(self.collection, {"manifest-slow": "",
                                        "content.txt": "slow\n"})
@@ -1294,9 +1259,8 @@ class FileTests(unittest.TestCase):
                        "0.0.0.0:8000", "EXPOSE 8000", "site/assets/css"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, text)
-        self.assertRegex(
-            text, r"ORGSYNDB_INDEX[= ]\S*/var/lib/orgsyndb/current/"
-                  r"index\.json")
+        self.assertNotIn("ORGSYNDB_INDEX", text)
+        self.assertNotIn("index.json", text)
         self.assertRegex(text, r"(?:--uid[= ]|-u\s*)1000\b")
         self.assertRegex(text, r"(?m)^\s*(COPY|ADD)\s+.*\bwebapp/?\s")
         self.assertIn("demo_data --if-empty", text)
@@ -1309,6 +1273,13 @@ class FileTests(unittest.TestCase):
         text = ENV_EXAMPLE.read_text()
         self.assertIn("#ORGSYNDB_DEMO=false", text.splitlines())
         self.assertNotIn("ORGSYNDB_DEMO", parse_env(ENV_EXAMPLE))
+
+    def test_env_example_names_no_index(self) -> None:
+        """Requirement: Application image (no `ORGSYNDB_INDEX` in the
+        example settings)."""
+        text = ENV_EXAMPLE.read_text()
+        self.assertNotIn("ORGSYNDB_INDEX", text)
+        self.assertNotIn("index.json", text)
 
 
 def parse_env(path: Path) -> dict[str, str]:

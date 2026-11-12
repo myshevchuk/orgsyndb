@@ -5,7 +5,6 @@ import os
 
 os.environ.setdefault("ORGSYNDB_SECRET_KEY", "test-only-secret-key")
 os.environ.setdefault("ORGSYNDB_ALLOWED_HOSTS", "testserver,lab.example.org")
-os.environ.setdefault("ORGSYNDB_INDEX", "/nonexistent/orgsyndb/index.json")
 
 from orgsyndb_web.settings import *  # noqa: E402,F401,F403
 

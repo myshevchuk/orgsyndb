@@ -6,8 +6,8 @@ from typing import Any
 from registry.models import Substance, SubstanceClass
 from vocabulary.models import ChemicalClass, Group
 
-from . import (build_index, context_form, field_value, make_substance,
-               page)
+from . import context_form, field_value, make_substance, page
+from .collection_support import accept
 from .registry_support import (NEW_SUBSTANCE, REGISTRY, VOCABULARIES,
                                RegistryCase, choice_value, offered,
                                substance_url, term_url, vocabulary_model)
@@ -142,7 +142,7 @@ class NewSubstanceTests(FormCase):
                          CLASS_ORDER)
 
     def test_the_form_in_english(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         root = self.get(NEW_SUBSTANCE)
         self.assertIn("Chemical classes", root.text())
 

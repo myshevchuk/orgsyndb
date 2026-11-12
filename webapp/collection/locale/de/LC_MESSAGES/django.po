@@ -146,3 +146,6 @@ msgstr "Zuletzt angenommener Import: Commit %(commit)s, Release %(release)s, emp
 
 msgid "No imports yet."
 msgstr "Noch keine Importe."
+
+msgid "General"
+msgstr "Allgemein"

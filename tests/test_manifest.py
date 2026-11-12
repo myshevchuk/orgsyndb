@@ -5,8 +5,8 @@ The pure tests call ``manifest_data`` in-process on temporary copies of
 the Markdown-only test collection; the program tests run the application
 copy's ``tools/orgsyndb`` as the other program tests do. The demo test
 exports the demo's Org procedures and so needs Emacs; it also keeps
-``webapp/tests/fixtures/demo-manifest.json``, which the lab
-application's tests post, from drifting from what the program prints.
+``webapp/demo/manifest.json``, which the lab application's demo data
+and tests apply, from drifting from what the program prints.
 """
 
 import json
@@ -22,7 +22,7 @@ from pipeline_support import (DEMO, REPO, TEST_COLLECTION,
                               keep_registry_inside, make_path, make_sandbox,
                               pipeline, pipeline_function, snapshot)
 
-FIXTURE = REPO / "webapp" / "tests" / "fixtures" / "demo-manifest.json"
+FIXTURE = REPO / "webapp" / "demo" / "manifest.json"
 PROCEDURE_KEYS = {"id", "source", "title", "title_de", "reaction_type",
                   "general", "entries"}
 SEQUENCE_KEYS = {"id", "title", "title_de", "target", "steps"}
@@ -357,8 +357,8 @@ class DemoManifestTests(unittest.TestCase):
         ps.require_exporter()
 
     def test_the_manifest_of_the_demo(self) -> None:
-        """Scenario: Manifest of the demo (and the fixture the lab
-        application's tests post)."""
+        """Scenario: Manifest of the demo (and `webapp/demo/manifest.json`,
+        which the lab application applies)."""
         sandbox = make_sandbox(self, collection=DEMO)
         exported = sandbox.build("export")
         self.assertEqual(exported.returncode, 0, exported.stderr)
@@ -387,7 +387,7 @@ class DemoManifestTests(unittest.TestCase):
                          (title, title))
         self.assertEqual(data, json.loads(FIXTURE.read_text(
             encoding="utf-8")),
-            "webapp/tests/fixtures/demo-manifest.json has drifted from "
+            "webapp/demo/manifest.json has drifted from "
             "the manifest of the demo")
 
 

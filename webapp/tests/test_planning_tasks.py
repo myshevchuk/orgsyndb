@@ -4,8 +4,9 @@ production-planning: Computed priority on tasks)."""
 
 from datetime import date, timedelta
 
-from . import (build_index, field_value, make_task, numbers, substance_for,
-               table, task_form_data, task_url)
+from . import (field_value, make_task, numbers, substance_for, table,
+               task_form_data, task_url)
+from .collection_support import accept
 from .inventory_support import TODAY
 from .planning_support import (PLAN, PlanningCase, article_links, count_days,
                                has_date, has_days, metadata, titles)
@@ -105,7 +106,7 @@ class ListPriorityTests(TasksCase):
         self.assertIn("manuell", cell.text())
 
     def test_the_english_marks_and_title(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         rows = self.rows()
         cell = rows[self.computed.number]["Priority"]
         self.assertIn("high", cell.text())
@@ -246,7 +247,7 @@ class PagePriorityTests(TasksCase):
         self.assertIn("manuell", cell.text())
 
     def test_the_english_page(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         task = make_task(self.kl, substance="NV-1", priority="low")
         cell = metadata(self.get(task_url(task)))["Priority"]
         self.assertIn("computed", cell.text())
@@ -296,7 +297,7 @@ class PageForecastTests(TasksCase):
         self.assertNotIn("verspätet", text)
 
     def test_the_english_page(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.planned_item("NV-5", quantity=5)
         task = make_task(self.kl, substance="NV-5")
         text = self.get(task_url(task)).text()
@@ -313,7 +314,7 @@ class PageForecastTests(TasksCase):
         self.assertNotIn("Tage", root.text())
 
     def test_the_english_text_without_a_forecast(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.item("NV-0", size="1", unit="mg", quantity=3)
         task = make_task(self.kl, substance="NV-0")
         self.assertIn(NO_FORECAST_EN, self.get(task_url(task)).text())
@@ -343,7 +344,7 @@ class FormTests(TasksCase):
                 self.assertEqual(help_text.text(), HELP_DE)
 
     def test_the_english_help_text(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.assertIn(HELP_EN, self.get(NEW).text())
 
     def test_substance_from_the_query(self) -> None:

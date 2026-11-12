@@ -8,9 +8,9 @@ from django.test import TestCase
 from inventory.models import Item
 from tasks.models import Task
 
-from . import (IndexMixin, build_index, context_form, datalist, make_item,
-               make_lot, make_substance, make_task, make_user, page,
-               substance_for, table, task_url)
+from . import (context_form, datalist, make_item, make_lot, make_substance,
+               make_task, make_user, page, substance_for, table, task_url)
+from .collection_support import accept
 from .demo_support import SeededCase
 from .inventory_support import item_data
 
@@ -18,16 +18,13 @@ SUBSTANCE_PAGE = "/lab/registry/substances/cinnamic-acid/"
 COMPOUND_PAGE = re.compile(r"/compounds/[^/]+/\Z")
 
 
-class LinkCase(IndexMixin, TestCase):
+class LinkCase(TestCase):
 
     @classmethod
     def setUpTestData(cls) -> None:
         cls.kl = make_user("kl", "KL")
         cls.known = make_task(cls.kl, substance="CH-0012")
         cls.other = make_task(cls.kl, substance="Neuverbindung 7")
-
-    def setUp(self) -> None:
-        self.use_index(None)
 
     def product_cells(self) -> dict:
         _, rows = table(page(self.client.get("/lab/tasks/")))
@@ -59,37 +56,35 @@ class TaskLinkTests(LinkCase):
     def test_no_substance_is_marked_as_outside_the_collection(self) -> None:
         for language, mark in (("de", "nicht in der Sammlung"),
                                ("en", "not in the collection")):
-            self.use_index(build_index(language))
+            accept(language=language)
             with self.subTest(language=language):
                 for cell in self.product_cells().values():
                     self.assertNotIn(mark, cell.text())
 
     def test_the_name_follows_the_language_of_the_site(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         cells = {row["No."].text(): row["Product"] for row in
                  table(page(self.client.get("/lab/tasks/")))[1]}
         known = cells[self.known.number]
         self.assertEqual([a.text() for a in known.find_all("a")],
                          ["(E)-Cinnamic acid"])
 
-    def test_the_link_does_not_depend_on_the_index(self) -> None:
-        for index in (None, build_index("de")):
-            self.use_index(index)
-            with self.subTest(index=index is None):
+    def test_the_link_does_not_depend_on_an_import(self) -> None:
+        for language in (None, "de"):
+            if language:
+                accept(language=language)
+            with self.subTest(language=language):
                 known = self.product_cells()[self.known.number]
                 self.assertEqual(
                     [a.get("href") for a in known.find_all("a")],
                     [SUBSTANCE_PAGE])
 
 
-class InventoryLinkTests(IndexMixin, TestCase):
+class InventoryLinkTests(TestCase):
 
     @classmethod
     def setUpTestData(cls) -> None:
         cls.kl = make_user("kl", "KL")
-
-    def setUp(self) -> None:
-        self.use_index(None)
 
     def test_the_item_page_the_lot_page_and_the_bulk_list(self) -> None:
         item = make_item(self.kl, "CH-0012")
@@ -106,7 +101,7 @@ class InventoryLinkTests(IndexMixin, TestCase):
                                   if COMPOUND_PAGE.match(h)])
 
 
-class DatalistTests(IndexMixin, TestCase):
+class DatalistTests(TestCase):
 
     @classmethod
     def setUpTestData(cls) -> None:
@@ -115,7 +110,6 @@ class DatalistTests(IndexMixin, TestCase):
         make_substance("acetophenone", "Acetophenone")
 
     def setUp(self) -> None:
-        self.use_index(None)
         self.client.force_login(self.kl)
 
     def options(self, path: str) -> dict[str, str]:
@@ -136,7 +130,7 @@ class DatalistTests(IndexMixin, TestCase):
             "acetophenone": "Acetophenone"})
 
     def test_labels_are_in_the_language_of_the_site(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.assertEqual(self.options("/lab/tasks/new/"), {
             "cinnamic-acid": "(E)-Cinnamic acid",
             "acetophenone": "Acetophenone"})

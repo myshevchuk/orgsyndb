@@ -6,8 +6,8 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 
-from . import (PASSWORD, IndexMixin, demo_index, edit_data, make_task,
-               make_user, page, substance_for, task_form_data, task_url)
+from . import (PASSWORD, done_days, edit_data, make_task, make_user, page,
+               substance_for, task_form_data, task_url)
 
 User = get_user_model()
 LOGIN = "/lab/accounts/login/"
@@ -148,7 +148,7 @@ class SignInTests(TestCase):
                 self.assertEqual(self.client.get(path).status_code, 404)
 
 
-class AccountWithoutPasswordTests(IndexMixin, TestCase):
+class AccountWithoutPasswordTests(TestCase):
 
     @classmethod
     def setUpTestData(cls) -> None:
@@ -170,7 +170,6 @@ class AccountWithoutPasswordTests(IndexMixin, TestCase):
 
     def test_the_account_is_offered_as_assignee(self) -> None:
         """Scenario: Account without a password (assignee)."""
-        self.use_index(demo_index())
         self.client.force_login(self.kl)
         shown = page(self.client.get("/lab/tasks/new/"))
         select = shown.find("select", name="assignee")
@@ -179,7 +178,6 @@ class AccountWithoutPasswordTests(IndexMixin, TestCase):
                             for o in options), options)
 
     def test_the_account_can_be_named_on_a_task(self) -> None:
-        self.use_index(demo_index())
         self.client.force_login(self.kl)
         substance_for("Aspirin")
         done = self.client.post("/lab/tasks/new/", task_form_data(
@@ -189,10 +187,9 @@ class AccountWithoutPasswordTests(IndexMixin, TestCase):
         self.assertEqual(Task.objects.get().assignee, self.student)
 
 
-class DisplayNameTests(IndexMixin, TestCase):
+class DisplayNameTests(TestCase):
 
     def test_display_name_is_the_full_name_or_the_user_name(self) -> None:
-        self.use_index(demo_index())
         kl = make_user("kl", "KL", "Klara", "Lehmann")
         make_user("plain", "PL")
         self.client.force_login(kl)
@@ -205,16 +202,13 @@ class DisplayNameTests(IndexMixin, TestCase):
                         options)
 
 
-class PermissionTests(IndexMixin, TestCase):
+class PermissionTests(TestCase):
 
     @classmethod
     def setUpTestData(cls) -> None:
         cls.kl = make_user("kl", "KL")
         cls.task = make_task(cls.kl, substance="Aspirin",
-                             steps_total=2)
-
-    def setUp(self) -> None:
-        self.use_index(demo_index())
+                             steps=2)
 
     def redirected_to_sign_in(self, response, path: str) -> None:
         self.assertEqual(response.status_code, 302)
@@ -247,7 +241,7 @@ class PermissionTests(IndexMixin, TestCase):
                 self.redirected_to_sign_in(self.client.post(path), path)
         self.task.refresh_from_db()
         self.assertIsNone(self.task.started)
-        self.assertEqual(self.task.steps_done, 0)
+        self.assertEqual(done_days(self.task), [None, None])
         self.assertEqual(self.task.history.count(), 1)
 
     def test_pages_that_show_data_need_no_sign_in(self) -> None:

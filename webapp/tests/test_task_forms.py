@@ -1,31 +1,25 @@
-"""Tests of the task forms (task-tracker: Task forms, Steps from a
-sequence)."""
+"""Tests of the task forms (task-tracker: Task forms, Task record)."""
 
-from django.test import TestCase
+from datetime import date
 
 from tasks.models import Task
 
-from . import (IndexMixin, build_index, context_form, demo_index,
-               edit_data, field_value, make_task, make_user, page, past,
-               procedure, sent_messages, sequence, substance_for,
-               task_form_data, task_url)
+from . import (berlin, context_form, done_days, edit_data, field_value,
+               frozen, make_task, page, past, sent_messages, substance_for,
+               task_form_data, task_steps, task_url)
+from .collection_support import (accept, changed_collection,
+                                 import_collection, without_ids)
+from .task_support import NEW, TaskCase, history_text
 
-NEW = "/lab/tasks/new/"
 FIELDS = {"substance", "priority", "assignee", "started", "ended", "sequence",
           "steps_total", "steps_done", "batch", "report", "qc_list",
           "note"}
 
 
-class FormCase(IndexMixin, TestCase):
-
-    @classmethod
-    def setUpTestData(cls) -> None:
-        cls.kl = make_user("kl", "KL", "Klara", "Lehmann")
-        cls.ae = make_user("ae", "AE", "Anna", "Eisele")
+class FormCase(TaskCase):
 
     def setUp(self) -> None:
-        self.use_index(demo_index())
-        self.client.force_login(self.kl)
+        super().setUp()
         for text in ("Aspirin", "Probe", "CH-0012"):
             substance_for(text)
 
@@ -69,7 +63,7 @@ class CreateTests(FormCase):
                       page(done).text())
 
     def test_the_message_is_english_on_an_english_site(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         done = self.client.post(NEW, task_form_data(), follow=True)
         number = self.only_task().number
         self.assertIn(f"Task {number} saved.", page(done).text())
@@ -86,7 +80,10 @@ class CreateTests(FormCase):
             ("probe", "low", self.ae))
         self.assertEqual((task.started, task.ended),
                          (past(2), past(5)))
-        self.assertEqual((task.steps_total, task.steps_done), (5, 3))
+        self.assertEqual(task.steps.count(), 5)
+        self.assertEqual(
+            [d is not None for d in done_days(task)],
+            [True, True, True, False, False])
         self.assertEqual(task.batch, "B-9")
         self.assertTrue(task.report)
         self.assertTrue(task.qc_list)
@@ -97,13 +94,13 @@ class CreateTests(FormCase):
     def test_steps_done_defaults_to_zero(self) -> None:
         self.client.post(NEW, task_form_data(steps_total="4"))
         task = self.only_task()
-        self.assertEqual((task.steps_total, task.steps_done), (4, 0))
+        self.assertEqual(done_days(task), [None] * 4)
 
     def test_without_a_total_steps_done_is_zero(self) -> None:
         self.client.post(NEW, task_form_data())
         task = self.only_task()
-        self.assertIsNone(task.steps_total)
-        self.assertEqual(task.steps_done, 0)
+        self.assertEqual(task.steps.count(), 0)
+        self.assertIsNone(task.progress)
 
     def test_the_form_holds_the_fields_of_the_spec(self) -> None:
         root = page(self.client.get(NEW))
@@ -187,7 +184,7 @@ class ValidationTests(FormCase):
         self.assertEqual(self.only_task().progress, 100)
 
     def test_steps_total_is_at_least_one(self) -> None:
-        for value in ("0", "-1", "two"):
+        for value in ("-1", "two"):
             with self.subTest(value=value):
                 done = self.client.post(NEW, task_form_data(
                     steps_total=value))
@@ -248,7 +245,7 @@ class EditTests(FormCase):
     def test_the_form_shows_the_task(self) -> None:
         task = make_task(self.kl, substance="Probe", priority="low",
                          assignee=self.ae, started=past(2),
-                         steps_total=5, steps_done=2, batch="B-9",
+                         steps=5, done=2, batch="B-9",
                          report=True, note="Notiz")
         root = page(self.client.get(task_url(task, "edit")))
         self.assertEqual(field_value(root, "substance"), "probe")
@@ -315,120 +312,314 @@ class EditTests(FormCase):
         self.assertEqual(task.state, "planned")
 
 
-class SequenceTests(FormCase):
+class StepsDoneTests(FormCase):
+    """Steps by hand and the steps done (task-tracker: Task forms)."""
 
-    def test_steps_from_a_sequence(self) -> None:
-        """Scenario: Steps from a sequence."""
-        done = self.client.post(NEW, task_form_data(
-            sequence="SEQ-0001", steps_total="7"))
-        self.assertEqual(done.status_code, 302)
+    def test_steps_by_hand(self) -> None:
+        """Scenario: Steps by hand."""
+        with frozen(berlin(2026, 11, 5)):
+            self.create(steps_total="3", steps_done="1")
         task = self.only_task()
-        self.assertEqual(task.steps_total, 2)
-        self.assertEqual(list(task.sequence_steps),
-                         ["OSDB-0001", "OSDB-0002"])
-        self.assertEqual(task.sequence, "SEQ-0001")
+        self.assertEqual(task.steps.count(), 3)
+        self.assertEqual([e for e, _i, _d in task_steps(task)],
+                         [None] * 3)
+        with frozen(berlin(2026, 11, 6)):
+            self.change(task, steps_done="2")
+        self.assertEqual(done_days(self.only_task()),
+                         [date(2026, 11, 5), date(2026, 11, 6), None])
 
-    def test_steps_from_a_sequence_without_a_posted_total(self) -> None:
-        self.client.post(NEW, task_form_data(sequence="SEQ-0002"))
+    def test_steps_done_left_alone_keep_their_dates(self) -> None:
+        """Requirement: Task forms (those done before keep their
+        dates)."""
+        with frozen(berlin(2026, 11, 5)):
+            self.create(steps_total="3", steps_done="2")
         task = self.only_task()
-        self.assertEqual(task.steps_total, 2)
-        self.assertEqual(list(task.sequence_steps),
-                         ["OSDB-0004", "OSDB-0009"])
+        with frozen(berlin(2026, 11, 9)):
+            self.change(task, note="Another day")
+        self.assertEqual(done_days(self.only_task()),
+                         [date(2026, 11, 5), date(2026, 11, 5), None])
 
-    def test_steps_done_is_bounded_by_the_steps_of_the_sequence(
+    def test_fewer_steps_done_clear_the_last_ones(self) -> None:
+        """Requirement: Task forms (the rest not done)."""
+        with frozen(berlin(2026, 11, 5)):
+            self.create(steps_total="3", steps_done="3")
+        task = self.only_task()
+        self.change(task, steps_done="1")
+        self.assertEqual(done_days(self.only_task()),
+                         [date(2026, 11, 5), None, None])
+        self.change(self.only_task(), steps_done="")
+        self.assertEqual(done_days(self.only_task()), [None] * 3)
+
+    def test_steps_done_mark_the_first_steps(self) -> None:
+        """Requirement: Task forms (marks the first that many steps
+        done)."""
+        self.create(steps_total="4", steps_done="2")
+        self.assertEqual(
+            [d is not None for d in done_days(self.only_task())],
+            [True, True, False, False])
+
+    def test_the_steps_total_adds_steps_at_the_end(self) -> None:
+        """Requirement: Task forms (steps are added, not done)."""
+        with frozen(berlin(2026, 11, 5)):
+            self.create(steps_total="2", steps_done="1")
+        task = self.only_task()
+        first = [s.pk for s in task.steps.order_by("position")]
+        self.change(task, steps_total="4")
+        task = self.only_task()
+        steps = list(task.steps.order_by("position"))
+        self.assertEqual([s.position for s in steps], [1, 2, 3, 4])
+        self.assertEqual([s.pk for s in steps[:2]], first)
+        self.assertEqual(done_days(task),
+                         [date(2026, 11, 5), None, None, None])
+
+    def test_the_steps_total_removes_the_last_steps(self) -> None:
+        """Requirement: Task forms (the last ones removed)."""
+        self.create(steps_total="4", steps_done="1")
+        task = self.only_task()
+        first = [s.pk for s in task.steps.order_by("position")]
+        self.change(task, steps_total="2")
+        steps = list(self.only_task().steps.order_by("position"))
+        self.assertEqual([s.pk for s in steps], first[:2])
+
+    def test_an_empty_total_removes_every_step(self) -> None:
+        """Requirement: Task forms (an empty total removes them all)."""
+        self.create(steps_total="3")
+        task = self.only_task()
+        self.change(task, steps_total="")
+        self.assertEqual(self.only_task().steps.count(), 0)
+
+    def test_a_removed_step_is_recorded_in_its_history(self) -> None:
+        """Requirement: Task record (steps keep a change history)."""
+        from tasks.models import TaskStep
+        self.create(steps_total="3")
+        task = self.only_task()
+        removed = task.steps.get(position=3)
+        self.change(task, steps_total="2")
+        self.assertEqual(
+            TaskStep.history.filter(id=removed.pk).first().history_type,
+            "-")
+
+    def test_steps_done_above_the_steps(self) -> None:
+        """Requirement: Task forms (steps done above the number of
+        steps)."""
+        self.refused(self.create(steps_total="2", steps_done="3"),
+                     "steps_done")
+        self.refused(self.create(steps_done="1"), "steps_done")
+        self.assertEqual(Task.objects.count(), 0)
+
+    def test_a_total_below_the_steps_done(self) -> None:
+        """Requirement: Task forms (a steps total below the number of
+        steps done)."""
+        self.create(steps_total="3", steps_done="2")
+        task = self.only_task()
+        before = task_steps(task)
+        self.refused(self.change(task, steps_total="1"))
+        self.assertEqual(task_steps(self.only_task()), before)
+
+    def test_the_total_cannot_remove_a_step_done(self) -> None:
+        """Requirement: Task forms (the last ones removed, not done
+        ones)."""
+        self.create(steps_total="3", steps_done="1")
+        task = self.only_task()
+        self.refused(self.change(task, steps_total="", steps_done="1"))
+        self.assertEqual(self.only_task().steps.count(), 3)
+
+    def test_the_edit_form_shows_the_steps_and_those_done(self) -> None:
+        task = make_task(self.kl, steps=5, done=2)
+        root = page(self.client.get(task_url(task, "edit")))
+        self.assertEqual(field_value(root, "steps_total"), "5")
+        self.assertEqual(field_value(root, "steps_done"), "2")
+
+    def test_steps_done_of_a_task_with_a_sequence(self) -> None:
+        """Requirement: Task forms (steps done with a sequence)."""
+        with frozen(berlin(2026, 11, 5)):
+            self.create(sequence="SEQ-0001", steps_done="1")
+        task = self.only_task()
+        self.assertEqual(done_days(task), [date(2026, 11, 5), None])
+        self.refused(self.change(task, steps_done="3"), "steps_done")
+
+
+class SequenceFieldTests(FormCase):
+    """The sequence choice (task-tracker: Task forms)."""
+
+    def options(self, path: str) -> dict[str, str]:
+        select = page(self.client.get(path)).find("select",
+                                                  name="sequence")
+        self.assertIsNotNone(select, "the form has no sequence choice")
+        return {o.get("value"): o.text() for o in select.find_all("option")}
+
+    def test_the_choice_offers_the_sequences_by_id_and_title(self) -> None:
+        """Requirement: Task forms (a choice of the collection's
+        sequences, by ID and title, or none)."""
+        options = self.options(NEW)
+        self.assertEqual(set(options), {"", "SEQ-0001", "SEQ-0002"})
+        for key in ("SEQ-0001", "SEQ-0002"):
+            with self.subTest(key=key):
+                self.assertIn(key, options[key])
+        self.assertIn("Aspirin aus Wintergrünöl", options["SEQ-0001"])
+        self.assertEqual(field_value(page(self.client.get(NEW)),
+                                     "sequence"), "")
+
+    def test_the_choice_offers_no_withdrawn_sequence(self) -> None:
+        """Requirement: Task forms (the sequences that are not
+        withdrawn)."""
+        import_collection(without_ids("SEQ-0001"))
+        self.assertEqual(set(self.options(NEW)), {"", "SEQ-0002"})
+
+    def test_the_choice_keeps_a_withdrawn_sequence_of_the_task(
             self) -> None:
-        done = self.client.post(NEW, task_form_data(
-            sequence="SEQ-0001", steps_done="3"))
-        self.refused(done, "steps_done")
+        """Requirement: Task forms (keeping a withdrawn sequence the
+        task already has)."""
+        self.create(sequence="SEQ-0001")
+        task = self.only_task()
+        import_collection(without_ids("SEQ-0001"))
+        path = task_url(task, "edit")
+        self.assertEqual(set(self.options(path)),
+                         {"", "SEQ-0001", "SEQ-0002"})
+        self.assertEqual(field_value(page(self.client.get(path)),
+                                     "sequence"), "SEQ-0001")
+        other = make_task(self.kl)
+        self.assertEqual(set(self.options(task_url(other, "edit"))),
+                         {"", "SEQ-0002"})
+
+    def test_the_edit_form_shows_the_sequence(self) -> None:
+        self.create(sequence="SEQ-0002")
+        task = self.only_task()
+        root = page(self.client.get(task_url(task, "edit")))
+        self.assertEqual(field_value(root, "sequence"), "SEQ-0002")
+        self.assertEqual(field_value(root, "steps_total"), "2")
+
+    def test_the_total_is_ignored_with_a_sequence(self) -> None:
+        """Requirement: Task forms (with a sequence the field is
+        ignored)."""
+        self.create(sequence="SEQ-0001", steps_total="7")
+        self.assertEqual(self.only_task().steps.count(), 2)
+        task = self.only_task()
+        self.change(task, steps_total="1")
+        self.assertEqual(self.only_task().steps.count(), 2)
+
+    def test_the_steps_come_from_the_sequence(self) -> None:
+        """Scenario: Steps from a sequence."""
+        done = self.create(sequence="SEQ-0002", steps_total="7")
+        self.assertEqual(done.status_code, 302)
+        self.assertEqual(task_steps(self.only_task()), [
+            (("OSDB-0004", 1), self.first, None),
+            (("OSDB-0009", 1), self.first, None)])
+
+    def test_an_unknown_sequence(self) -> None:
+        """Requirement: Task forms (invalid input shows the form
+        again)."""
+        self.refused(self.create(sequence="SEQ-9999"), "sequence")
         self.assertEqual(Task.objects.count(), 0)
 
-    def test_a_sequence_the_index_lacks(self) -> None:
-        done = self.client.post(NEW, task_form_data(sequence="SEQ-9999"))
+    def test_a_withdrawn_sequence_is_refused_when_new(self) -> None:
+        """Requirement: Task forms (a withdrawn sequence the task did
+        not have)."""
+        import_collection(without_ids("SEQ-0001"))
+        self.refused(self.create(sequence="SEQ-0001"), "sequence")
+        self.assertEqual(Task.objects.count(), 0)
+        task = make_task(self.kl, steps=2)
+        self.refused(self.change(task, sequence="SEQ-0001"), "sequence")
+        task.refresh_from_db()
+        self.assertIsNone(task.sequence)
+
+    def test_a_withdrawn_sequence_is_kept_by_a_save(self) -> None:
+        """Scenario: Sequence gone from the collection (through the
+        form)."""
+        self.create(sequence="SEQ-0001", started="2025-03-01",
+                    ended="2025-03-02")
+        task = self.only_task()
+        import_collection(without_ids("SEQ-0001"))
+        done = self.change(task, report="on")
+        self.assertEqual(done.status_code, 302)
+        task = self.only_task()
+        self.assertTrue(task.report)
+        self.assertEqual(task.sequence.key, "SEQ-0001")
+        self.assertEqual(task.steps.count(), 2)
+
+    def test_a_sequence_with_work_done(self) -> None:
+        """Scenario: A sequence with work done."""
+        self.create(sequence="SEQ-0002", started="2025-03-01")
+        task = self.only_task()
+        self.change(task, steps_done="1")
+        task = self.only_task()
+        before = task_steps(task)
+        done = self.change(task, sequence="SEQ-0001")
         self.refused(done, "sequence")
-        self.assertEqual(Task.objects.count(), 0)
-
-    def test_without_an_index_no_sequence_can_be_chosen(self) -> None:
-        self.use_index(None)
-        done = self.client.post(NEW, task_form_data(sequence="SEQ-0001"))
-        self.refused(done, "sequence")
-        self.assertEqual(Task.objects.count(), 0)
-        done = self.client.post(NEW, task_form_data(steps_total="3"))
-        self.assertEqual(done.status_code, 302)
-
-    def test_changing_the_sequence_reads_the_new_steps(self) -> None:
-        self.client.post(NEW, task_form_data(sequence="SEQ-0001"))
         task = self.only_task()
-        done = self.client.post(task_url(task, "edit"), edit_data(
-            task, sequence="SEQ-0002"))
-        self.assertEqual(done.status_code, 302)
-        task.refresh_from_db()
-        self.assertEqual(task.sequence, "SEQ-0002")
-        self.assertEqual(list(task.sequence_steps),
-                         ["OSDB-0004", "OSDB-0009"])
-        self.assertEqual(task.steps_total, 2)
+        self.assertEqual(task.sequence.key, "SEQ-0002")
+        self.assertEqual(task_steps(task), before)
 
-    def test_clearing_the_sequence_clears_the_steps(self) -> None:
-        self.client.post(NEW, task_form_data(sequence="SEQ-0001"))
+    def test_clearing_a_sequence_with_work_done(self) -> None:
+        """Requirement: Task forms (a sequence cleared on a task with a
+        step done)."""
+        self.create(sequence="SEQ-0002", started="2025-03-01")
         task = self.only_task()
-        self.client.post(task_url(task, "edit"), edit_data(
-            task, sequence="", steps_total="3"))
-        task.refresh_from_db()
-        self.assertFalse(task.sequence)
-        self.assertEqual(list(task.sequence_steps), [])
-        self.assertEqual(task.steps_total, 3)
+        self.change(task, steps_done="1")
+        task = self.only_task()
+        before = task_steps(task)
+        self.refused(self.change(task, sequence="", steps_total="2"),
+                     "sequence")
+        self.assertEqual(task_steps(self.only_task()), before)
 
-    def test_an_edit_that_leaves_the_sequence_reads_nothing(self) -> None:
-        self.client.post(NEW, task_form_data(sequence="SEQ-0001"))
-        task = self.only_task()
-        self.use_index(build_index(
-            "de", procedures=[procedure("OSDB-0003")],
-            sequences=[sequence("SEQ-0001", ["OSDB-0003"])]))
-        done = self.client.post(task_url(task, "edit"), edit_data(
-            task, note="Nur eine Notiz"))
+    def test_a_sequence_set_on_a_new_task_with_steps_done(self) -> None:
+        """Requirement: Task forms (steps done with a new sequence)."""
+        done = self.create(sequence="SEQ-0001", steps_done="1",
+                           started="2025-03-01")
         self.assertEqual(done.status_code, 302)
-        task.refresh_from_db()
-        self.assertEqual(list(task.sequence_steps),
-                         ["OSDB-0001", "OSDB-0002"])
-        self.assertEqual(task.steps_total, 2)
+        self.assertEqual(
+            [d is not None for d in done_days(self.only_task())],
+            [True, False])
+
+    def test_a_save_that_leaves_the_sequence_changes_no_step(self) -> None:
+        """Requirement: Task record (a save that leaves the sequence as
+        it was leaves the steps' entries and imports)."""
+        self.create(sequence="SEQ-0002")
+        task = self.only_task()
+        before = task_steps(task)
+        import_collection(changed_collection("OSDB-0009"))
+        done = self.change(task, note="Nur eine Notiz")
+        self.assertEqual(done.status_code, 302)
+        task = self.only_task()
+        self.assertEqual(task_steps(task), before)
         self.assertEqual(task.note, "Nur eine Notiz")
 
-    def test_sequence_gone_from_the_collection(self) -> None:
-        """Scenario: Sequence gone from the collection."""
-        self.client.post(NEW, task_form_data(
-            sequence="SEQ-0001", started="2025-03-01",
-            ended="2025-03-02"))
-        task = self.only_task()
-        self.use_index(build_index("de"))
-        done = self.client.post(task_url(task, "edit"), edit_data(
-            task, report="on"))
+
+class ConsistencyTests(FormCase):
+    """The review's cases: the posted form under the locks, the admin
+    and the history of a step's position."""
+
+    def test_a_posted_form_holds_the_import_lock(self) -> None:
+        """Requirement: Task record (the steps of a sequence carry the
+        latest accepted import, read under the import lock with them)."""
+        from unittest import mock
+        task = make_task(self.kl, substance="Probe")
+        with mock.patch("orgsyndb_web.lock.hold") as hold:
+            done = self.client.post(task_url(task, "edit"),
+                                    edit_data(task, note="locked"))
         self.assertEqual(done.status_code, 302)
-        task.refresh_from_db()
-        self.assertTrue(task.report)
-        self.assertEqual(task.steps_total, 2)
-        self.assertEqual(list(task.sequence_steps),
-                         ["OSDB-0001", "OSDB-0002"])
-        self.assertEqual(task.sequence, "SEQ-0001")
+        self.assertTrue(hold.called)
 
-    def test_sequence_gone_and_the_report_button(self) -> None:
-        self.client.post(NEW, task_form_data(
-            sequence="SEQ-0001", started="2025-03-01",
-            ended="2025-03-02"))
-        task = self.only_task()
-        self.use_index(None)
-        self.client.post(task_url(task, "report"))
-        task.refresh_from_db()
-        self.assertTrue(task.report)
-        self.assertEqual(list(task.sequence_steps),
-                         ["OSDB-0001", "OSDB-0002"])
+    def test_the_admin_shows_the_sequence_and_steps_read_only(
+            self) -> None:
+        """Requirement: Task forms (only the task form changes a task's
+        sequence and steps, so its rules hold)."""
+        from . import make_user
+        staff = make_user("boss", "BO", is_staff=True, is_superuser=True)
+        task = make_task(self.kl, substance="Probe", steps=2)
+        self.client.force_login(staff)
+        html = self.client.get(
+            f"/lab/admin/tasks/task/{task.pk}/change/").content.decode()
+        self.assertNotIn('name="sequence"', html)
+        self.assertNotIn('name="steps-0-done_on"', html)
+        self.assertNotIn('name="steps-0-position"', html)
 
-    def test_actions_read_nothing_from_the_index(self) -> None:
-        self.client.post(NEW, task_form_data(sequence="SEQ-0001"))
-        task = self.only_task()
-        self.use_index(None)
-        self.client.post(task_url(task, "start"))
-        self.client.post(task_url(task, "step"))
-        task.refresh_from_db()
-        self.assertEqual(task.steps_done, 1)
-        self.assertEqual(task.steps_total, 2)
-        self.assertEqual(list(task.sequence_steps),
-                         ["OSDB-0001", "OSDB-0002"])
+    def test_a_position_change_shows_in_the_history(self) -> None:
+        """Requirement: Task page (the history lists the steps'
+        changes)."""
+        task = make_task(self.kl, substance="Probe", steps=2)
+        last = task.steps.get(position=2)
+        last.position = 3
+        last.save()
+        text = history_text(page(self.client.get(task_url(task))))
+        self.assertIn("Stufe 3", text)

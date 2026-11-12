@@ -6,7 +6,7 @@ test that uses these helpers fails on its own assertions while the
 package is missing.
 
 The manifests the tests post are built from
-``fixtures/demo-manifest.json``, the collection half of the demo's
+``webapp/demo/manifest.json``, the collection half of the demo's
 manifest as ``tools/orgsyndb manifest`` prints it, with the build half
 added by ``manifest`` below.
 """
@@ -24,12 +24,12 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 
-from . import BERLIN, IndexMixin, load_demo_registry
+from . import BERLIN, load_demo_registry
 
 MANIFEST = "/lab/collection/manifest/"
 IMPORTS = "/lab/collection/"
 TOKEN = "s3cret"
-FIXTURE = Path(__file__).resolve().parent / "fixtures" / "demo-manifest.json"
+FIXTURE = Path(__file__).resolve().parents[1] / "demo" / "manifest.json"
 TOOLING = "b" * 40
 # The numbers of the demo collection's procedures and sequences.
 PROCEDURES = 9
@@ -156,7 +156,7 @@ def make_procedure(last_import: Any, key: str = "OSDB-0002",
     from vocabulary.models import ReactionType
     values = {"key": key, "source": "md", "title": "Aspirin",
               "reaction_type": ReactionType.objects.get(key="acylation"),
-              "last_import": last_import}
+              "general": False, "last_import": last_import}
     return Procedure.objects.create(**{**values, **fields})
 
 
@@ -192,6 +192,66 @@ def make_step(sequence: Any, entry: Any, position: int = 1) -> Any:
     from collection.models import Step
     return Step.objects.create(sequence=sequence, entry=entry,
                                position=position)
+
+
+def accept(language: str = "en", **fields: Any) -> Any:
+    """Record an accepted import of ``language``, the latest accepted
+    import from now on, without any imported row: how a test sets the
+    language of the site."""
+    return make_import(language=language, **fields)
+
+
+def latest_import() -> Any:
+    """The latest accepted import, the accepted import received last,
+    or None."""
+    from collection.models import Import
+    return Import.objects.filter(outcome="accepted").order_by(
+        "received_at", "pk").last()
+
+
+def import_collection(collection: dict[str, Any] | None = None,
+                      **over: Any) -> Any:
+    """Post to the manifest view, as the builder would, a manifest of
+    ``collection`` (the demo's by default) built after the latest
+    accepted import against the registry as it is now, with ``over``
+    replacing keys; assert that it is accepted and return the import.
+    The database must hold the demo registry or the substances the
+    collection names."""
+    from django.test import Client
+
+    from collection.models import Import
+    latest = latest_import()
+    body = manifest(collection, **{
+        "base": None if latest is None else latest.pk, **over})
+    with override_settings(ORGSYNDB_BUILDER_TOKEN=TOKEN):
+        done = post(Client(), body)
+    assert done.status_code == 200, done.content
+    assert done.json()["outcome"] == "accepted", done.json()
+    return Import.objects.get(pk=done.json()["import"])
+
+
+def changed_collection(ident: str, entry: int = 1,
+                       substrates: list[str] | None = None
+                       ) -> dict[str, Any]:
+    """The demo collection with the substrates of entry ``entry`` of the
+    procedure ``ident`` replaced by ``substrates``, ``benzaldehyde``
+    by default, so that an import of it withdraws the entry the demo
+    has and adds another."""
+    data = demo_collection()
+    by_id(data["procedures"], ident)["entries"][entry - 1][
+        "substrates"] = substrates or ["benzaldehyde"]
+    return data
+
+
+def without_ids(*idents: str) -> dict[str, Any]:
+    """The demo collection without the procedures and sequences
+    ``idents``."""
+    data = demo_collection()
+    data["procedures"] = [p for p in data["procedures"]
+                          if p["id"] not in idents]
+    data["sequences"] = [s for s in data["sequences"]
+                         if s["id"] not in idents]
+    return data
 
 
 # --- rows read back ---------------------------------------------------------
@@ -248,16 +308,13 @@ def steps_of(key: str) -> list[tuple[str, int]]:
 
 
 @override_settings(ORGSYNDB_BUILDER_TOKEN=TOKEN)
-class ImportCase(IndexMixin, TestCase):
+class ImportCase(TestCase):
     """A test case whose database holds the demo registry, with the
-    builder's token set and no collection index."""
+    builder's token set."""
 
     @classmethod
     def setUpTestData(cls) -> None:
         load_demo_registry()
-
-    def setUp(self) -> None:
-        self.use_index(None)
 
     def send(self, body: Any, token: str | None = TOKEN) -> Any:
         """Post ``body`` to the manifest view."""

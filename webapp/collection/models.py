@@ -2,7 +2,8 @@
 procedures, scope entries and sequences of the collection as the
 accepted imports left them.
 
-Only the manifest view writes these rows (``collection.importing``). An
+Only the manifest view and the demo data command write these rows,
+both through ``collection.importing``. An
 import never deletes a procedure, scope entry or sequence: one that is
 gone from the collection is marked withdrawn. A substance, reaction type
 or scope entry that a row names cannot be deleted.
@@ -109,7 +110,11 @@ class Import(models.Model):
 
 class Procedure(models.Model):
     """A procedure of the collection, by its ID, as the accepted import
-    ``last_import`` created it or last changed it."""
+    ``last_import`` created it or last changed it.
+
+    A ``general`` procedure has scope entries a step names by their
+    position; a specific one has one entry.
+    """
 
     key = models.CharField(_("ID"), max_length=KEY_LENGTH, unique=True)
     source = models.CharField(_("Source format"), max_length=3,
@@ -119,6 +124,7 @@ class Procedure(models.Model):
     reaction_type = models.ForeignKey(
         ReactionType, verbose_name=_("Reaction type"),
         on_delete=models.PROTECT, related_name="procedures")
+    general = models.BooleanField(_("General"))
     last_import = models.ForeignKey(
         Import, verbose_name=_("Last import"), on_delete=models.PROTECT,
         related_name="+")

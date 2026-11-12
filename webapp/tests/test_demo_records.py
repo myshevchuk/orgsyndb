@@ -8,12 +8,13 @@ from datetime import date, datetime, time, timedelta
 
 from django.test import TestCase
 
-from . import (BERLIN, IndexMixin, build_index, demo_data, demo_index,
-               frozen, page, table)
+from . import BERLIN, frozen, page, table
+from .collection_support import accept
 from .demo_support import (ACCOUNTS, ARTICLES, DAY, DELIVERIES,
                            DEMO_PASSWORD, ITEMS, LOGIN, NOTE_NUMBER,
                            NUMBERLESS, PLAN, TASKS, SeededCase, noon,
                            opening, run, seed)
+from .registry_support import demo_registry
 
 O = opening(DAY)
 DEFAULT_PARAMETERS = {"certainty": 0.95, "buffer_days": 28,
@@ -45,20 +46,16 @@ def history_models() -> list:
 
 
 def compound_names() -> dict[str, str]:
-    """The German name of each demo compound by its article number."""
-    found = {}
-    for entry in demo_data()["compounds"]:
-        data = entry["data"]
-        if "article_number" in data:
-            found[data["article_number"]] = data.get("name_de",
-                                                     data["name"])
-    return found
+    """The German name of each demo substance by its article number."""
+    return {entry["article_number"]: entry["name_de"] or entry["name"]
+            for entry in demo_registry()["substances"]
+            if entry["article_number"]}
 
 
 def compound_keys() -> dict[str, str]:
-    return {entry["data"]["article_number"]: entry["key"]
-            for entry in demo_data()["compounds"]
-            if "article_number" in entry["data"]}
+    return {entry["article_number"]: entry["key"]
+            for entry in demo_registry()["substances"]
+            if entry["article_number"]}
 
 
 class AccountTests(SeededCase):
@@ -150,7 +147,7 @@ class RegistryTests(SeededCase):
         self.assertLessEqual({"cinnamic-acid", "new-compound-7",
                               NUMBERLESS[1]}, keys)
         self.assertEqual(
-            keys, {entry["key"] for entry in demo_data()["compounds"]})
+            keys, {entry["key"] for entry in demo_registry()["substances"]})
 
     def test_the_registry_is_klehmanns_first_change_on_the_opening_day(
             self) -> None:
@@ -501,22 +498,46 @@ class TaskTests(SeededCase):
                       row["Synthesedauer"].text())
 
     def test_sequences(self) -> None:
+        """Requirement: Demo tasks and parameters (tasks of `SEQ-0001`
+        and `SEQ-0002` of the data set's import, one step per step of
+        the sequence)."""
+        from collection.models import Import, Sequence
         from tasks.models import State, Task
-        steps = {"SEQ-0001": ("acetylsalicylic-acid",
-                              ["OSDB-0001", "OSDB-0002"]),
-                 "SEQ-0002": ("1-biphenyl-4-yl-ethanol",
-                              ["OSDB-0004", "OSDB-0009"])}
-        for sequence, (product, wanted) in steps.items():
+        own = Import.objects.get()
+        products = {"SEQ-0001": "acetylsalicylic-acid",
+                    "SEQ-0002": "1-biphenyl-4-yl-ethanol"}
+        for key, product in products.items():
+            sequence = Sequence.objects.get(key=key)
+            wanted = [step.entry for step in sequence.steps.order_by(
+                "position")]
+            self.assertEqual(len(wanted), 2)
             tasks = Task.objects.filter(sequence=sequence)
-            with self.subTest(sequence=sequence):
+            with self.subTest(sequence=key):
                 self.assertTrue(tasks.exists())
                 for task in tasks:
                     self.assertEqual(task.substance.key, product)
-                    self.assertEqual(task.sequence_steps, wanted)
-                    self.assertEqual(task.steps_total, 2)
+                    steps = list(task.steps.order_by("position"))
+                    self.assertEqual([s.position for s in steps], [1, 2])
+                    self.assertEqual([s.entry for s in steps], wanted)
+                    self.assertEqual({s.planned_import for s in steps},
+                                     {own})
         self.assertTrue(any(
-            task.state == State.RUNNING and task.steps_done == 1
-            for task in Task.objects.exclude(sequence="")))
+            task.state == State.RUNNING and [
+                step.done_on is not None
+                for step in task.steps.order_by("position")]
+            == [True, False]
+            for task in Task.objects.exclude(sequence=None)))
+
+    def test_the_steps_of_a_sequence_task_name_the_demo_entries(
+            self) -> None:
+        """Requirement: Demo tasks and parameters (entry 1 of
+        `OSDB-0009` for the second step of `SEQ-0002`)."""
+        from tasks.models import Task
+        task = Task.objects.filter(sequence__key="SEQ-0002").first()
+        self.assertEqual(
+            [(step.entry.procedure.key, step.entry.position)
+             for step in task.steps.order_by("position")],
+            [("OSDB-0004", 1), ("OSDB-0009", 1)])
 
     def test_every_task_names_a_substance_of_the_registry(self) -> None:
         from registry.models import Substance
@@ -669,29 +690,61 @@ class RecordedPastTests(SeededCase):
                     history_user=None).exists())
 
 
-class LanguageTests(IndexMixin, TestCase):
+class LanguageTests(TestCase):
 
-    def test_english_index(self) -> None:
-        """Scenario: English index."""
-        index = self.use_index(build_index("en"))
-        seed(DAY, index=index)
+    def replace_after(self, language: str) -> None:
+        """Write the data set, accept an import of ``language`` and
+        write the data set again with ``--replace``."""
+        seed(DAY)
+        accept(language=language)
+        with frozen(noon(DAY)):
+            run("--replace")
+
+    def names(self) -> dict[str, str]:
         header, rows = table(page(self.client.get(ITEMS)))
-        names = {row[header[0]].text(): row[header[1]].text()
-                 for row in rows if row[header[0]].text()}
+        return {row[header[0]].text(): row[header[1]].text()
+                for row in rows if row[header[0]].text()}
+
+    def test_english_collection(self) -> None:
+        """Scenario: English collection."""
+        self.replace_after("en")
+        names = self.names()
         self.assertEqual(names["NV-0007"], "New compound 7")
         self.assertEqual(names["CH-0012"], "(E)-Cinnamic acid")
 
-    def test_a_german_index_names_the_items_in_german(self) -> None:
-        seed(DAY, index=self.use_index(build_index("de")))
-        header, rows = table(page(self.client.get(ITEMS)))
-        names = {row[header[0]].text(): row[header[1]].text()
-                 for row in rows if row[header[0]].text()}
+    def test_a_german_collection_names_the_items_in_german(self) -> None:
+        """Requirement: Language of the demo texts (German)."""
+        self.replace_after("de")
+        names = self.names()
         self.assertEqual(names["NV-0007"], "Neuverbindung 7")
         self.assertEqual(names["CH-0012"], "(E)-Zimtsäure")
 
+    def test_an_empty_database_is_written_in_german(self) -> None:
+        """Requirement: Language of the demo texts (German when it
+        holds no import)."""
+        seed(DAY)
+        self.assertEqual(self.names()["NV-0007"], "Neuverbindung 7")
+
+    def test_the_language_is_the_latest_import_before_deleting(
+            self) -> None:
+        """Requirement: Language of the demo texts (the latest accepted
+        import the database holds before the command deletes
+        anything)."""
+        seed(DAY)
+        accept(language="en")
+        accept(language="de")
+        with frozen(noon(DAY)):
+            run("--replace")
+        self.assertEqual(self.names()["NV-0007"], "Neuverbindung 7")
+        accept(language="de")
+        accept(language="en")
+        with frozen(noon(DAY)):
+            run("--replace")
+        self.assertEqual(self.names()["NV-0007"], "New compound 7")
+
     def test_the_substances_have_names_in_both_languages(self) -> None:
         from registry.models import Substance
-        seed(DAY, index=self.use_index(None))
+        seed(DAY)
         for key, english, german in (
                 ("new-compound-7", "New compound 7", "Neuverbindung 7"),
                 ("cinnamic-acid", "(E)-Cinnamic acid", "(E)-Zimtsäure")):
@@ -700,17 +753,18 @@ class LanguageTests(IndexMixin, TestCase):
                 self.assertEqual((found.name, found.name_de),
                                  (english, german))
 
-    def test_same_records_whatever_the_index(self) -> None:
-        """Scenario: Same records whatever the index."""
+    def test_same_records_whatever_the_language(self) -> None:
+        """Scenario: Same records whatever the language."""
         seed(DAY)
-        with_index = snapshot()
+        german = snapshot()
+        accept(language="en")
         with frozen(noon(DAY)):
-            run("--replace", index=self.use_index(None))
-        self.assertEqual(snapshot(), with_index)
+            run("--replace")
+        self.assertEqual(snapshot(), german)
 
 
 def snapshot() -> dict:
-    """The records that must not depend on the index, without their
+    """The records that must not depend on the language, without their
     IDs."""
     from inventory.models import Item, Lot, Movement
     from registry.models import Substance
@@ -729,13 +783,12 @@ def snapshot() -> dict:
     }
 
 
-class IndexCheckTests(TestCase):
+class DemoRegistryNamesTests(TestCase):
 
-    def test_demo_index_names_the_compounds(self) -> None:
+    def test_the_demo_registry_names_the_substances(self) -> None:
         names = compound_names()
         for article in ARTICLES:
             with self.subTest(article=article):
                 self.assertIn(article, names)
         self.assertEqual(names["NV-0007"], "Neuverbindung 7")
         self.assertNotIn("CH-0003", names)
-        self.assertTrue(demo_index().is_file())

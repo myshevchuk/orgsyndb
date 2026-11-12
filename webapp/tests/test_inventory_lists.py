@@ -6,7 +6,8 @@ from urllib.parse import quote
 
 from inventory.bookings import book_note, reverse, reverse_historical
 
-from . import build_index, field_value, frozen, make_substance, page, table
+from . import field_value, frozen, make_substance, page, table
+from .collection_support import accept
 from .inventory_support import (BULK, COMPOUND_PAGE, DELIVERIES, LEVELS, LIST,
                                 MICRO, NEW_ITEM, NEW_LOT, NEW_NOTE,
                                 SUBSTANCE_PAGE, InventoryCase, has_amount,
@@ -57,7 +58,7 @@ class ItemColumnTests(ListCase):
         self.assertEqual(table(self.listing())[0], COLUMNS_DE)
 
     def test_english_columns(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.item()
         self.assertEqual(table(self.listing())[0], COLUMNS_EN)
 
@@ -116,7 +117,7 @@ class ItemColumnTests(ListCase):
         self.assertTrue(has_amount(rows["S-2"], "10", "g"), rows)
 
     def test_english_numbers(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.means_item("CH-0012")
         row = self.rows()[0]
         self.assertEqual(row["Mean per year"].text(), "18.0")
@@ -293,7 +294,7 @@ class ItemListFurnishingTests(ListCase):
         self.assertEqual([a.text() for a in links], ["Neuer Artikel"])
 
     def test_english_link(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.client.force_login(self.kl)
         links = self.listing().find_all("a", href=NEW_ITEM)
         self.assertEqual([a.text() for a in links], ["New item"])
@@ -346,7 +347,7 @@ class SectionTabTests(ListCase):
                      for href, _ in self.TABS])
 
     def test_english_tabs(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.assertEqual([a.text() for a in self.tabs(LIST)],
                          ["Items", "Bulk", "Deliveries"])
 
@@ -372,7 +373,7 @@ class BulkListTests(InventoryCase):
         self.assertEqual(table(self.listing())[0], BULK_DE)
 
     def test_english_columns(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.lot()
         self.assertEqual(table(self.listing())[0], BULK_EN)
 
@@ -401,7 +402,7 @@ class BulkListTests(InventoryCase):
         self.assertEqual(rows["B-S"]["Herkunft"].text(), "gekauft · Sigma")
 
     def test_the_source_in_english(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.lot("X-1", batch="B-M", source="made")
         self.lot("X-1", batch="B-S", source="bought", supplier="Sigma")
         rows = {r["Batch"].text(): r for r in table(self.listing())[1]}
@@ -598,7 +599,7 @@ class DeliveryListTests(InventoryCase):
         self.assertEqual([a.text() for a in links], ["Neuer Lieferschein"])
 
     def test_english_link(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.client.force_login(self.kl)
         links = self.listing().find_all("a", href=NEW_NOTE)
         self.assertEqual([a.text() for a in links], ["New delivery note"])

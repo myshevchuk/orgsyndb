@@ -20,14 +20,16 @@ def only() -> list[Any]:
     return list(Import.objects.order_by("received_at", "pk"))
 
 
-@override_settings(ORGSYNDB_BUILDER_TOKEN=TOKEN)
-class FirstImportTests(SeededCase):
+class FirstImportTests(ImportCase):
+    """The demo registry is loaded and no import exists: the data set
+    is not written."""
 
     def test_first_import(self) -> None:
         """Scenario: First import."""
         from collection.models import (Import, Procedure, ScopeEntry,
                                        Sequence, Step)
         from registry import snapshot
+        self.assertFalse(Import.objects.exists())
         body = manifest()
         self.assertEqual(body["snapshot"], snapshot.build()["digest"])
         done = post(self.client, body)
@@ -50,6 +52,53 @@ class FirstImportTests(SeededCase):
             [p["id"] for p in demo_collection()["procedures"]])
         self.assertEqual(ScopeEntry.objects.count(), 11)
         self.assertEqual(Step.objects.count(), 4)
+
+
+@override_settings(ORGSYNDB_BUILDER_TOKEN=TOKEN)
+class AfterDemoImportTests(SeededCase):
+
+    def entries(self) -> dict[str, list[int]]:
+        """The entry each step of each task names, by task number."""
+        from tasks.models import Task
+        return {task.number: [step.entry_id for step in
+                              task.steps.order_by("position")]
+                for task in Task.objects.exclude(sequence=None)}
+
+    def test_after_the_demos_own_import(self) -> None:
+        """Scenario: After the demo's own import."""
+        from collection.models import Import
+        from registry import snapshot
+        (own,) = Import.objects.all()
+        before = self.entries()
+        self.assertTrue(before)
+        self.assertTrue(all(ids and None not in ids
+                            for ids in before.values()))
+        body = manifest(base=own.pk)
+        self.assertEqual(body["snapshot"], snapshot.build()["digest"])
+        done = post(self.client, body)
+        self.assertEqual(done.status_code, 200, done.content)
+        self.assertEqual(done.json()["outcome"], "accepted", done.json())
+        self.assertEqual(Import.objects.get(pk=done.json()["import"]).base,
+                         own)
+        self.assertEqual(self.entries(), before)
+
+    def test_the_rows_stay_the_same_rows(self) -> None:
+        """Scenario: After the demo's own import (the import matches
+        the demo's rows by ID and signature)."""
+        from collection.models import (Import, Procedure, ScopeEntry,
+                                       Sequence)
+        (own,) = Import.objects.all()
+        models = (Procedure, ScopeEntry, Sequence)
+
+        def keys() -> list[list[int]]:
+            return [sorted(model.objects.values_list("pk", flat=True))
+                    for model in models]
+
+        before = keys()
+        done = post(self.client, manifest(base=own.pk))
+        self.assertEqual(done.json()["outcome"], "accepted", done.content)
+        self.assertEqual(keys(), before)
+        self.assertFalse(Procedure.objects.filter(withdrawn=True).exists())
 
 
 class RecordTests(ImportCase):

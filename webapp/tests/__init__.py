@@ -5,16 +5,9 @@ while the settings module is still loading. The factories import the
 models when they are called.
 """
 
-import atexit
 import io
 import itertools
-import json
-import os
 import re
-import shutil
-import subprocess
-import sys
-import tempfile
 import unicodedata
 from datetime import date, datetime, timedelta
 from html.parser import HTMLParser
@@ -29,114 +22,6 @@ PASSWORD = "Tr4ck-Lab-Zebra-91"
 NOT_IN_COLLECTION = {"de": "nicht in der Sammlung",
                      "en": "not in the collection"}
 DEMO_REGISTRY = REPO / "webapp" / "demo" / "registry.json"
-
-# ---------------------------------------------------------------------------
-# Collection indexes
-
-_modified = itertools.count(1_700_000_000)
-_demo: Path | None = None
-
-
-def write_index(path: Path, data: Any) -> Path:
-    """Write ``data`` as JSON to ``path`` and give the file a modification
-    time that no earlier call gave any file, so a reader that compares
-    modification times sees every write."""
-    path.write_text(json.dumps(data), encoding="utf-8")
-    stamp(path)
-    return path
-
-
-def stamp(path: Path) -> None:
-    """Give ``path`` a new modification time, later than every other
-    this module handed out."""
-    moment = next(_modified)
-    os.utime(path, (moment, moment))
-
-
-def demo_index() -> Path:
-    """The output of ``orgsyndb index`` for the demo collection, saved
-    once per test run to a file."""
-    global _demo
-    if _demo is None:
-        done = subprocess.run(
-            [sys.executable, str(REPO / "tools" / "orgsyndb"), "-C",
-             str(REPO / "examples" / "demo"), "index"],
-            capture_output=True, text=True, check=True)
-        directory = Path(tempfile.mkdtemp(prefix="osdb-demo-index-"))
-        atexit.register(shutil.rmtree, directory, True)
-        _demo = directory / "index.json"
-        _demo.write_text(done.stdout, encoding="utf-8")
-        stamp(_demo)
-    return _demo
-
-
-def demo_data() -> dict[str, Any]:
-    return json.loads(demo_index().read_text(encoding="utf-8"))
-
-
-def compound(key: str, **data: Any) -> dict[str, Any]:
-    return {"key": key, "path": f"compounds/{key}.toml",
-            "data": {"name": key, **data}}
-
-
-def procedure(ident: str, language: str | None = None) -> dict[str, Any]:
-    suffix = f".{language}" if language else ""
-    return {"id": ident, "language": language, "format": "md",
-            "path": f"md/procedures/{ident}-x{suffix}.md",
-            "front_matter": {"id": ident}}
-
-
-def sequence(ident: str, steps: list[str],
-             language: str | None = None) -> dict[str, Any]:
-    suffix = f".{language}" if language else ""
-    return {"id": ident, "language": language,
-            "path": f"md/sequences/{ident}-x{suffix}.md",
-            "front_matter": {"id": ident,
-                             "steps": [{"procedure": s} for s in steps]}}
-
-
-def build_index(language: str = "de",
-                compounds: list[dict[str, Any]] | None = None,
-                procedures: list[dict[str, Any]] | None = None,
-                sequences: list[dict[str, Any]] | None = None,
-                fields: list[dict[str, Any]] | None = None
-                ) -> dict[str, Any]:
-    """A small index. ``fields`` are the declared compound fields; the
-    default declares the unique text field ``item_number``."""
-    if fields is None:
-        fields = [{"key": "item_number", "type": "text", "unique": True}]
-    return {"site_language": language,
-            "fields": {"compound": fields, "procedure": []},
-            "compounds": compounds or [],
-            "procedures": procedures or [],
-            "sequences": sequences or []}
-
-
-def text_field(key: str, unique: bool = True) -> dict[str, Any]:
-    return {"key": key, "type": "text", "unique": unique}
-
-
-class IndexMixin:
-    """Mixin for ``TestCase``: points ``ORGSYNDB_INDEX`` at an index for
-    the length of one test."""
-
-    def use_index(self, index: Any = None) -> Path:
-        """``index`` is a dict, written to a new file, a path, used as
-        it is, or None, a path where no file exists."""
-        from django.test import override_settings
-        if isinstance(index, Path):
-            path = index
-        else:
-            directory = Path(tempfile.mkdtemp(prefix="osdb-index-"))
-            self.addCleanup(shutil.rmtree, directory, True)  # type: ignore
-            path = directory / "index.json"
-            if index is not None:
-                write_index(path, index)
-        override = override_settings(ORGSYNDB_INDEX=str(path))
-        override.enable()
-        self.addCleanup(override.disable)  # type: ignore
-        return path
-
 
 # ---------------------------------------------------------------------------
 # Time
@@ -308,14 +193,50 @@ def make_article(substance: Any, number: str | None = None,
 
 
 def make_task(created_by: Any, substance: Any = "Aspirin",
+              steps: int = 0, done: int = 0, done_on: date | None = None,
               **fields: Any) -> Any:
     """A task of ``substance``, a substance or a text that
-    ``substance_for`` turns into one."""
+    ``substance_for`` turns into one, with ``steps`` plain steps, the
+    first ``done`` of them done on ``done_on`` (2 March 2025 by
+    default)."""
     from tasks.models import Task
     if isinstance(substance, str):
         substance = substance_for(substance)
-    return Task.objects.create(created_by=created_by, substance=substance,
+    task = Task.objects.create(created_by=created_by, substance=substance,
                                **fields)
+    add_steps(task, steps, done, done_on)
+    return task
+
+
+def add_steps(task: Any, count: int, done: int = 0,
+              done_on: date | None = None) -> None:
+    """Add ``count`` plain steps, with no entry and no import, after the
+    steps ``task`` has, the first ``done`` of them done on ``done_on``
+    (2 March 2025 by default)."""
+    if not count:
+        return
+    from tasks.models import TaskStep
+    first = task.steps.count()
+    for number in range(1, count + 1):
+        TaskStep.objects.create(
+            task=task, position=first + number,
+            done_on=(done_on or past(2)) if number <= done else None)
+
+
+def task_steps(task: Any) -> list[tuple[Any, Any, Any]]:
+    """The entry, the planned import and the day done of each step of
+    ``task``, in order; the entry is the pair of its procedure's key and
+    its position, or None for a step without one."""
+    return [(None if step.entry is None else
+             (step.entry.procedure.key, step.entry.position),
+             step.planned_import, step.done_on)
+            for step in task.steps.select_related(
+                "entry__procedure", "planned_import").order_by("position")]
+
+
+def done_days(task: Any) -> list[Any]:
+    """The ``done_on`` of each step of ``task``, in order."""
+    return [step.done_on for step in task.steps.order_by("position")]
 
 
 # The day test items entered stock unless a test says otherwise: long
@@ -418,7 +339,7 @@ def task_form_data(**over: Any) -> dict[str, str]:
     """The fields of the task form with nothing filled in but the
     substance key ``aspirin``, which a test creates with
     ``substance_for("Aspirin")``; a flag is on when given as
-    ``"on"``."""
+    ``"on"``. ``sequence`` is a sequence's key."""
     data = {"substance": "aspirin", "priority": "medium", "assignee": "",
             "started": "", "ended": "", "sequence": "", "steps_total": "",
             "steps_done": "", "batch": "", "note": ""}
@@ -433,10 +354,10 @@ def edit_data(task: Any, **over: Any) -> dict[str, str]:
         assignee=str(task.assignee_id or ""),
         started=task.started.isoformat() if task.started else "",
         ended=task.ended.isoformat() if task.ended else "",
-        sequence=task.sequence or "",
-        steps_total=str(task.steps_total or ""),
-        steps_done=str(task.steps_done), batch=task.batch or "",
-        note=task.note or "")
+        sequence=task.sequence.key if task.sequence_id else "",
+        steps_total=str(task.steps.count() or ""),
+        steps_done=str(task.steps.filter(done_on__isnull=False).count()),
+        batch=task.batch or "", note=task.note or "")
     for flag in ("report", "qc_list", "cancelled"):
         if getattr(task, flag):
             data[flag] = "on"

@@ -7,8 +7,8 @@ from decimal import Decimal
 from inventory.bookings import reverse
 from tasks.models import Task
 
-from . import (build_index, field_value, make_task, page, table,
-               task_form_data)
+from . import field_value, make_task, page, table, task_form_data
+from .collection_support import accept
 from .inventory_support import (BULK, LEVELS, TODAY, has_amount, has_number,
                                 item_url, newest_movement, num)
 from .planning_support import (COLUMNS_DE, COLUMNS_EN, PLAN, WINDOW,
@@ -85,7 +85,7 @@ class ColumnTests(ListCase):
         self.assertEqual(header, COLUMNS_DE)
 
     def test_english_columns(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.planned_item("NV-1", quantity=10)
         header, _ = table(self.get(PLAN))
         self.assertEqual(header, COLUMNS_EN)
@@ -154,7 +154,7 @@ class ColumnTests(ListCase):
         self.assertNotIn("36,2", text)
 
     def test_the_english_numbers(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.planned_item("NV-1", quantity=10)
         row = self.articles()["NV-1"]
         text = row["Demand per year"].text()
@@ -317,7 +317,7 @@ class TasksColumnTests(ListCase):
         self.assertNotIn("verspätet", parts[running.number])
 
     def test_the_english_mark(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.planned_item("NV-5", quantity=5)
         self.running("NV-5", 3)
         row = self.articles("?all=1")["NV-5"]
@@ -516,7 +516,7 @@ class ActionTests(ListCase):
         self.assertEqual(self.shown(), ["NV-2"])
 
     def test_the_english_texts(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.planned_item("NV-1", quantity=1)
         self.lot("NV-1", "mg", "20")
         self.planned_item("NV-2", quantity=10)
@@ -570,7 +570,7 @@ class PageTests(ListCase):
     def test_the_page_is_German_or_English_by_the_index(self) -> None:
         self.assertEqual(
             page(self.client.get(PLAN)).find("html").get("lang"), "de")
-        self.use_index(build_index("en"))
+        accept(language="en")
         self.assertEqual(
             page(self.client.get(PLAN)).find("html").get("lang"), "en")
 

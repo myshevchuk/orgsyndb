@@ -10,9 +10,9 @@ from django.test import TestCase
 
 from registry.models import Substance, SubstanceClass
 
-from . import (IndexMixin, build_index, make_article, make_class,
-               make_group, make_item, make_lot, make_substance, make_task,
-               make_user, page, table)
+from . import (make_article, make_class, make_group, make_item, make_lot,
+               make_substance, make_task, make_user, page, table)
+from .collection_support import accept
 
 # Check digits that verify and ones that do not.
 GOOD_CAS = ["140-10-3", "64-17-5", "50-00-0", "7732-18-5", "98-85-1"]
@@ -258,11 +258,11 @@ class HistoryTests(TestCase):
         self.assertEqual(records[0].key, "a")
 
 
-class NameByLanguageTests(IndexMixin, TestCase):
+class NameByLanguageTests(TestCase):
     """Scenario: Name by language, read from the list page."""
 
     def names(self, language: str) -> list[str]:
-        self.use_index(build_index(language))
+        accept(language=language)
         header, rows = table(page(self.client.get("/lab/registry/")))
         return sorted(row[header[0]].text() for row in rows)
 

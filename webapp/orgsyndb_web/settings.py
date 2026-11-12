@@ -1,8 +1,7 @@
 """Django settings of the OrgSynDB lab application.
 
 The environment decides the secret key, debug, the host names, the
-database, the path of the collection index, the demo flag and the
-builder's token; see
+database, the demo flag and the builder's token; see
 ``orgsyndb_web.config.settings_from``.
 """
 
@@ -38,7 +37,7 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
-    "orgsyndb_web.middleware.IndexLanguageMiddleware",
+    "orgsyndb_web.middleware.CollectionLanguageMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -85,8 +84,8 @@ LOGOUT_REDIRECT_URL = "/lab/tasks/"
 # Requests reach the application through Caddy, which sets the header.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-# The language is the collection index's; IndexLanguageMiddleware
-# activates it for each request.
+# The language is the latest accepted import's;
+# CollectionLanguageMiddleware activates it for each request.
 LANGUAGE_CODE = "de"
 LANGUAGES = [("de", _("German")), ("en", _("English"))]
 USE_I18N = True

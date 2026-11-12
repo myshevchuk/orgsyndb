@@ -62,7 +62,9 @@ class Task(models.Model):
 
     A task's number, ``T-`` and at least three digits, is assigned when
     it is first saved and never given again. Its state follows from its
-    dates and its cancelled flag; see ``state``.
+    dates and its cancelled flag; see ``state``. Its steps are the
+    ``TaskStep`` rows of ``steps``, which ``tasks.steps`` gives it from
+    its ``sequence``, an imported sequence, or as plain steps.
     """
 
     number = models.CharField(_("No."), max_length=20, unique=True,
@@ -80,13 +82,10 @@ class Task(models.Model):
     started = models.DateField(_("Started"), null=True, blank=True)
     ended = models.DateField(pgettext_lazy("date", "Ended"), null=True,
                              blank=True)
-    sequence = models.CharField(_("Sequence"), max_length=30, blank=True)
-    sequence_steps = models.JSONField(_("Steps of the sequence"),
-                                      default=list, blank=True)
-    steps_total = models.PositiveIntegerField(
-        _("Steps total"), null=True, blank=True,
-        validators=[MinValueValidator(1)])
-    steps_done = models.PositiveIntegerField(_("Steps done"), default=0)
+    sequence = models.ForeignKey(
+        "collection.Sequence", verbose_name=_("Sequence"),
+        on_delete=models.PROTECT, null=True, blank=True,
+        related_name="tasks")
     batch = models.CharField(_("Batch"), max_length=30, blank=True)
     report = models.BooleanField(_("Report"), default=False)
     qc_list = models.BooleanField(_("QC list"), default=False)
@@ -133,12 +132,19 @@ class Task(models.Model):
                                                   and self.qc_list)
 
     @property
+    def step_counts(self) -> tuple[int, int]:
+        """The number of the task's steps done and the number of its
+        steps, read from its step rows."""
+        steps = list(self.steps.all()) if self.pk else []
+        return (sum(step.done_on is not None for step in steps),
+                len(steps))
+
+    @property
     def progress(self) -> int | None:
-        """The steps done as a whole percentage of the steps total,
-        rounded down; None without a total."""
-        if not self.steps_total:
-            return None
-        return (self.steps_done or 0) * 100 // self.steps_total
+        """The steps done as a whole percentage of the steps, rounded
+        down; None without steps."""
+        done, total = self.step_counts
+        return done * 100 // total if total else None
 
     @property
     def active(self) -> bool:
@@ -148,12 +154,11 @@ class Task(models.Model):
                 or self.needs_follow_up)
 
     def clean(self) -> None:
-        """Check the rules that tie the fields together.
+        """Check the rules that tie the dates together.
 
-        Neither date may lie after today; an end needs a start and may
-        not precede it; steps done need a total and may not exceed it;
-        and with a sequence, the total is the number of its steps.
-        Raise ValidationError with the errors by field.
+        Neither date may lie after today, and an end needs a start and
+        may not precede it. Raise ValidationError with the errors by
+        field. The rules of the steps are ``tasks.steps.StepChange``'s.
         """
         errors: dict[str, str] = {}
         today = timezone.localdate()
@@ -166,16 +171,6 @@ class Task(models.Model):
                 errors["ended"] = _("An end needs a start.")
             elif self.ended < self.started:
                 errors["ended"] = _("The end may not precede the start.")
-        done = self.steps_done or 0
-        if self.steps_total is None:
-            if done:
-                errors["steps_done"] = _("Steps done need a steps total.")
-        elif done > self.steps_total:
-            errors["steps_done"] = _(
-                "Steps done may not exceed the steps total.")
-        if self.sequence and self.steps_total != len(self.sequence_steps):
-            errors["steps_total"] = _(
-                "With a sequence, the total is the number of its steps.")
         if errors:
             raise ValidationError(errors)
 
@@ -208,3 +203,41 @@ class Task(models.Model):
         assigned."""
         digits = self.number.removeprefix("T-")
         return int(digits) if digits.isdigit() else 0
+
+
+class TaskStep(models.Model):
+    """A step of a task, at its ``position`` from 1.
+
+    ``entry`` is the scope entry the step carries out, or None for a
+    step not written down as one; ``planned_import`` is the accepted
+    import that was the latest when the step was planned, or None; and
+    ``done_on`` is the day it was done, or None while it is not.
+    """
+
+    task = models.ForeignKey(Task, verbose_name=_("task"),
+                             on_delete=models.CASCADE, related_name="steps")
+    position = models.PositiveIntegerField(
+        _("Position"), validators=[MinValueValidator(1)])
+    entry = models.ForeignKey(
+        "collection.ScopeEntry", verbose_name=_("scope entry"),
+        on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    planned_import = models.ForeignKey(
+        "collection.Import", verbose_name=_("Planned with import"),
+        on_delete=models.PROTECT, null=True, blank=True, related_name="+")
+    done_on = models.DateField(_("Done on"), null=True, blank=True)
+
+    history = RecordedHistory()
+
+    class Meta:
+        ordering = ["task", "position"]
+        verbose_name = _("task step")
+        verbose_name_plural = _("task steps")
+        constraints = [
+            models.UniqueConstraint(fields=["task", "position"],
+                                    name="tasks_taskstep_once"),
+            models.CheckConstraint(condition=models.Q(position__gte=1),
+                                   name="tasks_taskstep_position"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.task.number} {self.position}"

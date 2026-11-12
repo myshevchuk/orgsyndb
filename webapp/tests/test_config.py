@@ -110,15 +110,16 @@ class DatabaseUrlTests(SimpleTestCase):
         self.assertEqual(Path(str(db["NAME"])), WEBAPP / "db.sqlite3")
 
 
-class IndexPathTests(SimpleTestCase):
+class NoIndexPathTests(SimpleTestCase):
 
-    def test_default_path(self) -> None:
-        self.assertEqual(settings_from(BASE)["ORGSYNDB_INDEX"],
-                         "/var/lib/orgsyndb/current/index.json")
+    def test_no_index_setting(self) -> None:
+        """Requirement: Settings from the environment (no
+        `ORGSYNDB_INDEX`)."""
+        self.assertNotIn("ORGSYNDB_INDEX", settings_from(BASE))
 
-    def test_path_from_the_environment(self) -> None:
+    def test_the_variable_is_not_read(self) -> None:
         result = settings_from({**BASE, "ORGSYNDB_INDEX": "/x/index.json"})
-        self.assertEqual(result["ORGSYNDB_INDEX"], "/x/index.json")
+        self.assertNotIn("ORGSYNDB_INDEX", result)
 
 
 class DemoFlagTests(SimpleTestCase):

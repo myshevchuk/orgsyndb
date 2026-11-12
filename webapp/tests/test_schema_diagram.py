@@ -21,7 +21,8 @@ APP_TABLES = {
     "vocabulary_reactiontype", "inventory_article", "inventory_item",
     "inventory_movement", "inventory_deliverynote", "inventory_deliveryline",
     "inventory_lot", "inventory_lotmovement", "inventory_enteredconsumption",
-    "tasks_task", "tasks_counter", "planning_parameters", "demo_demomark",
+    "tasks_task", "tasks_taskstep", "tasks_counter", "planning_parameters",
+    "demo_demomark",
     "collection_import", "collection_procedure", "collection_scopeentry",
     "collection_entrysubstance", "collection_sequence", "collection_step"}
 
@@ -98,8 +99,8 @@ class CollectionTests(unittest.TestCase):
         self.assertEqual(self.column("tasks_counter", "name").key, "PK")
         self.assertEqual(self.column("planning_parameters", "certainty").type,
                          "float8")
-        self.assertEqual(self.column("tasks_task", "sequence_steps").type,
-                         "jsonb")
+        self.assertEqual(self.column("collection_procedure", "general").type,
+                         "boolean")
 
     def test_notes_from_validators_defaults_and_checks(self) -> None:
         certainty = self.column("planning_parameters", "certainty").notes
@@ -159,6 +160,30 @@ class CollectionTests(unittest.TestCase):
             [c.name for c in self.table("vocabulary_reactiontype").columns],
             ["id", "key", "label", "label_de"])
 
+    def test_the_columns_of_a_task_and_its_steps(self) -> None:
+        """Scenario: Only the application's tables (`tasks_taskstep`),
+        and the task record's sequence and steps."""
+        names = [c.name for c in self.table("tasks_task").columns]
+        for gone in ("sequence_steps", "steps_total", "steps_done"):
+            with self.subTest(column=gone):
+                self.assertNotIn(gone, names)
+        sequence = self.column("tasks_task", "sequence_id")
+        self.assertEqual((sequence.key, sequence.ref, sequence.nullable),
+                         ("FK", "collection_sequence", True))
+        self.assertEqual(
+            {c.name for c in self.table("tasks_taskstep").columns},
+            {"id", "task_id", "position", "entry_id", "planned_import_id",
+             "done_on"})
+        for column, ref, nullable in (
+                ("task_id", "tasks_task", False),
+                ("entry_id", "collection_scopeentry", True),
+                ("planned_import_id", "collection_import", True)):
+            with self.subTest(column=column):
+                found = self.column("tasks_taskstep", column)
+                self.assertEqual((found.key, found.ref, found.nullable),
+                                 ("FK", ref, nullable))
+        self.assertTrue(self.column("tasks_taskstep", "done_on").nullable)
+
     def test_lots_and_tasks_name_substances(self) -> None:
         for name in ("inventory_lot", "tasks_task"):
             with self.subTest(table=name):
@@ -194,6 +219,7 @@ class CollectionTests(unittest.TestCase):
             ("vocabulary_historicalreactiontype",
              "vocabulary_reactiontype", ()),
             ("tasks_historicaltask", "tasks_task", ()),
+            ("tasks_historicaltaskstep", "tasks_taskstep", ()),
             ("planning_historicalparameters", "planning_parameters", ())}
         self.assertLessEqual(wanted, found)
         self.assertLessEqual(found - wanted, {
@@ -263,7 +289,8 @@ class ConstraintTests(unittest.TestCase):
 
     def test_positive_checks(self) -> None:
         self.assertIn("inventory_item.quantity", self.schema.positive_checks)
-        self.assertIn("tasks_task.steps_done", self.schema.positive_checks)
+        self.assertNotIn("tasks_task.steps_done",
+                         self.schema.positive_checks)
         self.assertNotIn("inventory_item.name", self.schema.positive_checks)
 
     def test_the_item_identity_has_no_nullable_column(self) -> None:
@@ -670,6 +697,19 @@ class PageTests(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertIn("app-registry", row.group(0))
         self.assertNotIn("app-vocabulary", row.group(0))
+
+    def test_links_of_the_task_steps(self) -> None:
+        """Scenario: Only the application's tables (the links of the new
+        table)."""
+        for source, column, target in (
+                ("tasks_taskstep", "task_id", "tasks_task"),
+                ("tasks_taskstep", "entry_id", "collection_scopeentry"),
+                ("tasks_taskstep", "planned_import_id", "collection_import"),
+                ("tasks_task", "sequence_id", "collection_sequence")):
+            with self.subTest(column=f"{source}.{column}"):
+                edge = self.edge(source, column)
+                self.assertEqual((edge["to"], edge["class"]),
+                                 (target, "kind-key"))
 
     def test_the_new_packages_have_colours_of_their_own(self) -> None:
         colours = sd.COLOURS

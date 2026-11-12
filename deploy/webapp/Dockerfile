@@ -30,7 +30,6 @@ COPY webapp/ /opt/orgsyndb/webapp/
 RUN ORGSYNDB_SECRET_KEY=collectstatic ORGSYNDB_ALLOWED_HOSTS=localhost \
     python manage.py collectstatic --noinput
 
-ENV ORGSYNDB_INDEX=/var/lib/orgsyndb/current/index.json
 USER orgsyndb
 EXPOSE 8000
 # Pending migrations first, then the demo data, which only an empty

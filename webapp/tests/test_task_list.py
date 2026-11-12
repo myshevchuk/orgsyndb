@@ -5,8 +5,9 @@ from urllib.parse import quote
 
 from django.test import TestCase
 
-from . import (IndexMixin, build_index, demo_index, field_value,
-               make_task, make_user, numbers, page, past, table, task_url)
+from . import (field_value, make_task, make_user, numbers, page, past, table,
+               task_url)
+from .collection_support import accept
 
 COLUMNS_DE = ["Nr.", "Produkt", "Priorität", "Bearbeitung", "Beginn",
               "Ende", "Fortschritt", "Charge", "Bericht", "QC-Liste",
@@ -16,15 +17,12 @@ COLUMNS_EN = ["No.", "Product", "Priority", "Assignee", "Started", "Ended",
 MIDDLE_DOT = "·"
 
 
-class ListCase(IndexMixin, TestCase):
+class ListCase(TestCase):
 
     @classmethod
     def setUpTestData(cls) -> None:
         cls.kl = make_user("kl", "KL", "Klara", "Lehmann")
         cls.ae = make_user("ae", "AE", "Anna", "Eisele")
-
-    def setUp(self) -> None:
-        self.use_index(demo_index())
 
     def listing(self, query: str = ""):
         response = self.client.get("/lab/tasks/" + query)
@@ -132,7 +130,7 @@ class ColumnTests(ListCase):
     def test_a_row(self) -> None:
         task = make_task(self.kl, substance="Probe", priority="high",
                          assignee=self.ae, started=date(2025, 11, 3),
-                         steps_total=5, steps_done=2, batch="B-17",
+                         steps=5, done=2, batch="B-17",
                          report=True)
         header, rows = table(self.listing())
         row = rows[0]
@@ -194,10 +192,10 @@ class ColumnTests(ListCase):
         self.assertIn("Verworfen", labels["C"])
 
     def test_english_columns_and_texts(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         make_task(self.kl, substance="Probe", priority="high",
                   assignee=self.ae, started=date(2025, 11, 3),
-                  steps_total=5, steps_done=2, report=True)
+                  steps=5, done=2, report=True)
         root = self.listing()
         header, rows = table(root)
         self.assertEqual(header, COLUMNS_EN)
@@ -212,7 +210,7 @@ class ColumnTests(ListCase):
                       "0 follow-up", root.text())
 
     def test_english_follow_up_and_new_task_link(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         make_task(self.kl, substance="Probe", started=past(1), ended=past(2))
         self.client.force_login(self.kl)
         root = self.listing()
@@ -238,7 +236,7 @@ class SubstanceLinkTests(ListCase):
             ["/lab/registry/substances/cinnamic-acid/"])
 
     def test_the_name_is_english_on_an_english_site(self) -> None:
-        self.use_index(build_index("en"))
+        accept(language="en")
         make_task(self.kl, substance="CH-0012")
         _, rows = table(self.listing())
         self.assertEqual(rows[0]["Product"].text(), "(E)-Cinnamic acid")

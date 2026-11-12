@@ -18,7 +18,7 @@ from django.db import connection, transaction
 from django.db.models.signals import post_save
 from django.test import TestCase, TransactionTestCase, override_settings
 
-from . import (IndexMixin, load_demo_registry, make_article, make_class,
+from . import (load_demo_registry, make_article, make_class,
                make_group, make_substance, make_user, page)
 from .collection_support import TOKEN, manifest, post, refused
 from .registry_support import (NEW_SUBSTANCE, OLD_LAYOUT, small_snapshot,
@@ -87,12 +87,11 @@ class OutsideTransactionTests(TransactionTestCase):
 
 
 @override_settings(ORGSYNDB_BUILDER_TOKEN=TOKEN)
-class LockCase(IndexMixin, TransactionTestCase):
+class LockCase(TransactionTestCase):
     """A test case with autocommit on, whose database holds two
     accounts."""
 
     def setUp(self) -> None:
-        self.use_index(None)
         self.kl = make_user("kl", "KL", "Klara", "Lehmann")
         self.staff = make_user("boss", "BO", is_staff=True,
                                is_superuser=True)

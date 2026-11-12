@@ -39,7 +39,7 @@
 <td>{% person task.assignee %}</td>
 <td>{{ task.started|default_if_none:"" }}</td>
 <td>{{ task.ended|default_if_none:"" }}</td>
-<td>{% if task.steps_total %}{{ task.steps_done }}/{{ task.steps_total }} <progress value="{{ task.steps_done }}" max="{{ task.steps_total }}"></progress>{% endif %}</td>
+<td>{% include "tasks/progress.html" %}</td>
 <td>{{ task.batch }}</td>
 <td>{{ task.report|yes_no }}</td>
 <td>{{ task.qc_list|yes_no }}</td>

@@ -143,7 +143,7 @@ GRID = (
      ("inventory_enteredconsumption",), ("inventory_lot",),
      ("collection_procedure", "collection_scopeentry")),
     (("inventory_article",), ("registry_substance",),
-     ("registry_substanceclass",), ("tasks_task",),
+     ("registry_substanceclass",), ("tasks_task", "tasks_taskstep"),
      ("collection_entrysubstance",)),
     (("vocabulary_group", "vocabulary_project"),
      ("vocabulary_chemicalclass", "vocabulary_reactiontype"),

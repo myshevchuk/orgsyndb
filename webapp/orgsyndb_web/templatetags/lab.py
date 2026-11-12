@@ -18,6 +18,13 @@ def not_in_collection(text: str) -> SafeString:
 
 
 @register.simple_tag
+def marked(text: str) -> SafeString:
+    """Return TEXT as HTML, followed by the mark of a name the
+    collection lacks."""
+    return not_in_collection(text)
+
+
+@register.simple_tag
 def substance(found: Any) -> SafeString:
     """Return the substance FOUND as HTML: its name in the active
     language, linking to its page in the registry."""

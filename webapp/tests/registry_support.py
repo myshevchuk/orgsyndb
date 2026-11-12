@@ -14,8 +14,8 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase
 
-from . import (DEMO_REGISTRY, REPO, IndexMixin, make_article, make_class,
-               make_group, make_substance, make_user, parse)
+from . import (DEMO_REGISTRY, make_article, make_class, make_group,
+               make_substance, make_user, parse)
 
 REGISTRY = "/lab/registry/"
 SNAPSHOT = REGISTRY + "snapshot.json"
@@ -114,7 +114,7 @@ def build_registry() -> dict[str, Any]:
             "bare": bare}
 
 
-class RegistryCase(IndexMixin, TestCase):
+class RegistryCase(TestCase):
     """A test case with two accounts and ``build_registry``'s records
     in its database; the index is none unless a test sets one."""
 
@@ -124,9 +124,6 @@ class RegistryCase(IndexMixin, TestCase):
         cls.staff = make_user("boss", "BO", is_staff=True,
                               is_superuser=True)
         cls.records = build_registry()
-
-    def setUp(self) -> None:
-        self.use_index(None)
 
     def get(self, path: str, signed_in: bool = False) -> Any:
         """The parsed page ``path``, which answers 200."""

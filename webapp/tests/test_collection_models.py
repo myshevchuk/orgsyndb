@@ -126,6 +126,17 @@ class ProcedureModelTests(ImportCase):
         self.assertEqual(found.last_import, self.first)
         self.assertIs(found.withdrawn, False)
 
+    def test_a_procedure_keeps_whether_it_is_general(self) -> None:
+        """Requirement: Imported rows (`general`, whether it is a
+        general procedure)."""
+        from collection.models import Procedure
+        for key, general in (("OSDB-0002", False), ("OSDB-0009", True)):
+            with self.subTest(general=general):
+                made = make_procedure(self.first, key, general=general)
+                made.full_clean()
+                self.assertIs(Procedure.objects.get(pk=made.pk).general,
+                              general)
+
     def test_a_german_title_is_optional(self) -> None:
         """Requirement: Imported rows (`title_de`, which may be
         empty)."""
@@ -157,7 +168,7 @@ def _unsaved_procedure(last_import: Any, key: str, **fields: Any) -> Any:
     from collection.models import Procedure
     values = {"key": key, "source": "md", "title": "Title",
               "reaction_type": ReactionType.objects.get(key="acylation"),
-              "last_import": last_import}
+              "general": False, "last_import": last_import}
     return Procedure(**{**values, **fields})
 
 

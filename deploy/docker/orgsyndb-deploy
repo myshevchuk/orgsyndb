@@ -28,8 +28,8 @@ ORGSYNDB_INTERVAL          seconds between cycles (default: 300)
 ORGSYNDB_PDF               true to render procedure PDFs (default: false)
 ORGSYNDB_KEEP_RELEASES     published sites kept besides the current one
                            (default: 2)
-ORGSYNDB_BUILD_TIMEOUT     seconds a build, and then its manifest and its
-                           index, may take each (default: 3600)
+ORGSYNDB_BUILD_TIMEOUT     seconds a build, and then its manifest, may
+                           take each (default: 3600)
 ORGSYNDB_REGISTRY_URL      address of the lab application's registry
                            snapshot (default:
                            http://app:8000/lab/registry/snapshot.json)
@@ -46,9 +46,8 @@ ORGSYNDB_ALLOWED_HOSTS     the host names the lab application accepts,
 
 The data directory (ORGSYNDB_DATA, default /var/lib/orgsyndb) holds the
 collection's clone in ``collection/``, the snapshot last fetched in
-``registry.json``, the releases in ``releases/``, each with the output
-of ``orgsyndb index`` as ``index.json``, the symlink ``current`` to the
-release being served, and ``state.json``. Every run of
+``registry.json``, the releases in ``releases/``, the symlink
+``current`` to the release being served, and ``state.json``. Every run of
 ``tools/orgsyndb`` has ORGSYNDB_REGISTRY naming ``registry.json``. A
 cycle whose snapshot cannot be fetched builds nothing. The snapshot's
 ``import`` names the latest accepted import; ``current`` is pointed at
@@ -95,7 +94,7 @@ class Failure(Exception):
 
 
 class BuildFailure(Exception):
-    """A build, its manifest or its index failed. ERRORS are the lines
+    """A build or its manifest failed. ERRORS are the lines
     of the failed command's output that report an error."""
 
     def __init__(self, message: str, errors: list[str]) -> None:
@@ -481,10 +480,9 @@ def release_name(serial: int, app: str, commit: str) -> str:
     return f"{serial:06d}-{app[:10]}-{commit[:10]}"
 
 
-def stage(config: Settings, collection: Path, index_text: str,
-          name: str) -> None:
-    """Copy the build of COLLECTION and INDEX_TEXT, as ``index.json``,
-    into the new release NAME, without publishing it."""
+def stage(config: Settings, collection: Path, name: str) -> None:
+    """Copy the build of COLLECTION into the new release NAME, without
+    publishing it."""
     releases = config.data / "releases"
     partial = releases / f".{name}"
     shutil.rmtree(partial, ignore_errors=True)
@@ -493,7 +491,6 @@ def stage(config: Settings, collection: Path, index_text: str,
                     symlinks=True)
     if config.pdf and (collection / "pdf").is_dir():
         shutil.copytree(collection / "pdf", partial / "pdf", symlinks=True)
-    (partial / "index.json").write_text(index_text, encoding="utf-8")
     os.replace(partial, releases / name)
 
 
@@ -600,10 +597,9 @@ def attempt(config: Settings, state: dict, app: str, commit: str,
         run_tool(config, collection, "pdf" if config.pdf else "build",
                  echo=True)
         half = collection_half(run_tool(config, collection, "manifest"))
-        index_text = run_tool(config, collection, "index")
         state["serial"] = state.get("serial", 0) + 1
         name = release_name(state["serial"], app, commit)
-        stage(config, collection, index_text, name)
+        stage(config, collection, name)
     except (BuildFailure, OSError) as exc:
         errors = getattr(exc, "errors", None) or [str(exc)]
         log(f"failed: {exc}; the published site is unchanged")
