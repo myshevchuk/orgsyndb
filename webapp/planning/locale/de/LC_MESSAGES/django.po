@@ -228,3 +228,9 @@ msgstr "Spielraum dieser Aufgabe: %(slack)s"
 
 msgid "Dormant, no forecast."
 msgstr "Ruhend, keine Prognose."
+
+msgid "Plan synthesis via %(sequence)s"
+msgstr "Synthese planen über %(sequence)s"
+
+msgid "Plan synthesis via %(sequence)s from step %(step)s, %(name)s in stock"
+msgstr "Synthese planen über %(sequence)s ab Stufe %(step)s, %(name)s vorrätig"

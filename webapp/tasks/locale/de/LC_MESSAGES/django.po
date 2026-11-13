@@ -320,3 +320,33 @@ msgstr "Der Syntheseweg kann nicht gesetzt, geändert oder entfernt werden, sola
 
 msgid "A step that names a lab notebook entry cannot be removed."
 msgstr "Eine Stufe, die einen Eintrag im Laborjournal nennt, lässt sich nicht entfernen."
+
+msgid "Start at step"
+msgstr "Beginn ab Stufe"
+
+msgid "The step of the sequence the task starts at; the steps before it are taken from stock."
+msgstr "Die Stufe des Synthesewegs, mit der die Aufgabe beginnt; die Stufen davor kommen aus dem Bestand."
+
+msgid "from step %(step)s"
+msgstr "ab Stufe %(step)s"
+
+msgid "The start step cannot be changed while a step is done."
+msgstr "Die Anfangsstufe kann nicht geändert werden, solange eine Stufe erledigt ist."
+
+msgid "The start step cannot be changed while a step has made a lot or taken a withdrawal."
+msgstr "Die Anfangsstufe kann nicht geändert werden, solange eine Stufe ein Bulk hergestellt oder eine Entnahme erhalten hat."
+
+msgid "The start step cannot be changed while a step names a lab notebook entry."
+msgstr "Die Anfangsstufe kann nicht geändert werden, solange eine Stufe einen Eintrag im Laborjournal nennt."
+
+msgid "The sequence %(key)s makes %(name)s, not the task's substance."
+msgstr "Der Syntheseweg %(key)s ergibt %(name)s, nicht die Substanz der Aufgabe."
+
+msgid "The start step may not exceed the %(count)s steps of the sequence %(key)s."
+msgstr "Die Anfangsstufe darf die %(count)s Stufen des Synthesewegs %(key)s nicht übersteigen."
+
+msgid "A task of the sequence %(key)s makes its target, %(name)s."
+msgstr "Eine Aufgabe des Synthesewegs %(key)s ergibt dessen Ziel, %(name)s."
+
+msgid "The sequence cannot be set, changed or cleared while a step has made a lot or taken a withdrawal."
+msgstr "Der Syntheseweg kann nicht gesetzt, geändert oder entfernt werden, solange eine Stufe ein Bulk hergestellt oder eine Entnahme erhalten hat."

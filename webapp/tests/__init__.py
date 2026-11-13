@@ -404,26 +404,44 @@ def task_url(task: Any, action: str = "") -> str:
     return f"/lab/tasks/{task.number}/" + (f"{action}/" if action else "")
 
 
+def sequence_target(sequence: str, default: str) -> str:
+    """The key of the target of the sequence ``sequence``, a sequence's
+    key, which is the substance a task of that sequence makes
+    (task-tracker "Task record"); ``default`` when there is no such
+    sequence."""
+    from collection.models import Sequence
+    return Sequence.objects.filter(key=sequence).values_list(
+        "target__key", flat=True).first() or default
+
+
 def task_form_data(**over: Any) -> dict[str, str]:
     """The fields of the task form with nothing filled in but the
     substance key ``aspirin``, which a test creates with
     ``substance_for("Aspirin")``; a flag is on when given as
-    ``"on"``. ``sequence`` is a sequence's key."""
+    ``"on"``. ``sequence`` is a sequence's key, and a form that names
+    one without a substance names the sequence's target, since a task
+    makes its sequence's target; ``start_step`` is a number."""
     data = {"substance": "aspirin", "priority": "medium", "assignee": "",
-            "started": "", "ended": "", "sequence": "", "steps_total": "",
-            "steps_done": "", "batch": "", "note": ""}
+            "started": "", "ended": "", "sequence": "", "start_step": "",
+            "steps_total": "", "steps_done": "", "batch": "", "note": ""}
     data.update(over)
+    if over.get("sequence") and "substance" not in over:
+        data["substance"] = sequence_target(over["sequence"],
+                                            data["substance"])
     return data
 
 
 def edit_data(task: Any, **over: Any) -> dict[str, str]:
-    """The edit form's fields as the task stands, with ``over`` applied."""
+    """The edit form's fields as the task stands, with ``over`` applied;
+    a sequence given without a substance brings its target."""
     data = task_form_data(
         substance=task.substance.key, priority=task.priority,
         assignee=str(task.assignee_id or ""),
         started=task.started.isoformat() if task.started else "",
         ended=task.ended.isoformat() if task.ended else "",
         sequence=task.sequence.key if task.sequence_id else "",
+        # The attribute exists once the task records where it starts.
+        start_step=str(getattr(task, "start_step", 1)),
         steps_total=str(task.steps.count() or ""),
         steps_done=str(task.steps.filter(done_on__isnull=False).count()),
         batch=task.batch or "", note=task.note or "")
@@ -431,6 +449,9 @@ def edit_data(task: Any, **over: Any) -> dict[str, str]:
         if getattr(task, flag, False):
             data[flag] = "on"
     data.update(over)
+    if over.get("sequence") and "substance" not in over:
+        data["substance"] = sequence_target(over["sequence"],
+                                            data["substance"])
     return data
 
 

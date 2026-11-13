@@ -259,10 +259,13 @@ def form_page(request: HttpRequest, form_class: type[TaskForm],
 
 @login_required
 def task_new(request: HttpRequest) -> HttpResponse:
-    """Create a task, made by the signed-in user; ``substance`` in the
-    query fills in the substance's key."""
-    return form_page(request, TaskForm, Task(created_by=request.user),
-                     {"substance": request.GET.get("substance", "")})
+    """Create a task, made by the signed-in user; ``substance``,
+    ``sequence`` and ``start_step`` in the query fill in the substance's
+    key, the sequence's ID and the start step."""
+    return form_page(request, TaskForm, Task(created_by=request.user), {
+        name: request.GET[name]
+        for name in ("substance", "sequence", "start_step")
+        if name in request.GET})
 
 
 @login_required

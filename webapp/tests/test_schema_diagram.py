@@ -187,6 +187,13 @@ class CollectionTests(unittest.TestCase):
                                  ("FK", ref, nullable))
         self.assertTrue(self.column("tasks_taskstep", "done_on").nullable)
 
+    def test_a_task_has_its_start_step(self) -> None:
+        """Requirement: Task record (`start_step`, a column of every
+        task that has a value)."""
+        names = [c.name for c in self.table("tasks_task").columns]
+        self.assertIn("start_step", names)
+        self.assertFalse(self.column("tasks_task", "start_step").nullable)
+
     def test_the_tables_of_the_journal(self) -> None:
         """Scenario: Only the application's tables (`journal_notebook` and
         `journal_entry`)."""

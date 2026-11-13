@@ -1,8 +1,11 @@
 """Tasks in the admin, for corrections by staff."""
 
+from typing import Any
+
 from django.contrib import admin
+from django.core.exceptions import PermissionDenied
 from django.forms import ModelForm
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponse
 from django.utils.translation import gettext_lazy as _
 from simple_history.admin import SimpleHistoryAdmin
 
@@ -37,7 +40,8 @@ class TaskAdmin(SimpleHistoryAdmin):
     search_fields = ("number", "substance__key", "substance__name",
                      "substance__name_de", "batch")
     ordering = ("id",)
-    readonly_fields = ("number", "sequence", "created_by", "created_at")
+    readonly_fields = ("number", "sequence", "start_step", "created_by",
+                       "created_at")
     inlines = (TaskStepInline,)
 
     @admin.display(description=_("Progress"))
@@ -46,6 +50,23 @@ class TaskAdmin(SimpleHistoryAdmin):
         ``–`` without steps."""
         done, total = task.step_counts
         return f"{done}/{total}" if total else "–"
+
+    def revert_disabled(self, request: HttpRequest, obj: Any = None
+                        ) -> bool:
+        """Offer no revert: a past version would bring back its sequence
+        and start step without planning the steps."""
+        return True
+
+    def history_form_view(self, request: HttpRequest, object_id: str,
+                          version_id: str,
+                          extra_context: dict[str, Any] | None = None
+                          ) -> HttpResponse:
+        """Show a past version of a task; refuse a POST, which would
+        restore it, with PermissionDenied (403)."""
+        if request.method == "POST":
+            raise PermissionDenied
+        return super().history_form_view(request, object_id, version_id,
+                                         extra_context)
 
     def save_model(self, request: HttpRequest, obj: Task, form: ModelForm,
                    change: bool) -> None:

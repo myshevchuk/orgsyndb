@@ -509,3 +509,62 @@ class ImportCase(TestCase):
         self.assertEqual(done.status_code, 200, done.content)
         self.assertEqual(done.json()["outcome"], "refused", done.json())
         return done.json()
+
+
+# --- collections with more sequences ---------------------------------------
+
+
+def longer_collection() -> dict[str, Any]:
+    """The demo collection with a procedure ``OSDB-0010``, which makes
+    ``benzaldehyde`` from ``acetone``, and two more sequences of
+    ``cinnamic-acid``: ``SEQ-0003``, of three steps, ``OSDB-0010``,
+    ``OSDB-0007`` and ``OSDB-0008``, whose intermediates are
+    ``benzaldehyde`` and ``ethyl-cinnamate``; and ``SEQ-0004``, of the
+    two steps ``OSDB-0007`` and ``OSDB-0008``, whose intermediate is
+    ``ethyl-cinnamate``."""
+    data = demo_collection()
+    new = copy_procedure(data, "OSDB-0007", "OSDB-0010")
+    new["entries"][0]["substrates"] = ["acetone"]
+    new["entries"][0]["products"] = [
+        {"compound": "benzaldehyde", "yield_percent": 90}]
+    data["procedures"].append(new)
+    title = "Zimtsäure in Stufen"
+    for ident, steps in (("SEQ-0003", ["OSDB-0010", "OSDB-0007",
+                                       "OSDB-0008"]),
+                         ("SEQ-0004", ["OSDB-0007", "OSDB-0008"])):
+        data["sequences"].append({
+            "id": ident, "title": title, "title_de": title,
+            "target": "cinnamic-acid",
+            "steps": [{"procedure": key, "entry": None} for key in steps]})
+    return data
+
+
+def shortened_collection() -> dict[str, Any]:
+    """``longer_collection`` with ``SEQ-0003`` of the two steps
+    ``OSDB-0007`` and ``OSDB-0008``."""
+    data = longer_collection()
+    by_id(data["sequences"], "SEQ-0003")["steps"].pop(0)
+    return data
+
+
+def retargeted_collection() -> dict[str, Any]:
+    """``longer_collection`` in which ``OSDB-0008`` makes
+    ``ethyl-cinnamate`` too, which is the target of ``SEQ-0003``."""
+    data = longer_collection()
+    by_id(data["procedures"], "OSDB-0008")["entries"][0][
+        "products"].append({"compound": "ethyl-cinnamate",
+                            "yield_percent": 50})
+    by_id(data["sequences"], "SEQ-0003")["target"] = "ethyl-cinnamate"
+    return data
+
+
+def reordered_collection() -> dict[str, Any]:
+    """The demo collection in which ``OSDB-0001`` lists
+    ``acetic-anhydride`` before ``salicylic-acid`` among its products,
+    both of which ``OSDB-0002`` takes, so that the intermediate of the
+    first step of ``SEQ-0001`` is ``acetic-anhydride``."""
+    data = demo_collection()
+    entry = by_id(data["procedures"], "OSDB-0001")["entries"][0]
+    entry["products"].insert(
+        0, {"compound": "acetic-anhydride", "yield_percent": 50})
+    return data

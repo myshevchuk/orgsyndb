@@ -12,11 +12,15 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from functools import cached_property
+from itertools import pairwise
 from typing import Any, NamedTuple
 from urllib.parse import urlencode
 
 from django.db.models import Q
+from django.utils.translation import gettext as _
 
+from collection.models import EntrySubstance, Sequence
+from collection.models import Step as SequenceStep
 from inventory.figures import (Consumption, bulk, consumption, convert,
                                counted_lines, figures_of, molar_mass,
                                quarter_of)
@@ -176,18 +180,50 @@ class TaskLine:
     late: bool
 
 
+class Start(NamedTuple):
+    """Where a synthesis by SEQUENCE can start: at its STEP, from 1,
+    taking the INTERMEDIATE of the step before it, a substance with an
+    open lot, from stock; INTERMEDIATE is None for step 1."""
+
+    sequence: Sequence
+    step: int
+    intermediate: Any
+
+    @property
+    def label(self) -> str:
+        """The planning list's synthesis action for the start, in the
+        active language."""
+        if self.intermediate is None:
+            return _("Plan synthesis via %(sequence)s") % {
+                "sequence": self.sequence.key}
+        return _("Plan synthesis via %(sequence)s from step %(step)s, "
+                 "%(name)s in stock") % {
+                     "sequence": self.sequence.key, "step": self.step,
+                     "name": self.intermediate.shown_name}
+
+    @property
+    def link(self) -> str:
+        """The path of the new-task form filled in with the sequence's
+        target, the sequence's ID and the step."""
+        return "/lab/tasks/new/?" + urlencode({
+            "substance": self.sequence.target.key,
+            "sequence": self.sequence.key, "start_step": self.step})
+
+
 @dataclass(frozen=True)
 class Row:
     """An article of the planning list with its TASKS and the actions
     due: the items to FILL, whether to CHECK_BULK, and whether to
-    PLAN_SYNTHESIS. LISTED tells whether the list shows it without
-    ``all=1``."""
+    PLAN_SYNTHESIS. STARTS are the starts of the sequences that make
+    the article's substance, in order of ID. LISTED tells whether the
+    list shows it without ``all=1``."""
 
     forecast: ArticleForecast
     tasks: list[TaskLine]
     fill: list[Item]
     check_bulk: bool
     plan_synthesis: bool
+    starts: list[Start]
 
     @property
     def listed(self) -> bool:
@@ -242,6 +278,54 @@ class Plan:
     def lots(self) -> list[Lot]:
         """The open lots."""
         return list(Lot.objects.filter(amount__gt=0))
+
+    @cached_property
+    def sequences(self) -> dict[int, list[tuple[Sequence, list[Any]]]]:
+        """The sequences of the collection that are not withdrawn, by the
+        ID of their target, each in order of ID with the intermediate of
+        each of its steps but the last, in order: the first of the
+        step's products, read from the entry it names, that the next
+        step's entry takes, or None when none does."""
+        sequences = list(Sequence.objects.filter(withdrawn=False)
+                         .select_related("target").order_by("key"))
+        entries: dict[int, list[int]] = {}
+        for sequence_id, entry_id in SequenceStep.objects.filter(
+                sequence__in=sequences).order_by("position").values_list(
+                    "sequence_id", "entry_id"):
+            entries.setdefault(sequence_id, []).append(entry_id)
+        roles: dict[tuple[int, str], list[Any]] = {}
+        for row in EntrySubstance.objects.filter(
+                entry__in={entry for found in entries.values()
+                           for entry in found}).select_related(
+                    "substance").order_by("position"):
+            roles.setdefault((row.entry_id, row.role), []).append(
+                row.substance)
+        found: dict[int, list[tuple[Sequence, list[Any]]]] = {}
+        for sequence in sequences:
+            chain = entries.get(sequence.pk, [])
+            found.setdefault(sequence.target_id, []).append((sequence, [
+                next((product for product in roles.get((made, "product"), [])
+                      if product in roles.get((taken, "substrate"), [])),
+                     None)
+                for made, taken in pairwise(chain)]))
+        return found
+
+    def starts(self, found: ArticleForecast) -> list[Start]:
+        """Return where a synthesis of the substance of FOUND can start,
+        one start for each sequence of ``sequences`` that makes it, in
+        order of ID: the last step whose preceding step's intermediate
+        has an open lot, of any source, or step 1 when none has."""
+        stocked = {lot.substance_id for lot in self.lots}
+        starts = []
+        for sequence, intermediates in self.sequences.get(
+                found.substance.pk, []):
+            start = Start(sequence, 1, None)
+            for step, intermediate in enumerate(intermediates, start=2):
+                if intermediate is not None \
+                        and intermediate.pk in stocked:
+                    start = Start(sequence, step, intermediate)
+            starts.append(start)
+        return starts
 
     @cached_property
     def tasks(self) -> list[Task]:
@@ -446,7 +530,8 @@ class Plan:
             check_bulk=found.unconvertible,
             plan_synthesis=(found.priority in (Priority.HIGH,
                                                Priority.MEDIUM)
-                            and not tasks and not found.unconvertible))
+                            and not tasks and not found.unconvertible),
+            starts=self.starts(found))
 
     def articles_of(self, task: Task) -> list[ArticleLine]:
         """Return the articles TASK matches, each with its forecast."""

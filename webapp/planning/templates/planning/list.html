@@ -33,8 +33,9 @@
 <td><ul class="planning-cell">
 {% for item in row.fill %}<li><a href="/lab/inventory/items/{{ item.pk }}/fill/">{% blocktranslate with container=item.container %}Fill {{ container }}{% endblocktranslate %}</a></li>
 {% endfor %}{% if row.check_bulk %}<li><a href="/lab/inventory/end-products/bulk/">{% translate "Check bulk" %}</a></li>
-{% endif %}{% if row.plan_synthesis %}<li>{% if user.is_authenticated %}<a href="/lab/tasks/new/?substance={{ found.substance.key|urlencode }}">{% translate "Plan synthesis" %}</a>{% else %}{% translate "Plan synthesis" %}{% endif %}</li>
-{% endif %}</ul></td>
+{% endif %}{% if row.plan_synthesis %}{% for start in row.starts %}<li>{% if user.is_authenticated %}<a href="{{ start.link }}">{{ start.label }}</a>{% else %}{{ start.label }}{% endif %}</li>
+{% empty %}<li>{% if user.is_authenticated %}<a href="/lab/tasks/new/?substance={{ found.substance.key|urlencode }}">{% translate "Plan synthesis" %}</a>{% else %}{% translate "Plan synthesis" %}{% endif %}</li>
+{% endfor %}{% endif %}</ul></td>
 </tr>
 {% endwith %}{% endfor %}</tbody>
 </table>

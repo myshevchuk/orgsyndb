@@ -1,6 +1,6 @@
-"""The steps a save gives a task: from its sequence, or plain steps as
-many as a total, the first of them done (task-tracker "Task record",
-"Task forms")."""
+"""The steps a save gives a task: from its sequence, from the step it
+starts at, or plain steps as many as a total, the first of them done
+(task-tracker "Task record", "Task forms")."""
 
 from datetime import date
 from typing import Any
@@ -13,35 +13,51 @@ from tasks.models import Task, TaskStep
 
 class StepChange:
     """A save's change of the steps of TASK: its sequence becoming
-    SEQUENCE, a sequence or None, the plain steps TOTAL, a number or
-    None, and the first DONE steps done.
+    SEQUENCE, a sequence or None, from its step START on, its substance
+    becoming SUBSTANCE, the plain steps TOTAL, a number or None, and
+    the first DONE steps done.
 
-    The change compares SEQUENCE with the sequence the database holds
-    for TASK, none for a task not saved yet, so it is made before the
-    task is saved with SEQUENCE. A sequence set, changed or cleared
-    replaces the steps; a sequence kept keeps them and ignores TOTAL;
-    without a sequence before or after, TOTAL adds plain steps at the
-    end or removes the last ones.
+    The change compares SEQUENCE and START with the sequence and the
+    start step the database holds for TASK, none and 1 for a task not
+    saved yet, so it is made before the task is saved with them. A
+    sequence set, changed or cleared, or a start step changed with a
+    sequence, plans the steps anew; a sequence and start step kept keep
+    the steps and ignore TOTAL; without a sequence before or after,
+    TOTAL adds plain steps at the end or removes the last ones, and
+    START is taken as 1.
     """
 
     def __init__(self, task: Task, sequence: Sequence | None,
-                 total: int | None, done: int) -> None:
+                 total: int | None, done: int, start: int = 1,
+                 substance: Any = None) -> None:
         self.task = task
         self.sequence = sequence
+        self.start = start if sequence is not None else 1
+        self.substance = substance
         self.total = total
         self.done = done
         self.stored_sequence: Any = None
+        self.stored_start = 1
         self.stored: list[TaskStep] = []
         if task.pk:
-            self.stored_sequence = Task.objects.values_list(
-                "sequence_id", flat=True).get(pk=task.pk)
+            self.stored_sequence, self.stored_start = (
+                Task.objects.values_list("sequence_id", "start_step")
+                .get(pk=task.pk))
             self.stored = list(task.steps.order_by("position"))
 
     @property
-    def replaces(self) -> bool:
+    def changes_sequence(self) -> bool:
         """Whether the save sets, changes or clears the sequence."""
         return (None if self.sequence is None
                 else self.sequence.pk) != self.stored_sequence
+
+    @property
+    def replaces(self) -> bool:
+        """Whether the save plans the steps anew: it sets, changes or
+        clears the sequence, or changes the start step of a task that
+        keeps one."""
+        return self.changes_sequence or (
+            self.sequence is not None and self.start != self.stored_start)
 
     def planned(self) -> list[tuple[Any, Any]]:
         """Return the entry and the planned import of each step the task
@@ -52,51 +68,81 @@ class StepChange:
         if self.sequence is not None:
             latest = latest_accepted()
             return [(step.entry_id, None if latest is None else latest.pk)
-                    for step in self.sequence.steps.order_by("position")]
+                    for step in self.sequence.steps.filter(
+                        position__gte=self.start).order_by("position")]
         return [(None, None)] * (self.total or 0)
+
+    def _plan_errors(self) -> dict[str, str]:
+        """Return the errors that refuse planning the steps anew, at the
+        field the save changes: ``sequence`` when it sets, changes or
+        clears the sequence, else ``start_step``; an error of the
+        sequence's target is always at ``sequence``."""
+        by_sequence = self.changes_sequence
+        field = "sequence" if by_sequence else "start_step"
+        if any(step.done_on is not None for step in self.stored):
+            return {field: _(
+                "The sequence cannot be set, changed or cleared while a "
+                "step is done.") if by_sequence else _(
+                "The start step cannot be changed while a step is done.")}
+        if any(step.lots.exists() or step.lot_movements.exists()
+               for step in self.stored):
+            return {field: _(
+                "The sequence cannot be set, changed or cleared while a "
+                "step has made a lot or taken a withdrawal.")
+                if by_sequence else _(
+                "The start step cannot be changed while a step has made "
+                "a lot or taken a withdrawal.")}
+        if any(step.journal_entry_id is not None for step in self.stored):
+            return {field: _(
+                "The sequence cannot be set, changed or cleared while a "
+                "step names a lab notebook entry.") if by_sequence else _(
+                "The start step cannot be changed while a step names a "
+                "lab notebook entry.")}
+        sequence = self.sequence
+        if sequence is None:
+            return {}
+        if sequence.withdrawn:
+            return {field: _(
+                "The sequence %(key)s is no longer in the collection.") % {
+                    "key": sequence.key}}
+        if self.substance is not None \
+                and sequence.target_id != self.substance.pk:
+            return {"sequence": _(
+                "The sequence %(key)s makes %(name)s, not the task's "
+                "substance.") % {"key": sequence.key,
+                                 "name": sequence.target.shown_name}}
+        count = sequence.steps.count()
+        if self.start > count:
+            return {"start_step": _(
+                "The start step may not exceed the %(count)s steps of the "
+                "sequence %(key)s.") % {"key": sequence.key,
+                                        "count": count}}
+        return {}
 
     def errors(self) -> dict[str, str]:
         """Return the errors that refuse the change, by form field.
 
-        A sequence set or changed may not be withdrawn; the sequence may
-        not be set, changed or cleared while a stored step is done or
-        names a journal entry; the steps done may not exceed the steps
-        the task has after the save; without a sequence, the total may
-        not fall below the stored steps done; and a step that made a
-        lot, took a withdrawal or names a journal entry may not be
-        removed.
+        A save that plans the steps anew may not do so while a stored
+        step is done, has made a lot or taken a withdrawal, or names a
+        journal entry; the sequence it plans from may not be withdrawn,
+        its target must be SUBSTANCE, when given, and START may not
+        exceed its steps. The steps done may not exceed the steps the
+        task has after the save; without a sequence, the total may not
+        fall below the stored steps done; and a step that made a lot,
+        took a withdrawal or names a journal entry may not be removed.
         """
-        errors = {}
+        errors = self._plan_errors() if self.replaces else {}
         done_before = sum(step.done_on is not None for step in self.stored)
-        booked = any(step.lots.exists() or step.lot_movements.exists()
-                     for step in self.stored)
-        journal = any(step.journal_entry_id is not None
-                      for step in self.stored)
-        if self.replaces and done_before:
-            errors["sequence"] = _(
-                "The sequence cannot be set, changed or cleared while a "
-                "step is done.")
-        elif self.replaces and booked:
-            errors["sequence"] = _(
-                "The sequence cannot be set, changed or cleared while a "
-                "step has made a lot or taken a withdrawal.")
-        elif self.replaces and journal:
-            errors["sequence"] = _(
-                "The sequence cannot be set, changed or cleared while a "
-                "step names a lab notebook entry.")
-        elif self.replaces and self.sequence is not None \
-                and self.sequence.withdrawn:
-            errors["sequence"] = _(
-                "The sequence %(key)s is no longer in the collection.") % {
-                    "key": self.sequence.key}
-        elif self.sequence is None and (self.total or 0) < done_before:
+        if not errors and self.sequence is None \
+                and (self.total or 0) < done_before:
             errors["steps_total"] = _(
                 "The steps total may not be below the %(done)s steps "
                 "done.") % {"done": done_before}
         count = len(self.planned())
         removed = self.stored[count:]
-        if "sequence" not in errors and "steps_total" not in errors:
-            field = "sequence" if self.replaces else "steps_total"
+        if not errors:
+            field = "sequence" if self.changes_sequence else (
+                "start_step" if self.replaces else "steps_total")
             if any(step.lots.exists() or step.lot_movements.exists()
                    for step in removed):
                 errors[field] = _(

@@ -41,8 +41,10 @@ class TaskForm(forms.ModelForm):
 
     The substance is named by its key. The sequence is one of the
     collection's sequences that are not withdrawn, or the one the task
-    already has. ``steps_total`` sets the number of plain steps of a
-    task without a sequence, and ``steps_done`` marks the first that
+    already has. ``start_step`` is the sequence's step the task starts
+    at, 1 when left empty, and is stored as 1 without a sequence.
+    ``steps_total`` sets the number of plain steps of a task without a
+    sequence, and ``steps_done`` marks the first that
     many steps done; both are left empty as none. The rules of the
     steps are those of ``tasks.steps.StepChange``, whose errors the
     form shows at their fields.
@@ -57,6 +59,10 @@ class TaskForm(forms.ModelForm):
         required=False, label=_("Sequence"), empty_label="–",
         help_text=_("A synthesis sequence of the collection; its steps "
                     "become the task's steps."))
+    start_step = forms.IntegerField(
+        label=_("Start at step"), required=False, min_value=1,
+        help_text=_("The step of the sequence the task starts at; the "
+                    "steps before it are taken from stock."))
     steps_total = forms.IntegerField(
         label=_("Steps total"), required=False, min_value=1,
         help_text=_("The number of steps of a task without a sequence."))
@@ -66,8 +72,8 @@ class TaskForm(forms.ModelForm):
     class Meta:
         model = Task
         fields = ["substance", "priority", "assignee", "started", "ended",
-                  "sequence", "steps_total", "steps_done", "batch",
-                  "report", "qc_list", "note"]
+                  "sequence", "start_step", "steps_total", "steps_done",
+                  "batch", "report", "qc_list", "note"]
         widgets = {
             "started": DATE,
             "ended": DATE,
@@ -93,14 +99,20 @@ class TaskForm(forms.ModelForm):
 
     def clean(self) -> dict[str, Any]:
         """Check the change of the steps the form makes, adding its
-        errors at their fields."""
+        errors at their fields; a start step left empty or given without
+        a sequence becomes 1."""
         cleaned = super().clean()
-        if any(name in self.errors
-               for name in ("sequence", "steps_total", "steps_done")):
+        if any(name in self.errors for name in (
+                "sequence", "start_step", "steps_total", "steps_done")):
             return cleaned
+        if cleaned.get("sequence") is None \
+                or cleaned.get("start_step") is None:
+            cleaned["start_step"] = 1
         self.steps = StepChange(self.instance, cleaned.get("sequence"),
                                 cleaned.get("steps_total"),
-                                cleaned.get("steps_done") or 0)
+                                cleaned.get("steps_done") or 0,
+                                start=cleaned["start_step"],
+                                substance=cleaned.get("substance"))
         for field, error in self.steps.errors().items():
             self.add_error(field, error)
         return cleaned

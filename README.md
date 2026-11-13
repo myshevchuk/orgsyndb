@@ -1656,15 +1656,31 @@ first. `/lab/tasks/new/?substance=cinnamic-acid`, for example, fills in
 that key. Search the task list by substance key or either language's name.
 
 In **Sequence**, choose an imported synthesis sequence by ID and title,
-or leave it empty to plan steps yourself. You can choose any sequence
-that is not withdrawn from the collection. Choosing one creates one task
-step per sequence step, in the same order. Each step records the scope
-entry it carries out and the import current when you planned it. A
-**scope entry** is one combination of substrates and products in a
-procedure. The task keeps its sequence, steps, entries and planned
-imports if a later import changes or withdraws that sequence. You can
-set, change or clear the task's sequence only while none of its steps
-is done or names a journal entry.
+or leave it empty to plan steps yourself. The sequence must make the
+task's substance and must not be withdrawn from the collection.
+**Start at step** (**Beginn ab Stufe**) sets where you begin in that
+sequence: enter a whole number from 1, or leave it empty for step 1.
+Earlier steps are skipped and their product taken from stock. The task
+gets one step per sequence step from that point on, in the same order.
+Without a sequence, the field is ignored and stored as 1.
+The new-task form also accepts a sequence ID and start step in its query;
+`/lab/tasks/new/?substance=acetylsalicylic-acid&sequence=SEQ-0001&start_step=2`
+fills in all three fields.
+
+Each step records the scope entry it carries out and the import current
+when you planned it. A **scope entry** is one combination of substrates
+and products in a procedure. Setting or changing the sequence, or changing
+the start step, plans the steps anew. At that save, the sequence must not
+be withdrawn, must make the task's substance, and must have at least that
+many steps.
+You can set, change or clear the sequence, or change the start step,
+only while none of the task's steps is done, has made a lot, has received
+material from a lot, or names a journal entry. A task with a sequence
+also refuses a substance change away from the sequence's target.
+
+Other saves, such as a note, flag or date change, keep the sequence,
+start step, steps, entries and planned imports even if a later import
+shortens, retargets or withdraws the sequence.
 
 Without a sequence, **Steps total** sets the number of plain steps,
 which have no scope entry or planned import. Increasing it adds steps
@@ -1704,9 +1720,11 @@ Choose **Edit** on the task page to change its fields, including the
 task. Unless the task is cancelled or failed, saving an end date requires
 a batch and a product lot.
 
-The task page links its sequence and lists steps in order. A step with a
-scope entry links to its procedure by ID at `/procedures/<id>/`, with the
-ID in lowercase. For a general procedure, **Eintrag &lt;n&gt;**
+The task page links its sequence and adds **ab Stufe &lt;k&gt;**
+(**from step &lt;k&gt;**) after its ID when the task starts after step 1.
+It lists the task's steps in order. A step with a scope entry links to
+its procedure by ID at `/procedures/<id>/`, with the ID in lowercase.
+For a general procedure, **Eintrag &lt;n&gt;**
 (**Entry &lt;n&gt;**) identifies the entry. A plain step appears as
 **Stufe &lt;n&gt;** (**Step &lt;n&gt;**). A done step shows
 **erledigt am &lt;date&gt;** (**done on &lt;date&gt;**).
@@ -1735,9 +1753,13 @@ was withdrawn also has no link. It shows the procedure ID and the entry's
 signature, with that mark instead of an entry number. The signature has
 the substrate keys, ` >> ` and the product keys; each side is sorted and
 joined by ` + `. The task page's history combines task and step changes,
-newest first. Step changes are headed **Stufe &lt;n&gt;** (**Step &lt;n&gt;**),
+including start-step changes, newest first. Step changes are headed
+**Stufe &lt;n&gt;** (**Step &lt;n&gt;**),
 removals **Stufe &lt;n&gt; entfernt** (**Step &lt;n&gt; removed**).
 Staff can also inspect a task's steps in `/lab/admin/`.
+The sequence, start step and steps are read-only there; use the task
+form to plan steps. The admin also refuses a substance change away from
+the sequence's target.
 
 Planned and running tasks use a computed priority when their substance's
 inventory article has a forecast. An article is one substance with its
@@ -1814,6 +1836,16 @@ imported sequences `SEQ-0001` and `SEQ-0002`; one is running with the
 first of its two steps done. This running `SEQ-0002` task's first step
 names journal entry `CE-3/2` and made a lot of `4-acetylbiphenyl`. Part of
 that lot was withdrawn into its second step.
+
+The planned `SEQ-0001` task for `CH-0010` starts at step 2 and has just
+one step, `OSDB-0002`. It uses salicylic acid from an open 5 g lot made
+by the first step of the second ended `SEQ-0001` task. Every other task
+with a sequence starts at step 1. The demo's planning list initially
+shows no stock proposal because the articles with sequences already
+have a planned or running task. Cancel the planned `SEQ-0001` task to
+see `CH-0010` offer **Synthese planen über SEQ-0001 ab Stufe 2,
+Salicylsäure vorrätig** (**Plan synthesis via SEQ-0001 from step 2,
+Salicylic acid in stock**).
 
 The inventory contains seven numbered articles: `CH-0001`, `CH-0002`,
 `CH-0010`, `CH-0012`, `CH-0013` and `CH-0016`, the six delivered final products of
@@ -2640,11 +2672,29 @@ Use the actions offered for each article:
 - **Bulk prüfen** (**Check bulk**) opens the bulk list when an open lot
   cannot be converted because its substance has no molar mass in the
   registry.
-- **Synthese planen** (**Plan synthesis**) opens a new task with the
-  substance key filled in. It appears when priority is high or medium,
-  no matching task is planned or running, and every open lot converts.
+- The synthesis action appears when priority is high or medium,
+  no matching task is planned or running, and every open lot of the
+  article converts.
   An unconvertible lot may hold enough material, so check it first. This
   action is a link when you are signed in and plain text otherwise.
+  For each sequence that makes the article's substance and is not
+  withdrawn, it offers **Synthese planen über &lt;ID&gt;**
+  (**Plan synthesis via &lt;ID&gt;**), in sequence-ID order.
+  The link fills in the substance key, sequence ID and proposed start step.
+  When no sequence makes the substance, **Synthese planen**
+  (**Plan synthesis**) fills in only the substance key.
+
+To skip work whose product is already in stock, planning proposes the
+latest sequence step whose preceding step's intermediate has an open
+lot, whether made or bought. An intermediate is the first product of
+one step that the next step takes as a substrate. An open lot has an
+amount above zero. When no such intermediate is in stock, planning
+proposes step 1. For a later step, the action adds **ab Stufe &lt;k&gt;,
+&lt;name&gt; vorrätig** (**from step &lt;k&gt;, &lt;name&gt; in stock**).
+Planning reserves nothing and does not check whether the lot holds
+enough. Check the amount and confirm or change **Start at step** before
+saving the task. Skipping steps does not shorten the forecast's synthesis
+time.
 
 Staff edit one parameter record at `/lab/admin/planning/parameters/`;
 changes stay in its history. The defaults apply when no record exists.

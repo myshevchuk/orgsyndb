@@ -609,8 +609,8 @@ class TaskTests(SeededCase):
 
     def test_sequences(self) -> None:
         """Requirement: Demo tasks and parameters (tasks of `SEQ-0001`
-        and `SEQ-0002` of the data set's import, one step per step of
-        the sequence)."""
+        and `SEQ-0002` of the data set's import, each with one step per
+        step of its sequence from the one it starts at)."""
         from collection.models import Import, Sequence
         from tasks.models import State, Task
         own = Import.objects.get()
@@ -626,9 +626,11 @@ class TaskTests(SeededCase):
                 self.assertTrue(tasks.exists())
                 for task in tasks:
                     self.assertEqual(task.substance.key, product)
+                    entries = wanted[task.start_step - 1:]
                     steps = list(task.steps.order_by("position"))
-                    self.assertEqual([s.position for s in steps], [1, 2])
-                    self.assertEqual([s.entry for s in steps], wanted)
+                    self.assertEqual([s.position for s in steps],
+                                     list(range(1, len(entries) + 1)))
+                    self.assertEqual([s.entry for s in steps], entries)
                     self.assertEqual({s.planned_import for s in steps},
                                      {own})
         self.assertTrue(any(
@@ -791,6 +793,79 @@ class TaskTests(SeededCase):
         self.assertEqual(records[-1].target_days, 365)
         self.assertLess(local(records[0].history_date).date(),
                         DAY - timedelta(days=365))
+
+
+class StockedStepTests(SeededCase):
+    """The demo's task from stock (lab-demo: Demo tasks and
+    parameters)."""
+
+    def planned(self):
+        from tasks.models import State, Task
+        (task,) = [task for task in Task.objects.filter(
+            sequence__key="SEQ-0001") if task.state == State.PLANNED]
+        return task
+
+    def test_the_planned_task_starts_at_the_second_step(self) -> None:
+        """Scenario: A demo task from stock (one step, of
+        `OSDB-0002`)."""
+        from collection.models import Import
+        task = self.planned()
+        self.assertEqual(task.start_step, 2)
+        self.assertEqual(task.substance.key, "acetylsalicylic-acid")
+        (step,) = task.steps.all()
+        self.assertEqual(
+            (step.position, step.entry.procedure.key, step.done_on,
+             step.planned_import),
+            (1, "OSDB-0002", None, Import.objects.get()))
+
+    def test_every_other_task_of_a_sequence_starts_at_the_first_step(
+            self) -> None:
+        """Requirement: Demo tasks and parameters (each with one step per
+        step of its sequence from the one it starts at)."""
+        from tasks.models import Task
+        planned = self.planned()
+        others = Task.objects.exclude(sequence=None).exclude(
+            pk=planned.pk)
+        self.assertTrue(others.exists())
+        for task in others:
+            with self.subTest(task=task.number):
+                self.assertEqual(task.start_step, 1)
+                self.assertEqual(task.steps.count(), 2)
+
+    def test_the_task_page_names_the_step(self) -> None:
+        """Scenario: A demo task from stock (it shows `SEQ-0001 ab Stufe
+        2` and one step, of `OSDB-0002`)."""
+        root = self.get(f"/lab/tasks/{self.planned().number}/")
+        self.assertIn("SEQ-0001 ab Stufe 2", root.text())
+        items = root.find("ol").find_all("li")
+        self.assertEqual(
+            [[a.get("href") for a in item.find_all("a")]
+             for item in items], [["/procedures/osdb-0002/"]])
+
+    def test_an_earlier_task_made_the_lot_it_starts_from(self) -> None:
+        """Scenario: A demo task from stock (an open lot of
+        `salicylic-acid` lists the first step of an ended task of
+        `SEQ-0001` as the step that made it)."""
+        from inventory.models import Lot
+        from tasks.models import State
+        found = []
+        for lot in Lot.objects.filter(substance__key="salicylic-acid",
+                                      amount__gt=0, source="made"):
+            step = lot.task_step
+            if (step is not None and step.position == 1
+                    and step.task.sequence is not None
+                    and step.task.sequence.key == "SEQ-0001"
+                    and step.task.state == State.ENDED):
+                found.append((lot, step))
+        self.assertTrue(found)
+        for lot, step in found:
+            with self.subTest(lot=str(lot)):
+                self.assertEqual(step.entry.procedure.key, "OSDB-0001")
+                self.assertIsNotNone(step.done_on)
+                self.assertLess(lot.made_on,
+                                self.planned().created_at.date())
+                text = self.get(f"/lab/inventory/bulk/{lot.pk}/").text()
+                self.assertIn(step.task.number, text)
 
 
 class RecordedPastTests(SeededCase):

@@ -75,6 +75,45 @@ class DayChecks:
                             for task, _text in self.tasks(row)))
         self.assertNotIn(PLAN_SYNTHESIS, row["Maßnahmen"].text())
 
+    def stocked_actions(self: Any) -> Any:
+        """The actions of the row of ``CH-0010`` for a signed-in user
+        once its planned task is cancelled."""
+        from tasks.models import Task
+        self.client.force_login(self.account("klehmann"))
+        Task.objects.filter(sequence__key="SEQ-0001", started=None,
+                            ended=None, cancelled=False).update(
+                                cancelled=True)
+        return self.rows()["CH-0010"]["Maßnahmen"]
+
+    def test_ch_0010_offers_a_synthesis_from_stock(self: Any) -> None:
+        """Scenario: A stocked intermediate skips a step (the demo
+        data set, its planned task of `SEQ-0001` cancelled)."""
+        cell = self.stocked_actions()
+        self.assertIn("Synthese planen über SEQ-0001 ab Stufe 2, "
+                      "Salicylsäure vorrätig", cell.text())
+        self.assertEqual(
+            [a.get("href") for a in cell.find_all("a")
+             if a.get("href", "").startswith("/lab/tasks/new/")],
+            ["/lab/tasks/new/?substance=acetylsalicylic-acid"
+             "&sequence=SEQ-0001&start_step=2"])
+
+    def test_ch_0010_offers_the_first_step_without_stock(self: Any
+                                                          ) -> None:
+        """Scenario: Nothing in stock (every salicylic-acid lot at
+        zero)."""
+        from inventory.models import Lot
+        self.stocked_actions()
+        Lot.objects.filter(substance__key="salicylic-acid").update(
+            amount=0)
+        cell = self.rows()["CH-0010"]["Maßnahmen"]
+        self.assertIn("Synthese planen über SEQ-0001", cell.text())
+        self.assertNotIn("ab Stufe", cell.text())
+        self.assertEqual(
+            [a.get("href") for a in cell.find_all("a")
+             if a.get("href", "").startswith("/lab/tasks/new/")],
+            ["/lab/tasks/new/?substance=acetylsalicylic-acid"
+             "&sequence=SEQ-0001&start_step=1"])
+
     def test_ch_0016(self: Any) -> None:
         row = self.rows()["CH-0016"]
         self.assertEqual(self.priority(row), "low")

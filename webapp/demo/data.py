@@ -319,7 +319,8 @@ class _Synthesis:
     """A task of a substance, its days counted from the opening.
 
     A synthesis follows the sequence SEQUENCE, by its key, or none when
-    it is empty; STEPS names the procedures of its steps, in order, and
+    it is empty, from its step START_STEP on; STEPS names the procedures
+    of its steps, in order, and
     STEPS_DONE the days on which a number of them is done; its steps
     make the STEP_LOTS, and the JOURNAL entries are named by its steps,
     each a day, a step's position and an entry ``<code>/<number>``. A
@@ -339,6 +340,7 @@ class _Synthesis:
     cancelled: int | None = None
     failed: int | None = None
     sequence: str = ""
+    start_step: int = 1
     steps: tuple[str, ...] = ()
     steps_done: tuple[tuple[int, int], ...] = ()
     step_lots: tuple[_StepLot, ...] = ()
@@ -412,9 +414,11 @@ ARTICLES = (
          _Synthesis("klehmann", 225, "jkoch", started=230,
                     ended=261, report=266, qc=270, sequence="SEQ-0001",
                     steps=SEQ_1, steps_done=((245, 1),),
+                    step_lots=(_StepLot("salicylic-acid", "g", "5", 1,
+                                        245),),
                     fills=(262, 310, 350), location=DESICCATOR),
          _Synthesis("aschmidt", 380, "aschmidt",
-                    sequence="SEQ-0001", steps=SEQ_1,
+                    sequence="SEQ-0001", start_step=2, steps=SEQ_1[1:],
                     note=("Ölbad vorher prüfen.",
                           "Check the oil bath first.")))),
     _Article(
@@ -957,7 +961,8 @@ def _task(line: _Timeline, key: str, substance: str,
     fields: dict[str, Any] = {
         "substance": substance, "assignee": synthesis.assignee,
         "priority": synthesis.priority, "note": line.text(synthesis.note),
-        "sequence": synthesis.sequence, "steps_total": total}
+        "sequence": synthesis.sequence,
+        "start_step": synthesis.start_step, "steps_total": total}
     if synthesis.started is not None and \
             synthesis.started <= synthesis.created:
         fields["started"] = line.day(synthesis.started)

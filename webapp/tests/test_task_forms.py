@@ -12,8 +12,8 @@ from .collection_support import (accept, changed_collection,
 from .task_support import NEW, TaskCase, history_text, make_product_lot
 
 FIELDS = {"substance", "priority", "assignee", "started", "ended", "sequence",
-          "steps_total", "steps_done", "batch", "report", "qc_list",
-          "note"}
+          "start_step", "steps_total", "steps_done", "batch", "report",
+          "qc_list", "note"}
 
 
 class FormCase(TaskCase):
@@ -104,6 +104,8 @@ class CreateTests(FormCase):
         self.assertIsNone(task.progress)
 
     def test_the_form_holds_the_fields_of_the_spec(self) -> None:
+        """Requirement: Task forms (the fields, among them the start
+        step)."""
         root = page(self.client.get(NEW))
         form = root.find("input", name="substance").closest("form")
         names = {e.get("name") for e in
@@ -531,7 +533,7 @@ class SequenceFieldTests(FormCase):
     def test_a_withdrawn_sequence_is_kept_by_a_save(self) -> None:
         """Scenario: Sequence gone from the collection (through the
         form)."""
-        make_lot(self.kl, substance=substance_for("Aspirin"), batch="B-1")
+        make_lot(self.kl, substance=substance_for("CH-0010"), batch="B-1")
         self.create(sequence="SEQ-0001", started="2025-03-01",
                     ended="2025-03-02", batch="B-1")
         task = self.only_task()

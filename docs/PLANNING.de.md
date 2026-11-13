@@ -222,8 +222,7 @@ hohe Priorität. Die beiden Prioritäten beantworten unterschiedliche Fragen.
 
 Unter null ist der eigene Spielraum der Aufgabe als **verspätet**
 gekennzeichnet. Die geschätzte Restarbeit und der Puffer passen dann nicht
-mehr in die Reichweite. Passt eine Aufgabe zu mehreren Artikeln mit
-Prognosen, entscheidet der kleinste Spielraum über ihre Priorität.
+mehr in die Reichweite.
 
 Bei geplanten und laufenden Aufgaben mit passender Prognose verwendet die
 Anwendung diese Priorität überall, wo sie Aufgaben anzeigt, sortiert oder
@@ -233,9 +232,10 @@ Aufgaben, auch abgeschlossene und verworfene, behalten die im Formular
 eingetragene Priorität mit der Kennzeichnung **manuell**. Sie können eine
 berechnete Priorität nicht durch Ändern dieses Feldes überschreiben.
 
-Eine Aufgabe passt zu einem Artikel, wenn ihr Produkt die Artikelnummer
-ist, unabhängig von Groß- und Kleinschreibung, oder dieselbe Verbindung in
-der Sammlung bezeichnet.
+Eine Aufgabe passt zum Artikel ihrer Substanz, sofern die Substanz einen
+Artikel hat. Sie passt damit zu höchstens einem Artikel. Ein Artikel ohne
+Artikelnummer hat keinen Verbrauch und keine Prognose. Aufgaben, die zu
+ihm passen, zeigen ihre eingetragene Priorität.
 
 ## Die nächste Maßnahme wählen
 
@@ -246,7 +246,30 @@ zutreffen:
 | --- | --- |
 | **Abfüllen** mit einer Größe | Die abgefüllten Gebinde dieser Größe reichen kürzer als der Puffer, und die offenen Chargen können mindestens ein Gebinde füllen. Öffnen Sie das Abfüllformular für diese Größe. |
 | **Bulk prüfen** | Eine offene Charge lässt sich wegen fehlender molarer Masse nicht umrechnen. Öffnen Sie die Bulk-Liste zur Prüfung; die Charge könnte genug Material enthalten, um eine Synthese zu vermeiden. |
-| **Synthese planen** | Die Priorität ist hoch oder mittel, keine passende Aufgabe ist geplant oder läuft, und alle offenen Chargen lassen sich umrechnen. Öffnen Sie eine neue Aufgabe, deren Produkt bereits die Artikelnummer enthält. |
+| **Synthese planen** | Die Priorität ist hoch oder mittel, keine passende Aufgabe ist geplant oder läuft, und alle offenen Chargen des Artikels lassen sich umrechnen. Öffnen Sie eine neue Aufgabe mit ausgefülltem Substanzschlüssel sowie Syntheseweg und vorgeschlagener Anfangsstufe, wenn ein Syntheseweg diese Substanz herstellt. |
+
+Ein *Syntheseweg* ist eine geordnete Folge von Synthesestufen. Für jeden
+Syntheseweg in der Sammlung, der die Substanz des Artikels herstellt und
+nicht zurückgezogen ist, heißt die Maßnahme **Synthese planen über
+&lt;ID&gt;**. Die Maßnahmen erscheinen nach Syntheseweg-ID sortiert. Wenn
+kein Syntheseweg die Substanz herstellt, bleibt es bei **Synthese planen**;
+dann ist nur der Substanzschlüssel ausgefüllt.
+
+Um Arbeit zu überspringen, deren Produkt bereits vorrätig ist, schlägt
+die Planung die späteste Stufe vor, für deren vorangehende Stufe das
+*Zwischenprodukt* in einer offenen Charge vorliegt. Das Zwischenprodukt
+ist das erste Produkt einer Stufe, das die nächste Stufe als Substrat
+einsetzt. Eine offene Charge hat eine Menge über null; hergestellte und
+gekaufte Chargen zählen gleichermaßen. Ist keines dieser Zwischenprodukte
+vorrätig, schlägt die Planung Stufe 1 vor. Bei einer späteren Stufe ergänzt
+die Maßnahme **ab Stufe &lt;k&gt;, &lt;name&gt; vorrätig** und nennt damit
+das Zwischenprodukt.
+
+Die Planung reserviert nichts und prüft nicht, ob die Menge ausreicht.
+Prüfen Sie die Menge und bestätigen oder ändern Sie **Beginn ab Stufe**
+im Aufgabenformular. Der Syntheseweg der Aufgabe muss deren Substanz
+herstellen; die Stufen der Aufgabe beginnen bei der gewählten Stufe.
+Das Überspringen von Stufen verkürzt die Synthesedauer der Prognose nicht.
 
 Synthese planen ist ein Link, wenn Sie angemeldet sind, sonst reiner Text.
 Nach dem Speichern erscheint die neue Aufgabe beim Artikel. Solange die

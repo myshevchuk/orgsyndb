@@ -67,7 +67,10 @@ class Task(models.Model):
     that is ended and has not failed has a batch and a product lot; see
     ``has_product_lot`` and ``clean``. Its steps are the
     ``TaskStep`` rows of ``steps``, which ``tasks.steps`` gives it from
-    its ``sequence``, an imported sequence, or as plain steps.
+    its ``sequence``, an imported sequence, from the sequence's step
+    ``start_step`` on, or as plain steps; ``start_step`` is 1 for a task
+    without a sequence. A task that follows a sequence makes the
+    sequence's target; see ``clean``.
     """
 
     number = models.CharField(_("No."), max_length=20, unique=True,
@@ -89,6 +92,8 @@ class Task(models.Model):
         "collection.Sequence", verbose_name=_("Sequence"),
         on_delete=models.PROTECT, null=True, blank=True,
         related_name="tasks")
+    start_step = models.PositiveIntegerField(
+        _("Start at step"), default=1, validators=[MinValueValidator(1)])
     batch = models.CharField(_("Batch"), max_length=30, blank=True)
     report = models.BooleanField(_("Report"), default=False)
     qc_list = models.BooleanField(_("QC list"), default=False)
@@ -173,9 +178,11 @@ class Task(models.Model):
         Neither date may lie after today, and an end needs a start and
         may not precede it. A failed task has no batch. A task that is
         ended, neither cancelled nor failed, has a batch and a product
-        lot (``has_product_lot``). Raise ValidationError with the errors
-        by field. The rules of the steps are
-        ``tasks.steps.StepChange``'s.
+        lot (``has_product_lot``). A saved task with a sequence whose
+        substance differs from the stored one has the sequence's target
+        as its substance. Raise ValidationError with the errors by
+        field. The rules of the steps, among them the target of a
+        sequence set or changed, are ``tasks.steps.StepChange``'s.
         """
         errors: dict[str, str] = {}
         today = timezone.localdate()
@@ -200,8 +207,24 @@ class Task(models.Model):
                     "Record a lot of the product, made in the lab, with "
                     "the batch %(batch)s before ending the task.") % {
                         "batch": self.batch}
+        if self.substance_changed_off_target():
+            errors["substance"] = _(
+                "A task of the sequence %(key)s makes its target, "
+                "%(name)s.") % {"key": self.sequence.key,
+                                "name": self.sequence.target.shown_name}
         if errors:
             raise ValidationError(errors)
+
+    def substance_changed_off_target(self) -> bool:
+        """Whether the task is saved, has a sequence, and has a substance
+        other than the stored one that is not the sequence's target."""
+        if self.pk is None or self.sequence_id is None \
+                or self.substance_id is None:
+            return False
+        stored = Task.objects.filter(pk=self.pk).values_list(
+            "substance_id", flat=True).first()
+        return (stored is not None and stored != self.substance_id
+                and self.sequence.target_id != self.substance_id)
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Save the task, giving a new task the next number.

@@ -201,8 +201,6 @@ two priorities answer different questions.
 
 Below zero, the task's own slack is marked **late (verspätet)**. It means
 the estimated remaining work and buffer no longer fit within the runway.
-If a task matches several articles with forecasts, the smallest slack
-decides its priority.
 
 For planned and running tasks with a matching forecast, the application
 uses this priority everywhere it shows, sorts, or filters tasks. It marks
@@ -211,9 +209,10 @@ All other tasks, including ended and cancelled tasks, keep the priority
 entered in the form, marked **entered (manuell)**. You cannot override a
 computed priority by changing that field.
 
-A task matches an article when its product is the article number,
-regardless of letter case, or identifies the same compound in the
-collection.
+A task matches the article of its substance, when the substance has one.
+It therefore matches at most one article. An article without an article
+number has no consumption and no forecast. Tasks that match it show their
+entered priority.
 
 ## Choose the next action
 
@@ -224,7 +223,28 @@ apply:
 | --- | --- |
 | **Fill (Abfüllen)** followed by a size | That size's filled containers last less than the buffer, and the open lots can fill at least one container. Open the filling form for that size. |
 | **Check bulk (Bulk prüfen)** | An open lot cannot be converted because the molar mass is missing. Open the bulk list to check it; the lot may contain enough material to avoid a synthesis. |
-| **Plan synthesis (Synthese planen)** | Priority is high or medium, no matching task is planned or running, and every open lot can be converted. Open a new task with the article number already entered as its product. |
+| **Plan synthesis (Synthese planen)** | Priority is high or medium, no matching task is planned or running, and every open lot of the article can be converted. Open a new task with the article's substance key filled in, together with the sequence and proposed start step when a sequence makes that substance. |
+
+A *sequence* is an ordered route through synthesis steps. For each
+sequence in the collection that makes the article's substance and is not
+withdrawn, the action reads **Plan synthesis via &lt;ID&gt; (Synthese planen
+über &lt;ID&gt;)**. The actions appear in sequence-ID order. If no sequence
+makes the substance, the action remains **Plan synthesis (Synthese
+planen)** and fills in only the substance key.
+
+To skip work whose product is already in stock, planning proposes the
+latest step whose preceding step's *intermediate* has an open lot.
+The intermediate is the first product of one step that the next step
+takes as a substrate. An open lot has an amount above zero; made and
+bought lots both count. If none is in stock, planning proposes step 1.
+For a later step, the action adds **from step &lt;k&gt;, &lt;name&gt; in stock
+(ab Stufe &lt;k&gt;, &lt;name&gt; vorrätig)**, naming that intermediate.
+
+Planning reserves nothing and does not check whether the lot holds
+enough. Check the amount and confirm or change **Start at step (Beginn
+ab Stufe)** in the task form. The task's sequence must make its substance;
+its steps start at the step you choose. Skipping steps does not shorten
+the forecast's synthesis time.
 
 Plan synthesis is a link when you are signed in and plain text otherwise.
 Saving the new task makes it appear beside the article and removes that

@@ -15,8 +15,8 @@ from registry.models import Substance
 from tasks.models import Priority, Task, TaskStep
 
 FIELDS = ["substance", "priority", "assignee", "started", "ended",
-          "sequence", "batch", "report", "qc_list", "cancelled", "failed",
-          "note"]
+          "sequence", "start_step", "batch", "report", "qc_list",
+          "cancelled", "failed", "note"]
 STEP_FIELDS = ["position", "entry", "planned_import", "done_on",
                "journal_entry"]
 

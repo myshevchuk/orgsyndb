@@ -346,11 +346,13 @@ class _Writer:
             else:
                 setattr(task, name, value)
         task.full_clean(exclude=["number", "sequence"])
-        steps = StepChange(task, sequence, total, done)
+        steps = StepChange(task, sequence, total, done,
+                           start=task.start_step, substance=task.substance)
         errors = steps.errors()
         if errors:
             raise ValidationError(errors)
         task.sequence = sequence
+        task.start_step = steps.start
         task._history_user = user
         task.save()
         steps.apply(timezone.localdate(), user)

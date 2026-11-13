@@ -30,7 +30,7 @@
 </dl>
 {% if task.note %}<h2>{% translate "Note" %}</h2>
 <div class="lab-note">{{ task.note|linebreaks }}</div>
-{% endif %}{% if task.sequence %}<h2>{% translate "Sequence" %} {% sequence task.sequence.key sequence_known %}</h2>
+{% endif %}{% if task.sequence %}<h2>{% translate "Sequence" %} {% sequence task.sequence.key sequence_known %}{% if task.start_step > 1 %} {% blocktranslate with step=task.start_step %}from step {{ step }}{% endblocktranslate %}{% endif %}</h2>
 {% elif steps %}<h2>{% translate "Steps" %}</h2>
 {% endif %}{% if steps %}<ol class="sequence-steps">
 {% for step in steps %}<li>{% if step.signature %}{{ step.procedure }} {% marked step.signature %}{% elif step.procedure %}{% procedure step.procedure step.known %}{% if step.number %} {% blocktranslate with number=step.number %}Entry {{ number }}{% endblocktranslate %}{% endif %}{% else %}{% blocktranslate with position=step.position %}Step {{ position }}{% endblocktranslate %}{% endif %}{% if step.done_on %} <span class="badge badge--checked">{% blocktranslate with day=step.done_on|date %}done on {{ day }}{% endblocktranslate %}</span>{% endif %}{% include "tasks/step_lots.html" %}</li>
