@@ -41,8 +41,19 @@ ORGSYNDB_BUILDER_TOKEN     the token the application expects on a
 ORGSYNDB_ALLOWED_HOSTS     the host names the lab application accepts,
                            separated by commas; the first that is not *,
                            without a leading dot, is sent as the Host of
-                           the snapshot's and the manifest's requests
-                           (default: localhost)
+                           the snapshot's, the manifest's and the
+                           check's requests (default: localhost)
+ORGSYNDB_GATE_TOKEN        the token the gate's hook signs its checks
+                           with; without it ``run`` serves no check
+ORGSYNDB_GATE_PORT         the check server's port (default: 8091)
+ORGSYNDB_GATE_BIND         the address the check server listens on
+                           (default: 0.0.0.0)
+ORGSYNDB_GATE_TIMEOUT      seconds the hook waits for a check; a check
+                           ends 10 seconds sooner (default: 150, at
+                           least 11)
+ORGSYNDB_CHECK_URL         address the collection half of a check is
+                           posted to (default:
+                           http://app:8000/lab/collection/check/)
 
 The data directory (ORGSYNDB_DATA, default /var/lib/orgsyndb) holds the
 collection's clone in ``collection/``, the snapshot last fetched in
@@ -56,22 +67,54 @@ ORGSYNDB_APP (default /opt/orgsyndb/app). ORGSYNDB_IMAGE_INFO (default
 /opt/orgsyndb/image.json) names the image's record of the repository,
 ref and ``deploy/docker`` tree it was built from. An application commit
 whose ``deploy/docker`` tree differs needs a new image, and is not used.
+
+With ORGSYNDB_GATE_TOKEN set, ``run`` also serves ``POST /check`` for
+the gate, the pre-receive hook of the collection's repository in
+Forgejo, from a thread beside its cycles. The request carries a commit's
+pack, as ``git pack-objects --stdout --revs`` writes it, the commit's id
+in ``X-Orgsyndb-Commit`` and ``Authorization: Bearer
+<ORGSYNDB_GATE_TOKEN>``. The check checks the commit out as a build
+would, validates it and builds its manifest with ``tools/orgsyndb``
+against a snapshot of its own, and posts the manifest's collection half
+to ORGSYNDB_CHECK_URL with ORGSYNDB_BUILDER_TOKEN. It answers 200 with
+an empty body when the collection passes, and otherwise with a status
+and the reasons, one per line, in plain UTF-8 text: 422 with the errors
+of the commit, 503 when the gate is busy, the check took too long or a
+service failed, and 400, 401, 404, 405, 411 or 413 for a request that is
+not a check. One check runs at a time; a request while one runs is
+answered 503 at once. A commit whose tree holds a symbolic link is
+refused before it is checked out. A check uses its own clone of the
+application, ``check/app/`` in the data directory, at the application
+commit of the published release, or of the cycle's clone when none is
+published, with copies of the cycle clone's tool caches, and a directory
+of its own under ``check/``, removed when it ends. Everything a check
+does, the transfers included, ends by one deadline,
+ORGSYNDB_GATE_TIMEOUT less 10 seconds after it starts. Its steps run in
+process groups of their own, which are killed at its deadline and when
+SIGTERM stops ``run``.
 """
 
+import hmac
 import http.client
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import BinaryIO
 
 sys.dont_write_bytecode = True
 PROG = "orgsyndb-deploy"
@@ -79,6 +122,20 @@ IMAGE_DIR = "deploy/docker"
 OUTPUTS = ("build", "public", "pdf")
 REGISTRY_URL = "http://app:8000/lab/registry/snapshot.json"
 MANIFEST_URL = "http://app:8000/lab/collection/manifest/"
+CHECK_URL = "http://app:8000/lab/collection/check/"
+GATE_PORT = 8091
+GATE_BIND = "0.0.0.0"
+GATE_TIMEOUT = 150
+# Seconds a check ends before the hook stops waiting for its answer.
+GATE_MARGIN = 10
+# The largest pack a check takes, in bytes.
+GATE_LIMIT = 200_000_000
+GATE_COMMIT = re.compile(r"[0-9a-fA-F]{40}")
+# Seconds the check server reads and discards a body it did not take.
+GATE_DISCARD = 2
+# The ignored directories of the application's clone that hold the
+# tools a build fetches, which the check's clone copies.
+TOOL_CACHES = (".emacs-batch", ".tools")
 REQUEST_TIMEOUT = 30
 MANIFEST_FORMAT = 1
 # The keys of an import as the snapshot names it, besides its ``id``.
@@ -121,6 +178,11 @@ class Settings:
     registry_host: str
     manifest_url: str
     token: str
+    gate_token: str
+    gate_port: int
+    gate_bind: str
+    gate_timeout: int
+    check_url: str
 
 
 def log(message: str) -> None:
@@ -147,6 +209,16 @@ def number(name: str, default: int, least: int) -> int:
         raise Failure(f"{name} must be a whole number of at least {least}: "
                       f"{value}")
     return int(value)
+
+
+def port(name: str, default: int) -> int:
+    """Return the TCP port the environment variable NAME gives, or
+    DEFAULT when it is unset or empty. Raise Failure when it is not a
+    whole number from 1 to 65535."""
+    value = number(name, default, 1)
+    if value > 65535:
+        raise Failure(f"{name} must be a port from 1 to 65535: {value}")
+    return value
 
 
 def request_host(allowed: str) -> str:
@@ -200,6 +272,14 @@ def settings() -> Settings:
         manifest_url=(os.environ.get("ORGSYNDB_MANIFEST_URL", "").strip()
                       or MANIFEST_URL),
         token=os.environ.get("ORGSYNDB_BUILDER_TOKEN", "").strip(),
+        gate_token=os.environ.get("ORGSYNDB_GATE_TOKEN", "").strip(),
+        gate_port=port("ORGSYNDB_GATE_PORT", GATE_PORT),
+        gate_bind=(os.environ.get("ORGSYNDB_GATE_BIND", "").strip()
+                   or GATE_BIND),
+        gate_timeout=number("ORGSYNDB_GATE_TIMEOUT", GATE_TIMEOUT,
+                            GATE_MARGIN + 1),
+        check_url=(os.environ.get("ORGSYNDB_CHECK_URL", "").strip()
+                   or CHECK_URL),
     )
 
 
@@ -327,33 +407,100 @@ def _has_strings(entry: object, *keys: str) -> bool:
         isinstance(entry.get(key), str) for key in keys)
 
 
+def request_registry(config: Settings, kept: Path,
+                     deadline: float | None = None) -> dict:
+    """Request the snapshot at the registry address, write it to the
+    file KEPT, replacing the file at once, and return it. Without
+    DEADLINE each step of the request may take REQUEST_TIMEOUT seconds;
+    with it, a ``time.monotonic`` value, the request as a whole must end
+    by then. Raise TimeoutError when DEADLINE passes, and Failure, with
+    the reason, when the request fails otherwise or its answer is no
+    snapshot; KEPT is then unchanged."""
+    headers = {"Host": config.registry_host, "Accept": "application/json"}
+    try:
+        if deadline is None:
+            request = urllib.request.Request(config.registry_url,
+                                             headers=headers)
+            with urllib.request.urlopen(request,
+                                        timeout=REQUEST_TIMEOUT) as answer:
+                status, data = answer.status, answer.read()
+        else:
+            status, data = transfer(config.registry_url, deadline, headers)
+    except TimeoutError:
+        if deadline is not None:
+            raise
+        raise Failure("timed out") from None
+    except urllib.error.HTTPError as exc:
+        raise Failure(f"status {exc.code}") from None
+    except (OSError, http.client.HTTPException, ValueError) as exc:
+        raise Failure(str(exc) or type(exc).__name__) from None
+    if status != 200:
+        raise Failure(f"status {status}")
+    table = read_snapshot(data)
+    temporary = kept.with_name(f".{kept.name}")
+    temporary.write_bytes(data)
+    os.replace(temporary, kept)
+    return table
+
+
+def transfer(url: str, deadline: float, headers: dict[str, str],
+             data: bytes | None = None) -> tuple[int, bytes]:
+    """Request the http or https address URL with HEADERS, by POST with
+    the body DATA or by GET without it, and return the answer's status,
+    whatever it is, and its body. The request as a whole must end by
+    DEADLINE, a ``time.monotonic`` value. Raise TimeoutError when it
+    does not, ValueError when URL is no http or https address, and
+    OSError or ``http.client.HTTPException`` when the request fails."""
+    def left() -> float:
+        seconds = deadline - time.monotonic()
+        if seconds <= 0:
+            raise TimeoutError("the deadline passed")
+        return seconds
+
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise ValueError(f"not an http or https address: {url}")
+    kind = (http.client.HTTPSConnection if parts.scheme == "https"
+            else http.client.HTTPConnection)
+    connection = kind(parts.hostname, parts.port, timeout=left())
+    answer = None
+    try:
+        path = (parts.path or "/") + (f"?{parts.query}" if parts.query
+                                      else "")
+        method = "GET" if data is None else "POST"
+        connection.request(method, path, body=data, headers=headers)
+        # The answer is read here rather than through getresponse, which
+        # lets go of the socket whose timeout each read sets.
+        sock = connection.sock
+        sock.settimeout(left())
+        answer = http.client.HTTPResponse(sock, method=method)
+        answer.begin()
+        chunks = []
+        while True:
+            sock.settimeout(left())
+            chunk = answer.read1(1 << 16)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        left()
+        return answer.status, b"".join(chunks)
+    finally:
+        if answer is not None:
+            answer.close()
+        connection.close()
+
+
 def fetch_registry(config: Settings) -> dict | None:
     """Request the snapshot at the registry address, keep it in
     ``<data>/registry.json`` and return it. When the request fails or
     its answer is no snapshot, log it and return None: nothing is built
     without a snapshot of this cycle."""
-    kept = config.data / "registry.json"
-    request = urllib.request.Request(
-        config.registry_url, headers={"Host": config.registry_host,
-                                      "Accept": "application/json"})
     try:
-        try:
-            with urllib.request.urlopen(request,
-                                        timeout=REQUEST_TIMEOUT) as answer:
-                if answer.status != 200:
-                    raise Failure(f"status {answer.status}")
-                data = answer.read()
-        except (OSError, http.client.HTTPException, ValueError) as exc:
-            raise Failure(str(exc)) from None
-        table = read_snapshot(data)
+        return request_registry(config, config.data / "registry.json")
     except Failure as exc:
         log(f"cannot fetch the registry from {config.registry_url}: {exc}; "
             "nothing is built")
         return None
-    temporary = kept.with_name(".registry.json")
-    temporary.write_bytes(data)
-    os.replace(temporary, kept)
-    return table
 
 
 def tool_environment(config: Settings) -> dict[str, str]:
@@ -754,7 +901,454 @@ def cycle(config: Settings) -> None:
         checkout(config.app, keep)
 
 
+# --------------------------------------------------------------------------
+# Gate
+
+
+class Refusal(Exception):
+    """A check ends with the answer STATUS and the text LINES."""
+
+    def __init__(self, status: int, *lines: str) -> None:
+        super().__init__(status, *lines)
+        self.status = status
+        self.lines = list(lines)
+
+
+def step_errors(stdout: str, stderr: str) -> list[str]:
+    """Return the error lines of a failed step's STDOUT and STDERR, or,
+    when neither has one, the last non-blank line of STDERR, else of
+    STDOUT, else nothing."""
+    found = error_lines(stdout) + error_lines(stderr)
+    if found:
+        return found
+    for text in (stderr, stdout):
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        if lines:
+            return lines[-1:]
+    return []
+
+
+class Gate:
+    """The checks of the gate: one at a time, each with a directory of
+    its own under ``<data>/check/`` and one deadline.
+
+    ``lock`` is held while a check runs. ``stop`` ends a running check
+    from another thread: it kills the process group of its step and
+    starts no further step.
+    """
+
+    def __init__(self, config: Settings) -> None:
+        self.config = config
+        self.root = config.data / "check"
+        self.lock = threading.Lock()
+        self._guard = threading.Lock()
+        self._group: int | None = None
+        self._directory: Path | None = None
+        self._stopping = False
+
+    @property
+    def seconds(self) -> int:
+        """The seconds a check may take."""
+        return self.config.gate_timeout - GATE_MARGIN
+
+    def too_slow(self) -> Refusal:
+        return Refusal(503, f"the check took too long: more than "
+                            f"{self.seconds} seconds")
+
+    def clear(self) -> None:
+        """Remove every check directory under ``<data>/check/``, keeping
+        the check's clone of the application."""
+        if not self.root.is_dir():
+            return
+        for entry in self.root.iterdir():
+            if entry.name != "app":
+                shutil.rmtree(entry, ignore_errors=True)
+
+    def stop(self) -> None:
+        """Stop the running check, if any: kill its step's process group,
+        start no further step, wait up to 10 seconds for the check to
+        end, and remove its directory."""
+        with self._guard:
+            self._stopping = True
+            if self._group is not None:
+                try:
+                    os.killpg(self._group, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+        if self.lock.acquire(timeout=10):
+            self.lock.release()
+        with self._guard:
+            directory = self._directory
+        if directory is not None:
+            shutil.rmtree(directory, ignore_errors=True)
+
+    def step(self, args: list[str], deadline: float,
+             stdin: BinaryIO | None = None,
+             env: dict[str, str] | None = None) -> tuple[int, str, str]:
+        """Run ARGS in a new process group, its standard input STDIN or
+        nothing, with the environment ENV or this program's, and return
+        its exit status, standard output and standard error. Raise
+        Refusal 503 when the DEADLINE, a ``time.monotonic`` value,
+        passes first, after killing the group, when ARGS cannot run, and
+        when the gate stops."""
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise self.too_slow()
+        with self._guard:
+            if self._stopping:
+                raise Refusal(503, "the builder is stopping; push again")
+            try:
+                process = subprocess.Popen(
+                    args, stdin=stdin or subprocess.DEVNULL,
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    env=env, process_group=0)
+            except OSError as exc:
+                raise Refusal(503, f"cannot run {args[0]}: {exc}") from None
+            self._group = process.pid
+        try:
+            try:
+                out, err = process.communicate(timeout=left)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.communicate()
+                raise self.too_slow() from None
+        finally:
+            with self._guard:
+                self._group = None
+                stopping = self._stopping
+        if stopping:
+            raise Refusal(503, "the builder is stopping; push again")
+        return (process.returncode, out.decode("utf-8", "replace"),
+                err.decode("utf-8", "replace"))
+
+    def git(self, deadline: float, *args: str,
+            stdin: BinaryIO | None = None) -> str:
+        """Run ``git ARGS`` as a step and return its output. Raise
+        Refusal 503, with Git's reason, when it exits non-zero."""
+        status, out, err = self.step(["git", *args], deadline, stdin)
+        if status != 0:
+            reason = (err.strip().splitlines() or [f"exit {status}"])[-1]
+            raise Refusal(503, f"git {' '.join(args)}: {reason}")
+        return out.strip()
+
+    def application(self, deadline: float) -> Path:
+        """Bring the check's clone of the application to the commit of
+        the published release the saved state names, or to the cycle's
+        checked-out commit when none is published, keeping its ignored
+        files, and copy into it the cycle clone's tool caches
+        (``TOOL_CACHES``) that it lacks, keeping their modes; return the
+        clone."""
+        wanted = ((load_state(self.config.data)["deployed"] or {})
+                  .get("app") or head(self.config.app))
+        if wanted is None:
+            raise Refusal(503, f"{self.config.app} is not a Git checkout of "
+                               "the application")
+        app = self.root / "app"
+        if not (app / ".git").exists():
+            app.mkdir(parents=True, exist_ok=True)
+            self.git(deadline, "-C", str(app), "init", "--quiet")
+        self.git(deadline, "-C", str(app), "fetch", "--quiet", "--no-tags",
+                 "--force", str(self.config.app.absolute()), wanted)
+        self.git(deadline, "-C", str(app), "checkout", "--quiet", "--force",
+                 "--detach", wanted)
+        self.git(deadline, "-C", str(app), "clean", "--quiet", "-ffd")
+        for name in TOOL_CACHES:
+            source, target = self.config.app / name, app / name
+            if source.is_dir() and not target.exists():
+                partial = app / f"{name}.partial"
+                shutil.rmtree(partial, ignore_errors=True)
+                shutil.copytree(source, partial, symlinks=True)
+                os.replace(partial, target)
+        return app
+
+    def checkout(self, deadline: float, directory: Path, commit: str
+                 ) -> Path:
+        """Index the pack ``<DIRECTORY>/pack`` into a new repository in
+        DIRECTORY, point its ``main`` at COMMIT and check it out; return
+        the repository. Raise Refusal 422 when the pack cannot be
+        indexed or does not hold COMMIT, and, before anything is checked
+        out, when the tree of COMMIT holds a symbolic link, naming each
+        link."""
+        repo = directory / "collection"
+        self.git(deadline, "init", "--quiet", "--initial-branch", "main",
+                 str(repo))
+        with open(directory / "pack", "rb") as pack:
+            status, out, err = self.step(
+                ["git", "-C", str(repo), "index-pack", "--stdin"],
+                deadline, pack)
+        if status != 0:
+            raise Refusal(422, *(step_errors(out, err)
+                                 or ["the pack cannot be read"]))
+        status, _out, _err = self.step(
+            ["git", "-C", str(repo), "cat-file", "-e", f"{commit}^{{commit}}"],
+            deadline)
+        if status != 0:
+            raise Refusal(422, f"the pack does not hold commit {commit}")
+        links = [entry.partition("\t")[2] for entry in self.git(
+            deadline, "-C", str(repo), "ls-tree", "-r", "-z", commit
+        ).split("\0") if entry.startswith("120000 ")]
+        if links:
+            raise Refusal(422, *(f"symbolic links are not allowed: {path}"
+                                 for path in links))
+        self.git(deadline, "-C", str(repo), "update-ref", "refs/heads/main",
+                 commit)
+        self.git(deadline, "-C", str(repo), "checkout", "--quiet", "--force",
+                 "main")
+        return repo
+
+    def tool(self, deadline: float, app: Path, collection: Path,
+             registry: Path, command: str) -> str:
+        """Run ``tools/orgsyndb -C COLLECTION COMMAND`` of the clone APP
+        as a step, ORGSYNDB_REGISTRY naming REGISTRY, and return its
+        standard output. Raise Refusal 422 with its error lines when it
+        exits non-zero."""
+        status, out, err = self.step(
+            [str(app / "tools" / "orgsyndb"), "-C", str(collection),
+             command], deadline,
+            env={**os.environ, "ORGSYNDB_REGISTRY": str(registry)})
+        if status != 0:
+            raise Refusal(422, *(step_errors(out, err)
+                                 or [f"{command} exited {status}"]))
+        return out
+
+    def ask(self, deadline: float, half: dict) -> list[str]:
+        """Post the collection HALF to the check address with the
+        builder's token and return the errors the application found.
+        Raise Refusal 503 when it gives no answer of status 200 holding
+        a list of texts under ``errors``; any other status, 2xx
+        included, is no answer. Raise it saying that the check took too
+        long when the answer has not arrived whole by the DEADLINE."""
+        config = self.config
+        try:
+            status, data = transfer(
+                config.check_url, deadline, {
+                    "Host": config.registry_host,
+                    "Authorization": f"Bearer {config.token}",
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"},
+                json.dumps(half).encode("utf-8"))
+        except TimeoutError:
+            raise self.too_slow() from None
+        except (OSError, http.client.HTTPException, ValueError) as exc:
+            raise Refusal(503, "the lab application gave no answer: "
+                               + (str(exc) or type(exc).__name__)) from None
+        if status != 200:
+            raise Refusal(503, "the lab application answered the check "
+                               f"with status {status}")
+        try:
+            errors = json.loads(data.decode("utf-8"))["errors"]
+        except (UnicodeDecodeError, ValueError, KeyError, TypeError):
+            errors = None
+        if not (isinstance(errors, list)
+                and all(isinstance(error, str) for error in errors)):
+            raise Refusal(503, "the lab application's answer to the check "
+                               "is not a list of errors")
+        return errors
+
+    def check(self, commit: str,
+              receive: Callable[[Path, float], None]) -> Refusal:
+        """Check COMMIT, whose pack RECEIVE writes to the file it is
+        given by the deadline it is given, a ``time.monotonic`` value,
+        raising TimeoutError when it cannot and OSError when the body
+        ends early; return the answer, status 200 without lines when
+        the commit passes.
+
+        The caller holds ``lock``. The check's directory is removed
+        when it ends, whatever the answer."""
+        config = self.config
+        deadline = time.monotonic() + self.seconds
+        self.root.mkdir(parents=True, exist_ok=True)
+        directory = Path(tempfile.mkdtemp(prefix="run-", dir=self.root))
+        with self._guard:
+            self._directory = directory
+        try:
+            try:
+                receive(directory / "pack", deadline)
+            except TimeoutError:
+                raise self.too_slow() from None
+            except OSError as exc:
+                raise Refusal(400, f"cannot read the pack: {exc}") from None
+            app = self.application(deadline)
+            registry = directory / "registry.json"
+            try:
+                request_registry(config, registry, deadline)
+            except TimeoutError:
+                raise self.too_slow() from None
+            except Failure as exc:
+                raise Refusal(503, "cannot fetch the registry snapshot: "
+                                   f"{exc}") from None
+            collection = (self.checkout(deadline, directory, commit)
+                          / config.collection_path)
+            self.tool(deadline, app, collection, registry, "validate")
+            output = self.tool(deadline, app, collection, registry,
+                               "manifest")
+            try:
+                half = collection_half(output)
+            except BuildFailure as exc:
+                raise Refusal(503, str(exc)) from None
+            errors = self.ask(deadline, half)
+            if errors:
+                return Refusal(422, *(line for error in errors
+                                      for line in error.splitlines()))
+            return Refusal(200)
+        except Refusal as answer:
+            return answer
+        finally:
+            shutil.rmtree(directory, ignore_errors=True)
+            with self._guard:
+                self._directory = None
+
+
+class CheckHandler(BaseHTTPRequestHandler):
+    """The check server's requests: ``POST /check`` with a pack."""
+
+    server_version = PROG
+    protocol_version = "HTTP/1.1"
+    # The bytes of the request's body not read yet.
+    unread = 0
+
+    @property
+    def gate(self) -> Gate:
+        return self.server.gate  # type: ignore[attr-defined]
+
+    def log_message(self, format: str, *args: object) -> None:
+        """Log nothing per request; ``check`` logs each check."""
+
+    def answer(self, status: int, lines: list[str]) -> None:
+        """Answer STATUS with LINES as UTF-8 text, closing the
+        connection."""
+        body = "".join(f"{line}\n" for line in lines).encode("utf-8")
+        self.close_connection = True
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Connection", "close")
+            self.end_headers()
+            if self.command != "HEAD":
+                self.wfile.write(body)
+        except OSError:
+            pass
+
+    def other(self) -> None:
+        """Answer a request that is not a POST."""
+        if self.path != "/check":
+            self.answer(404, ["not found"])
+        else:
+            self.answer(405, ["only POST is allowed"])
+
+    do_GET = do_HEAD = do_PUT = do_DELETE = do_PATCH = other
+
+    def signed(self) -> bool:
+        """Whether the request carries ``Authorization: Bearer
+        <ORGSYNDB_GATE_TOKEN>``, compared in constant time."""
+        scheme, _, given = self.headers.get("Authorization", "").partition(
+            " ")
+        return scheme == "Bearer" and hmac.compare_digest(
+            given.encode("utf-8"), self.gate.config.gate_token.encode("utf-8"))
+
+    def copy(self, target: Path, deadline: float) -> None:
+        """Read the rest of the body into the file TARGET by DEADLINE, a
+        ``time.monotonic`` value. Raise TimeoutError when the deadline
+        passes first, and OSError when the body ends early."""
+        with open(target, "wb") as out:
+            while self.unread > 0:
+                seconds = deadline - time.monotonic()
+                if seconds <= 0:
+                    raise TimeoutError("the deadline passed")
+                self.connection.settimeout(seconds)
+                chunk = self.rfile.read1(min(self.unread, 1 << 20))
+                if not chunk:
+                    raise OSError("the body ended early")
+                out.write(chunk)
+                self.unread -= len(chunk)
+
+    def discard(self) -> None:
+        """Read and drop what arrives of the rest of the body, for at
+        most GATE_DISCARD seconds."""
+        deadline = time.monotonic() + GATE_DISCARD
+        try:
+            while self.unread > 0:
+                seconds = deadline - time.monotonic()
+                if seconds <= 0:
+                    return
+                self.connection.settimeout(seconds)
+                chunk = self.rfile.read1(min(self.unread, 1 << 20))
+                if not chunk:
+                    return
+                self.unread -= len(chunk)
+        except OSError:
+            return
+
+    def do_POST(self) -> None:
+        self.unread = 0
+        try:
+            self.take()
+        finally:
+            self.discard()
+
+    def take(self) -> None:
+        """Answer a POST: check the pack it carries, or refuse it."""
+        if self.path != "/check":
+            self.answer(404, ["not found"])
+            return
+        if not self.signed():
+            self.answer(401, ["the request does not carry the gate's token"])
+            return
+        given = self.headers.get("Content-Length", "")
+        if not given.isdigit():
+            self.answer(411, ["the request has no Content-Length"])
+            return
+        self.unread = int(given)
+        if self.unread > GATE_LIMIT:
+            self.answer(413, [f"the pack is larger than {GATE_LIMIT} "
+                              "bytes"])
+            return
+        commit = self.headers.get("X-Orgsyndb-Commit", "").strip()
+        if not GATE_COMMIT.fullmatch(commit):
+            self.answer(400, ["X-Orgsyndb-Commit does not hold a commit id "
+                              "of 40 hexadecimal digits"])
+            return
+        commit = commit.lower()
+        gate = self.gate
+        if not gate.lock.acquire(blocking=False):
+            self.answer(503, ["the gate is busy with another check; push "
+                              "again"])
+            return
+        try:
+            result = gate.check(commit, self.copy)
+        finally:
+            gate.lock.release()
+        log(f"check of collection {commit[:10]}: {result.status}"
+            + (f", {result.lines[0]}" if result.lines else ""))
+        self.answer(result.status, result.lines)
+
+
+def serve_gate(config: Settings) -> tuple[ThreadingHTTPServer, Gate]:
+    """Start the check server on ORGSYNDB_GATE_BIND and
+    ORGSYNDB_GATE_PORT in a thread, after removing check directories a
+    previous run left; return the server and its gate. Raise OSError
+    when it cannot listen."""
+    gate = Gate(config)
+    gate.clear()
+    server = ThreadingHTTPServer((config.gate_bind, config.gate_port),
+                                 CheckHandler)
+    server.daemon_threads = True
+    server.gate = gate  # type: ignore[attr-defined]
+    threading.Thread(target=server.serve_forever, name="gate",
+                     daemon=True).start()
+    log(f"serving checks on {config.gate_bind}:{config.gate_port}")
+    return server, gate
+
+
 def run(config: Settings) -> int:
+    """Repeat the cycle every ORGSYNDB_INTERVAL seconds, or at once on
+    SIGHUP, serving checks beside it while ORGSYNDB_GATE_TOKEN is set,
+    until SIGTERM ends it with exit status 0. Raise OSError when the
+    check server cannot listen."""
     wake = threading.Event()
     signal.signal(signal.SIGHUP, lambda *_: wake.set())
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
@@ -762,13 +1356,21 @@ def run(config: Settings) -> int:
         + (f"application {config.app_repo} ({config.app_ref})"
            if config.app_update else "application updates off")
         + f"; every {config.interval} s")
-    while True:
-        try:
-            cycle(config)
-        except (Failure, OSError) as exc:
-            log(f"error: {exc}")
-        wake.wait(config.interval)
-        wake.clear()
+    served = serve_gate(config) if config.gate_token else None
+    try:
+        while True:
+            try:
+                cycle(config)
+            except (Failure, OSError) as exc:
+                log(f"error: {exc}")
+            wake.wait(config.interval)
+            wake.clear()
+    finally:
+        if served is not None:
+            server, gate = served
+            gate.stop()
+            server.shutdown()
+            server.server_close()
 
 
 def main(argv: list[str]) -> int:

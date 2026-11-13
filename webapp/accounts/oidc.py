@@ -14,7 +14,12 @@ from oauth2_provider.oauth2_validators import OAuth2Validator
 
 # The scopes the provider offers, and the claims it gives under them.
 SCOPES = ["openid", "profile", "email"]
-CLAIMS = ["sub", "nickname", "preferred_username", "name", "email"]
+CLAIMS = ["sub", "nickname", "preferred_username", "name", "email",
+          "groups"]
+# The Forgejo teams every account belongs to, through the claim
+# ``groups``: the group ``authors`` maps to the team ``authors`` of the
+# organisation ``lab``.
+GROUPS = ["authors"]
 
 
 def active(user: Any) -> bool:
@@ -27,9 +32,13 @@ class ClaimsValidator(OAuth2Validator):
     an access token of an account deactivated since it was issued, and
     whose ID tokens and user info carry,
     besides ``sub``, the account's primary key as text, ``nickname``
-    and ``preferred_username``, both the user name, and ``name``, the
-    display name, under the scope ``profile``, and ``email``, the
-    account's email address, under the scope ``email``."""
+    and ``preferred_username``, both the user name, ``name``, the
+    display name, and ``groups``, the list ``GROUPS``, under the scope
+    ``profile``, and ``email``, the account's email address, under the
+    scope ``email``."""
+
+    oidc_claim_scope = {**OAuth2Validator.oidc_claim_scope,
+                        "groups": "profile"}
 
     def validate_code(self, client_id: str, code: str, client: Any,
                       request: Any, *args: Any, **kwargs: Any) -> bool:
@@ -55,12 +64,13 @@ class ClaimsValidator(OAuth2Validator):
         return (super().validate_bearer_token(token, scopes, request)
                 and active(request.user))
 
-    def get_additional_claims(self, request: Any) -> dict[str, str]:
+    def get_additional_claims(self, request: Any) -> dict[str, Any]:
         """Return the claims of the account REQUEST is made for."""
         user = request.user
         return {"nickname": user.get_username(),
                 "preferred_username": user.get_username(),
-                "name": user.display_name, "email": user.email}
+                "name": user.display_name, "email": user.email,
+                "groups": list(GROUPS)}
 
 
 def provider_on() -> bool:

@@ -1,0 +1,71 @@
+#!/bin/sh
+# The gate: the pre-receive hook of lab/collection, which forge-setup
+# links into the repository's hooks/pre-receive.d/. For each update of
+# refs/heads/main that does not delete it, it posts the new commit with
+# its history, as git pack-objects --stdout --revs writes it, to the
+# builder's check, and lets the update pass only when the check answers
+# 200. Otherwise it writes "Gate: <reason>" and the answer's lines to
+# standard error, which Forgejo shows the pusher, and exits 1, so that
+# Forgejo refuses the push. Updates of other refs pass unchecked.
+#   ORGSYNDB_GATE_TOKEN    the token the check expects; without it every
+#                          update of main is refused
+#   ORGSYNDB_GATE_URL      the check (default: http://builder:8091/check)
+#   ORGSYNDB_GATE_TIMEOUT  seconds to wait for the answer (default: 150)
+set -u
+
+url=${ORGSYNDB_GATE_URL:-http://builder:8091/check}
+timeout=${ORGSYNDB_GATE_TIMEOUT:-150}
+
+work=$(mktemp -d) || exit 1
+trap 'rm -rf "$work"' EXIT
+
+# refuse REASON [FILE]: write the reason and the lines of FILE to
+# standard error and exit 1.
+refuse() {
+	echo "Gate: $1" >&2
+	if [ $# -gt 1 ] && [ -s "$2" ]; then
+		cat "$2" >&2
+		# The last line may lack its newline.
+		if [ -n "$(tail -c 1 "$2")" ]; then
+			echo >&2
+		fi
+	fi
+	exit 1
+}
+
+# check COMMIT: refuse the push unless the builder's check answers 200
+# for COMMIT.
+check() {
+	if [ -z "${ORGSYNDB_GATE_TOKEN:-}" ]; then
+		refuse "the gate is not configured: ORGSYNDB_GATE_TOKEN is not set; main takes no push"
+	fi
+	if ! echo "$1" | git pack-objects --stdout --revs >"$work/pack" \
+		2>"$work/error"; then
+		refuse "cannot pack commit $1" "$work/error"
+	fi
+	printf 'Authorization: Bearer %s\nX-Orgsyndb-Commit: %s\n' \
+		"$ORGSYNDB_GATE_TOKEN" "$1" >"$work/headers"
+	status=$(curl -sS -o "$work/answer" -w '%{http_code}' \
+		--max-time "$timeout" -H @"$work/headers" \
+		-H 'Content-Type: application/octet-stream' \
+		--data-binary @"$work/pack" "$url" 2>"$work/error")
+	code=$?
+	if [ "$code" -eq 28 ]; then
+		refuse "the check gave no answer within $timeout seconds; push again later"
+	elif [ "$code" -ne 0 ]; then
+		refuse "the check gave no answer; push again later" "$work/error"
+	fi
+	case $status in
+	200) ;;
+	422) refuse "commit $1 is refused:" "$work/answer" ;;
+	*) refuse "the check answered $status:" "$work/answer" ;;
+	esac
+}
+
+# Each line is "<old> <new> <ref>"; a <new> of zeros deletes the ref.
+while read -r _old new ref; do
+	case $new in
+	*[!0]*) [ "$ref" = refs/heads/main ] && check "$new" ;;
+	esac
+done
+exit 0

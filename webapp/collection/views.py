@@ -1,5 +1,6 @@
-"""The collection's pages: the manifest the builder posts, the ID path
-that issues procedure and sequence IDs, and the list of imports."""
+"""The collection's pages: the manifest the builder posts, the check
+the builder's gate asks for, the ID path that issues procedure and
+sequence IDs, and the list of imports."""
 
 import hmac
 import json
@@ -23,6 +24,23 @@ def signed(request: HttpRequest, token: str) -> bool:
         given.encode("utf-8"), token.encode("utf-8"))
 
 
+def _builder_refusal(request: HttpRequest) -> JsonResponse | None:
+    """Return the answer that refuses REQUEST to a path of the builder,
+    or None when it may proceed: 404 while ``ORGSYNDB_BUILDER_TOKEN`` is
+    empty, 403 without that token as its bearer token, and 405 for a
+    method other than POST, each with the reason under ``error``."""
+    token = settings.ORGSYNDB_BUILDER_TOKEN
+    if not token:
+        return JsonResponse({"error": "not found"}, status=404)
+    if not signed(request, token):
+        return JsonResponse({"error": "forbidden"}, status=403)
+    if request.method != "POST":
+        answer = JsonResponse({"error": "only POST is allowed"}, status=405)
+        answer["Allow"] = "POST"
+        return answer
+    return None
+
+
 @csrf_exempt
 def manifest(request: HttpRequest) -> JsonResponse:
     """Take the builder's manifest and answer, in JSON, how it was
@@ -33,15 +51,9 @@ def manifest(request: HttpRequest) -> JsonResponse:
     whose method is not POST 405, and a body that is not a manifest 400
     with the reason under ``error``. None of these records anything.
     """
-    token = settings.ORGSYNDB_BUILDER_TOKEN
-    if not token:
-        return JsonResponse({"error": "not found"}, status=404)
-    if not signed(request, token):
-        return JsonResponse({"error": "forbidden"}, status=403)
-    if request.method != "POST":
-        answer = JsonResponse({"error": "only POST is allowed"}, status=405)
-        answer["Allow"] = "POST"
-        return answer
+    refusal = _builder_refusal(request)
+    if refusal is not None:
+        return refusal
     try:
         body = json.loads(request.body)
     except ValueError as error:
@@ -52,6 +64,32 @@ def manifest(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"error": str(error)}, status=400)
     status, answer = importing.receive(read)
     return JsonResponse(answer, status=status)
+
+
+@csrf_exempt
+def check(request: HttpRequest) -> JsonResponse:
+    """Check the collection half of a manifest as an import would, and
+    answer 200 with ``{"errors": [...]}``, the errors an import of it
+    would be refused for (``importing.check``), an empty list when there
+    is none.
+
+    The body is a JSON table with ``language``, ``procedures``,
+    ``sequences`` and ``deleted`` as in a manifest. The token, the
+    method and a body that is not such a table are answered as the
+    manifest path answers them. The check records nothing.
+    """
+    refusal = _builder_refusal(request)
+    if refusal is not None:
+        return refusal
+    try:
+        body = json.loads(request.body)
+    except ValueError as error:
+        return JsonResponse({"error": f"not JSON: {error}"}, status=400)
+    try:
+        collection = importing.read_collection(body)
+    except importing.Malformed as error:
+        return JsonResponse({"error": str(error)}, status=400)
+    return JsonResponse({"errors": importing.check(collection)})
 
 
 @csrf_exempt

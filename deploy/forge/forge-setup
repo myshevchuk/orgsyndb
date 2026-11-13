@@ -9,7 +9,15 @@
 # application's discovery document, so the app must be up, with
 # ORGSYNDB_OIDC_KEY set, before this runs. The lab application takes
 # every account that is not local for one made through lab, so add no
-# other source.
+# other source. The source maps the claim groups, which names authors
+# for every lab account, to the team authors of the organisation lab.
+#
+# Through Forgejo's API, as orgsyndb, it then creates what is missing of
+# the public organisation lab, its team authors, the public repository
+# lab/collection with the default branch main, and the protection of
+# main, which refuses a force push to it; gives the team write access to
+# that repository alone; and links the gate, deploy/forge/gate, into the
+# repository's pre-receive hooks.
 set -eu
 
 : "${ORGSYNDB_FORGE_PASSWORD:?ORGSYNDB_FORGE_PASSWORD is not set}"
@@ -20,6 +28,14 @@ forgejo() {
 }
 
 discovery="${ORGSYNDB_APP_INTERNAL_URL:-http://app:8000}/lab/o/.well-known/openid-configuration"
+# The claim groups names the Forgejo teams, by organisation, an account
+# belongs to; Forgejo removes it from a team the claim no longer names.
+groups='{"authors":{"lab":["authors"]}}'
+# Forgejo's API inside this container, its repositories on disk, and
+# the gate as this service mounts it.
+api_url=http://localhost:3000/api/v1
+repositories=/var/lib/gitea/git/repositories
+gate=/opt/orgsyndb/forge/gate
 
 if forgejo admin user list --admin | awk '$2 == "orgsyndb" { found = 1 } END { exit !found }'; then
 	echo "forge-setup: the admin account orgsyndb exists."
@@ -35,13 +51,107 @@ if [ -z "$id" ]; then
 	forgejo admin auth add-oauth --name lab --provider openidConnect \
 		--key forgejo --secret "$ORGSYNDB_FORGE_CLIENT_SECRET" \
 		--auto-discover-url "$discovery" \
-		--scopes openid --scopes profile --scopes email
+		--scopes openid --scopes profile --scopes email \
+		--group-claim-name groups --group-team-map "$groups" \
+		--group-team-map-removal
 	echo "forge-setup: added the source lab."
 else
 	forgejo admin auth update-oauth --id "$id" --name lab \
 		--provider openidConnect \
 		--key forgejo --secret "$ORGSYNDB_FORGE_CLIENT_SECRET" \
 		--auto-discover-url "$discovery" \
-		--scopes openid --scopes profile --scopes email
+		--scopes openid --scopes profile --scopes email \
+		--group-claim-name groups --group-team-map "$groups" \
+		--group-team-map-removal
 	echo "forge-setup: updated the source lab."
 fi
+
+answer=$(mktemp)
+trap 'rm -f "$answer"' EXIT
+
+# api METHOD PATH [JSON]: send a request to Forgejo's API as orgsyndb,
+# keep the answer's body in $answer and print its status.
+api() {
+	if [ $# -gt 2 ]; then
+		curl -sS -o "$answer" -w '%{http_code}' \
+			-u "orgsyndb:$ORGSYNDB_FORGE_PASSWORD" -X "$1" \
+			-H 'Content-Type: application/json' --data "$3" \
+			"$api_url$2"
+	else
+		curl -sS -o "$answer" -w '%{http_code}' \
+			-u "orgsyndb:$ORGSYNDB_FORGE_PASSWORD" -X "$1" "$api_url$2"
+	fi
+}
+
+# expect STATUS WHAT ANSWERED: stop, showing the answer, unless
+# ANSWERED is STATUS.
+expect() {
+	if [ "$3" != "$1" ]; then
+		echo "forge-setup: error: cannot $2: status $3" >&2
+		cat "$answer" >&2
+		echo >&2
+		exit 1
+	fi
+}
+
+# exists PATH: whether Forgejo's API has PATH.
+exists() {
+	status=$(api GET "$1")
+	case $status in
+	200) return 0 ;;
+	404) return 1 ;;
+	esac
+	expect 200 "read $1" "$status"
+}
+
+if exists /orgs/lab; then
+	echo "forge-setup: the organisation lab exists."
+else
+	expect 201 "create the organisation lab" "$(api POST /orgs \
+		'{"username":"lab","visibility":"public"}')"
+	echo "forge-setup: created the organisation lab."
+fi
+
+# The id of the team authors in the organisation lab, or nothing.
+team_id() {
+	expect 200 "list the teams of lab" "$(api GET /orgs/lab/teams)"
+	grep -o '"id":[0-9]*,"name":"authors"' "$answer" |
+		sed 's/^"id":\([0-9]*\),.*/\1/'
+}
+
+team=$(team_id)
+if [ -n "$team" ]; then
+	echo "forge-setup: the team authors exists."
+else
+	expect 201 "create the team authors" "$(api POST /orgs/lab/teams \
+		'{"name":"authors","description":"Every lab account","permission":"write","includes_all_repositories":false,"units":["repo.code","repo.issues","repo.pulls","repo.releases"],"units_map":{"repo.code":"write","repo.issues":"write","repo.pulls":"write","repo.releases":"write"}}')"
+	team=$(team_id)
+	echo "forge-setup: created the team authors."
+fi
+
+if exists /repos/lab/collection; then
+	echo "forge-setup: the repository lab/collection exists."
+else
+	expect 201 "create the repository lab/collection" \
+		"$(api POST /orgs/lab/repos \
+		'{"name":"collection","private":false,"default_branch":"main"}')"
+	echo "forge-setup: created the repository lab/collection."
+fi
+
+expect 204 "give the team authors lab/collection" \
+	"$(api PUT "/teams/$team/repos/lab/collection")"
+echo "forge-setup: the team authors may write to lab/collection."
+
+if exists /repos/lab/collection/branch_protections/main; then
+	echo "forge-setup: main of lab/collection is protected."
+else
+	expect 201 "protect main of lab/collection" \
+		"$(api POST /repos/lab/collection/branch_protections \
+		'{"rule_name":"main","enable_push":true}')"
+	echo "forge-setup: protected main of lab/collection."
+fi
+
+hooks="$repositories/lab/collection.git/hooks/pre-receive.d"
+mkdir -p "$hooks"
+ln -sfn "$gate" "$hooks/orgsyndb-gate"
+echo "forge-setup: linked the gate into lab/collection's pre-receive hooks."

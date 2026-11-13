@@ -150,6 +150,48 @@ class SigningInTests(ProviderCase):
         self.assertEqual(found["name"], "Katrin Lehmann")
         self.assertEqual(found["email"], "kl@example.org")
 
+    def test_the_id_token_names_the_authors_group(self) -> None:
+        """Scenario: Signing in to Forgejo (the ID token carries
+        `groups` `["authors"]`)."""
+        _header, claims = self.id_claims(
+            self.sign_in_to_forgejo()["id_token"])
+        self.assertEqual(claims["groups"], ["authors"])
+
+    def test_the_user_info_names_the_authors_group(self) -> None:
+        """Scenario: Signing in to Forgejo (the user info carries
+        `groups` `["authors"]`)."""
+        answer = self.sign_in_to_forgejo()
+        info = self.user_info(answer["access_token"])
+        self.assertEqual(info.status_code, 200)
+        self.assertEqual(info.json()["groups"], ["authors"])
+
+    def test_groups_come_under_the_scope_profile(self) -> None:
+        """Requirement: OpenID provider (`groups` under the scope
+        `profile`)."""
+        answer = self.sign_in_to_forgejo()
+        self.assertIn("groups", self.id_claims(answer["id_token"])[1])
+        code = self.code_of(self.authorize(scope="openid email"))
+        answer = self.token(code)
+        self.assertEqual(answer.status_code, 200, answer.content)
+        _header, claims = self.id_claims(answer.json()["id_token"])
+        self.assertNotIn("groups", claims)
+        self.assertNotIn("nickname", claims)
+
+    def test_every_account_is_an_author(self) -> None:
+        """Requirement: OpenID provider (`groups`, the list
+        `["authors"]` for every account)."""
+        for name, initials, email in (("tbauer", "TB", "tb@example.org"),
+                                      ("plain", "PL", "plain@example.org")):
+            with self.subTest(account=name):
+                self.client.force_login(
+                    make_user(name, initials, email=email))
+                answer = self.sign_in_to_forgejo()
+                _header, claims = self.id_claims(answer["id_token"])
+                self.assertEqual(claims["groups"], ["authors"])
+                self.assertEqual(
+                    self.user_info(answer["access_token"]).json()[
+                        "groups"], ["authors"])
+
     def test_the_client_may_authenticate_with_a_basic_header(self) -> None:
         code = self.code_of(self.authorize())
         answer = self.token(code, basic=True)

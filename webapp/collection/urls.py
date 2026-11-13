@@ -7,5 +7,6 @@ from collection import views
 urlpatterns = [
     path("", views.imports, name="imports"),
     path("manifest/", views.manifest, name="manifest"),
+    path("check/", views.check, name="check"),
     path("ids/", views.ids, name="ids"),
 ]

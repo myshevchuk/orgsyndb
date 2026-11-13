@@ -287,13 +287,27 @@ def read(body: Any) -> dict[str, Any]:
                    for error in errors):
             raise Malformed("errors: not a list of non-blank strings")
         return {**manifest, "errors": errors}
+    return {**manifest,
+            "release": _text(body, "release", "", RELEASE_LENGTH),
+            **read_collection(body)}
+
+
+def read_collection(body: Any) -> dict[str, Any]:
+    """Return the collection half of BODY, a parsed JSON value, read as
+    ``read`` reads it: ``language``, ``procedures``, ``sequences`` and
+    ``deleted``. Other keys of BODY are left out.
+
+    Raise Malformed, saying what is wrong, when BODY is not a table or
+    its collection half is not of the manifest's keys and types, on the
+    conditions ``read`` names for that half.
+    """
+    if not isinstance(body, dict):
+        raise Malformed("the collection is not a table")
     deleted = _list(body, "deleted")
     if not all(issuing.is_id(item) for item in deleted):
         raise Malformed("deleted: not a list of procedure and sequence IDs")
     return {
-        **manifest,
         "deleted": deleted,
-        "release": _text(body, "release", "", RELEASE_LENGTH),
         "language": _choice(body, "language", Language.values),
         "procedures": [_procedure(table, number) for number, table
                        in enumerate(_tables(body, "procedures"), start=1)],
@@ -694,6 +708,36 @@ def _adoptable(manifest: dict[str, Any]) -> list[str]:
     return list(dict.fromkeys([*found, *manifest["deleted"]]))
 
 
+def _current_problems(manifest: dict[str, Any],
+                      adopted: list[str]) -> list[str]:
+    """Return the errors of the read collection half MANIFEST against
+    the registry, the notebooks, the accounts and the issued IDs as they
+    are, the IDs ADOPTED counting as issued too (``problems``)."""
+    named = [item["id"] for item in (*manifest["procedures"],
+                                     *manifest["sequences"])]
+    return problems(
+        manifest,
+        set(Substance.objects.values_list("key", flat=True)),
+        set(ReactionType.objects.values_list("key", flat=True)),
+        set(Project.objects.values_list("key", flat=True)),
+        set(Notebook.objects.values_list("code", flat=True)),
+        set(get_user_model().objects.values_list("username", flat=True)),
+        issuing.issued(named) | set(adopted))
+
+
+def check(collection: dict[str, Any]) -> list[str]:
+    """Return the errors for which an import of the read COLLECTION, a
+    collection half (``read_collection``), would be refused, in the
+    order the import reports them; an empty list when there is none.
+
+    The check counts as issued what ``receive`` would at this moment:
+    while no import is accepted, the IDs COLLECTION names and its
+    ``deleted`` as well. It takes no lock and changes nothing.
+    """
+    adopted = _adoptable(collection) if latest_accepted() is None else []
+    return _current_problems(collection, adopted)
+
+
 def receive(manifest: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     """Handle the read MANIFEST in one transaction holding the lock
     (``orgsyndb_web.lock``); return the status and the table to answer
@@ -727,17 +771,7 @@ def receive(manifest: dict[str, Any]) -> tuple[int, dict[str, Any]]:
                 or manifest["snapshot"] != snapshot.build()["digest"]:
             return 409, {"outcome": "stale"}
         adopted = _adoptable(manifest) if latest is None else []
-        named = [item["id"] for item in (*manifest["procedures"],
-                                         *manifest["sequences"])]
-        errors = problems(
-            manifest,
-            set(Substance.objects.values_list("key", flat=True)),
-            set(ReactionType.objects.values_list("key", flat=True)),
-            set(Project.objects.values_list("key", flat=True)),
-            set(Notebook.objects.values_list("code", flat=True)),
-            set(get_user_model().objects.values_list("username",
-                                                      flat=True)),
-            issuing.issued(named) | set(adopted))
+        errors = _current_problems(manifest, adopted)
         if errors:
             return _answer(_record(manifest, latest,
                                    outcome=Outcome.REFUSED,

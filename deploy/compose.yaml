@@ -3,8 +3,10 @@
 # forwards /lab/ to the lab application `app`, which keeps its records
 # in the PostgreSQL database `db`; `backup` dumps that database daily
 # into backups/ beside this file. `forge` runs Forgejo, served at /git/,
-# which signs people in through the lab application and keeps its data
-# in the database forge on `db`, which `forge-db` creates.
+# which signs people in through the lab application, keeps its data in
+# the database forge on `db`, which `forge-db` creates, and holds the
+# collection's repository lab/collection; its gate has `builder` check
+# every push to main.
 # Copy orgsyndb.env.example to orgsyndb.env beside this file, fill it in,
 # then run, from this directory:
 #   docker compose up -d --build
@@ -134,6 +136,9 @@ services:
       FORGEJO__oauth2_client__ENABLE_AUTO_REGISTRATION: "true"
       FORGEJO__oauth2_client__USERNAME: nickname
       FORGEJO__oauth2_client__ACCOUNT_LINKING: disabled
+      # A Forgejo account keeps the lab user name, and only staff
+      # delete accounts.
+      FORGEJO__admin__USER_DISABLED_FEATURES: change_username,deletion
     ports:
       - "2222:2222"
     volumes:

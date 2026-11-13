@@ -1461,10 +1461,14 @@ Forgejo, a Git repository service at `/git/`:
   also follows the application's own repository, so the server picks up
   new versions of the static site by itself. It reports each build to the
   lab application and publishes only a release the application accepts.
+  It also serves the **gate**, the check that must pass before Forgejo
+  accepts a push to `main` of `lab/collection`, on port 8091 inside the
+  Compose network. This port is not published, and Caddy has no route to it.
 - `web` serves the last published site with Caddy on port 8080 and
-  forwards `/lab/` to `app`, except the builder's manifest path. Caddy
-  answers 404 for every path beginning with `/lab/collection/manifest`;
-  the builder sends manifests directly to `app` over the Compose network.
+  forwards `/lab/` to `app`, except the builder's manifest and check paths.
+  Caddy answers 404 for every path beginning with
+  `/lab/collection/manifest` or `/lab/collection/check`; the builder sends
+  manifests and checks directly to `app` over the Compose network.
   Caddy also forwards `/git/` to `forge`, stripping that prefix, and
   redirects `/git` to `/git/`. Forgejo sets its own caching headers.
 - `db` runs PostgreSQL 18 and keeps the lab's records in the `db` volume.
@@ -1479,17 +1483,22 @@ Forgejo, a Git repository service at `/git/`:
   `codeberg.org/forgejo/forgejo:15.0.11-rootless`. It starts after
   `forge-db` completes, keeps its data in the `forge` volume and publishes
   SSH on port 2222. People sign in through the lab application.
+  They cannot rename or delete their Forgejo accounts themselves.
 
 `builder` and `web` share one image. They and `app` share the `data`
 volume; `web` and `app` read it without writing to it.
 
-The collection's repository may be anywhere Git reaches: an `https://` or
-`ssh://` URL on the internet or the intranet, or a repository on the
-server itself mounted into the container. Building the image needs
-internet access, since it installs Fedora packages and fetches ox-hugo,
-tomelr and Pagefind into the image. Once built, the containers need access
-only to the two repositories; with application updates off, only to the
-collection's.
+The collection's home is `lab/collection` in Forgejo. The example sets
+`ORGSYNDB_COLLECTION_REPO` to `http://forge:3000/lab/collection.git`,
+which the builder reads without signing in. You can still use an `https://`
+or `ssh://` URL on the internet or the intranet, or a repository on the
+server itself mounted into the container, but only `lab/collection` has
+the gate.
+
+Building the image needs internet access, since it installs Fedora packages
+and fetches ox-hugo, tomelr and Pagefind into the image. Once built, the
+containers need access only to the two repositories; with application
+updates off, only to the collection's.
 
 ### Set up the services
 
@@ -1532,10 +1541,17 @@ python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
 ```
 
 The builder uses this token to authenticate each build report, called a
-**manifest**, and the app accepts only that token. Both services read it
-from `orgsyndb.env`. Without it, the builder builds nothing and the app's
-manifest endpoint answers 404. `ORGSYNDB_MANIFEST_URL` defaults to
+**manifest**, and each request to the app's check path. The app accepts
+only that token. Both services read it from `orgsyndb.env`. Without it,
+the builder builds nothing and the app's manifest endpoint answers 404.
+`ORGSYNDB_MANIFEST_URL` defaults to
 `http://app:8000/lab/collection/manifest/` on the Compose network.
+
+Generate another token with the same command and put it in
+`ORGSYNDB_GATE_TOKEN`. Use a different value from `ORGSYNDB_BUILDER_TOKEN`.
+Forgejo sends it to authenticate requests to the builder's gate check.
+Without it, the builder serves no check and Forgejo refuses every push
+to the collection's `main`.
 
 Generate a separate secret for each of `ORGSYNDB_FORGE_CLIENT_SECRET`,
 `ORGSYNDB_FORGE_PASSWORD` and `FORGE_DB_PASSWORD` with:
@@ -1579,7 +1595,7 @@ settings:
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `ORGSYNDB_COLLECTION_REPO` | required | Git URL or path of the collection's repository |
+| `ORGSYNDB_COLLECTION_REPO` | `http://forge:3000/lab/collection.git` in the example; required | Git URL or path of the collection's repository |
 | `ORGSYNDB_COLLECTION_REF` | `main` | Branch or tag to build |
 | `ORGSYNDB_COLLECTION_PATH` | `.` | Directory of `orgsyndb.toml` inside that repository |
 | `ORGSYNDB_APP_UPDATE` | `true` | Follow the application's repository for static site builds |
@@ -1591,13 +1607,19 @@ settings:
 | `ORGSYNDB_BUILD_TIMEOUT` | `3600` | Seconds the build and manifest commands may each take, at least 60 |
 | `ORGSYNDB_REGISTRY_URL` | `http://app:8000/lab/registry/snapshot.json` | Registry snapshot fetched for each cycle |
 | `ORGSYNDB_MANIFEST_URL` | `http://app:8000/lab/collection/manifest/` | App endpoint that receives each build's manifest |
+| `ORGSYNDB_CHECK_URL` | `http://app:8000/lab/collection/check/` | App endpoint the builder asks whether an import would accept the collection |
+| `ORGSYNDB_GATE_TOKEN` | required for pushes to `main` | Shared secret Forgejo sends to the builder's check; must differ from `ORGSYNDB_BUILDER_TOKEN` |
+| `ORGSYNDB_GATE_URL` | `http://builder:8091/check` | Builder check address used by Forgejo's hook |
+| `ORGSYNDB_GATE_TIMEOUT` | `150` | Seconds the hook waits, at least 11; the check itself stops 10 seconds sooner |
+| `ORGSYNDB_GATE_PORT` | `8091` | Builder check server's port inside the Compose network |
+| `ORGSYNDB_GATE_BIND` | `0.0.0.0` | Address the builder check server listens on |
 | `ORGSYNDB_ADDRESS` | `:8080` | Caddy's site address |
 | `POSTGRES_USER` | `lab` in the example | Database user; must match the database URL |
 | `POSTGRES_PASSWORD` | choose your own | Database password; must match the database URL |
 | `POSTGRES_DB` | `lab` in the example | Database name; must match the database URL |
 | `ORGSYNDB_DATABASE_URL` | set for deployment | `postgres://<user>:<password>@db:5432/<database>` |
 | `ORGSYNDB_SECRET_KEY` | required | Generated secret key for sign-ins |
-| `ORGSYNDB_BUILDER_TOKEN` | required for builds | Shared service token the builder sends and the app checks on each manifest |
+| `ORGSYNDB_BUILDER_TOKEN` | required for builds | Shared service token the builder sends and the app checks on each manifest and collection check |
 | `ORGSYNDB_ALLOWED_HOSTS` | required | Comma-separated host names used to reach the site; must include `app` |
 | `ORGSYNDB_DEBUG` | `false` | Show error details; keep off on a reachable site |
 | `ORGSYNDB_DEMO` | `false` | Permit writing invented demo records; at container start, fill an empty database. Test deployments only; never set on a stack that keeps real records |
@@ -1624,7 +1646,8 @@ values.
 ### Forgejo set-up
 
 Once `app` and `forge` are up, run this from `deploy/` to connect
-Forgejo to the lab's accounts:
+Forgejo to the lab's accounts and prepare the collection's repository.
+Run it again after upgrading to the version with the collection gate:
 
 ```sh
 docker compose exec forge sh /opt/orgsyndb/forge/forge-setup
@@ -1638,6 +1661,19 @@ set-up script creates Forgejo's administrator account `orgsyndb` with
 source `lab`. Forgejo fetches the app's discovery document, which lists
 its sign-in addresses, during this step. When adding the source, the
 script reports `forge-setup: added the source lab.`
+
+The script also creates the public organisation `lab`, its team `authors`
+and the public repository `lab/collection` when missing. The repository's
+default branch is `main`. Forgejo refuses force pushes to `main` and
+attempts to delete it. The team has write access to `lab/collection` only.
+Reading the repository needs no account; writing needs one.
+
+Every lab account joins `authors` at its first sign-in to Forgejo.
+The lab app sends `groups: ["authors"]` as part of the account's identity
+information, and the sign-in source maps it to the team. Membership
+follows that information at each sign-in. The script links the gate into
+the repository's pre-receive hooks, the commands Forgejo runs before
+accepting a push.
 
 Run the script again after a failure, or whenever the client secret or
 the app's address changes. It leaves an existing `orgsyndb` account's
@@ -1655,6 +1691,65 @@ host and port, so you must trust it like the lab app. The lab's session
 cookie and its CSRF cookie, which protects forms against forged requests,
 are scoped to `/lab/`. Cookie paths do not isolate the two applications
 in the browser.
+
+### Move the collection into Forgejo
+
+Sign in to Forgejo through the lab once so your account joins `authors`.
+From your existing collection's checkout, push its branch to
+`lab/collection`'s `main`:
+
+```sh
+git push 'http://<server>/git/lab/collection.git' '<branch>:main'
+```
+
+Use your server's Forgejo address and replace `<branch>` with `main` or
+the branch your collection lives on. Authenticate with a Forgejo access
+token, or push over SSH instead. This first push goes through the gate,
+so the collection must validate. Before the first accepted import, the
+gate allows procedure and sequence IDs the app has not issued: that
+import adopts them.
+
+Then set `ORGSYNDB_COLLECTION_REPO` in `deploy/orgsyndb.env` to
+`http://forge:3000/lab/collection.git`; the example already uses it.
+From `deploy/`, recreate the builder to use that setting:
+
+```sh
+docker compose up -d --force-recreate builder
+```
+
+### Understand a refused push
+
+The gate checks every push to `main` of `lab/collection` before Forgejo
+accepts it. Before checkout, the builder refuses any commit containing a
+symbolic link anywhere in its tree. A symbolic link points to another
+file or directory. The collection's tools could otherwise follow a link
+outside the checkout. If there are no symbolic links, the builder checks
+out the pushed commit exactly as a build would, validates it and creates
+its manifest against a fresh registry snapshot. It then asks the lab app
+whether an import would accept the collection, without recording an
+import. Other branches and tags pass without this check.
+
+If the check finds errors, Forgejo refuses the push and shows them as
+`remote:` lines. The first says `Gate: commit <sha> is refused:`, where
+`<sha>` is the pushed commit's ID. Each following line reports one error
+from the symbolic-link check, the validator or the import checks. For
+symbolic links, it reports `symbolic links are not allowed: <path>` once
+per link, where `<path>` names the link in the repository. Remove the
+reported links from the commit. An ID the app never issued produces
+`<ID>: not issued by the lab application`.
+Correct the reported errors before pushing again.
+
+Other refusals describe a check that could not finish:
+
+| Message contains | Meaning and next step |
+|---|---|
+| `the gate is busy with another check; push again` | Another check is running. Push again after it finishes. |
+| `the check took too long` | The check exceeded its deadline: `ORGSYNDB_GATE_TIMEOUT` minus 10 seconds. |
+| `the check gave no answer` | The builder is unavailable or slow. Try again later; no push to `main` succeeds while the builder is down. |
+
+A passed check does not guarantee publication. The builder builds the
+site later, and the import checks again. The registry may have changed
+in the meantime.
 
 ### Access tokens
 
