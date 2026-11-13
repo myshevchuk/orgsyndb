@@ -254,11 +254,12 @@ class DeclaredFieldExportTests(ExportTestCase):
     ORG_SEED = "org/procedures/OSDB-0001-salicylic-acid"
 
     def declared_keys(self) -> list[str]:
-        """The keys of the procedure fields the test collection
-        declares."""
+        """The keys of the journal fields, which every procedure has, and
+        of the procedure fields the test collection declares."""
         settings = tomllib.loads(
             (TEST_COLLECTION / "orgsyndb.toml").read_text(encoding="utf-8"))
-        return [d["key"] for d in settings["fields"]["procedure"]]
+        return ["notebook", "project",
+                *(d["key"] for d in settings["fields"]["procedure"])]
 
     def replace_value(self, path: Path, key: str, value: str) -> None:
         """Set the value of ``:<key> "..."`` on the

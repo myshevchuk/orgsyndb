@@ -90,6 +90,34 @@ class ListTests(RegistryCase):
             with self.subTest(vocabulary=vocabulary):
                 self.assertIn(term_url(vocabulary), found)
 
+    def test_a_link_leads_to_the_lab_notebooks(self) -> None:
+        """Requirement: Registry pages (`Laborjournale`, to
+        `/lab/journal/`)."""
+        for signed_in in (False, True):
+            with self.subTest(signed_in=signed_in):
+                found = [a for a in self.get(
+                    REGISTRY, signed_in=signed_in).find_all("a")
+                    if a.text() == "Laborjournale"]
+                self.assertEqual([a.get("href") for a in found],
+                                 ["/lab/journal/"])
+
+    def test_the_link_to_the_lab_notebooks_in_english(self) -> None:
+        """Requirement: Registry pages (`Lab notebooks`)."""
+        accept(language="en")
+        found = [a for a in self.get(REGISTRY).find_all("a")
+                 if a.text() == "Lab notebooks"]
+        self.assertEqual([a.get("href") for a in found], ["/lab/journal/"])
+
+    def test_the_link_to_the_notebooks_is_among_the_other_links(
+            self) -> None:
+        """Requirement: Registry pages (links to the four vocabularies,
+        the lab notebooks and the imports above the table)."""
+        found = hrefs(self.get(REGISTRY))
+        for vocabulary in VOCABULARIES:
+            self.assertIn(term_url(vocabulary), found)
+        self.assertIn("/lab/journal/", found)
+        self.assertIn("/lab/collection/", found)
+
     def test_a_link_leads_to_the_imports(self) -> None:
         """Requirement: Registry pages (`Importe der Sammlung`, to
         `/lab/collection/`)."""

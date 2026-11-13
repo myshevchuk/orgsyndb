@@ -520,7 +520,7 @@ class MarkerTests(ProgramTestCase):
         """Scenario: Unknown key (beside `fields`)."""
         directory = self.collection_with(
             'format = 1\ntitle = "X"\n\n[[fields.procedure]]\n'
-            'key = "notebook"\n')
+            'key = "sample_code"\n')
         result = self.run_real("-C", directory, "validate")
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn("orgsyndb.toml", result.stderr)
@@ -530,7 +530,7 @@ class MarkerTests(ProgramTestCase):
     def test_declarations_do_not_stop_clean(self) -> None:
         """Scenario: Declarations do not stop other subcommands."""
         directory = self.collection_with(
-            'format = 1\n\n[[fields.procedure]]\nkey = "notebook"\n')
+            'format = 1\n\n[[fields.procedure]]\nkey = "sample_code"\n')
         result = self.run_real("-C", directory, "clean")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stderr.count("error"), 0, result.stderr)
@@ -540,7 +540,7 @@ class MarkerTests(ProgramTestCase):
         directory = self.temp_dir() / "a collection"
         self.assertEqual(self.run_real("init", directory).returncode, 0)
         with (directory / "orgsyndb.toml").open("a", encoding="utf-8") as f:
-            f.write('\n[[fields.procedure]]\nkey = "notebook"\n'
+            f.write('\n[[fields.procedure]]\nkey = "sample_code"\n'
                     'type = "nonsense"\n')
         result = self.run_real("-C", directory, "new", "--md",
                                "Ethyl acetate")

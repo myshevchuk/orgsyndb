@@ -6,8 +6,9 @@ from typing import Any
 
 from .collection_support import (ImportCase, author_rows, authors_of, by_id,
                                  counts, credited, demo_collection, dump,
-                                 issued_keys, make_token, manifest,
-                                 request_id)
+                                 issued_keys, journal_of, make_token,
+                                 manifest, request_id)
+from .journal_support import make_notebook
 
 
 class CheckCase(ImportCase):
@@ -45,7 +46,8 @@ class EachCheckTests(CheckCase):
     def test_an_id_named_twice(self) -> None:
         """Requirement: Import checks (`<ID>: named twice`)."""
         data = demo_collection()
-        data["procedures"].append(copy.deepcopy(data["procedures"][1]))
+        data["procedures"].append(
+            {**copy.deepcopy(data["procedures"][1]), "notebook": None})
         data["procedures"].sort(key=lambda procedure: procedure["id"])
         self.only_error(data, "OSDB-0002: named twice")
 
@@ -230,6 +232,8 @@ class IssuedCheckTests(CheckCase):
                         else ("procedures", "OSDB-0008"))
         new = copy.deepcopy(by_id(data[kind], source))
         new["id"] = ident
+        if not sequence:
+            new["notebook"] = None
         data[kind].append(new)
         return data
 
@@ -297,6 +301,157 @@ class IssuedCheckTests(CheckCase):
         self.accept(data)
         self.accept()
         self.assertEqual(counts()["Procedure"], 9)
+
+
+class NotebookCheckTests(CheckCase):
+    """Requirement: Import checks (a procedure's `notebook` and
+    `project`)."""
+
+    def named(self, ident: str, notebook: Any = None,
+              project: Any = None) -> dict[str, Any]:
+        """The demo collection with the `notebook` and `project` of the
+        procedure ``ident`` replaced."""
+        data = demo_collection()
+        found = by_id(data["procedures"], ident)
+        found["notebook"] = notebook
+        found["project"] = project
+        return data
+
+    def test_an_unknown_notebook(self) -> None:
+        """Scenario: An unknown notebook."""
+        data = demo_collection()
+        by_id(data["procedures"], "OSDB-0002")["notebook"] = "ZZ-9/1"
+        self.only_error(data, 'OSDB-0002: unknown notebook "ZZ-9"')
+
+    def test_a_notebook_of_a_malformed_value(self) -> None:
+        """Requirement: Import checks (`<ID>: notebook "<value>" is not
+        <code>/<number>`)."""
+        for value in ("AE-1", "AE-1/", "/2", "AE-1/0", "AE-1/02",
+                      "AE-1/x", "ae-1/2", "AE-1/2/3", "AE 1/2",
+                      "AE-1/10000", "CE-3/9223372036854775808"):
+            with self.subTest(value=value):
+                data = demo_collection()
+                by_id(data["procedures"], "OSDB-0002")["notebook"] = value
+                self.only_error(
+                    data, f'OSDB-0002: notebook "{value}" is not '
+                    "<code>/<number>")
+
+    def test_a_malformed_notebook_is_not_also_an_unknown_one(self) -> None:
+        """Requirement: Import checks (each error for one thing)."""
+        data = demo_collection()
+        by_id(data["procedures"], "OSDB-0002")["notebook"] = "ZZ-9"
+        errors = self.refused_by(data)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("is not", errors[0])
+
+    def test_one_entry_two_procedures(self) -> None:
+        """Scenario: One entry, two procedures."""
+        data = demo_collection()
+        by_id(data["procedures"], "OSDB-0003")["notebook"] = "AE-1/2"
+        self.assertEqual(sorted(self.refused_by(data)), [
+            "OSDB-0002: notebook entry AE-1/2 is also named by OSDB-0003",
+            "OSDB-0003: notebook entry AE-1/2 is also named by OSDB-0002"])
+
+    def test_the_same_number_in_another_notebook_is_another_entry(
+            self) -> None:
+        """Requirement: Import checks (an entry is a notebook and a
+        number)."""
+        data = demo_collection()
+        by_id(data["procedures"], "OSDB-0003")["notebook"] = "AE-2/2"
+        record = self.accept(data)
+        self.assertEqual(record.outcome, "accepted")
+        self.assertEqual(journal_of("OSDB-0002")[0], "AE-1/2")
+        self.assertEqual(journal_of("OSDB-0003")[0], "AE-2/2")
+
+    def test_an_unknown_project(self) -> None:
+        """Requirement: Import checks (`<ID>: unknown project
+        "<key>"`)."""
+        data = demo_collection()
+        by_id(data["procedures"], "OSDB-0002")["project"] = "no-such"
+        self.only_error(data, 'OSDB-0002: unknown project "no-such"')
+
+    def test_a_project_that_is_a_term_of_a_tree(self) -> None:
+        """Requirement: Import checks (a project the registry has, a
+        top-level term or one filed under it)."""
+        from collection.models import Procedure
+        for key in ("teaching", "research", "advanced-practical"):
+            with self.subTest(key=key):
+                self.accept(self.named("OSDB-0002", "AE-1/2", key))
+                self.assertEqual(Procedure.objects.get(
+                    key="OSDB-0002").project.key, key)
+
+    def test_each_error_is_one_for_its_procedure(self) -> None:
+        """Requirement: Import checks (one error for each, each
+        beginning with the ID it concerns)."""
+        data = demo_collection()
+        by_id(data["procedures"], "OSDB-0002").update(
+            notebook="ZZ-9/1", project="no-such")
+        by_id(data["procedures"], "OSDB-0005")["notebook"] = "AE-1"
+        self.assertEqual(sorted(self.refused_by(data)), sorted([
+            'OSDB-0002: unknown notebook "ZZ-9"',
+            'OSDB-0002: unknown project "no-such"',
+            'OSDB-0005: notebook "AE-1" is not <code>/<number>']))
+
+    def test_no_notebook_and_no_project_are_accepted(self) -> None:
+        """Requirement: Import checks (a procedure sets neither, or
+        either)."""
+        from collection.models import Procedure
+        from journal.models import Entry
+        data = demo_collection()
+        for procedure in data["procedures"]:
+            procedure["notebook"] = None
+            procedure["project"] = None
+        self.accept(data)
+        self.assertEqual(Procedure.objects.count(), 9)
+        self.assertEqual(journal_of("OSDB-0002"), (None, None))
+        self.assertEqual(Entry.objects.count(), 0)
+
+    def test_a_notebook_made_later_is_known(self) -> None:
+        """Requirement: Import checks (checked against the application's
+        notebooks, as they are when the manifest is posted)."""
+        from django.contrib.auth import get_user_model
+        data = demo_collection()
+        by_id(data["procedures"], "OSDB-0002")["notebook"] = "NW-1/3"
+        self.only_error(data, 'OSDB-0002: unknown notebook "NW-1"')
+        make_notebook("NW-1", get_user_model().objects.get(
+            username="klehmann"))
+        self.accept(data)
+
+    def test_a_refused_import_writes_no_journal_entry(self) -> None:
+        """Requirement: Import checks (a refused import writes no
+        procedure, entry or sequence)."""
+        from journal.models import Entry
+        data = demo_collection()
+        by_id(data["procedures"], "OSDB-0002")["notebook"] = "AE-1/20"
+        entry = by_id(data["procedures"], "OSDB-0002")["entries"][0]
+        entry["products"][0]["compound"] = "no-such-substance"
+        errors = self.refused_by(data)
+        self.assertEqual(errors,
+                         ['OSDB-0002: unknown substance '
+                          '"no-such-substance"'])
+        self.assertEqual(Entry.objects.count(), 0)
+
+    def test_a_notebook_that_breaks_a_rule_makes_no_entry(self) -> None:
+        """Requirement: Import checks (a refused import writes no
+        entry)."""
+        from journal.models import Entry
+        data = demo_collection()
+        by_id(data["procedures"], "OSDB-0002")["notebook"] = "AE-1/20"
+        by_id(data["procedures"], "OSDB-0003")["notebook"] = "AE-1/20"
+        self.refused_by(data)
+        self.assertEqual(Entry.objects.count(), 0)
+
+    def test_a_withdrawn_procedure_does_not_clash(self) -> None:
+        """Requirement: Import checks (an entry that another procedure
+        of the manifest names; a procedure the manifest lacks names
+        none)."""
+        self.accept()
+        data = demo_collection()
+        data["procedures"] = [p for p in data["procedures"]
+                              if p["id"] != "OSDB-0006"]
+        by_id(data["procedures"], "OSDB-0008")["notebook"] = "CE-1/4"
+        self.accept(data)
+        self.assertEqual(journal_of("OSDB-0008")[0], "CE-1/4")
 
 
 class StepEntryTests(CheckCase):
@@ -391,7 +546,8 @@ class ManyErrorsTests(CheckCase):
         """Requirement: Import checks (one error for an ID that occurs
         twice)."""
         data = demo_collection()
-        data["procedures"].append(copy.deepcopy(data["procedures"][4]))
+        data["procedures"].append(
+            {**copy.deepcopy(data["procedures"][4]), "notebook": None})
         data["procedures"].sort(key=lambda procedure: procedure["id"])
         errors = self.refused_by(data)
         self.assertEqual(errors.count("OSDB-0005: named twice"), 1, errors)

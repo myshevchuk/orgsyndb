@@ -12,8 +12,8 @@ from typing import Any
 from django.test import TestCase
 
 from . import (berlin, edit_data, load_demo_registry, make_demo_accounts,
-               make_lot, make_user, substance_for, task_form_data, task_url,
-               ticking)
+               make_demo_notebooks, make_lot, make_user, substance_for,
+               task_form_data, task_url, ticking)
 from .collection_support import import_collection
 
 NEW = "/lab/tasks/new/"
@@ -34,6 +34,7 @@ class TaskCase(TestCase):
         cls.ae = make_user("ae", "AE", "Anna", "Eisele")
         load_demo_registry()
         make_demo_accounts()
+        make_demo_notebooks()
         substance_for("Aspirin")
         cls.first = import_collection()
 

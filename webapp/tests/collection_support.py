@@ -24,7 +24,8 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 
-from . import BERLIN, load_demo_registry, make_demo_accounts
+from . import (BERLIN, load_demo_registry, make_demo_accounts,
+               make_demo_notebooks)
 
 MANIFEST = "/lab/collection/manifest/"
 IMPORTS = "/lab/collection/"
@@ -43,6 +44,19 @@ DEMO_CREDITS = {
     "OSDB-0005": ["mwolf"], "OSDB-0006": ["jkoch", "klehmann"],
     "OSDB-0007": ["aschmidt"], "OSDB-0008": ["aschmidt", "tbauer"],
     "OSDB-0009": ["mwolf"]}
+
+# The notebook and the project the demo's procedures name (sample-
+# procedures "Demo collection").
+DEMO_JOURNAL = {
+    "OSDB-0001": ("AE-1/1", "first-year-practical"),
+    "OSDB-0002": ("AE-1/2", "first-year-practical"),
+    "OSDB-0003": ("AE-1/3", "first-year-practical"),
+    "OSDB-0004": ("AE-2/7", "biaryls"),
+    "OSDB-0005": ("AE-2/8", "biaryls"),
+    "OSDB-0006": ("CE-1/4", "first-year-practical"),
+    "OSDB-0007": ("AE-2/11", "cinnamates"),
+    "OSDB-0008": ("AE-2/12", "cinnamates"),
+    "OSDB-0009": ("CE-3/1", "advanced-practical")}
 
 _commits = itertools.count(1)
 
@@ -319,6 +333,18 @@ def import_collection(collection: dict[str, Any] | None = None,
     return Import.objects.get(pk=done.json()["import"])
 
 
+def copy_procedure(data: dict[str, Any], source: str, ident: str
+                   ) -> dict[str, Any]:
+    """A copy of the procedure ``source`` of the collection half
+    ``data``, named ``ident``, that names no notebook, since no two
+    procedures name one entry (collection-import "Import checks"); the
+    caller adds it to ``data``."""
+    new = copy.deepcopy(by_id(data["procedures"], source))
+    new["id"] = ident
+    new["notebook"] = None
+    return new
+
+
 def changed_collection(ident: str, entry: int = 1,
                        substrates: list[str] | None = None
                        ) -> dict[str, Any]:
@@ -396,6 +422,17 @@ def dump() -> dict[str, list[dict[str, Any]]]:
     return {name: rows(name) for name in counts()}
 
 
+def journal_of(key: str) -> tuple[str | None, str | None]:
+    """The journal entry, written ``<code>/<number>``, and the project's
+    key that the procedure ``key`` names, each None for none."""
+    from collection.models import Procedure
+    found = Procedure.objects.select_related(
+        "journal_entry__notebook", "project").get(key=key)
+    return (None if found.journal_entry is None
+            else str(found.journal_entry),
+            None if found.project is None else found.project.key)
+
+
 def entries_of(key: str) -> list[Any]:
     """The scope entries of the procedure ``key`` by position, the
     withdrawn ones too."""
@@ -434,6 +471,7 @@ class ImportCase(TestCase):
     def setUpTestData(cls) -> None:
         load_demo_registry()
         make_demo_accounts()
+        make_demo_notebooks()
 
     def send(self, body: Any, token: str | None = TOKEN) -> Any:
         """Post ``body`` to the manifest view."""

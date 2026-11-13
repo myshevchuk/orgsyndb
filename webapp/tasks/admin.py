@@ -13,7 +13,8 @@ class TaskStepInline(admin.TabularInline):
     """A task's steps, by position, with the day each was done."""
 
     model = TaskStep
-    fields = ("position", "entry", "planned_import", "done_on")
+    fields = ("position", "entry", "planned_import", "done_on",
+              "journal_entry")
     readonly_fields = fields
     ordering = ("position",)
     extra = 0

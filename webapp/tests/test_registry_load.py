@@ -57,10 +57,12 @@ class RoundTripTests(LoadCase):
     def test_round_trip(self) -> None:
         """Scenario: Round trip."""
         load(DEMO_REGISTRY)
-        self.assertEqual(without_digest(snapshot.build(), "accounts"),
-                         without_digest(demo_registry(), "accounts"))
+        self.assertEqual(
+            without_digest(snapshot.build(), "accounts", "notebooks"),
+            without_digest(demo_registry(), "accounts", "notebooks"))
         self.assertIsNone(snapshot.build()["import"])
         self.assertEqual(snapshot.build().get("accounts"), [])
+        self.assertEqual(snapshot.build().get("notebooks"), [])
 
     def loaded_with(self, accounts: Any) -> None:
         """Load the small snapshot with ``accounts`` as its `accounts`:
@@ -81,6 +83,34 @@ class RoundTripTests(LoadCase):
         """Requirement: Loading a registry (it ignores `accounts`)."""
         self.loaded_with("not a list")
 
+    def test_the_notebooks_of_a_snapshot_are_ignored(self) -> None:
+        """Requirement: Loading a registry (it ignores `notebooks`, which
+        it does not create)."""
+        from journal.models import Notebook
+        data = small_snapshot()
+        data["notebooks"] = [{"code": "ZZ-1", "user": "z.new"}]
+        load(self.file(data))
+        self.assertEqual(Notebook.objects.count(), 0)
+        self.assertEqual(snapshot.build().get("notebooks"), [])
+
+    def test_notebooks_that_are_no_list_are_ignored_too(self) -> None:
+        """Requirement: Loading a registry (it ignores `notebooks`)."""
+        from journal.models import Notebook
+        data = small_snapshot()
+        data["notebooks"] = "not a list"
+        load(self.file(data))
+        self.assertEqual(Notebook.objects.count(), 0)
+        self.assertEqual(counts(), (5, 2, 1))
+
+    def test_the_demo_notebooks_are_not_created(self) -> None:
+        """Scenario: Round trip (the demo registry lists the notebooks;
+        loading it creates none)."""
+        from journal.models import Notebook
+        data = demo_registry()
+        self.assertTrue(data.get("notebooks"))
+        load(DEMO_REGISTRY)
+        self.assertEqual(Notebook.objects.count(), 0)
+
     def test_the_import_of_a_snapshot_is_ignored(self) -> None:
         """Requirement: Loading a registry (it ignores `digest` and
         `import`)."""
@@ -93,8 +123,9 @@ class RoundTripTests(LoadCase):
         load(self.file(data))
         self.assertEqual(Import.objects.count(), 0)
         self.assertIsNone(snapshot.build()["import"])
-        self.assertEqual(without_digest(snapshot.build(), "accounts"),
-                         without_digest(demo_registry(), "accounts"))
+        self.assertEqual(
+            without_digest(snapshot.build(), "accounts", "notebooks"),
+            without_digest(demo_registry(), "accounts", "notebooks"))
 
     def test_the_counts_are_printed(self) -> None:
         data = demo_registry()
@@ -180,7 +211,7 @@ class RoundTripTests(LoadCase):
     def test_the_registry_a_loaded_file_makes_is_reproducible(self) -> None:
         load(self.file(small_snapshot()))
         built = snapshot.build()
-        self.assertEqual(without_digest(built, "accounts"),
+        self.assertEqual(without_digest(built, "accounts", "notebooks"),
                          small_snapshot())
 
     def test_a_missing_vocabulary_is_empty(self) -> None:

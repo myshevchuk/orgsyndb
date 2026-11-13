@@ -11,7 +11,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from registry.models import Substance
-from vocabulary.models import ReactionType
+from vocabulary.models import Project, ReactionType
 
 from . import BERLIN, make_user, page
 from .collection_support import (TOOLING, ImportCase, accepts, commit_id,
@@ -19,6 +19,7 @@ from .collection_support import (TOOLING, ImportCase, accepts, commit_id,
                                  make_entry_substance, make_import,
                                  make_procedure, make_sequence, make_step,
                                  refuses)
+from .journal_support import entry_of
 
 ADMIN = "/lab/admin/collection/"
 HEX40 = "a" * 40
@@ -164,6 +165,82 @@ class ProcedureModelTests(ImportCase):
     def test_a_procedure_names_its_last_import(self) -> None:
         """Requirement: Imported rows (`last_import`)."""
         refuses(self, lambda: _unsaved_procedure(None, "OSDB-0002"))
+
+    def test_the_journal_entry_and_the_project_are_optional(self) -> None:
+        """Requirement: Imported rows (`journal_entry`, or none;
+        `project`, or none)."""
+        from collection.models import Procedure
+        made = make_procedure(self.first, "OSDB-0002")
+        made.full_clean()
+        found = Procedure.objects.get(pk=made.pk)
+        self.assertIsNone(found.journal_entry)
+        self.assertIsNone(found.project)
+
+    def test_a_procedure_names_a_journal_entry(self) -> None:
+        """Requirement: Imported rows (`journal_entry`, the journal entry
+        it was written from)."""
+        from collection.models import Procedure
+        entry = entry_of("AE-1/2")
+        made = make_procedure(self.first, "OSDB-0002", journal_entry=entry)
+        made.full_clean()
+        self.assertEqual(Procedure.objects.get(pk=made.pk).journal_entry,
+                         entry)
+        self.assertEqual(list(entry.procedures.all()), [made])
+
+    def test_a_procedure_names_a_project(self) -> None:
+        """Requirement: Imported rows (`project`, a term of the
+        registry's projects)."""
+        from collection.models import Procedure
+        project = Project.objects.get(key="first-year-practical")
+        made = make_procedure(self.first, "OSDB-0002", project=project)
+        made.full_clean()
+        self.assertEqual(Procedure.objects.get(pk=made.pk).project,
+                         project)
+        self.assertEqual(
+            Procedure.objects.filter(project=project).count(), 1)
+
+    def test_no_two_procedures_name_one_entry(self) -> None:
+        """Requirement: Imported rows (no two procedures that are not
+        withdrawn naming one entry)."""
+        entry = entry_of("AE-1/2")
+        make_procedure(self.first, "OSDB-0002", journal_entry=entry)
+        refuses(self, lambda: _unsaved_procedure(
+            self.first, "OSDB-0003", journal_entry=entry))
+        accepts(self, lambda: _unsaved_procedure(
+            self.first, "OSDB-0003", journal_entry=entry_of("AE-1/3")))
+
+    def test_a_withdrawn_procedure_shares_its_entry(self) -> None:
+        """Requirement: Imported rows (a withdrawn procedure may name an
+        entry another procedure names), as the import's design states:
+        it keeps its entry for history."""
+        entry = entry_of("AE-1/2")
+        make_procedure(self.first, "OSDB-0002", journal_entry=entry,
+                       withdrawn=True)
+        accepts(self, lambda: _unsaved_procedure(
+            self.first, "OSDB-0003", journal_entry=entry))
+        accepts(self, lambda: _unsaved_procedure(
+            self.first, "OSDB-0004", journal_entry=entry, withdrawn=True))
+
+    def test_a_withdrawn_procedure_cannot_return_to_a_taken_entry(
+            self) -> None:
+        """Requirement: Imported rows (no two procedures that are not
+        withdrawn naming one entry)."""
+        from collection.models import Procedure
+        entry = entry_of("AE-1/2")
+        gone = make_procedure(self.first, "OSDB-0002", journal_entry=entry,
+                              withdrawn=True)
+        make_procedure(self.first, "OSDB-0003", journal_entry=entry)
+        gone = Procedure.objects.get(pk=gone.pk)
+        gone.withdrawn = False
+        refuses(self, lambda: gone)
+
+    def test_procedures_that_name_no_entry_are_many(self) -> None:
+        """Requirement: Imported rows (no entry is no clash)."""
+        make_procedure(self.first, "OSDB-0002", journal_entry=None)
+        accepts(self, lambda: _unsaved_procedure(
+            self.first, "OSDB-0003", journal_entry=None))
+        accepts(self, lambda: _unsaved_procedure(
+            self.first, "OSDB-0004", journal_entry=None))
 
 
 def _unsaved_procedure(last_import: Any, key: str, **fields: Any) -> Any:
@@ -447,13 +524,29 @@ class ProtectedTests(ImportCase):
         cannot be deleted)."""
         self.refused_deletion(self.entry)
 
+    def test_a_journal_entry_a_procedure_names_stays(self) -> None:
+        """Requirement: Imported rows (a journal entry that a row names
+        cannot be deleted)."""
+        entry = entry_of("AE-1/2")
+        make_procedure(make_import(), "OSDB-0003", journal_entry=entry)
+        self.refused_deletion(entry)
+
+    def test_a_project_a_procedure_names_stays(self) -> None:
+        """Requirement: Imported rows (a project that a row names cannot
+        be deleted)."""
+        project = Project.objects.get(key="biaryls")
+        make_procedure(make_import(), "OSDB-0003", project=project)
+        self.refused_deletion(project)
+
     def test_what_no_row_names_can_be_deleted(self) -> None:
         """Requirement: Imported rows (only what a row names is
         kept)."""
         Substance.objects.get(key="acetic-anhydride").delete()
         ReactionType.objects.get(key="reduction").delete()
+        Project.objects.get(key="cinnamates").delete()
         self.assertFalse(Substance.objects.filter(
             key="acetic-anhydride").exists())
+        self.assertFalse(Project.objects.filter(key="cinnamates").exists())
 
 
 class SubstanceInUseTests(ImportCase):

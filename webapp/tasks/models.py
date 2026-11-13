@@ -239,8 +239,10 @@ class TaskStep(models.Model):
 
     ``entry`` is the scope entry the step carries out, or None for a
     step not written down as one; ``planned_import`` is the accepted
-    import that was the latest when the step was planned, or None; and
-    ``done_on`` is the day it was done, or None while it is not.
+    import that was the latest when the step was planned, or None;
+    ``done_on`` is the day it was done, or None while it is not; and
+    ``journal_entry`` is the lab notebook entry it is written down in,
+    or None.
     """
 
     task = models.ForeignKey(Task, verbose_name=_("task"),
@@ -254,6 +256,9 @@ class TaskStep(models.Model):
         "collection.Import", verbose_name=_("Planned with import"),
         on_delete=models.PROTECT, null=True, blank=True, related_name="+")
     done_on = models.DateField(_("Done on"), null=True, blank=True)
+    journal_entry = models.ForeignKey(
+        "journal.Entry", verbose_name=_("Lab notebook"), null=True,
+        blank=True, on_delete=models.PROTECT, related_name="task_steps")
 
     history = RecordedHistory()
 

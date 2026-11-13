@@ -1,0 +1,30 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n lab %}
+{% block title %}{{ notebook.code }}{% endblock %}
+{% block main %}
+<div class="lab-heading">
+<h1>{{ notebook.code }}</h1>
+{% if user.is_authenticated %}<p class="actions"><a href="/lab/journal/{{ notebook.code }}/edit/">{% translate "Edit" %}</a></p>
+{% endif %}</div>
+<p><a href="/lab/journal/">{% translate "Lab notebooks" %}</a></p>
+<dl class="metadata">
+<dt>{% translate "Owner" %}</dt>
+<dd>{% person notebook.user %} {{ notebook.user.display_name }}</dd>
+<dt>{% translate "Note" %}</dt>
+<dd>{{ notebook.note|default:"–" }}</dd>
+</dl>
+{% if entries %}<div class="table-scroll">
+<table class="inventory-table registry-table">
+<thead>
+<tr><th scope="col">{% translate "Entry" %}</th><th scope="col">{% translate "Procedure" %}</th><th scope="col">{% translate "Task steps" %}</th></tr>
+</thead>
+<tbody>
+{% for entry in entries %}<tr>
+<td>{{ notebook.code }}/{{ entry.number }}</td>
+<td>{% for found in entry.procedures.all %}{% if found.withdrawn %}{% marked found.key %}{% else %}{% procedure found.key True %}{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+<td>{% for step in entry.task_steps.all %}<a href="/lab/tasks/{{ step.task.number }}/">{{ step.task.number }} · {% blocktranslate with position=step.position %}Step {{ position }}{% endblocktranslate %}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% else %}<p>{% translate "No entries." %}</p>
+{% endif %}{% endblock %}

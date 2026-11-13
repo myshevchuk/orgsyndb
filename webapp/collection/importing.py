@@ -28,10 +28,13 @@ from collection.models import (KEY_LENGTH, RELEASE_LENGTH, EntrySubstance,
                                ProcedureAuthor, Role, ScopeEntry,
                                Sequence, Source, Step, Trigger,
                                latest_accepted)
+from journal.entries import entry_for
+from journal.models import ENTRY_RE, Notebook
+from journal.models import Entry as JournalEntry
 from orgsyndb_web import lock
 from registry import snapshot
 from registry.models import Substance
-from vocabulary.models import ReactionType
+from vocabulary.models import Project, ReactionType
 
 FORMAT = 1
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -71,15 +74,22 @@ def _text(table: dict[str, Any], key: str, where: str,
     return value
 
 
-def _optional_text(table: dict[str, Any], key: str, where: str) -> str:
-    """Return the string or null under KEY of TABLE as text, empty for
-    null; raise Malformed for a missing key or another type."""
+def _optional_string(table: dict[str, Any], key: str,
+                     where: str) -> str | None:
+    """Return the string or null under KEY of TABLE, None for null;
+    raise Malformed for a missing key or another type."""
     if key not in table:
         raise Malformed(f"{where}{key}: missing")
     value = table[key]
     if value is not None and not isinstance(value, str):
         raise Malformed(f"{where}{key}: neither a string nor null")
-    return value or ""
+    return value
+
+
+def _optional_text(table: dict[str, Any], key: str, where: str) -> str:
+    """Return the string or null under KEY of TABLE as text, empty for
+    null; raise Malformed for a missing key or another type."""
+    return _optional_string(table, key, where) or ""
 
 
 def _pattern(table: dict[str, Any], key: str, pattern: re.Pattern[str],
@@ -194,6 +204,8 @@ def _procedure(table: dict[str, Any], number: int) -> dict[str, Any]:
             "reaction_type": _text(table, "reaction_type", where),
             "general": general,
             "authors": _authors(table, where),
+            "notebook": _optional_string(table, "notebook", where),
+            "project": _optional_string(table, "project", where),
             "entries": entries}
 
 
@@ -224,7 +236,8 @@ def read(body: Any) -> dict[str, Any]:
     read: ``build`` as a UUID, ``committed_at`` as an aware datetime,
     ``errors`` of a failed build as a list of strings, and the
     procedures and sequences of a built one with their entries and
-    steps. Keys the manifest does not define are left out.
+    steps, a procedure's ``notebook`` and ``project`` None for null.
+    Keys the manifest does not define are left out.
 
     Raise Malformed, saying what is wrong, when BODY is not a table of
     the manifest's keys and types (collection-import "Manifest"), or
@@ -304,40 +317,79 @@ def _entry_signature(entry: dict[str, Any]) -> str:
                      [product["compound"] for product in entry["products"]])
 
 
+def _journal_problems(ident: str, notebook: str | None,
+                      notebooks: set[str],
+                      holders: dict[str, list[str]]) -> list[str]:
+    """Return the errors of NOTEBOOK, the ``notebook`` of the procedure
+    IDENT, against the application's notebook codes NOTEBOOKS: a value
+    that is not ``<code>/<number>``, a code no notebook has, or an
+    entry that another procedure names too, HOLDERS mapping each entry
+    to the IDs of the procedures that name it. None draws no error."""
+    if notebook is None:
+        return []
+    match = ENTRY_RE.match(notebook)
+    if match is None:
+        return [f'{ident}: notebook "{notebook}" is not <code>/<number>']
+    if match[1] not in notebooks:
+        return [f'{ident}: unknown notebook "{match[1]}"']
+    others = [other for other in holders[notebook] if other != ident]
+    if others:
+        return [f"{ident}: notebook entry {notebook} is also named by "
+                f"{', '.join(others)}"]
+    return []
+
+
 def problems(manifest: dict[str, Any], substances: set[str],
-             reaction_types: set[str], accounts: set[str],
+             reaction_types: set[str], projects: set[str],
+             notebooks: set[str], accounts: set[str],
              issued: set[str]) -> list[str]:
     """Return the errors that refuse the read, built MANIFEST against a
-    registry holding the substance keys SUBSTANCES and the reaction type
-    keys REACTION_TYPES, and an application whose accounts have the user
-    names ACCOUNTS and that counts the IDs ISSUED as issued, in the
-    order the checks find them: each procedure in the manifest's order,
-    then each sequence. An empty list accepts it.
+    registry holding the substance keys SUBSTANCES, the reaction type
+    keys REACTION_TYPES and the project keys PROJECTS, and an
+    application whose notebooks have the codes NOTEBOOKS, whose accounts
+    have the user names ACCOUNTS and that counts the IDs ISSUED as
+    issued, in the order the checks find them: each procedure in the
+    manifest's order, then each sequence. An empty list accepts it.
 
     Each error begins with the ID it concerns: an ID named twice among
     the procedures or the sequences, an ID not issued, an unknown
-    reaction type, author, substance or target, two entries of one
-    procedure with one signature, a procedure without an entry, and a
-    step that names a procedure the manifest lacks or no entry of the
-    one it names (collection-import "Import checks"). A second table of
-    an ID named twice is not checked further.
+    reaction type, a ``notebook`` that is not ``<code>/<number>``, names
+    an unknown notebook or an entry another procedure names, an unknown
+    project, author, substance or target, two entries of one procedure
+    with one signature, a procedure without an entry, and a step that
+    names a procedure the manifest lacks or no entry of the one it names
+    (collection-import "Import checks"). A second table of an ID named
+    twice is not checked further.
     """
     errors: list[str] = []
     procedures: dict[str, dict[str, Any]] = {}
+    for procedure in manifest["procedures"]:
+        procedures.setdefault(procedure["id"], procedure)
+    holders: dict[str, list[str]] = {}
+    for ident, procedure in procedures.items():
+        if procedure["notebook"] is not None:
+            holders.setdefault(procedure["notebook"], []).append(ident)
+    checked: set[str] = set()
     twice: set[str] = set()
     for procedure in manifest["procedures"]:
         ident = procedure["id"]
-        if ident in procedures:
+        if ident in checked:
             if ident not in twice:
                 twice.add(ident)
                 errors.append(f"{ident}: named twice")
             continue
-        procedures[ident] = procedure
+        checked.add(ident)
         if ident not in issued:
             errors.append(f"{ident}: {NOT_ISSUED}")
         if procedure["reaction_type"] not in reaction_types:
             errors.append(f'{ident}: unknown reaction type '
                           f'"{procedure["reaction_type"]}"')
+        errors += _journal_problems(ident, procedure["notebook"], notebooks,
+                                    holders)
+        if procedure["project"] is not None \
+                and procedure["project"] not in projects:
+            errors.append(f'{ident}: unknown project '
+                          f'"{procedure["project"]}"')
         errors += [f'{ident}: unknown author "{name}"'
                    for name in procedure["authors"] if name not in accounts]
         unknown: list[str] = []
@@ -475,19 +527,53 @@ def _apply_entries(row: Procedure, entries: list[dict[str, Any]],
     return changed, found
 
 
+def _release_journal_entries(manifest: dict[str, Any], record: Import,
+                             held: dict[str, Procedure],
+                             named: dict[str, JournalEntry | None]
+                             ) -> None:
+    """Free the journal entries the read MANIFEST, accepted as the
+    import RECORD, passes on: withdraw the procedures of HELD, the rows
+    by ID, that MANIFEST lacks, each keeping its entry, and clear the
+    entry of each procedure of MANIFEST whose entry differs from the
+    one NAMED gives it by ID. Afterwards no procedure that is not
+    withdrawn names an entry that NAMED gives another one. A cleared
+    entry is cleared in the database alone: the row of HELD still holds
+    it, so that applying the manifest sees the change."""
+    for key, row in held.items():
+        if key not in named and not row.withdrawn:
+            row.withdrawn = True
+            row.last_import = record
+            row.save()
+    for key, entry in named.items():
+        row = held.get(key)
+        if row is not None and row.journal_entry_id is not None \
+                and row.journal_entry_id != (None if entry is None
+                                             else entry.pk):
+            Procedure.objects.filter(pk=row.pk).update(journal_entry=None)
+
+
 def _apply_procedures(manifest: dict[str, Any], record: Import,
                       substances: dict[str, Substance]
                       ) -> dict[str, list[ScopeEntry]]:
     """Make the procedure rows, with their authors, those of the read
     MANIFEST, accepted as the import RECORD, and withdraw those it
     lacks; return the entry rows of each of its procedures by ID, in the
-    manifest's order."""
+    manifest's order.
+
+    The journal entries the procedures name are created when they are
+    new, and passed on (``_release_journal_entries``) before any
+    procedure takes a new one or is brought back."""
     types = {term.key: term for term in ReactionType.objects.all()}
+    projects = {term.key: term for term in Project.objects.all()}
     accounts = {user.username: user for user in
                 get_user_model().objects.filter(username__in={
                     name for procedure in manifest["procedures"]
                     for name in procedure["authors"]})}
     held = {row.key: row for row in Procedure.objects.all()}
+    named = {procedure["id"]: None if procedure["notebook"] is None
+             else entry_for(procedure["notebook"])
+             for procedure in manifest["procedures"]}
+    _release_journal_entries(manifest, record, held, named)
     entries: dict[str, list[ScopeEntry]] = {}
     for procedure in manifest["procedures"]:
         values = {"source": procedure["source"],
@@ -495,6 +581,9 @@ def _apply_procedures(manifest: dict[str, Any], record: Import,
                   "title_de": procedure["title_de"],
                   "reaction_type": types[procedure["reaction_type"]],
                   "general": procedure["general"],
+                  "journal_entry": named[procedure["id"]],
+                  "project": None if procedure["project"] is None
+                  else projects[procedure["project"]],
                   "withdrawn": False}
         row = held.pop(procedure["id"], None)
         if row is None:
@@ -509,11 +598,6 @@ def _apply_procedures(manifest: dict[str, Any], record: Import,
         if changed or credited or moved:
             row.last_import = record
             row.save()
-    for gone in held.values():
-        if not gone.withdrawn:
-            gone.withdrawn = True
-            gone.last_import = record
-            gone.save()
     return entries
 
 
@@ -564,7 +648,9 @@ def apply(manifest: dict[str, Any], record: Import) -> None:
 
     Procedures and sequences are matched by ID and scope entries within
     their procedure by signature; what the manifest lacks is withdrawn,
-    never deleted; a procedure's authors are replaced when they differ.
+    never deleted; a procedure's authors are replaced when they differ,
+    and its journal entry and project become those its ``notebook`` and
+    ``project`` name, the entry created when it is new.
     A procedure or sequence that is created or whose values, authors,
     entries or steps change, withdrawal included, takes RECORD
     as its ``last_import``. The caller provides the transaction.
@@ -647,6 +733,8 @@ def receive(manifest: dict[str, Any]) -> tuple[int, dict[str, Any]]:
             manifest,
             set(Substance.objects.values_list("key", flat=True)),
             set(ReactionType.objects.values_list("key", flat=True)),
+            set(Project.objects.values_list("key", flat=True)),
+            set(Notebook.objects.values_list("code", flat=True)),
             set(get_user_model().objects.values_list("username",
                                                       flat=True)),
             issuing.issued(named) | set(adopted))

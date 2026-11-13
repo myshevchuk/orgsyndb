@@ -4,22 +4,6 @@ format = 1
 registry = "registry.json"
 
 [[fields.procedure]]
-key = "notebook"
-type = "text"
-label = "Lab notebook"
-label_de = "Laborjournal"
-unique = true
-pattern = '[A-Z]{2}-\d+/\d+'
-
-[[fields.procedure]]
-key = "project"
-type = "choice"
-label = "Project"
-label_de = "Projekt"
-vocabulary = "projects"
-facet = true
-
-[[fields.procedure]]
 key = "working_time"
 type = "number"
 label = "Working time"

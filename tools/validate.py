@@ -12,11 +12,13 @@ are the compounds that procedures and sequences name by key, and its
 vocabularies hold the reaction types and the terms of the procedure
 fields. The sequences directory holds synthesis sequences, Markdown
 files whose steps name procedures of the content roots; the validator
-checks that each step exists and that the steps chain. The collection's
-settings file declares further procedure fields, whose values each
-procedure is checked against, and names the vocabularies of its choice
-fields. The validator reads no Org source: an Org procedure reaches it
-only as its export, and the export checks the Org source itself. Each
+checks that each step exists and that the steps chain. Every procedure
+has the journal fields ``notebook`` and ``project``, checked against the
+registry's notebooks and projects; the collection's settings file
+declares further procedure fields, whose values each procedure is
+checked against, and names the vocabularies of its choice fields. The
+validator reads no Org source: an Org procedure reaches it only as its
+export, and the export checks the Org source itself. Each
 problem is printed to stdout as ``<path>:<field>: <severity>:
 <message>``, followed by a summary line on stderr. The exit status is 0
 when no error was found, 1 when at least one was, and 2 on a usage or
@@ -87,6 +89,12 @@ HUGO_FRONT_MATTER_KEYS = (
 # The record keys and address parameters of the procedure catalogue that
 # neither the procedure schema nor Hugo names.
 PROCEDURE_CATALOGUE_KEYS = ("tag", "created", "text", "q", "sort", "view")
+# The keys of the journal fields, the two procedure fields every procedure
+# has (``journal_fields``), in their order.
+JOURNAL_KEYS = ("notebook", "project")
+# The pattern of a ``notebook`` value: a notebook's code, a slash and an
+# entry number from 1 to 9999.
+NOTEBOOK_PATTERN = "[A-Z0-9]+(-[A-Z0-9]+)*/[1-9][0-9]{0,3}"
 STATUSES = ("draft", "checked", "retired")
 # The languages a procedure may be written in. A file name may carry one
 # of them before its suffix, as in OSDB-0001-x.de.md; the files of one ID
@@ -262,7 +270,8 @@ def parse_front_matter(text: str) -> FrontMatter | Problem:
 class Context:
     """Settings shared by the checks of one run: the registry's reaction
     types and compound keys, the static directory, the time zone, the
-    procedure fields the collection declares, in declared order, and the
+    procedure fields, the journal fields followed by those the
+    collection declares in declared order (``load_fields``), and the
     user names of the registry's accounts."""
 
     reaction_types: frozenset[str]
@@ -1096,7 +1105,10 @@ class Declaration(NamedTuple):
     compound directory, the compound catalogue's search matching its
     values, the value written after every link to the compound, and the
     compound catalogue divided into tab pages by the field's top-level
-    terms, whose directory the field's key names.
+    terms, whose directory the field's key names. ``notebooks`` holds
+    the codes of the registry's notebooks for the journal field
+    ``notebook``, whose value's code, the part before ``/``, is one of
+    them, and is None for every other field.
     """
 
     key: str
@@ -1117,6 +1129,7 @@ class Declaration(NamedTuple):
     search: bool
     tabs: bool
     beside: bool
+    notebooks: frozenset[str] | None = None
 
 
 def check_choice(field: Declaration, value: object) -> list[Problem]:
@@ -1153,7 +1166,8 @@ def check_field_value(field: Declaration, value: object) -> list[Problem]:
     """Check VALUE, set by a procedure, against the declared FIELD.
 
     Problems are reported under the field's key. A value of the wrong
-    type draws that one error and no other.
+    type draws that one error and no other, and a text that breaks the
+    field's pattern draws no error about the notebook it names.
     """
     name = field.key
     match field.type:
@@ -1163,6 +1177,12 @@ def check_field_value(field: Declaration, value: object) -> list[Problem]:
                     and not field.pattern.fullmatch(value)):
                 found.append(error(name, "must match the pattern "
                                    f"{field.pattern.pattern}"))
+            if not found and field.notebooks is not None:
+                code = value.partition("/")[0]
+                if code not in field.notebooks:
+                    found.append(error(
+                        name, f'unknown notebook "{code}"; the registry '
+                        "has no notebook of this code"))
             return found
         case "number":
             if not is_number(value) or not math.isfinite(value):
@@ -1310,6 +1330,28 @@ def _accounts_problem(accounts: object) -> str | None:
     return None
 
 
+def _notebooks_problem(notebooks: object) -> str | None:
+    """Return why NOTEBOOKS, a snapshot's ``notebooks``, is no list of
+    notebooks, or None when it is one: tables of a non-empty string
+    ``code``, no code twice, and a string ``user``."""
+    if not isinstance(notebooks, list):
+        return "notebooks must be a list of notebooks"
+    codes: set[str] = set()
+    for number, entry in enumerate(notebooks, start=1):
+        at = f"notebooks[{number}]"
+        if not isinstance(entry, dict):
+            return f"{at} must be a table"
+        code = entry.get("code")
+        if not isinstance(code, str) or not code:
+            return f"{at}.code must be a non-empty string"
+        if code in codes:
+            return f"notebooks lists the code {code} twice"
+        if not isinstance(entry.get("user"), str):
+            return f"{at}.user must be a string"
+        codes.add(code)
+    return None
+
+
 def snapshot_problem(table: object) -> str | None:
     """Return why TABLE, a decoded JSON value, is not a registry
     snapshot, or None when it is one.
@@ -1319,9 +1361,11 @@ def snapshot_problem(table: object) -> str | None:
     VOCABULARIES as a list of terms, each a table of ``key``, ``label``
     and optionally ``label_de`` and ``parent``; and whose
     ``substances`` is a list of tables, each with a ``key``, no key
-    twice (``_substance_problem``); and whose ``accounts``, when it has
+    twice (``_substance_problem``); whose ``accounts``, when it has
     them, is a list of tables of ``username`` and ``name``, no user name
-    twice. Other keys, ``digest`` among them, are not checked.
+    twice; and whose ``notebooks``, when it has them, is a list of tables
+    of ``code`` and ``user``, no code twice. Other keys, ``digest`` among
+    them, are not checked.
     """
     if not isinstance(table, dict):
         return "it is not a JSON object"
@@ -1350,7 +1394,11 @@ def snapshot_problem(table: object) -> str | None:
             return f"substances lists the key {entry['key']} twice"
         keys.add(entry["key"])
     if "accounts" in table:
-        return _accounts_problem(table["accounts"])
+        problem = _accounts_problem(table["accounts"])
+        if problem is not None:
+            return problem
+    if "notebooks" in table:
+        return _notebooks_problem(table["notebooks"])
     return None
 
 
@@ -1406,6 +1454,14 @@ def registry_accounts(registry: dict[str, Any]) -> dict[str, str]:
             for entry in registry.get("accounts", [])}
 
 
+def registry_notebooks(registry: dict[str, Any]) -> dict[str, str]:
+    """Return the notebooks of the snapshot REGISTRY, each code mapped to
+    its owner's user name, in the snapshot's order; a snapshot without
+    ``notebooks`` has none."""
+    return {entry["code"]: entry["user"]
+            for entry in registry.get("notebooks", [])}
+
+
 # The key of the registry field shown as tabs, which names the directory
 # of the compound tab pages.
 TABS_KEY = "group"
@@ -1451,6 +1507,25 @@ def registry_fields(vocabularies: dict[str, dict[str, Term]]
         _declaration(TABS_KEY, "choice", "Group", "Gruppe",
                         "inventory-groups", vocabularies["inventory-groups"],
                         facet=True, tabs=True),
+    )
+
+
+def journal_fields(vocabularies: dict[str, dict[str, Term]],
+                   notebooks: Iterable[str]) -> tuple[Declaration, ...]:
+    """Return the two journal fields that every procedure has, in the
+    order of JOURNAL_KEYS: ``notebook``, the journal entry it was
+    written from, a unique text of NOTEBOOK_PATTERN whose code is one of
+    NOTEBOOKS, the codes of the registry's notebooks; and ``project``, a
+    choice of the projects in VOCABULARIES, as ``registry_terms``
+    returns them, offered as a filter. Neither is required."""
+    return (
+        _declaration("notebook", "text", "Lab notebook",
+                     "Laborjournal")._replace(
+                         unique=True,
+                         pattern=re.compile(NOTEBOOK_PATTERN),
+                         notebooks=frozenset(notebooks)),
+        _declaration("project", "choice", "Project", "Projekt",
+                     "projects", vocabularies["projects"], facet=True),
     )
 
 
@@ -1916,7 +1991,10 @@ RESERVED_PROCEDURE_KEYS = (
     (HUGO_FRONT_MATTER_KEYS, "is a front-matter key that Hugo reads"),
     (PROCEDURE_CATALOGUE_KEYS,
      "is reserved by the procedure catalogue; the reserved keys are "
-     f"{', '.join(PROCEDURE_CATALOGUE_KEYS)}"))
+     f"{', '.join(PROCEDURE_CATALOGUE_KEYS)}"),
+    (JOURNAL_KEYS,
+     "is a journal field, which every procedure has; a collection "
+     "declares neither notebook nor project"))
 
 
 def read_declaration(entry: dict[str, Any], number: int, settings: Path,
@@ -2008,21 +2086,24 @@ def read_declaration(entry: dict[str, Any], number: int, settings: Path,
 
 
 def load_fields(path: Path, vocabularies: dict[str, dict[str, Term]],
+                notebooks: Iterable[str],
                 must_exist: bool = True) -> tuple[Declaration, ...]:
-    """Load the procedure fields that the collection settings file PATH
-    declares, in declared order.
+    """Return the procedure fields of the collection whose settings file
+    is PATH: the journal fields (``journal_fields``), then the fields
+    PATH declares, in declared order.
 
     VOCABULARIES holds the registry's terms, as ``registry_terms``
-    returns them. A settings file without ``fields``, or whose
-    ``fields`` holds no ``procedure``, declares no field, and so does a
-    PATH that does not exist when MUST_EXIST is false. Raises
-    ConfigError when PATH is missing though MUST_EXIST, when it breaks
-    a rule of read_settings, or when ``fields`` is not a table whose
-    only key, ``procedure``, holds an array of tables that
-    read_declaration accepts.
+    returns them, and NOTEBOOKS the codes of its notebooks. A settings
+    file without ``fields``, or whose ``fields`` holds no
+    ``procedure``, declares no field, and so does a PATH that does not
+    exist when MUST_EXIST is false. Raises ConfigError when PATH is
+    missing though MUST_EXIST, when it breaks a rule of read_settings,
+    or when ``fields`` is not a table whose only key, ``procedure``,
+    holds an array of tables that read_declaration accepts.
     """
+    journal = journal_fields(vocabularies, notebooks)
     if not must_exist and not path.exists():
-        return ()
+        return journal
     fields = read_settings(path).get("fields", {})
     if not isinstance(fields, dict):
         raise ConfigError(f"{path}: fields must be a table holding the "
@@ -2043,7 +2124,7 @@ def load_fields(path: Path, vocabularies: dict[str, dict[str, Term]],
     for number, entry in enumerate(entries, start=1):
         declared.append(read_declaration(
             entry, number, path, [d.key for d in declared], vocabularies))
-    return tuple(declared)
+    return journal + tuple(declared)
 
 
 def load_zone() -> dt.tzinfo:
@@ -2231,6 +2312,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         vocabularies = registry_terms(table)
         settings = args.settings or DEFAULT_SETTINGS
         fields = load_fields(settings, vocabularies,
+                             registry_notebooks(table),
                              must_exist=args.settings is not None)
         ctx = Context(frozenset(vocabularies[REACTION_TYPES]),
                       args.static_dir, load_zone(),

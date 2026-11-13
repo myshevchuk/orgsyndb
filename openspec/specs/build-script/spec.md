@@ -359,7 +359,7 @@ The application's `.gitignore` SHALL keep `__pycache__/` and `.pytest_cache/`, a
 - **THEN** it exits 2, and stderr contains the word `usage`
 
 #### Scenario: Configuration error
-- **WHEN** a test sets `vocabulary = "storage"` in the declaration of `project` in a copy of the test collection's `orgsyndb.toml` and runs `tools/orgsyndb -C <collection> index`
+- **WHEN** a test adds a declaration with `key = "funding"`, `type = "choice"`, `label = "Funding"` and `vocabulary = "storage"` to a copy of the test collection's `orgsyndb.toml` and runs `tools/orgsyndb -C <collection> index`
 - **THEN** it exits 1, stderr begins with `orgsyndb: error:` and contains `storage`, and stdout is empty
 
 #### Scenario: Registry unreachable
@@ -372,7 +372,7 @@ The application's `.gitignore` SHALL keep `__pycache__/` and `.pytest_cache/`, a
 `pipeline.manifest_data(collection)` returns a table of:
 
 - `language`: `pipeline.site_language(<app>/site)`;
-- `procedures`: one table per procedure ID among the files of `build/export/` and `md/procedures/` whose names the validator's procedure file-name pattern accepts, ordered by ID, each with `id`; `source`, `org` when the variant the site publishes for that ID (localization "Choosing the variant to publish") is an export of an Org source, else `md`; `title`, that variant's title; `title_de`, the title of the ID's file tagged `de`, or `null` when it has none; `reaction_type`, the one element of that variant's `reaction_types`; `general`, whether the procedure has `scope`; and `entries`, the procedure's scope entries in file order, one per element of `scope` for a general procedure, else one made of the top-level `substrates` and `products`, each a table of `substrates`, a list of keys in file order, and `products`, a list of tables of `compound` and `yield_percent`, in file order;
+- `procedures`: one table per procedure ID among the files of `build/export/` and `md/procedures/` whose names the validator's procedure file-name pattern accepts, ordered by ID, each with `id`; `source`, `org` when the variant the site publishes for that ID (localization "Choosing the variant to publish") is an export of an Org source, else `md`; `title`, that variant's title; `title_de`, the title of the ID's file tagged `de`, or `null` when it has none; `reaction_type`, the one element of that variant's `reaction_types`; `general`, whether the procedure has `scope`; `notebook` and `project`, that variant's values of the journal fields (procedure-fields "Journal fields"), each `null` when it sets none; and `entries`, the procedure's scope entries in file order, one per element of `scope` for a general procedure, else one made of the top-level `substrates` and `products`, each a table of `substrates`, a list of keys in file order, and `products`, a list of tables of `compound` and `yield_percent`, in file order;
 - `sequences`: one table per sequence ID among the files of `md/sequences/` whose names the sequence file-name pattern accepts, ordered by ID, each with `id`; `title`, the title of the variant the site publishes; `title_de`, as for a procedure; `target`; and `steps`, a list of tables of `procedure` and `entry`, the number, counted from 1, of the entry the step names (synthesis-sequences "Sequence fields"), or `null` for a step of a specific procedure.
 
 - `deleted`: the procedure and sequence IDs, in upper case and in order, that the base name of a path under `org/procedures`, `md/procedures` or `md/sequences` in the collection's git history begins with, read as `new` reads it (new subcommand), and that `procedures` and `sequences` do not name. Without usable git history, or in a shallow clone, it warns on stderr as `new` does.
@@ -406,4 +406,8 @@ It reads no registry and checks no value: it runs after a build that validated t
 #### Scenario: Nothing deleted from the demo
 - **WHEN** a test builds a copy of the demo collection and runs `tools/orgsyndb -C <collection> manifest`
 - **THEN** its `deleted` is `[]`
+
+#### Scenario: Journal fields in the manifest
+- **WHEN** the same test reads the entry of `OSDB-0002`
+- **THEN** its `notebook` is `AE-1/2` and its `project` `first-year-practical`
 

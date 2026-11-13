@@ -5,7 +5,8 @@ A snapshot is a table of ``format``, ``1``; ``vocabularies``, a table
 of the four vocabularies by their collection names, each a list of its
 terms, a parent before the terms filed under it and siblings in key
 order; ``substances``, ordered by key; ``accounts``, every account by
-user name with its display name; ``import``, the latest accepted
+user name with its display name; ``notebooks``, every lab notebook by
+code with its owner's user name; ``import``, the latest accepted
 import of the collection or ``null``; and ``digest``, the SHA-256 of the
 rest but ``import``. Empty text, a missing molar mass and a missing
 article number are ``null``.
@@ -23,6 +24,7 @@ from django.db import transaction
 
 from collection.models import latest_accepted
 from inventory.models import Article
+from journal.models import Notebook
 from orgsyndb_web import lock
 from registry.models import Substance, SubstanceClass
 from vocabulary.models import (ChemicalClass, Group, Project, ReactionType,
@@ -92,11 +94,20 @@ def accounts() -> list[dict[str, str]]:
                   key=lambda account: account["username"])
 
 
+def notebooks() -> list[dict[str, str]]:
+    """Return every lab notebook as a table of ``code`` and ``user``,
+    its owner's user name, ordered by code as Python orders strings."""
+    return sorted(({"code": code, "user": username}
+                   for code, username in Notebook.objects.values_list(
+                       "code", "user__username")),
+                  key=lambda notebook: notebook["code"])
+
+
 def build() -> dict[str, Any]:
     """Return the registry as a table that ``json.dumps`` serializes:
-    the format, the vocabularies, the substances, the accounts, the
-    latest accepted import and the digest, which does not cover the
-    import."""
+    the format, the vocabularies, the substances, the accounts, the lab
+    notebooks, the latest accepted import and the digest, which does not
+    cover the import."""
     vocabularies = {}
     for name, model in VOCABULARIES.items():
         terms = list(model.objects.all())
@@ -124,6 +135,7 @@ def build() -> dict[str, Any]:
                              "vocabularies": vocabularies,
                              "substances": substances,
                              "accounts": accounts(),
+                             "notebooks": notebooks(),
                              "import": latest_import()}
     table["digest"] = digest(table)
     return table
@@ -261,8 +273,8 @@ def load(table: Any, user: Any = None) -> tuple[int, int, int]:
     their classes, and an article for each substance that names an
     article number; each gets a creation in its history, all in one
     transaction holding the lock (``orgsyndb_web.lock``). The digest, the
-    import and the accounts are ignored, and no account is created; a
-    vocabulary that is missing is empty.
+    import, the accounts and the notebooks are ignored, and no account or
+    notebook is created; a vocabulary that is missing is empty.
     Raise Broken, writing nothing, when the registry holds a substance
     or a term, the format is not ``1``, a term or substance names a key
     that does not exist, or a value breaks a rule the forms check.

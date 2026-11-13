@@ -26,7 +26,7 @@ APP_TABLES = {
     "collection_import", "collection_procedure", "collection_scopeentry",
     "collection_entrysubstance", "collection_sequence", "collection_step",
     "collection_procedureauthor", "collection_issuedid",
-    "accounts_accesstoken"}
+    "accounts_accesstoken", "journal_notebook", "journal_entry"}
 
 
 def by_name(items: tuple, name: str):
@@ -175,16 +175,48 @@ class CollectionTests(unittest.TestCase):
         self.assertEqual(
             {c.name for c in self.table("tasks_taskstep").columns},
             {"id", "task_id", "position", "entry_id", "planned_import_id",
-             "done_on"})
+             "done_on", "journal_entry_id"})
         for column, ref, nullable in (
                 ("task_id", "tasks_task", False),
                 ("entry_id", "collection_scopeentry", True),
-                ("planned_import_id", "collection_import", True)):
+                ("planned_import_id", "collection_import", True),
+                ("journal_entry_id", "journal_entry", True)):
             with self.subTest(column=column):
                 found = self.column("tasks_taskstep", column)
                 self.assertEqual((found.key, found.ref, found.nullable),
                                  ("FK", ref, nullable))
         self.assertTrue(self.column("tasks_taskstep", "done_on").nullable)
+
+    def test_the_tables_of_the_journal(self) -> None:
+        """Scenario: Only the application's tables (`journal_notebook` and
+        `journal_entry`)."""
+        self.assertEqual(
+            {c.name for c in self.table("journal_notebook").columns},
+            {"id", "code", "user_id", "note"})
+        code = self.column("journal_notebook", "code")
+        self.assertEqual((code.key, code.type), ("UQ", "varchar(20)"))
+        owner = self.column("journal_notebook", "user_id")
+        self.assertEqual((owner.key, owner.ref, owner.on_delete,
+                          owner.nullable),
+                         ("FK", "accounts_user", "PROTECT", False))
+        self.assertEqual(
+            {c.name for c in self.table("journal_entry").columns},
+            {"id", "notebook_id", "number"})
+        notebook = self.column("journal_entry", "notebook_id")
+        self.assertEqual((notebook.key, notebook.ref, notebook.on_delete,
+                          notebook.nullable),
+                         ("FK", "journal_notebook", "PROTECT", False))
+
+    def test_the_journal_columns_of_a_procedure(self) -> None:
+        """Scenario: Only the application's tables (the columns the
+        journal adds to `collection_procedure`)."""
+        for column, ref in (("journal_entry_id", "journal_entry"),
+                            ("project_id", "vocabulary_project")):
+            with self.subTest(column=column):
+                found = self.column("collection_procedure", column)
+                self.assertEqual(
+                    (found.key, found.ref, found.on_delete,
+                     found.nullable), ("FK", ref, "PROTECT", True))
 
     def test_lots_and_tasks_name_substances(self) -> None:
         for name in ("inventory_lot", "tasks_task"):
@@ -222,6 +254,7 @@ class CollectionTests(unittest.TestCase):
              "vocabulary_reactiontype", ()),
             ("tasks_historicaltask", "tasks_task", ()),
             ("tasks_historicaltaskstep", "tasks_taskstep", ()),
+            ("journal_historicalnotebook", "journal_notebook", ()),
             ("planning_historicalparameters", "planning_parameters", ())}
         self.assertLessEqual(wanted, found)
         self.assertLessEqual(found - wanted, {
@@ -643,6 +676,7 @@ class PageTests(unittest.TestCase):
                     ("collection_procedureauthor", "user_id"),
                     ("collection_issuedid", "user_id"),
                     ("accounts_accesstoken", "user_id"),
+                    ("journal_notebook", "user_id"),
                     (sd.HISTORY, "history_user_id")]))
         self.assertTrue(all(e["class"] == "kind-user" for e in to_people))
         self.assertIn(">set null<",
@@ -715,6 +749,23 @@ class PageTests(unittest.TestCase):
                 edge = self.edge(source, column)
                 self.assertEqual((edge["to"], edge["class"]),
                                  (target, "kind-key"))
+
+    def test_links_of_the_journal(self) -> None:
+        """Scenario: Only the application's tables (the links of the
+        journal tables)."""
+        for source, column, target in (
+                ("journal_entry", "notebook_id", "journal_notebook"),
+                ("collection_procedure", "journal_entry_id",
+                 "journal_entry"),
+                ("tasks_taskstep", "journal_entry_id", "journal_entry"),
+                ("collection_procedure", "project_id",
+                 "vocabulary_project")):
+            with self.subTest(column=f"{source}.{column}"):
+                edge = self.edge(source, column)
+                self.assertEqual((edge["to"], edge["class"]),
+                                 (target, "kind-key"))
+                self.assertNotIn(">cascade<", edge["body"])
+                self.assertNotIn(">set null<", edge["body"])
 
     def test_the_new_packages_have_colours_of_their_own(self) -> None:
         colours = sd.COLOURS

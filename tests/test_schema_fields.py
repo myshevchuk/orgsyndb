@@ -472,9 +472,9 @@ class UnknownKeyTests(ValidatorTestCase):
     def test_every_declared_key_is_known(self) -> None:
         """Scenario: A declared key is no unknown field (every key of
         the fixture's declarations)."""
-        for line in ('notebook = "AE-1/2"', "working_time = 2.5",
+        for line in ('sample_code = "AE-1/2"', "working_time = 2.5",
                      "inert_atmosphere = true",
-                     'project = "first-year-practical"'):
+                     'funding = "first-year-practical"'):
             with self.subTest(line=line):
                 self.assert_clean(procedure_field_run(edit_procedure(
                     BASELINE.name, insert_line(line))))

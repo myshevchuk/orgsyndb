@@ -169,8 +169,8 @@ When `--static-dir` is omitted, the validator SHALL use `static` in the working 
 - **THEN** it exits 2, stdout is empty, and stderr contains `validate.py: error:` and `no-such-registry.json`
 
 #### Scenario: Default settings file is the working directory's
-- **WHEN** a test runs `<app>/tools/validate.py` without `--settings`, with `cwd` set to a temporary directory holding an `orgsyndb.toml` that declares the required procedure text field `notebook`, with `--registry <app>/tests/fixtures/registry.json` and `--static-dir <app>/tests/fixtures/static`, on the content root `<app>/tests/fixtures/baseline`
-- **THEN** it exits 1, and its one stdout line has field `notebook` and contains `required field missing`
+- **WHEN** a test runs `<app>/tools/validate.py` without `--settings`, with `cwd` set to a temporary directory holding an `orgsyndb.toml` that declares the required procedure text field `sample_code`, with `--registry <app>/tests/fixtures/registry.json` and `--static-dir <app>/tests/fixtures/static`, on the content root `<app>/tests/fixtures/baseline`
+- **THEN** it exits 1, and its one stdout line has field `sample_code` and contains `required field missing`
 
 ### Requirement: Registry errors are configuration errors
 The validator SHALL exit with status 2, print nothing to stdout, and write `validate.py: error:` and a message to stderr, when any of these holds:

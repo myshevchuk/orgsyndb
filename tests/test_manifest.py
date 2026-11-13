@@ -26,7 +26,7 @@ from pipeline_support import (DEMO, GIT_QUIET, REPO, TEST_COLLECTION,
 
 FIXTURE = REPO / "webapp" / "demo" / "manifest.json"
 PROCEDURE_KEYS = {"id", "source", "title", "title_de", "reaction_type",
-                  "general", "authors", "entries"}
+                  "general", "authors", "notebook", "project", "entries"}
 # The user names the demo's procedures credit (sample-procedures "Sample
 # marking").
 DEMO_CREDITS = {
@@ -35,6 +35,18 @@ DEMO_CREDITS = {
     "OSDB-0005": ["mwolf"], "OSDB-0006": ["jkoch", "klehmann"],
     "OSDB-0007": ["aschmidt"], "OSDB-0008": ["aschmidt", "tbauer"],
     "OSDB-0009": ["mwolf"]}
+# The journal fields the demo's procedures set (procedure-fields "Journal
+# fields", sample-procedures "Demo collection"): notebook and project.
+DEMO_JOURNAL = {
+    "OSDB-0001": ("AE-1/1", "first-year-practical"),
+    "OSDB-0002": ("AE-1/2", "first-year-practical"),
+    "OSDB-0003": ("AE-1/3", "first-year-practical"),
+    "OSDB-0004": ("AE-2/7", "biaryls"),
+    "OSDB-0005": ("AE-2/8", "biaryls"),
+    "OSDB-0006": ("CE-1/4", "first-year-practical"),
+    "OSDB-0007": ("AE-2/11", "cinnamates"),
+    "OSDB-0008": ("AE-2/12", "cinnamates"),
+    "OSDB-0009": ("CE-3/1", "advanced-practical")}
 SEQUENCE_KEYS = {"id", "title", "title_de", "target", "steps"}
 IDS = [f"OSDB-{number:04d}" for number in range(1, 10)]
 FRONT_MATTER = ('+++\nid = "{id}"\ntitle = "{title}"\n'
@@ -141,6 +153,77 @@ class ManifestDataTests(unittest.TestCase):
         self.assertEqual(
             by_id(data["procedures"], "OSDB-0002")["authors"],
             ["aschmidt", "klehmann"])
+
+    def test_a_procedure_lists_its_journal_fields(self) -> None:
+        """Scenario: Journal fields in the manifest (`notebook` and
+        `project`, the values of the variant)."""
+        for ident, (notebook, project) in DEMO_JOURNAL.items():
+            with self.subTest(id=ident):
+                found = by_id(self.data["procedures"], ident)
+                self.assertEqual(found["notebook"], notebook)
+                self.assertEqual(found["project"], project)
+
+    def test_a_procedure_without_journal_fields_gives_null(self) -> None:
+        """Requirement: manifest subcommand (`notebook` and `project`,
+        each `null` when the procedure sets none)."""
+        (self.root / "md" / "procedures" / "OSDB-0050-plain.md"
+         ).write_text(procedure_text("OSDB-0050", "Plain"),
+                      encoding="utf-8")
+        found = by_id(manifest_of(self.root)["procedures"], "OSDB-0050")
+        self.assertEqual(set(found), PROCEDURE_KEYS)
+        self.assertIsNone(found["notebook"])
+        self.assertIsNone(found["project"])
+
+    def test_one_journal_field_alone(self) -> None:
+        """Requirement: manifest subcommand (each `null` when it sets
+        none, whichever the other is)."""
+        (self.root / "md" / "procedures" / "OSDB-0050-half.md"
+         ).write_text(procedure_text("OSDB-0050", "Half").replace(
+             'title = "Half"\n', 'title = "Half"\nnotebook = "AE-2/40"\n'),
+             encoding="utf-8")
+        found = by_id(manifest_of(self.root)["procedures"], "OSDB-0050")
+        self.assertEqual(found["notebook"], "AE-2/40")
+        self.assertIsNone(found["project"])
+
+    def test_the_journal_fields_are_the_published_variants(self) -> None:
+        """Requirement: manifest subcommand (`notebook` and `project`,
+        that variant's values)."""
+        export = self.root / "build" / "export"
+        export.mkdir(parents=True)
+        (export / "OSDB-0050-from-org.de.md").write_text(
+            procedure_text("OSDB-0050", "Aus Org").replace(
+                'title = "Aus Org"\n',
+                'title = "Aus Org"\nnotebook = "AE-2/41"\n'
+                'project = "biaryls"\n'), encoding="utf-8")
+        (self.root / "md" / "procedures" / "OSDB-0050-from-org.md"
+         ).write_text(procedure_text("OSDB-0050", "Plain").replace(
+             'title = "Plain"\n',
+             'title = "Plain"\nnotebook = "AE-2/42"\n'
+             'project = "cinnamates"\n'), encoding="utf-8")
+        for locale, notebook, project in (
+                ("en", "AE-2/42", "cinnamates"),
+                ("de", "AE-2/41", "biaryls")):
+            with self.subTest(locale=locale), site_app(self, locale):
+                found = by_id(manifest_of(self.root)["procedures"],
+                              "OSDB-0050")
+                self.assertEqual((found["notebook"], found["project"]),
+                                 (notebook, project))
+
+    def test_a_journal_value_is_listed_as_written(self) -> None:
+        """Requirement: manifest subcommand (it reads no registry and
+        checks no value: a notebook the registry lacks, or a project that
+        is no term, is listed)."""
+        (self.root / "registry.json").unlink()
+        path = (self.root / "md" / "procedures"
+                / "OSDB-0002-aspirin.de.md")
+        path.write_text(path.read_text(encoding="utf-8").replace(
+            'notebook = "AE-1/2"', 'notebook = "ZZ-9/1"').replace(
+            'project = "first-year-practical"', 'project = "no-such"'),
+            encoding="utf-8")
+        with site_app(self, "de"):
+            found = by_id(manifest_of(self.root)["procedures"], "OSDB-0002")
+        self.assertEqual((found["notebook"], found["project"]),
+                         ("ZZ-9/1", "no-such"))
 
     def test_the_authors_are_the_published_variants(self) -> None:
         """Requirement: manifest subcommand (`authors` of the variant the
@@ -629,6 +712,15 @@ class DemoManifestFileTests(unittest.TestCase):
             {p["id"]: p.get("authors") for p in data["procedures"]},
             DEMO_CREDITS)
 
+    def test_the_file_names_the_journal_fields(self) -> None:
+        """Scenario: Journal fields in the manifest (the file the lab
+        application's demo data applies gives each procedure's `notebook`
+        and `project`)."""
+        data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        self.assertEqual(
+            {p["id"]: (p.get("notebook"), p.get("project"))
+             for p in data["procedures"]}, DEMO_JOURNAL)
+
     def test_the_file_deletes_no_id(self) -> None:
         """Scenario: Nothing deleted from the demo."""
         data = json.loads(FIXTURE.read_text(encoding="utf-8"))
@@ -658,6 +750,9 @@ class DemoManifestTests(unittest.TestCase):
         self.assertEqual(by_id(procedures, "OSDB-0002")["source"], "md")
         self.assertEqual({p["id"]: p.get("authors") for p in procedures},
                          DEMO_CREDITS)
+        self.assertEqual(
+            {p["id"]: (p.get("notebook"), p.get("project"))
+             for p in procedures}, DEMO_JOURNAL)
         general = by_id(procedures, "OSDB-0009")
         self.assertEqual(len(general["entries"]), 3)
         self.assertEqual(general["entries"][0], {

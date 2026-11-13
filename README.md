@@ -81,15 +81,24 @@ anhydride (Ac2O)** or **Acetylsalicylic acid (CH-0010, ASA)**. The group
 field divides the directory into **Purchased** and **Synthesised** tab
 pages, listing ten and eleven substances respectively.
 
-The demo declares four procedure fields: `notebook` (a unique lab-notebook
-reference), `project` (a choice), `working_time` (hours, at least zero), and
-`inert_atmosphere` (a boolean). Its
-`projects` vocabulary in the registry groups
-first-year and advanced practicals under **Teaching**, and biaryls and
-cinnamates under **Research**. Every demo procedure sets `notebook` and
+Every collection has two built-in procedure fields, the *journal fields*:
+`notebook`, the paper notebook entry the procedure comes from, and `project`,
+one term from the registry's `projects` vocabulary. Both are optional.
+A notebook reference uses `<code>/<number>`, matching
+`[A-Z0-9]+(-[A-Z0-9]+)*/[1-9][0-9]{0,3}`, for example `AE-1/2`. Its code must
+name a [registered lab notebook](#register-and-read-lab-notebooks), and no
+other procedure may use the same entry. Translations of one procedure
+share it. Do not declare `notebook` or `project` in `orgsyndb.toml`;
+both keys are reserved.
+
+The demo declares only `working_time` (hours, at least zero) and
+`inert_atmosphere` (a boolean). Its `projects` vocabulary in the registry
+groups first-year and advanced practicals under **Teaching**, and biaryls
+and cinnamates under **Research**. Every demo procedure sets `notebook` and
 `project` in both languages; most set `working_time`, and some set
-`inert_atmosphere`. All four fields are optional for a new procedure, but a
-notebook reference must be unused. Procedure pages show these values, and the
+`inert_atmosphere`. Every demo notebook reference names `AE-1`, `AE-2`,
+`CE-1` or `CE-3`. All four fields are optional for a new procedure.
+Procedure pages show journal fields before declared fields, and the
 catalogues offer **Project** and **Inert atmosphere** filters.
 
 You can explore the same collection on the [live demo site](https://myshevchuk.github.io/orgsyndb/).
@@ -362,9 +371,9 @@ selects the image, so there is no image-path field to fill in.
 A collection keeps procedures, sequences and images; its substances and
 vocabularies are supplied by the registry. Compound field declarations
 under `[[fields.compound]]` are a configuration error naming
-`fields.compound`. Procedure fields remain declared under
-`[[fields.procedure]]`, with choice values from the registry. Each
-procedure's `reaction_types` names exactly one term from its
+`fields.compound`. Procedure fields beyond the two built-in journal fields
+are declared under `[[fields.procedure]]`, with choice values from the
+registry. Each procedure's `reaction_types` names exactly one term from its
 `reaction-types` vocabulary.
 
 Procedures name substances by key. For example, the demo's aspirin
@@ -727,7 +736,8 @@ help pages are not indexed. Clearing the search field returns to browsing with
 your filters still applied.
 
 Under **Filters**, each group of checkboxes is a facet: **Reaction type**,
-**Kind**, **Status**, declared procedure filters, **Tag** or **Author**.
+**Kind**, **Status**, **Project**, declared procedure filters, **Tag** or
+**Author**.
 **Kind** offers **Specific procedure** and **General procedure**; the German
 labels are **Art**,
 **Einzelvorschrift** and **Allgemeine Vorschrift**. You can select several
@@ -740,8 +750,9 @@ matches are hidden; selected values stay visible and removable even at zero.
 The result count shows how many procedures match. The **Author** facet
 shows account names; its values are the accounts' user names.
 
-A boolean or choice procedure field declared with `facet = true` adds a filter
-between **Status** and **Tag**, in declaration order. These filters start open
+The built-in **Project** field and boolean or choice procedure fields
+declared with `facet = true` add filters between **Status** and **Tag**:
+**Project** first, then declared fields in declaration order. These filters start open
 and have no “all values” link. Boolean filters offer **Yes** and **No** only
 when a published procedure sets that value. Choice filters show used values
 and their parents as an indented tree. Each parent is followed by the
@@ -749,9 +760,9 @@ terms filed under it, recursively, with siblings ordered by key. Selecting
 a parent also matches procedures filed under its descendants. These filters appear on
 `/procedures/`, reaction-type, tag and author pages, and
 `/general-procedures/`; every page offers values from the whole collection.
-The address records selections under the declared keys, for example
+The address records selections under the field keys, for example
 `/procedures/?project=research&inert_atmosphere=true`. Catalogue search also
-finds declared values displayed in the procedure's metadata panel.
+finds journal and declared values displayed in the procedure's metadata panel.
 
 Click a selection above the results to remove it, or use **Clear all** to
 remove the query and all selected filters. **Clear all** keeps your view and
@@ -981,8 +992,8 @@ Markdown procedures, completion works inside the `+++` information block;
 in Org, it works on `#+HUGO_CUSTOM_FRONT_MATTER` and `#+HUGO_TAGS` lines
 and in the `substrates` and `products` columns of the table named `scope`.
 It offers statuses, languages, reaction types, tags, authors, compound
-keys, scheme images and the collection's declared choice and boolean
-fields. Labels and compound names help you choose. For `authors`, it offers
+keys, scheme images, projects and the collection's declared choice and
+boolean fields. Labels and compound names help you choose. For `authors`, it offers
 the registry's account user names, each annotated with the account's name.
 For `checked_by`, it offers names already used under that key in procedures;
 you can also enter other names. Sequences also offer
@@ -1092,8 +1103,8 @@ prefix are relative to the collection.
 | `clean` | Removes `build/`, `public/`, and `pdf/`. |
 | `clean --all` | Also removes the application's `.emacs-batch/` and `.tools/`. Their contents are fetched again on the next relevant run. |
 | `check-deps` | Reports required tools; optional Emacs, Git, and Caddy; fetched tools; and the missing tool names when a required tool is missing. |
-| `index` | Reads the registry and prints the site language, procedure and sequence schema, registry source and digest, four compound fields, procedure declarations, accounts, vocabularies, substances, procedures and sequences as one line of JSON for an editor. Needs a collection but no external tool, takes no arguments and writes nothing. Lists Markdown files it cannot parse with the reason instead of failing. Org procedures are listed by file name only. Exits 1 on a configuration error, including an unreadable registry without a matching kept copy. |
-| `manifest` | After a build, prints the site language, published procedures with their author user names in file order and their scope entries, sequences with their steps, and `deleted` IDs as one line of JSON for the lab application's import. Warns on stderr when Git history is unavailable or shallow. Takes no arguments, reads no registry and writes no files. Collections with Org sources need `build/export/`; run `build` first. |
+| `index` | Reads the registry and prints the site language, procedure and sequence schema, registry source and digest, four compound fields, journal fields followed by procedure declarations, accounts, notebooks, vocabularies, substances, procedures and sequences as one line of JSON for an editor. Needs a collection but no external tool, takes no arguments and writes nothing. Lists Markdown files it cannot parse with the reason instead of failing. Org procedures are listed by file name only. Exits 1 on a configuration error, including an unreadable registry without a matching kept copy. |
+| `manifest` | After a build, prints the site language, published procedures with their author user names in file order, `notebook` and `project` (each `null` when unset), and scope entries, sequences with their steps, and `deleted` IDs as one line of JSON for the lab application's import. Warns on stderr when Git history is unavailable or shallow. Takes no arguments, reads no registry and writes no files. Collections with Org sources need `build/export/`; run `build` first. |
 | `help` | Prints the command summary. `-h` and `--help` do the same. |
 
 The program exits 0 on success, 1 on failure, and 2 on a usage error.
@@ -1120,9 +1131,10 @@ procedure with a future date is built immediately.
 
 For a direct validator invocation, `--registry FILE` chooses the snapshot;
 it defaults to `build/registry.json` in the working directory. The snapshot
-supplies account user names, substance keys, reaction types and the terms of
-procedure choice fields. A registry with no reaction-type terms makes every procedure's
-reaction type unknown. The lab application checks substance values. The
+supplies account user names, notebook codes, substance keys, reaction types
+and the terms of procedure choice fields. A registry with no reaction-type
+terms makes every procedure's reaction type unknown. The lab application checks
+substance values. The
 validator also refuses a substance keyed `group`, which the lab application
 does not create, reporting field `substances` on the registry path as
 given. Unknown references report:
@@ -1131,6 +1143,7 @@ given. Unknown references report:
 unknown author "<name>"; the registry has no account of this user name
 unknown compound "<key>"; the registry has no substance of this key
 unknown reaction type "<value>"; the registry has no such reaction type
+unknown notebook "<code>"; the registry has no notebook of this code
 unknown value "<value>" of the vocabulary <name>
 ```
 
@@ -1141,9 +1154,11 @@ A value that is not a list of strings reports
 `use authors, a list of user names`.
 
 `--settings FILE` chooses the collection's `orgsyndb.toml` for a direct
-validator invocation. Its declarations check procedures, including Org
-exports. It defaults to `orgsyndb.toml` in the working directory; a missing
-default declares no extra fields. An explicitly named file must exist.
+validator invocation. The journal field rules and its declarations check
+procedures, including Org exports. It defaults to `orgsyndb.toml` in the
+working directory; a missing default leaves only the journal fields.
+An explicitly named file must exist. Declaring `notebook` or `project`
+is a configuration error: these journal keys are reserved.
 A declared choice field's `vocabulary` names one of the snapshot's four
 vocabularies. `--static-dir DIR` chooses the directory for procedure
 scheme images and defaults to `static` in the working directory.
@@ -1158,11 +1173,13 @@ to standard error with no standard output. The options `--compounds` and
 `--vocabulary` are usage errors with exit 2.
 
 The JSON from `orgsyndb index` has the keys `site_language`, `schema`,
-`registry`, `fields`, `accounts`, `vocabularies`, `compounds`, `procedures` and
-`sequences`. `schema` describes procedures and sequences. `registry`
-holds `source` and `digest`; `fields.compound` lists the four built-in
-fields and `fields.procedure` the collection's declarations. `accounts`
-lists the snapshot's accounts, each with `username` and `name`. Each
+`registry`, `fields`, `accounts`, `notebooks`, `vocabularies`, `compounds`,
+`procedures` and `sequences`. `schema` describes procedures and sequences.
+`registry` holds `source` and `digest`; `fields.compound` lists the four built-in
+fields and `fields.procedure` lists `notebook` and `project` first, then
+the collection's declarations. `accounts` lists the snapshot's accounts,
+each with `username` and `name`. `notebooks` lists its notebooks, each
+with `code` and `user`, the owner's user name, in snapshot order. Each
 `compounds` entry holds `key`, `data` as staged for the site, and `url`.
 For an HTTP registry, `url` is
 `<origin>/lab/registry/substances/<key>/`, using the registry address's
@@ -1205,7 +1222,7 @@ input files and collection directories must be available inside `app`.
 | Command | What it does |
 |---|---|
 | `registry_import COLLECTION` | Fills an empty lab registry from a collection in the old layout, containing `compounds/` and four vocabularies under `vocabularies/`. See [Substance registry](#substance-registry) for required fields and fields left out. |
-| `registry_load FILE` | Fills an empty lab registry from a JSON snapshot, including article numbers. Ignores accounts and creates none. Invalid input leaves the registry unchanged. |
+| `registry_load FILE` | Fills an empty lab registry from a JSON snapshot, including article numbers. Ignores accounts and notebooks and creates neither. Invalid input leaves the registry unchanged. |
 | `adopt_ids ID...` | Records each named `OSDB-NNNN` or `SEQ-NNNN` as issued, with no account, for recovery after a restore. Prints `adopted <ID>` for a new record or `<ID> was issued` for an existing one. An invalid argument exits 1 and adopts nothing. See [Back up and restore lab records](#back-up-and-restore-lab-records). |
 | `demo_data [--replace \| --if-empty]` | Loads the demo registry and invented lab records. Requires `ORGSYNDB_DEMO=true`; see [Demo deployment](#demo-deployment) for the replacement and startup rules. |
 | `schema_diagram [--check] [--output PATH]` | Writes the database diagram, or checks it without writing with `--check`. See [Lab application tests and local server](#lab-application-tests-and-local-server). |
@@ -1647,7 +1664,7 @@ entry it carries out and the import current when you planned it. A
 procedure. The task keeps its sequence, steps, entries and planned
 imports if a later import changes or withdraws that sequence. You can
 set, change or clear the task's sequence only while none of its steps
-is done.
+is done or names a journal entry.
 
 Without a sequence, **Steps total** sets the number of plain steps,
 which have no scope entry or planned import. Increasing it adds steps
@@ -1658,7 +1675,9 @@ to **Steps total**. Clearing the sequence gives the task as many plain
 steps as **Steps total** specifies.
 
 A withdrawal records material taken from a bulk lot into a task step.
-A step that made a lot or received a withdrawal cannot be removed.
+A step that made a lot, received a withdrawal or names a journal entry
+cannot be removed. **Steps total** cannot remove a step that names a
+journal entry.
 
 **Steps done** marks the first that many steps done. Steps already done
 keep their dates; newly done steps take today. The remaining steps have
@@ -1692,7 +1711,16 @@ ID in lowercase. For a general procedure, **Eintrag &lt;n&gt;**
 **Stufe &lt;n&gt;** (**Step &lt;n&gt;**). A done step shows
 **erledigt am &lt;date&gt;** (**done on &lt;date&gt;**).
 
-Under each step, the page lists the lots it made and the withdrawals
+Under each step, **Laborjournal &lt;entry&gt;** (**Lab notebook &lt;entry&gt;**)
+links to the notebook page when the step names a journal entry. Sign in
+to set it with the step's **Laborjournal** (**Lab notebook**) field and
+**Speichern** (**Save**), whatever the task's state. Enter `<code>/<number>`
+of a registered notebook, for example `AE-2/8`, or leave the field empty
+to clear it. A saved value shows **Laborjournal von Stufe &lt;n&gt; gespeichert.**
+(**Lab notebook of step &lt;n&gt; saved.**) and appears in the task's change
+history. An invalid value shows an error and changes nothing.
+
+Under each step, the page also lists the lots it made and the withdrawals
 booked into it, each linking to its lot. While the task is planned or
 running, you can sign in and choose **Los erfassen** (**Record a lot**)
 to open `/lab/inventory/bulk/new/?step=<id>` for that step. When open lots
@@ -1747,9 +1775,9 @@ in, including for a substance without an article.
 
 Use a separate test deployment to explore the lab with invented records:
 substances and vocabularies, inventory and stock levels, delivery notes,
-bulk lots and fillings, tasks in every state, and planning priorities and
-actions, all with histories. One task for `CH-0013` is failed and has no
-batch. Every ended task that has not failed has its product lot.
+bulk lots and fillings, lab notebooks, tasks in every state, and planning
+priorities and actions, all with histories. One task for `CH-0013` is
+failed and has no batch. Every ended task that has not failed has its product lot.
 **Never set `ORGSYNDB_DEMO=true` on a stack that keeps real records.**
 
 Before the first start and before creating accounts, set these values in
@@ -1770,17 +1798,22 @@ vocabularies, including `new-compound-7` (**Neuverbindung 7** / **New
 compound 7**). That substance's history starts on the demo's opening day,
 recorded by `klehmann`.
 
+The command also registers four notebooks on the opening day, created by
+`klehmann`, each with an empty note: `AE-1` owned by `klehmann`, `AE-2` by
+`aschmidt`, `CE-1` by `jkoch` and `CE-3` by `mwolf`. The demo snapshot lists
+them too.
+
 The command then records the data set's own accepted import of the demo
 collection from `webapp/demo/manifest.json` on that opening day. This
 adopts `OSDB-0001` through `OSDB-0009`, `SEQ-0001` and `SEQ-0002`, with
-no account; the next IDs the application issues are `OSDB-0010` and
-`SEQ-0003`. It uses a commit of forty zeros, release `demo` and trigger
-`catch-up`. This lets
-you use the demo before any collection build. Its tasks follow the
+no account, and creates the nine procedures' journal entries. The next IDs
+the application issues are `OSDB-0010` and `SEQ-0003`. It uses a commit of
+forty zeros, release `demo` and trigger `catch-up`. This lets you use the demo
+before any collection build. Its tasks follow the
 imported sequences `SEQ-0001` and `SEQ-0002`; one is running with the
 first of its two steps done. This running `SEQ-0002` task's first step
-made a lot of `4-acetylbiphenyl`. Part of that lot was withdrawn into its
-second step.
+names journal entry `CE-3/2` and made a lot of `4-acetylbiphenyl`. Part of
+that lot was withdrawn into its second step.
 
 The inventory contains seven numbered articles: `CH-0001`, `CH-0002`,
 `CH-0010`, `CH-0012`, `CH-0013` and `CH-0016`, the six delivered final products of
@@ -1848,8 +1881,9 @@ docker compose exec app python manage.py demo_data --replace
 
 This deletes every lab record and its history, including the registry,
 collection imports, imported procedures with their scope entries,
-sequences with their steps, issued IDs, access tokens and records you
-added after seeding. It restarts task numbering at `T-001` and writes the
+notebooks and journal entries, sequences with their steps, issued IDs,
+access tokens and records you added after seeding. It restarts task numbering
+at `T-001` and writes the
 demo data set again.
 The only import left is the data set's own. The builder's next cycle
 builds the real collection with that import as its base, keeping the
@@ -1968,6 +2002,41 @@ site already serves that import's release. After a lost response to a
 manifest, or for the demo data set's own import before the builder's
 first build, the link can lead to a page the site does not serve yet.
 
+#### Register and read lab notebooks
+
+Register the lab's paper notebooks before the first validation or import
+of procedures that set `notebook`. Both checks refuse an unknown notebook.
+Choose **Laborjournale** (**Lab notebooks**) above the substance list,
+beside the vocabularies and collection imports, or open `/lab/journal/`.
+You need no sign-in to read it. The table lists notebooks by code, with
+the owner's initials and name, entry count and note. An empty list shows
+**Keine Laborjournale.** (**No lab notebooks.**).
+
+Sign in and choose **Neues Laborjournal** (**New lab notebook**) to open
+`/lab/journal/new/`. Enter the code as written on the cover, an owner and
+an optional note. The code uses capital letters and digits joined by
+single hyphens, at most 20 characters, for example `AE-2`. It must be
+unused and cannot change once saved. You can choose any account as owner;
+your signed-in account is preselected. A bad or taken code shows an error
+and saves nothing. Saving opens the notebook page with **Laborjournal
+&lt;code&gt; gespeichert.** (**Lab notebook &lt;code&gt; saved.**).
+
+Open a code to read `/lab/journal/<code>/`: its owner, note and entries in
+number order. `AE-2/8` means entry 8 of notebook `AE-2`; numbers run from 1
+to 9999 and have no leading zero. The entry's contents stay on paper. The app
+creates an entry record when an import or a task step first names it.
+Each row links to the procedures and task steps that name that entry.
+A withdrawn procedure is marked **nicht in der Sammlung** (**not in the
+collection**) and has no link. A notebook without entries shows **Keine
+Einträge.** (**No entries.**).
+
+Sign in and choose **Bearbeiten** (**Edit**) at
+`/lab/journal/<code>/edit/` to change the owner or note; the code stays
+fixed. Staff can also search notebooks by code and inspect their change
+histories in `/lab/admin/`. Journal entries there are read-only, with no
+add or edit action. A notebook with entries cannot be deleted, nor can an
+account that owns a notebook.
+
 #### Inspect collection imports
 
 To check which collection build the app accepted, choose **Collection
@@ -1984,8 +2053,9 @@ A refused import lists its errors, one per line. Before any import, the
 page shows **No imports yet.**
 
 Only an accepted import writes the collection's procedures, their authors,
-scope entries and their substances, sequences and steps into the app's database. A
-**scope entry** is one combination of substrates and products in a
+journal entries, projects, scope entries and their substances, sequences
+and steps into the app's database. A **scope entry** is one combination of
+substrates and products in a
 procedure. The app matches it within its procedure by the sorted
 substance keys on each side of `substrates >> products`. Changing yields
 or order keeps the same entry; changing its substances creates a new
@@ -1995,6 +2065,9 @@ imported procedure, an entry removed from its scope is also withdrawn.
 
 The app keeps each procedure's authors as account rows, in file order.
 An accepted import replaces that list when it differs from the manifest.
+It also keeps each procedure's journal entry and project. A withdrawn
+procedure keeps its journal entry. One import can pass an entry to another
+procedure or swap two procedures' entries.
 
 The app refuses an import when a procedure names an unknown substance or
 reaction type, an author's user name has no account, two entries of one
@@ -2003,6 +2076,15 @@ a sequence with an unknown target
 substance or a step naming a procedure outside the collection or an entry
 that procedure does not have. An unknown author reports
 `<ID>: unknown author "<name>"`. A procedure must have at least one entry.
+The following journal and project errors also refuse the import:
+
+| Error | Correction |
+|---|---|
+| `<ID>: notebook "<value>" is not <code>/<number>` | Use a notebook code, `/` and a number from 1 without a leading zero. |
+| `<ID>: unknown notebook "<code>"` | Check the code and register the notebook at `/lab/journal/` before importing. |
+| `<ID>: notebook entry <entry> is also named by <other ID>` | Assign distinct entries to the procedures. |
+| `<ID>: unknown project "<key>"` | Use a term key from the lab registry's `projects` vocabulary. |
+
 After the first accepted import, the app also refuses an import containing
 an ID it has not issued: `<ID>: not issued by the lab application`.
 Use `orgsyndb new` for new procedures and sequences; after restoring an
@@ -2073,10 +2155,14 @@ vocabularies, substances and article numbers. Its `accounts` list contains
 every account, active or not, ordered by user name, with `username` and
 `name`, the account's display name. It also includes a format number, the
 latest accepted collection import and a digest, a fingerprint of its
-contents. The digest covers accounts, so changing a person's name triggers
-a site rebuild; accepting an import does not change the digest.
-`registry_load` ignores accounts and creates none. Create accounts in the
-lab application's admin. Downloading the snapshot needs no sign-in.
+contents. Its `notebooks` list holds each notebook's `code` and `user`,
+the owner's user name, ordered by code. The digest covers accounts and
+notebooks: changing a person's name, registering a notebook or changing
+its owner triggers a site rebuild. Notebook notes are absent from the
+snapshot, so changing a note does not; accepting an import also leaves
+the digest unchanged.
+`registry_load` ignores accounts and notebooks and creates neither. Create
+accounts in the lab application's admin. Downloading the snapshot needs no sign-in.
 Both commands load substance and vocabulary data in one transaction;
 an unknown format, broken reference or invalid value leaves the registry
 unchanged. Errors identify the record and field. The
@@ -2088,8 +2174,9 @@ the collection, as described under [Compound registry](#compound-registry).
 A rebuild accepted by the lab application publishes changes to substances
 and terms on the static site; refresh the Emacs index to read those
 changes in the editor. The lab application reads the collection's
-procedures, their authors, scope entries, sequences and their steps from
-accepted imports stored in its database. Tasks use these imported sequences and
+procedures, their authors, journal entries, projects, scope entries,
+sequences and their steps from accepted imports stored in its database. Tasks
+use these imported sequences and
 scope entries. The latest accepted import supplies the interface language
 and determines when substance pages link to the collection. Substance
 names, molar masses and article numbers come directly from the lab registry.
@@ -2670,7 +2757,8 @@ The builder then posts the manifest to `ORGSYNDB_MANIFEST_URL`, with
 `Authorization: Bearer <token>` using `ORGSYNDB_BUILDER_TOKEN`, the
 snapshot request's `Host`, and a 30-second timeout. The manifest describes
 the collection's language, procedures with their author user names in file
-order, scope entries, sequences and steps. Its `deleted` list holds the
+order, `notebook` and `project` (each `null` when unset), scope entries,
+sequences and steps. Its `deleted` list holds the
 procedure and sequence IDs found in file names in the collection's Git
 history under `org/procedures/`, `md/procedures/` and `md/sequences/` that
 its current files no longer have. These IDs are uppercase and sorted;

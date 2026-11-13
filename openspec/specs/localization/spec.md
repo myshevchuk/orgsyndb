@@ -85,8 +85,8 @@ A procedure file's name MAY carry a language code, `de` or `en`, before its suff
 - **THEN** it reports exactly one error, field `file_name`, on the German file, containing `OSDB-0100-baseline.de.md`
 
 #### Scenario: A translation shares its declared fields
-- **WHEN** a procedure-field run (procedure-fields "Procedure field fixture") sets `project = "first-year-practical"` in `OSDB-0100-baseline.md` and adds `OSDB-0100-baseline.de.md`, a copy of it whose eight section headings are the German ones and whose `project` is `"research"`; and a second such run gives the German copy no `project` key
-- **THEN** each reports exactly one error, on the German file, field `project`, containing `OSDB-0100-baseline.md`
+- **WHEN** a procedure-field run (procedure-fields "Procedure field fixture") sets `funding = "first-year-practical"` in `OSDB-0100-baseline.md` and adds `OSDB-0100-baseline.de.md`, a copy of it whose eight section headings are the German ones and whose `funding` is `"research"`; and a second such run gives the German copy no `funding` key
+- **THEN** each reports exactly one error, on the German file, field `funding`, containing `OSDB-0100-baseline.md`
 
 ### Requirement: Choosing the variant to publish
 For each procedure ID, the build SHALL publish exactly one variant: the file tagged with the site's language; else the untagged file; else a file tagged with another language, in the order `de`, `en`. `pipeline.choose_variants(files, language)` makes the choice from `(path, front matter)` pairs and returns the chosen pairs by ID. `pipeline.stage_content(chosen, target)` empties `target` (`build/content/procedures/`) and copies each chosen file there as `<base name>.md`, with its note references linked by `pipeline.link_notes` (site-theme "Note references"); a file whose name has a code and whose front matter has no `language` gets `language = "<code>"` as its first front-matter line. Hugo reads procedures from that directory only. `pdf` renders the chosen files, each to `pdf/<source stem>.pdf`.

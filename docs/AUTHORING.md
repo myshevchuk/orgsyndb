@@ -130,11 +130,13 @@ each annotated with the account's name. Completion for `checked_by` offers
 names already used under that key in procedures; you can also enter other
 names.
 
-Check `orgsyndb.toml` for fields under `[[fields.procedure]]`. These are
-extra procedure details chosen by your collection, such as a lab-notebook
-reference or a project. Add them as `key = value` lines in the information
-block, before any table. For example, the demo's aspirin procedure sets
-these after `scale`:
+Use `notebook` to name the paper notebook entry the procedure comes from,
+and `project` to assign it to a project. These two optional *journal fields*
+are built in for every collection; do not declare them in `orgsyndb.toml`.
+Your collection can declare other fields under `[[fields.procedure]]`,
+such as the demo's `working_time` and `inert_atmosphere`.
+Add values as `key = value` lines in the information block, before any
+table. The demo's aspirin procedure sets these after `scale`:
 
 ```toml
 notebook = "AE-1/2"
@@ -148,13 +150,23 @@ Keep text and choice keys in double quotes. Write numbers and `true` or
 uses a term key from its named registry vocabulary; `multiple = true`
 requires a non-empty list of different keys. A field with `required = true`
 must be set, including in a general procedure. A field with `unique = true`
-needs a value no other procedure uses. In the demo, all four are optional;
-a notebook reference must match `[A-Z]{2}-\d+/\d+`, such as `AE-1/2`, and be
-unused. Working time is in hours and must be at least zero. Find project
-keys in the lab registry’s `projects` vocabulary, including
-`first-year-practical` under `teaching` in the demo. A choice field’s
-`vocabulary` names `chemical-classes`, `inventory-groups`, `projects` or
-`reaction-types`. The
+needs a value no other procedure uses. In the demo, all four are optional.
+
+Write a notebook reference as `<code>/<number>`, such as `AE-1/2` for entry
+2 of notebook `AE-1`. The code uses capital letters and digits joined by
+single hyphens; the entry number runs from 1 to 9999 and has no leading zero.
+The exact pattern is `[A-Z0-9]+(-[A-Z0-9]+)*/[1-9][0-9]{0,3}`. Register the
+notebook in the lab application at `/lab/journal/` before validating or
+importing the procedure. If you see `unknown notebook`, check the code and
+that the collection's registry snapshot lists the notebook. No other
+procedure may use the same entry; translations of one procedure share it.
+The entry's contents stay on paper.
+
+Set `project` to one key from the lab registry’s `projects` vocabulary,
+including `first-year-practical` under `teaching` in the demo. Use one
+quoted key, not a list. Working time is in hours and must be at least zero.
+A choice field’s `vocabulary` names `chemical-classes`, `inventory-groups`,
+`projects` or `reaction-types`. The
 [field reference](SCHEMA.md#procedure-field-declarations) gives the exact rules.
 
 Name products and starting materials by their registry keys. For example,
@@ -334,8 +346,9 @@ and SMILES. For several products, find those data on the compound pages.
 procedure, both lists include all entries, each compound once in order of first
 appearance. Precursor and used-in links also consider every entry. The panel
 then shows reaction type, tags, authors, checkers when present for draft or
-retired procedures under **Checked by**, declared procedure fields, created
-and modified times, and precursor or used-in links. When your procedure is a
+retired procedures under **Checked by**, journal fields, declared procedure
+fields, created and modified times, and precursor or used-in links. When your
+procedure is a
 step of a sequence,
 **Sequences** follows **Used in** and links those sequences by title, ordered
 by sequence ID. Formula digits appear as subscripts. Molecular
@@ -358,8 +371,9 @@ A compound with none of these values gets no note. Procedure search finds
 these values because the panel is indexed. The yield line, catalogue
 **Details**, image alt texts and page titles carry no note.
 
-The panel shows each declared procedure field you set in declaration order,
-before **Created** and after **Checked by** when that label is present.
+The panel shows the journal fields you set first, then the collection's
+fields in declaration order, before **Created** and after **Checked by**
+when that label is present.
 The demo shows **Lab notebook**, **Project**, **Working time** and
 **Inert atmosphere**. Choices use their vocabulary labels, such as
 **Teaching › First-year practical**; working time appears as `2.5 h`, and
@@ -549,8 +563,9 @@ same kind in the full catalogue. Without JavaScript, the general-procedures
 page still lists its procedures by ID. Catalogue **Details** includes products
 from every entry and shows the yield range.
 
-Your collection's declared boolean and choice fields with `facet = true`
-also appear as filters between **Status** and **Tag**, including on
+The built-in **Project** field and your collection's declared boolean and
+choice fields with `facet = true` also appear as filters between **Status**
+and **Tag**, including on
 reaction-type, tag, author and general-procedure pages. In the demo, use
 **Project** and **Inert atmosphere**. Selecting **Teaching** includes its
 practicals; selecting **Research** includes biaryls and cinnamates. Every
@@ -584,7 +599,8 @@ To translate an existing procedure, copy its file and add the language code
 before the extension, for example `OSDB-0002-aspirin.md` to
 `OSDB-0002-aspirin.de.md`. Keep the `id`, `slug`, `status`, `reaction_types`,
 `tags`, `products`, `substrates` and `scheme_image` as they are. Repeat every
-declared procedure field with the same value, or omit it in both variants.
+journal field and declared procedure field with the same value, or omit it
+in both variants.
 Do not translate these values; the site uses `label_de` for German field
 labels. Keep `scope` and its entry order, translating only each entry's `note`.
 The check reports

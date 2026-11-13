@@ -184,6 +184,8 @@ Omit an optional field when it does not apply.
 
 | Field | Meaning | TOML type | Required | Value rule | Example |
 |---|---|---|---|---|---|
+| `notebook` | The paper notebook entry the procedure comes from. | String | No | Registered notebook code and entry number; see [Journal fields](#journal-fields). | `notebook = "AE-1/2"` |
+| `project` | The procedure's project. | String | No | One term key from the registry's `projects` vocabulary. | `project = "first-year-practical"` |
 | `substrates` | The starting materials of a specific procedure; forbidden at top level with `scope`. | Array of strings | No | Registry keys, with no duplicates and none among the products. | `substrates = ["ethanol"]` |
 | `scope` | The entries of a general procedure. | Non-empty array of tables | No | Entry rules above; forbids top-level `products` and `substrates`. | See OSDB-0009. |
 | `scheme_image` | A reaction-scheme image in the title block, replacing product structures. | String | No | Relative path under `structures/`, no `..` component, `.svg` or `.png`, existing under the static directory. A general procedure without it shows the placeholder. | `scheme_image = "structures/aryl-ketone-reduction.svg"` |
@@ -296,9 +298,10 @@ the search index, so routes do not change search.
 
 ## Collection field declarations
 
-To record extra procedure data such as a lab-notebook reference or project,
-declare fields in the collection's `orgsyndb.toml`. This UTF-8 TOML file must
-contain `format = 1` as an integer. The other allowed top-level keys are
+Every procedure has the built-in journal fields `notebook` and `project`.
+To record other procedure data, declare fields in the collection's
+`orgsyndb.toml`. This UTF-8 TOML file must contain `format = 1` as an integer.
+The other allowed top-level keys are
 `registry` and `fields`. `registry` names the snapshot as described under
 [Compound registry](#compound-registry). `fields` is an optional table whose
 only allowed key is `procedure`, an array of field declarations. Without
@@ -317,6 +320,36 @@ presentation is fixed for every collection:
 
 Set these values in the lab application. The collection declares only
 procedure fields; `fields.compound` is a configuration error.
+
+### Journal fields
+
+These optional fields are built in for every procedure in every collection.
+They appear before the collection's declared fields, in this order:
+
+| Key | Type and rules | Label (English / German) |
+|---|---|---|
+| `notebook` | Text matching `[A-Z0-9]+(-[A-Z0-9]+)*/[1-9][0-9]{0,3}` as a whole; unique across procedure IDs; code must be a notebook in the registry snapshot. | Lab notebook / Laborjournal |
+| `project` | One term key from the registry's `projects` vocabulary, at any level; single `choice`, with `facet = true`. | Project / Projekt |
+
+`notebook` names the paper notebook entry the procedure comes from, as
+`<code>/<number>`, for example `notebook = "AE-1/2"`. The number runs from
+1 to 9999 and has no leading zero. Register the notebook in the lab application
+at `/lab/journal/` before validating or importing the collection. Its code
+uses capital letters and digits joined by single hyphens, at most 20
+characters, and cannot change once saved. The entry's contents stay on
+paper; the app creates its entry record when an import or a task step
+first names it.
+
+Set `project` as one quoted key, for example
+`project = "first-year-practical"`, never a list. All language variants
+of one procedure must repeat the same journal values, including their
+absence; those variants count as one holder of a notebook entry.
+The fields remain available when no collection fields are declared or
+the direct validator's default settings file is absent.
+
+Do not declare `notebook` or `project` under `[[fields.procedure]]`.
+Both keys are reserved; a declaration of either is a configuration error
+with validator exit status 2.
 
 ### Declaration keys
 
@@ -348,27 +381,26 @@ option on another type is a configuration error.
 
 ### Procedure field declarations
 
-To record a lab-notebook reference, project or other procedure data, write
-one `[[fields.procedure]]` table per field in `orgsyndb.toml`, in display
-order. Omitting `fields.procedure` declares no procedure fields. For example,
-the demo declares:
+To record procedure data beyond the journal fields, write one
+`[[fields.procedure]]` table per field in `orgsyndb.toml`, in display
+order. Omitting `fields.procedure` leaves only the built-in journal fields.
+For example, the validator's sample settings include these two declarations:
 
 ```toml
 [[fields.procedure]]
-key = "notebook"
+key = "sample_code"
 type = "text"
-label = "Lab notebook"
-label_de = "Laborjournal"
+label = "Sample code"
+label_de = "Probencode"
 unique = true
 pattern = '[A-Z]{2}-\d+/\d+'
 
 [[fields.procedure]]
-key = "project"
+key = "funding"
 type = "choice"
-label = "Project"
-label_de = "Projekt"
+label = "Funding"
+label_de = "Förderung"
 vocabulary = "projects"
-facet = true
 ```
 
 Use the declaration keys, types and defaults above. These rules also apply:
@@ -400,6 +432,8 @@ Use the declaration keys, types and defaults above. These rules also apply:
 
   **Procedure catalogue:** `tag`, `created`, `text`, `q`, `sort`, `view`.
 
+  **Journal fields:** `notebook`, `project`.
+
 Procedure choice fields use the terms of their named registry vocabulary.
 A choice may name a term at any level of that vocabulary.
 
@@ -414,19 +448,22 @@ inert_atmosphere = false
 ```
 
 The demo declares `working_time` as `number` with `unit = "h"` and `min = 0`,
-and `inert_atmosphere` as `boolean` with `facet = true`. None of its four
-procedure fields is required. A new demo procedure may omit them; any
-`notebook` it sets must match the pattern and be unused.
+and `inert_atmosphere` as `boolean` with `facet = true`. These are its only
+declared fields. Together with the two journal fields, all four are
+optional. Any `notebook` it sets must match the built-in pattern, name a
+registered notebook and be unused by another procedure.
 
-Every Markdown procedure and Org export is checked against the procedure
-declarations. Value errors use the field's key on the procedure's path and
-the [procedure value messages](#procedure-values-and-messages), including
+Every Markdown procedure and Org export is checked against the journal
+field rules and the procedure declarations. Value errors use the field's
+key on the procedure's path and the
+[procedure value messages](#procedure-values-and-messages), including
 `required field missing`, type, pattern, bound and choice-list errors.
 For `unique`, the message is `"<value>" is also set by <other procedure IDs>`;
 numbers appear without quotes. The comparison uses one reference variant
 per procedure ID and only values that pass the field checks. A file whose
 front matter cannot be parsed supplies no value. All variants must repeat
-the same declared values; see [Languages and variants](#languages-and-variants).
+the same journal and declared values; see
+[Languages and variants](#languages-and-variants).
 For Org syntax and its string-typing limit, see
 [Org file-level keywords](#org-file-level-keywords).
 
@@ -467,15 +504,17 @@ the substance "group" has the key of the directory of the compound tabs, /compou
 
 ### Procedure values and messages
 
-Set declared procedure fields as top-level keys in front matter. Value
-problems are errors on the procedure file's path, under the declared key:
+Set journal fields and declared procedure fields as top-level keys in
+front matter. Value problems are errors on the procedure file's path,
+under the field's key:
 
 | Field type or rule | Message | Meaning |
 |---|---|---|
 | `required = true` | `required field missing` | Set the field in every procedure, including a general procedure. |
 | `text`, single `choice` | `must be a string` | Put the value in quotes. |
 | `text` | `must not be empty` | Supply non-empty text. |
-| `text` with `pattern` | `must match the pattern <pattern>` | The whole string must match the declared pattern. |
+| `text` with `pattern` | `must match the pattern <pattern>` | The whole string must match the field's pattern; for `notebook`, use `<code>/<number>` with a number from 1 to 9999 and no leading zero. |
+| `notebook` | `unknown notebook "<code>"; the registry has no notebook of this code` | Check the code, register the notebook at `/lab/journal/` and use a snapshot that lists it. |
 | `number` | `must be a number, unquoted` | Supply a finite TOML integer or float, without quotes or units; a boolean is not a number. |
 | `number` with `min` | `must be at least <min>` | Increase the value to the inclusive lower bound or above. |
 | `number` with `max` | `must be at most <max>` | Reduce the value to the inclusive upper bound or below. |
@@ -484,11 +523,13 @@ problems are errors on the procedure file's path, under the declared key:
 | `choice` with `multiple = true` | `must be a list of strings, e.g. ["<a term>"]` | Supply a list of quoted term keys. The example uses the first term in the snapshot, or `a term` if the vocabulary is empty. |
 | `choice` with `multiple = true` | `must not be empty` | Supply at least one choice. |
 | `choice` with `multiple = true` | `repeats "<v>"` | Remove the repeated value. |
-| `unique = true` | `"<value>" is also set by <other procedure IDs>` | Use a value no other procedure sets. For numbers, the message shows the value without quotes. |
+| `notebook` or `unique = true` | `"<value>" is also set by <other procedure IDs>` | Use a value no other procedure sets. For numbers, the message shows the value without quotes. |
 
 A value of the wrong type produces only that type error. Empty text with a
-pattern produces only `must not be empty`. A list of choices produces one
-`unknown value` error per unknown string. Uniqueness checks compare values
+pattern produces only `must not be empty`. A notebook reference that fails
+its type or pattern check produces no unknown-notebook error. A list of
+choices produces one `unknown value` error per unknown string. Uniqueness
+checks compare values
 that pass their field's checks and report every procedure sharing a value,
 using one reference variant per procedure ID.
 
@@ -503,6 +544,10 @@ vocabularies and a list of substances. If it contains `accounts`, that
 value must be a list of tables, each with a non-empty string `username`
 and a string `name`, with no user name repeated. A snapshot without
 `accounts` lists no accounts, so no procedure author can be resolved.
+If `notebooks` is present, it must be a list of tables with a non-empty
+string `code` and a string `user`, with no code repeated. A snapshot
+without `notebooks` lists no notebooks, so every otherwise valid notebook
+reference reports an unknown notebook.
 
 These are configuration errors: exit status 2, nothing on standard output,
 and `validate.py: error: ...` on standard error. Messages identify the
@@ -527,6 +572,7 @@ compounds have the registry's`. A single `[fields.procedure]` table produces
 | Missing choice vocabulary | `vocabulary missing; a choice field names one of the registry's vocabularies, chemical-classes, inventory-groups, projects, reaction-types` |
 | Unknown choice vocabulary | `vocabulary '<name>' is not one of the registry's vocabularies, chemical-classes, inventory-groups, projects, reaction-types` |
 | Withheld option | `a procedure field does not take column` (or `search`, `tabs`, `beside`), even when set to `false` |
+| Journal-field key | `is a journal field, which every procedure has; a collection declares neither notebook nor project` |
 | Procedure-schema key | `declaration 5 of fields.procedure: key 'status' is a key of the procedure schema` |
 | Hugo key | `declaration 5 of fields.procedure: key 'layout' is a front-matter key that Hugo reads` |
 | Catalogue key | `declaration 5 of fields.procedure: key 'tag' is reserved by the procedure catalogue; the reserved keys are tag, created, text, q, sort, view` |
@@ -534,8 +580,8 @@ compounds have the registry's`. A single `[fields.procedure]` table produces
 The declaration number is its position within `fields.procedure`. Key errors,
 including duplicates and invalid spelling, identify `fields.procedure`.
 Malformed snapshot errors identify the offending vocabulary, term,
-substance or account. These check the snapshot's shape and types, not
-substance values.
+substance, account or notebook. These check the snapshot's shape and types,
+not substance values.
 
 Commands that read the registry also require a registry source. Without
 `registry` or a non-empty `ORGSYNDB_REGISTRY`, they report `no registry named; set
@@ -551,8 +597,9 @@ or `new`.
 
 ### Display on the site
 
-Procedure pages show each declared field the procedure sets in the metadata
-panel, in declaration order, after **Checked by** and before **Created**.
+Procedure pages show the journal fields the procedure sets first, then
+its declared fields in declaration order, in the metadata panel after
+**Checked by** and before **Created**.
 Labels use `label_de` on a German site when present, otherwise `label`.
 Text appears as written; numbers use the site's decimal separator and unit,
 such as `2,5 h`; booleans show **Yes**/**No** or **Ja**/**Nein**. Choices show
@@ -561,14 +608,15 @@ multiple choices are separated by `, ` in the procedure's order. The panel is
 indexed, so catalogue search finds these displayed values.
 
 Each boolean or choice procedure field with `facet = true` adds a filter
-between **Status** and **Tag**, in declaration order, open by default and
-without an “all values” link. Boolean filters list **Yes**, then **No**,
+between **Status** and **Tag**, with **Project** first and declared filters
+in declaration order, open by default and without an “all values” link. Boolean
+filters list **Yes**, then **No**,
 each only when some published procedure sets it. Choice filters list used
 values and their ancestors as an indented tree in vocabulary order.
 Selecting a parent also matches procedures filed under its descendants.
 These filters appear on `/procedures/`, every reaction-type, tag and author
 page, and `/general-procedures/`. Every page offers values from the whole
-collection. The address uses the declared key, for example
+collection. The address uses the field's key, for example
 `/procedures/?project=research&inert_atmosphere=true`. Selections use the same
 OR/AND and count rules as compound filters below. Procedure fields do not
 add table columns, values to the **Details** view, or tabs.
@@ -775,8 +823,8 @@ The following keys are rejected:
 | `author = ["klehmann"]` | The schema uses the plural field; the error is `use authors, a list of user names`. | `authors = ["klehmann"]` |
 | `url = "/procedures/osdb-0001/"` | The URL is derived from `slug`. | `slug = "osdb-0001"` |
 
-A key declared under `fields.procedure` is checked as a procedure field
-and produces no `unknown field` warning.
+The journal fields and keys declared under `fields.procedure` are checked
+as procedure fields and produce no `unknown field` warning.
 
 Any other top-level key produces an `unknown field` warning. This includes
 misspellings such as `checkedby` and the fields `product`, top-level
@@ -831,17 +879,20 @@ quoted list. Keep decimal points in numeric values in every language. The
 export also keeps table-valued metadata last so later fields do not become
 members of the last `[[products]]` table.
 
-Set declared procedure fields on additional `#+HUGO_CUSTOM_FRONT_MATTER:`
-lines before `:products`, for example after `:scale`:
+Set journal fields and declared fields on additional
+`#+HUGO_CUSTOM_FRONT_MATTER:` lines before `:products`, for example after
+`:scale`:
 
 ```org
 #+HUGO_CUSTOM_FRONT_MATTER: :notebook "AE-1/1" :project "first-year-practical" :working_time 3 :inert_atmosphere false
 ```
 
 Double-quote strings; leave numbers and booleans unquoted. A multiple choice
-uses a quoted list, for example `:project '("first-year-practical" "advanced-practical")`
-when the collection declares `project` with `multiple = true` and uses the
-demo registry’s `projects` vocabulary.
+uses a quoted list, for example
+`:funding '("first-year-practical" "advanced-practical")`
+when the collection declares `funding` with `multiple = true` and uses the
+demo registry’s `projects` vocabulary. The built-in `project` field takes
+one quoted key, not a list.
 
 The ox-hugo/tomelr export cannot preserve every quoted string as text. It
 writes a string without quotes when it reads `true` or `false`, has the form
@@ -1016,8 +1067,8 @@ The variants of a procedure:
 - have the same base name, the file name without code and suffix;
 - have the same `id` and `slug`;
 - have the same value, or the same absence, of `status`, `reaction_types`,
-  `tags`, `products`, `substrates`, `scope`, `scheme_image` and every declared
-  procedure field;
+  `tags`, `products`, `substrates`, `scope`, `scheme_image`, the journal
+  fields and every declared procedure field;
 - may translate each scope entry's `note`; all other scope values and the entry
   order must agree;
 - may differ in every other field and in the body: `title`, `scale`,
@@ -1032,8 +1083,8 @@ scope difference is reported under `scope`, ignoring entry notes; a scheme-path
 difference is reported under `scheme_image`. Numbers compare by value, so `85`
 and `85.0` agree; other values compare by both value and type.
 
-For a declared procedure field, a changed value, a missing key or an added
-key produces an error under that key:
+For a journal field or declared procedure field, a changed value, a missing
+key or an added key produces an error under that key:
 `must equal the value in <path of the reference variant> (<value>); the variants of a procedure share it`.
 Repeat values without translating them. The displayed field label comes
 from `label_de` on a German site when supplied.
@@ -1071,9 +1122,10 @@ Each positional `CONTENT_ROOT` is a directory of Markdown procedures.
 It resolves a procedure's `scheme_image` under that directory.
 `--registry` defaults to `build/registry.json` in the current directory.
 It takes a snapshot file, not an address. The validator checks procedure
-and sequence compound keys, author user names, reaction types and declared
-procedure values against that snapshot. It checks no substance values. An unreadable file
-or a file that is not a snapshot is a configuration error, exit status 2.
+and sequence compound keys, author user names, reaction types, journal
+fields and declared procedure values against that snapshot. It checks no
+substance values. An unreadable file or a file that is not a snapshot is a
+configuration error, exit status 2.
 `--compounds` and `--vocabulary` are not accepted; either is a usage error,
 also exit status 2.
 
@@ -1085,10 +1137,11 @@ the collection root.
 
 `--settings` names the collection's `orgsyndb.toml`. Without the option,
 the validator uses `orgsyndb.toml` in the working directory; a missing
-default declares no extra fields. A file explicitly named by `--settings`
-must exist. The validator checks procedure declarations against the four
-registry vocabularies, then checks each procedure's declared values. Org
-procedures reach this check as Markdown exports.
+default declares no extra fields; the journal fields still apply. A file
+explicitly named by `--settings` must exist. The validator checks procedure
+declarations against the four registry vocabularies, then checks each
+procedure's journal fields and declared values. Org procedures reach this
+check as Markdown exports.
 
 `--sequences` defaults to `md/sequences` in the working directory. A missing
 directory holds no sequences; an existing path that is not a directory is a
@@ -1117,9 +1170,9 @@ Author errors appear under `authors`:
 | `unknown author "<name>"; the registry has no account of this user name` | Check the user name and that the collection's registry snapshot lists the account. |
 | `"<name>" is named twice` | Keep each user name once. |
 
-Declared procedure-field errors name the Markdown source or Org export
-and the declared key, such as `notebook` or `project`. Look up their type,
-pattern, bounds and choice messages under
+Journal-field and declared procedure-field errors name the Markdown source
+or Org export and the field's key, such as `notebook`, `project` or
+`working_time`. Look up their type, pattern, bounds and choice messages under
 [Procedure field declarations](#procedure-field-declarations). An
 `also set by` message names other procedure IDs; a `must equal the value in`
 message names the reference language variant whose value you must repeat.

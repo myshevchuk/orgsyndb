@@ -428,14 +428,15 @@ class FieldDataStagingTests(BuildTestCase):
         self.assert_ok(self.build("build"))
         path = self.sandbox.root / "orgsyndb.toml"
         text = path.read_text(encoding="utf-8")
-        self.assertEqual(text.count('label_de = "Laborjournal"'), 1)
-        path.write_text(text.replace('label_de = "Laborjournal"',
-                                     'label_de = "Laborbuch"'),
+        self.assertEqual(text.count('label_de = "Arbeitszeit"'), 1)
+        path.write_text(text.replace('label_de = "Arbeitszeit"',
+                                     'label_de = "Arbeitsdauer"'),
                         encoding="utf-8")
         self.assert_ok(self.build("build"))
         data = self.fields_json()
         self.assertEqual(data, self.expected())
-        self.assertEqual(data["procedure"][0]["label"], "Laborbuch")
+        by_key = {f["key"]: f for f in data["procedure"]}
+        self.assertEqual(by_key["working_time"]["label"], "Arbeitsdauer")
 
     def test_a_second_build_stages_the_changed_registry(self) -> None:
         """Requirement: build subcommand (the field data is written from

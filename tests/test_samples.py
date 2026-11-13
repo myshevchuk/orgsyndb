@@ -762,7 +762,7 @@ class DemoFieldTests(unittest.TestCase):
         declared = settings["fields"]["procedure"]
         self.assertEqual(
             [d["key"] for d in declared],
-            ["notebook", "project", "working_time", "inert_atmosphere"])
+            ["working_time", "inert_atmosphere"])
         self.assertEqual(
             [{k: v for k, v in d.items() if k not in ("label", "label_de")}
              for d in declared], sup.DEMO_PROCEDURE_DECLARATIONS)
@@ -771,6 +771,39 @@ class DemoFieldTests(unittest.TestCase):
              for d in declared}, sup.DEMO_PROCEDURE_LABELS)
         self.assertEqual([d["key"] for d in declared
                           if d.get("required")], [])
+
+    def test_the_demo_declares_neither_journal_field(self) -> None:
+        """Requirement: Demo collection (the declarations: `notebook`
+        and `project` are built in, so the demo declares neither)."""
+        for path in (DEMO, COLLECTION):
+            settings = tomllib.loads(
+                (path / "orgsyndb.toml").read_text(encoding="utf-8"))
+            declared = [d["key"] for d in settings["fields"]["procedure"]]
+            with self.subTest(collection=path.name):
+                self.assertNotIn("notebook", declared)
+                self.assertNotIn("project", declared)
+                self.assertEqual(declared,
+                                 ["working_time", "inert_atmosphere"])
+
+    def test_the_demo_registry_lists_the_demo_notebooks(self) -> None:
+        """Requirement: Demo collection (the registry lists the notebooks
+        `AE-1`, `AE-2`, `CE-1` and `CE-3`), with lab-demo "Demo
+        notebooks"."""
+        table = json.loads(DEMO_REGISTRY.read_text(encoding="utf-8"))
+        self.assertEqual(table.get("notebooks"), sup.DEMO_NOTEBOOKS)
+        self.assertEqual(table["digest"], snapshot_digest(table))
+        without = {k: v for k, v in table.items() if k != "notebooks"}
+        self.assertNotEqual(table["digest"], snapshot_digest(without))
+
+    def test_every_sample_names_a_notebook_of_the_registry(self) -> None:
+        """Requirement: Demo collection (every `notebook` a sample sets
+        names one of the registry's notebooks)."""
+        codes = {n["code"] for n in sup.read_snapshot(DEMO)["notebooks"]}
+        values = sup.procedure_values(DEMO)
+        for number, variants in values.items():
+            for variant in variants:
+                with self.subTest(procedure=number):
+                    self.assertIn(variant["notebook"].split("/")[0], codes)
 
     def test_the_demo_procedure_values(self) -> None:
         """Scenario: The demo declares its fields (the procedures'
@@ -889,6 +922,9 @@ class ProcedureFieldCheckerTests(unittest.TestCase):
             "a flag that is no boolean": (
                 "inert_atmosphere = false", 'inert_atmosphere = "false"',
                 (".md", ".de.md"), "inert_atmosphere is"),
+            "a notebook the registry lacks": (
+                'notebook = "AE-1/1"', 'notebook = "ZZ-1/1"',
+                (".md", ".de.md"), "names no notebook"),
             "a notebook set twice": (
                 'notebook = "AE-1/1"', 'notebook = "AE-1/2"',
                 (".md", ".de.md"), "notebooks are"),
@@ -940,6 +976,30 @@ class ProcedureFieldCheckerTests(unittest.TestCase):
                         encoding="utf-8")
         self.assertNotEqual(sup.field_violations(root), [])
 
+    def test_a_journal_declaration_is_rejected(self) -> None:
+        """Scenario: The demo declares its fields (checker, a declared
+        journal field)."""
+        for key in ("notebook", "project"):
+            with self.subTest(key=key):
+                root = self.collection()
+                path = root / "orgsyndb.toml"
+                path.write_text(
+                    path.read_text(encoding="utf-8")
+                    + f'\n[[fields.procedure]]\nkey = "{key}"\n'
+                    'type = "text"\nlabel = "X"\n', encoding="utf-8")
+                self.assertNotEqual(sup.field_violations(root), [])
+
+    def test_a_registry_without_the_notebooks_is_rejected(self) -> None:
+        """Scenario: The demo's registry and fields (checker, no
+        notebooks)."""
+        root = self.collection()
+        path = root / "registry.json"
+        table = json.loads(path.read_text(encoding="utf-8"))
+        del table["notebooks"]
+        path.write_text(json.dumps(table), encoding="utf-8")
+        self.assertTrue(any("notebooks" in line for line in
+                            sup.field_violations(root)))
+
     def test_a_missing_declaration_is_rejected(self) -> None:
         """Scenario: The demo declares its fields (checker, no
         declaration)."""
@@ -976,6 +1036,7 @@ class TestCollectionTests(unittest.TestCase):
             table.pop("accounts", None)
             table.pop("digest")
         self.assertEqual(test_table, demo_table)
+        self.assertEqual(test_table["notebooks"], sup.DEMO_NOTEBOOKS)
         test_accounts = accounts_of(COLLECTION / "registry.json")
         self.assertEqual(
             {user: name for user, name in test_accounts.items()

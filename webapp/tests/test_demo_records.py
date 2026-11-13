@@ -8,7 +8,7 @@ from datetime import date, datetime, time, timedelta
 
 from django.test import TestCase
 
-from . import BERLIN, frozen, page, table
+from . import BERLIN, DEMO_NOTEBOOKS, frozen, page, table
 from .collection_support import accept
 from .demo_support import (ACCOUNTS, ARTICLES, DAY, DELIVERIES,
                            DEMO_PASSWORD, ITEMS, LOGIN, NOTE_NUMBER,
@@ -147,6 +147,14 @@ class RegistryTests(SeededCase):
             [{"username": user, "name": ACCOUNTS[user][0]}
              for user in sorted(ACCOUNTS)])
 
+    def test_the_registry_file_lists_the_demo_notebooks(self) -> None:
+        """Requirement: Demo notebooks (`webapp/demo/registry.json` lists
+        them as the snapshot does)."""
+        self.assertEqual(
+            demo_registry().get("notebooks"),
+            [{"code": code, "user": user}
+             for code, user in sorted(DEMO_NOTEBOOKS.items())])
+
     def test_the_registry_holds_the_substances_of_the_collection(
             self) -> None:
         from registry.models import Substance
@@ -208,6 +216,83 @@ class AuthorTests(SeededCase):
         rows = author_rows()
         self.assertTrue(rows)
         self.assertEqual({user for _, user, _ in rows}, set(ACCOUNTS))
+
+
+class NotebookTests(SeededCase):
+    """The demo's notebooks (lab-demo: Demo notebooks)."""
+
+    def test_notebooks_of_the_demo(self) -> None:
+        """Scenario: Notebooks of the demo."""
+        from journal.models import Entry
+        from registry import snapshot as registry_snapshot
+        listed = registry_snapshot.build()["notebooks"]
+        self.assertEqual(listed, demo_registry()["notebooks"])
+        self.assertEqual(
+            {n["code"]: n["user"] for n in listed}, DEMO_NOTEBOOKS)
+        numbers = {code: sorted(Entry.objects.filter(
+            notebook__code=code).values_list("number", flat=True))
+            for code in DEMO_NOTEBOOKS}
+        self.assertEqual(numbers["CE-3"], [1, 2])
+        entry = Entry.objects.get(notebook__code="CE-3", number=1)
+        self.assertEqual([p.key for p in entry.procedures.all()],
+                         ["OSDB-0009"])
+        self.assertEqual(
+            [(s.task.number, s.position) for s in
+             Entry.objects.get(notebook__code="CE-3", number=2)
+             .task_steps.select_related("task")],
+            [(self.running().number, 1)])
+
+    def running(self):
+        from tasks.models import Task
+        return Task.objects.get(sequence__key="SEQ-0002",
+                                started__isnull=False,
+                                ended__isnull=True)
+
+    def test_the_notebooks_have_no_note(self) -> None:
+        """Requirement: Demo notebooks (with no note)."""
+        from journal.models import Notebook
+        self.assertEqual(Notebook.objects.count(), 4)
+        for notebook in Notebook.objects.all():
+            with self.subTest(code=notebook.code):
+                self.assertEqual(notebook.note, "")
+
+    def test_the_notebooks_are_made_by_klehmann_on_the_opening_day(
+            self) -> None:
+        """Requirement: Demo notebooks (on `O` and made by
+        `klehmann`)."""
+        from journal.models import Notebook
+        klehmann = self.account("klehmann")
+        for notebook in Notebook.objects.all():
+            first = notebook.history.order_by("history_id").first()
+            with self.subTest(code=notebook.code):
+                self.assertEqual(first.history_type, "+")
+                self.assertEqual(first.history_user, klehmann)
+                self.assertEqual(local(first.history_date).date(), O)
+
+    def test_every_procedure_names_its_entry_and_its_project(self) -> None:
+        """Requirement: Demo notebooks (the data set's import gives the
+        procedures the entries their `notebook` names)."""
+        from .collection_support import DEMO_JOURNAL, journal_of
+        self.assertEqual({key: journal_of(key) for key in DEMO_JOURNAL},
+                         DEMO_JOURNAL)
+
+    def test_only_the_named_entries_exist(self) -> None:
+        """Requirement: Notebooks and entries (nothing but an import or a
+        task step creates an entry): nine of the procedures and one of
+        the step."""
+        from journal.models import Entry
+        self.assertEqual(Entry.objects.count(), 10)
+
+    def test_the_done_step_names_the_entry(self) -> None:
+        """Requirement: Demo notebooks (the done first step of the
+        running task of `SEQ-0002` names the entry `CE-3/2`)."""
+        from tasks.models import TaskStep
+        step = TaskStep.objects.get(task=self.running(), position=1)
+        self.assertIsNotNone(step.done_on)
+        self.assertEqual(str(step.journal_entry), "CE-3/2")
+        others = TaskStep.objects.exclude(pk=step.pk).filter(
+            journal_entry__isnull=False)
+        self.assertEqual(others.count(), 0)
 
 
 class InventoryTests(SeededCase):

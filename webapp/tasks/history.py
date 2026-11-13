@@ -10,13 +10,15 @@ from django.utils import formats
 from django.utils.translation import gettext as _
 
 from collection.models import Import, ScopeEntry, Sequence
+from journal.models import Entry as JournalEntry
 from registry.models import Substance
 from tasks.models import Priority, Task, TaskStep
 
 FIELDS = ["substance", "priority", "assignee", "started", "ended",
           "sequence", "batch", "report", "qc_list", "cancelled", "failed",
           "note"]
-STEP_FIELDS = ["position", "entry", "planned_import", "done_on"]
+STEP_FIELDS = ["position", "entry", "planned_import", "done_on",
+               "journal_entry"]
 
 
 @dataclass(frozen=True)
@@ -46,9 +48,10 @@ class Entry:
 def shown(name: str, value: Any, names: dict[str, dict[Any, str]]) -> str:
     """Return VALUE of the field NAME of a task or a step as the history
     shows it, in the active language. NAMES maps the IDs of the
-    accounts, substances, sequences, scope entries and imports the
-    records name, under ``assignee``, ``substance``, ``sequence``,
-    ``entry`` and ``planned_import``, to the text that shows each."""
+    accounts, substances, sequences, scope entries, imports and journal
+    entries the records name, under ``assignee``, ``substance``,
+    ``sequence``, ``entry``, ``planned_import`` and ``journal_entry``,
+    to the text that shows each."""
     if value is None or value == "":
         return "–"
     if name in names:
@@ -83,6 +86,10 @@ def _names(records: list[Any], steps: list[Any]) -> dict[str, dict]:
         "planned_import": {pk: str(found) for pk, found in
                            Import.objects.in_bulk(
                                ids(steps, "planned_import_id")).items()},
+        "journal_entry": {pk: str(found) for pk, found in
+                          JournalEntry.objects.select_related(
+                              "notebook").in_bulk(
+                                  ids(steps, "journal_entry_id")).items()},
     }
 
 

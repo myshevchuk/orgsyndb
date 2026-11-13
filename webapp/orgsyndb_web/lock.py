@@ -2,7 +2,8 @@
 that change the registry snapshot's digest.
 
 The digest covers the substances, their chemical classes, the terms of
-the four vocabularies and the articles' numbers. Every write of those
+the four vocabularies, the articles' numbers, the accounts' user names
+and names, and the lab notebooks' codes and owners. Every write of those
 rows takes the lock in the transaction that writes, and so does the
 manifest view while it checks and applies an import, so that an import
 is checked against the registry it is applied to. Issuing and adopting

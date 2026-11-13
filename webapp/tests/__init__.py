@@ -90,6 +90,30 @@ def make_demo_accounts() -> list[Any]:
     return found
 
 
+# The demo's notebooks and their owners (lab-demo "Demo notebooks"), by
+# code.
+DEMO_NOTEBOOKS = {"AE-1": "klehmann", "AE-2": "aschmidt",
+                  "CE-1": "jkoch", "CE-3": "mwolf"}
+
+
+def make_demo_notebooks() -> list[Any]:
+    """The four demo notebooks, which the demo collection's procedures
+    name, each created when it does not exist, with no note; return them
+    in the order of ``DEMO_NOTEBOOKS``. The demo accounts must exist
+    (``make_demo_accounts``). Does nothing, and returns none, while the
+    application has no journal, so that a test of the import fails on its
+    own assertions rather than here."""
+    from django.apps import apps
+    from django.contrib.auth import get_user_model
+    try:
+        model = apps.get_model("journal", "Notebook")
+    except LookupError:
+        return []
+    return [model.objects.get_or_create(code=code, defaults={
+        "user": get_user_model().objects.get(username=username)})[0]
+        for code, username in DEMO_NOTEBOOKS.items()]
+
+
 def slug(text: str) -> str:
     """``text`` as a registry key: lower case ASCII letters and digits
     joined by single hyphens, as ``Neuverbindung 9`` gives

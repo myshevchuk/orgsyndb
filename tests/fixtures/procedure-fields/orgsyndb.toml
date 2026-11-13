@@ -2,10 +2,10 @@
 format = 1
 
 [[fields.procedure]]
-key = "notebook"
+key = "sample_code"
 type = "text"
-label = "Lab notebook"
-label_de = "Laborjournal"
+label = "Sample code"
+label_de = "Probencode"
 pattern = '[A-Z]{2}-\d+/\d+'
 unique = true
 
@@ -23,8 +23,8 @@ type = "boolean"
 label = "Inert atmosphere"
 
 [[fields.procedure]]
-key = "project"
+key = "funding"
 type = "choice"
-label = "Project"
-label_de = "Projekt"
+label = "Funding"
+label_de = "Förderung"
 vocabulary = "projects"

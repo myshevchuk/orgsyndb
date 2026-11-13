@@ -131,21 +131,21 @@ class DefaultPathTests(ValidatorTestCase):
     def test_default_settings_file_is_the_working_directorys(self) -> None:
         """Scenario: Default settings file is the working directory's."""
         settings = support.procedure_declaration(
-            "notebook", "text", "Lab notebook", "required = true")
+            "sample_code", "text", "Sample code", "required = true")
         with tempfile.TemporaryDirectory() as cwd:
             (Path(cwd) / "orgsyndb.toml").write_text(
                 "format = 1\n" + settings, encoding="utf-8")
             result = run_validator(
                 ["--registry", REGISTRY, "--static-dir", STATIC_DIR,
                  FIXTURES / "baseline"], cwd=Path(cwd))
-        self.assert_one(result, "error", "notebook",
+        self.assert_one(result, "error", "sample_code",
                         "required field missing")
 
     def test_the_settings_option_outranks_the_working_directory(
             self) -> None:
         """Requirement: Command-line interface (--settings)."""
         settings = support.procedure_declaration(
-            "notebook", "text", "Lab notebook", "required = true")
+            "sample_code", "text", "Sample code", "required = true")
         with tempfile.TemporaryDirectory() as cwd:
             (Path(cwd) / "orgsyndb.toml").write_text(
                 "format = 1\n" + settings, encoding="utf-8")

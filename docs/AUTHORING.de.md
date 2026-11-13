@@ -166,11 +166,14 @@ Konten im Register an, jeweils mit dem Namen des Kontos als Zusatz. Für
 `checked_by` bietet sie Namen an, die Vorschriften bereits unter diesem
 Schlüssel verwenden; Sie können auch andere Namen eingeben.
 
-Prüfen Sie `orgsyndb.toml` auf Felder unter `[[fields.procedure]]`. Das sind
-zusätzliche Vorschriftenangaben Ihrer Sammlung, etwa ein Laborjournalverweis
-oder ein Projekt. Ergänzen Sie sie als Zeilen `key = value` im Datenblock,
-vor jeder Tabelle. Die Aspirin-Vorschrift der Beispielsammlung setzt nach
-`scale` etwa:
+Mit `notebook` benennen Sie den Eintrag im Papierjournal, aus dem die
+Vorschrift stammt. Mit `project` ordnen Sie die Vorschrift einem Projekt zu.
+Diese beiden optionalen *Journalfelder* sind in jeder Sammlung fest
+eingebaut; deklarieren Sie sie nicht in `orgsyndb.toml`. Weitere Felder
+kann Ihre Sammlung unter `[[fields.procedure]]` deklarieren, etwa
+`working_time` und `inert_atmosphere` der Beispielsammlung.
+Ergänzen Sie Werte als Zeilen `key = value` im Datenblock, vor jeder
+Tabelle. Die Aspirin-Vorschrift der Beispielsammlung setzt nach `scale`:
 
 ```toml
 notebook = "AE-1/2"
@@ -186,12 +189,24 @@ benannten Vokabular des Registers; `multiple = true` verlangt eine nicht
 leere Liste verschiedener Schlüssel. Ein Feld mit `required = true` muss
 gesetzt sein, auch in einer allgemeinen Vorschrift. Bei `unique = true`
 darf keine andere Vorschrift denselben Wert verwenden. In der
-Beispielsammlung sind alle vier Felder optional; ein Laborjournalverweis
-muss `[A-Z]{2}-\d+/\d+` entsprechen, etwa `AE-1/2`, und noch unvergeben sein.
-Die Arbeitszeit steht in Stunden und muss mindestens null sein.
-Projektschlüssel stehen im Vokabular `projects` des Laborregisters, in der
-Beispielsammlung etwa `first-year-practical` unter `teaching`. Das Feld
-`vocabulary` einer Auswahl benennt `chemical-classes`, `inventory-groups`,
+Beispielsammlung sind alle vier Felder optional.
+
+Schreiben Sie einen Laborjournalverweis als `<code>/<number>`, etwa
+`AE-1/2` für Eintrag 2 des Journals `AE-1`. Der Code besteht aus
+Großbuchstaben und Ziffern, verbunden durch einzelne Bindestriche. Die
+Eintragsnummer liegt zwischen 1 und 9999 und hat keine führende Null. Das genaue
+Muster lautet `[A-Z0-9]+(-[A-Z0-9]+)*/[1-9][0-9]{0,3}`. Registrieren Sie das
+Journal vor der Prüfung oder dem Import der Vorschrift in der
+Laboranwendung unter `/lab/journal/`. Bei `unknown notebook` prüfen Sie
+den Code und ob der Register-Snapshot der Sammlung das Journal aufführt.
+Keine andere Vorschrift darf denselben Eintrag verwenden; Übersetzungen
+einer Vorschrift teilen ihn. Der Inhalt des Eintrags bleibt auf Papier.
+
+Setzen Sie `project` auf einen Schlüssel aus dem Vokabular `projects` des
+Laborregisters, in der Beispielsammlung etwa `first-year-practical` unter
+`teaching`. Verwenden Sie einen Schlüssel in Anführungszeichen, keine
+Liste. Die Arbeitszeit steht in Stunden und muss mindestens null sein.
+Das Feld `vocabulary` einer Auswahl benennt `chemical-classes`, `inventory-groups`,
 `projects` oder `reaction-types`. Die
 [Feldreferenz](SCHEMA.de.md#felddeklarationen-für-vorschriften) nennt die genauen
 Regeln.
@@ -398,8 +413,9 @@ Verbindungsseiten. **Ausgangsstoffe** verlinkt die Verbindungen aus
 Einträge, jede Verbindung einmal in der Reihenfolge ihres ersten Auftretens.
 Auch Vorstufen- und Folgelinks berücksichtigen alle Einträge. Es folgen
 Reaktionstyp, Schlagwörter, Autoren, bei Entwürfen und zurückgezogenen
-Vorschriften gegebenenfalls die Prüfenden unter **Geprüft von**, deklarierte
-Vorschriftenfelder, Erstellungs- und Änderungszeit sowie die Links zu
+Vorschriften gegebenenfalls die Prüfenden unter **Geprüft von**,
+Journalfelder, deklarierte Vorschriftenfelder, Erstellungs- und Änderungszeit
+sowie die Links zu
 Vorstufen und Folgevorschriften. Wenn
 Ihre Vorschrift eine Stufe eines Synthesewegs ist, folgt auf **Verwendet in**
 das Feld **Synthesewege** mit verlinkten Titeln, nach Nummer geordnet. Ziffern
@@ -427,10 +443,11 @@ Die Vorschriftensuche findet diese Werte, weil das Datenfeld indexiert wird.
 Die Ausbeutezeile, die Katalogansicht **Details**, Alternativtexte von Bildern
 und Seitentitel tragen keinen Zusatz.
 
-Das Datenfeld zeigt jedes gesetzte deklarierte Vorschriftenfeld in
-Deklarationsreihenfolge vor **Erstellt**, nach **Geprüft von**, sofern diese
-Angabe erscheint. In der Beispielsammlung sind das **Laborjournal**,
-**Projekt**, **Arbeitszeit** und **Schutzgas**. Auswahlwerte verwenden die
+Das Datenfeld zeigt zuerst die gesetzten Journalfelder, dann die Felder
+der Sammlung in Deklarationsreihenfolge, vor **Erstellt**, nach
+**Geprüft von**, sofern diese Angabe erscheint. In der Beispielsammlung
+sind das **Laborjournal**, **Projekt**, **Arbeitszeit** und **Schutzgas**.
+Auswahlwerte verwenden die
 Namen aus dem Vokabular, etwa **Lehre › Grundpraktikum**. Arbeitszeit erscheint
 als `2,5 h`, Wahrheitswerte als **Ja** oder **Nein**. Die Katalogsuche findet
 diese angezeigten Werte.
@@ -651,8 +668,9 @@ zeigt die Seite weiterhin ihre Vorschriften nach Nummer. Die Ansicht
 **Details** berücksichtigt Produkte aller Einträge und zeigt die
 Ausbeutespanne.
 
-Die deklarierten Wahrheits- und Auswahlfelder Ihrer Sammlung mit
-`facet = true` erscheinen ebenfalls als Filter zwischen **Status** und
+Das fest eingebaute Feld **Projekt** und die deklarierten Wahrheits- und
+Auswahlfelder Ihrer Sammlung mit `facet = true` erscheinen ebenfalls als
+Filter zwischen **Status** und
 **Schlagwort**, auch auf Reaktionstyp-, Schlagwort-, Autoren- und allgemeinen
 Vorschriftenseiten. In der Beispielsammlung verwenden Sie **Projekt** und
 **Schutzgas**. **Lehre** schließt die Praktika ein, **Forschung** die Biaryle
@@ -680,8 +698,9 @@ also auf der deutschen Website das englische Original.
    löschen Sie die Zeile.
 4. Lassen Sie `id`, `slug`, `status`, `reaction_types`, `tags`, `products` und
    `substrates` sowie `scheme_image` wie im Original. Wiederholen Sie jedes
-   deklarierte Vorschriftenfeld mit demselben Wert, oder lassen Sie es in
-   beiden Fassungen weg. Übersetzen Sie diese Werte nicht; die deutschen
+   Journalfeld und jedes deklarierte Vorschriftenfeld mit demselben Wert,
+   oder lassen Sie es in beiden Fassungen weg. Übersetzen Sie diese Werte
+   nicht; die deutschen
    Feldnamen kommen aus `label_de`. Behalten Sie `scope` und
    die Reihenfolge seiner Einträge; übersetzen Sie darin nur `note`. Die
    Prüfung meldet Abweichungen der gemeinsamen Felder als Fehler unter dem

@@ -19,8 +19,8 @@ from django.db.models.signals import post_save
 from django.test import TestCase, TransactionTestCase, override_settings
 
 from . import (load_demo_registry, make_article, make_class,
-               make_demo_accounts, make_group, make_substance, make_user,
-               page)
+               make_demo_accounts, make_demo_notebooks, make_group,
+               make_substance, make_user, page)
 from .collection_support import (TOKEN, import_collection, make_token,
                                  manifest, post, refused, request_id)
 from .registry_support import (NEW_SUBSTANCE, OLD_LAYOUT, small_snapshot,
@@ -330,6 +330,87 @@ class ModelWritesTests(LockCase):
             article_number="CH-0031").exists())
 
 
+class NotebookWritesTests(LockCase):
+    """Requirement: One lock (every save or deletion of a notebook takes
+    the lock in the transaction that writes, whatever path writes it:
+    the model, a form, the admin), since the snapshot lists the
+    notebooks (lab-journal "Notebooks and entries")."""
+
+    def exists(self, code: str) -> Any:
+        from journal.models import Notebook
+        return lambda: Notebook.objects.filter(code=code).exists()
+
+    def test_a_notebook(self) -> None:
+        from journal.models import Notebook
+        with self.recording(self.exists("AE-1")) as calls:
+            notebook = Notebook.objects.create(code="AE-1", user=self.kl)
+        self.assertLocked(calls, before=False)
+        with self.recording() as calls:
+            notebook.note = "changed"
+            notebook.save()
+        self.assertLocked(calls)
+        with self.recording() as calls:
+            notebook.delete()
+        self.assertLocked(calls)
+        self.assertFalse(self.exists("AE-1")())
+
+    def test_a_bulk_write(self) -> None:
+        from journal.models import Notebook
+        Notebook.objects.create(code="AE-1", user=self.kl)
+        with self.recording() as calls:
+            Notebook.objects.filter(code="AE-1").update(note="bulk")
+        self.assertLocked(calls)
+        with self.recording() as calls:
+            Notebook.objects.filter(code="AE-1").delete()
+        self.assertLocked(calls)
+        self.assertFalse(self.exists("AE-1")())
+
+    def test_a_notebook_through_its_new_form(self) -> None:
+        self.client.force_login(self.kl)
+        with self.recording(self.exists("KL-1")) as calls:
+            done = self.client.post("/lab/journal/new/", {
+                "code": "KL-1", "user": str(self.kl.pk), "note": ""})
+        self.assertEqual(done.status_code, 302)
+        self.assertTrue(self.exists("KL-1")())
+        self.assertLocked(calls, before=False)
+
+    def test_a_notebook_through_its_edit_form(self) -> None:
+        from journal.models import Notebook
+        notebook = Notebook.objects.create(code="KL-1", user=self.kl)
+        self.client.force_login(self.kl)
+        with self.recording() as calls:
+            done = self.client.post("/lab/journal/KL-1/edit/", {
+                "user": str(self.kl.pk), "note": "edited"})
+        self.assertEqual(done.status_code, 302)
+        self.assertEqual(Notebook.objects.get(pk=notebook.pk).note,
+                         "edited")
+        self.assertLocked(calls)
+
+    def test_a_notebook_through_the_admin(self) -> None:
+        from journal.models import Notebook
+        self.client.force_login(self.staff)
+        with self.recording(self.exists("AD-1")) as calls:
+            done = self.client.post(f"{ADMIN}journal/notebook/add/", {
+                "code": "AD-1", "user": str(self.kl.pk), "note": ""})
+        self.assertEqual(done.status_code, 302)
+        self.assertTrue(self.exists("AD-1")())
+        self.assertLocked(calls, before=False)
+        notebook = Notebook.objects.get(code="AD-1")
+        with self.recording() as calls:
+            done = self.client.post(
+                f"{ADMIN}journal/notebook/{notebook.pk}/change/", {
+                    "user": str(self.kl.pk), "note": "admin"})
+        self.assertEqual(done.status_code, 302)
+        self.assertLocked(calls)
+        with self.recording(self.exists("AD-1")) as calls:
+            done = self.client.post(
+                f"{ADMIN}journal/notebook/{notebook.pk}/delete/",
+                {"post": "yes"})
+        self.assertEqual(done.status_code, 302)
+        self.assertFalse(self.exists("AD-1")())
+        self.assertLocked(calls, before=True)
+
+
 class ClassesTests(LockCase):
     """Requirement: One lock (a substance's chemical classes are set in
     the transaction that saves it)."""
@@ -395,6 +476,7 @@ class ManifestTests(LockCase):
         super().setUp()
         load_demo_registry()
         make_demo_accounts()
+        make_demo_notebooks()
 
     def test_an_accepted_manifest(self) -> None:
         from collection.models import Import
@@ -425,6 +507,7 @@ class IssuedIdTests(LockCase):
         super().setUp()
         load_demo_registry()
         make_demo_accounts()
+        make_demo_notebooks()
         import_collection()
 
     def test_issuing_an_id(self) -> None:
@@ -457,6 +540,7 @@ class AdoptionTests(LockCase):
         from collection.models import IssuedId
         load_demo_registry()
         make_demo_accounts()
+        make_demo_notebooks()
         with self.recording(IssuedId.objects.count) as calls:
             done = post(self.client, manifest())
         self.assertEqual(done.status_code, 200, done.content)

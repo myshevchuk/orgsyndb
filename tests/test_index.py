@@ -21,7 +21,13 @@ from pipeline_support import (DEMO, TEST_COLLECTION, closed_address,
                               make_sandbox, name_registry, pipeline,
                               pipeline_function, serve_snapshot, snapshot,
                               snapshot_digest)
-from support import load_snapshot, write_snapshot
+from support import load_snapshot, procedure_declaration, write_snapshot
+
+# The declaration that the scenarios "A declaration names a missing
+# vocabulary" and "Configuration error" add to the test collection's
+# `orgsyndb.toml`.
+MISSING_VOCABULARY = procedure_declaration(
+    "funding", "choice", "Funding", 'vocabulary = "storage"')
 
 
 def copy_collection(case: unittest.TestCase, source: Path) -> Path:
@@ -64,8 +70,8 @@ class IndexOfTheTestCollectionTests(unittest.TestCase):
         """Index data: the index has these keys and nothing else."""
         self.assertEqual(set(self.index),
                          {"site_language", "schema", "registry", "fields",
-                          "accounts", "vocabularies", "compounds",
-                          "procedures", "sequences"})
+                          "accounts", "notebooks", "vocabularies",
+                          "compounds", "procedures", "sequences"})
         self.assertEqual(self.index["site_language"],
                          pipeline().site_language(
                              pipeline().APP / "site"))
@@ -108,6 +114,12 @@ class IndexOfTheTestCollectionTests(unittest.TestCase):
         self.assertEqual(
             [item["key"] for item in self.index["fields"]["compound"]],
             ["article_number", "short_name", "chemical_class", "group"])
+        self.assertEqual(
+            self.index["notebooks"],
+            [{"code": "AE-1", "user": "klehmann"},
+             {"code": "AE-2", "user": "aschmidt"},
+             {"code": "CE-1", "user": "jkoch"},
+             {"code": "CE-3", "user": "mwolf"}])
 
         self.assertEqual(set(self.index["vocabularies"]),
                          {"chemical-classes", "inventory-groups", "projects",
@@ -127,6 +139,31 @@ class IndexOfTheTestCollectionTests(unittest.TestCase):
         self.assertEqual(names["klehmann"], "Katrin Lehmann")
         users = [a["username"] for a in self.index["accounts"]]
         self.assertEqual(users, sorted(users))
+
+    def test_notebooks(self) -> None:
+        """Index data: `notebooks` lists the registry's notebooks as the
+        snapshot lists them, each a table of `code` and `user`."""
+        listed = load_snapshot(TEST_COLLECTION / "registry.json")[
+            "notebooks"]
+        self.assertEqual(self.index["notebooks"], listed)
+        for item in self.index["notebooks"]:
+            self.assertEqual(set(item), {"code", "user"})
+        codes = [n["code"] for n in self.index["notebooks"]]
+        self.assertEqual(codes, sorted(codes))
+
+    def test_the_index_follows_a_changed_notebook(self) -> None:
+        """Index data: `notebooks` reads the registry's snapshot."""
+        table = load_snapshot(self.root / "registry.json")
+        for notebook in table["notebooks"]:
+            if notebook["code"] == "AE-2":
+                notebook["user"] = "tbauer"
+        table["notebooks"].append({"code": "KL-1", "user": "klehmann"})
+        table["notebooks"].sort(key=lambda notebook: notebook["code"])
+        write_snapshot(self.root / "registry.json", table)
+        index = index_of(self.root)
+        self.assertEqual(index["notebooks"], table["notebooks"])
+        self.assertEqual(index["registry"]["digest"],
+                         snapshot_digest(table))
 
     def test_the_index_follows_a_renamed_account(self) -> None:
         """Index data: `accounts` reads the registry's snapshot."""
@@ -228,7 +265,8 @@ class IndexOfTheTestCollectionTests(unittest.TestCase):
         self.assertEqual(procedure["notebook"], {
             "key": "notebook", "type": "text", "label": "Lab notebook",
             "label_de": "Laborjournal", "required": False,
-            "pattern": r"[A-Z]{2}-\d+/\d+", "unique": True})
+            "pattern": "[A-Z0-9]+(-[A-Z0-9]+)*/[1-9][0-9]{0,3}",
+            "unique": True})
         self.assertEqual(procedure["project"], {
             "key": "project", "type": "choice", "label": "Project",
             "label_de": "Projekt", "required": False,
@@ -289,6 +327,7 @@ class RegistryAtAnAddressTests(unittest.TestCase):
         self.assertEqual(index["registry"],
                          {"source": server.url, "digest": table["digest"]})
         self.assertEqual(index["accounts"], table["accounts"])
+        self.assertEqual(index["notebooks"], table["notebooks"])
         self.assertFalse((root / "build").exists())
 
     def test_the_environment_names_the_registry(self) -> None:
@@ -405,7 +444,8 @@ def write_registry(root: Path, **vocabularies: list) -> None:
     for name, terms in vocabularies.items():
         names[name.replace("_", "-")] = terms
     table: dict[str, Any] = {"format": 1, "vocabularies": names,
-                             "substances": [], "accounts": []}
+                             "substances": [], "accounts": [],
+                             "notebooks": []}
     table["digest"] = snapshot_digest(table)
     (root / "registry.json").write_text(json.dumps(table), encoding="utf-8")
 
@@ -491,8 +531,10 @@ class EmptyAndBrokenCollectionTests(unittest.TestCase):
         index = index_of(root)
         self.assertEqual((index["compounds"], index["procedures"],
                           index["sequences"]), ([], [], []))
-        self.assertEqual(index["fields"]["procedure"], [])
+        self.assertEqual([f["key"] for f in index["fields"]["procedure"]],
+                         ["notebook", "project"])
         self.assertEqual(index["accounts"], [])
+        self.assertEqual(index["notebooks"], [])
         self.assertEqual(
             [f["key"] for f in index["fields"]["compound"]],
             ["article_number", "short_name", "chemical_class", "group"])
@@ -516,14 +558,26 @@ class EmptyAndBrokenCollectionTests(unittest.TestCase):
     def test_broken_declaration(self) -> None:
         """Scenario: A declaration names a missing vocabulary."""
         root = copy_collection(self, TEST_COLLECTION)
-        text = (root / "orgsyndb.toml").read_text(encoding="utf-8")
-        self.assertEqual(text.count('vocabulary = "projects"'), 1)
-        (root / "orgsyndb.toml").write_text(
-            text.replace('vocabulary = "projects"',
-                         'vocabulary = "storage"'), encoding="utf-8")
+        with (root / "orgsyndb.toml").open("a", encoding="utf-8") as f:
+            f.write(MISSING_VOCABULARY)
         with self.assertRaises(pipeline().validate.ConfigError) as caught:
             index_of(root)
         self.assertIn("storage", str(caught.exception))
+
+    def test_a_declared_journal_field(self) -> None:
+        """Scenario: A journal field declared (the index refuses a
+        declaration of `notebook` or `project`, as the validator
+        does)."""
+        for key in ("notebook", "project"):
+            with self.subTest(key=key):
+                root = copy_collection(self, TEST_COLLECTION)
+                with (root / "orgsyndb.toml").open(
+                        "a", encoding="utf-8") as f:
+                    f.write(procedure_declaration(key, "text", "X"))
+                with self.assertRaises(
+                        pipeline().validate.ConfigError) as caught:
+                    index_of(root)
+                self.assertIn(key, str(caught.exception))
 
     def test_nothing_written(self) -> None:
         """Scenario: Nothing written."""
@@ -568,10 +622,9 @@ class IndexSubcommandTests(unittest.TestCase):
     def test_configuration_error(self) -> None:
         """Scenario: Configuration error."""
         sandbox = make_sandbox(self)
-        text = (sandbox.root / "orgsyndb.toml").read_text(encoding="utf-8")
-        (sandbox.root / "orgsyndb.toml").write_text(
-            text.replace('vocabulary = "projects"',
-                         'vocabulary = "storage"'), encoding="utf-8")
+        with (sandbox.root / "orgsyndb.toml").open(
+                "a", encoding="utf-8") as f:
+            f.write(MISSING_VOCABULARY)
         result = sandbox.build("index")
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertTrue(result.stderr.startswith("orgsyndb: error:"),

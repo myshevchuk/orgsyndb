@@ -7,6 +7,7 @@ from typing import Any
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -16,6 +17,7 @@ from django.utils.translation import gettext_lazy, pgettext_lazy
 from django.views.decorators.http import require_POST
 
 from inventory.models import Lot, LotMovement
+from journal.entries import entry_for
 from orgsyndb_web import lock
 from planning.plan import Plan, TaskPriority, batch_lots, bulk_link
 from tasks.forms import TaskEditForm, TaskForm
@@ -138,8 +140,9 @@ class Step:
     withdrawn, else None; the SIGNATURE of its entry when the entry is
     withdrawn, else empty; the day it was DONE_ON, or None; the LOTS it
     made and the WITHDRAWALS booked into it, in the order of their IDs;
-    and the open lots OFFERED for a withdrawal into it, empty unless
-    the page offers one."""
+    the open lots OFFERED for a withdrawal into it, empty unless the
+    page offers one; and the JOURNAL_ENTRY it is written down in, or
+    None."""
 
     id: int
     position: int
@@ -151,6 +154,7 @@ class Step:
     lots: list[Lot] = field(default_factory=list)
     withdrawals: list[LotMovement] = field(default_factory=list)
     offered: list[Lot] = field(default_factory=list)
+    journal_entry: Any = None
 
 
 def shown_step(step: TaskStep, offer: bool = False) -> Step:
@@ -164,7 +168,8 @@ def shown_step(step: TaskStep, offer: bool = False) -> Step:
         "withdrawals": list(step.lot_movements.filter(
             kind=LotMovement.Kind.WITHDRAWAL).select_related(
                 "lot__substance", "reversal").order_by("id")),
-        "offered": offered_lots(step) if offer else []}
+        "offered": offered_lots(step) if offer else [],
+        "journal_entry": step.journal_entry}
     entry = step.entry
     if entry is None:
         return Step(procedure="", known=False, number=None, signature="",
@@ -193,16 +198,17 @@ def task_page(request: HttpRequest, number: str) -> HttpResponse:
     the forecast of each article it matches, the lots that belong to it
     and its history; answer 404 for an unknown number.
 
-    Each step lists the lots it made and the withdrawals into it. For a
-    signed-in user, while the task is planned or running, each step
-    offers to record a lot it made and a withdrawal from the open lots
-    ``offered_lots`` gives.
+    Each step lists the lots it made and the withdrawals into it, and
+    the journal entry it names. For a signed-in user each step offers
+    the form that sets its journal entry, and, while the task is planned
+    or running, to record a lot it made and a withdrawal from the open
+    lots ``offered_lots`` gives.
     """
     task = get_object_or_404(Task.objects.select_related(
         "assignee", "created_by", "substance", "sequence"), number=number)
     plan = Plan(timezone.localdate())
-    steps = task.steps.select_related("entry__procedure").order_by(
-        "position")
+    steps = task.steps.select_related(
+        "entry__procedure", "journal_entry__notebook").order_by("position")
     recording = request.user.is_authenticated and task.state in (
         State.PLANNED, State.RUNNING)
     return render(request, "tasks/page.html", {
@@ -381,3 +387,38 @@ def task_action(request: HttpRequest, number: str, action: str
     else:
         messages.error(request, chosen.refusal)
     return redirect("task", number=task.number)
+
+
+@login_required
+@require_POST
+def step_journal(request: HttpRequest, step: int) -> HttpResponse:
+    """Make the task step STEP name the journal entry the posted
+    ``journal_entry`` gives, ``<code>/<number>``, created when it is
+    new, or none for an empty value, and return to its task's page with
+    a message; the change is recorded in the step's history.
+
+    A value that ``journal.entries.entry_for`` refuses changes nothing
+    and leaves its error as the message. The step's task is locked for
+    the change, as a task edit locks it, so the edit's rules on steps
+    that name an entry hold. Answer 404 for an unknown step, or one
+    removed meanwhile, and 405 for a request other than POST.
+    """
+    found = get_object_or_404(TaskStep.objects.select_related("task"),
+                              pk=step)
+    value = request.POST.get("journal_entry", "").strip()
+    try:
+        with transaction.atomic():
+            Task.objects.select_for_update().get(pk=found.task_id)
+            found = get_object_or_404(
+                TaskStep.objects.select_related("task"), pk=step)
+            entry = entry_for(value) if value else None
+            if found.journal_entry_id != (None if entry is None
+                                          else entry.pk):
+                found.journal_entry = entry
+                found.save(update_fields=["journal_entry"])
+    except ValidationError as refused:
+        messages.error(request, " ".join(refused.messages))
+    else:
+        messages.success(request, _("Lab notebook of step %(position)s "
+                                    "saved.") % {"position": found.position})
+    return redirect("task", number=found.task.number)

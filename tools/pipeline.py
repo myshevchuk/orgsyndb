@@ -1195,8 +1195,9 @@ def fields_data(settings: Path, registry: dict[str, Any],
     each one's ``key``, ``type`` and ``column``; its ``label`` as
     LANGUAGE shows it; ``search`` and ``beside`` for a text field; and
     ``facet``, ``multiple``, ``tabs``, ``values`` and ``order`` for a
-    choice field. ``procedure`` lists a table per declared procedure
-    field, in declared order: its ``key``, ``type`` and ``label``;
+    choice field. ``procedure`` lists a table per procedure field, the
+    journal fields first (``validate.journal_fields``) and then the
+    declared ones in declared order: its ``key``, ``type`` and ``label``;
     ``facet`` for a boolean or choice field; the ``unit`` of a number
     field that declares one; and ``multiple``, ``values`` and ``order``
     for a choice field. ``values`` maps every term of the field's
@@ -1207,8 +1208,9 @@ def fields_data(settings: Path, registry: dict[str, Any],
     followed by the terms filed under it, recursively, siblings in key
     order. A German label replaces the English one on a German site
     where one is given. A SETTINGS that does not exist declares no
-    procedure field. Raises ``validate.ConfigError`` when the
-    declarations break a rule of ``validate.load_fields``.
+    procedure field, which leaves the journal fields alone. Raises
+    ``validate.ConfigError`` when the declarations break a rule of
+    ``validate.load_fields``.
     """
     def shown(label: str, label_de: str | None) -> str:
         return label_de if language == "de" and label_de else label
@@ -1260,8 +1262,9 @@ def fields_data(settings: Path, registry: dict[str, Any],
         return entry
 
     vocabularies = validate.registry_terms(registry)
-    procedure = validate.load_fields(Path(settings), vocabularies,
-                                     must_exist=False)
+    procedure = validate.load_fields(
+        Path(settings), vocabularies, validate.registry_notebooks(registry),
+        must_exist=False)
     return {"compound": [describe(field, True) for field
                          in validate.registry_fields(vocabularies)],
             "procedure": [describe(field, False) for field in procedure]}
@@ -1538,12 +1541,14 @@ def index_data(collection: Path) -> dict[str, Any]:
     site; ``schema``, the procedure and sequence keys the validator
     knows; ``registry``, the ``source`` of the collection's registry as
     ``registry_source`` names it and the snapshot's ``digest``;
-    ``fields``, the registry fields under ``compound`` and the
-    collection's procedure declarations under ``procedure``, each with
-    the options of its type and its defaults applied; ``accounts``, the
-    registry's accounts in the snapshot's order, each a table of
-    ``username`` and ``name``; ``vocabularies``,
-    the registry's vocabularies, each mapping its terms, in the
+    ``fields``, the registry fields under ``compound`` and under
+    ``procedure`` the journal fields followed by the collection's
+    procedure declarations, each with the options of its type and its
+    defaults applied; ``accounts``, the registry's accounts in the
+    snapshot's order, each a table of ``username`` and ``name``;
+    ``notebooks``, the registry's notebooks in the snapshot's order,
+    each a table of ``code`` and ``user``; ``vocabularies``, the
+    registry's vocabularies, each mapping its terms, in the
     snapshot's order, to their ``label``, ``label_de`` and ``parent``;
     ``compounds``, one entry per substance, by key, with its ``key``,
     its ``data`` as ``compound_data`` returns it and its ``url``
@@ -1565,7 +1570,8 @@ def index_data(collection: Path) -> dict[str, Any]:
     table = registry(collection, store=False)
     vocabularies = validate.registry_terms(table)
     procedure = validate.load_fields(
-        collection / validate.DEFAULT_SETTINGS, vocabularies)
+        collection / validate.DEFAULT_SETTINGS, vocabularies,
+        validate.registry_notebooks(table))
     compounds = [{"key": substance["key"],
                   "data": compound_data(substance, collection / "static"),
                   "url": substance_page(source, substance["key"])}
@@ -1602,6 +1608,8 @@ def index_data(collection: Path) -> dict[str, Any]:
         "accounts": [{"username": username, "name": name}
                      for username, name
                      in validate.registry_accounts(table).items()],
+        "notebooks": [{"code": code, "user": user} for code, user
+                      in validate.registry_notebooks(table).items()],
         "vocabularies": {name: _terms_data(terms)
                          for name, terms in vocabularies.items()},
         "compounds": sorted(compounds, key=lambda item: item["key"]),
@@ -1678,6 +1686,8 @@ def _procedure_data(path: Path, data: dict[str, Any], export: Path,
             "reaction_type": types[0],
             "general": bool(scope),
             "authors": list(data.get("authors") or ()),
+            "notebook": data.get("notebook"),
+            "project": data.get("project"),
             "entries": entries}
 
 
@@ -1698,7 +1708,9 @@ def manifest_data(collection: Path) -> dict[str, Any]:
     ``title``, ``title_de`` (the title of the ID's file tagged ``de``,
     or None), ``reaction_type`` (the first of ``reaction_types``),
     ``general`` (whether it has ``scope``), ``authors`` (the user names
-    of ``authors``, in file order) and ``entries``, one per
+    of ``authors``, in file order), ``notebook`` and ``project`` (its
+    values of the journal fields, each None when it sets none) and
+    ``entries``, one per
     element of ``scope`` or else one of the top-level substrates and
     products, each a table of ``substrates``, keys in file order, and
     ``products``, tables of ``compound`` and ``yield_percent``; a

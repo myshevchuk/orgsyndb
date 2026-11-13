@@ -59,16 +59,19 @@ class StepChange:
         """Return the errors that refuse the change, by form field.
 
         A sequence set or changed may not be withdrawn; the sequence may
-        not be set, changed or cleared while a stored step is done; the
-        steps done may not exceed the steps the task has after the save;
-        without a sequence, the total may not fall below the stored
-        steps done; and a step that made a lot or took a withdrawal may
-        not be removed.
+        not be set, changed or cleared while a stored step is done or
+        names a journal entry; the steps done may not exceed the steps
+        the task has after the save; without a sequence, the total may
+        not fall below the stored steps done; and a step that made a
+        lot, took a withdrawal or names a journal entry may not be
+        removed.
         """
         errors = {}
         done_before = sum(step.done_on is not None for step in self.stored)
         booked = any(step.lots.exists() or step.lot_movements.exists()
                      for step in self.stored)
+        journal = any(step.journal_entry_id is not None
+                      for step in self.stored)
         if self.replaces and done_before:
             errors["sequence"] = _(
                 "The sequence cannot be set, changed or cleared while a "
@@ -77,6 +80,10 @@ class StepChange:
             errors["sequence"] = _(
                 "The sequence cannot be set, changed or cleared while a "
                 "step has made a lot or taken a withdrawal.")
+        elif self.replaces and journal:
+            errors["sequence"] = _(
+                "The sequence cannot be set, changed or cleared while a "
+                "step names a lab notebook entry.")
         elif self.replaces and self.sequence is not None \
                 and self.sequence.withdrawn:
             errors["sequence"] = _(
@@ -87,12 +94,18 @@ class StepChange:
                 "The steps total may not be below the %(done)s steps "
                 "done.") % {"done": done_before}
         count = len(self.planned())
-        if "sequence" not in errors and "steps_total" not in errors and any(
-                step.lots.exists() or step.lot_movements.exists()
-                for step in self.stored[count:]):
-            errors["sequence" if self.replaces else "steps_total"] = _(
-                "A step that made a lot or took a withdrawal cannot be "
-                "removed.")
+        removed = self.stored[count:]
+        if "sequence" not in errors and "steps_total" not in errors:
+            field = "sequence" if self.replaces else "steps_total"
+            if any(step.lots.exists() or step.lot_movements.exists()
+                   for step in removed):
+                errors[field] = _(
+                    "A step that made a lot or took a withdrawal cannot "
+                    "be removed.")
+            elif any(step.journal_entry_id is not None for step in removed):
+                errors[field] = _(
+                    "A step that names a lab notebook entry cannot be "
+                    "removed.")
         if self.done > count:
             errors["steps_done"] = (
                 _("Steps done may not exceed the %(count)s steps of the "

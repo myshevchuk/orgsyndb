@@ -7,8 +7,9 @@ Only the manifest view and the demo data command write the imported
 rows, both through ``collection.importing``; issued IDs are written
 through ``collection.issuing`` too. An import never deletes a
 procedure, scope entry or sequence: one that is gone from the
-collection is marked withdrawn. A substance, reaction type, scope entry
-or account that a row names cannot be deleted.
+collection is marked withdrawn. A substance, reaction type, project,
+scope entry, journal entry or account that a row names cannot be
+deleted.
 """
 
 from django.conf import settings
@@ -20,7 +21,7 @@ from django.utils.translation import gettext_lazy as _
 
 from accounts.models import current_time
 from registry.models import Substance
-from vocabulary.models import ReactionType
+from vocabulary.models import Project, ReactionType
 
 KEY_LENGTH = 50
 RELEASE_LENGTH = 200
@@ -119,7 +120,10 @@ class Procedure(models.Model):
     ``last_import`` created it or last changed it.
 
     A ``general`` procedure has scope entries a step names by their
-    position; a specific one has one entry.
+    position; a specific one has one entry. ``journal_entry`` is the
+    lab notebook entry it was written from and ``project`` the project
+    it belongs to, each None for none; no two procedures that are not
+    withdrawn name one journal entry.
     """
 
     key = models.CharField(_("ID"), max_length=KEY_LENGTH, unique=True)
@@ -131,6 +135,12 @@ class Procedure(models.Model):
         ReactionType, verbose_name=_("Reaction type"),
         on_delete=models.PROTECT, related_name="procedures")
     general = models.BooleanField(_("General"))
+    journal_entry = models.ForeignKey(
+        "journal.Entry", verbose_name=_("Lab notebook entry"), null=True,
+        blank=True, on_delete=models.PROTECT, related_name="procedures")
+    project = models.ForeignKey(
+        Project, verbose_name=_("Project"), null=True, blank=True,
+        on_delete=models.PROTECT, related_name="procedures")
     last_import = models.ForeignKey(
         Import, verbose_name=_("Last import"), on_delete=models.PROTECT,
         related_name="+")
@@ -140,6 +150,14 @@ class Procedure(models.Model):
         ordering = ["key"]
         verbose_name = _("procedure")
         verbose_name_plural = _("procedures")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["journal_entry"],
+                condition=Q(journal_entry__isnull=False, withdrawn=False),
+                name="collection_procedure_entry_once",
+                violation_error_message=_(
+                    "Another procedure names this lab notebook entry.")),
+        ]
 
     def __str__(self) -> str:
         return self.key

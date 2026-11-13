@@ -1,6 +1,5 @@
 """Tests of ``manage.py demo_data`` (lab-demo: Demo data command)."""
 
-import copy
 from unittest import mock
 
 from django.core.management.base import CommandError
@@ -8,11 +7,11 @@ from django.test import TestCase, override_settings
 
 from . import (BERLIN, frozen, make_group, make_substance, make_task,
                make_user)
-from .collection_support import (PROCEDURES, SEQUENCES, TOKEN, accept, by_id,
-                                 demo_collection, ids_of, import_collection,
-                                 issue_ids, issued_keys, issued_to,
-                                 make_import, make_token, manifest, post,
-                                 request_id)
+from .collection_support import (PROCEDURES, SEQUENCES, TOKEN, accept,
+                                 copy_procedure, demo_collection, ids_of,
+                                 import_collection, issue_ids, issued_keys,
+                                 issued_to, make_import, make_token, manifest,
+                                 post, request_id)
 from .demo_support import (ACCOUNTS, DAY, lab_records, noon, opening, run,
                            seed, task_counter)
 
@@ -151,6 +150,27 @@ class ReplaceTests(TestCase):
         self.assertEqual(first.number, "T-001")
         self.assertEqual(demo_marks(), 1)
 
+    def test_replace_deletes_the_notebooks_and_entries(self) -> None:
+        """Requirement: Demo data command (`--replace` deletes every lab
+        record, notebooks with their entries among them; only it deletes
+        entries)."""
+        from journal.models import Entry, Notebook
+        from .journal_support import entry_of
+        seed(DAY)
+        kl = make_user("kl", "KL9")
+        stray = Notebook.objects.create(code="ZZ-1", user=kl)
+        entry_of("AE-1/40")
+        entry_of("ZZ-1/1")
+        self.assertEqual(Entry.objects.count(), 12)
+        with frozen(noon(DAY)):
+            run("--replace")
+        self.assertFalse(Notebook.objects.filter(pk=stray.pk).exists())
+        self.assertEqual(
+            sorted(Notebook.objects.values_list("code", flat=True)),
+            ["AE-1", "AE-2", "CE-1", "CE-3"])
+        self.assertEqual(Entry.objects.count(), 10)
+        self.assertFalse(Entry.objects.filter(number=40).exists())
+
     def test_replace_writes_the_same_counts_again(self) -> None:
         seed(DAY)
         before = lab_records()
@@ -272,9 +292,8 @@ def with_extra_procedure() -> dict:
     """The demo collection with a tenth procedure, which the demo
     manifest lacks."""
     data = demo_collection()
-    extra = copy.deepcopy(by_id(data["procedures"], "OSDB-0008"))
-    extra["id"] = "OSDB-0010"
-    data["procedures"].append(extra)
+    data["procedures"].append(
+        copy_procedure(data, "OSDB-0008", "OSDB-0010"))
     return data
 
 

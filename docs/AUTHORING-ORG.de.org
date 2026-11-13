@@ -38,6 +38,8 @@
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-12 Thu 09:11] -- Stufenfelder, Beispiele, Meldungen, eindeutige Scope-Einträge und Emacs-Vervollständigung
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-12 Thu 18:56] -- Autorenkonten, Prüfmeldungen, Seiten, Namen, Emacs-Vervollständigung und Übersetzungen
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-12 Thu 20:59] -- vergebene IDs, Zugangsschlüssel und Syntheseweggerüste
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-13 Fri 08:41] -- Journalfelder, Anzeige und Übersetzungen
+#+AI_PASS: claude-opus-5-5 [2026-11-13 Fri] -- entry numbers from 1 to 9999
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
@@ -153,10 +155,14 @@ Meldungen.
   Wählen Sie ~:reaction_types~ aus dem Vokabular ~reaction-types~ des
   Laborregisters.
 
-  Prüfen Sie ~orgsyndb.toml~ auf Felder unter ~[[fields.procedure]]~, die
-  zusätzlichen Vorschriftenangaben Ihrer Sammlung. Ergänzen Sie eine Zeile
-  ~#+HUGO_CUSTOM_FRONT_MATTER:~ vor ~:products~, das zuletzt bleibt. Die
-  Salicylsäure-Vorschrift der Beispielsammlung setzt nach ~:scale~:
+  Mit ~:notebook~ benennen Sie den Eintrag im Papierjournal, aus dem die
+  Vorschrift stammt. Mit ~:project~ ordnen Sie die Vorschrift einem Projekt
+  zu. Diese beiden optionalen /Journalfelder/ sind in jeder Sammlung fest
+  eingebaut; deklarieren Sie sie nicht in ~orgsyndb.toml~. Weitere Felder
+  kann Ihre Sammlung unter ~[[fields.procedure]]~ deklarieren, etwa
+  ~working_time~ und ~inert_atmosphere~ der Beispielsammlung. Ergänzen Sie
+  eine Zeile ~#+HUGO_CUSTOM_FRONT_MATTER:~ vor ~:products~, das zuletzt
+  bleibt. Die Salicylsäure-Vorschrift der Beispielsammlung setzt nach ~:scale~:
 
 #+begin_src org
   #+HUGO_CUSTOM_FRONT_MATTER: :notebook "AE-1/1" :project "first-year-practical" :working_time 3 :inert_atmosphere false
@@ -165,14 +171,26 @@ Meldungen.
   Text und Auswahlschlüssel stehen in doppelten Anführungszeichen, Zahlen
   und ~true~ oder ~false~ ohne. Zahlen haben einen Dezimalpunkt und keine
   Einheit. Eine Mehrfachauswahl verwendet eine gequotete Liste, etwa
-  ~:project '("first-year-practical" "advanced-practical")~, wenn die Sammlung
-  ~project~ mit ~multiple = true~ deklariert und das Vokabular ~projects~
-  des Beispielregisters verwendet. ~required = true~ verlangt einen Wert
+  ~:funding '("first-year-practical" "advanced-practical")~, wenn die Sammlung
+  ~funding~ mit ~multiple = true~ deklariert und das Vokabular ~projects~
+  des Beispielregisters verwendet. ~:project~ nimmt einen Schlüssel in
+  Anführungszeichen an, keine Liste. ~required = true~ verlangt einen Wert
   in jeder Vorschrift, auch in allgemeinen Vorschriften. Bei ~unique = true~
   darf keine andere Vorschrift denselben Wert verwenden; Übersetzungen einer
-  Vorschrift zählen als eine. Die vier Beispielfelder sind optional. Ein
-  Laborjournalverweis muss ~[A-Z]{2}-\d+/\d+~ entsprechen und noch unvergeben
-  sein; die Arbeitszeit steht in Stunden und ist mindestens null.
+  Vorschrift zählen als eine. Die vier Beispielfelder sind optional.
+
+  Schreiben Sie einen Laborjournalverweis als ~<code>/<number>~, etwa
+  ~AE-1/1~ für Eintrag 1 des Journals ~AE-1~. Der Code besteht aus
+  Großbuchstaben und Ziffern, verbunden durch einzelne Bindestriche. Die
+  Eintragsnummer liegt zwischen 1 und 9999 und hat keine führende Null. Das genaue
+  Muster lautet ~[A-Z0-9]+(-[A-Z0-9]+)*/[1-9][0-9]{0,3}~. Registrieren Sie das
+  Journal vor der Prüfung oder dem Import der Vorschrift in der
+  Laboranwendung unter ~/lab/journal/~. Bei ~unknown notebook~ prüfen Sie
+  den Code und ob der Register-Snapshot der Sammlung das Journal aufführt.
+  Keine andere Vorschrift darf denselben Eintrag verwenden; Übersetzungen
+  einer Vorschrift teilen ihn. Der Inhalt des Eintrags bleibt auf Papier.
+
+  Die Arbeitszeit steht in Stunden und ist mindestens null.
   Projektschlüssel kommen aus dem Vokabular ~projects~ des Laborregisters.
   Das Feld ~vocabulary~ einer Auswahl benennt ~chemical-classes~,
   ~inventory-groups~, ~projects~ oder ~reaction-types~. Die
@@ -437,8 +455,9 @@ Meldungen.
   Einträge, jede Verbindung einmal in der Reihenfolge ihres ersten Auftretens.
   Auch Vorstufen- und Folgelinks berücksichtigen alle Einträge. Es folgen
   Reaktionstyp, Schlagwörter, Autoren, bei Entwürfen und zurückgezogenen
-  Vorschriften gegebenenfalls die Prüfenden unter *Geprüft von*, deklarierte
-  Vorschriftenfelder, Erstellungs- und Änderungszeit und die Links zu
+  Vorschriften gegebenenfalls die Prüfenden unter *Geprüft von*,
+  Journalfelder, deklarierte Vorschriftenfelder, Erstellungs- und Änderungszeit
+  und die Links zu
   Vorstufen und Folgevorschriften. Wenn Ihre
   Vorschrift eine Stufe eines Synthesewegs ist, folgt auf *Verwendet in* das
   Feld *Synthesewege* mit verlinkten Titeln, nach Nummer geordnet. Ziffern
@@ -466,15 +485,16 @@ Meldungen.
   Die Ausbeutezeile, die Katalogansicht *Details*, Alternativtexte von Bildern
   und Seitentitel tragen keinen Zusatz.
 
-  Das Datenfeld zeigt jedes gesetzte deklarierte Vorschriftenfeld in
-  Deklarationsreihenfolge vor *Erstellt*, nach *Geprüft von*, sofern diese
-  Angabe erscheint. In der Beispielsammlung sind das *Laborjournal*,
-  *Projekt*, *Arbeitszeit* und *Schutzgas*. Auswahlwerte verwenden die Namen
+  Das Datenfeld zeigt zuerst die gesetzten Journalfelder, dann die Felder
+  der Sammlung in Deklarationsreihenfolge, vor *Erstellt*, nach
+  *Geprüft von*, sofern diese Angabe erscheint. In der Beispielsammlung
+  sind das *Laborjournal*, *Projekt*, *Arbeitszeit* und *Schutzgas*.
+  Auswahlwerte verwenden die Namen
   aus dem Vokabular, etwa *Lehre › Grundpraktikum*. Arbeitszeit erscheint als
   ~3 h~, Wahrheitswerte als *Ja* oder *Nein*. Zahlen verwenden das
-  Dezimalkomma. Die Katalogsuche findet diese angezeigten Werte. Felder mit
-  ~facet = true~ ergänzen Filter zwischen *Status* und *Schlagwort* in den
-  Vorschriftenkatalogen, auch auf Begriffsseiten und für allgemeine
+  Dezimalkomma. Die Katalogsuche findet diese angezeigten Werte. *Projekt*
+  und Felder mit ~facet = true~ ergänzen Filter zwischen *Status* und
+  *Schlagwort* in den Vorschriftenkatalogen, auch auf Begriffsseiten und für allgemeine
   Vorschriften. Die Beispielsammlung bietet *Projekt* und *Schutzgas*;
   ein übergeordnetes Projekt erfasst auch darunter eingeordnete Werte.
 
@@ -599,8 +619,9 @@ Meldungen.
      löschen Sie die Zeile.
   4. Lassen Sie ~#+HUGO_SLUG~, ~:id~, ~:status~, ~:reaction_types~,
      ~#+HUGO_TAGS~, ~:products~, ~:substrates~ und ~:scheme_image~ wie im
-     Original. Wiederholen Sie jedes deklarierte Vorschriftenfeld mit
-     demselben Wert, oder lassen Sie es in beiden Fassungen weg. Übersetzen
+     Original. Wiederholen Sie jedes Journalfeld und jedes deklarierte
+     Vorschriftenfeld mit demselben Wert, oder lassen Sie es in beiden
+     Fassungen weg. Übersetzen
      Sie diese Werte nicht; deutsche Feldnamen kommen aus ~label_de~.
      Behalten Sie die Reihenfolge und Werte der Scope-Tabelle;
      übersetzen Sie darin nur ~note~. Der Validator vergleicht die gemeinsamen

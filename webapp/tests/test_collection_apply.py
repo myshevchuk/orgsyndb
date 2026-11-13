@@ -1,15 +1,16 @@
 """Tests of applying an accepted import (collection-import: Applying an
 import)."""
 
-import copy
 from typing import Any
 
 from django.test import SimpleTestCase
 
-from .collection_support import (DEMO_CREDITS, ImportCase, author_rows,
-                                 authors_of, by_id, counts, credited,
+from .collection_support import (DEMO_CREDITS, DEMO_JOURNAL, ImportCase,
+                                 author_rows, authors_of, by_id,
+                                 copy_procedure, counts, credited,
                                  demo_collection, dump, entries_of, issue_ids,
-                                 steps_of, substances_of)
+                                 journal_of, steps_of, substances_of)
+from .journal_support import entries_named, entry_of
 
 SPECIFIC = "acetic-anhydride + salicylic-acid >> acetylsalicylic-acid"
 GENERAL = ["4-acetylbiphenyl >> 1-biphenyl-4-yl-ethanol",
@@ -311,8 +312,7 @@ class ChangedValuesTests(ImportCase):
         first = self.accept()
         issue_ids("OSDB-0010")
         data = demo_collection()
-        new = copy.deepcopy(procedure_of(data, "OSDB-0008"))
-        new["id"] = "OSDB-0010"
+        new = copy_procedure(data, "OSDB-0008", "OSDB-0010")
         new["title"] = "Another"
         data["procedures"].append(new)
         second = self.accept(data)
@@ -350,6 +350,230 @@ class ManifestFileTests(SimpleTestCase):
         self.assertEqual(
             {p["id"]: p.get("authors")
              for p in demo_collection()["procedures"]}, DEMO_CREDITS)
+
+
+class JournalManifestFileTests(SimpleTestCase):
+    """Scenario: Entries from the import (the demo manifest, which the
+    demo data applies, names the notebook and the project of the demo's
+    procedures)."""
+
+    def test_the_file_names_the_journal_fields(self) -> None:
+        self.assertEqual(
+            {p["id"]: (p.get("notebook"), p.get("project"))
+             for p in demo_collection()["procedures"]}, DEMO_JOURNAL)
+
+
+class JournalApplyTests(ImportCase):
+    """Requirement: Applying an import (a procedure's `journal_entry` and
+    `project`)."""
+
+    def journal(self, data: dict[str, Any], ident: str,
+                notebook: Any, project: Any) -> None:
+        """Set the ``notebook`` and ``project`` of the procedure
+        ``ident`` of ``data``."""
+        procedure_of(data, ident).update(notebook=notebook,
+                                         project=project)
+
+    def test_entries_from_the_import(self) -> None:
+        """Scenario: Entries from the import."""
+        from journal.models import Entry
+        self.accept()
+        self.assertEqual(journal_of("OSDB-0002"),
+                         ("AE-1/2", "first-year-practical"))
+        self.assertEqual(
+            sorted(Entry.objects.filter(notebook__code="AE-2")
+                   .values_list("number", flat=True)), [7, 8, 11, 12])
+
+    def test_every_procedure_names_what_the_manifest_gives(self) -> None:
+        """Requirement: Applying an import (`journal_entry` becomes the
+        entry its `notebook` names, `project` the term its `project`
+        names)."""
+        from journal.models import Entry
+        self.accept()
+        self.assertEqual(
+            {key: journal_of(key) for key in DEMO_JOURNAL}, DEMO_JOURNAL)
+        self.assertEqual(Entry.objects.count(), 9)
+
+    def test_an_entry_the_notebook_has_is_taken(self) -> None:
+        """Requirement: Applying an import (created in that notebook when
+        it has no entry of that number: so an entry it has is taken)."""
+        from collection.models import Procedure
+        from journal.models import Entry
+        made = entry_of("AE-1/2")
+        self.accept()
+        self.assertEqual(entries_named("AE-1/2"), 1)
+        self.assertEqual(Entry.objects.get(
+            notebook__code="AE-1", number=2).pk, made.pk)
+        self.assertEqual(
+            Procedure.objects.get(key="OSDB-0002").journal_entry, made)
+
+    def test_the_entry_is_made_in_the_notebook_the_code_names(self) -> None:
+        """Requirement: Applying an import (created in that notebook)."""
+        from journal.models import Entry
+        self.accept()
+        found = Entry.objects.get(notebook__code="CE-1", number=4)
+        self.assertEqual(str(found), "CE-1/4")
+
+    def test_a_procedure_without_notebook_and_project(self) -> None:
+        """Requirement: Applying an import (`journal_entry` becomes none
+        without a `notebook`, `project` none without a `project`; an
+        entry is never deleted)."""
+        from collection.models import Procedure
+        first = self.accept()
+        data = demo_collection()
+        self.journal(data, "OSDB-0002", None, None)
+        second = self.accept(data)
+        self.assertEqual(journal_of("OSDB-0002"), (None, None))
+        self.assertEqual(entries_named("AE-1/2"), 1)
+        self.assertEqual(
+            Procedure.objects.get(key="OSDB-0002").last_import, second)
+        self.assertEqual(
+            Procedure.objects.get(key="OSDB-0001").last_import, first)
+
+    def test_clearing_the_notebook_alone_is_a_change(self) -> None:
+        """Requirement: Applying an import (`journal_entry` becomes none
+        without a `notebook`, and is among the procedure's values, so
+        `last_import` follows it)."""
+        from collection.models import Procedure
+        self.accept()
+        data = demo_collection()
+        procedure_of(data, "OSDB-0002")["notebook"] = None
+        second = self.accept(data)
+        self.assertEqual(journal_of("OSDB-0002"),
+                         (None, "first-year-practical"))
+        self.assertEqual(
+            Procedure.objects.get(key="OSDB-0002").last_import, second)
+
+    def test_a_new_notebook_value_is_a_change_of_the_procedure(
+            self) -> None:
+        """Requirement: Applying an import (`last_import` becomes the
+        accepted import when any of a procedure's values change; both
+        are among its values)."""
+        from collection.models import Procedure
+        first = self.accept()
+        data = demo_collection()
+        procedure_of(data, "OSDB-0001")["notebook"] = "AE-1/9"
+        second = self.accept(data)
+        self.assertEqual(journal_of("OSDB-0001")[0], "AE-1/9")
+        self.assertEqual(entries_named("AE-1/1"), 1)
+        self.assertEqual(entries_named("AE-1/9"), 1)
+        self.assertEqual(
+            Procedure.objects.get(key="OSDB-0001").last_import, second)
+        self.assertEqual(
+            Procedure.objects.get(key="OSDB-0002").last_import, first)
+
+    def test_a_new_project_is_a_change_of_the_procedure(self) -> None:
+        """Requirement: Applying an import (`project`, among its
+        values)."""
+        from collection.models import Procedure
+        first = self.accept()
+        data = demo_collection()
+        procedure_of(data, "OSDB-0002")["project"] = "research"
+        second = self.accept(data)
+        self.assertEqual(journal_of("OSDB-0002"), ("AE-1/2", "research"))
+        self.assertEqual(
+            Procedure.objects.get(key="OSDB-0002").last_import, second)
+        self.assertEqual(
+            Procedure.objects.get(key="OSDB-0003").last_import, first)
+
+    def test_an_unchanged_manifest_changes_no_journal_row(self) -> None:
+        """Requirement: Applying an import (a procedure that does not
+        change keeps its import and its entry)."""
+        from journal.models import Entry
+        first = self.accept()
+        before = (list(Entry.objects.order_by("pk").values_list(
+            "pk", "notebook__code", "number")), dump()["Procedure"])
+        self.accept()
+        self.assertEqual(
+            (list(Entry.objects.order_by("pk").values_list(
+                "pk", "notebook__code", "number")), dump()["Procedure"]),
+            before)
+        self.assertEqual(
+            {row["last_import_id"] for row in dump()["Procedure"]},
+            {first.pk})
+
+    def test_a_new_procedure_names_a_new_entry(self) -> None:
+        """Requirement: Applying an import (a procedure the rows lack is
+        created, with its `journal_entry` and `project`)."""
+        self.accept()
+        issue_ids("OSDB-0010")
+        data = demo_collection()
+        new = copy_procedure(data, "OSDB-0008", "OSDB-0010")
+        new.update(notebook="AE-1/30", project="biaryls")
+        data["procedures"].append(new)
+        self.accept(data)
+        self.assertEqual(journal_of("OSDB-0010"), ("AE-1/30", "biaryls"))
+        self.assertEqual(entries_named("AE-1/30"), 1)
+
+    def test_a_withdrawn_procedure_keeps_its_entry(self) -> None:
+        """Requirement: Applying an import (a withdrawn procedure keeps
+        its entry), and a procedure that comes back names its entry
+        again."""
+        from collection.models import Procedure
+        self.accept()
+        data = demo_collection()
+        data["procedures"] = [p for p in data["procedures"]
+                              if p["id"] != "OSDB-0006"]
+        self.accept(data)
+        self.assertTrue(Procedure.objects.get(key="OSDB-0006").withdrawn)
+        self.assertEqual(journal_of("OSDB-0006"),
+                         ("CE-1/4", "first-year-practical"))
+        self.accept()
+        self.assertFalse(Procedure.objects.get(key="OSDB-0006").withdrawn)
+        self.assertEqual(journal_of("OSDB-0006"),
+                         ("CE-1/4", "first-year-practical"))
+
+    def test_an_entry_passes_to_another_procedure(self) -> None:
+        """Scenario: An entry passes to another procedure."""
+        from collection.models import Procedure
+        self.accept()
+        data = without(demo_collection(), "OSDB-0002", "SEQ-0001")
+        procedure_of(data, "OSDB-0003")["notebook"] = "AE-1/2"
+        self.accept(data)
+        self.assertTrue(Procedure.objects.get(key="OSDB-0002").withdrawn)
+        self.assertEqual(journal_of("OSDB-0002")[0], "AE-1/2")
+        self.assertEqual(journal_of("OSDB-0003")[0], "AE-1/2")
+        self.assertFalse(Procedure.objects.get(key="OSDB-0003").withdrawn)
+
+    def test_two_procedures_swap_entries(self) -> None:
+        """Scenario: Two procedures swap entries."""
+        self.accept()
+        data = demo_collection()
+        procedure_of(data, "OSDB-0002")["notebook"] = "AE-1/3"
+        procedure_of(data, "OSDB-0003")["notebook"] = "AE-1/2"
+        self.accept(data)
+        self.assertEqual(journal_of("OSDB-0002")[0], "AE-1/3")
+        self.assertEqual(journal_of("OSDB-0003")[0], "AE-1/2")
+        self.assertEqual(entries_named("AE-1/2"), 1)
+        self.assertEqual(entries_named("AE-1/3"), 1)
+
+    def test_three_procedures_rotate_entries(self) -> None:
+        """Requirement: Applying an import (the entries of procedures
+        whose entry changes are cleared before any procedure takes a new
+        entry, so that an entry passes between procedures in one
+        import)."""
+        self.accept()
+        data = demo_collection()
+        procedure_of(data, "OSDB-0001")["notebook"] = "AE-1/2"
+        procedure_of(data, "OSDB-0002")["notebook"] = "AE-1/3"
+        procedure_of(data, "OSDB-0003")["notebook"] = "AE-1/1"
+        self.accept(data)
+        self.assertEqual(
+            [journal_of(key)[0]
+             for key in ("OSDB-0001", "OSDB-0002", "OSDB-0003")],
+            ["AE-1/2", "AE-1/3", "AE-1/1"])
+
+    def test_a_procedure_returns_with_its_entry(self) -> None:
+        """Scenario: A procedure returns with its entry."""
+        from collection.models import Procedure
+        self.accept()
+        passed = without(demo_collection(), "OSDB-0002", "SEQ-0001")
+        procedure_of(passed, "OSDB-0003")["notebook"] = "AE-1/2"
+        self.accept(passed)
+        self.accept(without(demo_collection(), "OSDB-0003"))
+        self.assertFalse(Procedure.objects.get(key="OSDB-0002").withdrawn)
+        self.assertEqual(journal_of("OSDB-0002")[0], "AE-1/2")
+        self.assertTrue(Procedure.objects.get(key="OSDB-0003").withdrawn)
 
 
 class AuthorsTests(ImportCase):
@@ -432,8 +656,8 @@ class AuthorsTests(ImportCase):
 
     def test_a_new_procedure_gets_its_authors(self) -> None:
         data = credited()
-        new = copy.deepcopy(procedure_of(data, "OSDB-0008"))
-        new.update(id="OSDB-0010", authors=["jkoch", "mwolf"])
+        new = copy_procedure(data, "OSDB-0008", "OSDB-0010")
+        new.update(authors=["jkoch", "mwolf"])
         data["procedures"].append(new)
         self.accept(data)
         self.assertEqual(authors_of("OSDB-0010"), ["jkoch", "mwolf"])

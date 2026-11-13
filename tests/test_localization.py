@@ -193,17 +193,17 @@ class TranslatedFileTests(ValidatorTestCase):
         """Scenario: A translation shares its declared fields."""
         for case, edit in (
                 ("another value",
-                 support.replace_line("project", 'project = "research"')),
-                ("no value", support.remove_line("project"))):
+                 support.replace_line("funding", 'funding = "research"')),
+                ("no value", support.remove_line("funding"))):
             with self.subTest(case=case):
                 result = support.procedure_field_run(
                     support.edit_procedure(
                         BASELINE.name, support.insert_line(
-                            'project = "first-year-practical"')),
+                            'funding = "first-year-practical"')),
                     support.add_procedure(
                         "OSDB-0100-baseline.de.md", germanised, edit))
                 problem = self.assert_one(
-                    result, "error", "project", "OSDB-0100-baseline.md",
+                    result, "error", "funding", "OSDB-0100-baseline.md",
                     path_suffix="OSDB-0100-baseline.de.md")
                 self.assertNotIn("OSDB-0100-baseline.de.md",
                                  problem.message)
@@ -211,13 +211,14 @@ class TranslatedFileTests(ValidatorTestCase):
     def test_every_declared_field_must_agree(self) -> None:
         """Scenario: A translation shares its declared fields (each
         declared field of the fixture)."""
-        values = {"notebook": ('notebook = "AE-1/2"', 'notebook = "AE-1/3"'),
+        values = {"sample_code": ('sample_code = "AE-1/2"',
+                                  'sample_code = "AE-1/3"'),
                   "working_time": ("working_time = 2.5",
                                    "working_time = 3"),
                   "inert_atmosphere": ("inert_atmosphere = false",
                                        "inert_atmosphere = true"),
-                  "project": ('project = "research"',
-                              'project = "teaching"')}
+                  "funding": ('funding = "research"',
+                              'funding = "teaching"')}
         for field, (own, other) in values.items():
             for case, edit in (
                     ("another value", support.replace_line(field, other)),
@@ -238,8 +239,33 @@ class TranslatedFileTests(ValidatorTestCase):
         result = support.procedure_field_run(
             support.add_procedure(
                 "OSDB-0100-baseline.de.md", germanised,
-                support.insert_line('project = "research"')))
-        self.assert_one(result, "error", "project", "OSDB-0100-baseline.md",
+                support.insert_line('funding = "research"')))
+        self.assert_one(result, "error", "funding", "OSDB-0100-baseline.md",
+                        path_suffix="OSDB-0100-baseline.de.md")
+
+    def test_every_journal_field_must_agree(self) -> None:
+        """Requirement: Procedure variants (the journal fields, which the
+        tools treat as declared fields, are shared by every variant)."""
+        notebooks = support.edit_procedure_registry(
+            lambda table: table.update(
+                notebooks=[{"code": "AE-1", "user": "a.example"}]))
+        values = {"notebook": ('notebook = "AE-1/2"',
+                               'notebook = "AE-1/3"'),
+                  "project": ('project = "research"',
+                              'project = "teaching"')}
+        for field, (own, other) in values.items():
+            for case, edit in (
+                    ("another value", support.replace_line(field, other)),
+                    ("no value", support.remove_line(field))):
+                with self.subTest(field=field, case=case):
+                    result = support.procedure_field_run(
+                        notebooks,
+                        support.edit_procedure(
+                            BASELINE.name, support.insert_line(own)),
+                        support.add_procedure(
+                            "OSDB-0100-baseline.de.md", germanised, edit))
+                    self.assert_one(
+                        result, "error", field, "OSDB-0100-baseline.md",
                         path_suffix="OSDB-0100-baseline.de.md")
 
     def test_declared_numbers_agree_by_value(self) -> None:
@@ -259,15 +285,15 @@ class TranslatedFileTests(ValidatorTestCase):
         variant against the reference)."""
         result = support.procedure_field_run(
             support.edit_procedure(
-                BASELINE.name, support.insert_line('project = "research"')),
+                BASELINE.name, support.insert_line('funding = "research"')),
             support.add_procedure("OSDB-0100-baseline.de.md", germanised),
             support.add_procedure(
                 "OSDB-0100-baseline.en.md",
-                support.replace_line("project", 'project = "teaching"')))
+                support.replace_line("funding", 'funding = "teaching"')))
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertEqual([(p.field, Path(p.path).name)
                           for p in result.problems],
-                         [("project", "OSDB-0100-baseline.en.md")])
+                         [("funding", "OSDB-0100-baseline.en.md")])
 
     def test_substrates_agree_by_value_and_order(self) -> None:
         """Scenario: A translation shares its ID and facts (substrates)."""

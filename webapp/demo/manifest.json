@@ -12,6 +12,8 @@
         "klehmann",
         "tbauer"
       ],
+      "notebook": "AE-1/1",
+      "project": "first-year-practical",
       "entries": [
         {
           "substrates": [
@@ -37,6 +39,8 @@
         "klehmann",
         "aschmidt"
       ],
+      "notebook": "AE-1/2",
+      "project": "first-year-practical",
       "entries": [
         {
           "substrates": [
@@ -63,6 +67,8 @@
         "tbauer",
         "jkoch"
       ],
+      "notebook": "AE-1/3",
+      "project": "first-year-practical",
       "entries": [
         {
           "substrates": [
@@ -89,6 +95,8 @@
         "aschmidt",
         "mwolf"
       ],
+      "notebook": "AE-2/7",
+      "project": "biaryls",
       "entries": [
         {
           "substrates": [
@@ -114,6 +122,8 @@
       "authors": [
         "mwolf"
       ],
+      "notebook": "AE-2/8",
+      "project": "biaryls",
       "entries": [
         {
           "substrates": [
@@ -139,6 +149,8 @@
         "jkoch",
         "klehmann"
       ],
+      "notebook": "CE-1/4",
+      "project": "first-year-practical",
       "entries": [
         {
           "substrates": [
@@ -164,6 +176,8 @@
       "authors": [
         "aschmidt"
       ],
+      "notebook": "AE-2/11",
+      "project": "cinnamates",
       "entries": [
         {
           "substrates": [
@@ -190,6 +204,8 @@
         "aschmidt",
         "tbauer"
       ],
+      "notebook": "AE-2/12",
+      "project": "cinnamates",
       "entries": [
         {
           "substrates": [
@@ -214,6 +230,8 @@
       "authors": [
         "mwolf"
       ],
+      "notebook": "CE-3/1",
+      "project": "advanced-practical",
       "entries": [
         {
           "substrates": [

@@ -10,7 +10,7 @@ from registry import snapshot
 from registry.models import Substance
 
 from . import (load_demo_registry, make_article, make_demo_accounts,
-               make_group, make_substance, make_user)
+               make_demo_notebooks, make_group, make_substance, make_user)
 from .collection_support import make_import
 from .demo_support import ACCOUNTS, SeededCase
 from .registry_support import (SNAPSHOT, RegistryCase, wipe_registry,
@@ -36,7 +36,8 @@ class ShapeTests(RegistryCase):
     def test_the_top_level(self) -> None:
         built = snapshot.build()
         self.assertEqual(set(built), {"format", "digest", "vocabularies",
-                                      "substances", "accounts", "import"})
+                                      "substances", "accounts",
+                                      "notebooks", "import"})
         self.assertEqual(built["format"], 1)
         self.assertEqual(set(built["vocabularies"]), set(VOCABULARIES))
 
@@ -235,6 +236,134 @@ class DemoAccountsTests(SeededCase):
                       second.get("accounts", []))
 
 
+class NotebookTests(RegistryCase):
+    """Requirement: Snapshot (`notebooks`: every notebook, ordered by
+    code, each a table of `code` and `user`, its owner's user name)."""
+
+    def listed(self) -> list[dict[str, str]]:
+        return snapshot.build().get("notebooks")
+
+    def test_no_notebook(self) -> None:
+        self.assertEqual(self.listed(), [])
+
+    def test_the_notebooks(self) -> None:
+        from .journal_support import make_notebook
+        make_notebook("AE-2", self.staff)
+        make_notebook("AE-1", self.kl, "Notiz")
+        self.assertEqual(self.listed(), [
+            {"code": "AE-1", "user": "kl"},
+            {"code": "AE-2", "user": "boss"}])
+
+    def test_each_notebook_is_a_table_of_two_keys(self) -> None:
+        from .journal_support import make_notebook
+        make_notebook("AE-1", self.kl, "Notiz")
+        for notebook in self.listed():
+            self.assertEqual(set(notebook), {"code", "user"})
+
+    def test_the_notebooks_are_ordered_by_code(self) -> None:
+        from .journal_support import make_notebook
+        for code in ("CE-3", "AE-10", "AE-2", "B-1", "AE-1"):
+            make_notebook(code, self.kl)
+        codes = [n["code"] for n in self.listed()]
+        self.assertEqual(codes, sorted(codes))
+        self.assertEqual(codes[0], "AE-1")
+
+    def test_the_owner_is_the_user_name(self) -> None:
+        from .journal_support import make_notebook
+        make_notebook("AE-1", make_user("only.first", "OF", "Olga"))
+        self.assertEqual(self.listed(),
+                         [{"code": "AE-1", "user": "only.first"}])
+
+    def test_the_notebooks_are_inside_the_digest(self) -> None:
+        from .journal_support import make_notebook
+        make_notebook("AE-1", self.kl)
+        built = snapshot.build()
+        self.assertEqual(built["digest"], digest_of(built))
+        without = {key: value for key, value in built.items()
+                   if key != "notebooks"}
+        self.assertNotEqual(built["digest"], digest_of(without))
+
+    def test_a_new_notebook_changes_the_digest(self) -> None:
+        from .journal_support import make_notebook
+        before = snapshot.build()["digest"]
+        make_notebook("AE-1", self.kl)
+        self.assertNotEqual(snapshot.build()["digest"], before)
+
+    def test_a_new_owner_changes_the_digest(self) -> None:
+        from .journal_support import make_notebook
+        notebook = make_notebook("AE-1", self.kl)
+        before = snapshot.build()["digest"]
+        notebook.user = self.staff
+        notebook.save()
+        after = snapshot.build()
+        self.assertNotEqual(after["digest"], before)
+        self.assertEqual(after["digest"], digest_of(after))
+
+    def test_a_new_name_of_the_owner_changes_the_digest(self) -> None:
+        """Requirement: Snapshot (the accounts are inside the digest too,
+        whatever the notebooks)."""
+        from .journal_support import make_notebook
+        make_notebook("AE-1", self.kl)
+        before = snapshot.build()["digest"]
+        self.kl.last_name = "Lehmann-Weiß"
+        self.kl.save()
+        self.assertNotEqual(snapshot.build()["digest"], before)
+
+    def test_the_note_is_outside_the_digest(self) -> None:
+        """Requirement: Snapshot (a notebook is its `code` and `user`)."""
+        from .journal_support import make_notebook
+        notebook = make_notebook("AE-1", self.kl)
+        before = snapshot.build()
+        notebook.note = "Eine Notiz"
+        notebook.save()
+        self.assertEqual(snapshot.build(), before)
+
+    def test_the_entries_are_not_in_the_snapshot(self) -> None:
+        """Requirement: Snapshot (the notebooks, not their entries)."""
+        from .journal_support import entry_of, make_notebook
+        make_notebook("AE-1", self.kl)
+        before = snapshot.build()
+        entry_of("AE-1/4")
+        self.assertEqual(snapshot.build(), before)
+
+    def test_the_answer_over_http_lists_them(self) -> None:
+        from .journal_support import make_notebook
+        make_notebook("AE-1", self.kl)
+        answer = self.client.get(SNAPSHOT).json()
+        self.assertEqual(answer["notebooks"],
+                         [{"code": "AE-1", "user": "kl"}])
+        self.assertEqual(answer, snapshot.build())
+
+    def test_it_serializes(self) -> None:
+        from .journal_support import make_notebook
+        make_notebook("AE-1", self.kl)
+        built = snapshot.build()
+        self.assertEqual(json.loads(json.dumps(built)), built)
+
+
+class DemoNotebooksTests(SeededCase):
+    """Scenario: Notebooks in the snapshot."""
+
+    def test_notebooks_in_the_snapshot(self) -> None:
+        from journal.models import Notebook
+        first = snapshot.build()
+        self.assertEqual(
+            first.get("notebooks"),
+            [{"code": "AE-1", "user": "klehmann"},
+             {"code": "AE-2", "user": "aschmidt"},
+             {"code": "CE-1", "user": "jkoch"},
+             {"code": "CE-3", "user": "mwolf"}])
+        notebook = Notebook.objects.get(code="AE-2")
+        notebook.note = "Eine Notiz"
+        notebook.save()
+        notebook.user = self.account("tbauer")
+        notebook.save()
+        second = snapshot.build()
+        listed = {n["code"]: n["user"] for n in second["notebooks"]}
+        self.assertEqual(listed["AE-2"], "tbauer")
+        self.assertNotEqual(first["digest"], second["digest"])
+
+
 class ImportTests(RegistryCase):
     """Requirement: Snapshot (`import`, the latest accepted import,
     outside the digest)."""
@@ -387,6 +516,7 @@ class DemoImportTests(TestCase):
         from .collection_support import TOKEN, manifest, post
         load_demo_registry()
         make_demo_accounts()
+        make_demo_notebooks()
         first = snapshot.build()
         with override_settings(ORGSYNDB_BUILDER_TOKEN=TOKEN):
             done = post(self.client, manifest())

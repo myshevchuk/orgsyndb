@@ -170,3 +170,12 @@ msgstr "vergebene ID"
 
 msgid "issued IDs"
 msgstr "vergebene IDs"
+
+msgid "Lab notebook entry"
+msgstr "Eintrag im Laborjournal"
+
+msgid "Project"
+msgstr "Projekt"
+
+msgid "Another procedure names this lab notebook entry."
+msgstr "Eine andere Vorschrift nennt diesen Eintrag im Laborjournal."

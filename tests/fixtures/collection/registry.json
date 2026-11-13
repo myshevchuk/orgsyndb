@@ -637,5 +637,23 @@
       "name": "Tobias Bauer"
     }
   ],
-  "digest": "049c4388eea3e22acd7c60a7015fb3ea38af14c69639c3d017797ce698539b58"
+  "notebooks": [
+    {
+      "code": "AE-1",
+      "user": "klehmann"
+    },
+    {
+      "code": "AE-2",
+      "user": "aschmidt"
+    },
+    {
+      "code": "CE-1",
+      "user": "jkoch"
+    },
+    {
+      "code": "CE-3",
+      "user": "mwolf"
+    }
+  ],
+  "digest": "d14c0c1723af2c75f7de374f6fc6ef1c9d9c5db1665fdf481fbb455e279dccf9"
 }

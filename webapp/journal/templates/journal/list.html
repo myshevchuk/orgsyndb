@@ -1,0 +1,26 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n lab %}
+{% block title %}{% translate "Lab notebooks" %}{% endblock %}
+{% block main %}
+<div class="lab-heading">
+<h1>{% translate "Lab notebooks" %}</h1>
+<span class="lab-count">{{ notebooks|length }}</span>
+{% if user.is_authenticated %}<p class="actions"><a href="/lab/journal/new/">{% translate "New lab notebook" %}</a></p>
+{% endif %}</div>
+<p><a href="/lab/registry/">{% translate "Substances" %}</a></p>
+<div class="table-scroll">
+<table class="inventory-table registry-table">
+<thead>
+<tr><th scope="col">{% translate "Notebook" %}</th><th scope="col">{% translate "Owner" %}</th><th scope="col" class="number">{% translate "Entries" %}</th><th scope="col">{% translate "Note" %}</th></tr>
+</thead>
+<tbody>
+{% for notebook in notebooks %}<tr>
+<td><a href="/lab/journal/{{ notebook.code }}/">{{ notebook.code }}</a></td>
+<td>{% person notebook.user %} {{ notebook.user.display_name }}</td>
+<td class="number">{{ notebook.entry_count }}</td>
+<td>{{ notebook.note }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% if not notebooks %}<p>{% translate "No lab notebooks." %}</p>
+{% endif %}{% endblock %}

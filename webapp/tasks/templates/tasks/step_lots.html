@@ -1,4 +1,6 @@
-{% load i18n inventory %}{% if step.lots %}
+{% load i18n inventory %}{% if step.journal_entry %}
+<div class="lab-step-journal"><a href="/lab/journal/{{ step.journal_entry.notebook.code }}/">{% blocktranslate with entry=step.journal_entry %}Lab notebook {{ entry }}{% endblocktranslate %}</a></div>{% endif %}{% if user.is_authenticated %}
+<form class="lab-step-journal" method="post" action="/lab/tasks/steps/{{ step.id }}/journal/">{% csrf_token %}<label>{% translate "Lab notebook" %} <input name="journal_entry" value="{{ step.journal_entry|default_if_none:"" }}" size="10" autocomplete="off" placeholder="AE-2/8"></label> <button type="submit">{% translate "Save" %}</button></form>{% endif %}{% if step.lots %}
 <div class="lab-step-lots">{% translate "Made:" %} {% for lot in step.lots %}<a href="/lab/inventory/bulk/{{ lot.pk }}/">{{ lot }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}{% if step.withdrawals %}
 <div class="lab-step-lots">{% translate "Withdrawn:" %} {% for movement in step.withdrawals %}<a href="/lab/inventory/bulk/{{ movement.lot.pk }}/">{{ movement.lot }}</a> {{ movement.amount|in_lot_unit:movement.lot }}{% if movement.reversal %} <span class="badge badge--reversed">{% translate "reversed" %}</span>{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}{% if recording %}
 <div class="lab-step-actions"><a href="/lab/inventory/bulk/new/?step={{ step.id }}">{% translate "Record a lot" %}</a>{% if step.offered %}

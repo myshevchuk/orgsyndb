@@ -139,17 +139,19 @@ class Schema:
 GRID = (
     (("inventory_deliverynote",), ("inventory_movement",),
      ("inventory_lotmovement",), (HUB, "accounts_accesstoken"),
-     ("collection_import", "collection_procedureauthor")),
+     ("collection_import", "collection_procedureauthor"),
+     ("journal_notebook",)),
     (("inventory_deliveryline",), ("inventory_item",),
      ("inventory_enteredconsumption",), ("inventory_lot",),
-     ("collection_procedure", "collection_scopeentry")),
+     ("collection_procedure", "collection_scopeentry"),
+     ("journal_entry",)),
     (("inventory_article",), ("registry_substance",),
      ("registry_substanceclass",), ("tasks_task", "tasks_taskstep"),
-     ("collection_entrysubstance", "collection_issuedid")),
+     ("collection_entrysubstance", "collection_issuedid"), None),
     (("vocabulary_group", "vocabulary_project"),
      ("vocabulary_chemicalclass", "vocabulary_reactiontype"),
      ("tasks_counter", HISTORY), ("planning_parameters", "demo_demomark"),
-     ("collection_sequence", "collection_step")),
+     ("collection_sequence", "collection_step"), None),
 )
 
 LINKS = (
@@ -171,6 +173,7 @@ COLOURS = {
     "planning": ("#3a7f33", "#7cc673"),
     "demo": ("#66717b", "#a2abb4"),
     "collection": ("#1d6a96", "#68b1df"),
+    "journal": ("#b4481c", "#f28a5e"),
     "history": ("#84479a", "#c98ddd"),
 }
 

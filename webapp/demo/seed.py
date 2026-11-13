@@ -3,11 +3,13 @@
 
 Every change of ``demo.data.changes`` is made through the application's
 own write paths: the registry through ``registry.snapshot.load``, the
+lab notebooks through their model's save after its own validation, the
 data set's import of the collection through ``collection.importing``,
 as the manifest view receives one, counts and amounts through
 ``inventory.bookings``, tasks and their steps through their saves after
-the validation the task form applies, and planning parameters through
-their model's save after its own validation.
+the validation the task form applies, the journal entries of steps
+through ``journal.entries``, and planning parameters through their
+model's save after its own validation.
 Each change is made with ``django.utils.timezone.now`` standing at its
 moment, so that the times the write paths stamp, the
 history records' among them, and the day they take as today are the
@@ -40,6 +42,8 @@ from inventory import bookings
 from inventory.models import (Article, DeliveryLine, DeliveryNote,
                               EnteredConsumption, Item, Lot, LotMovement,
                               Movement)
+from journal.entries import entry_for
+from journal.models import Entry, Notebook
 from orgsyndb_web import lock
 from planning.models import Parameters
 from registry import snapshot
@@ -81,14 +85,16 @@ def histories() -> list[type]:
 
 def holds_records() -> bool:
     """Whether the database holds lab records: an account, access token,
-    substance, vocabulary term, article, task, item, delivery note, bulk
-    lot, entered consumption value, stored planning parameters, import
-    of the collection, imported procedure or sequence, issued ID,
-    change-history record or the demo mark."""
+    lab notebook or its entry, substance, vocabulary term, article,
+    task, item, delivery note, bulk lot, entered consumption value,
+    stored planning parameters, import of the collection, imported
+    procedure or sequence, issued ID, change-history record or the demo
+    mark."""
     return any(model.objects.exists() for model in (
-        get_user_model(), AccessToken, Substance, *TERMS, Article, Task,
-        Item, DeliveryNote, Lot, EnteredConsumption, Parameters, Import,
-        Procedure, Sequence, IssuedId, DemoMark, *histories()))
+        get_user_model(), AccessToken, Notebook, Entry, Substance, *TERMS,
+        Article, Task, Item, DeliveryNote, Lot, EnteredConsumption,
+        Parameters, Import, Procedure, Sequence, IssuedId, DemoMark,
+        *histories()))
 
 
 def language() -> str:
@@ -113,8 +119,10 @@ def clear() -> None:
     the notes, lots and task steps they name, lots before the task steps
     that made them, records before the substances and terms they name,
     tasks and their steps before the sequences, entries and imports they
-    name, sequence steps before the entries they name, issued IDs and
-    access tokens before the accounts they name, and terms and
+    name, sequence steps before the entries they name, task steps and
+    procedures before the journal entries they name, journal entries
+    before their notebooks, notebooks, issued IDs and access tokens
+    before the accounts they name, and terms and
     imports are taken out of their trees and chains before they are
     deleted, as each protects the other otherwise.
     """
@@ -133,6 +141,8 @@ def clear() -> None:
     EntrySubstance.objects.all().delete()
     ScopeEntry.objects.all().delete()
     Procedure.objects.all().delete()
+    Entry.objects.all().delete()
+    Notebook.objects.all().delete()
     Import.objects.update(base=None)
     Import.objects.all().delete()
     EnteredConsumption.objects.all().delete()
@@ -203,6 +213,17 @@ class _Writer:
             case data.LoadRegistry():
                 snapshot.load(json.loads(REGISTRY.read_text(
                     encoding="utf-8")), user)
+            case data.RegisterNotebook():
+                notebook = Notebook(code=change.code,
+                                    user=self.users[change.owner])
+                notebook.full_clean()
+                notebook._history_user = user
+                notebook.save()
+            case data.NameJournalEntry():
+                step = self.step(change.task, change.position)
+                step.journal_entry = entry_for(change.entry)
+                step._history_user = user
+                step.save(update_fields=["journal_entry"])
             case data.RecordImport(language=language):
                 record_import(change.moment, language)
             case data.SaveParameters(fields=fields):

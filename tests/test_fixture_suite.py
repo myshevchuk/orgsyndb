@@ -210,7 +210,8 @@ class FixtureRegistryTests(ValidatorTestCase):
         table = load_snapshot(REGISTRY)
         self.assertEqual(
             list(table), ["format", "vocabularies", "substances",
-                          "accounts", "digest"])
+                          "accounts", "notebooks", "digest"])
+        self.assertEqual(table["notebooks"], [])
         self.assertEqual(table["format"], 1)
         self.assertEqual(table["digest"], snapshot_digest(table))
         self.assertEqual(

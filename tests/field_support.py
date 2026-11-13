@@ -149,12 +149,27 @@ def read_fields(settings: Path, snapshot: dict[str, Any], language: str,
     return fields
 
 
+def journal_fields(snapshot: dict[str, Any], language: str
+                   ) -> list[Field]:
+    """The two journal fields every procedure has, ``notebook`` and
+    ``project``, with their labels in ``language`` and the projects of
+    ``snapshot`` (procedure-fields "Journal fields")."""
+    return [
+        Field("notebook", "text",
+              "Laborjournal" if language == "de" else "Lab notebook",
+              False, None, False, {}),
+        _choice("project", "Project", "Projekt", language, snapshot,
+                "projects", facet=True),
+    ]
+
+
 def read_procedure_fields(settings: Path, snapshot: dict[str, Any],
                           language: str) -> list[Field]:
-    """The procedure fields ``settings`` declares, in declared order,
-    with their labels in ``language``. ``column``, ``search`` and
-    ``tabs`` are false."""
-    return read_fields(settings, snapshot, language, "procedure")
+    """The journal fields (``journal_fields``) and then the procedure
+    fields ``settings`` declares, in declared order, with their labels in
+    ``language``. ``column``, ``search`` and ``tabs`` are false."""
+    return [*journal_fields(snapshot, language),
+            *read_fields(settings, snapshot, language, "procedure")]
 
 
 def value_text(field: Field, value: Any, locale: str, *,

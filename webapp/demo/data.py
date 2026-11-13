@@ -62,6 +62,11 @@ def signing_in() -> list[Account]:
     return [account for account in ACCOUNTS if account.signs_in]
 
 
+# The demo's lab notebooks, each its code and its owner's user name.
+NOTEBOOKS = (("AE-1", "klehmann"), ("AE-2", "aschmidt"), ("CE-1", "jkoch"),
+             ("CE-3", "mwolf"))
+
+
 # ---------------------------------------------------------------------------
 # Changes
 
@@ -83,6 +88,15 @@ class CreateAccount(Change):
 class LoadRegistry(Change):
     """Load the demo registry, ``registry.json`` of this package, into
     the empty registry."""
+
+
+@dataclass(frozen=True, kw_only=True)
+class RegisterNotebook(Change):
+    """Register the lab notebook CODE of the account OWNER, by user
+    name, with no note."""
+
+    code: str
+    owner: str
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -224,6 +238,16 @@ class CorrectLot(Change):
 
 
 @dataclass(frozen=True, kw_only=True)
+class NameJournalEntry(Change):
+    """Make the step at POSITION of the task TASK name the lab notebook
+    entry ENTRY, ``<code>/<number>``."""
+
+    task: str
+    position: int
+    entry: str
+
+
+@dataclass(frozen=True, kw_only=True)
 class SaveTask(Change):
     """Create the task KEY with FIELDS, or change it; an assignee is
     given by user name, a substance and a sequence by their keys, and
@@ -297,10 +321,12 @@ class _Synthesis:
     A synthesis follows the sequence SEQUENCE, by its key, or none when
     it is empty; STEPS names the procedures of its steps, in order, and
     STEPS_DONE the days on which a number of them is done; its steps
-    make the STEP_LOTS. A synthesis that ends yields its product lot
-    the day it ends, which fills its article's items on the days FILLS
-    and keeps REST, in the lot's unit. A synthesis that FAILED ends that
-    day as failed, with no batch and no lot.
+    make the STEP_LOTS, and the JOURNAL entries are named by its steps,
+    each a day, a step's position and an entry ``<code>/<number>``. A
+    synthesis that ends yields its product lot the day it ends, which
+    fills its article's items on the days FILLS and keeps REST, in the
+    lot's unit. A synthesis that FAILED ends that day as failed, with
+    no batch and no lot.
     """
 
     by: str
@@ -316,6 +342,7 @@ class _Synthesis:
     steps: tuple[str, ...] = ()
     steps_done: tuple[tuple[int, int], ...] = ()
     step_lots: tuple[_StepLot, ...] = ()
+    journal: tuple[tuple[int, int, str], ...] = ()
     fills: tuple[int, ...] = ()
     rest: str = "0"
     location: Text = ("Chemikalienschrank 3", "Chemicals cabinet 3")
@@ -439,7 +466,7 @@ ARTICLES = (
                     fills=(111, 200, 300), rest="150"),
          _Synthesis("klehmann", 380, "jkoch", started=388,
                     sequence="SEQ-0002", steps=SEQ_2,
-                    steps_done=((396, 1),),
+                    steps_done=((396, 1),), journal=((396, 1, "CE-3/2"),),
                     step_lots=(_StepLot("4-acetylbiphenyl", "g", "3", 1,
                                         396, ((398, 2, "2"),)),))),
         mass="198.26"),
@@ -647,6 +674,9 @@ def changes(today: date, language: str) -> list[Change]:
         line.add(line.opening, ACCOUNT, CreateAccount,
                  user=account.username, account=account)
     line.add(line.opening, REGISTRY, LoadRegistry, user="klehmann")
+    for code, owner in NOTEBOOKS:
+        line.add(line.opening, REGISTRY, RegisterNotebook, user="klehmann",
+                 code=code, owner=owner)
     line.add(line.opening, REGISTRY, RecordImport, user="klehmann",
              language=language)
     line.add(line.day(1), PARAMETERS, SaveParameters, user="klehmann",
@@ -920,8 +950,9 @@ def _task(line: _Timeline, key: str, substance: str,
           synthesis: _Synthesis, batch: str) -> None:
     """Add the changes of the task KEY of SYNTHESIS, of the substance
     SUBSTANCE by its key: its creation, then its start, steps, end or
-    failure, report, QC list and cancellation, each on its day; an end
-    comes after the day's lots."""
+    failure, report, QC list and cancellation, each on its day, and the
+    journal entries its steps name, each after the day's other changes
+    of the task; an end comes after the day's lots."""
     total = len(synthesis.steps) or None
     fields: dict[str, Any] = {
         "substance": substance, "assignee": synthesis.assignee,
@@ -956,6 +987,10 @@ def _task(line: _Timeline, key: str, substance: str,
         line.add(line.day(offset), END if "ended" in change else TASK,
                  SaveTask, user=synthesis.assignee or synthesis.by,
                  key=key, fields=change)
+    for offset, position, entry in synthesis.journal:
+        line.add(line.day(offset), TASK, NameJournalEntry,
+                 user=synthesis.assignee or synthesis.by, task=key,
+                 position=position, entry=entry)
 
 
 def _notes(line: _Timeline, orders: list[tuple[date, str, int]]) -> None:

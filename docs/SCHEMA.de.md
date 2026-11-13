@@ -209,6 +209,8 @@ Lassen Sie ein optionales Feld weg, wenn es nicht zutrifft.
 
 | Feld | Bedeutung | TOML-Typ | Pflicht | Regel | Beispiel |
 |---|---|---|---|---|---|
+| `notebook` | Der Eintrag im Papierjournal, aus dem die Vorschrift stammt. | String | Nein | Registrierter Journalcode und Eintragsnummer; siehe [Journalfelder](#journalfelder). | `notebook = "AE-1/2"` |
+| `project` | Das Projekt der Vorschrift. | String | Nein | Ein Begriffsschlüssel aus dem Registervokabular `projects`. | `project = "first-year-practical"` |
 | `substrates` | Die Ausgangsstoffe einer Einzelvorschrift; mit `scope` auf oberster Ebene verboten. | String-Array | Nein | Schlüssel im Register, ohne Wiederholungen und ohne einen der Produktschlüssel. | `substrates = ["ethanol"]` |
 | `scope` | Die Einträge einer allgemeinen Vorschrift. | Nicht leeres Array von Tabellen | Nein | Regeln oben; verbietet `products` und `substrates` auf oberster Ebene. | Siehe OSDB-0009. |
 | `scheme_image` | Reaktionsschema im Titelblock anstelle der Produktstrukturen. | String | Nein | Relativer Pfad unter `structures/`, ohne `..`, mit `.svg` oder `.png`, unter dem Verzeichnis für statische Dateien vorhanden. Ohne dieses Feld zeigt eine allgemeine Vorschrift den Platzhalter. | `scheme_image = "structures/aryl-ketone-reduction.svg"` |
@@ -334,9 +336,10 @@ Verbindungsseiten bleiben außerhalb des Suchindex; die Herstellungswege
 
 ## Felddeklarationen der Sammlung
 
-Um weitere Vorschriftenangaben wie Laborjournalverweise oder Projekte zu
-erfassen, deklarieren Sie Felder in der `orgsyndb.toml` der Sammlung. Diese
-UTF-8-TOML-Datei muss `format = 1` als Ganzzahl enthalten. Die anderen
+Jede Vorschrift hat die fest eingebauten Journalfelder `notebook` und
+`project`. Um weitere Vorschriftenangaben zu erfassen, deklarieren Sie
+Felder in der `orgsyndb.toml` der Sammlung. Diese UTF-8-TOML-Datei muss
+`format = 1` als Ganzzahl enthalten. Die anderen
 erlaubten Schlüssel auf oberster Ebene sind `registry` und `fields`.
 `registry` benennt den Snapshot wie unter
 [Verbindungsregister](#verbindungsregister) beschrieben. `fields` ist eine
@@ -356,6 +359,39 @@ Reihenfolge. Ihre Anzeige ist für jede Sammlung vorgegeben:
 
 Setzen Sie diese Werte in der Laboranwendung. Die Sammlung deklariert nur
 Vorschriftenfelder; `fields.compound` ist ein Konfigurationsfehler.
+
+### Journalfelder
+
+Diese optionalen Felder sind für jede Vorschrift in jeder Sammlung fest
+eingebaut. Sie stehen vor den deklarierten Feldern der Sammlung, in dieser
+Reihenfolge:
+
+| Schlüssel | Typ und Regeln | Feldname (Englisch / Deutsch) |
+|---|---|---|
+| `notebook` | Text, der vollständig `[A-Z0-9]+(-[A-Z0-9]+)*/[1-9][0-9]{0,3}` entspricht; eindeutig über Vorschriftennummern hinweg; der Code muss ein Journal im Register-Snapshot benennen. | Lab notebook / Laborjournal |
+| `project` | Ein Begriffsschlüssel aus dem Registervokabular `projects`, auf beliebiger Ebene; einzelnes `choice` mit `facet = true`. | Project / Projekt |
+
+`notebook` benennt den Eintrag im Papierjournal, aus dem die Vorschrift
+stammt, als `<code>/<number>`, etwa `notebook = "AE-1/2"`. Die Nummer
+liegt zwischen 1 und 9999 und hat keine führende Null. Registrieren Sie das Journal
+vor der Prüfung oder dem Import der Sammlung in der Laboranwendung unter
+`/lab/journal/`. Sein Code besteht aus Großbuchstaben und Ziffern,
+verbunden durch einzelne Bindestriche, mit höchstens 20 Zeichen. Nach dem
+Speichern lässt er sich nicht ändern. Der Inhalt des Eintrags bleibt auf
+Papier; die Anwendung legt seinen Datensatz an, wenn ein Import oder ein
+Aufgabenschritt ihn erstmals benennt.
+
+Setzen Sie `project` als einen Schlüssel in Anführungszeichen, etwa
+`project = "first-year-practical"`, nie als Liste. Alle Sprachfassungen
+einer Vorschrift müssen dieselben Journalwerte wiederholen, auch deren
+Fehlen; für die Eindeutigkeitsprüfung zählen diese Fassungen als eine
+Vorschrift.
+Die Felder bleiben verfügbar, wenn keine Sammlungsfelder deklariert sind
+oder die vorgegebene Einstellungsdatei beim direkten Validatoraufruf fehlt.
+
+Deklarieren Sie `notebook` oder `project` nicht unter
+`[[fields.procedure]]`. Beide Schlüssel sind reserviert; eine Deklaration
+ist ein Konfigurationsfehler mit Rückgabewert 2 des Validators.
 
 ### Schlüssel einer Deklaration
 
@@ -387,27 +423,27 @@ Option bei einem anderen Typ ist ein Konfigurationsfehler.
 
 ### Felddeklarationen für Vorschriften
 
-Um Laborjournalverweise, Projekte oder andere Vorschriftendaten zu erfassen,
-schreiben Sie je Feld eine Tabelle `[[fields.procedure]]` in `orgsyndb.toml`,
-in Anzeigereihenfolge. Ohne `fields.procedure` sind keine Vorschriftenfelder
-deklariert. Die Beispielsammlung deklariert etwa:
+Um Vorschriftendaten über die Journalfelder hinaus zu erfassen, schreiben
+Sie je Feld eine Tabelle `[[fields.procedure]]` in `orgsyndb.toml`, in
+Anzeigereihenfolge. Ohne `fields.procedure` bleiben nur die fest eingebauten
+Journalfelder. Die Testdaten für Vorschriftenfelder deklarieren etwa diese
+beiden Felder:
 
 ```toml
 [[fields.procedure]]
-key = "notebook"
+key = "sample_code"
 type = "text"
-label = "Lab notebook"
-label_de = "Laborjournal"
+label = "Sample code"
+label_de = "Probencode"
 unique = true
 pattern = '[A-Z]{2}-\d+/\d+'
 
 [[fields.procedure]]
-key = "project"
+key = "funding"
 type = "choice"
-label = "Project"
-label_de = "Projekt"
+label = "Funding"
+label_de = "Förderung"
 vocabulary = "projects"
-facet = true
 ```
 
 Es gelten die obigen Deklarationsschlüssel, Typen und Vorgaben. Außerdem
@@ -440,6 +476,8 @@ gelten diese Regeln:
 
   **Vorschriftenkatalog:** `tag`, `created`, `text`, `q`, `sort`, `view`.
 
+  **Journalfelder:** `notebook`, `project`.
+
 Auswahlfelder für Vorschriften verwenden die Begriffe des benannten
 Registervokabulars. Eine Auswahl darf einen Begriff auf jeder Ebene dieses
 Vokabulars benennen.
@@ -456,14 +494,15 @@ inert_atmosphere = false
 ```
 
 Die Beispielsammlung deklariert `working_time` als `number` mit `unit = "h"`
-und `min = 0`, `inert_atmosphere` als `boolean` mit `facet = true`. Keines
-ihrer vier Vorschriftenfelder ist Pflicht. Eine neue Beispielvorschrift darf
-sie weglassen; ein gesetztes `notebook` muss dem Muster entsprechen und noch
-unvergeben sein.
+und `min = 0`, `inert_atmosphere` als `boolean` mit `facet = true`. Dies sind
+ihre einzigen deklarierten Felder. Zusammen mit den beiden Journalfeldern
+sind alle vier optional. Ein gesetztes `notebook` muss dem fest eingebauten
+Muster entsprechen, ein registriertes Journal benennen und darf von keiner
+anderen Vorschrift verwendet werden.
 
-Jede Markdown-Vorschrift und jeder Org-Export wird gegen die
-Vorschriftendeklarationen geprüft. Wertfehler erscheinen am Vorschriftenpfad
-unter dem Feldschlüssel und verwenden die
+Jede Markdown-Vorschrift und jeder Org-Export wird gegen die Regeln der
+Journalfelder und die Vorschriftendeklarationen geprüft. Wertfehler
+erscheinen am Vorschriftenpfad unter dem Feldschlüssel und verwenden die
 [Meldungen für Vorschriftenwerte](#vorschriftenwerte-und-meldungen), darunter
 `required field missing` sowie Typ-, Muster-, Grenzwert- und Auswahllistenfehler.
 Bei `unique` lautet die Meldung
@@ -471,7 +510,7 @@ Bei `unique` lautet die Meldung
 Anführungszeichen. Der Vergleich verwendet eine Bezugsfassung je
 Vorschriftennummer und nur Werte, die ihre Feldprüfung bestehen. Eine Datei
 mit nicht lesbarem Datenblock liefert keinen Wert. Alle Fassungen müssen
-dieselben deklarierten Werte wiederholen; siehe
+dieselben Journalwerte und deklarierten Werte wiederholen; siehe
 [Sprachen und Fassungen](#sprachen-und-fassungen). Die Org-Syntax und ihre
 Grenze bei String-Werten stehen unter
 [Org-Schlüsselwörter auf Dateiebene](#org-schlüsselwörter-auf-dateiebene).
@@ -519,16 +558,17 @@ the substance "group" has the key of the directory of the compound tabs, /compou
 
 ### Vorschriftenwerte und Meldungen
 
-Setzen Sie deklarierte Vorschriftenfelder als Schlüssel auf oberster Ebene
-im Datenblock. Wertprobleme sind Fehler am Pfad der Vorschriftendatei,
-unter dem deklarierten Schlüssel:
+Setzen Sie Journalfelder und deklarierte Vorschriftenfelder als Schlüssel
+auf oberster Ebene im Datenblock. Wertprobleme sind Fehler am Pfad der
+Vorschriftendatei, unter dem Feldschlüssel:
 
 | Feldtyp oder Regel | Meldung | Bedeutung |
 |---|---|---|
 | `required = true` | `required field missing` | Das Feld in jeder Vorschrift setzen, auch in einer allgemeinen Vorschrift. |
 | `text`, einzelnes `choice` | `must be a string` | Den Wert in Anführungszeichen setzen. |
 | `text` | `must not be empty` | Nicht leeren Text angeben. |
-| `text` mit `pattern` | `must match the pattern <pattern>` | Der ganze String muss dem deklarierten Muster entsprechen. |
+| `text` mit `pattern` | `must match the pattern <pattern>` | Der ganze String muss dem Feldmuster entsprechen; für `notebook` verwenden Sie `<code>/<number>` mit einer Nummer von 1 bis 9999 ohne führende Null. |
+| `notebook` | `unknown notebook "<code>"; the registry has no notebook of this code` | Prüfen Sie den Code, registrieren Sie das Journal unter `/lab/journal/` und verwenden Sie einen Snapshot, der es aufführt. |
 | `number` | `must be a number, unquoted` | Eine endliche TOML-Ganz- oder Gleitkommazahl ohne Anführungszeichen oder Einheit angeben; ein Wahrheitswert ist keine Zahl. |
 | `number` mit `min` | `must be at least <min>` | Den Wert auf die untere Grenze oder darüber erhöhen. |
 | `number` mit `max` | `must be at most <max>` | Den Wert auf die obere Grenze oder darunter verringern. |
@@ -537,11 +577,13 @@ unter dem deklarierten Schlüssel:
 | `choice` mit `multiple = true` | `must be a list of strings, e.g. ["<a term>"]` | Eine Liste von Begriffsschlüsseln in Anführungszeichen angeben. Das Beispiel nennt den ersten Begriff im Snapshot oder `a term`, wenn das Vokabular leer ist. |
 | `choice` mit `multiple = true` | `must not be empty` | Mindestens einen Auswahlwert angeben. |
 | `choice` mit `multiple = true` | `repeats "<v>"` | Den wiederholten Wert entfernen. |
-| `unique = true` | `"<value>" is also set by <other procedure IDs>` | Einen Wert verwenden, den keine andere Vorschrift setzt. Zahlen stehen in der Meldung ohne Anführungszeichen. |
+| `notebook` oder `unique = true` | `"<value>" is also set by <other procedure IDs>` | Einen Wert verwenden, den keine andere Vorschrift setzt. Zahlen stehen in der Meldung ohne Anführungszeichen. |
 
 Ein Wert mit falschem Typ ergibt nur diesen Typfehler. Leerer Text mit
-einem Muster ergibt nur `must not be empty`. Eine Auswahlliste ergibt
-eine Meldung `unknown value` je unbekanntem String. Die
+einem Muster ergibt nur `must not be empty`. Ein Laborjournalverweis, der
+die Typ- oder Musterprüfung nicht besteht, ergibt keinen Fehler zu einem
+unbekannten Journal. Eine Auswahlliste ergibt eine Meldung `unknown value`
+je unbekanntem String. Die
 Eindeutigkeitsprüfung vergleicht Werte, die ihre Feldprüfung bestehen,
 und meldet jede Vorschrift, die denselben Wert setzt. Sie verwendet dabei
 eine Bezugsfassung je Vorschriftennummer.
@@ -559,6 +601,11 @@ Liste von Tabellen sein, jede mit einem nicht leeren String `username`
 und einem String `name`. Kein Benutzername darf mehrfach vorkommen. Ein
 Snapshot ohne `accounts` führt keine Konten auf; damit lässt sich kein
 Vorschriftenautor einem Konto zuordnen.
+Enthält der Snapshot `notebooks`, muss dieser Wert eine Liste von Tabellen
+mit einem nicht leeren String `code` und einem String `user` sein. Kein
+Code darf mehrfach vorkommen. Ein Snapshot ohne `notebooks` führt keine
+Journale auf; jeder ansonsten gültige Laborjournalverweis meldet dann ein
+unbekanntes Journal.
 
 Dies sind Konfigurationsfehler: Rückgabewert 2, keine Standardausgabe
 und `validate.py: error: ...` auf der Standardfehlerausgabe. Die Meldungen
@@ -584,6 +631,7 @@ Eine einzelne Tabelle `[fields.procedure]` ergibt
 | Fehlendes Auswahlvokabular | `vocabulary missing; a choice field names one of the registry's vocabularies, chemical-classes, inventory-groups, projects, reaction-types` |
 | Unbekanntes Auswahlvokabular | `vocabulary '<name>' is not one of the registry's vocabularies, chemical-classes, inventory-groups, projects, reaction-types` |
 | Nicht erlaubte Option | `a procedure field does not take column` (oder `search`, `tabs`, `beside`), auch bei `false` |
+| Journalfeldschlüssel | `is a journal field, which every procedure has; a collection declares neither notebook nor project` |
 | Schlüssel des Vorschriftenschemas | `declaration 5 of fields.procedure: key 'status' is a key of the procedure schema` |
 | Hugo-Schlüssel | `declaration 5 of fields.procedure: key 'layout' is a front-matter key that Hugo reads` |
 | Katalogschlüssel | `declaration 5 of fields.procedure: key 'tag' is reserved by the procedure catalogue; the reserved keys are tag, created, text, q, sort, view` |
@@ -591,8 +639,8 @@ Eine einzelne Tabelle `[fields.procedure]` ergibt
 Die Deklarationsnummer ist die Position innerhalb von `fields.procedure`.
 Schlüsselfehler, auch doppelte oder falsch geschriebene Schlüssel, nennen
 `fields.procedure`. Fehlerhafte Snapshots nennen das beanstandete Vokabular,
-den Begriff, den Stoff oder das Konto. Diese Prüfungen betreffen Aufbau
-und Typen des Snapshots, nicht die Werte der Stoffe.
+den Begriff, den Stoff, das Konto oder das Journal. Diese Prüfungen
+betreffen Aufbau und Typen des Snapshots, nicht die Werte der Stoffe.
 
 Befehle, die das Register lesen, benötigen außerdem eine Registerquelle.
 Ohne `registry` oder eine nicht leere Umgebungsvariable `ORGSYNDB_REGISTRY`
@@ -610,8 +658,9 @@ Deklaration verhindert daher weder `clean` noch `new`.
 
 ### Anzeige auf der Website
 
-Vorschriftenseiten zeigen jedes gesetzte deklarierte Vorschriftenfeld im
-Datenfeld, in Deklarationsreihenfolge nach **Geprüft von** und vor **Erstellt**.
+Vorschriftenseiten zeigen zuerst die gesetzten Journalfelder, dann die
+deklarierten Felder in Deklarationsreihenfolge, im Datenfeld nach
+**Geprüft von** und vor **Erstellt**.
 Eine deutsche Website verwendet `label_de`, falls vorhanden, sonst `label`.
 Text erscheint wie eingetragen, Zahlen mit dem Dezimalzeichen der Website
 und der Einheit, etwa `2,5 h`. Wahrheitswerte erscheinen als **Ja**/**Nein**,
@@ -621,8 +670,9 @@ stehen mit `, ` getrennt in der Reihenfolge der Vorschrift. Das Datenfeld
 wird indexiert; die Katalogsuche findet diese angezeigten Werte.
 
 Jedes Vorschriftenfeld vom Typ `boolean` oder `choice` mit `facet = true`
-ergänzt einen Filter zwischen **Status** und **Schlagwort**, in
-Deklarationsreihenfolge, anfangs geöffnet und ohne Link „Alle Werte“.
+ergänzt einen Filter zwischen **Status** und **Schlagwort**. Zuerst steht
+**Projekt**, danach folgen deklarierte Filter in Deklarationsreihenfolge.
+Die Filter sind anfangs geöffnet und haben keinen Link „Alle Werte“.
 Wahrheitsfilter zeigen zuerst **Ja**, dann **Nein**, jeweils nur, wenn eine
 veröffentlichte Vorschrift den Wert setzt. Auswahlfilter zeigen verwendete
 Werte und deren übergeordnete Werte als eingerückten Baum in
@@ -630,7 +680,7 @@ Vokabularreihenfolge. Die Auswahl eines übergeordneten Werts erfasst auch
 Vorschriften unter den darunter eingeordneten Werten. Diese Filter stehen
 unter `/procedures/`, auf jeder Reaktionstyp-, Schlagwort- und Autorenseite
 sowie unter `/general-procedures/`. Jede Seite bietet Werte der gesamten
-Sammlung an. Die Adresse verwendet den deklarierten Schlüssel, etwa
+Sammlung an. Die Adresse verwendet den Feldschlüssel, etwa
 `/procedures/?project=research&inert_atmosphere=true`. Es gelten dieselben
 ODER/UND- und Zählregeln wie für die Verbindungsfilter unten.
 Vorschriftenfelder ergänzen keine Tabellenspalten, Werte in der Ansicht
@@ -860,8 +910,9 @@ Diese Felder werden abgelehnt:
 | `author = ["klehmann"]` | Das Schema verwendet die Mehrzahl; die Fehlermeldung lautet `use authors, a list of user names`. | `authors = ["klehmann"]` |
 | `url = "/procedures/osdb-0001/"` | Die URL ergibt sich aus `slug`. | `slug = "osdb-0001"` |
 
-Ein unter `fields.procedure` deklarierter Schlüssel wird als
-Vorschriftenfeld geprüft und ergibt keine Warnung `unknown field`.
+Die Journalfelder und unter `fields.procedure` deklarierten Schlüssel
+werden als Vorschriftenfelder geprüft und ergeben keine Warnung
+`unknown field`.
 
 Jedes andere Feld der obersten Ebene ergibt die Warnung `unknown field`,
 auch Tippfehler wie `checkedby` und die Felder `product`, `yield_percent`
@@ -919,7 +970,7 @@ in der gequoteten Liste. Zahlen haben in jeder Sprache einen Dezimalpunkt.
 Der Export hält tabellenartige Metadaten zusätzlich am Ende, damit spätere
 Felder nicht zur letzten Tabelle `[[products]]` gehören.
 
-Setzen Sie deklarierte Vorschriftenfelder auf weiteren Zeilen
+Setzen Sie Journalfelder und deklarierte Felder auf weiteren Zeilen
 `#+HUGO_CUSTOM_FRONT_MATTER:` vor `:products`, etwa nach `:scale`:
 
 ```org
@@ -928,9 +979,10 @@ Setzen Sie deklarierte Vorschriftenfelder auf weiteren Zeilen
 
 Strings stehen in doppelten Anführungszeichen; Zahlen und Wahrheitswerte
 bleiben ungequotet. Eine Mehrfachauswahl verwendet eine gequotete Liste,
-etwa `:project '("first-year-practical" "advanced-practical")`, wenn die
-Sammlung `project` mit `multiple = true` deklariert und das Vokabular
-`projects` des Beispielregisters verwendet.
+etwa `:funding '("first-year-practical" "advanced-practical")`, wenn die
+Sammlung `funding` mit `multiple = true` deklariert und das Vokabular
+`projects` des Beispielregisters verwendet. Das fest eingebaute Feld
+`project` nimmt einen Schlüssel in Anführungszeichen an, keine Liste.
 
 Der Export mit ox-hugo/tomelr erhält nicht jeden gequoteten String als Text.
 Er schreibt einen String ohne Anführungszeichen, wenn er `true` oder `false`
@@ -1109,8 +1161,8 @@ Die Fassungen einer Vorschrift
 - haben denselben Grundnamen, den Dateinamen ohne Kürzel und Endung;
 - haben dieselbe `id` und denselben `slug`;
 - haben denselben Wert, oder dasselbe Fehlen, von `status`, `reaction_types`,
-  `tags`, `products`, `substrates`, `scope`, `scheme_image` und jedem
-  deklarierten Vorschriftenfeld;
+  `tags`, `products`, `substrates`, `scope`, `scheme_image`, den
+  Journalfeldern und jedem deklarierten Vorschriftenfeld;
 - dürfen `note` in jedem Eintrag von `scope` übersetzen; alle anderen Werte von
   `scope` und die Reihenfolge der Einträge müssen übereinstimmen;
 - dürfen sich in allen übrigen Feldern und im Text unterscheiden: `title`,
@@ -1129,8 +1181,9 @@ Ausgangsstoffe unter `substrates`. Abweichungen in `scope` erscheinen unter
 `scheme_image`. Zahlen werden nach ihrem Wert verglichen: `85` und `85.0`
 stimmen überein. Bei anderen Werten müssen Wert und Typ übereinstimmen.
 
-Bei einem deklarierten Vorschriftenfeld ergeben ein geänderter Wert, ein
-fehlender oder ein hinzugefügter Schlüssel einen Fehler unter diesem Schlüssel:
+Bei einem Journalfeld oder deklarierten Vorschriftenfeld ergeben ein
+geänderter Wert, ein fehlender oder ein hinzugefügter Schlüssel einen Fehler
+unter diesem Schlüssel:
 `must equal the value in <path of the reference variant> (<value>); the variants of a procedure share it`.
 Wiederholen Sie Werte ohne Übersetzung. Der angezeigte Feldname kommt auf
 einer deutschen Website aus `label_de`, falls vorhanden.
@@ -1172,9 +1225,9 @@ Der Validator sucht das `scheme_image` einer Vorschrift darunter.
 `--registry` ist ohne Angabe `build/registry.json` im aktuellen Verzeichnis.
 Die Option erwartet eine Snapshot-Datei, keine Adresse. Der Validator prüft
 Verbindungsschlüssel der Vorschriften und Synthesewege, Benutzernamen der
-Autoren, Reaktionstypen und deklarierte Vorschriftenwerte gegen diesen
-Snapshot. Er prüft keine Werte der Stoffe. Eine nicht lesbare Datei oder
-eine Datei, die kein Snapshot ist, ergibt einen Konfigurationsfehler mit
+Autoren, Reaktionstypen, Journalfelder und deklarierte Vorschriftenwerte
+gegen diesen Snapshot. Er prüft keine Werte der Stoffe. Eine nicht lesbare
+Datei oder eine Datei, die kein Snapshot ist, ergibt einen Konfigurationsfehler mit
 Rückgabewert 2. `--compounds` und
 `--vocabulary` werden nicht akzeptiert; beide ergeben einen Aufruffehler,
 ebenfalls mit Rückgabewert 2.
@@ -1188,10 +1241,11 @@ sowie die vorhandenen Vorschriftenverzeichnisse `build/export` und
 
 `--settings` benennt die `orgsyndb.toml` der Sammlung. Ohne diese Option
 verwendet der Validator `orgsyndb.toml` im aktuellen Verzeichnis; fehlt
-diese Vorgabedatei, sind keine weiteren Felder deklariert. Eine mit
-`--settings` ausdrücklich benannte Datei muss vorhanden sein. Der
-Validator prüft die Vorschriftendeklarationen gegen die vier
-Registervokabulare und danach die deklarierten Werte jeder Vorschrift.
+diese Vorgabedatei, sind keine weiteren Felder deklariert; die Journalfelder
+gelten weiterhin. Eine mit `--settings` ausdrücklich benannte Datei muss
+vorhanden sein. Der Validator prüft die Vorschriftendeklarationen gegen die
+vier Registervokabulare und danach die Journalfelder und deklarierten Werte
+jeder Vorschrift.
 Org-Vorschriften erreichen diese Prüfung als Markdown-Exporte.
 
 `--sequences` ist ohne Angabe `md/sequences` im aktuellen Verzeichnis. Ein
@@ -1226,8 +1280,9 @@ Autorenfehler erscheinen unter `authors`:
 | `unknown author "<name>"; the registry has no account of this user name` | Den Benutzernamen prüfen und sicherstellen, dass der Register-Snapshot der Sammlung das Konto aufführt. |
 | `"<name>" is named twice` | Jeden Benutzernamen nur einmal behalten. |
 
-Fehler deklarierter Vorschriftenfelder nennen die Markdown-Quelle oder
-den Org-Export und den deklarierten Schlüssel, etwa `notebook` oder `project`.
+Fehler der Journalfelder und deklarierten Vorschriftenfelder nennen die
+Markdown-Quelle oder den Org-Export und den Feldschlüssel, etwa `notebook`,
+`project` oder `working_time`.
 Typ-, Muster-, Grenzwert- und Auswahlmeldungen stehen unter
 [Felddeklarationen für Vorschriften](#felddeklarationen-für-vorschriften).
 `also set by` nennt andere Vorschriftennummern; `must equal the value in`

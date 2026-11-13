@@ -13,7 +13,7 @@ Define the four registry fields every compound has: their values from the substa
 - `values`: only for a `choice` field, a table holding every term of its vocabulary in the registry under the term's key, each a table of `label`, the term's shown label, its `label_de` on a German site when it has one and its `label` otherwise; `path`, the shown labels of the term's ancestors, outermost first, followed by its own; and `ancestors`, the keys of its ancestors, outermost first;
 - `order`: only for a `choice` field, the keys of every term of its vocabulary, each top-level term followed by the terms filed under it, recursively, siblings in key order.
 
-A settings file that does not exist, or that declares no procedure field, gives `procedure` an empty list; `compound` always lists the four registry fields.
+A settings file that does not exist, or that declares no procedure field, gives `procedure` the journal fields alone (procedure-fields "Journal fields"); `compound` always lists the four registry fields.
 
 #### Scenario: Field data in both languages
 - **WHEN** a test calls `fields_data` on the test collection's `orgsyndb.toml` and registry with the language `en`, and again with `de`
@@ -27,7 +27,7 @@ A settings file that does not exist, or that declares no procedure field, gives 
 
 #### Scenario: No settings file
 - **WHEN** a test calls `fields_data` on a path that does not exist, with the test collection's registry
-- **THEN** its `procedure` is an empty list and its `compound` lists the four registry fields
+- **THEN** its `procedure` lists the two journal fields alone and its `compound` lists the four registry fields
 
 ### Requirement: Field display
 The site SHALL name a field, a registry field or a declared procedure field, by its shown label (requirement "Field data for the site") and write a value of it as text, escaped once, as follows:

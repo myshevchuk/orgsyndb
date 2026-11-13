@@ -586,7 +586,13 @@ class FieldDataTests(unittest.TestCase):
             with self.subTest(language=language):
                 data = self.data(language)
                 self.assertEqual(list(data), ["compound", "procedure"])
-                self.assertEqual(data["procedure"], [])
+                self.assertEqual(
+                    [f["key"] for f in data["procedure"]],
+                    ["notebook", "project"])
+                self.assertEqual(
+                    data["procedure"],
+                    [procedure_field_data(f) for f in fs.journal_fields(
+                        load_registry(), language)])
                 self.assertEqual(
                     [f["key"] for f in data["compound"]],
                     ["article_number", "short_name", "chemical_class",
@@ -775,12 +781,15 @@ class FieldDataTests(unittest.TestCase):
             self.assertEqual((field["values"], field["order"]), ({}, []))
 
     def test_no_settings_file(self) -> None:
-        """Scenario: No settings file."""
+        """Scenario: No settings file (`procedure` lists the two journal
+        fields alone)."""
         with tempfile.TemporaryDirectory(prefix="no settings ") as tmp:
             missing = Path(tmp) / "orgsyndb.toml"
             for language in ("en", "de"):
                 data = self.data(language, settings=missing)
-                self.assertEqual(data["procedure"], [])
+                self.assertEqual(
+                    [f["key"] for f in data["procedure"]],
+                    ["notebook", "project"])
                 self.assertEqual(
                     [f["key"] for f in data["compound"]],
                     ["article_number", "short_name", "chemical_class",
@@ -791,8 +800,22 @@ class FieldDataTests(unittest.TestCase):
         field)."""
         path = self.settings("format = 1\n")
         data = self.data(settings=path)
-        self.assertEqual(data["procedure"], [])
+        self.assertEqual([f["key"] for f in data["procedure"]],
+                         ["notebook", "project"])
         self.assertEqual(len(data["compound"]), 4)
+
+    def test_a_journal_field_declared_is_a_configuration_error(
+            self) -> None:
+        """Scenario: A journal field declared (the journal fields are
+        built in, so a collection cannot declare either)."""
+        for key in ("notebook", "project"):
+            with self.subTest(key=key):
+                path = self.settings(
+                    'format = 1\n\n[[fields.procedure]]\n'
+                    f'key = "{key}"\ntype = "text"\nlabel = "X"\n')
+                with self.assertRaisesRegex(pipeline().validate.ConfigError,
+                                            key):
+                    self.data(settings=path)
 
     def test_a_declaration_of_a_compound_field_is_a_configuration_error(
             self) -> None:
@@ -857,13 +880,14 @@ class ProcedureFieldDataTests(unittest.TestCase):
                      "group"])
                 self.assertEqual(
                     [f["key"] for f in data["procedure"]],
-                    ["notebook", "working_time", "inert_atmosphere",
-                     "project"])
+                    ["notebook", "project", "sample_code", "working_time",
+                     "inert_atmosphere", "funding"])
                 self.assertEqual(
                     data["procedure"],
-                    [procedure_field_data(f) for f in fs.read_fields(
-                        PROCEDURE_SETTINGS, load_registry(FIXTURE_REGISTRY),
-                        language)])
+                    [procedure_field_data(f) for f in
+                     fs.read_procedure_fields(
+                         PROCEDURE_SETTINGS,
+                         load_registry(FIXTURE_REGISTRY), language)])
 
     def test_the_stated_values_of_the_scenario(self) -> None:
         """Scenario: Procedure field data in both languages (the stated
@@ -872,27 +896,32 @@ class ProcedureFieldDataTests(unittest.TestCase):
         german = {f["key"]: f for f in self.data("de")["procedure"]}
         for fields in (english, german):
             self.assertEqual(fields["working_time"]["unit"], "h")
-            self.assertIs(fields["project"]["multiple"], False)
-            self.assertIs(fields["project"]["facet"], False)
+            self.assertIs(fields["funding"]["multiple"], False)
+            self.assertIs(fields["funding"]["facet"], False)
+            self.assertIs(fields["project"]["facet"], True)
             self.assertIs(fields["inert_atmosphere"]["facet"], False)
             self.assertEqual(fields["inert_atmosphere"]["label"],
                              "Inert atmosphere")
-            self.assertEqual(fields["project"]["order"],
+            self.assertEqual(fields["funding"]["order"],
                              ["research", "teaching",
                               "first-year-practical"])
             for field in fields.values():
                 for key in ("column", "search", "tabs"):
                     self.assertNotIn(key, field)
         self.assertEqual(
-            english["project"]["values"]["first-year-practical"],
+            english["funding"]["values"]["first-year-practical"],
             {"label": "First-year practical",
              "path": ["Teaching", "First-year practical"],
              "ancestors": ["teaching"]})
         self.assertEqual(
-            german["project"]["values"]["first-year-practical"],
+            german["funding"]["values"]["first-year-practical"],
             {"label": "Grundpraktikum",
              "path": ["Lehre", "Grundpraktikum"],
              "ancestors": ["teaching"]})
+        self.assertEqual(english["funding"]["label"], "Funding")
+        self.assertEqual(german["funding"]["label"], "Förderung")
+        self.assertEqual(german["sample_code"]["label"], "Probencode")
+        self.assertEqual(english["sample_code"]["label"], "Sample code")
 
     def test_a_field_carries_only_the_keys_its_type_has(self) -> None:
         """Requirement: Procedure field data (these keys and no
@@ -901,11 +930,12 @@ class ProcedureFieldDataTests(unittest.TestCase):
                 for field in self.data()["procedure"]}
         base = {"key", "type", "label"}
         self.assertEqual(keys["notebook"], base)
+        self.assertEqual(keys["sample_code"], base)
         self.assertEqual(keys["working_time"], base | {"unit"})
         self.assertEqual(keys["inert_atmosphere"], base | {"facet"})
-        self.assertEqual(
-            keys["project"],
-            base | {"facet", "multiple", "values", "order"})
+        choice = base | {"facet", "multiple", "values", "order"}
+        self.assertEqual(keys["project"], choice)
+        self.assertEqual(keys["funding"], choice)
 
     def test_facet_and_multiple_are_taken_as_declared(self) -> None:
         """Requirement: Procedure field data (`facet`, `multiple`, as
@@ -935,7 +965,8 @@ class ProcedureFieldDataTests(unittest.TestCase):
             'format = 1\n\n[[fields.procedure]]\nkey = "side_reaction"\n'
             'type = "choice"\nlabel = "Side reaction"\n'
             'vocabulary = "reaction-types"\n')
-        (field,) = self.data("de", path)["procedure"]
+        field = {f["key"]: f for f in self.data("de", path)["procedure"]
+                 }["side_reaction"]
         self.assertEqual(field["order"], ["esterification", "reduction"])
         self.assertEqual(
             field["values"]["reduction"],

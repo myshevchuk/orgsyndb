@@ -305,3 +305,18 @@ msgstr "Los erfassen"
 
 msgid "Book a withdrawal"
 msgstr "Entnahme buchen"
+
+msgid "Lab notebook"
+msgstr "Laborjournal"
+
+msgid "Lab notebook %(entry)s"
+msgstr "Laborjournal %(entry)s"
+
+msgid "Lab notebook of step %(position)s saved."
+msgstr "Laborjournal von Stufe %(position)s gespeichert."
+
+msgid "The sequence cannot be set, changed or cleared while a step names a lab notebook entry."
+msgstr "Der Syntheseweg kann nicht gesetzt, geändert oder entfernt werden, solange eine Stufe einen Eintrag im Laborjournal nennt."
+
+msgid "A step that names a lab notebook entry cannot be removed."
+msgstr "Eine Stufe, die einen Eintrag im Laborjournal nennt, lässt sich nicht entfernen."

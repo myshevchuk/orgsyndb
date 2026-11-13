@@ -1,7 +1,6 @@
 """Tests of the adoption of IDs and of ``manage.py adopt_ids``
 (collection-import: Issued IDs)."""
 
-import copy
 import io
 from typing import Any
 
@@ -10,10 +9,10 @@ from django.core.management.base import CommandError
 from django.test import override_settings
 
 from . import make_user
-from .collection_support import (TOKEN, ImportCase, by_id, demo_collection,
-                                 issue_ids, issued_keys, issued_to,
-                                 latest_import, make_token, manifest, post,
-                                 refused, request_id)
+from .collection_support import (TOKEN, ImportCase, by_id, copy_procedure,
+                                 demo_collection, issue_ids, issued_keys,
+                                 issued_to, latest_import, make_token,
+                                 manifest, post, refused, request_id)
 from .demo_support import SeededCase
 
 DEMO_IDS = [*(f"OSDB-{number:04d}" for number in range(1, 10)),
@@ -32,9 +31,8 @@ def with_procedure(*idents: str) -> dict[str, Any]:
     which the demo lacks."""
     data = demo_collection()
     for ident in idents:
-        new = copy.deepcopy(by_id(data["procedures"], "OSDB-0008"))
-        new["id"] = ident
-        data["procedures"].append(new)
+        data["procedures"].append(
+            copy_procedure(data, "OSDB-0008", ident))
     return data
 
 

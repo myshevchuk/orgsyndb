@@ -497,19 +497,20 @@ DEMO_NUMBERS = {"1-4-bromophenyl-ethanol": "CH-0001",
                 "dibenzylideneacetone": "CH-0013",
                 "isopentyl-acetate": "CH-0016",
                 "new-compound-7": "NV-0007"}
+# The demo declares two procedure fields; the journal fields `notebook` and
+# `project` are built in (procedure-fields "Journal fields").
 DEMO_PROCEDURE_DECLARATIONS = [
-    {"key": "notebook", "type": "text", "unique": True,
-     "pattern": r"[A-Z]{2}-\d+/\d+"},
-    {"key": "project", "type": "choice", "facet": True,
-     "vocabulary": "projects"},
     {"key": "working_time", "type": "number", "unit": "h", "min": 0},
     {"key": "inert_atmosphere", "type": "boolean", "facet": True},
 ]
 DEMO_PROCEDURE_LABELS = {
-    "notebook": ("Lab notebook", "Laborjournal"),
-    "project": ("Project", "Projekt"),
     "working_time": ("Working time", "Arbeitszeit"),
     "inert_atmosphere": ("Inert atmosphere", "Schutzgas")}
+# The notebooks of the demo's registry (lab-demo "Demo notebooks").
+DEMO_NOTEBOOKS = [{"code": "AE-1", "user": "klehmann"},
+                  {"code": "AE-2", "user": "aschmidt"},
+                  {"code": "CE-1", "user": "jkoch"},
+                  {"code": "CE-3", "user": "mwolf"}]
 # The terms of the vocabulary projects, each with its parent and its
 # English and German labels.
 PROJECTS = [
@@ -695,6 +696,10 @@ def procedure_field_violations(collection: Path, settings: dict[str, Any],
             for d in declared]
     if bare != DEMO_PROCEDURE_DECLARATIONS:
         problems.append(f"procedure declarations are {bare}")
+    notebooks = read_snapshot(collection).get("notebooks")
+    if notebooks != DEMO_NOTEBOOKS:
+        problems.append(f"the registry's notebooks are {notebooks}")
+    codes = {n["code"] for n in notebooks or []}
     labels = {d.get("key"): (d.get("label"), d.get("label_de"))
               for d in declared}
     if labels != DEMO_PROCEDURE_LABELS:
@@ -719,6 +724,10 @@ def procedure_field_violations(collection: Path, settings: dict[str, Any],
                 isinstance(notebook, str)
                 and re.fullmatch(r"[A-Z]{2}-\d+/\d+", notebook)):
             problems.append(f"{number}: notebook is {notebook!r}")
+        elif isinstance(notebook, str) \
+                and notebook.split("/")[0] not in codes:
+            problems.append(f"{number}: notebook {notebook!r} names no "
+                            "notebook of the registry")
         if variants[0].get("project", PROJECT_VALUES[0]) \
                 not in PROJECT_VALUES:
             problems.append(f"{number}: project is "
@@ -730,9 +739,9 @@ def procedure_field_violations(collection: Path, settings: dict[str, Any],
         flag = variants[0].get("inert_atmosphere", False)
         if not isinstance(flag, bool):
             problems.append(f"{number}: inert_atmosphere is {flag!r}")
-    notebooks = [v["notebook"] for v in values.values() if "notebook" in v]
-    if len(set(notebooks)) != len(notebooks):
-        problems.append(f"notebooks are {notebooks}")
+    named = [v["notebook"] for v in values.values() if "notebook" in v]
+    if len(set(named)) != len(named):
+        problems.append(f"notebooks are {named}")
     chosen = {v.get("project") for v in values.values()}
     for value in PROJECT_VALUES:
         if value not in chosen:

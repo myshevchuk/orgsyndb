@@ -18,6 +18,7 @@ INSTALLED_APPS = [
     "accounts",
     "vocabulary",
     "registry",
+    "journal",
     "tasks",
     "inventory",
     "planning",

@@ -11,7 +11,7 @@
 {% for name, heading in vocabularies %}<li><a href="/lab/registry/{{ name }}/">{{ heading }}</a></li>
 {% endfor %}</ul>
 </nav>
-<p><a href="/lab/collection/">{% translate "Collection imports" %}</a></p>
+<p><a href="/lab/journal/">{% translate "Lab notebooks" %}</a> · <a href="/lab/collection/">{% translate "Collection imports" %}</a></p>
 <form class="lab-filters" method="get" action="/lab/registry/">
 <label>{% translate "Search substances" %}
 <input type="search" name="q" value="{{ q }}"></label>
