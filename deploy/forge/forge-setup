@@ -1,0 +1,47 @@
+#!/bin/sh
+# Sets Forgejo up for the lab; run it once the forge service is up, and
+# again at will:
+#   docker compose exec forge sh /opt/orgsyndb/forge/forge-setup
+# It creates the admin account orgsyndb, which the lab application uses
+# for Forgejo's API, with ORGSYNDB_FORGE_PASSWORD when the account is
+# missing, and adds the OpenID Connect source lab, the lab application,
+# or updates it to the settings below. The source fetches the lab
+# application's discovery document, so the app must be up, with
+# ORGSYNDB_OIDC_KEY set, before this runs. The lab application takes
+# every account that is not local for one made through lab, so add no
+# other source.
+set -eu
+
+: "${ORGSYNDB_FORGE_PASSWORD:?ORGSYNDB_FORGE_PASSWORD is not set}"
+: "${ORGSYNDB_FORGE_CLIENT_SECRET:?ORGSYNDB_FORGE_CLIENT_SECRET is not set}"
+
+forgejo() {
+	gitea --config "${GITEA_APP_INI:-/var/lib/gitea/custom/conf/app.ini}" "$@"
+}
+
+discovery="${ORGSYNDB_APP_INTERNAL_URL:-http://app:8000}/lab/o/.well-known/openid-configuration"
+
+if forgejo admin user list --admin | awk '$2 == "orgsyndb" { found = 1 } END { exit !found }'; then
+	echo "forge-setup: the admin account orgsyndb exists."
+else
+	forgejo admin user create --admin --username orgsyndb \
+		--email orgsyndb@noreply.localhost \
+		--password "$ORGSYNDB_FORGE_PASSWORD" --must-change-password=false
+	echo "forge-setup: created the admin account orgsyndb."
+fi
+
+id=$(forgejo admin auth list | awk '$2 == "lab" { print $1 }')
+if [ -z "$id" ]; then
+	forgejo admin auth add-oauth --name lab --provider openidConnect \
+		--key forgejo --secret "$ORGSYNDB_FORGE_CLIENT_SECRET" \
+		--auto-discover-url "$discovery" \
+		--scopes openid --scopes profile --scopes email
+	echo "forge-setup: added the source lab."
+else
+	forgejo admin auth update-oauth --id "$id" --name lab \
+		--provider openidConnect \
+		--key forgejo --secret "$ORGSYNDB_FORGE_CLIENT_SECRET" \
+		--auto-discover-url "$discovery" \
+		--scopes openid --scopes profile --scopes email
+	echo "forge-setup: updated the source lab."
+fi

@@ -1,0 +1,21 @@
+#!/bin/sh
+# Creates the PostgreSQL role forge, with the password
+# FORGE_DB_PASSWORD, and the database forge it owns, each only when it
+# is missing; changes nothing that exists. Run once by the forge-db
+# service, from the postgres image, before forge starts. It signs in as
+# POSTGRES_USER with POSTGRES_PASSWORD to POSTGRES_DB, at PGHOST (db by
+# default) and PGPORT, and fails when the server cannot be reached.
+set -eu
+
+: "${FORGE_DB_PASSWORD:?FORGE_DB_PASSWORD is not set in orgsyndb.env}"
+export PGHOST="${PGHOST:-db}"
+export PGPASSWORD="${POSTGRES_PASSWORD:-}"
+
+psql -X -v ON_ERROR_STOP=1 -v password="$FORGE_DB_PASSWORD" \
+	-U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-postgres}" <<'SQL'
+SELECT format('CREATE ROLE forge LOGIN PASSWORD %L', :'password')
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'forge') \gexec
+SELECT 'CREATE DATABASE forge OWNER forge ENCODING ''UTF8'' TEMPLATE template0'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'forge') \gexec
+SQL
+echo "forge-db: the role and the database forge exist."

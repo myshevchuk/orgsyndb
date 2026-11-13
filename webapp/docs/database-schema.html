@@ -482,6 +482,10 @@ CHECK &gt;= 0</title><rect class="bg" x="1" y="64" width="270" height="17"/><lin
     <section>
       <h2>Constraints</h2>
       <ul>
+        <li><span class="on-t">accounts_user · accounts_user_email_unique</span>
+          Unique on <code>LOWER(email)</code> where <code>NOT (email = &#x27;&#x27;)</code></li>
+        <li><span class="on-t">accounts_user · accounts_user_username_unique</span>
+          Unique on <code>LOWER(username)</code></li>
         <li><span class="on-t">collection_entrysubstance · collection_entrysubstance_once</span>
           Unique on <code>entry_id, role, substance_id</code></li>
         <li><span class="on-t">collection_entrysubstance · collection_entrysubstance_position</span>
@@ -639,7 +643,7 @@ CHECK &gt;= 0</title><rect class="bg" x="1" y="64" width="270" height="17"/><lin
     <h2>Tables</h2>
     <dl class="docs">
       <div class="app-accounts"><dt>accounts_accesstoken</dt><dd><p>A personal access token, by which a program outside the browser acts as the account <code>user</code>.</p><p>The token itself is never stored, only its SHA-256 <code>digest</code>, so it cannot be recovered from the row. Deleting the row revokes the token; deleting the account deletes its tokens. <code>last_used_at</code> is None until a request is made with the token.</p></dd></div>
-      <div class="app-accounts"><dt>accounts_user</dt><dd><p>A person who signs in or is named on records.</p><p>USERNAME is at most 40 ASCII letters and digits, with single <code>.</code>, <code>-</code> or <code>_</code> between them, the user names Forgejo accepts. Procedure files name their authors by it, so the admin offers no way to change it once the account exists. INITIALS, one to five letters or digits, name the user in lists; they are stored in upper case and unique regardless of case. An account without a usable password cannot sign in and can still be named on records.</p></dd></div>
+      <div class="app-accounts"><dt>accounts_user</dt><dd><p>A person who signs in or is named on records.</p><p>USERNAME is at most 40 ASCII letters and digits, with single <code>.</code>, <code>-</code> or <code>_</code> between them, the user names Forgejo accepts, unique regardless of case, and none that Forgejo reserves (<code>validate_unreserved</code>). Procedure files name their authors by it, so the admin offers no way to change it once the account exists. INITIALS, one to five letters or digits, name the user in lists; they are stored in upper case and unique regardless of case. EMAIL may be empty and is otherwise unique regardless of case. An account without a usable password cannot sign in and can still be named on records.</p><p>Once a save of an account whose <code>is_active</code>, email or display name changed has committed, its Forgejo account is set in line with the account as stored (<code>accounts.forge</code>); <code>forge_failed</code> then tells whether that failed.</p></dd></div>
       <div class="app-collection"><dt>collection_entrysubstance</dt><dd><p>A substance of a scope entry in one ROLE, at its <code>position</code> among the entry&#x27;s substances of that role, from 1; a product may have a <code>yield_percent</code>.</p></dd></div>
       <div class="app-collection"><dt>collection_import</dt><dd><p>One build the builder reported, accepted or refused.</p><p>An accepted import has the <code>release</code> the builder staged and the site&#x27;s <code>language</code>, and no <code>errors</code>; a refused one has neither, and its errors one per line. <code>base</code> is the accepted import the build was made after, or None.</p></dd></div>
       <div class="app-collection"><dt>collection_issuedid</dt><dd><p>A procedure or sequence ID the application issued, <code>key</code>, kept once: issued to the account <code>user</code>, or adopted, with no account, from a collection that had it already; <code>issued_at</code> is when.</p></dd></div>
@@ -684,6 +688,12 @@ CHECK &gt;= 0</title><rect class="bg" x="1" y="64" width="270" height="17"/><lin
       <li><code>django_admin_log</code></li>
       <li><code>django_content_type</code></li>
       <li><code>django_session</code></li>
+      <li><code>oauth2_provider_accesstoken</code></li>
+      <li><code>oauth2_provider_application</code></li>
+      <li><code>oauth2_provider_devicegrant</code></li>
+      <li><code>oauth2_provider_grant</code></li>
+      <li><code>oauth2_provider_idtoken</code></li>
+      <li><code>oauth2_provider_refreshtoken</code></li>
       
     </ul>
   </section>

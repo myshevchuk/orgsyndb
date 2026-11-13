@@ -2,10 +2,13 @@
 # collection's Git repository and the application's, `web` serves it and
 # forwards /lab/ to the lab application `app`, which keeps its records
 # in the PostgreSQL database `db`; `backup` dumps that database daily
-# into backups/ beside this file.
+# into backups/ beside this file. `forge` runs Forgejo, served at /git/,
+# which signs people in through the lab application and keeps its data
+# in the database forge on `db`, which `forge-db` creates.
 # Copy orgsyndb.env.example to orgsyndb.env beside this file, fill it in,
 # then run, from this directory:
 #   docker compose up -d --build
+#   docker compose exec forge sh /opt/orgsyndb/forge/forge-setup
 # See the README's "Container deployment".
 name: orgsyndb
 
@@ -89,7 +92,59 @@ services:
       db:
         condition: service_healthy
 
+  # Creates the role and the database forge on db when they are
+  # missing, then exits.
+  forge-db:
+    image: postgres:18
+    entrypoint: ["sh", "/opt/orgsyndb/forge/forge-db"]
+    env_file: orgsyndb.env
+    volumes:
+      - ./forge:/opt/orgsyndb/forge:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Forgejo. forge-start adds the settings derived from orgsyndb.env
+  # (the root URL and the database password) and runs the image's own
+  # entrypoint, given as the command.
+  forge:
+    image: codeberg.org/forgejo/forgejo:15.0.11-rootless
+    entrypoint: ["sh", "/opt/orgsyndb/forge/forge-start"]
+    command: ["/usr/bin/dumb-init", "--",
+              "/usr/local/bin/docker-entrypoint.sh"]
+    restart: unless-stopped
+    env_file: orgsyndb.env
+    environment:
+      FORGEJO__database__DB_TYPE: postgres
+      FORGEJO__database__HOST: db:5432
+      FORGEJO__database__NAME: forge
+      FORGEJO__database__USER: forge
+      FORGEJO__database__SSL_MODE: disable
+      FORGEJO__security__INSTALL_LOCK: "true"
+      FORGEJO__server__HTTP_PORT: "3000"
+      FORGEJO__server__START_SSH_SERVER: "true"
+      FORGEJO__server__SSH_LISTEN_PORT: "2222"
+      FORGEJO__server__SSH_PORT: "2222"
+      # Accounts come only from the lab application: made at the first
+      # sign-in through it, named after its nickname claim, never linked
+      # to an existing account; there is no password sign-in.
+      FORGEJO__service__DISABLE_REGISTRATION: "true"
+      FORGEJO__service__ALLOW_ONLY_EXTERNAL_REGISTRATION: "true"
+      FORGEJO__service__ENABLE_INTERNAL_SIGNIN: "false"
+      FORGEJO__oauth2_client__ENABLE_AUTO_REGISTRATION: "true"
+      FORGEJO__oauth2_client__USERNAME: nickname
+      FORGEJO__oauth2_client__ACCOUNT_LINKING: disabled
+    ports:
+      - "2222:2222"
+    volumes:
+      - forge:/var/lib/gitea
+      - ./forge:/opt/orgsyndb/forge:ro
+    depends_on:
+      forge-db:
+        condition: service_completed_successfully
+
 volumes:
   data:
   caddy:
   db:
+  forge:

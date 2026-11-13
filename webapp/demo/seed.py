@@ -301,15 +301,16 @@ class _Writer:
 
     def account(self, change: data.CreateAccount) -> Any:
         """Create the account of CHANGE, with the password
-        ``data.PASSWORD`` or none usable, joined at the change's
-        moment."""
+        ``data.PASSWORD`` or none usable and its email address, joined
+        at the change's moment."""
         account = change.account
         return get_user_model().objects.create_user(
             username=account.username,
             password=data.PASSWORD if account.signs_in else None,
             first_name=account.first_name, last_name=account.last_name,
-            initials=account.initials, is_staff=account.superuser,
-            is_superuser=account.superuser, date_joined=change.moment)
+            email=account.email, initials=account.initials,
+            is_staff=account.superuser, is_superuser=account.superuser,
+            date_joined=change.moment)
 
     def save_parameters(self, user: Any, fields: dict[str, Any]) -> None:
         """Store the planning parameters with FIELDS, or change the

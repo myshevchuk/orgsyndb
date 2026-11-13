@@ -1,14 +1,18 @@
 """The application's user model and the accounts' access tokens."""
 
+import functools
 import hashlib
+import logging
 import secrets
 from datetime import datetime
 from typing import Any
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser, UserManager
+from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 from django.core.validators import RegexValidator
 from django.db import models, transaction
+from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -18,10 +22,50 @@ from orgsyndb_web.lock import LockedQuerySet
 
 USER_NAME = r"\A[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*\Z"
 
+# The user names Forgejo 15 reserves for itself, and the patterns of
+# those it refuses, from reservedUsernames and reservedUserPatterns in
+# models/user/user.go of Forgejo 15.0.11. Forgejo compares them in lower
+# case.
+FORGEJO_RESERVED_NAMES = frozenset({
+    ".", "..", "-", ".well-known",
+    "api", "metrics", "v2",
+    "assets", "attachments",
+    "avatar", "avatars", "repo-avatars",
+    "captcha", "login", "org", "repo", "user",
+    "admin", "explore", "issues", "pulls", "milestones", "notifications",
+    "report_abuse",
+    "favicon.ico", "manifest.json", "robots.txt", "sitemap.xml",
+    "ssh_info", "swagger.v1.json",
+    "ghost", "gitea-actions", "forgejo-actions",
+})
+FORGEJO_RESERVED_SUFFIXES = (".keys", ".gpg", ".rss", ".atom", ".png")
+# The name of the Forgejo admin account the application uses.
+FORGE_ADMIN_NAME = "orgsyndb"
+
+log = logging.getLogger(__name__)
+
+
+def validate_unreserved(value: str) -> None:
+    """Raise ValidationError when the user name VALUE is, in any case,
+    one Forgejo 15 reserves, ends in a suffix Forgejo refuses, or is
+    ``orgsyndb``."""
+    name = value.lower()
+    if (name in FORGEJO_RESERVED_NAMES or name == FORGE_ADMIN_NAME
+            or name.endswith(FORGEJO_RESERVED_SUFFIXES)):
+        raise ValidationError(
+            _("This user name is reserved for Forgejo."), code="reserved")
+
 
 # The fields of an account the registry snapshot carries, as its user
 # name and its name.
 SNAPSHOT_FIELDS = frozenset({"username", "first_name", "last_name"})
+# The fields of an account its Forgejo account follows.
+FORGE_FIELDS = ("is_active", "email", "username", "first_name",
+                "last_name")
+EMAIL_TAKEN = "email_taken"
+USERNAME_TAKEN = "username_taken"
+# The field each code of a constraint's error belongs to.
+CONSTRAINT_FIELDS = {EMAIL_TAKEN: "email", USERNAME_TAKEN: "username"}
 
 
 class AccountManager(UserManager.from_queryset(LockedQuerySet)):
@@ -33,12 +77,19 @@ class User(AbstractUser):
     """A person who signs in or is named on records.
 
     USERNAME is at most 40 ASCII letters and digits, with single ``.``,
-    ``-`` or ``_`` between them, the user names Forgejo accepts.
-    Procedure files name their authors by it, so the admin offers no way
-    to change it once the account exists. INITIALS, one to five letters
-    or digits, name the user in lists; they are stored in upper case and
-    unique regardless of case. An account without a usable password
-    cannot sign in and can still be named on records.
+    ``-`` or ``_`` between them, the user names Forgejo accepts, unique
+    regardless of case, and none that Forgejo reserves
+    (``validate_unreserved``). Procedure files name their authors by it,
+    so the admin offers no way to change it once the account exists. INITIALS, one to five letters or digits,
+    name the user in lists; they are stored in upper case and unique
+    regardless of case. EMAIL may be empty and is otherwise unique
+    regardless of case. An account without a usable password cannot
+    sign in and can still be named on records.
+
+    Once a save of an account whose ``is_active``, email or display
+    name changed has committed, its Forgejo account is set in line with
+    the account as stored (``accounts.forge``); ``forge_failed`` then
+    tells whether that failed.
     """
 
     username = models.CharField(
@@ -46,7 +97,8 @@ class User(AbstractUser):
         validators=[RegexValidator(
             USER_NAME,
             _("Enter at most 40 letters or digits, with single dots, "
-              "hyphens or underscores between them."))],
+              "hyphens or underscores between them.")),
+            validate_unreserved],
         help_text=_("At most 40 letters or digits, with single dots, "
                     "hyphens or underscores between them. It cannot be "
                     "changed later."),
@@ -64,8 +116,23 @@ class User(AbstractUser):
 
     objects = AccountManager()
 
+    forge_failed = False
+
     class Meta(AbstractUser.Meta):
         swappable = "AUTH_USER_MODEL"
+        constraints = [
+            models.UniqueConstraint(
+                Lower("username"), name="accounts_user_username_unique",
+                violation_error_code=USERNAME_TAKEN,
+                violation_error_message=_(
+                    "A user with that username already exists.")),
+            models.UniqueConstraint(
+                Lower("email"), name="accounts_user_email_unique",
+                condition=~models.Q(email=""),
+                violation_error_code=EMAIL_TAKEN,
+                violation_error_message=_(
+                    "Another account has this email address.")),
+        ]
 
     @property
     def display_name(self) -> str:
@@ -78,15 +145,59 @@ class User(AbstractUser):
         import lock (``orgsyndb_web.lock``), since the registry
         snapshot's digest covers its user name and name; a save of only
         other fields, such as a sign-in's ``last_login``, takes no
-        lock."""
+        lock. When a save of an existing account that changes its
+        ``is_active``, email address or display name commits, its
+        Forgejo account is set in line, as ``update_forge`` does; a
+        save rolled back calls nothing."""
         self.initials = (self.initials or "").upper()
         fields = kwargs.get("update_fields")
+        before = self.forge_state_saved(fields)
         if fields is not None and not SNAPSHOT_FIELDS & set(fields):
             super().save(*args, **kwargs)
+        else:
+            with transaction.atomic():
+                lock.hold()
+                super().save(*args, **kwargs)
+        self.forge_failed = False
+        if before is not None:
+            transaction.on_commit(functools.partial(self.update_forge,
+                                                    before))
+
+    def forge_state(self) -> tuple[Any, ...]:
+        """Return the values of the account its Forgejo account
+        follows."""
+        return tuple(getattr(self, name) for name in FORGE_FIELDS)
+
+    def forge_state_saved(self, fields: Any) -> tuple[Any, ...] | None:
+        """Return ``forge_state`` of the account as saved, before a save
+        of the fields FIELDS (None meaning every field); return None
+        when that save cannot change it, the account is new, or Forgejo
+        is not configured."""
+        from accounts import forge
+        if (self._state.adding or self.pk is None
+                or not forge.configured()
+                or (fields is not None
+                    and not set(FORGE_FIELDS) & set(fields))):
+            return None
+        saved = type(self).objects.filter(pk=self.pk).values_list(
+            *FORGE_FIELDS).first()
+        return None if saved is None else tuple(saved)
+
+    def update_forge(self, before: tuple[Any, ...]) -> None:
+        """Set the Forgejo account in line with the account as stored
+        now, when ``forge_state`` of that differs from BEFORE; on
+        failure log it and set ``forge_failed``, leaving the account
+        saved."""
+        from accounts import forge
+        stored = type(self).objects.filter(pk=self.pk).first()
+        if stored is None or stored.forge_state() == before:
             return
-        with transaction.atomic():
-            lock.hold()
-            super().save(*args, **kwargs)
+        try:
+            forge.push(stored)
+        except forge.ForgeError as exc:
+            log.warning("Forgejo account of %s not updated: %s",
+                        stored.get_username(), exc)
+            self.forge_failed = True
 
     def delete(self, *args: Any, **kwargs: Any) -> Any:
         """Delete the account, as ``Model.delete`` does, under the
@@ -100,6 +211,20 @@ class User(AbstractUser):
         put the initials in upper case."""
         super().clean()
         self.initials = (self.initials or "").upper()
+
+    def validate_constraints(self, exclude: Any = None) -> None:
+        """Validate the constraints as ``Model.validate_constraints``
+        does, reporting a user name or an email address that another
+        account has, regardless of case, on its own field."""
+        try:
+            super().validate_constraints(exclude)
+        except ValidationError as exc:
+            errors = exc.update_error_dict({})
+            for error in errors.pop(NON_FIELD_ERRORS, []):
+                field = CONSTRAINT_FIELDS.get(getattr(error, "code", None),
+                                              NON_FIELD_ERRORS)
+                errors.setdefault(field, []).append(error)
+            raise ValidationError(errors) from None
 
 
 # The text every access token begins with.

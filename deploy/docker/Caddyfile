@@ -1,18 +1,20 @@
-# Serves the site orgsyndb-deploy published last, and forwards /lab/ to
-# the lab application, but for the manifest path, which only the builder
-# reaches. ORGSYNDB_ADDRESS is Caddy's site address, :8080 (plain HTTP on
+# Serves the site orgsyndb-deploy published last, forwards /lab/ to the
+# lab application, but for the manifest path, which only the builder
+# reaches, and /git/ to Forgejo, without the prefix. ORGSYNDB_ADDRESS is Caddy's site address, :8080 (plain HTTP on
 # port 8080) by default; a host name makes Caddy serve HTTPS for it
 # instead. ORGSYNDB_APP_UPSTREAM is the application's address, app:8000
-# by default. Mount your own file over /etc/caddy/Caddyfile for other
+# by default, and ORGSYNDB_FORGE_UPSTREAM Forgejo's, forge:3000. Mount your own file over /etc/caddy/Caddyfile for other
 # settings.
 # Cache-Control: no-cache makes browsers revalidate every file, so they
-# show a new build at once instead of cached pages of the previous one.
+# show a new build at once instead of cached pages of the previous one;
+# Forgejo sets its own.
 {
 	admin off
 }
 
 {$ORGSYNDB_ADDRESS::8080} {
-	header Cache-Control "no-cache"
+	@cached not path /git /git/*
+	header @cached Cache-Control "no-cache"
 	# The builder posts its manifests to the application directly, over
 	# the compose network; from outside, that path does not exist.
 	handle /lab/collection/manifest* {
@@ -24,6 +26,14 @@
 	}
 	handle /lab {
 		redir * /lab/
+	}
+	# Forgejo's root URL is <ORGSYNDB_URL>/git/; it sees paths without
+	# the prefix.
+	handle_path /git/* {
+		reverse_proxy {$ORGSYNDB_FORGE_UPSTREAM:forge:3000}
+	}
+	handle /git {
+		redir * /git/
 	}
 	handle_path /pdf/* {
 		root * /var/lib/orgsyndb/current/pdf

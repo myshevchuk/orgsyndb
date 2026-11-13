@@ -3,9 +3,10 @@ accounts' access tokens, which staff see and delete."""
 
 from typing import Any
 
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import AdminUserCreationForm, UserChangeForm
+from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
 from accounts.models import AccessToken, User
@@ -46,6 +47,21 @@ class AccountAdmin(UserAdmin):
                            "last_name", "usable_password", "password1",
                            "password2")}),
     )
+
+    def save_model(self, request: Any, obj: Any, form: Any, change: bool
+                   ) -> None:
+        """Save the account as ``ModelAdmin.save_model`` does, and warn,
+        once the save has committed, when its Forgejo account could not
+        be set in line with it."""
+        super().save_model(request, obj, form, change)
+
+        def warn() -> None:
+            if obj.forge_failed:
+                messages.warning(request, _(
+                    "Forgejo was not updated; manage.py forge_accounts "
+                    "brings it in line."))
+
+        transaction.on_commit(warn)
 
     def get_readonly_fields(self, request: Any, obj: Any = None
                             ) -> tuple[str, ...]:

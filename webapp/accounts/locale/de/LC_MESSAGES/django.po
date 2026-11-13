@@ -109,3 +109,23 @@ msgstr "Anlegen"
 
 msgid "Enter 64 lower-case hexadecimal digits."
 msgstr "64 hexadezimale Ziffern in Kleinbuchstaben eingeben."
+
+msgid "This user name is reserved for Forgejo."
+msgstr "Dieser Benutzername ist für Forgejo reserviert."
+
+msgid "Another account has this email address."
+msgstr "Ein anderes Konto hat diese E-Mail-Adresse."
+
+msgid "Forgejo was not updated; manage.py forge_accounts brings it in line."
+msgstr "Forgejo wurde nicht aktualisiert; manage.py forge_accounts gleicht es ab."
+
+msgid "No access to Forgejo"
+msgstr "Kein Zugang zu Forgejo"
+
+msgid ""
+"Your account has no email address, and Forgejo needs one. Ask staff to "
+"give your account an email address first, then sign in to Forgejo again."
+msgstr ""
+"Ihr Konto hat keine E-Mail-Adresse, Forgejo braucht aber eine. Bitten Sie "
+"das Laborpersonal, Ihrem Konto zuerst eine E-Mail-Adresse zu geben, und "
+"melden Sie sich dann erneut bei Forgejo an."

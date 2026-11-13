@@ -1,0 +1,6 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n %}
+{% block title %}{% translate "No access to Forgejo" %}{% endblock %}
+{% block main %}
+<h1>{% translate "No access to Forgejo" %}</h1>
+<p>{% translate "Your account has no email address, and Forgejo needs one. Ask staff to give your account an email address first, then sign in to Forgejo again." %}</p>
+{% endblock %}

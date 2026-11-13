@@ -33,7 +33,8 @@ type Text = tuple[str, str]
 @dataclass(frozen=True)
 class Account:
     """A demo account; SIGNS_IN tells whether it has the password
-    ``PASSWORD``, or no usable password."""
+    ``PASSWORD`` and an email address, or no usable password and no
+    address."""
 
     username: str
     first_name: str
@@ -46,6 +47,12 @@ class Account:
     def name(self) -> str:
         """The first and last name."""
         return f"{self.first_name} {self.last_name}"
+
+    @property
+    def email(self) -> str:
+        """``<user name>@example.org`` for an account that signs in,
+        which Forgejo needs; empty for one that does not."""
+        return f"{self.username}@example.org" if self.signs_in else ""
 
 
 ACCOUNTS = (

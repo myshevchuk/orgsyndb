@@ -264,6 +264,20 @@ def condition_text(condition: Q, model: type[models.Model],
     return f"({joined})" if nested and len(parts) > 1 else joined
 
 
+def expression_text(expression: object,
+                    model: type[models.Model]) -> str:
+    """Return EXPRESSION, a field of MODEL (``F``) or a database function
+    of such fields, such as ``Lower("email")``, written as SQL. Raises
+    ValueError for any other expression."""
+    if isinstance(expression, models.F):
+        return model._meta.get_field(expression.name).column
+    if isinstance(expression, models.Func) and expression.function:
+        inner = ", ".join(expression_text(part, model) for part in
+                          expression.get_source_expressions())
+        return f"{expression.function}({inner})"
+    raise ValueError(f"cannot show the expression {expression!r}")
+
+
 def paragraphs(model: type[models.Model]) -> tuple[str, ...]:
     """Return the paragraphs of MODEL's docstring, each on one line, or
     none when the model has only the docstring Django gives it."""
@@ -354,10 +368,13 @@ def history_model(model: type[models.Model]) -> type[models.Model] | None:
 
 
 def constraints_of(model: type[models.Model]) -> list[Constraint]:
-    """Return the unique and check constraints of MODEL.
+    """Return the unique and check constraints of MODEL; a unique
+    constraint over expressions has them, written as SQL, among its
+    columns.
 
-    Raises ValueError naming the constraint when its condition cannot be
-    written as SQL, or for a constraint of another kind.
+    Raises ValueError naming the constraint when its condition or an
+    expression cannot be written as SQL, or for a constraint of another
+    kind.
     """
     table = model._meta.db_table
     found = []
@@ -367,7 +384,9 @@ def constraints_of(model: type[models.Model]) -> list[Constraint]:
                 found.append(Constraint(
                     table, constraint.name, "unique",
                     tuple(model._meta.get_field(name).column
-                          for name in constraint.fields),
+                          for name in constraint.fields)
+                    + tuple(expression_text(expression, model)
+                            for expression in constraint.expressions),
                     condition_text(constraint.condition, model)
                     if constraint.condition else None))
             elif isinstance(constraint, models.CheckConstraint):
@@ -433,12 +452,14 @@ def _collect(connection: BaseDatabaseWrapper) -> Schema:
         about="The layout of every history table: one row per saved "
               "change of a tracked row, holding its columns then.",
         count=len(historical))
-    by_name = {t.name: t for t in tables}
+    # A unique constraint's expressions, such as LOWER(email), are no
+    # columns and never count as nullable here.
+    nullable = {(t.name, x.name) for t in tables for x in t.columns
+                if x.nullable}
     null_notes = tuple(
         (c.name, c.table, column) for c in constraints
         if c.kind == "unique" and c.name for column in c.columns
-        if next(x for x in by_name[c.table].columns
-                if x.name == column).nullable)
+        if (c.table, column) in nullable)
     return Schema(
         tables=tuple(tables), history=history,
         history_tables=tuple(sorted(history_tables, key=lambda h: h.name)),

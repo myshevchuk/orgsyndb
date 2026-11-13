@@ -1072,7 +1072,8 @@ class FileTests(unittest.TestCase):
     def test_caddyfile(self) -> None:
         text = (DOCKER / "Caddyfile").read_text()
         self.assertIn("/var/lib/orgsyndb/current/public", text)
-        self.assertIn('header Cache-Control "no-cache"', text)
+        self.assertRegex(
+            text, r'header\s+(@\S+\s+)?Cache-Control\s+"no-cache"')
         if shutil.which("caddy") is None:
             self.skipTest("caddy not found")
         done = subprocess.run(["caddy", "adapt", "--adapter", "caddyfile",
@@ -1088,7 +1089,8 @@ class FileTests(unittest.TestCase):
         self.assertIn("ORGSYNDB_APP_UPSTREAM", text)
         self.assertIn("app:8000", text)
         self.assertRegex(text, r"admin\s+off")
-        self.assertIn('header Cache-Control "no-cache"', text)
+        self.assertRegex(
+            text, r'header\s+(@\S+\s+)?Cache-Control\s+"no-cache"')
         # The prefix reaches the application unchanged.
         self.assertNotRegex(text, r"handle_path\s+/lab")
         self.assertNotIn("strip_prefix", text)
@@ -1154,7 +1156,8 @@ class FileTests(unittest.TestCase):
         example = parse_env(ENV_EXAMPLE)
         services = config["services"]
         self.assertEqual(sorted(services),
-                         ["app", "backup", "builder", "db", "web"])
+                         ["app", "backup", "builder", "db", "forge",
+                          "forge-db", "web"])
         self.assertEqual(services["builder"]["command"],
                          ["orgsyndb-deploy", "run"])
         self.assertEqual(services["builder"]["environment"][

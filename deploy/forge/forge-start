@@ -1,0 +1,25 @@
+#!/bin/sh
+# The entrypoint of the forge service: exports the Forgejo settings
+# derived from orgsyndb.env, which Compose cannot substitute from a
+# service's env_file, then runs its arguments, the image's own
+# entrypoint, in its place.
+#   FORGEJO__server__ROOT_URL   <ORGSYNDB_URL>/git/
+#   FORGEJO__database__PASSWD   FORGE_DB_PASSWORD
+#   FORGEJO__server__DOMAIN and FORGEJO__server__SSH_DOMAIN, unless set:
+#                               the host name of ORGSYNDB_URL
+set -eu
+
+: "${ORGSYNDB_URL:?ORGSYNDB_URL is not set in orgsyndb.env}"
+: "${FORGE_DB_PASSWORD:?FORGE_DB_PASSWORD is not set in orgsyndb.env}"
+
+host=${ORGSYNDB_URL#*://}
+host=${host%%/*}
+host=${host%:*}
+FORGEJO__server__ROOT_URL="${ORGSYNDB_URL%/}/git/"
+FORGEJO__database__PASSWD=$FORGE_DB_PASSWORD
+FORGEJO__server__DOMAIN=${FORGEJO__server__DOMAIN:-$host}
+FORGEJO__server__SSH_DOMAIN=${FORGEJO__server__SSH_DOMAIN:-$host}
+export FORGEJO__server__ROOT_URL FORGEJO__database__PASSWD \
+	FORGEJO__server__DOMAIN FORGEJO__server__SSH_DOMAIN
+
+exec "$@"

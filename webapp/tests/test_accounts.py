@@ -371,3 +371,211 @@ class PermissionTests(TestCase):
         shown = page(self.client.get(task_url(self.task)))
         self.assertIsNone(shown.find("form", action=task_url(self.task,
                                                              "delete")))
+
+
+# The names Forgejo 15 reserves for itself, as the spike found them (the
+# admin API refuses each, in any case), and the suffixes it refuses.
+RESERVED_USER_NAMES = [
+    "admin", "api", "user", "explore", "assets", "avatars", "login", "org",
+    "repo", "notifications", "ghost", "swagger.v1.json", "v2", "metrics",
+    "captcha", "issues", "pulls", "milestones", "attachments",
+    "favicon.ico", "robots.txt", "manifest.json", "ssh_info",
+    "gitea-actions", "forgejo-actions", "repo-avatars", "orgsyndb"]
+RESERVED_SUFFIXES = [".keys", ".gpg", ".rss", ".atom", ".png"]
+# Names Forgejo takes, which stay open to accounts.
+FREE_USER_NAMES = ["help", "mail", "install", "administrator", "adminx",
+                   "api2", "users", "orgsyndb2", "keys", "png", "annarss",
+                   "a.pngx", "a-png", "a.png.b", "x.orgsyndb"]
+
+
+def admin_errors(response) -> dict:
+    """The errors of the form that the admin page ``response`` shows."""
+    return response.context["adminform"].form.errors
+
+
+class ReservedUserNameTests(TestCase):
+    """Requirement: Accounts and sign-in (user names Forgejo reserves,
+    and `orgsyndb`)."""
+
+    def candidate(self, name: str):
+        user = User(username=name, initials="RN")
+        user.set_unusable_password()
+        return user
+
+    def refused(self, name: str) -> list[str]:
+        return validation_errors(self.candidate(name)).get("username", [])
+
+    def test_the_reserved_names_are_refused_in_every_case(self) -> None:
+        for name in RESERVED_USER_NAMES:
+            for spelled in dict.fromkeys(
+                    (name, name.upper(), name.title(), name.capitalize())):
+                with self.subTest(username=spelled):
+                    self.assertTrue(self.refused(spelled))
+
+    def test_the_refused_suffixes_are_refused_in_every_case(self) -> None:
+        for suffix in RESERVED_SUFFIXES:
+            for name in (f"anna{suffix}", f"a{suffix}",
+                         f"Anna{suffix.upper()}", f"a.b{suffix}"):
+                with self.subTest(username=name):
+                    self.assertTrue(self.refused(name))
+
+    def test_the_error_says_the_name_is_reserved(self) -> None:
+        """Scenario: Reserved user names (each form names the user name
+        as reserved)."""
+        for name in ("Admin", "anna.rss", "orgsyndb"):
+            with self.subTest(username=name):
+                self.assertRegex(" ".join(self.refused(name)),
+                                 r"(?i)reserv")
+
+    def test_the_names_forgejo_takes_stay_open(self) -> None:
+        for name in FREE_USER_NAMES:
+            with self.subTest(username=name):
+                self.assertEqual(self.refused(name), [])
+
+
+class ReservedUserNameAdminTests(TestCase):
+    """Scenario: Reserved user names."""
+
+    ADD = "/lab/admin/accounts/user/add/"
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        cls.staff = make_user("boss", "BO", is_staff=True,
+                              is_superuser=True)
+
+    def setUp(self) -> None:
+        self.client.force_login(self.staff)
+
+    def add(self, name: str, initials: str):
+        return self.client.post(self.ADD, {
+            "username": name, "initials": initials, "first_name": "Test",
+            "last_name": "Name", "usable_password": "false"})
+
+    def test_none_is_created_and_each_form_names_the_user_name(self) -> None:
+        names = ["Admin", "explore", "anna.rss", "a.png", "orgsyndb"]
+        for number, name in enumerate(names):
+            with self.subTest(username=name):
+                answer = self.add(name, f"R{number}")
+                self.assertEqual(answer.status_code, 200)
+                errors = admin_errors(answer)
+                self.assertIn("username", errors)
+                self.assertRegex(" ".join(errors["username"]),
+                                 r"(?i)reserv")
+        self.assertEqual(User.objects.exclude(pk=self.staff.pk).count(), 0)
+
+    def test_an_open_name_is_created(self) -> None:
+        self.add("mail", "MA")
+        self.assertTrue(User.objects.filter(username="mail").exists())
+
+
+class EmailAddressTests(TestCase):
+    """Requirement: Accounts and sign-in (an email address may be empty
+    and is otherwise unique regardless of case)."""
+
+    def candidate(self, name: str, initials: str, email: str):
+        user = User(username=name, initials=initials, email=email)
+        user.set_unusable_password()
+        return user
+
+    def test_the_same_address_in_another_case_fails_validation(self) -> None:
+        """Scenario: Email addresses (the second account)."""
+        make_user("first", "KL", email="kl@example.org")
+        for address in ("KL@Example.org", "kl@example.org", "Kl@EXAMPLE.ORG"):
+            with self.subTest(email=address):
+                errors = validation_errors(
+                    self.candidate("second", "SE", address))
+                self.assertIn("email", errors)
+
+    def test_accounts_without_an_address_are_all_saved(self) -> None:
+        """Scenario: Email addresses (two more without an address)."""
+        make_user("first", "KL", email="kl@example.org")
+        for name, initials in (("second", "SE"), ("third", "TH")):
+            with self.subTest(username=name):
+                user = self.candidate(name, initials, "")
+                self.assertNotIn("email", validation_errors(user))
+                user.save()
+        self.assertEqual(User.objects.filter(email="").count(), 2)
+
+    def test_different_addresses_are_fine(self) -> None:
+        make_user("first", "KL", email="kl@example.org")
+        self.assertNotIn("email", validation_errors(
+            self.candidate("second", "SE", "kl2@example.org")))
+
+    def test_an_account_keeps_its_own_address(self) -> None:
+        first = make_user("first", "KL", email="kl@example.org")
+        first.refresh_from_db()
+        self.assertNotIn("email", validation_errors(first))
+        first.email = "KL@example.org"
+        self.assertNotIn("email", validation_errors(first))
+
+    def test_an_address_given_up_is_free_again(self) -> None:
+        first = make_user("first", "KL", email="kl@example.org")
+        first.email = ""
+        first.save()
+        self.assertNotIn("email", validation_errors(
+            self.candidate("second", "SE", "KL@example.org")))
+
+
+class EmailAddressAdminTests(TestCase):
+    """Scenario: Email addresses (in the admin)."""
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        cls.staff = make_user("boss", "BO", is_staff=True,
+                              is_superuser=True)
+        cls.kl = make_user("klehmann", "KL")
+        cls.tb = make_user("tbauer", "TB")
+        cls.aschmidt = make_user("aschmidt", "AS")
+        cls.jkoch = make_user("jkoch", "JK")
+
+    def setUp(self) -> None:
+        self.client.force_login(self.staff)
+
+    def give(self, user, address: str):
+        url = f"/lab/admin/accounts/user/{user.pk}/change/"
+        data = form_data(page(self.client.get(url)))
+        data["email"] = address
+        return self.client.post(url, data)
+
+    def test_the_second_address_is_refused(self) -> None:
+        self.assertEqual(self.give(self.kl, "kl@example.org").status_code,
+                         302)
+        answer = self.give(self.tb, "KL@Example.org")
+        self.assertEqual(answer.status_code, 200)
+        self.assertIn("email", admin_errors(answer))
+        for user in (self.kl, self.tb):
+            user.refresh_from_db()
+        self.assertEqual(self.kl.email, "kl@example.org")
+        self.assertEqual(self.tb.email, "")
+
+    def test_accounts_without_an_address_are_saved(self) -> None:
+        for user in (self.aschmidt, self.jkoch):
+            with self.subTest(username=user.username):
+                self.assertEqual(self.give(user, "").status_code, 302)
+
+
+class UserNameCaseTests(TestCase):
+    """Scenario: User names differing in case."""
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        cls.staff = make_user("boss", "BO", is_staff=True,
+                              is_superuser=True)
+
+    def test_a_name_differing_in_case_fails_validation(self) -> None:
+        make_user("alice", "AL")
+        user = User(username="Alice", initials="A2")
+        user.set_unusable_password()
+        self.assertIn("username", validation_errors(user))
+
+    def test_the_admin_refuses_the_second_account(self) -> None:
+        self.client.force_login(self.staff)
+        for name, initials in (("alice", "AL"), ("Alice", "A2")):
+            answer = self.client.post("/lab/admin/accounts/user/add/", {
+                "username": name, "initials": initials,
+                "first_name": "Test", "last_name": "Name",
+                "usable_password": "false"})
+        self.assertEqual(answer.status_code, 200)
+        self.assertIn("username", admin_errors(answer))
+        self.assertEqual(
+            User.objects.filter(username__iexact="alice").count(), 1)

@@ -35,5 +35,6 @@ EXPOSE 8000
 # Pending migrations first, then the demo data, which only an empty
 # database with ORGSYNDB_DEMO=true receives, then the application.
 CMD ["sh", "-c", "python manage.py migrate --noinput \
-&& python manage.py demo_data --if-empty && exec gunicorn \
+&& python manage.py demo_data --if-empty \
+&& python manage.py forge_client && exec gunicorn \
 orgsyndb_web.wsgi --bind 0.0.0.0:8000 --workers 3 --access-logfile -"]

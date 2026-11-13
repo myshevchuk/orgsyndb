@@ -1453,7 +1453,8 @@ collection it lets the commit through.
 ## Container deployment
 
 `deploy/` runs OrgSynDB on a server with Docker Compose or Podman Compose.
-Five services build and serve the site and keep the lab's records:
+Seven services build and serve the site, keep the lab's records and run
+Forgejo, a Git repository service at `/git/`:
 
 - `builder` clones the collection from its Git repository, builds the site
   inside the container, and checks for new commits every five minutes. It
@@ -1464,11 +1465,20 @@ Five services build and serve the site and keep the lab's records:
   forwards `/lab/` to `app`, except the builder's manifest path. Caddy
   answers 404 for every path beginning with `/lab/collection/manifest`;
   the builder sends manifests directly to `app` over the Compose network.
+  Caddy also forwards `/git/` to `forge`, stripping that prefix, and
+  redirects `/git` to `/git/`. Forgejo sets its own caching headers.
 - `db` runs PostgreSQL 18 and keeps the lab's records in the `db` volume.
 - `app` runs the lab application, built from the checkout that holds
   `deploy/compose.yaml`. It stores accepted collection imports in the
   database.
 - `backup` dumps the database daily into `deploy/backups/` on the host.
+- `forge-db` runs once from `postgres:18` after `db` is healthy. It
+  creates the PostgreSQL role and database `forge` when missing, including
+  in an existing `db` volume, and leaves anything that exists unchanged.
+- `forge` runs Forgejo 15.0.11 LTS from the rootless image
+  `codeberg.org/forgejo/forgejo:15.0.11-rootless`. It starts after
+  `forge-db` completes, keeps its data in the `forge` volume and publishes
+  SSH on port 2222. People sign in through the lab application.
 
 `builder` and `web` share one image. They and `app` share the `data`
 volume; `web` and `app` read it without writing to it.
@@ -1495,7 +1505,18 @@ user, password and name in `POSTGRES_USER`, `POSTGRES_PASSWORD` and
 `POSTGRES_DB`. Repeat those values in `ORGSYNDB_DATABASE_URL` as
 `postgres://<user>:<password>@db:5432/<database>`; the password appears
 in both settings. Set `ORGSYNDB_ALLOWED_HOSTS` to the host names you use
-to reach the site, separated by commas.
+to reach the site, separated by commas, and include `app` so Forgejo can
+reach the lab application on the Compose network.
+
+Set `ORGSYNDB_URL` to the address people use in their browsers, without
+a trailing slash, for example `https://lab.example.org` or
+`http://localhost:8080` behind an SSH tunnel. The lab application acts as
+an OpenID Connect provider: it confirms your identity to Forgejo so you
+can use your lab account there. Its issuer address, which identifies the
+provider, Forgejo's root URL and the return address after sign-in all
+derive from `ORGSYNDB_URL`. Forgejo's server reaches the app through
+`ORGSYNDB_APP_INTERNAL_URL`, which defaults to `http://app:8000`, for
+tokens and account information.
 
 Generate a secret key for sign-ins and put the result in
 `ORGSYNDB_SECRET_KEY`:
@@ -1516,6 +1537,29 @@ from `orgsyndb.env`. Without it, the builder builds nothing and the app's
 manifest endpoint answers 404. `ORGSYNDB_MANIFEST_URL` defaults to
 `http://app:8000/lab/collection/manifest/` on the Compose network.
 
+Generate a separate secret for each of `ORGSYNDB_FORGE_CLIENT_SECRET`,
+`ORGSYNDB_FORGE_PASSWORD` and `FORGE_DB_PASSWORD` with:
+
+```sh
+python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
+```
+
+The client secret lets Forgejo authenticate to the lab's provider. The
+other two settings are the passwords for Forgejo's `orgsyndb`
+administrator account and its PostgreSQL role `forge`.
+
+Generate the provider's RSA private key and put the result, encoded in
+base64 on one line, in `ORGSYNDB_OIDC_KEY`:
+
+```sh
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | base64 -w0
+```
+
+The key signs the identity tokens the lab app sends to Forgejo. Replace
+the example's placeholder before starting: a malformed key stops the app
+at startup. An empty setting turns the provider off; its paths under
+`/lab/o/` then answer 404.
+
 Git ignores `deploy/orgsyndb.env` and `deploy/backups/`. After filling in
 the settings, start the services from `deploy/`:
 
@@ -1525,8 +1569,10 @@ docker compose logs -f builder
 ```
 
 The site is then at `http://<server>:8080/`, with the lab application at
-`http://<server>:8080/lab/`. Until the app accepts the first site build
-and the builder publishes it, the static site answers 404.
+`http://<server>:8080/lab/` and Forgejo at `http://<server>:8080/git/`.
+Complete [Forgejo set-up](#forgejo-set-up) before signing in there.
+Until the app accepts the first site build and the builder publishes it,
+the static site answers 404.
 
 [`deploy/orgsyndb.env.example`](deploy/orgsyndb.env.example) lists the
 settings:
@@ -1552,10 +1598,18 @@ settings:
 | `ORGSYNDB_DATABASE_URL` | set for deployment | `postgres://<user>:<password>@db:5432/<database>` |
 | `ORGSYNDB_SECRET_KEY` | required | Generated secret key for sign-ins |
 | `ORGSYNDB_BUILDER_TOKEN` | required for builds | Shared service token the builder sends and the app checks on each manifest |
-| `ORGSYNDB_ALLOWED_HOSTS` | required | Comma-separated host names used to reach the site |
+| `ORGSYNDB_ALLOWED_HOSTS` | required | Comma-separated host names used to reach the site; must include `app` |
 | `ORGSYNDB_DEBUG` | `false` | Show error details; keep off on a reachable site |
 | `ORGSYNDB_DEMO` | `false` | Permit writing invented demo records; at container start, fill an empty database. Test deployments only; never set on a stack that keeps real records |
 | `ORGSYNDB_APP_UPSTREAM` | `app:8000` | Address to which Caddy forwards `/lab/` |
+| `ORGSYNDB_URL` | `http://localhost:8080` in the example | Browser address of the site, without a trailing slash; determines the provider's issuer, Forgejo's root URL and the sign-in return address |
+| `ORGSYNDB_APP_INTERNAL_URL` | `http://app:8000` | Lab app address on the Compose network, used by Forgejo's server |
+| `ORGSYNDB_OIDC_KEY` | required for Forgejo sign-in | RSA private key in PEM format, base64 on one line; empty disables the provider, malformed stops the app |
+| `ORGSYNDB_FORGE_CLIENT_SECRET` | choose your own | Shared secret for Forgejo to authenticate to the lab's provider |
+| `ORGSYNDB_FORGE_PASSWORD` | choose your own | Password of Forgejo's `orgsyndb` administrator account, used by the app to keep accounts in line |
+| `FORGE_DB_PASSWORD` | choose your own | Password of PostgreSQL role `forge` |
+| `ORGSYNDB_FORGE_URL` | `http://forge:3000/api/v1` in the example | Forgejo API address for the app; empty turns account synchronization off |
+| `ORGSYNDB_FORGE_UPSTREAM` | `forge:3000` | Address to which Caddy forwards `/git/` |
 | `ORGSYNDB_BACKUP_HOURS` | `24` | Hours between database dumps |
 | `ORGSYNDB_KEEP_BACKUPS` | `14` | Newest database dumps kept |
 
@@ -1566,6 +1620,41 @@ environment or in a `.env` file beside `compose.yaml` to build from another
 repository, such as a mirror on the intranet. `APP_REF` must be a branch
 or a tag. `ORGSYNDB_APP_REPO` and `ORGSYNDB_APP_REF` default to the same
 values.
+
+### Forgejo set-up
+
+Once `app` and `forge` are up, run this from `deploy/` to connect
+Forgejo to the lab's accounts:
+
+```sh
+docker compose exec forge sh /opt/orgsyndb/forge/forge-setup
+```
+
+The app must be reachable with `ORGSYNDB_OIDC_KEY` set. At startup,
+`app` runs `manage.py forge_client` after `demo_data` to register Forgejo
+as its OpenID client when `ORGSYNDB_FORGE_CLIENT_SECRET` is set. The
+set-up script creates Forgejo's administrator account `orgsyndb` with
+`ORGSYNDB_FORGE_PASSWORD` if missing, then adds or updates the sign-in
+source `lab`. Forgejo fetches the app's discovery document, which lists
+its sign-in addresses, during this step. When adding the source, the
+script reports `forge-setup: added the source lab.`
+
+Run the script again after a failure, or whenever the client secret or
+the app's address changes. It leaves an existing `orgsyndb` account's
+password unchanged. Add no other sign-in source: the lab app treats every
+non-local Forgejo account as a lab account.
+
+Forgejo's settings come from environment variables. The start script
+`deploy/forge/forge-start` derives its root URL, database password,
+domain and SSH domain from `orgsyndb.env`; Compose does not substitute
+values from that file. The root URL is `<ORGSYNDB_URL>/git/`, and the
+domain and SSH domain default to the host in `ORGSYNDB_URL`.
+
+Forgejo shares the lab app's origin, the browser's combination of scheme,
+host and port, so you must trust it like the lab app. The lab's session
+cookie and its CSRF cookie, which protects forms against forged requests,
+are scoped to `/lab/`. Cookie paths do not isolate the two applications
+in the browser.
 
 ### Access tokens
 
@@ -1617,8 +1706,13 @@ docker compose exec app python manage.py createsuperuser
 The command asks for a user name, email, initials and password. User names
 follow Forgejo's rule: at most 40 characters, using ASCII letters and
 digits with single `.`, `-` or `_` between them. A user name must start and
-end with a letter or digit. Choose it before creating the account: it
-cannot change later, and the admin shows it read-only.
+end with a letter or digit. Forgejo's reserved names, such as `admin`,
+`api`, `user` and `explore`, and the name `orgsyndb` are refused
+regardless of case. So are names ending in `.keys`, `.gpg`, `.rss`,
+`.atom` or `.png`. Two user names may not differ only in case, since
+Forgejo treats them as one. Choose the user name before creating the
+account: it cannot change later, and the admin shows it read-only. An email address
+may be empty; otherwise it must be unique regardless of case.
 
 Sign in at `/lab/admin/` to create further accounts. The admin requires staff
 status. You can assign tasks to an account without a usable password
@@ -1630,6 +1724,41 @@ a person's name changes the registry digest and triggers a site rebuild.
 You cannot delete accounts in the admin, so their names stay on the task
 history they wrote. To remove someone's access, deactivate their account
 by clearing its **Active** flag in the admin.
+
+To sign in to Forgejo at `/git/`, choose **Sign in with lab**; there is
+no Forgejo password sign-in. If you are already signed in to the lab app,
+you pass through without a consent page. Your first sign-in creates a
+Forgejo account with your lab user name, email address and full name.
+It is bound to your lab account's ID, which later sign-ins use to find
+the same account. If your account has no email address, you see
+**Kein Zugang zu Forgejo** (**No access to Forgejo**). Ask staff to give
+it an address, then try again.
+
+Deactivating a lab account also blocks its Forgejo account, and a
+sign-in to Forgejo that began before the deactivation is refused too.
+Reactivating it lifts the block; Forgejo keeps its access tokens and SSH
+keys, which work again after reactivation. Changes to the lab account's
+name and email address are sent to Forgejo too, once the save is
+committed. Clearing the address gives the Forgejo account the address
+`<user name>@noreply.localhost`, which frees the old one for another
+account.
+
+If Forgejo is unreachable or refuses an update, the lab account is still
+saved. The admin warns **Forgejo wurde nicht aktualisiert; manage.py
+forge_accounts gleicht es ab.** (**Forgejo was not updated; manage.py
+forge_accounts brings it in line.**). Until you reconcile the accounts,
+Forgejo keeps its previous state: a deactivated account's Forgejo tokens
+and SSH keys can still push. Once Forgejo is reachable, run from `deploy/`:
+
+```sh
+docker compose exec app python manage.py forge_accounts
+```
+
+The command prints each account it changes and blocks Forgejo accounts
+with no matching lab account. It exits non-zero if Forgejo cannot be
+reached or refuses a request. Synchronization needs
+`ORGSYNDB_FORGE_URL` and `ORGSYNDB_FORGE_PASSWORD`; without both, the app
+does not call Forgejo.
 
 Open `/lab/` for the [lab overview](#lab-overview). Choose **Aufgaben**
 (**Tasks**) or open `/lab/tasks/` for the task list. Signing in still
@@ -1880,9 +2009,10 @@ carries the blue **neu** (**new**) mark and has projected consumption
 means. **1-Phenylethanol** carries the mark when its stock entry date
 falls in the seeding year too.
 
-At every start, `app` applies migrations, runs `demo_data --if-empty`, then
-starts serving requests. The command fills the database only when
-`ORGSYNDB_DEMO=true` and it holds no lab records. Otherwise it prints why
+At every start, `app` applies migrations, runs `demo_data --if-empty`,
+then `forge_client`, and starts serving requests. The demo command fills
+the database only when `ORGSYNDB_DEMO=true` and it holds no lab records.
+Otherwise it prints why
 it skips seeding and exits successfully without changes. An import of the
 collection counts as a lab record. The flag only permits writing demo
 data; setting it alone does not display demo content.
@@ -1903,6 +2033,12 @@ these accounts:
 | `aschmidt` | Anna Schmidt | Lab application |
 | `jkoch` | Jonas Koch | Lab application |
 | `mwolf` | Miriam Wolf | Cannot sign in; former member named on early records |
+
+Every account except `mwolf` has the email address
+`<user name>@example.org`, so it can sign in to Forgejo. `mwolf` has no
+email address. On an existing demo test server, run the replacement
+command below after deployment to give the demo accounts
+their addresses; the startup command leaves an existing database alone.
 
 The records age after seeding. To renew them as of today, run from
 `deploy/`:

@@ -91,6 +91,28 @@ class AccountTests(SeededCase):
                                             "password": DEMO_PASSWORD})
         self.assertEqual(response.status_code, 200)
 
+    def test_email_addresses(self) -> None:
+        """Scenario: Email addresses."""
+        self.assertEqual(self.account("tbauer").email, "tbauer@example.org")
+        self.assertEqual(self.account("mwolf").email, "")
+
+    def test_every_account_but_mwolf_has_its_address(self) -> None:
+        """Requirement: Demo accounts (the address `<user name>@example.org`
+        of every account but `mwolf`)."""
+        for username in ACCOUNTS:
+            with self.subTest(username=username):
+                self.assertEqual(
+                    self.account(username).email,
+                    "" if username == "mwolf" else f"{username}@example.org")
+
+    def test_the_demo_addresses_are_unique(self) -> None:
+        from django.contrib.auth import get_user_model
+        given = [address.lower() for address in
+                 get_user_model().objects.exclude(email="")
+                 .values_list("email", flat=True)]
+        self.assertEqual(len(given), len(set(given)))
+        self.assertEqual(len(given), len(ACCOUNTS) - 1)
+
     def test_every_account_but_mwolf_has_the_password(self) -> None:
         for username in ACCOUNTS:
             with self.subTest(username=username):

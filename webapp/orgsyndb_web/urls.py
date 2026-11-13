@@ -15,5 +15,6 @@ urlpatterns = [
     path("lab/journal/", include("journal.urls")),
     path("lab/collection/", include("collection.urls")),
     path("lab/accounts/", include("accounts.urls")),
+    path("lab/o/", include("accounts.oidc")),
     path("lab/admin/", admin.site.urls),
 ]

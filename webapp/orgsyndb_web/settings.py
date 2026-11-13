@@ -1,8 +1,8 @@
 """Django settings of the OrgSynDB lab application.
 
 The environment decides the secret key, debug, the host names, the
-database, the demo flag and the builder's token; see
-``orgsyndb_web.config.settings_from``.
+database, the demo flag, the builder's token, the OpenID provider and
+Forgejo's API; see ``orgsyndb_web.config.settings_from``.
 """
 
 import os
@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "simple_history",
+    "oauth2_provider",
 ]
 
 MIDDLEWARE = [
@@ -81,6 +82,9 @@ AUTH_PASSWORD_VALIDATORS = [
 LOGIN_URL = "/lab/accounts/login/"
 LOGIN_REDIRECT_URL = "/lab/tasks/"
 LOGOUT_REDIRECT_URL = "/lab/tasks/"
+# Forgejo, served from the same host under /git/, receives neither.
+SESSION_COOKIE_PATH = "/lab/"
+CSRF_COOKIE_PATH = "/lab/"
 
 # Requests reach the application through Caddy, which sets the header.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
