@@ -329,15 +329,15 @@ class ForgeStartTests(unittest.TestCase):
     def test_the_exit_status_of_the_command_is_the_scripts(self) -> None:
         self.assertEqual(self.run_script("sh", "-c", "exit 7").returncode, 7)
 
-    def test_the_script_is_posix_shell_that_ends_in_exec(self) -> None:
+    def test_the_script_is_posix_shell(self) -> None:
+        """Requirement: Forgejo (the entrypoint runs the image's own as
+        a child, so it no longer ends in `exec`; see test_forge_pause
+        for the pause)."""
         self.assertTrue(START.is_file(),
                         "deploy/forge/forge-start is missing")
         text = START.read_text(encoding="utf-8")
         self.assertIn(text.splitlines()[0],
                       ("#!/bin/sh", "#!/usr/bin/env sh"))
-        lines = [line.strip() for line in text.splitlines()
-                 if line.strip() and not line.strip().startswith("#")]
-        self.assertEqual(lines[-1], 'exec "$@"')
         done = subprocess.run(["sh", "-n", str(START)],
                               capture_output=True, text=True)
         self.assertEqual(done.returncode, 0, done.stderr)

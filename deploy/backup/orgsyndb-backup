@@ -1,35 +1,94 @@
 #!/bin/sh
-# Dump the lab application's PostgreSQL database into a directory.
+# Back up the lab application's database, Forgejo and the push log as
+# backup sets in a directory, and restore a set.
 #
-#   orgsyndb-backup [run]   dump now, then every ORGSYNDB_BACKUP_HOURS
-#                           hours, until stopped; a failed dump is
-#                           logged and the next one is tried on time
-#   orgsyndb-backup once    dump once; exit 1 when the dump fails
+#   orgsyndb-backup [run]          write a set now, then every
+#                                  ORGSYNDB_BACKUP_HOURS hours, until
+#                                  stopped; a failed run is logged and
+#                                  the next one is tried on time
+#   orgsyndb-backup once           write one set; exit 1 when it fails
+#   orgsyndb-backup restore SET    restore the set SET of the directory
 #
-# Each dump is lab-<UTC time as YYYYMMDDTHHMMSSZ>.dump, in pg_dump's
-# custom format, readable by pg_restore. It is written under a temporary
-# name and renamed when complete. After each dump all but the
-# ORGSYNDB_KEEP_BACKUPS newest lab-*.dump files are removed.
+# A set is a directory orgsyndb-<UTC time as YYYYMMDDTHHMMSSZ>/ holding
+#
+#   lab.dump      POSTGRES_DB, in pg_dump's custom format
+#   pushes.log    the push log, when it exists
+#   forge.dump    the database forge, in pg_dump's custom format
+#   forge.tar     the whole of ORGSYNDB_FORGE_DATA, with numeric owners,
+#                 modes and symbolic links
+#   orgsyndb.env  ORGSYNDB_SETTINGS_FILE, when it exists
+#
+# The first four are taken while Forgejo is paused. The run, when it
+# runs as root, makes ORGSYNDB_FORGE_CONTROL owned by UID 1000, the
+# user of forge-start. It writes the file pause there, holding a request
+# id of its own, waits until forge-start writes that id to the file
+# paused there, and removes pause afterwards, also when the run
+# failed. A set is kept only when paused still holds the id after its
+# last part; otherwise Forgejo resumed during the backup and the run
+# fails. When ORGSYNDB_FORGE_DATA is not a directory, the run pauses
+# nothing and the set holds lab.dump and orgsyndb.env only.
+#
+# Runs hold a lock on <dir>/.lock and follow one another. A set is
+# built as .orgsyndb-<time>.partial/ and renamed when complete; a run
+# that fails removes it and exits 1. After a complete set, all but the
+# ORGSYNDB_KEEP_BACKUPS newest sets are removed, and so is every partial
+# set; other files in the directory are left alone. Sets are readable by
+# their owner only. On SIGTERM, SIGINT or SIGHUP, once and run stop the
+# step under way, remove pause when they wrote it and the partial set,
+# and exit, once with 1 and run with 0.
+#
+# restore expects every service stopped but db and forge-db. It checks
+# the set first and exits 1, changing nothing, when the set is missing,
+# lacks lab.dump, or holds only one of forge.dump and forge.tar. It then
+# drops POSTGRES_DB, creates it again owned by POSTGRES_USER and
+# restores lab.dump into it; when the set holds Forgejo's parts, it does
+# the same for forge, owned by the role forge, deletes Forgejo's push
+# mirrors there when their table exists, and replaces the content of
+# ORGSYNDB_FORGE_DATA with forge.tar. It copies pushes.log, when the set
+# has it, to the push log, owned by UID 1000 when run as root, removes
+# the builder's clone <ORGSYNDB_DATA>/collection, and prints the next
+# steps. A failed step exits 1 naming it.
 #
 # Settings come from the environment:
 #
 # POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
-#                         the database, dumped on the host db
-# ORGSYNDB_BACKUP_DIR     where dumps are written (default: /backups)
-# ORGSYNDB_BACKUP_HOURS   hours between dumps of run (default: 24)
-# ORGSYNDB_KEEP_BACKUPS   dumps kept (default: 14)
+#                         the lab database, on the host db
+# ORGSYNDB_BACKUP_DIR     where sets are written (default: /backups)
+# ORGSYNDB_BACKUP_HOURS   hours between sets of run (default: 24)
+# ORGSYNDB_KEEP_BACKUPS   sets kept (default: 14)
+# ORGSYNDB_FORGE_DATA     Forgejo's directory (default: /var/lib/gitea)
+# ORGSYNDB_FORGE_CONTROL  the directory of Forgejo's pause
+#                         (default: /var/lib/orgsyndb-forge-control)
+# ORGSYNDB_FORGE_PAUSE_TIMEOUT
+#                         seconds to wait for Forgejo to pause
+#                         (default: 300)
+# ORGSYNDB_PUSH_LOG       the push log
+#                         (default: /var/lib/orgsyndb-pushes/pushes.log)
+# ORGSYNDB_SETTINGS_FILE  the settings copied into a set
+#                         (default: /opt/orgsyndb/orgsyndb.env)
+# ORGSYNDB_DATA           the builder's data, for restore
+#                         (default: /var/lib/orgsyndb)
 
 set -u
 prog=orgsyndb-backup
-# Dumps hold the accounts' password hashes: only their owner reads them.
+# Sets hold password hashes, Forgejo's secrets and the settings: only
+# their owner reads them.
 umask 077
+
+# The name of a complete set, as a pattern.
+set_glob='orgsyndb-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T'
+set_glob=$set_glob'[0-9][0-9][0-9][0-9][0-9][0-9]Z'
 
 error() {
     printf '%s: error: %s\n' "$prog" "$*" >&2
 }
 
+say() {
+    printf '%s: %s\n' "$prog" "$*"
+}
+
 usage() {
-    printf 'usage: %s [run|once]\n' "$prog" >&2
+    printf 'usage: %s [run|once|restore SET]\n' "$prog" >&2
     exit 2
 }
 
@@ -45,73 +104,383 @@ whole() {
     fi
 }
 
-# prune DIR: remove all but the $keep newest lab-*.dump files of DIR.
-# Their names sort by time, oldest first.
-prune() {
-    count=0
-    for file in "$1"/lab-*.dump; do
-        [ -f "$file" ] && count=$((count + 1))
-    done
-    excess=$((count - keep))
-    for file in "$1"/lab-*.dump; do
-        [ "$excess" -gt 0 ] || break
-        [ -f "$file" ] || continue
-        rm -f -- "$file"
-        excess=$((excess - 1))
-    done
+# job FILE COMMAND...: run COMMAND, with its output in FILE and without
+# the lock's descriptor, as a background job and wait for it, so that a
+# signal interrupts the wait; $tool holds its process id meanwhile.
+# Return COMMAND's status.
+job() {
+    into=$1
+    shift
+    "$@" > "$into" 2>&1 9>&- &
+    tool=$!
+    wait "$tool"
+    status=$?
+    tool=
+    return "$status"
 }
 
-# dump: write one dump and prune; return 1, after logging why, when the
-# dump fails.
-dump() {
+# stop_job: stop the running job, if any, with SIGTERM and wait for it.
+stop_job() {
+    if [ -n "$tool" ]; then
+        kill -TERM "$tool" 2>/dev/null
+        wait "$tool"
+        tool=
+    fi
+}
+
+# step WHAT COMMAND...: run COMMAND as a job with its output captured;
+# when it fails, log WHAT and that output, and return 1.
+step() {
+    what=$1
+    shift
+    if ! job "$captured" "$@"; then
+        output=$(cat -- "$captured")
+        error "$what${output:+: $output}"
+        return 1
+    fi
+}
+
+# databases: return 1, after logging why, unless the lab database and
+# its user are named.
+databases() {
     if [ -z "${POSTGRES_DB-}" ] || [ -z "${POSTGRES_USER-}" ]; then
         error "POSTGRES_DB and POSTGRES_USER must be set"
         return 1
     fi
-    stamp=$(date -u +%Y%m%dT%H%M%SZ)
-    target="$dir/lab-$stamp.dump"
-    partial="$dir/.lab-$stamp.dump.partial"
-    if ! output=$(PGPASSWORD=${POSTGRES_PASSWORD-} pg_dump --no-password \
-            -h db -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc \
-            -f "$partial" 2>&1); then
-        rm -f -- "$partial"
-        error "pg_dump of $POSTGRES_DB failed${output:+: $output}"
-        return 1
-    fi
-    if ! mv -f -- "$partial" "$target"; then
-        rm -f -- "$partial"
-        error "cannot write $target"
-        return 1
-    fi
-    prune "$dir"
-    printf '%s: wrote %s\n' "$prog" "$target"
 }
 
-[ $# -le 1 ] || usage
+# dump DATABASE FILE: write DATABASE to FILE in pg_dump's custom format.
+dump() {
+    step "pg_dump of $1 failed" pg_dump --no-password -h db \
+        -U "$POSTGRES_USER" -d "$1" -Fc -f "$2"
+}
+
+# acknowledged: whether paused holds the request id of this run.
+acknowledged() {
+    held=
+    if [ -f "$control/paused" ]; then
+        { read -r held < "$control/paused"; } 2>/dev/null
+    fi
+    [ -n "$held" ] && [ "$held" = "$request" ]
+}
+
+# pause: ask Forgejo to pause and wait until it has; return 1, after
+# logging why, when the request cannot be written or is not answered
+# within the timeout.
+pause() {
+    request=$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')
+    if [ -z "$request" ]; then
+        error "cannot make an id for Forgejo's pause"
+        return 1
+    fi
+    # forge-start runs as UID 1000: it reads the request and writes
+    # paused in the directory, which a container engine may have handed
+    # to this container's user when it mounted the empty volume.
+    if [ "$(id -u)" = 0 ]; then
+        step "cannot hand $control to UID 1000" \
+            chown 1000:1000 "$control" || return 1
+    fi
+    scratch="$control/.pause-$request"
+    asked=yes
+    if ! { printf '%s\n' "$request" > "$scratch" &&
+           chmod 644 "$scratch" &&
+           mv -f -- "$scratch" "$control/pause"; } 2>/dev/null; then
+        rm -f -- "$scratch"
+        error "cannot ask Forgejo to pause: cannot write $control/pause"
+        return 1
+    fi
+    ticks=$((timeout * 5))
+    while ! acknowledged; do
+        if [ "$ticks" -le 0 ]; then
+            error "Forgejo did not pause within $timeout seconds" \
+                "(ORGSYNDB_FORGE_PAUSE_TIMEOUT); is forge running?"
+            return 1
+        fi
+        job /dev/null sleep 0.2
+        ticks=$((ticks - 1))
+    done
+}
+
+# prune: remove all but the $keep newest sets and every partial set.
+# Set names sort by time, oldest first.
+prune() {
+    count=0
+    for entry in "$dir"/$set_glob; do
+        [ -d "$entry" ] && count=$((count + 1))
+    done
+    excess=$((count - keep))
+    for entry in "$dir"/$set_glob; do
+        [ "$excess" -gt 0 ] || break
+        [ -d "$entry" ] || continue
+        rm -rf -- "$entry"
+        excess=$((excess - 1))
+    done
+    for entry in "$dir"/.orgsyndb-*.partial; do
+        if [ -e "$entry" ] || [ -L "$entry" ]; then
+            rm -rf -- "$entry"
+        fi
+    done
+}
+
+# finish: on leaving a run, withdraw the pause it asked for and remove
+# the set it did not complete.
+finish() {
+    [ "$asked" = yes ] && rm -f -- "$control/pause"
+    [ -n "$partial" ] && rm -rf -- "$partial"
+}
+
+# stopped: on SIGTERM, stop the step under way and exit 1, which runs
+# finish.
+stopped() {
+    stop_job
+    error "stopped by a signal; the set is discarded"
+    exit 1
+}
+
+# backup: write one set and prune, holding the lock; exit 1, after
+# logging why, when a part fails or SIGTERM arrives. Runs as a
+# background job, whose exit releases the lock and runs its cleanup.
+backup() {
+    asked=
+    partial=
+    tool=
+    trap finish EXIT
+    trap stopped HUP INT TERM
+    databases || exit 1
+    if [ ! -d "$dir" ]; then
+        error "$dir is not a directory"
+        exit 1
+    fi
+    if ! exec 9>> "$dir/.lock"; then
+        error "cannot open $dir/.lock"
+        exit 1
+    fi
+    flock 9 &
+    tool=$!
+    if ! wait "$tool"; then
+        error "cannot lock $dir/.lock"
+        exit 1
+    fi
+    tool=
+
+    stamp=$(date -u +%Y%m%dT%H%M%SZ)
+    while [ -e "$dir/orgsyndb-$stamp" ]; do
+        job /dev/null sleep 0.2
+        stamp=$(date -u +%Y%m%dT%H%M%SZ)
+    done
+    target="$dir/orgsyndb-$stamp"
+    partial="$dir/.orgsyndb-$stamp.partial"
+    rm -rf -- "$partial"
+    step "cannot make $partial" mkdir -- "$partial" || exit 1
+
+    if [ -d "$forge" ]; then
+        pause || exit 1
+        dump "$POSTGRES_DB" "$partial/lab.dump" || exit 1
+        if [ -f "$push_log" ]; then
+            step "cannot copy the push log $push_log" \
+                cp -- "$push_log" "$partial/pushes.log" || exit 1
+        fi
+        dump forge "$partial/forge.dump" || exit 1
+        step "cannot archive $forge" tar -c --numeric-owner \
+            -f "$partial/forge.tar" -C "$forge" . || exit 1
+        if ! acknowledged; then
+            error "Forgejo resumed during the backup; the set is discarded"
+            exit 1
+        fi
+        rm -f -- "$control/pause"
+        asked=
+    else
+        dump "$POSTGRES_DB" "$partial/lab.dump" || exit 1
+        say "Forgejo was not backed up: $forge is not a directory"
+    fi
+    if [ -f "$settings" ]; then
+        step "cannot copy the settings $settings" \
+            cp -- "$settings" "$partial/orgsyndb.env" || exit 1
+    fi
+    step "cannot write $target" chmod 600 "$partial"/* || exit 1
+    step "cannot write $target" mv -- "$partial" "$target" || exit 1
+    partial=
+    prune
+    say "wrote $target"
+    exit 0
+}
+
+# recreate DATABASE OWNER DUMP: drop DATABASE with its connections,
+# create it again owned by OWNER and restore DUMP into it.
+recreate() {
+    step "cannot drop the database $1" dropdb --no-password -h db \
+        -U "$POSTGRES_USER" --if-exists --force "$1" || return 1
+    step "cannot create the database $1" createdb --no-password -h db \
+        -U "$POSTGRES_USER" -T template0 -O "$2" "$1" || return 1
+    step "cannot restore $3 into the database $1" pg_restore \
+        --no-password -h db -U "$POSTGRES_USER" -d "$1" --exit-on-error \
+        "$3"
+}
+
+# empty DIR: remove everything in DIR, following no link, and keep DIR.
+empty() {
+    for entry in "$1"/* "$1"/.[!.]* "$1"/..?*; do
+        if [ -e "$entry" ] || [ -L "$entry" ]; then
+            rm -rf -- "$entry" || return 1
+        fi
+    done
+}
+
+# restore NAME: restore the set NAME; exit 1, after logging why, when
+# the set is incomplete or a step fails.
+restore() {
+    source="$dir/$1"
+    if [ ! -d "$source" ]; then
+        error "no set $source"
+        exit 1
+    fi
+    if [ ! -f "$source/lab.dump" ]; then
+        error "the set $source lacks lab.dump"
+        exit 1
+    fi
+    if [ -f "$source/forge.dump" ] && [ -f "$source/forge.tar" ]; then
+        with_forge=yes
+    elif [ -f "$source/forge.dump" ] || [ -f "$source/forge.tar" ]; then
+        error "the set $source is incomplete: it holds only one of" \
+            "forge.dump and forge.tar"
+        exit 1
+    else
+        with_forge=
+    fi
+    if [ -n "$with_forge" ] && [ ! -d "$forge" ]; then
+        error "$forge, Forgejo's directory, is not a directory"
+        exit 1
+    fi
+    databases || exit 1
+
+    recreate "$POSTGRES_DB" "$POSTGRES_USER" "$source/lab.dump" || exit 1
+    say "restored the database $POSTGRES_DB"
+    if [ -n "$with_forge" ]; then
+        recreate forge forge "$source/forge.dump" || exit 1
+        # A Forgejo never started has no tables.
+        step "cannot delete Forgejo's push mirrors" psql -X --no-password \
+            -v ON_ERROR_STOP=1 -h db -U "$POSTGRES_USER" -d forge \
+            -c "DO \$\$ BEGIN
+    IF to_regclass('public.push_mirror') IS NOT NULL THEN
+        DELETE FROM push_mirror;
+    END IF;
+END \$\$" || exit 1
+        say "restored the database forge, without its push mirrors"
+        step "cannot empty $forge" empty "$forge" || exit 1
+        step "cannot extract forge.tar into $forge" tar -x -p \
+            --numeric-owner -f "$source/forge.tar" -C "$forge" || exit 1
+        say "restored Forgejo's directory $forge"
+    else
+        say "the set holds no Forgejo parts: Forgejo's database and" \
+            "directory were not restored"
+    fi
+    if [ -f "$source/pushes.log" ]; then
+        step "cannot restore the push log $push_log" \
+            cp -- "$source/pushes.log" "$push_log" || exit 1
+        if [ "$(id -u)" = 0 ]; then
+            step "cannot hand the push log to UID 1000" \
+                chown 1000:1000 "$push_log" || exit 1
+        fi
+        say "restored the push log $push_log"
+    fi
+    step "cannot remove the builder's clone $data/collection" \
+        rm -rf -- "$data/collection" || exit 1
+    say "removed the builder's clone $data/collection"
+    cat <<EOF
+$prog: restored $1. Next, from deploy/:
+  1. Start every service but web and builder:
+       docker compose up -d db forge-db forge app backup
+  2. Clear the builder's failed builds while builder is stopped:
+       docker compose run --rm builder orgsyndb-deploy retry
+  3. Start builder, which the gate asks about every push; web stays
+     stopped:
+       docker compose up -d builder
+  4. Reconcile the IDs issued after the set with adopt_ids, as the
+     README describes, and, when a mirror was configured, push the
+     commits it holds beyond the set to lab/collection over SSH; the
+     gate names any ID still to adopt.
+  5. Start web:
+       docker compose up -d web
+  6. Add the mirror again:
+       docker compose exec forge sh /opt/orgsyndb/forge/forge-setup
+EOF
+}
+
 command=${1:-run}
 case $command in
-    run | once) ;;
+    run | once) [ $# -le 1 ] || usage ;;
+    restore) [ $# -eq 2 ] || usage ;;
     *) usage ;;
 esac
 
 dir=${ORGSYNDB_BACKUP_DIR:-/backups}
-keep=${ORGSYNDB_KEEP_BACKUPS:-14}
-whole ORGSYNDB_KEEP_BACKUPS "$keep"
+forge=${ORGSYNDB_FORGE_DATA:-/var/lib/gitea}
+control=${ORGSYNDB_FORGE_CONTROL:-/var/lib/orgsyndb-forge-control}
+push_log=${ORGSYNDB_PUSH_LOG:-/var/lib/orgsyndb-pushes/pushes.log}
+settings=${ORGSYNDB_SETTINGS_FILE:-/opt/orgsyndb/orgsyndb.env}
+data=${ORGSYNDB_DATA:-/var/lib/orgsyndb}
+PGPASSWORD=${POSTGRES_PASSWORD-}
+export PGPASSWORD
+tool=
 
-if [ "$command" = once ]; then
-    dump
+if [ "$command" != restore ]; then
+    keep=${ORGSYNDB_KEEP_BACKUPS:-14}
+    whole ORGSYNDB_KEEP_BACKUPS "$keep"
+    timeout=${ORGSYNDB_FORGE_PAUSE_TIMEOUT:-300}
+    whole ORGSYNDB_FORGE_PAUSE_TIMEOUT "$timeout"
+fi
+if [ "$command" = run ]; then
+    hours=${ORGSYNDB_BACKUP_HOURS:-24}
+    whole ORGSYNDB_BACKUP_HOURS "$hours"
+fi
+
+# The output of the step under way.
+if ! captured=$(mktemp); then
+    error "cannot make a temporary file"
+    exit 1
+fi
+trap 'rm -f -- "$captured"' EXIT
+
+if [ "$command" = restore ]; then
+    restore "$2"
     exit
 fi
 
-hours=${ORGSYNDB_BACKUP_HOURS:-24}
-whole ORGSYNDB_BACKUP_HOURS "$hours"
+# A run is a background job, its worker, so that this shell takes a
+# signal at once, also as PID 1 of a container, and passes it on as
+# SIGTERM; the worker then stops its step and cleans up.
+worker=
 sleeper=
-trap '[ -n "$sleeper" ] && kill "$sleeper" 2>/dev/null; exit 0' TERM INT
-printf '%s: dumping %s every %s hours into %s\n' "$prog" \
-    "${POSTGRES_DB-}" "$hours" "$dir"
+
+# stop STATUS: stop the worker, wait for its cleanup and exit STATUS.
+stop() {
+    if [ -n "$sleeper" ]; then
+        kill "$sleeper" 2>/dev/null
+    fi
+    if [ -n "$worker" ]; then
+        kill -TERM "$worker" 2>/dev/null
+        wait "$worker"
+    fi
+    exit "$1"
+}
+
+if [ "$command" = once ]; then
+    trap 'stop 1' HUP INT TERM
+    backup &
+    worker=$!
+    wait "$worker"
+    exit
+fi
+
+trap 'stop 0' HUP INT TERM
+printf '%s: backing up every %s hours into %s\n' "$prog" "$hours" "$dir"
 while :; do
-    dump || true
+    backup &
+    worker=$!
+    wait "$worker"
+    worker=
     sleep $((hours * 3600)) &
     sleeper=$!
     wait "$sleeper"
+    sleeper=
 done

@@ -7,14 +7,20 @@
 # 200. Otherwise it writes "Gate: <reason>" and the answer's lines to
 # standard error, which Forgejo shows the pusher, and exits 1, so that
 # Forgejo refuses the push. Updates of other refs pass unchecked.
+# While a backup has asked Forgejo to pause, every update of any ref is
+# refused, without asking the check.
 #   ORGSYNDB_GATE_TOKEN    the token the check expects; without it every
 #                          update of main is refused
 #   ORGSYNDB_GATE_URL      the check (default: http://builder:8091/check)
 #   ORGSYNDB_GATE_TIMEOUT  seconds to wait for the answer (default: 150)
+#   ORGSYNDB_FORGE_CONTROL the directory where a backup's file pause
+#                          appears (default:
+#                          /var/lib/orgsyndb-forge-control)
 set -u
 
 url=${ORGSYNDB_GATE_URL:-http://builder:8091/check}
 timeout=${ORGSYNDB_GATE_TIMEOUT:-150}
+control=${ORGSYNDB_FORGE_CONTROL:-/var/lib/orgsyndb-forge-control}
 
 work=$(mktemp -d) || exit 1
 trap 'rm -rf "$work"' EXIT
@@ -61,6 +67,13 @@ check() {
 	*) refuse "the check answered $status:" "$work/answer" ;;
 	esac
 }
+
+# forge-start stops Forgejo for a backup once no push is in flight;
+# a push started now would keep it waiting.
+if [ -e "$control/pause" ]; then
+	cat >/dev/null
+	refuse "a backup is running; push again in a few minutes"
+fi
 
 # Each line is "<old> <new> <ref>"; a <new> of zeros deletes the ref.
 while read -r _old new ref; do

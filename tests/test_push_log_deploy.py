@@ -61,8 +61,9 @@ class ComposeTextTests(unittest.TestCase):
 
     def test_nothing_else_mounts_the_volume(self) -> None:
         """Requirement: Web server and Compose file (the services that
-        write or read the push log)."""
-        for name in ("web", "db", "app", "backup"):
+        write or read the push log; `backup` and `restore` are in
+        test_backup_compose)."""
+        for name in ("web", "db", "app"):
             with self.subTest(service=name):
                 self.assertNotIn("pushes", service_block(name))
 

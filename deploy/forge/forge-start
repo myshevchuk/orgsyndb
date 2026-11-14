@@ -1,13 +1,34 @@
 #!/bin/sh
-# The entrypoint of the forge service: exports the Forgejo settings
+# The entrypoint of the forge service. It exports the Forgejo settings
 # derived from orgsyndb.env, which Compose cannot substitute from a
-# service's env_file, then runs its arguments, the image's own
-# entrypoint, in its place.
+# service's env_file, runs its arguments, the image's own entrypoint, as
+# a child, and pauses that child for a backup.
 #   FORGEJO__server__ROOT_URL   <ORGSYNDB_URL>/git/
 #   FORGEJO__database__PASSWD   FORGE_DB_PASSWORD
 #   FORGEJO__server__DOMAIN and FORGEJO__server__SSH_DOMAIN, unless set:
 #                               the host name of ORGSYNDB_URL
-set -eu
+#
+# The pause goes through the directory ORGSYNDB_FORGE_CONTROL (default
+# /var/lib/orgsyndb-forge-control); without it, no pause is possible.
+# At start the script removes the file paused there. Every 2 seconds it
+# reads the file pause. While pause holds a request id, the child is
+# not running: the script first waits, checking every second, until no
+# process of the container has a command line holding receive-pack, a
+# push in flight; it then stops the child with SIGTERM and waits for
+# it, then waits until no other process of the container but its init
+# process (PID 1) and the script itself remains, and only then writes
+# the id to paused. It signals none of the processes it waits for.
+# When pause is gone, it removes paused and starts the child again. A
+# pause that lasts ORGSYNDB_FORGE_PAUSE_LIMIT seconds (default 3600)
+# ends: the script logs that, removes paused and the pause holding that
+# id, and starts the child.
+#
+# When the child exits while no pause holds, the script exits with its
+# status. On SIGTERM or SIGINT it stops the child, waits for it and
+# exits 0. A missing setting, or a malformed ORGSYNDB_FORGE_PAUSE_LIMIT,
+# exits 1.
+set -u
+prog=forge-start
 
 : "${ORGSYNDB_URL:?ORGSYNDB_URL is not set in orgsyndb.env}"
 : "${FORGE_DB_PASSWORD:?FORGE_DB_PASSWORD is not set in orgsyndb.env}"
@@ -22,4 +43,137 @@ FORGEJO__server__SSH_DOMAIN=${FORGEJO__server__SSH_DOMAIN:-$host}
 export FORGEJO__server__ROOT_URL FORGEJO__database__PASSWD \
 	FORGEJO__server__DOMAIN FORGEJO__server__SSH_DOMAIN
 
-exec "$@"
+control=${ORGSYNDB_FORGE_CONTROL:-/var/lib/orgsyndb-forge-control}
+limit=${ORGSYNDB_FORGE_PAUSE_LIMIT:-3600}
+case $limit in
+	'' | *[!0-9]* | 0 | 00*)
+		printf '%s: error: %s %s\n' "$prog" \
+			'ORGSYNDB_FORGE_PAUSE_LIMIT must be a whole number' \
+			"of at least 1: $limit" >&2
+		exit 1 ;;
+esac
+
+log() {
+	printf '%s: %s\n' "$prog" "$*"
+}
+
+child=
+sleeper=
+
+# stop_child: stop the child, when it runs, with SIGTERM and wait until
+# it has ended.
+stop_child() {
+	if [ -n "$child" ]; then
+		kill -TERM "$child" 2>/dev/null
+		wait "$child"
+		child=
+	fi
+}
+
+# on_signal: stop the child and exit 0.
+on_signal() {
+	if [ -n "$sleeper" ]; then
+		kill "$sleeper" 2>/dev/null
+	fi
+	stop_child
+	exit 0
+}
+trap on_signal TERM INT
+
+# requested: set request to the id pause holds, empty without one.
+requested() {
+	request=
+	if [ -f "$control/pause" ]; then
+		{ read -r request < "$control/pause"; } 2>/dev/null
+	fi
+}
+
+# quiet: whether no process but PID 1 and this script remains. It forks
+# nothing, so that none of its own processes is counted.
+quiet() {
+	for entry in /proc/[0-9]*; do
+		case ${entry#/proc/} in
+			1 | "$$") ;;
+			*) return 1 ;;
+		esac
+	done
+}
+
+# in_flight: whether a process of the container has a command line
+# holding receive-pack, that is, Git receives a push.
+in_flight() {
+	for entry in /proc/[0-9]*/cmdline; do
+		case $(tr '\0' ' ' 2>/dev/null < "$entry") in
+			*receive-pack*) return 0 ;;
+		esac
+	done
+	return 1
+}
+
+# acknowledge: write the id in request to paused.
+acknowledge() {
+	if printf '%s\n' "$request" > "$control/.paused" &&
+		mv -f -- "$control/.paused" "$control/paused"; then
+		acked=$request
+		log "Forgejo is paused for the backup $request"
+	fi
+}
+
+# end_pause: end the pause timed, which lasted its limit.
+end_pause() {
+	log "the pause $timed ended: it lasted ORGSYNDB_FORGE_PAUSE_LIMIT" \
+		"($limit seconds)"
+	rm -f -- "$control/paused"
+	requested
+	if [ "$request" = "$timed" ]; then
+		rm -f -- "$control/pause"
+	fi
+	ended=$timed
+	acked=
+	timed=
+}
+
+rm -f -- "$control/paused"
+acked=   # the id paused holds
+timed=   # the id of the pause under way
+since=   # when that pause began, in seconds since the epoch
+ended=   # the id of a pause that ended at its limit
+while :; do
+	nap=2
+	requested
+	[ -n "$request" ] || ended=
+	if [ -n "$request" ] && [ "$request" != "$ended" ]; then
+		if [ "$request" != "$timed" ]; then
+			timed=$request
+			since=$(date +%s)
+		fi
+		if [ $(($(date +%s) - since)) -ge "$limit" ]; then
+			end_pause
+			continue
+		fi
+		if [ -n "$child" ] && in_flight; then
+			nap=1
+		else
+			stop_child
+			if [ "$acked" != "$request" ] && quiet; then
+				acknowledge
+			fi
+		fi
+	elif [ -z "$child" ]; then
+		if [ -n "$timed" ] || [ -n "$acked" ]; then
+			rm -f -- "$control/paused"
+			log "Forgejo resumes"
+		fi
+		acked=
+		timed=
+		"$@" &
+		child=$!
+	elif ! kill -0 "$child" 2>/dev/null; then
+		wait "$child"
+		exit
+	fi
+	sleep "$nap" &
+	sleeper=$!
+	wait "$sleeper"
+	sleeper=
+done

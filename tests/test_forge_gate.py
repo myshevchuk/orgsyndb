@@ -482,5 +482,67 @@ class SettingsTests(GateHookCase):
         self.assertEqual(len(self.new), 40)
 
 
+class DuringBackupTests(GateHookCase):
+    """Scenario: During a backup."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.control = self.tmp / "control"
+        self.control.mkdir()
+
+    def test_every_update_is_refused_while_pause_exists(self) -> None:
+        """Scenario: During a backup."""
+        (self.control / "pause").write_text("r1\n")
+        done = self.hook((self.old, self.new, MAIN),
+                         (ZERO, self.new, "refs/heads/draft"),
+                         ORGSYNDB_FORGE_CONTROL=str(self.control))
+        self.assertNotEqual(done.returncode, 0, done.stderr)
+        self.assertIn("Gate: a backup is running", done.stderr)
+        self.assertEqual(self.requests(), [])
+
+    def test_another_ref_alone_is_refused_too(self) -> None:
+        """Requirement: Gate (every update, of any ref)."""
+        (self.control / "pause").write_text("r1\n")
+        for ref in ("refs/heads/draft", "refs/tags/v1"):
+            with self.subTest(ref=ref):
+                done = self.hook((ZERO, self.new, ref),
+                                 ORGSYNDB_FORGE_CONTROL=str(self.control))
+                self.assertNotEqual(done.returncode, 0, done.stderr)
+                self.assertIn("push again in a few minutes", done.stderr)
+        self.assertEqual(self.requests(), [])
+
+    def test_the_refusal_holds_without_the_token(self) -> None:
+        """Requirement: Gate (refused without asking the check)."""
+        (self.control / "pause").write_text("r1\n")
+        done = self.hook((ZERO, self.new, "refs/heads/draft"),
+                         ORGSYNDB_FORGE_CONTROL=str(self.control),
+                         ORGSYNDB_GATE_TOKEN=None)
+        self.assertNotEqual(done.returncode, 0, done.stderr)
+        self.assertIn("Gate: a backup is running", done.stderr)
+
+    def test_without_pause_the_gate_checks_as_before(self) -> None:
+        """Requirement: Gate (only while `pause` exists)."""
+        (self.control / "paused").write_text("r1\n")
+        done = self.hook((self.old, self.new, MAIN),
+                         ORGSYNDB_FORGE_CONTROL=str(self.control))
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(len(self.requests()), 1)
+
+    def test_without_the_control_directory_the_gate_checks_as_before(
+            self) -> None:
+        """Requirement: Gate (only while `pause` exists)."""
+        done = self.hook((self.old, self.new, MAIN),
+                         ORGSYNDB_FORGE_CONTROL=str(self.tmp / "absent"))
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(len(self.requests()), 1)
+
+    def test_the_hook_names_the_default_control_directory(self) -> None:
+        """Requirement: Gate (`/var/lib/orgsyndb-forge-control` by
+        default)."""
+        text = GATE.read_text(encoding="utf-8")
+        self.assertIn("ORGSYNDB_FORGE_CONTROL", text)
+        self.assertIn("/var/lib/orgsyndb-forge-control", text)
+
+
 if __name__ == "__main__":
     unittest.main()

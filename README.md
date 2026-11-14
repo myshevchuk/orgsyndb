@@ -1223,7 +1223,7 @@ input files and collection directories must be available inside `app`.
 |---|---|
 | `registry_import COLLECTION` | Fills an empty lab registry from a collection in the old layout, containing `compounds/` and four vocabularies under `vocabularies/`. See [Substance registry](#substance-registry) for required fields and fields left out. |
 | `registry_load FILE` | Fills an empty lab registry from a JSON snapshot, including article numbers. Ignores accounts and notebooks and creates neither. Invalid input leaves the registry unchanged. |
-| `adopt_ids ID...` | Records each named `OSDB-NNNN` or `SEQ-NNNN` as issued, with no account, for recovery after a restore. Prints `adopted <ID>` for a new record or `<ID> was issued` for an existing one. An invalid argument exits 1 and adopts nothing. See [Back up and restore lab records](#back-up-and-restore-lab-records). |
+| `adopt_ids ID...` | Records each named `OSDB-NNNN` or `SEQ-NNNN` as issued, with no account, for recovery after a restore. Prints `adopted <ID>` for a new record or `<ID> was issued` for an existing one. An invalid argument exits 1 and adopts nothing. See [Back up and restore](#back-up-and-restore). |
 | `demo_data [--replace \| --if-empty]` | Loads the demo registry and invented lab records. Requires `ORGSYNDB_DEMO=true`; see [Demo deployment](#demo-deployment) for the replacement and startup rules. |
 | `schema_diagram [--check] [--output PATH]` | Writes the database diagram, or checks it without writing with `--check`. See [Lab application tests and local server](#lab-application-tests-and-local-server). |
 
@@ -1453,8 +1453,9 @@ collection it lets the commit through.
 ## Container deployment
 
 `deploy/` runs OrgSynDB on a server with Docker Compose or Podman Compose.
-Seven services build and serve the site, keep the lab's records and run
-Forgejo, a Git repository service at `/git/`:
+Seven services run by default to build and serve the site, keep the lab's
+records and run Forgejo, a Git repository service at `/git/`. An additional
+service restores backups:
 
 - `builder` clones the collection from its Git repository, builds the site
   inside the container, and starts a cycle within seconds of a push to
@@ -1482,22 +1483,35 @@ Forgejo, a Git repository service at `/git/`:
   `deploy/compose.yaml`. It stores accepted collection imports in the
   database and wakes the builder after a registry change commits when
   `ORGSYNDB_WAKE_URL` is set.
-- `backup` dumps the database daily into `deploy/backups/` on the host.
+- `backup` writes a backup set at startup and every 24 hours into
+  `deploy/backups/` on the host. It pauses Forgejo to copy both databases,
+  Forgejo's volume and the push log, and also saves `orgsyndb.env`.
+- `restore` uses the same `postgres:18` image and script as `backup` to
+  put a set back. It belongs to the Compose profile `restore`, so
+  `docker compose up` leaves it out. Start it with `docker compose run`
+  as shown in [Back up and restore](#back-up-and-restore).
 - `forge-db` runs once from `postgres:18` after `db` is healthy. It
   creates the PostgreSQL role and database `forge` when missing, including
   in an existing `db` volume, and leaves existing roles and databases
-  unchanged. It also makes the `pushes` volume and its files owned by
-  UID 1000, the user of Forgejo's and the builder's images.
+  unchanged. It also makes the `pushes` and `forge-control` volumes and
+  their files owned by UID 1000, the user of Forgejo's and the builder's
+  images.
 - `forge` runs Forgejo 15.0.11 LTS from the rootless image
   `codeberg.org/forgejo/forgejo:15.0.11-rootless`. It starts after
   `forge-db` completes, keeps its data in the `forge` volume and publishes
-  SSH on port 2222. People sign in through the lab application.
+  SSH on port 2222. It has an init process, and its start script pauses
+  Forgejo when a backup asks. People sign in through the lab application.
   They cannot rename or delete their Forgejo accounts themselves.
 
 `builder` and `web` share one image. They and `app` share the `data`
-volume; `web` and `app` read it without writing to it.
+volume; `web` and `app` read it without writing to it, and `restore`
+mounts it read-write. `backup` mounts the `forge` volume read-only;
+`restore` mounts it read-write.
 The `pushes` volume holds `pushes.log` at `/var/lib/orgsyndb-pushes`.
-`forge` and `forge-db` mount it read-write; `builder` mounts it read-only.
+`forge`, `forge-db` and `restore` mount it read-write; `builder` and
+`backup` mount it read-only. `forge`, `backup` and `forge-db` share
+`forge-control` read-write to coordinate the pause. `backup` mounts
+`orgsyndb.env` read-only. `restore` mounts `deploy/backups/` read-only.
 
 The collection's home is `lab/collection` in Forgejo. The example sets
 `ORGSYNDB_COLLECTION_REPO` to `http://forge:3000/lab/collection.git`,
@@ -1655,8 +1669,10 @@ settings:
 | `ORGSYNDB_MIRROR_URL` | empty | HTTPS target for the collection's push mirror; must start with `https://` and name a repository used for nothing else; see [Mirror the collection to its old remote](#mirror-the-collection-to-its-old-remote) |
 | `ORGSYNDB_MIRROR_USER` | empty | User name on the target's host; required when `ORGSYNDB_MIRROR_URL` is set |
 | `ORGSYNDB_MIRROR_TOKEN` | empty | Access token with write access to the target; required when `ORGSYNDB_MIRROR_URL` is set |
-| `ORGSYNDB_BACKUP_HOURS` | `24` | Hours between database dumps |
-| `ORGSYNDB_KEEP_BACKUPS` | `14` | Newest database dumps kept |
+| `ORGSYNDB_BACKUP_HOURS` | `24` | Hours between backup sets |
+| `ORGSYNDB_KEEP_BACKUPS` | `14` | Newest backup sets kept |
+| `ORGSYNDB_FORGE_PAUSE_TIMEOUT` | `300` | Seconds a backup waits for Forgejo to pause before it fails |
+| `ORGSYNDB_FORGE_PAUSE_LIMIT` | `3600` | Seconds after which `forge` ends a pause a backup left behind |
 
 The shared `builder`/`web` image is built from the application's repository
 and branch given by the `APP_REPO` and `APP_REF` build arguments, by default
@@ -1809,6 +1825,11 @@ out the pushed commit exactly as a build would, validates it and creates
 its manifest against a fresh registry snapshot. It then asks the lab app
 whether an import would accept the collection, without recording an
 import. Other branches and tags pass without this check.
+
+During a backup, the gate refuses pushes to every branch and tag of
+`lab/collection` with `Gate: a backup is running; push again in a few minutes`.
+This refusal begins when the backup requests a pause and lasts until the
+pause ends. Push again after Forgejo resumes.
 
 If the check finds errors, Forgejo refuses the push and shows them as
 `remote:` lines. The first says `Gate: commit <sha> is refused:`, where
@@ -2442,7 +2463,7 @@ The following journal and project errors also refuse the import:
 After the first accepted import, the app also refuses an import containing
 an ID it has not issued: `<ID>: not issued by the lab application`.
 Use `orgsyndb new` for new procedures and sequences; after restoring an
-older database, follow [the restore steps](#back-up-and-restore-lab-records).
+older database, follow [the restore steps](#back-up-and-restore).
 The refused import records every error and changes no procedure, entry
 or sequence. Staff can inspect imports, procedures, sequences and issued IDs in
 `/lab/admin/`, including each procedure's author rows; these records are
@@ -3241,7 +3262,8 @@ of that kind has been issued. These responses issue no ID.
 Update the lab application deliberately so you can back up its records
 before applying database changes. The builder's automatic updates apply
 to the static site only. From `deploy/`, pull the new code, take a backup,
-and rebuild `app`:
+and rebuild `app`. The backup writes a whole set and pauses Forgejo
+briefly:
 
 ```sh
 git pull
@@ -3253,54 +3275,188 @@ Continue with the rebuild only if the backup succeeds. On startup,
 `app` applies pending migrations, the changes to the database's tables,
 before serving requests.
 
-### Back up and restore lab records
+### Back up and restore
 
-The `backup` service writes a database dump every 24 hours and keeps the
-14 newest dumps. Change `ORGSYNDB_BACKUP_HOURS` and
-`ORGSYNDB_KEEP_BACKUPS` to adjust this. Each file is named
-`lab-<UTC time>.dump`, with time written as `YYYYMMDDTHHMMSSZ`, under
-`deploy/backups/`. It uses `pg_dump`'s custom format, read by
-`pg_restore`. Files have mode 600 and belong to root, so copying them
-elsewhere requires root access.
+A backup set keeps the lab's records together with the collection,
+Forgejo's accounts and settings, and the log of who pushed each commit.
+Use a set to recover on the same server or a new one.
 
-To take a backup immediately, run this from `deploy/`:
+#### Take and keep backup sets
+
+The `backup` service writes a set at startup and every 24 hours. It keeps
+the 14 newest sets. Change `ORGSYNDB_BACKUP_HOURS` for the interval and
+`ORGSYNDB_KEEP_BACKUPS` for the number of sets to keep.
+
+Each set is a directory named `deploy/backups/orgsyndb-<UTC time>/`, with
+time written as `YYYYMMDDTHHMMSSZ`. It holds:
+
+| File | Contents |
+|---|---|
+| `lab.dump` | The lab database, in `pg_dump`'s custom format, read by `pg_restore`. |
+| `forge.dump` | Forgejo's database, in the same format. |
+| `forge.tar` | Forgejo's whole volume: repositories and their hooks, settings and secrets, attachments and queues of pending work. |
+| `pushes.log` | The push log, when it exists. |
+| `orgsyndb.env` | The deployment settings file, when it exists. |
+
+Directories belong to root with mode 700; files belong to root with
+mode 600. Copying a set elsewhere requires root access. Protect those
+copies too: a set holds password hashes, Forgejo's secrets and
+`orgsyndb.env`. The backup does not copy sets off the server for you.
+Earlier `lab-*.dump` files are left alone; remove them by hand.
+
+To take a set immediately, run this from `deploy/`:
 
 ```sh
 docker compose run --rm backup once
 ```
 
-To restore a dump, stop `app`, restore the database, and start `app`
-again. From `deploy/`, replace the file name below with the dump you
-want to restore. `sudo cat` reads the root-owned file; the database
-container supplies `POSTGRES_USER` and `POSTGRES_DB` from `orgsyndb.env`:
+Runs never overlap: a second run waits for the first. A set appears under
+its final name only when complete. A failed run removes its partial set.
 
-```sh
-docker compose stop app
-sudo cat 'backups/lab-<UTC time>.dump' | docker compose exec -T db sh -c \
-  'pg_restore --clean --if-exists -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
-docker compose start app
-```
+#### Allow for Forgejo's pause
 
-Immediately reconcile IDs issued since the dump. The restored database
-has forgotten them, but the collection still has their files. Until you
-adopt those IDs, the application may issue one again; the validator then
-refuses the duplicate when both files meet.
+The backup takes both database dumps, the push log and Forgejo's volume
+archive during one pause, so the databases and files belong together.
+Every commit named by an import in the lab dump is in the set, unless an
+administrator lifted the protection of `main` and force-pushed it back
+to an earlier commit after that import.
 
-The next builder import is refused with one
-`<ID>: not issued by the lab application` error per missing ID. Open
-`/lab/collection/` to find them. From `deploy/`, replace `ID...` with those
-IDs, separated by spaces, then allow the builder to try the build again:
+When a backup requests a pause, the gate refuses new pushes to
+`lab/collection` with `Gate: a backup is running; push again in a few minutes`.
+Forgejo waits for pushes already in flight to finish, then stops while
+the backup copies the data. Pushes and Forgejo's pages fail until it
+starts again. Allow for the copying time, usually seconds for a lab's
+data, plus Forgejo's stop and start.
 
-```sh
-docker compose exec app python manage.py adopt_ids ID...
-docker compose exec builder orgsyndb-deploy retry
-```
+If Forgejo does not pause within `ORGSYNDB_FORGE_PAUSE_TIMEOUT`, 300
+seconds by default, the run fails and writes no set, including no lab
+database backup. This happens, for example, when `forge` is stopped.
+`forge` reads `ORGSYNDB_FORGE_PAUSE_LIMIT`, 3600 seconds by default, to
+end a pause left behind by a crashed backup. If Forgejo resumes before
+copying finishes, the backup discards the set.
 
-`adopt_ids` prints `adopted <ID>` for each new record and
-`<ID> was issued` for an existing one. Each argument must have the form
-`OSDB-NNNN` or `SEQ-NNNN`; an invalid argument exits 1 and adopts nothing.
-Check `/lab/collection/` after the builder's next cycle for the accepted
-import.
+#### Restore a set
+
+A restore replaces the current databases, Forgejo's files and the push
+log with the set's contents. It also removes the builder's clone of the
+collection, so a failed fetch cannot make it build a commit pushed after
+the set. It deletes Forgejo's push-mirror settings to prevent Forgejo
+from overwriting a mirror's newer history before you recover it. A push
+mirror is Forgejo's copy of the collection in another repository.
+
+Run the following steps from `deploy/`. Keep `web` stopped until you have
+reconciled IDs: while it is stopped, nobody reaches the lab app to be
+issued an ID or Forgejo over HTTP.
+
+1. Prepare the set. On a new server, copy the whole set directory into
+   `deploy/backups/` and put its `orgsyndb.env` at `deploy/orgsyndb.env`
+   **before running the restore**. The restore reads `POSTGRES_USER`,
+   `POSTGRES_DB` and `POSTGRES_PASSWORD` from that file. Use application
+   and Forgejo images of the set's version or newer; older versions
+   cannot read a newer database schema.
+
+2. If the current state contains anything worth keeping, take a set of
+   it before replacing it:
+
+   ```sh
+   docker compose run --rm backup once
+   ```
+
+3. Stop every service except the database and its setup service, then
+   bring those two up:
+
+   ```sh
+   docker compose stop builder web app backup forge
+   docker compose up -d db forge-db
+   ```
+
+4. Restore the chosen set. Replace `orgsyndb-<UTC time>` with its
+   directory name under `backups/`:
+
+   ```sh
+   docker compose run --rm restore restore 'orgsyndb-<UTC time>'
+   ```
+
+   The first `restore` names the service; the second names the script's
+   subcommand. It drops and recreates the lab database and Forgejo's
+   database `forge`, then restores their dumps and replaces Forgejo's
+   volume with `forge.tar`. It puts the push log back and removes the
+   builder's collection clone. A set with neither Forgejo part leaves
+   Forgejo's database and files alone. A set with only one Forgejo part
+   is incomplete and is refused before anything changes, as is a set
+   missing `lab.dump`. If a restore step fails, the command exits with an
+   error naming that step. Continue only after the restore succeeds.
+
+5. Start the services needed for recovery. Leave `web` and `builder`
+   stopped:
+
+   ```sh
+   docker compose up -d db forge-db forge app backup
+   ```
+
+6. Clear the builder's failed builds while `builder` is still stopped:
+
+   ```sh
+   docker compose run --rm builder orgsyndb-deploy retry
+   ```
+
+   Otherwise the builder skips combinations it previously recorded as
+   failed. A running builder could save its old state and bring those
+   failures back.
+
+7. Start the builder on its own. The gate asks it about every push to
+   `main`, so recovering commits needs it; `web` stays stopped:
+
+   ```sh
+   docker compose up -d builder
+   ```
+
+   On the same server, the builder points the site at the restored latest
+   accepted import's release if it still has that release. It then
+   builds `main` of the restored collection. On a new server it rebuilds
+   `main` against the restored registry.
+
+8. Reconcile IDs issued after the set. The restored database has
+   forgotten them, but copies of the collection made after the set may
+   still hold their files. Until you adopt those IDs, the application
+   may issue one again; the validator then refuses the duplicate when
+   both files meet. Replace `ID...` with the IDs, separated by spaces:
+
+   ```sh
+   docker compose exec app python manage.py adopt_ids ID...
+   ```
+
+   `adopt_ids` prints `adopted <ID>` for each new record and
+   `<ID> was issued` for an existing one. Each argument must have the form
+   `OSDB-NNNN` or `SEQ-NNNN`; an invalid argument exits 1 and adopts nothing.
+
+   If a push mirror was configured, its target holds the commits pushed
+   after the set. Push its `main` to `lab/collection` over SSH, on port
+   2222, since `web` is stopped. The gate refuses a push that names an ID
+   not yet adopted, with one `<ID>: not issued by the lab application`
+   error per ID: adopt those IDs and push again. The push log names you
+   as the pusher of the recovered commits.
+
+9. Reopen the site:
+
+   ```sh
+   docker compose up -d web
+   ```
+
+   Check `/lab/collection/` after the builder's next cycle for the
+   accepted import. If an import is still refused with
+   `<ID>: not issued by the lab application`, adopt those IDs with the
+   command in step 8 and let the builder try again:
+
+   ```sh
+   docker compose exec builder orgsyndb-deploy retry
+   ```
+
+10. Add the push mirror again after recovering its newer commits:
+
+    ```sh
+    docker compose exec forge sh /opt/orgsyndb/forge/forge-setup
+    ```
 
 ### HTTPS
 

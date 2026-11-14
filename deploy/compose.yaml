@@ -1,14 +1,19 @@
 # OrgSynDB in containers: `builder` keeps the site built from the
 # collection's Git repository and the application's, `web` serves it and
 # forwards /lab/ to the lab application `app`, which keeps its records
-# in the PostgreSQL database `db`; `backup` dumps that database daily
-# into backups/ beside this file. `forge` runs Forgejo, served at /git/,
+# in the PostgreSQL database `db`. `forge` runs Forgejo, served at /git/,
 # which signs people in through the lab application, keeps its data in
 # the database forge on `db`, which `forge-db` creates, and holds the
 # collection's repository lab/collection; its gate has `builder` check
 # every push to main, and its push log, on the volume `pushes` that
 # `forge` writes and `builder` reads, records who pushed each commit and
 # wakes `builder`, which `app` wakes too after a registry change.
+# `backup` writes a backup set daily into backups/ beside this file: the
+# lab database, the push log, Forgejo's database and volume, taken while
+# `forge` pauses Forgejo on its request through the volume
+# `forge-control`, and orgsyndb.env. `restore`, in the profile restore,
+# brings a set back, with every service stopped but `db` and `forge-db`:
+#   docker compose run --rm restore restore orgsyndb-<UTC time>
 # Copy orgsyndb.env.example to orgsyndb.env beside this file, fill it in,
 # then run, from this directory:
 #   docker compose up -d --build
@@ -93,12 +98,40 @@ services:
     volumes:
       - ./backup:/opt/orgsyndb/backup:ro
       - ./backups:/backups
+      - ./orgsyndb.env:/opt/orgsyndb/orgsyndb.env:ro
+      - forge:/var/lib/gitea:ro
+      - pushes:/var/lib/orgsyndb-pushes:ro
+      - forge-control:/var/lib/orgsyndb-forge-control
     depends_on:
       db:
         condition: service_healthy
 
+  # Restores a backup set. The arguments of `run` replace the command,
+  # so they repeat the subcommand before the set's name:
+  #   docker compose run --rm restore restore orgsyndb-<UTC time>
+  # Only in the profile restore, so that `up` leaves it out.
+  restore:
+    image: postgres:18
+    profiles: ["restore"]
+    entrypoint: ["sh", "/opt/orgsyndb/backup/orgsyndb-backup"]
+    command: ["restore"]
+    env_file: orgsyndb.env
+    volumes:
+      - ./backup:/opt/orgsyndb/backup:ro
+      - ./backups:/backups:ro
+      - forge:/var/lib/gitea
+      - pushes:/var/lib/orgsyndb-pushes
+      - data:/var/lib/orgsyndb
+    # forge-db makes the role forge, which owns the restored database.
+    depends_on:
+      db:
+        condition: service_healthy
+      forge-db:
+        condition: service_completed_successfully
+
   # Creates the role and the database forge on db when they are
-  # missing, hands the volume pushes to UID 1000, then exits.
+  # missing, hands the volumes pushes and forge-control to UID 1000,
+  # then exits.
   forge-db:
     image: postgres:18
     entrypoint: ["sh", "/opt/orgsyndb/forge/forge-db"]
@@ -106,18 +139,21 @@ services:
     volumes:
       - ./forge:/opt/orgsyndb/forge:ro
       - pushes:/var/lib/orgsyndb-pushes
+      - forge-control:/var/lib/orgsyndb-forge-control
     depends_on:
       db:
         condition: service_healthy
 
   # Forgejo. forge-start adds the settings derived from orgsyndb.env
-  # (the root URL and the database password) and runs the image's own
-  # entrypoint, given as the command.
+  # (the root URL and the database password), runs the image's own
+  # entrypoint, given as the command, as its child, and stops it while
+  # a backup asks for a pause through forge-control.
   forge:
     image: codeberg.org/forgejo/forgejo:15.0.11-rootless
     entrypoint: ["sh", "/opt/orgsyndb/forge/forge-start"]
     command: ["/usr/bin/dumb-init", "--",
               "/usr/local/bin/docker-entrypoint.sh"]
+    init: true
     restart: unless-stopped
     env_file: orgsyndb.env
     environment:
@@ -149,6 +185,7 @@ services:
       - forge:/var/lib/gitea
       - ./forge:/opt/orgsyndb/forge:ro
       - pushes:/var/lib/orgsyndb-pushes
+      - forge-control:/var/lib/orgsyndb-forge-control
     depends_on:
       forge-db:
         condition: service_completed_successfully
@@ -159,3 +196,4 @@ volumes:
   db:
   forge:
   pushes:
+  forge-control:
