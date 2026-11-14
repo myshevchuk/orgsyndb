@@ -1614,7 +1614,7 @@ settings:
 | Setting | Default | Meaning |
 |---|---|---|
 | `ORGSYNDB_COLLECTION_REPO` | `http://forge:3000/lab/collection.git` in the example; required | Git URL or path of the collection's repository |
-| `ORGSYNDB_COLLECTION_REF` | `main` | Branch or tag to build |
+| `ORGSYNDB_COLLECTION_REF` | `main` | Branch or tag to build; must be `main` for Forgejo's `lab/collection`, so leave unset or set to `main` |
 | `ORGSYNDB_COLLECTION_PATH` | `.` | Directory of `orgsyndb.toml` inside that repository |
 | `ORGSYNDB_APP_UPDATE` | `true` | Follow the application's repository for static site builds |
 | `ORGSYNDB_APP_REPO` | the image's | Git URL or path of the application |
@@ -1786,7 +1786,13 @@ import adopts them.
 
 Then set `ORGSYNDB_COLLECTION_REPO` in `deploy/orgsyndb.env` to
 `http://forge:3000/lab/collection.git`; the example already uses it.
-From `deploy/`, recreate the builder to use that setting:
+For `lab/collection` in Forgejo, `ORGSYNDB_COLLECTION_REF` must be `main`,
+its default: leave it unset or set it to `main`. The gate checks only
+pushes to `main`; a builder following another branch would publish
+commits the gate never checked. If the repository does not have the
+configured ref, every fetch fails with `cannot fetch the collection`.
+The builder then keeps building the last commit it fetched, if any.
+From `deploy/`, recreate the builder to use these settings:
 
 ```sh
 docker compose up -d --force-recreate builder
