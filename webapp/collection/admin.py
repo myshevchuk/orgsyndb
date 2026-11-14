@@ -50,9 +50,10 @@ class ReadOnlyInline(admin.TabularInline):
 
 @admin.register(Import)
 class ImportAdmin(ReadOnly):
-    list_display = ("received_at", "short_commit", "trigger", "outcome",
-                    "release")
+    list_display = ("received_at", "short_commit", "trigger", "pushed_by",
+                    "outcome", "release")
     list_filter = ("outcome", "trigger")
+    list_select_related = ("pushed_by",)
 
     @admin.display(description="Commit")
     def short_commit(self, record: Import) -> str:

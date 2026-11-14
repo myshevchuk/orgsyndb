@@ -6,7 +6,7 @@ from typing import Any
 
 from django.apps import apps
 from django.contrib.auth import get_user_model
-from django.db.models import ProtectedError
+from django.db.models import PROTECT, ProtectedError
 from django.test import TestCase
 from django.utils import timezone
 
@@ -95,6 +95,45 @@ class ImportModelTests(ImportCase):
         build = uuid.uuid4()
         make_import(build=build)
         refuses(self, lambda: _unsaved_import(build=build))
+
+    def test_an_import_names_the_account_that_pushed_it(self) -> None:
+        """Requirement: Imported rows (`pushed_by`, the account that
+        pushed the commit)."""
+        from collection.models import Import
+        pusher = get_user_model().objects.get(username="jkoch")
+        made = make_import(pushed_by=pusher)
+        self.assertEqual(Import.objects.get(pk=made.pk).pushed_by, pusher)
+
+    def test_an_import_may_have_no_pusher(self) -> None:
+        """Requirement: Imported rows (`pushed_by`, or none)."""
+        from collection.models import Import
+        made = make_import()
+        self.assertIsNone(Import.objects.get(pk=made.pk).pushed_by)
+        accepts(self, lambda: _unsaved_import(pushed_by=None))
+        accepts(self, lambda: _unsaved_import(
+            outcome="refused", errors="x: error: y", pushed_by=None))
+
+    def test_the_pusher_is_a_nullable_protecting_account_key(self) -> None:
+        """Requirement: Imported rows (`pushed_by`, an account or none,
+        which a deletion of the account does not take with it)."""
+        from collection.models import Import
+        field = Import._meta.get_field("pushed_by")
+        self.assertTrue(field.null)
+        self.assertIs(field.remote_field.model, get_user_model())
+        self.assertIs(field.remote_field.on_delete, PROTECT)
+
+    def test_an_account_that_pushed_an_import_cannot_be_deleted(
+            self) -> None:
+        """Requirement: Imported rows (an account that a row names
+        cannot be deleted)."""
+        from collection.models import Import
+        pusher = make_user("pusher", "PU", "Pia", "Schulz")
+        made = make_import(pushed_by=pusher)
+        with self.assertRaises(ProtectedError):
+            pusher.delete()
+        self.assertTrue(get_user_model().objects.filter(
+            pk=pusher.pk).exists())
+        self.assertEqual(Import.objects.get(pk=made.pk).pushed_by, pusher)
 
 
 def _unsaved_import(**fields: Any) -> Any:
@@ -607,6 +646,39 @@ class AdminTests(ImportCase):
                 if done.status_code == 302:
                     self.assertTrue(done["Location"].startswith(
                         "/lab/admin/login/"))
+
+    def test_the_import_list_shows_who_pushed(self) -> None:
+        """Requirement: Imported rows (the admin's import list shows
+        `pushed_by`)."""
+        from django.contrib import admin
+
+        from collection.models import Import
+        self.assertIn("pushed_by",
+                      admin.site._registry[Import].list_display)
+        make_user("pusher", "PU", "Pia", "Schulz")
+        pushed = make_import(pushed_by=get_user_model().objects.get(
+            username="pusher"))
+        done = self.client.get(f"{ADMIN}import/")
+        self.assertEqual(done.status_code, 200)
+        text = done.content.decode()
+        self.assertIn(pushed.commit[:10], text)
+        self.assertIn("pusher", text)
+
+    def test_the_pusher_is_read_only_on_the_change_page(self) -> None:
+        """Requirement: Imported rows (the admin shows imports
+        read-only, `pushed_by` too)."""
+        pusher = get_user_model().objects.get(username="klehmann")
+        pushed = make_import(pushed_by=pusher)
+        done = self.client.get(f"{ADMIN}import/{pushed.pk}/change/")
+        self.assertEqual(done.status_code, 200)
+        self.assertNotIn("pushed_by", self.controls(done))
+        self.assertIn("klehmann", done.content.decode())
+        posted = self.client.post(
+            f"{ADMIN}import/{pushed.pk}/change/",
+            {"pushed_by": ""})
+        self.assertEqual(posted.status_code, 403)
+        pushed.refresh_from_db()
+        self.assertEqual(pushed.pushed_by, pusher)
 
     def test_read_only_in_the_admin(self) -> None:
         """Scenario: Read-only in the admin."""

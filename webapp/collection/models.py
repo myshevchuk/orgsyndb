@@ -73,7 +73,9 @@ class Import(models.Model):
     An accepted import has the ``release`` the builder staged and the
     site's ``language``, and no ``errors``; a refused one has neither,
     and its errors one per line. ``base`` is the accepted import the
-    build was made after, or None.
+    build was made after, or None; ``pushed_by`` is the account that
+    pushed the commit, or None when the builder named none or no
+    account has the name it named.
     """
 
     build = models.UUIDField(_("Build"), unique=True)
@@ -95,6 +97,9 @@ class Import(models.Model):
                                choices=Outcome.choices)
     trigger = models.CharField(_("Trigger"), max_length=10,
                                choices=Trigger.choices)
+    pushed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name=_("Pushed by"), null=True,
+        blank=True, on_delete=models.PROTECT, related_name="+")
     errors = models.TextField(_("Errors"), blank=True)
     received_at = models.DateTimeField(_("Received"), auto_now_add=True)
 

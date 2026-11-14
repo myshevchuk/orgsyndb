@@ -138,7 +138,8 @@ def imports(request: HttpRequest) -> HttpResponse:
     """List the imports, newest first, below a line on the latest
     accepted import and the procedures and sequences not withdrawn."""
     return render(request, "collection/imports.html", {
-        "imports": Import.objects.order_by("-received_at", "-pk"),
+        "imports": Import.objects.select_related("pushed_by").order_by(
+            "-received_at", "-pk"),
         "latest": latest_accepted(),
         "procedures": Procedure.objects.filter(withdrawn=False).count(),
         "sequences": Sequence.objects.filter(withdrawn=False).count(),

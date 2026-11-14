@@ -1457,13 +1457,19 @@ Seven services build and serve the site, keep the lab's records and run
 Forgejo, a Git repository service at `/git/`:
 
 - `builder` clones the collection from its Git repository, builds the site
-  inside the container, and checks for new commits every five minutes. It
-  also follows the application's own repository, so the server picks up
+  inside the container, and starts a cycle within seconds of a push to
+  `main` of `lab/collection` or a registry change in the lab app. If a
+  cycle is already running, the wake-up starts one more after it finishes.
+  Checks every `ORGSYNDB_INTERVAL` seconds (300 by default) remain as a
+  fallback when a wake-up is lost. It also follows the application's own
+  repository, so the server picks up
   new versions of the static site by itself. It reports each build to the
   lab application and publishes only a release the application accepts.
-  It also serves the **gate**, the check that must pass before Forgejo
-  accepts a push to `main` of `lab/collection`, on port 8091 inside the
-  Compose network. This port is not published, and Caddy has no route to it.
+  Its server answers `POST /wake` and serves the **gate**, the check that
+  must pass before Forgejo accepts a push to `main` of `lab/collection`,
+  on port 8091 inside the Compose network. The server runs when either
+  `ORGSYNDB_BUILDER_TOKEN` or `ORGSYNDB_GATE_TOKEN` is set. This port is
+  not published, and Caddy has no route to it.
 - `web` serves the last published site with Caddy on port 8080 and
   forwards `/lab/` to `app`, except the builder's manifest and check paths.
   Caddy answers 404 for every path beginning with
@@ -1474,11 +1480,14 @@ Forgejo, a Git repository service at `/git/`:
 - `db` runs PostgreSQL 18 and keeps the lab's records in the `db` volume.
 - `app` runs the lab application, built from the checkout that holds
   `deploy/compose.yaml`. It stores accepted collection imports in the
-  database.
+  database and wakes the builder after a registry change commits when
+  `ORGSYNDB_WAKE_URL` is set.
 - `backup` dumps the database daily into `deploy/backups/` on the host.
 - `forge-db` runs once from `postgres:18` after `db` is healthy. It
   creates the PostgreSQL role and database `forge` when missing, including
-  in an existing `db` volume, and leaves anything that exists unchanged.
+  in an existing `db` volume, and leaves existing roles and databases
+  unchanged. It also makes the `pushes` volume and its files owned by
+  UID 1000, the user of Forgejo's and the builder's images.
 - `forge` runs Forgejo 15.0.11 LTS from the rootless image
   `codeberg.org/forgejo/forgejo:15.0.11-rootless`. It starts after
   `forge-db` completes, keeps its data in the `forge` volume and publishes
@@ -1487,6 +1496,8 @@ Forgejo, a Git repository service at `/git/`:
 
 `builder` and `web` share one image. They and `app` share the `data`
 volume; `web` and `app` read it without writing to it.
+The `pushes` volume holds `pushes.log` at `/var/lib/orgsyndb-pushes`.
+`forge` and `forge-db` mount it read-write; `builder` mounts it read-only.
 
 The collection's home is `lab/collection` in Forgejo. The example sets
 `ORGSYNDB_COLLECTION_REPO` to `http://forge:3000/lab/collection.git`,
@@ -1498,7 +1509,8 @@ the gate.
 Building the image needs internet access, since it installs Fedora packages
 and fetches ox-hugo, tomelr and Pagefind into the image. Once built, the
 containers need access only to the two repositories; with application
-updates off, only to the collection's.
+updates off, only to the collection's. With a push mirror configured,
+`forge` also needs access to its target.
 
 ### Set up the services
 
@@ -1544,14 +1556,20 @@ The builder uses this token to authenticate each build report, called a
 **manifest**, and each request to the app's check path. The app accepts
 only that token. Both services read it from `orgsyndb.env`. Without it,
 the builder builds nothing and the app's manifest endpoint answers 404.
+The app also uses this token to authenticate its wake-ups to the builder.
 `ORGSYNDB_MANIFEST_URL` defaults to
 `http://app:8000/lab/collection/manifest/` on the Compose network.
 
 Generate another token with the same command and put it in
 `ORGSYNDB_GATE_TOKEN`. Use a different value from `ORGSYNDB_BUILDER_TOKEN`.
-Forgejo sends it to authenticate requests to the builder's gate check.
-Without it, the builder serves no check and Forgejo refuses every push
+Forgejo sends it to authenticate requests to the builder's gate check
+and wake-ups from the push-log hook. Without it, the check answers 503,
+saying that the gate is not configured, and Forgejo refuses every push
 to the collection's `main`.
+
+Set `ORGSYNDB_WAKE_URL=http://builder:8091/wake` as in the example so
+registry changes wake the builder. With this setting empty, the app
+sends no wake-up; the push-log hook uses that address by default.
 
 Generate a separate secret for each of `ORGSYNDB_FORGE_CLIENT_SECRET`,
 `ORGSYNDB_FORGE_PASSWORD` and `FORGE_DB_PASSWORD` with:
@@ -1601,25 +1619,27 @@ settings:
 | `ORGSYNDB_APP_UPDATE` | `true` | Follow the application's repository for static site builds |
 | `ORGSYNDB_APP_REPO` | the image's | Git URL or path of the application |
 | `ORGSYNDB_APP_REF` | the image's | Branch or tag of the application |
-| `ORGSYNDB_INTERVAL` | `300` | Seconds between checks for new commits, at least 10 |
+| `ORGSYNDB_INTERVAL` | `300` | Seconds to wait between checks when no wake-up arrives, at least 10; fallback for lost wake-ups |
 | `ORGSYNDB_PDF` | `false` | Also render one PDF per procedure, served under `/pdf/` |
 | `ORGSYNDB_KEEP_RELEASES` | `2` | Published sites kept besides the current one |
 | `ORGSYNDB_BUILD_TIMEOUT` | `3600` | Seconds the build and manifest commands may each take, at least 60 |
 | `ORGSYNDB_REGISTRY_URL` | `http://app:8000/lab/registry/snapshot.json` | Registry snapshot fetched for each cycle |
 | `ORGSYNDB_MANIFEST_URL` | `http://app:8000/lab/collection/manifest/` | App endpoint that receives each build's manifest |
 | `ORGSYNDB_CHECK_URL` | `http://app:8000/lab/collection/check/` | App endpoint the builder asks whether an import would accept the collection |
-| `ORGSYNDB_GATE_TOKEN` | required for pushes to `main` | Shared secret Forgejo sends to the builder's check; must differ from `ORGSYNDB_BUILDER_TOKEN` |
+| `ORGSYNDB_WAKE_URL` | empty in the app; `http://builder:8091/wake` in the example and by default in the hook | Builder wake-up address used by the lab app and Forgejo's push-log hook; empty in the app sends no wake-up |
+| `ORGSYNDB_PUSH_LOG` | `/var/lib/orgsyndb-pushes/pushes.log` | Push log written by the hook, checked by `forge-setup` and read by the builder to identify who pushed |
+| `ORGSYNDB_GATE_TOKEN` | required for pushes to `main` | Shared secret Forgejo sends to the builder's check and on the push-log hook's wake-ups; must differ from `ORGSYNDB_BUILDER_TOKEN` |
 | `ORGSYNDB_GATE_URL` | `http://builder:8091/check` | Builder check address used by Forgejo's hook |
 | `ORGSYNDB_GATE_TIMEOUT` | `150` | Seconds the hook waits, at least 11; the check itself stops 10 seconds sooner |
-| `ORGSYNDB_GATE_PORT` | `8091` | Builder check server's port inside the Compose network |
-| `ORGSYNDB_GATE_BIND` | `0.0.0.0` | Address the builder check server listens on |
+| `ORGSYNDB_GATE_PORT` | `8091` | Builder server's port for checks and wake-ups inside the Compose network |
+| `ORGSYNDB_GATE_BIND` | `0.0.0.0` | Address the builder server listens on |
 | `ORGSYNDB_ADDRESS` | `:8080` | Caddy's site address |
 | `POSTGRES_USER` | `lab` in the example | Database user; must match the database URL |
 | `POSTGRES_PASSWORD` | choose your own | Database password; must match the database URL |
 | `POSTGRES_DB` | `lab` in the example | Database name; must match the database URL |
 | `ORGSYNDB_DATABASE_URL` | set for deployment | `postgres://<user>:<password>@db:5432/<database>` |
 | `ORGSYNDB_SECRET_KEY` | required | Generated secret key for sign-ins |
-| `ORGSYNDB_BUILDER_TOKEN` | required for builds | Shared service token the builder sends and the app checks on each manifest and collection check |
+| `ORGSYNDB_BUILDER_TOKEN` | required for builds | Shared service token the builder sends and the app checks on each manifest and collection check; also authenticates the app's wake-ups to the builder |
 | `ORGSYNDB_ALLOWED_HOSTS` | required | Comma-separated host names used to reach the site; must include `app` |
 | `ORGSYNDB_DEBUG` | `false` | Show error details; keep off on a reachable site |
 | `ORGSYNDB_DEMO` | `false` | Permit writing invented demo records; at container start, fill an empty database. Test deployments only; never set on a stack that keeps real records |
@@ -1632,6 +1652,9 @@ settings:
 | `FORGE_DB_PASSWORD` | choose your own | Password of PostgreSQL role `forge` |
 | `ORGSYNDB_FORGE_URL` | `http://forge:3000/api/v1` in the example | Forgejo API address for the app; empty turns account synchronization off |
 | `ORGSYNDB_FORGE_UPSTREAM` | `forge:3000` | Address to which Caddy forwards `/git/` |
+| `ORGSYNDB_MIRROR_URL` | empty | HTTPS target for the collection's push mirror; must start with `https://` and name a repository used for nothing else; see [Mirror the collection to its old remote](#mirror-the-collection-to-its-old-remote) |
+| `ORGSYNDB_MIRROR_USER` | empty | User name on the target's host; required when `ORGSYNDB_MIRROR_URL` is set |
+| `ORGSYNDB_MIRROR_TOKEN` | empty | Access token with write access to the target; required when `ORGSYNDB_MIRROR_URL` is set |
 | `ORGSYNDB_BACKUP_HOURS` | `24` | Hours between database dumps |
 | `ORGSYNDB_KEEP_BACKUPS` | `14` | Newest database dumps kept |
 
@@ -1647,7 +1670,7 @@ values.
 
 Once `app` and `forge` are up, run this from `deploy/` to connect
 Forgejo to the lab's accounts and prepare the collection's repository.
-Run it again after upgrading to the version with the collection gate:
+Run it again after upgrading to install the gate and push-log hooks:
 
 ```sh
 docker compose exec forge sh /opt/orgsyndb/forge/forge-setup
@@ -1674,6 +1697,12 @@ information, and the sign-in source maps it to the team. Membership
 follows that information at each sign-in. The script links the gate into
 the repository's pre-receive hooks, the commands Forgejo runs before
 accepting a push.
+It also links `deploy/forge/push-log` into the post-receive hooks, the
+commands Forgejo runs after accepting a push. It creates the push log
+when missing and stops with an error naming `ORGSYNDB_PUSH_LOG` if it
+cannot append to it. The file must be writable by `forge` on `pushes`.
+With `ORGSYNDB_MIRROR_URL` set, it also configures the
+[push mirror](#mirror-the-collection-to-its-old-remote).
 
 Run the script again after a failure, or whenever the client secret or
 the app's address changes. It leaves an existing `orgsyndb` account's
@@ -1691,6 +1720,52 @@ host and port, so you must trust it like the lab app. The lab's session
 cookie and its CSRF cookie, which protects forms against forged requests,
 are scoped to `/lab/`. Cookie paths do not isolate the two applications
 in the browser.
+
+### Mirror the collection to its old remote
+
+To keep the collection's old remote receiving every change, configure a
+**push mirror**: Forgejo copies `lab/collection` to that repository on
+every push and every 8 hours. Stop pushing to the old remote directly.
+
+**Warning: the mirror makes the target an exact copy of `lab/collection`.
+It overwrites the target's branches even when their history is unrelated,
+and deletes branches that exist only on the target. Use a repository
+reserved for the collection alone. Never use the application's repository
+or a repository shared with other work.**
+
+In `deploy/orgsyndb.env`, set `ORGSYNDB_MIRROR_URL` to the target's
+`https://` URL. Set `ORGSYNDB_MIRROR_USER` to a user name on that host
+and `ORGSYNDB_MIRROR_TOKEN` to an access token with write access to the
+target. Both credentials are required with the URL. From `deploy/`,
+recreate `forge` with `docker compose up -d --force-recreate forge` so it
+reads the settings, then run [Forgejo set-up](#forgejo-set-up) again.
+Repeat these steps after changing the credentials.
+
+Each run removes the push mirrors to that address and adds one with the
+current credentials. Without `ORGSYNDB_MIRROR_URL`, the script reports
+that no mirror is configured
+and leaves all existing mirrors unchanged. Clearing the setting does
+not remove a mirror. Forgejo refuses mirror addresses on local networks
+unless its `[migrations] ALLOW_LOCALNETWORKS` setting allows them.
+
+### Read the push log
+
+To identify who pushed the commit behind an import, the builder reads
+`ORGSYNDB_PUSH_LOG` when it reports the build. Each accepted push to
+`main` of `lab/collection` appends one line:
+
+```text
+<UTC time> <commit> <Forgejo id> <user name>
+```
+
+The time has the form `YYYY-MM-DDTHH:MM:SSZ`. A missing Forgejo id or
+user name is recorded as `-`. Pushes to other branches add nothing.
+The log is never trimmed.
+
+If logging or waking the builder fails, Forgejo shows the pusher
+`Push log: cannot record this push: <reason>` or
+`Push log: the builder was not woken; it builds this push at its next check`.
+The push remains accepted in either case.
 
 ### Move the collection into Forgejo
 
@@ -2309,11 +2384,21 @@ import's commit, release and received time, with counts of procedures
 and sequences that are not withdrawn.
 
 The table lists imports newest first. Its columns are **Received**,
-**Commit**, **Trigger**, **Outcome**, **Release** and **Errors**. Commits
-show their first ten characters. Triggers are **Commit**, **Registry**,
-**Tooling** or **Catch-up**; outcomes are **Accepted** or **Refused**.
+**Commit**, **Trigger**, **Pushed by**, **Outcome**, **Release** and
+**Errors**. Commits show their first ten characters. Triggers are
+**Commit**, **Registry**, **Tooling** or **Catch-up**; outcomes are
+**Accepted** or **Refused**.
 A refused import lists its errors, one per line. Before any import, the
 page shows **No imports yet.**
+
+**Pushed by** shows the display name of the lab account whose user name
+matches the push log's pusher for that commit, ignoring case. A rebuild
+after a registry or tooling change still names the commit's pusher.
+The column is empty when the log has no line for that commit, as with
+pushes before push logging was installed or collections outside Forgejo.
+It is also empty when Forgejo named nobody or no lab account has that
+user name, as with Forgejo's own `orgsyndb` administrator. The demo
+data's import also has no pusher.
 
 Only an accepted import writes the collection's procedures, their authors,
 journal entries, projects, scope entries and their substances, sequences

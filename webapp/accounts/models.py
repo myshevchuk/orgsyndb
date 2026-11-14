@@ -143,12 +143,13 @@ class User(AbstractUser):
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Save the account with its initials in upper case, under the
         import lock (``orgsyndb_web.lock``), since the registry
-        snapshot's digest covers its user name and name; a save of only
-        other fields, such as a sign-in's ``last_login``, takes no
-        lock. When a save of an existing account that changes its
-        ``is_active``, email address or display name commits, its
-        Forgejo account is set in line, as ``update_forge`` does; a
-        save rolled back calls nothing."""
+        snapshot's digest covers its user name and name, and wake the
+        builder once the transaction commits (``orgsyndb_web.wake``); a
+        save of only other fields, such as a sign-in's ``last_login``,
+        takes no lock and wakes nothing. When a save of an existing
+        account that changes its ``is_active``, email address or display
+        name commits, its Forgejo account is set in line, as
+        ``update_forge`` does; a save rolled back calls nothing."""
         self.initials = (self.initials or "").upper()
         fields = kwargs.get("update_fields")
         before = self.forge_state_saved(fields)
@@ -156,7 +157,7 @@ class User(AbstractUser):
             super().save(*args, **kwargs)
         else:
             with transaction.atomic():
-                lock.hold()
+                lock.hold_covered()
                 super().save(*args, **kwargs)
         self.forge_failed = False
         if before is not None:
@@ -201,9 +202,10 @@ class User(AbstractUser):
 
     def delete(self, *args: Any, **kwargs: Any) -> Any:
         """Delete the account, as ``Model.delete`` does, under the
-        import lock; return what it returns."""
+        import lock, and wake the builder once the transaction commits;
+        return what it returns."""
         with transaction.atomic():
-            lock.hold()
+            lock.hold_covered()
             return super().delete(*args, **kwargs)
 
     def clean(self) -> None:

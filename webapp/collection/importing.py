@@ -6,7 +6,8 @@ A manifest is a table the builder posts for every build it tries. Its
 build half names the build, the collection commit, the import it was
 built after (``base``), the registry digest it was built with
 (``snapshot``), the application commit that built it (``tooling``), the
-trigger and the outcome; a build that succeeded adds the collection half
+trigger, the user name of the account that pushed the commit
+(``pusher``) and the outcome; a build that succeeded adds the collection half
 that ``tools/orgsyndb manifest`` prints, one that failed its errors.
 The first import the application accepts adopts the IDs its manifest
 names (``collection.issuing``); every import is refused an ID that is
@@ -236,7 +237,8 @@ def read(body: Any) -> dict[str, Any]:
     read: ``build`` as a UUID, ``committed_at`` as an aware datetime,
     ``errors`` of a failed build as a list of strings, and the
     procedures and sequences of a built one with their entries and
-    steps, a procedure's ``notebook`` and ``project`` None for null.
+    steps, a procedure's ``notebook`` and ``project`` and the
+    ``pusher`` None for null.
     Keys the manifest does not define are left out.
 
     Raise Malformed, saying what is wrong, when BODY is not a table of
@@ -277,6 +279,7 @@ def read(body: Any) -> dict[str, Any]:
         "tooling": _pattern(body, "tooling", COMMIT_RE,
                             "40 lower-case hexadecimal digits"),
         "trigger": _choice(body, "trigger", Trigger.values),
+        "pusher": _optional_string(body, "pusher", ""),
         "outcome": _choice(body, "outcome", ("built", "refused")),
     }
     if manifest["outcome"] == "refused":
@@ -686,15 +689,24 @@ def _answer(record: Import) -> tuple[int, dict[str, Any]]:
     return 200, {"outcome": record.outcome, "import": record.pk}
 
 
+def _pusher(name: str | None) -> Any:
+    """Return the account whose user name equals NAME, ignoring case, or
+    None when NAME is None or no account has it."""
+    if name is None:
+        return None
+    return get_user_model().objects.filter(username__iexact=name).first()
+
+
 def _record(manifest: dict[str, Any], base: Import | None,
             **fields: Any) -> Import:
     """Record the read MANIFEST, built after BASE, as an import with
-    FIELDS."""
+    FIELDS, naming the account its ``pusher`` names (``_pusher``)."""
     return Import.objects.create(
         build=manifest["build"], commit=manifest["commit"],
         committed_at=manifest["committed_at"], base=base,
         snapshot=manifest["snapshot"], tooling=manifest["tooling"],
-        trigger=manifest["trigger"], **fields)
+        trigger=manifest["trigger"],
+        pushed_by=_pusher(manifest["pusher"]), **fields)
 
 
 def _adoptable(manifest: dict[str, Any]) -> list[str]:
@@ -752,8 +764,10 @@ def receive(manifest: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     error; any other is applied (``apply``) and recorded as accepted.
     While no import is accepted, the IDs the manifest names count as
     issued, and an accepted import adopts them; after that, an ID
-    counts as issued only when it is. A recorded import is answered 200
-    with its outcome and its id.
+    counts as issued only when it is. An import's ``pushed_by`` is the
+    account the manifest's ``pusher`` names, or none; the pusher never
+    refuses an import. A recorded import is answered 200 with its
+    outcome and its id.
     """
     with transaction.atomic():
         lock.hold()

@@ -272,7 +272,8 @@ def load(table: Any, user: Any = None) -> tuple[int, int, int]:
     named before the terms filed under it, then the substances with
     their classes, and an article for each substance that names an
     article number; each gets a creation in its history, all in one
-    transaction holding the lock (``orgsyndb_web.lock``). The digest, the
+    transaction holding the lock (``orgsyndb_web.lock``), which wakes the
+    builder once it commits (``orgsyndb_web.wake``). The digest, the
     import, the accounts and the notebooks are ignored, and no account or
     notebook is created; a vocabulary that is missing is empty.
     Raise Broken, writing nothing, when the registry holds a substance
@@ -282,7 +283,7 @@ def load(table: Any, user: Any = None) -> tuple[int, int, int]:
     if not isinstance(table, dict):
         raise Broken("the snapshot is not a table")
     with transaction.atomic():
-        lock.hold()
+        lock.hold_covered()
         if not is_empty():
             raise Broken("the registry holds substances or terms; it is "
                          "filled only while it is empty")

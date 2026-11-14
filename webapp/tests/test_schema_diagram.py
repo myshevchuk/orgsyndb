@@ -682,6 +682,7 @@ class PageTests(unittest.TestCase):
                     ("tasks_task", "created_by_id"),
                     ("collection_procedureauthor", "user_id"),
                     ("collection_issuedid", "user_id"),
+                    ("collection_import", "pushed_by_id"),
                     ("accounts_accesstoken", "user_id"),
                     ("journal_notebook", "user_id"),
                     (sd.HISTORY, "history_user_id")]))

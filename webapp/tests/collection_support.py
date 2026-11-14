@@ -95,12 +95,13 @@ def current_digest() -> str:
 
 def build_half(**over: Any) -> dict[str, Any]:
     """The keys a manifest has whatever its outcome, for a build
-    after the import ``base``, none by default."""
+    after the import ``base``, none by default, of a commit no account
+    pushed (``pusher`` is ``None``)."""
     commit = commit_id()
     return {"format": 1, "build": str(uuid.uuid4()), "commit": commit,
             "committed_at": "2026-11-09T14:30:00+01:00", "base": None,
             "snapshot": current_digest(), "tooling": TOOLING,
-            "trigger": "commit", **over}
+            "trigger": "commit", "pusher": None, **over}
 
 
 def manifest(collection: dict[str, Any] | None = None,

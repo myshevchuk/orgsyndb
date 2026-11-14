@@ -1,0 +1,53 @@
+#!/bin/sh
+# The push log: the post-receive hook of lab/collection, which
+# forge-setup links into the repository's hooks/post-receive.d/. For
+# each update of refs/heads/main that does not delete it, it appends to
+# the push log one line "<time> <commit> <id> <name>": the time in UTC,
+# the new commit, and Forgejo's id and user name of the pusher, each "-"
+# when Forgejo sets none. The lines of a push are appended by a single
+# write, so that the lines of concurrent pushes stay whole. It then
+# wakes the builder once. Updates of other refs append nothing and wake
+# nothing. A failure is reported on standard error, which Forgejo shows
+# the pusher, and the hook exits 0, since the push is already accepted.
+#   ORGSYNDB_PUSH_LOG    the push log (default:
+#                        /var/lib/orgsyndb-pushes/pushes.log)
+#   ORGSYNDB_WAKE_URL    the builder's wake-up (default:
+#                        http://builder:8091/wake)
+#   ORGSYNDB_GATE_TOKEN  the token the wake-up carries
+#   GITEA_PUSHER_ID, GITEA_PUSHER_NAME  the pusher, as Forgejo sets them
+set -u
+
+log=${ORGSYNDB_PUSH_LOG:-/var/lib/orgsyndb-pushes/pushes.log}
+url=${ORGSYNDB_WAKE_URL:-http://builder:8091/wake}
+id=${GITEA_PUSHER_ID:--}
+name=${GITEA_PUSHER_NAME:--}
+
+# Each line is "<old> <new> <ref>"; a <new> of zeros deletes the ref.
+lines=
+while read -r _old new ref; do
+	case $new in
+	*[!0]*)
+		if [ "$ref" = refs/heads/main ]; then
+			lines="$lines$(date -u +%Y-%m-%dT%H:%M:%SZ) $new $id $name
+"
+		fi
+		;;
+	esac
+done
+[ -n "$lines" ] || exit 0
+
+if ! reason=$({ printf '%s' "$lines" >>"$log"; } 2>&1); then
+	echo "Push log: cannot record this push: ${reason:-cannot append to $log}" >&2
+	exit 0
+fi
+
+work=$(mktemp -d) || exit 0
+trap 'rm -rf "$work"' EXIT
+printf 'Authorization: Bearer %s\n' "${ORGSYNDB_GATE_TOKEN:-}" \
+	>"$work/headers"
+status=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 \
+	-H @"$work/headers" --data-binary '' "$url" 2>/dev/null)
+if [ "$status" != 202 ]; then
+	echo "Push log: the builder was not woken; it builds this push at its next check" >&2
+fi
+exit 0

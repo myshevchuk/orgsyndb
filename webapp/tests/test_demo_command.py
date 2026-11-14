@@ -339,6 +339,16 @@ class DataSetImportTests(TestCase):
             {"Procedure": PROCEDURES, "ScopeEntry": 11,
              "Sequence": SEQUENCES, "Step": 4})
 
+    def test_the_data_sets_import_has_no_pusher(self) -> None:
+        """Scenario: The pusher (the demo data command's import has
+        none)."""
+        from collection.models import Import
+        seed(DAY)
+        (own,) = Import.objects.all()
+        self.assertTrue(hasattr(own, "pushed_by"),
+                        "the import has no pushed_by")
+        self.assertIsNone(own.pushed_by)
+
     def test_the_rows_are_the_manifests(self) -> None:
         """Requirement: Demo data command (the rows `webapp/demo/
         manifest.json` describes, general procedures marked)."""

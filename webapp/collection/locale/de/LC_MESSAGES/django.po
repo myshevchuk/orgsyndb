@@ -179,3 +179,6 @@ msgstr "Projekt"
 
 msgid "Another procedure names this lab notebook entry."
 msgstr "Eine andere Vorschrift nennt diesen Eintrag im Laborjournal."
+
+msgid "Pushed by"
+msgstr "Gepusht von"

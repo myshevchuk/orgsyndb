@@ -166,6 +166,30 @@ class BuilderTokenTests(SimpleTestCase):
         self.assertIsInstance(settings.ORGSYNDB_BUILDER_TOKEN, str)
 
 
+class WakeUrlTests(SimpleTestCase):
+
+    def test_wake_up_address(self) -> None:
+        """Scenario: Wake-up address."""
+        self.assertEqual(settings_from(BASE)["ORGSYNDB_WAKE_URL"], "")
+        self.assertEqual(
+            settings_from({**BASE,
+                           "ORGSYNDB_WAKE_URL": "http://builder:8091/wake"})
+            ["ORGSYNDB_WAKE_URL"], "http://builder:8091/wake")
+
+    def test_an_empty_address_is_empty(self) -> None:
+        """Requirement: Settings from the environment (default empty,
+        which sends no wake-up)."""
+        self.assertEqual(
+            settings_from({**BASE, "ORGSYNDB_WAKE_URL": ""})
+            ["ORGSYNDB_WAKE_URL"], "")
+
+    def test_the_project_has_the_setting(self) -> None:
+        """Requirement: Settings from the environment (the Django
+        setting of the same name; empty in the tests, which send no
+        wake-up unless one overrides it)."""
+        self.assertEqual(settings.ORGSYNDB_WAKE_URL, "")
+
+
 class AppliedSettingsTests(SimpleTestCase):
 
     def test_settings_of_the_project(self) -> None:

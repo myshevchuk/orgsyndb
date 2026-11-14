@@ -9,12 +9,19 @@ manifest view while it checks and applies an import, so that an import
 is checked against the registry it is applied to. Issuing and adopting
 procedure and sequence IDs take it too (``collection.issuing``), so that
 no ID is issued twice or at the moment an import adopts it.
+
+A write of the rows the digest covers takes the lock through
+``hold_covered``, which also wakes the builder once the transaction
+commits (``orgsyndb_web.wake``); the other holders of the lock wake
+nothing.
 """
 
 from typing import Any
 
 from django.db import connection, models, transaction
 from django.db.transaction import TransactionManagementError
+
+from orgsyndb_web import wake
 
 # The key of the PostgreSQL advisory lock, a fixed 64-bit integer: the
 # ASCII bytes of "orgsyndb".
@@ -38,22 +45,33 @@ def hold() -> None:
             cursor.execute("SELECT pg_advisory_xact_lock(%s)", [KEY])
 
 
+def hold_covered() -> None:
+    """Take the lock as ``hold`` does, for a write of rows the snapshot's
+    digest covers, and wake the builder once after the current
+    transaction commits (``wake.after_commit``).
+
+    Raise TransactionManagementError when no transaction is open.
+    """
+    hold()
+    wake.after_commit()
+
+
 class LockedWrites:
     """A mixin for a model whose rows the snapshot's digest covers: its
     ``save`` and ``delete`` open a transaction, or join the current one,
-    and take the lock before they write."""
+    and take the lock before they write (``hold_covered``)."""
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Save the record, as ``Model.save`` does, under the lock."""
         with transaction.atomic():
-            hold()
+            hold_covered()
             super().save(*args, **kwargs)  # type: ignore[misc]
 
     def delete(self, *args: Any, **kwargs: Any) -> Any:
         """Delete the record, as ``Model.delete`` does, under the lock;
         return what it returns."""
         with transaction.atomic():
-            hold()
+            hold_covered()
             return super().delete(*args, **kwargs)  # type: ignore[misc]
 
 
@@ -68,19 +86,19 @@ class LockedQuerySet(models.QuerySet):
         """Update the rows, as ``QuerySet.update`` does, under the lock;
         return the number of rows matched."""
         with transaction.atomic(using=self.db):
-            hold()
+            hold_covered()
             return super().update(**kwargs)
 
     def delete(self) -> tuple[int, dict[str, int]]:
         """Delete the rows, as ``QuerySet.delete`` does, under the lock;
         return what it returns."""
         with transaction.atomic(using=self.db):
-            hold()
+            hold_covered()
             return super().delete()
 
     def bulk_create(self, objs: Any, *args: Any, **kwargs: Any) -> Any:
         """Create the records, as ``QuerySet.bulk_create`` does, under
         the lock; return what it returns."""
         with transaction.atomic(using=self.db):
-            hold()
+            hold_covered()
             return super().bulk_create(objs, *args, **kwargs)

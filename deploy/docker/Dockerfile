@@ -26,7 +26,8 @@ RUN dnf install -y --setopt=install_weak_deps=False \
     && dnf clean all \
     && git config --system --add safe.directory '/srv/git/*' \
     && useradd --uid 1000 --user-group --create-home orgsyndb \
-    && install -d -o orgsyndb -g orgsyndb /opt/orgsyndb /var/lib/orgsyndb
+    && install -d -o orgsyndb -g orgsyndb /opt/orgsyndb /var/lib/orgsyndb \
+        /var/lib/orgsyndb-pushes
 
 ARG APP_REPO
 ARG APP_REF

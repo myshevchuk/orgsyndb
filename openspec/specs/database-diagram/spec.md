@@ -64,7 +64,7 @@ A line's tooltip names its two columns and, for a foreign key, its delete rule, 
 
 #### Scenario: Links to people
 - **WHEN** a test generates the diagram
-- **THEN** there is one line of kind `user` for each of `inventory_deliverynote.created_by_id`, `inventory_movement.user_id`, `inventory_lotmovement.user_id`, `inventory_enteredconsumption.entered_by_id`, `tasks_task.assignee_id`, `tasks_task.created_by_id`, `collection_procedureauthor.user_id`, `collection_issuedid.user_id`, `accounts_accesstoken.user_id`, `journal_notebook.user_id` and the history box's `history_user_id`, the last carrying `set null`, and no line of another kind ends at `accounts_user`
+- **THEN** there is one line of kind `user` for each of `inventory_deliverynote.created_by_id`, `inventory_movement.user_id`, `inventory_lotmovement.user_id`, `inventory_enteredconsumption.entered_by_id`, `tasks_task.assignee_id`, `tasks_task.created_by_id`, `collection_procedureauthor.user_id`, `collection_issuedid.user_id`, `collection_import.pushed_by_id`, `accounts_accesstoken.user_id`, `journal_notebook.user_id` and the history box's `history_user_id`, the last carrying `set null`, and no line of another kind ends at `accounts_user`
 
 #### Scenario: Links of a task
 - **WHEN** a test generates the diagram

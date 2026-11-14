@@ -53,10 +53,11 @@ FAKE_MANIFEST = {
     "deleted": ["OSDB-0002"],
 }
 BUILT_KEYS = {"format", "build", "commit", "committed_at", "base",
-              "snapshot", "tooling", "trigger", "outcome", "release",
-              "language", "procedures", "sequences", "deleted"}
+              "snapshot", "tooling", "trigger", "pusher", "outcome",
+              "release", "language", "procedures", "sequences", "deleted"}
 REFUSED_KEYS = {"format", "build", "commit", "committed_at", "base",
-                "snapshot", "tooling", "trigger", "outcome", "errors"}
+                "snapshot", "tooling", "trigger", "pusher", "outcome",
+                "errors"}
 # The line the fake build prints, on standard output, when it fails.
 FAKE_PROBLEM = ("md/procedures/OSDB-0001-x.md:title: error: the fake "
                 "build was told to fail")
@@ -74,7 +75,9 @@ FAKE_ORGSYNDB = """\
 # `manifest-broken`, and sleeps past any timeout when the collection
 # holds `manifest-slow`. `index` is a command the builder must never
 # run: the fake answers it with a minimal index, so that the run shows
-# in the log and in the release.
+# in the log and in the release. A build also appends the line
+# $FAKE_PUSH_LINE, when that is set, to the file $ORGSYNDB_PUSH_LOG: a
+# push that Forgejo logs while the build runs.
 import json, os, sys, time
 from pathlib import Path
 app = Path(__file__).resolve().parent.parent
@@ -98,6 +101,9 @@ if sys.argv[3] == "manifest":
     sys.exit(0)
 with open(os.environ["FAKE_LOG"], "a") as log:
     log.write(f"{version} {sys.argv[3]}\\n")
+if os.environ.get("FAKE_PUSH_LINE"):
+    with open(os.environ["ORGSYNDB_PUSH_LOG"], "a") as pushes:
+        pushes.write(os.environ["FAKE_PUSH_LINE"] + "\\n")
 if (collection / "fail-silent").exists():
     sys.exit(1)
 if (collection / "fail").exists() or version == "broken":
@@ -180,6 +186,7 @@ class UpdaterTests(unittest.TestCase):
             ".gitignore": "/build/\n/public/\n/pdf/\n"})
         self.data = self.tmp / "data"
         self.log = self.tmp / "builds.log"
+        self.push_log = self.tmp / "pushes.log"
         self.registry_log = self.tmp / "registry.log"
         self.snapshot = load_snapshot(REGISTRY)
         self.server = FakeApp(self.snapshot)
@@ -198,6 +205,7 @@ class UpdaterTests(unittest.TestCase):
             "ORGSYNDB_APP": str(self.app),
             "ORGSYNDB_IMAGE_INFO": str(self.image),
             "ORGSYNDB_COLLECTION_REPO": str(self.collection),
+            "ORGSYNDB_PUSH_LOG": str(self.push_log),
         }
 
     def sync(self, **extra: str) -> subprocess.CompletedProcess:
@@ -699,6 +707,7 @@ class UpdaterTests(unittest.TestCase):
         self.assertEqual(body["snapshot"], self.snapshot["digest"])
         self.assertEqual(body["tooling"], self.app_v1)
         self.assertIsNone(body["base"])
+        self.assertIsNone(body["pusher"])
         self.assertEqual(body["trigger"], "catch-up")
         self.assertEqual(body["outcome"], "built")
         self.assertEqual(body["release"], self.current())
@@ -1037,6 +1046,159 @@ class UpdaterTests(unittest.TestCase):
         self.assertIn(FAKE_PROBLEM, broken["errors"])
         self.assertEqual(self.sent()[2]["tooling"], self.app_v1)
         self.assertEqual(self.page(), "v1 second")
+
+    # --- the pusher (container-deployment "Push log") --------------------
+
+    OTHER = "1" * 40
+
+    @staticmethod
+    def push_line(commit: str, name: str = "jkoch", ident: str = "7",
+                  time: str = "2026-11-14T09:30:00Z") -> str:
+        """A line of the push log."""
+        return f"{time} {commit} {ident} {name}"
+
+    def write_push_log(self, *lines: str | bytes) -> None:
+        self.push_log.write_bytes(b"".join(
+            (line if isinstance(line, bytes) else line.encode()) + b"\n"
+            for line in lines))
+
+    def first_pusher(self, *lines: str | bytes, **extra: str) -> object:
+        """Write the push log with ``lines``, unless there are none, run
+        ``sync``, and return the ``pusher`` of the manifest it sent."""
+        if lines:
+            self.write_push_log(*lines)
+        done = self.sync(**extra)
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        (first,) = self.sent()
+        self.assertIn("pusher", first)
+        return first["pusher"]
+
+    def test_the_pusher_is_the_last_line_naming_the_commit(self) -> None:
+        """Scenario: The pusher of a build (`jkoch`, then `abauer`)."""
+        self.assertEqual(self.first_pusher(
+            self.push_line(self.col_v1, "jkoch", "7"),
+            self.push_line(self.OTHER, "mmeier", "9"),
+            self.push_line(self.col_v1, "abauer", "8")), "abauer")
+
+    def test_a_line_for_another_commit_names_no_pusher(self) -> None:
+        """Scenario: The pusher of a build (no line naming the
+        commit)."""
+        self.assertIsNone(self.first_pusher(
+            self.push_line(self.OTHER, "jkoch")))
+
+    def test_no_log_gives_no_pusher(self) -> None:
+        """Scenario: The pusher of a build (no log)."""
+        self.assertFalse(self.push_log.exists())
+        self.assertIsNone(self.first_pusher())
+        self.assertEqual(self.builds(), ["v1 build"])
+
+    def test_an_empty_log_gives_no_pusher(self) -> None:
+        """Requirement: Push log (no line names the commit)."""
+        self.push_log.write_bytes(b"")
+        self.assertIsNone(self.first_pusher())
+
+    def test_a_dash_is_no_pusher(self) -> None:
+        """Requirement: Push log (that line's name is `-`): the last
+        line decides, though an earlier one named someone."""
+        self.assertIsNone(self.first_pusher(
+            self.push_line(self.col_v1, "jkoch", "7"),
+            self.push_line(self.col_v1, "-", "-")))
+
+    def test_the_name_counts_without_the_id(self) -> None:
+        """Requirement: Push log (the name of the last line, whatever
+        its id)."""
+        self.assertEqual(self.first_pusher(
+            self.push_line(self.col_v1, "jkoch", "-")), "jkoch")
+
+    def test_a_line_that_cannot_be_read_is_skipped(self) -> None:
+        """Requirement: Push log (a line it cannot read is skipped)."""
+        self.assertEqual(self.first_pusher(
+            b"not a line of the push log",
+            b"\xff\xfe\xfd",
+            b"",
+            self.push_line(self.col_v1, "jkoch"),
+            b"\xff\xfe \xfd",
+            self.push_line(self.col_v1, "abauer").encode()[:20]),
+            "jkoch")
+
+    def test_a_line_appended_during_the_build_is_used(self) -> None:
+        """Scenario: A line appended during the build."""
+        self.assertFalse(self.push_log.exists())
+        self.assertEqual(self.first_pusher(
+            FAKE_PUSH_LINE=self.push_line(self.col_v1, "jkoch")), "jkoch")
+
+    def test_a_line_appended_during_the_build_is_the_last(self) -> None:
+        """Requirement: Push log (the log is read after the build's
+        commands have run)."""
+        self.assertEqual(self.first_pusher(
+            self.push_line(self.col_v1, "abauer", "8"),
+            FAKE_PUSH_LINE=self.push_line(self.col_v1, "jkoch")), "jkoch")
+
+    def test_a_failed_build_names_its_pusher(self) -> None:
+        """Requirement: Manifests (`pusher` of every build, a failed one
+        too)."""
+        self.sync()
+        bad = commit_files(self.collection, {"fail": "",
+                                             "content.txt": "bad"})
+        self.write_push_log(self.push_line(bad, "abauer", "8"))
+        done = self.sync()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        (report,) = self.refused_reports()
+        self.assertEqual(report["pusher"], "abauer")
+        self.assertIsNone(self.sent()[0]["pusher"])
+
+    def test_a_registry_build_keeps_the_commits_pusher(self) -> None:
+        """Scenario: The pusher of a registry build."""
+        self.write_push_log(self.push_line(self.col_v1, "jkoch"))
+        self.sync()
+        self.assertEqual(self.sent()[0]["pusher"], "jkoch")
+        self.change_registry()
+        done = self.sync()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(len(self.sent()), 2)
+        self.assertEqual(self.sent()[1]["trigger"], "registry")
+        self.assertEqual(self.sent()[1]["pusher"], "jkoch")
+
+    def test_a_tooling_build_keeps_the_commits_pusher(self) -> None:
+        """Requirement: Manifests (the pusher belongs to the commit)."""
+        self.write_push_log(self.push_line(self.col_v1, "jkoch"))
+        self.sync()
+        commit_files(self.upstream, {"VERSION": "v2\n"})
+        self.sync()
+        self.assertEqual(self.sent()[1]["trigger"], "tooling")
+        self.assertEqual(self.sent()[1]["pusher"], "jkoch")
+
+    def test_a_line_appended_after_the_manifest_is_not_used(self) -> None:
+        """Requirement: Push log (a line appended after the manifest was
+        made is not used; the next import of the commit names it)."""
+        self.sync()
+        self.assertIsNone(self.sent()[0]["pusher"])
+        self.write_push_log(self.push_line(self.col_v1, "jkoch"))
+        self.sync()
+        self.assertEqual(len(self.sent()), 1)
+        self.change_registry()
+        self.sync()
+        self.assertEqual(len(self.sent()), 2)
+        self.assertIsNone(self.sent()[0]["pusher"])
+        self.assertEqual(self.sent()[1]["pusher"], "jkoch")
+
+    def test_each_commit_has_its_own_pusher(self) -> None:
+        """Requirement: Push log (the last line whose commit is C)."""
+        self.write_push_log(self.push_line(self.col_v1, "jkoch"))
+        self.sync()
+        second = commit_files(self.collection, {"content.txt": "second\n"})
+        self.write_push_log(self.push_line(self.col_v1, "jkoch"),
+                            self.push_line(second, "abauer", "8"))
+        self.sync()
+        self.assertEqual([m["pusher"] for m in self.sent()],
+                         ["jkoch", "abauer"])
+
+    def test_the_program_names_the_push_log_and_its_default(self) -> None:
+        """Requirement: Updater program (`ORGSYNDB_PUSH_LOG`, default
+        `/var/lib/orgsyndb-pushes/pushes.log`)."""
+        text = UPDATER.read_text(encoding="utf-8")
+        self.assertIn("ORGSYNDB_PUSH_LOG", text)
+        self.assertIn("/var/lib/orgsyndb-pushes/pushes.log", text)
 
 
 class FileTests(unittest.TestCase):

@@ -16,12 +16,41 @@
 # the public organisation lab, its team authors, the public repository
 # lab/collection with the default branch main, and the protection of
 # main, which refuses a force push to it; gives the team write access to
-# that repository alone; and links the gate, deploy/forge/gate, into the
-# repository's pre-receive hooks.
+# that repository alone; links the gate, deploy/forge/gate, into the
+# repository's pre-receive hooks and the push log's hook,
+# deploy/forge/push-log, into its post-receive hooks; and creates the
+# push log, ORGSYNDB_PUSH_LOG, when it is missing, stopping when it
+# cannot append to it.
+#
+# With ORGSYNDB_MIRROR_URL, an https:// address, it last removes the
+# push mirrors of lab/collection to that address and adds one with
+# ORGSYNDB_MIRROR_USER and ORGSYNDB_MIRROR_TOKEN, synced on every push
+# and every 8 hours, so that a run applies changed credentials. The
+# mirror makes its address a copy of lab/collection, deleting what only
+# the address has. Without ORGSYNDB_MIRROR_URL it changes no mirror.
 set -eu
 
 : "${ORGSYNDB_FORGE_PASSWORD:?ORGSYNDB_FORGE_PASSWORD is not set}"
 : "${ORGSYNDB_FORGE_CLIENT_SECRET:?ORGSYNDB_FORGE_CLIENT_SECRET is not set}"
+
+mirror_url=${ORGSYNDB_MIRROR_URL:-}
+if [ -n "$mirror_url" ]; then
+	case $mirror_url in
+	https://*) ;;
+	*)
+		echo "forge-setup: error: ORGSYNDB_MIRROR_URL must begin with https://" >&2
+		exit 1
+		;;
+	esac
+	if [ -z "${ORGSYNDB_MIRROR_USER:-}" ]; then
+		echo "forge-setup: error: ORGSYNDB_MIRROR_USER is not set; the mirror needs it" >&2
+		exit 1
+	fi
+	if [ -z "${ORGSYNDB_MIRROR_TOKEN:-}" ]; then
+		echo "forge-setup: error: ORGSYNDB_MIRROR_TOKEN is not set; the mirror needs it" >&2
+		exit 1
+	fi
+fi
 
 forgejo() {
 	gitea --config "${GITEA_APP_INI:-/var/lib/gitea/custom/conf/app.ini}" "$@"
@@ -31,11 +60,13 @@ discovery="${ORGSYNDB_APP_INTERNAL_URL:-http://app:8000}/lab/o/.well-known/openi
 # The claim groups names the Forgejo teams, by organisation, an account
 # belongs to; Forgejo removes it from a team the claim no longer names.
 groups='{"authors":{"lab":["authors"]}}'
-# Forgejo's API inside this container, its repositories on disk, and
-# the gate as this service mounts it.
+# Forgejo's API inside this container, its repositories on disk, the
+# hooks as this service mounts them, and the push log.
 api_url=http://localhost:3000/api/v1
 repositories=/var/lib/gitea/git/repositories
 gate=/opt/orgsyndb/forge/gate
+push_hook=/opt/orgsyndb/forge/push-log
+push_log=${ORGSYNDB_PUSH_LOG:-/var/lib/orgsyndb-pushes/pushes.log}
 
 if forgejo admin user list --admin | awk '$2 == "orgsyndb" { found = 1 } END { exit !found }'; then
 	echo "forge-setup: the admin account orgsyndb exists."
@@ -155,3 +186,50 @@ hooks="$repositories/lab/collection.git/hooks/pre-receive.d"
 mkdir -p "$hooks"
 ln -sfn "$gate" "$hooks/orgsyndb-gate"
 echo "forge-setup: linked the gate into lab/collection's pre-receive hooks."
+
+hooks="$repositories/lab/collection.git/hooks/post-receive.d"
+mkdir -p "$hooks"
+ln -sfn "$push_hook" "$hooks/orgsyndb-push-log"
+echo "forge-setup: linked the push log into lab/collection's post-receive hooks."
+
+if ! (: >>"$push_log") 2>/dev/null; then
+	echo "forge-setup: error: cannot append to the push log $push_log; set ORGSYNDB_PUSH_LOG to a file forge can write, on the volume pushes" >&2
+	exit 1
+fi
+echo "forge-setup: the push log $push_log can be appended to."
+
+# json TEXT: print TEXT as a JSON string.
+json() {
+	printf '"%s"' "$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+}
+
+if [ -z "$mirror_url" ]; then
+	echo "forge-setup: no mirror is configured (ORGSYNDB_MIRROR_URL is empty); the push mirrors of lab/collection are unchanged."
+	exit 0
+fi
+
+expect 200 "list the push mirrors of lab/collection" \
+	"$(api GET /repos/lab/collection/push_mirrors)"
+# The remote_name of each mirror whose remote_address is the URL. Go's
+# JSON writes &, < and > as &, < and >; a URL holds no
+# other character it escapes.
+mirrors=$(tr -d '\n' <"$answer" | sed 's/},{/}\n{/g' |
+	while IFS= read -r mirror || [ -n "$mirror" ]; do
+		address=$(printf '%s\n' "$mirror" |
+			sed -n 's/.*"remote_address":"\([^"]*\)".*/\1/p' |
+			sed 's/\\u0026/\&/g; s/\\u003c/</g; s/\\u003e/>/g')
+		remote=$(printf '%s\n' "$mirror" |
+			sed -n 's/.*"remote_name":"\([^"]*\)".*/\1/p')
+		if [ "$address" = "$mirror_url" ] && [ -n "$remote" ]; then
+			echo "$remote"
+		fi
+	done)
+for remote in $mirrors; do
+	expect 204 "remove the push mirror $remote of lab/collection" \
+		"$(api DELETE "/repos/lab/collection/push_mirrors/$remote")"
+	echo "forge-setup: removed the push mirror $remote to $mirror_url."
+done
+expect 200 "add the push mirror to $mirror_url" \
+	"$(api POST /repos/lab/collection/push_mirrors \
+	"{\"remote_address\":$(json "$mirror_url"),\"remote_username\":$(json "$ORGSYNDB_MIRROR_USER"),\"remote_password\":$(json "$ORGSYNDB_MIRROR_TOKEN"),\"interval\":\"8h\",\"sync_on_commit\":true}")"
+echo "forge-setup: lab/collection is mirrored to $mirror_url on every push."

@@ -572,18 +572,41 @@ class ValidCheckTests(GateCase):
         self.assert_no_check_directory()
         self.assertEqual(len(self.server.checks), 2)
 
-    def test_no_check_server_without_the_token(self) -> None:
-        """Requirement: Gate (when `ORGSYNDB_GATE_TOKEN` is set): the
-        same settings with the token serve; without it nothing does."""
+    def test_no_token_no_server(self) -> None:
+        """Scenario: No token, no server (`ORGSYNDB_BUILDER_TOKEN` and
+        `ORGSYNDB_GATE_TOKEN` both empty): the same settings with the
+        gate token serve; without either token nothing does."""
         served = self.start()
         self.assertTrue(self.listening(self.port))
         self.stop(served)
         self.assertFalse(self.listening(self.port))
-        self.start(ORGSYNDB_GATE_TOKEN="")
+        self.start(ORGSYNDB_GATE_TOKEN="", ORGSYNDB_BUILDER_TOKEN="")
         self.assertTrue(wait_for(
             lambda: self.output().count("every") > 0), self.output())
         time.sleep(1)
         self.assertFalse(self.listening(self.port))
+
+    def test_gate_not_configured(self) -> None:
+        """Scenario: Gate not configured (the builder's server runs with
+        `ORGSYNDB_BUILDER_TOKEN` set and `ORGSYNDB_GATE_TOKEN` empty):
+        `/check` answers 503 to any token, and no check ran."""
+        self.start(ORGSYNDB_GATE_TOKEN="")
+        self.assertTrue(wait_for(lambda: self.listening(self.port), 6),
+                        "the builder's server does not listen\n"
+                        + self.output())
+        pack = pack_of(self.collection, self.head())
+        for name, token in (("none", None), ("the gate's", GATE_TOKEN),
+                            ("the builder's", TOKEN), ("empty", ""),
+                            ("other", "other")):
+            with self.subTest(token=name):
+                status, body = post_check(self.port, pack, self.head(),
+                                          token=token)
+                self.assertEqual(status, 503, body)
+                self.assertIn("not configured", body)
+        self.assertEqual(self.runs(), [])
+        self.assertEqual(self.server.checks, [])
+        self.assertEqual(self.server.hosts, [])
+        self.assertEqual(self.leftovers(), [])
 
     def test_the_program_names_the_settings(self) -> None:
         """Requirement: Gate (the settings and their defaults)."""
@@ -1288,3 +1311,227 @@ class ToolCacheTests(GateCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WakeTests(GateCase):
+    """Requirement: Waking the builder (``POST /wake`` on the builder's
+    server, which does what SIGHUP does).
+
+    ``run`` has the collection, so that its first cycle builds and
+    publishes; every later cycle only fetches the snapshot, which the
+    fake lab application counts in ``hosts``. ``ORGSYNDB_INTERVAL`` is
+    300, so that only a wake-up starts a cycle after the first.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.opened = threading.Event()
+        self.opened.set()
+
+    def hold_snapshots(self) -> None:
+        """Make the fake lab application answer a request for the
+        snapshot only once ``opened`` is set, so that a cycle stays
+        running until then. Calls ``opened.clear``."""
+        self.opened.clear()
+        self.addCleanup(self.opened.set)
+        original = self.server.snapshot_body
+
+        def held() -> bytes:
+            self.opened.wait(30)
+            return original()
+
+        self.server.snapshot_body = held
+
+    def cycles(self) -> int:
+        """The cycles started: the requests for the snapshot."""
+        return len(self.server.hosts)
+
+    def start_builder(self, **extra: str) -> subprocess.Popen:
+        """Start ``run`` with the collection, an interval of 300
+        seconds and ``extra``, and wait until its server listens."""
+        process = self.start(ORGSYNDB_INTERVAL="300",
+                             ORGSYNDB_COLLECTION_REPO=str(self.collection),
+                             **extra)
+        self.assertTrue(wait_for(lambda: self.listening(self.port), 6),
+                        "the builder's server does not listen\n"
+                        + self.output())
+        return process
+
+    def start_idle(self, **extra: str) -> subprocess.Popen:
+        """Start ``run`` and wait until its first cycle has published
+        and is over, so that it waits; return the process."""
+        process = self.start_builder(**extra)
+        self.assertTrue(wait_for(
+            lambda: (self.data / "state.json").exists()
+            and len(self.server.manifests) == 1), self.output())
+        time.sleep(0.5)
+        self.assertEqual(self.cycles(), 1, self.output())
+        return process
+
+    def wake(self, token: str | None = GATE_TOKEN, method: str = "POST",
+             path: str = "/wake", header: str | None = None
+             ) -> tuple[int, str]:
+        """Send a request to the server's wake-up path; return the
+        status and the text of the answer. ``header``, when given, is
+        the whole ``Authorization`` header."""
+        connection = http.client.HTTPConnection("127.0.0.1", self.port,
+                                                timeout=30)
+        try:
+            headers = {}
+            if header is not None:
+                headers["Authorization"] = header
+            elif token is not None:
+                headers["Authorization"] = f"Bearer {token}"
+            connection.request(method, path,
+                               b"" if method == "POST" else None,
+                               headers)
+            answer = connection.getresponse()
+            return answer.status, answer.read().decode("utf-8", "replace")
+        finally:
+            connection.close()
+
+    def assertCycles(self, total: int, seconds: float = 4.0) -> None:
+        self.assertTrue(wait_for(lambda: self.cycles() >= total, seconds),
+                        f"{self.cycles()} cycles, not {total}\n"
+                        + self.output())
+
+    def assertNoMoreCycles(self, total: int, seconds: float = 2.0) -> None:
+        time.sleep(seconds)
+        self.assertEqual(self.cycles(), total, self.output())
+
+    def test_a_wake_up_starts_a_cycle_at_once(self) -> None:
+        """Scenario: A wake-up (the gate token, then the builder's)."""
+        self.start_idle()
+        status, body = self.wake(GATE_TOKEN)
+        self.assertEqual((status, body), (202, ""))
+        self.assertCycles(2)
+        time.sleep(0.5)
+        status, body = self.wake(TOKEN)
+        self.assertEqual((status, body), (202, ""))
+        self.assertCycles(3)
+        self.assertNoMoreCycles(3)
+
+    def test_without_a_wake_up_the_interval_decides(self) -> None:
+        """Requirement: Waking the builder (the wait of
+        `ORGSYNDB_INTERVAL` seconds between cycles stays)."""
+        self.start_idle()
+        self.assertNoMoreCycles(1, 2.0)
+
+    def test_a_wrong_token_starts_no_cycle(self) -> None:
+        """Scenario: Wrong token (no token and a wrong one)."""
+        self.start_idle()
+        for name, kwargs in (
+                ("none", {"token": None}), ("wrong", {"token": "other"}),
+                ("close", {"token": GATE_TOKEN[:-1]}),
+                ("longer", {"token": GATE_TOKEN + "x"}),
+                ("empty", {"token": ""}),
+                ("lower case", {"token": GATE_TOKEN.upper()}),
+                ("no scheme", {"header": GATE_TOKEN}),
+                ("basic", {"header": f"Basic {GATE_TOKEN}"}),
+                ("token scheme", {"header": f"Token {TOKEN}"}),
+                ("bearer alone", {"header": "Bearer"})):
+            with self.subTest(token=name):
+                self.assertEqual(self.wake(**kwargs)[0], 401)
+        self.assertNoMoreCycles(1)
+
+    def test_another_method_answers_405(self) -> None:
+        """Requirement: Waking the builder (another method on `/wake`
+        answers 405)."""
+        self.start_idle()
+        for method in ("GET", "PUT", "DELETE", "PATCH"):
+            with self.subTest(method=method):
+                self.assertEqual(self.wake(method=method)[0], 405)
+        self.assertNoMoreCycles(1)
+
+    def test_another_path_is_not_a_wake_up(self) -> None:
+        """Requirement: Gate (another path answers 404)."""
+        self.start_idle()
+        for path in ("/wake/extra", "/wakeup", "/", "/check/wake"):
+            with self.subTest(path=path):
+                self.assertEqual(self.wake(path=path)[0], 404)
+        self.assertNoMoreCycles(1)
+
+    def test_a_wake_up_needs_no_body(self) -> None:
+        """Requirement: Waking the builder (a request without a body or
+        a `Content-Length`, as `curl -X POST` sends it, wakes)."""
+        self.start_idle()
+        with socket.create_connection(("127.0.0.1", self.port), 10) as sock:
+            sock.sendall(
+                (f"POST /wake HTTP/1.1\r\nHost: builder\r\n"
+                 f"Authorization: Bearer {GATE_TOKEN}\r\n"
+                 "Connection: close\r\n\r\n").encode())
+            sock.settimeout(10)
+            first = sock.recv(4096).decode("latin-1").splitlines()[0]
+        self.assertIn(" 202 ", first)
+        self.assertCycles(2)
+
+    def test_three_wake_ups_during_a_cycle_give_one_more(self) -> None:
+        """Scenario: During a cycle."""
+        self.hold_snapshots()
+        self.start_builder()
+        self.assertCycles(1)
+        for token in (GATE_TOKEN, TOKEN, GATE_TOKEN):
+            self.assertEqual(self.wake(token)[0], 202)
+        self.assertNoMoreCycles(1, 0.5)
+        self.opened.set()
+        self.assertCycles(2, 15)
+        self.assertNoMoreCycles(2, 3.0)
+        self.assertEqual(len(self.server.manifests), 1)
+
+    def test_a_wake_up_after_the_extra_cycle_starts_another(self) -> None:
+        """Requirement: Waking the builder (when one runs, one more
+        starts after it): the wake-ups of one cycle are used up."""
+        self.hold_snapshots()
+        self.start_builder()
+        self.assertCycles(1)
+        self.assertEqual(self.wake()[0], 202)
+        self.opened.set()
+        self.assertCycles(2, 15)
+        self.assertNoMoreCycles(2, 1.5)
+        self.assertEqual(self.wake()[0], 202)
+        self.assertCycles(3)
+        self.assertNoMoreCycles(3)
+
+    def test_sighup_still_starts_a_cycle(self) -> None:
+        """Requirement: Updater program (until SIGHUP or a wake-up)."""
+        process = self.start_idle()
+        os.kill(process.pid, signal.SIGHUP)
+        self.assertCycles(2)
+
+    def test_only_the_builder_token(self) -> None:
+        """Scenario: Only the builder token (`ORGSYNDB_GATE_TOKEN`
+        empty)."""
+        self.start_idle(ORGSYNDB_GATE_TOKEN="")
+        self.assertEqual(self.wake(TOKEN), (202, ""))
+        self.assertCycles(2)
+
+    def test_an_empty_gate_token_matches_no_token(self) -> None:
+        """Requirement: Waking the builder (an empty setting matching no
+        token)."""
+        self.start_idle(ORGSYNDB_GATE_TOKEN="")
+        for name, kwargs in (("the gate's", {"token": GATE_TOKEN}),
+                             ("empty", {"token": ""}),
+                             ("none", {"token": None}),
+                             ("bearer alone", {"header": "Bearer"}),
+                             ("bearer space", {"header": "Bearer "})):
+            with self.subTest(token=name):
+                self.assertEqual(self.wake(**kwargs)[0], 401)
+        self.assertNoMoreCycles(1)
+
+    def test_an_empty_builder_token_matches_no_token(self) -> None:
+        """Requirement: Waking the builder (an empty setting matching no
+        token): with the gate token alone the server runs and wakes on
+        it."""
+        self.start_builder(ORGSYNDB_BUILDER_TOKEN="")
+        for name, kwargs in (("the builder's", {"token": TOKEN}),
+                             ("empty", {"token": ""}),
+                             ("bearer alone", {"header": "Bearer"}),
+                             ("bearer space", {"header": "Bearer "})):
+            with self.subTest(token=name):
+                self.assertEqual(self.wake(**kwargs)[0], 401)
+        self.assertEqual(self.wake(GATE_TOKEN)[0], 202)
+        self.assertCycles(2)
+
+    def test_the_program_names_the_wake_up(self) -> None:
+        """Requirement: Waking the builder (the path `/wake`)."""
+        self.assertIn("/wake", UPDATER.read_text(encoding="utf-8"))

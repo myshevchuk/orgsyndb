@@ -364,18 +364,19 @@ def record_import(moment: datetime, language: str) -> Import:
     """Record the data set's own accepted import of the demo collection,
     ``MANIFEST``, committed and received at MOMENT, with the commit and
     tooling of forty zeros, the release ``demo``, the trigger
-    ``catch-up``, no base, the current snapshot's digest and LANGUAGE,
-    through ``collection.importing`` as the manifest view receives a
-    manifest, which adopts the IDs the manifest names; return it. The
-    database must hold the registry the manifest names and no accepted
-    import. Raise ValidationError when
+    ``catch-up``, no base, no pusher, the current snapshot's digest and
+    LANGUAGE, through ``collection.importing`` as the manifest view
+    receives a manifest, which adopts the IDs the manifest names; return
+    it. The database must hold the registry the manifest names and no
+    accepted import. Raise ValidationError when
     the import is not accepted."""
     collection = json.loads(MANIFEST.read_text(encoding="utf-8"))
     body = {**collection, "format": importing.FORMAT,
             "build": str(uuid.uuid4()), "commit": DEMO_COMMIT,
             "committed_at": moment.isoformat(), "base": None,
             "snapshot": snapshot.build()["digest"], "tooling": DEMO_COMMIT,
-            "trigger": Trigger.CATCH_UP.value, "outcome": "built",
+            "trigger": Trigger.CATCH_UP.value, "pusher": None,
+            "outcome": "built",
             "release": DEMO_RELEASE, "language": language}
     _status, answer = importing.receive(importing.read(body))
     if answer["outcome"] != Outcome.ACCEPTED:

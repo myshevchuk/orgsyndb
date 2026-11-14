@@ -164,10 +164,11 @@ def settings_from(environ: Mapping[str, str]) -> dict[str, Any]:
     ``webapp/db.sqlite3``), ``ORGSYNDB_DEMO`` from the flag of that name,
     which permits writing the demo data, and ``ORGSYNDB_BUILDER_TOKEN``,
     the token the builder signs its manifests with, empty when unset,
-    which turns the manifest path off, and the settings
-    ``forge_settings`` makes. With debug on, the secret key
-    and the host list may be left out; the hosts are then ``localhost``
-    and ``127.0.0.1``.
+    which turns the manifest path off, ``ORGSYNDB_WAKE_URL``, the
+    builder's wake-up address, empty when unset, which sends no
+    wake-up, and the settings ``forge_settings`` makes. With debug on,
+    the secret key and the host list may be left out; the hosts are then
+    ``localhost`` and ``127.0.0.1``.
     Raise ImproperlyConfigured naming the variable when the secret key or
     the host list is missing outside debug, or a flag, the database URL
     or the OpenID key is malformed.
@@ -199,5 +200,6 @@ def settings_from(environ: Mapping[str, str]) -> dict[str, Any]:
         "ORGSYNDB_DEMO": flag(environ, "ORGSYNDB_DEMO", False),
         "ORGSYNDB_BUILDER_TOKEN": environ.get("ORGSYNDB_BUILDER_TOKEN",
                                               "").strip(),
+        "ORGSYNDB_WAKE_URL": environ.get("ORGSYNDB_WAKE_URL", "").strip(),
         **forge_settings(environ),
     }

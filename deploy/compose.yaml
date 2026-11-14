@@ -6,7 +6,9 @@
 # which signs people in through the lab application, keeps its data in
 # the database forge on `db`, which `forge-db` creates, and holds the
 # collection's repository lab/collection; its gate has `builder` check
-# every push to main.
+# every push to main, and its push log, on the volume `pushes` that
+# `forge` writes and `builder` reads, records who pushed each commit and
+# wakes `builder`, which `app` wakes too after a registry change.
 # Copy orgsyndb.env.example to orgsyndb.env beside this file, fill it in,
 # then run, from this directory:
 #   docker compose up -d --build
@@ -34,6 +36,7 @@ services:
       ORGSYNDB_LAB: "true"
     volumes:
       - data:/var/lib/orgsyndb
+      - pushes:/var/lib/orgsyndb-pushes:ro
       # For ssh:// repositories: a directory holding the private key
       # (owned by UID 1000, mode 600), config and known_hosts.
       # - ./ssh:/home/orgsyndb/.ssh:ro
@@ -95,13 +98,14 @@ services:
         condition: service_healthy
 
   # Creates the role and the database forge on db when they are
-  # missing, then exits.
+  # missing, hands the volume pushes to UID 1000, then exits.
   forge-db:
     image: postgres:18
     entrypoint: ["sh", "/opt/orgsyndb/forge/forge-db"]
     env_file: orgsyndb.env
     volumes:
       - ./forge:/opt/orgsyndb/forge:ro
+      - pushes:/var/lib/orgsyndb-pushes
     depends_on:
       db:
         condition: service_healthy
@@ -144,6 +148,7 @@ services:
     volumes:
       - forge:/var/lib/gitea
       - ./forge:/opt/orgsyndb/forge:ro
+      - pushes:/var/lib/orgsyndb-pushes
     depends_on:
       forge-db:
         condition: service_completed_successfully
@@ -153,3 +158,4 @@ volumes:
   caddy:
   db:
   forge:
+  pushes:

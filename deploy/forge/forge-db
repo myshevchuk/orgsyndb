@@ -5,6 +5,10 @@
 # service, from the postgres image, before forge starts. It signs in as
 # POSTGRES_USER with POSTGRES_PASSWORD to POSTGRES_DB, at PGHOST (db by
 # default) and PGPORT, and fails when the server cannot be reached.
+# It then makes the volume pushes, mounted at /var/lib/orgsyndb-pushes,
+# and the files in it owned by UID 1000, the user of Forgejo's rootless
+# image and of the builder's image, so that forge appends to the push
+# log and builder reads it; without the mount it skips this.
 set -eu
 
 : "${FORGE_DB_PASSWORD:?FORGE_DB_PASSWORD is not set in orgsyndb.env}"
@@ -19,3 +23,9 @@ SELECT 'CREATE DATABASE forge OWNER forge ENCODING ''UTF8'' TEMPLATE template0'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'forge') \gexec
 SQL
 echo "forge-db: the role and the database forge exist."
+
+pushes=/var/lib/orgsyndb-pushes
+if [ -d "$pushes" ]; then
+	chown -R 1000:1000 "$pushes"
+	echo "forge-db: $pushes belongs to UID 1000."
+fi

@@ -9,13 +9,14 @@
 {% endif %}{% if imports %}<div class="table-scroll">
 <table class="inventory-table collection-table">
 <thead>
-<tr><th scope="col">{% translate "Received" %}</th><th scope="col">{% translate "Commit" %}</th><th scope="col">{% translate "Trigger" %}</th><th scope="col">{% translate "Outcome" %}</th><th scope="col">{% translate "Release" %}</th><th scope="col">{% translate "Errors" %}</th></tr>
+<tr><th scope="col">{% translate "Received" %}</th><th scope="col">{% translate "Commit" %}</th><th scope="col">{% translate "Trigger" %}</th><th scope="col">{% translate "Pushed by" %}</th><th scope="col">{% translate "Outcome" %}</th><th scope="col">{% translate "Release" %}</th><th scope="col">{% translate "Errors" %}</th></tr>
 </thead>
 <tbody>
 {% for record in imports %}<tr>
 <td>{{ record.received_at|date:"SHORT_DATETIME_FORMAT" }}</td>
 <td><code>{{ record.commit|slice:":10" }}</code></td>
 <td>{{ record.get_trigger_display }}</td>
+<td>{{ record.pushed_by.display_name|default:"" }}</td>
 <td>{{ record.get_outcome_display }}</td>
 <td>{{ record.release }}</td>
 <td>{{ record.errors|linebreaksbr }}</td>

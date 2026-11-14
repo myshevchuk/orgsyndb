@@ -9,8 +9,9 @@ the latest import the application accepted, send the application the
 build's manifest, and publish the build only once the application has
 accepted it. ``orgsyndb-deploy sync`` runs one cycle. ``orgsyndb-deploy
 status`` prints the saved state; ``orgsyndb-deploy retry`` forgets the
-failed builds, so that the next cycle tries them again. SIGHUP starts
-the next cycle of ``run`` at once.
+failed builds, so that the next cycle tries them again. SIGHUP, or a
+wake-up (``POST /wake``, below), starts the next cycle of ``run`` at
+once, or one more after the cycle that runs.
 
 Settings come from the environment:
 
@@ -37,16 +38,18 @@ ORGSYNDB_MANIFEST_URL      address the manifest of each build is posted
                            to (default:
                            http://app:8000/lab/collection/manifest/)
 ORGSYNDB_BUILDER_TOKEN     the token the application expects on a
-                           manifest; without it nothing is built
+                           manifest, and one the server takes on a
+                           wake-up; without it nothing is built
 ORGSYNDB_ALLOWED_HOSTS     the host names the lab application accepts,
                            separated by commas; the first that is not *,
                            without a leading dot, is sent as the Host of
                            the snapshot's, the manifest's and the
                            check's requests (default: localhost)
 ORGSYNDB_GATE_TOKEN        the token the gate's hook signs its checks
-                           with; without it ``run`` serves no check
-ORGSYNDB_GATE_PORT         the check server's port (default: 8091)
-ORGSYNDB_GATE_BIND         the address the check server listens on
+                           and the push log's hook its wake-ups with;
+                           without it every check answers 503
+ORGSYNDB_GATE_PORT         the server's port (default: 8091)
+ORGSYNDB_GATE_BIND         the address the server listens on
                            (default: 0.0.0.0)
 ORGSYNDB_GATE_TIMEOUT      seconds the hook waits for a check; a check
                            ends 10 seconds sooner (default: 150, at
@@ -54,6 +57,9 @@ ORGSYNDB_GATE_TIMEOUT      seconds the hook waits for a check; a check
 ORGSYNDB_CHECK_URL         address the collection half of a check is
                            posted to (default:
                            http://app:8000/lab/collection/check/)
+ORGSYNDB_PUSH_LOG          the push log Forgejo appends to, read for the
+                           pusher of each build (default:
+                           /var/lib/orgsyndb-pushes/pushes.log)
 
 The data directory (ORGSYNDB_DATA, default /var/lib/orgsyndb) holds the
 collection's clone in ``collection/``, the snapshot last fetched in
@@ -68,9 +74,21 @@ ORGSYNDB_APP (default /opt/orgsyndb/app). ORGSYNDB_IMAGE_INFO (default
 ref and ``deploy/docker`` tree it was built from. An application commit
 whose ``deploy/docker`` tree differs needs a new image, and is not used.
 
-With ORGSYNDB_GATE_TOKEN set, ``run`` also serves ``POST /check`` for
-the gate, the pre-receive hook of the collection's repository in
-Forgejo, from a thread beside its cycles. The request carries a commit's
+Every manifest names as ``pusher`` the user name of the push log's last
+line naming the collection commit, ``<time> <commit> <id> <name>``, read
+after the build's commands have run; it is null when no line names the
+commit, the line's name is ``-`` or the log is missing. A line that is
+not of that form is skipped.
+
+With ORGSYNDB_GATE_TOKEN or ORGSYNDB_BUILDER_TOKEN set, ``run`` also
+runs the builder's server, from a thread beside its cycles. It answers
+``POST /wake`` with 202 and an empty body when the request carries
+``Authorization: Bearer`` with either token, and 401 otherwise; a
+wake-up does what SIGHUP does.
+
+The server answers ``POST /check`` for the gate, the pre-receive hook
+of the collection's repository in Forgejo, and answers it 503 while
+ORGSYNDB_GATE_TOKEN is empty. The request carries a commit's
 pack, as ``git pack-objects --stdout --revs`` writes it, the commit's id
 in ``X-Orgsyndb-Commit`` and ``Authorization: Bearer
 <ORGSYNDB_GATE_TOKEN>``. The check checks the commit out as a build
@@ -118,6 +136,11 @@ from typing import BinaryIO
 
 sys.dont_write_bytecode = True
 PROG = "orgsyndb-deploy"
+PUSH_LOG = "/var/lib/orgsyndb-pushes/pushes.log"
+# A line of the push log: the time, the commit, Forgejo's id of the
+# pusher and their user name, the last two ``-`` when unknown.
+PUSH_LINE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:"
+                       r"[0-9]{2}Z ([0-9a-f]{40}) \S+ (\S+)")
 IMAGE_DIR = "deploy/docker"
 OUTPUTS = ("build", "public", "pdf")
 REGISTRY_URL = "http://app:8000/lab/registry/snapshot.json"
@@ -131,6 +154,8 @@ GATE_MARGIN = 10
 # The largest pack a check takes, in bytes.
 GATE_LIMIT = 200_000_000
 GATE_COMMIT = re.compile(r"[0-9a-fA-F]{40}")
+# The answer of a check while ORGSYNDB_GATE_TOKEN is empty.
+NOT_CONFIGURED = "the gate is not configured: ORGSYNDB_GATE_TOKEN is empty"
 # Seconds the check server reads and discards a body it did not take.
 GATE_DISCARD = 2
 # The ignored directories of the application's clone that hold the
@@ -183,6 +208,7 @@ class Settings:
     gate_bind: str
     gate_timeout: int
     check_url: str
+    push_log: Path
 
 
 def log(message: str) -> None:
@@ -280,6 +306,8 @@ def settings() -> Settings:
                             GATE_MARGIN + 1),
         check_url=(os.environ.get("ORGSYNDB_CHECK_URL", "").strip()
                    or CHECK_URL),
+        push_log=Path(os.environ.get("ORGSYNDB_PUSH_LOG", "").strip()
+                      or PUSH_LOG),
     )
 
 
@@ -533,6 +561,26 @@ def trigger(accepted: dict | None, app: str, commit: str,
     return "catch-up"
 
 
+def pusher(log_path: Path, commit: str) -> str | None:
+    """Return the user name the last line of the push log LOG_PATH that
+    names COMMIT gives, or None when no line names it, that line's name
+    is ``-``, or the log cannot be read. A line that is not UTF-8 text
+    of the form ``PUSH_LINE`` is skipped."""
+    try:
+        data = log_path.read_bytes()
+    except OSError:
+        return None
+    found = None
+    for raw in data.split(b"\n"):
+        try:
+            line = PUSH_LINE.fullmatch(raw.decode("utf-8"))
+        except UnicodeDecodeError:
+            continue
+        if line is not None and line[1] == commit:
+            found = line[2]
+    return None if found == "-" else found
+
+
 def send(config: Settings, manifest: dict) -> dict:
     """Post MANIFEST to the manifest address and return the answer's
     table when the application answers 200 or 409. Raise Failure, with
@@ -714,9 +762,10 @@ def record_failure(state: dict, app: str, commit: str,
 def attempt(config: Settings, state: dict, app: str, commit: str,
             snapshot: dict) -> str:
     """Build ``commit`` of the collection with ``app``, both checked out,
-    and the kept SNAPSHOT, send the application its manifest, and
-    publish the build when the application accepts it. Return what came
-    of it:
+    and the kept SNAPSHOT, send the application its manifest, naming the
+    pusher the push log gives once the build's commands have run
+    (``pusher``), and publish the build when the application accepts
+    it. Return what came of it:
 
     - ``published``: accepted; ``current`` points at the release, which
       the state records;
@@ -751,8 +800,9 @@ def attempt(config: Settings, state: dict, app: str, commit: str,
         errors = getattr(exc, "errors", None) or [str(exc)]
         log(f"failed: {exc}; the published site is unchanged")
         try:
-            send(config, {**manifest, "outcome": "refused",
-                          "errors": errors})
+            send(config, {**manifest,
+                          "pusher": pusher(config.push_log, commit),
+                          "outcome": "refused", "errors": errors})
         except Failure as reason:
             log(f"cannot send the manifest: {reason}; the failure is "
                 "reported again by the next cycle")
@@ -761,8 +811,10 @@ def attempt(config: Settings, state: dict, app: str, commit: str,
         return "failed"
     release = config.data / "releases" / name
     try:
-        answer = send(config, {**manifest, "outcome": "built",
-                               "release": name, **half})
+        answer = send(config, {**manifest,
+                               "pusher": pusher(config.push_log, commit),
+                               "outcome": "built", "release": name,
+                               **half})
     except Failure as reason:
         log(f"cannot send the manifest: {reason}; release {name} is kept "
             "until the application names it")
@@ -1203,7 +1255,8 @@ class Gate:
 
 
 class CheckHandler(BaseHTTPRequestHandler):
-    """The check server's requests: ``POST /check`` with a pack."""
+    """The builder's server's requests: ``POST /check`` with a pack, and
+    ``POST /wake``."""
 
     server_version = PROG
     protocol_version = "HTTP/1.1"
@@ -1213,6 +1266,11 @@ class CheckHandler(BaseHTTPRequestHandler):
     @property
     def gate(self) -> Gate:
         return self.server.gate  # type: ignore[attr-defined]
+
+    @property
+    def woken(self) -> threading.Event:
+        """The event a wake-up sets, which ``run`` waits for."""
+        return self.server.woken  # type: ignore[attr-defined]
 
     def log_message(self, format: str, *args: object) -> None:
         """Log nothing per request; ``check`` logs each check."""
@@ -1235,20 +1293,25 @@ class CheckHandler(BaseHTTPRequestHandler):
 
     def other(self) -> None:
         """Answer a request that is not a POST."""
-        if self.path != "/check":
-            self.answer(404, ["not found"])
-        else:
+        if self.path == "/check" and not self.gate.config.gate_token:
+            self.answer(503, [NOT_CONFIGURED])
+        elif self.path in ("/check", "/wake"):
             self.answer(405, ["only POST is allowed"])
+        else:
+            self.answer(404, ["not found"])
 
     do_GET = do_HEAD = do_PUT = do_DELETE = do_PATCH = other
 
-    def signed(self) -> bool:
-        """Whether the request carries ``Authorization: Bearer
-        <ORGSYNDB_GATE_TOKEN>``, compared in constant time."""
+    def signed(self, *tokens: str) -> bool:
+        """Whether the request carries ``Authorization: Bearer <token>``
+        with one of TOKENS, compared in constant time; an empty token
+        matches nothing."""
         scheme, _, given = self.headers.get("Authorization", "").partition(
             " ")
-        return scheme == "Bearer" and hmac.compare_digest(
-            given.encode("utf-8"), self.gate.config.gate_token.encode("utf-8"))
+        matches = [hmac.compare_digest(given.encode("utf-8"),
+                                       token.encode("utf-8"))
+                   for token in tokens if token]
+        return scheme == "Bearer" and any(matches)
 
     def copy(self, target: Path, deadline: float) -> None:
         """Read the rest of the body into the file TARGET by DEADLINE, a
@@ -1290,12 +1353,34 @@ class CheckHandler(BaseHTTPRequestHandler):
         finally:
             self.discard()
 
+    def wake(self) -> None:
+        """Answer a POST to ``/wake``: 202, setting ``woken``, when it
+        carries the gate's or the builder's token, else 401. A body is
+        read and dropped afterwards."""
+        given = self.headers.get("Content-Length", "")
+        self.unread = int(given) if given.isdigit() else 0
+        config = self.gate.config
+        if not self.signed(config.gate_token, config.token):
+            self.answer(401, ["the request does not carry the gate's or "
+                              "the builder's token"])
+            return
+        self.woken.set()
+        log("woken up; the next cycle starts now or after this one")
+        self.answer(202, [])
+
     def take(self) -> None:
-        """Answer a POST: check the pack it carries, or refuse it."""
+        """Answer a POST: a wake-up, or a check of the pack it carries,
+        or refuse it."""
+        if self.path == "/wake":
+            self.wake()
+            return
         if self.path != "/check":
             self.answer(404, ["not found"])
             return
-        if not self.signed():
+        if not self.gate.config.gate_token:
+            self.answer(503, [NOT_CONFIGURED])
+            return
+        if not self.signed(self.gate.config.gate_token):
             self.answer(401, ["the request does not carry the gate's token"])
             return
         given = self.headers.get("Content-Length", "")
@@ -1327,28 +1412,34 @@ class CheckHandler(BaseHTTPRequestHandler):
         self.answer(result.status, result.lines)
 
 
-def serve_gate(config: Settings) -> tuple[ThreadingHTTPServer, Gate]:
-    """Start the check server on ORGSYNDB_GATE_BIND and
+def serve_gate(config: Settings, woken: threading.Event
+               ) -> tuple[ThreadingHTTPServer, Gate]:
+    """Start the builder's server on ORGSYNDB_GATE_BIND and
     ORGSYNDB_GATE_PORT in a thread, after removing check directories a
-    previous run left; return the server and its gate. Raise OSError
-    when it cannot listen."""
+    previous run left; a wake-up sets WOKEN. Return the server and its
+    gate. Raise OSError when it cannot listen."""
     gate = Gate(config)
     gate.clear()
     server = ThreadingHTTPServer((config.gate_bind, config.gate_port),
                                  CheckHandler)
     server.daemon_threads = True
     server.gate = gate  # type: ignore[attr-defined]
+    server.woken = woken  # type: ignore[attr-defined]
     threading.Thread(target=server.serve_forever, name="gate",
                      daemon=True).start()
-    log(f"serving checks on {config.gate_bind}:{config.gate_port}")
+    log("serving wake-ups and "
+        + ("checks" if config.gate_token else "no checks")
+        + f" on {config.gate_bind}:{config.gate_port}")
     return server, gate
 
 
 def run(config: Settings) -> int:
     """Repeat the cycle every ORGSYNDB_INTERVAL seconds, or at once on
-    SIGHUP, serving checks beside it while ORGSYNDB_GATE_TOKEN is set,
-    until SIGTERM ends it with exit status 0. Raise OSError when the
-    check server cannot listen."""
+    SIGHUP or a wake-up, running the builder's server beside it while
+    ORGSYNDB_GATE_TOKEN or ORGSYNDB_BUILDER_TOKEN is set, until SIGTERM
+    ends it with exit status 0. A SIGHUP or wake-up during a cycle
+    starts one more after it, however many arrive. Raise OSError when
+    the server cannot listen."""
     wake = threading.Event()
     signal.signal(signal.SIGHUP, lambda *_: wake.set())
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
@@ -1356,7 +1447,8 @@ def run(config: Settings) -> int:
         + (f"application {config.app_repo} ({config.app_ref})"
            if config.app_update else "application updates off")
         + f"; every {config.interval} s")
-    served = serve_gate(config) if config.gate_token else None
+    served = (serve_gate(config, wake)
+              if config.gate_token or config.token else None)
     try:
         while True:
             try:

@@ -6,17 +6,17 @@ from typing import Any
 
 from django.test import override_settings
 
-from . import berlin, frozen, page, table, ticking
+from . import berlin, frozen, make_user, page, table, ticking
 from .collection_support import accept, latest_import
 from .collection_support import (IMPORTS, SEQUENCES, TOKEN, ImportCase,
                                  demo_collection, make_import, manifest,
                                  post, refused)
 from .demo_support import DAY, SeededCase, noon
 
-COLUMNS_DE = ["Empfangen", "Commit", "Anlass", "Ergebnis", "Release",
-              "Fehler"]
-COLUMNS_EN = ["Received", "Commit", "Trigger", "Outcome", "Release",
-              "Errors"]
+COLUMNS_DE = ["Empfangen", "Commit", "Anlass", "Gepusht von", "Ergebnis",
+              "Release", "Fehler"]
+COLUMNS_EN = ["Received", "Commit", "Trigger", "Pushed by", "Outcome",
+              "Release", "Errors"]
 TRIGGERS_DE = {"commit": "Commit", "registry": "Register",
                "tooling": "Werkzeuge", "catch-up": "Nachholen"}
 TRIGGERS_EN = {"commit": "Commit", "registry": "Registry",
@@ -93,7 +93,7 @@ class ImportsListedTests(SeededCase):
         with frozen(noon(DAY + timedelta(days=1))):
             report = post(self.client, refused(
                 errors, base=done.json()["import"],
-                trigger="registry"))
+                trigger="registry", pusher="jkoch"))
         self.assertEqual(report.json()["outcome"], "refused")
         self.assertEqual(Import.objects.count(), 3)
         response = self.client.get(IMPORTS)
@@ -108,6 +108,9 @@ class ImportsListedTests(SeededCase):
             outcome="refused").commit[:10])
         self.assertEqual(newest["Ergebnis"].text(), "Abgelehnt")
         self.assertEqual(newest["Anlass"].text(), "Register")
+        self.assertEqual(newest["Gepusht von"].text(), "Jonas Koch")
+        self.assertEqual(oldest["Gepusht von"].text(), "")
+        self.assertEqual(first["Gepusht von"].text(), "")
         self.assertEqual(newest["Release"].text(), "")
         for error in errors:
             self.assertIn(error, newest["Fehler"].text())
@@ -187,6 +190,63 @@ class ListTests(ImportCase):
         self.assertIn("second: error: two", cell.text())
         self.assertLess(cell.text().index("first: error: one"),
                         cell.text().index("second: error: two"))
+
+
+class PushedByTests(ImportCase):
+    """Requirement: Imports page (`Gepusht von`, the display name of the
+    import's `pushed_by`, empty for none)."""
+
+    def row(self, record: Any) -> dict[str, Any]:
+        _header, rows = table(page(self.client.get(IMPORTS)))
+        return row_of(rows, record.commit)
+
+    def test_the_column_names_the_pusher_by_display_name(self) -> None:
+        from django.contrib.auth import get_user_model
+        pusher = get_user_model().objects.get(username="klehmann")
+        record = make_import(pushed_by=pusher)
+        self.assertEqual(pusher.display_name, "Katrin Lehmann")
+        self.assertEqual(self.row(record)["Gepusht von"].text(),
+                         "Katrin Lehmann")
+
+    def test_an_account_without_a_full_name_shows_its_user_name(
+            self) -> None:
+        """Requirement: Imports page (the account's `display_name`)."""
+        pusher = make_user("nameless", "NL")
+        record = make_import(pushed_by=pusher)
+        self.assertEqual(self.row(record)["Gepusht von"].text(),
+                         "nameless")
+
+    def test_no_pusher_leaves_the_cell_empty(self) -> None:
+        record = make_import()
+        self.assertEqual(self.row(record)["Gepusht von"].text(), "")
+
+    def test_a_refused_import_names_its_pusher(self) -> None:
+        from django.contrib.auth import get_user_model
+        record = make_import(
+            outcome="refused", errors="a: error: b",
+            pushed_by=get_user_model().objects.get(username="tbauer"))
+        self.assertEqual(self.row(record)["Gepusht von"].text(),
+                         "Tobias Bauer")
+
+    def test_the_column_in_english(self) -> None:
+        """Requirement: Imports page (`Pushed by`)."""
+        from django.contrib.auth import get_user_model
+        accept(language="en")
+        record = make_import(
+            language="en",
+            pushed_by=get_user_model().objects.get(username="aschmidt"))
+        header, rows = table(page(self.client.get(IMPORTS)))
+        self.assertEqual(header, COLUMNS_EN)
+        self.assertEqual(
+            row_of(rows, record.commit)["Pushed by"].text(),
+            "Anna Schmidt")
+
+    def test_the_pusher_comes_from_the_manifest(self) -> None:
+        """Requirement: Imports page (the import's `pushed_by`, which the
+        manifest's `pusher` names)."""
+        record = self.accept(pusher="mwolf")
+        self.assertEqual(self.row(record)["Gepusht von"].text(),
+                         "Miriam Wolf")
 
 
 class LatestAcceptedTests(ImportCase):

@@ -111,8 +111,8 @@ class MalformedTests(ImportCase):
         built = {"without commit": {k: v for k, v in good.items()
                                     if k != "commit"}}
         for key in ("format", "build", "committed_at", "base", "snapshot",
-                    "tooling", "trigger", "outcome", "release", "language",
-                    "procedures", "sequences"):
+                    "tooling", "trigger", "pusher", "outcome", "release",
+                    "language", "procedures", "sequences"):
             built[f"without {key}"] = {k: v for k, v in good.items()
                                        if k != key}
         changes: dict[str, dict[str, Any]] = {
@@ -125,6 +125,8 @@ class MalformedTests(ImportCase):
             "a snapshot in capitals": {"snapshot": "D" * 64},
             "a tooling of 39 digits": {"tooling": "b" * 39},
             "a trigger of push": {"trigger": "push"},
+            "a pusher that is a number": {"pusher": 7},
+            "a pusher that is a list": {"pusher": ["jkoch"]},
             "an outcome that is neither": {"outcome": "pending"},
             "a format of 2": {"format": 2},
             "a format that is text": {"format": "1"},
@@ -148,6 +150,10 @@ class MalformedTests(ImportCase):
         built["a yield too large for a float"] = huge
         refusing = refused(["x: error: y"])
         refusals = {
+            "a refusal without a pusher": {
+                k: v for k, v in refusing.items() if k != "pusher"},
+            "a refusal with a pusher that is a number": {
+                **refusing, "pusher": 7},
             "a refusal without errors": {
                 k: v for k, v in refusing.items() if k != "errors"},
             "a refusal with an empty list": {**refusing, "errors": []},
