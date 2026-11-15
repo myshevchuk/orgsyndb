@@ -25,7 +25,7 @@
 - [x] 3.1 Measure the shell on site and lab pages at 1280 and 500 CSS
   pixels, signed in and not, light and dark (site-theme "The shell
   does not move")
-- [ ] 3.2 Run the stack on the test server
+- [x] 3.2 Run the stack on the test server
 
 ## 4. Docs and archive
 

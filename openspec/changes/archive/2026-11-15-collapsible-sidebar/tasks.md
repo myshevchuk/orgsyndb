@@ -21,7 +21,7 @@
   and not: the toggle collapses and expands on the site's and the
   application's pages, the state holds across pages, nothing moves
   on load, and without JavaScript the toggle is hidden
-- [ ] 3.2 Run the stack on the test server
+- [x] 3.2 Run the stack on the test server
 
 ## 4. Review and archive
 
