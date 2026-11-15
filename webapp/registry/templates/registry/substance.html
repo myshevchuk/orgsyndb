@@ -15,7 +15,7 @@
 <dd>{{ substance.name_de|default:"–" }}</dd>
 <dt>{% translate "Short name" %}</dt>
 <dd>{{ substance.short_name|default:"–" }}</dd>
-<dt>{% translate "Group" %}</dt>
+<dt>{% translate "Inventory group" %}</dt>
 <dd><a href="/lab/registry/groups/">{{ substance.group.shown_label }}</a></dd>
 <dt>{% translate "Chemical classes" %}</dt>
 <dd>{% for term in classes %}{{ term.shown_label }}{% if not forloop.last %}, {% endif %}{% empty %}–{% endfor %}</dd>

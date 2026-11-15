@@ -536,8 +536,11 @@ narrow one only the title's row. The browser remembers the choice for every
 page of the site.
 Under **Collection**, choose **Compounds**, **Sequences** or **Procedures**;
 **Help** follows on its own. Sites with the lab application also show a
-**Lab** group first: **Overview**, **Inventory**, **Planning**, **Tasks**,
-**Substances**, **Lab notebooks** and **Imports**. On a procedure page, the
+**Lab** group first, with **Overview**, **Inventory**, **Planning** and
+**Tasks**; then **Chemicals**, with **Substances**; and, after
+**Collection**, **Master data**, with **Chemical classes**, **Inventory
+groups**, **Projects**, **Reaction types**, **Lab notebooks** and
+**Imports**. On a procedure page, the
 search hint is **Product, CAS or SMILES**; keywords still match. Choose the
 magnifier at the field's right end or press Enter to search procedures.
 

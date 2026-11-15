@@ -519,13 +519,19 @@ the button is absent and the sidebar stays open.
 The **Collection** group lists **Compounds**, **Sequences** and **Procedures**
 in that order (**Sammlung**, **Verbindungen**, **Synthesewege** and
 **Vorschriften** on a German site). **Help** (**Hilfe**) follows on its own.
-A site built with `ORGSYNDB_LAB=true` shows the **Lab** (**Labor**) group
-first: **Overview**, **Inventory**, **Planning**, **Tasks**, **Substances**,
-**Lab notebooks** and **Imports** (**Übersicht**, **Bestand**, **Planung**,
-**Aufgaben**, **Substanzen**, **Laborjournale** and **Importe**).
-They link to `/lab/`, `/lab/inventory/end-products/`, `/lab/planning/`,
-`/lab/tasks/`, `/lab/registry/`, `/lab/journal/` and `/lab/collection/`.
-Without the lab setting, the **Lab** group and its links are absent.
+A site built with `ORGSYNDB_LAB=true` adds three groups. **Lab**
+(**Labor**) comes first, with **Overview**, **Inventory**, **Planning** and
+**Tasks** (**Übersicht**, **Bestand**, **Planung** and **Aufgaben**),
+linking to `/lab/`, `/lab/inventory/end-products/`, `/lab/planning/` and
+`/lab/tasks/`. **Chemicals** (**Chemikalien**) follows, with **Substances**
+(**Substanzen**) at `/lab/registry/`. **Master data** (**Stammdaten**)
+comes after **Collection** and before **Help**, with **Chemical classes**,
+**Inventory groups**, **Projects**, **Reaction types**, **Lab notebooks**
+and **Imports** (**Stoffklassen**, **Bestandsgruppen**, **Projekte**,
+**Reaktionstypen**, **Laborjournale** and **Importe**); the four
+vocabularies are under `/lab/registry/`, the notebooks at `/lab/journal/`
+and the imports at `/lab/collection/`. Without the lab setting, these
+three groups and their links are absent.
 
 To add or remove a menu entry, edit `[[menus.main]]` in `site/hugo.toml`;
 each `identifier` needs text in both `site/i18n/de.toml` and
@@ -2377,13 +2383,15 @@ the summary; the builder updates only the static site.
 
 Before entering stock or planning a synthesis, find or add the substance
 in the lab registry. A **substance** is a compound, mixture or solution
-that you track as one material. Choose **Substanzen** (**Substances**) or
-open `/lab/registry/`. You can read the registry without signing in;
-creating or editing a record requires a signed-in account.
+that you track as one material. Choose **Substanzen** (**Substances**)
+under **Chemikalien** (**Chemicals**) or open `/lab/registry/`. You can
+read the registry without signing in; creating or editing a record
+requires a signed-in account.
 
 Search by key, English or German name, short name or CAS number, the
 chemical registry identifier. The list shows substances in name order,
-with their group, chemical classes, formula, molar mass and article number.
+with their inventory group, chemical classes, formula, molar mass and
+article number.
 Open a substance's name to see its full record, containers, open bulk lots
 and tasks. **In der Sammlung** (**In the collection**) links to the site's
 compound page when the latest accepted import was received no earlier
@@ -2514,16 +2522,20 @@ number must have the correct form and check digit and must be unused.
 A German interface shows the German name when present, otherwise the
 English name.
 
-The links above the substance list open four **vocabularies**, lists of
-terms you can reuse: **Chemical classes**, **Groups**, **Projects** and
-**Reaction types**. The first three allow a term to sit under a parent;
-reaction types are a flat list. Each page shows keys, labels in both
-languages, parents where applicable and how many substances use each
-term. Parents appear before their children, with siblings ordered by key.
+The **Master data** (**Stammdaten**) group of the menu opens four
+**vocabularies**, lists of terms you can reuse: **Chemical classes**,
+**Inventory groups**, **Projects** and **Reaction types** (**Stoffklassen**,
+**Bestandsgruppen**, **Projekte** and **Reaktionstypen**). The first three
+allow a term to sit under a parent; reaction types are a flat list. Each
+page shows keys, labels in both languages, parents where applicable and
+how many records use each term: substances for chemical classes and
+inventory groups, and the collection's procedures, withdrawn ones
+included, for projects and reaction types. Parents appear before their
+children, with siblings ordered by key.
 
-To add a missing group or class before creating a substance, open its
-vocabulary and choose **New term**. Enter a unique key using the same
-rule as substance keys and an English label. You can add a German label
+To add a missing inventory group or class before creating a substance,
+open its vocabulary and choose **New term**. Enter a unique key using the
+same rule as substance keys and an English label. You can add a German label
 and, in a tree, a parent. The parent cannot be the term itself or one
 filed under it. Choose a term's key to edit its labels or parent; its
 key stays fixed. Changes to substances and terms keep a history.

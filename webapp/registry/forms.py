@@ -68,13 +68,14 @@ class SubstanceForm(forms.ModelForm):
     """A substance with its chemical classes, at least one of them.
 
     The key is entered when the substance is created and is fixed
-    afterwards: the form of an existing substance has no key. The group
-    and the classes are offered in the order of their vocabularies'
-    pages. Saving replaces the substance's classes by those checked.
+    afterwards: the form of an existing substance has no key. The
+    inventory group and the classes are offered in the order of their
+    vocabularies' pages. Saving replaces the substance's classes by
+    those checked.
     """
 
-    group = TermChoiceField(queryset=Group.objects.all(), label=_("Group"),
-                            empty_label="–")
+    group = TermChoiceField(queryset=Group.objects.all(),
+                            label=_("Inventory group"), empty_label="–")
     chemical_classes = TermsChoiceField(
         queryset=ChemicalClass.objects.all(), label=_("Chemical classes"),
         widget=forms.CheckboxSelectMultiple,

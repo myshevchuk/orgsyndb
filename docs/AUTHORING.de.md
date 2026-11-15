@@ -637,12 +637,14 @@ und wieder auf: Eingeklappt bleibt in breiten Fenstern nur ein schmaler
 Streifen mit der Schaltfläche, in schmalen nur die Titelzeile. Der Browser
 merkt sich die Wahl für alle Seiten der Website. Unter **Sammlung** wählen Sie
 **Verbindungen**, **Synthesewege** oder **Vorschriften**; **Hilfe** folgt
-einzeln. Websites mit Laboranwendung zeigen davor die Gruppe **Labor**:
-**Übersicht**, **Bestand**, **Planung**, **Aufgaben**, **Substanzen**,
-**Laborjournale** und **Importe**. Auf einer
-Vorschriftenseite zeigt das Suchfeld **Produkt, CAS oder SMILES**; auch
-Stichwörter werden gefunden. Klicken Sie auf die Lupe rechts im Feld oder
-drücken Sie die Eingabetaste, um Vorschriften zu suchen.
+einzeln. Websites mit Laboranwendung zeigen davor die Gruppe **Labor** mit
+**Übersicht**, **Bestand**, **Planung** und **Aufgaben** und die Gruppe
+**Chemikalien** mit **Substanzen**, danach die Gruppe **Stammdaten** mit
+**Stoffklassen**, **Bestandsgruppen**, **Projekte**, **Reaktionstypen**,
+**Laborjournale** und **Importe**. Auf einer Vorschriftenseite zeigt das
+Suchfeld **Produkt, CAS oder SMILES**; auch Stichwörter werden gefunden.
+Klicken Sie auf die Lupe rechts im Feld oder drücken Sie die Eingabetaste,
+um Vorschriften zu suchen.
 
 Die **Übersicht** der Startseite enthält **Synthesewege** mit einer
 Anzahl. Dieser Link und die Navigation öffnen `/sequences/`: nach Nummer

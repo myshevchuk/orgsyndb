@@ -6,11 +6,6 @@
 <span class="lab-count">{{ substances|length }}</span>
 {% if user.is_authenticated %}<p class="actions"><a href="/lab/registry/substances/new/">{% translate "New substance" %}</a></p>
 {% endif %}</div>
-<nav class="section-tabs" aria-label="{% translate "Vocabularies" %}">
-<ul>
-{% for name, heading in vocabularies %}<li><a href="/lab/registry/{{ name }}/">{{ heading }}</a></li>
-{% endfor %}</ul>
-</nav>
 <form class="lab-filters" method="get" action="/lab/registry/">
 <label>{% translate "Search substances" %}
 <input type="search" name="q" value="{{ q }}"></label>
@@ -19,7 +14,7 @@
 <div class="table-scroll">
 <table class="inventory-table registry-table">
 <thead>
-<tr><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Key" %}</th><th scope="col">{% translate "Short name" %}</th><th scope="col">{% translate "Group" %}</th><th scope="col">{% translate "Chemical classes" %}</th><th scope="col">{% translate "Formula" %}</th><th scope="col">{% translate "Molar mass" %}</th><th scope="col">{% translate "Article no." %}</th></tr>
+<tr><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Key" %}</th><th scope="col">{% translate "Short name" %}</th><th scope="col">{% translate "Inventory group" %}</th><th scope="col">{% translate "Chemical classes" %}</th><th scope="col">{% translate "Formula" %}</th><th scope="col">{% translate "Molar mass" %}</th><th scope="col">{% translate "Article no." %}</th></tr>
 </thead>
 <tbody>
 {% for found in substances %}<tr>

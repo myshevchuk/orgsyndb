@@ -12,7 +12,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 
-from collection.models import latest_accepted
+from collection.models import Procedure, latest_accepted
 from inventory.models import Item, Lot
 from registry import snapshot
 from registry.forms import SubstanceForm
@@ -27,7 +27,7 @@ REGISTRY = "/lab/registry/"
 # its heading.
 VOCABULARIES: dict[str, tuple[type[Term], Any]] = {
     "chemical-classes": (ChemicalClass, gettext_lazy("Chemical classes")),
-    "groups": (Group, gettext_lazy("Groups")),
+    "groups": (Group, gettext_lazy("Inventory groups")),
     "projects": (Project, gettext_lazy("Projects")),
     "reaction-types": (ReactionType, gettext_lazy("Reaction types")),
 }
@@ -60,11 +60,7 @@ def substance_list(request: HttpRequest) -> HttpResponse:
                    key=lambda substance: (substance.shown_name.casefold(),
                                           substance.key))
     return render(request, "registry/list.html", {
-        "substances": shown,
-        "q": query,
-        "vocabularies": [(name, heading) for name, (_model, heading)
-                         in VOCABULARIES.items()],
-    })
+        "substances": shown, "q": query})
 
 
 def in_collection(substance: Substance) -> bool:
@@ -141,24 +137,31 @@ def vocabulary_of(name: str) -> tuple[type[Term], Any]:
     return VOCABULARIES[name]
 
 
+# The rows that name a term of each vocabulary, by model: a manager and
+# the field that names the term.
+NAMED_BY: dict[type[Term], tuple[Any, str]] = {
+    ChemicalClass: (SubstanceClass.objects, "chemical_class"),
+    Group: (Substance.objects, "group"),
+    Project: (Procedure.objects, "project"),
+    ReactionType: (Procedure.objects, "reaction_type"),
+}
+
+
 def uses(model: type[Term]) -> Counter[int]:
-    """Return how many substances name each term of MODEL, by the
-    term's ID."""
-    if model is Group:
-        pairs = Substance.objects.values("group").annotate(
-            count=Count("pk")).values_list("group", "count")
-    elif model is ChemicalClass:
-        pairs = SubstanceClass.objects.values("chemical_class").annotate(
-            count=Count("pk")).values_list("chemical_class", "count")
-    else:
-        pairs = []
-    return Counter(dict(pairs))
+    """Return how many records name each term of MODEL, by the term's
+    ID: substances for the chemical classes and the inventory groups,
+    procedures of the collection, withdrawn ones included, for the
+    projects and the reaction types."""
+    rows, field = NAMED_BY[model]
+    return Counter(dict(rows.filter(**{f"{field}__isnull": False})
+                        .values(field).annotate(count=Count("pk"))
+                        .values_list(field, "count")))
 
 
 def vocabulary_page(request: HttpRequest, vocabulary: str) -> HttpResponse:
     """List the terms of VOCABULARY in tree order, each with its depth
-    and the number of substances that name it; answer 404 for an
-    unknown vocabulary."""
+    and the number of records that name it (``uses``); answer 404 for
+    an unknown vocabulary."""
     model, heading = vocabulary_of(vocabulary)
     counts = uses(model)
     terms = model.objects.select_related("parent") if is_tree(model) \

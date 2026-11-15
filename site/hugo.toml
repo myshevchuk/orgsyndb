@@ -77,25 +77,15 @@ weight = 14
 params.paths = ["/lab/tasks/"]
 
 [[menus.main]]
-identifier = "nav_substances"
-parent = "nav_lab"
-url = "/lab/registry/"
+identifier = "nav_chemicals"
 weight = 15
-params.paths = ["/lab/registry/"]
 
 [[menus.main]]
-identifier = "nav_notebooks"
-parent = "nav_lab"
-url = "/lab/journal/"
+identifier = "nav_substances"
+parent = "nav_chemicals"
+url = "/lab/registry/"
 weight = 16
-params.paths = ["/lab/journal/"]
-
-[[menus.main]]
-identifier = "nav_imports"
-parent = "nav_lab"
-url = "/lab/collection/"
-weight = 17
-params.paths = ["/lab/collection/"]
+params.paths = ["/lab/registry/substances/"]
 
 [[menus.main]]
 identifier = "nav_collection"
@@ -124,7 +114,53 @@ params.paths = ["/procedures/", "/general-procedures/", "/reaction_types/",
                 "/tags/", "/authors/"]
 
 [[menus.main]]
+identifier = "nav_master_data"
+weight = 25
+
+[[menus.main]]
+identifier = "nav_chemical_classes"
+parent = "nav_master_data"
+url = "/lab/registry/chemical-classes/"
+weight = 26
+params.paths = ["/lab/registry/chemical-classes/"]
+
+[[menus.main]]
+identifier = "nav_inventory_groups"
+parent = "nav_master_data"
+url = "/lab/registry/groups/"
+weight = 27
+params.paths = ["/lab/registry/groups/"]
+
+[[menus.main]]
+identifier = "nav_projects"
+parent = "nav_master_data"
+url = "/lab/registry/projects/"
+weight = 28
+params.paths = ["/lab/registry/projects/"]
+
+[[menus.main]]
+identifier = "nav_reaction_types"
+parent = "nav_master_data"
+url = "/lab/registry/reaction-types/"
+weight = 29
+params.paths = ["/lab/registry/reaction-types/"]
+
+[[menus.main]]
+identifier = "nav_notebooks"
+parent = "nav_master_data"
+url = "/lab/journal/"
+weight = 30
+params.paths = ["/lab/journal/"]
+
+[[menus.main]]
+identifier = "nav_imports"
+parent = "nav_master_data"
+url = "/lab/collection/"
+weight = 31
+params.paths = ["/lab/collection/"]
+
+[[menus.main]]
 identifier = "nav_help"
 url = "/help/"
-weight = 30
+weight = 40
 params.paths = ["/help/"]

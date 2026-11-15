@@ -3,19 +3,21 @@
 import re
 from typing import Any
 
+from vocabulary.models import Project, ReactionType
+
 from . import (berlin, frozen, make_group, make_item, make_lot,
                make_substance, make_task, table)
-from .collection_support import accept, make_import
+from .collection_support import accept, make_import, make_procedure
 from .demo_support import SeededCase
 from .inventory_support import SUBSTANCE_PAGE
 from .planning_support import section
 from .registry_support import (REGISTRY, VOCABULARIES, RegistryCase,
                                substance_url, term_url)
 
-COLUMNS_DE = ["Name", "Schlüssel", "Kurzname", "Gruppe", "Stoffklassen",
-              "Summenformel", "Molmasse", "Artikelnr."]
-COLUMNS_EN = ["Name", "Key", "Short name", "Group", "Chemical classes",
-              "Formula", "Molar mass", "Article no."]
+COLUMNS_DE = ["Name", "Schlüssel", "Kurzname", "Bestandsgruppe",
+              "Stoffklassen", "Summenformel", "Molmasse", "Artikelnr."]
+COLUMNS_EN = ["Name", "Key", "Short name", "Inventory group",
+              "Chemical classes", "Formula", "Molar mass", "Article no."]
 
 
 def hrefs(root: Any) -> list[str]:
@@ -60,7 +62,7 @@ class ListTests(RegistryCase):
                    == "cinnamic-acid")
         self.assertEqual(row["Name"].text(), "(E)-Zimtsäure")
         self.assertEqual(row["Kurzname"].text(), "ZS")
-        self.assertIn("Endprodukte", row["Gruppe"].text())
+        self.assertIn("Endprodukte", row["Bestandsgruppe"].text())
         self.assertIn("Carbonsäuren", row["Stoffklassen"].text())
         self.assertEqual(row["Summenformel"].text(), "C9H8O2")
         self.assertRegex(row["Molmasse"].text(), r"148[,.]16")
@@ -84,11 +86,12 @@ class ListTests(RegistryCase):
              if name in ("acetone", "Benzaldehyde", "Zinc acetate")],
             ["acetone", "Benzaldehyde", "Zinc acetate"])
 
-    def test_links_lead_to_the_four_vocabularies(self) -> None:
-        found = hrefs(self.get(REGISTRY))
-        for vocabulary in VOCABULARIES:
-            with self.subTest(vocabulary=vocabulary):
-                self.assertIn(term_url(vocabulary), found)
+    def test_the_content_leaves_the_vocabularies_to_the_menu(self) -> None:
+        """Requirement: Registry pages (no links to the vocabularies
+        above the table)."""
+        main = self.get(REGISTRY).find("main")
+        pages = {term_url(vocabulary) for vocabulary in VOCABULARIES}
+        self.assertEqual([h for h in hrefs(main) if h in pages], [])
 
     def test_the_content_leaves_the_notebooks_and_imports_to_the_menu(
             self) -> None:
@@ -485,6 +488,32 @@ class VocabularyPageTests(RegistryCase):
         root = self.get(term_url("groups"), signed_in=True)
         self.assertTrue([a for a in root.find_all("a")
                          if a.text() == "New term"])
+
+    def test_no_link_back_to_the_substances(self) -> None:
+        for vocabulary in VOCABULARIES:
+            with self.subTest(vocabulary=vocabulary):
+                main = self.get(term_url(vocabulary)).find("main")
+                self.assertNotIn(REGISTRY, hrefs(main))
+
+    def test_projects_and_reaction_types_count_procedures(self) -> None:
+        """Scenario: Uses of a reaction type."""
+        ReactionType.objects.create(key="acylation", label="Acylation")
+        esterification = ReactionType.objects.create(
+            key="esterification", label="Esterification")
+        course = Project.objects.create(key="course", label="Course")
+        received = make_import()
+        make_procedure(received, "OSDB-0002", reaction_type=esterification,
+                       project=course)
+        make_procedure(received, "OSDB-0003", reaction_type=esterification,
+                       withdrawn=True)
+        self.assertEqual(
+            {row["Schlüssel"].text(): row["Verwendet"].text()
+             for row in self.rows("reaction-types")},
+            {"acylation": "0", "esterification": "2"})
+        self.assertEqual(
+            {row["Schlüssel"].text(): row["Verwendet"].text()
+             for row in self.rows("projects")},
+            {"course": "1"})
 
     def test_any_other_vocabulary_answers_404(self) -> None:
         for name in ("substances", "inventory-groups", "Groups", "nope"):

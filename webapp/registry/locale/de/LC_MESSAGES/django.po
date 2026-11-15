@@ -32,8 +32,8 @@ msgstr "Name deutsch"
 msgid "Short name"
 msgstr "Kurzname"
 
-msgid "Group"
-msgstr "Gruppe"
+msgid "Inventory group"
+msgstr "Bestandsgruppe"
 
 msgid "Chemical classes"
 msgstr "Stoffklassen"
@@ -89,8 +89,8 @@ msgstr "Neue Substanz"
 msgid "Edit %(record)s"
 msgstr "%(record)s bearbeiten"
 
-msgid "Groups"
-msgstr "Gruppen"
+msgid "Inventory groups"
+msgstr "Bestandsgruppen"
 
 msgid "Projects"
 msgstr "Projekte"

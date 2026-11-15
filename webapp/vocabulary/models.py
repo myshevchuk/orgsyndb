@@ -103,8 +103,8 @@ class Group(TreeTerm):
     history = RecordedHistory()
 
     class Meta(TreeTerm.Meta):
-        verbose_name = _("group")
-        verbose_name_plural = _("groups")
+        verbose_name = _("inventory group")
+        verbose_name_plural = _("inventory groups")
 
 
 class Project(TreeTerm):

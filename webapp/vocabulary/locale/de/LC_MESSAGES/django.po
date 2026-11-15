@@ -35,11 +35,11 @@ msgstr "Stoffklasse"
 msgid "chemical classes"
 msgstr "Stoffklassen"
 
-msgid "group"
-msgstr "Gruppe"
+msgid "inventory group"
+msgstr "Bestandsgruppe"
 
-msgid "groups"
-msgstr "Gruppen"
+msgid "inventory groups"
+msgstr "Bestandsgruppen"
 
 msgid "project"
 msgstr "Projekt"

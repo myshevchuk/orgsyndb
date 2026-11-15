@@ -75,7 +75,7 @@ class Substance(LockedWrites, models.Model):
                                blank=True)
     short_name = models.CharField(_("Short name"), max_length=50,
                                   blank=True)
-    group = models.ForeignKey(Group, verbose_name=_("Group"),
+    group = models.ForeignKey(Group, verbose_name=_("Inventory group"),
                               on_delete=models.PROTECT,
                               related_name="substances")
     chemical_classes = models.ManyToManyField(

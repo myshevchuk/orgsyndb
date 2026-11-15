@@ -22,7 +22,7 @@ SNAPSHOT = REGISTRY + "snapshot.json"
 NEW_SUBSTANCE = REGISTRY + "substances/new/"
 VOCABULARIES = {
     "chemical-classes": ("Stoffklassen", "Chemical classes"),
-    "groups": ("Gruppen", "Groups"),
+    "groups": ("Bestandsgruppen", "Inventory groups"),
     "projects": ("Projekte", "Projects"),
     "reaction-types": ("Reaktionstypen", "Reaction types"),
 }
