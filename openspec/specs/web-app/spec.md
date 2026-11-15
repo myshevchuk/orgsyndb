@@ -115,11 +115,11 @@ Every text the application shows SHALL come from its translations, German and En
 - **THEN** the page has `<html lang="de">`
 
 ### Requirement: Page shell
-Every page but the admin's and the summary's SHALL link, from `/lab/static/site/`, the site's own `tokens.css`, `base.css`, `screen.css` with `media="screen"` and `print.css` with `media="print"`, all collected from `site/assets/css/` of the same checkout, and then `/lab/static/lab.css`. Its `header.site-header` holds the site's shell, read from `site/hugo.toml` and `site/i18n/` of the same checkout: the site title linking to `/`; the site's search form as the site's pages other than the catalogues have it (site-theme "Page shell"); and the navigation, with every entry of the menu, those under `/lab/` included (site-theme "Navigation"). The header also shows the signed-in user's initials and a sign-out button, or a link `Anmelden` (`Sign in`). A message confirming a saved change shows above the content. These pages carry no `script` element but the item list, whose one `script` element loads `/lab/static/lab.js` with `defer` (end-product-inventory "Item list"); the admin keeps Django's own pages and scripts. The summary, `/lab/summary/`, links the same five stylesheets and carries no `script` element, but no header, navigation or message; its `base` element sends its links to the top window, and it answers with `X-Frame-Options: SAMEORIGIN`, so that a page of the same host may frame it.
+Every page but the admin's and the summary's SHALL link, from `/lab/static/site/`, the site's own `tokens.css`, `base.css`, `screen.css` with `media="screen"` and `print.css` with `media="print"`, all collected from `site/assets/css/` of the same checkout, and then `/lab/static/lab.css`. Its `header.site-header` holds the site's shell, read from `site/hugo.toml` and `site/i18n/` of the same checkout: the site title linking to `/`; the site's search form as the site's pages other than the catalogues have it (site-theme "Page shell"); and the navigation, with every entry of the menu, those under `/lab/` included (site-theme "Navigation"). The header also shows the signed-in user's initials and a sign-out button, or a link `Anmelden` (`Sign in`). A message confirming a saved change shows above the content. The item list loads `/lab/static/lab.js` with `defer` (end-product-inventory "Item list"), and no other page does; the admin keeps Django's own pages and scripts. The summary, `/lab/summary/`, links the same five stylesheets and carries no `script` element, but no header, navigation or message; its `base` element sends its links to the top window, and it answers with `X-Frame-Options: SAMEORIGIN`, so that a page of the same host may frame it.
 
 #### Scenario: Shell
 - **WHEN** a test client requests `/lab/tasks/` signed in as `KL` and once not signed in
-- **THEN** both pages link the five stylesheets in that order, hold the site title, the site's search form and the navigation as site-theme "Navigation" states them for a build with the lab application's views, the first shows `KL` and a sign-out form and the second a link to the sign-in page, and neither has a `script` element
+- **THEN** both pages link the five stylesheets in that order, hold the site title, the site's search form and the navigation as site-theme "Navigation" states them for a build with the lab application's views, the first shows `KL` and a sign-out form and the second a link to the sign-in page
 
 #### Scenario: Current link on the application's pages
 - **WHEN** a test client requests every page of the application that the menu links, and a page inside the section of each
@@ -129,9 +129,9 @@ Every page but the admin's and the summary's SHALL link, from `/lab/static/site/
 - **WHEN** a test client requests `/lab/summary/` and `/lab/tasks/`
 - **THEN** the first links the five stylesheets, has a `base` with `target="_top"` and no `header` or `script` element, and answers with `X-Frame-Options: SAMEORIGIN`; the second answers with `X-Frame-Options: DENY`
 
-#### Scenario: One script for the item list
+#### Scenario: lab.js for the item list
 - **WHEN** a test client requests the item list, an item's page and `/lab/planning/`
-- **THEN** the item list has one `script` element, with `src` `/lab/static/lab.js` and `defer`, and the other two have none
+- **THEN** the item list has a `script` element with `src` `/lab/static/lab.js` and `defer`, and the other two load no `lab.js`
 
 ### Requirement: Substance links
 Wherever the application shows a substance, the substance of an item, a lot or a task among them, it SHALL show the substance's name (lab-registry "Substances") linking to its page, `/lab/registry/substances/<key>/`, except where a requirement links that name elsewhere, as the item list does for an item without an article number (end-product-inventory "Item list"). A form field for a substance takes its key and offers, through a `datalist`, every substance's key labelled with its name; an unknown key is an error at the field.

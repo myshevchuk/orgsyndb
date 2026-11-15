@@ -10,11 +10,15 @@
 <link rel="stylesheet" href="{% static 'site/screen.css' %}" media="screen">
 <link rel="stylesheet" href="{% static 'site/print.css' %}" media="print">
 <link rel="stylesheet" href="{% static 'lab.css' %}">
-{% block head %}{% endblock %}</head>
+{% block site_script %}<script src="{% static 'site/site.js' %}"></script>
+{% endblock %}{% block head %}{% endblock %}</head>
 <body{% block body_class %}{% endblock %}>
 {% block header %}<a class="skip-link" href="#main">{% translate "Skip to content" %}</a>
 <header class="site-header">
+<div class="site-brand">
+<button type="button" class="sidebar-toggle" aria-expanded="true" data-sidebar-toggle>{{ site_strings.nav_toggle }}</button>
 <a class="site-title" href="/">{{ site_title }}</a>
+</div>
 <form class="site-search" role="search" method="get" action="/procedures/">
 <input type="search" name="q" aria-label="{{ site_strings.search_label }}" placeholder="{{ site_strings.search_placeholder }}">
 <button type="submit">{{ site_strings.search_button }}</button>

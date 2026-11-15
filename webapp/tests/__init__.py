@@ -602,6 +602,23 @@ def page_text(response: Any) -> str:
     return page(response).text()
 
 
+# The page shell's one script, the site's.
+SHELL_SCRIPT = "/lab/static/site/site.js"
+
+
+def own_scripts(root: Element) -> list[Element]:
+    """The ``script`` elements of a page beyond the page shell's, after
+    asserting that the shell's loads SHELL_SCRIPT once, from the head,
+    without ``defer`` and before every other script."""
+    scripts = root.find_all("script")
+    shell = [s for s in scripts if s.get("src") == SHELL_SCRIPT]
+    assert len(shell) == 1, f"{len(shell)} scripts load {SHELL_SCRIPT}"
+    assert shell[0].parent.tag == "head", "the shell's script is not in head"
+    assert "defer" not in shell[0].attrs, "the shell's script is deferred"
+    assert scripts[0] is shell[0], "a script precedes the shell's"
+    return scripts[1:]
+
+
 def field_value(root: Element, name: str) -> str | None:
     """The value a form control named ``name`` shows: an input's value,
     a select's selected option (its first without a selection), a

@@ -1,5 +1,7 @@
-{{- /* The site header: the site title, the search form, which submits q
-to /procedures/, and the navigation. On the catalogue, the term pages,
+{{- /* The site header: the sidebar's toggle, which site.js wires and
+the stylesheet shows only once site.js has run, and the site title;
+the search form, which submits q to /procedures/; and the
+navigation. On the catalogue, the term pages,
 /general-procedures/, the compound catalogue /compounds/ and its tab
 pages the form is the catalogue's: catalogue.js drives its field,
 #catalogue-q, the page itself is its action, on a term page and on
@@ -56,7 +58,10 @@ aria-current="true". */ -}}
 {{ end -}}
 {{ end -}}
 <header class="site-header">
+<div class="site-brand">
+<button type="button" class="sidebar-toggle" aria-expanded="true" data-sidebar-toggle>{{ T "nav_toggle" }}</button>
 <a class="site-title" href="/">{{ site.Title }}</a>
+</div>
 <form class="site-search" role="search" method="get" action="{{ $action }}"{{ if $catalogue }} data-catalogue-search{{ end }}>
 <input type="search" name="q"{{ if $catalogue }} id="catalogue-q"{{ end }} aria-label="{{ $label }}" placeholder="{{ $hint }}">
 <button type="submit">{{ T "search_button" }}</button>

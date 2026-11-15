@@ -11,6 +11,10 @@
 <link rel="stylesheet" href="{{ $screen.RelPermalink }}" media="screen">
 {{ $print := resources.Get "css/print.css" | minify | fingerprint -}}
 <link rel="stylesheet" href="{{ $print.RelPermalink }}" media="print">
+{{- /* Without defer: site.js marks the sidebar's state on the root
+element before the first paint. */}}
+{{ $site := resources.Get "js/site.js" | minify | fingerprint -}}
+<script src="{{ $site.RelPermalink }}"></script>
 {{ block "head" . }}{{ end }}
 </head>
 <body>
@@ -20,8 +24,6 @@
 {{ block "main" . }}{{ end }}
 </main>
 {{ partial "site-footer.html" . }}
-{{ $site := resources.Get "js/site.js" | minify | fingerprint -}}
-<script src="{{ $site.RelPermalink }}" defer></script>
 {{ block "scripts" . }}{{ end }}
 </body>
 </html>

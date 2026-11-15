@@ -211,6 +211,30 @@ class ShippedSiteTests(SiteCase):
                         self.assertFalse(attribute.startswith("on"))
         self.assertGreater(scripts, 0, "no page loads a script")
 
+    def test_the_site_script_and_the_sidebar_toggle(self) -> None:
+        text = ns.strings(self.site, "en")["nav_toggle"]
+        for path, page in self.pages():
+            with self.subTest(page=str(path.relative_to(self.public))):
+                scripts = page.find_all("script")
+                self.assertTrue(scripts, "no script")
+                self.assertRegex(page.resolve(scripts[0].get("src", "")),
+                                 r"^/js/site\.")
+                self.assertEqual(scripts[0].parent.tag, "head")
+                self.assertNotIn("defer", scripts[0].attrs)
+                header = page.find("header", "site-header")
+                toggles = header.find_all("button", data_sidebar_toggle=True)
+                self.assertEqual(len(toggles), 1)
+                self.assertEqual((toggles[0].get("type"),
+                                  toggles[0].get("aria-expanded"),
+                                  toggles[0].norm()),
+                                 ("button", "true", text))
+                brand = toggles[0].parent
+                self.assertTrue(brand.has_class("site-brand"))
+                self.assertEqual([(n.tag, n.classes[:1])
+                                  for n in brand.elements()],
+                                 [("button", ["sidebar-toggle"]),
+                                  ("a", ["site-title"])])
+
     def test_every_page_has_the_shell(self) -> None:
         """Scenario: Shell on every page."""
         built = set()

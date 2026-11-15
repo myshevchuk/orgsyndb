@@ -530,6 +530,10 @@ preview.
 
 The navigation sits in a left sidebar below the site title and search field.
 It stays in view while you scroll; in narrow windows it sits above the page.
+The menu button before the site title collapses the sidebar and opens it
+again: collapsed, a wide window keeps only a narrow strip with the button, a
+narrow one only the title's row. The browser remembers the choice for every
+page of the site.
 Under **Collection**, choose **Compounds**, **Sequences** or **Procedures**;
 **Help** follows on its own. Sites with the lab application also show a
 **Lab** group first: **Overview**, **Inventory**, **Planning**, **Tasks**,

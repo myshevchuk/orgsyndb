@@ -14,6 +14,7 @@ title_help = "Hilfe"
 
 skip_link = "Zum Inhalt springen"
 nav_site = "Website"
+nav_toggle = "Menü"
 nav_procedures = "Vorschriften"
 nav_compounds = "Verbindungen"
 nav_sequences = "Synthesewege"

@@ -510,6 +510,11 @@ German equivalents, such as **Kopieren** for **Copy**.
 The site and lab application share a left sidebar with the site title,
 search field and navigation. It stays in view while you scroll. In narrow
 windows it sits above the page, with each menu group shown as a row of links.
+The menu button before the site title collapses the sidebar and opens it
+again: collapsed, a wide window keeps only a narrow strip with the button, a
+narrow one only the title's row. The browser remembers the choice for every
+page of the site and the lab application on the same host. Without JavaScript
+the button is absent and the sidebar stays open.
 
 The **Collection** group lists **Compounds**, **Sequences** and **Procedures**
 in that order (**Sammlung**, **Verbindungen**, **Synthesewege** and

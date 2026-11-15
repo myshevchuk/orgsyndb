@@ -85,17 +85,18 @@ def navigation(path: str, language: str) -> list[dict[str, Any]]:
 
 
 def shell(request: HttpRequest) -> dict[str, Any]:
-    """Return the context of the page shell: the site's title, search
-    form texts and navigation in the active language, and the
-    database's demo mark, None outside a demo database, with the demo
-    accounts that sign in and their password."""
+    """Return the context of the page shell: the site's title, the
+    texts of its search form and sidebar toggle, and its navigation, in
+    the active language, and the database's demo mark, None outside a
+    demo database, with the demo accounts that sign in and their
+    password."""
     language = (translation.get_language()
                 or settings.LANGUAGE_CODE).split("-")[0]
     strings = site_strings(language)
     return {"site_title": site_config()["title"],
             "site_strings": {key: strings[key] for key in (
-                "nav_site", "search_label", "search_placeholder",
-                "search_button")},
+                "nav_site", "nav_toggle", "search_label",
+                "search_placeholder", "search_button")},
             "navigation": navigation(request.path, language),
             "demo_mark": models.current(),
             "demo_accounts": data.signing_in(),

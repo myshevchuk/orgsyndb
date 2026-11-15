@@ -41,6 +41,7 @@
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-13 Fri 08:41] -- Journalfelder, Anzeige und Übersetzungen
 #+AI_PASS: claude-opus-5-5 [2026-11-13 Fri] -- entry numbers from 1 to 9999
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-15 Sun 18:56] -- Navigation und Suche in der Seitenleiste
+#+AI_PASS: claude-opus-5-5 [2026-11-15 Sun 20:23] -- Seitenleiste einklappen
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
@@ -796,10 +797,14 @@ Meldungen.
 
   Die Navigation steht in einer linken Seitenleiste unter dem Titel und dem
   Suchfeld. Sie bleibt beim Scrollen sichtbar; in schmalen Fenstern steht sie
-  über der Seite. Unter *Sammlung* wählen Sie *Verbindungen*, *Synthesewege*
-  oder *Vorschriften*; *Hilfe* folgt einzeln. Websites mit Laboranwendung
-  zeigen davor die Gruppe *Labor*: *Übersicht*, *Bestand*, *Planung*,
-  *Aufgaben*, *Substanzen*, *Laborjournale* und *Importe*. Auf einer
+  über der Seite. Die Menüschaltfläche vor dem Titel klappt die Seitenleiste
+  ein und wieder auf: Eingeklappt bleibt in breiten Fenstern nur ein schmaler
+  Streifen mit der Schaltfläche, in schmalen nur die Titelzeile. Der Browser
+  merkt sich die Wahl für alle Seiten der Website. Unter *Sammlung* wählen
+  Sie *Verbindungen*, *Synthesewege* oder *Vorschriften*; *Hilfe* folgt
+  einzeln. Websites mit Laboranwendung zeigen davor die Gruppe *Labor*:
+  *Übersicht*, *Bestand*, *Planung*, *Aufgaben*, *Substanzen*,
+  *Laborjournale* und *Importe*. Auf einer
   Vorschriftenseite zeigt das Suchfeld *Produkt, CAS oder SMILES*; auch
   Stichwörter werden gefunden. Klicken Sie auf die Lupe rechts im Feld oder
   drücken Sie die Eingabetaste, um Vorschriften zu suchen.

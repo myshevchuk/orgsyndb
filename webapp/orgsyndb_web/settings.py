@@ -100,9 +100,12 @@ USE_TZ = True
 
 STATIC_URL = "/lab/static/"
 STATIC_ROOT = WEBAPP / "staticfiles"
-# The site's own stylesheets, from the same checkout, under site/.
-STATICFILES_DIRS = [("site", WEBAPP.parent / "site" / "assets" / "css")]
-# Files keep their names, so pages link the stylesheets by them.
+# The site's own stylesheets and scripts, from the same checkout, under
+# site/.
+STATICFILES_DIRS = [("site", WEBAPP.parent / "site" / "assets" / "css"),
+                    ("site", WEBAPP.parent / "site" / "assets" / "js")]
+# Files keep their names, so pages link the stylesheets and scripts by
+# them.
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {

@@ -295,7 +295,7 @@ Each directory is linked from the section tabs, from the home page's browse list
 - **THEN** each term in the front matter has a term page, its catalogue table's rows are exactly that term's IDs in ascending order, and the taxonomy page links it with the correct count and text, in order
 
 ### Requirement: Content does not need JavaScript
-Every procedure, catalogue, taxonomy, term, compound, sequence, help and home page SHALL show all of its content without running JavaScript. Scripts add only these:
+Every procedure, catalogue, taxonomy, term, compound, sequence, help and home page SHALL show all of its content without running JavaScript. Among what scripts add:
 - `site/assets/js/site.js` reveals and wires the print button (`window.print()`) and the SMILES copy button.
 - `site.js` replaces the print-facts URL with `location.href` when the protocol is `http:` or `https:`.
 - The copy button writes the SMILES string with the Clipboard API. When that fails or is unavailable, it selects the SMILES text instead.

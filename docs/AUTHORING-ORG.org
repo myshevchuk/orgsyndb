@@ -45,6 +45,7 @@
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-13 Fri 08:41] -- journal fields, display and translations
 #+AI_PASS: claude-opus-5-5 [2026-11-13 Fri] -- entry numbers from 1 to 9999
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-15 Sun 18:56] -- navigation and sidebar search
+#+AI_PASS: claude-opus-5-5 [2026-11-15 Sun 20:23] -- collapsing the sidebar
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -642,6 +643,10 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
 
   The navigation sits in a left sidebar below the site title and search field.
   It stays in view while you scroll; in narrow windows it sits above the page.
+  The menu button before the site title collapses the sidebar and opens it
+  again: collapsed, a wide window keeps only a narrow strip with the button, a
+  narrow one only the title's row. The browser remembers the choice for every
+  page of the site.
   Under *Collection*, choose *Compounds*, *Sequences* or *Procedures*;
   *Help* follows on its own. Sites with the lab application also show a
   *Lab* group first: *Overview*, *Inventory*, *Planning*, *Tasks*,

@@ -21,11 +21,11 @@ The package `overview` SHALL answer `/lab/` with the page `Labor auf einen Blick
 
   A list without entries shows `Keine Abgaben.` (`No deliveries.`) in place of its `ol`.
 
-The stock bar and the figures are the page's summary, which `/lab/summary/` shows alone (Summary for the home page). The containers delivered on a day are the counts of the delivery lines that count as consumption (end-product-inventory "Consumption") on notes of that day. The page carries no `script` element and no form beyond the page shell's.
+The stock bar and the figures are the page's summary, which `/lab/summary/` shows alone (Summary for the home page). The containers delivered on a day are the counts of the delivery lines that count as consumption (end-product-inventory "Consumption") on notes of that day. Beyond the page shell's, the page carries no `script` element and no form.
 
 #### Scenario: Stock bar
 - **WHEN** the database holds two items at the level ok and one at low, and a test client not signed in requests `/lab/`
-- **THEN** the page has one `section.lab-overview`, whose stock bar holds the links `level-low` reading 1 and `level-ok` reading 2, in this order, linking to `/lab/inventory/end-products/?stock=low` and `?stock=ok`, and the page has no `script` element
+- **THEN** the page has one `section.lab-overview`, whose stock bar holds the links `level-low` reading 1 and `level-ok` reading 2, in this order, linking to `/lab/inventory/end-products/?stock=low` and `?stock=ok`, and the page has no `script` element beyond the page shell's
 
 #### Scenario: Figures and lists
 - **WHEN** on 2026-11-07 notes of 2026-03-02 deliver 3 containers of `CH-0012` to `AK Weber` and of 2026-10-01 2 of `CH-0010` without a recipient, notes of 2025-06-01 and 2025-12-01 deliver 4 and 5 of `CH-0012`, a current note of 2026-10-02 delivering 6 of `CH-0010` is reversed, one task is running and two are planned, and one lot is open, and a test client requests `/lab/`

@@ -632,10 +632,14 @@ Terminal `Strg+C`, um die Vorschau zu beenden.
 
 Die Navigation steht in einer linken Seitenleiste unter dem Titel und dem
 Suchfeld. Sie bleibt beim Scrollen sichtbar; in schmalen Fenstern steht sie
-über der Seite. Unter **Sammlung** wählen Sie **Verbindungen**, **Synthesewege**
-oder **Vorschriften**; **Hilfe** folgt einzeln. Websites mit Laboranwendung
-zeigen davor die Gruppe **Labor**: **Übersicht**, **Bestand**, **Planung**,
-**Aufgaben**, **Substanzen**, **Laborjournale** und **Importe**. Auf einer
+über der Seite. Die Menüschaltfläche vor dem Titel klappt die Seitenleiste ein
+und wieder auf: Eingeklappt bleibt in breiten Fenstern nur ein schmaler
+Streifen mit der Schaltfläche, in schmalen nur die Titelzeile. Der Browser
+merkt sich die Wahl für alle Seiten der Website. Unter **Sammlung** wählen Sie
+**Verbindungen**, **Synthesewege** oder **Vorschriften**; **Hilfe** folgt
+einzeln. Websites mit Laboranwendung zeigen davor die Gruppe **Labor**:
+**Übersicht**, **Bestand**, **Planung**, **Aufgaben**, **Substanzen**,
+**Laborjournale** und **Importe**. Auf einer
 Vorschriftenseite zeigt das Suchfeld **Produkt, CAS oder SMILES**; auch
 Stichwörter werden gefunden. Klicken Sie auf die Lupe rechts im Feld oder
 drücken Sie die Eingabetaste, um Vorschriften zu suchen.
