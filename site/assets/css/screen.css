@@ -56,7 +56,10 @@ html { font-family: var(--font-ui); scrollbar-gutter: stable; }
    pages, the account at its foot. It is one window high and stays in
    view, scrolling on its own when its content is taller. Its contents
    are the same on the site's pages and the application's, so nothing
-   moves between them. Below 55rem it stacks above the page. */
+   moves between them. Below 55rem it stacks above the page. A scrolling
+   box clips what sticks out of it, so the header reaches 1rem into the
+   body's padding, room for the focus outline and the current link's
+   bar. */
 body {
   display: grid;
   grid-template-columns: 17rem minmax(0, 1fr);
@@ -78,7 +81,8 @@ main, .site-footer { grid-column: 2; }
   flex-wrap: nowrap;
   align-items: stretch;
   gap: var(--space-4);
-  padding: var(--space-5) var(--space-4) var(--space-4) 0;
+  margin-left: calc(-1 * var(--space-3));
+  padding: var(--space-5) var(--space-4) var(--space-4) var(--space-3);
   border-bottom: 0;
   border-right: 1px solid var(--border);
 }
@@ -501,6 +505,7 @@ pre { overflow-x: auto; }
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: var(--space-3) var(--space-4);
+    margin-left: 0;
     padding: var(--space-4) 0;
     border-right: 0;
     border-bottom: 1px solid var(--border);
