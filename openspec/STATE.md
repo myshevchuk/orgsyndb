@@ -102,6 +102,18 @@ leaves this file then.
   measurements to the stylesheets. The diagram's band layout
   (database-diagram) and A4 printing (print-layout) are what those
   specs are about, and stay.
+- **Synthesis routes from the database.** The build derives each
+  compound's routes from the procedure files (`tools/pipeline.py`),
+  while the lab's database already holds every imported procedure's
+  substrates and products. Wanted: the lab derives the routes from its
+  own records. The Git, Org and Markdown workflow stays the way
+  procedures are written.
+- **Procedure history from Git.** The collection's history is in Git,
+  so the lab could show how a procedure changed between versions.
+- **Compounds back into a static collection.** Once the lab's
+  substance pages replace the site's compound pages, an export of the
+  compounds into a static collection may be wanted. Open: what for,
+  and in which form.
 - **Retire the GitHub Pages demo.** The site need not work without the
   lab application, the owner decided on 2026-11-15. Once the change
   that regroups the menu and merges the substance views is done, take
