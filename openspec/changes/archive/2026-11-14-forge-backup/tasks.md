@@ -19,4 +19,4 @@
 
 - [x] 3.1 README: back up and restore (sets, Forgejo's pause, restoring step by step, `orgsyndb.env`, IDs after a restore), the service list
 - [x] 3.2 Review, then archive
-- [ ] 3.3 Test server, by the owner: rebuild; a set is written with every part and Forgejo comes back; optionally a restore rehearsal
+- [x] 3.3 Test server, by the owner: rebuild; a set is written with every part and Forgejo comes back; optionally a restore rehearsal
