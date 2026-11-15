@@ -102,3 +102,15 @@ leaves this file then.
   measurements to the stylesheets. The diagram's band layout
   (database-diagram) and A4 printing (print-layout) are what those
   specs are about, and stay.
+- **Retire the GitHub Pages demo.** The site need not work without the
+  lab application, the owner decided on 2026-11-15. Once the change
+  that regroups the menu and merges the substance views is done, take
+  the demo down: unpublish GitHub Pages in the repository's settings;
+  delete `.github/workflows/demo-site.yml`, the demo-site spec and
+  `tests/test_demo_site.py`; and drop the demo site from `README.md`
+  (the live-demo link, the path-prefix note, the deployment section)
+  and from `AGENTS.md` (pushes to `main` deploy it). Open, following
+  from the decision: whether the build without the lab goes too
+  (`ORGSYNDB_LAB`, the build without the lab in site-theme
+  "Navigation", site-build and build-script), and what an author's
+  local preview (`orgsyndb serve`) does with links to the lab.
