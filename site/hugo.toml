@@ -38,3 +38,93 @@ keepWhitespace = true
 [params]
 siteurl = "http://127.0.0.1:8000"
 
+
+# The navigation of the site and of the lab application, which reads this
+# menu too. Each identifier is the key of the entry's text in i18n/. A
+# group has no url; its links name it as parent. params.paths lists the
+# path prefixes of a link's section, whose pages mark the link as
+# current. A build without the lab leaves out the links under /lab/ and
+# the groups they leave empty.
+[[menus.main]]
+identifier = "nav_lab"
+weight = 10
+
+[[menus.main]]
+identifier = "nav_overview"
+parent = "nav_lab"
+url = "/lab/"
+weight = 11
+
+[[menus.main]]
+identifier = "nav_inventory"
+parent = "nav_lab"
+url = "/lab/inventory/end-products/"
+weight = 12
+params.paths = ["/lab/inventory/"]
+
+[[menus.main]]
+identifier = "nav_planning"
+parent = "nav_lab"
+url = "/lab/planning/"
+weight = 13
+params.paths = ["/lab/planning/"]
+
+[[menus.main]]
+identifier = "nav_tasks"
+parent = "nav_lab"
+url = "/lab/tasks/"
+weight = 14
+params.paths = ["/lab/tasks/"]
+
+[[menus.main]]
+identifier = "nav_substances"
+parent = "nav_lab"
+url = "/lab/registry/"
+weight = 15
+params.paths = ["/lab/registry/"]
+
+[[menus.main]]
+identifier = "nav_notebooks"
+parent = "nav_lab"
+url = "/lab/journal/"
+weight = 16
+params.paths = ["/lab/journal/"]
+
+[[menus.main]]
+identifier = "nav_imports"
+parent = "nav_lab"
+url = "/lab/collection/"
+weight = 17
+params.paths = ["/lab/collection/"]
+
+[[menus.main]]
+identifier = "nav_collection"
+weight = 20
+
+[[menus.main]]
+identifier = "nav_compounds"
+parent = "nav_collection"
+url = "/compounds/"
+weight = 21
+params.paths = ["/compounds/"]
+
+[[menus.main]]
+identifier = "nav_sequences"
+parent = "nav_collection"
+url = "/sequences/"
+weight = 22
+params.paths = ["/sequences/"]
+
+[[menus.main]]
+identifier = "nav_procedures"
+parent = "nav_collection"
+url = "/procedures/"
+weight = 23
+params.paths = ["/procedures/", "/general-procedures/", "/reaction_types/",
+                "/tags/", "/authors/"]
+
+[[menus.main]]
+identifier = "nav_help"
+url = "/help/"
+weight = 30
+params.paths = ["/help/"]

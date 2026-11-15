@@ -233,8 +233,9 @@ The site shows the image on a white panel in dark mode. Ask the owner to add
 or check the image if you do not work with SVG files.
 
 You may register a starting material even if no procedure makes it. A compound
-that no procedure uses is also allowed. **Compounds** in the site navigation
-opens the catalogue at `/compounds/`, which you can filter and search.
+that no procedure uses is also allowed. In the sidebar's **Collection** group,
+**Compounds** opens the catalogue at `/compounds/`, which you can filter and
+search. Its search field shows **Name, formula, CAS, SMILES**.
 Each name links to a page with chemical data, the structure when supplied,
 **Made by** procedures with yields and status, and **Used in** procedures
 with status. A general procedure appears
@@ -527,7 +528,15 @@ Open <http://127.0.0.1:8000/> in a web browser on the same computer. The
 address is local to that computer. Press `Ctrl-C` in the terminal to stop the
 preview.
 
-The navigation is **Procedures**, **Compounds**, **Sequences**, **Help**.
+The navigation sits in a left sidebar below the site title and search field.
+It stays in view while you scroll; in narrow windows it sits above the page.
+Under **Collection**, choose **Compounds**, **Sequences** or **Procedures**;
+**Help** follows on its own. Sites with the lab application also show a
+**Lab** group first: **Overview**, **Inventory**, **Planning**, **Tasks**,
+**Substances**, **Lab notebooks** and **Imports**. On a procedure page, the
+search hint is **Product, CAS or SMILES**; keywords still match. Choose the
+magnifier at the field's right end or press Enter to search procedures.
+
 The home page's **Browse** list includes **Sequences** with a count. Open it
 or the navigation link to browse `/sequences/`, ordered by ID with linked
 titles and targets, step counts and overall yields. A sequence page shows
@@ -554,10 +563,11 @@ To find your general procedure, open **Procedures** and use the **Kind**
 filter: **Specific procedure** or **General procedure**. The tabs are **All
 procedures**, **General procedures**, **Reaction types**, **Tags** and
 **Authors**. **General procedures** opens `/general-procedures/`, a catalogue
-limited to general procedures. Its header search is labelled **Search general
-procedures** and searches within that list. **Only general procedures · Browse
-all procedures** links back to the full catalogue. **Clear all** keeps this
-restriction; **Browse all procedures** removes it while carrying your query,
+limited to general procedures. Its sidebar search is labelled **Search general
+procedures**, with the hint **Search these procedures**, and searches within
+that list. **Only general procedures · Browse all procedures** links back to
+the full catalogue. **Clear all** keeps this restriction; **Browse all
+procedures** removes it while carrying your query,
 other filters, sort and view. The address parameter `kind=general` selects the
 same kind in the full catalogue. Without JavaScript, the general-procedures
 page still lists its procedures by ID. Catalogue **Details** includes products

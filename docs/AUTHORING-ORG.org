@@ -44,6 +44,7 @@
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-12 Thu 20:59] -- issued IDs, access tokens and sequence stubs
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-13 Fri 08:41] -- journal fields, display and translations
 #+AI_PASS: claude-opus-5-5 [2026-11-13 Fri] -- entry numbers from 1 to 9999
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-15 Sun 18:56] -- navigation and sidebar search
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -275,9 +276,11 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   dark colour scheme and on paper.
 
   You may register a starting material even if no procedure makes it. A
-  compound that no procedure uses is also allowed. *Compounds* in the site
-  navigation opens the catalogue at ~/compounds/~, which you can filter and
-  search. Each name links to a page with chemical data,
+  compound that no procedure uses is also allowed. In the sidebar's
+  *Collection* group, *Compounds* opens the catalogue at ~/compounds/~, which
+  you can filter and search. Its search field shows
+  *Name, formula, CAS, SMILES*.
+  Each name links to a page with chemical data,
   the structure when supplied, *Made by* procedures with yields and status, and
   *Used in* procedures with status. A general procedure appears under *Made by*
   once per entry that makes the compound, as
@@ -637,11 +640,19 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   The server is reachable only from the same machine. It has no live reload,
   so stop it with ~Ctrl-C~ and run it again after an edit.
 
-  The navigation is *Procedures*, *Compounds*, *Sequences*, *Help*. The home
-  page's *Browse* list includes *Sequences* with a count. That link and the
-  navigation open ~/sequences/~, ordered by ID with linked titles and targets,
-  step counts and overall yields. A sequence page shows its ID and title,
-  *Steps* and *Overall yield*, a scheme, the linked procedures with entry
+  The navigation sits in a left sidebar below the site title and search field.
+  It stays in view while you scroll; in narrow windows it sits above the page.
+  Under *Collection*, choose *Compounds*, *Sequences* or *Procedures*;
+  *Help* follows on its own. Sites with the lab application also show a
+  *Lab* group first: *Overview*, *Inventory*, *Planning*, *Tasks*,
+  *Substances*, *Lab notebooks* and *Imports*. On a procedure page, the
+  search hint is *Product, CAS or SMILES*; keywords still match. Choose the
+  magnifier at the field's right end or press Enter to search procedures.
+
+  The home page's *Browse* list includes *Sequences* with a count. That link
+  and the navigation open ~/sequences/~, ordered by ID with linked titles and
+  targets, step counts and overall yields. A sequence page shows its ID and
+  title, *Steps* and *Overall yield*, a scheme, the linked procedures with entry
   numbers where needed, reaction type, yield and status, then your notes.
   The scheme shows starting materials, intermediates and target with matching
   structure images from ~static/structures/~ where available. Compound links
@@ -660,10 +671,11 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   procedure* or *General procedure*. Its tabs are *All procedures*, *General
   procedures*, *Reaction types*, *Tags* and *Authors*. *General procedures*
   opens ~/general-procedures/~, a catalogue restricted to general procedures,
-  with the header search labelled *Search general procedures*. *Only general
-  procedures · Browse all procedures* links to the full catalogue. *Clear all*
-  keeps the restriction; *Browse all procedures* removes it and carries the
-  query, other filters, sort and view. In the full catalogue, ~kind=general~ in
+  with the sidebar search labelled *Search general procedures* and the hint
+  *Search these procedures*. *Only general procedures · Browse all procedures*
+  links to the full catalogue. *Clear all* keeps the restriction;
+  *Browse all procedures* removes it and carries the query, other filters,
+  sort and view. In the full catalogue, ~kind=general~ in
   the address selects this kind. Without JavaScript the general-procedures page
   still lists its procedures by ID. Catalogue *Details* includes all entries'
   products and the yield range.

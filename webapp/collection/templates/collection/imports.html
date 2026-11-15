@@ -4,7 +4,6 @@
 <div class="lab-heading">
 <h1>{% translate "Imports" %}</h1>
 </div>
-<p><a href="/lab/registry/">{% translate "Substances" %}</a></p>
 {% if latest %}<p class="collection-latest">{% blocktranslate with commit=latest.commit|slice:":10" release=latest.release received=latest.received_at|date:"SHORT_DATETIME_FORMAT" %}Latest accepted import: commit {{ commit }}, release {{ release }}, received {{ received }}. Procedures: {{ procedures }}, sequences: {{ sequences }}.{% endblocktranslate %}</p>
 {% endif %}{% if imports %}<div class="table-scroll">
 <table class="inventory-table collection-table">

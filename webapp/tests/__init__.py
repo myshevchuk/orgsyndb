@@ -605,8 +605,10 @@ def page_text(response: Any) -> str:
 def field_value(root: Element, name: str) -> str | None:
     """The value a form control named ``name`` shows: an input's value,
     a select's selected option (its first without a selection), a
-    textarea's text, or whether a checkbox is checked."""
-    controls = root.find_all(("input", "select", "textarea"), name=name)
+    textarea's text, or whether a checkbox is checked. On a whole page
+    only the controls in ``main`` count, not the shell's search."""
+    scope = root.find("main") or root
+    controls = scope.find_all(("input", "select", "textarea"), name=name)
     if not controls:
         return None
     control = controls[0]

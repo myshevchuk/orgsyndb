@@ -8,12 +8,10 @@ integration tests do.
 
 import catalogue_support as cs
 import general_support as gs
+import navigation_support as ns
 import pipeline_support as ps
 from pipeline_support import Page
 
-NAVIGATION = [("/compounds/", "Verbindungen"),
-              ("/sequences/", "Synthesewege"),
-              ("/procedures/", "Vorschriften"), ("/help/", "Hilfe")]
 TABS = [("/procedures/", "Alle Vorschriften"),
         ("/general-procedures/", "Allgemeine Vorschriften"),
         ("/reaction_types/", "Reaktionstypen"), ("/tags/", "Schlagwörter"),
@@ -56,8 +54,8 @@ class GermanSiteTests(GermanCase):
                 header = page.find("header", "site-header")
                 nav = header.find("nav", aria_label="Website")
                 self.assertIsNotNone(nav, "no nav[aria-label=Website]")
-                links = [(l.target, l.node.norm()) for l in page.links(nav)]
-                self.assertEqual(links, NAVIGATION)
+                self.assertEqual(ns.shown(page, nav), ns.expected(
+                    self.sandbox.app / "site", "de", False))
                 self.assertEqual(len(header.find_all("nav")), 1,
                                  "the header has a language switch")
                 tabs = page.find("nav", "section-tabs")
@@ -90,30 +88,30 @@ class GermanSiteTests(GermanCase):
             self.assertEqual(field.get("aria-label"),
                              "Vorschriften durchsuchen")
             self.assertEqual(field.get("placeholder"),
-                             "Produkt, CAS, SMILES oder Stichwort")
+                             "Produkt, CAS oder SMILES")
         elif page.url == "/compounds/":
             self.assertEqual(field.get("aria-label"),
                              "Verbindungen durchsuchen")
             self.assertEqual(field.get("placeholder"),
-                             "Name, Summenformel, CAS oder SMILES")
+                             "Name, Formel, CAS, SMILES")
         elif page.url in dict(COMPOUND_TABS):
             self.assertEqual(field.get("aria-label"),
                              "Verbindungen durchsuchen: "
                              + dict(COMPOUND_TABS)[page.url])
             self.assertEqual(field.get("placeholder"),
-                             "Name, Summenformel, CAS oder SMILES")
+                             "Name, Formel, CAS, SMILES")
             self.assertEqual(
                 page.resolve(forms[0].attrs.get("action", "")), page.url)
         elif page.url == "/general-procedures/":
             self.assertEqual(field.get("aria-label"),
                              "Allgemeine Vorschriften durchsuchen")
             self.assertEqual(field.get("placeholder"),
-                             "Diese Vorschriften durchsuchen")
+                             "In diesen Vorschriften")
         else:
             self.assertRegex(field.get("aria-label"),
                              r"^Vorschriften .+ durchsuchen$")
             self.assertEqual(field.get("placeholder"),
-                             "Diese Vorschriften durchsuchen")
+                             "In diesen Vorschriften")
         buttons = forms[0].find_all("button")
         self.assertEqual([b.norm() for b in buttons], ["Suchen"])
 

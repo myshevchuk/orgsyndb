@@ -90,51 +90,14 @@ class ListTests(RegistryCase):
             with self.subTest(vocabulary=vocabulary):
                 self.assertIn(term_url(vocabulary), found)
 
-    def test_a_link_leads_to_the_lab_notebooks(self) -> None:
-        """Requirement: Registry pages (`Laborjournale`, to
-        `/lab/journal/`)."""
-        for signed_in in (False, True):
-            with self.subTest(signed_in=signed_in):
-                found = [a for a in self.get(
-                    REGISTRY, signed_in=signed_in).find_all("a")
-                    if a.text() == "Laborjournale"]
-                self.assertEqual([a.get("href") for a in found],
-                                 ["/lab/journal/"])
-
-    def test_the_link_to_the_lab_notebooks_in_english(self) -> None:
-        """Requirement: Registry pages (`Lab notebooks`)."""
-        accept(language="en")
-        found = [a for a in self.get(REGISTRY).find_all("a")
-                 if a.text() == "Lab notebooks"]
-        self.assertEqual([a.get("href") for a in found], ["/lab/journal/"])
-
-    def test_the_link_to_the_notebooks_is_among_the_other_links(
+    def test_the_content_leaves_the_notebooks_and_imports_to_the_menu(
             self) -> None:
-        """Requirement: Registry pages (links to the four vocabularies,
-        the lab notebooks and the imports above the table)."""
-        found = hrefs(self.get(REGISTRY))
-        for vocabulary in VOCABULARIES:
-            self.assertIn(term_url(vocabulary), found)
-        self.assertIn("/lab/journal/", found)
-        self.assertIn("/lab/collection/", found)
-
-    def test_a_link_leads_to_the_imports(self) -> None:
-        """Requirement: Registry pages (`Importe der Sammlung`, to
-        `/lab/collection/`)."""
-        for signed_in in (False, True):
-            with self.subTest(signed_in=signed_in):
-                found = [a for a in self.get(
-                    REGISTRY, signed_in=signed_in).find_all("a")
-                    if a.text() == "Importe der Sammlung"]
-                self.assertEqual([a.get("href") for a in found],
-                                 ["/lab/collection/"])
-
-    def test_the_link_to_the_imports_in_english(self) -> None:
-        accept(language="en")
-        found = [a for a in self.get(REGISTRY).find_all("a")
-                 if a.text() == "Collection imports"]
-        self.assertEqual([a.get("href") for a in found],
-                         ["/lab/collection/"])
+        """Requirement: Registry pages (no links to the notebooks and
+        imports above the table)."""
+        main = self.get(REGISTRY).find("main")
+        self.assertEqual([h for h in hrefs(main)
+                          if h.startswith(("/lab/journal/",
+                                           "/lab/collection/"))], [])
 
     def test_the_new_substance_link_needs_a_sign_in(self) -> None:
         anonymous = self.get(REGISTRY)
@@ -160,12 +123,12 @@ class SearchTests(RegistryCase):
         return sorted(row["Schlüssel"].text() for row in rows)
 
     def test_the_search_field_is_labelled(self) -> None:
-        search = self.get(REGISTRY).find("input", name="q")
+        search = self.get(REGISTRY).find("main").find("input", name="q")
         self.assertIn("Substanzen suchen", search.parent.text())
 
     def test_the_search_field_in_english(self) -> None:
         accept(language="en")
-        search = self.get(REGISTRY).find("input", name="q")
+        search = self.get(REGISTRY).find("main").find("input", name="q")
         self.assertIn("Search substances", search.parent.text())
 
     def test_the_key(self) -> None:

@@ -507,17 +507,34 @@ The built site provides these pages. Buttons and messages are named below
 as an English site shows them; the German site, the default, shows the
 German equivalents, such as **Kopieren** for **Copy**.
 
-The navigation links **Compounds**, **Sequences**, **Procedures** and **Help**
-in that order (**Verbindungen**, **Synthesewege**, **Vorschriften** and
-**Hilfe** on a German site). A site built with `ORGSYNDB_LAB=true` puts
-**Inventory**, **Planning** and **Tasks** first (**Bestand**, **Planung** and
-**Aufgaben**), linking to `/lab/inventory/end-products/`, `/lab/planning/`
-and `/lab/tasks/`.
+The site and lab application share a left sidebar with the site title,
+search field and navigation. It stays in view while you scroll. In narrow
+windows it sits above the page, with each menu group shown as a row of links.
 
-Every page has a search field in the same place in the header. Except
+The **Collection** group lists **Compounds**, **Sequences** and **Procedures**
+in that order (**Sammlung**, **Verbindungen**, **Synthesewege** and
+**Vorschriften** on a German site). **Help** (**Hilfe**) follows on its own.
+A site built with `ORGSYNDB_LAB=true` shows the **Lab** (**Labor**) group
+first: **Overview**, **Inventory**, **Planning**, **Tasks**, **Substances**,
+**Lab notebooks** and **Imports** (**Übersicht**, **Bestand**, **Planung**,
+**Aufgaben**, **Substanzen**, **Laborjournale** and **Importe**).
+They link to `/lab/`, `/lab/inventory/end-products/`, `/lab/planning/`,
+`/lab/tasks/`, `/lab/registry/`, `/lab/journal/` and `/lab/collection/`.
+Without the lab setting, the **Lab** group and its links are absent.
+
+To add or remove a menu entry, edit `[[menus.main]]` in `site/hugo.toml`;
+each `identifier` needs text in both `site/i18n/de.toml` and
+`site/i18n/en.toml`. A link has a `url`; a group has none, and its links name
+it as `parent`. `weight` sets the order; `params.paths` lists the section's
+path prefixes. Rebuild the site and restart the lab application after edits;
+for containers, rebuild the application image.
+
+Every page, including lab pages, has a search field in the sidebar. Except
 on term pages, `/general-procedures/`, `/compounds/` and its tab pages, its
-placeholder is **Product, CAS, SMILES or keyword** and its accessible name is
-**Search procedures**.
+placeholder is **Product, CAS or SMILES** and its accessible name is
+**Search procedures**. Keywords still match. Choose the magnifier button at
+the field's right end or press Enter to submit; screen readers name the
+button **Search**. On lab pages, this searches procedures at `/procedures/`.
 
 - `/` opens with **Synthetic procedures** and a short introduction.
   With `ORGSYNDB_LAB=true`, **Lab at a glance** appears below the
@@ -622,9 +639,10 @@ placeholder is **Product, CAS, SMILES or keyword** and its accessible name is
   has `/compounds/group/purchased/` and `/compounds/group/synthesised/`.
   On a tab page, the group filter leaves out the tab's own group and moves
   the groups below it up one level. Filters with no values to list are
-  omitted. The header search is labelled **Search compounds: \<label\>**
-  and works within that tab. Tab links carry no query or filters. Without
-  JavaScript, a tab page shows its whole list.
+  omitted. The sidebar search is labelled **Search compounds: \<label\>**,
+  with the placeholder **Name, formula, CAS, SMILES**, and works within that
+  tab. Tab links carry no query or filters. Without JavaScript, a tab page
+  shows its whole list.
 
   **Filters** offers **Chemical class** and **Group**, in that order.
   Each filter shows terms used by substances and their ancestors as an
@@ -639,8 +657,8 @@ placeholder is **Product, CAS, SMILES or keyword** and its accessible name is
   while filtering. A tab page with no filter values has no filter column;
   the count and search remain.
 
-  The header search is labelled **Search compounds**, with the placeholder
-  **Name, formula, CAS or SMILES**. It matches English and German names,
+  The sidebar search is labelled **Search compounds**, with the placeholder
+  **Name, formula, CAS, SMILES**. It matches English and German names,
   formula, CAS number, SMILES, article numbers and short names where
   supplied. Each query word must match a substring; matching ignores
   case and characters other than letters and digits. For example, `50-78-2`,
@@ -713,14 +731,14 @@ placeholder is **Product, CAS, SMILES or keyword** and its accessible name is
   the other version as **English** or **Deutsch**. Documents that exist only
   in German remain available on an English site.
 
-To find a procedure, type in the header search field. On `/procedures/`,
+To find a procedure, type in the sidebar search field. On `/procedures/`,
 `/general-procedures/` and term pages, this is the catalogue's only search
-field. Results update as you type; **Search** applies the query immediately. On
-`/compounds/` and its tab pages, the field searches compounds as described in
-its entry above. On other pages, including individual compound pages, submit
-the field to search in `/procedures/`. On a term page, the field searches
-only that term's procedures. Its placeholder is **Search these procedures**;
-its accessible name identifies the term, for example **Search
+field. Results update as you type; the magnifier button applies the query
+immediately. On `/compounds/` and its tab pages, the field searches compounds
+as described in its entry above. On other pages, including individual compound
+pages, submit the field to search in `/procedures/`. On a term page, the field
+searches only that term's procedures. Its placeholder is **Search these
+procedures**; its accessible name identifies the term, for example **Search
 procedures with the tag cinnamate**. On `/general-procedures/`, the placeholder
 is **Search these procedures** and the accessible name **Search general
 procedures**. Full-text search uses the Pagefind index and finds procedures by
@@ -801,7 +819,7 @@ Without JavaScript, `/procedures/` lists every procedure by ID, and term pages
 list every procedure of their term by ID. `/general-procedures/` lists every
 general procedure by ID. A note explains that search, filters and sorting need
 JavaScript and links to the reaction-type, tag and author directories. On a
-term page or `/general-procedures/`, submitting the header search reloads that
+term page or `/general-procedures/`, submitting the sidebar search reloads that
 page with the query; elsewhere it leads to the catalogue. In either case, the
 static list does not apply the query.
 
@@ -1110,7 +1128,7 @@ prefix are relative to the collection.
 The program exits 0 on success, 1 on failure, and 2 on a usage error.
 
 For `build`, set the environment variable `ORGSYNDB_LAB=true` to include
-the lab application's views in the site's header and its summary on the
+the lab application's views in the site's sidebar and its summary on the
 home page. It also accepts `1`, `yes` and `on`. Leave it unset or empty,
 or set it to `false`, `0`, `no` or `off`, to omit those links and the
 summary. Values are case-insensitive. Any other value stops `build` with
@@ -1860,13 +1878,15 @@ address, give `orgsyndb new` a personal access token. This is a secret
 that lets the command request IDs as your account.
 
 Sign in with your [lab account](#first-account-and-tasks), then choose
-**Zugangsschlüssel** (**Access tokens**) beside your initials in the
-header, or open `/lab/accounts/tokens/`. Under **Neuer Zugangsschlüssel**
-(**New access token**), enter a **Name** of at most 100 characters and
-choose **Anlegen** (**Create**). Copy the token now: it is shown only
-once. It begins with `osdb_` followed by 43 characters. The application
-stores only its SHA-256 digest, a fingerprint from which it cannot recover
-the token.
+**Zugangsschlüssel** (**Access tokens**) beside your initials at the
+sidebar's foot, or open `/lab/accounts/tokens/`. In narrow windows, the
+account sits beside the site title above the search field; on a phone the
+link moves to the password page that your initials open. Under
+**Neuer Zugangsschlüssel** (**New access token**), enter a **Name** of at most
+100 characters and choose **Anlegen** (**Create**). Copy the token now: it is
+shown only once. It begins with `osdb_` followed by 43 characters. The
+application stores only its SHA-256 digest, a fingerprint from which it
+cannot recover the token.
 
 On the computer where you run `new`, put the token on the first line of
 `~/.config/orgsyndb/token`. If `XDG_CONFIG_HOME` is set and not empty, use
@@ -1914,7 +1934,8 @@ may be empty; otherwise it must be unique regardless of case.
 Sign in at `/lab/admin/` to create further accounts. The admin requires staff
 status. You can assign tasks to an account without a usable password
 for a person who never signs in. Users change their own password through
-their initials in the header, at `/lab/accounts/password/`. Procedure files
+their initials at the sidebar's foot, at `/lab/accounts/password/`. In narrow
+windows, the initials sit beside the site title. Procedure files
 credit authors by user name. The site displays their account names; changing
 a person's name changes the registry digest and triggers a site rebuild.
 
@@ -2371,8 +2392,8 @@ first build, the link can lead to a page the site does not serve yet.
 
 Register the lab's paper notebooks before the first validation or import
 of procedures that set `notebook`. Both checks refuse an unknown notebook.
-Choose **Laborjournale** (**Lab notebooks**) above the substance list,
-beside the vocabularies and collection imports, or open `/lab/journal/`.
+Choose **Laborjournale** (**Lab notebooks**) in the sidebar's **Labor**
+(**Lab**) group, or open `/lab/journal/`.
 You need no sign-in to read it. The table lists notebooks by code, with
 the owner's initials and name, entry count and note. An empty list shows
 **Keine Laborjournale.** (**No lab notebooks.**).
@@ -2404,11 +2425,11 @@ account that owns a notebook.
 
 #### Inspect collection imports
 
-To check which collection build the app accepted, choose **Collection
-imports** above the substance list or open `/lab/collection/`. You need
-no sign-in. The page is headed **Imports**. It names the latest accepted
-import's commit, release and received time, with counts of procedures
-and sequences that are not withdrawn.
+To check which collection build the app accepted, choose **Importe**
+(**Imports**) in the sidebar's **Labor** (**Lab**) group or open
+`/lab/collection/`. You need no sign-in. The page is headed **Imports**.
+It names the latest accepted import's commit, release and received time,
+with counts of procedures and sequences that are not withdrawn.
 
 The table lists imports newest first. Its columns are **Received**,
 **Commit**, **Trigger**, **Pushed by**, **Outcome**, **Release** and
@@ -2559,12 +2580,8 @@ names, molar masses and article numbers come directly from the lab registry.
 ### End-product inventory
 
 Use the inventory to see which end products are ready to deliver and how
-long their stock will last. The navigation lists **Bestand** (**Inventory**),
-**Planung** (**Planning**), **Aufgaben** (**Tasks**), **Substanzen**
-(**Substances**), **Verbindungen** (**Compounds**), **Synthesewege**
-(**Sequences**), **Vorschriften** (**Procedures**) and **Hilfe** (**Help**)
-in that order.
-Choose **Bestand**, or open
+long their stock will last. In the sidebar's **Labor** (**Lab**) group,
+choose **Bestand** (**Inventory**), or open
 `/lab/inventory/end-products/`. `/lab/inventory/` redirects to the same
 list; `/lab/` opens the [lab overview](#lab-overview). You can read the
 inventory without signing in. Use the same account as for tasks to enter

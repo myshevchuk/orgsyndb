@@ -131,6 +131,3 @@ msgstr "Verwendet"
 
 msgid "No terms."
 msgstr "Keine Begriffe."
-
-msgid "Collection imports"
-msgstr "Importe der Sammlung"

@@ -1,7 +1,8 @@
 # The lab application's image: Django served by gunicorn on port 8000,
 # behind the web service's Caddy, which forwards /lab/ to it. Built from
 # the repository root with deploy/compose.yaml, which sets the context;
-# it takes webapp/ and the site's stylesheets, site/assets/css/, from
+# it takes webapp/ and, from the site, its stylesheets, menu and
+# interface strings (site/assets/css/, site/hugo.toml, site/i18n/) from
 # the checkout. Updating the application means rebuilding this image;
 # the container applies pending migrations when it starts, and with
 # ORGSYNDB_DEMO=true fills an empty database with the demo data. See the
@@ -25,6 +26,8 @@ COPY webapp/pyproject.toml webapp/uv.lock ./
 RUN uv sync --frozen --no-dev --no-cache
 
 COPY site/assets/css/ /opt/orgsyndb/site/assets/css/
+COPY site/hugo.toml /opt/orgsyndb/site/hugo.toml
+COPY site/i18n/ /opt/orgsyndb/site/i18n/
 COPY webapp/ /opt/orgsyndb/webapp/
 # collectstatic needs settings but no database.
 RUN ORGSYNDB_SECRET_KEY=collectstatic ORGSYNDB_ALLOWED_HOSTS=localhost \

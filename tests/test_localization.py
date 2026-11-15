@@ -602,13 +602,13 @@ class SiteLanguageTests(unittest.TestCase):
         wanted_german = {
             "1 Verbindung", "{shown} von {total} Verbindungen",
             "Verbindungen durchsuchen",
-            "Name, Summenformel, CAS oder SMILES",
+            "Name, Formel, CAS, SMILES",
             "Suche und Filter brauchen JavaScript. Ohne JavaScript zeigt "
             "diese Seite alle Verbindungen.",
             "Keine Verbindung passt zu Suche und Filtern."}
         wanted_english = {
             "1 compound", "{shown} of {total} compounds",
-            "Search compounds", "Name, formula, CAS or SMILES",
+            "Search compounds", "Name, formula, CAS, SMILES",
             "Search and filters need JavaScript. Without it, this page "
             "lists every compound.",
             "No compounds match the search and filters."}
@@ -651,15 +651,16 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class LabNavigationStringTests(unittest.TestCase):
-    def test_the_lab_views_have_german_and_english_labels(self) -> None:
-        """Scenario: Lab views in the navigation (interface strings)."""
-        labels = {"de": ("Bestand", "Planung", "Aufgaben"),
-                  "en": ("Inventory", "Planning", "Tasks")}
-        for language, expected in labels.items():
-            with self.subTest(language=language):
-                strings = tomllib.loads((I18N / f"{language}.toml")
-                                        .read_text(encoding="utf-8"))
-                self.assertEqual(tuple(strings[key] for key in (
-                    "nav_inventory", "nav_planning", "nav_tasks")),
-                    expected)
+class NavigationStringTests(unittest.TestCase):
+    def test_every_menu_entry_has_both_strings(self) -> None:
+        """Requirement: Interface strings (the navigation's entries)."""
+        entries = tomllib.loads((I18N.parent / "hugo.toml").read_text(
+            encoding="utf-8"))["menus"]["main"]
+        self.assertTrue(entries, "the menu main is empty")
+        for language in ("de", "en"):
+            strings = tomllib.loads((I18N / f"{language}.toml")
+                                    .read_text(encoding="utf-8"))
+            for entry in entries:
+                with self.subTest(language=language,
+                                  entry=entry["identifier"]):
+                    self.assertTrue(strings.get(entry["identifier"]))

@@ -286,8 +286,9 @@ SVG-Dateien arbeiten.
 
 Sie dürfen einen Ausgangsstoff registrieren, ohne dass eine Vorschrift ihn
 herstellt. Auch eine Verbindung, die keine Vorschrift verwendet, ist zulässig.
-**Verbindungen** in der Navigation öffnet den Katalog unter `/compounds/`,
-den Sie filtern und durchsuchen können.
+**Verbindungen** in der Gruppe **Sammlung** in der linken Seitenleiste öffnet
+den Katalog unter `/compounds/`, den Sie filtern und durchsuchen können.
+Das Suchfeld zeigt **Name, Formel, CAS, SMILES**.
 Jeder Name verlinkt auf eine Seite mit chemischen Daten, dem Strukturbild,
 sofern vorhanden, Vorschriften unter **Hergestellt nach** mit Ausbeute und
 Status sowie Vorschriften unter **Verwendet in** mit Status. Eine allgemeine
@@ -629,8 +630,17 @@ serving http://127.0.0.1:8000/ (Ctrl-C to stop)
 Rechner. Die Adresse funktioniert nur auf diesem Rechner. Drücken Sie im
 Terminal `Strg+C`, um die Vorschau zu beenden.
 
-Die Navigation heißt **Vorschriften**, **Verbindungen**, **Synthesewege**,
-**Hilfe**. Die **Übersicht** der Startseite enthält **Synthesewege** mit einer
+Die Navigation steht in einer linken Seitenleiste unter dem Titel und dem
+Suchfeld. Sie bleibt beim Scrollen sichtbar; in schmalen Fenstern steht sie
+über der Seite. Unter **Sammlung** wählen Sie **Verbindungen**, **Synthesewege**
+oder **Vorschriften**; **Hilfe** folgt einzeln. Websites mit Laboranwendung
+zeigen davor die Gruppe **Labor**: **Übersicht**, **Bestand**, **Planung**,
+**Aufgaben**, **Substanzen**, **Laborjournale** und **Importe**. Auf einer
+Vorschriftenseite zeigt das Suchfeld **Produkt, CAS oder SMILES**; auch
+Stichwörter werden gefunden. Klicken Sie auf die Lupe rechts im Feld oder
+drücken Sie die Eingabetaste, um Vorschriften zu suchen.
+
+Die **Übersicht** der Startseite enthält **Synthesewege** mit einer
 Anzahl. Dieser Link und die Navigation öffnen `/sequences/`: nach Nummer
 geordnet, mit verlinkten Titeln und Zielen, Stufenzahl und Gesamtausbeute.
 Eine Synthesewegseite zeigt Nummer und Titel, **Stufen** und
@@ -658,8 +668,9 @@ verwenden den Filter **Art**: **Einzelvorschrift** oder **Allgemeine
 Vorschrift**. Die Reiter heißen **Alle Vorschriften**, **Allgemeine
 Vorschriften**, **Reaktionstypen**, **Schlagwörter** und **Autoren**.
 **Allgemeine Vorschriften** öffnet `/general-procedures/`, den auf diese Art
-begrenzten Katalog. Die Suche im Kopf heißt **Allgemeine Vorschriften
-durchsuchen** und bleibt innerhalb dieser Liste. **Nur allgemeine Vorschriften
+begrenzten Katalog. Die Suche in der Seitenleiste heißt **Allgemeine
+Vorschriften durchsuchen**, zeigt **In diesen Vorschriften** im Feld und
+bleibt innerhalb dieser Liste. **Nur allgemeine Vorschriften
 · Alle Vorschriften anzeigen** führt zum gesamten Katalog. **Alles
 zurücksetzen** behält die Beschränkung; **Alle Vorschriften anzeigen** hebt sie
 auf und übernimmt Suchtext, andere Filter, Sortierung und Ansicht. Im gesamten

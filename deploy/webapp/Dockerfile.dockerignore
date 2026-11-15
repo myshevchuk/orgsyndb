@@ -1,8 +1,11 @@
-# The image takes only the application and the site's stylesheets from
-# the repository root.
+# The image takes only the application and, from the site, its
+# stylesheets, its menu and its interface strings, from the
+# repository root.
 *
 !webapp/
 !site/assets/css/
+!site/hugo.toml
+!site/i18n/
 webapp/.venv/
 webapp/db.sqlite3
 webapp/staticfiles/

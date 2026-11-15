@@ -54,7 +54,7 @@ CATALOGUE_TEXTS = {
            "ignored": "Ignored in the address: {list}",
            "remove": "Remove {facet}: {value}", "filters": "Filters",
            "clear": "Clear all", "label": "Search compounds",
-           "placeholder": "Name, formula, CAS or SMILES",
+           "placeholder": "Name, formula, CAS, SMILES",
            "button": "Search", "all": "All compounds",
            "tab_noscript": "Search and filters need JavaScript. Without "
                            "it, this page lists every compound of this "
@@ -70,7 +70,7 @@ CATALOGUE_TEXTS = {
            "remove": "{facet}: {value} entfernen", "filters": "Filter",
            "clear": "Alles zurücksetzen", "label": "Verbindungen "
            "durchsuchen",
-           "placeholder": "Name, Summenformel, CAS oder SMILES",
+           "placeholder": "Name, Formel, CAS, SMILES",
            "button": "Suchen", "all": "Alle Verbindungen",
            "tab_noscript": "Suche und Filter brauchen JavaScript. Ohne "
                            "JavaScript zeigt diese Seite alle "
@@ -391,10 +391,6 @@ class CompoundCase(tti.SiteCase):
                          [self.tab_label(tab)])
         self.assertEqual(page.title(), f"{self.tab_label(tab)} | OrgSynDB")
         self.assertEqual(page.find_all(data_pagefind_body=True), [])
-        nav = page.find("header", "site-header").find("nav")
-        marked = {l.target: l.node.attrs["aria-current"]
-                  for l in page.links(nav) if "aria-current" in l.node.attrs}
-        self.assertEqual(marked, {"/compounds/": "true"})
         self.check_compound_header_search(page, tab)
         return page
 
@@ -1306,18 +1302,6 @@ class CompoundSiteTests(CompoundCase):
                     self.compound_page(key).find_all("nav", "section-tabs"),
                     [])
 
-    def test_the_header_marks_compounds_on_a_tab_page(self) -> None:
-        """Scenario: Tabs in the HTML (the Compounds link)."""
-        for value in ("purchased", "synthesised"):
-            page = self.tab_page(Tab("group", value))
-            nav = page.find("header", "site-header").find("nav")
-            with self.subTest(tab=value):
-                self.assertEqual(
-                    {l.target: l.node.attrs["aria-current"]
-                     for l in page.links(nav)
-                     if "aria-current" in l.node.attrs},
-                    {"/compounds/": "true"})
-
     def test_a_tab_page_is_not_indexed(self) -> None:
         """Requirement: Compound tabs (no data-pagefind-body)."""
         for value in ("purchased", "synthesised"):
@@ -1437,7 +1421,7 @@ class GermanCompoundTests(CompoundCase):
             (field.get("aria-label"), field.get("placeholder"),
              form.find("button").norm()),
             ("Verbindungen durchsuchen",
-             "Name, Summenformel, CAS oder SMILES", "Suchen"))
+             "Name, Formel, CAS, SMILES", "Suchen"))
         self.assertEqual(page.resolve(form.attrs.get("action", "")),
                          "/compounds/")
 

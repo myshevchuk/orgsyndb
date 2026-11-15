@@ -3,12 +3,27 @@
    filters and table, state badges, forms and the history. Colours come
    from the site's tokens, so both colour schemes apply. */
 
+/* The account sits at the foot of the sidebar, and at the end of the
+   title's row once the header stacks above the page. */
 .lab-account {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  margin-left: auto;
+  margin-top: auto;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
   font-family: var(--font-ui);
+  font-size: 0.875rem;
+}
+@media (max-width: 55rem) {
+  .lab-account { grid-column: 2; margin-top: 0; padding-top: 0; border-top: 0; }
+}
+/* On a phone the title's row has room for the initials and the
+   sign-out button only; the access tokens open from the password page,
+   which the initials lead to. */
+@media (max-width: 30rem) {
+  .lab-account-tokens { display: none; }
 }
 .lab-account form { margin: 0; }
 .lab-account > a { text-decoration: none; font-weight: 600; }
@@ -555,6 +570,6 @@ table.note-lines { padding: 0; }
 .deliveries-chart text { fill: var(--muted); }
 .deliveries-chart .chart-axis { stroke: var(--border); }
 .deliveries-chart figcaption { color: var(--muted); font-family: var(--font-ui); font-size: 0.875rem; }
-body.lab-framed { margin: 0; padding: 0; max-width: none; }
+body.lab-framed { display: block; min-height: 0; margin: 0; padding: 0; max-width: none; }
 body.lab-framed main { padding: 0; }
 body.lab-framed .lab-demo { margin-bottom: var(--space-2); }

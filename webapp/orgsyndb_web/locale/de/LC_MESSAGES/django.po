@@ -8,27 +8,6 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "Procedures"
-msgstr "Vorschriften"
-
-msgid "Compounds"
-msgstr "Verbindungen"
-
-msgid "Sequences"
-msgstr "Synthesewege"
-
-msgid "Help"
-msgstr "Hilfe"
-
-msgid "Inventory"
-msgstr "Bestand"
-
-msgid "Planning"
-msgstr "Planung"
-
-msgid "Tasks"
-msgstr "Aufgaben"
-
 msgid "German"
 msgstr "Deutsch"
 
@@ -37,9 +16,6 @@ msgstr "Englisch"
 
 msgid "Skip to content"
 msgstr "Zum Inhalt springen"
-
-msgid "Site"
-msgstr "Website"
 
 msgid "%(name)s: change password"
 msgstr "%(name)s: Passwort ändern"

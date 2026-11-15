@@ -123,7 +123,7 @@ A failing step stops the command with exit 1. Any other value of `ORGSYNDB_LAB` 
 
 #### Scenario: Lab views on request
 - **WHEN** an integration test runs `tools/orgsyndb -C <collection> build` on a copy of the test collection with `ORGSYNDB_LAB=true`, and once with `ORGSYNDB_LAB=maybe`
-- **THEN** the first exits 0, its overlay sets `params.lab = true` and its home page's header links `/lab/tasks/`; the second exits 1 with a message naming `ORGSYNDB_LAB` and `maybe`, and runs no export
+- **THEN** the first exits 0, its overlay sets `params.lab = true` and its home page's navigation links under `/lab/`; the second exits 1 with a message naming `ORGSYNDB_LAB` and `maybe`, and runs no export
 
 ### Requirement: serve subcommand
 `tools/orgsyndb serve [--port N]` SHALL run `build`, bind `127.0.0.1:<N>`, print the line `serving http://127.0.0.1:<N>/ (Ctrl-C to stop)` once the port is bound, and then serve the collection's `public/` with the standard library's HTTP server until interrupted. Every response carries `Cache-Control: no-cache`, so a browser revalidates each file and shows a new build instead of cached pages of an earlier one. The default port is 8000; a port outside 1–65535 or not a number is a usage error. It never binds an address other than `127.0.0.1`.

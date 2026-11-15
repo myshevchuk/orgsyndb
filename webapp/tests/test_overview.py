@@ -8,6 +8,7 @@ from django.test import SimpleTestCase
 
 from . import berlin, make_task, page, table, ticking
 from .collection_support import accept
+from . import navigation_support as ns
 from .planning_support import PlanningCase
 
 OVERVIEW = "/lab/"
@@ -420,10 +421,10 @@ class PathTests(OverviewCase):
         self.assertIsNotNone(page(response).find("section", "lab-overview"))
         self.assertEqual(self.client.get("/procedures/").status_code, 404)
 
-    def test_no_view_is_marked(self) -> None:
-        nav = page(self.client.get(OVERVIEW)).find("header").find("nav")
-        self.assertFalse([a for a in nav.find_all("a")
-                          if a.get("aria-current")])
+    def test_the_navigation_marks_the_overview_as_the_menu_says(
+            self) -> None:
+        self.assertEqual(ns.marks(self.client.get(OVERVIEW)),
+                         ns.expected_marks(OVERVIEW))
 
 
 class SpanTests(SimpleTestCase):

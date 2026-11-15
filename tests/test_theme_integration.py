@@ -14,9 +14,11 @@ import re
 import tomllib
 import unittest
 import urllib.parse
+from pathlib import Path
 
 import field_support as fs
 import general_support as gs
+import navigation_support as ns
 import pipeline_support as ps
 import sequence_support as ss
 from pipeline_support import Content, Node, Page, Sequence
@@ -29,10 +31,6 @@ FOOTER = re.compile(r"OrgSynDB · internal procedures · built "
 ORIGIN = "http://127.0.0.1:8000"
 RFC3339 = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}"
                      r"(Z|[+-]\d{2}:\d{2})$")
-NAVIGATION = [("/compounds/", "Compounds"), ("/sequences/", "Sequences"),
-              ("/procedures/", "Procedures"), ("/help/", "Help")]
-LAB_NAVIGATION = [("/lab/inventory/end-products/", "Inventory"),
-                  ("/lab/planning/", "Planning"), ("/lab/tasks/", "Tasks")]
 TABS = [("/procedures/", "All procedures"),
         ("/general-procedures/", "General procedures"),
         ("/reaction_types/", "Reaction types"), ("/tags/", "Tags"),
@@ -74,6 +72,18 @@ class SiteCase(fs.ProcedureFieldsMixin, ps.ThemeBuildCase):
 
     def by_id(self) -> dict[str, Content]:
         return {item.id: item for item in self.content()}
+
+    @property
+    def site(self) -> Path:
+        return self.sandbox.app / "site"
+
+    @property
+    def lab(self) -> bool:
+        return getattr(self, "ENV", {}).get("ORGSYNDB_LAB") == "true"
+
+    def navigation(self) -> list[ns.Entry]:
+        """The navigation this build's pages show."""
+        return ns.expected(self.site, "en", self.lab)
 
     def labels(self) -> dict[str, str]:
         return ps.reaction_labels(self.sandbox.root)
@@ -224,8 +234,7 @@ class ShippedSiteTests(SiteCase):
         self.assertEqual(len(header.find_all("nav")), 1)
         nav = header.find("nav", aria_label="Site")
         self.assertIsNotNone(nav, "no nav[aria-label=Site]")
-        self.assertEqual([(link.target, link.node.norm())
-                          for link in page.links(nav)], NAVIGATION)
+        self.assertEqual(ns.shown(page, nav), self.navigation())
         mains = page.find_all("main")
         self.assertEqual(len(mains), 1)
         self.assertEqual(mains[0].attrs.get("id"), "main")
@@ -275,7 +284,6 @@ class ShippedSiteTests(SiteCase):
         self.assertTrue(form.has_class("site-search"))
         self.assertEqual(form.attrs.get("role"), "search")
         self.assertEqual(form.attrs.get("method", "").lower(), "get")
-        self.assertGreater(page.index_of(form), page.index_of(nav))
         self.assertFalse(form.within(nav))
         fields = form.find_all("input")
         self.assertEqual(len(fields), 1)
@@ -288,7 +296,7 @@ class ShippedSiteTests(SiteCase):
             self.assertEqual((fields[0].attrs.get("aria-label"),
                               fields[0].attrs.get("placeholder")),
                              ("Search procedures",
-                              "Product, CAS, SMILES or keyword"))
+                              "Product, CAS or SMILES"))
         if page.url == "/compounds/":
             self.assertEqual(page.resolve(form.attrs.get("action", "")),
                              "/compounds/")
@@ -296,7 +304,7 @@ class ShippedSiteTests(SiteCase):
                               fields[0].attrs.get("aria-label"),
                               fields[0].attrs.get("placeholder")),
                              ("catalogue-q", "Search compounds",
-                              "Name, formula, CAS or SMILES"))
+                              "Name, formula, CAS, SMILES"))
         if page.url in COMPOUND_TAB_PAGES:
             self.assertEqual(page.resolve(form.attrs.get("action", "")),
                              page.url)
@@ -305,7 +313,7 @@ class ShippedSiteTests(SiteCase):
                               fields[0].attrs.get("placeholder")),
                              ("catalogue-q", "Search compounds: "
                               + COMPOUND_TAB_PAGES[page.url],
-                              "Name, formula, CAS or SMILES"))
+                              "Name, formula, CAS, SMILES"))
         buttons = form.find_all("button")
         self.assertEqual(len(buttons), 1)
         self.assertEqual((buttons[0].attrs.get("type"), buttons[0].norm()),
@@ -936,40 +944,27 @@ class ShippedSiteTests(SiteCase):
               "1-(Biphenyl-4-yl)ethanol from 4′-bromoacetophenone")])
         self.assertEqual(page.find_all("button", data_copy_smiles=True), [])
 
-    def test_navigation_marks_the_current_section(self) -> None:
-        """Scenario: Current section in the navigation."""
-        within = {"/procedures/": "true"}
-        cases = {"index.html": {},
-                 "procedures/index.html": {"/procedures/": "page"},
-                 "procedures/osdb-0001/index.html": within,
-                 "general-procedures/index.html": within,
-                 "procedures/osdb-0009/index.html": within,
-                 "tags/index.html": within,
-                 "authors/index.html": within,
-                 "reaction_types/index.html": within,
-                 "tags/sample-data/index.html": within,
-                 "authors/klehmann/index.html": within,
-                 "reaction_types/hydrolysis/index.html": within,
-                 "compounds/index.html": {"/compounds/": "page"},
-                 "compounds/salicylic-acid/index.html": {
-                     "/compounds/": "true"},
-                 "compounds/group/purchased/index.html": {
-                     "/compounds/": "true"},
-                 "compounds/group/synthesised/index.html": {
-                     "/compounds/": "true"},
-                 "sequences/index.html": {"/sequences/": "page"},
-                 "sequences/seq-0001/index.html": {"/sequences/": "true"},
-                 "sequences/seq-0002/index.html": {"/sequences/": "true"},
-                 "help/index.html": {"/help/": "page"},
-                 "help/schema/index.html": {"/help/": "true"}}
-        for name, expected in cases.items():
-            with self.subTest(page=name):
-                page = ps.load_page(self.public, self.public / name)
+    def test_current_link(self) -> None:
+        """Scenario: Current link."""
+        marked_pages = 0
+        for path, page in self.pages():
+            with self.subTest(page=str(path.relative_to(self.public))):
                 nav = page.find("header", "site-header").find("nav")
                 marked = {l.target: l.node.attrs["aria-current"]
                           for l in page.links(nav)
                           if "aria-current" in l.node.attrs}
+                expected = ns.marks(self.site, self.lab, page.url)
                 self.assertEqual(marked, expected)
+                marked_pages += bool(expected)
+        self.assertGreater(marked_pages, 0, "no page marks a link")
+
+    def test_no_link_under_the_lab(self) -> None:
+        """Scenario: A build without the lab."""
+        for path, page in self.pages():
+            with self.subTest(page=str(path.relative_to(self.public))):
+                header = page.find("header", "site-header")
+                self.assertEqual([l.target for l in page.links(header)
+                                  if l.target.startswith("/lab/")], [])
 
     def listing_pages(self) -> dict[str, dict[str, str]]:
         """The pages that carry the tabs, with the tabs they mark."""
@@ -1248,7 +1243,7 @@ class ShippedSiteTests(SiteCase):
 
     def test_metadata_is_indexed_and_chrome_is_not(self) -> None:
         """Scenario: Metadata inside the body, chrome outside."""
-        navigation = " ".join(text for _, text in NAVIGATION)
+        navigation = " ".join(ns.texts(self.navigation()))
         registry = self.registry()
         accounts = ps.account_names(self.sandbox)
         for item, page in self.procedure_pages():
@@ -1710,19 +1705,29 @@ class LabNavigationTests(SiteCase):
 
     ENV = {"ORGSYNDB_LAB": "true"}
 
-    def test_lab_views_in_the_navigation(self) -> None:
-        """Scenario: Lab views in the navigation."""
-        for name in ("index.html", "procedures/osdb-0001/index.html"):
-            with self.subTest(page=name):
-                page = ps.load_page(self.public, self.public / name)
-                nav = page.find("header", "site-header").find(
-                    "nav", aria_label="Site")
-                links = page.links(nav)
-                self.assertEqual([(link.target, link.node.norm())
-                                  for link in links],
-                                 LAB_NAVIGATION + NAVIGATION)
-                for link in links[:3]:
-                    self.assertNotIn("aria-current", link.node.attrs)
+    def test_one_navigation_from_the_menu(self) -> None:
+        """Scenario: One navigation from the menu."""
+        navigation = self.navigation()
+        self.assertTrue([e for e in ns.links(self.site, True)
+                         if e["url"].startswith("/lab/")], "no lab link")
+        for path, page in self.pages():
+            with self.subTest(page=str(path.relative_to(self.public))):
+                header = page.find("header", "site-header")
+                self.assertEqual(len(header.find_all("nav")), 1)
+                nav = header.find("nav", aria_label="Site")
+                self.assertIsNotNone(nav, "no nav[aria-label=Site]")
+                self.assertEqual(ns.shown(page, nav), navigation)
+
+    def test_current_link_with_the_lab(self) -> None:
+        """Scenario: Current link (with the lab)."""
+        for path, page in self.pages():
+            with self.subTest(page=str(path.relative_to(self.public))):
+                nav = page.find("header", "site-header").find("nav")
+                marked = {l.target: l.node.attrs["aria-current"]
+                          for l in page.links(nav)
+                          if "aria-current" in l.node.attrs}
+                self.assertEqual(marked,
+                                 ns.marks(self.site, True, page.url))
 
     def test_the_labs_summary_on_the_home_page(self) -> None:
         """Scenario: The lab's summary on the home page."""
@@ -1750,8 +1755,9 @@ class LabNavigationTests(SiteCase):
 
     def test_lab_references_at_the_root(self) -> None:
         """Scenario: Lab references at the root."""
-        lab = {"/lab/", "/lab/summary/", "/lab/inventory/end-products/",
-               "/lab/planning/", "/lab/tasks/"}
+        lab = {"/lab/", "/lab/summary/",
+               *(entry["url"] for entry in ns.links(self.site, True)
+                 if entry["url"].startswith("/lab/"))}
         scheme = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
         found_lab: set[str] = set()
         problems = []

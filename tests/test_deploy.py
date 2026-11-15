@@ -1419,9 +1419,16 @@ class FileTests(unittest.TestCase):
         for needle in ("FROM fedora:44", "uv sync --frozen --no-dev",
                        "collectstatic", "migrate", "gunicorn",
                        "USER orgsyndb", "orgsyndb_web.wsgi",
-                       "0.0.0.0:8000", "EXPOSE 8000", "site/assets/css"):
+                       "0.0.0.0:8000", "EXPOSE 8000", "site/assets/css",
+                       "site/hugo.toml", "site/i18n/"):
             with self.subTest(needle=needle):
                 self.assertIn(needle, text)
+        ignore = (WEBAPP_DOCKERFILE.parent
+                  / "Dockerfile.dockerignore").read_text()
+        for admitted in ("!site/assets/css/", "!site/hugo.toml",
+                         "!site/i18n/"):
+            with self.subTest(admitted=admitted):
+                self.assertIn(admitted, ignore.splitlines())
         self.assertNotIn("ORGSYNDB_INDEX", text)
         self.assertNotIn("index.json", text)
         self.assertRegex(text, r"(?:--uid[= ]|-u\s*)1000\b")

@@ -1,6 +1,7 @@
 """Tests of the page shell and the interface language (web-app: Page
 shell, Interface language)."""
 
+import re
 import tomllib
 from datetime import date
 from pathlib import Path
@@ -10,6 +11,7 @@ from django.test import SimpleTestCase, TestCase
 
 from . import (REPO, berlin, frozen, make_item, make_lot, make_task,
                make_user, page, substance_for, table, task_url, ticking)
+from . import navigation_support as ns
 from .collection_support import accept, make_import
 
 CSS = REPO / "site" / "assets" / "css"
@@ -63,39 +65,65 @@ class ShellTests(TestCase):
                 self.assertEqual(media["print.css"], "print")
 
     def test_navigation(self) -> None:
-        """Scenario: Shell (navigation)."""
+        """Scenario: Shell (title, search and navigation)."""
         strings = site_strings("de")
         for signed_in in (True, False):
             with self.subTest(signed_in=signed_in):
                 self.client.logout()
-                header, links = self.nav_links(self.shell(signed_in))
-                self.assertEqual(
-                    [(a.get("href"), a.text()) for a in links[:8]],
-                    [("/lab/inventory/end-products/", "Bestand"),
-                     ("/lab/planning/", "Planung"),
-                     ("/lab/tasks/", "Aufgaben"),
-                     ("/lab/registry/", "Substanzen"),
-                     ("/compounds/", strings["nav_compounds"]),
-                     ("/sequences/", strings["nav_sequences"]),
-                     ("/procedures/", strings["nav_procedures"]),
-                     ("/help/", strings["nav_help"])])
-                self.assertEqual(header.find("nav").get("aria-label"),
+                root = self.shell(signed_in)
+                header, _ = self.nav_links(root)
+                self.assertEqual(ns.shown(root), ns.expected("de"))
+                self.assertEqual(ns.nav(root).get("aria-label"),
                                  strings["nav_site"])
-                self.assertEqual(
-                    [a.get("aria-current") for a in links[:8]],
-                    [None, None, "page", None, None, None, None, None])
-                title = header.find("a", href="/")
+                title = header.find("a", cls="site-title")
                 self.assertIsNotNone(title)
-                self.assertEqual(title.text(), site_title())
+                self.assertEqual((title.get("href"), title.text()),
+                                 ("/", site_title()))
+                self.check_search(header, strings)
 
-    def test_a_page_inside_a_view_marks_the_view(self) -> None:
-        for path in (task_url(self.task), task_url(self.task, "edit"),
-                     "/lab/tasks/new/"):
-            with self.subTest(path=path):
-                _, links = self.nav_links(self.shell(True, path))
-                self.assertEqual(
-                    [a.get("aria-current") for a in links[:8]],
-                    [None, None, "true", None, None, None, None, None])
+    def check_search(self, header, strings: dict) -> None:
+        """The header holds the site's search form for procedures."""
+        forms = header.find_all("form", cls="site-search")
+        self.assertEqual(len(forms), 1)
+        form = forms[0]
+        self.assertEqual((form.get("role"), form.get("method"),
+                          form.get("action")),
+                         ("search", "get", "/procedures/"))
+        fields = form.find_all("input")
+        self.assertEqual(len(fields), 1)
+        self.assertEqual(
+            [fields[0].get(n) for n in ("type", "name", "aria-label",
+                                        "placeholder")],
+            ["search", "q", strings["search_label"],
+             strings["search_placeholder"]])
+        button = form.find("button")
+        self.assertEqual((button.get("type"), button.text()),
+                         ("submit", strings["search_button"]))
+
+    def test_current_link(self) -> None:
+        """Scenario: Current link on the application's pages."""
+        inside = {"/lab/tasks/": [task_url(self.task),
+                                  task_url(self.task, "edit"),
+                                  "/lab/tasks/new/"],
+                  "/lab/registry/": ["/lab/registry/groups/"],
+                  "/lab/journal/": ["/lab/journal/new/"]}
+        self.client.force_login(self.kl)
+        for entry in ns.links():
+            url = entry["url"]
+            if not url.startswith("/lab/"):
+                continue
+            for path in [url, *inside.get(url, [])]:
+                with self.subTest(path=path):
+                    response = self.client.get(path)
+                    self.assertEqual(response.status_code, 200)
+                    expected = ns.expected_marks(path)
+                    self.assertTrue(expected, f"{path} lies in no section")
+                    self.assertEqual(ns.marks(response), expected)
+
+    def test_an_account_page_marks_nothing(self) -> None:
+        self.client.force_login(self.kl)
+        response = self.client.get("/lab/accounts/password/")
+        self.assertEqual(ns.marks(response), {})
 
     def test_signed_in_state(self) -> None:
         """Scenario: Shell (sign-in state)."""
@@ -171,14 +199,10 @@ class InventoryShellTests(TestCase):
         self.item = make_item(self.kl, "CH-0012", quantity=5)
         self.lot = make_lot(self.kl, "CH-0012")
 
-    def marks(self, path: str) -> list:
+    def marks(self, path: str) -> dict[str, str]:
         response = self.client.get(path)
-        self.assertEqual(response.status_code, 200)
-        header = page(response).find("header", cls="site-header")
-        links = header.find("nav").find_all("a")
-        self.assertEqual([a.text() for a in links[0:4]],
-                         ["Bestand", "Planung", "Aufgaben", "Substanzen"])
-        return [a.get("aria-current") for a in links[0:4]]
+        self.assertEqual(response.status_code, 200, path)
+        return ns.marks(response)
 
     def paths(self) -> list[str]:
         return ["/lab/inventory/end-products/bulk/",
@@ -191,30 +215,18 @@ class InventoryShellTests(TestCase):
                 f"/lab/inventory/items/{self.item.pk}/fill/",
                 f"/lab/inventory/items/{self.item.pk}/edit/"]
 
-    def test_navigation_in_the_inventory(self) -> None:
-        """Scenario: Navigation in the inventory."""
-        self.assertEqual(self.marks("/lab/inventory/end-products/"),
-                         ["page", None, None, None])
-        self.assertEqual(
-            self.marks(f"/lab/inventory/items/{self.item.pk}/"),
-            ["true", None, None, None])
-
-    def test_every_page_under_the_inventory_marks_it(self) -> None:
+    def test_every_page_under_the_inventory_marks_its_section(self) -> None:
         self.client.force_login(self.kl)
-        for path in self.paths():
+        for path in ["/lab/inventory/end-products/", *self.paths()]:
             with self.subTest(path=path):
-                self.assertEqual(self.marks(path),
-                                 ["true", None, None, None])
+                expected = ns.expected_marks(path)
+                self.assertTrue(expected, f"{path} lies in no section")
+                self.assertEqual(self.marks(path), expected)
 
-    def test_the_english_label(self) -> None:
+    def test_english_texts(self) -> None:
         accept(language="en")
         response = self.client.get("/lab/inventory/end-products/")
-        links = page(response).find("header", cls="site-header").find(
-            "nav").find_all("a")
-        self.assertEqual(links[0].text(), "Inventory")
-        self.assertEqual(links[0].get("href"), "/lab/inventory/end-products/")
-        self.assertEqual(links[1].text(), "Planning")
-        self.assertEqual(links[1].get("href"), "/lab/planning/")
+        self.assertEqual(ns.shown(page(response)), ns.expected("en"))
 
     def test_the_inventory_pages_carry_the_shell_and_no_script(self) -> None:
         self.client.force_login(self.kl)
@@ -273,24 +285,13 @@ class PlanningShellTests(TestCase):
     def setUpTestData(cls) -> None:
         cls.kl = make_user("kl", "KL", "Klara", "Lehmann")
 
-    def marks(self, path: str) -> list:
-        response = self.client.get(path)
-        self.assertEqual(response.status_code, 200)
-        header = page(response).find("header", cls="site-header")
-        links = header.find("nav").find_all("a")
-        self.assertEqual([(a.get("href"), a.text()) for a in links[0:4]],
-                         [("/lab/inventory/end-products/", "Bestand"),
-                          ("/lab/planning/", "Planung"),
-                          ("/lab/tasks/", "Aufgaben"),
-                          ("/lab/registry/", "Substanzen")])
-        return [a.get("aria-current") for a in links[0:4]]
-
-    def test_navigation_in_the_planning_list(self) -> None:
-        """Scenario: Navigation in the planning list."""
+    def test_the_planning_list_marks_its_section(self) -> None:
         for path in ("/lab/planning/", "/lab/planning/?all=1"):
             with self.subTest(path=path):
-                self.assertEqual(self.marks(path),
-                                 [None, "page", None, None])
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(ns.marks(response),
+                                 ns.expected_marks("/lab/planning/"))
 
     def test_the_planning_list_carries_the_shell_and_no_script(self) -> None:
         for signed_in in (False, True):
@@ -308,19 +309,6 @@ class PlanningShellTests(TestCase):
                     hrefs, [f"/lab/static/site/{n}" for n in STYLESHEETS]
                     + ["/lab/static/lab.css"])
 
-    def test_the_english_label(self) -> None:
-        accept(language="en")
-        links = page(self.client.get("/lab/planning/")).find(
-            "header", cls="site-header").find("nav").find_all("a")
-        self.assertEqual(links[1].text(), "Planning")
-        self.assertEqual(links[1].get("href"), "/lab/planning/")
-
-    def test_the_other_views_do_not_mark_the_planning(self) -> None:
-        self.assertEqual(self.marks("/lab/tasks/"),
-                         [None, None, "page", None])
-        self.assertEqual(self.marks("/lab/inventory/end-products/"),
-                         ["page", None, None, None])
-
 
 class RegistryShellTests(TestCase):
 
@@ -329,52 +317,23 @@ class RegistryShellTests(TestCase):
         cls.kl = make_user("kl", "KL", "Klara", "Lehmann")
         cls.substance = substance_for("CH-0012")
 
-    def marks(self, path: str) -> list:
-        response = self.client.get(path)
-        self.assertEqual(response.status_code, 200, path)
-        header = page(response).find("header", cls="site-header")
-        links = header.find("nav").find_all("a")
-        self.assertEqual([(a.get("href"), a.text()) for a in links[0:4]],
-                         [("/lab/inventory/end-products/", "Bestand"),
-                          ("/lab/planning/", "Planung"),
-                          ("/lab/tasks/", "Aufgaben"),
-                          ("/lab/registry/", "Substanzen")])
-        return [a.get("aria-current") for a in links[0:4]]
-
-    def test_navigation_in_the_registry(self) -> None:
-        """Scenario: Shell (the registry entry)."""
-        self.assertEqual(self.marks("/lab/registry/"),
-                         [None, None, None, "page"])
-        for path in ("/lab/registry/substances/cinnamic-acid/",
+    def test_the_registry_pages_mark_their_section(self) -> None:
+        self.client.force_login(self.kl)
+        for path in ("/lab/registry/",
+                     "/lab/registry/substances/cinnamic-acid/",
+                     "/lab/registry/substances/cinnamic-acid/edit/",
+                     "/lab/registry/substances/new/",
                      "/lab/registry/groups/",
+                     "/lab/registry/groups/new/",
                      "/lab/registry/chemical-classes/",
                      "/lab/registry/projects/",
                      "/lab/registry/reaction-types/"):
             with self.subTest(path=path):
-                self.assertEqual(self.marks(path),
-                                 [None, None, None, "true"])
-
-    def test_the_forms_are_under_the_registry(self) -> None:
-        self.client.force_login(self.kl)
-        for path in ("/lab/registry/substances/new/",
-                     "/lab/registry/substances/cinnamic-acid/edit/",
-                     "/lab/registry/groups/new/"):
-            with self.subTest(path=path):
-                self.assertEqual(self.marks(path),
-                                 [None, None, None, "true"])
-
-    def test_the_other_views_do_not_mark_the_registry(self) -> None:
-        self.assertEqual(self.marks("/lab/tasks/"),
-                         [None, None, "page", None])
-        self.assertEqual(self.marks("/lab/planning/"),
-                         [None, "page", None, None])
-
-    def test_the_english_label(self) -> None:
-        accept(language="en")
-        links = page(self.client.get("/lab/registry/")).find(
-            "header", cls="site-header").find("nav").find_all("a")
-        self.assertEqual(links[3].text(), "Substances")
-        self.assertEqual(links[3].get("href"), "/lab/registry/")
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 200, path)
+                expected = ns.expected_marks(path)
+                self.assertTrue(expected, f"{path} lies in no section")
+                self.assertEqual(ns.marks(response), expected)
 
     def test_the_registry_pages_carry_the_shell_and_no_script(self) -> None:
         for path in ("/lab/registry/", "/lab/registry/groups/",
@@ -432,16 +391,11 @@ class LanguageTests(TestCase):
         response = self.client.get("/lab/tasks/?state=all")
         root = page(response)
         self.assertEqual(root.find("html").get("lang"), "en")
-        links = root.find("header", cls="site-header").find("nav"
-                                                            ).find_all("a")
-        self.assertEqual(links[0].text(), "Inventory")
-        self.assertEqual(links[1].text(), "Planning")
-        self.assertEqual(links[2].text(), "Tasks")
-        self.assertEqual(links[3].text(), "Substances")
-        strings = site_strings("en")
-        self.assertEqual([a.text() for a in links[4:8]],
-                         [strings[f"nav_{n}"] for n in
-                          ("compounds", "sequences", "procedures", "help")])
+        self.assertEqual(ns.shown(root), ns.expected("en"))
+        header = root.find("header", cls="site-header")
+        self.assertEqual([a.text() for a in header.find_all("a")
+                          if a.get("href", "").startswith(
+                              "/lab/accounts/login/")], ["Sign in"])
         header, rows = table(root)
         self.assertEqual(rows[0]["Started"].text(), "2026-11-03")
 
@@ -508,3 +462,29 @@ class NoCollectionIndexTests(SimpleTestCase):
         """Requirement: Collection index (removed)."""
         import importlib.util
         self.assertIsNone(importlib.util.find_spec("orgsyndb_web.index"))
+
+
+class AccountOnAPhoneTests(TestCase):
+    """The account in the title's row of a phone-sized window."""
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        cls.kl = make_user("kl", "KL", "Klara", "Lehmann")
+
+    def test_the_password_page_leads_to_the_access_tokens(self) -> None:
+        self.client.force_login(self.kl)
+        main = page(self.client.get("/lab/accounts/password/")).find("main")
+        self.assertIn("/lab/accounts/tokens/",
+                      [a.get("href") for a in main.find_all("a")])
+
+    def test_a_phone_shows_only_the_initials_and_the_sign_out(self) -> None:
+        self.client.force_login(self.kl)
+        header = page(self.client.get("/lab/tasks/")).find(
+            "header", cls="site-header")
+        tokens = header.find("a", href="/lab/accounts/tokens/")
+        self.assertIn("lab-account-tokens", tokens.classes)
+        css = (REPO / "webapp" / "orgsyndb_web" / "static" / "lab.css"
+               ).read_text(encoding="utf-8")
+        rule = re.search(r"@media \(max-width: 30rem\) \{\s*"
+                         r"\.lab-account-tokens \{ display: none; \}", css)
+        self.assertIsNotNone(rule, "no rule hides the token link on a phone")

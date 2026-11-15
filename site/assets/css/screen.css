@@ -51,27 +51,63 @@ button:hover { border-color: var(--muted); }
    text face of tokens.css. The scrollbar's gutter is kept on short pages
    too, so the shell does not shift between pages. */
 html { font-family: var(--font-ui); scrollbar-gutter: stable; }
+/* The shell: the header is a sidebar beside the page, holding the
+   title, the search form, the navigation and, on the lab application's
+   pages, the account at its foot. It is one window high and stays in
+   view, scrolling on its own when its content is taller. Its contents
+   are the same on the site's pages and the application's, so nothing
+   moves between them. Below 55rem it stacks above the page. */
 body {
+  display: grid;
+  grid-template-columns: 17rem minmax(0, 1fr);
+  grid-template-rows: 1fr auto;
+  column-gap: var(--space-5);
+  min-height: 100vh;
   max-width: 96rem;
   padding: 0 2.5rem;
 }
-
-/* The title and the navigation start the header row and the search form
-   ends it, on every page, so the row keeps its height and layout. The
-   gaps leave the search field room for its whole placeholder at 1280
-   CSS pixels, with the lab application's three views in the row. */
+main, .site-footer { grid-column: 2; }
 .site-header {
-  align-items: center;
-  gap: var(--space-3) var(--space-4);
-  padding: var(--space-4) 0;
+  grid-column: 1;
+  grid-row: 1 / 3;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-4) var(--space-4) 0;
+  border-bottom: 0;
+  border-right: 1px solid var(--border);
 }
-.site-title { font-size: 1.25rem; }
-.site-header ul { gap: var(--space-2) var(--space-3); }
-.site-header nav a { color: var(--muted); text-decoration: none; padding-bottom: 0.2rem; }
-.site-header nav a:hover { color: var(--fg); }
+.site-title { font-size: 1.25rem; line-height: 2rem; }
+.site-header nav > ul { flex-direction: column; flex-wrap: nowrap; gap: var(--space-3); }
+.site-header nav ul ul { flex-direction: column; flex-wrap: nowrap; gap: 0; }
+.nav-group-label {
+  display: block;
+  margin-bottom: var(--space-1);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.site-header nav a {
+  display: block;
+  margin-left: calc(-1 * var(--space-2) - 3px);
+  padding: 0.2rem var(--space-2);
+  border-left: 3px solid transparent;
+  border-radius: 0 0.25rem 0.25rem 0;
+  color: var(--muted);
+  text-decoration: none;
+}
+.site-header nav a:hover { color: var(--fg); background: var(--surface); }
 .site-header nav a[aria-current] {
   color: var(--fg);
-  border-bottom: 2px solid currentColor;
+  font-weight: 600;
+  background: var(--surface);
+  border-left-color: currentColor;
 }
 main { padding: var(--space-5) 0; }
 h1 { font-size: 2.25rem; }
@@ -95,8 +131,38 @@ h1 { font-size: 2.25rem; }
   border-bottom: 2px solid currentColor;
 }
 
-.site-search { margin-left: auto; }
-.site-search input, .site-search button { padding: 0.4rem 0.75rem; }
+/* The search field fills the sidebar's width; its button is a
+   magnifier inside the field's end, its text kept for assistive
+   technology. */
+.site-search { position: relative; }
+.site-search input {
+  flex: 1 1 auto;
+  font-size: 0.875rem;
+  padding: 0.4rem 2rem 0.4rem 0.5rem;
+}
+.site-search button {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  width: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0 0.25rem 0.25rem 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0;
+}
+.site-search button::before {
+  content: "";
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  margin: auto;
+  background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='6.5' cy='6.5' r='4.75' fill='none' stroke='black' stroke-width='1.75'/%3E%3Cpath d='M10 10l4.5 4.5' stroke='black' stroke-width='1.75' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.site-search button:hover { color: var(--fg); }
 
 .home-intro { margin-bottom: var(--space-5); }
 .lede { max-width: var(--measure); }
@@ -423,7 +489,35 @@ pre { overflow-x: auto; }
    the navigation, and the facets wait behind the Filters button, above
    the results. */
 @media (max-width: 55rem) {
-  .site-search { flex-basis: 100%; max-width: none; margin-left: 0; }
+  /* The header stacks above the page: the title, with the account at
+     the end of its row, then the search form and the navigation, each
+     group its label over a row of links. */
+  body { display: block; min-height: 0; }
+  .site-header {
+    position: static;
+    height: auto;
+    overflow: visible;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-3) var(--space-4);
+    padding: var(--space-4) 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .site-title, .lab-account { grid-row: 1; }
+  .site-title { justify-self: start; }
+  .site-search, .site-header nav { grid-column: 1 / -1; }
+  .site-header nav > ul { gap: var(--space-2); }
+  .site-header nav ul ul { flex-direction: row; flex-wrap: wrap; gap: 0 var(--space-3); }
+  .site-header nav a {
+    margin-left: 0;
+    padding: 0.2rem 0;
+    border-left: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+  }
+  .site-header nav a[aria-current] { border-bottom-color: currentColor; }
   .catalogue-layout { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
   .facets-toggle { display: inline-block; }
   .catalogue:not([data-facets-open]) .catalogue-facets { display: none; }

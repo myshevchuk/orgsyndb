@@ -15,14 +15,23 @@
 {% block header %}<a class="skip-link" href="#main">{% translate "Skip to content" %}</a>
 <header class="site-header">
 <a class="site-title" href="/">{{ site_title }}</a>
-<nav aria-label="{% translate "Site" %}">
+<form class="site-search" role="search" method="get" action="/procedures/">
+<input type="search" name="q" aria-label="{{ site_strings.search_label }}" placeholder="{{ site_strings.search_placeholder }}">
+<button type="submit">{{ site_strings.search_button }}</button>
+</form>
+<nav aria-label="{{ site_strings.nav_site }}">
 <ul>
-{% for link in navigation %}<li><a href="{{ link.url }}"{% if link.current %} aria-current="{{ link.current }}"{% endif %}>{{ link.label }}</a></li>
+{% for item in navigation %}{% if item.links %}<li class="nav-group"><span class="nav-group-label">{{ item.label }}</span>
+<ul>
+{% for link in item.links %}<li><a href="{{ link.url }}"{% if link.current %} aria-current="{{ link.current }}"{% endif %}>{{ link.label }}</a></li>
 {% endfor %}</ul>
+</li>
+{% else %}<li><a href="{{ item.url }}"{% if item.current %} aria-current="{{ item.current }}"{% endif %}>{{ item.label }}</a></li>
+{% endif %}{% endfor %}</ul>
 </nav>
 <div class="lab-account">
 {% if user.is_authenticated %}<a href="/lab/accounts/password/" title="{% blocktranslate with name=user.display_name %}{{ name }}: change password{% endblocktranslate %}">{{ user.initials }}</a>
-<a href="/lab/accounts/tokens/">{% translate "Access tokens" %}</a>
+<a class="lab-account-tokens" href="/lab/accounts/tokens/">{% translate "Access tokens" %}</a>
 <form method="post" action="/lab/accounts/logout/">{% csrf_token %}<button type="submit">{% translate "Sign out" %}</button></form>
 {% else %}<a href="/lab/accounts/login/?next={{ request.path|urlencode }}">{% translate "Sign in" %}</a>
 {% endif %}</div>

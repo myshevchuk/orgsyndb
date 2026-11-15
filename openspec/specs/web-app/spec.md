@@ -104,30 +104,26 @@ Every model holding lab records SHALL keep a history with django-simple-history:
 - **THEN** the task's page lists two history entries, the newer naming `KL`, the field `Priorität` and the values `mittel` and `hoch`
 
 ### Requirement: Interface language
-Every text the application shows SHALL come from its translations, German and English, in the language of the latest accepted import of the collection (collection-import "Accepting an import"), or German while none was accepted. The German texts are those the requirements name; the English ones follow in parentheses. A page has `<html lang="<language>">`. Dates show as `03.11.2026` in German and `2026-11-03` in English.
+Every text the application shows SHALL come from its translations, German and English, or, for the site title, the navigation and the search form, from the site's interface strings (localization "Interface strings"), in the language of the latest accepted import of the collection (collection-import "Accepting an import"), or German while none was accepted. The German texts are those the requirements name; the English ones follow in parentheses. A page has `<html lang="<language>">`. Dates show as `03.11.2026` in German and `2026-11-03` in English.
 
 #### Scenario: English site
 - **WHEN** the latest accepted import's language is `en` and a test client requests `/lab/tasks/`
-- **THEN** the page has `<html lang="en">`, the navigation reads `Tasks` and a start date of 3 November 2026 shows as `2026-11-03`
+- **THEN** the page has `<html lang="en">`, the navigation's texts are those of `site/i18n/en.toml`, the sign-in link reads `Sign in` and a start date of 3 November 2026 shows as `2026-11-03`
 
 #### Scenario: Before any import
 - **WHEN** no import was accepted and a test client requests `/lab/tasks/`
 - **THEN** the page has `<html lang="de">`
 
 ### Requirement: Page shell
-Every page but the admin's and the summary's SHALL link, from `/lab/static/site/`, the site's own `tokens.css`, `base.css`, `screen.css` with `media="screen"` and `print.css` with `media="print"`, all collected from `site/assets/css/` of the same checkout, and then `/lab/static/lab.css`. Its `header.site-header` holds the site title linking to `/`, a `nav` labelled as the site's navigation with the application's views, each a link and the path its pages lie under, followed by the site's sections `/compounds/`, `/sequences/`, `/procedures/` and `/help/` under the site's labels. The views are `Bestand` (`Inventory`), linking to `/lab/inventory/end-products/`, its pages under `/lab/inventory/`; `Planung` (`Planning`), linking to `/lab/planning/`, its pages under `/lab/planning/`; `Aufgaben` (`Tasks`), linking to `/lab/tasks/`, its pages under `/lab/tasks/`; and `Substanzen` (`Substances`), linking to `/lab/registry/`, its pages under `/lab/registry/`. A view's link carries `aria-current="page"` on the page it links to and `aria-current="true"` on every other page under its view's path. The header ends with the signed-in user's initials and a sign-out button, or a link `Anmelden` (`Sign in`). A message confirming a saved change shows above the content. These pages carry no `script` element but the item list, whose one `script` element loads `/lab/static/lab.js` with `defer` (end-product-inventory "Item list"); the admin keeps Django's own pages and scripts. The summary, `/lab/summary/`, links the same five stylesheets and carries no `script` element, but no header, navigation or message; its `base` element sends its links to the top window, and it answers with `X-Frame-Options: SAMEORIGIN`, so that a page of the same host may frame it.
+Every page but the admin's and the summary's SHALL link, from `/lab/static/site/`, the site's own `tokens.css`, `base.css`, `screen.css` with `media="screen"` and `print.css` with `media="print"`, all collected from `site/assets/css/` of the same checkout, and then `/lab/static/lab.css`. Its `header.site-header` holds the site's shell, read from `site/hugo.toml` and `site/i18n/` of the same checkout: the site title linking to `/`; the site's search form as the site's pages other than the catalogues have it (site-theme "Page shell"); and the navigation, with every entry of the menu, those under `/lab/` included (site-theme "Navigation"). The header also shows the signed-in user's initials and a sign-out button, or a link `Anmelden` (`Sign in`). A message confirming a saved change shows above the content. These pages carry no `script` element but the item list, whose one `script` element loads `/lab/static/lab.js` with `defer` (end-product-inventory "Item list"); the admin keeps Django's own pages and scripts. The summary, `/lab/summary/`, links the same five stylesheets and carries no `script` element, but no header, navigation or message; its `base` element sends its links to the top window, and it answers with `X-Frame-Options: SAMEORIGIN`, so that a page of the same host may frame it.
 
 #### Scenario: Shell
 - **WHEN** a test client requests `/lab/tasks/` signed in as `KL` and once not signed in
-- **THEN** both pages link the five stylesheets in that order, the navigation lists `Bestand` and `Planung` without `aria-current`, `Aufgaben` with `aria-current="page"`, `Substanzen` without it, and then the four site sections in that order, the first shows `KL` and a sign-out form and the second a link to the sign-in page, and neither has a `script` element
+- **THEN** both pages link the five stylesheets in that order, hold the site title, the site's search form and the navigation as site-theme "Navigation" states them for a build with the lab application's views, the first shows `KL` and a sign-out form and the second a link to the sign-in page, and neither has a `script` element
 
-#### Scenario: Navigation in the inventory
-- **WHEN** a test client requests the item list and an item's page
-- **THEN** the navigation's `Bestand` link carries `aria-current="page"` on the list and `aria-current="true"` on the item's page, and `Planung` and `Aufgaben` carry neither
-
-#### Scenario: Navigation in the planning list
-- **WHEN** a test client requests `/lab/planning/` and `/lab/planning/?all=1`
-- **THEN** the navigation's `Planung` link carries `aria-current="page"` on both, and `Bestand` and `Aufgaben` carry neither
+#### Scenario: Current link on the application's pages
+- **WHEN** a test client requests every page of the application that the menu links, and a page inside the section of each
+- **THEN** each page's navigation marks its links as site-theme "Navigation" states
 
 #### Scenario: A summary to frame
 - **WHEN** a test client requests `/lab/summary/` and `/lab/tasks/`

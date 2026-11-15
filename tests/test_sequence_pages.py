@@ -248,14 +248,6 @@ class SequenceSiteTests(SequenceCase):
             self.assertNotIn("Sequences",
                              self.panel(self.page_of(self.by_id()[ident])))
 
-    def test_the_navigation_leads_to_the_directory(self) -> None:
-        """Requirement: Page shell (the Sequences link)."""
-        page = self.page_of(self.by_id()["OSDB-0001"])
-        nav = page.find("header", "site-header").find("nav")
-        self.assertIn(("/sequences/", "Sequences"),
-                      [(l.target, l.node.norm()) for l in page.links(nav)])
-        self.assertTrue(ps.target_file(self.public, "/sequences/").is_file())
-
     def test_sequence_pages_are_not_indexed(self) -> None:
         """Requirement: Sequence pages (no data-pagefind-body)."""
         for sequence in self.sequences():

@@ -1,23 +1,21 @@
-{{- /* The site header: the site title, the navigation and the search form,
-which submits q to /procedures/. On the catalogue, the term pages,
+{{- /* The site header: the site title, the search form, which submits q
+to /procedures/, and the navigation. On the catalogue, the term pages,
 /general-procedures/, the compound catalogue /compounds/ and its tab
 pages the form is the catalogue's: catalogue.js drives its field,
 #catalogue-q, the page itself is its action, on a term page and on
 /general-procedures/ its label names the scope while its placeholder,
 short enough to show whole, says it is scoped, and on /compounds/ and
 its tab pages its label and placeholder name compounds and what their
-search matches, the label of a tab page naming the tab. The link of
-the page itself carries aria-current="page"; the link of the section a
-page lies in carries aria-current="true". /general-procedures/, the
-three taxonomy directories and their term pages lie in /procedures/, as
-their facets do, every compound page and compound tab page lies in
-/compounds/ and every sequence page in /sequences/. A site built with
-params.lab links the lab application's views first; no page of the
-site lies in them. */ -}}
+search matches, the label of a tab page naming the tab. The navigation
+is the menu main of hugo.toml, which the lab application renders too:
+a link's text is the interface string its identifier names, and a group
+is its label followed by a list of its links. Without params.lab the
+links under /lab/ and the groups they leave empty are left out. The
+link to the page itself carries aria-current="page"; otherwise the
+first link whose params.paths holds a prefix of the page's path carries
+aria-current="true". */ -}}
 {{ $here := .RelPermalink -}}
-{{ $within := $here -}}
 {{ $general := and (eq .Kind "section") (eq .Section "general-procedures") -}}
-{{ if or $general (hasPrefix $here "/reaction_types/") (hasPrefix $here "/tags/") (hasPrefix $here "/authors/") }}{{ $within = "/procedures/" }}{{ end -}}
 {{ $compounds := and (eq .Kind "section") (eq .Section "compounds") -}}
 {{ $tab := and (eq .Kind "page") (eq .Section "compounds") .Params.tab -}}
 {{ $catalogue := or (eq .Kind "term") $general $compounds $tab (and (eq .Kind "section") (eq .Section "procedures")) -}}
@@ -38,21 +36,45 @@ site lies in them. */ -}}
 {{ $label = T "search_compounds_tab" (partial "page-title.html" .) -}}
 {{ $hint = T "search_compounds_placeholder" -}}
 {{ end -}}
+{{ $links := slice -}}
+{{ $groups := slice -}}
+{{ range site.Menus.main -}}
+{{ $shown := slice -}}
+{{ range cond .HasChildren .Children (slice .) -}}
+{{ if or site.Params.lab (not (hasPrefix .URL "/lab/")) }}{{ $shown = $shown | append . }}{{ end -}}
+{{ end -}}
+{{ if $shown }}{{ $groups = $groups | append (dict "entry" . "links" $shown) }}{{ $links = $links | append $shown }}{{ end -}}
+{{ end -}}
+{{ $current := "" -}}
+{{ $mark := "page" -}}
+{{ range $links }}{{ if eq .URL $here }}{{ $current = .URL }}{{ end }}{{ end -}}
+{{ if not $current -}}
+{{ $mark = "true" -}}
+{{ range $links -}}
+{{ $url := .URL -}}
+{{ range .Params.paths }}{{ if and (not $current) (hasPrefix $here .) }}{{ $current = $url }}{{ end }}{{ end -}}
+{{ end -}}
+{{ end -}}
 <header class="site-header">
 <a class="site-title" href="/">{{ site.Title }}</a>
-<nav aria-label="{{ T "nav_site" }}">
-<ul>
-{{ $links := slice -}}
-{{ if site.Params.lab }}{{ $links = $links | append (dict "url" "/lab/inventory/end-products/" "key" "nav_inventory") (dict "url" "/lab/planning/" "key" "nav_planning") (dict "url" "/lab/tasks/" "key" "nav_tasks") }}{{ end -}}
-{{ $links = $links | append (dict "url" "/compounds/" "key" "nav_compounds") (dict "url" "/sequences/" "key" "nav_sequences") (dict "url" "/procedures/" "key" "nav_procedures") (dict "url" "/help/" "key" "nav_help") -}}
-{{ range $links -}}
-{{ $url := .url -}}
-<li><a href="{{ $url }}"{{ if eq $here $url }} aria-current="page"{{ else if hasPrefix $within $url }} aria-current="true"{{ end }}>{{ T .key }}</a></li>
-{{ end -}}
-</ul>
-</nav>
 <form class="site-search" role="search" method="get" action="{{ $action }}"{{ if $catalogue }} data-catalogue-search{{ end }}>
 <input type="search" name="q"{{ if $catalogue }} id="catalogue-q"{{ end }} aria-label="{{ $label }}" placeholder="{{ $hint }}">
 <button type="submit">{{ T "search_button" }}</button>
 </form>
+<nav aria-label="{{ T "nav_site" }}">
+<ul>
+{{ range $groups -}}
+{{ if .entry.HasChildren -}}
+<li class="nav-group"><span class="nav-group-label">{{ T .entry.Identifier }}</span>
+<ul>
+{{ range .links }}<li><a href="{{ .URL }}"{{ if eq .URL $current }} aria-current="{{ $mark }}"{{ end }}>{{ T .Identifier }}</a></li>
+{{ end }}</ul>
+</li>
+{{ else -}}
+{{ with index .links 0 }}<li><a href="{{ .URL }}"{{ if eq .URL $current }} aria-current="{{ $mark }}"{{ end }}>{{ T .Identifier }}</a></li>
+{{ end -}}
+{{ end -}}
+{{ end -}}
+</ul>
+</nav>
 </header>
