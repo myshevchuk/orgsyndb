@@ -110,6 +110,17 @@ leaves this file then.
   procedures are written.
 - **Procedure history from Git.** The collection's history is in Git,
   so the lab could show how a procedure changed between versions.
+- **Structures in the database.** A substance's structure image is a
+  file of the collection, `static/structures/<key>.svg` or `.png`
+  (compound-registry "Structure images by key"), which the build
+  publishes. The owner wants it kept by the lab with the substance,
+  since a chemistry toolkit will compute from SMILES or InChI and
+  Ketcher will draw structures. Planned after `substances-in-the-lab`
+  and before the site's compound pages retire, so that the lab's
+  substance page shows the structure. Open: what the lab keeps (the
+  image, or a molfile or SMILES it renders), how the build gets the
+  images for procedure pages (the snapshot or a path of the lab), and
+  moving the collections' existing images into the lab.
 - **Compounds back into a static collection.** Once the lab's
   substance pages replace the site's compound pages, an export of the
   compounds into a static collection may be wanted. Open: what for,
