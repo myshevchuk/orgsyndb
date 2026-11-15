@@ -80,3 +80,25 @@ leaves this file then.
   complete quarters, so an item first delivered in the current quarter
   has no forecast until the quarter ends, though the item list projects
   its means from the current year.
+- **Specs that fix layout.** Specs should keep general design rules,
+  not positions, breakpoints or element-by-element page structure.
+  Requirements that fix layout today:
+  - site-theme "Measure and tables": the 96rem shell, the 55rem
+    breakpoint, `grid-template-columns` and `display` of named
+    classes, and the "Desktop workspace" scenario's left and right
+    columns;
+  - site-theme "Home page": every element and class in order, and its
+    layout from 70rem up;
+  - site-theme "Procedure page structure" and "Metadata panel": the
+    title block's left and right halves and the element tree;
+  - site-theme "Procedure section tabs": one row above the `h1`;
+  - site-catalogue "Catalogue controls": the facets hidden below
+    55rem;
+  - end-product-inventory "Item list": the lines above and below the
+    table, the popups' placement rule and the sticky box's height.
+
+  Wanted: cut each to its rule, such as "wide tables scroll in their
+  own box" or "a narrow window keeps the reading order", and leave
+  measurements to the stylesheets. The diagram's band layout
+  (database-diagram) and A4 printing (print-layout) are what those
+  specs are about, and stay.
