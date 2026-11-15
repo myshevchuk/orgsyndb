@@ -27,7 +27,7 @@ from collection import issuing
 from collection.models import (KEY_LENGTH, RELEASE_LENGTH, EntrySubstance,
                                Import, Language, Outcome, Procedure,
                                ProcedureAuthor, Role, ScopeEntry,
-                               Sequence, Source, Step, Trigger,
+                               Sequence, Source, Status, Step, Trigger,
                                latest_accepted)
 from journal.entries import entry_for
 from journal.models import ENTRY_RE, Notebook
@@ -201,6 +201,7 @@ def _procedure(table: dict[str, Any], number: int) -> dict[str, Any]:
     return {"id": ident,
             "source": _choice(table, "source", Source.values, where),
             "title": _text(table, "title", where),
+            "status": _choice(table, "status", Status.values, where),
             "title_de": _optional_text(table, "title_de", where),
             "reaction_type": _text(table, "reaction_type", where),
             "general": general,
@@ -595,6 +596,7 @@ def _apply_procedures(manifest: dict[str, Any], record: Import,
     for procedure in manifest["procedures"]:
         values = {"source": procedure["source"],
                   "title": procedure["title"],
+                  "status": procedure["status"],
                   "title_de": procedure["title_de"],
                   "reaction_type": types[procedure["reaction_type"]],
                   "general": procedure["general"],

@@ -2389,13 +2389,24 @@ read the registry without signing in; creating or editing a record
 requires a signed-in account.
 
 Search by key, English or German name, short name or CAS number, the
-chemical registry identifier. The list shows substances in name order,
-with their inventory group, chemical classes, formula, molar mass and
-article number.
+chemical registry identifier. To narrow the list, choose an
+**Inventory group** (**Bestandsgruppe**) or a **Chemical class**
+(**Stoffklasse**); each choice also takes the terms filed under it. The
+list shows substances in name order, with their inventory group, chemical
+classes, formula, molar mass and article number.
 Open a substance's name to see its full record, containers, open bulk lots
-and tasks. **In der Sammlung** (**In the collection**) links to the site's
-compound page when the latest accepted import was received no earlier
-than the substance was created. A substance added later gets the link
+and tasks. **Copy** (**Kopieren**) beside the SMILES string copies it. When
+the collection's procedures involve the substance, the page also lists
+them: **Made by** (**Hergestellt nach**), the procedures and
+general-procedure entries that make it, each with its yield and status;
+**Used in** (**Verwendet in**), the procedures that start from it;
+**Sequences** (**Synthesewege**), the sequences whose target it is; and
+**Routes** (**Herstellungswege**), the ways to make it from the
+collection's procedures, each step with the substances it starts from.
+These come from the latest accepted import, and procedures and sequences
+link to their pages on the site. **In der Sammlung** (**In the
+collection**) links to the site's compound page when the latest accepted
+import was received no earlier than the substance was created. A substance added later gets the link
 after a subsequent import is accepted. The app cannot tell whether the
 site already serves that import's release. After a lost response to a
 manifest, or for the demo data set's own import before the builder's

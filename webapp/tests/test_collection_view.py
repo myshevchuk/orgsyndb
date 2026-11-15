@@ -148,6 +148,15 @@ class MalformedTests(ImportCase):
         huge["procedures"][0]["entries"][0]["products"][0][
             "yield_percent"] = 10 ** 400
         built["a yield too large for a float"] = huge
+        for name, status in (("a procedure without a status", None),
+                             ("a procedure of another status",
+                              "published")):
+            body = json.loads(json.dumps(good))
+            if status is None:
+                del body["procedures"][0]["status"]
+            else:
+                body["procedures"][0]["status"] = status
+            built[name] = body
         refusing = refused(["x: error: y"])
         refusals = {
             "a refusal without a pusher": {

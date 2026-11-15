@@ -359,6 +359,7 @@ class DataSetImportTests(TestCase):
                 row = Procedure.objects.get(key=body["id"])
                 self.assertEqual(row.general, body["general"])
                 self.assertEqual(row.title, body["title"])
+                self.assertEqual(row.status, body["status"])
                 self.assertEqual(row.entries.count(), len(body["entries"]))
 
     def test_the_import_is_recorded_on_the_opening_day(self) -> None:

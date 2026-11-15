@@ -24,7 +24,7 @@
 <dt>{% translate "Molar mass" %}</dt>
 <dd>{% if substance.mw is not None %}{{ substance.mw|decimal }} g/mol{% else %}–{% endif %}</dd>
 <dt>{% translate "SMILES" %}</dt>
-<dd>{{ substance.smiles|default:"–" }}</dd>
+<dd>{% if substance.smiles %}<code data-smiles>{{ substance.smiles }}</code> <button type="button" class="copy-button" data-copy-smiles data-copied="{% site_string "copied" %}" data-selected="{% site_string "selected" %}" hidden>{% site_string "copy" %}</button>{% else %}–{% endif %}</dd>
 <dt>{% translate "CAS number" %}</dt>
 <dd>{{ substance.cas|default:"–" }}</dd>
 <dt>{% translate "Article no." %}</dt>
@@ -32,7 +32,22 @@
 <dt>{% translate "Note" %}</dt>
 <dd>{{ substance.note|linebreaksbr|default:"–" }}</dd>
 </dl>
-<h2>{% translate "Containers" context "substance" %}</h2>
+{% if made_by %}<h2>{% translate "Made by" context "substance" %}</h2>
+<ul class="lab-links">
+{% for made in made_by %}<li>{% include "registry/procedure_item.html" with procedure=made.procedure entry=made.entry yield_percent=made.yield_percent %}</li>
+{% endfor %}</ul>
+{% endif %}{% if used_in %}<h2>{% translate "Used in" context "substance" %}</h2>
+<ul class="lab-links">
+{% for procedure in used_in %}<li>{% include "registry/procedure_item.html" with procedure=procedure entry=None yield_percent=None %}</li>
+{% endfor %}</ul>
+{% endif %}{% if sequences %}<h2>{% translate "Sequences" context "substance" %}</h2>
+<ul class="lab-links">
+{% for sequence in sequences %}<li><a href="/sequences/{{ sequence.key|lower }}/">{{ sequence.key }} {{ sequence.shown_title }}</a></li>
+{% endfor %}</ul>
+{% endif %}{% if route %}<h2>{% translate "Routes" context "substance" %}</h2>
+<ul class="route-tree">
+{% include "registry/route_steps.html" with steps=route %}</ul>
+{% endif %}<h2>{% translate "Containers" context "substance" %}</h2>
 {% if items %}<ul class="lab-links">
 {% for item in items %}<li><a href="/lab/inventory/items/{{ item.pk }}/">{% if item.article_number %}{{ item.article_number }} · {% endif %}{{ item.container }}</a> {% blocktranslate count count=item.quantity %}{{ count }} container{% plural %}{{ count }} containers{% endblocktranslate %}</li>
 {% endfor %}</ul>

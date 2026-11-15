@@ -21,7 +21,7 @@ from django.utils.translation import gettext_lazy as _
 
 from accounts.models import current_time
 from registry.models import Substance
-from vocabulary.models import Project, ReactionType
+from vocabulary.models import Project, ReactionType, german
 
 KEY_LENGTH = 50
 RELEASE_LENGTH = 200
@@ -54,6 +54,12 @@ class Language(models.TextChoices):
 class Source(models.TextChoices):
     ORG = "org", "Org"
     MD = "md", "Markdown"
+
+
+class Status(models.TextChoices):
+    DRAFT = "draft", _("draft")
+    CHECKED = "checked", _("checked")
+    RETIRED = "retired", _("retired")
 
 
 class Role(models.TextChoices):
@@ -125,10 +131,11 @@ class Procedure(models.Model):
     ``last_import`` created it or last changed it.
 
     A ``general`` procedure has scope entries a step names by their
-    position; a specific one has one entry. ``journal_entry`` is the
-    lab notebook entry it was written from and ``project`` the project
-    it belongs to, each None for none; no two procedures that are not
-    withdrawn name one journal entry.
+    position; a specific one has one entry. ``status`` is the published
+    variant's, empty until an accepted import gives one. ``journal_entry``
+    is the lab notebook entry it was written from and ``project`` the
+    project it belongs to, each None for none; no two procedures that
+    are not withdrawn name one journal entry.
     """
 
     key = models.CharField(_("ID"), max_length=KEY_LENGTH, unique=True)
@@ -136,6 +143,8 @@ class Procedure(models.Model):
                               choices=Source.choices)
     title = models.TextField(_("Title"))
     title_de = models.TextField(_("German title"), blank=True)
+    status = models.CharField(_("Status"), max_length=10,
+                              choices=Status.choices, blank=True)
     reaction_type = models.ForeignKey(
         ReactionType, verbose_name=_("Reaction type"),
         on_delete=models.PROTECT, related_name="procedures")
@@ -166,6 +175,12 @@ class Procedure(models.Model):
 
     def __str__(self) -> str:
         return self.key
+
+    @property
+    def shown_title(self) -> str:
+        """The title in the active language: ``title_de`` on a German
+        site when there is one, else ``title``."""
+        return self.title_de if german() and self.title_de else self.title
 
 
 class ProcedureAuthor(models.Model):
@@ -283,6 +298,12 @@ class Sequence(models.Model):
 
     def __str__(self) -> str:
         return self.key
+
+    @property
+    def shown_title(self) -> str:
+        """The title in the active language: ``title_de`` on a German
+        site when there is one, else ``title``."""
+        return self.title_de if german() and self.title_de else self.title
 
 
 class Step(models.Model):

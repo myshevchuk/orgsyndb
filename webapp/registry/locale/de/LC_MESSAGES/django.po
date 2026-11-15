@@ -131,3 +131,33 @@ msgstr "Verwendet"
 
 msgid "No terms."
 msgstr "Keine Begriffe."
+
+msgctxt "substance"
+msgid "Made by"
+msgstr "Hergestellt nach"
+
+msgctxt "substance"
+msgid "Used in"
+msgstr "Verwendet in"
+
+msgctxt "substance"
+msgid "Sequences"
+msgstr "Synthesewege"
+
+msgctxt "substance"
+msgid "Routes"
+msgstr "Herstellungswege"
+
+#, python-format
+msgid "entry %(entry)s"
+msgstr "Eintrag %(entry)s"
+
+msgid "more steps on its page"
+msgstr "weitere Stufen auf ihrer Seite"
+
+msgid "Chemical class"
+msgstr "Stoffklasse"
+
+msgctxt "registry"
+msgid "All"
+msgstr "Alle"

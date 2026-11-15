@@ -9,6 +9,16 @@
 <form class="lab-filters" method="get" action="/lab/registry/">
 <label>{% translate "Search substances" %}
 <input type="search" name="q" value="{{ q }}"></label>
+<label>{% translate "Inventory group" %}
+<select name="group">
+<option value="">{% translate "All" context "registry" %}</option>
+{% for term, depth in groups %}<option value="{{ term.key }}"{% if term.key == group %} selected{% endif %}>{% indent depth %}{{ term.shown_label }}</option>
+{% endfor %}</select></label>
+<label>{% translate "Chemical class" %}
+<select name="class">
+<option value="">{% translate "All" context "registry" %}</option>
+{% for term, depth in classes %}<option value="{{ term.key }}"{% if term.key == chemical_class %} selected{% endif %}>{% indent depth %}{{ term.shown_label }}</option>
+{% endfor %}</select></label>
 <button type="submit">{% translate "Filter" %}</button>
 </form>
 <div class="table-scroll">

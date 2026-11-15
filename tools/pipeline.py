@@ -1682,6 +1682,7 @@ def _procedure_data(path: Path, data: dict[str, Any], export: Path,
     return {"id": data["id"],
             "source": "org" if path.parent == export else "md",
             "title": data.get("title"),
+            "status": data.get("status"),
             "title_de": title_de,
             "reaction_type": types[0],
             "general": bool(scope),
@@ -1705,13 +1706,13 @@ def manifest_data(collection: Path) -> dict[str, Any]:
     it does. Each of the procedures and sequences describes the
     variant the site publishes (``choose_variants``): a procedure by
     its ``id``, ``source`` (``org`` for an export, else ``md``),
-    ``title``, ``title_de`` (the title of the ID's file tagged ``de``,
-    or None), ``reaction_type`` (the first of ``reaction_types``),
-    ``general`` (whether it has ``scope``), ``authors`` (the user names
-    of ``authors``, in file order), ``notebook`` and ``project`` (its
-    values of the journal fields, each None when it sets none) and
-    ``entries``, one per
-    element of ``scope`` or else one of the top-level substrates and
+    ``title``, ``status``, ``title_de`` (the title of the ID's file
+    tagged ``de``, or None), ``reaction_type`` (the first of
+    ``reaction_types``), ``general`` (whether it has ``scope``),
+    ``authors`` (the user names of ``authors``, in file order),
+    ``notebook`` and ``project`` (its values of the journal fields,
+    each None when it sets none) and ``entries``, one per element of
+    ``scope`` or else one of the top-level substrates and
     products, each a table of ``substrates``, keys in file order, and
     ``products``, tables of ``compound`` and ``yield_percent``; a
     sequence by its ``id``, ``title``, ``title_de``, ``target`` and

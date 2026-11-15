@@ -84,14 +84,20 @@ def navigation(path: str, language: str) -> list[dict[str, Any]]:
     return items
 
 
+def active_language() -> str:
+    """Return the active language, ``de`` or ``en``, without a
+    region."""
+    return (translation.get_language()
+            or settings.LANGUAGE_CODE).split("-")[0]
+
+
 def shell(request: HttpRequest) -> dict[str, Any]:
     """Return the context of the page shell: the site's title, the
     texts of its search form and sidebar toggle, and its navigation, in
     the active language, and the database's demo mark, None outside a
     demo database, with the demo accounts that sign in and their
     password."""
-    language = (translation.get_language()
-                or settings.LANGUAGE_CODE).split("-")[0]
+    language = active_language()
     strings = site_strings(language)
     return {"site_title": site_config()["title"],
             "site_strings": {key: strings[key] for key in (

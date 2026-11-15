@@ -25,8 +25,9 @@ from pipeline_support import (DEMO, GIT_QUIET, REPO, TEST_COLLECTION,
                               snapshot)
 
 FIXTURE = REPO / "webapp" / "demo" / "manifest.json"
-PROCEDURE_KEYS = {"id", "source", "title", "title_de", "reaction_type",
-                  "general", "authors", "notebook", "project", "entries"}
+PROCEDURE_KEYS = {"id", "source", "title", "status", "title_de",
+                  "reaction_type", "general", "authors", "notebook",
+                  "project", "entries"}
 # The user names the demo's procedures credit (sample-procedures "Sample
 # marking").
 DEMO_CREDITS = {
@@ -50,7 +51,7 @@ DEMO_JOURNAL = {
 SEQUENCE_KEYS = {"id", "title", "title_de", "target", "steps"}
 IDS = [f"OSDB-{number:04d}" for number in range(1, 10)]
 FRONT_MATTER = ('+++\nid = "{id}"\ntitle = "{title}"\n'
-                'authors = {authors}\n'
+                'status = "{status}"\nauthors = {authors}\n'
                 'reaction_types = ["hydrolysis"]\n'
                 'substrates = ["ethyl-cinnamate"]\n'
                 'products = [{{ compound = "cinnamic-acid", '
@@ -58,10 +59,11 @@ FRONT_MATTER = ('+++\nid = "{id}"\ntitle = "{title}"\n'
 
 
 def procedure_text(ident: str, title: str,
-                   authors: tuple[str, ...] = ("a.example",)) -> str:
+                   authors: tuple[str, ...] = ("a.example",),
+                   status: str = "draft") -> str:
     """The front matter of a minimal procedure."""
     return FRONT_MATTER.format(
-        id=ident, title=title,
+        id=ident, title=title, status=status,
         authors="[" + ", ".join(f'"{a}"' for a in authors) + "]")
 
 
@@ -446,6 +448,20 @@ class ManifestDataTests(unittest.TestCase):
                               "OSDB-0050")
         self.assertEqual((published["source"], published["title"]),
                          ("org", "Aus Org"))
+
+    def test_the_status_is_the_published_variants(self) -> None:
+        """Requirement: manifest subcommand (`status`, that variant's
+        `status`)."""
+        procedures = self.root / "md" / "procedures"
+        (procedures / "OSDB-0051-checked.de.md").write_text(
+            procedure_text("OSDB-0051", "Geprüft", status="checked"),
+            encoding="utf-8")
+        (procedures / "OSDB-0051-checked.md").write_text(
+            procedure_text("OSDB-0051", "Draft"), encoding="utf-8")
+        for locale, status in (("de", "checked"), ("en", "draft")):
+            with self.subTest(locale=locale), site_app(self, locale):
+                self.assertEqual(by_id(manifest_of(self.root)["procedures"],
+                                       "OSDB-0051")["status"], status)
 
     def test_files_the_validator_does_not_name_are_left_out(self) -> None:
         """Requirement: manifest subcommand (only files whose names the

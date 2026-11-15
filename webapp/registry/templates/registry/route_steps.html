@@ -1,0 +1,9 @@
+{% load i18n lab %}{% for step in steps %}<li class="route-step">{% include "registry/procedure_item.html" with procedure=step.procedure entry=step.entry yield_percent=step.yield_percent %}{% if step.substrates %}
+<ul>
+{% for item in step.substrates %}<li class="route-compound">{% substance item.substance %}{% if item.steps %}
+<ul>
+{% include "registry/route_steps.html" with steps=item.steps %}</ul>
+{% elif item.more %} · <span class="route-more">{% translate "more steps on its page" %}</span>{% endif %}</li>
+{% endfor %}</ul>
+{% endif %}</li>
+{% endfor %}

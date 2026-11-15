@@ -136,10 +136,11 @@ class RecordTests(ImportCase):
         for body in demo_collection()["procedures"]:
             with self.subTest(id=body["id"]):
                 row = Procedure.objects.get(key=body["id"])
-                self.assertEqual((row.source, row.title,
+                self.assertEqual((row.source, row.title, row.status,
                                   row.reaction_type.key, row.last_import),
                                  (body["source"], body["title"],
-                                  body["reaction_type"], record))
+                                  body["status"], body["reaction_type"],
+                                  record))
                 self.assertEqual(row.title_de, body["title_de"] or "")
                 self.assertFalse(row.withdrawn)
         for body in demo_collection()["sequences"]:

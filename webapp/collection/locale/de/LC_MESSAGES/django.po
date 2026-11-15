@@ -77,6 +77,18 @@ msgstr "ID"
 msgid "Source format"
 msgstr "Quellformat"
 
+msgid "Status"
+msgstr "Status"
+
+msgid "draft"
+msgstr "Entwurf"
+
+msgid "checked"
+msgstr "Geprüft"
+
+msgid "retired"
+msgstr "Zurückgezogen"
+
 msgid "Title"
 msgstr "Titel"
 

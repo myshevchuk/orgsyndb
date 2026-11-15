@@ -2,6 +2,7 @@
 the snapshot."""
 
 from collections import Counter
+from decimal import Decimal
 from typing import Any
 
 from django.contrib import messages
@@ -12,7 +13,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 
-from collection.models import Procedure, latest_accepted
+from collection import routes
+from collection.models import (EntrySubstance, Procedure, Role, Sequence,
+                               latest_accepted)
 from inventory.models import Item, Lot
 from registry import snapshot
 from registry.forms import SubstanceForm
@@ -20,7 +23,7 @@ from registry.models import Substance, SubstanceClass
 from tasks.models import Task
 from vocabulary.forms import term_form
 from vocabulary.models import (ChemicalClass, Group, Project, ReactionType,
-                               Term, is_tree, tree_order)
+                               Term, descendants, is_tree, tree_order)
 
 REGISTRY = "/lab/registry/"
 # The vocabularies by the names of their pages, each with its model and
@@ -47,20 +50,40 @@ def searched(substance: Substance) -> str:
                       substance.short_name, substance.cas]).casefold()
 
 
+def filed_under(model: type[Term], key: str) -> list[Any]:
+    """Return the IDs of the term of MODEL whose key is KEY and of the
+    terms filed below it, at any depth; none for a key no term has."""
+    term = model.objects.filter(key=key).first()
+    return [] if term is None else [
+        term.pk, *(below.pk for below in descendants(term))]
+
+
 def substance_list(request: HttpRequest) -> HttpResponse:
-    """List the substances whose key, names, short name or CAS number
-    hold the query's ``q`` regardless of case, every one without it, by
-    name regardless of case."""
+    """List the substances, by name regardless of case: those whose key,
+    names, short name or CAS number hold the query's ``q`` regardless of
+    case, filed under the inventory group ``group`` or a group below it,
+    and of the chemical class ``class`` or a class below it, each
+    condition left out when its parameter is empty."""
     query = request.GET.get("q", "").strip()
+    group = request.GET.get("group", "").strip()
+    chemical_class = request.GET.get("class", "").strip()
     words = query.casefold()
     every = Substance.objects.select_related("group", "article") \
         .prefetch_related("chemical_classes")
+    if group:
+        every = every.filter(group__in=filed_under(Group, group))
+    if chemical_class:
+        every = every.filter(chemical_classes__in=filed_under(
+            ChemicalClass, chemical_class)).distinct()
     shown = sorted((substance for substance in every
                     if not words or words in searched(substance)),
                    key=lambda substance: (substance.shown_name.casefold(),
                                           substance.key))
     return render(request, "registry/list.html", {
-        "substances": shown, "q": query})
+        "substances": shown, "q": query, "group": group,
+        "chemical_class": chemical_class,
+        "groups": tree_order(Group.objects.all()),
+        "classes": tree_order(ChemicalClass.objects.all())})
 
 
 def in_collection(substance: Substance) -> bool:
@@ -75,10 +98,83 @@ def in_collection(substance: Substance) -> bool:
             and latest.received_at >= created.history_date)
 
 
+def shown_yield(value: float | None) -> Decimal | None:
+    """Return VALUE, a yield kept as a float, as the decimal it was
+    written as, or None."""
+    return None if value is None else Decimal(repr(value))
+
+
+def kept_rows(substance: Substance, role: Role) -> Any:
+    """Return the rows of SUBSTANCE in ROLE among the entries that are
+    not withdrawn, of procedures that are not withdrawn."""
+    return EntrySubstance.objects.filter(
+        substance=substance, role=role, entry__withdrawn=False,
+        entry__procedure__withdrawn=False)
+
+
+def made_by(substance: Substance) -> list[dict[str, Any]]:
+    """Return what makes SUBSTANCE, by procedure ID and then entry
+    position: per specific procedure or entry of a general one, a table
+    of ``procedure``, its row; ``entry``, the entry's position for a
+    general procedure, else None; and ``yield_percent``, a decimal or
+    None."""
+    rows = kept_rows(substance, Role.PRODUCT).select_related(
+        "entry__procedure").order_by("entry__procedure__key",
+                                     "entry__position")
+    return [{"procedure": row.entry.procedure,
+             "entry": row.entry.position
+             if row.entry.procedure.general else None,
+             "yield_percent": shown_yield(row.yield_percent)}
+            for row in rows]
+
+
+def used_in(substance: Substance) -> list[Procedure]:
+    """Return the procedures that start from SUBSTANCE, by ID."""
+    named = kept_rows(substance, Role.SUBSTRATE).values("entry__procedure")
+    return list(Procedure.objects.filter(pk__in=named).order_by("key"))
+
+
+def route(substance: Substance) -> list[dict[str, Any]]:
+    """Return SUBSTANCE's route tree (``routes.route_tree``), its steps
+    holding the procedure's row under ``procedure`` and the yield as a
+    decimal, and their substrates the substance's row under
+    ``substance``; an empty list when it has none."""
+    tree = routes.route_tree(substance.key, routes.steps())
+    procedures: set[str] = set()
+    compounds: set[str] = set()
+
+    def collect(steps: list[dict[str, Any]]) -> None:
+        for step in steps:
+            procedures.add(step["procedure"])
+            for item in step["substrates"]:
+                compounds.add(item["compound"])
+                collect(item["steps"])
+
+    collect(tree)
+    rows = {row.key: row for row in
+            Procedure.objects.filter(key__in=procedures)}
+    found = {row.key: row for row in
+             Substance.objects.filter(key__in=compounds)}
+
+    def resolve(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return [{"procedure": rows[step["procedure"]],
+                 "entry": step.get("entry"),
+                 "yield_percent": shown_yield(step["yield_percent"]),
+                 "substrates": [{"substance": found[item["compound"]],
+                                 "steps": resolve(item["steps"]),
+                                 "more": item["more"]}
+                                for item in step["substrates"]]}
+                for step in steps]
+
+    return resolve(tree)
+
+
 def substance_page(request: HttpRequest, key: str) -> HttpResponse:
     """Show the substance KEY with its fields, its link to the site's
-    compound page (``in_collection``), its article's items, its open
-    lots and its tasks; answer 404 for an unknown key."""
+    compound page (``in_collection``), the procedures that make it and
+    that start from it, the sequences whose target it is, its route
+    tree, its article's items, its open lots and its tasks; answer 404
+    for an unknown key."""
     substance = get_object_or_404(
         Substance.objects.select_related("group"), key=key)
     items = sorted(Item.objects.filter(article_id=substance.pk)
@@ -89,6 +185,11 @@ def substance_page(request: HttpRequest, key: str) -> HttpResponse:
         "classes": [term for term, _depth in tree_order(
             substance.chemical_classes.all())],
         "in_collection": in_collection(substance),
+        "made_by": made_by(substance),
+        "used_in": used_in(substance),
+        "sequences": Sequence.objects.filter(
+            target=substance, withdrawn=False).order_by("key"),
+        "route": route(substance),
         "items": items,
         "lots": Lot.objects.filter(substance=substance, amount__gt=0)
         .order_by("made_on", "id"),

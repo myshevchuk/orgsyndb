@@ -7,7 +7,24 @@ from django.utils.html import format_html
 from django.utils.safestring import SafeString, mark_safe
 from django.utils.translation import gettext as _
 
+from orgsyndb_web.context_processors import active_language, site_strings
+
 register = template.Library()
+
+
+@register.simple_tag
+def indent(depth: int) -> str:
+    """Return the indent of a term's label at DEPTH in a choice."""
+    from vocabulary.forms import INDENT
+    return INDENT * depth
+
+
+@register.simple_tag
+def site_string(key: str) -> str:
+    """Return the site's interface string KEY in the active language.
+
+    Raises KeyError when the site has no string KEY."""
+    return site_strings(active_language())[key]
 
 
 def not_in_collection(text: str) -> SafeString:
