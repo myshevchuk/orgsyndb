@@ -69,7 +69,7 @@ def substance_list(request: HttpRequest) -> HttpResponse:
     chemical_class = request.GET.get("class", "").strip()
     words = query.casefold()
     every = Substance.objects.select_related("group", "article") \
-        .prefetch_related("chemical_classes")
+        .prefetch_related("chemical_classes").defer("structure_svg")
     if group:
         every = every.filter(group__in=filed_under(Group, group))
     if chemical_class:
@@ -176,7 +176,8 @@ def substance_page(request: HttpRequest, key: str) -> HttpResponse:
     tree, its article's items, its open lots and its tasks; answer 404
     for an unknown key."""
     substance = get_object_or_404(
-        Substance.objects.select_related("group"), key=key)
+        Substance.objects.select_related("group").defer("structure_svg"),
+        key=key)
     items = sorted(Item.objects.filter(article_id=substance.pk)
                    .select_related("article__substance"),
                    key=Item.sort_key)
@@ -212,11 +213,33 @@ def form_page(request: HttpRequest, form: Any, title: str, cancel: str,
         "form": form, "title": title, "cancel": cancel})
 
 
+# The headers of a structure image: it runs no script and loads nothing
+# from elsewhere, and is taken for nothing but SVG.
+IMAGE_HEADERS = {
+    "Content-Security-Policy": "default-src 'none'; style-src "
+                               "'unsafe-inline'",
+    "X-Content-Type-Options": "nosniff",
+}
+
+
+def structure_image(request: HttpRequest, key: str) -> HttpResponse:
+    """Answer the kept drawing of the substance KEY's structure as
+    ``image/svg+xml`` with ``IMAGE_HEADERS``, without drawing it; answer
+    404 for an unknown key or a substance without a molfile."""
+    found = Substance.objects.filter(key=key).exclude(molfile="") \
+        .values_list("structure_svg", flat=True).first()
+    if found is None:
+        raise Http404
+    return HttpResponse(found, content_type="image/svg+xml",
+                        headers=IMAGE_HEADERS)
+
+
 @login_required
 def substance_new(request: HttpRequest) -> HttpResponse:
     """Create a substance with its chemical classes."""
-    return form_page(request, SubstanceForm(request.POST or None),
-                     _("New substance"), REGISTRY, substance_url)
+    return form_page(
+        request, SubstanceForm(request.POST or None, request.FILES or None),
+        _("New substance"), REGISTRY, substance_url)
 
 
 @login_required
@@ -225,7 +248,8 @@ def substance_edit(request: HttpRequest, key: str) -> HttpResponse:
     unknown key."""
     substance = get_object_or_404(Substance, key=key)
     return form_page(
-        request, SubstanceForm(request.POST or None, instance=substance),
+        request, SubstanceForm(request.POST or None, request.FILES or None,
+                               instance=substance),
         _("Edit %(record)s") % {"record": substance.shown_name},
         substance_url(substance), substance_url)
 

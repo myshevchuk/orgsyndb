@@ -8,8 +8,9 @@ order; ``substances``, ordered by key; ``accounts``, every account by
 user name with its display name; ``notebooks``, every lab notebook by
 code with its owner's user name; ``import``, the latest accepted
 import of the collection or ``null``; and ``digest``, the SHA-256 of the
-rest but ``import``. Empty text, a missing molar mass and a missing
-article number are ``null``.
+rest but ``import``. Empty text, a missing molfile among it, a missing
+molar mass and a missing article number are ``null``; a substance's
+drawing is left out.
 """
 
 import hashlib
@@ -42,7 +43,7 @@ VOCABULARIES: dict[str, type[Term]] = {
     "reaction-types": ReactionType,
 }
 SUBSTANCE_TEXTS = ("name", "name_de", "short_name", "formula", "smiles",
-                   "cas", "note")
+                   "molfile", "cas", "note")
 
 
 def _text(value: str) -> str | None:
@@ -121,8 +122,8 @@ def build() -> dict[str, Any]:
     numbers = dict(Article.objects.values_list("substance_id",
                                                "article_number"))
     substances = []
-    for substance in Substance.objects.select_related("group").order_by(
-            "key"):
+    for substance in Substance.objects.select_related("group").defer(
+            "structure_svg").order_by("key"):
         substances.append({
             "key": substance.key,
             **{name: _text(getattr(substance, name))
@@ -270,15 +271,18 @@ def load(table: Any, user: Any = None) -> tuple[int, int, int]:
 
     The terms of each vocabulary are created in their order, a parent
     named before the terms filed under it, then the substances with
-    their classes, and an article for each substance that names an
-    article number; each gets a creation in its history, all in one
-    transaction holding the lock (``orgsyndb_web.lock``), which wakes the
-    builder once it commits (``orgsyndb_web.wake``). The digest, the
-    import, the accounts and the notebooks are ignored, and no account or
-    notebook is created; a vocabulary that is missing is empty.
+    their classes, each with a molfile drawn as it is saved, a missing
+    ``molfile`` meaning none, and an article for each substance that
+    names an article number; each gets a creation in its history, all
+    in one transaction holding the lock (``orgsyndb_web.lock``), which
+    wakes the builder once it commits (``orgsyndb_web.wake``). The
+    digest, the import, the accounts and the notebooks are ignored, and
+    no account or notebook is created; a vocabulary that is missing is
+    empty.
     Raise Broken, writing nothing, when the registry holds a substance
     or a term, the format is not ``1``, a term or substance names a key
-    that does not exist, or a value breaks a rule the forms check.
+    that does not exist, or a value breaks a rule the forms check, such
+    as a molfile from which RDKit reads no molecule.
     """
     if not isinstance(table, dict):
         raise Broken("the snapshot is not a table")

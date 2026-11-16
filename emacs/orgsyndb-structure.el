@@ -29,20 +29,17 @@
 
 (defun orgsyndb--structure-file (root key)
   "Return the structure image of the compound KEY in ROOT, or nil.
-That is the file `static/structures/KEY.svg' of the collection, or
-`static/structures/KEY.png' when there is no SVG."
-  (cl-find-if #'file-readable-p
-              (mapcar (lambda (suffix)
-                        (expand-file-name (concat key suffix)
-                                          (expand-file-name
-                                           "static/structures/" root)))
-                      '(".svg" ".png"))))
+That is the file `build/substances/KEY/structure.svg' of the collection,
+which the last build staged, when it is readable."
+  (let ((file (expand-file-name
+               (concat "build/substances/" key "/structure.svg") root)))
+    (and (file-readable-p file) file)))
 
 (defun orgsyndb-structure-update ()
   "Show the compound at point in the structure buffer.
 The buffer shows its structure image (`orgsyndb--structure-file'), when
-it has one and Emacs can display the image's type, and below it its name
-and formula.  When point is on no compound, the buffer keeps what it
+it has one and Emacs can display SVG, and below it its name and
+formula.  When point is on no compound, the buffer keeps what it
 shows."
   (when orgsyndb--root
     (let* ((root orgsyndb--root)
@@ -50,12 +47,11 @@ shows."
            (data (and key (orgsyndb--compound root key))))
       (when data
         (with-current-buffer (get-buffer-create orgsyndb--structure-buffer)
-          (let* ((inhibit-read-only t)
-                 (file (orgsyndb--structure-file root key))
-                 (type (and file (image-supported-file-p file))))
+          (let ((inhibit-read-only t)
+                (file (orgsyndb--structure-file root key)))
             (erase-buffer)
-            (when (and type (image-type-available-p type))
-              (insert-image (create-image file type))
+            (when (and file (image-type-available-p 'svg))
+              (insert-image (create-image file 'svg))
               (insert "\n\n"))
             (insert (or (alist-get 'name data) key) "\n"
                     (or (alist-get 'formula data) "") "\n")

@@ -222,15 +222,29 @@ chemical classes and group. These four fields are built in; their display
 is fixed. The [field reference](SCHEMA.md#collection-field-declarations)
 gives the details.
 
-To show a structure, place `static/structures/<key>.svg` or
-`static/structures/<key>.png` in the collection, using the substance's key.
-For example, use `static/structures/isopentyl-acetate.svg` for
-`isopentyl-acetate`. The build uses the SVG when both files exist. A
-substance without either file has no structure image. For an SVG, use black
-lines and text on a white background rectangle. Give the file a `<title>`,
-and do not include scripts, external images, or other external references.
-The site shows the image on a white panel in dark mode. Ask the owner to add
-or check the image if you do not work with SVG files.
+To show a compound's structure, open its record in the lab registry and
+choose **Structure (molfile)** on the new or edit form. Upload a molfile,
+a text file describing the molecular structure and its drawing coordinates.
+It must be UTF-8 text, at most 1 MB (1,000,000 bytes), from which RDKit, the
+lab's chemistry toolkit, can read a molecule with at least one atom. An
+invalid file shows an error at the field and saves nothing.
+
+A chosen file replaces the existing molfile. To remove it, check
+**Remove structure** on the edit form; this box appears only when the
+substance has a molfile. Choosing neither keeps the existing structure.
+Choosing a file and checking the box together is an error. The lab draws
+the structure in
+black on white when you save and shows it on the substance's page. It keeps
+the file's coordinates and wedges; coordinates are computed only when all
+atoms are at the origin. Formula, molar mass and SMILES are not computed
+from the molfile. A substance without a molfile has no structure
+image. The site shows the image on a white panel in dark mode.
+
+The build takes the SVG from the registry source. If the collection uses a
+snapshot file, the SVG must be at `substances/<key>/structure.svg` in that
+file's directory; without it, the substance has no image on the site.
+`static/structures/` holds procedure scheme images only. Ask the owner to
+add the molfile if you cannot edit the lab registry.
 
 You may register a starting material even if no procedure makes it. A compound
 that no procedure uses is also allowed. In the sidebar's **Collection** group,
@@ -386,8 +400,9 @@ A general procedure adds **Scope** before **Summary**, with one row per entry.
 **Scale**, **Time**, **Temperature** and **Note** appear only when some entry
 sets them; an unset value leaves an empty cell. Starting materials and products
 link to compound pages, and products show small structure images when the
-collection has matching image files. The compound links carry the same notes
-as the panel. For example, entry 1 of OSDB-0009 makes the same alcohol as OSDB-0005,
+build has staged their images from the registry source. The compound
+links carry the same notes as the panel. For example, entry 1 of
+OSDB-0009 makes the same alcohol as OSDB-0005,
 so that compound's page lists both routes.
 
 ## 3. Write the procedure
@@ -433,8 +448,8 @@ its `md/procedures/`. Do not put it in a subfolder.
 If you do not have the collection, send the `.md` file to the owner. Tell the
 owner whether you used a procedure number they assigned or left the template
 number in place. The owner can then place, rename, and check it. Include
-any new structure images, and ask the owner to add any missing substances
-in the lab application.
+any new molfiles for compounds and any scheme images. Ask the owner to
+add missing substances and their molfiles in the lab application.
 
 ## 5. Check the file
 
@@ -550,7 +565,8 @@ titles and targets, step counts and overall yields. A sequence page shows
 its ID and title, **Steps** and **Overall yield**, a scheme, its linked
 procedures with entry numbers where needed, reaction type, yield and status,
 then your notes. The scheme shows starting materials, intermediates and target
-with matching structure images from `static/structures/` where available.
+with structure images staged from the registry source by the build, where
+available.
 Compound links in the scheme and the directory's targets carry the same
 notes as the panel.
 A plus joins the first step's starting materials, and arrows show step

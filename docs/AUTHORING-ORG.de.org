@@ -43,6 +43,7 @@
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-15 Sun 18:56] -- Navigation und Suche in der Seitenleiste
 #+AI_PASS: claude-opus-5-5 [2026-11-15 Sun 20:23] -- Seitenleiste einklappen
 #+AI_PASS: claude-opus-5-5 [2026-11-15 Sun 22:20] -- Menügruppen Chemikalien und Stammdaten
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-16 Mon 01:56] -- Verbindungsstrukturen aus Molfile-Dateien, Reaktionsschemata und Bildübernahme beim Build
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
@@ -248,9 +249,9 @@ Meldungen.
   #+HUGO_TAGS: esterification fragrance
 #+end_src
 
-  Produktnamen und chemische Daten kommen aus dem Laborregister.
-  Strukturbilder gehören in ~static/structures/~ der Sammlung, wie im
-  nächsten Abschnitt beschrieben.
+  Produktnamen, chemische Daten und Molfile-Dateien kommen aus dem
+  Laborregister. Der Build übernimmt die Strukturbilder aus dessen Quelle,
+  wie im nächsten Abschnitt beschrieben.
 
   Verwenden Sie die Anführungs- und Listenformen der Vorlage. Autoren und
   Gefahren stehen in gequoteten Lisp-Listen. Nennen Sie unter ~authors~
@@ -307,15 +308,34 @@ Meldungen.
   Diese vier Felder sind fest eingebaut; ihre Anzeige ist vorgegeben. Die
   [[file:SCHEMA.de.md][Schema-Referenz]] nennt die Einzelheiten.
 
-  Für ein Strukturbild legen Sie ~static/structures/<key>.svg~ oder
-  ~static/structures/<key>.png~ in der Sammlung ab. Verwenden Sie den
-  Stoffschlüssel, etwa ~static/structures/isopentyl-acetate.svg~ für
-  ~isopentyl-acetate~. Sind beide Dateien vorhanden, verwendet der Build das
-  SVG. Ohne eine dieser Dateien hat der Stoff kein Strukturbild. Ein
-  Struktur-SVG verwendet schwarze Linien und Schrift auf einem weißen
-  Hintergrundrechteck. Es hat ein ~<title>~ und enthält keine Skripte,
-  externen Bilder oder anderen externen Verweise. Der weiße Hintergrund
-  hält die Zeichnung im dunklen Farbschema der Website und auf Papier lesbar.
+  Für das Strukturbild einer Verbindung öffnen Sie deren Eintrag im
+  Laborregister und wählen im Formular für einen neuen Stoff oder zum
+  Bearbeiten *Strukturformel (Molfile)*. Laden Sie eine Molfile-Datei hoch,
+  eine Textdatei, die die Molekülstruktur und ihre Zeichnungskoordinaten
+  beschreibt. Die Datei muss UTF-8-Text sein und darf höchstens 1 MB
+  (1.000.000 Bytes) groß sein. RDKit, das Chemie-Toolkit der Laboranwendung,
+  muss daraus ein Molekül mit mindestens einem Atom lesen können. Eine
+  ungültige Datei führt zu einem Fehler am Feld; das Formular speichert nichts.
+
+  Eine ausgewählte Datei ersetzt die vorhandene Molfile-Datei. Zum Entfernen
+  aktivieren Sie *Strukturformel entfernen* im Bearbeitungsformular. Das
+  Kästchen erscheint nur, wenn der Stoff eine Molfile-Datei hat. Ohne neue
+  Datei und ohne Häkchen bleibt die vorhandene Struktur erhalten. Eine Datei
+  auszuwählen und zugleich das Kästchen anzukreuzen ist ein Fehler. Beim
+  Speichern zeichnet die Laboranwendung die Struktur schwarz auf weiß und
+  zeigt sie auf der Stoffseite. Sie behält Koordinaten und Keilbindungen der
+  Datei bei; Koordinaten berechnet sie nur, wenn alle Atome im Ursprung liegen.
+  Summenformel, Molmasse und SMILES berechnet sie nicht aus der
+  Molfile-Datei. Ohne Molfile-Datei hat ein Stoff kein Strukturbild. Die
+  Website zeigt das Bild im dunklen Modus auf einer weißen Fläche. Der
+  weiße Hintergrund hält die Zeichnung auch auf Papier lesbar.
+
+  Der Build übernimmt das SVG aus der Registerquelle. Verwendet die Sammlung
+  eine Snapshot-Datei, muss das SVG unter ~substances/<key>/structure.svg~
+  in deren Verzeichnis liegen; ohne dieses Bild hat der Stoff auf der Website
+  kein Strukturbild. In ~static/structures/~ liegen nur Reaktionsschemata.
+  Bitten Sie die oder den Verantwortlichen, die Molfile-Datei hinzuzufügen,
+  wenn Sie das Laborregister nicht bearbeiten können.
 
   Sie dürfen einen Ausgangsstoff registrieren, ohne dass eine Vorschrift ihn
   herstellt. Auch eine Verbindung, die keine Vorschrift verwendet, ist
@@ -507,9 +527,9 @@ Meldungen.
   *Produkte* und *Ausbeute* erscheinen immer. *Ansatzgröße*, *Zeit*,
   *Temperatur* und *Anmerkung* erscheinen nur, wenn mindestens ein Eintrag das
   Feld setzt; ungesetzte Werte lassen leere Zellen. Verbindungen verlinken auf
-  ihre Seiten, und Produkte zeigen kleine Strukturbilder, sofern die Sammlung
-  passende Bilddateien enthält. Die Verbindungslinks tragen dieselben Zusätze
-  wie im Datenfeld.
+  ihre Seiten, und Produkte zeigen kleine Strukturbilder, sofern der Build
+  ihre Bilder aus der Registerquelle übernommen hat. Die Verbindungslinks
+  tragen dieselben Zusätze wie im Datenfeld.
   Eintrag 1 von OSDB-0009 stellt denselben Alkohol wie OSDB-0005
   her, sodass die Verbindungsseite beide Wege nennt.
 
@@ -819,9 +839,9 @@ Meldungen.
   ein Schema, die verlinkten Vorschriften mit gegebenenfalls Eintragsnummer,
   Reaktionstyp, Ausbeute und Status, danach Ihre Anmerkungen. Das Schema zeigt
   Ausgangsstoffe, Zwischenprodukte und Ziel mit passenden Strukturbildern
-  aus ~static/structures/~, sofern vorhanden. Die Verbindungslinks im Schema
-  und die Ziele im Synthesewegverzeichnis tragen dieselben Zusätze wie im
-  Datenfeld.
+  aus der Registerquelle, die der Build übernommen hat, sofern vorhanden.
+  Die Verbindungslinks im Schema und die Ziele im Synthesewegverzeichnis
+  tragen dieselben Zusätze wie im Datenfeld.
   Ein Plus verbindet die Ausgangsstoffe der ersten Stufe; Pfeile nennen
   Stufennummer, Reaktionstyp und Ausbeute. In schmalen Fenstern verläuft
   das Schema nach unten. Synthesewegseiten fehlen im Suchindex für

@@ -3,6 +3,7 @@
 
 import json
 import os
+import re
 import shutil
 import tempfile
 import unittest
@@ -10,7 +11,7 @@ import unittest.mock
 from pathlib import Path
 from typing import Any
 
-from pipeline_support import (captured, closed_address, pipeline,
+from pipeline_support import (MOLFILE, captured, closed_address, pipeline,
                               pipeline_function, serve_snapshot,
                               snapshot_digest)
 from support import REGISTRY, load_snapshot, write_snapshot
@@ -248,6 +249,57 @@ class NotASnapshotTests(RegistryCase):
                 table = json.loads(json.dumps(self.table))
                 table["vocabularies"]["chemical-classes"] = terms
                 self.refused(json.dumps(table))
+
+    def test_a_molfile_is_a_string_or_null(self) -> None:
+        """Requirement: Reading the registry (a substance's `molfile`,
+        a string or null, like its other texts)."""
+        for name, value in (("a string", MOLFILE),
+                            ("null", None), ("an empty string", "")):
+            with self.subTest(molfile=name):
+                table = json.loads(json.dumps(self.table))
+                table["substances"][2]["molfile"] = value
+                self.name("registry.json")
+                (self.root / "registry.json").write_text(
+                    json.dumps(table), encoding="utf-8")
+                self.assertEqual(self.read()["substances"][2]["molfile"],
+                                 value)
+        table = json.loads(json.dumps(self.table))
+        self.assertNotIn("molfile", table["substances"][2])
+        self.name("registry.json")
+        self.assertEqual(self.read(), self.table)
+
+    def test_a_molfile_that_is_no_text_is_refused(self) -> None:
+        """Requirement: Reading the registry (the snapshot is refused
+        with `substances[<n>].molfile must be a string or null`)."""
+        for name, value in (("a number", 5), ("true", True),
+                            ("a list", ["M  END"]), ("a table", {})):
+            for number in (1, 3):
+                with self.subTest(molfile=name, number=number):
+                    table = json.loads(json.dumps(self.table))
+                    table["substances"][number - 1]["molfile"] = value
+                    self.name("registry.json")
+                    (self.root / "registry.json").write_text(
+                        json.dumps(table), encoding="utf-8")
+                    with self.assertRaisesRegex(
+                            self.error(), re.escape(
+                                f"substances[{number}].molfile must be a "
+                                "string or null")):
+                        self.read()
+
+    def test_the_snapshot_check_names_a_molfile_that_is_no_text(self) -> None:
+        """Requirement: Reading the registry (`validate.snapshot_problem`
+        gives the reason, and none for a string or null)."""
+        check = pipeline().validate.snapshot_problem
+        table = json.loads(json.dumps(self.table))
+        self.assertIsNone(check(table))
+        for value in (MOLFILE, None):
+            table["substances"][0]["molfile"] = value
+            self.assertIsNone(check(table))
+        for value in (0, False, [], {}):
+            table["substances"][0]["molfile"] = value
+            self.assertEqual(
+                check(table),
+                "substances[1].molfile must be a string or null")
 
     def test_a_file_that_is_not_json(self) -> None:
         """Requirement: Reading the registry (not UTF-8 JSON)."""

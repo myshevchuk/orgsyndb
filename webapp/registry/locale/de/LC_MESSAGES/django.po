@@ -50,6 +50,37 @@ msgstr "In g/mol."
 msgid "SMILES"
 msgstr "SMILES"
 
+msgid "Molfile"
+msgstr "Molfile"
+
+msgid "Structure (molfile)"
+msgstr "Strukturformel (Molfile)"
+
+msgid "Remove structure"
+msgstr "Strukturformel entfernen"
+
+#, python-format
+msgid "Structure of %(name)s"
+msgstr "Strukturformel von %(name)s"
+
+msgid "The file is larger than 1 MB."
+msgstr "Die Datei ist größer als 1 MB."
+
+msgid "The file is not UTF-8 text."
+msgstr "Die Datei ist kein UTF-8-Text."
+
+msgid "Choose a file or remove the structure, not both."
+msgstr "Entweder eine Datei wählen oder die Strukturformel entfernen, nicht beides."
+
+msgid "The molfile is empty."
+msgstr "Das Molfile ist leer."
+
+msgid "RDKit reads no molecule from this molfile."
+msgstr "RDKit liest aus diesem Molfile kein Molekül."
+
+msgid "The molecule of this molfile has no atom."
+msgstr "Das Molekül dieses Molfiles hat kein Atom."
+
 msgid "CAS number"
 msgstr "CAS-Nummer"
 
@@ -161,3 +192,6 @@ msgstr "Stoffklasse"
 msgctxt "registry"
 msgid "All"
 msgstr "Alle"
+
+msgid "The molfile holds a NUL character."
+msgstr "Die Molfile-Datei enthält ein NUL-Zeichen."

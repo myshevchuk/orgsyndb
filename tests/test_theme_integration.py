@@ -820,9 +820,9 @@ class ShippedSiteTests(SiteCase):
         image = figure.find("img")
         self.assertIsNotNone(image, "no img in the figure")
         self.assertEqual(page.resolve(image.attrs.get("src", "")),
-                         "/structures/isopentyl-acetate.svg")
-        self.assertTrue(
-            (self.public / "structures" / "isopentyl-acetate.svg").is_file())
+                         "/substances/isopentyl-acetate/structure.svg")
+        self.assertTrue((self.public / "substances" / "isopentyl-acetate"
+                         / "structure.svg").is_file())
         self.assertFalse(
             (self.public / "structures" / "osdb-0003.svg").exists())
         self.assertEqual(image.attrs.get("alt"),
@@ -1454,9 +1454,9 @@ class GeneralFixtureSiteTests(SiteCase):
         self.assertEqual([(i.attrs.get("alt"), page.resolve(i.attrs["src"]))
                           for i in images],
                          [("Structure of Ethyl acetate",
-                           "/structures/ethyl-acetate.svg")])
-        self.assertTrue((self.public / "structures"
-                         / "ethyl-acetate.svg").is_file())
+                           "/substances/ethyl-acetate/structure.svg")])
+        self.assertTrue((self.public / "substances" / "ethyl-acetate"
+                         / "structure.svg").is_file())
 
     def test_the_yield_is_the_range_of_all_entries(self) -> None:
         """Scenario: Yields of a general procedure (the fixture)."""
@@ -1612,9 +1612,9 @@ class TwoProductSiteTests(SiteCase):
         self.assertEqual(images[0].attrs.get("alt"),
                          "Structure of trans-Stilbene")
         self.assertEqual(page.resolve(images[0].attrs.get("src", "")),
-                         "/structures/trans-stilbene.svg")
-        self.assertTrue((self.public / "structures"
-                         / "trans-stilbene.svg").is_file())
+                         "/substances/trans-stilbene/structure.svg")
+        self.assertTrue((self.public / "substances" / "trans-stilbene"
+                         / "structure.svg").is_file())
         self.assertEqual(page.find_all("figure", "structure--placeholder"),
                          [])
 
@@ -1657,7 +1657,7 @@ class TwoProductSiteTests(SiteCase):
         self.assertEqual(image.attrs.get("alt"),
                          "Structure of trans-Stilbene")
         self.assertEqual(trans.resolve(image.attrs["src"]),
-                         "/structures/trans-stilbene.svg")
+                         "/substances/trans-stilbene/structure.svg")
 
 
 class SecondRouteSiteTests(SiteCase):

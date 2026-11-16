@@ -275,13 +275,36 @@ leer. Der Stoff hat dann weder den entsprechenden Suchtext noch die Angabe
 auf seiner Seite. Die Laboranwendung prüft die Werte der Stoffe; der
 Validator der Sammlung prüft Verweise auf deren Schlüssel.
 
-Für ein Strukturbild legen Sie `static/structures/<key>.svg` oder
-`static/structures/<key>.png` in der Sammlung ab. Sind beide vorhanden,
-verwendet der Build das SVG. Ohne eine dieser Dateien hat der Stoff kein
-Bild. Es gibt kein Feld `structure_image` zum Ausfüllen. Der Build schreibt
-je Stoff eine Datei `build/data/compounds/<key>.json` und setzt
-`structure_image` in diesen erzeugten Daten nur, wenn er ein Bild findet.
-Hugo liest die Dateien als `data/compounds`.
+Für ein Strukturbild laden Sie im Laborregister eine Molfile-Datei hoch.
+Eine Molfile-Datei ist eine Textdatei, die eine Molekülstruktur und ihre
+Zeichnungskoordinaten beschreibt. Beim Speichern des Stoffs zeichnet und
+speichert die Laboranwendung ein SVG. Sie liefert das Bild ohne Anmeldung
+unter `/lab/registry/substances/<key>/structure.svg`. Ohne Molfile-Datei
+hat ein Stoff kein Strukturbild; der Snapshot enthält `molfile` als Text
+oder `null`, wenn keine Datei vorliegt.
+
+Der Build legt die Bilder unter `build/substances/<key>/structure.svg` ab.
+Bei einer Registeradresse fragt er `substances/<key>/structure.svg` relativ
+zur Snapshot-Adresse mit einer Wartefrist von 30 Sekunden ab. Schlägt eine
+Anfrage fehl oder antwortet sie mit einem anderen Status als 200, bleibt
+ein von einem früheren Build abgelegtes Bild erhalten. Sobald eine Anfrage
+keine Antwort erhält, fragt der Build keine weiteren Bilder ab. Eine
+Warnung nennt die Anzahl der nicht abgelegten Bilder sowie die Adresse und
+den Grund beim ersten Bild. Bei einer Snapshot-Datei kopiert er
+`substances/<key>/structure.svg` aus deren Verzeichnis, nur für Stoffe mit
+Molfile-Datei. Fehlt das SVG, hat der Stoff kein Bild; der Build entfernt
+eine früher abgelegte Kopie und gibt keine Warnung aus.
+
+Es gibt kein Feld `structure_image` zum Ausfüllen. Der Build schreibt je
+Stoff eine Datei `build/data/compounds/<key>.json` und setzt
+`structure_image` nur dann auf `substances/<key>/structure.svg`, wenn er
+dieses Bild abgelegt hat. Hugo liest die Dateien als `data/compounds` und
+veröffentlicht das SVG unter diesem Pfad. `orgsyndb index` meldet die Bilder,
+die der letzte Build abgelegt hat.
+
+In `static/structures/` der Sammlung liegen nur Reaktionsschemata.
+Dateien mit den Namen `<key>.svg` oder `<key>.png` dort liefern keine
+Strukturbilder von Verbindungen.
 
 Das Argument `--static-dir` bestimmt, wo der Validator das `scheme_image`
 einer Vorschrift sucht. Ohne Angabe nimmt er `static` im aktuellen

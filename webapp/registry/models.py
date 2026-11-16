@@ -8,6 +8,7 @@ to cannot be deleted.
 
 import re
 from decimal import Decimal
+from typing import Any
 
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.validators import RegexValidator
@@ -17,6 +18,7 @@ from django.utils.translation import gettext_lazy as _
 
 from orgsyndb_web.history import RecordedHistory
 from orgsyndb_web.lock import LockedQuerySet, LockedWrites
+from registry import structures
 from vocabulary.models import KEY_PATTERN, ChemicalClass, Group, german
 
 CAS_PATTERN = re.compile(r"^\d{2,7}-\d{2}-\d$")
@@ -54,6 +56,14 @@ def cas_rule(value: str) -> None:
                                 "not match."), code="invalid")
 
 
+def molfile_rule(value: str) -> None:
+    """Refuse VALUE unless RDKit reads from it a molecule of at least
+    one atom (``structures.refusal``)."""
+    reason = structures.refusal(value)
+    if reason is not None:
+        raise ValidationError(reason, code="invalid")
+
+
 def above_zero(value: Decimal) -> None:
     """Refuse a VALUE of zero or less."""
     if value is not None and value <= 0:
@@ -87,11 +97,15 @@ class Substance(LockedWrites, models.Model):
         blank=True, validators=[above_zero],
         help_text=_("In g/mol."))
     smiles = models.TextField(_("SMILES"), blank=True)
+    molfile = models.TextField(_("Molfile"), blank=True,
+                               validators=[molfile_rule])
+    # The drawing of the molfile, kept so that no request draws it.
+    structure_svg = models.TextField(blank=True, editable=False)
     cas = models.CharField(_("CAS number"), max_length=12, blank=True,
                            validators=[cas_rule])
     note = models.TextField(_("Note"), blank=True)
 
-    history = RecordedHistory()
+    history = RecordedHistory(excluded_fields=["structure_svg"])
 
     class Meta:
         ordering = ["key"]
@@ -108,6 +122,22 @@ class Substance(LockedWrites, models.Model):
 
     def __str__(self) -> str:
         return self.key
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Save the substance under the lock, its molfile's line endings
+        made LF and its structure drawn anew from the molfile
+        (``structures.draw``), or the drawing cleared when it has no
+        molfile. A save whose ``update_fields`` leave out the molfile
+        keeps the drawing. Raise ValueError, saving nothing, when RDKit
+        cannot draw the molfile."""
+        fields = kwargs.get("update_fields")
+        if fields is None or "molfile" in fields:
+            self.molfile = structures.lf(self.molfile)
+            self.structure_svg = structures.draw(self.molfile) \
+                if self.molfile else ""
+            if fields is not None:
+                kwargs["update_fields"] = {*fields, "structure_svg"}
+        super().save(*args, **kwargs)
 
     @property
     def shown_name(self) -> str:

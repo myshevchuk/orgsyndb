@@ -314,8 +314,11 @@ def run_build(collection: Path) -> list[tuple[Path, dict]]:
     count = pipeline.stage_help(APP / "docs",
                                 Path("build") / pipeline.HELP_STAGED)
     step(f"build: staging {count} help pages from docs/")
+    step("build: staging the structure images of the registry")
+    pipeline.stage_structures(collection, table)
     count = pipeline.stage_compounds(
-        table, Path("static"), Path("build") / pipeline.COMPOUNDS_STAGED)
+        table, Path("build") / pipeline.STRUCTURES_STAGED,
+        Path("build") / pipeline.COMPOUNDS_STAGED)
     step(f"build: staging {count} compounds from the registry")
     step("build: hugo")
     pipeline.remove_tree(Path("public"))

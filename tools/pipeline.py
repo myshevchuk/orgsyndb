@@ -59,6 +59,10 @@ HELP_STAGED = Path("content") / "help"
 # The data of each substance, which Hugo reads as site.Data.compounds,
 # under build/.
 COMPOUNDS_STAGED = Path("data") / "compounds"
+# The structure images the build staged, which Hugo publishes as
+# substances/<key>/structure.svg, under build/.
+STRUCTURES_STAGED = Path("substances")
+STRUCTURE_FILE = "structure.svg"
 # The field, reaction-type, author and route data Hugo reads as
 # site.Data.collection, under build/.
 FIELDS_STAGED = Path("data") / "fields.json"
@@ -746,6 +750,105 @@ def registry(collection: Path, store: bool = True) -> dict[str, Any]:
     return table
 
 
+def _write_atomically(path: Path, data: bytes) -> None:
+    """Make the file PATH hold DATA, replacing it at once, creating its
+    directory when it is missing."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_name(f".{path.name}.partial")
+    partial.write_bytes(data)
+    partial.replace(path)
+
+
+def _clear_except(root: Path, kept: set[Path]) -> None:
+    """Remove from the directory ROOT every file and directory that is
+    not one of the files KEPT or a directory holding one."""
+    for path in sorted(root.rglob("*"), reverse=True):
+        if path in kept:
+            continue
+        if path.is_dir() and not path.is_symlink():
+            if not any(path.iterdir()):
+                path.rmdir()
+        else:
+            path.unlink()
+
+
+def _fetch_image(address: str) -> tuple[bytes | None, str, bool]:
+    """Request the image at ADDRESS with a timeout of REGISTRY_TIMEOUT
+    seconds. Return the body of an answer of status 200, or None; the
+    reason when there is none; and whether the request was answered."""
+    try:
+        with urllib.request.urlopen(address,
+                                    timeout=REGISTRY_TIMEOUT) as answer:
+            if answer.status == 200:
+                return answer.read(), "", True
+            return None, f"answered with status {answer.status}", True
+    except urllib.error.HTTPError as exc:
+        return None, f"answered with status {exc.code}", True
+    except (OSError, http.client.HTTPException, ValueError) as exc:
+        reason = getattr(exc, "reason", None) or exc
+        return None, f"no answer ({reason})", False
+
+
+def stage_structures(collection: Path, registry: dict[str, Any]) -> None:
+    """Stage the structure images of the substances of the snapshot
+    REGISTRY in the collection directory COLLECTION, as
+    ``build/substances/<key>/structure.svg``.
+
+    Only a substance whose ``molfile`` is a string has an image, and
+    everything else in ``build/substances/``, which is created when it
+    is missing, is removed. The images come from the registry that
+    ``registry_source`` names. Beside a snapshot file, relative to
+    COLLECTION unless absolute, a substance's image is the file
+    ``substances/<key>/structure.svg`` in the file's directory, copied
+    when it exists; a substance without it has no image, and its staged
+    image is removed. For an address, the image is the answer of status
+    200 to a GET of ``substances/<key>/structure.svg`` resolved against
+    it, requested in the registry's order with a timeout of
+    REGISTRY_TIMEOUT seconds. A substance answered with another status,
+    or not answered, keeps its staged image, if any; after the first
+    request that is not answered, no further image is requested. When
+    an image is not staged, one warning on stderr names how many were
+    not, and the first one's address and the reason.
+
+    Raises ``validate.ConfigError`` when the collection's settings name
+    no registry or break a rule of ``validate.read_settings``.
+    """
+    collection = Path(collection)
+    source = registry_source(collection)
+    staged = collection / "build" / STRUCTURES_STAGED
+    staged.mkdir(parents=True, exist_ok=True)
+    keys = [substance["key"] for substance in registry["substances"]
+            if isinstance(substance.get("molfile"), str)]
+    targets = {key: staged / key / STRUCTURE_FILE for key in keys}
+    if not is_address(source):
+        beside = (collection / source).parent / STRUCTURES_STAGED
+        images = {key: beside / key / STRUCTURE_FILE for key in keys
+                  if (beside / key / STRUCTURE_FILE).is_file()}
+        _clear_except(staged, {targets[key] for key in images})
+        for key, image in images.items():
+            _write_atomically(targets[key], image.read_bytes())
+        return
+    _clear_except(staged, set(targets.values()))
+    missed: list[tuple[str, str]] = []
+    answering = True
+    for key, target in targets.items():
+        address = urllib.parse.urljoin(
+            source, f"substances/{urllib.parse.quote(key)}/{STRUCTURE_FILE}")
+        if not answering:
+            missed.append((address, "not requested"))
+            continue
+        body, reason, answering = _fetch_image(address)
+        if body is None:
+            missed.append((address, reason))
+        else:
+            _write_atomically(target, body)
+    if missed:
+        address, reason = missed[0]
+        count = len(missed)
+        _warn(f"{count} structure image{'' if count == 1 else 's'} not "
+              f"staged; the first, {address}: {reason}")
+
+
 # --------------------------------------------------------------------------
 # Hugo
 
@@ -1297,41 +1400,41 @@ def authors_data(registry: dict[str, Any]) -> dict[str, str]:
 
 
 def compound_data(substance: dict[str, Any],
-                  static: Path) -> dict[str, Any]:
+                  staged: Path) -> dict[str, Any]:
     """Return the data the site reads for SUBSTANCE, a substance of a
-    registry snapshot, whose collection's static files are STATIC.
+    registry snapshot, whose collection's staged structure images are
+    in STAGED, the collection's ``build/substances/``.
 
     The table holds those of the substance's ``name``, ``name_de``,
     ``formula``, ``mw``, ``smiles``, ``cas``, ``article_number``,
     ``short_name`` and ``group`` that are not null; ``chemical_class``,
     its ``chemical_classes`` in their order, unless it has none; and
-    ``structure_image``, ``structures/<key>.svg`` when STATIC holds
-    that file, else ``structures/<key>.png`` when it holds that one.
+    ``structure_image``, ``substances/<key>/structure.svg``, exactly
+    when STAGED holds ``<key>/structure.svg``. STAGED need not exist.
     """
     data = {name: substance[name] for name in COMPOUND_VALUES
             if substance.get(name) is not None}
     if substance.get("chemical_classes"):
         data["chemical_class"] = list(substance["chemical_classes"])
-    for suffix in (".svg", ".png"):
-        image = f"structures/{substance['key']}{suffix}"
-        if (Path(static) / image).is_file():
-            data["structure_image"] = image
-            break
+    key = substance["key"]
+    if (Path(staged) / key / STRUCTURE_FILE).is_file():
+        data["structure_image"] = (STRUCTURES_STAGED / key
+                                   / STRUCTURE_FILE).as_posix()
     return data
 
 
-def stage_compounds(registry: dict[str, Any], static: Path,
+def stage_compounds(registry: dict[str, Any], staged: Path,
                     target: Path) -> int:
     """Write the data of each substance of the snapshot REGISTRY, as
-    ``compound_data`` returns it for the static files STATIC, to
-    ``TARGET/<key>.json``, after emptying TARGET; return the number of
-    files written."""
+    ``compound_data`` returns it for the staged structure images in
+    STAGED, to ``TARGET/<key>.json``, after emptying TARGET; return the
+    number of files written."""
     target = Path(target)
     remove_tree(target)
     target.mkdir(parents=True)
     for substance in registry["substances"]:
         (target / f"{substance['key']}.json").write_text(
-            json.dumps(compound_data(substance, static), ensure_ascii=False,
+            json.dumps(compound_data(substance, staged), ensure_ascii=False,
                        indent=2) + "\n", encoding="utf-8")
     return len(registry["substances"])
 
@@ -1551,7 +1654,8 @@ def index_data(collection: Path) -> dict[str, Any]:
     registry's vocabularies, each mapping its terms, in the
     snapshot's order, to their ``label``, ``label_de`` and ``parent``;
     ``compounds``, one entry per substance, by key, with its ``key``,
-    its ``data`` as ``compound_data`` returns it and its ``url``
+    its ``data`` as ``compound_data`` returns it for the structure
+    images the last build staged, and its ``url``
     (``substance_page``); and ``procedures`` and ``sequences``, one
     entry per content file whose name the validator accepts, with its
     front matter. A content file that cannot be parsed is listed with
@@ -1568,12 +1672,13 @@ def index_data(collection: Path) -> dict[str, Any]:
     collection = Path(collection)
     source = registry_source(collection)
     table = registry(collection, store=False)
+    staged = collection / "build" / STRUCTURES_STAGED
     vocabularies = validate.registry_terms(table)
     procedure = validate.load_fields(
         collection / validate.DEFAULT_SETTINGS, vocabularies,
         validate.registry_notebooks(table))
     compounds = [{"key": substance["key"],
-                  "data": compound_data(substance, collection / "static"),
+                  "data": compound_data(substance, staged),
                   "url": substance_page(source, substance["key"])}
                  for substance in table["substances"]]
     return {
@@ -1779,15 +1884,16 @@ def hugo_overlay(site: Path, collection: Path, language: str,
     language. With ``lab`` the overlay also sets ``params.lab``, so that
     the header links the lab application's views; without it, it sets
     no ``params``. The overlay sets ``defaultContentLanguage`` to it, the
-    publish and resource directories inside the collection, and seven
+    publish and resource directories inside the collection, and eight
     module mounts: the application's pages, the staged procedures of
     ``build/content/procedures/``, the staged help pages of
     ``build/content/help/``, the collection's static files, the staged
     substance data of ``build/data/compounds/`` as the data entry
     ``compounds``, the staged sequences of ``build/content/sequences/``,
     and the staged ``build/data/``, which holds the field,
-    reaction-type and route data, as the data entry ``collection``. The
-    site has no data entry but these two.
+    reaction-type and route data, as the data entry ``collection``, and
+    the staged structure images of ``build/substances/`` as the static
+    files ``substances/``. The site has no data entry but these two.
     """
     site, collection = Path(site), Path(collection)
 
@@ -1812,6 +1918,8 @@ def hugo_overlay(site: Path, collection: Path, language: str,
                     "content/sequences", "/SEQ-*.md")
             + mount(collection / "build" / FIELDS_STAGED.parent,
                     "data/collection")
+            + mount(collection / "build" / STRUCTURES_STAGED,
+                    "static/substances")
             + ("\n[params]\nlab = true\n" if lab else ""))
 
 

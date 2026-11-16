@@ -21,7 +21,8 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from pipeline_support import FakeApp, closed_address, closed_manifest_address
+from pipeline_support import (FakeApp, closed_address,
+                              closed_manifest_address, with_molfiles)
 from support import (REGISTRY, load_snapshot, snapshot_digest)
 
 REPO = Path(__file__).resolve().parent.parent
@@ -63,7 +64,9 @@ FAKE_ORGSYNDB = """\
 #!/usr/bin/env python3
 # Fake tool: -C DIR build|pdf|manifest. Every run appends a JSON
 # line of the command, $ORGSYNDB_REGISTRY and the text of the file it
-# names to $FAKE_REGISTRY_LOG. A build fails when the collection
+# names to $FAKE_REGISTRY_LOG, and one of the command and the files
+# under `substances/` beside that file, by relative path, to
+# $FAKE_IMAGE_LOG. A build fails when the collection
 # holds `fail` or the application's VERSION reads `broken`, printing a
 # problem line and an error line, or silently when it holds
 # `fail-silent`, and appends one line per run to $FAKE_LOG. `manifest`
@@ -85,6 +88,14 @@ with open(os.environ["FAKE_REGISTRY_LOG"], "a") as log:
     held = Path(registry).read_text() if registry and \\
         Path(registry).is_file() else ""
     log.write(json.dumps([sys.argv[3], registry, held]) + "\\n")
+if os.environ.get("FAKE_IMAGE_LOG"):
+    base = Path(registry).parent / "substances" if registry else None
+    found = {}
+    if base is not None and base.is_dir():
+        found = {str(p.relative_to(base)): p.read_text()
+                 for p in sorted(base.rglob("*")) if p.is_file()}
+    with open(os.environ["FAKE_IMAGE_LOG"], "a") as log:
+        log.write(json.dumps([sys.argv[3], found]) + "\\n")
 if sys.argv[3] == "index":
     print('{"site_language": "de"}')
     sys.exit(0)
@@ -185,6 +196,7 @@ class UpdaterTests(unittest.TestCase):
         self.log = self.tmp / "builds.log"
         self.push_log = self.tmp / "pushes.log"
         self.registry_log = self.tmp / "registry.log"
+        self.image_log = self.tmp / "images.log"
         self.snapshot = load_snapshot(REGISTRY)
         self.server = FakeApp(self.snapshot)
         self.server.token = TOKEN
@@ -195,6 +207,7 @@ class UpdaterTests(unittest.TestCase):
             "GIT_CONFIG_NOSYSTEM": "1",
             "FAKE_LOG": str(self.log),
             "FAKE_REGISTRY_LOG": str(self.registry_log),
+            "FAKE_IMAGE_LOG": str(self.image_log),
             "ORGSYNDB_REGISTRY_URL": self.server.url,
             "ORGSYNDB_MANIFEST_URL": self.server.manifest_url,
             "ORGSYNDB_BUILDER_TOKEN": TOKEN,
@@ -653,6 +666,251 @@ class UpdaterTests(unittest.TestCase):
         self.assertIn("cannot fetch the registry", done.stdout)
         self.assertEqual(self.builds(), [])
         self.assertFalse((self.data / "current").exists())
+
+    # --- the structure images (container-deployment "Update cycle") ----
+
+    IMAGE = "<svg xmlns='http://www.w3.org/2000/svg'>lab</svg>\n"
+
+    def serve_images(self, *keys: str) -> None:
+        """Make the fake application's snapshot give each of KEYS a
+        molfile and every other substance the molfile null, and serve
+        an image for each of KEYS."""
+        self.server.table = with_molfiles(self.snapshot, *keys)
+        for key in keys:
+            self.server.images[key] = self.IMAGE.encode()
+
+    def image_runs(self) -> list[list]:
+        """Each run of the fake tool: its command and the files under
+        `substances/` beside the snapshot file at that time, by relative
+        path, with their text."""
+        if not self.image_log.exists():
+            return []
+        return [json.loads(line)
+                for line in self.image_log.read_text().splitlines()]
+
+    def kept_images(self) -> list[str]:
+        """The files below `<data>/substances/`, by relative path."""
+        root = self.data / "substances"
+        return sorted(p.relative_to(root).as_posix()
+                      for p in root.rglob("*") if p.is_file()) \
+            if root.is_dir() else []
+
+    def test_the_images_are_fetched_beside_the_kept_snapshot(self) -> None:
+        """Scenario: Structure images beside the kept snapshot."""
+        self.serve_images("ethyl-acetate")
+        done = self.sync()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(
+            [key for key, _ in self.server.image_requests],
+            ["ethyl-acetate"])
+        self.assertEqual(self.server.image_requests[0][1],
+                         self.server.hosts[0])
+        self.assertEqual(
+            (self.data / "substances" / "ethyl-acetate"
+             / "structure.svg").read_text(), self.IMAGE)
+        self.assertEqual(self.kept_images(),
+                         ["ethyl-acetate/structure.svg"])
+        self.assertEqual(self.page(), "v1 first")
+
+    def test_the_first_build_finds_the_images_beside_the_snapshot(
+            self) -> None:
+        """Requirement: Update cycle (before the cycle's first build,
+        where the build finds it)."""
+        self.serve_images("ethyl-acetate", "ethanol")
+        self.sync()
+        builds = [files for command, files in self.image_runs()
+                  if command == "build"]
+        self.assertEqual(builds, [{
+            "ethanol/structure.svg": self.IMAGE,
+            "ethyl-acetate/structure.svg": self.IMAGE}])
+        self.assertEqual(self.runs()[0][0], "build")
+        self.assertEqual(Path(self.runs()[0][1]).parent / "substances",
+                         self.data / "substances")
+
+    def test_the_images_are_requested_with_the_host_of_the_snapshot(
+            self) -> None:
+        """Scenario: Structure images beside the kept snapshot (the
+        `Host` it received the snapshot's request with)."""
+        self.serve_images("ethyl-acetate")
+        for number, (allowed, host) in enumerate((
+                ("lab.example.org,localhost", "lab.example.org"),
+                ("*", "localhost"), (".example.org", "example.org"),
+                ("", "localhost"))):
+            with self.subTest(allowed=allowed):
+                before = (len(self.server.hosts),
+                          len(self.server.image_requests))
+                done = self.sync(
+                    ORGSYNDB_ALLOWED_HOSTS=allowed,
+                    ORGSYNDB_DATA=str(self.tmp / f"data {number}"))
+                self.assertEqual(done.returncode, 0,
+                                 done.stdout + done.stderr)
+                self.assertEqual(self.server.hosts[before[0]], host)
+                self.assertEqual(
+                    self.server.image_requests[before[1]:],
+                    [("ethyl-acetate", host)])
+
+    def test_an_image_is_requested_beside_the_registry_address(
+            self) -> None:
+        """Requirement: Update cycle (`substances/<key>/structure.svg`
+        resolved against `ORGSYNDB_REGISTRY_URL`)."""
+        other = FakeApp(with_molfiles(self.snapshot, "ethyl-acetate"),
+                        "/elsewhere/snapshots/snapshot.json")
+        self.addCleanup(other.stop)
+        other.token = TOKEN
+        other.images["ethyl-acetate"] = self.IMAGE.encode()
+        done = self.sync(ORGSYNDB_REGISTRY_URL=other.url,
+                         ORGSYNDB_MANIFEST_URL=other.manifest_url)
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(other.image_requests,
+                         [("ethyl-acetate", "localhost")])
+        self.assertEqual(self.kept_images(),
+                         ["ethyl-acetate/structure.svg"])
+        self.assertEqual(self.server.hosts, [])
+
+    def test_only_substances_with_a_molfile_have_an_image_fetched(
+            self) -> None:
+        """Requirement: Update cycle (the image of every substance of
+        that snapshot with a molfile)."""
+        self.serve_images("ethyl-acetate")
+        self.server.images["ethanol"] = self.IMAGE.encode()
+        self.sync()
+        self.assertEqual(
+            [key for key, _ in self.server.image_requests],
+            ["ethyl-acetate"])
+        self.assertEqual(self.kept_images(),
+                         ["ethyl-acetate/structure.svg"])
+
+    def test_a_snapshot_without_molfiles_requests_no_image(self) -> None:
+        """Requirement: Update cycle (a snapshot of substances without
+        molfiles)."""
+        done = self.sync()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(self.server.image_requests, [])
+        self.assertEqual(self.kept_images(), [])
+
+    def test_everything_else_is_removed_from_the_images_directory(
+            self) -> None:
+        """Requirement: Update cycle (removes everything else from
+        `<data>/substances/`)."""
+        self.serve_images("ethyl-acetate")
+        kept = self.data / "substances"
+        for name in ("stray.txt", "gone/structure.svg", "ethanol/x.txt",
+                     "ethyl-acetate/old.txt"):
+            (kept / name).parent.mkdir(parents=True, exist_ok=True)
+            (kept / name).write_text("old")
+        self.sync()
+        self.assertEqual(self.kept_images(),
+                         ["ethyl-acetate/structure.svg"])
+        self.assertEqual(
+            [files for command, files in self.image_runs()
+             if command == "build"],
+            [{"ethyl-acetate/structure.svg": self.IMAGE}])
+
+    def test_images_of_an_earlier_snapshot_are_removed(self) -> None:
+        """Requirement: Update cycle (a structure removed from the
+        snapshot leaves no image beside it)."""
+        self.serve_images("ethyl-acetate", "ethanol")
+        self.sync()
+        self.assertEqual(len(self.kept_images()), 2)
+        self.serve_images("ethyl-acetate")
+        commit_files(self.collection, {"content.txt": "second\n"})
+        self.sync()
+        self.assertEqual(self.kept_images(),
+                         ["ethyl-acetate/structure.svg"])
+        self.assertEqual(self.image_runs()[-2][1],
+                         {"ethyl-acetate/structure.svg": self.IMAGE})
+
+    def test_an_image_that_cannot_be_fetched_builds_nothing(self) -> None:
+        """Scenario: An image that cannot be fetched."""
+        self.serve_images("ethyl-acetate")
+        address = self.server.image_url("ethyl-acetate")
+        for how in ("status 500", "status 404", "no answer"):
+            with self.subTest(how=how):
+                self.server.image_drop = how == "no answer"
+                self.server.image_status = (
+                    int(how.split()[1]) if how.startswith("status")
+                    else 200)
+                done = self.sync()
+                self.assertEqual(done.returncode, 0,
+                                 done.stdout + done.stderr)
+                self.assertIn("cannot fetch the structure images",
+                              done.stdout)
+                self.assertIn(address, done.stdout)
+                self.assertEqual(self.builds(), [])
+                self.assertEqual(self.runs(), [])
+                self.assertEqual(self.sent(), [])
+                self.assertFalse((self.data / "current").exists())
+
+    def test_a_substance_key_out_of_pattern_is_no_snapshot(self) -> None:
+        """Requirement: Update cycle (an answer is kept only when it is
+        a snapshot, whose substance keys follow the key pattern, so that
+        no image path is made from another key)."""
+        table = with_molfiles(self.snapshot, "ethyl-acetate")
+        table["substances"].append(
+            {**table["substances"][0], "key": "../escape"})
+        self.server.table = table
+        done = self.sync()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn("cannot fetch the registry", done.stdout)
+        self.assertEqual(self.builds(), [])
+        self.assertEqual(self.server.image_requests, [])
+        self.assertFalse((self.data / "escape").exists())
+
+    def test_an_image_that_cannot_be_fetched_is_tried_again(self) -> None:
+        """Requirement: Update cycle (builds nothing in that cycle, as a
+        missing snapshot does)."""
+        self.serve_images("ethyl-acetate")
+        self.server.image_status = 500
+        self.sync()
+        self.assertEqual(self.builds(), [])
+        self.server.image_status = 200
+        done = self.sync()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(self.builds(), ["v1 build"])
+        self.assertEqual(self.page(), "v1 first")
+
+    def test_one_missing_image_among_several_builds_nothing(self) -> None:
+        """Requirement: Update cycle (when an image request fails or is
+        answered with another status)."""
+        self.serve_images("ethyl-acetate", "ethanol")
+        self.server.image_statuses["ethyl-acetate"] = 404
+        done = self.sync()
+        self.assertIn("cannot fetch the structure images", done.stdout)
+        self.assertIn(self.server.image_url("ethyl-acetate"), done.stdout)
+        self.assertEqual(self.builds(), [])
+
+    def test_a_missing_image_keeps_the_published_site(self) -> None:
+        """Requirement: Update cycle (the published site is unchanged
+        when an image cannot be fetched)."""
+        self.serve_images("ethyl-acetate")
+        self.sync()
+        commit_files(self.collection, {"content.txt": "second\n"})
+        self.server.image_status = 500
+        done = self.sync()
+        self.assertIn("cannot fetch the structure images", done.stdout)
+        self.assertEqual(self.page(), "v1 first")
+        self.assertEqual(self.builds(), ["v1 build"])
+        self.assertEqual(len(self.releases()), 1)
+        self.assertEqual(len(self.sent()), 1)
+
+    def test_the_images_are_fetched_once_for_a_cycle(self) -> None:
+        """Requirement: Update cycle (before the cycle's first build:
+        the fallback to the checked-out application builds beside the
+        same images)."""
+        self.serve_images("ethyl-acetate")
+        self.sync()
+        commit_files(self.upstream, {"VERSION": "broken\n"})
+        commit_files(self.collection, {"content.txt": "second\n"})
+        before = len(self.server.image_requests)
+        done = self.sync()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(self.builds(), ["v1 build", "broken build",
+                                         "v1 build"])
+        self.assertEqual(len(self.server.image_requests) - before, 1)
+        for command, files in self.image_runs():
+            if command == "build":
+                self.assertEqual(
+                    files, {"ethyl-acetate/structure.svg": self.IMAGE})
 
     # --- the manifest and the application (container-deployment
     # "Manifests", "Update cycle", "Releases") ----------------------------

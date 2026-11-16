@@ -341,7 +341,7 @@ The application's `.gitignore` SHALL keep `__pycache__/` and `.pytest_cache/`, a
 #### Scenario: Generated paths ignored, sources not
 - **WHEN** a test runs `git check-ignore` in the application on `examples/demo/build/export/x.md`, `examples/demo/public/index.html`, `examples/demo/pdf/x.pdf`, `.emacs-batch/elpa` and `.tools/pagefind-1.5.2/pagefind`, skipping when `git` is absent
 - **THEN** each path is reported as ignored
-- **AND** `examples/demo/org/procedures/OSDB-0001-salicylic-acid.org`, `examples/demo/md/procedures/OSDB-0002-aspirin.md`, `examples/demo/static/structures/isopentyl-acetate.svg`, `site/hugo.toml`, `site/.hugo_build.lock`, `build/x` and `tests/fixtures/export/build/x` are not
+- **AND** `examples/demo/org/procedures/OSDB-0001-salicylic-acid.org`, `examples/demo/md/procedures/OSDB-0002-aspirin.md`, `examples/demo/static/structures/aryl-ketone-reduction.svg`, `webapp/demo/substances/isopentyl-acetate/structure.svg`, `site/hugo.toml`, `site/.hugo_build.lock`, `build/x` and `tests/fixtures/export/build/x` are not
 
 ### Requirement: index subcommand
 `tools/orgsyndb index` SHALL take no arguments, and print to stdout the JSON form of `pipeline.index_data(<collection>)` (collection-index "Index data") on one line, as strict JSON with non-ASCII characters written as themselves, followed by a newline. It prints no step line, creates no file or directory, and exits 0. A configuration error that `index_data` raises is printed as `orgsyndb: error: <message>` with exit 1. Any argument is a usage error.

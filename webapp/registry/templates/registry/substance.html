@@ -6,6 +6,7 @@
 {% if in_collection %}<a href="/compounds/{{ substance.key }}/">{% translate "In the collection" %}</a>
 {% endif %}{% if user.is_authenticated %}<a href="/lab/registry/substances/{{ substance.key }}/edit/">{% translate "Edit" %}</a>
 {% endif %}</div>
+{% endif %}{% if substance.molfile %}<figure class="structure"><img src="/lab/registry/substances/{{ substance.key }}/structure.svg" alt="{% blocktranslate with name=substance.shown_name %}Structure of {{ name }}{% endblocktranslate %}"></figure>
 {% endif %}<dl class="metadata">
 <dt>{% translate "Key" %}</dt>
 <dd>{{ substance.key }}</dd>

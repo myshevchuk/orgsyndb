@@ -245,13 +245,34 @@ substance has an empty directory cell, no corresponding search text and no
 such fact on its page. The lab application checks substance values; the
 collection validator checks references to their keys.
 
-To supply a structure image, put `static/structures/<key>.svg` or
-`static/structures/<key>.png` in the collection. The build uses the SVG when
-both exist. A substance without either has no image. There is no
-`structure_image` field to set. The build writes one
+To supply a structure image, upload a molfile in the lab registry. A
+molfile is a text file describing a molecular structure and its drawing
+coordinates. The lab draws and keeps an SVG when you save the substance.
+It serves the drawing without sign-in at
+`/lab/registry/substances/<key>/structure.svg`. A substance without a
+molfile has no structure image; the snapshot carries `molfile` as text or
+`null` when absent.
+
+The build stages images in `build/substances/<key>/structure.svg`. For a
+registry address, it requests `substances/<key>/structure.svg` relative to
+the snapshot address, with a 30-second timeout. A failed request or a
+status other than 200 keeps any image an earlier build staged. After a
+request gets no answer, the build requests no further images. One warning
+names the number not staged and the first image's address and reason.
+For a snapshot file, it copies `substances/<key>/structure.svg` from the
+snapshot file's directory, only for substances with a molfile. A missing
+file leaves the substance without an image, removes any earlier staged
+copy and produces no warning.
+
+There is no `structure_image` field to set. The build writes one
 `build/data/compounds/<key>.json` per substance and sets `structure_image`
-in that generated data only when it finds an image. Hugo reads these files
-as `data/compounds`.
+to `substances/<key>/structure.svg` only when it staged that image. Hugo
+reads these files as `data/compounds` and publishes the SVG at that path.
+`orgsyndb index` reports the images the last build staged.
+
+The collection's `static/structures/` holds procedure scheme images only.
+Files named `<key>.svg` or `<key>.png` there do not supply compound
+structures.
 
 For a procedure's `scheme_image`, `--static-dir` controls where the validator
 resolves the path. It defaults to `static` in the current directory;

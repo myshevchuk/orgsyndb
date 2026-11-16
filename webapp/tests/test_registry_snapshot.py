@@ -15,13 +15,14 @@ from .collection_support import make_import
 from .demo_support import ACCOUNTS, SeededCase
 from .registry_support import (SNAPSHOT, RegistryCase, wipe_registry,
                                without_digest)
+from .structure_support import ACETONE, ETHANOL
 
 VOCABULARIES = ["chemical-classes", "inventory-groups", "projects",
                 "reaction-types"]
 TERM_KEYS = {"key", "label", "label_de", "parent"}
 SUBSTANCE_KEYS = {"key", "name", "name_de", "short_name", "group",
-                  "chemical_classes", "formula", "mw", "smiles", "cas",
-                  "note", "article_number"}
+                  "chemical_classes", "formula", "mw", "smiles", "molfile",
+                  "cas", "note", "article_number"}
 
 
 def digest_of(table: dict[str, Any]) -> str:
@@ -77,7 +78,7 @@ class ShapeTests(RegistryCase):
             "group": "final-products",
             "chemical_classes": ["carboxylic-acids"], "formula": "C9H8O2",
             "mw": 148.16, "smiles": "OC(=O)/C=C/c1ccccc1",
-            "cas": "140-10-3", "note": "Notiz",
+            "molfile": None, "cas": "140-10-3", "note": "Notiz",
             "article_number": "CH-0012"})
         for entry in found.values():
             self.assertEqual(set(entry), SUBSTANCE_KEYS)
@@ -95,7 +96,7 @@ class ShapeTests(RegistryCase):
             "key": "new-compound-7", "name": "New compound 7",
             "name_de": None, "short_name": None, "group": "intermediates",
             "chemical_classes": [], "formula": None, "mw": None,
-            "smiles": None, "cas": None, "note": None,
+            "smiles": None, "molfile": None, "cas": None, "note": None,
             "article_number": None})
 
     def test_an_article_without_a_number_is_null(self) -> None:
@@ -124,6 +125,61 @@ class ShapeTests(RegistryCase):
         self.assertEqual(built["vocabularies"],
                          {name: [] for name in VOCABULARIES})
         self.assertEqual(built["digest"], digest_of(built))
+
+
+class MolfileTests(RegistryCase):
+    """Requirement: Snapshot (each substance's `molfile`, after
+    `smiles`, `null` when it has none)."""
+
+    def entry(self, key: str = "cinnamic-acid") -> dict[str, Any]:
+        return {s["key"]: s for s in snapshot.build()["substances"]}[key]
+
+    def test_a_molfile_is_the_text(self) -> None:
+        make_substance("cinnamic-acid", molfile=ACETONE)
+        self.assertEqual(self.entry()["molfile"], ACETONE)
+
+    def test_no_molfile_is_null(self) -> None:
+        make_substance("cinnamic-acid", molfile=ACETONE)
+        make_substance("cinnamic-acid", molfile="")
+        for key in ("cinnamic-acid", "new-compound-7"):
+            with self.subTest(key=key):
+                self.assertIn("molfile", self.entry(key))
+                self.assertIsNone(self.entry(key)["molfile"])
+
+    def test_the_molfile_follows_the_smiles(self) -> None:
+        make_substance("cinnamic-acid", molfile=ACETONE)
+        keys = list(self.entry())
+        self.assertEqual(keys.index("molfile"), keys.index("smiles") + 1)
+
+    def test_the_molfile_is_inside_the_digest(self) -> None:
+        before = snapshot.build()
+        make_substance("cinnamic-acid", molfile=ACETONE)
+        drawn = snapshot.build()
+        self.assertNotEqual(drawn["digest"], before["digest"])
+        self.assertEqual(drawn["digest"], digest_of(drawn))
+        make_substance("cinnamic-acid", molfile=ETHANOL)
+        self.assertNotEqual(snapshot.build()["digest"], drawn["digest"])
+        make_substance("cinnamic-acid", molfile="")
+        self.assertEqual(snapshot.build()["digest"], before["digest"])
+
+    def test_the_drawing_is_not_in_the_snapshot(self) -> None:
+        make_substance("cinnamic-acid", molfile=ACETONE)
+        self.assertEqual(self.entry()["molfile"], ACETONE)
+        self.assertNotIn("structure_svg", self.entry())
+        self.assertNotIn("<svg", json.dumps(snapshot.build()))
+
+    def test_it_serializes(self) -> None:
+        make_substance("cinnamic-acid", molfile=ACETONE)
+        built = snapshot.build()
+        self.assertEqual(json.loads(json.dumps(built)), built)
+        self.assertEqual(self.entry()["molfile"], ACETONE)
+
+    def test_the_answer_over_http_holds_it(self) -> None:
+        make_substance("cinnamic-acid", molfile=ACETONE)
+        found = {s["key"]: s for s in self.client.get(
+            SNAPSHOT).json()["substances"]}
+        self.assertEqual(found["cinnamic-acid"]["molfile"], ACETONE)
+        self.assertIsNone(found["new-compound-7"]["molfile"])
 
 
 class AccountTests(RegistryCase):
@@ -551,6 +607,14 @@ class HttpTests(TestCase):
         groups = [t["key"] for t in body["vocabularies"]["inventory-groups"]]
         self.assertLess(groups.index("purchased"),
                         groups.index("starting-materials"))
+
+    def test_the_demos_molfiles_over_http(self) -> None:
+        """Scenario: Snapshot over HTTP (the molfiles)."""
+        found = {s["key"]: s for s in self.client.get(
+            SNAPSHOT).json()["substances"]}
+        self.assertIsInstance(found["isopentyl-acetate"]["molfile"], str)
+        self.assertTrue(found["isopentyl-acetate"]["molfile"].strip())
+        self.assertIsNone(found["new-compound-7"]["molfile"])
 
     def test_the_answer_is_the_snapshot(self) -> None:
         self.assertEqual(self.client.get(SNAPSHOT).json(), snapshot.build())

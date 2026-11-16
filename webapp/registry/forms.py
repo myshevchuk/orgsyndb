@@ -8,12 +8,15 @@ from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
 from inventory.models import plain
+from registry import structures
 from registry.models import Substance, SubstanceClass
 from vocabulary.forms import TermChoiceField, TermsChoiceField
 from vocabulary.models import ChemicalClass, Group
 
 # The id of the datalist that offers every substance's key.
 DATALIST = "substances"
+# The largest structure file the substance form takes, in bytes: 1 MB.
+MOLFILE_LIMIT = 1_000_000
 
 
 class SubstanceKeyField(forms.CharField):
@@ -72,6 +75,14 @@ class SubstanceForm(forms.ModelForm):
     inventory group and the classes are offered in the order of their
     vocabularies' pages. Saving replaces the substance's classes by
     those checked.
+
+    The structure is a molfile chosen as a file, which replaces the
+    substance's molfile with its line endings made LF; on the form of a
+    substance with a molfile, the box ``remove_structure`` removes it
+    instead. With neither, the molfile stays. A file larger than
+    ``MOLFILE_LIMIT`` bytes, not UTF-8 text, or one RDKit cannot draw
+    (``structures.refusal``), and a file chosen with the box checked,
+    are errors at ``molfile``.
     """
 
     group = TermChoiceField(queryset=Group.objects.all(),
@@ -82,6 +93,10 @@ class SubstanceForm(forms.ModelForm):
         error_messages={"required": _("Check at least one class.")})
     mw = decimal_field(_("Molar mass"), required=False, max_digits=10,
                        decimal_places=3, help_text=_("In g/mol."))
+    molfile = forms.FileField(label=_("Structure (molfile)"),
+                              required=False, widget=forms.FileInput)
+    remove_structure = forms.BooleanField(label=_("Remove structure"),
+                                          required=False)
 
     class Meta:
         model = Substance
@@ -92,6 +107,8 @@ class SubstanceForm(forms.ModelForm):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        if not self.instance.molfile:
+            del self.fields["remove_structure"]
         if self.instance.pk is not None:
             del self.fields["key"]
             if self.instance.mw is not None:
@@ -102,13 +119,51 @@ class SubstanceForm(forms.ModelForm):
                                                            flat=True))
         order = ["key", "name", "name_de", "short_name", "group",
                  "chemical_classes", "formula", "mw", "smiles", "cas",
-                 "note"]
+                 "note", "molfile", "remove_structure"]
         self.order_fields(order)
 
+    def clean_molfile(self) -> str | None:
+        """Return the text of the chosen structure file with LF line
+        endings, or None when no file was chosen; refuse a file larger
+        than ``MOLFILE_LIMIT`` bytes, one that is not UTF-8 text, and
+        one RDKit cannot draw."""
+        chosen = self.cleaned_data.get("molfile")
+        if chosen is None:
+            return None
+        if chosen.size > MOLFILE_LIMIT:
+            raise forms.ValidationError(
+                _("The file is larger than 1 MB."), code="too_large")
+        try:
+            text = structures.lf(b"".join(chosen.chunks()).decode(
+                "utf-8-sig"))
+        except UnicodeDecodeError as error:
+            raise forms.ValidationError(
+                _("The file is not UTF-8 text."), code="encoding") \
+                from error
+        reason = structures.refusal(text)
+        if reason is not None:
+            raise forms.ValidationError(reason, code="invalid")
+        return text
+
+    def clean(self) -> dict[str, Any]:
+        """Return the cleaned data; refuse a structure file chosen while
+        the box that removes the structure is checked."""
+        cleaned = super().clean()
+        if cleaned.get("molfile") and cleaned.get("remove_structure"):
+            self.add_error("molfile", forms.ValidationError(
+                _("Choose a file or remove the structure, not both."),
+                code="conflict"))
+        return cleaned
+
     def save(self, commit: bool = True) -> Substance:
-        """Return the substance with the form's values; with COMMIT, save
-        it with exactly the classes checked."""
+        """Return the substance with the form's values and its molfile
+        replaced or removed as the form chose; with COMMIT, save it with
+        exactly the classes checked, which draws its structure."""
         substance = super().save(commit=False)
+        if self.cleaned_data.get("molfile"):
+            substance.molfile = self.cleaned_data["molfile"]
+        elif self.cleaned_data.get("remove_structure"):
+            substance.molfile = ""
         if commit:
             with transaction.atomic():
                 substance.save()

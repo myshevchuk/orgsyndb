@@ -325,13 +325,45 @@ class ThemeSampleSetTests(unittest.TestCase):
 
 
 class StructureImageSampleTests(unittest.TestCase):
-    def test_isopentyl_acetate_has_its_structure_image_by_key(self) -> None:
-        """Scenario: Structure image is present."""
+    def table(self) -> dict:
+        return json.loads(DEMO_REGISTRY.read_text(encoding="utf-8"))
+
+    def test_the_registry_gives_every_smiles_a_molfile(self) -> None:
+        """Scenario: Structure image is present (the registry)."""
+        substances = {e["key"]: e for e in self.table()["substances"]}
+        drawn = [key for key, e in substances.items() if e.get("smiles")]
+        self.assertTrue(drawn, "no demo substance has a smiles")
+        for key in drawn:
+            with self.subTest(compound=key):
+                self.assertIsInstance(substances[key].get("molfile"), str)
+                self.assertIn("M  END", substances[key]["molfile"])
+        self.assertIn("molfile", substances["new-compound-7"])
+        self.assertIsNone(substances["new-compound-7"]["molfile"])
+
+    def test_isopentyl_acetate_has_its_image_beside_the_registry(
+            self) -> None:
+        """Scenario: Structure image is present (the files beside the
+        registry)."""
         self.assertIn("isopentyl-acetate", sup.read_registry(DEMO))
-        self.assertTrue((DEMO / "static" / "structures"
-                         / "isopentyl-acetate.svg").is_file(),
-                        "examples/demo/static/structures/"
-                        "isopentyl-acetate.svg is missing")
+        directory = REPO / "webapp" / "demo" / "substances"
+        self.assertEqual(sorted(relative_files(directory)),
+                         ["isopentyl-acetate/structure.svg"])
+        entry = {e["key"]: e for e in self.table()["substances"]}[
+            "isopentyl-acetate"]
+        self.assertIsInstance(entry["molfile"], str)
+
+    def test_the_demo_collection_keeps_no_structure_image_by_key(
+            self) -> None:
+        """Scenario: Structure image is present (no file of
+        `examples/demo/static/structures/` is named after a
+        substance)."""
+        keys = {e["key"] for e in self.table()["substances"]}
+        names = sorted(p.name for p in
+                       (DEMO / "static" / "structures").iterdir())
+        self.assertIn("aryl-ketone-reduction.svg", names)
+        for key in keys:
+            for suffix in (".svg", ".png"):
+                self.assertNotIn(key + suffix, names)
         self.assertFalse((DEMO / "static" / "structures"
                           / "osdb-0003.svg").exists())
 
@@ -1019,7 +1051,7 @@ class TestCollectionTests(unittest.TestCase):
         copied = [".gitignore",
                   *sorted(f"static/{p}" for p in relative_files(
                       DEMO / "static"))]
-        self.assertIn("static/structures/isopentyl-acetate.svg", copied)
+        self.assertIn("static/structures/aryl-ketone-reduction.svg", copied)
         for relative in copied:
             with self.subTest(file=relative):
                 self.assertTrue((COLLECTION / relative).is_file(),
@@ -1029,6 +1061,17 @@ class TestCollectionTests(unittest.TestCase):
         self.assertEqual(
             {p for p in relative_files(COLLECTION / "static")},
             relative_files(DEMO / "static"), "static/ files")
+        images = relative_files(REPO / "webapp" / "demo" / "substances")
+        self.assertEqual(images, {"isopentyl-acetate/structure.svg"})
+        self.assertEqual(
+            relative_files(COLLECTION / "substances"), images,
+            "substances/ files")
+        for relative in sorted(images):
+            with self.subTest(file=f"substances/{relative}"):
+                self.assertEqual(
+                    (COLLECTION / "substances" / relative).read_bytes(),
+                    (REPO / "webapp" / "demo" / "substances" / relative
+                     ).read_bytes())
         demo_table = json.loads(DEMO_REGISTRY.read_text(encoding="utf-8"))
         test_table = json.loads(
             (COLLECTION / "registry.json").read_text(encoding="utf-8"))

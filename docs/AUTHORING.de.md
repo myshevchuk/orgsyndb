@@ -272,17 +272,33 @@ Diese vier Felder sind fest eingebaut; ihre Anzeige ist vorgegeben. Die
 [Feldreferenz](SCHEMA.de.md#felddeklarationen-der-sammlung) nennt die
 Einzelheiten.
 
-Für ein Strukturbild legen Sie `static/structures/<key>.svg` oder
-`static/structures/<key>.png` in der Sammlung ab. Verwenden Sie den
-Stoffschlüssel, etwa `static/structures/isopentyl-acetate.svg` für
-`isopentyl-acetate`. Sind beide Dateien vorhanden, verwendet der Build das
-SVG. Ohne eine dieser Dateien hat der Stoff kein Strukturbild. Ein SVG
-verwendet schwarze Linien und Schrift auf einem weißen Hintergrundrechteck.
-Geben Sie der Datei ein `<title>`-Element und lassen Sie Skripte, externe
-Bilder und andere externe Verweise weg. Die Website zeigt das Bild im dunklen
-Modus auf einer weißen Fläche. Bitten Sie die Verantwortliche oder den
-Verantwortlichen, das Bild hinzuzufügen oder zu prüfen, wenn Sie nicht mit
-SVG-Dateien arbeiten.
+Für das Strukturbild einer Verbindung öffnen Sie deren Eintrag im
+Laborregister und wählen im Formular für einen neuen Stoff oder zum
+Bearbeiten **Strukturformel (Molfile)**. Laden Sie eine Molfile-Datei hoch,
+eine Textdatei, die die Molekülstruktur und ihre Zeichnungskoordinaten
+beschreibt. Die Datei muss UTF-8-Text sein und darf höchstens 1 MB
+(1.000.000 Bytes) groß sein. RDKit, das Chemie-Toolkit der Laboranwendung,
+muss daraus ein Molekül mit mindestens einem Atom lesen können. Eine
+ungültige Datei führt zu einem Fehler am Feld; das Formular speichert nichts.
+
+Eine ausgewählte Datei ersetzt die vorhandene Molfile-Datei. Zum Entfernen
+aktivieren Sie **Strukturformel entfernen** im Bearbeitungsformular. Das
+Kästchen erscheint nur, wenn der Stoff eine Molfile-Datei hat. Ohne neue
+Datei und ohne Häkchen bleibt die vorhandene Struktur erhalten. Eine Datei
+auszuwählen und zugleich das Kästchen anzukreuzen ist ein Fehler. Beim
+Speichern zeichnet die Laboranwendung die Struktur schwarz auf weiß und
+zeigt sie auf der Stoffseite. Sie behält Koordinaten und Keilbindungen der
+Datei bei; Koordinaten berechnet sie nur, wenn alle Atome im Ursprung liegen.
+Summenformel, Molmasse und SMILES berechnet sie nicht aus der
+Molfile-Datei. Ohne Molfile-Datei hat ein Stoff kein Strukturbild. Die
+Website zeigt das Bild im dunklen Modus auf einer weißen Fläche.
+
+Der Build übernimmt das SVG aus der Registerquelle. Verwendet die Sammlung
+eine Snapshot-Datei, muss das SVG unter `substances/<key>/structure.svg`
+in deren Verzeichnis liegen; ohne dieses Bild hat der Stoff auf der Website
+kein Strukturbild. In `static/structures/` liegen nur Reaktionsschemata.
+Bitten Sie die oder den Verantwortlichen, die Molfile-Datei hinzuzufügen,
+wenn Sie das Laborregister nicht bearbeiten können.
 
 Sie dürfen einen Ausgangsstoff registrieren, ohne dass eine Vorschrift ihn
 herstellt. Auch eine Verbindung, die keine Vorschrift verwendet, ist zulässig.
@@ -459,8 +475,8 @@ Bei einer allgemeinen Vorschrift steht **Anwendungsbereich** vor
 **Ansatzgröße**, **Zeit**, **Temperatur** und **Anmerkung** erscheinen nur,
 wenn mindestens ein Eintrag das Feld setzt; sonst bleibt die jeweilige Zelle
 leer. Ausgangsstoffe und Produkte verlinken auf ihre Verbindungsseiten;
-Produkte zeigen kleine Strukturbilder, wenn die Sammlung passende
-Bilddateien enthält.
+Produkte zeigen kleine Strukturbilder, wenn der Build ihre Bilder aus
+der Registerquelle übernommen hat.
 Die Verbindungslinks tragen dieselben Zusätze wie im Datenfeld.
 Eintrag 1 von OSDB-0009 stellt denselben Alkohol wie OSDB-0005 her, sodass die
 Verbindungsseite beide Wege nennt.
@@ -520,8 +536,9 @@ Wenn Sie die Sammlung nicht haben, schicken Sie die `.md`-Datei an die
 Verantwortliche oder den Verantwortlichen. Sagen Sie dazu, ob Sie eine
 zugeteilte Vorschriftennummer verwendet oder die Nummer der Vorlage stehen
 gelassen haben. Dann kann die Datei abgelegt, umbenannt und geprüft
-werden. Schicken Sie neue Strukturbilder mit und bitten Sie darum,
-fehlende Stoffe in der Laboranwendung anzulegen.
+werden. Schicken Sie neue Molfile-Dateien für Verbindungen und neue
+Reaktionsschemata mit. Bitten Sie darum, fehlende Stoffe und ihre
+Molfile-Dateien in der Laboranwendung anzulegen.
 
 ## 5. Die Datei prüfen
 
@@ -653,9 +670,9 @@ Eine Synthesewegseite zeigt Nummer und Titel, **Stufen** und
 **Gesamtausbeute**, ein Schema, die verlinkten Vorschriften mit gegebenenfalls
 Eintragsnummer, Reaktionstyp, Ausbeute und Status, danach Ihre Anmerkungen.
 Das Schema zeigt Ausgangsstoffe, Zwischenprodukte und Ziel mit passenden
-Strukturbildern aus `static/structures/`, sofern vorhanden. Die
-Verbindungslinks im Schema und die Ziele im Synthesewegverzeichnis tragen
-dieselben Zusätze wie im Datenfeld.
+Strukturbildern, die der Build aus der Registerquelle übernommen hat,
+sofern vorhanden. Die Verbindungslinks im Schema und die Ziele im
+Synthesewegverzeichnis tragen dieselben Zusätze wie im Datenfeld.
 Ein Plus verbindet die Ausgangsstoffe der ersten Stufe; Pfeile nennen
 Stufennummer, Reaktionstyp und Ausbeute. In schmalen Fenstern verläuft das
 Schema nach unten. Synthesewegseiten fehlen im Suchindex für Vorschriften;

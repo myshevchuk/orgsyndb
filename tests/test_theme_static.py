@@ -14,6 +14,7 @@ CSS_DIR = REPO / "site" / "assets" / "css"
 SOURCES = ("tokens.css", "base.css", "screen.css", "print.css")
 PRINT_SOURCES = ("tokens.css", "base.css", "print.css")
 SVG_DIR = DEMO / "static" / "structures"
+SUBSTANCES_DIR = REPO / "webapp" / "demo" / "substances"
 SVG_NS = "{http://www.w3.org/2000/svg}"
 DARK = "@media(prefers-color-scheme:dark)"
 
@@ -277,11 +278,18 @@ class StructureImageTests(unittest.TestCase):
 
     def test_every_shipped_image_is_safe_svg(self) -> None:
         """Scenario: Shipped structure images."""
-        files = sorted(SVG_DIR.glob("*.svg"))
-        self.assertTrue(files, "site/static/structures has no .svg file")
-        self.assertIn("isopentyl-acetate.svg", [f.name for f in files])
-        for path in files:
-            with self.subTest(file=path.name):
+        schemes = sorted(SVG_DIR.glob("*.svg"))
+        structures = sorted(SUBSTANCES_DIR.rglob("*.svg"))
+        self.assertTrue(schemes, "the demo's static/structures has no .svg")
+        self.assertTrue(structures,
+                        "webapp/demo/substances has no .svg file")
+        self.assertIn("aryl-ketone-reduction.svg",
+                      [f.name for f in schemes])
+        self.assertIn("isopentyl-acetate/structure.svg",
+                      [f.relative_to(SUBSTANCES_DIR).as_posix()
+                       for f in structures])
+        for path in schemes + structures:
+            with self.subTest(file=str(path.relative_to(REPO))):
                 self.assertEqual(self.check(path), [])
 
 

@@ -206,24 +206,43 @@ class IndexOfTheTestCollectionTests(unittest.TestCase):
 
     def test_compounds_hold_the_staged_data(self) -> None:
         """Index data: each substance has `key`, `data` as the build
-        stages it, and `url`."""
+        stages them, and `url`; the copy holds no staged image."""
         table = load_snapshot(self.root / "registry.json")
-        expected = compounds_of(table, self.root / "static")
+        expected = compounds_of(table, None)
         self.assertEqual(
             {item["key"]: item["data"] for item in self.index["compounds"]},
             expected)
         for item in self.index["compounds"]:
             self.assertEqual(set(item), {"key", "data", "url"})
             self.assertIsNone(item["url"])
-        self.assertEqual(
-            compound(self.index["compounds"], "isopentyl-acetate")[
-                "data"]["structure_image"],
-            "structures/isopentyl-acetate.svg")
+        self.assertNotIn("structure_image", compound(
+            self.index["compounds"], "isopentyl-acetate")["data"])
         self.assertEqual(
             compound(self.index["compounds"], "acetylsalicylic-acid")[
                 "data"]["article_number"], "CH-0010")
         self.assertNotIn("structure_image", compound(
             self.index["compounds"], "salicylic-acid")["data"])
+
+    def test_a_staged_image_is_in_the_data(self) -> None:
+        """Index data: the data sets `structure_image` for a substance
+        whose image the last build staged in `build/substances/`, and
+        for no other."""
+        staged = self.root / "build" / "substances" / "isopentyl-acetate"
+        staged.mkdir(parents=True)
+        shutil.copyfile(self.root / "substances" / "isopentyl-acetate"
+                        / "structure.svg", staged / "structure.svg")
+        stray = self.root / "static" / "structures" / "acetone.svg"
+        stray.write_text("<svg xmlns='http://www.w3.org/2000/svg'/>",
+                         encoding="utf-8")
+        compounds = index_of(self.root)["compounds"]
+        self.assertEqual(
+            compound(compounds, "isopentyl-acetate")["data"][
+                "structure_image"],
+            "substances/isopentyl-acetate/structure.svg")
+        self.assertEqual(
+            [item["key"] for item in compounds
+             if "structure_image" in item["data"]],
+            ["isopentyl-acetate"])
 
     def test_a_substance_without_a_value_leaves_it_out(self) -> None:
         """Index data: the data leaves out a value the substance

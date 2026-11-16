@@ -5,13 +5,14 @@
 application and the collection from their Git repositories and the
 registry snapshot from the lab application, build the site when the
 collection commit, the registry or the application commit differs from
-the latest import the application accepted, send the application the
-build's manifest, and publish the build only once the application has
-accepted it. ``orgsyndb-deploy sync`` runs one cycle. ``orgsyndb-deploy
-status`` prints the saved state; ``orgsyndb-deploy retry`` forgets the
-failed builds, so that the next cycle tries them again. SIGHUP, or a
-wake-up (``POST /wake``, below), starts the next cycle of ``run`` at
-once, or one more after the cycle that runs.
+the latest import the application accepted, after fetching the
+structure images of the snapshot's substances, send the application
+the build's manifest, and publish the build only once the application
+has accepted it. ``orgsyndb-deploy sync`` runs one cycle.
+``orgsyndb-deploy status`` prints the saved state; ``orgsyndb-deploy
+retry`` forgets the failed builds, so that the next cycle tries them
+again. SIGHUP, or a wake-up (``POST /wake``, below), starts the next
+cycle of ``run`` at once, or one more after the cycle that runs.
 
 Settings come from the environment:
 
@@ -63,12 +64,14 @@ ORGSYNDB_PUSH_LOG          the push log Forgejo appends to, read for the
 
 The data directory (ORGSYNDB_DATA, default /var/lib/orgsyndb) holds the
 collection's clone in ``collection/``, the snapshot last fetched in
-``registry.json``, the releases in ``releases/``, the symlink
-``current`` to the release being served, and ``state.json``. Every run of
-``tools/orgsyndb`` has ORGSYNDB_REGISTRY naming ``registry.json``. A
-cycle whose snapshot cannot be fetched builds nothing. The snapshot's
-``import`` names the latest accepted import; ``current`` is pointed at
-its release whenever that release exists. The application's clone is
+``registry.json``, the structure images of its substances in
+``substances/<key>/structure.svg``, the releases in ``releases/``, the
+symlink ``current`` to the release being served, and ``state.json``.
+Every run of ``tools/orgsyndb`` has ORGSYNDB_REGISTRY naming
+``registry.json``. A cycle whose snapshot, or one of whose structure
+images, cannot be fetched builds nothing. The snapshot's ``import``
+names the latest accepted import; ``current`` is pointed at its release
+whenever that release exists. The application's clone is
 ORGSYNDB_APP (default /opt/orgsyndb/app). ORGSYNDB_IMAGE_INFO (default
 /opt/orgsyndb/image.json) names the image's record of the repository,
 ref and ``deploy/docker`` tree it was built from. An application commit
@@ -154,6 +157,8 @@ GATE_MARGIN = 10
 # The largest pack a check takes, in bytes.
 GATE_LIMIT = 200_000_000
 GATE_COMMIT = re.compile(r"[0-9a-fA-F]{40}")
+# A substance's key in the registry (lab-registry "Substances").
+SUBSTANCE_KEY = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
 # The answer of a check while ORGSYNDB_GATE_TOKEN is empty.
 NOT_CONFIGURED = "the gate is not configured: ORGSYNDB_GATE_TOKEN is empty"
 # Seconds the check server reads and discards a body it did not take.
@@ -404,7 +409,8 @@ def read_snapshot(data: bytes) -> dict:
     Failure when DATA is not a table whose ``format`` is 1 and which
     holds the four vocabularies, lists of tables each with a string
     ``key`` and ``label``, the list of substances, tables each with a
-    string ``key``, a string ``digest`` and ``import``, null or a table
+    string ``key`` of the form SUBSTANCE_KEY, which may name a path, a
+    string ``digest`` and ``import``, null or a table
     of an integer ``id`` and the strings of ``IMPORT_KEYS``."""
     try:
         table = json.loads(data.decode("utf-8"))
@@ -421,6 +427,7 @@ def read_snapshot(data: bytes) -> dict:
                     for name in VOCABULARIES
                     for term in table["vocabularies"][name])
             and all(_has_strings(substance, "key")
+                    and SUBSTANCE_KEY.fullmatch(substance["key"])
                     for substance in table["substances"])
             and (table.get("import") is None
                  or _has_strings(table["import"], *IMPORT_KEYS)
@@ -529,6 +536,62 @@ def fetch_registry(config: Settings) -> dict | None:
         log(f"cannot fetch the registry from {config.registry_url}: {exc}; "
             "nothing is built")
         return None
+
+
+def fetch_images(config: Settings, snapshot: dict) -> bool:
+    """Keep the structure images of SNAPSHOT beside the kept snapshot, in
+    ``<data>/substances/<key>/structure.svg``, and return whether every
+    one was fetched.
+
+    The image of each substance whose ``molfile`` is a string is the
+    answer of status 200 to a GET of ``substances/<key>/structure.svg``
+    resolved against the registry address, sent with the snapshot's
+    ``Host`` and a timeout of REQUEST_TIMEOUT seconds; each is replaced
+    at once. Everything else in ``<data>/substances/`` is removed. When
+    a request fails or is answered with another status, the cycle's log
+    names the image's address and False is returned at once; the images
+    fetched before stay."""
+    root = config.data / "substances"
+    root.mkdir(parents=True, exist_ok=True)
+    keys = [substance["key"] for substance in snapshot["substances"]
+            if isinstance(substance.get("molfile"), str)]
+    wanted = {root / key / "structure.svg" for key in keys}
+    for path in sorted(root.rglob("*"), reverse=True):
+        if path in wanted:
+            continue
+        if path.is_dir() and not path.is_symlink():
+            if not any(path.iterdir()):
+                path.rmdir()
+        else:
+            path.unlink()
+    headers = {"Host": config.registry_host, "Accept": "image/svg+xml"}
+    for key in keys:
+        url = urllib.parse.urljoin(
+            config.registry_url,
+            f"substances/{urllib.parse.quote(key)}/structure.svg")
+        try:
+            request = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(request,
+                                        timeout=REQUEST_TIMEOUT) as answer:
+                status, data = answer.status, answer.read()
+        except urllib.error.HTTPError as exc:
+            status, data = exc.code, b""
+        except TimeoutError:
+            status, data = "timed out", b""
+        except (OSError, http.client.HTTPException, ValueError) as exc:
+            status, data = str(exc) or type(exc).__name__, b""
+        if status != 200:
+            reason = (f"status {status}" if isinstance(status, int)
+                      else status)
+            log(f"cannot fetch the structure images: {url}: {reason}; "
+                "nothing is built")
+            return False
+        target = root / key / "structure.svg"
+        target.parent.mkdir(exist_ok=True)
+        temporary = target.with_name(f".{target.name}")
+        temporary.write_bytes(data)
+        os.replace(temporary, target)
+    return True
 
 
 def tool_environment(config: Settings) -> dict[str, str]:
@@ -885,7 +948,9 @@ def cycle(config: Settings) -> None:
     ``current`` at the latest accepted import's release, and build,
     report and publish the first combination of an application commit,
     the collection commit and the registry that the application has not
-    accepted and that did not fail before, newest application first."""
+    accepted and that did not fail before, newest application first.
+    The snapshot's structure images are fetched once, before the first
+    build; when one cannot be fetched, nothing is built."""
     data = config.data
     (data / "releases").mkdir(parents=True, exist_ok=True)
     state = load_state(data)
@@ -921,6 +986,7 @@ def cycle(config: Settings) -> None:
     if new_app is not None:
         candidates.append(new_app)
     candidates.append(old_app)
+    images = False
     # The state is saved even when a step raises, so that a serial
     # given to a staged release is never handed out twice.
     try:
@@ -938,6 +1004,10 @@ def cycle(config: Settings) -> None:
                     "ORGSYNDB_COLLECTION_PATH")
                 record_failure(state, app, commit, registry)
                 break
+            if not images:
+                if not fetch_images(config, snapshot):
+                    break
+                images = True
             if attempt(config, state, app, commit, snapshot) != "failed":
                 break
     finally:

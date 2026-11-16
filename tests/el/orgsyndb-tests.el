@@ -1613,37 +1613,85 @@ Also: Later preview builds."
         (orgsyndb-pdf))
       (orgsyndb-test-wait (lambda () (find-buffer-visiting pdf))))))
 
+(defconst orgsyndb-test-demo-structure
+  (expand-file-name
+   "webapp/demo/substances/isopentyl-acetate/structure.svg"
+   orgsyndb-test-repo)
+  "The demo's drawn image of `isopentyl-acetate', beside its registry.")
+
+(defun orgsyndb-test-stage-structure (root key)
+  "Make `build/substances/KEY/structure.svg' of the collection ROOT a copy
+of the demo's image, as a build stages it."
+  (let ((target (expand-file-name
+                 (format "build/substances/%s/structure.svg" key) root)))
+    (should (file-exists-p orgsyndb-test-demo-structure))
+    (make-directory (file-name-directory target) t)
+    (copy-file orgsyndb-test-demo-structure target t)
+    target))
+
 (ert-deftest orgsyndb-test-structure-image-and-text ()
   "Scenario: Image and text."
   (orgsyndb-test-with (root orgsyndb-test-demo)
+    (let ((staged (orgsyndb-test-stage-structure root "isopentyl-acetate")))
+      ;; A file of `static/structures/' is no structure image.
+      (orgsyndb-test-write root "static/structures/acetone.svg"
+                           "<svg xmlns=\"http://www.w3.org/2000/svg\"/>")
+      (with-current-buffer (orgsyndb-test-visit
+                            root "md/procedures/OSDB-0002-aspirin.md")
+        (erase-buffer)
+        (insert "isopentyl-acetate and acetone\n")
+        (orgsyndb-structure-mode 1)
+        (unwind-protect
+            (let ((structure (get-buffer "*orgsyndb structure*")))
+              (should structure)
+              (goto-char (point-min))
+              (search-forward "isopentyl")
+              (orgsyndb-structure-update)
+              (with-current-buffer structure
+                (when (image-type-available-p 'svg)
+                  (let ((image (get-text-property (point-min) 'display)))
+                    (should (eq (car-safe image) 'image))
+                    (should (equal (plist-get (cdr image) :file) staged))))
+                (should (string-match-p "Isopentyl acetate"
+                                        (buffer-string))))
+              (goto-char (point-min))
+              (search-forward "aceto")
+              (orgsyndb-structure-update)
+              (with-current-buffer structure
+                (should-not (or (get-text-property (point-min) 'display)
+                                (next-single-property-change (point-min)
+                                                             'display)))
+                (should (string-match-p "Acetone" (buffer-string)))))
+          (orgsyndb-structure-mode -1)
+          (set-buffer-modified-p nil))))))
+
+(ert-deftest orgsyndb-test-structure-without-a-staged-image ()
+  "Scenario: Image and text (no staged image, no image)."
+  (orgsyndb-test-with (root orgsyndb-test-demo)
+    ;; The old place of a structure image and the place beside the
+    ;; registry hold an image, and no build has staged one.
+    (dolist (file '("static/structures/isopentyl-acetate.svg"
+                    "static/structures/isopentyl-acetate.png"
+                    "substances/isopentyl-acetate/structure.svg"))
+      (orgsyndb-test-write root file
+                           "<svg xmlns=\"http://www.w3.org/2000/svg\"/>"))
+    (should-not (file-exists-p (expand-file-name "build/substances" root)))
     (with-current-buffer (orgsyndb-test-visit
                           root "md/procedures/OSDB-0002-aspirin.md")
       (erase-buffer)
-      (insert "isopentyl-acetate and acetone\n")
+      (insert "isopentyl-acetate\n")
       (orgsyndb-structure-mode 1)
       (unwind-protect
-          (let ((structure (get-buffer "*orgsyndb structure*")))
-            (should structure)
+          (progn
             (goto-char (point-min))
             (search-forward "isopentyl")
             (orgsyndb-structure-update)
-            (with-current-buffer structure
-              (when (image-type-available-p 'svg)
-                (let ((image (get-text-property (point-min) 'display)))
-                  (should (eq (car-safe image) 'image))
-                  (should (equal (plist-get (cdr image) :file)
-                                 (expand-file-name
-                                  "static/structures/isopentyl-acetate.svg"
-                                  root)))))
-              (should (string-match-p "Isopentyl acetate" (buffer-string))))
-            (goto-char (point-min))
-            (search-forward "aceto")
-            (orgsyndb-structure-update)
-            (with-current-buffer structure
+            (with-current-buffer (get-buffer "*orgsyndb structure*")
               (should-not (or (get-text-property (point-min) 'display)
                               (next-single-property-change (point-min)
                                                            'display)))
-              (should (string-match-p "Acetone" (buffer-string)))))
+              (should (string-match-p "Isopentyl acetate"
+                                      (buffer-string)))))
         (orgsyndb-structure-mode -1)
         (set-buffer-modified-p nil)))))
 

@@ -62,7 +62,7 @@ VOCABULARIES = ("chemical-classes", "inventory-groups", "projects",
 REACTION_TYPES = "reaction-types"
 # The text values of a substance in a snapshot, each a string or null.
 SUBSTANCE_TEXTS = ("name", "name_de", "short_name", "formula", "smiles", "cas",
-                   "note", "group", "article_number")
+                   "note", "group", "article_number", "molfile")
 FIELD_KEY_RE = re.compile(r"^[a-z][a-z0-9]*(_[a-z0-9]+)*$")
 FIELD_TYPES = ("text", "number", "boolean", "choice")
 # The keys of a procedure field declaration: those every type takes, and

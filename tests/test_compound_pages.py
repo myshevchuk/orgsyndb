@@ -13,6 +13,7 @@ tab scenarios that say so.
 
 import json
 import re
+import shutil
 from typing import NamedTuple
 
 import catalogue_support as cs
@@ -993,9 +994,10 @@ class CompoundSiteTests(CompoundCase):
         image = page.find("figure", "structure").find("img")
         self.assertEqual(
             ps.target_file(self.public, page.resolve(image.attrs["src"])),
-            self.public / "structures" / "isopentyl-acetate.svg")
-        self.assertTrue((self.public / "structures"
-                         / "isopentyl-acetate.svg").is_file())
+            self.public / "substances" / "isopentyl-acetate"
+            / "structure.svg")
+        self.assertTrue((self.public / "substances" / "isopentyl-acetate"
+                         / "structure.svg").is_file())
 
     def test_the_directory_lists_every_compound(self) -> None:
         """Scenario: Every compound is listed."""
@@ -1815,26 +1817,31 @@ class MarkupNameTests(CompoundCase):
                                   if l.target == "/compounds/dimethylurea/"])
 
 
-class StructureImageByKeyTests(CompoundCase):
-    """The test collection in English, with `acetone.png`, and
-    `benzaldehyde.svg` beside `benzaldehyde.png`, added to its
-    `static/structures/`."""
+class StructureImageTests(CompoundCase):
+    """The test collection in English, with a structure image of
+    `acetone` beside its registry, whose `acetone` has a molfile, and
+    `acetone.png` and `benzaldehyde.svg` among its static files."""
 
     @classmethod
     def prepare(cls) -> None:
-        structures = cls.sandbox.root / "static" / "structures"
+        root = cls.sandbox.root
+        ps.edit_snapshot(cls.sandbox, support.setting_substance(
+            "acetone", molfile=ps.MOLFILE))
+        (root / "substances" / "acetone").mkdir(parents=True)
+        shutil.copyfile(ps.FIXTURE_STATIC / "structures"
+                        / "ethyl-acetate.svg",
+                        root / "substances" / "acetone" / "structure.svg")
+        structures = root / "static" / "structures"
         (structures / "acetone.png").write_bytes(b"\x89PNG\r\n\x1a\n")
-        (structures / "benzaldehyde.png").write_bytes(b"\x89PNG\r\n\x1a\n")
         (structures / "benzaldehyde.svg").write_text(
             "<svg xmlns='http://www.w3.org/2000/svg' width='1' "
             "height='1'/>", encoding="utf-8")
 
-    def test_the_image_is_found_by_the_key(self) -> None:
-        """Scenario: Image found by key."""
-        for key, image in (("acetone", "structures/acetone.png"),
-                           ("benzaldehyde", "structures/benzaldehyde.svg"),
-                           ("isopentyl-acetate",
-                            "structures/isopentyl-acetate.svg")):
+    def test_the_staged_image_is_shown(self) -> None:
+        """Scenario: Compound pages are not indexed (the image resolves
+        to the published staged image)."""
+        for key in ("acetone", "isopentyl-acetate"):
+            image = f"substances/{key}/structure.svg"
             with self.subTest(compound=key):
                 page = self.compound_page(key)
                 (img,) = page.find("figure", "structure").find_all("img")
@@ -1842,14 +1849,30 @@ class StructureImageByKeyTests(CompoundCase):
                                  "/" + image)
                 self.assertEqual(self.registry()[key]["structure_image"],
                                  image)
+                self.assertEqual(
+                    (self.public / image).read_bytes(),
+                    (self.sandbox.root / image).read_bytes())
 
-    def test_a_substance_without_a_file_of_its_key_shows_none(self) -> None:
-        """Scenario: Image found by key (no file of its key)."""
-        for key in ("salicylic-acid", "new-compound-7"):
+    def test_a_substance_without_a_staged_image_shows_none(self) -> None:
+        """Requirement: Compound pages (otherwise no figure and no
+        placeholder); Requirement: Structure images (a file of
+        `static/structures/` is no structure image)."""
+        for key in ("salicylic-acid", "new-compound-7", "benzaldehyde"):
             with self.subTest(compound=key):
                 page = self.compound_page(key)
                 self.assertEqual(page.find("main").find_all("figure"), [])
                 self.assertEqual(page.find("main").find_all("img"), [])
+                self.assertNotIn("structure_image", self.registry()[key])
+
+    def test_static_files_are_published_as_they_are(self) -> None:
+        """Requirement: Structure images (a file of `static/structures/`
+        is a static file whatever its name)."""
+        for name in ("acetone.png", "benzaldehyde.svg"):
+            with self.subTest(file=name):
+                self.assertEqual(
+                    (self.public / "structures" / name).read_bytes(),
+                    (self.sandbox.root / "static" / "structures" / name
+                     ).read_bytes())
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 {% block title %}{{ title }}{% endblock %}
 {% block main %}
 <h1>{{ title }}</h1>
-<form class="lab-form" method="post">{% csrf_token %}
+<form class="lab-form" method="post"{% if form.is_multipart %} enctype="multipart/form-data"{% endif %}>{% csrf_token %}
 {{ form.non_field_errors }}
 {% for field in form %}<div class="lab-field{% if field.errors %} lab-field--error{% endif %}">
 {% if field.widget_type == "checkboxselectmultiple" %}<fieldset><legend>{{ field.label }}</legend>

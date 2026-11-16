@@ -11,6 +11,8 @@ urlpatterns = [
     path("substances/<str:key>/", views.substance_page, name="substance"),
     path("substances/<str:key>/edit/", views.substance_edit,
          name="substance_edit"),
+    path("substances/<str:key>/structure.svg", views.structure_image,
+         name="structure_image"),
     path("<str:vocabulary>/", views.vocabulary_page, name="vocabulary"),
     path("<str:vocabulary>/new/", views.term_new, name="term_new"),
     path("<str:vocabulary>/<str:key>/edit/", views.term_edit,

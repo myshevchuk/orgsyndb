@@ -13,6 +13,7 @@ from .inventory_support import SUBSTANCE_PAGE
 from .planning_support import section
 from .registry_support import (REGISTRY, VOCABULARIES, RegistryCase,
                                substance_url, term_url)
+from .structure_support import ETHANOL
 
 COLUMNS_DE = ["Name", "Schlüssel", "Kurzname", "Bestandsgruppe",
               "Stoffklassen", "Summenformel", "Molmasse", "Artikelnr."]
@@ -581,3 +582,81 @@ class DemoRegistryPageTests(SeededCase):
                 else:
                     self.assertTrue(link.get("href").startswith(
                         "/lab/inventory/items/"))
+
+
+def figures(root: Any) -> list[Any]:
+    """The ``figure.structure`` elements of a page."""
+    return root.find_all("figure", "structure")
+
+
+class StructureFigureTests(RegistryCase):
+    """Requirement: Registry pages (the substance page's figure, when
+    the substance has a structure image)."""
+
+    def figure(self, key: str) -> Any:
+        found = figures(self.get(substance_url(key)))
+        self.assertEqual(len(found), 1)
+        return found[0]
+
+    def test_the_figure_in_german(self) -> None:
+        make_substance("cinnamic-acid", molfile=ETHANOL)
+        image = self.figure("cinnamic-acid").find_all("img")
+        self.assertEqual(len(image), 1)
+        self.assertEqual(
+            image[0].get("src"),
+            "/lab/registry/substances/cinnamic-acid/structure.svg")
+        self.assertEqual(image[0].get("alt"),
+                         "Strukturformel von (E)-Zimtsäure")
+
+    def test_the_figure_in_english(self) -> None:
+        accept(language="en")
+        make_substance("cinnamic-acid", molfile=ETHANOL)
+        image = self.figure("cinnamic-acid").find("img")
+        self.assertEqual(
+            image.get("src"),
+            "/lab/registry/substances/cinnamic-acid/structure.svg")
+        self.assertEqual(image.get("alt"),
+                         "Structure of (E)-Cinnamic acid")
+
+    def test_the_alt_names_the_name_the_page_shows(self) -> None:
+        make_substance("acetophenone", molfile=ETHANOL)
+        self.assertEqual(self.figure("acetophenone").find("img").get("alt"),
+                         "Strukturformel von Acetophenone")
+
+    def test_no_figure_without_a_molfile(self) -> None:
+        for key in ("cinnamic-acid", "new-compound-7"):
+            with self.subTest(key=key):
+                self.assertEqual(
+                    figures(self.get(substance_url(key))), [])
+
+    def test_no_figure_after_the_molfile_is_removed(self) -> None:
+        make_substance("cinnamic-acid", molfile=ETHANOL)
+        self.assertEqual(len(figures(self.get(
+            substance_url("cinnamic-acid")))), 1)
+        make_substance("cinnamic-acid", molfile="")
+        self.assertEqual(
+            figures(self.get(substance_url("cinnamic-acid"))), [])
+
+    def test_the_image_the_figure_names_is_served(self) -> None:
+        make_substance("cinnamic-acid", molfile=ETHANOL)
+        src = self.figure("cinnamic-acid").find("img").get("src")
+        self.assertEqual(self.client.get(src).status_code, 200)
+
+
+class DemoStructureFigureTests(SeededCase):
+    """Scenario: Structure on the page."""
+
+    def test_the_demos_figure(self) -> None:
+        found = figures(self.get(substance_url("isopentyl-acetate")))
+        self.assertEqual(len(found), 1)
+        images = found[0].find_all("img")
+        self.assertEqual(len(images), 1)
+        self.assertEqual(
+            images[0].get("src"),
+            "/lab/registry/substances/isopentyl-acetate/structure.svg")
+        self.assertEqual(images[0].get("alt"),
+                         "Strukturformel von Isopentylacetat")
+
+    def test_a_substance_without_a_molfile_has_no_figure(self) -> None:
+        self.assertEqual(
+            figures(self.get(substance_url("new-compound-7"))), [])

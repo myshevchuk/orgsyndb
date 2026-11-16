@@ -458,9 +458,9 @@ class IntermediateSiteTests(SequenceCase):
         self.assertEqual(
             [(page.resolve(i.attrs.get("src", "")), i.attrs.get("alt"))
              for i in images],
-            [("/structures/trans-stilbene.svg",
+            [("/substances/trans-stilbene/structure.svg",
               "Structure of trans-Stilbene"),
-             ("/structures/ethyl-acetate.svg",
+             ("/substances/ethyl-acetate/structure.svg",
               "Structure of Ethyl acetate")])
         for image in images:
             self.assertTrue(ps.target_file(

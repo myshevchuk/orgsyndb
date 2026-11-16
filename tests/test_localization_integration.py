@@ -457,7 +457,7 @@ class GermanGeneralFixtureTests(GermanCase):
             [(i.attrs.get("alt"), page.resolve(i.attrs["src"]))
              for i in table.find_all("img", "scope-structure")],
             [("Strukturformel von Ethylacetat",
-              "/structures/ethyl-acetate.svg")])
+              "/substances/ethyl-acetate/structure.svg")])
 
     def test_the_key_facts_write_the_range_with_a_decimal_comma(
             self) -> None:

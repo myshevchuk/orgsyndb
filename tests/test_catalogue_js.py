@@ -1081,7 +1081,7 @@ def compound_text(key: str) -> str:
     searchable text fields, joined by single spaces."""
     compound = ps.compounds_of(
         json.loads((TEST_COLLECTION / "registry.json").read_text(
-            encoding="utf-8")), TEST_COLLECTION / "static")[key]
+            encoding="utf-8")), TEST_COLLECTION)[key]
     parts = [compound["name"], compound.get("name_de"),
              compound.get("formula"), compound.get("cas"),
              compound.get("smiles"), compound.get("article_number"),

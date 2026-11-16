@@ -572,7 +572,7 @@ class TwoProductDetailsTests(DetailsChecks, cs.CatalogueCase):
         self.assertEqual(images[0].attrs.get("alt"),
                          "Structure of trans-Stilbene")
         self.assertEqual(page.resolve(images[0].attrs.get("src", "")),
-                         "/structures/trans-stilbene.svg")
+                         "/substances/trans-stilbene/structure.svg")
         for item in items:
             with self.subTest(procedure=item.id):
                 self.check_details(

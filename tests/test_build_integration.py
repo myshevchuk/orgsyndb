@@ -288,10 +288,12 @@ class ValidateRegistryTests(BuildTestCase):
 
     def test_a_substance_without_a_structure_image_draws_no_problem(
             self) -> None:
-        """Requirement: Structure images by key (no check reports a
-        substance without an image)."""
-        (self.sandbox.root / "static" / "structures"
-         / "isopentyl-acetate.svg").unlink()
+        """Requirement: Structure images (no check reports a substance
+        without an image)."""
+        image = (self.sandbox.root / "substances" / "isopentyl-acetate"
+                 / "structure.svg")
+        self.assertTrue(image.is_file(), "the test collection has no image")
+        image.unlink()
         result = self.build("validate")
         self.assert_ok(result)
         self.assertEqual(problem_lines(result.stdout), [])
@@ -610,14 +612,14 @@ class StagedSubstanceDataTests(BuildTestCase):
         self.assertEqual(sorted(staged),
                          sorted(s["key"] for s in table["substances"]))
         self.assertEqual(
-            staged, ps.compounds_of(table, self.sandbox.root / "static"))
+            staged, ps.compounds_of(table, self.sandbox.root))
         self.assertEqual(staged["acetylsalicylic-acid"]["article_number"],
                          "CH-0010")
         self.assertEqual(staged["acetylsalicylic-acid"]["short_name"],
                          "ASA")
         self.assertNotIn("short_name", staged["salicylic-acid"])
         self.assertEqual(staged["isopentyl-acetate"]["structure_image"],
-                         "structures/isopentyl-acetate.svg")
+                         "substances/isopentyl-acetate/structure.svg")
         self.assertNotIn("structure_image", staged["salicylic-acid"])
 
     def test_the_staged_values_are_the_substances(self) -> None:
@@ -646,20 +648,38 @@ class StagedSubstanceDataTests(BuildTestCase):
             self.assertNotIn(key, data)
         self.assertEqual(data["article_number"], "NV-0007")
 
-    def test_the_svg_comes_before_the_png(self) -> None:
-        """Requirement: Structure images by key (the PNG when there is no
-        SVG)."""
+    def test_a_static_file_is_no_structure_image(self) -> None:
+        """Requirement: Structure images (a file of `static/structures/`
+        is a static file whatever its name, and PNG structure images
+        end)."""
         structures = self.sandbox.root / "static" / "structures"
         (structures / "acetone.png").write_bytes(b"\x89PNG")
-        (structures / "benzaldehyde.png").write_bytes(b"\x89PNG")
         (structures / "benzaldehyde.svg").write_text(
             "<svg xmlns='http://www.w3.org/2000/svg'/>", encoding="utf-8")
         self.assert_ok(self.build("build"))
         staged = self.staged()
-        self.assertEqual(staged["acetone"]["structure_image"],
-                         "structures/acetone.png")
-        self.assertEqual(staged["benzaldehyde"]["structure_image"],
-                         "structures/benzaldehyde.svg")
+        self.assertNotIn("structure_image", staged["acetone"])
+        self.assertNotIn("structure_image", staged["benzaldehyde"])
+        for name in ("acetone.png", "benzaldehyde.svg"):
+            self.assertEqual(
+                (self.sandbox.root / "public" / "structures" / name)
+                .read_bytes(), (structures / name).read_bytes())
+
+    def test_a_png_beside_the_registry_is_no_structure_image(self) -> None:
+        """Requirement: Structure images (the image is
+        `substances/<key>/structure.svg`)."""
+        ps.edit_snapshot(self.sandbox, support.setting_substance(
+            "acetone", molfile=ps.MOLFILE))
+        png = self.sandbox.root / "substances" / "acetone"
+        png.mkdir(parents=True)
+        (png / "structure.png").write_bytes(b"\x89PNG")
+        self.assert_ok(self.build("build"))
+        self.assertNotIn("structure_image", self.staged()["acetone"])
+        staged = self.sandbox.root / "build" / "substances"
+        self.assertEqual(
+            sorted(p.relative_to(staged).as_posix()
+                   for p in staged.rglob("*") if p.is_file()),
+            ["isopentyl-acetate/structure.svg"])
 
     def test_the_staged_directory_is_rewritten_on_every_build(self) -> None:
         """Requirement: build subcommand (the staged substance data is

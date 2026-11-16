@@ -19,6 +19,7 @@ import importlib.util
 import io
 import json
 import os
+import posixpath
 import re
 import shutil
 import socket
@@ -61,6 +62,11 @@ TEST_COLLECTION = FIXTURES / "collection"
 
 OX_HUGO_PIN = "b7dc44dc28911b9d8e3055a18deac16c3b560b03"
 TOMELR_PIN = "670e0a08f625175fd80137cf69e799619bf8a381"
+# A molfile for the tests that need a registry to name a drawn structure;
+# the build never parses it.
+MOLFILE = ("\n  orgsyndb tests\n\n  1  0  0  0  0  0  0  0  0  0999 V2000\n"
+           "    0.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0"
+           "  0  0\nM  END\n")
 PAGEFIND_RELATIVE = Path(".tools") / "pagefind-1.5.2" / "pagefind"
 LANGUAGES = ("de", "en")
 BOOTSTRAP_HINT = ("ox-hugo not bootstrapped: run tools/orgsyndb -C "
@@ -171,29 +177,52 @@ class SnapshotServer:
     ``Host`` header of each request. ``table`` is the snapshot served;
     ``status`` the status answered; set ``body`` to answer other text.
     ``stop`` makes the address stop answering. It answers a ``POST`` with
-    ``post``, which refuses it here; ``FakeApp`` answers manifests."""
+    ``post``, which refuses it here; ``FakeApp`` answers manifests.
+
+    It serves the structure images as the lab does, at
+    ``substances/<key>/structure.svg`` beside the snapshot: ``images``
+    maps a key to the bytes of its image, ``image_status`` is the status
+    answered for any image and ``image_statuses`` the statuses of single
+    keys, which win; an image that is not in ``images`` is answered 404.
+    With ``image_drop`` true each request for an image is closed without
+    an answer. Each request for an image is kept in ``image_requests``,
+    a pair of the key and the ``Host`` header. ``path`` is where the
+    snapshot is served, ``PATH`` unless given."""
 
     PATH = "/lab/registry/snapshot.json"
 
-    def __init__(self, table: dict[str, Any]) -> None:
+    def __init__(self, table: dict[str, Any],
+                 path: str | None = None) -> None:
         self.table = table
+        self.path = path or self.PATH
         self.status = 200
         self.body: bytes | None = None
         self.hosts: list[str] = []
+        self.images: dict[str, bytes] = {}
+        self.image_status = 200
+        self.image_statuses: dict[str, int] = {}
+        self.image_drop = False
+        self.image_requests: list[tuple[str, str]] = []
         owner = self
 
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self) -> None:
-                owner.hosts.append(self.headers.get("Host", ""))
-                if self.path != SnapshotServer.PATH:
+                host = self.headers.get("Host", "")
+                owner.hosts.append(host)
+                if self.path == owner.path:
+                    body = owner.snapshot_body()
+                    self.send_response(owner.status)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                key = owner.image_key(self.path)
+                if key is None:
                     self.send_error(404)
                     return
-                body = owner.snapshot_body()
-                self.send_response(owner.status)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
+                owner.image_requests.append((key, host))
+                owner.answer_image(self, key)
 
             def do_POST(self) -> None:
                 owner.post(self)
@@ -207,6 +236,37 @@ class SnapshotServer:
                                        daemon=True)
         self.thread.start()
         self.running = True
+
+    def image_key(self, request_path: str) -> str | None:
+        """The key whose image ``request_path`` asks for, or None."""
+        prefix = posixpath.dirname(self.path) + "/substances/"
+        suffix = "/structure.svg"
+        if not (request_path.startswith(prefix)
+                and request_path.endswith(suffix)):
+            return None
+        key = request_path[len(prefix):-len(suffix)]
+        return key if key and "/" not in key else None
+
+    def image_url(self, key: str) -> str:
+        """The address of the image of the substance ``key``."""
+        return (self.origin + posixpath.dirname(self.path)
+                + f"/substances/{key}/structure.svg")
+
+    def answer_image(self, handler: BaseHTTPRequestHandler,
+                     key: str) -> None:
+        """Answer the request for the image of ``key``."""
+        if self.image_drop:
+            handler.close_connection = True
+            return
+        status = self.image_statuses.get(key, self.image_status)
+        if status == 200 and key not in self.images:
+            status = 404
+        body = self.images[key] if status == 200 else b"no image\n"
+        handler.send_response(status)
+        handler.send_header("Content-Type", "image/svg+xml")
+        handler.send_header("Content-Length", str(len(body)))
+        handler.end_headers()
+        handler.wfile.write(body)
 
     def snapshot_body(self) -> bytes:
         """The text a request for the snapshot is answered with."""
@@ -223,7 +283,7 @@ class SnapshotServer:
 
     @property
     def url(self) -> str:
-        return self.origin + self.PATH
+        return self.origin + self.path
 
     def stop(self) -> None:
         """Stop answering; the port is closed."""
@@ -280,7 +340,8 @@ class FakeApp(SnapshotServer):
     latest accepted one as the snapshot names it, or None.
     """
 
-    def __init__(self, table: dict[str, Any]) -> None:
+    def __init__(self, table: dict[str, Any],
+                 path: str | None = None) -> None:
         self.manifests: list[Received] = []
         self.imports: list[dict[str, Any]] = []
         self.imported: dict[str, Any] | None = None
@@ -289,7 +350,7 @@ class FakeApp(SnapshotServer):
         self.rules: list[Any] = []
         self.on_manifest: Any = None
         self.answered: dict[str, tuple[int, dict[str, Any]]] = {}
-        super().__init__(table)
+        super().__init__(table, path)
 
     @property
     def manifest_url(self) -> str:
@@ -648,7 +709,9 @@ def collection_registry(collection: Path) -> Path:
 def keep_registry_inside(original: Path, copy: Path) -> None:
     """Make the registry of the collection ``copy`` a file of the copy
     when the original names one outside itself, as the demo collection
-    does: the snapshot is copied to ``registry.json`` and named there."""
+    does: the snapshot is copied to ``registry.json`` and named there,
+    and the structure images beside it, ``substances/``, are copied
+    beside the copy."""
     named = collection_registry(copy)
     if named.is_file():
         return
@@ -659,6 +722,9 @@ def keep_registry_inside(original: Path, copy: Path) -> None:
     if changed == text:
         raise AssertionError("orgsyndb.toml names no registry")
     shutil.copyfile(collection_registry(original), copy / "registry.json")
+    images = collection_registry(original).parent / "substances"
+    if images.is_dir():
+        shutil.copytree(images, copy / "substances", dirs_exist_ok=True)
     settings.write_text(changed, encoding="utf-8")
 
 
@@ -706,6 +772,21 @@ def edit_snapshot(sandbox: Sandbox, *steps: Any) -> None:
     for step in steps:
         step(table)
     write_snapshot(sandbox, table)
+
+
+def with_molfiles(table: dict[str, Any], *keys: str) -> dict[str, Any]:
+    """A copy of the snapshot ``table`` in which each substance of
+    ``keys`` has a molfile (``MOLFILE``) and every other substance has
+    the ``molfile`` ``null``, with its digest made to agree."""
+    copy = json.loads(json.dumps(table))
+    held = {entry["key"] for entry in copy["substances"]}
+    missing = set(keys) - held
+    if missing:
+        raise AssertionError(f"the snapshot lacks {sorted(missing)}")
+    for entry in copy["substances"]:
+        entry["molfile"] = MOLFILE if entry["key"] in keys else None
+    copy["digest"] = snapshot_digest(copy)
+    return copy
 
 
 # --- GitHub Actions workflows ---------------------------------------------
@@ -939,21 +1020,29 @@ def fixture_compound_keys(path: Path) -> list[str]:
 def put_compounds(sandbox: Sandbox, *keys: str) -> list[str]:
     """Add the fixture registry's substances ``keys`` to the sandbox
     collection's registry, with the terms of their group and classes
-    that it lacks, and the structure images that the fixture static
-    files hold for them into ``static/structures/``. A substance the
+    that it lacks. For each that the fixture static files hold a
+    structure image for, put the image beside the registry as
+    ``substances/<key>/structure.svg`` and give the substance a
+    ``molfile`` (``MOLFILE``) in the registry, as compound-registry
+    "Structure images" has a substance with an image. A substance the
     registry already holds is kept. Returns the keys added."""
     table = read_snapshot(sandbox)
     before = json.dumps(table, sort_keys=True)
     added = with_fixture_substances(table, *keys)
-    if json.dumps(table, sort_keys=True) != before:
-        write_snapshot(sandbox, table)
+    beside = collection_registry(sandbox.root).parent
     for key in keys:
-        for suffix in (".svg", ".png"):
-            source = FIXTURE_STATIC / "structures" / f"{key}{suffix}"
-            destination = sandbox.root / "static" / "structures" / source.name
-            if source.is_file() and not destination.exists():
+        source = FIXTURE_STATIC / "structures" / f"{key}.svg"
+        destination = beside / "substances" / key / "structure.svg"
+        if source.is_file():
+            if not destination.exists():
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, destination)
+            for entry in table["substances"]:
+                if entry["key"] == key and not isinstance(
+                        entry.get("molfile"), str):
+                    entry["molfile"] = MOLFILE
+    if json.dumps(table, sort_keys=True) != before:
+        write_snapshot(sandbox, table)
     return added
 
 
@@ -1343,14 +1432,16 @@ def reaction_labels(collection: Path,
 
 
 def compounds_of(table: dict[str, Any],
-                 static: Path) -> dict[str, dict[str, Any]]:
-    """The substances of the snapshot ``table``, by key, as the build
-    stages them for the site (site-build "Hugo configuration"): the
-    values a substance has under ``name``, ``name_de``, ``formula``,
-    ``mw``, ``smiles``, ``cas``, ``article_number``, ``short_name`` and
-    ``group``, its classes as the list ``chemical_class``, and
-    ``structure_image`` when ``static`` holds
-    ``structures/<key>.svg`` or ``.png``."""
+                 beside: Path | None) -> dict[str, dict[str, Any]]:
+    """The substances of the snapshot ``table``, by key, as a build from
+    the snapshot file in the directory ``beside`` stages them for the
+    site (site-build "Hugo configuration"): the values a substance has
+    under ``name``, ``name_de``, ``formula``, ``mw``, ``smiles``,
+    ``cas``, ``article_number``, ``short_name`` and ``group``, its
+    classes as the list ``chemical_class``, and ``structure_image``,
+    ``substances/<key>/structure.svg``, when its ``molfile`` is a string
+    and ``beside`` holds that file. With ``beside`` None no substance
+    has an image."""
     found: dict[str, dict[str, Any]] = {}
     for entry in table["substances"]:
         compound = {name: entry[name] for name in (
@@ -1359,19 +1450,19 @@ def compounds_of(table: dict[str, Any],
             if entry.get(name) is not None}
         if entry["chemical_classes"]:
             compound["chemical_class"] = list(entry["chemical_classes"])
-        for suffix in (".svg", ".png"):
-            if (static / "structures" / f"{entry['key']}{suffix}").is_file():
-                compound["structure_image"] = (
-                    f"structures/{entry['key']}{suffix}")
-                break
+        image = f"substances/{entry['key']}/structure.svg"
+        if (beside is not None and isinstance(entry.get("molfile"), str)
+                and (beside / image).is_file()):
+            compound["structure_image"] = image
         found[entry["key"]] = compound
     return found
 
 
 def read_registry(sandbox: Sandbox) -> dict[str, dict[str, Any]]:
     """Each substance of the sandbox collection's registry, by key, as
-    ``compounds_of`` states."""
-    return compounds_of(read_snapshot(sandbox), sandbox.root / "static")
+    ``compounds_of`` states for the registry file's directory."""
+    return compounds_of(read_snapshot(sandbox),
+                        collection_registry(sandbox.root).parent)
 
 
 def account_names(sandbox: Sandbox) -> dict[str, str]:

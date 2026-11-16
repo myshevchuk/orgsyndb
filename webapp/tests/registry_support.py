@@ -198,13 +198,14 @@ def small_snapshot() -> dict[str, Any]:
             {"key": "acetone", "name": "Acetone", "name_de": "Aceton",
              "short_name": None, "group": "reagents",
              "chemical_classes": ["ketones"], "formula": "C3H6O",
-             "mw": 58.08, "smiles": "CC(C)=O", "cas": "67-64-1",
-             "note": None, "article_number": "CH-0099"},
+             "mw": 58.08, "smiles": "CC(C)=O", "molfile": None,
+             "cas": "67-64-1", "note": None, "article_number": "CH-0099"},
             {"key": "mystery", "name": "Mystery", "name_de": None,
              "short_name": None, "group": "reagents",
              "chemical_classes": ["carbonyl-compounds", "ketones"],
-             "formula": None, "mw": None, "smiles": None, "cas": None,
-             "note": None, "article_number": None}]}
+             "formula": None, "mw": None, "smiles": None,
+             "molfile": None, "cas": None, "note": None,
+             "article_number": None}]}
 
 
 def wipe_registry() -> None:

@@ -105,8 +105,8 @@ class NoValueChecksTests(ValidatorTestCase):
 
     def test_a_substance_without_a_structure_image_draws_no_report(
             self) -> None:
-        """Requirement: Structure images by key (no check reports a
-        substance without an image)."""
+        """Requirement: Structure images (no check reports a substance
+        without an image)."""
         with tempfile.TemporaryDirectory() as empty:
             result = fixture_run("baseline",
                                  extra=["--static-dir", empty])

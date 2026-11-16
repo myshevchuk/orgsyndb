@@ -90,7 +90,7 @@ class OverlayTests(unittest.TestCase):
         self.assertEqual(overlay["resourceDir"],
                          f"{collection}/build/hugo-resources")
         files = ["/OSDB-*.md"]
-        self.assertEqual(len(overlay["module"]["mounts"]), 7)
+        self.assertEqual(len(overlay["module"]["mounts"]), 8)
         self.assertEqual(overlay["module"], {"mounts": [
             {"source": f"{site}/content", "target": "content"},
             {"source": f"{collection}/build/content/procedures",
@@ -104,7 +104,28 @@ class OverlayTests(unittest.TestCase):
              "target": "content/sequences", "files": ["/SEQ-*.md"]},
             {"source": f"{collection}/build/data",
              "target": "data/collection"},
+            {"source": f"{collection}/build/substances",
+             "target": "static/substances"},
         ]})
+
+    def test_the_eighth_mount_comes_last_and_stays_in_the_collection(
+            self) -> None:
+        """Requirement: Hugo configuration (mount 8 publishes the staged
+        structure images at `substances/<key>/structure.svg`)."""
+        for site, collection in (
+                (Path("/srv/app/site"), Path("/srv/data")),
+                (Path("/srv/a b/site"), Path('/srv/c "d"/coll'))):
+            with self.subTest(collection=str(collection)):
+                mounts = tomllib.loads(pipeline().hugo_overlay(
+                    site, collection, "en"))["module"]["mounts"]
+                self.assertEqual(mounts[-1], {
+                    "source": f"{collection}/build/substances",
+                    "target": "static/substances"})
+                self.assertEqual(
+                    [m["target"] for m in mounts].count("static/substances"),
+                    1)
+                self.assertEqual(
+                    [m["target"] for m in mounts].count("static"), 1)
 
 
     def test_overlay_with_the_lab(self) -> None:
@@ -152,7 +173,8 @@ class IgnoreRuleTests(unittest.TestCase):
                ".emacs-batch/elpa", ".tools/pagefind-1.5.2/pagefind"]
     TRACKED = ["examples/demo/org/procedures/OSDB-0001-salicylic-acid.org",
                "examples/demo/md/procedures/OSDB-0002-aspirin.md",
-               "examples/demo/static/structures/isopentyl-acetate.svg",
+               "examples/demo/static/structures/aryl-ketone-reduction.svg",
+               "webapp/demo/substances/isopentyl-acetate/structure.svg",
                "site/hugo.toml", "site/.hugo_build.lock", "build/x",
                "tests/fixtures/export/build/x"]
 

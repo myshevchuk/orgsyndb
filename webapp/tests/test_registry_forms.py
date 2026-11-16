@@ -8,9 +8,13 @@ from vocabulary.models import ChemicalClass, Group
 
 from . import context_form, field_value, make_substance, page
 from .collection_support import accept
+from .demo_support import SeededCase
 from .registry_support import (NEW_SUBSTANCE, REGISTRY, VOCABULARIES,
                                RegistryCase, choice_value, offered,
                                substance_url, term_url, vocabulary_model)
+from .structure_support import (ACETONE, ACETONE_WITH_AN_ALIAS, ALIAS,
+                                ETHANOL, LARGE, LATIN_1, NO_ATOM,
+                                NOT_A_MOLFILE, crlf, parsed, tag, upload)
 
 TREES = ["chemical-classes", "groups", "projects"]
 # The groups and classes of the registry in the order of their pages.
@@ -127,7 +131,8 @@ class NewSubstanceTests(FormCase):
         names = control_names(form)
         self.assertEqual(names, {
             "key", "name", "name_de", "short_name", "group",
-            "chemical_classes", "formula", "mw", "smiles", "cas", "note"})
+            "chemical_classes", "formula", "mw", "smiles", "molfile",
+            "cas", "note"})
 
     def test_the_groups_come_in_the_order_of_their_page(self) -> None:
         root = self.get(NEW_SUBSTANCE)
@@ -599,3 +604,279 @@ class SignInTests(RegistryCase):
                      *(term_url(v) for v in VOCABULARIES)):
             with self.subTest(path=path):
                 self.assertEqual(self.client.get(path).status_code, 200)
+
+
+def image_path(key: str) -> str:
+    """The address of the image of the substance ``key``."""
+    return substance_url(key) + "structure.svg"
+
+
+def label_of(root: Any, name: str) -> str:
+    """The text of the label of the control ``name``, without its
+    colon."""
+    control = root.find("main").find("input", name=name)
+    assert control is not None, f"the page has no control {name}"
+    label = (root.find("label", attrs={"for": control.get("id")})
+             if control.get("id") else None) or control.closest("label")
+    assert label is not None, f"the control {name} has no label"
+    return label.text().rstrip(": ")
+
+
+def filled(root: Any) -> dict[str, Any]:
+    """The values the edit form ``root`` shows, to post back."""
+    data = {name: field_value(root, name) for name in (
+        "name", "name_de", "short_name", "group", "formula", "mw",
+        "smiles", "cas", "note")}
+    data["chemical_classes"] = [
+        box.get("value") for box in root.find_all(
+            "input", name="chemical_classes") if "checked" in box.attrs]
+    return data
+
+
+class StructureFieldTests(FormCase):
+    """Requirement: Registry forms (the structure's file field and the
+    box that removes it)."""
+
+    def test_the_new_form_takes_a_file(self) -> None:
+        root = self.get(NEW_SUBSTANCE)
+        control = root.find("main").find("input", name="molfile")
+        self.assertEqual(control.get("type"), "file")
+        self.assertEqual(control.closest("form").get("enctype"),
+                         "multipart/form-data")
+        self.assertEqual(label_of(root, "molfile"),
+                         "Strukturformel (Molfile)")
+
+    def test_the_labels_in_english(self) -> None:
+        accept(language="en")
+        make_substance("cinnamic-acid", molfile=ACETONE)
+        root = self.get(substance_url("cinnamic-acid", "edit"))
+        self.assertEqual(label_of(root, "molfile"),
+                         "Structure (molfile)")
+        self.assertEqual(label_of(root, "remove_structure"),
+                         "Remove structure")
+
+    def test_the_box_of_a_substance_with_a_molfile(self) -> None:
+        make_substance("cinnamic-acid", molfile=ACETONE)
+        root = self.get(substance_url("cinnamic-acid", "edit"))
+        box = root.find("main").find("input", name="remove_structure")
+        self.assertEqual(box.get("type"), "checkbox")
+        self.assertNotIn("checked", box.attrs)
+        self.assertEqual(label_of(root, "remove_structure"),
+                         "Strukturformel entfernen")
+        self.assertEqual(
+            root.find("main").find("input", name="molfile").get("type"),
+            "file")
+
+    def test_no_box_without_a_molfile(self) -> None:
+        for path in (NEW_SUBSTANCE, substance_url("cinnamic-acid", "edit")):
+            with self.subTest(path=path):
+                root = self.get(path)
+                self.assertIsNone(root.find("main").find(
+                    "input", name="remove_structure"))
+                self.assertIsNotNone(root.find("main").find(
+                    "input", name="molfile"))
+
+    def test_the_drawing_is_no_field(self) -> None:
+        make_substance("cinnamic-acid", molfile=ACETONE)
+        root = self.get(substance_url("cinnamic-acid", "edit"))
+        self.assertIsNotNone(root.find("main").find(
+            "input", name="molfile"))
+        self.assertIsNone(root.find("main").find(
+            ("input", "textarea"), name="structure_svg"))
+
+
+class NewStructureTests(FormCase):
+    """Requirement: Registry forms (a chosen file becomes the
+    substance's molfile, its line endings made LF)."""
+
+    def data(self, **over: Any) -> dict[str, Any]:
+        return substance_data(self.get(NEW_SUBSTANCE), **over)
+
+    def test_a_new_substance_with_a_file(self) -> None:
+        done = self.client.post(NEW_SUBSTANCE, self.data(
+            molfile=upload(ACETONE)))
+        found = Substance.objects.get(key="ethyl-acetate")
+        self.assertEqual(found.molfile, ACETONE)
+        self.assertRedirects(done, substance_url("ethyl-acetate"),
+                             fetch_redirect_response=False)
+        self.assertEqual(
+            self.client.get(image_path("ethyl-acetate")).status_code, 200)
+
+    def test_line_endings_are_made_lf(self) -> None:
+        self.client.post(NEW_SUBSTANCE, self.data(
+            molfile=upload(crlf(ACETONE))))
+        found = Substance.objects.get(key="ethyl-acetate")
+        self.assertEqual(found.molfile, ACETONE)
+        self.assertNotIn("\r", found.molfile)
+
+    def test_a_new_substance_without_a_file_has_no_molfile(self) -> None:
+        self.client.post(NEW_SUBSTANCE, self.data())
+        found = Substance.objects.get(key="ethyl-acetate")
+        self.assertEqual((found.molfile, found.structure_svg), ("", ""))
+        self.assertEqual(
+            self.client.get(image_path("ethyl-acetate")).status_code, 404)
+
+    def test_a_file_that_is_refused_saves_nothing(self) -> None:
+        for name, content in REFUSED.items():
+            with self.subTest(file=name):
+                before = Substance.objects.count()
+                self.refused(self.client.post(NEW_SUBSTANCE, self.data(
+                    molfile=upload(content))), "molfile")
+                self.assertEqual(Substance.objects.count(), before)
+                self.assertFalse(Substance.objects.filter(
+                    key="ethyl-acetate").exists())
+
+    def test_a_molfile_with_a_nul_character_is_refused(self) -> None:
+        """A NUL character, which a PostgreSQL text column cannot hold,
+        is refused at the structure like the other refused files."""
+        self.refused(self.client.post(NEW_SUBSTANCE, self.data(
+            molfile=upload(ACETONE.replace("\n", "\x00\n", 1)))),
+            "molfile")
+        self.assertFalse(
+            Substance.objects.filter(key="ethyl-acetate").exists())
+
+    def test_markup_in_an_atom_alias(self) -> None:
+        """Scenario: Markup in an atom alias."""
+        self.client.post(NEW_SUBSTANCE, self.data(
+            molfile=upload(ACETONE_WITH_AN_ALIAS)))
+        response = self.client.get(image_path("ethyl-acetate"))
+        self.assertEqual(response.status_code, 200)
+        root = parsed(response.content)
+        self.assertEqual([e for e in root.iter() if tag(e) == "script"], [])
+        self.assertNotIn(ALIAS, response.content.decode("utf-8"))
+
+
+# The files a form refuses: not a molfile, a molfile of no atom, one
+# larger than 1 MB and one that is not UTF-8 text.
+REFUSED = {"text": NOT_A_MOLFILE, "no atom": NO_ATOM, "too large": LARGE,
+           "not UTF-8": LATIN_1}
+
+
+class EditStructureTests(FormCase):
+    """Requirement: Registry forms (the edit form's file and box)."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        make_substance("cinnamic-acid", molfile=ACETONE)
+        self.url = substance_url("cinnamic-acid", "edit")
+
+    def data(self, **over: Any) -> dict[str, Any]:
+        return {**filled(self.get(self.url)), **over}
+
+    def found(self) -> Any:
+        return Substance.objects.get(key="cinnamic-acid")
+
+    def test_a_file_replaces_the_molfile_and_is_drawn(self) -> None:
+        before = self.found().structure_svg
+        done = self.client.post(self.url, self.data(
+            molfile=upload(crlf(ETHANOL))))
+        self.assertRedirects(done, substance_url("cinnamic-acid"),
+                             fetch_redirect_response=False)
+        self.assertEqual(self.found().molfile, ETHANOL)
+        self.assertNotEqual(self.found().structure_svg, before)
+        self.assertEqual(
+            self.client.get(image_path("cinnamic-acid")).status_code, 200)
+
+    def test_with_neither_the_molfile_stays(self) -> None:
+        before = self.found().structure_svg
+        done = self.client.post(self.url, self.data(note="Geändert"))
+        self.assertEqual(done.status_code, 302)
+        self.assertEqual(self.found().note, "Geändert")
+        self.assertEqual(self.found().molfile, ACETONE)
+        self.assertEqual(self.found().structure_svg, before)
+
+    def test_the_box_removes_the_molfile(self) -> None:
+        done = self.client.post(self.url, self.data(remove_structure="on"))
+        self.assertEqual(done.status_code, 302)
+        self.assertEqual(self.found().molfile, "")
+        self.assertEqual(
+            self.client.get(image_path("cinnamic-acid")).status_code, 404)
+
+    def test_a_file_and_the_box_together(self) -> None:
+        self.refused(self.client.post(self.url, self.data(
+            molfile=upload(ETHANOL), remove_structure="on")), "molfile")
+        self.assertEqual(self.found().molfile, ACETONE)
+
+    def test_a_file_that_is_refused_changes_nothing(self) -> None:
+        before = self.found().structure_svg
+        for name, content in REFUSED.items():
+            with self.subTest(file=name):
+                self.refused(self.client.post(self.url, self.data(
+                    molfile=upload(content), note="Geändert")), "molfile")
+                self.assertEqual(self.found().molfile, ACETONE)
+                self.assertEqual(self.found().structure_svg, before)
+                self.assertNotEqual(self.found().note, "Geändert")
+
+    def test_the_molfile_is_in_the_history_and_the_drawing_is_not(
+            self) -> None:
+        """Scenario: Not in the history."""
+        self.client.post(self.url, self.data(molfile=upload(ETHANOL)))
+        newest = self.found().history.order_by("-history_id").first()
+        self.assertEqual(newest.history_type, "~")
+        self.assertEqual(newest.history_user, self.kl)
+        self.assertEqual(newest.molfile, ETHANOL)
+        self.assertFalse(hasattr(newest, "structure_svg"))
+
+
+class DemoStructureFormTests(SeededCase):
+    """Scenarios of Registry forms about the structure, on the demo data
+    set."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.client.force_login(self.account("klehmann"))
+
+    def post(self, key: str, **over: Any) -> Any:
+        root = self.get(substance_url(key, "edit"))
+        return self.client.post(substance_url(key, "edit"),
+                                {**filled(root), **over})
+
+    def test_structure_from_a_file(self) -> None:
+        """Scenario: Structure from a file."""
+        sent = ACETONE.replace("acetone\n", "Aceton\n", 1)
+        done = self.post("acetone", molfile=upload(crlf(sent)))
+        self.assertRedirects(done, substance_url("acetone"),
+                             fetch_redirect_response=False)
+        self.assertEqual(Substance.objects.get(key="acetone").molfile, sent)
+        self.assertEqual(
+            self.client.get(image_path("acetone")).status_code, 200)
+
+    def test_not_a_molfile(self) -> None:
+        """Scenario: Not a molfile."""
+        before = Substance.objects.get(key="new-compound-7")
+        self.assertEqual(before.molfile, "")
+        done = self.post("new-compound-7", molfile=upload(NOT_A_MOLFILE))
+        self.assertEqual(done.status_code, 200)
+        self.assertIn("molfile", context_form(done).errors)
+        self.assertEqual(
+            Substance.objects.get(key="new-compound-7").molfile, "")
+        self.assertEqual(
+            self.client.get(image_path("new-compound-7")).status_code, 404)
+
+    def test_structure_removed(self) -> None:
+        """Scenario: Structure removed."""
+        self.assertEqual(
+            self.client.get(image_path("isopentyl-acetate")).status_code,
+            200)
+        done = self.post("isopentyl-acetate", remove_structure="on")
+        self.assertRedirects(done, substance_url("isopentyl-acetate"),
+                             fetch_redirect_response=False)
+        self.assertEqual(
+            Substance.objects.get(key="isopentyl-acetate").molfile, "")
+        self.assertEqual(
+            self.client.get(image_path("isopentyl-acetate")).status_code,
+            404)
+
+    def test_a_file_and_the_box_together(self) -> None:
+        """Scenario: A file and the box together."""
+        before = Substance.objects.get(key="isopentyl-acetate").molfile
+        self.assertTrue(before)
+        done = self.post("isopentyl-acetate", molfile=upload(ACETONE),
+                         remove_structure="on")
+        self.assertEqual(done.status_code, 200)
+        self.assertIn("molfile", context_form(done).errors)
+        self.assertEqual(
+            Substance.objects.get(key="isopentyl-acetate").molfile, before)
+        self.assertEqual(
+            self.client.get(image_path("isopentyl-acetate")).status_code,
+            200)

@@ -8,7 +8,7 @@ The site SHALL be rendered by a theme written for this repository, made of these
 - layouts in `site/layouts/`;
 - stylesheets in `site/assets/css/`;
 - scripts in `site/assets/js/`;
-- structure images in the collection's `static/structures/`.
+- structure images the build stages from the registry (compound-registry "Structure images"), and scheme images in the collection's `static/structures/`.
 
 The following apply:
 - `site/hugo.toml` sets no `theme` key, and no `themes/` directory exists under `site/`.
@@ -227,11 +227,11 @@ A procedure page SHALL carry exactly one `p.sample-banner` with `role="note"` an
 - **THEN** `procedures/osdb-0906/index.html` has no `p.sample-banner`
 
 ### Requirement: Structure image slot
-A procedure that sets `scheme_image` (procedure-schema "Scheme image") SHALL end its header with one `figure.structure` holding an `img` whose `src` resolves to the published copy of the collection's `static/<scheme_image>` and whose `alt` is `Scheme of <title>`. Otherwise a specific procedure's header SHALL end with one `figure.structure` per product whose compound sets `structure_image`, in `products` order, each holding an `img` whose `src` resolves to the published copy of the collection's `static/<structure_image>`, and whose `alt` is `Structure of <name>`, the compound's shown name. When no product's compound sets one, and always for a general procedure without `scheme_image`, the header ends with a `figure.structure.structure--placeholder` holding `div.structure__slot` with the text `No structure image`. The print stylesheet hides the placeholder.
+A procedure that sets `scheme_image` (procedure-schema "Scheme image") SHALL end its header with one `figure.structure` holding an `img` whose `src` resolves to the published copy of the collection's `static/<scheme_image>` and whose `alt` is `Scheme of <title>`. Otherwise a specific procedure's header SHALL end with one `figure.structure` per product whose compound sets `structure_image`, in `products` order, each holding an `img` whose `src` resolves to the published copy of the image the build staged as `<structure_image>`, and whose `alt` is `Structure of <name>`, the compound's shown name. When no product's compound sets one, and always for a general procedure without `scheme_image`, the header ends with a `figure.structure.structure--placeholder` holding `div.structure__slot` with the text `No structure image`. The print stylesheet hides the placeholder.
 
 #### Scenario: Image and placeholder
 - **WHEN** a test scans `procedures/osdb-0003/index.html` and `procedures/osdb-0002/index.html` after a theme build
-- **THEN** the first has an `img` whose resolved `src` is `public/structures/isopentyl-acetate.svg`, which exists, with `alt` `Structure of Isopentyl acetate`
+- **THEN** the first has an `img` whose resolved `src` is `public/substances/isopentyl-acetate/structure.svg`, which exists, with `alt` `Structure of Isopentyl acetate`
 - **AND** the second has the placeholder figure and no `img`
 
 #### Scenario: One figure per product with an image
@@ -243,7 +243,7 @@ A procedure that sets `scheme_image` (procedure-schema "Scheme image") SHALL end
 - **THEN** the first header ends with one figure whose `img` has the `alt` `Scheme of <title>` and the second with the placeholder, although its products' compounds set structure images
 
 ### Requirement: Structure images are safe SVG
-Every `.svg` file under the demo collection's `static/structures/` SHALL be a hand-written SVG that meets all of the following:
+Every `.svg` file under the demo collection's `static/structures/` and under `webapp/demo/substances/`, beside the demo registry, SHALL be a hand-written SVG that meets all of the following:
 - It parses as XML with the root element `{http://www.w3.org/2000/svg}svg`.
 - The root has a `viewBox`, `role="img"` and a child `title` with non-empty text.
 - The first drawing element is a `rect` filling the view box with `fill="#fff"`.
@@ -254,8 +254,8 @@ Every `.svg` file under the demo collection's `static/structures/` SHALL be a ha
 - No attribute value begins with `http:`, `https:` or `//`.
 
 #### Scenario: Shipped structure images
-- **WHEN** a test parses every `.svg` file under `examples/demo/static/structures/` with `xml.etree.ElementTree`
-- **THEN** at least one file exists, `isopentyl-acetate.svg` among them, and each meets every rule above
+- **WHEN** a test parses every `.svg` file under `examples/demo/static/structures/` and `webapp/demo/substances/` with `xml.etree.ElementTree`
+- **THEN** each directory holds at least one, `aryl-ketone-reduction.svg` and `isopentyl-acetate/structure.svg` among them, and each meets every rule above
 
 ### Requirement: Home page
 The home page's `main` SHALL contain, in this order:
@@ -363,7 +363,7 @@ These texts are those of an English site; a German site has the German texts tha
 ### Requirement: Compound pages
 The site SHALL publish, for every compound of the registry, a page at `/compounds/<key>/`, made by a Hugo content adapter in `site/content/compounds/` from `site.Data.compounds` (site-build "Hugo configuration"). The page's display title is the compound's shown name (localization "German compound names"), and its `main` holds, in this order:
 - the `h1` with that name;
-- when the substance has a structure image (compound-registry "Structure images by key"), a `figure.structure` holding an `img` whose `src` resolves to the published image and whose `alt` is `Structure of <name>`; otherwise no figure and no placeholder;
+- when the substance has a structure image (compound-registry "Structure images"), a `figure.structure` holding an `img` whose `src` resolves to the published image and whose `alt` is `Structure of <name>`; otherwise no figure and no placeholder;
 - a `dl.compound-facts` with the pairs `Formula`, `MW`, `CAS` and `SMILES`, each only when the substance has it, written as the metadata panel writes them, the SMILES with its copy button, followed by one pair for each registry field the substance has, in the registry fields' order, its label and value written as compound-fields "Field display" states, with whitespace after each `</dt>`;
 - `section.compound-made-by`, only when some published procedure has the compound among its products, with the `h2` `Made by` and a `ul` holding one `li` per such procedure, by ID, or, for a general procedure, one per entry that makes the compound, in entry order: an `a` linking the procedure page with the text `<ID> <title>`, then, for a general procedure, ` · entry <n>`, then ` · `, the yield of this compound in that procedure or entry as `<n> %`, then ` · ` and the procedure's status badge;
 - `section.compound-used-in`, only when some published procedure has the compound among its `substrates`, with the `h2` `Used in` and a `ul` holding one `li` per such procedure, by ID: an `a` linking the procedure page with the text `<ID> <title>`, then ` · ` and its status badge;
@@ -387,7 +387,7 @@ A compound page carries no `data-pagefind-body`, so the search index holds proce
 
 #### Scenario: Compound pages are not indexed
 - **WHEN** a test scans every compound page after the same build
-- **THEN** none has an element with `data-pagefind-body`, and the image of `isopentyl-acetate` resolves to `public/structures/isopentyl-acetate.svg`
+- **THEN** none has an element with `data-pagefind-body`, and the image of `isopentyl-acetate` resolves to `public/substances/isopentyl-acetate/structure.svg`
 
 ### Requirement: Compound directory
 The page `/compounds/` SHALL be the compound catalogue (site-catalogue "Compound catalogue"), whose results end with a `table.compound-table` with the header cells `Compound`, `Formula`, `MW` and `CAS`, then one header cell for each registry field shown as a column, `Article no.` and `Chemical class` in that order (compound-fields "Registry fields"), holding the field's shown label, then `Made by` and `Used in`, and one body row per substance of the registry, ordered by shown name. A row holds a link to the compound's page with its shown name, the formula with each digit run in `<sub>` or an empty cell, `<mw> g/mol` or an empty cell, the CAS number or an empty cell, for each column field the substance's value written as compound-fields "Field display" states or an empty cell when it has none, and the numbers of published procedures that make it and that use it. Without JavaScript the page shows the complete table and no control.
