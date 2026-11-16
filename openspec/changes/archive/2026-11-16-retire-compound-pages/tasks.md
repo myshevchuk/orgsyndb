@@ -30,7 +30,7 @@
 - [x] 4.1 In a browser: a procedure page, a general procedure's scope
   table, a sequence page and the home page link the lab's substance
   pages; the catalogue searches and filters
-- [ ] 4.2 Run the stack on the test server
+- [x] 4.2 Run the stack on the test server
 
 ## 5. Docs, review and archive
 
