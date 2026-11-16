@@ -1552,6 +1552,47 @@ class FileTests(unittest.TestCase):
         self.assertRegex(builder.group(1),
                          r"(?m)^      ORGSYNDB_LAB: \"true\"$")
 
+    def test_the_builder_waits_for_the_app(self) -> None:
+        """Scenario: Compose file (the app's health check connects to
+        port 8000 and the builder starts once the app is healthy, without
+        Docker)."""
+        text = (DEPLOY / "compose.yaml").read_text(encoding="utf-8")
+        blocks = {name: re.search(rf"^  {name}:\n(.*?)(?=^  \S|^\S)",
+                                  text + "\n", re.M | re.S)
+                  for name in ("builder", "app")}
+        for name, block in blocks.items():
+            with self.subTest(service=name):
+                self.assertIsNotNone(block)
+        self.assertRegex(blocks["builder"].group(1),
+                         r"(?s)depends_on:\s*\n\s*app:\s*\n\s*"
+                         r"condition: service_healthy")
+        check = re.search(r"(?s)healthcheck:\s*\n\s*test:(.*?)\n\s*interval:",
+                          blocks["app"].group(1))
+        self.assertIsNotNone(check)
+        self.assertIn("8000", check.group(1))
+        self.assertRegex(check.group(1), r"create_connection")
+
+    def test_the_app_health_check_passes_once_the_port_listens(self) -> None:
+        """Scenario: Compose file (the health check fails while nothing
+        listens on port 8000 and passes once something does)."""
+        text = (DEPLOY / "compose.yaml").read_text(encoding="utf-8")
+        found = re.search(r"\"(import socket;[^\"]*)\"", text)
+        self.assertIsNotNone(found, "no Python health check in compose.yaml")
+        import socket
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        code = found.group(1).replace("8000", str(port))
+        closed = subprocess.run([sys.executable, "-c", code],
+                                capture_output=True)
+        self.assertNotEqual(closed.returncode, 0)
+        with socket.socket() as server:
+            server.bind(("127.0.0.1", port))
+            server.listen()
+            opened = subprocess.run([sys.executable, "-c", code],
+                                    capture_output=True)
+        self.assertEqual(opened.returncode, 0, opened.stderr)
+
     def test_compose_file(self) -> None:
         """Scenario: Compose file."""
         if shutil.which("docker") is None:
@@ -1599,6 +1640,10 @@ class FileTests(unittest.TestCase):
         app = services["app"]
         self.assertEqual(app["depends_on"]["db"]["condition"],
                          "service_healthy")
+        self.assertIn("8000", " ".join(app["healthcheck"]["test"]))
+        self.assertEqual(
+            services["builder"]["depends_on"]["app"]["condition"],
+            "service_healthy")
         self.assertEqual(Path(app["build"]["context"]).resolve(), root)
         self.assertTrue(
             app["build"]["dockerfile"].endswith("deploy/webapp/Dockerfile"))

@@ -39,6 +39,10 @@ services:
     environment:
       # The site links the lab application, which app below runs.
       ORGSYNDB_LAB: "true"
+    # The first cycle needs the app answering, not still migrating.
+    depends_on:
+      app:
+        condition: service_healthy
     volumes:
       - data:/var/lib/orgsyndb
       - pushes:/var/lib/orgsyndb-pushes:ro
@@ -88,6 +92,14 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # Healthy once gunicorn listens, after the migrations and demo data.
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import socket; socket.create_connection(('127.0.0.1', 8000), 2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
 
   backup:
     image: postgres:18

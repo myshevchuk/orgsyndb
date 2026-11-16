@@ -1535,7 +1535,9 @@ service restores backups:
 - `app` runs the lab application, built from the checkout that holds
   `deploy/compose.yaml`. It stores accepted collection imports in the
   database and wakes the builder after a registry change commits when
-  `ORGSYNDB_WAKE_URL` is set.
+  `ORGSYNDB_WAKE_URL` is set. Compose counts it healthy once it accepts
+  connections on port 8000 and starts the builder only then, so the
+  builder's first cycle finds the app answering.
 - `backup` writes a backup set at startup and every 24 hours into
   `deploy/backups/` on the host. It pauses Forgejo to copy both databases,
   Forgejo's volume and the push log, and also saves `orgsyndb.env`.
