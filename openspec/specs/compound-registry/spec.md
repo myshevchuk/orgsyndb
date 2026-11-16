@@ -42,15 +42,15 @@ A collection SHALL name its registry in its `orgsyndb.toml` as `registry`, a non
 - **THEN** `pipeline.registry` raises `validate.ConfigError` naming the file
 
 ### Requirement: Registry checks
-The validator SHALL take the registry from the snapshot file its `--registry` option names (procedure-validation "Command-line interface"): the compound keys are the keys of its substances, and its vocabularies are those procedure fields and reaction types name (procedure-fields "Procedure field declarations", reaction-types "Reaction-type vocabulary"). It checks no substance's values: the lab application checks them. A substance whose key is `group`, the directory of the compound tabs (site-catalogue "Compound tabs"), is an error on the snapshot file, under the field `substances`, containing `group`.
+The validator SHALL take the registry from the snapshot file its `--registry` option names (procedure-validation "Command-line interface"): the compound keys are the keys of its substances, and its vocabularies are those procedure fields and reaction types name (procedure-fields "Procedure field declarations", reaction-types "Reaction-type vocabulary"). It checks no substance's values: the lab application checks them.
 
 #### Scenario: Unknown compound
 - **WHEN** a registry variant run removes the substance `ethyl-acetate` from the fixture snapshot
 - **THEN** it reports one error for each procedure of the run that names `ethyl-acetate`, containing `unknown compound "ethyl-acetate"`
 
-#### Scenario: A substance named like the tabs directory
+#### Scenario: A substance with the key group
 - **WHEN** a registry variant run adds a substance with the key `group` to the fixture snapshot
-- **THEN** it reports exactly one error, on the snapshot's path, field `substances`, containing `group`
+- **THEN** it reports no problem
 
 ### Requirement: Structure images
 A substance SHALL have a structure image only when its snapshot entry's `molfile` is a string. The build stages the images as `build/substances/<key>/structure.svg` in the collection, `<key>` being the substance's key, creating `build/substances/` when it is missing, and removes from it everything that is not the image of a substance with a molfile.

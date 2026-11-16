@@ -67,6 +67,22 @@ class HugoConfigurationTests(unittest.TestCase):
                          "every data entry of the site comes from the "
                          "collection")
 
+    def test_the_menu_has_no_compounds_entry(self) -> None:
+        """Scenario: Navigation (the menu `main` has no `Compounds`
+        entry, and no entry names `/compounds/`)."""
+        config = tomllib.loads(HUGO_TOML.read_text(encoding="utf-8"))
+        entries = config["menus"]["main"]
+        self.assertTrue(entries, "the menu main is empty")
+        self.assertNotIn("nav_compounds",
+                         [entry["identifier"] for entry in entries])
+        self.assertEqual(
+            [entry["identifier"] for entry in entries
+             if any("/compounds/" in value for value in strings(entry))],
+            [])
+        collection = [entry["identifier"] for entry in entries
+                      if entry.get("parent") == "nav_collection"]
+        self.assertEqual(collection, ["nav_sequences", "nav_procedures"])
+
     def test_configuration_names_no_host(self) -> None:
         """Scenario: Configuration parses to the contract (no host)."""
         self.assertTrue(HUGO_TOML.is_file(), "site/hugo.toml does not exist")

@@ -1,5 +1,5 @@
 """Tests of the route trees the lab draws (synthesis-routes: Routes in
-the lab, by the rules of Derived routes)."""
+the lab, by the rules of "Routes in the lab")."""
 
 from typing import Any
 
@@ -22,7 +22,7 @@ def leaf(key: str, more: bool = False) -> dict[str, Any]:
 
 def step(procedure: str, yield_percent: Any, *substrates: dict[str, Any],
          entry: int | None = None) -> dict[str, Any]:
-    """A step of a route tree, as Derived routes writes it."""
+    """A step of a route tree, as "Routes in the lab" writes it."""
     found: dict[str, Any] = {"procedure": procedure}
     if entry is not None:
         found["entry"] = entry
@@ -104,7 +104,7 @@ class DemoRoutesTests(SeededCase):
 
 
 class RowRoutesTests(TestCase):
-    """The rules of Derived routes on the lab's rows."""
+    """The rules of "Routes in the lab" on the lab's rows."""
 
     def setUp(self) -> None:
         self.collection = Collection()
@@ -138,7 +138,7 @@ class RowRoutesTests(TestCase):
         self.assertEqual(last, leaf("chain-1", more=True))
 
     def test_order_entries_and_a_step_from_nothing(self) -> None:
-        """Derived routes: steps by procedure ID, a general procedure's
+        """Routes in the lab: steps by procedure ID, a general procedure's
         entries in entry order, and a step that starts from nothing."""
         add = self.collection.add
         add("OSDB-0003", (["m"], [("t", 70)]))
@@ -159,6 +159,105 @@ class RowRoutesTests(TestCase):
         procedure.entries.update(withdrawn=True)
         self.assertEqual(routes.route_tree("c", routes.steps()), [])
 
+    def add_chain(self, length: int) -> None:
+        """The specific procedures OSDB-000<n>, each making c<n> from
+        c<n-1>, for n from 1 to LENGTH."""
+        for n in range(1, length + 1):
+            self.collection.add(f"OSDB-{n:04d}",
+                                ([f"c{n - 1}"], [(f"c{n}", 90)]))
+
+    def test_the_depth_limit(self) -> None:
+        """Scenario: The depth limit in the lab."""
+        self.add_chain(4)
+        made = routes.steps()
+        drawn = {key: routes.route_tree(key, made, depth=2)
+                 for key in ("c0", "c1", "c2", "c3", "c4")}
+        self.assertEqual(drawn["c4"], [
+            step("OSDB-0004", 90.0, below(
+                "c3", step("OSDB-0003", 90.0, leaf("c2", more=True))))])
+        self.assertEqual(drawn["c3"], [
+            step("OSDB-0003", 90.0, below(
+                "c2", step("OSDB-0002", 90.0, leaf("c1", more=True))))])
+        self.assertEqual(drawn["c2"], [
+            step("OSDB-0002", 90.0, below(
+                "c1", step("OSDB-0001", 90.0, leaf("c0"))))])
+        self.assertEqual(drawn["c1"], [])
+        self.assertEqual(drawn["c0"], [])
+
+    def test_the_depth_limit_one(self) -> None:
+        """Scenario: The depth limit in the lab (depth limit 1)."""
+        self.add_chain(4)
+        made = routes.steps()
+        for n in (2, 3, 4):
+            with self.subTest(key=f"c{n}"):
+                self.assertEqual(
+                    routes.route_tree(f"c{n}", made, depth=1), [
+                        step(f"OSDB-{n:04d}", 90.0,
+                             leaf(f"c{n - 1}", more=True))])
+        self.assertEqual(routes.route_tree("c1", made, depth=1), [])
+
+    def test_the_default_depth_limit_is_6(self) -> None:
+        """Requirement: Routes in the lab (the depth limit 6)."""
+        self.add_chain(8)
+        tree = routes.route_tree("c8", routes.steps())
+        procedures = []
+        while tree:
+            (only,) = tree
+            procedures.append(only["procedure"])
+            (substrate,) = only["substrates"]
+            last, tree = substrate, substrate["steps"]
+        self.assertEqual(procedures, [f"OSDB-{n:04d}"
+                                      for n in range(8, 2, -1)])
+        self.assertEqual(last, leaf("c2", more=True))
+
+    def test_the_keys_of_a_tree(self) -> None:
+        """Requirement: Routes in the lab (the exact keys of the step
+        and substrate tables; `entry` only for an entry of a general
+        procedure)."""
+        add = self.collection.add
+        add("OSDB-0001", (["a"], [("b", 80)]))
+        add("OSDB-0002", (["b"], [("t", 70)]))
+        add("OSDB-0003", (["b"], [("x", 60), ("t", 50)]), (["a"], []),
+            general=True)
+        tree = routes.route_tree("t", routes.steps())
+        self.assertEqual([found["procedure"] for found in tree],
+                         ["OSDB-0002", "OSDB-0003"])
+        tables = []
+
+        def collect(steps: list[dict[str, Any]]) -> None:
+            for found in steps:
+                tables.append(found)
+                for substrate in found["substrates"]:
+                    tables.append(substrate)
+                    collect(substrate["steps"])
+
+        collect(tree)
+        for found in tables:
+            with self.subTest(table=found):
+                if "compound" in found:
+                    self.assertEqual(set(found),
+                                     {"compound", "steps", "more"})
+                    self.assertIsInstance(found["more"], bool)
+                elif found["procedure"] == "OSDB-0003":
+                    self.assertEqual(set(found), {
+                        "procedure", "entry", "yield_percent",
+                        "substrates"})
+                else:
+                    self.assertEqual(set(found), {
+                        "procedure", "yield_percent", "substrates"})
+
+    def test_the_yield_is_that_of_the_substance_the_step_makes(
+            self) -> None:
+        """Requirement: Routes in the lab (`yield_percent`, the yield of
+        the substance the step makes)."""
+        add = self.collection.add
+        add("OSDB-0001", (["a"], [("x", 60), ("y", 70)]))
+        add("OSDB-0002", (["y"], [("t", 50)]))
+        (found,) = routes.route_tree("t", routes.steps())
+        (via,) = found["substrates"]
+        self.assertEqual([found["yield_percent"],
+                          via["steps"][0]["yield_percent"]], [50.0, 70.0])
+
 
 def chain(length: int) -> dict[str, list[routes.Step]]:
     """The steps of a chain: OSDB-000<n> makes c<n> from c<n-1>."""
@@ -168,7 +267,7 @@ def chain(length: int) -> dict[str, list[routes.Step]]:
 
 
 class LimitTests(SimpleTestCase):
-    """Derived routes: the depth limit and the step budget."""
+    """Routes in the lab: the depth limit and the step budget."""
 
     def test_the_depth_limit(self) -> None:
         made = chain(4)

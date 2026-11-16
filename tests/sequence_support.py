@@ -121,13 +121,6 @@ def sequences_of(item: Content, sequences: list[Sequence]
                   key=lambda s: s.id)
 
 
-def sequences_making(key: str, sequences: list[Sequence]
-                     ) -> list[Sequence]:
-    """The sequences whose target is the compound ``key``, by ID."""
-    return sorted((s for s in sequences if s.target == key),
-                  key=lambda s: s.id)
-
-
 def check_sequence_page(case: unittest.TestCase, page: Page,
                         sequence: Sequence, by_id: dict[str, Content],
                         registry: dict[str, dict[str, Any]],
@@ -221,7 +214,7 @@ def check_compound_item(case: unittest.TestCase, page: Page, item: Node,
                                            fields, locale),
                      [fs.beside_note(fields, compound, locale)])
     case.assertEqual(page.resolve(links[0].attrs.get("href", "")),
-                     f"/compounds/{key}/")
+                     fs.substance_url(key))
     case.assertEqual(links[0].norm(), name)
     images = item.find_all("img")
     if compound.get("structure_image"):
@@ -307,28 +300,3 @@ def check_panel_sequences(case: unittest.TestCase, page: Page,
     case.assertEqual(len(page.links(pairs[label].definition)), len(links))
     case.assertNotEqual(pairs[label].gap, "")
     case.assertEqual(pairs[label].gap.strip(), "")
-
-
-def check_compound_sequences(case: unittest.TestCase, page: Page,
-                             key: str, sequences: list[Sequence],
-                             locale: str) -> None:
-    """``section.compound-sequences`` of a compound page, after its
-    ``Used in`` section: only when some sequence makes the compound."""
-    section = page.find("section", "compound-sequences")
-    wanted = sequences_making(key, sequences)
-    if not wanted:
-        case.assertIsNone(section, f"a sequence section on {key}")
-        return
-    case.assertIsNotNone(section, f"no section.compound-sequences, {key}")
-    case.assertEqual([h.norm() for h in section.find_all("h2")],
-                     [TEXTS[locale]["heading"]])
-    for other in ("compound-made-by", "compound-used-in"):
-        before = page.find("section", other)
-        if before is not None:
-            case.assertLess(page.index_of(before), page.index_of(section))
-    entries = section.find("ul").find_all("li")
-    case.assertEqual(len(entries), len(wanted))
-    for entry, sequence in zip(entries, wanted):
-        links = page.links(entry)
-        case.assertEqual([(l.target, l.node.norm()) for l in links],
-                         [(f"/sequences/{sequence.slug}/", sequence.title)])

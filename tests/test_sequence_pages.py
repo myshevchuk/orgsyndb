@@ -7,8 +7,6 @@ pages" and "Sequences beside procedures and compounds", site-build
 ``GermanSequenceTests`` in German, ``PartialSequenceTests`` in German
 without one German sequence, and ``IntermediateSiteTests`` adds a
 sequence whose first step makes two compounds that the next step takes.
-The links from the compound pages are also checked in
-``test_compound_pages.py``.
 """
 
 import json
@@ -77,7 +75,7 @@ class SequenceCase(tti.SiteCase):
                 targets = page.links(cells[1])
                 self.assertEqual(
                     [(l.target, l.node.norm()) for l in targets],
-                    [(f"/compounds/{sequence.target}/", ps.shown_name(
+                    [(fs.substance_url(sequence.target), ps.shown_name(
                         registry[sequence.target], self.LOCALE))])
                 self.assertTrue(targets[0].node.has_class("compound"))
                 self.assertEqual(
@@ -210,9 +208,10 @@ class SequenceSiteTests(SequenceCase):
         scheme = main.find("figure", "sequence-scheme")
         links = [page.resolve(l.attrs["href"])
                  for l in scheme.find_all("a", "compound")]
-        self.assertEqual(links[-1], "/compounds/1-biphenyl-4-yl-ethanol/")
+        self.assertEqual(
+            links[-1], fs.substance_url("1-biphenyl-4-yl-ethanol"))
         for other in ("1-phenylethanol", "1-4-bromophenyl-ethanol"):
-            self.assertNotIn(f"/compounds/{other}/", links)
+            self.assertNotIn(fs.substance_url(other), links)
         self.assertEqual(
             [(p.label, p.definition.norm()) for p in page.definition_pairs(
                 main.find("dl", "key-facts"))],
@@ -356,7 +355,7 @@ class GermanSequenceTests(SequenceCase):
         self.assertEqual(self.directory().title(),
                          "Synthesewege | OrgSynDB")
 
-    def test_the_german_links_from_procedures_and_compounds(self) -> None:
+    def test_the_german_links_from_procedures(self) -> None:
         """Scenario: German metadata panel (the Synthesewege pair)."""
         sequences = self.sequences()
         for item, page in self.procedure_pages():
@@ -366,11 +365,6 @@ class GermanSequenceTests(SequenceCase):
         self.assertEqual(
             [l.norm() for l in panel["Synthesewege"].definition.find_all(
                 "a", "sequence")], ["Aspirin aus Wintergrünöl"])
-        for key in self.registry():
-            page = ps.load_page(self.public, self.public / "compounds"
-                                / key / "index.html")
-            with self.subTest(compound=key):
-                ss.check_compound_sequences(self, page, key, sequences, "de")
 
     def test_the_german_variants_are_staged(self) -> None:
         """Requirement: Sequence files (the chosen variant is staged,
@@ -558,7 +552,8 @@ class StepEntrySiteTests(SequenceCase):
         scheme = main.find("figure", "sequence-scheme")
         links = [page.resolve(l.attrs["href"])
                  for l in scheme.find_all("a", "compound")]
-        self.assertEqual(links[-1], "/compounds/1-biphenyl-4-yl-ethanol/")
+        self.assertEqual(
+            links[-1], fs.substance_url("1-biphenyl-4-yl-ethanol"))
         self.assertEqual(
             [(p.label, p.definition.norm()) for p in page.definition_pairs(
                 main.find("dl", "key-facts"))],

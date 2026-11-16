@@ -74,8 +74,9 @@ TYPE_OPTIONS = {
     "boolean": ("facet",),
     "choice": ("vocabulary", "multiple", "facet"),
 }
-# The presentation options of the registry fields, which a procedure
-# field does not take.
+# The keys a procedure field declaration does not take, which an error
+# names: ``beside``, the presentation of a registry field, and
+# ``column``, ``search`` and ``tabs``.
 PROCEDURE_WITHHELD_OPTIONS = ("column", "search", "tabs", "beside")
 # The front-matter keys Hugo reads for itself, beyond those the procedure
 # schema already names, and the weight it reads for each taxonomy.
@@ -1099,13 +1100,10 @@ class Declaration(NamedTuple):
     field, and ``vocabulary``, ``multiple``, ``terms`` and ``facet`` to
     a choice field. ``pattern`` is compiled; ``terms`` maps every term
     of the field's vocabulary, in the registry's order, to its entry.
-    ``facet`` makes the field a filter of a catalogue. ``column``,
-    ``search``, ``beside`` and ``tabs`` are the presentation of a
-    registry field and False for a procedure field: a column of the
-    compound directory, the compound catalogue's search matching its
-    values, the value written after every link to the compound, and the
-    compound catalogue divided into tab pages by the field's top-level
-    terms, whose directory the field's key names. ``notebooks`` holds
+    ``facet`` makes a procedure field a filter of a catalogue and is
+    False for a registry field. ``beside`` is the presentation of a
+    registry field, its value written after every link to the compound,
+    and False for a procedure field. ``notebooks`` holds
     the codes of the registry's notebooks for the journal field
     ``notebook``, whose value's code, the part before ``/``, is one of
     them, and is None for every other field.
@@ -1116,7 +1114,6 @@ class Declaration(NamedTuple):
     label: str
     label_de: str | None
     required: bool
-    column: bool
     unique: bool
     pattern: re.Pattern[str] | None
     minimum: int | float | None
@@ -1126,8 +1123,6 @@ class Declaration(NamedTuple):
     multiple: bool
     terms: dict[str, Term]
     facet: bool
-    search: bool
-    tabs: bool
     beside: bool
     notebooks: frozenset[str] | None = None
 
@@ -1462,27 +1457,19 @@ def registry_notebooks(registry: dict[str, Any]) -> dict[str, str]:
             for entry in registry.get("notebooks", [])}
 
 
-# The key of the registry field shown as tabs, which names the directory
-# of the compound tab pages.
-TABS_KEY = "group"
-
-
 def _declaration(key: str, type_: str, label: str, label_de: str | None,
                  vocabulary: str | None = None,
                  terms: dict[str, Term] | None = None,
                  **flags: bool) -> Declaration:
     """Return the field KEY of TYPE_ with its labels, for a choice its
-    VOCABULARY and TERMS, and the FLAGS among ``column``, ``search``,
-    ``beside``, ``multiple``, ``facet`` and ``tabs`` that it sets; every
-    other option takes its default."""
+    VOCABULARY and TERMS, and the FLAGS among ``beside``, ``multiple``
+    and ``facet`` that it sets; every other option takes its default."""
     return Declaration(
         key=key, type=type_, label=label, label_de=label_de,
-        required=False, column=flags.get("column", False), unique=False,
-        pattern=None, minimum=None, maximum=None, unit=None,
-        vocabulary=vocabulary, multiple=flags.get("multiple", False),
-        terms=terms or {}, facet=flags.get("facet", False),
-        search=flags.get("search", False), tabs=flags.get("tabs", False),
-        beside=flags.get("beside", False))
+        required=False, unique=False, pattern=None, minimum=None,
+        maximum=None, unit=None, vocabulary=vocabulary,
+        multiple=flags.get("multiple", False), terms=terms or {},
+        facet=flags.get("facet", False), beside=flags.get("beside", False))
 
 
 def registry_fields(vocabularies: dict[str, dict[str, Term]]
@@ -1497,16 +1484,14 @@ def registry_fields(vocabularies: dict[str, dict[str, Term]]
     """
     return (
         _declaration("article_number", "text", "Article no.",
-                        "Artikelnr.", column=True, search=True, beside=True),
+                     "Artikelnr.", beside=True),
         _declaration("short_name", "text", "Short name", "Kurzname",
-                        search=True, beside=True),
+                     beside=True),
         _declaration("chemical_class", "choice", "Chemical class",
-                        "Stoffklasse", "chemical-classes",
-                        vocabularies["chemical-classes"], multiple=True,
-                        column=True, facet=True),
-        _declaration(TABS_KEY, "choice", "Group", "Gruppe",
-                        "inventory-groups", vocabularies["inventory-groups"],
-                        facet=True, tabs=True),
+                     "Stoffklasse", "chemical-classes",
+                     vocabularies["chemical-classes"], multiple=True),
+        _declaration("group", "choice", "Group", "Gruppe",
+                     "inventory-groups", vocabularies["inventory-groups"]),
     )
 
 
@@ -1528,15 +1513,6 @@ def journal_fields(vocabularies: dict[str, dict[str, Term]],
                      "projects", vocabularies["projects"], facet=True),
     )
 
-
-def check_registry(registry: dict[str, Any]) -> list[Problem]:
-    """Check the snapshot REGISTRY for what the site cannot publish: a
-    substance whose key is TABS_KEY, which names the directory of the
-    compound tab pages, is an error under ``substances``."""
-    return [error("substances", f'the substance "{TABS_KEY}" has the key '
-                  "of the directory of the compound tabs, "
-                  f"/compounds/{TABS_KEY}/, which no substance may take")
-            for entry in registry["substances"] if entry["key"] == TABS_KEY]
 
 # --------------------------------------------------------------------------
 # Synthesis sequences
@@ -2258,21 +2234,18 @@ def report(problems: Iterable[tuple[str, Problem]], files: int) -> int:
     return 1 if errors else 0
 
 
-def run(content_roots: Sequence[str], registry: tuple[str, dict[str, Any]],
-        sequences: str, ctx: Context) -> int:
+def run(content_roots: Sequence[str], sequences: str,
+        ctx: Context) -> int:
     """Validate the CONTENT_ROOTS and the SEQUENCES directory against the
-    registry, report, and return the exit status.
+    registry that CTX holds, report, and return the exit status.
 
-    REGISTRY is the path of the registry snapshot, as given, and its
-    table; its problems (``check_registry``) are reported on that path.
     The steps of the sequences resolve against the procedures of the
     content roots, and their compounds against the registry keys of
     CTX. The variants of a procedure share the values of its declared
     fields, and a ``unique`` procedure field is compared across the
     files that stand for their IDs.
     """
-    path, table = registry
-    problems = [(path, problem) for problem in check_registry(table)]
+    problems: list[tuple[str, Problem]] = []
     content: list[ContentFile] = []
     for root in content_roots:
         for entry in discover(root, ".md"):
@@ -2322,8 +2295,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ConfigError as exc:
         print(f"validate.py: error: {exc}", file=sys.stderr)
         return 2
-    return run(args.content_roots, (str(args.registry), table),
-               args.sequences, ctx)
+    return run(args.content_roots, args.sequences, ctx)
 
 
 if __name__ == "__main__":

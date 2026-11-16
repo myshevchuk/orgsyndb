@@ -154,8 +154,8 @@ verwenden. Beide Listen sind nach Vorschriftennummer geordnet und funktionieren
 über Sprachgrenzen hinweg. Sie tragen dafür keine Vorschriftennummern ein. Bei
 einer allgemeinen Vorschrift berücksichtigt die Website alle Produkte und
 Ausgangsstoffe aller Einträge, jede Verbindung einmal in der Reihenfolge ihres
-ersten Auftretens. Das gilt auch für Datenfeld, Verbindungsverzeichnis,
-Katalogdetails und Suche einschließlich SMILES-Treffern.
+ersten Auftretens. Das gilt auch für Datenfeld, Katalogdetails und Suche
+einschließlich SMILES-Treffern.
 
 Das Datenfeld ergänzt nach **Verwendet in** die **Synthesewege**, in denen
 diese Vorschrift eine Stufe ist. Es verlinkt deren Titel, nach Nummer geordnet.
@@ -195,13 +195,14 @@ Auf der Vorschriftenseite steht **Anwendungsbereich** vor **Zusammenfassung**.
 Die Spalten heißen **Eintrag**, **Ausgangsstoffe**, **Produkte** und
 **Ausbeute**. **Ansatzgröße**, **Zeit**, **Temperatur** und **Anmerkung**
 erscheinen nur, wenn mindestens ein Eintrag das Feld setzt. Verbindungsnamen
-verlinken auf ihre Seiten; Produkte mit Strukturbild zeigen kleine Bilder. Die
+verlinken auf ihre Stoffseiten im Labor; Produkte mit Strukturbild zeigen
+kleine Bilder. Die
 Angaben unter dem Titel nennen die typische Ansatzgröße und die Ausbeutespanne
 aller Produkte aller Einträge, `<min>–<max> %`, bei gleichen Ausbeuten nur eine
-Prozentzahl. Unter **Hergestellt nach** nennt eine Verbindungsseite jeden
-Eintrag, der sie herstellt:
-`<ID> <Titel> · Eintrag <n> · <Ausbeute> % · <Status>`. **Verwendet in** und
-Verzeichniszähler zählen jede Vorschrift nur einmal.
+Prozentzahl. Unter **Hergestellt nach** nennt die Stoffseite im Labor jeden
+Eintrag, der den Stoff herstellt:
+`<ID> <Titel> · Eintrag <n> · <Ausbeute> % · <Status>`. **Verwendet in**
+listet jede Vorschrift nur einmal.
 
 ### Optionale Felder
 
@@ -267,13 +268,13 @@ des Inhalts. Er liefert die Vokabulare `chemical-classes`,
 `inventory-groups`, `projects` und `reaction-types` sowie die Stoffe. Ein
 Vokabular ist eine Liste erlaubter Begriffe. Die Website verwendet Namen,
 Summenformel, Molmasse (`mw`, in g/mol), SMILES als Textschreibweise für
-Molekülstrukturen, CAS-Registriernummer (`cas`), Artikelnummer, Kurzname,
-Stoffklassen und Gruppe jedes Stoffs. Eine englische Website verwendet
-`name`, eine deutsche `name_de`, falls vorhanden, sonst `name`. Ohne
-Summenformel, Molmasse oder SMILES bleibt die jeweilige Zelle im Verzeichnis
-leer. Der Stoff hat dann weder den entsprechenden Suchtext noch die Angabe
-auf seiner Seite. Die Laboranwendung prüft die Werte der Stoffe; der
-Validator der Sammlung prüft Verweise auf deren Schlüssel.
+Molekülstrukturen, CAS-Registriernummer (`cas`), Artikelnummer und Kurzname
+jedes Stoffs. Der Build legt auch Stoffklassen und Gruppe ab; die statische
+Website zeigt sie nicht an. Eine englische Website verwendet `name`, eine
+deutsche `name_de`, falls vorhanden, sonst `name`. Fehlende Summenformel,
+Molmasse oder SMILES liefern weder den entsprechenden Suchtext noch eine
+Angabe auf Vorschriftenseiten. Die Laboranwendung prüft die Werte der
+Stoffe; der Validator der Sammlung prüft Verweise auf deren Schlüssel.
 
 Für ein Strukturbild laden Sie im Laborregister eine Molfile-Datei hoch.
 Eine Molfile-Datei ist eine Textdatei, die eine Molekülstruktur und ihre
@@ -311,33 +312,48 @@ einer Vorschrift sucht. Ohne Angabe nimmt er `static` im aktuellen
 Verzeichnis. `orgsyndb validate` übergibt das `static/` der Sammlung. Bei
 falschem Pfadanfang oder falscher Endung entfällt die Existenzprüfung.
 
-Eine Verbindungsseite ergänzt nach **Verwendet in** den Abschnitt
-**Synthesewege**, wenn Synthesewege diese Verbindung als Ziel nennen. Die
-Liste verlinkt deren Titel, nach Nummer geordnet.
+### Stoffseiten und Herstellungswege im Labor
 
-**Herstellungswege** ist der letzte Abschnitt der Verbindungsseite, nach
-**Synthesewege**, sofern dieser Abschnitt vorhanden ist. Er zeigt Wege zur
-Verbindung aus den veröffentlichten Vorschriften der Sammlung, einschließlich
-der Vorschriften für ihre Ausgangsstoffe. Er erscheint nur, wenn ein Weg
-über eine Stufe hinausgeht. Stellt keine Vorschrift einen der Ausgangsstoffe
+Jeder Verbindungslink auf der Website führt zur Stoffseite im Labor unter
+`/lab/registry/substances/<key>/`, in jedem Build. Das gilt für Produkte
+und Ausgangsstoffe in Datenfeldern und Tabellen zum Anwendungsbereich,
+Synthesewegschemata und Ziele im Synthesewegverzeichnis. Der Link
+**Substanzen** auf der Startseite öffnet `/lab/registry/` und nennt die
+Stoffanzahl des Registers. Diese Links setzen das Labor unter `/lab/` auf
+demselben Host voraus, mit der Website an dessen Wurzel. Unter einem
+Pfadpräfix oder ohne Labor funktionieren sie nicht.
+
+Die Stoffseite im Labor zeigt den Datensatz, ein vorhandenes Strukturbild,
+Vorschriften zur Herstellung oder Verwendung, Synthesewege mit diesem
+Ziel, den Herstellungsbaum, Gebinde, offene Bulk-Lose und Aufträge.
+**Hergestellt nach** und **Verwendet in** listen Vorschriften nach Nummer;
+**Hergestellt nach** nennt jeden Eintrag einer allgemeinen Vorschrift,
+der den Stoff herstellt. **Synthesewege** folgt auf **Verwendet in**, wenn
+Synthesewege den Stoff als Ziel nennen. Die Liste verlinkt deren Titel,
+nach Nummer geordnet. Vorschriften und Synthesewege stammen aus
+angenommenen Importen und verlinken ihre Seiten auf der statischen Website.
+
+**Herstellungswege** folgt auf **Synthesewege**, sofern dieser Abschnitt
+vorhanden ist, vor **Gebinde**. Die Laboranwendung zeichnet den Baum aus den
+importierten Vorschriften der Sammlung, einschließlich der Vorschriften
+für die Ausgangsstoffe. Er erscheint nur, wenn ein Weg über eine Stufe
+hinausgeht. Stellt keine Vorschrift einen der Ausgangsstoffe
 her, deckt **Hergestellt nach** die verfügbaren Stufen bereits ab; der
 Abschnitt **Herstellungswege** entfällt.
 
 Der Baum besteht aus verschachtelten Listen. Unter einer Verbindung stehen
 alternative Stufen: Eine davon genügt. Unter einer Stufe werden alle
 aufgeführten Ausgangsstoffe benötigt. Jeder Ausgangsstoff verlinkt auf seine
-Verbindungsseite; darunter stehen wiederum seine Herstellungsstufen, bis zu
-Verbindungen, die keine Vorschrift herstellt. Die Verbindungslinks tragen
-wie sonst auf der Website Artikelnummer und Kurzname des Stoffs, sofern
-vorhanden.
+Stoffseite im Labor; darunter stehen wiederum seine Herstellungsstufen,
+bis zu Stoffen, die keine Vorschrift herstellt.
 
 Jede Stufe zeigt Nummer und Titel der Vorschrift, bei einer allgemeinen
 Vorschrift die Eintragsnummer, Ausbeute und Status wie unter **Hergestellt
 nach**. Die Stufen sind nach Vorschriftennummer geordnet, die Einträge einer
 allgemeinen Vorschrift nach Eintragsreihenfolge. Jeder Eintrag ist eine
-eigene Stufe und verwendet nur seine eigenen Ausgangsstoffe. Alle
-veröffentlichten Vorschriften nehmen unabhängig vom Status teil; die
-Statusmarkierung zeigt ihn an.
+eigene Stufe und verwendet nur seine eigenen Ausgangsstoffe. Zurückgezogene
+Vorschriften und Einträge sind ausgeschlossen. Ansonsten nehmen
+Vorschriften unabhängig vom Status teil; die Statusmarkierung zeigt ihn an.
 
 Beginnt eine Stufe mit einer Verbindung, die auf demselben Ast bereits
 weiter oben steht, entfällt diese Stufe. So werden Kreise wie das Anbringen
@@ -345,17 +361,15 @@ und Entfernen einer Schutzgruppe nicht verfolgt. Würden alle Stufen einer
 Verbindung zurückführen, erscheint sie ohne Stufen: Sie müssen sie anders
 beschaffen.
 
-Die Anzeige verwendet eine feste Tiefengrenze von 6 Stufen und ein festes
+Die Laboranwendung verwendet eine feste Tiefengrenze von 6 Stufen und ein festes
 Budget von 200 Stufen pro Baum. Dies sind keine Sammlungseinstellungen. Ein
 zu großer Baum wird bis zur größten Tiefe gezeigt, die noch passt. Stellen
 mehr als 200 Stufen die Verbindung direkt her, zeigt der Baum nur diese.
 Eine abgeschnittene Verbindung trägt den Zusatz **weitere Stufen auf ihrer
 Seite**; folgen Sie ihrem Link, um den Weg fortzusetzen.
 
-Der Build leitet die Herstellungswege automatisch ab. Dafür tragen Sie
-nichts in eine Vorschrift oder `orgsyndb.toml` ein.
-Verbindungsseiten bleiben außerhalb des Suchindex; die Herstellungswege
-ändern die Suche daher nicht.
+Die Laboranwendung leitet die Herstellungswege automatisch ab. Dafür
+tragen Sie nichts in eine Vorschrift oder `orgsyndb.toml` ein.
 
 ## Felddeklarationen der Sammlung
 
@@ -371,17 +385,30 @@ ein Array von Felddeklarationen. Ohne `fields` oder `fields.procedure`
 deklariert die Sammlung keine weiteren Vorschriftenfelder.
 
 Verbindungen haben vier fest eingebaute Registerfelder in dieser
-Reihenfolge. Ihre Anzeige ist für jede Sammlung vorgegeben:
+Reihenfolge. Ihre Anzeige auf der statischen Website ist für jede Sammlung
+vorgegeben:
 
 | Schlüssel | Wert des Stoffs | Typ und Vokabular | Feldname (Englisch / Deutsch) | Anzeige |
 |---|---|---|---|---|
-| `article_number` | Artikelnummer | Text | Article no. / Artikelnr. | Verzeichnisspalte, Suche, neben Links |
-| `short_name` | Kurzname | Text | Short name / Kurzname | Suche, neben Links |
-| `chemical_class` | `chemical_classes`, in ihrer Reihenfolge | Mehrfachauswahl, `chemical-classes` | Chemical class / Stoffklasse | Verzeichnisspalte, Filter |
-| `group` | Gruppe | Einzelauswahl, `inventory-groups` | Group / Gruppe | Filter, Reiter |
+| `article_number` | Artikelnummer | Text | Article no. / Artikelnr. | `beside`: nach Links |
+| `short_name` | Kurzname | Text | Short name / Kurzname | `beside`: nach Links |
+| `chemical_class` | `chemical_classes`, in ihrer Reihenfolge | Mehrfachauswahl, `chemical-classes` | Chemical class / Stoffklasse | Nicht angezeigt |
+| `group` | Gruppe | Einzelauswahl, `inventory-groups` | Group / Gruppe | Nicht angezeigt |
 
 Setzen Sie diese Werte in der Laboranwendung. Die Sammlung deklariert nur
 Vorschriftenfelder; `fields.compound` ist ein Konfigurationsfehler.
+
+`orgsyndb index` listet jedes Registerfeld mit `key`, `type`, `label` und
+`label_de`, dazu `beside` für Text oder `vocabulary` und `multiple` für
+Auswahlfelder. Die Datei `build/data/fields.json` des Builds verwendet für
+`label` die Sprache der Website. Jedes Registerfeld darin hat `key` und
+`type`, dazu `beside` für Text oder `multiple`, `values` und `order` für
+Auswahlfelder. Jeder Eintrag in `values` enthält sein übersetztes `label`,
+die Namen seines vollständigen Pfads in `path` und die Schlüssel seiner
+übergeordneten Begriffe in `ancestors`. `order` listet jeden Begriff mit
+seinen untergeordneten Begriffen, rekursiv und mit Geschwisterbegriffen in
+Schlüsselreihenfolge. `beside` ist die einzige Anzeigeoption der
+Registerfelder.
 
 ### Journalfelder
 
@@ -558,7 +585,7 @@ wählen. Im Beispielregister ist etwa `esters` unter `acid-derivatives`
 eingeordnet und dieses unter `carbonyl-compounds`. Reaktionstypen haben
 nur eine Ebene.
 
-Filter und Reiter zeigen jeden Begriff mit den darunter eingeordneten
+Filter zeigen jeden Begriff mit den darunter eingeordneten
 Begriffen, jeweils wiederum mit deren untergeordneten Begriffen. Begriffe
 auf gleicher Ebene unter demselben übergeordneten Begriff stehen in
 Schlüsselreihenfolge. Die Auswahl eines übergeordneten Begriffs in einem
@@ -568,16 +595,6 @@ Filter erfasst auch Werte unter dessen untergeordneten Begriffen.
 
 Die Laboranwendung prüft die Werte der Stoffe. Der Validator der Sammlung
 meldet keine Feldwertfehler an einzelnen Stoffen.
-
-Ein Stoff mit dem Schlüssel `group` kollidiert mit `/compounds/group/`, dem
-Verzeichnis der Gruppenreiter. Die Laboranwendung lässt diesen Schlüssel
-nicht zu; nur eine anders erzeugte Snapshot-Datei kann ihn enthalten. Der
-Validator meldet einen Fehler am
-Snapshot-Pfad, wie er an `--registry` übergeben wurde, unter `substances`:
-
-```text
-the substance "group" has the key of the directory of the compound tabs, /compounds/group/, which no substance may take
-```
 
 ### Vorschriftenwerte und Meldungen
 
@@ -704,24 +721,20 @@ Vorschriften unter den darunter eingeordneten Werten. Diese Filter stehen
 unter `/procedures/`, auf jeder Reaktionstyp-, Schlagwort- und Autorenseite
 sowie unter `/general-procedures/`. Jede Seite bietet Werte der gesamten
 Sammlung an. Die Adresse verwendet den Feldschlüssel, etwa
-`/procedures/?project=research&inert_atmosphere=true`. Es gelten dieselben
-ODER/UND- und Zählregeln wie für die Verbindungsfilter unten.
+`/procedures/?project=research&inert_atmosphere=true`. Auf jedem
+Vorschriftenkatalog sind ausgewählte Werte innerhalb eines Filters mit
+ODER verknüpft, verschiedene Filter mit UND. Die Anzahl neben einem Wert
+berücksichtigt die Suche und alle anderen Filter, jedoch nicht die Auswahl
+im eigenen Filter.
 Vorschriftenfelder ergänzen keine Tabellenspalten, Werte in der Ansicht
 **Details** oder Reiter.
-
-Verbindungsseiten zeigen die vier fest eingebauten Felder nach Summenformel,
-Molmasse, CAS und SMILES. Fehlende Werte erscheinen nicht. Die Reihenfolge
-ist **Artikelnr.**, **Kurzname**, **Stoffklasse**, **Gruppe**, auf einer
-englischen Website **Article no.**, **Short name**, **Chemical class**,
-**Group**. Artikelnummern und Kurznamen erscheinen wie eingetragen.
 
 Die Werte für Artikelnummer und Kurzname stehen nach den Verbindungslinks
 unter **Produkt**/**Produkte** und **Ausgangsstoffe** im Datenfeld, in der
 Tabelle zum Anwendungsbereich einer allgemeinen Vorschrift, im Schema einer
-Synthesewegseite, beim Ziel im Synthesewegverzeichnis und in den
-Herstellungswegen auf Verbindungsseiten. Der Linktext bleibt der
-Verbindungsname. Nach einem Leerzeichen folgt ein Zusatz in Klammern und
-gedeckter Farbe, in der Beispielsammlung etwa
+Synthesewegseite und beim Ziel im Synthesewegverzeichnis. Der Linktext
+bleibt der Verbindungsname. Nach einem Leerzeichen folgt ein Zusatz in
+Klammern und gedeckter Farbe, in der Beispielsammlung etwa
 **Essigsäureanhydrid (Ac2O)** oder **Acetylsalicylsäure (CH-0010, ASA)**.
 Er enthält nur die Werte, die der Stoff hat, zuerst die Artikelnummer,
 ohne Feldnamen, durch `, ` getrennt. Hat ein Stoff keinen dieser Werte,
@@ -729,69 +742,6 @@ entfällt der Zusatz. Die Angaben unter dem Titel, die Katalogansicht
 **Details**, Alternativtexte von Bildern und Seitentitel tragen keinen
 Zusatz. Das Datenfeld wird indexiert; daher findet die Vorschriftensuche
 auch diese Werte.
-
-Ein Auswahlwert auf einer Verbindungsseite zeigt die Namen seiner
-übergeordneten Werte und seinen eigenen Namen, verbunden durch ` › `,
-etwa **Carbonylverbindungen › Carbonsäurederivate › Ester**. Mehrere
-Stoffklassen sind durch `, ` getrennt, in der Reihenfolge des Stoffs.
-Das Verbindungsverzeichnis ergänzt **Artikelnr.** und **Stoffklasse** nach
-CAS. Es zeigt nur den eigenen Namen jeder Stoffklasse und lässt ungesetzte
-Werte als leere Zellen.
-
-`/compounds/` und jede Gruppenreiterseite beginnen mit einer Reiterzeile,
-wie im Bereich **Vorschriften**. **Alle Verbindungen** (auf Englisch
-**All compounds**) verlinkt `/compounds/`. Danach folgen die Bezeichnungen
-der Begriffe auf der obersten Ebene des Vokabulars `inventory-groups`, in
-Schlüsselreihenfolge. Ein Begriff erscheint nur, wenn ein Stoff ihn oder
-einen darunter eingeordneten Begriff verwendet. Der Reiter der aktuellen
-Seite ist markiert.
-
-Eine Reiterseite liegt unter `/compounds/group/<value>/`; Überschrift und
-Seitentitel sind die Bezeichnung des Werts. Sie listet nach Namen geordnet
-die Stoffe, die diesen Wert oder einen darunter eingeordneten Wert setzen.
-Anzahl, Filter und Suche beziehen sich auf diese Liste und funktionieren
-wie unter `/compounds/`. Die Beispielsammlung hat die Seiten **Zugekauft**
-unter `/compounds/group/purchased/` und **Selbst hergestellt** unter
-`/compounds/group/synthesised/`, mit zehn beziehungsweise elf Stoffen.
-
-Auf einer Reiterseite zeigen die Filter nur Werte ihrer Stoffe.
-Der Filter **Gruppe** lässt den Wert des Reiters weg und rückt die darunter
-eingeordneten Werte um eine Ebene nach oben. Ein Filter ohne Werte entfällt.
-Die Suche im Kopf heißt **Verbindungen durchsuchen: \<label\>** (auf Englisch
-**Search compounds: \<label\>**). Reiterlinks übernehmen weder Suchtext noch
-Filter. Ohne JavaScript zeigt eine Reiterseite ihre vollständige Liste.
-
-Unter `/compounds/` ist das Verzeichnis ein durchsuchbarer, filterbarer
-Katalog aller Registereinträge. Die Zeilen bleiben nach dem angezeigten
-Namen in der Sprache der Website geordnet. **Stoffklasse** und **Gruppe**
-erscheinen als Filter in dieser Reihenfolge. Jeder zeigt die von Stoffen
-verwendeten Werte und deren übergeordnete Werte als eingerückten Baum.
-Auf jeden Begriff folgen seine untergeordneten Begriffe; Begriffe mit
-demselben übergeordneten Begriff stehen in Schlüsselreihenfolge. Wählen Sie
-einen übergeordneten Wert, erfasst der Filter auch Verbindungen unter dessen
-untergeordneten Werten: **Carbonylverbindungen** schließt Ketone und Ester ein.
-
-Ausgewählte Werte innerhalb eines Filters sind mit ODER verknüpft,
-verschiedene Filter mit UND. Die Anzahl neben einem Wert berücksichtigt
-die Suche und alle anderen Filter, jedoch nicht die Auswahl im eigenen
-Filter. Ausgewählte Werte erscheinen als einzeln entfernbare Schaltflächen;
-**Alles zurücksetzen** löscht Suchtext und Auswahl. Der Katalog zeigt die
-Gesamtzahl oder beim Filtern **{shown} von {total} Verbindungen**.
-
-Das Suchfeld **Verbindungen durchsuchen** im Kopf berücksichtigt englische
-und deutsche Namen, Summenformel, CAS-Nummer, SMILES, Artikelnummer und
-Kurzname. Jedes Suchwort muss als Teil einer Zeichenfolge
-vorkommen. Dabei zählen weder Groß- und Kleinschreibung noch Zeichen außer
-Buchstaben und Ziffern. Suchangaben wie `50-78-2`, `salicyl` und `c1ccccc1O`
-funktionieren ohne Pagefind-Index. Außerhalb dieser Kataloge, auch auf
-einzelnen Verbindungsseiten, durchsucht das Feld Vorschriften;
-Verbindungsseiten bleiben außerhalb des Suchindex für Vorschriften.
-
-Die Adresse hält Suchtext und Auswahl fest, etwa
-`/compounds/?q=ester&chemical_class=esters&group=final-products`. Parameter,
-die die Seite nicht anwenden kann, nennt sie in einem Hinweis und entfernt
-sie aus der Adresse. Suche und Filter brauchen JavaScript. Ohne JavaScript zeigt
-die Seite die vollständige Tabelle und einen entsprechenden Hinweis.
 
 ## Synthesewege
 
@@ -815,8 +765,8 @@ kopieren Sie die Datei für eine deutsche Fassung mit `.de` vor `.md`.
 Synthesewege.
 
 Ein Syntheseweg hält den Weg fest, den Ihre Gruppe durchführt. Den Baum
-**Herstellungswege** auf der Verbindungsseite leitet die Website aus den
-Vorschriften der Sammlung ab.
+**Herstellungswege** auf einer Stoffseite zeichnet die Laboranwendung aus
+den importierten Vorschriften der Sammlung.
 
 Der Dateiname ist `SEQ-NNNN-short-slug.md`, optional mit `.de` oder `.en` vor
 `.md`. Der kurze Slug entspricht `[a-z0-9]+(-[a-z0-9]+)*`. Die Nummer im
@@ -911,7 +861,8 @@ Die Seite zeigt **Stufen** und **Gesamtausbeute**, ein Schema mit verlinkten
 Verbindungen und Stufen, eine Liste mit Vorschriftenlinks, gegebenenfalls
 Eintragsnummer, Reaktionstyp, Ausbeute und Status, danach die Anmerkungen.
 `/sequences/` listet Synthesewege nach Nummer mit Titel, Zielverbindung,
-Stufenzahl und Gesamtausbeute. Synthesewegseiten stehen nicht im Suchindex.
+Stufenzahl und Gesamtausbeute. Verbindungslinks im Schema und Verzeichnis
+führen zu Stoffseiten im Labor. Synthesewegseiten stehen nicht im Suchindex.
 
 ## Geduldete, abgelehnte und unbekannte Felder
 
@@ -1214,9 +1165,8 @@ einer deutschen Website aus `label_de`, falls vorhanden.
 Verbindungsnamen kommen aus dem Register, unabhängig von der Sprache der
 Vorschrift. Eine deutsche Website verwendet `name_de`, wenn vorhanden,
 sonst `name`; eine englische verwendet `name`. Das gilt für
-Verbindungsseiten und deren Reihenfolge im Verzeichnis, Produkt- und
-Ausgangsstofflinks, Ausbeuten, Bildbeschreibungen, Katalogdetails und
-indexierte Suchbegriffe.
+Produkt- und Ausgangsstofflinks, Ausbeuten, Bildbeschreibungen,
+Katalogdetails und indexierte Suchbegriffe.
 
 Das optionale Feld `language` gibt die Sprache einer Vorschrift an,
 `"de"` oder `"en"`. Trägt der Dateiname ein Kürzel, muss das Feld dieselbe
@@ -1285,14 +1235,8 @@ Jedes Problem ist eine Zeile auf der Standardausgabe:
 
 Das Feld ist meist ein Feld des Datenblocks. Produktfelder heißen etwa
 `products[1].yield_percent`; die Zählung beginnt bei 1. Ein Eintrag, der
-keine Tabelle ist, erscheint unter `products[n]`. Ein Registerfehler nennt
-den Snapshot-Pfad, wie er an `--registry` übergeben wurde, und das Feld
-`substances`: Ein Stoff mit dem Schlüssel `group` kollidiert mit den
-Gruppenreitern.
-Die Laboranwendung lässt diesen Schlüssel nicht zu; die Snapshot-Datei
-wurde also anders erzeugt. Geben Sie dem Stoff dort einen anderen Schlüssel.
-Weitere mögliche Felder sind `file_name`,
-`front_matter`, `toml` und `body`. Die Meldungen sind englisch.
+keine Tabelle ist, erscheint unter `products[n]`. Weitere mögliche Felder
+sind `file_name`, `front_matter`, `toml` und `body`. Die Meldungen sind englisch.
 
 Autorenfehler erscheinen unter `authors`:
 
@@ -1344,8 +1288,8 @@ auf die Standardausgabe. Seine Felder können auch Org-Schlüsselwörter wie
 `#+CREATED`, Eigenschaften wie `#+PROPERTY` oder `:EXPORT_DATE:` und
 Schubladen wie `:LOGBOOK:` sein.
 
-Ein `error` bedeutet, dass eine Vorschrift, ein Syntheseweg oder das
-Register ungültig ist. Eine `warning`
+Ein `error` bedeutet, dass eine Vorschrift oder ein Syntheseweg ungültig
+ist. Eine `warning`
 bezeichnet ein Problem, das die Prüfung nicht scheitern lässt, etwa einen
 fehlenden Abschnitt oder ein unbekanntes Feld. Nach den Problemzeilen
 schreibt der Validator eine Zusammenfassung auf die Standardfehlerausgabe.
@@ -1372,7 +1316,7 @@ Der Rückgabewert sagt einem aufrufenden Befehl, ob die Prüfung gelungen ist:
 | Rückgabewert | Bedeutung |
 |---|---|
 | `0` | Kein Fehler gefunden. Warnungen können ausgegeben worden sein. |
-| `1` | Mindestens ein Fehler in einer Vorschrift, einem Syntheseweg oder im Register. |
+| `1` | Mindestens ein Fehler in einer Vorschrift oder einem Syntheseweg. |
 | `2` | Aufruf oder Konfiguration des Validators ist ungültig, etwa kein Verzeichnis, ein Verzeichnis, das keines ist, eine fehlende ausdrücklich benannte Einstellungsdatei, ungültige Einstellungen oder Deklarationen oder ein nicht lesbarer oder fehlerhafter Register-Snapshot. |
 
 Aufruf- und Konfigurationsfehler gehen auf die Standardfehlerausgabe und

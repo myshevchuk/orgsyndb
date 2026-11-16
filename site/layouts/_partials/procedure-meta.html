@@ -2,7 +2,7 @@
 canonical order, labelled in the page's language. It repeats nothing the
 procedure header shows: no ID, scale or yield, and the checkers only when
 the status is not checked. Product, or Products for several, links the
-compound page of each product (product-keys.html, which for a general
+lab's substance page of each product (compound-link.html) (product-keys.html, which for a general
 procedure takes them from every entry); the compound's formula, weight,
 CAS number and SMILES follow only for a procedure with one product
 (compound-facts.html), and index-terms.html keeps every product's in the
@@ -10,7 +10,7 @@ indexed text. Starting materials link the compounds of
 substrate-keys.html. The procedure fields the collection declares
 (site.Data.collection.fields.procedure) that the procedure sets follow
 Checked by, in declared order, each labelled with its shown label and
-its value written as on a compound page (field-value.html). Precursors
+its value written as field-value.html writes it. Precursors
 and Used in (procedure-links.html) and the Sequences the procedure is a
 step of (procedure-sequences.html) end the panel. A newline separates
 every </dt> from its <dd>, so that Pagefind indexes each label and
@@ -47,7 +47,7 @@ value as separate words. */ -}}
 {{ range site.Data.collection.fields.procedure -}}
 {{ if isset $p .key -}}
 <dt>{{ .label }}</dt>
-<dd>{{ partial "field-value.html" (dict "field" . "value" (index $p .key) "page" true) }}</dd>
+<dd>{{ partial "field-value.html" (dict "field" . "value" (index $p .key)) }}</dd>
 {{ end -}}
 {{ end -}}
 {{ if not .Date.IsZero -}}

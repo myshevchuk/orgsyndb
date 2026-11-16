@@ -263,22 +263,18 @@ class IndexOfTheTestCollectionTests(unittest.TestCase):
                           "group"])
         self.assertEqual(compound_fields["article_number"], {
             "key": "article_number", "type": "text", "label": "Article no.",
-            "label_de": "Artikelnr.", "column": True, "search": True,
-            "beside": True})
+            "label_de": "Artikelnr.", "beside": True})
         self.assertEqual(compound_fields["short_name"], {
             "key": "short_name", "type": "text", "label": "Short name",
-            "label_de": "Kurzname", "column": False, "search": True,
-            "beside": True})
+            "label_de": "Kurzname", "beside": True})
         self.assertEqual(compound_fields["chemical_class"], {
             "key": "chemical_class", "type": "choice",
             "label": "Chemical class", "label_de": "Stoffklasse",
-            "column": True, "vocabulary": "chemical-classes",
-            "multiple": True, "facet": True, "tabs": False})
+            "vocabulary": "chemical-classes", "multiple": True})
         self.assertEqual(compound_fields["group"], {
             "key": "group", "type": "choice", "label": "Group",
-            "label_de": "Gruppe", "column": False,
-            "vocabulary": "inventory-groups", "multiple": False,
-            "facet": True, "tabs": True})
+            "label_de": "Gruppe", "vocabulary": "inventory-groups",
+            "multiple": False})
         procedure = {item["key"]: item
                      for item in self.index["fields"]["procedure"]}
         self.assertEqual(procedure["notebook"], {

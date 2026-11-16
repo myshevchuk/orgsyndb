@@ -19,23 +19,36 @@ from pipeline_support import Node, Page
 
 BOOLEANS = {"en": ("Yes", "No"), "de": ("Ja", "Nein")}
 PATH_SEPARATOR = " › "
+LAB_SUBSTANCES = "/lab/registry/substances/"
+
+
+def substance_url(key: str) -> str:
+    """The address an ``a.compound`` to the substance ``key`` resolves
+    to, in every build (compound-fields "Values beside compound
+    links")."""
+    return f"{LAB_SUBSTANCES}{key}/"
+
+
+def substance_key(target: str) -> str:
+    """The key of the substance whose lab page ``target`` is; the
+    assertion fails for any other address."""
+    assert target.startswith(LAB_SUBSTANCES) and target.endswith("/"), \
+        f"not a lab substance page: {target}"
+    return target.removeprefix(LAB_SUBSTANCES).removesuffix("/")
 
 
 class Field(NamedTuple):
     key: str
     type: str
     label: str
-    column: bool
     unit: str | None
     multiple: bool
     paths: dict[str, tuple[str, ...]]   # value -> labels, outermost first
     facet: bool = False
-    search: bool = False
     # value -> keys of its ancestors, outermost first
     ancestors: dict[str, tuple[str, ...]] = {}
     # every value of the vocabulary, depth first, siblings in key order
     order: tuple[str, ...] = ()
-    tabs: bool = False
     beside: bool = False
 
 
@@ -97,10 +110,9 @@ def _choice(key: str, label: str, label_de: str, language: str,
             ) -> Field:
     terms = vocabulary_of(snapshot, vocabulary)
     return Field(
-        key, "choice", label_de if language == "de" else label,
-        options.get("column", False), None, options.get("multiple", False),
-        _paths(terms, language), options.get("facet", False), False,
-        _ancestors(terms), _order(terms), options.get("tabs", False), False)
+        key, "choice", label_de if language == "de" else label, None,
+        options.get("multiple", False), _paths(terms, language),
+        options.get("facet", False), _ancestors(terms), _order(terms))
 
 
 def registry_fields(snapshot: dict[str, Any], language: str
@@ -111,15 +123,14 @@ def registry_fields(snapshot: dict[str, Any], language: str
     german = language == "de"
     return [
         Field("article_number", "text",
-              "Artikelnr." if german else "Article no.", True, None, False,
-              {}, search=True, beside=True),
+              "Artikelnr." if german else "Article no.", None, False, {},
+              beside=True),
         Field("short_name", "text", "Kurzname" if german else "Short name",
-              False, None, False, {}, search=True, beside=True),
+              None, False, {}, beside=True),
         _choice("chemical_class", "Chemical class", "Stoffklasse",
-                language, snapshot, "chemical-classes", multiple=True,
-                column=True, facet=True),
+                language, snapshot, "chemical-classes", multiple=True),
         _choice("group", "Group", "Gruppe", language, snapshot,
-                "inventory-groups", facet=True, tabs=True),
+                "inventory-groups"),
     ]
 
 
@@ -141,10 +152,8 @@ def read_fields(settings: Path, snapshot: dict[str, Any], language: str,
             order = _order(vocabulary)
         fields.append(Field(
             entry["key"], entry["type"], _label(entry, language),
-            entry.get("column", False), entry.get("unit"),
-            entry.get("multiple", False), paths,
-            entry.get("facet", False), entry.get("search", False),
-            ancestors, order, entry.get("tabs", False),
+            entry.get("unit"), entry.get("multiple", False), paths,
+            entry.get("facet", False), ancestors, order,
             entry.get("beside", False)))
     return fields
 
@@ -157,7 +166,7 @@ def journal_fields(snapshot: dict[str, Any], language: str
     return [
         Field("notebook", "text",
               "Laborjournal" if language == "de" else "Lab notebook",
-              False, None, False, {}),
+              None, False, {}),
         _choice("project", "Project", "Projekt", language, snapshot,
                 "projects", facet=True),
     ]
@@ -167,15 +176,14 @@ def read_procedure_fields(settings: Path, snapshot: dict[str, Any],
                           language: str) -> list[Field]:
     """The journal fields (``journal_fields``) and then the procedure
     fields ``settings`` declares, in declared order, with their labels in
-    ``language``. ``column``, ``search`` and ``tabs`` are false."""
+    ``language``."""
     return [*journal_fields(snapshot, language),
             *read_fields(settings, snapshot, language, "procedure")]
 
 
-def value_text(field: Field, value: Any, locale: str, *,
-               page: bool) -> str:
-    """How the site writes ``value`` of ``field``: on a compound page
-    when ``page`` is true, else in the compound directory."""
+def value_text(field: Field, value: Any, locale: str) -> str:
+    """How the site writes ``value`` of ``field`` (compound-fields "Field
+    display")."""
     if field.type == "text":
         return value
     if field.type == "number":
@@ -184,20 +192,18 @@ def value_text(field: Field, value: Any, locale: str, *,
     if field.type == "boolean":
         return BOOLEANS[locale][0 if value else 1]
     values = value if field.multiple else [value]
-    return ", ".join(
-        PATH_SEPARATOR.join(field.paths[v]) if page else field.paths[v][-1]
-        for v in values)
+    return ", ".join(PATH_SEPARATOR.join(field.paths[v]) for v in values)
 
 
 def beside_note(fields: list[Field], compound: dict[str, Any],
                 locale: str) -> str | None:
     """The text of the ``span.compound-beside`` that follows a link to
     ``compound`` (compound-fields "Values beside compound links"): the
-    values of the ``beside`` fields it sets, each as a compound page
-    writes it, in declared order, joined by ``, `` and put in
+    values of the ``beside`` fields it sets, each as the site writes a
+    value, in declared order, joined by ``, `` and put in
     parentheses; ``None`` when it sets none."""
-    values = [text for field, text in shown(fields, compound, locale,
-                                            page=True) if field.beside]
+    values = [text for field, text in shown(fields, compound, locale)
+              if field.beside]
     return f"({', '.join(values)})" if values else None
 
 
@@ -211,11 +217,13 @@ def named(key: str, registry: dict[str, dict[str, Any]],
 
 
 def link_to(page: Page, scope: Node, key: str) -> Node:
-    """The ``a.compound`` below ``scope`` that links the page of the
-    compound ``key``."""
-    (link,) = [node for node in scope.find_all("a", "compound")
-               if page.resolve(node.attrs["href"]) == f"/compounds/{key}/"]
-    return link
+    """The ``a.compound`` below ``scope`` that links the lab page of the
+    substance ``key``."""
+    found = [node for node in scope.find_all("a", "compound")
+             if page.resolve(node.attrs["href"]) == substance_url(key)]
+    assert len(found) == 1, (
+        f"{len(found)} a.compound to {substance_url(key)} in {page.url}")
+    return found[0]
 
 
 def after_link(link: Node) -> list[Node | str]:
@@ -237,8 +245,7 @@ def check_beside_notes(case: unittest.TestCase, page: Page, scope: Node,
     links = scope.find_all("a", "compound")
     notes: list[str | None] = []
     for link in links:
-        key = page.resolve(link.attrs["href"]).removeprefix(
-            "/compounds/").removesuffix("/")
+        key = substance_key(page.resolve(link.attrs["href"]))
         with case.subTest(page=page.url, compound=key):
             case.assertEqual(link.text(),
                              ps.shown_name(registry[key], locale))
@@ -263,24 +270,20 @@ def check_beside_notes(case: unittest.TestCase, page: Page, scope: Node,
     return notes
 
 
-def shown(fields: list[Field], compound: dict[str, Any], locale: str, *,
-          page: bool) -> list[tuple[Field, str]]:
+def shown(fields: list[Field], compound: dict[str, Any], locale: str
+          ) -> list[tuple[Field, str]]:
     """The fields ``compound`` sets, in declared order, each with its
-    written value. In the directory only the column fields count. A
-    procedure's front matter serves as ``compound`` for its procedure
-    fields, with ``page`` true."""
-    return [(field, value_text(field, compound[field.key], locale,
-                               page=page))
-            for field in fields
-            if field.key in compound and (page or field.column)]
+    written value. A procedure's front matter serves as ``compound`` for
+    its procedure fields."""
+    return [(field, value_text(field, compound[field.key], locale))
+            for field in fields if field.key in compound]
 
 
 def values_set(field: Field, compound: dict[str, Any]) -> list[str]:
     """The machine values of ``field`` that ``compound`` sets, as a
-    row's facet attribute lists them (site-catalogue "Compound
-    catalogue"): for a
-    boolean ``"true"`` or ``"false"``, for a choice each value set and
-    each ancestor of one, each once; none when the field is unset."""
+    row's facet attribute lists them (site-catalogue "Catalogue rows"):
+    for a boolean ``"true"`` or ``"false"``, for a choice each value set
+    and each ancestor of one, each once; none when the field is unset."""
     if field.key not in compound:
         return []
     value = compound[field.key]
@@ -304,55 +307,6 @@ def facet_entries(field: Field, registry: dict[str, dict[str, Any]],
                 (("true", yes), ("false", no)) if value in used]
     return [(value, field.paths[value][-1], len(field.ancestors[value]))
             for value in field.order if value in used]
-
-
-def tab_values(field: Field, registry: dict[str, dict[str, Any]]
-               ) -> list[str]:
-    """The top-level values of the tabs ``field`` that have a tab page
-    (site-catalogue "Compound tabs"): those that some compound sets or
-    that are an ancestor of a value some compound sets, in the field's
-    order."""
-    used = {v for compound in registry.values()
-            for v in values_set(field, compound)}
-    return [v for v in field.order if not field.ancestors[v] and v in used]
-
-
-def tab_compounds(field: Field, registry: dict[str, dict[str, Any]],
-                  value: str) -> dict[str, dict[str, Any]]:
-    """The compounds on the tab page of ``value``: those that set it or a
-    value filed under it in the tabs ``field``."""
-    return {key: compound for key, compound in registry.items()
-            if value in values_set(field, compound)}
-
-
-def tab_facet_entries(field: Field, tabs: Field, value: str,
-                      registry: dict[str, dict[str, Any]], locale: str
-                      ) -> list[tuple[str, str, int | None]]:
-    """The ``(value, label, depth)`` that the facet of ``field`` lists on
-    the tab page of ``value`` of the tabs field ``tabs``: the values that
-    some row of the page carries; on the tabs field's own facet, without
-    the tab's value, and with the depth of a value filed under it one
-    less."""
-    entries = facet_entries(
-        field, tab_compounds(tabs, registry, value), locale)
-    if field.key != tabs.key:
-        return entries
-    return [(found, label,
-             depth - 1 if value in field.ancestors[found] else depth)
-            for found, label, depth in entries if found != value]
-
-
-def search_text(fields: list[Field], compound: dict[str, Any]) -> str:
-    """The text the compound catalogue searches for ``compound``: its
-    names, formula, CAS number, SMILES and the values of its searchable
-    text fields, joined by single spaces."""
-    parts = [compound["name"], compound.get("name_de"),
-             compound.get("formula"), compound.get("cas"),
-             compound.get("smiles")]
-    parts += [compound[field.key] for field in fields
-              if field.type == "text" and field.search
-              and field.key in compound]
-    return " ".join(part for part in parts if part)
 
 
 class ProcedureFieldsMixin:
@@ -399,4 +353,4 @@ class ProcedureFieldsMixin:
         """The label and written value of each declared procedure field
         that the front matter ``data`` sets, in declared order."""
         return [(field.label, text) for field, text in shown(
-            self.procedure_fields(), data, self.LOCALE, page=True)]
+            self.procedure_fields(), data, self.LOCALE)]

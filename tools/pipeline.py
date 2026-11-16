@@ -3,7 +3,7 @@
 The reading of the collection's registry, the Org source names the
 export needs, the recoverable replacement of ``build/export/``, the
 procedure and sequence IDs of new stubs, slugs, template filling, the
-Hugo overlay, the site's substance, field, reaction-type and route
+Hugo overlay, the site's substance, field, reaction-type and author
 data, the collection index, the manifest, PDF jobs and the Pagefind
 download.
 File discovery and the reading of the collection settings come from
@@ -63,16 +63,11 @@ COMPOUNDS_STAGED = Path("data") / "compounds"
 # substances/<key>/structure.svg, under build/.
 STRUCTURES_STAGED = Path("substances")
 STRUCTURE_FILE = "structure.svg"
-# The field, reaction-type, author and route data Hugo reads as
+# The field, reaction-type and author data Hugo reads as
 # site.Data.collection, under build/.
 FIELDS_STAGED = Path("data") / "fields.json"
 REACTION_TYPES_STAGED = Path("data") / "reaction_types.json"
 AUTHORS_STAGED = Path("data") / "authors.json"
-ROUTES_STAGED = Path("data") / "routes.json"
-# The depth limit and the step budget of the route trees the build
-# derives.
-ROUTE_DEPTH = 6
-ROUTE_BUDGET = 200
 
 PAGEFIND_VERSION = "1.5.2"
 PAGEFIND_TARBALL = (f"pagefind-v{PAGEFIND_VERSION}-x86_64-unknown-linux-"
@@ -100,10 +95,9 @@ COMPOUND_VALUES = ("name", "name_de", "formula", "mw", "smiles", "cas",
                    "article_number", "short_name", "group")
 # The options of a registry field that the index lists: those of every
 # field, and those of its type.
-REGISTRY_FIELD_OPTIONS = ("key", "type", "label", "label_de", "column")
-REGISTRY_TYPE_OPTIONS = {"text": ("search", "beside"),
-                         "choice": ("vocabulary", "multiple", "facet",
-                                    "tabs")}
+REGISTRY_FIELD_OPTIONS = ("key", "type", "label", "label_de")
+REGISTRY_TYPE_OPTIONS = {"text": ("beside",),
+                         "choice": ("vocabulary", "multiple")}
 
 Rename = Callable[[Path, Path], None]
 Remove = Callable[[Path], None]
@@ -1295,12 +1289,12 @@ def fields_data(settings: Path, registry: dict[str, Any],
 
     The result is a table of two keys. ``compound`` lists the four
     registry fields (``validate.registry_fields``) in their order:
-    each one's ``key``, ``type`` and ``column``; its ``label`` as
-    LANGUAGE shows it; ``search`` and ``beside`` for a text field; and
-    ``facet``, ``multiple``, ``tabs``, ``values`` and ``order`` for a
-    choice field. ``procedure`` lists a table per procedure field, the
-    journal fields first (``validate.journal_fields``) and then the
-    declared ones in declared order: its ``key``, ``type`` and ``label``;
+    each one's ``key`` and ``type``; its ``label`` as LANGUAGE shows
+    it; ``beside`` for a text field; and ``multiple``, ``values`` and
+    ``order`` for a choice field. ``procedure`` lists a table per
+    procedure field, the journal fields first
+    (``validate.journal_fields``) and then the declared ones in declared
+    order: its ``key``, ``type`` and ``label``;
     ``facet`` for a boolean or choice field; the ``unit`` of a number
     field that declares one; and ``multiple``, ``values`` and ``order``
     for a choice field. ``values`` maps every term of the field's
@@ -1339,19 +1333,14 @@ def fields_data(settings: Path, registry: dict[str, Any],
         entry: dict[str, Any] = {
             "key": field.key, "type": field.type,
             "label": shown(field.label, field.label_de)}
-        if compound:
-            entry["column"] = field.column
-        if field.type in ("boolean", "choice"):
+        if not compound and field.type in ("boolean", "choice"):
             entry["facet"] = field.facet
         if compound and field.type == "text":
-            entry["search"] = field.search
             entry["beside"] = field.beside
         if field.unit is not None:
             entry["unit"] = field.unit
         if field.type == "choice":
             entry["multiple"] = field.multiple
-            if compound:
-                entry["tabs"] = field.tabs
             labels = {value: shown(term.label, term.label_de)
                       for value, term in field.terms.items()}
             entry["values"] = {}
@@ -1437,122 +1426,6 @@ def stage_compounds(registry: dict[str, Any], staged: Path,
             json.dumps(compound_data(substance, staged), ensure_ascii=False,
                        indent=2) + "\n", encoding="utf-8")
     return len(registry["substances"])
-
-
-class _Maker(NamedTuple):
-    """A step to a compound: a procedure, or one entry of a general
-    procedure, that makes it at YIELD_PERCENT from SUBSTRATES."""
-    procedure: str
-    entry: int | None
-    yield_percent: Any
-    substrates: tuple[str, ...]
-
-
-class _OverBudget(Exception):
-    """A route tree being built has more steps than its budget."""
-
-
-def routes_data(files: Iterable[tuple[Path, dict[str, Any]]],
-                depth: int = ROUTE_DEPTH,
-                budget: int = ROUTE_BUDGET) -> dict[str, list[dict[str, Any]]]:
-    """Return the route trees of the compounds that the procedures of
-    FILES make, drawn to at most DEPTH steps and within BUDGET steps.
-
-    FILES holds pairs of a path and the front matter of a procedure, of
-    which only ``id``, ``products``, ``substrates`` and ``scope`` are
-    read. A step to a compound is a specific procedure that lists it
-    among its ``products``, or an entry of a general procedure that
-    does; it starts from that procedure's or entry's ``substrates``, in
-    order, or from nothing when they are unset. The steps to a compound
-    come by procedure ID, the entries of one procedure in entry order.
-
-    A tree of a compound R alternates compounds and steps: under a
-    compound the steps it keeps, under a step the compounds it starts
-    from. A compound keeps every step to it except those that start
-    from a compound on its path, the compounds from R down to it, both
-    included, so that no cycle is followed. A tree to the depth D
-    expands the compounds fewer than D steps below R; a compound D
-    steps below R is cut off when it keeps a step, and a plain leaf
-    otherwise. R's route tree is its tree to the largest depth from 1
-    to DEPTH that holds at most BUDGET steps, counted at every level,
-    or its tree to the depth 1 when even that holds more.
-
-    The result maps the key of every compound whose route tree goes
-    past one step, that is, one of whose steps starts from a compound
-    that is expanded with a step or cut off, to the list of the steps
-    it keeps. A step is a table of ``procedure``, the procedure's ID;
-    ``entry``, the entry's number counted from 1, only for an entry of
-    a general procedure; ``yield_percent``, the yield of the compound it
-    makes; and ``substrates``, one table per compound it starts from,
-    holding ``compound``, its key, ``steps``, its own steps, empty
-    unless it is expanded, and ``more``, true exactly when it is cut
-    off. Raises ``KeyError`` when a procedure lacks ``id``, or a product
-    lacks ``compound`` or ``yield_percent``.
-    """
-    makers: dict[str, list[_Maker]] = {}
-    for _, data in sorted(files, key=lambda item: item[1]["id"]):
-        scope = data.get("scope")
-        for number, run in enumerate(scope or [data], 1):
-            for product in run.get("products", []):
-                makers.setdefault(product["compound"], []).append(_Maker(
-                    data["id"], number if scope else None,
-                    product["yield_percent"],
-                    tuple(run.get("substrates", []))))
-
-    def kept(compound: str, path: frozenset[str]) -> list[_Maker]:
-        return [maker for maker in makers.get(compound, [])
-                if path.isdisjoint(maker.substrates)]
-
-    def tree(root: str, limit: int,
-             cap: int | None) -> tuple[list[dict[str, Any]], bool]:
-        # The steps of ROOT's tree to the depth LIMIT, and whether it
-        # cuts a compound off; raises _OverBudget past CAP steps.
-        size, cut = 0, False
-
-        def grow(compound: str, path: frozenset[str],
-                 level: int) -> list[dict[str, Any]]:
-            nonlocal size, cut
-            steps = []
-            for maker in kept(compound, path):
-                size += 1
-                if cap is not None and size > cap:
-                    raise _OverBudget
-                substrates = []
-                for key in maker.substrates:
-                    below = path | {key}
-                    substrate: dict[str, Any] = {
-                        "compound": key, "steps": [], "more": False}
-                    if level + 1 < limit:
-                        substrate["steps"] = grow(key, below, level + 1)
-                    elif kept(key, below):
-                        substrate["more"] = cut = True
-                    substrates.append(substrate)
-                step: dict[str, Any] = {"procedure": maker.procedure}
-                if maker.entry is not None:
-                    step["entry"] = maker.entry
-                steps.append(step | {"yield_percent": maker.yield_percent,
-                                     "substrates": substrates})
-            return steps
-
-        return grow(root, frozenset({root}), 0), cut
-
-    # Deepen one level at a time and abandon a tree as soon as it passes
-    # the budget, so that no tree much larger than the budget is built.
-    # A tree that cuts nothing off is the same at every greater depth.
-    routes = {}
-    for compound in sorted(makers):
-        drawn, cut = tree(compound, 1, None)
-        for limit in range(2, depth + 1):
-            if not cut:
-                break
-            try:
-                drawn, cut = tree(compound, limit, budget)
-            except _OverBudget:
-                break
-        if any(substrate["steps"] or substrate["more"]
-               for step in drawn for substrate in step["substrates"]):
-            routes[compound] = drawn
-    return routes
 
 
 def _json_value(value: Any) -> Any:
@@ -1891,7 +1764,7 @@ def hugo_overlay(site: Path, collection: Path, language: str,
     substance data of ``build/data/compounds/`` as the data entry
     ``compounds``, the staged sequences of ``build/content/sequences/``,
     and the staged ``build/data/``, which holds the field,
-    reaction-type and route data, as the data entry ``collection``, and
+    reaction-type and author data, as the data entry ``collection``, and
     the staged structure images of ``build/substances/`` as the static
     files ``substances/``. The site has no data entry but these two.
     """

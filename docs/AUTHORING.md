@@ -182,10 +182,10 @@ Separate product entries with commas inside the square brackets. Yields
 are numbers from 0 to 100, without quotes or `%`. Do not list a key twice
 in either list or list a product as a starting material.
 
-The site links the starting materials to their compound pages. It derives
-**Precursors** from other procedures that make those compounds and
-**Used in** from procedures that start from your products. For example,
-the aspirin page links to OSDB-0001 because that procedure makes
+The site links the starting materials to their lab substance pages. It
+derives **Precursors** from other procedures that make those compounds and
+**Used in** from procedures that start from your products. For example, the
+aspirin page links to OSDB-0001 because that procedure makes
 `salicylic-acid`. You do not enter these procedure links yourself.
 
 Write `date` and `lastmod` without quotes. Use Europe/Berlin local time and
@@ -196,10 +196,10 @@ and every allowed value.
 ### Find or add the compounds
 
 The *compound registry* is the lab application's list of substances, shared
-by every procedure that makes or uses them. Open `/lab/registry/` in the lab
-application and look for an existing substance before adding one. The key
-identifies the compound; the site does not compare structures to find
-duplicates.
+by every procedure that makes or uses them. Choose **Chemicals › Substances**
+in the lab application or open `/lab/registry/` and look for an existing
+substance before adding one. The key identifies the compound; the site does
+not compare structures to find duplicates.
 
 Create and edit substances in the lab application. Use the substance's key
 in `products` or `substrates`, for example `ethyl-acetate`. Keys use lowercase
@@ -217,10 +217,11 @@ owner to set it if the collection has no registry.
 Names and chemical data come from the substance in that registry: formula,
 molar mass in g/mol, SMILES (a text notation for molecular structures) and
 CAS Registry Number. An English site uses `name`; a German site uses
-`name_de` when supplied, otherwise `name`. The site also shows the substance's article number, short name,
-chemical classes and group. These four fields are built in; their display
-is fixed. The [field reference](SCHEMA.md#collection-field-declarations)
-gives the details.
+`name_de` when supplied, otherwise `name`. Article number, short name,
+chemical classes and group remain built-in registry fields. The site shows
+article number and short name after compound links; find chemical classes and
+group in the lab application. The
+[field reference](SCHEMA.md#collection-field-declarations) gives the details.
 
 To show a compound's structure, open its record in the lab registry and
 choose **Structure (molfile)** on the new or edit form. Upload a molfile,
@@ -246,39 +247,42 @@ file's directory; without it, the substance has no image on the site.
 `static/structures/` holds procedure scheme images only. Ask the owner to
 add the molfile if you cannot edit the lab registry.
 
-You may register a starting material even if no procedure makes it. A compound
-that no procedure uses is also allowed. In the sidebar's **Collection** group,
-**Compounds** opens the catalogue at `/compounds/`, which you can filter and
-search. Its search field shows **Name, formula, CAS, SMILES**.
-Each name links to a page with chemical data, the structure when supplied,
-**Made by** procedures with yields and status, and **Used in** procedures
-with status. A general procedure appears
-under **Made by** once per entry that makes the compound, as
-`<ID> <title> · entry <n> · <yield> % · <status>`. **Used in** lists each
-procedure once, and the directory counts each procedure once. After
-**Used in**, **Sequences** links the sequences that name this compound as their
-target, by sequence ID. It appears only when there are matching sequences.
+You may register a starting material even if no procedure makes it. A
+compound that no procedure uses is also allowed. Open a substance's lab page
+at `/lab/registry/substances/<key>/` to see its chemical data, its structure
+when supplied, and its containers. **Made by** lists procedures with yields
+when known and status when set; **Used in** lists procedures with status when
+set. A general procedure appears under **Made by** once per entry that makes
+the compound, as `<ID> <title> · entry <n> · <yield> % · <status>` when the
+yield and status are known. **Used in** lists each procedure once. Both lists
+are ordered by procedure ID, with entries of one general procedure in entry
+order. **Sequences** follows **Used in** and links the sequences that name
+this compound as their target, by title and in sequence ID order. Each
+section appears only when it has matching records. The lab omits procedures,
+entries and sequences removed from the collection by an accepted import.
 
-**Routes** ends the page, after **Sequences** when present, if a route goes
-beyond one step: a procedure makes a starting material for another step.
-The tree shows steps that make the compound, then each step's starting
-materials, then the steps that make those, down to compounds no procedure
-makes. Under a compound, any one step will do; under a step, all starting
-materials are needed. Each step shows the procedure link, entry number when
-needed, yield and status, as in **Made by**. All published procedures take
-part, whatever their status. A general procedure's entry uses only its own
-starting materials. Compound links carry the substance’s article number
-and short name when supplied.
+**Routes** follows **Sequences** when present, if a route goes beyond one
+step: a procedure makes a starting material for another step. The tree shows
+steps that make the compound, then each step's starting materials, then the
+steps that make those, down to compounds no procedure makes. Under a
+compound, any one step will do; under a step, all starting materials are
+needed. Each step shows the procedure link, entry number when needed, yield
+when known and status when set, as in **Made by**. Steps are ordered by
+procedure ID, with entries of one general procedure in entry order. The tree
+uses the collection's procedures and entries kept in the lab, excluding those
+removed by an accepted import. Draft, checked and retired procedures can all
+appear. A general procedure's entry uses only its own starting materials.
+Each starting material links to its lab substance page.
 
 A step is omitted if it starts from a compound already above it on the same
 branch, so the tree never follows a cycle. If all steps would loop back, the
 compound appears without steps and must be obtained another way. The display
-uses a fixed depth limit of 6 steps and a fixed budget of 200 steps per
-tree. A larger tree is drawn to the largest depth that fits. When more than
-200 steps make the compound directly, the tree shows only those. A compound
-cut off by a limit ends with **more steps on its page**; follow its link to
-continue. Routes are derived during the build. You write nothing extra in a
-procedure or `orgsyndb.toml`.
+uses a fixed depth limit of 6 steps and a fixed budget of 200 steps per tree.
+A larger tree is drawn to the largest depth that fits. When more than 200
+steps make the compound directly, the tree shows only those. A compound cut
+off by a limit ends with **more steps on its page**; follow its link to
+continue. The lab draws the routes from the procedures it keeps. You write
+nothing extra in a procedure or `orgsyndb.toml`.
 
 ### Write a general procedure
 
@@ -333,6 +337,10 @@ procedure without it shows the **No structure image** placeholder.
 
 ### How the fields appear on the page
 
+Every compound link on the site opens the substance page at
+`/lab/registry/substances/<key>/`. These links work when the site is served
+at `/` and the lab application at `/lab/` on the same host.
+
 The labels below are those of an English site; a German site, the default,
 shows them in German, such as **Kopieren** for **Copy**. The title block shows
 `id` and a `status` badge above the title. When `status` is `checked` and
@@ -353,10 +361,10 @@ also precede the panel. When neither a scheme nor product figures are shown,
 the screen shows a **No structure image** placeholder, which is omitted from
 printouts. A rule closes the title block on screen.
 
-The information panel always links the product names to their compound pages
+The information panel always links the product names to their lab substance pages
 under **Product** or **Products**, even when a name equals the title. For a
 single product it also shows formula, molecular weight, CAS number when present
-and SMILES. For several products, find those data on the compound pages.
+and SMILES. For several products, find those data on the lab substance pages.
 **Starting materials** links the compounds in `substrates`. For a general
 procedure, both lists include all entries, each compound once in order of first
 appearance. Precursor and used-in links also consider every entry. The panel
@@ -380,8 +388,7 @@ After each product or starting-material link, the panel shows the substance’s
 article number and short name when supplied, in that order.
 The link text stays the compound's name. One space and a muted note in
 parentheses follow it, for example **Acetic anhydride (Ac2O)** in the
-demo. Values appear without labels, separated by `, `, as on the compound
-page.
+demo. Values appear without labels, separated by `, `.
 A compound with none of these values gets no note. Procedure search finds
 these values because the panel is indexed. The yield line, catalogue
 **Details**, image alt texts and page titles carry no note.
@@ -399,11 +406,11 @@ A general procedure adds **Scope** before **Summary**, with one row per entry.
 **Entry**, **Starting materials**, **Products** and **Yield** always appear.
 **Scale**, **Time**, **Temperature** and **Note** appear only when some entry
 sets them; an unset value leaves an empty cell. Starting materials and products
-link to compound pages, and products show small structure images when the
+link to lab substance pages, and products show small structure images when the
 build has staged their images from the registry source. The compound
 links carry the same notes as the panel. For example, entry 1 of
 OSDB-0009 makes the same alcohol as OSDB-0005,
-so that compound's page lists both routes.
+so that substance's lab page lists both under **Made by**.
 
 ## 3. Write the procedure
 
@@ -482,10 +489,7 @@ Read each line from left to right:
 
 For example, `products[1].yield_percent` names the yield in the first
 product entry; product numbers start at 1. An `unknown compound` error
-means you must check the key in the lab registry. A registry error under
-`substances` names a substance keyed `group`, which conflicts with the
-site’s group-tab directory. The lab application refuses this key, so the
-snapshot file was made another way; give the substance another key there.
+means you must check the key in the lab registry.
 A line naming `body` tells you to inspect the section headings. Run the
 command again after correcting the file. The last line reports how many
 files, errors, and warnings were found; its file count includes procedures
@@ -549,7 +553,7 @@ The menu button before the site title collapses the sidebar and opens it
 again: collapsed, a wide window keeps only a narrow strip with the button, a
 narrow one only the title's row. The browser remembers the choice for every
 page of the site.
-Under **Collection**, choose **Compounds**, **Sequences** or **Procedures**;
+Under **Collection**, choose **Sequences** or **Procedures**;
 **Help** follows on its own. Sites with the lab application also show a
 **Lab** group first, with **Overview**, **Inventory**, **Planning** and
 **Tasks**; then **Chemicals**, with **Substances**; and, after
@@ -559,20 +563,19 @@ groups**, **Projects**, **Reaction types**, **Lab notebooks** and
 search hint is **Product, CAS or SMILES**; keywords still match. Choose the
 magnifier at the field's right end or press Enter to search procedures.
 
-The home page's **Browse** list includes **Sequences** with a count. Open it
-or the navigation link to browse `/sequences/`, ordered by ID with linked
-titles and targets, step counts and overall yields. A sequence page shows
-its ID and title, **Steps** and **Overall yield**, a scheme, its linked
-procedures with entry numbers where needed, reaction type, yield and status,
-then your notes. The scheme shows starting materials, intermediates and target
-with structure images staged from the registry source by the build, where
-available.
-Compound links in the scheme and the directory's targets carry the same
-notes as the panel.
-A plus joins the first step's starting materials, and arrows show step
-number, reaction type and yield. It runs down the page in narrow windows.
-Sequence pages are absent from the procedure search index; use their links
-to find them.
+The home page's **Browse** list includes **Substances** with their count,
+linking `/lab/registry/`, and **Sequences** with a count. Open the latter or
+the navigation link to browse `/sequences/`, ordered by ID with linked titles
+and targets, step counts and overall yields. A sequence page shows its ID and
+title, **Steps** and **Overall yield**, a scheme, its linked procedures with
+entry numbers where needed, reaction type, yield and status, then your notes.
+The scheme shows starting materials, intermediates and target with structure
+images staged from the registry source by the build, where available.
+Compound links in the scheme and the directory's targets open the lab
+substance pages and carry the same notes as the panel. A plus joins the first
+step's starting materials, and arrows show step number, reaction type and
+yield. It runs down the page in narrow windows. Sequence pages are absent
+from the procedure search index; use their links to find them.
 
 On a procedure page, choose **Print / Save as PDF** to open the browser's
 print dialog. The print layout is A4, complete, and black on white. Firefox
@@ -650,8 +653,8 @@ When you use several procedures in order to make a target compound, record
 that route as a **synthesis sequence**. Each step names the procedure you run
 and, for a general procedure, the scope entry you use. The site checks that
 the steps connect and calculates their overall yield.
-The sequence records the route your group runs; the compound page's
-**Routes** tree is derived from the collection's procedures.
+The sequence records the route your group runs; the lab draws the substance
+page's **Routes** tree from the procedures it keeps.
 
 From inside the collection, create a stub with:
 

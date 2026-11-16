@@ -14,8 +14,7 @@ from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 
 from collection import routes
-from collection.models import (EntrySubstance, Procedure, Role, Sequence,
-                               latest_accepted)
+from collection.models import EntrySubstance, Procedure, Role, Sequence
 from inventory.models import Item, Lot
 from registry import snapshot
 from registry.forms import SubstanceForm
@@ -84,18 +83,6 @@ def substance_list(request: HttpRequest) -> HttpResponse:
         "chemical_class": chemical_class,
         "groups": tree_order(Group.objects.all()),
         "classes": tree_order(ChemicalClass.objects.all())})
-
-
-def in_collection(substance: Substance) -> bool:
-    """Whether the latest accepted import of the collection was received
-    no earlier than SUBSTANCE was created, the time of the first record
-    of its history: the build of that import had the substance's page.
-    False while no import was accepted, or for a substance without a
-    history."""
-    latest = latest_accepted()
-    created = substance.history.order_by("history_id").first()
-    return (latest is not None and created is not None
-            and latest.received_at >= created.history_date)
 
 
 def shown_yield(value: float | None) -> Decimal | None:
@@ -170,11 +157,10 @@ def route(substance: Substance) -> list[dict[str, Any]]:
 
 
 def substance_page(request: HttpRequest, key: str) -> HttpResponse:
-    """Show the substance KEY with its fields, its link to the site's
-    compound page (``in_collection``), the procedures that make it and
-    that start from it, the sequences whose target it is, its route
-    tree, its article's items, its open lots and its tasks; answer 404
-    for an unknown key."""
+    """Show the substance KEY with its fields, the procedures that make
+    it and that start from it, the sequences whose target it is, its
+    route tree, its article's items, its open lots and its tasks;
+    answer 404 for an unknown key."""
     substance = get_object_or_404(
         Substance.objects.select_related("group").defer("structure_svg"),
         key=key)
@@ -185,7 +171,6 @@ def substance_page(request: HttpRequest, key: str) -> HttpResponse:
         "substance": substance,
         "classes": [term for term, _depth in tree_order(
             substance.chemical_classes.all())],
-        "in_collection": in_collection(substance),
         "made_by": made_by(substance),
         "used_in": used_in(substance),
         "sequences": Sequence.objects.filter(

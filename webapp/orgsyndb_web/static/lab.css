@@ -142,6 +142,17 @@
 .lab-history ul { margin: var(--space-1) 0 0; padding-left: var(--space-4); }
 .lab-history__time { color: var(--muted); }
 
+/* A substance's page: its structure image, and its route tree as nested
+   lists, each level guided by a line. */
+main > .structure { max-width: 21rem; }
+.route-tree { font-family: var(--font-ui); padding-left: var(--space-4); }
+.route-tree ul {
+  margin: var(--space-1) 0 var(--space-1) var(--space-1);
+  padding-left: var(--space-2);
+  border-left: 1px solid var(--border);
+  list-style: none;
+}
+
 /* The inventory: stock levels, its tables, the consumption chart and the
    rows of a delivery note. Each of the seven levels' background and
    text keep a contrast of at least 4.5:1 in both colour schemes. */

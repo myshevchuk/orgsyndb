@@ -161,13 +161,13 @@ class NewSubstanceTests(FormCase):
         self.assertFalse(Substance.objects.filter(
             key="ethyl-acetate").exists())
 
-    def test_the_key_of_the_compound_tabs(self) -> None:
-        """Scenario: The key of the compound tabs."""
-        before = Substance.objects.count()
-        self.refused(self.client.post(
-            NEW_SUBSTANCE, self.data(key="group")), "key")
-        self.assertEqual(Substance.objects.count(), before)
-        self.assertFalse(Substance.objects.filter(key="group").exists())
+    def test_the_key_group(self) -> None:
+        """Scenario: The key group."""
+        done = self.client.post(NEW_SUBSTANCE, self.data(key="group"))
+        self.assertRedirects(done, substance_url("group"),
+                             fetch_redirect_response=False)
+        self.assertEqual(Substance.objects.get(key="group").name,
+                         "Ethyl acetate")
 
     def test_the_key_must_match_its_pattern(self) -> None:
         for key in ("", "Ethyl-Acetate", "ethyl acetate", "-a", "a--b",

@@ -225,7 +225,7 @@ eckigen Klammern durch Kommas. Ausbeuten sind Zahlen von 0 bis 100, ohne
 Anführungszeichen oder `%`, mit Dezimalpunkt. Nennen Sie keinen Schlüssel
 doppelt in einer Liste und kein Produkt auch als Ausgangsstoff.
 
-Die Website verlinkt die Ausgangsstoffe auf ihre Verbindungsseiten. Sie
+Die Website verlinkt die Ausgangsstoffe auf ihre Stoffseiten im Labor. Sie
 leitet **Vorstufen** aus anderen Vorschriften ab, die diese Verbindungen
 herstellen, und **Verwendet in** aus Vorschriften, die von Ihren Produkten
 ausgehen. Die Aspirin-Seite verlinkt zum Beispiel OSDB-0001, weil diese
@@ -242,10 +242,10 @@ Format und jeden erlaubten Wert.
 
 Das *Verbindungsregister* ist die Stoffliste der Laboranwendung. Alle
 Vorschriften, die diese Stoffe herstellen oder verwenden, teilen sich die
-Daten. Öffnen Sie `/lab/registry/` in der Laboranwendung und suchen Sie
-zuerst nach einem vorhandenen Stoff. Der Schlüssel bestimmt die Identität
-der Verbindung; die Website vergleicht keine Strukturen, um doppelte
-Einträge zu erkennen.
+Daten. Wählen Sie **Chemikalien › Substanzen** in der Laboranwendung oder
+öffnen Sie `/lab/registry/` und suchen Sie zuerst nach einem vorhandenen
+Stoff. Der Schlüssel bestimmt die Identität der Verbindung; die Website
+vergleicht keine Strukturen, um doppelte Einträge zu erkennen.
 
 Legen Sie Stoffe in der Laboranwendung an und bearbeiten Sie sie dort.
 Verwenden Sie den Stoffschlüssel in `products` oder `substrates`, etwa
@@ -263,12 +263,13 @@ nicht leere Umgebungsvariable `ORGSYNDB_REGISTRY` ersetzt diese Einstellung.
 Bitten Sie die oder den Verantwortlichen, das Register einzutragen, wenn
 die Sammlung keines benennt.
 
-Namen und chemische Daten kommen vom Stoff in diesem Register:
-Summenformel, Molmasse in g/mol, SMILES als Textschreibweise für
-Molekülstrukturen und CAS-Registriernummer. Eine englische Website verwendet
-`name`, eine deutsche `name_de`, falls vorhanden, sonst `name`. Die Website
-zeigt außerdem Artikelnummer, Kurzname, Stoffklassen und Gruppe des Stoffs.
-Diese vier Felder sind fest eingebaut; ihre Anzeige ist vorgegeben. Die
+Namen und chemische Daten kommen vom Stoff in diesem Register: Summenformel,
+Molmasse in g/mol, SMILES als Textschreibweise für Molekülstrukturen und
+CAS-Registriernummer. Eine englische Website verwendet `name`, eine deutsche
+`name_de`, falls vorhanden, sonst `name`. Artikelnummer, Kurzname,
+Stoffklassen und Gruppe bleiben fest eingebaute Registerfelder. Die Website
+zeigt Artikelnummer und Kurzname nach Verbindungslinks; Stoffklassen und
+Gruppe sehen Sie in der Laboranwendung. Die
 [Feldreferenz](SCHEMA.de.md#felddeklarationen-der-sammlung) nennt die
 Einzelheiten.
 
@@ -301,46 +302,50 @@ Bitten Sie die oder den Verantwortlichen, die Molfile-Datei hinzuzufügen,
 wenn Sie das Laborregister nicht bearbeiten können.
 
 Sie dürfen einen Ausgangsstoff registrieren, ohne dass eine Vorschrift ihn
-herstellt. Auch eine Verbindung, die keine Vorschrift verwendet, ist zulässig.
-**Verbindungen** in der Gruppe **Sammlung** in der linken Seitenleiste öffnet
-den Katalog unter `/compounds/`, den Sie filtern und durchsuchen können.
-Das Suchfeld zeigt **Name, Formel, CAS, SMILES**.
-Jeder Name verlinkt auf eine Seite mit chemischen Daten, dem Strukturbild,
-sofern vorhanden, Vorschriften unter **Hergestellt nach** mit Ausbeute und
-Status sowie Vorschriften unter **Verwendet in** mit Status. Eine allgemeine
-Vorschrift steht unter **Hergestellt nach** einmal je Eintrag, der die
-Verbindung herstellt, als
-`<ID> <Titel> · Eintrag <n> · <Ausbeute> % · <Status>`. **Verwendet in** listet
-jede Vorschrift einmal; auch die Verzeichniszähler zählen sie nur einmal.
-Nach **Verwendet in** verlinkt **Synthesewege** die Wege, die diese Verbindung
-als Ziel nennen, nach Nummer geordnet. Der Abschnitt erscheint nur bei
-passenden Synthesewegen.
+herstellt. Auch eine Verbindung, die keine Vorschrift verwendet, ist
+zulässig. Öffnen Sie die Stoffseite unter `/lab/registry/substances/<key>/`,
+um die chemischen Daten, das Strukturbild, sofern vorhanden, und die Gebinde
+anzusehen. **Hergestellt nach** listet Vorschriften mit Ausbeute, sofern
+bekannt, und Status, sofern gesetzt; **Verwendet in** listet Vorschriften mit
+Status, sofern gesetzt. Eine allgemeine Vorschrift steht unter **Hergestellt
+nach** einmal je Eintrag, der die Verbindung herstellt, als
+`<ID> <Titel> · Eintrag <n> · <Ausbeute> % · <Status>`, wenn Ausbeute und
+Status bekannt sind. **Verwendet in** listet jede Vorschrift einmal. Beide
+Listen sind nach Vorschriftennummer geordnet, die Einträge einer allgemeinen
+Vorschrift nach ihrer Reihenfolge. **Synthesewege** folgt auf **Verwendet
+in** und verlinkt die Wege, die diese Verbindung als Ziel nennen, mit ihrem
+Titel und nach Synthesewegnummer geordnet. Jeder Abschnitt erscheint nur bei
+passenden Einträgen. Das Labor lässt Vorschriften, Einträge und Synthesewege
+weg, die ein angenommener Import aus der Sammlung entfernt hat.
 
-**Herstellungswege** steht am Seitenende, nach **Synthesewege**, falls
-vorhanden. Der Abschnitt erscheint nur, wenn ein Weg über eine Stufe
-hinausgeht: Eine Vorschrift stellt einen Ausgangsstoff für eine weitere
-Stufe her. Der Baum zeigt die Stufen zur Verbindung, darunter die
-Ausgangsstoffe jeder Stufe und deren Herstellungsstufen, bis zu
-Verbindungen, die keine Vorschrift herstellt. Unter einer Verbindung genügt
-eine der Stufen; unter einer Stufe werden alle Ausgangsstoffe benötigt. Jede
-Stufe zeigt den Vorschriftenlink, gegebenenfalls die Eintragsnummer,
-Ausbeute und Status wie unter **Hergestellt nach**. Alle veröffentlichten
-Vorschriften nehmen unabhängig vom Status teil. Ein Eintrag einer
-allgemeinen Vorschrift verwendet nur seine eigenen Ausgangsstoffe. Die
-Verbindungslinks tragen Artikelnummer und Kurzname des Stoffs, sofern
-vorhanden.
+**Herstellungswege** folgt auf **Synthesewege**, falls vorhanden. Der
+Abschnitt erscheint nur, wenn ein Weg über eine Stufe hinausgeht: Eine
+Vorschrift stellt einen Ausgangsstoff für eine weitere Stufe her. Der Baum
+zeigt die Stufen zur Verbindung, darunter die Ausgangsstoffe jeder Stufe und
+deren Herstellungsstufen, bis zu Verbindungen, die keine Vorschrift
+herstellt. Unter einer Verbindung genügt eine der Stufen; unter einer Stufe
+werden alle Ausgangsstoffe benötigt. Jede Stufe zeigt den Vorschriftenlink,
+gegebenenfalls die Eintragsnummer, die Ausbeute, sofern bekannt, und den
+Status, sofern gesetzt, wie unter **Hergestellt nach**. Die Stufen sind nach
+Vorschriftennummer geordnet, die Einträge einer allgemeinen Vorschrift nach
+ihrer Reihenfolge. Der Baum verwendet die im Labor geführten Vorschriften und
+Einträge der Sammlung; durch einen angenommenen Import entfernte bleiben
+ausgenommen. Entwürfe, geprüfte und zurückgezogene Vorschriften können alle
+erscheinen. Ein Eintrag einer allgemeinen Vorschrift verwendet nur seine
+eigenen Ausgangsstoffe. Jeder Ausgangsstoff verlinkt auf seine Stoffseite im
+Labor.
 
-Beginnt eine Stufe mit einer Verbindung, die auf demselben Ast bereits
-weiter oben steht, entfällt sie; Kreise werden nicht verfolgt. Würden alle
-Stufen zurückführen, erscheint die Verbindung ohne Stufen und muss anders
-beschafft werden. Die Anzeige verwendet eine feste Tiefengrenze von 6 Stufen
-und ein festes Budget von 200 Stufen pro Baum. Ein zu großer Baum wird bis
-zur größten Tiefe gezeigt, die noch passt. Stellen mehr als 200 Stufen die
+Beginnt eine Stufe mit einer Verbindung, die auf demselben Ast bereits weiter
+oben steht, entfällt sie; Kreise werden nicht verfolgt. Würden alle Stufen
+zurückführen, erscheint die Verbindung ohne Stufen und muss anders beschafft
+werden. Die Anzeige verwendet eine feste Tiefengrenze von 6 Stufen und ein
+festes Budget von 200 Stufen pro Baum. Ein zu großer Baum wird bis zur
+größten Tiefe gezeigt, die noch passt. Stellen mehr als 200 Stufen die
 Verbindung direkt her, zeigt der Baum nur diese. Eine abgeschnittene
 Verbindung trägt den Zusatz **weitere Stufen auf ihrer Seite**; folgen Sie
-ihrem Link, um den Weg fortzusetzen. Der Build leitet die Herstellungswege
-ab. Dafür tragen Sie nichts zusätzlich in eine Vorschrift oder
-`orgsyndb.toml` ein.
+ihrem Link, um den Weg fortzusetzen. Die Laboranwendung zeichnet die
+Herstellungswege aus den Vorschriften, die sie führt. Dafür tragen Sie nichts
+zusätzlich in eine Vorschrift oder `orgsyndb.toml` ein.
 
 ### Eine allgemeine Vorschrift schreiben
 
@@ -400,6 +405,11 @@ dieses Feld zeigt eine allgemeine Vorschrift **Keine Strukturformel**.
 
 ### So erscheinen die Felder auf der Seite
 
+Alle Verbindungslinks auf der Website öffnen die Stoffseite unter
+`/lab/registry/substances/<key>/`. Diese Links funktionieren, wenn die
+Website unter `/` und die Laboranwendung unter `/lab/` auf demselben Host
+bereitstehen.
+
 Der Titelblock zeigt über dem Titel die `id` und ein Statusabzeichen. Wenn
 `status` den Wert `checked` hat und `checked_by` ausgefüllt ist, folgen die
 Namen der Prüfenden auf das Abzeichen: **Geprüft von** und die Namen. Unter dem
@@ -422,10 +432,10 @@ Strukturformel**, der im Ausdruck fehlt. Eine Linie schließt den Titelblock auf
 dem Bildschirm ab.
 
 Das Datenfeld verlinkt die Produktnamen immer unter **Produkt** oder
-**Produkte** auf ihre Verbindungsseiten, auch bei gleichem Namen wie im Titel.
+**Produkte** auf ihre Stoffseiten im Labor, auch bei gleichem Namen wie im Titel.
 Bei einem Produkt zeigt es außerdem Summenformel, Molmasse, gegebenenfalls die
 CAS-Nummer und SMILES. Bei mehreren Produkten finden Sie diese Daten auf den
-Verbindungsseiten. **Ausgangsstoffe** verlinkt die Verbindungen aus
+Stoffseiten im Labor. **Ausgangsstoffe** verlinkt die Verbindungen aus
 `substrates`. Bei einer allgemeinen Vorschrift umfassen beide Listen alle
 Einträge, jede Verbindung einmal in der Reihenfolge ihres ersten Auftretens.
 Auch Vorstufen- und Folgelinks berücksichtigen alle Einträge. Es folgen
@@ -454,7 +464,7 @@ Reihenfolge.
 Der Linktext bleibt der Verbindungsname. Nach einem Leerzeichen folgt ein
 Zusatz in Klammern und gedeckter Farbe, in der Beispielsammlung etwa
 **Essigsäureanhydrid (Ac2O)**. Die Werte stehen ohne Feldnamen,
-durch `, ` getrennt, wie auf der Verbindungsseite.
+durch `, ` getrennt.
 Setzt eine Verbindung keinen dieser Werte, entfällt der Zusatz.
 Die Vorschriftensuche findet diese Werte, weil das Datenfeld indexiert wird.
 Die Ausbeutezeile, die Katalogansicht **Details**, Alternativtexte von Bildern
@@ -474,12 +484,12 @@ Bei einer allgemeinen Vorschrift steht **Anwendungsbereich** vor
 **Ausgangsstoffe**, **Produkte** und **Ausbeute** erscheinen immer.
 **Ansatzgröße**, **Zeit**, **Temperatur** und **Anmerkung** erscheinen nur,
 wenn mindestens ein Eintrag das Feld setzt; sonst bleibt die jeweilige Zelle
-leer. Ausgangsstoffe und Produkte verlinken auf ihre Verbindungsseiten;
+leer. Ausgangsstoffe und Produkte verlinken auf ihre Stoffseiten im Labor;
 Produkte zeigen kleine Strukturbilder, wenn der Build ihre Bilder aus
 der Registerquelle übernommen hat.
 Die Verbindungslinks tragen dieselben Zusätze wie im Datenfeld.
 Eintrag 1 von OSDB-0009 stellt denselben Alkohol wie OSDB-0005 her, sodass die
-Verbindungsseite beide Wege nennt.
+Stoffseite im Labor beide unter **Hergestellt nach** nennt.
 
 ## 3. Die Vorschrift schreiben
 
@@ -573,12 +583,7 @@ Lesen Sie jede Zeile von links nach rechts:
 
 Eine Zeile mit `products[1].yield_percent` nennt die Ausbeute im ersten
 Produkteintrag; die Zählung beginnt bei 1. Bei `unknown compound` prüfen
-Sie den Schlüssel im Laborregister. Ein Registerfehler unter `substances`
-bezeichnet einen Stoff mit dem Schlüssel `group`, der mit dem Verzeichnis
-für die Gruppenreiter der Website kollidiert.
-Die Laboranwendung lässt diesen Schlüssel nicht zu; die Snapshot-Datei
-wurde also anders erzeugt. Geben Sie dem Stoff dort einen anderen Schlüssel.
-Eine Zeile mit `body` betrifft die
+Sie den Schlüssel im Laborregister. Eine Zeile mit `body` betrifft die
 Abschnittsüberschriften; `missing section "Notes"` statt
 `missing section "Anmerkungen"` zeigt, dass der Dateiname kein `.de` hat
 und die Datei deshalb als englisch gilt. Führen Sie den Befehl nach der
@@ -653,7 +658,7 @@ Suchfeld. Sie bleibt beim Scrollen sichtbar; in schmalen Fenstern steht sie
 und wieder auf: Eingeklappt bleibt in breiten Fenstern nur ein schmaler
 Streifen mit der Schaltfläche, in schmalen nur die Titelzeile. Der Browser
 merkt sich die Wahl für alle Seiten der Website. Unter **Sammlung** wählen Sie
-**Verbindungen**, **Synthesewege** oder **Vorschriften**; **Hilfe** folgt
+**Synthesewege** oder **Vorschriften**; **Hilfe** folgt
 einzeln. Websites mit Laboranwendung zeigen davor die Gruppe **Labor** mit
 **Übersicht**, **Bestand**, **Planung** und **Aufgaben** und die Gruppe
 **Chemikalien** mit **Substanzen**, danach die Gruppe **Stammdaten** mit
@@ -663,20 +668,21 @@ Suchfeld **Produkt, CAS oder SMILES**; auch Stichwörter werden gefunden.
 Klicken Sie auf die Lupe rechts im Feld oder drücken Sie die Eingabetaste,
 um Vorschriften zu suchen.
 
-Die **Übersicht** der Startseite enthält **Synthesewege** mit einer
-Anzahl. Dieser Link und die Navigation öffnen `/sequences/`: nach Nummer
+Die **Übersicht** der Startseite enthält **Substanzen** mit ihrer Anzahl und
+dem Link auf `/lab/registry/` sowie **Synthesewege** mit einer Anzahl. Der
+Syntheseweg-Link und die Navigation öffnen `/sequences/`: nach Nummer
 geordnet, mit verlinkten Titeln und Zielen, Stufenzahl und Gesamtausbeute.
 Eine Synthesewegseite zeigt Nummer und Titel, **Stufen** und
-**Gesamtausbeute**, ein Schema, die verlinkten Vorschriften mit gegebenenfalls
-Eintragsnummer, Reaktionstyp, Ausbeute und Status, danach Ihre Anmerkungen.
-Das Schema zeigt Ausgangsstoffe, Zwischenprodukte und Ziel mit passenden
-Strukturbildern, die der Build aus der Registerquelle übernommen hat,
-sofern vorhanden. Die Verbindungslinks im Schema und die Ziele im
-Synthesewegverzeichnis tragen dieselben Zusätze wie im Datenfeld.
-Ein Plus verbindet die Ausgangsstoffe der ersten Stufe; Pfeile nennen
-Stufennummer, Reaktionstyp und Ausbeute. In schmalen Fenstern verläuft das
-Schema nach unten. Synthesewegseiten fehlen im Suchindex für Vorschriften;
-verwenden Sie ihre Links.
+**Gesamtausbeute**, ein Schema, die verlinkten Vorschriften mit
+gegebenenfalls Eintragsnummer, Reaktionstyp, Ausbeute und Status, danach Ihre
+Anmerkungen. Das Schema zeigt Ausgangsstoffe, Zwischenprodukte und Ziel mit
+passenden Strukturbildern, die der Build aus der Registerquelle übernommen
+hat, sofern vorhanden. Die Verbindungslinks im Schema und die Ziele im
+Synthesewegverzeichnis öffnen die Stoffseiten im Labor und tragen dieselben
+Zusätze wie im Datenfeld. Ein Plus verbindet die Ausgangsstoffe der ersten
+Stufe; Pfeile nennen Stufennummer, Reaktionstyp und Ausbeute. In schmalen
+Fenstern verläuft das Schema nach unten. Synthesewegseiten fehlen im
+Suchindex für Vorschriften; verwenden Sie ihre Links.
 
 Auf einer Vorschriftenseite öffnet **Drucken / Als PDF speichern** den
 Druckdialog des Browsers. Das Drucklayout ist A4, vollständig und schwarz
@@ -762,8 +768,8 @@ die Vorschrift und bei einer allgemeinen Vorschrift den gewählten
 Scope-Eintrag. Die Website prüft den Zusammenhang der Stufen und berechnet die
 Gesamtausbeute.
 Der Syntheseweg hält den Weg fest, den Ihre Gruppe durchführt; den Baum
-**Herstellungswege** auf der Verbindungsseite leitet die Website aus den
-Vorschriften der Sammlung ab.
+**Herstellungswege** auf der Stoffseite im Labor zeichnet die
+Laboranwendung aus den Vorschriften, die sie führt.
 
 Legen Sie im Ordner der Sammlung ein Gerüst an:
 

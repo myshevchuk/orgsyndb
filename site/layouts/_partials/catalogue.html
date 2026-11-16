@@ -41,7 +41,7 @@ data-text-* attributes of div.catalogue. */ -}}
 {{ range $field := where site.Data.collection.fields.procedure "facet" true -}}
 {{ $carried := slice -}}
 {{ range $procedures }}{{ range partial "field-machine-values.html" (dict "field" $field "record" .Params) }}{{ $carried = $carried | append . }}{{ end }}{{ end -}}
-{{ $declared = merge $declared (dict $field.key (dict "field" $field "entries" (partial "field-facet-entries.html" (dict "field" $field "carried" $carried "own" "")))) -}}
+{{ $declared = merge $declared (dict $field.key (dict "field" $field "entries" (partial "field-facet-entries.html" (dict "field" $field "carried" $carried)))) -}}
 {{ $facetKeys = $facetKeys | append $field.key -}}
 {{ end -}}
 {{ $facetKeys = $facetKeys | append "tag" "author" -}}

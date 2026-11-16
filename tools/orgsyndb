@@ -316,6 +316,8 @@ def run_build(collection: Path) -> list[tuple[Path, dict]]:
     step(f"build: staging {count} help pages from docs/")
     step("build: staging the structure images of the registry")
     pipeline.stage_structures(collection, table)
+    # build/data/ holds only what this build writes.
+    pipeline.remove_tree(Path("build") / "data")
     count = pipeline.stage_compounds(
         table, Path("build") / pipeline.STRUCTURES_STAGED,
         Path("build") / pipeline.COMPOUNDS_STAGED)
@@ -327,8 +329,7 @@ def run_build(collection: Path) -> list[tuple[Path, dict]]:
              pipeline.fields_data(collection / MARKER, table, language)),
             (pipeline.REACTION_TYPES_STAGED,
              pipeline.reaction_types_data(table, language)),
-            (pipeline.AUTHORS_STAGED, pipeline.authors_data(table)),
-            (pipeline.ROUTES_STAGED, pipeline.routes_data(chosen))):
+            (pipeline.AUTHORS_STAGED, pipeline.authors_data(table))):
         path = Path("build") / staged
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2)

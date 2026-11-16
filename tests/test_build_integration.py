@@ -262,18 +262,14 @@ class ValidateSubcommandTests(BuildTestCase):
 
 
 class ValidateRegistryTests(BuildTestCase):
-    def test_registry_problem_is_reported_under_the_registry_path(
-            self) -> None:
-        """Scenario: Seeds validate (the registry is checked)."""
+    def test_a_substance_keyed_group_passes_validation(self) -> None:
+        """Scenario: Seeds validate (the registry is checked; the key
+        `group` is a key like any other)."""
         ps.edit_snapshot(self.sandbox, lambda table: table[
             "substances"].append(support.substance("group")))
         result = self.build("validate")
-        self.assertEqual(result.returncode, 1, result.stderr)
-        lines = problem_lines(result.stdout)
-        self.assertEqual(len(lines), 1, result.stdout)
-        self.assertTrue(lines[0].startswith(
-            "build/registry.json:substances: error: "), lines[0])
-        self.assertIn("group", lines[0])
+        self.assert_ok(result)
+        self.assertEqual(problem_lines(result.stdout), [])
 
     def test_unknown_compound_is_reported(self) -> None:
         """Scenario: Seeds validate (compounds are resolved)."""
@@ -419,6 +415,10 @@ class FieldDataStagingTests(BuildTestCase):
             [f["key"] for f in data["compound"]],
             ["article_number", "short_name", "chemical_class", "group"])
         self.assertEqual(data["compound"][0]["label"], "Artikelnr.")
+        self.assertTrue(data["compound"][0]["beside"])
+        for field in data["compound"]:
+            for option in ("column", "facet", "search", "tabs"):
+                self.assertNotIn(option, field, field["key"])
         self.assertEqual(
             [f["key"] for f in data["procedure"]],
             ["notebook", "project", "working_time", "inert_atmosphere"])
@@ -694,22 +694,28 @@ class StagedSubstanceDataTests(BuildTestCase):
         self.assertEqual(staged["acetone"]["short_name"], "Me2CO")
 
 
-class RouteDataStagingTests(BuildTestCase):
-    def test_route_data_is_staged(self) -> None:
-        """Scenario: Route data is staged."""
+class NoRouteDataTests(BuildTestCase):
+    """build-script "build subcommand": the build derives no route
+    data."""
+
+    def test_no_route_data_is_staged(self) -> None:
+        """Scenario: No route data."""
         self.assert_ok(self.build("build"))
-        path = self.sandbox.root / "build" / "data" / "routes.json"
-        self.assertTrue(path.is_file(), "build/data/routes.json is missing")
-        staged = [(item, front_matter(item.read_text(encoding="utf-8")))
-                  for item in sorted((self.sandbox.root / "build" / "content"
-                                      / "procedures").glob("OSDB-*.md"))]
-        self.assertEqual(len(staged), 9)
-        expected = ps.pipeline_function("routes_data")(staged)
-        self.assertEqual(set(expected), {
-            "acetylsalicylic-acid", "1-biphenyl-4-yl-ethanol",
-            "cinnamic-acid"})
-        self.assertEqual(json.loads(path.read_text(encoding="utf-8")),
-                         expected)
+        data = self.sandbox.root / "build" / "data"
+        self.assertTrue((data / "fields.json").is_file(),
+                        "the build staged no data")
+        self.assertFalse((data / "routes.json").exists())
+
+    def test_data_of_an_earlier_build_goes(self) -> None:
+        """Scenario: Data of an earlier build."""
+        data = self.sandbox.root / "build" / "data"
+        (data / "compounds").mkdir(parents=True, exist_ok=True)
+        stale = (data / "routes.json", data / "compounds" / "gone.json")
+        for path in stale:
+            path.write_text("{}\n", encoding="utf-8")
+        self.assert_ok(self.build("build"))
+        for path in stale:
+            self.assertFalse(path.exists(), path.name)
 
 
 class ShippedTreeValidationTests(DemoBuildTestCase):

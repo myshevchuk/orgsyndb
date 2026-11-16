@@ -1,8 +1,0 @@
-{{- /* The compound catalogue at /compounds/: the compound tabs when a field
-declares tabs = true (compound-tabs.html), then the catalogue of every
-entry of the registry (compound-catalogue.html). */ -}}
-{{ define "main" -}}
-{{ partial "compound-tabs.html" . -}}
-{{ partial "compound-catalogue.html" (dict "page" . "rows" (partialCached "compound-rows.html" "compound rows")) -}}
-{{ end }}
-{{ define "scripts" }}{{ partial "catalogue-script.html" . }}{{ end }}

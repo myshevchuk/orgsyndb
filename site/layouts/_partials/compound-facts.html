@@ -2,7 +2,7 @@
 (each digit run in <sub>), MW (<mw> g/mol, with the language's decimal
 separator), CAS when set, and SMILES as <code data-smiles> followed by
 its copy button, which site.js reveals. Takes the entry. The metadata
-panel and the compound page put the pairs in their own dl. */ -}}
+panel puts the pairs in its dl. */ -}}
 {{ with .formula -}}
 <dt>{{ T "label_formula" }}</dt>
 <dd>{{ . | htmlEscape | replaceRE "([0-9]+)" "<sub>$1</sub>" | safeHTML }}</dd>

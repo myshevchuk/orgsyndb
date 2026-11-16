@@ -49,6 +49,7 @@
 #+AI_PASS: claude-opus-5-5 [2026-11-15 Sun 22:20] -- Chemicals and Master data menu groups
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-16 Mon 01:56] -- compound structures from molfiles, scheme images and build staging
 #+AI_PASS: claude-opus-5-5 [2026-11-16 Mon 02:00] -- line wrapping in the structure passage
+#+AI_PASS: doc-writer gpt-6.1-sol [2026-11-16 Mon 09:01] -- lab substance pages, compound links, navigation and route trees
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -209,8 +210,8 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   yield is a number from 0 to 100 without quotes or ~%~. Do not list a key
   twice in either list or list a product as a starting material.
 
-  The site links the starting materials to their compound pages. It derives
-  *Precursors* from other procedures that make those compounds and
+  The site links the starting materials to their lab substance pages. It
+  derives *Precursors* from other procedures that make those compounds and
   *Used in* from procedures that start from your products. You do not write
   these procedure links yourself; they work across procedure languages.
 
@@ -244,11 +245,11 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
 
 * Find or add the compounds
 
-  The /compound registry/ is the lab application's list of substances,
-  shared by every procedure that makes or uses them. Open ~/lab/registry/~
-  in the lab application and look for an existing substance before adding
-  one. The key identifies the compound; the site does not compare structures
-  to find duplicates.
+  The /compound registry/ is the lab application's list of substances, shared
+  by every procedure that makes or uses them. Choose *Chemicals › Substances*
+  in the lab application or open ~/lab/registry/~ and look for an existing
+  substance before adding one. The key identifies the compound; the site does
+  not compare structures to find duplicates.
 
   Create and edit substances in the lab application. Use the substance's key
   in ~:products~ or ~:substrates~, for example ~ethyl-acetate~. Keys use
@@ -266,9 +267,11 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   Names and chemical data come from the substance in that registry: formula,
   molar mass in g/mol, SMILES (a text notation for molecular structures) and
   CAS Registry Number. An English site uses ~name~; a German site uses
-  ~name_de~ when supplied, otherwise ~name~. The site also shows the substance's article number,
-  short name, chemical classes and group. These four fields are built in;
-  their display is fixed. The [[file:SCHEMA.md][schema reference]] gives the details.
+  ~name_de~ when supplied, otherwise ~name~. Article number, short name,
+  chemical classes and group remain built-in registry fields. The site shows
+  article number and short name after compound links; find chemical classes
+  and group in the lab application. The [[file:SCHEMA.md][schema reference]]
+  gives the details.
 
   To show a compound's structure, open its record in the lab registry and
   choose *Structure (molfile)* on the new or edit form. Upload a molfile,
@@ -296,39 +299,42 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   add the molfile if you cannot edit the lab registry.
 
   You may register a starting material even if no procedure makes it. A
-  compound that no procedure uses is also allowed. In the sidebar's
-  *Collection* group, *Compounds* opens the catalogue at ~/compounds/~, which
-  you can filter and search. Its search field shows
-  *Name, formula, CAS, SMILES*.
-  Each name links to a page with chemical data,
-  the structure when supplied, *Made by* procedures with yields and status, and
-  *Used in* procedures with status. A general procedure appears under *Made by*
-  once per entry that makes the compound, as
-  ~<ID> <title> · entry <n> · <yield> % · <status>~. *Used in* lists each
-  procedure once; the directory also counts each procedure once. When a
-  sequence names this compound as its target, *Sequences* follows *Used in*
-  and links those sequences by title, ordered by sequence ID.
+  compound that no procedure uses is also allowed. Open a substance's lab
+  page at ~/lab/registry/substances/<key>/~ to see its chemical data, its
+  structure when supplied, and its containers. *Made by* lists procedures
+  with yields when known and status when set; *Used in* lists procedures with
+  status when set. A general procedure appears under *Made by* once per entry
+  that makes the compound, as
+  ~<ID> <title> · entry <n> · <yield> % · <status>~ when the yield and status
+  are known. *Used in* lists each procedure once. Both lists are ordered by
+  procedure ID, with entries of one general procedure in entry order.
+  *Sequences* follows *Used in* and links the sequences that name this
+  compound as their target, by title and in sequence ID order. Each section
+  appears only when it has matching records. The lab omits procedures,
+  entries and sequences removed from the collection by an accepted import.
 
-  *Routes* ends the page, after *Sequences* when present, if a route goes
-  beyond one step: a procedure makes a starting material for another step.
-  The tree shows steps that make the compound, then each step's starting
-  materials, then the steps that make those, down to compounds no procedure
-  makes. Under a compound, any one step will do; under a step, all starting
-  materials are needed. Each step shows the procedure link, entry number when
-  needed, yield and status, as in *Made by*. All published procedures take
-  part, whatever their status. A general procedure's entry uses only its own
-  starting materials. Compound links carry the substance’s article number
-  and short name when supplied.
+  *Routes* follows *Sequences* when present, if a route goes beyond one step:
+  a procedure makes a starting material for another step. The tree shows
+  steps that make the compound, then each step's starting materials, then the
+  steps that make those, down to compounds no procedure makes. Under a
+  compound, any one step will do; under a step, all starting materials are
+  needed. Each step shows the procedure link, entry number when needed, yield
+  when known and status when set, as in *Made by*. Steps are ordered by
+  procedure ID, with entries of one general procedure in entry order. The
+  tree uses the collection's procedures and entries kept in the lab,
+  excluding those removed by an accepted import. Draft, checked and retired
+  procedures can all appear. A general procedure's entry uses only its own
+  starting materials. Each starting material links to its lab substance page.
 
-  A step is omitted if it starts from a compound already above it on the
-  same branch, so the tree never follows a cycle. If all steps would loop
-  back, the compound appears without steps and must be obtained another way.
-  The display uses a fixed depth limit of 6 steps and a fixed budget of 200
-  steps per tree. A larger tree is drawn to the largest depth that fits.
-  When more than 200 steps make the compound directly, the tree shows only
-  those. A compound cut off by a limit ends with *more steps on its page*;
-  follow its link to continue. Routes are derived during the build. You
-  write nothing extra in a procedure or ~orgsyndb.toml~.
+  A step is omitted if it starts from a compound already above it on the same
+  branch, so the tree never follows a cycle. If all steps would loop back,
+  the compound appears without steps and must be obtained another way. The
+  display uses a fixed depth limit of 6 steps and a fixed budget of 200 steps
+  per tree. A larger tree is drawn to the largest depth that fits. When more
+  than 200 steps make the compound directly, the tree shows only those. A
+  compound cut off by a limit ends with *more steps on its page*; follow its
+  link to continue. The lab draws the routes from the procedures it keeps.
+  You write nothing extra in a procedure or ~orgsyndb.toml~.
 
 * Write a general procedure
 
@@ -395,6 +401,10 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
 
 * Understand the finished page
 
+  Every compound link on the site opens the substance page at
+  ~/lab/registry/substances/<key>/~. These links work when the site is served
+  at ~/~ and the lab application at ~/lab/~ on the same host.
+
   The labels below are those of an English site; a German site, the default,
   shows them in German, such as *Kopieren* for *Copy*. The title block shows
   the procedure ID and a status badge above ~#+TITLE~. When ~:status~ is
@@ -415,10 +425,10 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   screen shows a *No structure image* placeholder, which is omitted from
   printouts. A rule closes the title block on screen.
 
-  The metadata panel always links the product names to their compound pages
+  The metadata panel always links the product names to their lab substance pages
   under *Product* or *Products*, even when a name equals the title. For one
   product it also shows formula, molecular weight, CAS when set, and SMILES.
-  For several products, find those data on their compound pages. *Starting
+  For several products, find those data on their lab substance pages. *Starting
   materials* links the compounds in ~:substrates~. For a general procedure,
   both lists include all entries, each compound once in order of first
   appearance. Precursor and used-in links consider every entry. The panel then
@@ -441,8 +451,7 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   substance’s article number and short name when supplied, in that order.
   The link text stays the compound's name. One space and a muted note in
   parentheses follow it, for example *Acetic anhydride (Ac2O)* in the
-  demo. Values appear without labels, separated by a comma and a space, as
-  on the compound page.
+  demo. Values appear without labels, separated by a comma and a space.
   A compound with none of these values gets no note. Procedure search finds
   these values because the panel is indexed. The yield line, catalogue
   *Details*, image alt texts and page titles carry no note.
@@ -464,12 +473,12 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   A general procedure adds *Scope* before *Summary*, one row per entry. The
   columns *Entry*, *Starting materials*, *Products* and *Yield* always appear.
   *Scale*, *Time*, *Temperature* and *Note* appear only when some entry sets
-  the field; unset values leave empty cells. Compounds link to their pages, and
-  products show small structure images when the build has staged their
-  images from the registry source.
+  the field; unset values leave empty cells. Compounds link to their lab
+  substance pages, and products show small structure images when the build
+  has staged their images from the registry source.
   The compound links carry the same notes as the panel.
-  Entry 1 of OSDB-0009 makes the same alcohol as OSDB-0005, so its compound
-  page lists both routes.
+  Entry 1 of OSDB-0009 makes the same alcohol as OSDB-0005, so its lab
+  substance page lists both under *Made by*.
 
 * Use exact timestamps
 
@@ -613,11 +622,8 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   ~--sequences md/sequences~ to the validator. A field such as
   ~products[1].yield_percent~ names the yield in the first product entry;
   counting starts at 1. ~unknown compound~
-  means you must check the key in the lab registry. A registry error under
-  ~substances~ names a substance keyed ~group~, which conflicts with the
-  site’s group-tab directory. The lab application refuses this key, so the
-  snapshot file was made another way; give the substance another key there. The
-  summary counts procedure and sequence files, including language variants.
+  means you must check the key in the lab registry. The summary counts
+  procedure and sequence files, including language variants.
 
   An ~unknown author~ error under ~authors~ means the registry snapshot has
   no account with that user name. Check the spelling and ask staff to create
@@ -667,7 +673,7 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   again: collapsed, a wide window keeps only a narrow strip with the button, a
   narrow one only the title's row. The browser remembers the choice for every
   page of the site.
-  Under *Collection*, choose *Compounds*, *Sequences* or *Procedures*;
+  Under *Collection*, choose *Sequences* or *Procedures*;
   *Help* follows on its own. Sites with the lab application also show a
   *Lab* group first, with *Overview*, *Inventory*, *Planning* and *Tasks*;
   then *Chemicals*, with *Substances*; and, after *Collection*, *Master
@@ -676,19 +682,20 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   search hint is *Product, CAS or SMILES*; keywords still match. Choose the
   magnifier at the field's right end or press Enter to search procedures.
 
-  The home page's *Browse* list includes *Sequences* with a count. That link
+  The home page's *Browse* list includes *Substances* with their count,
+  linking ~/lab/registry/~, and *Sequences* with a count. The sequence link
   and the navigation open ~/sequences/~, ordered by ID with linked titles and
   targets, step counts and overall yields. A sequence page shows its ID and
-  title, *Steps* and *Overall yield*, a scheme, the linked procedures with entry
-  numbers where needed, reaction type, yield and status, then your notes.
-  The scheme shows starting materials, intermediates and target with matching
-  structure images staged from the registry source by the build, where
-  available. Compound links in the scheme and the directory's targets carry
-  the same notes as the panel.
-  A plus joins the first step's starting materials; arrows show step
-  number, reaction type and yield. In narrow windows the scheme runs down
-  the page. Sequence pages are absent from the procedure search index; use
-  their links to find them.
+  title, *Steps* and *Overall yield*, a scheme, the linked procedures with
+  entry numbers where needed, reaction type, yield and status, then your
+  notes. The scheme shows starting materials, intermediates and target with
+  matching structure images staged from the registry source by the build,
+  where available. Compound links in the scheme and the directory's targets
+  open the lab substance pages and carry the same notes as the panel. A plus
+  joins the first step's starting materials; arrows show step number,
+  reaction type and yield. In narrow windows the scheme runs down the page.
+  Sequence pages are absent from the procedure search index; use their links
+  to find them.
 
   On a procedure page, choose *Print / Save as PDF* to open the browser's
   print dialog. The print layout is complete A4 output in black on white.
@@ -780,8 +787,8 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   a general procedure. The site checks that the steps connect and calculates
   the overall yield. Sequences are written in Markdown, even when all their
   procedures are Org sources. There is no Org sequence export.
-  A sequence records the route your group runs; the compound page's
-  *Routes* tree is derived from the collection's procedures.
+  A sequence records the route your group runs; the lab draws the substance
+  page's *Routes* tree from the procedures it keeps.
 
   From inside the collection, create a stub with:
 

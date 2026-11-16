@@ -35,8 +35,6 @@ TABS = [("/procedures/", "All procedures"),
         ("/general-procedures/", "General procedures"),
         ("/reaction_types/", "Reaction types"), ("/tags/", "Tags"),
         ("/authors/", "Authors")]
-COMPOUND_TAB_PAGES = {"/compounds/group/purchased/": "Purchased",
-                      "/compounds/group/synthesised/": "Synthesised"}
 SECTIONS = ["Summary", "Reagents", "Procedure", "Workup and Purification",
             "Characterization", "Notes", "Hazards and Waste Disposal",
             "References"]
@@ -321,23 +319,6 @@ class ShippedSiteTests(SiteCase):
                               fields[0].attrs.get("placeholder")),
                              ("Search procedures",
                               "Product, CAS or SMILES"))
-        if page.url == "/compounds/":
-            self.assertEqual(page.resolve(form.attrs.get("action", "")),
-                             "/compounds/")
-            self.assertEqual((fields[0].attrs.get("id"),
-                              fields[0].attrs.get("aria-label"),
-                              fields[0].attrs.get("placeholder")),
-                             ("catalogue-q", "Search compounds",
-                              "Name, formula, CAS, SMILES"))
-        if page.url in COMPOUND_TAB_PAGES:
-            self.assertEqual(page.resolve(form.attrs.get("action", "")),
-                             page.url)
-            self.assertEqual((fields[0].attrs.get("id"),
-                              fields[0].attrs.get("aria-label"),
-                              fields[0].attrs.get("placeholder")),
-                             ("catalogue-q", "Search compounds: "
-                              + COMPOUND_TAB_PAGES[page.url],
-                              "Name, formula, CAS, SMILES"))
         buttons = form.find_all("button")
         self.assertEqual(len(buttons), 1)
         self.assertEqual((buttons[0].attrs.get("type"), buttons[0].norm()),
@@ -496,7 +477,7 @@ class ShippedSiteTests(SiteCase):
         self.assertEqual([l.norm() for l in product],
                          ["Acetylsalicylic acid"])
         self.assertEqual(page.resolve(product[0].attrs["href"]),
-                         "/compounds/acetylsalicylic-acid/")
+                         "/lab/registry/substances/acetylsalicylic-acid/")
         self.assertEqual(text["Product"],
                          self.linked("acetylsalicylic-acid"))
         self.assertEqual(text["Formula"], "C9H8O4")
@@ -517,8 +498,8 @@ class ShippedSiteTests(SiteCase):
         materials = panel["Starting materials"].definition
         links = materials.find_all("a", "compound")
         self.assertEqual([page.resolve(l.attrs["href"]) for l in links],
-                         ["/compounds/salicylic-acid/",
-                          "/compounds/acetic-anhydride/"])
+                         ["/lab/registry/substances/salicylic-acid/",
+                          "/lab/registry/substances/acetic-anhydride/"])
         self.assertEqual([l.norm() for l in links],
                          ["Salicylic acid", "Acetic anhydride"])
         self.assertEqual(
@@ -562,9 +543,9 @@ class ShippedSiteTests(SiteCase):
 
     def test_notes_after_every_compound_link(self) -> None:
         """Scenario: Notes after every compound link. Every page is
-        scanned, a superset of the procedure pages, the sequence pages,
-        the sequence directory and the compound pages, so that a stray
-        note or link shows too."""
+        scanned, a superset of the procedure pages, the sequence pages
+        and the sequence directory, so that a stray note or link shows
+        too."""
         beside = [f.key for f in self.compound_fields() if f.beside]
         self.assertEqual(beside, ["article_number", "short_name"])
         noted: dict[str, int] = {}
@@ -582,16 +563,6 @@ class ShippedSiteTests(SiteCase):
                       "sequences/index.html"):
             with self.subTest(page=where):
                 self.assertGreater(noted[where], 0)
-        for key, links in (("acetylsalicylic-acid", 3),
-                           ("1-biphenyl-4-yl-ethanol", 6),
-                           ("cinnamic-acid", 3)):
-            where = f"compounds/{key}/index.html"
-            with self.subTest(page=where):
-                self.assertEqual(noted[where], links)
-        for key in ("salicylic-acid", "methyl-salicylate"):
-            where = f"compounds/{key}/index.html"
-            with self.subTest(page=where):
-                self.assertEqual(noted[where], 0)
 
     def test_notes_in_each_place_a_compound_is_linked(self) -> None:
         """Scenario: Notes after every compound link (the metadata panel,
@@ -660,7 +631,7 @@ class ShippedSiteTests(SiteCase):
         links = pair.definition.find_all("a", "compound")
         self.assertEqual(len(links), 1)
         self.assertEqual(page.resolve(links[0].attrs["href"]),
-                         "/compounds/salicylic-acid/")
+                         "/lab/registry/substances/salicylic-acid/")
         self.assertEqual(links[0].norm(), "Salicylic acid")
         terms = page.find("article", "procedure").find("span", "index-terms")
         self.assertIsNotNone(terms, "no span.index-terms")
@@ -701,7 +672,7 @@ class ShippedSiteTests(SiteCase):
                     self.assertNotEqual(pair.gap, "", label)
                     self.assertEqual(pair.gap.strip(), "", label)
 
-    def test_declared_fields_are_written_as_on_a_compound_page(
+    def test_declared_fields_are_written_as_the_field_data_says(
             self) -> None:
         """Scenario: Panel labels follow the canonical order on every
         page (the written values)."""
@@ -873,14 +844,10 @@ class ShippedSiteTests(SiteCase):
         links = page.links(table)
         self.assertEqual(
             [l.target for l in links],
-            ["/compounds/4-acetylbiphenyl/",
-             "/compounds/1-biphenyl-4-yl-ethanol/",
-             "/compounds/acetophenone/", "/compounds/1-phenylethanol/",
-             "/compounds/4-bromoacetophenone/",
-             "/compounds/1-4-bromophenyl-ethanol/"])
-        for link in links:
-            self.assertTrue(ps.target_file(self.public, link.target)
-                            .is_file(), link.target)
+            [fs.substance_url(key) for key in (
+                "4-acetylbiphenyl", "1-biphenyl-4-yl-ethanol",
+                "acetophenone", "1-phenylethanol", "4-bromoacetophenone",
+                "1-4-bromophenyl-ethanol")])
 
     def test_no_scope_table_on_a_specific_procedure(self) -> None:
         """Scenario: No scope table on a specific procedure."""
@@ -944,18 +911,19 @@ class ShippedSiteTests(SiteCase):
         self.assertEqual(
             [(page.resolve(l.attrs["href"]), l.norm())
              for l in panel["Products"].definition.find_all("a", "compound")],
-            [("/compounds/1-biphenyl-4-yl-ethanol/",
+            [(fs.substance_url("1-biphenyl-4-yl-ethanol"),
               "1-(Biphenyl-4-yl)ethanol"),
-             ("/compounds/1-phenylethanol/", "1-Phenylethanol"),
-             ("/compounds/1-4-bromophenyl-ethanol/",
+             (fs.substance_url("1-phenylethanol"), "1-Phenylethanol"),
+             (fs.substance_url("1-4-bromophenyl-ethanol"),
               "1-(4-Bromophenyl)ethanol")])
         self.assertEqual(
             [(page.resolve(l.attrs["href"]), l.norm())
              for l in panel["Starting materials"].definition.find_all(
                  "a", "compound")],
-            [("/compounds/4-acetylbiphenyl/", "4-Acetylbiphenyl"),
-             ("/compounds/acetophenone/", "Acetophenone"),
-             ("/compounds/4-bromoacetophenone/", "4′-Bromoacetophenone")])
+            [(fs.substance_url("4-acetylbiphenyl"), "4-Acetylbiphenyl"),
+             (fs.substance_url("acetophenone"), "Acetophenone"),
+             (fs.substance_url("4-bromoacetophenone"),
+              "4′-Bromoacetophenone")])
         self.assertEqual(list(panel), self.expected_labels(item))
         self.assertEqual(
             [l.norm() for l in
@@ -1021,22 +989,51 @@ class ShippedSiteTests(SiteCase):
                 self.assertEqual(marked, expected)
 
     def test_no_tabs_elsewhere(self) -> None:
-        """Scenario: No tabs elsewhere."""
+        """Scenario: No tabs elsewhere (the procedure tabs are the only
+        section tabs)."""
         listing = set(self.listing_pages())
-        compound = {"compounds/index.html"} | {
-            f"{url.strip('/')}/index.html" for url in COMPOUND_TAB_PAGES}
         built = set()
         for path, page in self.pages():
             name = str(path.relative_to(self.public))
             built.add(name)
-            if name in compound:
-                with self.subTest(page=name):
-                    self.assertEqual(
-                        len(page.find_all("nav", "section-tabs")), 1)
-            elif name not in listing:
-                with self.subTest(page=name):
-                    self.assertIsNone(page.find("nav", "section-tabs"))
-        self.assertLessEqual(compound, built)
+            with self.subTest(page=name):
+                tabs = page.find_all("nav", "section-tabs")
+                self.assertEqual(len(tabs), int(name in listing))
+                for tab in tabs:
+                    self.assertEqual(tab.attrs.get("aria-label"),
+                                     "Procedures")
+        self.assertLessEqual(listing, built)
+
+    def test_no_compound_pages(self) -> None:
+        """Scenario: No compound pages (nothing is built under
+        `/compounds/`, and no page links there)."""
+        self.assertFalse((self.public / "compounds").exists())
+        self.assertEqual(
+            [str(path.relative_to(self.public))
+             for path, _ in self.pages()
+             if "compounds" in path.relative_to(self.public).parts], [])
+        for path, page in self.pages():
+            with self.subTest(page=str(path.relative_to(self.public))):
+                self.assertEqual(
+                    [l.target for l in page.links()
+                     if l.target.startswith("/compounds/")], [])
+
+    def test_every_compound_link_leads_to_the_labs_substance(self) -> None:
+        """Scenario: every `a.compound` links the substance's lab page,
+        in a build without the lab (site-theme "Metadata panel",
+        compound-fields "Values beside compound links")."""
+        registry = self.registry()
+        linked: set[str] = set()
+        for path, page in self.pages():
+            where = path.relative_to(self.public).as_posix()
+            for link in page.find_all("a", "compound"):
+                with self.subTest(page=where, href=link.attrs["href"]):
+                    self.assertFalse(link.attrs["href"].startswith("/"))
+                    key = fs.substance_key(
+                        page.resolve(link.attrs["href"]))
+                    self.assertIn(key, registry)
+                    linked.add(key)
+        self.assertGreater(len(linked), 10)
 
     def help_lists(self, page: Page) -> dict[str, Node]:
         """The ul.help-list after each h2 of a help index, by heading."""
@@ -1484,9 +1481,11 @@ class GeneralFixtureSiteTests(SiteCase):
             panel["Starting materials"].definition.norm(),
             ", ".join(self.linked(key)
                       for key in ("acetic-acid", "ethanol")))
-        for link in page.links(panel["Products"].definition):
-            self.assertTrue(ps.target_file(self.public, link.target)
-                            .is_file(), link.target)
+        self.assertEqual(
+            [l.target for l in page.links(panel["Products"].definition)],
+            [fs.substance_url(key) for key in (
+                "ethyl-acetate", "benzyl-acetate", "propyl-acetate",
+                "methyl-benzoate")])
 
     def test_the_index_follows_the_union_of_the_entries(self) -> None:
         """Requirement: General procedures (index terms and SMILES
@@ -1509,36 +1508,6 @@ class GeneralFixtureSiteTests(SiteCase):
             " ".join(ps.smiles_suffixes(registry[key]["smiles"])
                      for key in ("ethyl-acetate", "benzyl-acetate",
                                  "propyl-acetate", "methyl-benzoate")))
-
-    def test_the_compound_pages_name_the_entry(self) -> None:
-        """Requirement: Compound pages (entries of a general procedure)."""
-        cases = {
-            "ethyl-acetate": ["OSDB-0140 Acetate Esters · entry 1 · 85 % · "
-                              "draft"],
-            "benzyl-acetate": ["OSDB-0140 Acetate Esters · entry 2 · 78 % · "
-                               "draft"],
-            "propyl-acetate": ["OSDB-0140 Acetate Esters · entry 2 · "
-                               "64.5 % · draft"],
-            "methyl-benzoate": ["OSDB-0140 Acetate Esters · entry 3 · "
-                                "72.5 % · draft"]}
-        for key, expected in cases.items():
-            page = ps.load_page(self.public, self.public / "compounds" / key
-                                / "index.html")
-            made = page.find("section", "compound-made-by")
-            with self.subTest(compound=key):
-                self.assertIsNotNone(made, "no section.compound-made-by")
-                self.assertEqual([li.norm() for li in made.find_all("li")],
-                                 expected)
-        used = ps.load_page(self.public, self.public / "compounds"
-                            / "acetic-acid" / "index.html").find(
-            "section", "compound-used-in")
-        self.assertIn("OSDB-0140 Acetate Esters · draft",
-                      [li.norm() for li in used.find_all("li")])
-        self.assertEqual(
-            [li.norm() for li in used.find_all("li")].count(
-                "OSDB-0140 Acetate Esters · draft"), 1,
-            "once for each procedure, however many entries use it")
-
 
 class QuotedTitleSiteTests(SiteCase):
     """The test collection plus the quoted-title fixture."""
@@ -1590,8 +1559,10 @@ class TwoProductSiteTests(SiteCase):
         links = panel["Products"].definition.find_all("a", "compound")
         self.assertEqual([(page.resolve(l.attrs["href"]), l.norm())
                           for l in links],
-                         [("/compounds/trans-stilbene/", "trans-Stilbene"),
-                          ("/compounds/cis-stilbene/", "cis-Stilbene")])
+                         [(fs.substance_url("trans-stilbene"),
+                           "trans-Stilbene"),
+                          (fs.substance_url("cis-stilbene"),
+                           "cis-Stilbene")])
         self.assertEqual(
             panel["Products"].definition.norm(),
             ", ".join(self.linked(key)
@@ -1630,36 +1601,6 @@ class TwoProductSiteTests(SiteCase):
             "c1ccc(cc1)/C=C\\c1ccccc1")
         self.assertEqual(page.find_all("button", data_copy_smiles=True), [])
 
-    def test_the_compound_pages_give_each_yield(self) -> None:
-        """Scenario: Made by and used in (two products)."""
-        for key, name, yield_text in (("trans-stilbene", "trans-Stilbene",
-                                       "45 %"),
-                                      ("cis-stilbene", "cis-Stilbene",
-                                       "30 %")):
-            path = self.public / "compounds" / key / "index.html"
-            with self.subTest(compound=key):
-                self.assertTrue(path.is_file(), f"{key} has no page")
-                page = ps.load_page(self.public, path)
-                section = page.find("section", "compound-made-by")
-                self.assertIsNotNone(section, "no section.compound-made-by")
-                self.assertEqual(
-                    [li.norm() for li in section.find_all("li")],
-                    [f"OSDB-0907 Stilbene isomers · {yield_text} · draft"])
-                self.assertIsNone(page.find("section",
-                                            "compound-used-in"))
-                self.assertEqual(page.find("main").find("h1").norm(), name)
-        cis = ps.load_page(self.public, self.public / "compounds"
-                           / "cis-stilbene" / "index.html")
-        self.assertEqual(cis.find_all("figure"), [])
-        trans = ps.load_page(self.public, self.public / "compounds"
-                             / "trans-stilbene" / "index.html")
-        image = trans.find("figure", "structure").find("img")
-        self.assertEqual(image.attrs.get("alt"),
-                         "Structure of trans-Stilbene")
-        self.assertEqual(trans.resolve(image.attrs["src"]),
-                         "/substances/trans-stilbene/structure.svg")
-
-
 class SecondRouteSiteTests(SiteCase):
     """The test collection plus a second route to salicylic acid."""
 
@@ -1691,20 +1632,6 @@ class SecondRouteSiteTests(SiteCase):
                          ["OSDB-0001 Salicylic acid",
                           "OSDB-0908 Salicylic acid, second route"])
 
-    def test_the_compound_page_lists_both_routes(self) -> None:
-        """Scenario: Made by and used in (a second route)."""
-        page = ps.load_page(self.public, self.public / "compounds"
-                            / "salicylic-acid" / "index.html")
-        made = page.find("section", "compound-made-by")
-        self.assertEqual(
-            [li.norm() for li in made.find_all("li")],
-            ["OSDB-0001 Salicylic acid · 80 % · draft",
-             "OSDB-0908 Salicylic acid, second route · 70 % · draft"])
-        used = page.find("section", "compound-used-in")
-        self.assertEqual([li.norm() for li in used.find_all("li")],
-                         ["OSDB-0002 Aspirin (acetylsalicylic acid) · "
-                          "draft"])
-
     def test_the_panel_names_the_starting_material(self) -> None:
         """Scenario: A second route (starting materials)."""
         page = ps.load_page(self.public, self.public / "procedures"
@@ -1715,7 +1642,7 @@ class SecondRouteSiteTests(SiteCase):
         self.assertEqual(
             [page.resolve(l.attrs["href"]) for l in
              panel["Starting materials"].definition.find_all("a")],
-            ["/compounds/phenyl-salicylate/"])
+            [fs.substance_url("phenyl-salicylate")])
         self.assertEqual(list(panel), self.expected_labels(
             self.by_id()["OSDB-0908"]))
 
@@ -1779,9 +1706,10 @@ class LabNavigationTests(SiteCase):
 
     def test_lab_references_at_the_root(self) -> None:
         """Scenario: Lab references at the root."""
-        lab = {"/lab/", "/lab/summary/",
+        lab = {"/lab/", "/lab/summary/", "/lab/registry/",
                *(entry["url"] for entry in ns.links(self.site, True)
                  if entry["url"].startswith("/lab/"))}
+        substances = {fs.substance_url(key) for key in self.registry()}
         scheme = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
         found_lab: set[str] = set()
         problems = []
@@ -1801,13 +1729,32 @@ class LabNavigationTests(SiteCase):
                         urllib.parse.urlsplit(joined).path)
                     if target.startswith("/lab/") or target == "/lab":
                         found_lab.add(target)
-                        if target not in lab:
+                        if target not in lab | substances:
                             problems.append((page.url, value))
                         continue
                     if not ps.target_file(self.public, target).is_file():
                         problems.append((page.url, value))
         self.assertEqual(problems, [])
-        self.assertEqual(found_lab, lab)
+        self.assertLessEqual(lab, found_lab)
+        self.assertLessEqual(found_lab, lab | substances)
+        self.assertIn(fs.substance_url("salicylic-acid"), found_lab)
+
+    def test_compound_links_are_the_same_with_the_lab(self) -> None:
+        """Scenario: every `a.compound` links the substance's lab page
+        whatever `ORGSYNDB_LAB` says, and no compound page is built."""
+        self.assertFalse((self.public / "compounds").exists())
+        registry = self.registry()
+        links = [(path, page, link) for path, page in self.pages()
+                 for link in page.find_all("a", "compound")]
+        self.assertGreater(len(links), 30)
+        for path, page, link in links:
+            with self.subTest(page=str(path.relative_to(self.public)),
+                              href=link.attrs["href"]):
+                self.assertFalse(link.attrs["href"].startswith("/"))
+                self.assertIn(fs.substance_key(
+                    page.resolve(link.attrs["href"])), registry)
+        navigation = [e["url"] for e in ns.links(self.site, True)]
+        self.assertNotIn("/compounds/", navigation)
 
     def test_the_overlay_sets_the_lab(self) -> None:
         """Scenario: Lab views on request (the overlay)."""

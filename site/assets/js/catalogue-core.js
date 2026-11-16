@@ -7,10 +7,9 @@
 // view}: q a string, one array of machine values per facet, sort null or
 // one of SORTS, view "table" or "details". The facets of a state are its
 // keys other than q, sort and view, in the state's key order. A record is
-// {id, title, created, modified, text, ...facets}: created and modified
-// RFC 3339 timestamps (procedure catalogues), text the words the compound
-// catalogue searches, and each facet an array of machine values or a
-// single one, a missing key holding no value. No function changes its
+// {id, title, created, modified, ...facets}: created and modified RFC
+// 3339 timestamps, and each facet an array of machine values or a single
+// one, a missing key holding no value. No function changes its
 // arguments.
 //
 // parse(search, known, fixed, offered): {state, ignored} of a query
@@ -38,9 +37,6 @@
 //   pages Pagefind finds for q, in result order. It pairs Pagefind's page
 //   hashes with procedure IDs through the id filter and sort key, once,
 //   and rejects with an Error when the index does not pair up.
-// match(records, q): the IDs of the records whose text, normalised and in
-//   lower case, holds every word of the normalised query as a substring,
-//   in the order of records, each once; [] for a query without a word.
 (function () {
   "use strict";
 
@@ -273,24 +269,7 @@
     return { search };
   };
 
-  const match = (records, q) => {
-    const normalise = (text) =>
-      globalThis.OrgSynSearch.normaliseTerm(text).toLowerCase();
-    const words = normalise(q).split(" ").filter(Boolean);
-    if (words.length === 0) return [];
-    const seen = new Set();
-    const out = [];
-    for (const record of records) {
-      if (seen.has(record.id)) continue;
-      seen.add(record.id);
-      const text = normalise(record.text || "");
-      if (words.every((word) => text.includes(word))) out.push(record.id);
-    }
-    return out;
-  };
-
   globalThis.OrgSynCatalogue = {
     parse, serialize, active, sortOf, withQuery, clear, select, searcher,
-    match,
   };
 })();

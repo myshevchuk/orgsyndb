@@ -1938,16 +1938,13 @@ def squash(text: str) -> str:
 CATALOGUE_HEADER = ["ID", "Procedure", "Reaction type", "Status", "Modified"]
 FACETS = ("type", "kind", "status", "tag", "author")
 TERM_PAGE = re.compile(r"^/(reaction_types|tags|authors)/[^/]+/$")
-COMPOUND_TAB_PAGE = re.compile(r"^/compounds/[a-z][a-z0-9_]*/[^/]+/$")
 
 
 def is_catalogue_url(url: str) -> bool:
     """Whether the page at ``url`` carries a catalogue: the procedure
-    catalogue, the general procedures' view, a term page, the compound
-    catalogue or one of its tab pages."""
-    return (url in ("/procedures/", "/general-procedures/", "/compounds/")
-            or TERM_PAGE.match(url) is not None
-            or COMPOUND_TAB_PAGE.match(url) is not None)
+    catalogue, the general procedures' view or a term page."""
+    return (url in ("/procedures/", "/general-procedures/")
+            or TERM_PAGE.match(url) is not None)
 
 
 def catalogue_rows(page: Page) -> list[Node]:

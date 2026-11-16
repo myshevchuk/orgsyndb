@@ -369,8 +369,7 @@ h1 { font-size: 2.25rem; }
   align-items: start;
 }
 .catalogue-facets, .catalogue-results { min-width: 0; }
-.catalogue-facets[hidden] + .catalogue-results,
-.catalogue-results:first-child { grid-column: 1 / -1; }
+.catalogue-facets[hidden] + .catalogue-results { grid-column: 1 / -1; }
 .catalogue-facets h2 { font-size: 1rem; margin: 0 0 var(--space-2); }
 .facet { border-top: 1px solid var(--border); padding: var(--space-2) 0; font-size: 0.875rem; }
 .facet summary { cursor: pointer; font-weight: 600; padding: 0.2rem 0; }
@@ -442,29 +441,19 @@ label.facet-value { margin-inline-start: calc(var(--depth, 0) * 1.25rem); }
 }
 .catalogue[data-view="details"] .procedure-list td { vertical-align: top; }
 
-/* The compound and sequence directories share the catalogue table's
-   rows. */
-.procedure-list, .compound-table, .sequence-table { width: 100%; font-size: 0.925rem; }
-:is(.procedure-list, .compound-table, .sequence-table) :is(th, td) {
+/* The sequence directory shares the catalogue table's rows. */
+.procedure-list, .sequence-table { width: 100%; font-size: 0.925rem; }
+:is(.procedure-list, .sequence-table) :is(th, td) {
   padding: 0.5rem 0.9rem;
   vertical-align: middle;
 }
-:is(.procedure-list, .compound-table, .sequence-table) thead { background: var(--surface); }
-:is(.procedure-list, .compound-table, .sequence-table) thead th { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-:is(.procedure-list, .compound-table, .sequence-table) tbody tr:hover { background: var(--surface); }
+:is(.procedure-list, .sequence-table) thead { background: var(--surface); }
+:is(.procedure-list, .sequence-table) thead th { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+:is(.procedure-list, .sequence-table) tbody tr:hover { background: var(--surface); }
 .procedure-list td:first-child a { color: var(--fg); text-decoration: none; }
-.procedure-list td:nth-child(2) a, :is(.compound-table, .sequence-table) td:first-child a { text-decoration: none; }
-.procedure-list td:nth-child(2) a:hover, :is(.compound-table, .sequence-table) td:first-child a:hover { text-decoration: underline; }
+.procedure-list td:nth-child(2) a, .sequence-table td:first-child a { text-decoration: none; }
+.procedure-list td:nth-child(2) a:hover, .sequence-table td:first-child a:hover { text-decoration: underline; }
 .sequence-table td:first-child { overflow-wrap: anywhere; }
-/* Beside the facets the table is narrow: long words break between
-   syllables, the header cells may wrap, and formula, weight, CAS and the
-   numbers stay on one line. */
-.compound-table :is(th, td) { hyphens: auto; hyphenate-limit-chars: 12 5 5; }
-.compound-table td:first-child { overflow-wrap: break-word; }
-.compound-table th, .compound-table th.num { white-space: normal; }
-.compound-table td:is(:nth-child(2), :nth-child(3), :nth-child(4), .num) {
-  white-space: nowrap;
-}
 .procedure-list td:nth-child(n+4) { color: var(--muted); }
 .procedure-list .badge {
   padding: 0;

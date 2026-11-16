@@ -529,15 +529,15 @@ def registry_with(**vocabularies: list[dict]) -> dict:
 
 def field_data(field: fs.Field) -> dict:
     """The field data of one field as the contract states it: a text
-    field has ``search`` and ``beside``; a choice field has ``facet``,
-    ``multiple``, ``tabs``, ``values`` and ``order``."""
+    field has ``beside``; a choice field has ``multiple``, ``values`` and
+    ``order``; none has ``column``, ``facet``, ``search`` or ``tabs``."""
     data: dict = {"key": field.key, "type": field.type,
-                  "column": field.column, "label": field.label}
+                  "label": field.label}
     if field.type == "text":
-        data.update(search=field.search, beside=field.beside)
+        data.update(beside=field.beside)
         return data
     data.update(
-        facet=field.facet, multiple=field.multiple, tabs=field.tabs,
+        multiple=field.multiple,
         values={key: {"label": path[-1], "path": list(path),
                       "ancestors": list(field.ancestors[key])}
                 for key, path in field.paths.items()},
@@ -608,12 +608,11 @@ class FieldDataTests(unittest.TestCase):
         german = {f["key"]: f for f in self.data("de")["compound"]}
         for fields in (english, german):
             self.assertIs(fields["chemical_class"]["multiple"], True)
-            self.assertIs(fields["chemical_class"]["column"], True)
-            self.assertIs(fields["chemical_class"]["facet"], True)
-            self.assertIs(fields["group"]["tabs"], True)
             self.assertIs(fields["group"]["multiple"], False)
+            for key, field in fields.items():
+                for option in ("column", "facet", "search", "tabs"):
+                    self.assertNotIn(option, field, key)
             for key in ("article_number", "short_name"):
-                self.assertIs(fields[key]["search"], True, key)
                 self.assertIs(fields[key]["beside"], True, key)
             self.assertEqual(
                 fields["chemical_class"]["values"]["ketones"]["ancestors"],
@@ -653,10 +652,10 @@ class FieldDataTests(unittest.TestCase):
         other)."""
         keys = {field["key"]: set(field)
                 for field in self.data()["compound"]}
-        base = {"key", "type", "column", "label"}
-        self.assertEqual(keys["article_number"], base | {"search", "beside"})
-        self.assertEqual(keys["short_name"], base | {"search", "beside"})
-        choice = base | {"facet", "multiple", "tabs", "values", "order"}
+        base = {"key", "type", "label"}
+        self.assertEqual(keys["article_number"], base | {"beside"})
+        self.assertEqual(keys["short_name"], base | {"beside"})
+        choice = base | {"multiple", "values", "order"}
         self.assertEqual(keys["chemical_class"], choice)
         self.assertEqual(keys["group"], choice)
 
@@ -664,15 +663,17 @@ class FieldDataTests(unittest.TestCase):
         """Requirement: Registry fields (the table of presentation)."""
         by_key = {f["key"]: f for f in self.data()["compound"]}
         self.assertEqual(
-            {key: (f["type"], f["column"]) for key, f in by_key.items()},
-            {"article_number": ("text", True),
-             "short_name": ("text", False),
-             "chemical_class": ("choice", True),
-             "group": ("choice", False)})
+            {key: f["type"] for key, f in by_key.items()},
+            {"article_number": "text", "short_name": "text",
+             "chemical_class": "choice", "group": "choice"})
         self.assertEqual(
-            {key: (f["facet"], f["tabs"]) for key, f in by_key.items()
+            {key: f["beside"] for key, f in by_key.items()
+             if f["type"] == "text"},
+            {"article_number": True, "short_name": True})
+        self.assertEqual(
+            {key: f["multiple"] for key, f in by_key.items()
              if f["type"] == "choice"},
-            {"chemical_class": (True, False), "group": (True, True)})
+            {"chemical_class": True, "group": False})
 
     def test_the_group_field_of_the_test_collection(self) -> None:
         """Requirement: Field data for the site (the `group` field)."""
@@ -1040,202 +1041,16 @@ def general(ident: str, *entries: tuple[list[str], dict[str, int]]
         for substrates, products in entries]}
 
 
-def made_by(ident: str, percent: int, *substrates: dict,
-            entry: int | None = None) -> dict:
-    """A step of route data: procedure ``ident``, in ``entry`` of a
-    general procedure, at ``percent``, starting from ``substrates``."""
-    step: dict = {"procedure": ident}
-    if entry is not None:
-        step["entry"] = entry
-    return {**step, "yield_percent": percent, "substrates": list(substrates)}
+class NoRouteDataTests(unittest.TestCase):
+    """synthesis-routes: the helper module derives no route trees; the
+    lab draws them (requirement "Routes in the lab")."""
 
-
-def leaf(key: str) -> dict:
-    """A compound that no step makes, or that the cycle rule leaves
-    without one."""
-    return {"compound": key, "steps": [], "more": False}
-
-
-def cut_off(key: str) -> dict:
-    """A compound that the depth limit cuts off."""
-    return {"compound": key, "steps": [], "more": True}
-
-
-def expanded(key: str, *steps: dict) -> dict:
-    """A compound with the steps that make it drawn below it."""
-    return {"compound": key, "steps": list(steps), "more": False}
-
-
-class RouteDataTests(unittest.TestCase):
-    """synthesis-routes "Derived routes": ``pipeline.routes_data``."""
-
-    def routes(self, *files: tuple[Path, dict], **limits: int) -> dict:
-        return pipeline_function("routes_data")(list(files), **limits)
-
-    def test_routes_of_the_test_collection(self) -> None:
-        """Scenario: Routes of the test collection."""
+    def test_the_helper_module_has_no_route_data(self) -> None:
+        """Scenario: No route data (``pipeline.routes_data``)."""
         module = pipeline()
-        files = module.choose_variants(module.content_files(
-            [str(TEST_COLLECTION / "md" / "procedures")]), "en")
-        self.assertEqual(len(files), 9)
-        routes = pipeline_function("routes_data")(files)
+        self.assertFalse(hasattr(module, "routes_data"))
         self.assertEqual(
-            set(routes), {"acetylsalicylic-acid", "1-biphenyl-4-yl-ethanol",
-                          "cinnamic-acid"})
-        self.assertEqual(routes["acetylsalicylic-acid"], [
-            made_by("OSDB-0002", 75,
-                    expanded("salicylic-acid", made_by(
-                        "OSDB-0001", 80, leaf("methyl-salicylate"))),
-                    leaf("acetic-anhydride"))])
-        acetylbiphenyl = expanded("4-acetylbiphenyl", made_by(
-            "OSDB-0004", 85, leaf("4-bromoacetophenone"),
-            leaf("phenylboronic-acid")))
-        self.assertEqual(routes["1-biphenyl-4-yl-ethanol"], [
-            made_by("OSDB-0005", 90, acetylbiphenyl),
-            made_by("OSDB-0009", 90, acetylbiphenyl, entry=1)])
-        self.assertEqual(routes["cinnamic-acid"], [
-            made_by("OSDB-0008", 90, expanded("ethyl-cinnamate", made_by(
-                "OSDB-0007", 80, leaf("benzaldehyde"),
-                leaf("ethyl-triphenylphosphoranylidene-acetate"))))])
-        self.assertEqual(json.loads(json.dumps(routes)), routes)
-
-    def test_a_protection_and_its_removal_is_not_followed(self) -> None:
-        """Scenario: A protection and its removal."""
-        routes = self.routes(
-            specific("OSDB-0001", "b", "a", percent=81),
-            specific("OSDB-0002", "a", "b", percent=82),
-            specific("OSDB-0003", "c", "b", percent=83))
-        self.assertEqual(routes, {"c": [
-            made_by("OSDB-0003", 83, expanded("b", made_by(
-                "OSDB-0001", 81, leaf("a"))))]})
-
-    def test_the_depth_limit_cuts_a_tree_off(self) -> None:
-        """Scenario: The depth limit (a depth of 2)."""
-        files = [specific(f"OSDB-000{n}", f"c{n}", f"c{n - 1}",
-                          percent=60 + n) for n in range(1, 5)]
-        routes = self.routes(*files, depth=2)
-        self.assertEqual(set(routes), {"c2", "c3", "c4"})
-        self.assertEqual(routes["c4"], [made_by("OSDB-0004", 64, expanded(
-            "c3", made_by("OSDB-0003", 63, cut_off("c2"))))])
-        self.assertEqual(routes["c3"], [made_by("OSDB-0003", 63, expanded(
-            "c2", made_by("OSDB-0002", 62, cut_off("c1"))))])
-        self.assertEqual(routes["c2"], [made_by("OSDB-0002", 62, expanded(
-            "c1", made_by("OSDB-0001", 61, leaf("c0"))))])
-
-    def test_a_depth_of_one_cuts_off_every_substrate_with_a_step(
-            self) -> None:
-        """Scenario: The depth limit (a depth of 1)."""
-        files = [specific(f"OSDB-000{n}", f"c{n}", f"c{n - 1}",
-                          percent=60 + n) for n in range(1, 5)]
-        routes = self.routes(*files, depth=1)
-        self.assertEqual(routes, {
-            f"c{n}": [made_by(f"OSDB-000{n}", 60 + n, cut_off(f"c{n - 1}"))]
-            for n in (2, 3, 4)})
-
-    def test_the_default_depth_is_six(self) -> None:
-        """Scenario: The depth limit (the default of the build)."""
-        files = [specific(f"OSDB-{n:04d}", f"c{n}", f"c{n - 1}")
-                 for n in range(1, 9)]
-        tree = self.routes(*files)["c8"]
-        for level in range(6):
-            (step,) = tree
-            self.assertEqual(step["procedure"], f"OSDB-{8 - level:04d}")
-            (substrate,) = step["substrates"]
-            self.assertEqual(substrate["compound"], f"c{7 - level}")
-            tree = substrate["steps"]
-        self.assertEqual(tree, [])
-        self.assertEqual(substrate["more"], True)
-
-    def stepped(self, budget: int) -> dict:
-        return self.routes(
-            specific("OSDB-0001", "r", "a", "b", percent=71),
-            specific("OSDB-0002", "a", "x", percent=72),
-            specific("OSDB-0003", "b", "y", percent=73),
-            specific("OSDB-0004", "x", "z", percent=74),
-            depth=6, budget=budget)
-
-    def test_a_tree_within_the_budget_is_drawn_whole(self) -> None:
-        """Scenario: The step budget (a budget of 4)."""
-        self.assertEqual(self.stepped(4)["r"], [made_by(
-            "OSDB-0001", 71,
-            expanded("a", made_by("OSDB-0002", 72, expanded(
-                "x", made_by("OSDB-0004", 74, leaf("z"))))),
-            expanded("b", made_by("OSDB-0003", 73, leaf("y"))))])
-
-    def test_a_tree_over_the_budget_is_drawn_to_a_smaller_depth(
-            self) -> None:
-        """Scenario: The step budget (a budget of 3)."""
-        self.assertEqual(self.stepped(3)["r"], [made_by(
-            "OSDB-0001", 71,
-            expanded("a", made_by("OSDB-0002", 72, cut_off("x"))),
-            expanded("b", made_by("OSDB-0003", 73, leaf("y"))))])
-
-    def test_a_budget_below_the_first_level_draws_one_step(self) -> None:
-        """Scenario: The step budget (a budget of 0)."""
-        self.assertEqual(self.stepped(0)["r"], [made_by(
-            "OSDB-0001", 71, cut_off("a"), cut_off("b"))])
-
-    def test_the_budget_counts_the_steps_of_a_tree_at_every_level(
-            self) -> None:
-        """Scenario: The step budget (the size of a tree)."""
-        files = [specific(f"OSDB-000{n}", f"c{n}", f"c{n - 1}")
-                 for n in range(1, 4)]
-        for budget, drawn in ((0, 1), (1, 1), (2, 2), (3, 3), (200, 3)):
-            with self.subTest(budget=budget):
-                tree = self.routes(*files, depth=6, budget=budget)["c3"]
-                steps = 0
-                while tree:
-                    (step,) = tree
-                    steps += 1
-                    tree = step["substrates"][0]["steps"]
-                self.assertEqual(steps, drawn)
-
-    def test_steps_come_by_id_and_entry_and_may_start_from_nothing(
-            self) -> None:
-        """Scenario: Order, entries and a step from nothing."""
-        routes = self.routes(
-            specific("OSDB-0003", "t", "m", percent=40),
-            general("OSDB-0001", (["m"], {"t": 60}), (["n"], {"t": 50})),
-            specific("OSDB-0002", "m", percent=30))
-        from_nothing = expanded("m", made_by("OSDB-0002", 30))
-        self.assertEqual(routes, {"t": [
-            made_by("OSDB-0001", 60, from_nothing, entry=1),
-            made_by("OSDB-0001", 50, leaf("n"), entry=2),
-            made_by("OSDB-0003", 40, from_nothing)]})
-        self.assertNotIn("entry", routes["t"][2])
-
-    def test_an_entry_is_a_step_of_its_own(self) -> None:
-        """Requirement: Scope entries (the steps of a derived route take
-        each entry on its own)."""
-        routes = self.routes(
-            general("OSDB-0001", (["a"], {"u": 61, "t": 62}),
-                    (["b", "c"], {"v": 63})),
-            specific("OSDB-0002", "w", "t", "v"),
-            specific("OSDB-0003", "t", "b"))
-        self.assertEqual(routes["w"], [made_by(
-            "OSDB-0002", 90,
-            expanded("t", made_by("OSDB-0001", 62, leaf("a"), entry=1),
-                     made_by("OSDB-0003", 90, leaf("b"))),
-            expanded("v", made_by("OSDB-0001", 63, leaf("b"), leaf("c"),
-                                  entry=2)))])
-
-    def test_only_the_compounds_of_a_route_deeper_than_one_step_are_keys(
-            self) -> None:
-        """Requirement: Derived routes (a compound whose steps all start
-        from compounds that nothing makes is not a key)."""
-        routes = self.routes(
-            specific("OSDB-0001", "p", "a"),
-            specific("OSDB-0002", "q", "p"),
-            specific("OSDB-0003", "q", "a"))
-        self.assertEqual(set(routes), {"q"})
-        self.assertEqual(routes["q"], [
-            made_by("OSDB-0002", 90, expanded("p", made_by(
-                "OSDB-0001", 90, leaf("a")))),
-            made_by("OSDB-0003", 90, leaf("a"))])
-
-    def test_no_procedure_gives_no_routes(self) -> None:
-        """Requirement: Derived routes (no procedure, no key)."""
-        self.assertEqual(self.routes(), {})
+            [name for name in dir(module) if "route" in name.lower()], [])
 
 
 class StepEntryTests(unittest.TestCase):

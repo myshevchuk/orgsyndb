@@ -97,11 +97,11 @@ A sequence page carries no `data-pagefind-body`. The page `/sequences/` holds th
 - **THEN** it has one row per sequence, by ID, with the stated cells
 
 ### Requirement: Sequences beside procedures and compounds
-A procedure's metadata panel SHALL hold, after `Used in`, the pair `Sequences`, with one `a.sequence` per sequence that has the procedure as a step, linking its page with its title, by ID, and only when there is one. A compound page SHALL hold, after its `Used in` section, `section.compound-sequences` with the `h2` `Sequences` and a `ul` with one `li` per sequence whose `target` is the compound, by ID, linking its page with its title, only when there is one.
+A procedure's metadata panel SHALL hold, after `Used in`, the pair `Sequences`, with one `a.sequence` per sequence that has the procedure as a step, linking its page with its title, by ID, and only when there is one. The lab's substance page lists the sequences whose target is the substance (lab-registry "Registry pages").
 
 #### Scenario: Links to the demo sequence
-- **WHEN** a test reads the pages of OSDB-0001, OSDB-0002 and the compound `acetylsalicylic-acid` after a theme build
-- **THEN** both procedure panels have a `Sequences` pair linking `SEQ-0001`, and the compound page's `section.compound-sequences` links it
+- **WHEN** a test reads the pages of OSDB-0001 and OSDB-0002 after a theme build
+- **THEN** both procedure panels have a `Sequences` pair linking `SEQ-0001`
 
 ### Requirement: Sequence template
 The file `templates/sequence.md` SHALL be a complete sequence using the placeholder ID `SEQ-0000` and slug `seq-0000`, whose front matter explains every key in TOML comments. Once `SEQ-0000` and `seq-0000` are replaced by a real ID and its lowercase form, and its two steps name existing procedures that chain, it validates with no error and no warning.

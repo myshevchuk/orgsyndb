@@ -16,9 +16,6 @@ TABS = [("/procedures/", "Alle Vorschriften"),
         ("/general-procedures/", "Allgemeine Vorschriften"),
         ("/reaction_types/", "Reaktionstypen"), ("/tags/", "Schlagwörter"),
         ("/authors/", "Autoren")]
-COMPOUND_TABS = [("/compounds/", "Alle Verbindungen"),
-                 ("/compounds/group/purchased/", "Zugekauft"),
-                 ("/compounds/group/synthesised/", "Selbst hergestellt")]
 FOOTER = (r"^OrgSynDB · interne Vorschriften · Stand "
           r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}$")
 BANNER = "Beispieldaten – Mengenangaben nicht experimentell überprüft."
@@ -30,9 +27,8 @@ TITLES = {"procedures/index.html": "Vorschriften",
           "general-procedures/index.html": "Allgemeine Vorschriften",
           "reaction_types/index.html": "Reaktionstypen",
           "tags/index.html": "Schlagwörter",
-          "authors/index.html": "Autoren", "compounds/index.html":
-          "Verbindungen", "sequences/index.html": "Synthesewege",
-          "help/index.html": "Hilfe"}
+          "authors/index.html": "Autoren",
+          "sequences/index.html": "Synthesewege", "help/index.html": "Hilfe"}
 
 
 class GermanCase(cs.CatalogueCase):
@@ -59,14 +55,7 @@ class GermanSiteTests(GermanCase):
                 self.assertEqual(len(header.find_all("nav")), 1,
                                  "the header has a language switch")
                 tabs = page.find("nav", "section-tabs")
-                if page.url in dict(COMPOUND_TABS):
-                    self.assertIsNotNone(tabs, "no compound tabs")
-                    self.assertEqual(tabs.attrs.get("aria-label"),
-                                     "Gruppe")
-                    self.assertEqual([(l.target, l.node.norm())
-                                      for l in page.links(tabs)],
-                                     COMPOUND_TABS)
-                elif tabs is not None:
+                if tabs is not None:
                     self.assertEqual(tabs.attrs.get("aria-label"),
                                      "Vorschriften")
                     self.assertEqual([(l.target, l.node.norm())
@@ -89,19 +78,6 @@ class GermanSiteTests(GermanCase):
                              "Vorschriften durchsuchen")
             self.assertEqual(field.get("placeholder"),
                              "Produkt, CAS oder SMILES")
-        elif page.url == "/compounds/":
-            self.assertEqual(field.get("aria-label"),
-                             "Verbindungen durchsuchen")
-            self.assertEqual(field.get("placeholder"),
-                             "Name, Formel, CAS, SMILES")
-        elif page.url in dict(COMPOUND_TABS):
-            self.assertEqual(field.get("aria-label"),
-                             "Verbindungen durchsuchen: "
-                             + dict(COMPOUND_TABS)[page.url])
-            self.assertEqual(field.get("placeholder"),
-                             "Name, Formel, CAS, SMILES")
-            self.assertEqual(
-                page.resolve(forms[0].attrs.get("action", "")), page.url)
         elif page.url == "/general-procedures/":
             self.assertEqual(field.get("aria-label"),
                              "Allgemeine Vorschriften durchsuchen")
@@ -170,7 +146,8 @@ class GermanSiteTests(GermanCase):
         self.assertEqual(
             [(page.resolve(l.attrs["href"]), l.norm())
              for l in pairs["Produkt"].find_all("a", "compound")],
-            [("/compounds/acetylsalicylic-acid/", "Acetylsalicylsäure")])
+            [("/lab/registry/substances/acetylsalicylic-acid/",
+              "Acetylsalicylsäure")])
         self.assertEqual(
             pairs["Ausgangsstoffe"].norm(),
             ", ".join(self.linked(key)
@@ -477,14 +454,6 @@ class GermanGeneralFixtureTests(GermanCase):
         self.assertTrue(figure.has_class("structure--placeholder"))
         self.assertEqual(figure.find("div", "structure__slot").norm(),
                          "Keine Strukturformel")
-
-    def test_the_compound_page_names_the_entry_in_german(self) -> None:
-        """Requirement: Compound pages (German entries)."""
-        page = self.page("compounds/propyl-acetate/index.html")
-        made = page.find("section", "compound-made-by")
-        self.assertEqual(
-            [li.norm() for li in made.find_all("li")],
-            ["OSDB-0140 Acetate Esters · Eintrag 2 · 64,5 % · Entwurf"])
 
 
 class GermanPdfTests(GermanCase):

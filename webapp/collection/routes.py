@@ -63,7 +63,7 @@ def route_tree(root: str, made: dict[str, list[Step]],
                budget: int = BUDGET) -> list[dict[str, Any]]:
     """Return ROOT's route tree from the steps MADE gives each
     substance, drawn to at most DEPTH steps within BUDGET steps by the
-    rules of synthesis-routes "Derived routes", or an empty list when
+    rules of synthesis-routes "Routes in the lab", or an empty list when
     the tree does not go past one step.
 
     A substance keeps every step to it except those that start from a

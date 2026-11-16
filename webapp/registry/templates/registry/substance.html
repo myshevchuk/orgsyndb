@@ -2,10 +2,9 @@
 {% block title %}{{ substance.shown_name }}{% endblock %}
 {% block main %}
 <h1>{{ substance.shown_name }}</h1>
-{% if user.is_authenticated or in_collection %}<div class="lab-actions">
-{% if in_collection %}<a href="/compounds/{{ substance.key }}/">{% translate "In the collection" %}</a>
-{% endif %}{% if user.is_authenticated %}<a href="/lab/registry/substances/{{ substance.key }}/edit/">{% translate "Edit" %}</a>
-{% endif %}</div>
+{% if user.is_authenticated %}<div class="lab-actions">
+<a href="/lab/registry/substances/{{ substance.key }}/edit/">{% translate "Edit" %}</a>
+</div>
 {% endif %}{% if substance.molfile %}<figure class="structure"><img src="/lab/registry/substances/{{ substance.key }}/structure.svg" alt="{% blocktranslate with name=substance.shown_name %}Structure of {{ name }}{% endblocktranslate %}"></figure>
 {% endif %}<dl class="metadata">
 <dt>{% translate "Key" %}</dt>

@@ -208,60 +208,59 @@ class SubstancePageTests(RegistryCase):
         full = self.get(substance_url("cinnamic-acid")).text()
         self.assertLess(full.count("–"), bare.count("–"))
 
-    def collection_links(self, key: str, label: str = "In der Sammlung"
-                         ) -> list[str]:
-        """The targets of the links ``label`` on the page of ``key``."""
+    def site_links(self, key: str) -> list[str]:
+        """The targets of the links in the content of the page of
+        ``key`` that read ``In der Sammlung`` or ``In the collection``,
+        or that lead under ``/compounds/``. The site's menu around the
+        content is not the registry's and is left out."""
         return [a.get("href")
-                for a in self.get(substance_url(key)).find_all("a")
-                if a.text() == label]
+                for a in self.get(substance_url(key)).find("main")
+                .find_all("a")
+                if a.text() in ("In der Sammlung", "In the collection")
+                or a.get("href", "").startswith("/compounds/")]
 
-    def test_the_site_link_follows_an_accepted_import(self) -> None:
-        """Requirement: Registry pages (a link `In der Sammlung` when an
-        import was accepted no earlier than the substance was
-        created)."""
-        accept(language="de")
-        for key in ("cinnamic-acid", "acetophenone", "new-compound-7"):
-            with self.subTest(key=key):
-                self.assertEqual(self.collection_links(key),
-                                 [f"/compounds/{key}/"])
+    def test_no_site_link_follows_an_accepted_import(self) -> None:
+        """Requirement: Registry pages (no link `In der Sammlung`, no
+        path under `/compounds/`), in both languages."""
+        for language in ("de", "en"):
+            accept(language=language)
+            for key in ("cinnamic-acid", "acetophenone", "new-compound-7"):
+                with self.subTest(language=language, key=key):
+                    self.assertEqual(self.site_links(key), [])
 
-    def test_the_site_link_without_an_import(self) -> None:
-        """Requirement: Registry pages (no link while no import was
-        accepted)."""
-        root = self.get(substance_url("cinnamic-acid"))
-        self.assertNotIn("/compounds/cinnamic-acid/", hrefs(root))
-        self.assertEqual(self.collection_links("cinnamic-acid"), [])
+    def test_no_site_link_without_an_import(self) -> None:
+        """Requirement: Registry pages (no link `In der Sammlung`)."""
+        self.assertEqual(self.site_links("cinnamic-acid"), [])
 
     def test_a_refused_import_gives_no_link(self) -> None:
-        """Requirement: Registry pages (accepted imports only)."""
+        """Requirement: Registry pages (no link `In der Sammlung`)."""
         make_import(outcome="refused")
-        self.assertEqual(self.collection_links("cinnamic-acid"), [])
+        self.assertEqual(self.site_links("cinnamic-acid"), [])
 
     def test_a_substance_added_after_the_import_has_no_link(self) -> None:
-        """Scenario: Not in the collection."""
+        """Requirement: Registry pages (no link `In der Sammlung`,
+        whenever the substance was created)."""
         accept(language="de")
         make_substance("ethyl-acetate", "Ethylacetat")
         root = self.get(substance_url("ethyl-acetate"))
         self.assertEqual(root.find("h1").text(), "Ethylacetat")
-        self.assertEqual(self.collection_links("ethyl-acetate"), [])
-        self.assertEqual(self.collection_links("cinnamic-acid"),
-                         ["/compounds/cinnamic-acid/"])
+        self.assertEqual(self.site_links("ethyl-acetate"), [])
 
     def test_the_import_and_the_substance_of_one_moment(self) -> None:
-        """Requirement: Registry pages (accepted no earlier than the
-        substance was created)."""
+        """Requirement: Registry pages (no link `In der Sammlung`,
+        whatever the import and the creation of the substance)."""
         with frozen(berlin(2026, 11, 3)):
             make_substance("same-moment", "Same")
             accept(language="de")
         with frozen(berlin(2026, 11, 3, 12, 1)):
             make_substance("a-minute-later", "Later")
-        self.assertEqual(self.collection_links("same-moment"),
-                         ["/compounds/same-moment/"])
-        self.assertEqual(self.collection_links("a-minute-later"), [])
+        for key in ("same-moment", "a-minute-later"):
+            with self.subTest(key=key):
+                self.assertEqual(self.site_links(key), [])
 
-    def test_the_creation_is_the_first_record_of_the_history(self) -> None:
-        """Requirement: Registry pages (the substance's creation, the
-        first record of its history)."""
+    def test_an_edited_substance_has_no_link(self) -> None:
+        """Requirement: Registry pages (no link `In der Sammlung`,
+        whatever the substance's history)."""
         with frozen(berlin(2026, 11, 1)):
             made = make_substance("edited-later", "Edited")
         with frozen(berlin(2026, 11, 2)):
@@ -269,27 +268,7 @@ class SubstancePageTests(RegistryCase):
         with frozen(berlin(2026, 11, 3)):
             made.note = "Changed after the import"
             made.save()
-        self.assertEqual(made.history.count(), 2)
-        self.assertEqual(self.collection_links("edited-later"),
-                         ["/compounds/edited-later/"])
-
-    def test_an_older_import_does_not_cover_a_newer_substance(
-            self) -> None:
-        """Requirement: Registry pages (no link for a substance created
-        after the latest accepted import)."""
-        with frozen(berlin(2026, 11, 1)):
-            accept(language="de")
-        with frozen(berlin(2026, 11, 2)):
-            make_substance("newer", "Newer")
-        self.assertEqual(self.collection_links("newer"), [])
-
-    def test_the_site_link_in_english(self) -> None:
-        accept(language="en")
-        root = self.get(substance_url("cinnamic-acid"))
-        self.assertEqual(
-            [a.get("href") for a in root.find_all("a")
-             if a.text() == "In the collection"],
-            ["/compounds/cinnamic-acid/"])
+        self.assertEqual(self.site_links("edited-later"), [])
 
     def test_the_edit_link_needs_a_sign_in(self) -> None:
         anonymous = self.get(substance_url("cinnamic-acid"))
@@ -552,24 +531,16 @@ class DemoRegistryPageTests(SeededCase):
         """Scenario: Substance page."""
         root = self.get("/lab/registry/substances/cinnamic-acid/")
         self.assertEqual(root.find("h1").text(), "(E)-Zimtsäure")
-        links = [a for a in root.find_all("a")
-                 if a.text() == "In der Sammlung"]
-        self.assertEqual([a.get("href") for a in links],
-                         ["/compounds/cinnamic-acid/"])
+        content = root.find("main")
+        self.assertEqual([h for h in hrefs(content)
+                          if h.startswith("/compounds/")], [])
+        self.assertFalse([a for a in content.find_all("a") if a.text()
+                          in ("In der Sammlung", "In the collection")])
         held = section(root, "Gebinde")
         self.assertTrue(held.find_all("a"))
         self.assertTrue(all(
             re.fullmatch(r"/lab/inventory/items/\d+/", a.get("href"))
             for a in held.find_all("a")))
-
-    def test_not_in_the_collection(self) -> None:
-        """Scenario: Not in the collection."""
-        make_substance("ethyl-acetate", "Ethyl acetate", classes=["esters"],
-                       name_de="Ethylacetat")
-        root = self.get("/lab/registry/substances/ethyl-acetate/")
-        self.assertEqual(root.find("h1").text(), "Ethylacetat")
-        self.assertFalse([a for a in root.find_all("a")
-                          if a.text() == "In der Sammlung"])
 
     def test_item_names_link_to_their_substances(self) -> None:
         header, rows = table(self.get("/lab/inventory/end-products/"))

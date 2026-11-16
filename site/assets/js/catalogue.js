@@ -1,14 +1,13 @@
-// The catalogue on /procedures/, /general-procedures/, the term pages and
-// /compounds/, as a progressive enhancement: without it the page is its
-// full table. It runs after search-terms.js and catalogue-core.js, in one
-// bundle.
+// The catalogue on /procedures/, /general-procedures/ and the term pages,
+// as a progressive enhancement: without it the page is its full table. It
+// runs after search-terms.js and catalogue-core.js, in one bundle.
 //
 // - Reveals every [data-catalogue-controls] element of div.catalogue, and
 //   drives the search field #catalogue-q of the site header's form.
 // - Takes its facets from the data-facet of each details.facet, in page
 //   order; its records from the table rows (data-id, data-title,
-//   data-created, data-modified, data-text, and data-<facet> as a JSON
-//   array or a single value); its known facet values from the facet
+//   data-created, data-modified, and data-<facet> as a JSON array or a
+//   single value); its known facet values from the facet
 //   checkboxes; its fixed facet from data-fixed; the sorts and views it
 //   offers from the options of #catalogue-sort and #catalogue-view, no
 //   sort and only the table where a select is missing; and its state
@@ -20,11 +19,9 @@
 //   count and the message, and sets the controls. A facet the page did not
 //   render open opens while one of its values is selected. Only the latest
 //   render applies a search result.
-// - On a catalogue with data-search="text" the query matches the rows'
-//   text with OrgSynCatalogue.match, at once. Elsewhere it imports the
-//   Pagefind bundle, ../pagefind/pagefind.js resolved against this
-//   script's URL, only while the query is active, and runs each distinct
-//   normalised query once per page view.
+// - It imports the Pagefind bundle, ../pagefind/pagefind.js resolved
+//   against this script's URL, only while the query is active, and runs
+//   each distinct normalised query once per page view.
 // - Typing changes the query 250 ms after the last keystroke; a run of
 //   edits makes one history entry. Every other change pushes one. Back and
 //   Forward render the address they reach.
@@ -41,7 +38,6 @@
 
   const DELAY = 250;
   const fixed = root.dataset.fixed || null;
-  const inPage = root.dataset.search === "text";
   const language = document.documentElement.lang || undefined;
   const text = (name) => root.getAttribute(`data-text-${name}`) || "";
   const fill = (template, values) => template.replace(
@@ -135,7 +131,6 @@
       title: row.dataset.title || "",
       created: row.dataset.created || "",
       modified: row.dataset.modified || "",
-      text: row.dataset.text || "",
     };
     for (const facet of facets) record[facet] = valuesOf(row, facet);
     records.push(record);
@@ -378,11 +373,6 @@
     syncControls(setField);
     if (!core.active(state)) {
       show(core.select(records, state, null, language));
-      return;
-    }
-    if (inPage) {
-      show(core.select(records, state, core.match(records, state.q),
-        language));
       return;
     }
     results.setAttribute("aria-busy", "true");

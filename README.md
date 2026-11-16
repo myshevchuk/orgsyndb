@@ -52,8 +52,8 @@ caches of fetched tools, `.emacs-batch/` and `.tools/`.
 procedures in English, each with a German translation. It shows the layout, and
 the tests build it. OSDB-0009 is a general procedure for reducing three aryl
 methyl ketones with sodium borohydride. Its first entry makes the same alcohol
-as OSDB-0005, so that compound page lists two routes. The demo also has two
-sequences, each with a German translation:
+as OSDB-0005, so the lab’s substance page lists two routes after importing
+the demo. The demo also has two sequences, each with a German translation:
 
 - SEQ-0001, “Aspirin from oil of wintergreen”: OSDB-0001 → OSDB-0002,
   with an overall yield of 60 %.
@@ -71,15 +71,12 @@ procedures credit the demo's five accounts: `klehmann`, `tbauer`,
 
 The registry has 21 substances. Its chemical-class vocabulary has 13 values
 on three levels, and every substance has at least one chemical class and a
-group. The site shows four built-in fields: `article_number`, `short_name`,
-`chemical_class` and `group`. The compound directory shows article numbers
-and chemical classes as columns, with an empty article-number cell for a
-substance without one. You can filter by chemical class and group, and
-search by article number or short name as well as chemical data. Article
-numbers and short names follow compound links, for example **Acetic
-anhydride (Ac2O)** or **Acetylsalicylic acid (CH-0010, ASA)**. The group
-field divides the directory into **Purchased** and **Synthesised** tab
-pages, listing ten and eleven substances respectively.
+group. Every collection has four built-in registry fields: `article_number`,
+`short_name`, `chemical_class` and `group`. Article numbers and short names
+follow compound links to the lab, for example **Acetic anhydride (Ac2O)** or
+**Acetylsalicylic acid (CH-0010, ASA)**. The static site does not display
+chemical classes or groups. The lab’s substance list lets you search and
+filter the registry.
 
 Every collection has two built-in procedure fields, the *journal fields*:
 `notebook`, the paper notebook entry the procedure comes from, and `project`,
@@ -326,42 +323,34 @@ orgsyndb: warning: cannot read the registry: <address>: <reason>; using the copy
 Without a copy from that address, the command fails with an error naming
 the address. A snapshot file that cannot be read also stops the command.
 
-The site shows these four registry fields in this order. Their
-presentation is fixed for every collection.
+Every collection has these four registry fields, in this order. Their
+presentation on the static site is fixed.
 
-| Field | Value | English / German label | Where it appears |
+| Field | Value | English / German label | Where it appears on the site |
 |---|---|---|---|
-| `article_number` | Article number, as text | Article no. / Artikelnr. | Directory column, search, beside compound links |
-| `short_name` | Short name, as text | Short name / Kurzname | Search, beside compound links |
-| `chemical_class` | Chemical classes, in the substance's order | Chemical class / Stoffklasse | Directory column and filter |
-| `group` | One group | Group / Gruppe | Filter and tab pages |
+| `article_number` | Article number, as text | Article no. / Artikelnr. | Beside compound links |
+| `short_name` | Short name, as text | Short name / Kurzname | Beside compound links |
+| `chemical_class` | Chemical classes, in the substance's order | Chemical class / Stoffklasse | Not displayed |
+| `group` | One group | Group / Gruppe | Not displayed |
 
 Chemical classes come from the registry's `chemical-classes` vocabulary;
 groups come from `inventory-groups`. A vocabulary is a list of allowed
-terms with labels, optionally arranged under parent terms. Tab pages live
-at `/compounds/group/<value>/`. The key `group` is reserved for this
-directory and cannot be a substance key. The validator reports that
-collision on the registry file under `substances`.
+terms with labels, optionally arranged under parent terms.
 
-Compound pages show each field the substance has, after its chemical
-facts. The directory adds article number and chemical class after CAS,
-with empty cells for missing values. Labels follow the site's language,
-falling back to English where no German label is given. Pages show a
-class's full path, such as **Carbonyl compounds › Carboxylic acid
-derivatives › Esters**; the directory shows only **Esters**. Several
-classes appear in the substance's order, separated by commas.
-
-The article number and short name, when present, follow compound links
-in muted parentheses, in that order and separated by `, `. This applies to
-the metadata panel, general-procedure scope tables, sequence schemes,
-sequence-directory targets and route trees. A substance with neither
-value gets no note. The link text stays the substance's name.
+Every compound link leads to the substance's lab page at
+`/lab/registry/substances/<key>/`, in every build. The article number and
+short name, when present, follow in muted parentheses, in that order and
+separated by `, `. This applies to the metadata panel, general-procedure
+scope tables, sequence schemes and sequence-directory targets. A substance
+with neither value gets no note. The link text stays the substance's name.
+These links require the lab at `/lab/` on the same host, served at the
+host's root.
 
 A German site uses the substance's `name_de` when present, otherwise
 `name`; an English site uses `name`. Formula, molar mass in g/mol and
 SMILES, a text notation for molecular structures, may be absent. Missing
-values leave empty directory cells, contribute no search text and appear
-as no fact on the compound page. CAS is also shown only when supplied.
+values contribute no corresponding search text or fact to procedure
+pages. CAS is also shown only when supplied.
 
 To supply a compound's structure, upload a **molfile**, a text file describing
 its molecular structure and drawing coordinates, in the lab registry. The
@@ -466,8 +455,8 @@ procedure or in scope entries for a general procedure. The validator warns
 A synthesis sequence records the route you run through two or more procedures,
 including the chosen entry of a general procedure. The site checks that the
 steps connect and calculates the overall yield from their product yields.
-The **Routes** tree on a compound page is derived from the collection's
-procedures.
+The lab draws the **Routes** tree on a substance’s page from the
+collection’s imported procedures.
 
 Create a sequence from inside the collection:
 
@@ -536,9 +525,9 @@ narrow one only the title's row. The browser remembers the choice for every
 page of the site and the lab application on the same host. Without JavaScript
 the button is absent and the sidebar stays open.
 
-The **Collection** group lists **Compounds**, **Sequences** and **Procedures**
-in that order (**Sammlung**, **Verbindungen**, **Synthesewege** and
-**Vorschriften** on a German site). **Help** (**Hilfe**) follows on its own.
+The **Collection** group lists **Sequences** and **Procedures** in that
+order (**Sammlung**, **Synthesewege** and **Vorschriften** on a German
+site). **Help** (**Hilfe**) follows on its own.
 A site built with `ORGSYNDB_LAB=true` adds three groups. **Lab**
 (**Labor**) comes first, with **Overview**, **Inventory**, **Planning** and
 **Tasks** (**Übersicht**, **Bestand**, **Planung** and **Aufgaben**),
@@ -561,8 +550,8 @@ path prefixes. Rebuild the site and restart the lab application after edits;
 for containers, rebuild the application image.
 
 Every page, including lab pages, has a search field in the sidebar. Except
-on term pages, `/general-procedures/`, `/compounds/` and its tab pages, its
-placeholder is **Product, CAS or SMILES** and its accessible name is
+on term pages and `/general-procedures/`, its placeholder is **Product, CAS
+or SMILES** and its accessible name is
 **Search procedures**. Keywords still match. Choose the magnifier button at
 the field's right end or press Enter to submit; screen readers name the
 button **Search**. On lab pages, this searches procedures at `/procedures/`.
@@ -582,9 +571,10 @@ button **Search**. On lab pages, this searches procedures at `/procedures/`.
   their creation dates. **All draft procedures (n)** opens the catalogue
   with the draft status selected; `n` is the total number of drafts. This
   section is absent when there are no drafts. **Browse** links to
-  **All procedures**, **Reaction types**, **Tags**, **Authors**, **Compounds**
-  and **Sequences**, with counts of procedures, terms in use,
-  compounds or published sequences.
+  **All procedures**, **Reaction types**, **Tags**, **Authors**, **Substances**
+  and **Sequences**, with counts of procedures, terms in use, substances or
+  published sequences. **Substances** (**Substanzen**) links to the lab’s
+  substance list at `/lab/registry/` in every build.
 - `/procedures/` is the catalogue: search, filter, sort and read details
   in one list. With no query or filters it lists every procedure by ID.
   Its table shows **ID**, **Procedure**, **Reaction type**, **Status**
@@ -610,7 +600,7 @@ button **Search**. On lab pages, this searches procedures at `/procedures/`.
   figures sit to the right, above the details column. In a narrow window they
   follow the print button, before the details. A rule closes the title block.
   The details beside the eight body sections always link the products to their
-  compound pages under **Product** or **Products**, including when the name
+  lab substance pages under **Product** or **Products**, including when the name
   equals the title. Formula, molecular weight, CAS when supplied and SMILES
   appear there only for one product; for several, follow the compound links to
   those data. **Authors** links each account's name to
@@ -630,7 +620,7 @@ button **Search**. On lab pages, this searches procedures at `/procedures/`.
   reference to a missing note stays plain text. A general procedure adds
   **Scope** before **Summary**: one row per entry with **Entry**, **Starting
   materials**, **Products** and **Yield**. Starting materials and products link
-  to compound pages; products with images show small structures. **Scale**,
+  to lab substance pages; products with images show small structures. **Scale**,
   **Time**, **Temperature** and **Note** columns appear only when some entry
   sets that field; unset values leave empty cells.
 - `/reaction_types/`, `/tags/`, and `/authors/` list the terms in each category
@@ -650,103 +640,17 @@ button **Search**. On lab pages, this searches procedures at `/procedures/`.
   the tabs, the home page's **Browse** links or the catalogue filters. On a
   term page, use its directory's tab to return to the directory. Procedure
   metadata links to the term pages.
-- `/compounds/` is a searchable, filterable catalogue of every registry entry,
-  including compounds no procedure names, ordered by its name in the site's
-  language. The table shows the linked name, formula, molecular weight, CAS,
-  article number and chemical classes, with empty cells for missing values,
-  and counts of published procedures that make it and that use it as a
-  starting material. Each general procedure counts once, considering
-  all its entries.
-
-  The directory and its tab pages begin with a row of group tabs, styled
-  like the procedure tabs. **All compounds** links to `/compounds/`. It is
-  followed by one tab per top-level group used by a substance, directly or
-  through a group filed under it, labelled with the term's label. Sibling
-  terms are ordered by key. The current page's tab is marked.
-
-  Each tab page at `/compounds/group/<value>/` uses the group's label as
-  its heading and title. It lists substances in that group or a group filed
-  under it, in name order, with its own count, filters and search. The demo
-  has `/compounds/group/purchased/` and `/compounds/group/synthesised/`.
-  On a tab page, the group filter leaves out the tab's own group and moves
-  the groups below it up one level. Filters with no values to list are
-  omitted. The sidebar search is labelled **Search compounds: \<label\>**,
-  with the placeholder **Name, formula, CAS, SMILES**, and works within that
-  tab. Tab links carry no query or filters. Without JavaScript, a tab page
-  shows its whole list.
-
-  **Filters** offers **Chemical class** and **Group**, in that order.
-  Each filter shows terms used by substances and their ancestors as an
-  indented tree. Each parent is followed by the terms filed under it,
-  recursively, with siblings ordered by key. Selecting **Carbonyl compounds**
-  also selects compounds filed under ketones and esters. Selections within
-  one filter combine with OR; different filters combine with AND.
-  Each value's count includes the search and every other filter, excluding
-  its own filter's selections. Selected values appear as small buttons
-  (chips) that remove a selection. **Clear all** clears the query and
-  selections. The count shows the total, or **{shown} of {total} compounds**
-  while filtering. A tab page with no filter values has no filter column;
-  the count and search remain.
-
-  The sidebar search is labelled **Search compounds**, with the placeholder
-  **Name, formula, CAS, SMILES**. It matches English and German names,
-  formula, CAS number, SMILES, article numbers and short names where
-  supplied. Each query word must match a substring; matching ignores
-  case and characters other than letters and digits. For example, `50-78-2`,
-  `salicyl` and `c1ccccc1O` work. This search runs in the page without the
-  Pagefind index. Rows keep their name order while searching or filtering.
-
-  The address preserves the query and filters, for example
-  `/compounds/?q=ester&chemical_class=esters&group=reagents`. Parameters the
-  page cannot apply are named in a notice and removed from the address.
-  Search and filters need JavaScript; without it, the complete table remains
-  visible with a note explaining this.
-- `/compounds/<key>/` shows the compound's name, its structure image when
-  found by key, and the chemical facts and registry fields it has. SMILES
-  has a **Copy** button. **Made by** lists procedures with their yields and
-  status; **Used in** lists
-  procedures with status. A general procedure appears in **Made by** once per
-  entry that makes the compound, as
-  `<ID> <title> · entry <n> · <yield> % · <status>`, and in **Used in** once.
-  Both lists are ordered by procedure ID and appear only when there are
-  matching procedures. **Sequences** follows **Used in** when any sequence
-  names this compound as its target; it links those sequences by title, ordered
-  by sequence ID. Compound pages mark **Compounds** as the current section.
-
-  **Routes** is the page's last section, after **Sequences** when present.
-  It shows ways to make the compound from the collection's published
-  procedures, each step with its starting materials. It appears only when
-  a route goes beyond one step; otherwise **Made by** already covers it.
-  Read the nested lists as alternatives under each compound and required
-  starting materials under each step. Those compounds link to their own
-  pages, followed by their article number and short name when present,
-  and have their own steps below them. Each step shows the procedure's ID and title, entry
-  number when needed, yield and status, as in **Made by**. Steps follow
-  procedure ID and then entry order. All published procedures take part,
-  whatever their status. A general procedure's entry uses only its own
-  starting materials.
-
-  A step that starts from a compound already above it on the same branch is
-  omitted, so cycles are not followed. If all steps would loop back, the
-  compound appears without steps and must be obtained another way. The
-  display uses a fixed depth limit of 6 steps and a fixed budget of 200
-  steps per tree. A larger tree is drawn to the largest depth that fits.
-  When more than 200 steps make the compound directly, the tree shows only
-  those. A compound cut off by a limit ends with **more steps on its page**;
-  follow its link to continue. Routes are derived during the build; you add
-  no route data to a procedure or `orgsyndb.toml`. Compound pages remain
-  outside the search index, so routes do not change search.
-
 - `/sequences/` lists every published sequence by ID. Each row shows its title
-  linked to the sequence page, its target linked to the compound page, the
+  linked to the sequence page, its target linked to the lab substance page, the
   number of steps and the overall yield. The directory works without
   JavaScript.
 - `/sequences/seq-NNNN/` shows the sequence ID and title, then **Steps** and
   **Overall yield**. A scheme links the first step's starting materials,
   intermediates and target, with structure images staged from the registry
   source by the build.
-  A plus separates the first step's starting materials. Each arrow gives the
-  step number, reaction type and yield. In narrow windows the scheme runs down
+  Each compound links to its lab substance page. A plus separates the first
+  step’s starting materials. Each arrow gives the step number, reaction type
+  and yield. In narrow windows the scheme runs down
   the page. The steps list links each procedure by ID and title, adding
   **entry <n>** for a general procedure, then reaction type, yield and status.
   The notes follow. Overall yield multiplies each step's yield of the compound
@@ -765,11 +669,10 @@ button **Search**. On lab pages, this searches procedures at `/procedures/`.
 To find a procedure, type in the sidebar search field. On `/procedures/`,
 `/general-procedures/` and term pages, this is the catalogue's only search
 field. Results update as you type; the magnifier button applies the query
-immediately. On `/compounds/` and its tab pages, the field searches compounds
-as described in its entry above. On other pages, including individual compound
-pages, submit the field to search in `/procedures/`. On a term page, the field
-searches only that term's procedures. Its placeholder is **Search these
-procedures**; its accessible name identifies the term, for example **Search
+immediately. On other pages, submit the field to search in `/procedures/`.
+On a term page, the field searches only that term’s procedures. Its
+placeholder is **Search these procedures**; its accessible name identifies
+the term, for example **Search
 procedures with the tag cinnamate**. On `/general-procedures/`, the placeholder
 is **Search these procedures** and the accessible name **Search general
 procedures**. Full-text search uses the Pagefind index and finds procedures by
@@ -780,7 +683,7 @@ SMILES fragments match any product's structure, including products from
 every scope entry.
 Starting-material terms also include all entries. SMILES searches ignore
 punctuation and compare only letters and digits. A fragment may therefore match
-more than one compound. Search results contain procedures only; compound and
+more than one compound. Search results contain procedures only; lab and
 help pages are not indexed. Clearing the search field returns to browsing with
 your filters still applied.
 
@@ -854,7 +757,7 @@ term page or `/general-procedures/`, submitting the sidebar search reloads that
 page with the query; elsewhere it leads to the catalogue. In either case, the
 static list does not apply the query.
 
-On a procedure or compound page, **Copy** copies the SMILES and briefly
+On a procedure or lab substance page, **Copy** copies the SMILES and briefly
 reports **Copied**. Clipboard access needs a secure context: `https:` or
 `http://127.0.0.1`. At another address the button selects the SMILES and
 reports **Selected: press Ctrl+C** instead.
@@ -1170,7 +1073,11 @@ run `build`. Enable this setting only where the lab application runs under
 `/lab/` on the same host, as in the container deployment. A lab build must
 be served at the host's root; its lab links and summary do not work under
 a path prefix. Leave the variable unset for the GitHub Pages demo and
-local `orgsyndb serve` previews, which have no lab application.
+local `orgsyndb serve` previews, which have no lab application. Every build
+still writes compound links to the lab’s substance pages and the home
+page’s **Substances** link to `/lab/registry/`. These links resolve only
+when the lab runs at the host’s root; they do not work in a preview
+without the lab or under a path prefix.
 
 The normal `validate` command checks top-level procedure and sequence
 files. Subdirectories under `md/procedures/` or `md/sequences/` are invalid.
@@ -1184,10 +1091,7 @@ it defaults to `build/registry.json` in the working directory. The snapshot
 supplies account user names, notebook codes, substance keys, reaction types
 and the terms of procedure choice fields. A registry with no reaction-type
 terms makes every procedure's reaction type unknown. The lab application checks
-substance values. The
-validator also refuses a substance keyed `group`, which the lab application
-does not create, reporting field `substances` on the registry path as
-given. Unknown references report:
+substance values. Unknown references report:
 
 ```text
 unknown author "<name>"; the registry has no account of this user name
@@ -1226,8 +1130,9 @@ The JSON from `orgsyndb index` has the keys `site_language`, `schema`,
 `registry`, `fields`, `accounts`, `notebooks`, `vocabularies`, `compounds`,
 `procedures` and `sequences`. `schema` describes procedures and sequences.
 `registry` holds `source` and `digest`; `fields.compound` lists the four built-in
-fields and `fields.procedure` lists `notebook` and `project` first, then
-the collection's declarations. `accounts` lists the snapshot's accounts,
+fields, each with `key`, `type`, `label` and `label_de`, plus `beside` for
+text or `vocabulary` and `multiple` for choice. `fields.procedure` lists
+`notebook` and `project` first, then the collection’s declarations. `accounts` lists the snapshot's accounts,
 each with `username` and `name`. `notebooks` lists its notebooks, each
 with `code` and `user`, the owner's user name, in snapshot order. Each
 `compounds` entry holds `key`, `data` as staged for the site, and `url`.
@@ -1284,7 +1189,7 @@ These directories are generated and must not be committed. The collection's
 
 | Directory | Where | Contents |
 |---|---|---|
-| `build/` | collection | The snapshot last read in `registry.json` and its source in `registry.source`, Org exports, selected procedure and sequence variants under `content/`, one JSON file per substance in `data/compounds/`, staged structure images in `substances/<key>/structure.svg`, registry fields and procedure declarations with display and filter settings and vocabulary labels, paths, ancestors and tree order in `data/fields.json`, reaction-type labels in `data/reaction_types.json`, account user names mapped to their names in `data/authors.json`, derived routes in `data/routes.json`, the generated Hugo configuration overlay, Hugo's resource cache, temporary export data, and `export.log`. |
+| `build/` | collection | The snapshot last read in `registry.json` and its source in `registry.source`, Org exports, selected procedure and sequence variants under `content/`, one JSON file per substance in `data/compounds/`, staged structure images in `substances/<key>/structure.svg`, registry fields and procedure declarations with display and filter settings and vocabulary labels, paths, ancestors and tree order in `data/fields.json`, reaction-type labels in `data/reaction_types.json`, account user names mapped to their names in `data/authors.json`, the generated Hugo configuration overlay, Hugo's resource cache, temporary export data, and `export.log`. |
 | `public/` | collection | The complete static website and Pagefind index. |
 | `pdf/` | collection | One generated PDF per procedure. |
 | `.emacs-batch/` | application | The application's own ox-hugo and tomelr installations. |
@@ -1306,12 +1211,11 @@ image, the file also holds `structure_image` as
 
 Before Hugo runs, the build writes `build/data/fields.json` with labels in
 the site's language, under `compound` and `procedure`. Every field has `key`,
-`type` and `label`; boolean and choice fields also have `facet`, numbers
-with a unit have `unit`, and choices have `multiple`, `values` and `order`.
-Registry fields also have `column`. Text registry fields have `search`
-and `beside`; choice registry fields have `tabs`. Procedure fields have
-none of those four keys. Each choice value has its label, its label `path`
-and `ancestors` (the keys of its ancestors). The vocabulary's `order` lists
+`type` and `label`. Text registry fields have `beside`; choice registry
+fields have `multiple`, `values` and `order`. Boolean and choice procedure
+fields have `facet`, numbers with a unit have `unit`, and procedure choices
+have `multiple`, `values` and `order`. Each choice value has its label,
+its label `path` and `ancestors` (the keys of its ancestors). The vocabulary's `order` lists
 each parent followed by the terms filed under it, recursively, with
 siblings ordered by key. The overlay mounts `build/data/` as collection
 data, available to the theme as
@@ -1319,13 +1223,6 @@ data, available to the theme as
 `build/data/reaction_types.json`, with each reaction-type slug mapped to its
 `label` in the site's language. The theme reads these labels as
 `site.Data.collection.reaction_types`.
-
-Before Hugo runs, the build also writes `build/data/routes.json`. For each
-compound with a route beyond one step, it holds a list of steps. Each step
-has `procedure`, `yield_percent` and `substrates`, with `entry` only for an
-entry of a general procedure. Each substrate has `compound`, its own
-`steps` list (empty unless drawn), and `more`, which is true when a limit
-cuts it off. The theme reads this data as `site.Data.collection.routes`.
 
 It runs Hugo without a build lock, so nothing is written under the
 application's `site/`.
@@ -2236,10 +2133,6 @@ The inventory contains seven numbered articles: `CH-0001`, `CH-0002`,
 `examples/demo`, and `NV-0007` (**Neuverbindung 7** / **New compound 7**),
 which no demo procedure names. Their names and molar masses come from the
 lab registry. Conversions between mg and µmol use those molar masses.
-The data set's import gives each demo substance a collection link. A
-substance you add later gets its link after a later import is accepted;
-see [Substance registry](#substance-registry) for when these links appear
-and when their target pages are available.
 
 There is also an item **1-Phenylethanol** without an article number. It
 enters stock later, is filled without a bulk lot and is never delivered.
@@ -2430,14 +2323,35 @@ general-procedure entries that make it, each with its yield and status;
 **Sequences** (**Synthesewege**), the sequences whose target it is; and
 **Routes** (**Herstellungswege**), the ways to make it from the
 collection's procedures, each step with the substances it starts from.
-These come from the latest accepted import, and procedures and sequences
-link to their pages on the site. **In der Sammlung** (**In the
-collection**) links to the site's compound page when the latest accepted
-import was received no earlier than the substance was created. A substance added later gets the link
-after a subsequent import is accepted. The app cannot tell whether the
-site already serves that import's release. After a lost response to a
-manifest, or for the demo data set's own import before the builder's
-first build, the link can lead to a page the site does not serve yet.
+The procedure lists follow procedure ID, with general-procedure entries
+in entry order; **Used in** lists each procedure once. **Sequences** links
+titles in sequence ID order. These come from the latest accepted import,
+and procedures and sequences link to their pages on the site. These links
+assume the site serves that import’s release. After a lost response to a
+manifest, or for the demo data set’s own import before the builder’s first
+build, they can lead to pages the site does not serve yet. The lab draws
+the route tree from imported procedures, excluding withdrawn procedures
+and entries.
+
+Read **Routes** as nested lists: steps under a substance are alternatives;
+all starting materials under a step are required. Starting materials link
+to their lab substance pages, with their own steps below. Each step shows
+the procedure’s ID and title, entry number for a general procedure, yield
+and status. Steps follow procedure ID and then entry order. Each general
+procedure entry uses only its own starting materials. All imported
+procedures that are not withdrawn take part, whatever their status.
+The section appears only when a route goes beyond one step; otherwise
+**Made by** already covers the available steps.
+
+A step that starts from a substance already above it on the same branch
+is omitted, so cycles are not followed. If all steps would loop back, the
+substance appears without steps and must be obtained another way. The lab
+uses a fixed depth limit of 6 steps and a fixed budget of 200 steps per
+tree, drawing a larger tree to the largest depth that fits. When more than
+200 steps make the substance directly, the tree shows only those. A
+substance cut off by a limit ends with **more steps on its page**; follow
+its link to continue. You add no route data to a procedure or
+`orgsyndb.toml`.
 
 #### Register and read lab notebooks
 
@@ -2548,9 +2462,8 @@ To add a substance, choose **Neue Substanz** (**New substance**). Enter
 a key, such as `cinnamic-acid`, and an English name, choose a group and
 check at least one chemical class. A key uses lowercase letters and
 digits joined by single hyphens. It must be unique and cannot change
-after creation. The key `group` is refused, since it names the directory
-of the collection site's compound tabs. Use **Edit** on the substance's page to change its other
-fields.
+after creation. Use **Edit** on the substance’s
+page to change its other fields.
 
 You can also enter a German name, short name, formula, molar mass in
 g/mol, SMILES structure notation, CAS number and note. Formula, molar mass
@@ -2641,7 +2554,7 @@ unchanged. Errors identify the record and field. The
 [command reference](#lab-application-commands) gives local and container
 invocations.
 
-The site's compound pages, validator and Emacs read the registry named by
+The static site, validator and Emacs read the registry named by
 the collection, as described under [Compound registry](#compound-registry).
 A rebuild accepted by the lab application publishes changes to substances
 and terms on the static site; refresh the Emacs index to read those
@@ -2650,8 +2563,8 @@ procedures, their authors, journal entries, projects, scope entries,
 sequences and their steps from accepted imports stored in its database. Tasks
 use these imported sequences and
 scope entries. The latest accepted import supplies the interface language
-and determines when substance pages link to the collection. Substance
-names, molar masses and article numbers come directly from the lab registry.
+for the lab’s pages. Substance names, molar masses and article numbers come
+directly from the lab registry.
 
 ### End-product inventory
 
@@ -2706,9 +2619,7 @@ article has none. Enter the number once; it is fixed after you save it,
 including in the admin, and appears on every size of that article.
 You can still edit the category and the item's note. Clearing the category
 on **Edit** clears it for every size. Change the name on the substance's
-page, which the item links to; that page links to the collection's
-compound when the latest accepted import was received no earlier than
-the substance was created.
+page, which the item links to.
 
 To set aside one container size, choose **Edit** on its item page and
 change **Status** from **aktiv** (**active**), the default, to **nicht
@@ -3598,8 +3509,10 @@ start the workflow by hand. Deployment runs only for `main`.
 To publish the demo from a fork, set the repository's Pages source to
 **GitHub Actions** under **Settings > Pages**. The workflow needs no
 repository secrets. The demo works below a path such as `/orgsyndb/`
-without additional configuration: Hugo writes relative URLs, and Pagefind
-finds its files and result links from the location of its own script.
+for procedure pages and search without additional configuration: Hugo
+writes relative URLs, and Pagefind finds its files and result links from
+the location of its own script. The home page’s **Substances** link and
+compound links still require the lab at the host’s root.
 
 ## Authoring references
 

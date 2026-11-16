@@ -95,7 +95,7 @@ For a missing tool it prints `orgsyndb: error: <tool> not found; install it with
 `tools/orgsyndb build` SHALL perform these steps in order:
 1. Run `export`.
 2. Validate as `validate` does without arguments, stopping with exit 1 on any validation error while tolerating warnings.
-3. Remove `public/`, write the staged substance data `build/data/compounds/` (site-build "Hugo configuration"), write the field data `build/data/fields.json`, the JSON form of `pipeline.fields_data(<collection>/orgsyndb.toml, <registry>, <language>)` for the site's language (compound-fields "Field data for the site"), write the reaction-type data `build/data/reaction_types.json`, the JSON form of `pipeline.reaction_types_data(<registry>, <language>)` (reaction-types "Reaction-type data for the site"), write the author data `build/data/authors.json`, the JSON form of `pipeline.authors_data(<registry>)` (procedure-authors "Author data for the site"), `<registry>` being the collection's registry as `pipeline.registry` read it for this build (compound-registry "Reading the registry"), write the route data `build/data/routes.json`, the JSON form of `pipeline.routes_data(<published procedures>)`, the published procedures being the `(path, front matter)` pairs of the variants the build staged (synthesis-routes "Derived routes"), and write the Hugo overlay `build/hugo-config/_default/hugo.toml` (site-build "Hugo configuration"), with the lab application's views when the environment variable `ORGSYNDB_LAB` is `true`, `1`, `yes` or `on`, in any case, and without them when it is unset, empty, `false`, `0`, `no` or `off`.
+3. Remove `public/` and `build/data/`, so that `build/data/` holds only what this build writes, write the staged substance data `build/data/compounds/` (site-build "Hugo configuration"), write the field data `build/data/fields.json`, the JSON form of `pipeline.fields_data(<collection>/orgsyndb.toml, <registry>, <language>)` for the site's language (compound-fields "Field data for the site"), write the reaction-type data `build/data/reaction_types.json`, the JSON form of `pipeline.reaction_types_data(<registry>, <language>)` (reaction-types "Reaction-type data for the site"), write the author data `build/data/authors.json`, the JSON form of `pipeline.authors_data(<registry>)` (procedure-authors "Author data for the site"), `<registry>` being the collection's registry as `pipeline.registry` read it for this build (compound-registry "Reading the registry"), and write the Hugo overlay `build/hugo-config/_default/hugo.toml` (site-build "Hugo configuration"), with the lab application's views when the environment variable `ORGSYNDB_LAB` is `true`, `1`, `yes` or `on`, in any case, and without them when it is unset, empty, `false`, `0`, `no` or `off`.
 4. Run `hugo --source <app>/site --configDir <collection>/build/hugo-config --minify --quiet --noBuildLock`.
 5. Obtain the Pagefind binary, and run it with `--site <collection>/public --quiet`.
 
@@ -117,9 +117,13 @@ A failing step stops the command with exit 1. Any other value of `ORGSYNDB_LAB` 
 - **WHEN** an integration test runs `tools/orgsyndb -C <collection> build` on a copy of the test collection
 - **THEN** it exits 0, and `build/data/reaction_types.json` parses as JSON to `pipeline.reaction_types_data` of the copy's registry for the language `pipeline.site_language` reports
 
-#### Scenario: Route data is staged
+#### Scenario: No route data
 - **WHEN** an integration test runs `tools/orgsyndb -C <collection> build` on a copy of the test collection
-- **THEN** it exits 0, and `build/data/routes.json` parses as JSON to `pipeline.routes_data` of the procedures the build staged
+- **THEN** it exits 0, and `build/data/routes.json` does not exist
+
+#### Scenario: Data of an earlier build
+- **WHEN** an integration test writes `build/data/routes.json` and `build/data/compounds/gone.json` into a copy of the test collection and runs `tools/orgsyndb -C <collection> build`
+- **THEN** it exits 0, and neither file exists
 
 #### Scenario: Lab views on request
 - **WHEN** an integration test runs `tools/orgsyndb -C <collection> build` on a copy of the test collection with `ORGSYNDB_LAB=true`, and once with `ORGSYNDB_LAB=maybe`

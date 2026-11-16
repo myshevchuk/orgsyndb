@@ -545,7 +545,7 @@ class SiteLanguageTests(unittest.TestCase):
         used = {tomllib.loads(page.read_text(encoding="utf-8").split(
                     "+++")[1]).get("title_key")
                 for page in (SITE / "content").rglob("*.md")} - {None}
-        self.assertEqual(len(used), 8)
+        self.assertEqual(len(used), 7)
         for path in LAYOUTS.rglob("*.html"):
             text = path.read_text(encoding="utf-8")
             used |= set(re.findall(r'\bT "([a-z_]+)"', text))
@@ -569,22 +569,47 @@ class SiteLanguageTests(unittest.TestCase):
         self.assertTrue(any(v.startswith("Step ") for v in english),
                         "no Step <k> string")
 
-    def test_the_route_strings_are_in_both_languages(self) -> None:
-        """Scenario: Interface strings (the route tree)."""
-        german = set(self.strings("de").values())
-        english = set(self.strings("en").values())
-        wanted_german = {
-            "Herstellungswege",
-            "Wege zu dieser Verbindung aus den Vorschriften der Sammlung, "
-            "jede Stufe mit ihren Ausgangsstoffen.",
-            "weitere Stufen auf ihrer Seite"}
-        wanted_english = {
-            "Routes",
-            "Ways to make this compound from the collection's procedures, "
-            "each step with the compounds it starts from.",
-            "more steps on its page"}
-        self.assertEqual(sorted(wanted_german - german), [])
-        self.assertEqual(sorted(wanted_english - english), [])
+    def test_the_compound_pages_strings_are_gone(self) -> None:
+        """Scenario: Interface strings (the route tree, the compound
+        catalogue and the compound tabs are not built)."""
+        retired = {
+            "de": {
+                "Verbindungen", "Alle Verbindungen", "Herstellungswege",
+                "Wege zu dieser Verbindung aus den Vorschriften der "
+                "Sammlung, jede Stufe mit ihren Ausgangsstoffen.",
+                "weitere Stufen auf ihrer Seite", "1 Verbindung",
+                "{shown} von {total} Verbindungen",
+                "Verbindungen durchsuchen",
+                "Verbindungen durchsuchen: {{ . }}",
+                "Name, Formel, CAS, SMILES",
+                "Suche und Filter brauchen JavaScript. Ohne JavaScript "
+                "zeigt diese Seite alle Verbindungen.",
+                "Suche und Filter brauchen JavaScript. Ohne JavaScript "
+                "zeigt diese Seite alle Verbindungen dieses Reiters.",
+                "Keine Verbindung passt zu Suche und Filtern."},
+            "en": {
+                "Compounds", "All compounds", "Routes",
+                "Ways to make this compound from the collection's "
+                "procedures, each step with the compounds it starts "
+                "from.",
+                "more steps on its page", "1 compound",
+                "{shown} of {total} compounds", "Search compounds",
+                "Search compounds: {{ . }}", "Name, formula, CAS, SMILES",
+                "Search and filters need JavaScript. Without it, this "
+                "page lists every compound.",
+                "Search and filters need JavaScript. Without it, this "
+                "page lists every compound of this tab.",
+                "No compounds match the search and filters."}}
+        for language, gone in retired.items():
+            with self.subTest(language=language):
+                self.assertEqual(
+                    sorted(gone & set(self.strings(language).values())), [])
+
+    def test_the_substances_entry_is_in_both_languages(self) -> None:
+        """Scenario: Interface strings (the home page entry
+        `Substanzen`, `Substances`)."""
+        self.assertIn("Substanzen", self.strings("de").values())
+        self.assertIn("Substances", self.strings("en").values())
 
     def test_the_boolean_strings_are_in_both_languages(self) -> None:
         """Scenario: Interface strings (declared fields)."""
@@ -593,50 +618,6 @@ class SiteLanguageTests(unittest.TestCase):
         self.assertIn("No", english.values())
         self.assertIn("Ja", german.values())
         self.assertIn("Nein", german.values())
-
-    def test_the_compound_catalogue_strings_are_in_both_languages(
-            self) -> None:
-        """Scenario: Interface strings (the compound catalogue)."""
-        german = set(self.strings("de").values())
-        english = set(self.strings("en").values())
-        wanted_german = {
-            "1 Verbindung", "{shown} von {total} Verbindungen",
-            "Verbindungen durchsuchen",
-            "Name, Formel, CAS, SMILES",
-            "Suche und Filter brauchen JavaScript. Ohne JavaScript zeigt "
-            "diese Seite alle Verbindungen.",
-            "Keine Verbindung passt zu Suche und Filtern."}
-        wanted_english = {
-            "1 compound", "{shown} of {total} compounds",
-            "Search compounds", "Name, formula, CAS, SMILES",
-            "Search and filters need JavaScript. Without it, this page "
-            "lists every compound.",
-            "No compounds match the search and filters."}
-        self.assertEqual(sorted(wanted_german - german), [])
-        self.assertEqual(sorted(wanted_english - english), [])
-        for values, ending in ((german, " Verbindungen"),
-                               (english, " compounds")):
-            self.assertTrue(
-                any(v.endswith(ending) and "{" in v and "{shown}" not in v
-                    for v in values), f"no <n>{ending} string")
-
-    def test_the_compound_tab_strings_are_in_both_languages(self) -> None:
-        """Scenario: Interface strings (the compound tabs)."""
-        german = set(self.strings("de").values())
-        english = set(self.strings("en").values())
-        self.assertIn("Alle Verbindungen", german)
-        self.assertIn("All compounds", english)
-        self.assertIn(
-            "Suche und Filter brauchen JavaScript. Ohne JavaScript zeigt "
-            "diese Seite alle Verbindungen dieses Reiters.", german)
-        self.assertIn(
-            "Search and filters need JavaScript. Without it, this page "
-            "lists every compound of this tab.", english)
-        for values, start in ((german, "Verbindungen durchsuchen: "),
-                              (english, "Search compounds: ")):
-            self.assertTrue(
-                any(v.startswith(start) and len(v) > len(start)
-                    for v in values), f"no {start!r}<label> string")
 
     def test_site_pages_are_one_per_page(self) -> None:
         """Scenario: Site locale (content pages)."""

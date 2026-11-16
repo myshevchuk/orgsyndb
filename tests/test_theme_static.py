@@ -132,7 +132,7 @@ class NarrowWindowTests(unittest.TestCase):
 
 class FacetIndentTests(unittest.TestCase):
     def test_a_choice_value_is_indented_by_its_depth(self) -> None:
-        """Requirement: Compound catalogue (the screen stylesheet
+        """Requirement: Catalogue controls (the screen stylesheet
         indents a facet value by --depth)."""
         indents = ("margin-left", "margin-inline-start", "padding-left",
                    "padding-inline-start", "text-indent")
@@ -142,17 +142,6 @@ class FacetIndentTests(unittest.TestCase):
                          for selector in ps.selectors_of(decl))]
         self.assertTrue(
             found, "screen.css indents no .facet-value by var(--depth)")
-
-    def test_results_without_facets_span_the_grid(self) -> None:
-        """Requirement: Compound catalogue (without facet fields the
-        results take the whole catalogue layout)."""
-        found = [decl for decl in css("screen.css")
-                 if decl.prop == "grid-column"
-                 and decl.value.replace(" ", "") == "1/-1"
-                 and any(".catalogue-results:first-child" in selector
-                         for selector in ps.selectors_of(decl))]
-        self.assertTrue(found, "screen.css leaves results without facets "
-                        "in the facet column")
 
 
 class RowDetailsTests(unittest.TestCase):
@@ -185,25 +174,6 @@ class CompoundBesideStyleTests(unittest.TestCase):
         self.assertTrue(found, "base.css has no rule for .compound-beside")
         self.assertIn("var(--muted)",
                       [ps.plain_value(decl.value) for decl in found])
-
-
-class RouteTreeStyleTests(unittest.TestCase):
-    def rules(self, selector: str, prop: str) -> list[str]:
-        """The plain values that ``base.css`` gives ``prop`` in rules
-        whose selector list names exactly ``selector``."""
-        return [ps.plain_value(decl.value) for decl in css("base.css")
-                if decl.prop == prop and selector in ps.selectors_of(decl)]
-
-    def test_the_tree_is_set_in_the_interface_font_with_a_rule_line(
-            self) -> None:
-        """Scenario: The tree style."""
-        self.assertIn("var(--font-ui)", self.rules(".route-tree",
-                                                   "font-family"))
-        borders = self.rules(".route-tree ul", "border-left")
-        self.assertTrue(borders, "base.css has no border-left for "
-                                 ".route-tree ul")
-        self.assertTrue(any("var(--border)" in value for value in borders),
-                        borders)
 
 
 class ContrastFunctionTests(unittest.TestCase):

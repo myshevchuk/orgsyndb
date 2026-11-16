@@ -85,7 +85,7 @@ TEXTS: dict[str, dict[str, Any]] = {
         "unchecked": "Not yet checked",
         "unchecked_link": "All draft procedures",
         "entries": ["All procedures", "Reaction types", "Tags", "Authors",
-                    "Compounds", "Sequences"],
+                    "Substances", "Sequences"],
         "thousands": ",",
     },
     "de": {
@@ -148,7 +148,7 @@ TEXTS: dict[str, dict[str, Any]] = {
         "unchecked": "Noch nicht geprüft",
         "unchecked_link": "Alle Entwürfe",
         "entries": ["Alle Vorschriften", "Reaktionstypen", "Schlagwörter",
-                    "Autoren", "Verbindungen", "Synthesewege"],
+                    "Autoren", "Substanzen", "Synthesewege"],
         "thousands": ".",
     },
 }
@@ -729,7 +729,7 @@ class CatalogueCase(fs.ProcedureFieldsMixin, ps.ThemeBuildCase):
             ("/reaction_types/", len(terms["reaction_types"])),
             ("/tags/", len(terms["tags"])),
             ("/authors/", len(terms["authors"])),
-            ("/compounds/", len(ps.read_registry(self.sandbox))),
+            ("/lab/registry/", len(ps.read_registry(self.sandbox))),
             ("/sequences/", len(ps.read_sequences(self.sandbox,
                                                   self.LOCALE)))]
         entries = listing.find_all("li")

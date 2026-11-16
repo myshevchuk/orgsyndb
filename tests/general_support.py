@@ -103,7 +103,7 @@ def check_scope_row(case: unittest.TestCase, page: Page, cells: list[Node],
              for key in entry["substrates"]]
     links = page.links(cells[1])
     case.assertEqual([(l.target, l.node.norm()) for l in links],
-                     [(f"/compounds/{key}/", name)
+                     [(fs.substance_url(key), name)
                       for key, name in zip(entry["substrates"], names)])
     for link in links:
         case.assertTrue(link.node.has_class("compound"))
@@ -120,7 +120,7 @@ def check_scope_row(case: unittest.TestCase, page: Page, cells: list[Node],
         product_names.append(name)
         if compound.get("structure_image"):
             expected.append(("img", "/" + compound["structure_image"]))
-        expected.append(("a", f"/compounds/{product['compound']}/"))
+        expected.append(("a", fs.substance_url(product["compound"])))
     shown = []
     for node in cells[2].iter():
         if node.tag == "img":

@@ -13,18 +13,17 @@ The site SHALL be built in one language, named by `locale` in `site/hugo.toml`, 
 ### Requirement: Interface strings
 Every text that a layout shows SHALL come from the interface strings of the site's language, `site/i18n/de.toml` or `site/i18n/en.toml`, looked up with `T`; a page of `site/content/` names its title by a `title_key` front-matter value, a key of those files. The two files have the same keys, and every value is a non-empty string. The English strings are the texts that the site-theme, site-catalogue and print-layout specs name; a German site shows the German string in their place. In particular a German site shows:
 - the skip link `Zum Inhalt springen`, the navigation labelled `Website` with the German texts of its entries (site-theme "Navigation"), the header search field labelled `Vorschriften durchsuchen` with the placeholder `Produkt, CAS oder SMILES` and the button `Suchen`, and the footer `OrgSynDB · interne Vorschriften · Stand <time>`;
-- the page titles `Vorschriften`, `Reaktionstypen`, `Schlagwörter`, `Autoren`, `Verbindungen`, `Synthesewege` and `Hilfe`;
-- on sequence pages the key facts `Stufen` and `Gesamtausbeute`, the steps `Stufe <k>` and `Eintrag <n>`, and in the sequence directory the header cells `Syntheseweg`, `Zielverbindung`, `Stufen` and `Gesamtausbeute`; the panel label and the compound-page heading `Synthesewege`;
+- the page titles `Vorschriften`, `Reaktionstypen`, `Schlagwörter`, `Autoren`, `Synthesewege` and `Hilfe`;
+- on sequence pages the key facts `Stufen` and `Gesamtausbeute`, the steps `Stufe <k>` and `Eintrag <n>`, and in the sequence directory the header cells `Syntheseweg`, `Zielverbindung`, `Stufen` and `Gesamtausbeute`; the panel label `Synthesewege`;
 - the section tabs `Alle Vorschriften`, `Allgemeine Vorschriften`, `Reaktionstypen`, `Schlagwörter` and `Autoren` (in a `nav` with `aria-label="Vorschriften"`);
 - the panel and key-fact labels `Produkt`, `Produkte`, `Summenformel`, `Molmasse`, `CAS`, `SMILES`, `Ausgangsstoffe`, `Ansatzgröße`, `Ausbeute`, `Reaktionstyp`, `Schlagwörter`, `Autoren`, `Geprüft von`, `Erstellt`, `Geändert`, `Vorstufen`, `Verwendet in`, and the sign-off `von <names>`;
 - on a general procedure's page the heading `Anwendungsbereich` and the scope-table header cells `Eintrag`, `Ausgangsstoffe`, `Produkte`, `Ausbeute`, `Ansatzgröße`, `Zeit`, `Temperatur` and `Anmerkung`, and the scheme `alt` text `Schema von <title>`;
 - on `/general-procedures/` the title `Allgemeine Vorschriften`, the scope `Nur allgemeine Vorschriften` and the header search field labelled `Allgemeine Vorschriften durchsuchen`;
-- on compound pages the headings `Hergestellt nach`, `Verwendet in` and `Herstellungswege`, `Eintrag <n>` for an entry of a general procedure, the route tree's intro `Wege zu dieser Verbindung aus den Vorschriften der Sammlung, jede Stufe mit ihren Ausgangsstoffen.` and its note `weitere Stufen auf ihrer Seite`, and in the compound directory the header cells `Verbindung`, `Summenformel`, `Molmasse`, `CAS`, `Hergestellt nach` and `Verwendet in`;
-- in the compound catalogue the count `<n> Verbindungen` (`1 Verbindung`) and `{shown} von {total} Verbindungen`, the header search field labelled `Verbindungen durchsuchen` with the placeholder `Name, Formel, CAS, SMILES`, the `noscript` note `Suche und Filter brauchen JavaScript. Ohne JavaScript zeigt diese Seite alle Verbindungen.`, the empty-result text `Keine Verbindung passt zu Suche und Filtern.`, and `Ja` and `Nein` for the values of a boolean facet; and on the compound tabs the first tab `Alle Verbindungen` and, on a tab page, the header search field labelled `Verbindungen durchsuchen: <label>` and the `noscript` note `Suche und Filter brauchen JavaScript. Ohne JavaScript zeigt diese Seite alle Verbindungen dieses Reiters.`;
+- `Ja` and `Nein` for the values of a boolean facet;
 - the status `Entwurf`, `Geprüft` or `Zurückgezogen` for `draft`, `checked` or `retired`, while the badge class stays `badge--<status>`;
 - the banner `Beispieldaten – Mengenangaben nicht experimentell überprüft.`, the button `Drucken / Als PDF speichern`, the copy button `Kopieren` with the messages `Kopiert` and `Markiert: Strg+C drücken`, and the placeholder `Keine Strukturformel`;
 - in the catalogue: the count `<n> Vorschriften` (`1 Vorschrift`) and `{shown} von {total} Vorschriften`; the heading and toggle `Filter`; the facets `Reaktionstyp`, `Art`, `Status`, `Schlagwort` and `Autor`, the kinds `Einzelvorschrift` and `Allgemeine Vorschrift`; the directory links `Alle Reaktionstypen`, `Alle Schlagwörter` and `Alle Autoren`; `Alles zurücksetzen`; `Sortieren nach` with `Relevanz`, `ID`, `Titel (A–Z)`, `Erstellt (neueste zuerst)` and `Geändert (neueste zuerst)`; `Ansicht` with `Tabelle` and `Details`; the script texts `Suche läuft …`, `Suche nicht verfügbar`, `Der Suchindex konnte nicht geladen werden; die Suche wurde nicht angewendet.`, `Liste ohne Suche anzeigen`, `Keine Vorschrift passt zu Suche und Filtern.`, `In der Adresse nicht berücksichtigt: {list}` and `{facet}: {value} entfernen`; the `noscript` note `Suche, Filter und Sortierung brauchen JavaScript. Ohne JavaScript zeigt diese Seite ihre Vorschriften nach ID. Weitere Listen gibt es nach Reaktionstyp, Schlagwort oder Autor.`; and on term pages `Nur Vorschriften des Reaktionstyps <label>`, `Nur Vorschriften mit dem Schlagwort <tag>` or `Nur Vorschriften von <author>`, with the link `Alle Vorschriften anzeigen`, and the header search field labelled `Vorschriften des Reaktionstyps <label> durchsuchen`, `Vorschriften mit dem Schlagwort <tag> durchsuchen` or `Vorschriften von <author> durchsuchen` with the placeholder `In diesen Vorschriften`;
-- on the home page: the `h1` `Synthesevorschriften`, the lede `Die Vorschriften der Arbeitsgruppe, in Org oder Markdown nach einem gemeinsamen Schema geschrieben.`, the headings `Zuletzt geändert`, `Noch nicht geprüft` and `Übersicht`, the links `Alle Vorschriften, zuletzt geänderte zuerst` and `Alle Entwürfe`, and the entries `Alle Vorschriften`, `Reaktionstypen`, `Schlagwörter`, `Autoren`, `Verbindungen` and `Synthesewege`;
+- on the home page: the `h1` `Synthesevorschriften`, the lede `Die Vorschriften der Arbeitsgruppe, in Org oder Markdown nach einem gemeinsamen Schema geschrieben.`, the headings `Zuletzt geändert`, `Noch nicht geprüft` and `Übersicht`, the links `Alle Vorschriften, zuletzt geänderte zuerst` and `Alle Entwürfe`, and the entries `Alle Vorschriften`, `Reaktionstypen`, `Schlagwörter`, `Autoren`, `Substanzen` and `Synthesewege`;
 - front-matter numbers (molecular weight, yield) with a decimal comma, and counts with German digit grouping.
 
 The site script holds no language: the copy button carries its messages in `data-copied` and `data-selected`, and the catalogue carries its texts in `data-text-*` attributes.
@@ -36,10 +35,10 @@ The site script holds no language: the copy button carries its messages in `data
 #### Scenario: German page shell
 - **WHEN** a test scans every HTML page of a build of a copy of the test collection `tests/fixtures/collection/` in locale `de`
 - **THEN** each has `<html lang="de">`, the German skip link, exactly one `nav` in the site header, labelled `Website`, its texts those of `site/i18n/de.toml`, the German section tabs where the page has them, and the German footer, and `public/de/` and `public/en/` do not exist
-- **AND** every page has the header search with the button `Suchen`, labelled `Vorschriften durchsuchen` everywhere but on the term pages, `/general-procedures/`, `/compounds/` and its tab pages
+- **AND** every page has the header search with the button `Suchen`, labelled `Vorschriften durchsuchen` everywhere but on the term pages and `/general-procedures/`
 
 #### Scenario: German page titles
-- **WHEN** the same test reads the seven site pages `/procedures/`, `/reaction_types/`, `/tags/`, `/authors/`, `/compounds/`, `/sequences/` and `/help/`
+- **WHEN** the same test reads the six site pages `/procedures/`, `/reaction_types/`, `/tags/`, `/authors/`, `/sequences/` and `/help/`
 - **THEN** their `h1` and `<title>` carry the German titles
 
 #### Scenario: German metadata panel
@@ -182,13 +181,13 @@ The application SHALL ship `docs/STYLE.de.md`, a style guide for the text of Ger
 - **THEN** there are at least 500, every entry has a German form and an English equivalent, and every entry marked as a form to avoid names its replacement
 
 ### Requirement: German compound names
-A compound's shown name SHALL be its substance's `name_de` in the registry on a German site when the substance has one, and its `name` otherwise; on an English site it is its `name`. Every place the site names a compound uses the shown name: the compound's page and its `<title>`, the compound directory and its order, the metadata panel, the key facts, the catalogue's Details view, the structure `alt` texts and the index terms.
+A compound's shown name SHALL be its substance's `name_de` in the registry on a German site when the substance has one, and its `name` otherwise; on an English site it is its `name`. Every place the site names a compound uses the shown name: the metadata panel, the key facts, the catalogue's Details view, the structure `alt` texts and the index terms.
 
 #### Scenario: German names on a German site
-- **WHEN** a test reads `public/compounds/salicylic-acid/index.html`, `public/compounds/index.html` and `public/procedures/osdb-0001/index.html` of a build of the test collection in locale `de`
-- **THEN** the compound page's `h1` is `Salicylsäure`, the directory links it as `Salicylsäure`, ordered among the German names, and the procedure's `Product` link reads `Salicylsäure`
+- **WHEN** a test reads `public/procedures/osdb-0001/index.html` of a build of the test collection in locale `de`
+- **THEN** the procedure's `Product` link reads `Salicylsäure`
 
 #### Scenario: A compound without a German name
 - **WHEN** a test builds a copy of the test collection in locale `de` after removing the `name_de` of `acetone` from the copy of its registry
-- **THEN** `public/compounds/acetone/index.html` has the `h1` equal to the substance's `name`
+- **THEN** the `a.compound` to `acetone` under `Starting materials` in `public/procedures/osdb-0006/index.html` reads the substance's `name`
 

@@ -92,13 +92,6 @@ identifier = "nav_collection"
 weight = 20
 
 [[menus.main]]
-identifier = "nav_compounds"
-parent = "nav_collection"
-url = "/compounds/"
-weight = 21
-params.paths = ["/compounds/"]
-
-[[menus.main]]
 identifier = "nav_sequences"
 parent = "nav_collection"
 url = "/sequences/"

@@ -271,44 +271,33 @@ class PlainCatalogueTests(cs.CatalogueCase):
             with self.subTest(word=word):
                 self.assertIn(word, script)
 
-    def test_the_compound_catalogue_shares_the_script(self) -> None:
-        """Scenario: Script wiring (the compound catalogue)."""
-        scripts = {}
-        for relative in ("procedures/index.html", "compounds/index.html"):
-            page = self.page(relative)
-            found = [page.resolve(s) for s in page.script_sources()
+    def test_the_script_has_no_text_search_mode(self) -> None:
+        """Scenario: Script wiring (the script has one search)."""
+        page = self.page("procedures/index.html")
+        (source,) = [page.resolve(s) for s in page.script_sources()
                      if s and "/js/catalogue" in page.resolve(s)]
-            self.assertEqual(len(found), 1, relative)
-            self.assertRegex(found[0], cs.CATALOGUE_SCRIPT)
-            scripts[relative] = found[0]
-        self.assertEqual(scripts["procedures/index.html"],
-                         scripts["compounds/index.html"])
-        page = self.page("compounds/index.html")
-        self.assertNotIn("pagefind-ui", page.source)
-        self.assertEqual(len(page.find_all("input", name="q")), 1)
-
-    def test_the_compound_tab_pages_share_the_script(self) -> None:
-        """Scenario: Script wiring (the compound tab pages)."""
-        procedures = self.page("procedures/index.html")
-        wanted = [procedures.resolve(s) for s in procedures.script_sources()
-                  if s and "/js/catalogue" in procedures.resolve(s)]
-        self.assertEqual(len(wanted), 1)
-        for value in ("purchased", "synthesised"):
-            relative = f"compounds/group/{value}/index.html"
-            page = self.page(relative)
-            found = [page.resolve(s) for s in page.script_sources()
-                     if s and "/js/catalogue" in page.resolve(s)]
+        script = ps.target_file(self.public, source).read_text(
+            encoding="utf-8")
+        for word in ("data-search", "dataset.search"):
+            with self.subTest(word=word):
+                self.assertNotIn(word, script)
+        for relative in ("procedures/index.html",
+                         "general-procedures/index.html",
+                         "tags/cinnamate/index.html"):
             with self.subTest(page=relative):
-                self.assertEqual(found, wanted)
-                self.assertRegex(found[0], cs.CATALOGUE_SCRIPT)
-                self.assertNotIn("pagefind-ui", page.source)
-                self.assertEqual(len(page.find_all("input", name="q")), 1)
-                self.assertIsNotNone(page.find("div", "catalogue"))
+                block = self.page(relative).find("div", "catalogue")
+                self.assertNotIn("data-search", block.attrs)
 
     def test_links_and_assets_resolve_under_a_prefix(self) -> None:
-        """Scenario: Links and assets under a prefix."""
+        """Scenario: Links and assets under a prefix (the references to
+        the lab that every build writes)."""
         base = f"http://127.0.0.1{PREFIX.rstrip('/')}"
+        lab = f"{PREFIX}lab/"
+        allowed = {f"{lab}registry/"} | {
+            f"{lab}registry/substances/{key}/"
+            for key in ps.read_registry(self.sandbox)}
         checked = 0
+        into_lab = set()
         for path, page in self.pages():
             relative = str(path.relative_to(self.public))
             for node in page.nodes:
@@ -324,6 +313,10 @@ class PlainCatalogueTests(cs.CatalogueCase):
                         joined = urllib.parse.urljoin(base + page.url, value)
                         found = urllib.parse.unquote(
                             urllib.parse.urlsplit(joined).path)
+                        if found.startswith(lab):
+                            self.assertIn(found, allowed)
+                            into_lab.add(found)
+                            continue
                         self.assertTrue(found.startswith(PREFIX), found)
                         target = self.public / found[len(PREFIX):]
                         if found.endswith("/") or target.is_dir():
@@ -331,6 +324,8 @@ class PlainCatalogueTests(cs.CatalogueCase):
                         self.assertTrue(target.is_file(), found)
                         checked += 1
         self.assertGreater(checked, 100)
+        self.assertIn(f"{lab}registry/", into_lab)
+        self.assertIn(f"{lab}registry/substances/salicylic-acid/", into_lab)
 
 
 class DetailsChecks:

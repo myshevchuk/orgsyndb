@@ -5,11 +5,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from support import (FIXTURES, STATIC_DIR, ValidatorTestCase,
-                     adding_substance, edit_registry, fixture_run,
-                     registry_copy, registry_variant_run, run_validator,
-                     setting_terms, setting_substance, substance, term,
-                     valid_set_run, without_substance)
+from pipeline_support import pipeline
+from support import (FIXTURES, ValidatorTestCase, adding_substance,
+                     edit_registry, fixture_run, registry_copy,
+                     registry_variant_run, setting_terms,
+                     setting_substance, substance, term, valid_set_run,
+                     without_substance)
 
 
 class UnknownCompoundTests(ValidatorTestCase):
@@ -63,31 +64,20 @@ class UnknownCompoundTests(ValidatorTestCase):
 
 
 class SubstanceKeyTests(ValidatorTestCase):
-    def test_a_substance_named_like_the_tabs_directory_is_an_error(
-            self) -> None:
-        """Scenario: A substance named like the tabs directory."""
+    def test_a_substance_with_the_key_group_draws_no_problem(self) -> None:
+        """Scenario: A substance with the key group."""
         with registry_copy() as registry:
             edit_registry(adding_substance(substance("group", "Group")))(
                 registry)
             result = fixture_run("baseline", registry=registry)
-            self.assert_one(result, "error", "substances", "group",
-                            path_suffix="registry.json")
-            self.assertEqual(result.problems[0].path, str(registry))
+        self.assert_clean(result)
+        self.assertEqual(result.problems, [])
 
-    def test_the_problem_carries_the_registry_argument_as_given(
-            self) -> None:
-        """Requirement: Problem report format (the registry's path)."""
-        with registry_copy() as registry:
-            edit_registry(adding_substance(substance("group")))(registry)
-            with tempfile.TemporaryDirectory() as cwd:
-                relative = Path("sub") / "registry.json"
-                (Path(cwd) / "sub").mkdir()
-                (Path(cwd) / relative).write_bytes(registry.read_bytes())
-                result = run_validator(
-                    ["--static-dir", STATIC_DIR, "--registry", relative,
-                     FIXTURES / "baseline"], cwd=Path(cwd))
-        self.assert_one(result, "error", "substances", "group")
-        self.assertEqual(result.problems[0].path, str(relative))
+    def test_the_validator_reserves_no_substance_key(self) -> None:
+        """Requirement: Registry checks (`validate.TABS_KEY`, the
+        reserved key of the compound tabs, is gone)."""
+        module = pipeline().validate
+        self.assertFalse(hasattr(module, "TABS_KEY"))
 
 
 class NoValueChecksTests(ValidatorTestCase):

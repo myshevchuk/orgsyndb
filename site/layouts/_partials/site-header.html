@@ -1,14 +1,11 @@
 {{- /* The site header: the sidebar's toggle, which site.js wires and
 the stylesheet shows only once site.js has run, and the site title;
 the search form, which submits q to /procedures/; and the
-navigation. On the catalogue, the term pages,
-/general-procedures/, the compound catalogue /compounds/ and its tab
-pages the form is the catalogue's: catalogue.js drives its field,
-#catalogue-q, the page itself is its action, on a term page and on
+navigation. On the catalogue, the term pages and /general-procedures/
+the form is the catalogue's: catalogue.js drives its field,
+#catalogue-q, the page itself is its action, and on a term page and on
 /general-procedures/ its label names the scope while its placeholder,
-short enough to show whole, says it is scoped, and on /compounds/ and
-its tab pages its label and placeholder name compounds and what their
-search matches, the label of a tab page naming the tab. The navigation
+short enough to show whole, says it is scoped. The navigation
 is the menu main of hugo.toml, which the lab application renders too:
 a link's text is the interface string its identifier names, and a group
 is its label followed by a list of its links. Without params.lab the
@@ -18,9 +15,7 @@ first link whose params.paths holds a prefix of the page's path carries
 aria-current="true". */ -}}
 {{ $here := .RelPermalink -}}
 {{ $general := and (eq .Kind "section") (eq .Section "general-procedures") -}}
-{{ $compounds := and (eq .Kind "section") (eq .Section "compounds") -}}
-{{ $tab := and (eq .Kind "page") (eq .Section "compounds") .Params.tab -}}
-{{ $catalogue := or (eq .Kind "term") $general $compounds $tab (and (eq .Kind "section") (eq .Section "procedures")) -}}
+{{ $catalogue := or (eq .Kind "term") $general (and (eq .Kind "section") (eq .Section "procedures")) -}}
 {{ $action := cond $catalogue .RelPermalink "/procedures/" -}}
 {{ $label := T "search_label" -}}
 {{ $hint := T "search_placeholder" -}}
@@ -31,12 +26,6 @@ aria-current="true". */ -}}
 {{ else if $general -}}
 {{ $label = T "search_scope_kind" -}}
 {{ $hint = T "search_scope_placeholder" -}}
-{{ else if $compounds -}}
-{{ $label = T "search_compounds" -}}
-{{ $hint = T "search_compounds_placeholder" -}}
-{{ else if $tab -}}
-{{ $label = T "search_compounds_tab" (partial "page-title.html" .) -}}
-{{ $hint = T "search_compounds_placeholder" -}}
 {{ end -}}
 {{ $links := slice -}}
 {{ $groups := slice -}}

@@ -278,7 +278,6 @@ class RefusalTests(LoadCase):
 
     def test_a_substance_value_a_form_would_refuse(self) -> None:
         cases = [("key", "Bad Key"), ("key", ""), ("key", "k" * 101),
-                 ("key", "group"),
                  ("name", ""), ("name", "n" * 201), ("mw", 0),
                  ("mw", -1.5), ("mw", 1.2345), ("cas", "140-10-4"),
                  ("cas", "1-1-1"), ("short_name", "s" * 51),
@@ -291,6 +290,15 @@ class RefusalTests(LoadCase):
                 self.assertIn(field, str(error))
                 if field != "key":
                     self.assertIn("mystery", str(error))
+
+    def test_a_substance_keyed_group_is_loaded(self) -> None:
+        """Requirement: Registry forms (the key `group` is a key like
+        any other), as ``registry_load`` checks what the forms check."""
+        data = small_snapshot()
+        data["substances"][1]["key"] = "group"
+        load(self.file(data))
+        self.assertEqual(Substance.objects.get(key="group").name,
+                         "Mystery")
 
     def test_a_cas_number_taken_twice(self) -> None:
         data = small_snapshot()
