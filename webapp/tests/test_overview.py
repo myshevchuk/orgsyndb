@@ -6,7 +6,7 @@ from datetime import date
 
 from django.test import SimpleTestCase
 
-from . import berlin, make_task, own_scripts, page, table, ticking
+from . import berlin, make_task, page, shell_scripts, table, ticking
 from .collection_support import accept
 from . import navigation_support as ns
 from .planning_support import PlanningCase
@@ -81,7 +81,7 @@ class StockBarTests(OverviewCase):
                          ["niedrig: 1", "ausreichend: 2"])
         self.assertEqual([a.get("style") for a in links],
                          ["flex-grow: 1", "flex-grow: 2"])
-        self.assertEqual(own_scripts(root), [])
+        shell_scripts(root)
         self.assertIn("3 Artikel", sections[0].text())
 
     def test_the_heading_and_the_order(self) -> None:
@@ -391,8 +391,6 @@ class SummaryTests(OverviewCase):
         self.assertEqual(root.find("base").get("target"), "_top")
         self.assertIsNone(root.find("header"))
         self.assertIsNone(root.find("nav"))
-        self.assertIsNone(root.find("script"))
-        self.assertNotIn("<script", summary.content.decode().lower())
 
     def test_the_demo_note(self) -> None:
         from demo.models import DemoMark

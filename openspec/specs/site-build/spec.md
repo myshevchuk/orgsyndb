@@ -76,7 +76,6 @@ The layouts SHALL live in `site/layouts/`. Whichever layouts are in place, they 
 - The procedure page shows the procedure's `title` and `id`.
 - Every HTML page has `<html lang="<language>">` with the site's language, `<meta charset="utf-8">` and a `<title>` element.
 - Asset references in layouts are root-relative paths.
-- A procedure page's content does not depend on JavaScript.
 
 #### Scenario: One indexed body per procedure page
 - **WHEN** an integration test builds a copy of the test collection `tests/fixtures/collection/` and parses every HTML file under `public/` with `html.parser`

@@ -10,7 +10,10 @@
 <link rel="stylesheet" href="{% static 'site/screen.css' %}" media="screen">
 <link rel="stylesheet" href="{% static 'site/print.css' %}" media="print">
 <link rel="stylesheet" href="{% static 'lab.css' %}">
-{% block site_script %}<script src="{% static 'site/site.js' %}"></script>
+{% block scripts %}<meta name="htmx-config" content='{"allowEval": false, "includeIndicatorStyles": false}'>
+<script src="{% static 'site/site.js' %}"></script>
+<script src="{% static 'htmx/htmx.min.js' %}" defer></script>
+<script src="{% static 'lab.js' %}" defer></script>
 {% endblock %}{% block head %}{% endblock %}</head>
 <body{% block body_class %}{% endblock %}>
 {% block header %}<a class="skip-link" href="#main">{% translate "Skip to content" %}</a>

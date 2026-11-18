@@ -602,21 +602,32 @@ def page_text(response: Any) -> str:
     return page(response).text()
 
 
-# The page shell's one script, the site's.
+# The page shell's scripts: the site's, run before the page is parsed,
+# then htmx and the application's, deferred.
 SHELL_SCRIPT = "/lab/static/site/site.js"
+HTMX = "/lab/static/htmx/htmx.min.js"
+LAB_SCRIPT = "/lab/static/lab.js"
 
 
-def own_scripts(root: Element) -> list[Element]:
-    """The ``script`` elements of a page beyond the page shell's, after
-    asserting that the shell's loads SHELL_SCRIPT once, from the head,
-    without ``defer`` and before every other script."""
+def shell_scripts(root: Element) -> None:
+    """Assert that the page ROOT loads the page shell's scripts:
+    SHELL_SCRIPT once, from the head, without ``defer`` and before every
+    other script, then HTMX and then LAB_SCRIPT, each once and with
+    ``defer``."""
     scripts = root.find_all("script")
+    sources = [s.get("src") for s in scripts]
     shell = [s for s in scripts if s.get("src") == SHELL_SCRIPT]
     assert len(shell) == 1, f"{len(shell)} scripts load {SHELL_SCRIPT}"
     assert shell[0].parent.tag == "head", "the shell's script is not in head"
     assert "defer" not in shell[0].attrs, "the shell's script is deferred"
     assert scripts[0] is shell[0], "a script precedes the shell's"
-    return scripts[1:]
+    for source in (HTMX, LAB_SCRIPT):
+        assert sources.count(source) == 1, \
+            f"{sources.count(source)} scripts load {source}"
+        assert "defer" in scripts[sources.index(source)].attrs, \
+            f"{source} is not deferred"
+    assert sources.index(HTMX) < sources.index(LAB_SCRIPT), \
+        f"{LAB_SCRIPT} comes before {HTMX}"
 
 
 def field_value(root: Element, name: str) -> str | None:

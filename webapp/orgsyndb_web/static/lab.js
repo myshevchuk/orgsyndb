@@ -1,6 +1,7 @@
-// Progressive enhancement for the lab's item list. The page works
-// without it: the browser opens and closes popups by itself, and the
-// view controls take effect through lab.css.
+// The lab application's script, loaded on every page of the shell
+// after htmx. What it wires today lives on the item list, where the
+// browser opens and closes popups by itself and the view controls
+// take effect through lab.css; the script adds:
 //
 // - Places each popup below the button that opened it, or above it
 //   when there is no room below, or else over it, always inside the

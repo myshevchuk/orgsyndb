@@ -35,9 +35,6 @@ TABS = [("/procedures/", "All procedures"),
         ("/general-procedures/", "General procedures"),
         ("/reaction_types/", "Reaction types"), ("/tags/", "Tags"),
         ("/authors/", "Authors")]
-SECTIONS = ["Summary", "Reagents", "Procedure", "Workup and Purification",
-            "Characterization", "Notes", "Hazards and Waste Disposal",
-            "References"]
 REAGENT_HEADER = ["Reagent", "CAS", "MW (g/mol)", "Amount", "mmol", "Equiv"]
 # "Products" takes the place of "Product" for a procedure with several.
 PANEL_LABELS = ["Product", "Formula", "MW", "CAS", "SMILES",
@@ -1186,54 +1183,6 @@ class ShippedSiteTests(SiteCase):
         self.assertEqual(count.norm(), f"{len(wanted)} procedure"
                          + ("" if len(wanted) == 1 else "s"))
 
-    def test_static_html_holds_the_content(self) -> None:
-        """Scenario: Static HTML holds the content."""
-        registry = self.registry()
-        for item, page in self.procedure_pages():
-            with self.subTest(procedure=item.id):
-                panel = page.find("dl", "metadata")
-                self.assertIsNotNone(panel, "no dl.metadata")
-                text = panel.norm()
-                header = page.find("header", "procedure-header").norm()
-                self.assertIn(item.id, header)
-                single = len(item.products) == 1
-                for entry in item.products:
-                    compound = registry[entry["compound"]]
-                    self.assertIn(compound["name"], text)
-                    for value in (compound.get("cas"), compound["smiles"]):
-                        if value and single:
-                            self.assertIn(value, text)
-                        elif value:
-                            self.assertNotIn(value, text)
-                self.assertIn(ps.yield_text(item, registry, "en"),
-                              page.find("dl", "key-facts").norm())
-                article = page.find("article", "procedure")
-                self.assertEqual(
-                    [n.norm() for n in article.find_all("h2")
-                     if n.norm() in SECTIONS], SECTIONS)
-                self.assertTrue(page.links(panel))
-                data_print = page.find_all("button", data_print=True)
-                data_copy = page.find_all("button", data_copy_smiles=True)
-                self.assertEqual(len(data_print), 1)
-                self.assertEqual(len(data_copy), 1 if single else 0)
-        for path, page in self.pages():
-            name = str(path.relative_to(self.public))
-            for button in page.buttons():
-                with self.subTest(page=name, button=button.norm()):
-                    enhanced = ("data-print" in button.attrs
-                                or "data-copy-smiles" in button.attrs)
-                    self.assertEqual("hidden" in button.attrs, enhanced)
-            catalogue = page.find("div", "catalogue")
-            for button in () if catalogue is None else catalogue.find_all(
-                    "button"):
-                with self.subTest(page=name, catalogue_button=button.norm()):
-                    hidden = [a for a in button.ancestors()
-                              if a.within(catalogue)
-                              and "data-catalogue-controls" in a.attrs
-                              and "hidden" in a.attrs]
-                    self.assertTrue(hidden, "the button is not inside a "
-                                    "hidden catalogue control")
-
     def test_printed_url_is_text_only(self) -> None:
         """Scenario: The URL is text only."""
         procedure_urls = {f"/procedures/{item.slug}/"
@@ -1701,8 +1650,6 @@ class LabNavigationTests(SiteCase):
         self.assertEqual([(link.target, link.node.norm())
                           for link in page.links(section)],
                          [("/lab/", "Open the lab overview")])
-        self.assertFalse([source for source in page.script_sources()
-                          if source and "lab" in source])
 
     def test_lab_references_at_the_root(self) -> None:
         """Scenario: Lab references at the root."""

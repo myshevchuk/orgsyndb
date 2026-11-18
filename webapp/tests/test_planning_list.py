@@ -7,8 +7,7 @@ from decimal import Decimal
 from inventory.bookings import reverse
 from tasks.models import Task
 
-from . import (field_value, make_task, own_scripts, page, table,
-               task_form_data)
+from . import field_value, make_task, page, table, task_form_data
 from .collection_support import accept
 from .inventory_support import (BULK, LEVELS, TODAY, has_amount, has_number,
                                 item_url, newest_movement, num)
@@ -560,12 +559,6 @@ class CreatedTaskTests(ListCase):
 
 
 class PageTests(ListCase):
-
-    def test_the_page_has_no_script_beyond_the_shells(self) -> None:
-        self.planned_item("NV-1", quantity=10)
-        response = self.client.get(PLAN)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(own_scripts(page(response)), [])
 
     def test_the_page_is_German_or_English_by_the_index(self) -> None:
         self.assertEqual(

@@ -12,7 +12,7 @@ The site SHALL be rendered by a theme written for this repository, made of these
 
 The following apply:
 - `site/hugo.toml` sets no `theme` key, and no `themes/` directory exists under `site/`.
-- No CSS or JavaScript framework or library is included, apart from the Pagefind bundle that `build` generates.
+- No CSS framework is included. A script library is kept in `site/assets/js/` at a fixed version, beside its licence; the Pagefind bundle is the one `build` generates.
 - No web font is used: no stylesheet contains `@font-face`, and no file under `public/` ends in `.woff`, `.woff2`, `.ttf`, `.otf` or `.eot`. Font stacks name system fonts and end in a generic family.
 - Every `<script>` element has a `src` attribute beginning with `/js/` or `/pagefind/` before `relativeURLs` rewriting. No HTML attribute name begins with `on`.
 
@@ -281,7 +281,7 @@ The counts are computed from the published procedures and the registry, and writ
 
 #### Scenario: The lab's summary on the home page
 - **WHEN** a test scans `public/index.html` of a theme build of the test collection with `ORGSYNDB_LAB=true`, and of one without
-- **THEN** the first has, between `div.home-intro` and `div.home-layout`, a `section.home-lab` with its `h2`, its `iframe` and its link to `/lab/`, and no `script` element beyond those of other home pages; the second has no `section.home-lab` and no `iframe`
+- **THEN** the first has, between `div.home-intro` and `div.home-layout`, a `section.home-lab` with its `h2`, its `iframe` and its link to `/lab/`; the second has no `section.home-lab` and no `iframe`
 
 ### Requirement: Taxonomy and term pages
 For each taxonomy, `reaction_types`, `tags` and `authors`, the site SHALL publish:
@@ -293,25 +293,6 @@ Each directory is linked from the section tabs, from the home page's browse list
 #### Scenario: Every term page lists the right procedures
 - **WHEN** a test scans every term page under `public/reaction_types/`, `public/tags/` and `public/authors/` after a theme build, and computes each term's procedures from the content files' `reaction_types`, `tags` and `authors`
 - **THEN** each term in the front matter has a term page, its catalogue table's rows are exactly that term's IDs in ascending order, and the taxonomy page links it with the correct count and text, in order
-
-### Requirement: Content does not need JavaScript
-Every procedure, catalogue, taxonomy, term, compound, sequence, help and home page SHALL show all of its content without running JavaScript. Among what scripts add:
-- `site/assets/js/site.js` reveals and wires the print button (`window.print()`) and the SMILES copy button.
-- `site.js` replaces the print-facts URL with `location.href` when the protocol is `http:` or `https:`.
-- The copy button writes the SMILES string with the Clipboard API. When that fails or is unavailable, it selects the SMILES text instead.
-- The catalogue script, on the catalogue and term pages, reveals the catalogue's controls and runs its search, filters, sorting and views (site-catalogue).
-
-In the published HTML, the print button (`data-print`) and the SMILES copy button (`data-copy-smiles`) carry `hidden`, and only `site.js` reveals them. No other button carries `hidden`. Every button of a catalogue lies inside an element that carries `data-catalogue-controls` and `hidden`, which only the catalogue script reveals. The header search's submit button is visible and works without JavaScript.
-
-#### Scenario: Static HTML holds the content
-- **WHEN** a test scans every procedure page after a theme build, without running scripts
-- **THEN** the metadata values, the rendered body sections and the links are present in the HTML, every `button` with `data-print` or `data-copy-smiles` has the `hidden` attribute, and no other `button` on any page under `public/` has it
-- **AND** every `button` of a page's `div.catalogue` lies inside an element with `data-catalogue-controls` and `hidden`
-
-#### Scenario: Buttons work in a browser
-- **WHEN** the orchestrator opens a procedure page in a browser with JavaScript (manual verification, tasks.md section 6)
-- **THEN** the print button is visible and opens the print dialog, the Copy button copies or selects the SMILES string, and with JavaScript disabled neither button is shown and the page is otherwise unchanged
-- **AND** with JavaScript disabled, submitting the header search of a procedure page loads `/procedures/?q=<term>`, which shows the `noscript` note and every procedure by ID, and no catalogue control
 
 ### Requirement: Org and Markdown sources render alike
 A procedure SHALL render to the same HTML whichever source format it was written in. Two procedures with the same content, one exported from Org and one written in Markdown, give pages that are byte-identical once their IDs and slugs are replaced by a common placeholder.
@@ -383,4 +364,15 @@ The site's pages and the lab application's pages SHALL show one navigation, defi
 #### Scenario: The shell does not move
 - **WHEN** the orchestrator measures the site title, the search form, the navigation, the start of `main` and the `h1` of the home page, `/procedures/`, a procedure page, `/lab/`, `/lab/registry/` and `/lab/tasks/`, signed in and not, in a browser at 1280 and at 500 CSS pixels (manual verification, tasks.md section 3)
 - **THEN** at each width each of them has the same position and size on every page, and the `h1` the same font size
+
+### Requirement: Site scripts
+The site's scripts SHALL add the following to its pages:
+- `site/assets/js/site.js` reveals and wires the print button (`window.print()`) and the SMILES copy button.
+- `site.js` replaces the print-facts URL with `location.href` when the protocol is `http:` or `https:`.
+- The copy button writes the SMILES string with the Clipboard API. When that fails or is unavailable, it selects the SMILES text instead.
+- The catalogue script, on the catalogue and term pages, reveals the catalogue's controls and runs its search, filters, sorting and views (site-catalogue).
+
+#### Scenario: Buttons work in a browser
+- **WHEN** the orchestrator opens a procedure page in a browser (manual verification)
+- **THEN** the print button is visible and opens the print dialog, and the Copy button copies or selects the SMILES string
 

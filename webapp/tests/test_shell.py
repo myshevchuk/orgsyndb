@@ -1,6 +1,7 @@
 """Tests of the page shell and the interface language (web-app: Page
 shell, Interface language)."""
 
+import json
 import re
 import tomllib
 from datetime import date
@@ -9,9 +10,9 @@ from pathlib import Path
 from django.contrib.staticfiles import finders
 from django.test import SimpleTestCase, TestCase
 
-from . import (REPO, SHELL_SCRIPT, berlin, frozen, make_item, make_lot,
-               make_task, make_user, own_scripts, page, substance_for,
-               table, task_url, ticking)
+from . import (HTMX, REPO, SHELL_SCRIPT, berlin, frozen, make_item,
+               make_lot, make_task, make_user, page, shell_scripts,
+               substance_for, table, task_url, ticking)
 from . import navigation_support as ns
 from .collection_support import accept, make_import
 
@@ -148,22 +149,33 @@ class ShellTests(TestCase):
         self.assertFalse([f for f in header.find_all("form")
                           if f.get("action") == "/lab/accounts/logout/"])
 
-    def test_no_page_has_a_script_beyond_the_shells(self) -> None:
-        paths = ["/lab/tasks/", task_url(self.task), "/lab/tasks/new/",
-                 task_url(self.task, "edit"), "/lab/accounts/password/"]
+    def test_scripts_from_the_applications_files(self) -> None:
+        """Scenario: Scripts from the application's files (web-app:
+        Scripts)."""
+        menu = [e["url"] for e in ns.links() if e["url"].startswith("/lab/")]
         self.client.force_login(self.kl)
-        for path in paths:
+        for path in [*menu, task_url(self.task), task_url(self.task, "edit")]:
             with self.subTest(path=path):
-                response = self.client.get(path)
-                self.assertEqual(response.status_code, 200)
-                self.assertEqual(own_scripts(page(response)), [])
+                self.assert_scripts(self.client.get(path))
         self.client.logout()
-        for path in ("/lab/accounts/login/", "/lab/tasks/",
-                     task_url(self.task)):
-            with self.subTest(path=path, signed_in=False):
-                response = self.client.get(path)
-                self.assertEqual(response.status_code, 200)
-                self.assertEqual(own_scripts(page(response)), [])
+        with self.subTest(path="/lab/accounts/login/", signed_in=False):
+            self.assert_scripts(self.client.get("/lab/accounts/login/"))
+
+    def assert_scripts(self, response) -> None:
+        self.assertEqual(response.status_code, 200)
+        root = page(response)
+        for script in root.find_all("script"):
+            self.assertTrue(script.get("src", "").startswith("/lab/static/"),
+                            script.get("src"))
+            self.assertEqual(script.text(), "")
+        for element in root.walk():
+            for name in element.attrs:
+                self.assertFalse(
+                    name.startswith(("on", "hx-on", "data-hx-on")),
+                    f"<{element.tag}> carries {name}")
+        config = root.find("meta", attrs={"name": "htmx-config"})
+        self.assertIsNotNone(config, "no meta htmx-config")
+        self.assertIs(json.loads(config.get("content"))["allowEval"], False)
 
     def test_the_sidebar_toggle(self) -> None:
         for signed_in, language in ((False, "de"), (True, "en")):
@@ -252,8 +264,7 @@ class InventoryShellTests(TestCase):
             with self.subTest(path=path):
                 response = self.client.get(path)
                 root = page(response)
-                if path != "/lab/inventory/end-products/":
-                    self.assertEqual(own_scripts(root), [])
+                shell_scripts(root)
                 self.assertIsNotNone(root.find("header", cls="site-header"))
                 hrefs = [e.get("href") for e in root.find_all("link")
                          if e.get("rel") == "stylesheet"]
@@ -261,26 +272,15 @@ class InventoryShellTests(TestCase):
                     hrefs, [f"/lab/static/site/{n}" for n in STYLESHEETS]
                     + ["/lab/static/lab.css"])
 
-    def test_lab_js_for_the_item_list(self) -> None:
-        """Scenario: lab.js for the item list."""
-        for signed_in in (False, True):
-            if signed_in:
-                self.client.force_login(self.kl)
-            with self.subTest(signed_in=signed_in):
-                response = self.client.get("/lab/inventory/end-products/")
-                scripts = own_scripts(page(response))
-                self.assertEqual(len(scripts), 1)
-                self.assertEqual(scripts[0].get("src"), "/lab/static/lab.js")
-                self.assertIn("defer", scripts[0].attrs)
-                self.assertEqual(scripts[0].text(), "")
-        for path in (f"/lab/inventory/items/{self.item.pk}/",
+    def test_scripts_on_every_page(self) -> None:
+        """Scenario: Scripts on every page."""
+        for path in ("/lab/inventory/end-products/",
+                     f"/lab/inventory/items/{self.item.pk}/",
                      "/lab/planning/"):
             with self.subTest(path=path):
                 response = self.client.get(path)
                 self.assertEqual(response.status_code, 200)
-                self.assertNotIn("/lab/static/lab.js",
-                                 [s.get("src") for s in
-                                  page(response).find_all("script")])
+                shell_scripts(page(response))
 
     def test_the_script_is_collected(self) -> None:
         self.assertIsNotNone(finders.find("lab.js"))
@@ -316,7 +316,7 @@ class PlanningShellTests(TestCase):
             with self.subTest(signed_in=signed_in):
                 response = self.client.get("/lab/planning/")
                 root = page(response)
-                self.assertEqual(own_scripts(root), [])
+                shell_scripts(root)
                 self.assertIsNotNone(root.find("header", cls="site-header"))
                 hrefs = [e.get("href") for e in root.find_all("link")
                          if e.get("rel") == "stylesheet"]
@@ -356,7 +356,7 @@ class RegistryShellTests(TestCase):
             with self.subTest(path=path):
                 response = self.client.get(path)
                 root = page(response)
-                self.assertEqual(own_scripts(root), [])
+                shell_scripts(root)
                 self.assertIsNotNone(root.find("header", cls="site-header"))
                 hrefs = [e.get("href") for e in root.find_all("link")
                          if e.get("rel") == "stylesheet"]
@@ -377,6 +377,12 @@ class StaticFilesTests(SimpleTestCase):
 
     def test_the_applications_stylesheet_is_collected(self) -> None:
         self.assertTrue(finders.find("lab.css"))
+
+    def test_htmx_kept_with_its_licence(self) -> None:
+        """Scenario: htmx kept with its licence (web-app: Scripts)."""
+        found = finders.find(HTMX.removeprefix("/lab/static/"))
+        self.assertTrue(found, f"{HTMX} is not found")
+        self.assertTrue((Path(found).parent / "LICENSE").is_file())
 
     def test_the_sites_script_is_collected(self) -> None:
         found = finders.find(SHELL_SCRIPT.removeprefix("/lab/static/"))
