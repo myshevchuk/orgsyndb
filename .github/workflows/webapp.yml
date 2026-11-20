@@ -3,10 +3,10 @@
 # difference between the two fails here.
 name: Lab application
 
+# Every pushed branch runs the whole suite, so a change branch is
+# checked before it is squash-merged into develop.
 on:
   push:
-    branches: [main, develop]
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -25,7 +25,7 @@ jobs:
           python-version: "3.14"
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --frozen
-      - run: uv run pytest
+      - run: uv run pytest -n auto
 
   postgres:
     runs-on: ubuntu-24.04
@@ -55,4 +55,4 @@ jobs:
           python-version: "3.14"
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --frozen
-      - run: uv run pytest
+      - run: uv run pytest -n auto
