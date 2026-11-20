@@ -60,14 +60,34 @@ HOOK = TOOLS / "hooks" / "pre-commit"
 DEMO = REPO / "examples" / "demo"
 TEST_COLLECTION = FIXTURES / "collection"
 
-OX_HUGO_PIN = "b7dc44dc28911b9d8e3055a18deac16c3b560b03"
-TOMELR_PIN = "670e0a08f625175fd80137cf69e799619bf8a381"
+
+
+def export_pin(package: str) -> str:
+    """The commit ``tools/export.el`` pins for ``package``."""
+    found = re.search(
+        rf'\({re.escape(package)}\s+"[^"]+"\s+"([0-9a-f]{{40}})"\)',
+        (TOOLS / "export.el").read_text(encoding="utf-8"))
+    if found is None:
+        raise AssertionError(f"tools/export.el pins no {package}")
+    return found.group(1)
+
+
+OX_HUGO_PIN = export_pin("ox-hugo")
+TOMELR_PIN = export_pin("tomelr")
+# The oldest Emacs the package declares in its Package-Requires header.
+EMACS_OLDEST = re.search(
+    r'Package-Requires: \(\(emacs "([0-9.]+)"\)\)',
+    (REPO / "emacs" / "orgsyndb.el").read_text(encoding="utf-8")).group(1)
+PAGEFIND_VERSION = re.search(
+    r'^PAGEFIND_VERSION = "([^"]+)"$',
+    (TOOLS / "pipeline.py").read_text(encoding="utf-8"), re.M).group(1)
 # A molfile for the tests that need a registry to name a drawn structure;
 # the build never parses it.
 MOLFILE = ("\n  orgsyndb tests\n\n  1  0  0  0  0  0  0  0  0  0999 V2000\n"
            "    0.0000    0.0000    0.0000 C   0  0  0  0  0  0  0  0  0  0"
            "  0  0\nM  END\n")
-PAGEFIND_RELATIVE = Path(".tools") / "pagefind-1.5.2" / "pagefind"
+PAGEFIND_RELATIVE = (Path(".tools") / f"pagefind-{PAGEFIND_VERSION}"
+                     / "pagefind")
 LANGUAGES = ("de", "en")
 BOOTSTRAP_HINT = ("ox-hugo not bootstrapped: run tools/orgsyndb -C "
                   "examples/demo export once (needs network)")
@@ -164,11 +184,36 @@ def body_of(text: str) -> str:
     return "\n".join(lines[end + 1:])
 
 
+# Each pytest-xdist worker hands out ports from its own block below the
+# kernel's ephemeral range, so that a port one worker found free is not
+# taken by another worker, or by a server binding port 0, before the
+# process the test starts binds it.
+PORT_BLOCK = 400
+_next_port: int | None = None
+
+
 def free_port() -> int:
-    """Return a TCP port on 127.0.0.1 that is free right now."""
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
+    """Return a TCP port on 127.0.0.1 that is free right now and that no
+    other test worker hands out.
+
+    Ports are taken in turn from the worker's block, so a port is not
+    handed out again until the block has gone round. Raises OSError
+    when no port of the block is free."""
+    global _next_port
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "gw0").removeprefix("gw")
+    base = 20000 + PORT_BLOCK * (int(worker) if worker.isdigit() else 0)
+    if _next_port is None:
+        _next_port = base
+    for _ in range(PORT_BLOCK):
+        port = _next_port
+        _next_port = base + (_next_port + 1 - base) % PORT_BLOCK
+        with socket.socket() as sock:
+            try:
+                sock.bind(("127.0.0.1", port))
+            except OSError:
+                continue
+            return port
+    raise OSError(f"no free port in {base}-{base + PORT_BLOCK - 1}")
 
 
 class SnapshotServer:

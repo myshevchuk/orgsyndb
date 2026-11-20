@@ -24,6 +24,11 @@ tag = "tags"
 procedures = "/procedures/:slug/"
 sequences = "/sequences/:slug/"
 
+# The help pages are Org documents, which Hugo renders itself; Hugo's
+# default policy refuses Org content, and raw HTML content stays refused.
+[security]
+allowContent = ['! ^text/html$']
+
 [markup.goldmark.renderer]
 unsafe = true
 

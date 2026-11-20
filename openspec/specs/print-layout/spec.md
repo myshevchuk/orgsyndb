@@ -128,7 +128,7 @@ The automated PDF checks below detect content pushed past the left or right marg
 - **THEN** no text, table, figure or rule is cut off at a box edge or the page edge, and the structure drawing on OSDB-0003 is complete
 
 ### Requirement: Warning-free rendering
-WeasyPrint 70.0 SHALL render every procedure page without a warning. No stylesheet a procedure page loads in print media uses a property, value or media query that WeasyPrint does not support.
+WeasyPrint SHALL render every procedure page without a warning. No stylesheet a procedure page loads in print media uses a property, value or media query that WeasyPrint does not support.
 
 #### Scenario: Clean pdf run
 - **WHEN** a PDF build completes

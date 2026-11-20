@@ -18,7 +18,7 @@ A collection's reaction types SHALL be the terms of the vocabulary `reaction-typ
 ### Requirement: Reaction-type data for the site
 `pipeline.reaction_types_data(registry, language)` SHALL return the reaction-type data that the build stages as `build/data/reaction_types.json` (build-script "build subcommand"), given the collection's registry and the site's language. The data is a table with one key per reaction type of the registry, each mapped to a table holding only `label`: the term's `label_de` when the language is `de` and the term has one, its `label` otherwise. A registry without reaction types gives an empty table.
 
-The site reads the data as `site.Data.collection.reaction_types` (site-build "Hugo configuration"). Wherever it shows a reaction type's vocabulary label (site-theme, site-catalogue, synthesis-sequences), the label is the data's `label` for that reaction type.
+The site reads the data as `hugo.Data.collection.reaction_types` (site-build "Hugo configuration"). Wherever it shows a reaction type's vocabulary label (site-theme, site-catalogue, synthesis-sequences), the label is the data's `label` for that reaction type.
 
 #### Scenario: Labels in either language
 - **WHEN** a test calls `reaction_types_data` on the test collection's registry with the language `en`, and again with `de`

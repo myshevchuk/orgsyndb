@@ -12,7 +12,7 @@ without a scheme, it is one empty slot that the print stylesheet hides. */ -}}
 {{ else -}}
 {{ if not .Params.scope -}}
 {{ range $entry := .Params.products -}}
-{{ with index site.Data.compounds $entry.compound -}}
+{{ with index hugo.Data.compounds $entry.compound -}}
 {{ with .structure_image -}}
 {{ $found = true -}}
 <figure class="structure"><img src="/{{ . }}" alt="{{ T "structure_of" (partial "compound-name.html" $entry.compound) }}"></figure>

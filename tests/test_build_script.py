@@ -22,7 +22,8 @@ from pathlib import Path
 from unittest import mock
 
 from pipeline_support import (BOOTSTRAP_HINT, DEMO, GIT_QUIET, HOOK,
-                              ORGSYNDB, PIPELINE, REPO, TOOLS, Run,
+                              ORGSYNDB, PAGEFIND_VERSION, PIPELINE,
+                              REPO, TOOLS, Run,
                               closed_address, make_path, make_sandbox,
                               pipeline_function, require_pagefind,
                               require_tool, run_script, serve_snapshot,
@@ -409,7 +410,7 @@ class CleanTests(ProgramTestCase):
         root, app = sandbox.root, sandbox.app
         generated = [root / "build/export", root / "public/pagefind",
                      root / "pdf", app / ".emacs-batch/elpa",
-                     app / ".tools/pagefind-1.5.2"]
+                     app / ".tools" / f"pagefind-{PAGEFIND_VERSION}"]
         for path in generated:
             path.mkdir(parents=True, exist_ok=True)
             (path / "marker").write_text("x\n")
@@ -423,7 +424,8 @@ class CleanTests(ProgramTestCase):
         for name in ("build", "public", "pdf"):
             self.assertFalse((root / name).exists(), name)
         self.assertTrue((app / ".emacs-batch" / "elpa" / "marker").is_file())
-        self.assertTrue((app / ".tools" / "pagefind-1.5.2").is_dir())
+        self.assertTrue(
+            (app / ".tools" / f"pagefind-{PAGEFIND_VERSION}").is_dir())
         for path, files in kept.items():
             self.assertEqual(snapshot(path), files, str(path))
         self.assertEqual((root / "orgsyndb.toml").read_bytes(), marker)

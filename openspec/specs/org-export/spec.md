@@ -4,11 +4,11 @@
 Define how `tools/export.el` turns Org procedure sources into Hugo content: an isolated, pinned batch Emacs, the front-matter mapping, body export options, and a complete, fresh and byte-identical export directory.
 ## Requirements
 ### Requirement: Isolated batch Emacs
-`tools/export.el` SHALL run under `emacs -Q --batch`, invoked as `emacs -Q --batch -l tools/export.el ORG_ROOT STAGING_DIR`, and SHALL work with Emacs 29.1 or later and the Org it bundles. `ORG_ROOT` is the directory of Org sources, and `tools/orgsyndb` passes `org/procedures` with the collection as working directory. It loads neither package.el nor any package archive. Before loading Org or `emacs/osdb-org.el` it SHALL make these settings:
+`tools/export.el` SHALL run under `emacs -Q --batch`, invoked as `emacs -Q --batch -l tools/export.el ORG_ROOT STAGING_DIR`, and SHALL work with the oldest Emacs the package `orgsyndb` supports (emacs-mode "Package files") or a later one, and the Org it bundles. `ORG_ROOT` is the directory of Org sources, and `tools/orgsyndb` passes `org/procedures` with the collection as working directory. It loads neither package.el nor any package archive. Before loading Org or `emacs/osdb-org.el` it SHALL make these settings:
 - `user-emacs-directory` points to the application's `.emacs-batch/`.
 - `temporary-file-directory` and the `TMPDIR` environment variable point to `tmp/` in the parent directory of `STAGING_DIR`, which is the collection's `build/tmp/`, and which is created when missing.
 
-Under an Emacs older than 29.1 it exits 1 before installing or exporting anything, printing `export.el: error: Emacs 29.1 or later is required; this is Emacs <version>`.
+Under an older Emacs it exits 1 before installing or exporting anything, printing `export.el: error: Emacs <oldest> or later is required; this is Emacs <version>`.
 
 The export writes nothing under `$HOME`, and nothing in the `TMPDIR` it inherited. It neither loads nor writes anything in `~/.emacs.d` or `~/.config/emacs`. git, which the bootstrap and the pin check run, may still read its own user configuration.
 
@@ -19,23 +19,21 @@ The export writes nothing under `$HOME`, and nothing in the `TMPDIR` it inherite
 - **AND** the `TMPDIR` directory is still empty
 
 #### Scenario: An old Emacs is refused
-- **WHEN** an integration test runs `tools/orgsyndb -C <collection> export` with an `emacs` on `PATH` that runs the real Emacs with `emacs-version` set to `28.2` before `tools/export.el` loads
-- **THEN** the export exits 1, the output contains `Emacs 29.1 or later is required; this is Emacs 28.2`, and `build/export/` is unchanged
+- **WHEN** an integration test runs `tools/orgsyndb -C <collection> export` with an `emacs` on `PATH` that runs the real Emacs with `emacs-version` set to a version older than the oldest supported one before `tools/export.el` loads
+- **THEN** the export exits 1, the output contains `Emacs <oldest> or later is required; this is Emacs <that version>`, and `build/export/` is unchanged
 
 ### Requirement: Pinned ox-hugo and tomelr
-`tools/export.el` SHALL install tomelr and then ox-hugo, each only when its directory `.emacs-batch/elpa/<package>/` in the application does not exist, by cloning the package's upstream repository with git into that directory and checking out its pinned commit. When the clone or the checkout fails, it removes the directory and exits non-zero with a message naming the package. It then adds both directories to `load-path`. The pins are:
-- tomelr: `https://github.com/kaushalmodi/tomelr` at `670e0a08f625175fd80137cf69e799619bf8a381` (0.4.3).
-- ox-hugo: `https://github.com/kaushalmodi/ox-hugo` at `b7dc44dc28911b9d8e3055a18deac16c3b560b03` (MELPA `20251206.1738`).
+`tools/export.el` SHALL install tomelr and then ox-hugo, each only when its directory `.emacs-batch/elpa/<package>/` in the application does not exist, by cloning the package's upstream repository with git into that directory and checking out its pinned commit. When the clone or the checkout fails, it removes the directory and exits non-zero with a message naming the package. It then adds both directories to `load-path`. The upstream repositories are `https://github.com/kaushalmodi/tomelr` and `https://github.com/kaushalmodi/ox-hugo`; `tools/export.el` names the pinned commit of each.
 
 On every run that goes on to export, that is, every run whose Org sources have no error and include at least one Org source, the export compares each installed checkout's `HEAD` with its pin. On a mismatch it exits non-zero, before exporting anything, with a message that names the package, both commits, and `tools/orgsyndb clean --all`.
 
 #### Scenario: Installed checkouts are at the pins
 - **WHEN** an integration test reads `git rev-parse HEAD` in `.emacs-batch/elpa/ox-hugo` and `.emacs-batch/elpa/tomelr` after an export
-- **THEN** the values are `b7dc44dc28911b9d8e3055a18deac16c3b560b03` and `670e0a08f625175fd80137cf69e799619bf8a381`
+- **THEN** the values are the commits `tools/export.el` pins for them
 
 #### Scenario: A checkout at another commit stops the export
 - **WHEN** an integration test copies `.emacs-batch/` into the application copy instead of linking it, checks out ox-hugo's parent commit in the copy, and runs `tools/orgsyndb -C <collection> export`
-- **THEN** the exit status is non-zero, and the output contains `ox-hugo`, `b7dc44dc28911b9d8e3055a18deac16c3b560b03`, the parent commit's hash, and `clean --all`
+- **THEN** the exit status is non-zero, and the output contains `ox-hugo`, its pinned commit, the parent commit's hash, and `clean --all`
 - **AND** `build/export/` is unchanged
 
 #### Scenario: No package.el

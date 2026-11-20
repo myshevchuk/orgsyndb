@@ -1254,6 +1254,10 @@ WeasyPrint. The Org export tests copy the demo collection. Those tests
 need Emacs, Git, and the ox-hugo cache in `.emacs-batch/`; without Emacs, they
 skip with the reason `emacs not found`.
 
+The whole suite takes several minutes. With pytest-xdist installed
+(`python3-pytest-xdist` on Fedora), run it in parallel, one worker per
+processor core, with `python3 -m pytest -n auto`.
+
 The Org front end and the Emacs package have suites using ERT, Emacs's
 Lisp test framework, in `tests/el/osdb-org-tests.el` and
 `tests/el/orgsyndb-tests.el`. `tests/test_elisp.py` runs both under pytest
@@ -1276,16 +1280,18 @@ not have Emacs, build a copy of `tests/fixtures/collection` outside
 the generated `build/` and `public/` directories would affect the fixture
 checks.
 
-The `Emacs 29 export` GitHub Actions workflow runs the export integration
-tests and both ERT suites through `tests/test_elisp.py` on Ubuntu 24.04's
-Emacs 29 with:
+The [`program.yml`](.github/workflows/program.yml) GitHub Actions
+workflow runs the whole suite in a Fedora container with the latest
+stable Emacs. The [`emacs.yml`](.github/workflows/emacs.yml) workflow runs
+the export integration tests and both ERT suites on older stable Emacs
+versions that distributions still ship, Ubuntu 24.04's Emacs 29 and Debian
+13's Emacs 30. Its failures are reported but do not fail the run. It runs:
 
 ```sh
 python -m pytest tests/test_export_integration.py tests/test_elisp.py
 ```
 
-It runs on pushes to `main` and `develop`, pull requests, and manual
-dispatch.
+Both run on a push to any branch, and on manual dispatch.
 
 ### Lab application tests and local server
 

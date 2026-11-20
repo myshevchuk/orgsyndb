@@ -1698,18 +1698,18 @@ of the demo's image, as a build stages it."
 ;;;; Command menu
 
 (defun orgsyndb-test-suffix-commands (layout)
-  "Return every `:command' value in the transient LAYOUT."
+  "Return every `:command' value in the transient LAYOUT.
+A value is whatever follows the keyword `:command' anywhere in LAYOUT,
+whether a suffix is a property list or a list headed by its class, as
+transient versions differ."
   (cond ((vectorp layout)
          (orgsyndb-test-suffix-commands (append layout nil)))
         ((consp layout)
-         (let ((own (and (keywordp (car layout))
-                         (plist-member layout :command)
-                         (list (plist-get layout :command)))))
-           (append own
-                   (cl-mapcan #'orgsyndb-test-suffix-commands
-                              (if own (cl-remove (plist-get layout :command)
-                                                 layout)
-                                layout)))))
+         (if (and (eq (car layout) :command) (consp (cdr layout)))
+             (cons (cadr layout)
+                   (orgsyndb-test-suffix-commands (cddr layout)))
+           (append (orgsyndb-test-suffix-commands (car layout))
+                   (orgsyndb-test-suffix-commands (cdr layout)))))
         (t nil)))
 
 (ert-deftest orgsyndb-test-one-binding ()

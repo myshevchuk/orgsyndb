@@ -1,14 +1,14 @@
 {{- /* A compound key as an a.compound linking the substance's page in the
 lab, /lab/registry/substances/<key>/, in every build, with its shown name
 (compound-name.html) as text. When the registry entry sets fields of
-site.Data.collection.fields.compound with beside = true, one space and a
+hugo.Data.collection.fields.compound with beside = true, one space and a
 span.compound-beside follow the link, holding "(", those values in the
 fields' order as field-value.html writes them, joined by ", ", and ")". */ -}}
 <a class="compound" href="/lab/registry/substances/{{ . }}/">{{ partial "compound-name.html" . }}</a>
-{{- with index site.Data.compounds . -}}
+{{- with index hugo.Data.compounds . -}}
 {{- $compound := . -}}
 {{- $values := slice -}}
-{{- range site.Data.collection.fields.compound -}}
+{{- range hugo.Data.collection.fields.compound -}}
 {{- if and .beside (isset $compound .key) -}}
 {{- $values = $values | append (partial "field-value.html" (dict "field" . "value" (index $compound .key))) -}}
 {{- end -}}

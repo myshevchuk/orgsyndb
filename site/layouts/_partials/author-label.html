@@ -1,9 +1,9 @@
 {{- /* Author user name to the account's name, as the collection's
-registry gives it and the build stages it in site.Data.collection.authors;
+registry gives it and the build stages it in hugo.Data.collection.authors;
 the user name itself when the registry has no such account. A taxonomy
 term, which Hugo may have lowercased, matches its user name regardless of
 case. */ -}}
-{{- $authors := site.Data.collection.authors | default dict -}}
+{{- $authors := hugo.Data.collection.authors | default dict -}}
 {{- $name := index $authors . -}}
 {{- if not $name -}}
 {{- range $username, $found := $authors -}}

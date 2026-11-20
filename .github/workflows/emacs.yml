@@ -1,0 +1,55 @@
+# Runs the export integration tests and both ERT suites on the older
+# stable Emacs versions that distributions still ship: 29, as Ubuntu
+# 24.04 ships it, and 30, as Debian 13 ships it. The Program workflow
+# tests the latest stable Emacs and gates a merge; these jobs only
+# report, so a failure here never blocks one.
+name: Emacs versions (informational)
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  emacs-29:
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends emacs-nox git
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - run: python -m pip install pytest
+      # The first export clones ox-hugo and tomelr; without them the
+      # integration tests would skip.
+      - run: tools/orgsyndb -C examples/demo export
+      - run: python -m pytest tests/test_export_integration.py tests/test_elisp.py
+
+  emacs-30:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    container: debian:trixie
+    steps:
+      - run: apt-get update && apt-get install -y --no-install-recommends emacs-nox git ca-certificates
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      # Debian 13 has no Python 3.14, so uv provides it. Root ignores
+      # file permissions, which some tests rely on, so the tests run as
+      # an unprivileged user.
+      - run: |
+          useradd --create-home tester
+          chown -R tester: "$GITHUB_WORKSPACE"
+          su tester -c "
+            set -e
+            cd '$GITHUB_WORKSPACE'
+            git config --global --add safe.directory '*'
+            export UV_CACHE_DIR=\$HOME/.cache/uv
+            '$(command -v uv)' venv --python 3.14 \$HOME/venv
+            . \$HOME/venv/bin/activate
+            '$(command -v uv)' pip install pytest
+            emacs --version | head -1
+            tools/orgsyndb -C examples/demo export
+            python -m pytest tests/test_export_integration.py tests/test_elisp.py"

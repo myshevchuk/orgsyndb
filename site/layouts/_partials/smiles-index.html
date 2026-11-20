@@ -6,7 +6,7 @@ Pagefind indexes it as the meta field smiles_index, which it never shows
 in excerpts. */ -}}
 {{ $suffixes := slice -}}
 {{ range partial "product-keys.html" . -}}
-{{ $smiles := (index site.Data.compounds . | default dict).smiles | default "" -}}
+{{ $smiles := (index hugo.Data.compounds . | default dict).smiles | default "" -}}
 {{ $key := lower $smiles | replaceRE "[^a-z0-9]" "" -}}
 {{ range $start := seq 0 (sub (len $key) 1) }}{{ if lt $start (len $key) }}{{ $suffixes = $suffixes | append (substr $key $start) }}{{ end }}{{ end -}}
 {{ end -}}

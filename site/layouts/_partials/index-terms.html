@@ -7,7 +7,7 @@ number and SMILES it has, all separated by single spaces. */ -}}
 {{ $terms := slice .Params.id -}}
 {{ range partial "product-keys.html" . -}}
 {{ $terms = $terms | append (partial "compound-name.html" .) -}}
-{{ with index site.Data.compounds . -}}
+{{ with index hugo.Data.compounds . -}}
 {{ with .formula }}{{ $terms = $terms | append . }}{{ end -}}
 {{ with .cas }}{{ $terms = $terms | append . }}{{ end -}}
 {{ with .smiles }}{{ $terms = $terms | append . }}{{ end -}}

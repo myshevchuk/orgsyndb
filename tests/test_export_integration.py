@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pipeline_support as ps
 import support
-from pipeline_support import (DEMO, FIXTURES, OX_HUGO_PIN, REPO,
+from pipeline_support import (DEMO, EMACS_OLDEST, FIXTURES, OX_HUGO_PIN, REPO,
                               TEST_COLLECTION, TOMELR_PIN, Sandbox, body_of,
                               front_matter, make_path, make_sandbox,
                               read_only_dir, snapshot)
@@ -143,8 +143,10 @@ class OldEmacsTests(ExportTestCase):
         # The fake restores PATH, since a launcher such as Fedora's
         # re-executes Emacs by the bare name emacs.
         inherited = sandbox.env()["PATH"]
-        pretend = ("(setq emacs-version \"28.2\" emacs-major-version 28 "
-                   "emacs-minor-version 2)")
+        major = int(EMACS_OLDEST.split(".")[0]) - 1
+        older = f"{major}.2"
+        pretend = (f"(setq emacs-version \"{older}\" "
+                   f"emacs-major-version {major} emacs-minor-version 2)")
         fake = bin_dir / "emacs"
         fake.write_text("#!/bin/sh\n"
                         f"PATH={quoted(inherited)}; export PATH\n"
@@ -156,8 +158,8 @@ class OldEmacsTests(ExportTestCase):
         result = self.export(sandbox, env=sandbox.env(PATH=path))
         output = result.stdout + result.stderr
         self.assertEqual(result.returncode, 1, output)
-        self.assertIn("Emacs 29.1 or later is required; this is Emacs 28.2",
-                      output)
+        self.assertIn(f"Emacs {EMACS_OLDEST} or later is required; this is "
+                      f"Emacs {older}", output)
         self.assertEqual(snapshot(sandbox.export_dir()), before)
 
 

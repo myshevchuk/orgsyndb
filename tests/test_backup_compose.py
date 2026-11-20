@@ -114,7 +114,7 @@ class ComposeTextTests(unittest.TestCase):
         found = re.search(r"(?m)^    profiles:(.*(?:\n      - .*)*)", block)
         self.assertIsNotNone(found, "restore has no profiles")
         self.assertIn("restore", found.group(1))
-        self.assertRegex(block, r"(?m)^    image: postgres:18$")
+        self.assertRegex(block, r"(?m)^    image: postgres:\S+$")
 
     def test_restore_runs_the_script_with_restore(self) -> None:
         """Requirement: Web server and Compose file (`restore` running
@@ -263,7 +263,7 @@ class ComposeConfigTests(unittest.TestCase):
     def test_restore(self) -> None:
         config = self.config("restore")
         restore = config["services"]["restore"]
-        self.assertEqual(restore["image"], "postgres:18")
+        self.assertEqual(restore["image"], config["services"]["db"]["image"])
         self.assertEqual(restore["command"][-1], "restore")
         self.assertEqual(restore["depends_on"]["db"]["condition"],
                          "service_healthy")

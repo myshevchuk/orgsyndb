@@ -1,5 +1,5 @@
 {{- /* Reaction-type slug to its label in the site's language, as the
 collection's registry gives it and the build stages it in
-site.Data.collection.reaction_types; the slug itself when the registry
+hugo.Data.collection.reaction_types; the slug itself when the registry
 has no such reaction type. */ -}}
-{{- with index (site.Data.collection.reaction_types | default dict) . }}{{ .label }}{{ else }}{{ . }}{{ end -}}
+{{- with index (hugo.Data.collection.reaction_types | default dict) . }}{{ .label }}{{ else }}{{ . }}{{ end -}}

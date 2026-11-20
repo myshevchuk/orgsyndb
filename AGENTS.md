@@ -32,16 +32,17 @@ on CI.
 - Take the baseline from CI, not from a local run: `gh run list
   --commit <sha>` for the commit the branch grew from. Run a full
   suite locally only when CI has no result for that commit or reports
-  a failure, and run the lab suite in parallel then:
-  `uv run pytest -n auto`.
-- Every pushed branch runs the lab suite on CI. Push a change branch
-  once its area tests pass, wait for its runs with `gh run watch`, and
-  squash-merge it into `develop` only when they are green. Work
+  a failure, and run it in parallel then: `uv run pytest -n auto` in
+  `webapp/`, `python3 -m pytest -n auto` at the root.
+- Every pushed branch runs both suites on CI: the workflows `Program`,
+  on the latest stable Emacs, and `Lab application`. Push a change
+  branch once its area tests pass, wait for those runs with
+  `gh run watch`, and squash-merge it into `develop` only when they
+  are green. `Emacs versions (informational)` runs the Emacs tests on
+  older stable Emacs versions too; its failures are worth knowing and
+  fixing in time, and never block a merge. Work
   committed on `develop` itself is checked by the same runs after the
   push; a red run there is fixed before anything else.
-- CI runs only the export tests of the program's suite. A change that
-  touches `tools/`, `site/`, `emacs/` or `tests/` runs the program's
-  suite in full locally once, before it is merged.
 - A delegated stage, such as the test writer or an implementer, runs
   only the area's tests, never a full suite; its brief names the files.
 

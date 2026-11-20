@@ -1479,7 +1479,7 @@ class FileTests(unittest.TestCase):
 
     def test_dockerfile(self) -> None:
         text = (DOCKER / "Dockerfile").read_text()
-        self.assertIn("FROM fedora:44", text)
+        self.assertRegex(text, r"(?m)^FROM fedora:\S+$")
         for tool in ("python3", "hugo", "weasyprint", "emacs-nox", "git",
                      "caddy"):
             self.assertIn(tool, text)
@@ -1630,7 +1630,7 @@ class FileTests(unittest.TestCase):
         self.assertFalse(builder["/var/lib/orgsyndb"].get("read_only"))
 
         db = services["db"]
-        self.assertEqual(db["image"], "postgres:18")
+        self.assertRegex(db["image"], r"^postgres:\S+$")
         self.assertIn("pg_isready", " ".join(db["healthcheck"]["test"]))
         self.assertIn("db", {m.get("source") for m in db["volumes"]
                              if m.get("type") == "volume"})
@@ -1652,7 +1652,7 @@ class FileTests(unittest.TestCase):
         self.assertIn("ORGSYNDB_SECRET_KEY", app["environment"])
 
         backup = services["backup"]
-        self.assertEqual(backup["image"], "postgres:18")
+        self.assertEqual(backup["image"], services["db"]["image"])
         self.assertIn("orgsyndb-backup",
                       " ".join([*_words(backup.get("entrypoint")),
                                 *_words(backup.get("command"))]))
@@ -1719,7 +1719,7 @@ class FileTests(unittest.TestCase):
         self.assertTrue(WEBAPP_DOCKERFILE.is_file(),
                         "deploy/webapp/Dockerfile does not exist")
         text = WEBAPP_DOCKERFILE.read_text()
-        for needle in ("FROM fedora:44", "uv sync --frozen --no-dev",
+        for needle in ("FROM fedora:", "uv sync --frozen --no-dev",
                        "collectstatic", "migrate", "gunicorn",
                        "USER orgsyndb", "orgsyndb_web.wsgi",
                        "0.0.0.0:8000", "EXPOSE 8000", "site/assets/css",

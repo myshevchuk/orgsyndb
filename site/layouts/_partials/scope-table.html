@@ -38,7 +38,7 @@ nothing. */ -}}
 <tr>
 <td class="num">{{ add $i 1 }}</td>
 <td>{{ range $j, $key := $entry.substrates }}{{ if $j }}, {{ end }}{{ partial "compound-link.html" $key }}{{ end }}</td>
-<td>{{ range $j, $product := $entry.products }}{{ if $j }}, {{ end }}<span class="scope-product">{{ with index site.Data.compounds $product.compound }}{{ with .structure_image }}<img class="scope-structure" src="/{{ . }}" alt="{{ T "structure_of" (partial "compound-name.html" $product.compound) }}" loading="lazy" decoding="async"> {{ end }}{{ end }}{{ partial "compound-link.html" $product.compound }}</span>{{ end }}</td>
+<td>{{ range $j, $product := $entry.products }}{{ if $j }}, {{ end }}<span class="scope-product">{{ with index hugo.Data.compounds $product.compound }}{{ with .structure_image }}<img class="scope-structure" src="/{{ . }}" alt="{{ T "structure_of" (partial "compound-name.html" $product.compound) }}" loading="lazy" decoding="async"> {{ end }}{{ end }}{{ partial "compound-link.html" $product.compound }}</span>{{ end }}</td>
 <td class="num">{{ range $j, $product := $entry.products }}{{ if $j }}, {{ end }}{{ partial "decimal.html" $product.yield_percent }} %{{ end }}</td>
 {{ range $columns -}}
 {{ $value := index $entry . -}}

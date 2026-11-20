@@ -24,7 +24,8 @@ from pathlib import Path
 
 import pipeline_support as ps
 import support
-from pipeline_support import (FIXTURES, Sandbox, front_matter, make_sandbox,
+from pipeline_support import (FIXTURES, PAGEFIND_VERSION, Sandbox,
+                              front_matter, make_sandbox,
                               scan_page, snapshot)
 
 BASELINE = FIXTURES / "baseline" / "OSDB-0100-baseline.md"
@@ -216,7 +217,7 @@ class SearchIndexTests(BuildTestCase):
             self.assertTrue(self.public("pagefind", name).is_file(), name)
         entry = json.loads(self.public("pagefind", "pagefind-entry.json")
                            .read_text(encoding="utf-8"))
-        self.assertEqual(entry["version"], "1.5.2")
+        self.assertEqual(entry["version"], PAGEFIND_VERSION)
         self.assertEqual(set(entry["languages"]), {LOCALE})
         self.assertEqual(entry["languages"][LOCALE]["page_count"],
                          len(self.content_files()))

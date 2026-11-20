@@ -10,7 +10,7 @@ Details block, row-details.html, which the screen stylesheet shows only in
 the Details view. The ID link is left out of the tab order, because the
 title links the same page. */ -}}
 {{ $keys := partialCached "term-keys.html" "term keys" -}}
-{{ $facetFields := where site.Data.collection.fields.procedure "facet" true -}}
+{{ $facetFields := where hugo.Data.collection.fields.procedure "facet" true -}}
 <div class="table-scroll" tabindex="0" role="region" aria-label="{{ T "table_procedures" }}">
 <table class="procedure-list">
 <thead>

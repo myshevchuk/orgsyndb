@@ -9,4 +9,4 @@ context. */ -}}
 {{- $keys.SetInMap "keys" $pages.Page.RelPermalink $key -}}
 {{- end -}}
 {{- end -}}
-{{- return $keys.Get "keys" | default dict -}}
+{{- return ($keys.Get "keys" | default dict) -}}

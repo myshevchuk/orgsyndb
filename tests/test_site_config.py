@@ -186,7 +186,7 @@ class DemoCollectionTests(unittest.TestCase):
 class IgnoreRuleTests(unittest.TestCase):
     IGNORED = ["examples/demo/build/export/x.md",
                "examples/demo/public/index.html", "examples/demo/pdf/x.pdf",
-               ".emacs-batch/elpa", ".tools/pagefind-1.5.2/pagefind"]
+               ".emacs-batch/elpa", ".tools/pagefind/pagefind"]
     TRACKED = ["examples/demo/org/procedures/OSDB-0001-salicylic-acid.org",
                "examples/demo/md/procedures/OSDB-0002-aspirin.md",
                "examples/demo/static/structures/aryl-ketone-reduction.svg",

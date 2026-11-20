@@ -1,0 +1,36 @@
+name: Program
+
+# The program's whole suite, on every pushed branch, so that a change
+# branch is checked before it is squash-merged into develop.
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    container: fedora:45
+    steps:
+      # git before checkout, so that checkout makes a real clone.
+      - run: >-
+          dnf install -y emacs-nox git python3 python3-pytest
+          python3-pytest-xdist hugo tar weasyprint poppler-utils nodejs
+          which util-linux
+      - uses: actions/checkout@v5
+      # Root ignores file permissions, which some tests rely on, so the
+      # suite runs as an unprivileged user. The demo build fills the
+      # ox-hugo and Pagefind caches the integration tests need.
+      - run: |
+          useradd --create-home tester
+          chown -R tester: "$GITHUB_WORKSPACE"
+          su tester -c "
+            set -e
+            cd '$GITHUB_WORKSPACE'
+            git config --global user.name tester
+            git config --global user.email tester@example.invalid
+            git config --global --add safe.directory '*'
+            tools/orgsyndb -C examples/demo build
+            python3 -m pytest -n auto"

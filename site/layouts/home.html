@@ -48,7 +48,7 @@ lab's substance list, and the published sequences among them. */ -}}
   (slice "/reaction_types/" (T "title_reaction_types") (len site.Taxonomies.reaction_types))
   (slice "/tags/" (T "title_tags") (len site.Taxonomies.tags))
   (slice "/authors/" (T "title_authors") (len site.Taxonomies.authors))
-  (slice "/lab/registry/" (T "home_substances") (len (site.Data.compounds | default dict)))
+  (slice "/lab/registry/" (T "home_substances") (len (hugo.Data.compounds | default dict)))
   (slice "/sequences/" (T "title_sequences") (len (where site.RegularPages "Section" "sequences"))) -}}
 <li><a href="{{ index . 0 }}">{{ index . 1 }}</a> <span class="count">({{ lang.FormatNumber 0 (index . 2) }})</span></li>
 {{ end -}}

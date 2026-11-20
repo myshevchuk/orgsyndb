@@ -14,7 +14,8 @@
 ;; which is left out of the exported body.  ox-hugo and tomelr are cloned with git into
 ;; <app>/.emacs-batch/elpa/ at pinned commits on first use, and every run
 ;; that exports checks the installed checkouts against the pins.  Needs
-;; Emacs 29.1 or later; package.el is not used.  Temporary files go to
+;; the oldest Emacs the package orgsyndb declares in its
+;; Package-Requires header, or a later one; package.el is not used.  Temporary files go to
 ;; tmp/ beside STAGING_DIR, the collection's build/tmp/.  Nothing is read
 ;; from or written to the user's own Emacs directories or the inherited
 ;; TMPDIR.  Exits 0 on success; on any other error it prints
@@ -36,9 +37,23 @@
 (defconst osdb-batch-dir (expand-file-name ".emacs-batch/" osdb-app)
   "The Emacs directory of the export, inside the application.")
 
-(when (version< emacs-version "29.1")
-  (message "export.el: error: Emacs 29.1 or later is required; this is \
-Emacs %s" emacs-version)
+(defconst osdb-emacs-oldest
+  (with-temp-buffer
+    (insert-file-contents (expand-file-name "emacs/orgsyndb.el" osdb-app))
+    (when (re-search-forward
+           "^;; Package-Requires: ((emacs \"\\([0-9.]+\\)\"))" nil t)
+      (match-string 1)))
+  "The oldest Emacs the package `orgsyndb' declares, which the export
+needs too, or nil when its header names none.")
+
+(unless osdb-emacs-oldest
+  (message "export.el: error: emacs/orgsyndb.el names no Emacs in its \
+Package-Requires header")
+  (kill-emacs 1))
+
+(when (version< emacs-version osdb-emacs-oldest)
+  (message "export.el: error: Emacs %s or later is required; this is \
+Emacs %s" osdb-emacs-oldest emacs-version)
   (kill-emacs 1))
 
 (unless (= (length command-line-args-left) 2)

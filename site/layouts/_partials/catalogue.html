@@ -38,7 +38,7 @@ data-text-* attributes of div.catalogue. */ -}}
 {{ $procedures := where site.RegularPages "Section" "procedures" -}}
 {{ $declared := dict -}}
 {{ $facetKeys := slice "type" "kind" "status" -}}
-{{ range $field := where site.Data.collection.fields.procedure "facet" true -}}
+{{ range $field := where hugo.Data.collection.fields.procedure "facet" true -}}
 {{ $carried := slice -}}
 {{ range $procedures }}{{ range partial "field-machine-values.html" (dict "field" $field "record" .Params) }}{{ $carried = $carried | append . }}{{ end }}{{ end -}}
 {{ $declared = merge $declared (dict $field.key (dict "field" $field "entries" (partial "field-facet-entries.html" (dict "field" $field "carried" $carried)))) -}}
