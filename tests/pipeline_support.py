@@ -789,35 +789,6 @@ def with_molfiles(table: dict[str, Any], *keys: str) -> dict[str, Any]:
     return copy
 
 
-# --- GitHub Actions workflows ---------------------------------------------
-
-def workflow_jobs(text: str) -> dict[str, str]:
-    """Split a workflow's ``jobs:`` mapping into each job's text."""
-    found: dict[str, str] = {}
-    name = None
-    inside = False
-    for line in text.splitlines():
-        if re.match(r"^\S", line):
-            inside = line.rstrip() == "jobs:"
-            name = None
-            continue
-        if not inside:
-            continue
-        key = re.match(r"^  ([\w-]+):\s*$", line)
-        if key:
-            name = key.group(1)
-            found[name] = ""
-        elif name is not None:
-            found[name] += line + "\n"
-    return found
-
-
-def workflow_key(text: str, key: str) -> str:
-    """Return the text of one top-level key, its own line included."""
-    match = re.search(rf"(?ms)^{re.escape(key)}:.*?(?=^\S|\Z)", text)
-    return match.group(0) if match else ""
-
-
 # --- a reduced PATH ----------------------------------------------------------
 
 class PathDir(NamedTuple):
