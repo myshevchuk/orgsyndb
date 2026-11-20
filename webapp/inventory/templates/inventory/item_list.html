@@ -1,4 +1,4 @@
-{% extends "orgsyndb_web/base.html" %}{% load i18n lab inventory %}
+{% extends "orgsyndb_web/base.html" %}{% load i18n l10n lab inventory %}
 {% block title %}{% translate "End products" %}{% endblock %}
 {% block main %}
 <div class="lab-heading">
@@ -64,6 +64,7 @@
 <div class="table-caption">
 <p class="list-summary">{% blocktranslate with shown=rows|length count total=total %}{{ shown }} of {{ total }} item{% plural %}{{ shown }} of {{ total }} items{% endblocktranslate %} · {{ order }}{% if filters.active %} · <a href="{{ reset }}">{% translate "Reset" %}</a>{% endif %}</p>
 <div class="lab-view-controls">
+<p class="detail-switch"><label><input type="checkbox" id="detail-switch" data-remember="item-list:detail"{% if detail_on %} checked{% endif %}> {% translate "Details" %}</label></p>
 <label>{% translate "Row height" %}
 <select id="row-height" data-remember="item-list:row-height">
 <option value="compact" selected>{% translate "Compact" %}</option>
@@ -72,22 +73,22 @@
 <p class="heat-legend"><label><input type="checkbox" id="heat-switch" data-remember="item-list:heat" checked> {% translate "Colour consumption" %}</label> <span class="heat-scale">{% translate "little" context "consumption" %}{% for name in heats %} <span class="heat-swatch {{ name }}" aria-hidden="true"></span>{% endfor %} {% translate "much" context "consumption" %}</span></p>
 </div>
 </div>
+<div class="item-layout">
 <div class="table-scroll table-sticky">
 <table class="inventory-table item-table">
 <thead>
-<tr>{% for column in columns %}<th scope="col" class="col-{{ column.key }}{% if column.numeric %} number{% endif %}"{% if column.aria_sort %} aria-sort="{{ column.aria_sort }}"{% endif %}>{% if column.href %}<a href="{{ column.href }}">{{ column.label }}</a>{% else %}{{ column.label }}{% endif %}{% if column.unit %}<small>{{ column.unit }}</small>{% endif %}</th>{% endfor %}</tr>
+<tr>{% for column in columns %}<th scope="col" class="col-{{ column.key }}{% if column.numeric %} number{% endif %}"{% if column.aria_sort %} aria-sort="{{ column.aria_sort }}"{% endif %}><a href="{{ column.href }}">{{ column.label }}</a>{% if column.unit %}<small>{{ column.unit }}</small>{% endif %}</th>{% endfor %}</tr>
 </thead>
-<tbody>
-{% for row in rows %}{% with item=row.item figures=row.figures %}<tr{% if row.category_start %} class="category-start"{% endif %}>
+<tbody hx-target="#item-detail" hx-swap="outerHTML" hx-sync="this:replace" hx-indicator="#item-detail">
+{% for row in rows %}{% with item=row.item figures=row.figures %}<tr data-item="{{ item.pk }}" hx-get="/lab/inventory/items/{{ item.pk }}/detail/" hx-trigger="item-select"{% if row is chosen %} aria-current="true"{% endif %}{% if row.category_start %} class="category-start"{% endif %}>
 <td class="col-number">{% if item.article_number %}{% if user.is_authenticated %}<input type="checkbox" name="item" value="{{ item.pk }}" form="pick" aria-label="{% blocktranslate %}Select {{ item }}{% endblocktranslate %}"> {% endif %}<a href="/lab/inventory/items/{{ item.pk }}/">{{ item.article_number }}</a>{% endif %}</td>
 <td class="col-name">{% if not item.article_number %}<a href="/lab/inventory/items/{{ item.pk }}/">{{ item.name }}</a>{% else %}{% substance item.substance %}{% endif %}{% if item|new_on:today %}<sup class="mark-new">{% translate "new" context "item" %}</sup>{% endif %}</td>
 <td class="col-category">{{ item.category }}</td>
 <td class="col-container number">{{ item.container }}</td>
 <td class="col-stock number stock level-{{ figures.level }}" title="{{ figures.level|level_label }}">{{ item.quantity }}<span class="visually-hidden"> {{ figures.level|level_label }}</span></td>
 <td class="col-mean_year number{% if row.heat_mean %} {{ row.heat_mean }}{% endif %}{% if figures.projected %} projected" title="{% translate "projected from the current year" %}{% endif %}">{% if figures.mean_year is not None %}{{ figures.mean_year|floatformat:1 }}{% endif %}</td>
-<td class="col-this_year number{% if row.heat_year %} {{ row.heat_year }}{% endif %}"><button type="button" class="stat-button" popovertarget="stats-{{ item.pk }}" aria-label="{% blocktranslate %}Delivery statistics of {{ item }}{% endblocktranslate %}">{{ figures.this_year }}</button>{% include "inventory/statistics_popup.html" %}</td>
+<td class="col-this_year number{% if row.heat_year %} {{ row.heat_year }}{% endif %}">{{ figures.this_year }}</td>
 <td class="col-coverage number{% if figures.projected and figures.coverage is not None %} projected" title="{% translate "projected from the current year" %}{% endif %}">{% if figures.coverage is not None %}{{ figures.coverage|floatformat:1 }}{% endif %}</td>
-<td class="col-location"><button type="button" class="location-button" popovertarget="where-{{ item.pk }}" aria-label="{% blocktranslate %}Location of {{ item }}{% endblocktranslate %}"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M18 10c0 5-6 10-6 10S6 15 6 10a6 6 0 1 1 12 0Z"/><circle cx="12" cy="10" r="2"/></svg>{% translate "Location" %}</button>{% include "inventory/location_popup.html" %}</td>
 <td class="col-compartment">{{ item.compartment }}</td>
 <td class="col-box">{{ item.box }}</td>
 <td class="col-bulk">{% include "inventory/bulk.html" with bulk=row.bulk %}</td>
@@ -96,5 +97,51 @@
 {% endwith %}{% endfor %}</tbody>
 </table>
 </div>
-<p class="lab-table-note">{% blocktranslate trimmed %}<strong>Stock:</strong> colours and meanings in the filter “Stock status”. <strong>Location</strong> opens compartment, box and bulk. <strong>Delivered</strong> opens statistics by year and quarter.{% endblocktranslate %}</p>
+{% partialdef detail inline %}{% if chosen %}{% with item=chosen.item figures=chosen.figures statistics=chosen.statistics bulk=chosen.bulk %}{% translate "not recorded" as missing %}<aside id="item-detail" class="item-detail" data-item="{{ item.pk }}" aria-labelledby="item-detail-title">
+<header class="detail-head">
+<h2 id="item-detail-title">{% if item.article_number %}{% substance item.substance %}{% else %}<a href="/lab/inventory/items/{{ item.pk }}/">{{ item.name }}</a>{% endif %}{% if item|new_on:today %}<sup class="mark-new">{% translate "new" context "item" %}</sup>{% endif %}</h2>
+<p>{% if item.article_number %}{{ item.article_number }} · {% endif %}{{ item.container }}{% if item.category %} · {{ item.category }}{% endif %}{% if item.status != "active" %} · {{ item.get_status_display }}{% endif %}</p>
+</header>
+<dl class="detail-figures">
+<div><dt>{% translate "Stock" %}</dt><dd><span class="stock level-{{ figures.level }}">{{ item.quantity }} <span class="level-label">{{ figures.level|level_label }}</span></span></dd></div>
+<div><dt>{% translate "Coverage" %}</dt><dd{% if figures.projected and figures.coverage is not None %} class="projected" title="{% translate "projected from the current year" %}"{% endif %}>{% if figures.coverage is not None %}{% blocktranslate with coverage=figures.coverage|floatformat:1 %}{{ coverage }} quarters{% endblocktranslate %}{% else %}–{% endif %}</dd></div>
+</dl>
+<p class="detail-links"><a href="/lab/inventory/items/{{ item.pk }}/">{% translate "Open item page" %}</a></p>
+{% if user.is_authenticated %}<p class="lab-actions">
+{% include "inventory/item_actions.html" %}</p>
+{% endif %}<h3>{% translate "Finished containers" %}</h3>
+<dl class="detail-location"><dt>{% translate "Compartment" %}</dt><dd>{{ item.compartment|default:missing }}</dd><dt>{% translate "Box" %}</dt><dd>{{ item.box|default:missing }}</dd></dl>
+{% if bulk.lots %}<h3>{% translate "Bulk, stored separately" %}</h3>
+<ul class="detail-lots">
+{% for lot in bulk.lots %}<li><strong>{{ lot.location|default:missing }}</strong> <a href="/lab/inventory/bulk/{{ lot.pk }}/">{% translate "Batch" %} {{ lot.batch|default:lot.pk }}</a> · {{ lot.amount|in_lot_unit:lot }}</li>
+{% endfor %}</ul>
+{% endif %}<h3>{% translate "Consumption" %}</h3>
+<dl class="detail-figures">
+<div><dt>{% blocktranslate with year=statistics.year|unlocalize day=today|date:"MONTH_DAY_FORMAT" %}{{ year }} to {{ day }}{% endblocktranslate %}</dt><dd>{{ figures.this_year }}</dd></div>
+<div><dt>{% translate "Mean per year" %}</dt><dd{% if figures.projected %} class="projected" title="{% translate "projected from the current year" %}"{% endif %}>{% if figures.mean_year is not None %}{{ figures.mean_year|floatformat:1 }}{% else %}–{% endif %}</dd></div>
+<div><dt>{% translate "Mean per quarter" %}</dt><dd{% if figures.projected %} class="projected" title="{% translate "projected from the current year" %}"{% endif %}>{% if figures.mean_quarter is not None %}{{ figures.mean_quarter|floatformat:1 }}{% else %}–{% endif %}</dd></div>
+</dl>
+<h4>{% blocktranslate with year=statistics.year|unlocalize %}Quarters of {{ year }}{% endblocktranslate %}</h4>
+<ol class="quarter-bars">
+{% for bar in statistics.bars %}<li class="quarter-bar{% if bar.current %} current{% endif %}">{% if bar.value is not None %}<span class="bar-value">{{ bar.value }}</span><span class="bar" style="height: {{ bar.share|unlocalize }}%"></span>{% endif %}<span class="bar-label">Q{{ bar.quarter }}{% if bar.current %} {% translate "running" context "quarter" %}{% endif %}</span></li>
+{% endfor %}</ol>
+<table class="detail-table">
+<thead>
+<tr><th scope="col">{% translate "Year" %}</th>{% for bar in statistics.bars %}<th scope="col" class="number">Q{{ bar.quarter }}</th>{% endfor %}<th scope="col" class="number">{% translate "Total" %}</th></tr>
+</thead>
+<tbody>
+{% for year in statistics.years %}<tr><th scope="row">{{ year.year|unlocalize }}</th>{% for value in year.quarters %}<td class="number">{% if value is not None %}{{ value }}{% endif %}</td>{% endfor %}<td class="number"><strong>{{ year.total }}</strong></td></tr>
+{% endfor %}</tbody>
+</table>
+{% if statistics.entered_years %}<p class="detail-note entered-years">{% blocktranslate with years=statistics.entered_years|join:", " %}Entered consumption in {{ years }}.{% endblocktranslate %}</p>
+{% endif %}<p class="detail-note">{% blocktranslate with year=statistics.year|unlocalize %}{{ year }} is not over; its total is not a whole year's.{% endblocktranslate %}</p>
+{% if item.note %}<h3>{% translate "Note" context "inventory" %}</h3>
+<div class="lab-note">{{ item.note|linebreaks }}</div>
+{% endif %}</aside>
+{% endwith %}{% else %}<aside id="item-detail" class="item-detail">
+<p class="lab-empty">{% translate "No item is chosen." %}</p>
+</aside>
+{% endif %}{% endpartialdef %}
+</div>
+<p class="lab-table-note">{% blocktranslate trimmed %}<strong>Stock:</strong> colours and meanings in the filter “Stock status”. <strong>Details</strong> shows the chosen item's compartment, box, bulk and consumption beside the table.{% endblocktranslate %}</p>
 {% endblock %}

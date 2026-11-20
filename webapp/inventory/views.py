@@ -24,6 +24,7 @@ from django.utils.translation import gettext as _
 from django.utils.translation import pgettext
 from django.utils.translation import gettext_lazy
 from django.views.decorators.http import require_POST
+from django.views.decorators.vary import vary_on_headers
 
 from inventory import bookings
 from inventory.bookings import Refused
@@ -59,7 +60,7 @@ def tabs(current: str) -> list[dict[str, Any]]:
 @dataclass(frozen=True)
 class Row:
     """An item of the item list with its consumption, its bulk and the
-    figures of its statistics popup.
+    statistics of its details.
     HEAT_MEAN and HEAT_YEAR are the classes of the heat of its mean per
     year and of its current year's consumption, empty without one;
     CATEGORY_START tells whether it is the first row of its category
@@ -133,7 +134,7 @@ TIES = ("number", "container")
 # cannot hide; and those hidden until the user shows them.
 NUMERIC = ("container", "stock", "mean_year", "this_year", "coverage")
 FIXED_COLUMNS = ("number", "name", "stock")
-HIDDEN_COLUMNS = ("compartment", "box", "note")
+HIDDEN_COLUMNS = ("note",)
 
 
 @dataclass(frozen=True)
@@ -210,9 +211,8 @@ class ItemFilters:
 
 @dataclass(frozen=True)
 class Column:
-    """A column of the item list: its sort KEY, or ``location``, its
-    LABEL, the UNIT shown beneath it, the HREF its header links to,
-    empty for a column that does not sort, and ARIA_SORT,
+    """A column of the item list: its sort KEY, its LABEL, the UNIT shown
+    beneath it, the HREF its header links to, and ARIA_SORT,
     ``ascending`` or ``descending`` for the column in force, else
     empty."""
 
@@ -240,23 +240,21 @@ def column_labels(year: int) -> list[tuple[str, str, str]]:
         ("this_year", pgettext("item list", "Delivered"),
          _("%(year)s · containers") % {"year": year}),
         ("coverage", _("Coverage"), _("quarters")),
-        ("location", pgettext("item", "Location"), ""),
         ("compartment", _("Compartment"), ""), ("box", _("Box"), ""),
         ("bulk", _("Bulk available"), ""),
         ("note", pgettext("inventory", "Note"), "")]
 
 
 def columns(filters: ItemFilters, year: int) -> list[Column]:
-    """The columns of the list FILTERS shows in YEAR, each header but
-    the location's linking to the list sorted by it, reversed when it
-    is in force and not reversed."""
+    """The columns of the list FILTERS shows in YEAR, each header
+    linking to the list sorted by it, reversed when it is in force and
+    not reversed."""
     found = []
     for key, label, unit in column_labels(year):
         current = key == filters.sort
         found.append(Column(
             key=key, label=label, unit=unit,
-            href="" if key not in SORTS
-            else filters.link(key, current and not filters.descending),
+            href=filters.link(key, current and not filters.descending),
             aria_sort=("descending" if filters.descending else "ascending")
             if current else ""))
     return found
@@ -356,20 +354,36 @@ def stock_menu(rows: list[Row], filters: ItemFilters) -> list[StockEntry]:
                     counts[level]) for level in Level)]
 
 
+def row_of(item: Item, today: date, lots: list[Lot]) -> Row:
+    """The row of ITEM as of TODAY, with its bulk among LOTS, the open
+    lots, and without heats."""
+    figures = consumption(item, today)
+    return Row(item=item, figures=figures, bulk=bulk(item, lots),
+               statistics=statistics(figures, today))
+
+
+def chosen_row(rows: list[Row], detail: str) -> Row | None:
+    """The row of ROWS whose item's id is the number DETAIL, else the
+    first row, else None for no rows. A DETAIL that is not a whole
+    number, or names no item of ROWS, chooses the first row."""
+    for row in rows:
+        if str(row.item.pk) == detail:
+            return row
+    return rows[0] if rows else None
+
+
 def item_list(request: HttpRequest) -> HttpResponse:
     """List the items the query's filters select, with their figures,
-    heats, bulk and statistics, in the order the query names."""
+    heats and bulk, in the order the query names, and beside them the
+    details of the item ``detail`` names among those listed, else of the
+    first one listed. The switch of the details is on when the query
+    holds ``detail``."""
     today = timezone.localdate()
     filters = ItemFilters.from_query(request.GET)
     items = sorted(Item.objects.select_related("article__substance"),
                    key=Item.sort_key)
     lots = list(Lot.objects.filter(amount__gt=0).order_by("made_on", "id"))
-    rows = []
-    for item in items:
-        figures = consumption(item, today)
-        rows.append(Row(item=item, figures=figures, bulk=bulk(item, lots),
-                        statistics=statistics(figures, today)))
-    rows = heated(rows)
+    rows = heated([row_of(item, today, lots) for item in items])
     shown = filters.ordered([row for row in rows if filters.admits(row)])
     if filters.sort == "category":
         shown = by_category(shown)
@@ -377,8 +391,11 @@ def item_list(request: HttpRequest) -> HttpResponse:
                   sorted(items, key=Item.container_order)}
     menu = stock_menu(rows, filters)
     shown_columns = columns(filters, today.year)
+    chosen = chosen_row(shown, request.GET.get("detail", ""))
     return render(request, "inventory/item_list.html", {
         "rows": shown,
+        "chosen": chosen,
+        "detail_on": "detail" in request.GET,
         "total": len(rows),
         "filters": filters,
         "columns": shown_columns,
@@ -398,6 +415,26 @@ def item_list(request: HttpRequest) -> HttpResponse:
         "heats": [f"heat-{n}" for n in range(1, 6)],
         "today": today,
         "tabs": tabs(LIST),
+    })
+
+
+@vary_on_headers("HX-Request")
+def item_detail(request: HttpRequest, pk: int) -> HttpResponse:
+    """Answer an htmx request (``HX-Request: true``) with the details of
+    the item PK alone, as the item list shows them beside its table,
+    and any other request with a redirect to the list with ``detail``
+    naming the item. Answer 404 for an unknown ID. The answer varies
+    with the ``HX-Request`` header."""
+    item = get_object_or_404(Item.objects.select_related(
+        "article__substance"), pk=pk)
+    if request.headers.get("HX-Request") != "true":
+        return redirect(f"{LIST}?{urlencode({'detail': item.pk})}")
+    today = timezone.localdate()
+    lots = list(Lot.objects.filter(substance_id=item.article_id,
+                                   amount__gt=0).order_by("made_on", "id"))
+    return render(request, "inventory/item_list.html#detail", {
+        "chosen": row_of(item, today, lots),
+        "today": today,
     })
 
 

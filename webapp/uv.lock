@@ -409,7 +409,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "django", specifier = ">=5.2,<6.1" },
+    { name = "django", specifier = ">=6.0,<6.1" },
     { name = "django-oauth-toolkit", specifier = ">=3.4" },
     { name = "django-simple-history", specifier = ">=3.8" },
     { name = "gunicorn", specifier = ">=23" },

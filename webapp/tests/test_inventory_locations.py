@@ -120,7 +120,8 @@ class ListTests(InventoryCase):
         kept(self.item("A-1"), "2", "7")
         kept(self.item("A-2"), "10", "7")
         header, rows = table(page(self.client.get(LIST)))
-        self.assertEqual(header[8:11], ["Lagerort", "Fach", "Box"])
+        self.assertEqual(header[8:10], ["Fach", "Box"])
+        self.assertNotIn("Lagerort", header)
         self.assertEqual([(row["Fach"].text(), row["Box"].text())
                           for row in rows], [("2", "7"), ("10", "7")])
         for query, wanted in (("?compartment=2", ["A-1"]),

@@ -1,5 +1,6 @@
-"""The rows of the item list's statistics popup: an item's consumption by
-quarter in the current year and the two years before it."""
+"""The consumption rows of the item list's details: an item's
+consumption by quarter in the current year and the two years before
+it."""
 
 from dataclasses import dataclass
 from datetime import date
@@ -10,7 +11,7 @@ from inventory.figures import Consumption, quarter_of
 
 @dataclass(frozen=True)
 class YearRow:
-    """A year of the popup's table: the consumption of each of its
+    """A year of the details' table: the consumption of each of its
     QUARTERS, None for a quarter still to come, and their TOTAL."""
 
     year: int
@@ -32,9 +33,9 @@ class QuarterBar:
 
 @dataclass(frozen=True)
 class Statistics:
-    """The popup's figures: the current YEAR, a row for each of the
-    YEARS shown, oldest first, the current year's BARS, and the
-    ENTERED_YEARS among those shown that hold an entered value above
+    """The details' consumption figures: the current YEAR, a row for
+    each of the YEARS shown, oldest first, the current year's BARS, and
+    the ENTERED_YEARS among those shown that hold an entered value above
     zero."""
 
     year: int
@@ -44,9 +45,10 @@ class Statistics:
 
 
 def statistics(figures: Consumption, today: date) -> Statistics:
-    """Return the popup's figures for the consumption FIGURES as of
-    TODAY: the two years before TODAY's and TODAY's own, the quarters
-    after TODAY's empty, and bars whose shares round half up."""
+    """Return the details' consumption figures for the consumption
+    FIGURES as of TODAY: the two years before TODAY's and TODAY's own,
+    the quarters after TODAY's empty, and bars whose shares round half
+    up."""
     year, current = quarter_of(today)
     years = []
     for shown in (year - 2, year - 1, year):

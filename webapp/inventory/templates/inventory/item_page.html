@@ -3,13 +3,7 @@
 {% block main %}
 <h1>{% if item.article_number %}{{ item.article_number }} · {% endif %}{{ item.name }}{% if item|new_on:today %}<sup class="mark-new">{% translate "new" context "item" %}</sup>{% endif %}</h1>
 {% if user.is_authenticated %}<div class="lab-actions">
-{% if item.article_number %}<a href="/lab/inventory/deliveries/new/?item={{ item.pk }}">{% translate "Book delivery" %}</a>
-{% else %}<a href="/lab/inventory/items/{{ item.pk }}/edit/">{% translate "Enter article number" %}</a>
-{% endif %}<a href="/lab/inventory/items/{{ item.pk }}/fill/">{% translate "Fill" %}</a>
-<a href="/lab/inventory/items/{{ item.pk }}/correct/">{% translate "Correct count" %}</a>
-{% if item.article_number %}<a href="/lab/inventory/items/{{ item.pk }}/consumption/">{% translate "Enter consumption" %}</a>
-{% endif %}<a href="/lab/inventory/items/{{ item.pk }}/edit/">{% translate "Edit" %}</a>
-</div>
+{% include "inventory/item_actions.html" %}</div>
 {% endif %}<dl class="metadata">
 <dt>{% translate "Substance" %}</dt>
 <dd>{% substance item.substance %}</dd>

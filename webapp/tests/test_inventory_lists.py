@@ -15,11 +15,11 @@ from .inventory_support import (BULK, COMPOUND_PAGE, DELIVERIES, LEVELS, LIST,
                                 num)
 
 COLUMNS_DE = ["Artikelnr.", "Name", "Kategorie", "Gebinde", "Bestand",
-              "Ø Jahr", "Abgegeben", "Reichweite", "Lagerort", "Fach", "Box",
+              "Ø Jahr", "Abgegeben", "Reichweite", "Fach", "Box",
               "Bulk verfügbar", "Bemerkung"]
 COLUMNS_EN = ["Article no.", "Name", "Category", "Container", "Stock",
-              "Mean per year", "Delivered", "Coverage", "Location",
-              "Compartment", "Box", "Bulk available", "Note"]
+              "Mean per year", "Delivered", "Coverage", "Compartment",
+              "Box", "Bulk available", "Note"]
 BULK_DE = ["Name", "Artikelnr.", "Herkunft", "Charge", "Menge", "Ort",
            "Datum", "Bemerkung"]
 BULK_EN = ["Name", "Article no.", "Source", "Batch", "Amount", "Location",

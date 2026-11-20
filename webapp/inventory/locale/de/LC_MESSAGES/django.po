@@ -624,10 +624,6 @@ msgctxt "item list"
 msgid "Delivered"
 msgstr "Abgegeben"
 
-msgctxt "item"
-msgid "Location"
-msgstr "Lagerort"
-
 msgid "Bulk available"
 msgstr "Bulk verfügbar"
 
@@ -675,23 +671,17 @@ msgstr "Sehr kompakt"
 msgid "Colour consumption"
 msgstr "Verbrauch einfärben"
 
-msgid "Delivery statistics of %(item)s"
-msgstr "Abgabenstatistik von %(item)s"
-
-msgid "Location of %(item)s"
-msgstr "Lagerort von %(item)s"
+msgid "Details"
+msgstr "Details"
 
 msgid ""
 "<strong>Stock:</strong> colours and meanings in the filter “Stock status”. "
-"<strong>Location</strong> opens compartment, box and bulk. "
-"<strong>Delivered</strong> opens statistics by year and quarter."
+"<strong>Details</strong> shows the chosen item's compartment, box, bulk and "
+"consumption beside the table."
 msgstr ""
 "<strong>Bestand:</strong> Farben und Bedeutungen im Filter "
-"„Bestandsstatus“. <strong>Ort</strong> öffnet Fach, Box und Bulk. "
-"<strong>Abgegeben</strong> öffnet Jahres- und Quartalsstatistik."
-
-msgid "Close"
-msgstr "Schließen"
+"„Bestandsstatus“. <strong>Details</strong> zeigt Fach, Box, Bulk und "
+"Verbrauch des gewählten Artikels neben der Tabelle."
 
 msgid "not recorded"
 msgstr "nicht hinterlegt"
@@ -699,14 +689,14 @@ msgstr "nicht hinterlegt"
 msgid "Finished containers"
 msgstr "Fertige Gebinde"
 
-msgid "No location is recorded for the finished containers."
-msgstr "Für die fertigen Gebinde ist kein Lagerort eingetragen."
-
 msgid "Bulk, stored separately"
 msgstr "Bulk, separat gelagert"
 
-msgid "Open item and location"
-msgstr "Artikel und Lagerort öffnen"
+msgid "Open item page"
+msgstr "Artikelseite öffnen"
+
+msgid "No item is chosen."
+msgstr "Kein Artikel gewählt."
 
 msgid "%(year)s to %(day)s"
 msgstr "%(year)s bis %(day)s"
@@ -723,9 +713,6 @@ msgstr "Nachgetragener Verbrauch in %(years)s."
 
 msgid "%(year)s is not over; its total is not a whole year's."
 msgstr "%(year)s ist unvollständig; die Summe ist kein ganzes Jahr."
-
-msgid "Open all quarters and movements"
-msgstr "Alle Quartale und Buchungen öffnen"
 
 msgid "article"
 msgstr "Artikel"

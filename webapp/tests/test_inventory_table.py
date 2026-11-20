@@ -1,10 +1,10 @@
 """Tests of the item list's table: its columns and order, the filters
-above it, the stock menu, the popups, the view controls, the
-consumption heat and the box that keeps the headers in view
-(end-product-inventory: Item list, Consumption heat)."""
+above it, the stock menu, the view controls, the consumption heat, the
+box that keeps the headers in view and the stylesheet's rules for the
+details beside the table (end-product-inventory: Item list,
+Consumption heat)."""
 
 import re
-from datetime import date
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlsplit
 
@@ -12,25 +12,25 @@ from django.test import SimpleTestCase
 
 from inventory.models import Item
 
-from . import berlin, field_value, make_substance, page, table, ticking
+from . import field_value, make_substance, page, table
 from .collection_support import accept
-from .inventory_support import LIST, InventoryCase, fresh, item_url, lot_url
+from .inventory_support import LIST, InventoryCase, fresh
 from .test_inventory_colours import (CSS, MINIMUM, balanced, contrast,
                                      split_schemes)
 
 SORTS = ("number", "name", "category", "container", "stock", "mean_year",
          "this_year", "coverage", "compartment", "box", "bulk", "note")
 COLUMNS = ["Artikelnr.", "Name", "Kategorie", "Gebinde", "Bestand",
-           "Ø Jahr", "Abgegeben", "Reichweite", "Lagerort", "Fach", "Box",
+           "Ø Jahr", "Abgegeben", "Reichweite", "Fach", "Box",
            "Bulk verfügbar", "Bemerkung"]
 KEYS = ["number", "name", "category", "container", "stock", "mean_year",
-        "this_year", "coverage", "location", "compartment", "box", "bulk",
-        "note"]
-SORTED_COLUMNS = {key: column for key, column in zip(KEYS, COLUMNS)
-                  if key != "location"}
+        "this_year", "coverage", "compartment", "box", "bulk", "note"]
+SORTED_COLUMNS = dict(zip(KEYS, COLUMNS))
 # The columns the view controls may hide, and those hidden at first.
 OPTIONAL = [key for key in KEYS if key not in ("number", "name", "stock")]
-HIDDEN = {"compartment", "box", "note"}
+HIDDEN = {"note"}
+# The columns that stay while the details show.
+DETAILED = ["number", "name", "container", "stock", "coverage"]
 LEVEL_VALUES = ["out", "critical", "low", "watch", "ok", "undelivered",
                 "dormant"]
 LEVEL_LABELS = ["aufgebraucht", "kritisch", "niedrig", "beobachten",
@@ -57,28 +57,12 @@ def heat_of(cell) -> str | None:
     return found[0] if found else None
 
 
-def outside_popups(element) -> str:
-    """The text of ELEMENT without that of the popups inside it."""
-    return element.text(lambda node: "popover" in node.attrs)
-
-
 def body_rows(root) -> list:
     """The rows of the body of the page's first table, without those of
     the tables inside its cells."""
     grid = root.find("table")
     return [tr for tr in grid.find("tbody").find_all("tr")
             if tr.closest("table") is grid]
-
-
-def popup_of(root, button):
-    """The popup BUTTON opens, which must lie in the button's cell."""
-    target = button.get("popovertarget")
-    assert target, "the button opens no popup"
-    found = root.find(id=target)
-    assert found is not None, target
-    assert "popover" in found.attrs, target
-    assert found.closest("td") is button.closest("td"), target
-    return found
 
 
 class TableCase(InventoryCase):
@@ -137,8 +121,7 @@ class ColumnTests(TableCase):
         header, _ = table(root)
         self.assertEqual(header, [
             "Article no.", "Name", "Category", "Container", "Stock",
-            "Mean per year", "Delivered", "Coverage", "Location",
-            "Compartment", "Box", "Bulk available", "Note"])
+            "Mean per year", "Delivered", "Coverage", "Compartment", "Box", "Bulk available", "Note"])
         units = [th.find("small").text()
                  for th in self.headers(root).values() if th.find("small")]
         self.assertEqual(units, ["containers", "containers / year",
@@ -173,10 +156,14 @@ class SortTests(TableCase):
         self.item("A-1", category="Säuren")
         self.item("A-3", category="Ester")
         self.item("A-4")
+        self.assertEqual(self.articles(), ["A-2", "A-3", "A-1", "A-4"])
+
+    def test_the_category_order_marks_its_starts(self) -> None:
+        self.item("A-2", category="Ester")
+        self.item("A-1", category="Säuren")
+        self.item("A-3", category="Ester")
+        self.item("A-4")
         root = self.listing()
-        header, rows = table(root)
-        self.assertEqual([row[header[0]].text() for row in rows],
-                         ["A-2", "A-3", "A-1", "A-4"])
         body = body_rows(root)
         self.assertEqual(["category-start" in tr.classes for tr in body],
                          [False, False, True, True])
@@ -210,7 +197,6 @@ class SortTests(TableCase):
         self.assertEqual(self.keys("?sort=number"), self.keys())
 
     def test_sorting_by_a_column(self) -> None:
-        """Scenario: Sorting by a column."""
         self.item("A-1", category="Säuren")
         self.item("A-2")
         self.item("A-3", category="Ester")
@@ -228,7 +214,6 @@ class SortTests(TableCase):
                          {"sort": ["category"], "dir": ["desc"]})
         self.assertEqual(self.header_link(root, "Artikelnr."),
                          {"sort": ["number"]})
-        self.assertIsNone(headers["Lagerort"].find("a"))
         self.assertEqual([name for name, th in headers.items()
                           if th.get("aria-sort") is not None],
                          ["Kategorie"])
@@ -260,7 +245,6 @@ class SortTests(TableCase):
                          "ascending")
 
     def test_containers_and_locations_in_their_order(self) -> None:
-        """Scenario: Containers and locations in their order."""
         kept(self.item("C-1", size="1", unit="g"), "10")
         kept(self.item("C-2", size="100", unit="mg"), "2")
         kept(self.item("C-3", size="10", unit="umol"), "")
@@ -395,8 +379,8 @@ class SortTests(TableCase):
 
 class FilterTests(TableCase):
 
-    def test_filters_above_the_table(self) -> None:
-        """Scenario: Filters above the table."""
+    def test_filters(self) -> None:
+        """Scenario: Filters."""
         self.item("CH-0012", "(E)-Zimtsäure", "100", "mg",
                   category="Säuren", note="Kühlschrank")
         self.item("CH-0010", "Aspirin", "1", "g", category="Säuren")
@@ -414,6 +398,11 @@ class FilterTests(TableCase):
                 self.assertEqual([row[header[0]].text() for row in rows],
                                  wanted)
                 self.assertEqual(field_value(root, name), value)
+
+    def test_the_filters_keep_the_order_and_reset_to_it(self) -> None:
+        self.item("CH-0012", "(E)-Zimtsäure", "100", "mg")
+        self.item("CH-0016", "Isopentylacetat", "100", "mg")
+        self.item("CH-0010", "Aspirin", "1", "g")
         root = self.listing(f"?container={quote('100 mg')}"
                             "&sort=name&dir=desc")
         header, rows = table(root)
@@ -470,6 +459,9 @@ class FilterTests(TableCase):
         """Scenario: Locations."""
         kept(self.item("L-1"), "2", "7")
         kept(self.item("L-2"), "10", "7")
+        header, rows = table(self.listing())
+        self.assertEqual([(row["Fach"].text(), row["Box"].text())
+                          for row in rows], [("2", "7"), ("10", "7")])
         for query, wanted in (("?compartment=2", ["L-1"]),
                               ("?box=7", ["L-1", "L-2"])):
             with self.subTest(query=query):
@@ -477,10 +469,6 @@ class FilterTests(TableCase):
                 header, rows = table(root)
                 self.assertEqual([row[header[0]].text() for row in rows],
                                  wanted)
-                for row in rows:
-                    shown = popup_of(root, row["Lagerort"].find("button"))
-                    self.assertIn(row["Fach"].text(), shown.text())
-                    self.assertIn("7", shown.text())
                 self.assertEqual(root.find("button", attrs={
                     "popovertarget": "more-filters"}).text(),
                     "Weitere Filter (1)")
@@ -569,8 +557,18 @@ class StockMenuTests(TableCase):
                           link.get("href")))
         return found
 
-    def test_stock_menu_with_counts(self) -> None:
-        """Scenario: Stock menu with counts."""
+    def counts(self, popup) -> dict[str, tuple[str, str]]:
+        """The count and the link of each level the menu offers."""
+        found = {}
+        for link in popup.find_all("a"):
+            for level in LEVEL_VALUES:
+                if link.find(cls=f"level-{level}") is not None:
+                    found[level] = (link.find("span", "count").text(),
+                                    link.get("href"))
+        return found
+
+    def test_levels_with_their_counts(self) -> None:
+        """Scenario: Levels with their counts."""
         self.with_mean_quarter(self.item("O-1", quantity=20,
                                          category="A"), 1)
         self.with_mean_quarter(self.item("O-2", quantity=20,
@@ -579,29 +577,42 @@ class StockMenuTests(TableCase):
                                          category="A"), 4)
         dormant = self.with_mean_quarter(self.item("D-1", category="B"), 1)
         Item.objects.filter(pk=dormant.pk).update(status="discontinued")
+        _, popup = self.menu(self.listing("?category=A"))
+        found = self.counts(popup)
+        self.assertEqual(sorted(found), sorted(LEVEL_VALUES))
+        self.assertEqual({level: count for level, (count, _)
+                          in found.items()},
+                         {"out": "0", "critical": "0", "low": "1",
+                          "watch": "0", "ok": "2", "undelivered": "0",
+                          "dormant": "0"})
+        link = query_of(found["low"][1])
+        self.assertEqual((link["category"], link["stock"]),
+                         (["A"], ["low"]))
+
+    def test_the_menu_counts_all_items_the_filters_admit(self) -> None:
+        self.with_mean_quarter(self.item("O-1", quantity=20,
+                                         category="A"), 1)
+        self.with_mean_quarter(self.item("L-1", quantity=3,
+                                         category="A"), 4)
+        self.item("D-1", category="B")
         root = self.listing("?category=A")
         button, popup = self.menu(root)
-        self.assertEqual(button.text(), "Alle (3)")
+        self.assertEqual(button.text(), "Alle (2)")
         entries = self.entries(popup)
-        self.assertEqual([label for label, _, _ in entries],
-                         ["Alle Bestandsstatus", "Aufgebraucht",
-                          "Kritisch", "Niedrig", "Beobachten",
-                          "Ausreichend", "Noch nie abgegeben", "Ruhend"])
-        self.assertEqual([count for _, count, _ in entries],
-                         ["3", "0", "0", "1", "0", "2", "0", "0"])
-        self.assertEqual(query_of(entries[3][2]),
-                         {"category": ["A"], "stock": ["low"],
-                          "sort": ["category"]})
-        self.assertEqual(query_of(entries[0][2]),
-                         {"category": ["A"], "sort": ["category"]})
+        self.assertEqual(entries[0][1], "2")
+        self.assertEqual(query_of(entries[0][2])["category"], ["A"])
+        self.assertNotIn("stock", query_of(entries[0][2]))
 
     def test_one_level_exactly(self) -> None:
         """Scenario: One level exactly."""
         for article, quantity in (("A-1", 0), ("A-2", 1), ("A-3", 3)):
             self.with_mean_quarter(self.item(article, quantity=quantity), 4)
-        root = self.listing("?stock=critical")
         self.assertEqual(self.articles("?stock=critical"), ["A-2"])
-        button, popup = self.menu(root)
+
+    def test_the_menu_marks_the_level_in_force(self) -> None:
+        for article, quantity in (("A-1", 0), ("A-2", 1), ("A-3", 3)):
+            self.with_mean_quarter(self.item(article, quantity=quantity), 4)
+        button, popup = self.menu(self.listing("?stock=critical"))
         self.assertEqual(button.text(), "Kritisch (1)")
         current = [link for link in popup.find_all("a")
                    if link.get("aria-current") == "true"]
@@ -634,144 +645,34 @@ class StockMenuTests(TableCase):
         self.assertIsNone(root.find("dl", "level-legend"))
         note = root.find("p", "lab-table-note").text()
         self.assertIn("Bestandsstatus", note)
-        self.assertIn("Ort", note)
-        self.assertIn("Abgegeben", note)
+        self.assertIn("Details", note)
+        self.assertIsNone(re.search(r"\bOrt\b", note), note)
 
 
 class PopupTests(TableCase):
 
-    def test_location_popup(self) -> None:
-        """Scenario: Location popup."""
-        item = self.item("CH-0012", "(E)-Zimtsäure", "100", "mg",
-                         quantity=3)
-        lot = self.lot("CH-0012", "mg", "50", batch="B-7",
-                       location="Kühlschrank 2")
+    def test_no_popup_inside_the_table(self) -> None:
+        """The location and the statistics are in the details, not in
+        popups."""
+        self.item("C-1", quantity=3)
+        self.enter(self.item("C-2"), 2026, 1, 3)
+        self.lot("C-1", "mg", "50", location="Kühlschrank 2")
         root = self.listing()
+        grid = root.find("table")
+        self.assertEqual([e.tag for e in grid.walk()
+                          if "popover" in e.attrs
+                          or "popovertarget" in e.attrs], [])
+        self.assertEqual([e.tag for e in grid.find_all("button")], [])
         _, rows = table(root)
-        cell = rows[0]["Lagerort"]
-        button = cell.find("button")
-        self.assertEqual(outside_popups(cell), "Ort")
-        self.assertEqual(button.get("type"), "button")
-        self.assertIn("Lagerort", button.get("aria-label"))
-        self.assertIn("(E)-Zimtsäure", button.get("aria-label"))
-        popup = popup_of(root, button)
-        heading = popup.find("h2")
-        self.assertEqual(heading.text(), "Lagerort · (E)-Zimtsäure")
-        text = popup.text()
-        for shown in ("CH-0012", "100 mg", "3 Gebinde", "Fertige Gebinde",
-                      "Bulk, separat gelagert", "Kühlschrank 2"):
-            self.assertIn(shown, text)
-        self.assertEqual(text.count("nicht hinterlegt"), 2)
-        links = {a.get("href"): a.text() for a in popup.find_all("a")}
-        self.assertIn("B-7", links[lot_url(lot)])
-        self.assertIn(item_url(item), links)
+        self.assertEqual([row["Abgegeben"].text() for row in rows],
+                         ["0", "3"])
 
-    def test_a_kept_item_and_a_lot_without_location(self) -> None:
-        kept(self.item("CH-0012", quantity=1), "2", "7")
-        self.lot("CH-0012", "mg", "50")
-        root = self.listing()
-        _, rows = table(root)
-        popup = popup_of(root, rows[0]["Lagerort"].find("button"))
-        values = [dd.text() for dd in popup.find("dl").find_all("dd")]
-        self.assertEqual(values, ["2", "7"])
-        self.assertEqual(popup.text().count("nicht hinterlegt"), 1)
-
-    def test_no_bulk_section_without_lots(self) -> None:
-        self.item(None, "Neuverbindung 9", quantity=2)
-        root = self.listing()
-        _, rows = table(root)
-        popup = popup_of(root, rows[0]["Lagerort"].find("button"))
-        self.assertNotIn("Bulk", popup.text())
-        self.assertIn("10 µmol · 2 Gebinde", popup.text())
-
-    def test_statistics_popup(self) -> None:
-        """Scenario: Statistics popup."""
-        item = self.item("CH-0012", "(E)-Zimtsäure", quantity=6)
-        self.enter_year(item, 2024, 4)
-        for quarter, count in ((1, 6), (2, 5), (3, 7)):
-            self.enter(item, 2026, quarter, count)
-        self.deliver(item, 2, date(2026, 10, 15))
-        root = self.listing()
-        _, rows = table(root)
-        cell = rows[0]["Abgegeben"]
-        button = cell.find("button")
-        self.assertEqual(button.text(), "20")
-        self.assertEqual(outside_popups(cell), "20")
-        popup = popup_of(root, button)
-        self.assertEqual(popup.find("h2").text(),
-                         "Abgegeben · (E)-Zimtsäure")
-        header, years = table(popup)
-        self.assertEqual(header, ["Jahr", "Q1", "Q2", "Q3", "Q4", "Summe"])
-        self.assertEqual([[cell.text() for cell in year.values()]
-                          for year in years],
-                         [["2024", "4", "4", "4", "4", "16"],
-                          ["2025", "0", "0", "0", "0", "0"],
-                          ["2026", "6", "5", "7", "2", "20"]])
-        bars = popup.find_all(cls="quarter-bar")
-        self.assertEqual(len(bars), 4)
-        self.assertEqual(["current" in bar.classes for bar in bars],
-                         [False, False, False, True])
-        self.assertIn("laufend", bars[3].text())
-        entered = popup.find(cls="entered-years").text()
-        self.assertIn("2024", entered)
-        self.assertIn("2026", entered)
-        self.assertNotIn("2025", entered)
-        self.assertIn(item_url(item), [a.get("href")
-                                        for a in popup.find_all("a")])
-
-    def test_quarters_to_come_are_empty(self) -> None:
-        item = self.item("Q-1")
-        self.enter(item, 2026, 1, 3)
-        with ticking(berlin(2026, 5, 4, 8)):
-            root = self.listing()
-        _, rows = table(root)
-        popup = popup_of(root, rows[0]["Abgegeben"].find("button"))
-        _, years = table(popup)
-        self.assertEqual([cell.text() for cell in years[2].values()],
-                         ["2026", "3", "0", "", "", "3"])
-        bars = popup.find_all(cls="quarter-bar")
-        self.assertEqual(["current" in bar.classes for bar in bars],
-                         [False, True, False, False])
-        self.assertIsNone(bars[2].find(cls="bar"))
-
-    def test_the_means_in_the_statistics(self) -> None:
-        item = self.means_item()
-        root = self.listing()
-        _, rows = table(root)
-        popup = popup_of(root, rows[0]["Abgegeben"].find("button"))
-        figures = {dt.text(): dt.parent.find("dd")
-                   for dt in popup.find_all("dt")}
-        self.assertEqual(figures["Ø Jahr"].text(), "18,0")
-        self.assertEqual(figures["Ø Quartal"].text(), "4,5")
-        self.assertEqual(figures["2026 bis 4. November"].text(), "13")
-        self.assertNotIn("projected", figures["Ø Jahr"].classes)
-        self.assertEqual(fresh(item).quantity, 3)
-
-    def test_projected_means_are_marked(self) -> None:
-        item = self.item("P-1", quantity=3)
-        self.enter(item, 2026, 2, 6)
-        root = self.listing()
-        _, rows = table(root)
-        popup = popup_of(root, rows[0]["Abgegeben"].find("button"))
-        figures = {dt.text(): dt.parent.find("dd")
-                   for dt in popup.find_all("dt")}
-        for name in ("Ø Jahr", "Ø Quartal"):
-            self.assertIn("projected", figures[name].classes)
-
-    def test_every_popup_closes_itself(self) -> None:
+    def test_the_menus_stay_popups(self) -> None:
         self.item("C-1")
         root = self.listing()
-        popups = [e for e in root.walk() if "popover" in e.attrs]
-        self.assertEqual(len(popups), 5)
-        for popup in popups:
-            if popup.closest("td") is None:
-                continue
-            with self.subTest(popup=popup.get("id")):
-                close = popup.find("button", attrs={
-                    "popovertarget": popup.get("id"),
-                    "popovertargetaction": "hide"})
-                self.assertIsNotNone(close)
-                self.assertEqual(close.get("aria-label"), "Schließen")
+        self.assertEqual(sorted(e.get("id") for e in root.walk()
+                                if "popover" in e.attrs),
+                         ["columns-menu", "more-filters", "stock-menu"])
 
 
 class ViewControlTests(TableCase):
@@ -790,8 +691,10 @@ class ViewControlTests(TableCase):
         self.assertEqual({box.get("id")[7:] for box in boxes
                           if "checked" not in box.attrs}, HIDDEN)
         labels = {box.get("id")[7:]: box.parent.text() for box in boxes}
-        self.assertEqual(labels["location"], "Lagerort")
+        self.assertEqual(labels["compartment"], "Fach")
+        self.assertEqual(labels["box"], "Box")
         self.assertEqual(labels["note"], "Bemerkung")
+        self.assertNotIn("location", labels)
         height = root.find("select", id="row-height")
         self.assertEqual([(o.get("value"), o.text(), "selected" in o.attrs)
                           for o in height.find_all("option")],
@@ -801,14 +704,48 @@ class ViewControlTests(TableCase):
         self.assertEqual(heat.get("type"), "checkbox")
         self.assertIn("checked", heat.attrs)
         self.assertIn("Verbrauch einfärben", heat.parent.text())
-        for control in [*boxes, height, heat]:
+        detail = root.find("input", id="detail-switch")
+        self.assertIsNotNone(detail, "the view controls lack the switch")
+        self.assertEqual(detail.get("type"), "checkbox")
+        self.assertEqual(detail.get("data-remember"), "item-list:detail")
+        self.assertNotIn("checked", detail.attrs)
+        self.assertIn("Details", detail.parent.text())
+        self.assertIsNotNone(detail.closest("main"))
+        controls = [*boxes, height, heat, detail]
+        for control in controls:
             with self.subTest(control=control.get("id")):
                 self.assertTrue(control.get("data-remember"))
                 self.assertIsNone(control.closest("form"))
                 self.assertIsNone(control.get("form"))
                 self.assertIsNone(control.get("name"))
-        remembered = [c.get("data-remember") for c in [*boxes, height, heat]]
+        remembered = [c.get("data-remember") for c in controls]
         self.assertEqual(len(set(remembered)), len(remembered))
+
+    def test_the_columns_shown_at_first(self) -> None:
+        """Item list: Fach and Box show at first, Bemerkung does not."""
+        self.item("V-1")
+        boxes = self.listing().find(id="columns-menu").find_all(
+            "input", type="checkbox")
+        shown = {box.get("id")[7:]: "checked" in box.attrs
+                 for box in boxes}
+        self.assertTrue(shown["compartment"])
+        self.assertTrue(shown["box"])
+        self.assertFalse(shown["note"])
+        self.assertEqual({key for key, on in shown.items() if not on},
+                         {"note"})
+
+    def test_the_switch_is_checked_by_detail_in_the_query(self) -> None:
+        item = self.item("V-1")
+        for query, checked in (
+                ("", False), ("?category=A", False),
+                (f"?detail={item.pk}", True),
+                ("?detail=999999", True),
+                (f"?q=v&detail={item.pk}&sort=name", True)):
+            with self.subTest(query=query):
+                switch = self.listing(query).find("input",
+                                                  id="detail-switch")
+                self.assertIsNotNone(switch)
+                self.assertEqual("checked" in switch.attrs, checked)
 
     def test_signed_in_extras_keep_their_places(self) -> None:
         self.client.force_login(self.kl)
@@ -908,6 +845,31 @@ def rules(text: str) -> list[tuple[str, str]]:
     return found
 
 
+def blanked(text: str) -> str:
+    """TEXT with its comments replaced by spaces, so that places in it
+    stay places in TEXT."""
+    return re.sub(r"/\*.*?\*/", lambda m: " " * len(m.group()), text,
+                  flags=re.DOTALL)
+
+
+def located(text: str) -> list[tuple[int, str, str]]:
+    """Each style rule of TEXT as its place, its selector and its body,
+    the place being an index into TEXT."""
+    return [(m.start(), " ".join(m.group(1).split()), m.group(2))
+            for m in re.finditer(r"([^{}]+)\{([^{}]*)\}", blanked(text))
+            if not m.group(1).strip().startswith("@")]
+
+
+def columns_hit(selector: str) -> set[str]:
+    """The keys of the columns a selector that hides cells reaches: the
+    ones it names, or, when it names them only inside ``:not()``, all
+    the others."""
+    plain = re.sub(r":not\([^)]*\)", "", selector)
+    named = set(re.findall(r"\.col-(\w+)", plain))
+    excepted = set(re.findall(r"\.col-(\w+)", selector)) - named
+    return named or (set(KEYS) - excepted if excepted else set())
+
+
 class StylesheetTests(SimpleTestCase):
 
     @classmethod
@@ -937,17 +899,6 @@ class StylesheetTests(SimpleTestCase):
         for part in (".lab-toolbar", ".lab-view-controls",
                      ".lab-table-note"):
             self.assertIn(part, hidden)
-
-    def test_paper_keeps_the_delivered_numbers(self) -> None:
-        """print.css hides every button; the numbers of Abgegeben sit in
-        buttons and must print."""
-        printed = ""
-        for found in re.finditer(r"@media\s+print\s*\{", self.text):
-            printed += balanced(self.text, found.start())[0]
-        self.assertTrue(any(
-            ".stat-button" in selector
-            and re.search(r"display:\s*inline", body)
-            for selector, body in rules(printed)))
 
     def test_unchecked_columns_are_hidden(self) -> None:
         """Scenario: View controls (the stylesheet)."""
@@ -1009,3 +960,73 @@ class StylesheetTests(SimpleTestCase):
         tokens = self.heat_tokens(light)
         shades = [luminance(tokens[f"--heat-{n}-bg"]) for n in range(1, 6)]
         self.assertEqual(shades, sorted(shades, reverse=True))
+
+    def screen_rules(self, needle: str) -> list[tuple[str, str]]:
+        """The rules inside an ``@media screen`` block whose selector
+        holds NEEDLE."""
+        spans = screen_blocks(blanked(self.text))
+        return [(selector, body)
+                for start, selector, body in located(self.text)
+                if needle in selector
+                and any(a <= start < b for a, b in spans)]
+
+    def test_the_switch_narrows_the_table_on_screen(self) -> None:
+        """Item list: while the details show, the table keeps five
+        columns."""
+        hidden: set[str] = set()
+        for selector, body in self.screen_rules("#detail-switch:checked"):
+            if re.search(r"display:\s*none", body):
+                hidden |= columns_hit(selector)
+        self.assertEqual(hidden, set(KEYS) - set(DETAILED))
+
+    def test_the_switch_rules_are_for_the_screen_alone(self) -> None:
+        spans = screen_blocks(blanked(self.text))
+        found = [start for start, selector, _ in located(self.text)
+                 if "#detail-switch" in selector]
+        self.assertTrue(found)
+        for place in found:
+            with self.subTest(at=place):
+                self.assertTrue(any(a <= place < b for a, b in spans))
+
+    def test_the_switch_shows_the_pane(self) -> None:
+        shown = self.screen_rules("#detail-switch:checked")
+        self.assertTrue(any("#item-detail" in selector
+                            for selector, _ in shown))
+        for selector, body in shown:
+            if "#item-detail" in selector:
+                self.assertNotRegex(body, r"display:\s*none", selector)
+        self.assertTrue(any(
+            re.search(r"display:\s*(?!none\b)[a-z]", body)
+            for selector, body in shown if "#item-detail" in selector))
+
+    def test_the_rows_show_a_pointer_and_the_chosen_one_a_mark(self) -> None:
+        shown = self.screen_rules("#detail-switch:checked")
+        self.assertTrue(any(
+            "tr" in selector and re.search(r"cursor:\s*pointer", body)
+            for selector, body in shown))
+        self.assertTrue(any("aria-current" in selector
+                            for selector, _ in shown))
+
+    def test_the_pane_is_hidden_without_the_switch_and_on_paper(
+            self) -> None:
+        """Item list: on paper the table prints without the details."""
+        spans = screen_blocks(blanked(self.text))
+        printed = [
+            (selector, body) for start, selector, body
+            in located(self.text)
+            if re.search(r"#item-detail\s*(,|\Z)", selector)
+            and ":checked" not in selector
+            and not any(a <= start < b for a, b in spans)]
+        self.assertTrue(any(re.search(r"display:\s*none", body)
+                            for _, body in printed), printed)
+
+    def test_a_pane_in_a_request_is_dimmed_and_takes_no_pointer(
+            self) -> None:
+        waiting = [body for selector, body in rules(self.text)
+                   if "item-detail" in selector
+                   and "htmx-request" in selector]
+        self.assertTrue(waiting)
+        self.assertTrue(any(re.search(r"pointer-events:\s*none", body)
+                            for body in waiting), waiting)
+        self.assertTrue(any(re.search(r"opacity:\s*0?\.\d+", body)
+                            for body in waiting), waiting)

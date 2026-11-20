@@ -11,6 +11,7 @@ urlpatterns = [
     path("end-products/new/", views.item_new, name="item_new"),
     path("end-products/bulk/", views.lot_list, name="lot_list"),
     path("items/<int:pk>/", views.item_page, name="item"),
+    path("items/<int:pk>/detail/", views.item_detail, name="item_detail"),
     path("items/<int:pk>/edit/", views.item_edit, name="item_edit"),
     path("items/<int:pk>/fill/", views.item_fill, name="item_fill"),
     path("items/<int:pk>/correct/", views.item_correct,

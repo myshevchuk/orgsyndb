@@ -93,9 +93,7 @@ leaves this file then.
     title block's left and right halves and the element tree;
   - site-theme "Procedure section tabs": one row above the `h1`;
   - site-catalogue "Catalogue controls": the facets hidden below
-    55rem;
-  - end-product-inventory "Item list": the lines above and below the
-    table, the popups' placement rule and the sticky box's height.
+    55rem.
 
   Wanted: cut each to its rule, such as "wide tables scroll in their
   own box" or "a narrow window keeps the reading order", and leave

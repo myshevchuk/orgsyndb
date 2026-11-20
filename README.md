@@ -2610,8 +2610,8 @@ free text, at most 30 characters each. They suggest values already in
 use, ordered with `2` before `10`, but you can enter another value.
 Change them on **Edit** or in the admin when you move the containers.
 The item page shows both locations, with `–` for each empty field.
-The list shows them in the **Ort** (**Location**) popup and in the
-optional **Fach** and **Box** columns.
+The list shows both locations by default in its **Fach** and **Box**
+columns.
 
 Before the first delivery, choose **Enter article number** on the item
 page to open **Edit**. The article-number field appears only while the
@@ -2651,46 +2651,68 @@ and has no **Enter consumption** or **New bulk lot** link.
 
 Enter items and past quarterly consumption by hand; there is no Excel
 import. The heading **Endprodukte** (**End products**) shows the number
-of items in the whole inventory. To find stock, use the list's columns,
-in order: **Artikelnr.** (**Article no.**), **Name**, **Kategorie**
-(**Category**), **Gebinde** (**Container**), **Bestand** (**Stock**),
-**Ø Jahr** (**Mean per year**), **Abgegeben** (**Delivered**),
-**Reichweite** (**Coverage**), **Lagerort** (**Location**), **Fach**
+of items in the whole inventory. The table offers **Artikelnr.**
+(**Article no.**), **Name**, **Kategorie** (**Category**), **Gebinde**
+(**Container**), **Bestand** (**Stock**), **Ø Jahr** (**Mean per year**),
+**Abgegeben** (**Delivered**), **Reichweite** (**Coverage**), **Fach**
 (**Compartment**), **Box**, **Bulk verfügbar** (**Bulk available**) and
-**Bemerkung** (**Note**). **Fach**, **Box** and **Bemerkung** start hidden;
-show them with **Spalten** (**Columns**). **Bestand** counts containers,
-**Ø Jahr** gives containers per year, and **Abgegeben** counts this year's
-consumption in containers. **Reichweite** gives coverage in quarters.
-Small lines under these headings show their units and the current year
-for **Abgegeben**. Open an article number, or the name of an item without
-one, to see its item page.
+**Bemerkung** (**Note**) in that order. Only **Bemerkung** starts hidden.
+Use **Spalten** (**Columns**) to show it.
 
-To find the material without leaving the list, choose **Ort** in
-**Lagerort**. Under **Fertige Gebinde** (**Finished containers**), the
-popup shows the compartment and box, with **nicht hinterlegt** (**not
-recorded**) for an empty field. Under **Bulk, separat gelagert** (**Bulk,
-stored separately**), it lists each open bulk lot of the article with
-its location, batch and amount. An unrecorded bulk location also reads
-**nicht hinterlegt**. Open a batch to see its lot page, or choose
-**Artikel und Lagerort öffnen** (**Open item and location**) for the item
-page.
+**Bestand** counts containers. **Ø Jahr** gives containers per year,
+and **Abgegeben** shows this year's consumption as a plain container
+count. **Reichweite** tells you how many quarters the stock will last at
+the mean rate of consumption. Small lines under these headings show the
+units and the current year for **Abgegeben**. With **Details** off, click
+an article number or the name of an unnumbered item to open its page.
 
-To read consumption in more detail, choose the number in **Abgegeben**.
-The popup shows this year's consumption up to today and the means per
-year and quarter. A mean projected from the current year is italic;
-`–` means there is no mean. A bar chart shows the current year's quarters,
-marking the current quarter **laufend** (**running**). A table shows each
-quarter and the year's total for the two previous years and the current
-year. Future quarters have no bar and stay empty in the table. The popup
-names the years with consumption entered by hand and warns that the
-current year is incomplete. Choose **Alle Quartale und Buchungen öffnen**
-(**Open all quarters and movements**) for the item page, where you can
-also read the quarterly mean.
+To find where an item is stored and read its consumption figures without
+leaving the list, tick **Details** above the table. The pane opens beside
+the table or below it in a narrow window. With the default column
+choices, the table narrows to **Artikelnr.**, **Name**, **Gebinde**,
+**Bestand** and **Reichweite**. Untick **Details** to return to your
+usual table view.
 
-Both popups identify the item by its name, article number when present,
-container size and stock count. They open beside their buttons and
-highlight the row. Press Escape, click outside or use the close button
-to close a popup.
+With **Details** on, click a row or one of its links to choose the item.
+Use the row's check box to select it for a delivery note. Use a modifier
+key such as Ctrl or Command, or the middle mouse button, to follow a
+row link. When focus is in the table, press ↑ or ↓ to choose the previous
+or next row. While details load, the pane dims and you cannot click its
+links. When the details arrive, the list highlights the chosen row and
+updates the address with `detail=<id>`. If loading fails, the pane,
+highlight and address stay on the previous item.
+
+Reload or share that address to open the same item with **Details** on.
+The pane shows the first listed item when the address names no item
+in the list. Changing a filter or the sort order also selects the first
+listed item. If the list is empty, the pane shows no item.
+
+The pane shows the item's name, article number when present, container
+size and category when set. It marks new items with **neu** (**new**) and
+shows the status of items set aside. It also gives the stock count,
+stock level and coverage in quarters. Choose **Artikelseite öffnen**
+(**Open item page**) to read the full item page, including its quarterly
+mean and stock movements. When you sign in, you can use the available
+actions, such as **Fill** and **Correct count**, directly from the pane.
+
+Under **Fertige Gebinde** (**Finished containers**), read **Fach** and
+**Box** to find the finished containers. Each empty field reads **nicht
+hinterlegt** (**not recorded**). Under **Bulk, separat gelagert**
+(**Bulk, stored separately**), the pane lists each open bulk lot of the
+substance with its location, batch and amount. An unrecorded bulk
+location also reads **nicht hinterlegt**. Click a batch to open its
+lot page.
+
+Under **Verbrauch** (**Consumption**), read this year's consumption to
+date in containers and the means per year and per quarter. A mean or
+coverage projected from the current year appears in italics. A dash
+(`–`) marks a missing mean or coverage. The bar chart shows this year's
+quarters and marks the current one **laufend** (**running**). The table
+shows each quarter and the annual total for this year and the previous
+two years. Future quarters have no bars and stay empty in the table.
+The pane lists the years with positive consumption entered by hand and
+reminds you that the current year's total is incomplete. The item's note
+appears below the figures when present.
 
 The **Bestand** column shows container counts alone, coloured by stock
 level. Hover over a count to read the level's name; screen readers also
@@ -2720,12 +2742,12 @@ inventory and names the order in force. While any filter is in force,
 **Zurücksetzen** (**Reset**) at the end of that line clears every filter
 and keeps your order.
 
-To reorder the list, choose any column header except **Lagerort**.
-Choose it again to reverse the order; ▲ or ▼ marks the sorted column.
-Sorting keeps your filters, and filtering keeps your order. You can
-bookmark the filters and order. Text sorts regardless of case. Containers
-sort from smallest to largest, with mass sizes before amount-of-substance
-sizes: 100 mg, 250 mg, 1 g, then µmol sizes. Locations sort with `2` before
+To reorder the list, choose any column header.
+Choose it again to reverse the order. ▲ or ▼ marks the sorted column.
+Sorting keeps your filters, and filtering keeps your order. Text sorts
+regardless of case. Containers sort from smallest to largest, with mass
+sizes before amount-of-substance sizes, so 100 mg, 250 mg and 1 g come
+before µmol sizes. Locations sort with `2` before
 `10`. Consumption and coverage sort by value, smallest first; bulk sorts
 by how many containers the open lots would fill. Items without a value
 in the sorting column come last in either direction. Ties sort by article
@@ -2760,20 +2782,22 @@ To fit more information on screen, use **Spalten** to show or hide any
 column except **Artikelnr.**, **Name** and **Bestand**. **Zeilenhöhe**
 (**Row height**) offers **Kompakt** (**Compact**), the default, and
 **Sehr kompakt** (**Very compact**). Your browser remembers the columns,
-row height and consumption-colour choice across pages. These choices
-are separate from the filters and order saved in a bookmark.
+row height, consumption colours and **Details** setting across pages.
+**Details** starts off by default. You can bookmark the address to save
+the filters and sort order separately from those view settings.
 
-The list uses one small script to place popups, apply filter choices and
-remember view controls. Without JavaScript, popups open in the centre of
-the window, and **Filtern** (**Filter**) applies the filters. The view
-controls still work, but their choices last only until you leave the page.
+The **Bestandsstatus**, **Weitere Filter** and **Spalten** menus open beside
+their buttons. Without JavaScript, these menus open in the centre of the
+window. Choose **Filtern** (**Filter**) to apply filter choices. You can
+still change the view for the current page. Choosing another row in
+**Details** requires JavaScript.
 
 For a long or wide list, scroll inside the table's box. The column headers
 stay at the top, and **Artikelnr.** stays at the left. The box is at most
-the window's height. Printing shows the whole table with your chosen
-columns, without filters, menus, view controls, the note below the table
-or the **Lagerort** column. Show **Fach** and **Box** before printing to
-include the locations.
+the window's height. Printing includes every listed row and uses the
+columns selected in **Spalten**, even with **Details** on. The details
+pane, filter controls, menus, view controls and the note below the table
+stay on screen only.
 
 #### Book deliveries and correct counts
 

@@ -1,5 +1,6 @@
-"""Tests of the rows of the item list's statistics popup, computed from
-an item's consumption (end-product-inventory: Item list)."""
+"""Tests of the rows of the item list's details that show an item's
+consumption, computed from its figures (end-product-inventory: Item
+list)."""
 
 from datetime import date
 from unittest import TestCase
@@ -13,7 +14,7 @@ TODAY = date(2026, 11, 4)
 class StatisticsTests(TestCase):
 
     def test_the_scenarios_years(self) -> None:
-        """Scenario: Statistics popup (the figures)."""
+        """Scenario: Details of an item (the consumption's figures)."""
         entered = {(2024, q): 4 for q in range(1, 5)}
         entered.update({(2026, 1): 6, (2026, 2): 5, (2026, 3): 7})
         figures = figures_of(6, entered, {(2026, 4): 2}, TODAY)

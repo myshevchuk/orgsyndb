@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "The OrgSynDB lab application: tasks and later lab records."
 requires-python = ">=3.14"
 dependencies = [
-    "django>=5.2,<6.1",
+    "django>=6.0,<6.1",
     "django-simple-history>=3.8",
     "psycopg[binary]>=3.2",
     "gunicorn>=23",

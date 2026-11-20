@@ -10,9 +10,24 @@
 //   changes, and hides that form's submit buttons.
 // - Restores each control marked data-remember from localStorage when
 //   the page loads, and saves it there whenever it changes.
+// - Checks the item list's switch `Details` (#detail-switch) and saves
+//   it when the address holds `detail`. Turning the switch on writes
+//   the id of the marked row into the address as `detail`; turning it
+//   off removes `detail`.
+// - While the switch is checked, chooses a row: a plain click in it,
+//   on a link too but not on a check box, or an arrow key up or down
+//   in the table, which also focuses the row it moves to. Choosing
+//   fires the event `item-select` on the row, which makes htmx load the
+//   row's details into #item-detail, and nothing else.
+// - Once htmx has swapped details in, marks the row that asked for them
+//   with aria-current="true" and writes its id into the address as
+//   `detail`. A request that is aborted or fails swaps nothing, so
+//   pane, mark and address stay as they were. While details load, the
+//   pane is inert.
 //
-// OrgSynLab.place is the placement's arithmetic, kept apart from the
-// page so that tests can run it without one.
+// OrgSynLab.place is the placement's arithmetic and
+// OrgSynLab.detailSearch the address's, each kept apart from the page
+// so that tests can run it without one.
 (() => {
   "use strict";
 
@@ -35,7 +50,29 @@
     return { left, top: above >= EDGE ? above : lowest };
   };
 
-  globalThis.OrgSynLab = { place };
+  // The query string of SEARCH, as location.search holds it, with or
+  // without its leading "?", whose parameter `detail` is set to ID, a
+  // number or text, or removed when ID is null; every other parameter
+  // keeps its text and its place. It is "?" and the parameters, or ""
+  // when none is left. Repeated `detail` parameters become one, at the
+  // place of the first.
+  const detailSearch = (search, id) => {
+    const kept = [];
+    let placed = id === null || id === undefined;
+    for (const pair of search.replace(/^\?/, "").split("&")) {
+      if (pair === "") continue;
+      if (pair.split("=", 1)[0] !== "detail") {
+        kept.push(pair);
+      } else if (!placed) {
+        kept.push(`detail=${encodeURIComponent(id)}`);
+        placed = true;
+      }
+    }
+    if (!placed) kept.push(`detail=${encodeURIComponent(id)}`);
+    return kept.length ? `?${kept.join("&")}` : "";
+  };
+
+  globalThis.OrgSynLab = { place, detailSearch };
   if (typeof document === "undefined") return;
 
   let open = null;
@@ -116,4 +153,119 @@
       }
     });
   }
+
+  const detailSwitch = document.getElementById("detail-switch");
+  if (!detailSwitch) return;
+  const ROWS = ".item-table tbody tr[data-item]";
+
+  const markedRow = () => document.querySelector(
+    `${ROWS}[aria-current="true"]`);
+
+  const writeDetail = (id) => {
+    try {
+      history.replaceState(
+        history.state, "",
+        `${location.pathname}${detailSearch(location.search, id)}`
+        + location.hash);
+    } catch {
+      // The address cannot change: the page shows the item regardless.
+    }
+  };
+
+  // Rows take focus only while the details show, so that the arrow
+  // keys have a row to start from.
+  const focusable = () => {
+    for (const row of document.querySelectorAll(ROWS)) {
+      if (detailSwitch.checked) {
+        row.tabIndex = -1;
+      } else {
+        row.removeAttribute("tabindex");
+      }
+    }
+  };
+
+  detailSwitch.addEventListener("change", () => {
+    const row = markedRow();
+    writeDetail(detailSwitch.checked && row ? row.dataset.item : null);
+    focusable();
+  });
+
+  // A shared address holding `detail` opens on the item, whatever the
+  // reader's stored choice; a switch restored as checked names the
+  // marked row in the address.
+  if (/(^|[?&])detail(=|&|$)/.test(location.search)) {
+    detailSwitch.checked = true;
+    detailSwitch.dispatchEvent(new Event("change"));
+  } else if (detailSwitch.checked) {
+    const row = markedRow();
+    writeDetail(row ? row.dataset.item : null);
+  }
+  focusable();
+
+  // While a row's details load, the pane takes neither pointer nor
+  // keyboard, so the previous item's links cannot be used; it is
+  // usable again once the request ends without swapping.
+  document.addEventListener("htmx:beforeRequest", (event) => {
+    const pane = document.getElementById("item-detail");
+    if (pane && event.target.matches && event.target.matches(ROWS)) {
+      pane.inert = true;
+    }
+  });
+  document.addEventListener("htmx:afterRequest", (event) => {
+    const pane = document.getElementById("item-detail");
+    if (pane && event.target.matches && event.target.matches(ROWS)) {
+      pane.inert = pane.classList.contains("htmx-request");
+    }
+  });
+
+  // Asks htmx for the details of ROW.
+  const choose = (row) => htmx.trigger(row, "item-select");
+
+  document.addEventListener("click", (event) => {
+    if (!detailSwitch.checked || typeof htmx === "undefined") return;
+    if (event.button !== 0 || event.ctrlKey || event.metaKey
+        || event.shiftKey || event.altKey) {
+      return;
+    }
+    if (!(event.target instanceof Element)) return;
+    const row = event.target.closest(ROWS);
+    if (!row || event.target.closest("input")) return;
+    event.preventDefault();
+    choose(row);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (!detailSwitch.checked || typeof htmx === "undefined") return;
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
+      return;
+    }
+    if (!(event.target instanceof Element)
+        || !event.target.closest(".item-table")) {
+      return;
+    }
+    const from = event.target.closest(ROWS) || markedRow();
+    if (!from) return;
+    event.preventDefault();
+    const rows = [...document.querySelectorAll(ROWS)];
+    const step = event.key === "ArrowDown" ? 1 : -1;
+    const to = rows[rows.indexOf(from) + step];
+    if (!to) return;
+    to.focus();
+    choose(to);
+  });
+
+  // htmx dispatches htmx:afterSwap on the elements it swapped in, and
+  // names the element that asked for them in the request's
+  // configuration.
+  document.addEventListener("htmx:afterSwap", (event) => {
+    const row = event.detail.requestConfig
+      && event.detail.requestConfig.elt;
+    if (!row || !row.matches || !row.matches(ROWS)) return;
+    for (const old of document.querySelectorAll(ROWS)) {
+      old.removeAttribute("aria-current");
+    }
+    row.setAttribute("aria-current", "true");
+    if (detailSwitch.checked) writeDetail(row.dataset.item);
+  });
 })();
