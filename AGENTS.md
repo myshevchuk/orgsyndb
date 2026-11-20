@@ -17,6 +17,34 @@ This repo uses OpenSpec
 - Both branches reject force-pushes, deletion, merge commits and
   unsigned commits.
 
+## Tests
+
+The repository has two suites: the program's, `python3 -m pytest` at
+the root, and the lab application's, `uv run pytest` in `webapp/`.
+Each takes minutes in full, so a full run happens once per change, and
+on CI.
+
+- While working, run only the tests of the area the change touches:
+  the test files named for it (`webapp/tests/test_inventory_*.py` for
+  the inventory), and those of anything shared that it edits, such as
+  the page shell, `lab.css`, `lab.js` or the build pipeline. Run them
+  serially.
+- Take the baseline from CI, not from a local run: `gh run list
+  --commit <sha>` for the commit the branch grew from. Run a full
+  suite locally only when CI has no result for that commit or reports
+  a failure, and run the lab suite in parallel then:
+  `uv run pytest -n auto`.
+- Every pushed branch runs the lab suite on CI. Push a change branch
+  once its area tests pass, wait for its runs with `gh run watch`, and
+  squash-merge it into `develop` only when they are green. Work
+  committed on `develop` itself is checked by the same runs after the
+  push; a red run there is fixed before anything else.
+- CI runs only the export tests of the program's suite. A change that
+  touches `tools/`, `site/`, `emacs/` or `tests/` runs the program's
+  suite in full locally once, before it is merged.
+- A delegated stage, such as the test writer or an implementer, runs
+  only the area's tests, never a full suite; its brief names the files.
+
 ## Committing
 
 This repo uses Conventional Commits

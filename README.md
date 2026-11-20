@@ -1301,8 +1301,12 @@ uv run pytest
 The suite uses SQLite, a database stored in one file, by default. Set
 `ORGSYNDB_DATABASE_URL` to run it against PostgreSQL instead. The
 [`webapp.yml`](.github/workflows/webapp.yml) GitHub Actions workflow runs
-this suite on SQLite and on a PostgreSQL 18 service on pushes to `main`
-and `develop`, and on pull requests.
+this suite on SQLite and on a PostgreSQL 18 service on a push to any
+branch, so a change branch is checked before it is merged.
+
+The full suite takes several minutes. Run it in parallel, one worker per
+processor core, with `uv run pytest -n auto`, or pass the files you need,
+such as `uv run pytest tests/test_inventory_table.py`.
 
 The standalone [database diagram](webapp/docs/database-schema.html) shows
 the lab application's tables and their relationships, generated from the
