@@ -307,6 +307,7 @@ span.stock[class*="level-"] { padding: 0 var(--space-2); border-radius: 0.25rem;
 .lab-columns { margin-left: auto; }
 .lab-toolbar .lab-menu-button { min-width: 11rem; text-align: left; background: var(--surface); }
 .lab-columns .lab-menu-button { min-width: 0; }
+.lab-toolbar button:disabled { color: var(--muted); cursor: default; opacity: 0.6; }
 .lab-menu-button::after { content: " ▾"; content: " ▾" / ""; }
 .lab-toolbar .lab-text-button { border-color: transparent; background: none; color: var(--link); }
 
