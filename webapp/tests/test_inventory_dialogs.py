@@ -445,6 +445,24 @@ class SavedInTheDialogTests(DialogCase):
         self.assertEqual(counts[str(other.pk)], 9)
         self.assertIsNotNone(root.find("ul", cls="lab-messages"))
 
+    def test_a_save_in_the_dialog_reorders_the_list(self) -> None:
+        """The list sorted by stock, requested again after a save that
+        fills the item up, shows its row after the other's."""
+        other = self.item("CH-0013", size="10", unit="umol", quantity=9)
+        self.deliver_movement(other, 2)
+        order = f"{LIST}?sort=stock"
+
+        def rows() -> list[str]:
+            return [row.get("data-item") for row in
+                    page(self.client.get(order)).find_all("tr")
+                    if row.get("data-item")]
+
+        self.assertEqual(rows(), [str(self.target.pk), str(other.pk)])
+        done = self.client.post(self.urls()["correct"],
+                                correction(count="99"), **HTMX)
+        self.assertEqual(done.status_code, 204)
+        self.assertEqual(rows(), [str(other.pk), str(self.target.pk)])
+
 
 class SignedOutTests(InventoryCase):
 

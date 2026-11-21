@@ -210,6 +210,7 @@
   let dialogOpener = null; // the link that opened the dialog
   let loading = null; // the address of the form being requested
   let saving = false; // a save is posted and its refresh not done
+  let posting = false; // the dialog's form is being posted
 
   const lockDialog = (locked) => {
     saving = locked;
@@ -303,14 +304,14 @@
   // page, else to the heading of the details, else to the page's.
   const focusAfterSave = () => {
     if (dialogOpener && dialogOpener.isConnected) {
-      dialogOpener.focus();
+      dialogOpener.focus({ preventScroll: true });
       return;
     }
     const heading = document.getElementById("item-detail-title")
       || document.querySelector("main h1");
     if (!heading) return;
     heading.tabIndex = -1;
-    heading.focus();
+    heading.focus({ preventScroll: true });
   };
 
   if (dialog && dialogBody) {
@@ -319,6 +320,8 @@
       const link = event.target.closest("a[data-dialog]");
       if (link && typeof htmx !== "undefined") {
         event.preventDefault();
+        // One form at a time: a second click while one loads is lost.
+        if (loading !== null || dialog.open) return;
         dialogOpener = link;
         loading = link.href;
         htmx.ajax("GET", link.href,
@@ -329,7 +332,7 @@
         ".lab-dialog-close, #lab-dialog-body .lab-buttons a");
       if (closer && dialog.contains(closer)) {
         event.preventDefault();
-        if (!saving) dialog.close();
+        if (!saving && !posting) dialog.close();
       }
     });
 
@@ -347,23 +350,39 @@
     });
 
     // A form that could not be requested opens as the page it is.
-    const unopened = () => {
-      if (loading === null) return;
+    // htmx fires the request's events on its source, the body, not on
+    // the dialog it targets.
+    const unopened = (event) => {
+      if (loading === null || event.detail.target !== dialogBody) return;
       const href = loading;
       loading = null;
       location.assign(href);
     };
-    dialogBody.addEventListener("htmx:responseError", unopened);
-    dialogBody.addEventListener("htmx:sendError", unopened);
+    document.addEventListener("htmx:responseError", unopened);
+    document.addEventListener("htmx:sendError", unopened);
 
     dialog.addEventListener("close", () => dialogBody.replaceChildren());
     dialog.addEventListener("cancel", (event) => {
-      if (saving) event.preventDefault();
+      if (saving || posting) event.preventDefault();
+    });
+
+    // While the dialog's form is posted it stays open, so that a save
+    // still finds it. A post the server refuses outright, such as one
+    // without a session or its CSRF cookie, reloads the page; one that
+    // does not reach the server leaves the form as it was, to send
+    // again.
+    dialog.addEventListener("htmx:beforeRequest", () => {
+      posting = true;
+    });
+    dialog.addEventListener("htmx:responseError", () => {
+      posting = false;
+      location.reload();
     });
 
     // htmx enables the buttons again when the save's request ends,
     // which is before the refresh does.
     dialog.addEventListener("htmx:afterRequest", () => {
+      posting = false;
       if (saving) lockDialog(true);
     });
 
