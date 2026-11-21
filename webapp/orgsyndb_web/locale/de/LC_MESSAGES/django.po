@@ -17,6 +17,9 @@ msgstr "Englisch"
 msgid "Skip to content"
 msgstr "Zum Inhalt springen"
 
+msgid "Close"
+msgstr "Schließen"
+
 msgid "%(name)s: change password"
 msgstr "%(name)s: Passwort ändern"
 

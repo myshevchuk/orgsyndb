@@ -50,5 +50,9 @@
 {% endfor %}</ul>
 {% endif %}{% endblock %}{% block main %}{% endblock %}
 </main>
+<dialog id="lab-dialog" class="lab-dialog" aria-labelledby="lab-dialog-title">
+<div id="lab-dialog-body"></div>
+<button type="button" class="lab-dialog-close" aria-label="{% translate "Close" %}"><span aria-hidden="true">×</span></button>
+</dialog>
 </body>
 </html>

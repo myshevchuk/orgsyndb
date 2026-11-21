@@ -1,6 +1,7 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n l10n lab inventory %}
 {% block title %}{% if item.article_number %}{{ item.article_number }} {% endif %}{{ item.name }}{% endblock %}
 {% block main %}
+<div id="item-refresh" data-refresh>
 <h1>{% if item.article_number %}{{ item.article_number }} · {% endif %}{{ item.name }}{% if item|new_on:today %}<sup class="mark-new">{% translate "new" context "item" %}</sup>{% endif %}</h1>
 {% if user.is_authenticated %}<div class="lab-actions">
 {% include "inventory/item_actions.html" %}</div>
@@ -73,7 +74,7 @@
 <td>{% person movement.user %}</td>
 <td>{% if movement.delivery_note %}<a href="/lab/inventory/deliveries/{{ movement.delivery_note.pk }}/">{{ movement.delivery_note }}</a> {{ movement.delivery_note.recipient }}{% endif %}</td>
 <td>{% if movement.delivery_note.note %}{{ movement.delivery_note.note }} {% endif %}{{ movement.note }}</td>
-{% if user.is_authenticated %}<td>{% if row.reversible %}<a href="/lab/inventory/items/{{ item.pk }}/movements/{{ movement.pk }}/reverse/">{% translate "Reverse" %}</a>{% endif %}</td>{% endif %}
+{% if user.is_authenticated %}<td>{% if row.reversible %}<a href="/lab/inventory/items/{{ item.pk }}/movements/{{ movement.pk }}/reverse/" data-dialog>{% translate "Reverse" %}</a>{% endif %}</td>{% endif %}
 </tr>
 {% endwith %}{% endfor %}</tbody>
 </table>
@@ -100,4 +101,5 @@
 {% endif %}{% if user.is_authenticated and item.article_number %}<p class="actions"><a href="/lab/inventory/bulk/new/?substance={{ item.substance.key|urlencode }}">{% translate "New bulk lot" %}</a></p>
 {% endif %}{% include "planning/item_forecast.html" %}
 {% include "inventory/history.html" %}
+</div>
 {% endblock %}
