@@ -58,7 +58,7 @@ A flask whose task is ended, failed or cancelled stays at zero: a correction of 
 - **THEN** the flask holds `0,5` g and the new vessel `1,5` g, whose only movement is a `transfer_in` naming the flask's `transfer_out`
 
 #### Scenario: Transfer across units
-- **WHEN** a batch of `cinnamic-acid`, whose molar mass is 148.16, has a flask holding `1` g and a stored vessel in `µmol` holding `100` µmol, and a signed-in user transfers `148,16` mg from the flask into that vessel
+- **WHEN** a batch of `cinnamic-acid`, whose molar mass is 148.16, has a flask in `mg` holding `1000` mg and a stored vessel in `µmol` holding `100` µmol, and a signed-in user transfers `148,16`, in the flask's unit, from the flask into that vessel
 - **THEN** the flask holds `851,84` mg and the vessel `1100` µmol
 
 #### Scenario: Transfer without a molar mass
@@ -347,7 +347,7 @@ For a signed-in user, the application SHALL offer:
 - `/lab/inventory/batches/<id>/edit/`: the number, journal entry and yield of a made batch, the supplier, supplier's article number and supplier's batch of a bought one, and the date and note;
 - `/lab/inventory/batches/<id>/vessels/new/`: a new stored vessel of the batch with its opening amount, its unit, its location, with the `datalist` of the locations in use, and its note;
 - `/lab/inventory/vessels/<id>/withdraw/`: a withdrawal from an open vessel into a step of a task that is planned or running, chosen among those tasks' steps or given as `?step=<id>`, with the amount in the vessel's unit and the date; an amount above the vessel's is refused;
-- `/lab/inventory/vessels/<id>/transfer/`: a transfer from an open vessel, with the amount in its unit, the date and a note, into a stored vessel of the same batch, chosen among them, or into a new vessel at the location given; an amount above the vessel's, and a target whose unit converts from the source's only through a molar mass the substance lacks, are refused, the latter with an error at the target;
+- `/lab/inventory/vessels/<id>/transfer/`: a transfer from an open vessel, with the amount in the source vessel's unit, the date and a note, into a stored vessel of the same batch, chosen among them, or into a new vessel at the location given; an amount above the vessel's, and a target whose unit converts from the source's only through a molar mass the substance lacks, are refused, the latter with an error at the target;
 - `/lab/inventory/vessels/movements/<id>/reverse/`, a POST: reverses a withdrawal not yet reversed;
 - `/lab/inventory/vessels/<id>/edit/`, for the location and note, and `/lab/inventory/vessels/<id>/correct/`.
 
