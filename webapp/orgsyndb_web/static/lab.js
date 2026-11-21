@@ -25,6 +25,18 @@
 //   pane, mark and address stay as they were. While details load, the
 //   pane is inert.
 //
+// - Opens the form that a link marked data-dialog leads to in the
+//   dialog of the page shell (#lab-dialog) on a plain click, and
+//   closes the dialog on a click on its close button or on the form's
+//   cancel link; Escape closes it by itself. Closing empties it. A
+//   form that is saved there fires the event `lab-saved`; the script
+//   then fetches the page again as a page, replaces each element
+//   marked data-refresh, and the messages, with the new page's, keeps
+//   what the user ticked and chose in the list, closes the dialog and
+//   moves focus to where the user was working. The dialog's buttons
+//   stay disabled until then. If the page cannot be fetched, the page
+//   is reloaded.
+//
 // OrgSynLab.place is the placement's arithmetic and
 // OrgSynLab.detailSearch the address's, each kept apart from the page
 // so that tests can run it without one.
@@ -111,13 +123,20 @@
   window.addEventListener("resize", reposition);
 
   for (const control of document.querySelectorAll("[data-submit]")) {
-    const form = control.form;
-    if (!form) continue;
-    control.addEventListener("change", () => form.requestSubmit());
-    for (const button of form.querySelectorAll("button[type=submit]")) {
+    if (!control.form) continue;
+    for (const button of control.form.querySelectorAll(
+      "button[type=submit]")) {
       button.hidden = true;
     }
   }
+  // Delegated, so that a control a refresh put in still submits.
+  document.addEventListener("change", (event) => {
+    const control = event.target;
+    if (control instanceof Element && control.matches("[data-submit]")
+        && control.form) {
+      control.form.requestSubmit();
+    }
+  });
 
   const storage = (() => {
     try {
@@ -155,7 +174,6 @@
   }
 
   const detailSwitch = document.getElementById("detail-switch");
-  if (!detailSwitch) return;
   const ROWS = ".item-table tbody tr[data-item]";
 
   const markedRow = () => document.querySelector(
@@ -175,6 +193,7 @@
   // Rows take focus only while the details show, so that the arrow
   // keys have a row to start from.
   const focusable = () => {
+    if (!detailSwitch) return;
     for (const row of document.querySelectorAll(ROWS)) {
       if (detailSwitch.checked) {
         row.tabIndex = -1;
@@ -184,6 +203,189 @@
     }
   };
 
+  // The dialog of the page shell, and what the script knows of the
+  // form in it.
+  const dialog = document.getElementById("lab-dialog");
+  const dialogBody = document.getElementById("lab-dialog-body");
+  let dialogOpener = null; // the link that opened the dialog
+  let loading = null; // the address of the form being requested
+  let saving = false; // a save is posted and its refresh not done
+
+  const lockDialog = (locked) => {
+    saving = locked;
+    for (const button of dialog.querySelectorAll("button")) {
+      button.disabled = locked;
+    }
+  };
+
+  const plain = (event) => event.button === 0 && !event.ctrlKey
+    && !event.metaKey && !event.shiftKey && !event.altKey;
+
+  // Replaces every element of the page marked data-refresh, and the
+  // messages, with the same element of FRESH, the parsed new page,
+  // and returns the elements put in. An element the new page lacks is
+  // removed.
+  const refreshParts = (fresh) => {
+    const added = [];
+    for (const old of document.querySelectorAll("[data-refresh][id]")) {
+      const next = fresh.getElementById(old.id);
+      if (next) {
+        const node = document.adoptNode(next);
+        old.replaceWith(node);
+        added.push(node);
+      } else {
+        old.remove();
+      }
+    }
+    const shown = document.querySelector("ul.lab-messages");
+    const message = fresh.querySelector("ul.lab-messages");
+    if (message) {
+      const node = document.adoptNode(message);
+      if (shown) {
+        shown.replaceWith(node);
+      } else {
+        const main = document.getElementById("main");
+        const demo = main.querySelector(":scope > .lab-demo");
+        if (demo) {
+          demo.after(node);
+        } else {
+          main.prepend(node);
+        }
+      }
+    } else if (shown) {
+      shown.remove();
+    }
+    document.title = fresh.title;
+    return added;
+  };
+
+  // Brings what the user set in the item list back after its parts
+  // were replaced: TICKED, the values of the check boxes that were
+  // ticked, the rows' focus, the row of the details' item marked, and
+  // that item named in the address while the details show.
+  const restoreList = (ticked) => {
+    for (const box of document.querySelectorAll("input[name=item]")) {
+      box.checked = ticked.has(box.value);
+    }
+    focusable();
+    const pane = document.getElementById("item-detail");
+    const id = pane && pane.dataset.item ? pane.dataset.item : null;
+    for (const row of document.querySelectorAll(ROWS)) {
+      if (id !== null && row.dataset.item === id) {
+        row.setAttribute("aria-current", "true");
+      } else {
+        row.removeAttribute("aria-current");
+      }
+    }
+    if (detailSwitch && detailSwitch.checked) writeDetail(id);
+  };
+
+  // Fetches the page's own address as a page and puts what changed in.
+  const refreshPage = async () => {
+    const response = await fetch(location.href, {
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { Accept: "text/html" },
+    });
+    if (!response.ok || response.redirected) {
+      throw new Error(`refresh answered ${response.status}`);
+    }
+    const fresh = new DOMParser().parseFromString(
+      await response.text(), "text/html");
+    const ticked = new Set(
+      [...document.querySelectorAll("input[name=item]:checked")]
+        .map((box) => box.value));
+    for (const node of refreshParts(fresh)) htmx.process(node);
+    restoreList(ticked);
+  };
+
+  // Moves focus to the link that opened the dialog while it is in the
+  // page, else to the heading of the details, else to the page's.
+  const focusAfterSave = () => {
+    if (dialogOpener && dialogOpener.isConnected) {
+      dialogOpener.focus();
+      return;
+    }
+    const heading = document.getElementById("item-detail-title")
+      || document.querySelector("main h1");
+    if (!heading) return;
+    heading.tabIndex = -1;
+    heading.focus();
+  };
+
+  if (dialog && dialogBody) {
+    document.addEventListener("click", (event) => {
+      if (!plain(event) || !(event.target instanceof Element)) return;
+      const link = event.target.closest("a[data-dialog]");
+      if (link && typeof htmx !== "undefined") {
+        event.preventDefault();
+        dialogOpener = link;
+        loading = link.href;
+        htmx.ajax("GET", link.href,
+                  { target: dialogBody, swap: "innerHTML" });
+        return;
+      }
+      const closer = event.target.closest(
+        ".lab-dialog-close, #lab-dialog-body .lab-buttons a");
+      if (closer && dialog.contains(closer)) {
+        event.preventDefault();
+        if (!saving) dialog.close();
+      }
+    });
+
+    // The form is in: show the dialog, or, where the dialog already
+    // shows and the form is back with errors, move to the first one.
+    dialogBody.addEventListener("htmx:afterSwap", () => {
+      loading = null;
+      if (!dialog.open) {
+        dialog.showModal();
+        return;
+      }
+      const wrong = dialogBody.querySelector(
+        ".lab-field--error :is(input, select, textarea)");
+      if (wrong) wrong.focus();
+    });
+
+    // A form that could not be requested opens as the page it is.
+    const unopened = () => {
+      if (loading === null) return;
+      const href = loading;
+      loading = null;
+      location.assign(href);
+    };
+    dialogBody.addEventListener("htmx:responseError", unopened);
+    dialogBody.addEventListener("htmx:sendError", unopened);
+
+    dialog.addEventListener("close", () => dialogBody.replaceChildren());
+    dialog.addEventListener("cancel", (event) => {
+      if (saving) event.preventDefault();
+    });
+
+    // htmx enables the buttons again when the save's request ends,
+    // which is before the refresh does.
+    dialog.addEventListener("htmx:afterRequest", () => {
+      if (saving) lockDialog(true);
+    });
+
+    document.addEventListener("lab-saved", async (event) => {
+      if (!(event.target instanceof Element)
+          || !dialog.contains(event.target) || saving) {
+        return;
+      }
+      lockDialog(true);
+      try {
+        await refreshPage();
+      } catch {
+        location.reload();
+        return;
+      }
+      lockDialog(false);
+      dialog.close();
+      focusAfterSave();
+    });
+  }
+
+  if (!detailSwitch) return;
   detailSwitch.addEventListener("change", () => {
     const row = markedRow();
     writeDetail(detailSwitch.checked && row ? row.dataset.item : null);

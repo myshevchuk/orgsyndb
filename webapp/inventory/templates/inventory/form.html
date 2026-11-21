@@ -2,7 +2,8 @@
 {% block title %}{{ title }}{% endblock %}
 {% block main %}
 <h1>{{ title }}</h1>
-<form class="lab-form" method="post">{% csrf_token %}
+{% partialdef form inline %}{% if dialog %}<h2 id="lab-dialog-title">{{ title }}</h2>
+{% endif %}<form class="lab-form" method="post"{% if dialog %} action="{{ request.path }}" hx-post="{{ request.path }}" hx-target="#lab-dialog-body" hx-swap="innerHTML" hx-disabled-elt="#lab-dialog button"{% endif %}>{% csrf_token %}
 {{ form.non_field_errors }}
 {% for field in form %}<div class="lab-field{% if field.errors %} lab-field--error{% endif %}">
 {% if field.widget_type == "checkbox" %}{{ field }} {{ field.label_tag }}{% else %}{{ field.label_tag }}
@@ -28,4 +29,4 @@
 {% if propose %}<button type="submit" name="propose" value="1">{% translate "Propose amount" %}</button>
 {% endif %}<a href="{{ cancel }}">{% translate "Cancel" %}</a></p>
 </form>
-{% endblock %}
+{% endpartialdef %}{% endblock %}

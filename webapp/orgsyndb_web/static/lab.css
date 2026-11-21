@@ -137,6 +137,35 @@
 }
 .lab-buttons { display: flex; align-items: center; gap: var(--space-3); }
 
+/* The dialog in the shell that a form chosen on a page opens in. */
+.lab-dialog {
+  position: fixed;
+  width: min(42rem, calc(100vw - 2 * var(--space-3)));
+  max-height: calc(100vh - 2 * var(--space-3));
+  overflow: auto;
+  padding: var(--space-4);
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+.lab-dialog::backdrop { background: rgb(0 0 0 / 0.5); }
+.lab-dialog h2 { margin-top: 0; padding-right: 2.5rem; }
+.lab-dialog .lab-form { max-width: none; }
+.lab-dialog-close {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  font: inherit;
+  line-height: 1;
+  padding: 0.2rem 0.55rem;
+  color: var(--fg);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+
 .lab-history { font-family: var(--font-ui); padding-left: var(--space-4); }
 .lab-history > li + li { margin-top: var(--space-2); }
 .lab-history ul { margin: var(--space-1) 0 0; padding-left: var(--space-4); }

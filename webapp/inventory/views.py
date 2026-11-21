@@ -2,22 +2,26 @@
 
 import bisect
 import itertools
+import json
 import re
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import date
+from functools import wraps
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import redirect_to_login
 from django.db import transaction
 from django.db.models import Count
 from django.forms import BaseForm
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.formats import localize_input
 from django.utils.text import capfirst
 from django.utils.translation import gettext as _
@@ -625,28 +629,108 @@ def note_page(request: HttpRequest, pk: int) -> HttpResponse:
     })
 
 
+def for_dialog(request: HttpRequest) -> bool:
+    """Tell whether REQUEST asks for a form to show in the lab's dialog.
+
+    That is an htmx request that is not htmx's reload of a page from its
+    history, which needs the complete page.
+    """
+    return (request.headers.get("HX-Request") == "true"
+            and request.headers.get("HX-History-Restore-Request") != "true")
+
+
+def sign_in_next(request: HttpRequest) -> str:
+    """Return the address to which signing in leads back after REQUEST.
+
+    That is the path and query of the page that made the htmx request
+    REQUEST, named by its ``HX-Current-URL`` header, when the page is on
+    the host of REQUEST; otherwise the path of REQUEST.
+    """
+    current = request.headers.get("HX-Current-URL", "")
+    if current and url_has_allowed_host_and_scheme(
+            current, {request.get_host()}, request.is_secure()):
+        parts = urlsplit(current)
+        return (parts.path or "/") + (f"?{parts.query}" if parts.query
+                                      else "")
+    return request.path
+
+
+def item_form(view: Callable[..., HttpResponse]
+              ) -> Callable[..., HttpResponse]:
+    """Decorate the item form VIEW to need a signed-in user and to answer
+    a request for a dialog (see ``for_dialog``).
+
+    A request without a signed-in user is redirected to the sign-in page
+    with ``next`` the path of the request. Where the request is for a
+    dialog, the answer is instead ``204 No Content`` with ``HX-Redirect``
+    to the sign-in page, whose ``next`` is the address of the page that
+    made the request (see ``sign_in_next``), which htmx makes the page
+    follow. Every answer varies with the headers ``HX-Request`` and
+    ``HX-History-Restore-Request``.
+    """
+    signed_in = login_required(view)
+
+    @wraps(view)
+    @vary_on_headers("HX-Request", "HX-History-Restore-Request")
+    def wrapper(request: HttpRequest, *args: Any, **kwargs: Any
+                ) -> HttpResponse:
+        if for_dialog(request) and not request.user.is_authenticated:
+            return HttpResponse(status=204, headers={
+                "HX-Redirect": redirect_to_login(sign_in_next(request)).url})
+        return signed_in(request, *args, **kwargs)
+
+    return wrapper
+
+
+def render_form(request: HttpRequest, form: BaseForm,
+                context: dict[str, Any], dialog: bool = False,
+                template: str = "inventory/form.html") -> HttpResponse:
+    """Render TEMPLATE with FORM and CONTEXT.
+
+    When DIALOG is true and REQUEST is for a dialog (see ``for_dialog``),
+    only the form's partial is rendered, to post from the dialog;
+    otherwise the complete page is.
+    """
+    if dialog and for_dialog(request):
+        return render(request, f"{template}#form",
+                      {"form": form, "dialog": True, **context})
+    return render(request, template, {"form": form, **context})
+
+
 def form_page(request: HttpRequest, form: BaseForm,
               book: Callable[[dict[str, Any]], HttpResponse],
               context: dict[str, Any],
-              template: str = "inventory/form.html") -> HttpResponse:
+              template: str = "inventory/form.html",
+              dialog: bool = False) -> HttpResponse:
     """Show FORM, or pass the cleaned data of the posted FORM to BOOK and
     return its response.
 
     A form with errors, and one whose booking is refused, shows again
     with the errors at their fields. CONTEXT goes to TEMPLATE beside the
-    form.
+    form. A true DIALOG lets a request for a dialog show the form alone
+    (see ``render_form``).
     """
     if request.method == "POST" and form.is_valid():
         try:
             return book(form.cleaned_data)
         except Refused as refused:
             show_refusal(form, refused, form.cleaned_data.get("rows"))
-    return render(request, template, {"form": form, **context})
+    return render_form(request, form, context, dialog, template)
 
 
-def saved(request: HttpRequest, text: str, target: str) -> HttpResponse:
-    """Leave the message TEXT and redirect to TARGET."""
+def saved(request: HttpRequest, text: str, target: str,
+          item: Item | None = None) -> HttpResponse:
+    """Leave the message TEXT and redirect to TARGET.
+
+    When ITEM is given and REQUEST is for a dialog (see ``for_dialog``),
+    the answer is instead ``204 No Content`` with an ``HX-Trigger``
+    header that fires the event ``lab-saved`` with the ID of ITEM as its
+    ``item``.
+    """
     messages.success(request, text)
+    if item is not None and for_dialog(request):
+        return HttpResponse(status=204, headers={
+            "HX-Trigger": json.dumps({"lab-saved": {"item": item.pk}})})
     return redirect(target)
 
 
@@ -708,7 +792,7 @@ def item_new(request: HttpRequest) -> HttpResponse:
          "boxes": in_use("box")})
 
 
-@login_required
+@item_form
 def item_edit(request: HttpRequest, pk: int) -> HttpResponse:
     """Change the state, stock entry, location and note of the item PK
     and its article's category, and give its article the article number
@@ -727,17 +811,17 @@ def item_edit(request: HttpRequest, pk: int) -> HttpResponse:
         stored = Item.objects.select_related("article__substance").get(
             pk=item.pk)
         return saved(request, _("Item %(item)s saved.") % {"item": stored},
-                     item_url(stored))
+                     item_url(stored), stored)
 
     form = ItemEditForm(request.POST or None, instance=item)
     return form_page(
         request, form, book,
         {"title": title, "cancel": item_url(item),
          "categories": categories(), "compartments": in_use("compartment"),
-         "boxes": in_use("box")})
+         "boxes": in_use("box")}, dialog=True)
 
 
-@login_required
+@item_form
 def item_fill(request: HttpRequest, pk: int) -> HttpResponse:
     """Book a filling of the item PK, from a lot or none.
 
@@ -750,15 +834,15 @@ def item_fill(request: HttpRequest, pk: int) -> HttpResponse:
     if request.method == "POST" and "propose" in request.POST:
         if form.is_valid():
             form = proposed(request, form, item)
-        return render(request, "inventory/form.html",
-                      {"form": form, **fill_context(item)})
+        return render_form(request, form, fill_context(item), dialog=True)
 
     def book(data: dict[str, Any]) -> HttpResponse:
         bookings.fill(request.user, item, **data)
         return saved(request, _("Filling of %(item)s booked.")
-                     % {"item": item}, item_url(item))
+                     % {"item": item}, item_url(item), item)
 
-    return form_page(request, form, book, fill_context(item))
+    return form_page(request, form, book, fill_context(item),
+                     dialog=True)
 
 
 def proposed(request: HttpRequest, form: FillForm, item: Item) -> FillForm:
@@ -787,7 +871,7 @@ def fill_context(item: Item) -> dict[str, Any]:
             "cancel": item_url(item), "item": item, "propose": True}
 
 
-@login_required
+@item_form
 def item_correct(request: HttpRequest, pk: int) -> HttpResponse:
     """Set the count of the item PK after counting."""
     item = get_object_or_404(Item, pk=pk)
@@ -795,16 +879,16 @@ def item_correct(request: HttpRequest, pk: int) -> HttpResponse:
     def book(data: dict[str, Any]) -> HttpResponse:
         bookings.correct(request.user, item, **data)
         return saved(request, _("Count of %(item)s corrected.")
-                     % {"item": item}, item_url(item))
+                     % {"item": item}, item_url(item), item)
 
     return form_page(
         request, CorrectionForm(request.POST or None, initial={
             "count": item.quantity}), book,
         {"title": _("Correct the count of %(item)s") % {"item": item},
-         "cancel": item_url(item)})
+         "cancel": item_url(item)}, dialog=True)
 
 
-@login_required
+@item_form
 def movement_reverse(request: HttpRequest, pk: int, movement: int
                      ) -> HttpResponse:
     """Reverse the delivery or filling MOVEMENT of the item PK."""
@@ -815,17 +899,17 @@ def movement_reverse(request: HttpRequest, pk: int, movement: int
         bookings.reverse(request.user, chosen, note=data["note"])
         return saved(request, _("%(kind)s of %(item)s reversed.")
                      % {"kind": chosen.get_kind_display(), "item": item},
-                     item_url(item))
+                     item_url(item), item)
 
     return form_page(
         request, ReversalForm(request.POST or None), book,
         {"title": _("Reverse: %(kind)s of %(count)s, %(date)s") % {
             "kind": chosen.get_kind_display(), "count": chosen.count,
             "date": localize_input(chosen.date)},
-         "cancel": item_url(item)})
+         "cancel": item_url(item)}, dialog=True)
 
 
-@login_required
+@item_form
 def item_consumption(request: HttpRequest, pk: int) -> HttpResponse:
     """Enter the consumption of a quarter of the item PK, or remove it
     with an empty count."""
@@ -834,12 +918,12 @@ def item_consumption(request: HttpRequest, pk: int) -> HttpResponse:
     def book(data: dict[str, Any]) -> HttpResponse:
         bookings.enter_consumption(request.user, item, **data)
         return saved(request, _("Consumption of %(item)s saved.")
-                     % {"item": item}, item_url(item))
+                     % {"item": item}, item_url(item), item)
 
     return form_page(
         request, ConsumptionForm(request.POST or None), book,
         {"title": _("Enter consumption of %(item)s") % {"item": item},
-         "cancel": item_url(item)})
+         "cancel": item_url(item)}, dialog=True)
 
 
 @login_required
