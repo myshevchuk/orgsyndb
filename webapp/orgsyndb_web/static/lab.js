@@ -10,20 +10,28 @@
 //   changes, and hides that form's submit buttons.
 // - Restores each control marked data-remember from localStorage when
 //   the page loads, and saves it there whenever it changes.
-// - Checks the item list's switch `Details` (#detail-switch) and saves
-//   it when the address holds `detail`. Turning the switch on writes
-//   the id of the marked row into the address as `detail`; turning it
-//   off removes `detail`.
-// - While the switch is checked, chooses a row: a plain click in it,
-//   on a link too but not on a check box, or an arrow key up or down
-//   in the table, which also focuses the row it moves to. Choosing
-//   fires the event `item-select` on the row, which makes htmx load the
-//   row's details into #item-detail, and nothing else.
-// - Once htmx has swapped details in, marks the row that asked for them
-//   with aria-current="true" and writes its id into the address as
-//   `detail`. A request that is aborted or fails swaps nothing, so
-//   pane, mark and address stay as they were. While details load, the
-//   pane is inert.
+// - Marks the item list's layout (.item-layout) data-scripted, so that
+//   lab.css follows its data-view and no longer the radio buttons of
+//   the switch between the views, `Tabelle` and `Details`
+//   (#view-table, #view-details). When one of them changes, the script
+//   saves the view in the cookie `item-list-view`, which the server
+//   reads, and sets data-view, inside a view transition where the
+//   browser has them and the user has not asked for reduced motion.
+//   The radio buttons keep their native behaviour. While the details
+//   view shows, the button `Spalten` is disabled.
+// - In both views, chooses a row: a plain click in it, but not on a
+//   link or an input, or an arrow key up or down in the table, which
+//   also focuses the row it moves to. Choosing fires the event
+//   `item-select` on the row, which makes htmx load the row's details
+//   into #item-detail, and nothing else.
+// - Once htmx has swapped details in, and once a dialog's save has
+//   refreshed the list, makes the list follow the details' item: its
+//   row is marked with aria-current="true", and its id is written as
+//   `selected` into the address, the filter form's hidden field and
+//   the links of the list to itself, which are the column headers, the
+//   stock levels and the reset link. A request that is aborted or
+//   fails swaps nothing, so pane, mark and address stay as they were.
+//   While details load, the pane is inert.
 //
 // - Opens the form that a link marked data-dialog leads to in the
 //   dialog of the page shell (#lab-dialog) on a plain click, and
@@ -41,7 +49,7 @@
 //   save is pending.
 //
 // OrgSynLab.place is the placement's arithmetic and
-// OrgSynLab.detailSearch the address's, each kept apart from the page
+// OrgSynLab.paramSearch the address's, each kept apart from the page
 // so that tests can run it without one.
 (() => {
   "use strict";
@@ -66,28 +74,28 @@
   };
 
   // The query string of SEARCH, as location.search holds it, with or
-  // without its leading "?", whose parameter `detail` is set to ID, a
-  // number or text, or removed when ID is null; every other parameter
-  // keeps its text and its place. It is "?" and the parameters, or ""
-  // when none is left. Repeated `detail` parameters become one, at the
-  // place of the first.
-  const detailSearch = (search, id) => {
+  // without its leading "?", whose parameter NAME is set to VALUE, a
+  // number or text, or removed when VALUE is null; every other
+  // parameter keeps its text and its place. It is "?" and the
+  // parameters, or "" when none is left. Repeated NAME parameters become
+  // one, at the place of the first.
+  const paramSearch = (search, name, value) => {
     const kept = [];
-    let placed = id === null || id === undefined;
+    let placed = value === null || value === undefined;
     for (const pair of search.replace(/^\?/, "").split("&")) {
       if (pair === "") continue;
-      if (pair.split("=", 1)[0] !== "detail") {
+      if (pair.split("=", 1)[0] !== name) {
         kept.push(pair);
       } else if (!placed) {
-        kept.push(`detail=${encodeURIComponent(id)}`);
+        kept.push(`${name}=${encodeURIComponent(value)}`);
         placed = true;
       }
     }
-    if (!placed) kept.push(`detail=${encodeURIComponent(id)}`);
+    if (!placed) kept.push(`${name}=${encodeURIComponent(value)}`);
     return kept.length ? `?${kept.join("&")}` : "";
   };
 
-  globalThis.OrgSynLab = { place, detailSearch };
+  globalThis.OrgSynLab = { place, paramSearch };
   if (typeof document === "undefined") return;
 
   let open = null;
@@ -176,33 +184,73 @@
     });
   }
 
-  const detailSwitch = document.getElementById("detail-switch");
+  const layout = document.querySelector(".item-layout");
   const ROWS = ".item-table tbody tr[data-item]";
+  // The links of the list to itself, which name the selected item.
+  const OWN_LINKS = ".item-table thead a, #stock-entries a, #list-summary a";
 
   const markedRow = () => document.querySelector(
     `${ROWS}[aria-current="true"]`);
 
-  const writeDetail = (id) => {
+  // The id of the item whose details the pane holds, "" for none.
+  const paneItem = () => {
+    const pane = document.getElementById("item-detail");
+    return pane && pane.dataset.item ? pane.dataset.item : "";
+  };
+
+  // Rows take focus, so that the arrow keys have a row to start from.
+  const focusable = () => {
+    for (const row of document.querySelectorAll(ROWS)) row.tabIndex = -1;
+  };
+
+  // Sets the parameter `selected` of the link's address to ID, or
+  // removes it when ID is empty, keeping its path.
+  const relink = (link, id) => {
+    const href = link.getAttribute("href");
+    const at = href.indexOf("?");
+    link.setAttribute("href", (at < 0 ? href : href.slice(0, at))
+      + paramSearch(at < 0 ? "" : href.slice(at), "selected",
+                    id === "" ? null : id));
+  };
+
+  // Brings the list in step with the details' item ID, "" for none: its
+  // row is marked and the others are not, and the address, the filter
+  // form's hidden field and the links of the list to itself name it, or
+  // do not name any item for no id.
+  const follow = (id) => {
+    for (const row of document.querySelectorAll(ROWS)) {
+      if (id !== "" && row.dataset.item === id) {
+        row.setAttribute("aria-current", "true");
+      } else {
+        row.removeAttribute("aria-current");
+      }
+    }
     try {
       history.replaceState(
         history.state, "",
-        `${location.pathname}${detailSearch(location.search, id)}`
+        `${location.pathname}${paramSearch(location.search, "selected",
+                                           id === "" ? null : id)}`
         + location.hash);
     } catch {
       // The address cannot change: the page shows the item regardless.
     }
-  };
-
-  // Rows take focus only while the details show, so that the arrow
-  // keys have a row to start from.
-  const focusable = () => {
-    if (!detailSwitch) return;
-    for (const row of document.querySelectorAll(ROWS)) {
-      if (detailSwitch.checked) {
-        row.tabIndex = -1;
+    const form = document.getElementById("filters");
+    if (form) {
+      let field = form.querySelector("input[name=selected]");
+      if (id === "") {
+        if (field) field.remove();
       } else {
-        row.removeAttribute("tabindex");
+        if (!field) {
+          field = document.createElement("input");
+          field.type = "hidden";
+          field.name = "selected";
+          form.append(field);
+        }
+        field.value = id;
       }
+    }
+    for (const link of document.querySelectorAll(OWN_LINKS)) {
+      relink(link, id);
     }
   };
 
@@ -274,23 +322,14 @@
 
   // Brings what the user set in the item list back after its parts
   // were replaced: TICKED, the values of the check boxes that were
-  // ticked, the rows' focus, the row of the details' item marked, and
-  // that item named in the address while the details show.
+  // ticked, the rows' focus, and the list's follow of the details' item.
   const restoreList = (ticked) => {
     for (const box of document.querySelectorAll("input[name=item]")) {
       box.checked = ticked.has(box.value);
     }
+    if (!layout) return;
     focusable();
-    const pane = document.getElementById("item-detail");
-    const id = pane && pane.dataset.item ? pane.dataset.item : null;
-    for (const row of document.querySelectorAll(ROWS)) {
-      if (id !== null && row.dataset.item === id) {
-        row.setAttribute("aria-current", "true");
-      } else {
-        row.removeAttribute("aria-current");
-      }
-    }
-    if (detailSwitch && detailSwitch.checked) writeDetail(id);
+    follow(paneItem());
   };
 
   // Fetches the page's own address as a page and puts what changed in.
@@ -431,24 +470,47 @@
     });
   }
 
-  if (!detailSwitch) return;
-  detailSwitch.addEventListener("change", () => {
-    const row = markedRow();
-    writeDetail(detailSwitch.checked && row ? row.dataset.item : null);
-    focusable();
-  });
+  if (!layout) return;
 
-  // A shared address holding `detail` opens on the item, whatever the
-  // reader's stored choice; a switch restored as checked names the
-  // marked row in the address.
-  if (/(^|[?&])detail(=|&|$)/.test(location.search)) {
-    detailSwitch.checked = true;
-    detailSwitch.dispatchEvent(new Event("change"));
-  } else if (detailSwitch.checked) {
-    const row = markedRow();
-    writeDetail(row ? row.dataset.item : null);
-  }
+  // From here on lab.css follows data-view, which the radio buttons
+  // agree with unless the browser restored them differently.
+  layout.dataset.scripted = "";
+  const radios = [...document.querySelectorAll("input[name=view]")];
+  const checked = radios.find((radio) => radio.checked);
+  if (checked) layout.dataset.view = checked.value;
   focusable();
+
+  const columnsButton = document.querySelector(
+    "[popovertarget=columns-menu]");
+  // The columns of `Spalten` are those of the table view, so the
+  // button has nothing to offer while the details view shows.
+  const syncColumnsButton = () => {
+    if (columnsButton) {
+      columnsButton.disabled = layout.dataset.view === "details";
+    }
+  };
+  syncColumnsButton();
+
+  for (const radio of radios) {
+    radio.addEventListener("change", () => {
+      const view = radio.value;
+      if (!radio.checked || layout.dataset.view === view) return;
+      document.cookie = `item-list-view=${view};`
+        + " path=/lab/inventory/end-products/; max-age=31536000;"
+        + " SameSite=Lax";
+      const show = () => {
+        layout.dataset.view = view;
+        syncColumnsButton();
+      };
+      if (document.startViewTransition
+          && !window.matchMedia("(prefers-reduced-motion: reduce)")
+            .matches) {
+        document.startViewTransition(show);
+      } else {
+        show();
+      }
+    });
+  }
 
   // While a row's details load, the pane takes neither pointer nor
   // keyboard, so the previous item's links cannot be used; once the
@@ -472,21 +534,18 @@
   // Asks htmx for the details of ROW.
   const choose = (row) => htmx.trigger(row, "item-select");
 
+  // A click chooses the row it lands in unless it lands on a link,
+  // which leads where it links, or on an input.
   document.addEventListener("click", (event) => {
-    if (!detailSwitch.checked || typeof htmx === "undefined") return;
-    if (event.button !== 0 || event.ctrlKey || event.metaKey
-        || event.shiftKey || event.altKey) {
-      return;
-    }
+    if (typeof htmx === "undefined" || !plain(event)) return;
     if (!(event.target instanceof Element)) return;
     const row = event.target.closest(ROWS);
-    if (!row || event.target.closest("input")) return;
-    event.preventDefault();
+    if (!row || event.target.closest("a, input")) return;
     choose(row);
   });
 
   document.addEventListener("keydown", (event) => {
-    if (!detailSwitch.checked || typeof htmx === "undefined") return;
+    if (typeof htmx === "undefined") return;
     if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
     if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
       return;
@@ -513,10 +572,6 @@
     const row = event.detail.requestConfig
       && event.detail.requestConfig.elt;
     if (!row || !row.matches || !row.matches(ROWS)) return;
-    for (const old of document.querySelectorAll(ROWS)) {
-      old.removeAttribute("aria-current");
-    }
-    row.setAttribute("aria-current", "true");
-    if (detailSwitch.checked) writeDetail(row.dataset.item);
+    follow(paneItem());
   });
 })();

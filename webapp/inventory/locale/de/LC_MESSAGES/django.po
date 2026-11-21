@@ -685,6 +685,14 @@ msgstr "Sehr kompakt"
 msgid "Colour consumption"
 msgstr "Verbrauch einfärben"
 
+msgctxt "item list"
+msgid "View"
+msgstr "Ansicht"
+
+msgctxt "item list"
+msgid "Table"
+msgstr "Tabelle"
+
 msgid "Details"
 msgstr "Details"
 
