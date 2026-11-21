@@ -88,8 +88,8 @@ A signed-in user sees a link `Neuer Artikel` (`New item`), and, in the row of ea
 - **THEN** the first two lists mark the row of `A-2` and show its details, the third marks the row of `A-1` and show its details, and the fourth marks no row and shows none, in either view
 
 #### Scenario: The selection kept
-- **WHEN** a test client requests the list with `category=Ester` and `selected` naming `A-3`
-- **THEN** the filter form holds `selected` naming `A-3`, and the list's links to its stock levels, to its other orders and to its reset name `A-3` in `selected`
+- **WHEN** the database holds `A-2` and `A-3` in `Ester` and `A-1` in `Säuren`, and a test client requests the list with `category=Ester` and `selected` naming `A-3`, then with `category=Ester` alone, then with `category=Ester` and `selected` naming `A-1`, and then with `category=Basen`
+- **THEN** the filter form holds `selected` and the list's links to its stock levels, to its other orders and to its reset name it in `selected`: `A-3` in the first answer, `A-2` in the second and third, and in the fourth neither the form nor those links hold `selected`
 
 #### Scenario: Links in the details
 - **WHEN** a signed-in user requests the list with `selected` naming an item without an article number, and a visitor requests it

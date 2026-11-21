@@ -12,21 +12,30 @@
   both views; the first row without it, with an unknown id and with an
   id the filters leave out; none for an empty list; `detail` no longer
   read
-- [ ] 1.4 Selection kept: with `selected`, the filter form's hidden
-  field, the stock levels' links, the headers' links and the reset
-  link carry it; without it, none of them does
+- [ ] 1.4 Selection kept: the filter form's hidden field, the stock
+  levels' links, the headers' links and the reset link carry the id of
+  the row the server selected, named by `selected` or standing in as
+  the first; a stale `selected` is not carried; an empty list carries
+  none
 - [ ] 1.5 Details' URL: a request without htmx redirects to the list
   with `selected`; the scenarios "Details of an item", "Links in the
-  details" and "Another item in place" with `selected`
-- [ ] 1.6 Stylesheet: `.table-only` hidden while `#view-details` is
-  checked, on screen alone; the item table without `width: 100%`; the
-  marked row styled in both views; no per-key hiding rule left in
-  `lab.css`
+  details" and "Another item in place" with `selected`; every test
+  that requests the list with `detail`, the consumption widget's in
+  `test_inventory_consumption_widget.py` among them, moved to
+  `selected` and to an item other than the first
+- [ ] 1.6 Stylesheet: `.table-only` hidden in the details view, on
+  screen alone, by `[data-view="details"]` once scripted and by
+  `#view-details:checked` otherwise; `.item-table` without
+  `width: 100%`; the marked row styled in both views; no per-key
+  hiding rule left in `lab.css`; the generated rules in the page's
+  head; the view-transition names and the unscaled snapshots under
+  `prefers-reduced-motion: no-preference` alone
 - [ ] 1.7 `OrgSynLab.paramSearch` under Node: a parameter set,
   replaced and removed, repeated ones joined, others kept;
   `detailSearch` gone
 - [ ] 1.8 Dialogs: the scenario "Signed out meanwhile" with
-  `selected=3`; the refresh's parts unchanged
+  `selected=3`; the refresh's parts unchanged; `.item-layout` carries
+  `data-view` from the cookie
 
 ## 2. Implementation
 
@@ -41,9 +50,10 @@
   details grid, `.table-only` hidden in the details view, the marked
   row in both views, the switch, the view-transition names
 - [ ] 2.4 `lab.js`: `paramSearch`; selection in both views, links
-  followed; the address, the hidden field and the links updated after
-  the swap; the cookie; the disabled `Spalten` button; the animated
-  switch with its fallbacks; the header comment
+  followed; `follow(id)` after a row's swap and after a dialog's
+  refresh, in either view; the cookie and `data-view`, `data-scripted`;
+  the disabled `Spalten` button; the animated switch with native radio
+  activation and its fallbacks; the header comment
 - [ ] 2.5 The German catalogue of `inventory`: new strings, obsolete
   ones removed, compiled
 
@@ -56,12 +66,24 @@
 ## 4. Verification
 
 - [ ] 4.1 Both suites pass
-- [ ] 4.2 On the test server: switching keeps every base column's
-  width and place and animates, and switches at once with reduced
-  motion; a click outside the links and ↑ and ↓ select in both views,
-  a link follows; holding ↓ in the table view; a reload, a filter and
-  a reorder keep the selection; the cookie survives a new tab; a save
-  in a dialog keeps the selection; the console shows no error
+- [ ] 4.2 On the test server, in a real browser:
+  - by script, the five base columns' widths and left edges relative
+    to the table are equal in both views, with the note shown and
+    hidden, with a long name, on both sides of 55rem, and with the box
+    scrolled sideways;
+  - the switch animates with the base columns standing still, neither
+    moved nor scaled, and switches at once with reduced motion; the
+    switch itself with click, Space, ←/→ and Tab, and clicked twice
+    on the shown view, keeps focus and checked state as native radios
+    do and switches once per change;
+  - a click outside the links and ↑ and ↓ select in both views, a
+    link follows; holding ↓ in the table view;
+  - a reload, a filter, a reorder and a reset keep the selection; the
+    cookie survives a new tab;
+  - a save in a dialog keeps the selection, and a save that moves the
+    selected item out of the stock filter selects the first row,
+    after which a header link and the filter form carry that row;
+  - the console shows no error
 
 ## 5. Review and archive
 

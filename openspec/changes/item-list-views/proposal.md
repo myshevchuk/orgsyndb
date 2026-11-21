@@ -81,7 +81,8 @@ None.
   `inventory`.
 - Tests: `webapp/tests/test_inventory_table.py`,
   `test_inventory_detail.py`, `test_inventory_lists.py`,
-  `test_inventory_dialogs.py` and `test_lab_script.py`.
+  `test_inventory_dialogs.py`, `test_inventory_consumption_widget.py`
+  and `test_lab_script.py`.
 - `README.md`, whose section on the item list describes the checkbox
   `Details`, selection in the details view only and `detail=<id>`.
 - No new dependency.

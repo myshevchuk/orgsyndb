@@ -56,47 +56,72 @@ rejected: twelve includes per row cost a loader lookup each on lists
 of hundreds of rows, where a partial renders from the parsed
 template.
 
-**Hiding rules come from the model.** The page renders, inside
-`main`, a `<style>` element with one rule per table-view column:
-`main:has(#column-<key>:not(:checked)) .item-table .col-<key>` hides
-the column. One static rule in `lab.css` hides `.table-only` while
-the details view shows. Adding a column, or moving one between the
-groups, then needs no edit of `lab.css`. The `Spalten` menu lists the
-table-view columns alone.
+**Hiding rules come from the model.** The list fills the page shell's
+`head` block with a `<style>` element holding one rule per table-view
+column: `main:has(#column-<key>:not(:checked)) .item-table
+.col-<key>` hides the column. One static rule in `lab.css` hides
+`.table-only` while the details view shows. Adding a column, or
+moving one between the groups, then needs no edit of `lab.css`. The
+`Spalten` menu lists the table-view columns alone.
 
-**Geometry.** The item table drops `width: 100%` and takes its
-natural width; every cell but the note's is `nowrap`, so a base
-column is as wide as its widest content in both views. In the table
-view the note column, when shown, takes the remaining width. In the
-details view the grid gives the table its natural width, at most
+**Geometry.** `.item-table` overrides the `width: 100%` that
+`.inventory-table` gives every list and takes its natural width. Every
+base cell is `nowrap`, header and units included, so its minimum and
+maximum content widths are equal; the automatic table layout then
+gives each base column its widest content's width whatever the other
+columns do, and a table wider than its box overflows into the box's
+scroll range rather than narrowing a base column. In the table view
+the note column, when shown, takes the width left over. In the
+details view the grid gives the table box its natural width, at most
 what is left beside a pane of at least 20rem, and the pane the rest.
 Below 55rem the pane stays under the table, as now.
+
+A base column keeps its width and its left edge relative to the
+table. Where the box is scrolled sideways and the details view leaves
+less to scroll, the browser clamps the scroll offset, so the table may
+move as a whole; that is accepted, and the base columns still line up
+with themselves.
 
 **Two-part switch, view in a cookie.** The switch is a fieldset of two
 radio buttons, `#view-table` (`Tabelle`) and `#view-details`
 (`Details`), named `view`, outside any form, with a visually hidden
-legend `Ansicht` (`View`). `lab.css` reads `#view-details:checked`
-where it read `#detail-switch:checked`, so the views switch without a
-script too. A change sets the cookie `item-list-view` to `table` or
-`details`, path `/lab/inventory/end-products/`, a year's `max-age`,
-`SameSite=Lax`. The view reads it and checks the matching radio; any
-other value is the table view. The checkbox `#detail-switch`, its
-`data-remember` key and the rule that `detail` in the address turns it
-on go. The `Spalten` button is disabled while the details view shows.
+legend `Ansicht` (`View`). The view reads the cookie `item-list-view`
+and checks the matching radio, any other value being the table view,
+and renders the same view as `data-view` on `.item-layout`. On a
+change `lab.js` sets the cookie to `table` or `details`, path
+`/lab/inventory/end-products/`, a year's `max-age`, `SameSite=Lax`.
+The checkbox `#detail-switch`, its `data-remember` key and the rule
+that `detail` in the address turns it on go. The `Spalten` button is
+disabled while the details view shows.
+
+The layout follows `data-view`. `lab.js` marks `.item-layout` with
+`data-scripted` when it starts; until then, and on a page without the
+script, the layout follows `#view-details:checked` instead. Both agree
+on the first paint, since the server renders both from the cookie.
 
 **`selected` in the address.** `chosen_row` reads `selected`; the
 details' URL redirects a request without htmx to `?selected=<id>`.
 The selected row carries `aria-current="true"` in both views, and
-`lab.css` marks it in both. The server writes the request's
-`selected` into the list's links to itself (the column headers, the
-stock levels, `Zurücksetzen`) and as a hidden field into the filter
-form. After each selection `lab.js` writes the new id into the
-address, into that hidden field and into those links' `selected`, so
-a later filter or reorder keeps it; a `selected` that the new list
-does not hold falls back to the first row, as now.
-`OrgSynLab.detailSearch` becomes `OrgSynLab.paramSearch(search, name,
-value)`, which sets or removes one parameter, so the address and the
-links share it.
+`lab.css` marks it in both. The server writes the id of the row it
+selected, whether `selected` named it or the first row stands in, into
+the list's links to itself (the column headers, the stock levels,
+`Zurücksetzen`) and as a hidden field into the filter form, and leaves
+it out of them for an empty list; a stale `selected` therefore never
+travels on. `OrgSynLab.detailSearch` becomes
+`OrgSynLab.paramSearch(search, name, value)`, which sets or removes
+one parameter, so the address and the links share it.
+
+`lab.js` keeps all of these in step with the pane through one
+function, `follow(id)`: it marks the row of `id`, and writes `id` into
+the address, the hidden field and every link of the list to itself,
+or removes `selected` from them when `id` is empty. It runs after a
+row's details are swapped in and after a dialog's refresh, in either
+view, with the id the pane carries as `data-item`. The refresh
+replaces the rows, the pane, the stock levels and the reset link with
+the fetched page's, which the server rendered from the address; the
+column headers and the hidden field stay, and `follow` brings them up
+to date, also when the save moved the selected item out of the
+filters and the fetched page selected another.
 
 **Selection in both views.** Rows take focus (`tabindex="-1"`) in
 both views. A click without a modifier key in a row selects it unless
@@ -107,15 +132,24 @@ not, and switching to the details view needs no request. Mark and
 address still move only after the swap, as `item-detail-pane` settled,
 so they never name an item other than the pane's.
 
-**Animated switch.** The radio's click is cancelled, and inside
-`document.startViewTransition(update)` `update` checks the radio and
-dispatches `change`, so that the browser takes its snapshot of the old
-view before the change. The pane and the table box get their own
-`view-transition-name`, so the pane slides in beside base columns
-that stay where they are, and the table view's columns fade. Without
-`startViewTransition`, or under `prefers-reduced-motion: reduce`, the
-switch changes at once. The keyboard selects radios through click
-events too, so the arrow keys animate as well.
+**Animated switch.** The radios keep their native activation: click,
+Space and the arrow keys check them and fire `input` and `change` as
+the browser does. Because the layout follows `data-view` and not the
+radios, the `change` handler can call
+`document.startViewTransition(() => { layout.dataset.view = view; })`,
+and the browser snapshots the old layout before the attribute
+changes. A `change` that names the view already shown does nothing.
+
+The intended effect: the base columns stand still, the table view's
+columns fade out or in, and the pane slides in from the right or out
+to it. The table box and the pane get their own
+`view-transition-name`. The table box's old and new snapshots are
+drawn unscaled, anchored at their left edge (`object-fit: none`,
+`object-position: left top`, a full-size image in a group that clips),
+so that its width animating does not stretch the columns; the pane's
+entering and leaving snapshots get a slide keyed to the same
+duration. Without `startViewTransition`, or under
+`prefers-reduced-motion: reduce`, the attribute changes at once.
 
 ## Risks / Trade-offs
 
@@ -123,9 +157,13 @@ events too, so the arrow keys animate as well.
   aborts each request for the next, so the mark waits until the key
   is released and the last request has answered; the focused row
   shows the keyboard's place meanwhile. Checked by hand (tasks 4.2).
-- [A `<style>` element in the page] → the application sends no
+- [A `<style>` element in the page's head] → the application sends no
   Content Security Policy; one that forbids inline styles later must
   allow this element or move the rules to a generated stylesheet.
 - [Natural width] → a table wider than the window scrolls in its
   box, as now; a very long name widens the name column in both views
   alike, which is the point.
+- [Column geometry and the transition's look are a browser's] → no
+  test client can measure them; tasks 4.2 measures the five base
+  columns' widths and left edges in both views by script in a real
+  browser.
