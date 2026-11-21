@@ -50,7 +50,7 @@
 ## 4. Verification
 
 - [x] 4.1 Both suites pass
-- [ ] 4.2 On the test server, with `category` in force: the switch,
+- [x] 4.2 On the test server, with `category` in force: the switch,
   a click and ↑ and ↓ show items in the pane; a reload keeps both
   `category` and `detail`; with the network throttled the pane dims
   and the mark moves only when the details arrive; offline, a choice

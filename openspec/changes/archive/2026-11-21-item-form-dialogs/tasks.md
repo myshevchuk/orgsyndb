@@ -68,4 +68,4 @@
   as a page. Focus after a save from the pane and from a reversal
   link. Signed out in another tab, opening and saving lead to sign-in
   and back
-- [ ] 3.3 On the test server, by the owner
+- [x] 3.3 On the test server, by the owner
