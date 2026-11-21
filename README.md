@@ -2704,6 +2704,14 @@ stock level and coverage in quarters. Choose **Artikelseite öffnen**
 (**Open item page**) to read the full item page, including its quarterly
 mean and stock movements. When you sign in, you can use the available
 actions, such as **Fill** and **Correct count**, directly from the pane.
+**Fill**, **Correct count**, **Enter consumption**, **Edit** and **Enter
+article number**, in the pane and on the item page, and **Reverse** on
+the item page, open their forms in a dialog over the page; **Book
+delivery** opens the delivery note form as a page. Saving closes the
+dialog and updates the page in place with a confirmation, keeping your
+filters, chosen item and ticked rows. **Abbrechen** (**Cancel**), the
+close button or Escape closes the dialog without saving. A form opened
+in a new tab still works as a page of its own.
 
 Under **Fertige Gebinde** (**Finished containers**), read **Fach** and
 **Box** to find the finished containers. Each empty field reads **nicht
