@@ -41,9 +41,10 @@ FORM_NAMES = ("edit", "fill", "correct", "consumption", "reverse")
 DIALOG_LINKS = ("Abfüllen", "Bestand korrigieren", "Verbrauch nachtragen",
                 "Bearbeiten")
 # Controls that a refresh of the list must not replace: the search the
-# user typed in and the view controls.
-KEPT = ({"name": "q"}, {"id": "detail-switch"}, {"id": "row-height"},
-        {"id": "heat-switch"})
+# user typed in, the view controls and the field that names the
+# selected item.
+KEPT = ({"name": "q"}, {"id": "view-table"}, {"id": "view-details"},
+        {"id": "row-height"}, {"id": "heat-switch"}, {"name": "selected"})
 
 
 def correction(**over: str) -> dict[str, str]:
@@ -435,7 +436,7 @@ class SavedInTheDialogTests(DialogCase):
         done = self.client.post(self.urls()["correct"],
                                 correction(count="3"), **HTMX)
         self.assertEqual(done.status_code, 204)
-        root = page(self.client.get(f"{LIST}?detail={self.target.pk}"))
+        root = page(self.client.get(f"{LIST}?selected={self.target.pk}"))
         counts = {}
         for row in root.find_all("tr"):
             if row.get("data-item"):
@@ -494,7 +495,7 @@ class SignedOutTests(InventoryCase):
 
     def test_a_page_is_led_to_sign_in_and_back(self) -> None:
         """Scenario: Signed out meanwhile."""
-        origin = "/lab/inventory/end-products/?q=CH&detail=3"
+        origin = "/lab/inventory/end-products/?q=CH&selected=3"
         before = snapshot()
         for path, data in self.forms.items():
             headers = current(origin)
@@ -508,7 +509,7 @@ class SignedOutTests(InventoryCase):
         self.assertEqual(snapshot(), before)
 
     def test_signing_in_leads_back_to_the_page(self) -> None:
-        origin = "/lab/inventory/end-products/?q=CH&detail=3"
+        origin = "/lab/inventory/end-products/?q=CH&selected=3"
         path = item_url(self.target, "fill")
         led = self.led_to(self.client.get(path, **current(origin)))
         done = self.client.post(LOGIN, {"username": "kl",
@@ -557,7 +558,7 @@ class SignedOutTests(InventoryCase):
 
     def test_the_delivery_note_is_unchanged(self) -> None:
         before = snapshot()
-        headers = current("/lab/inventory/end-products/?q=CH&detail=3")
+        headers = current("/lab/inventory/end-products/?q=CH&selected=3")
         login = f"{LOGIN}?next={NEW_NOTE}"
         for method, done in (
                 ("GET", self.client.get(NEW_NOTE, **headers)),
@@ -602,7 +603,8 @@ class LinksTests(DialogCase):
 
     def test_links_in_the_details(self) -> None:
         """Scenario: Item forms as dialogs (the list)."""
-        root = page(self.client.get(f"{LIST}?detail={self.target.pk}"))
+        self.item("A-0")
+        root = page(self.client.get(f"{LIST}?selected={self.target.pk}"))
         pane = pane_of(root)
         self.assert_dialog_links(pane, self.target)
         self.assertEqual(
@@ -611,8 +613,9 @@ class LinksTests(DialogCase):
             {*DIALOG_LINKS})
 
     def test_links_in_the_details_of_an_item_without_a_number(self) -> None:
+        self.item("A-0")
         bare = self.item(None, "Neuverbindung 9")
-        root = page(self.client.get(f"{LIST}?detail={bare.pk}"))
+        root = page(self.client.get(f"{LIST}?selected={bare.pk}"))
         pane = pane_of(root)
         self.assertEqual(pane.get("data-item"), str(bare.pk))
         self.assert_dialog_links(pane, bare, numbered=False)
@@ -647,11 +650,11 @@ class MarkupTests(DialogCase):
 
     def setUp(self) -> None:
         super().setUp()
-        self.other = self.item("CH-0013", size="10", unit="umol",
+        self.other = self.item("CH-0011", size="10", unit="umol",
                                quantity=9, compartment="2", box="7")
 
     def listing(self) -> Element:
-        return page(self.client.get(f"{LIST}?detail={self.target.pk}"))
+        return page(self.client.get(f"{LIST}?selected={self.target.pk}"))
 
     def assert_marked(self, root: Element, node: Element) -> Element:
         """``node`` is, or lies in, an element with ``data-refresh`` and
@@ -717,6 +720,29 @@ class MarkupTests(DialogCase):
                 self.assertIsNotNone(node)
                 self.assert_marked(root, node)
 
+    def test_the_layout_carries_the_view_from_the_cookie(self) -> None:
+        """Scenario: The view from the cookie (the dialog's page)."""
+        for cookie, view in ((None, "table"), ("details", "details"),
+                             ("table", "table"), ("other", "table")):
+            with self.subTest(cookie=cookie):
+                if cookie is None:
+                    self.client.cookies.pop("item-list-view", None)
+                else:
+                    self.client.cookies["item-list-view"] = cookie
+                layout = self.listing().find(cls="item-layout")
+                self.assertEqual(layout.get("data-view"), view)
+
+    def test_the_parts_are_marked_in_the_details_view_too(self) -> None:
+        self.client.cookies["item-list-view"] = "details"
+        root = self.listing()
+        self.assertEqual(root.find(cls="item-layout").get("data-view"),
+                         "details")
+        for name, node in (("details", pane_of(root)),
+                           ("table body", root.find("tbody")),
+                           ("summary", root.find("p", cls="list-summary"))):
+            with self.subTest(part=name):
+                self.assert_marked(root, node)
+
     def test_the_list_parts_are_marked_when_nothing_is_chosen(self) -> None:
         root = page(self.client.get(f"{LIST}?q=no-such-item"))
         for name, node in (("details", pane_of(root)),
@@ -765,7 +791,7 @@ class ScriptsTests(DialogCase):
     """The pages that carry the dialog still pass web-app "Scripts"."""
 
     def test_the_pages_carry_no_inline_script_or_handler(self) -> None:
-        paths = [f"{LIST}?detail={self.target.pk}",
+        paths = [f"{LIST}?selected={self.target.pk}",
                  item_url(self.target), "/lab/tasks/", *self.urls().values()]
         for path in paths:
             with self.subTest(path=path):
@@ -786,7 +812,7 @@ class ScriptsTests(DialogCase):
         root = page(self.client.get(item_url(self.target)))
         self.assertTrue(root.find_all(attrs={"data-refresh": True}))
         assert_scripts(self, root)
-        root = page(self.client.get(f"{LIST}?detail={self.target.pk}"))
+        root = page(self.client.get(f"{LIST}?selected={self.target.pk}"))
         self.assertTrue(root.find_all(attrs={"data-refresh": True}))
         assert_scripts(self, root)
 
