@@ -5,6 +5,7 @@ production-planning: Demand models, Runway and Item forecast)."""
 
 from datetime import date
 from decimal import Decimal
+from urllib.parse import parse_qs, urlsplit
 
 from inventory.bookings import Refused, correct, fill
 from inventory.models import EnteredConsumption, Item
@@ -213,13 +214,18 @@ class ListTests(InventoryCase):
         self.leveled()
         root = page(self.client.get(LIST))
         menu = root.find(id="stock-menu")
+        marked = [tr.get("data-item") for tr in root.find_all("tr")
+                  if tr.get("aria-current") == "true"]
         counts = {}
         for link in menu.find_all("a")[1:]:
             level = next(c[6:] for c in link.find(cls="swatch").classes
                          if c.startswith("level-"))
             counts[level] = int(link.find("span", "count").text())
-            self.assertEqual(link.get("href"),
-                             f"{LIST}?stock={level}&sort=category")
+            href = urlsplit(link.get("href"))
+            self.assertEqual(href.path, LIST)
+            self.assertEqual(parse_qs(href.query),
+                             {"stock": [level], "sort": ["category"],
+                              "selected": marked})
             label = LEVELS[level]
             self.assertEqual(link.find("strong").text(),
                              label[0].upper() + label[1:])

@@ -334,7 +334,14 @@
 
   // Fetches the page's own address as a page and puts what changed in.
   const refreshPage = async () => {
-    const response = await fetch(location.href, {
+    // On the item list the page asks for the item whose details it
+    // shows, which the address need not name yet, so that the save
+    // keeps it while it is listed.
+    const address = layout && paneItem()
+      ? `${location.pathname}${paramSearch(location.search, "selected",
+                                           paneItem())}`
+      : location.href;
+    const response = await fetch(address, {
       credentials: "same-origin",
       cache: "no-store",
       headers: { Accept: "text/html" },
@@ -491,15 +498,18 @@
   };
   syncColumnsButton();
 
+  // The view last asked for, which a pending transition may not have
+  // shown yet; the transition shows whichever view is asked for last.
+  let wanted = layout.dataset.view;
   for (const radio of radios) {
     radio.addEventListener("change", () => {
-      const view = radio.value;
-      if (!radio.checked || layout.dataset.view === view) return;
-      document.cookie = `item-list-view=${view};`
+      if (!radio.checked || wanted === radio.value) return;
+      wanted = radio.value;
+      document.cookie = `item-list-view=${wanted};`
         + " path=/lab/inventory/end-products/; max-age=31536000;"
         + " SameSite=Lax";
       const show = () => {
-        layout.dataset.view = view;
+        layout.dataset.view = wanted;
         syncColumnsButton();
       };
       if (document.startViewTransition

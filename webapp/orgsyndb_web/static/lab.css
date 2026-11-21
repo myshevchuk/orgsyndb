@@ -525,6 +525,9 @@ main:has(#heat-switch:not(:checked)) .item-table td[class*="heat-"] { background
   }
   .item-table tbody tr[aria-current="true"] > td:first-child { box-shadow: inset 3px 0 0 var(--link); }
 
+  /* Without the script nothing disables `Spalten`, whose columns the
+     details view does not show. */
+  main:has(#view-details:checked):not(:has(.item-layout[data-scripted])) .lab-columns { visibility: hidden; }
   .item-layout[data-scripted][data-view="details"] .table-only,
   main:has(#view-details:checked) .item-layout:not([data-scripted]) .table-only { display: none; }
   .item-layout[data-scripted][data-view="details"],
