@@ -100,6 +100,16 @@ leaves this file then.
   measurements to the stylesheets. The diagram's band layout
   (database-diagram) and A4 printing (print-layout) are what those
   specs are about, and stay.
+- **Say when an item's details fail to load.** While the details of a
+  chosen row load, the pane is greyed out and takes no input; when the
+  request fails, the previous item's details come back with nothing
+  said, and a request that gets no answer leaves the pane grey until
+  the browser gives up or another row is chosen. Wanted: a short
+  message in the pane when the request fails, such as that the
+  details could not be loaded and to try again. No timeout cuts a slow
+  request short: a pane that stays grey, which choosing a row again
+  ends, is signal enough of a stalled connection.
+
 - **Faster tests.** `docs/DEVELOPMENT.md` records what was done.
   Still slow:
   - 25 tests in `webapp/tests/test_demo_command.py` and
