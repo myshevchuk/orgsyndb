@@ -35,7 +35,13 @@ per step (`tasks/history.py`).
 **The consumption section as a template of its own.**
 `inventory/consumption.html` renders the chart and the table of
 quarters from a context that one function builds, `consumption(item,
-today, links)`, used by `item_page` and `item_consumption`. Each row of
+today, links)`, named `consumption_section` so as not to shadow the
+`consumption` figures function `views.py` imports and the item list
+uses, called by `item_page` and `item_consumption`. A stored zero is a
+value: its quarter links `Ändern` and fills in 0; only a quarter without
+a record links `Nachtragen`. The chart's title takes an `id` per
+rendered copy, since the dialog opened over the item page shows a
+second one. Each row of
 the table carries the quarter's link when `links` asks for them, the
 item has an article number and the quarter takes a value; a quarter
 takes one when it has begun and holds no line of a historical note
@@ -45,7 +51,10 @@ into a function both use. On the item page the links carry
 links lead to the form for their quarter: in the dialog they carry
 `hx-get` with the dialog's body as target, since the page's handler
 opens no second dialog over an open one; as a page they are plain
-links. Considered: a section for the form only, with the item page
+links. While the dialog's form is posted and the page refreshed after
+a save, `lab.js` makes the dialog's body inert, so no quarter link can
+replace the form whose save is under way and `lab-saved` still finds
+its form in the dialog. Considered: a section for the form only, with the item page
 keeping its own. Rejected: the owner asked for one interface in both
 places.
 
@@ -56,19 +65,24 @@ consumption section, so that the dialog and the page show the same.
 `form.html` itself is not made to know about consumption.
 
 **The form for a quarter.** `item_consumption` reads `year` and
-`quarter` from the query on a GET; when both are valid and name a
-quarter that has begun, the form's initial values are that year and
-quarter and the quarter's stored count, and the context names the
-stored count, which the template shows as the value a save replaces.
-Other values are ignored and the form opens as today. Choosing another
-quarter in the form's own fields fetches nothing: the table beside
-them shows every value, and its links load the form for a quarter.
+`quarter` from the query; when both are valid and name a quarter that
+has begun, the form is fixed to that quarter: the year and quarter are
+hidden fields, the form names the quarter as text, its count starts at
+the stored value, and the value a save replaces is named beside it.
+The fixed form posts to the same URL with its query, so a form shown
+again with errors stays fixed and keeps naming the stored value. Other
+values are ignored and the form opens as today, with editable fields
+and no value named; that form is the way to quarters older than the
+table shows. Considered: keeping the fields editable and naming the
+loaded quarter's value. Rejected: changing the fields would leave the
+notice naming another quarter's value than the one a save replaces.
 Considered: reloading the form when its year or quarter changes.
-Rejected: it would discard a count already typed, and the table covers
-the need.
+Rejected: it would discard a count already typed.
 
 **History.** `EnteredConsumption` gains `history = RecordedHistory()`
-and a migration creating its history table. `enter_consumption`
+and a migration creating its history table. The committed table
+diagram `webapp/docs/database-schema.html` is regenerated, and the
+history tables its test expects gain the new one. `enter_consumption`
 attributes the save to the user, and removes a value by deleting the
 instance after attributing it, so the removal is recorded with its
 author. A data migration writes one creation record for each value
@@ -81,8 +95,12 @@ the item's entered consumption, as `tasks/history.py` merges a task's
 steps: an `Entry` gains a `heading`, `Verbrauch Q<quarter> <year>`
 for consumption records and empty for the item's; a creation lists
 the count from `–`, a change from its old to its new count, a removal
-to `–`; all sorted newest first, of records made at one moment the
-consumption's counting as newer. `history.html` shows a heading when
+to `–`. Changes are computed per source in `history_id` order, each
+consumption record against the previous one of the same item, year
+and quarter, which includes records whose live row is gone; the
+entries are then shown by descending `(history_date, source,
+history_id)`, the consumption's source ranking above the item's, as
+the task's history ranks its steps. `history.html` shows a heading when
 an entry has one. Lots and delivery notes keep their history as it is.
 
 ## Risks / Trade-offs
