@@ -1,0 +1,25 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n lab l10n %}
+{% block title %}{{ title }}{% endblock %}
+{% block main %}
+<h1>{{ title }}</h1>
+{% partialdef form inline %}{% if dialog %}<h2 id="lab-dialog-title">{{ title }}</h2>
+{% endif %}<form class="lab-form" method="post" action="{{ request.get_full_path }}"{% if dialog %} hx-post="{{ request.get_full_path }}" hx-target="#lab-dialog-body" hx-swap="innerHTML" hx-disabled-elt="#lab-dialog button"{% endif %}>{% csrf_token %}
+{{ form.non_field_errors }}{% for field in form.hidden_fields %}{{ field }}{% endfor %}
+{% if fixed %}<p class="lab-quarter"><strong>Q{{ fixed.1 }} {{ fixed.0|unlocalize }}</strong></p>
+{% for field in form.hidden_fields %}{{ field.errors }}{% endfor %}
+{% if stored is not None %}<p class="lab-help">{% blocktranslate %}A save replaces the entered value {{ stored }}.{% endblocktranslate %}</p>
+{% endif %}{% endif %}{% for field in form.visible_fields %}<div class="lab-field{% if field.errors %} lab-field--error{% endif %}">
+{{ field.label_tag }}
+{{ field }}
+{% if field.help_text %}<p class="lab-help" id="{{ field.auto_id }}_helptext">{{ field.help_text }}</p>{% endif %}
+{{ field.errors }}
+</div>
+{% endfor %}<p class="lab-buttons"><button type="submit">{% translate "Save" %}</button>
+<a href="{{ cancel }}">{% translate "Cancel" %}</a></p>
+</form>
+<section class="lab-consumption">
+{% if dialog %}<h3>{% translate "Consumption" %}</h3>
+{% include "inventory/consumption.html" with link_mode="htmx" title_id="consumption-title-form" %}{% else %}<h2>{% translate "Consumption" %}</h2>
+{% include "inventory/consumption.html" with link_mode="plain" title_id="consumption-title-form" %}{% endif %}
+</section>
+{% endpartialdef %}{% endblock %}

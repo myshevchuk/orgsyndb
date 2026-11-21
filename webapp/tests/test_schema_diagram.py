@@ -252,6 +252,8 @@ class CollectionTests(unittest.TestCase):
             ("inventory_historicaldeliverynote", "inventory_deliverynote",
              ()),
             ("inventory_historicallot", "inventory_lot", ("amount",)),
+            ("inventory_historicalenteredconsumption",
+             "inventory_enteredconsumption", ()),
             ("registry_historicalsubstance", "registry_substance",
              ("structure_svg",)),
             ("vocabulary_historicalchemicalclass",

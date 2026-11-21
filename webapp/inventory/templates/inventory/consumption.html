@@ -1,0 +1,30 @@
+{% load i18n l10n %}{% comment %}
+The chart and the table of quarters of the context of
+``consumption_section``. ``link_mode`` says how a row's link opens its
+form: "dialog" in the lab's dialog, "htmx" in the dialog's body, else as
+a page. ``title_id`` is the chart title's id, which must differ between
+the copies a page holds.
+{% endcomment %}<figure class="consumption-chart">
+{% localize off %}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="img" aria-labelledby="{{ title_id|default:'consumption-title' }}">
+<title id="{{ title_id|default:'consumption-title' }}">{% translate "Consumption per quarter" %}</title>
+<line class="chart-axis" x1="0" y1="{{ chart.baseline }}" x2="{{ chart.width }}" y2="{{ chart.baseline }}"/>
+{% for bar in chart.bars %}<g class="chart-bar">
+<title>{{ bar.title }}</title>
+<rect x="{{ bar.x }}" y="{{ bar.y }}" width="24" height="{{ bar.height }}"/>
+<text x="{{ bar.label_x }}" y="{{ chart.baseline|add:14 }}" text-anchor="middle">Q{{ bar.quarter.1 }}</text>
+</g>
+{% endfor %}{% if chart.mean_y is not None %}<line class="chart-mean" x1="0" y1="{{ chart.mean_y }}" x2="{{ chart.width }}" y2="{{ chart.mean_y }}"/>
+{% endif %}{% for year, x in chart.years %}<text class="chart-year" x="{{ x }}" y="{{ chart.baseline|add:30 }}" text-anchor="middle">{{ year }}</text>
+{% endfor %}</svg>{% endlocalize %}
+{% if chart.mean_y is not None %}<figcaption>{% translate "The line marks the mean per quarter." %}</figcaption>{% endif %}
+</figure>
+<div class="table-scroll">
+<table class="inventory-table consumption-table">
+<thead>
+<tr><th scope="col">{% translate "Quarter" %}</th><th scope="col">{% translate "Entered" %}</th><th scope="col">{% translate "Deliveries" %}</th><th scope="col">{% translate "Total" %}</th>{% if links %}<th scope="col"><span class="visually-hidden">{% translate "Actions" %}</span></th>{% endif %}</tr>
+</thead>
+<tbody>
+{% for row in quarters %}<tr><th scope="row">Q{{ row.quarter }} {{ row.year|unlocalize }}</th><td class="number">{{ row.entered }}</td><td class="number">{{ row.delivered }}</td><td class="number">{{ row.total }}</td>{% if links %}<td>{% if row.href %}<a href="{{ row.href }}"{% if link_mode == "dialog" %} data-dialog{% elif link_mode == "htmx" %} hx-get="{{ row.href }}" hx-target="#lab-dialog-body" hx-swap="innerHTML"{% endif %}>{% if row.stored %}{% translate "Change" context "consumption quarter" %}{% else %}{% translate "Enter" context "consumption quarter" %}{% endif %}</a>{% endif %}</td>{% endif %}</tr>
+{% endfor %}</tbody>
+</table>
+</div>

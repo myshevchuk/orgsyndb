@@ -507,6 +507,7 @@ class EnteredConsumption(models.Model):
         settings.AUTH_USER_MODEL, verbose_name=_("Entered by"),
         on_delete=models.PROTECT, related_name="+")
     entered_at = models.DateTimeField(_("Entered at"))
+    history = RecordedHistory()
 
     class Meta:
         ordering = ["year", "quarter"]

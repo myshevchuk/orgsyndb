@@ -348,7 +348,13 @@ class CorrectionForm(forms.Form):
 
 class ConsumptionForm(forms.Form):
     """An entered consumption value of a quarter; left empty, it removes
-    the quarter's value."""
+    the quarter's value.
+
+    FIXED, a pair of year and quarter, makes the form one for that
+    quarter: its year and quarter are hidden fields, and a bound form
+    takes them from FIXED whatever the data holds. STORED is the quarter's
+    stored count, which the count starts at, or None.
+    """
 
     year = forms.IntegerField(label=_("Year"), min_value=1, max_value=9999)
     quarter = forms.TypedChoiceField(
@@ -358,9 +364,21 @@ class ConsumptionForm(forms.Form):
         label=_("Count"), min_value=0, required=False,
         help_text=_("Left empty, the quarter's value is removed."))
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, fixed: tuple[int, int] | None = None,
+                 stored: int | None = None, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.fields["year"].initial = timezone.localdate().year
+        if fixed is None:
+            return
+        pinned = {"year": fixed[0], "quarter": fixed[1]}
+        for name, value in pinned.items():
+            self.fields[name].widget = forms.HiddenInput()
+            self.fields[name].initial = value
+        self.fields["count"].initial = stored
+        if self.is_bound:
+            self.data = self.data.copy()
+            for name, value in pinned.items():
+                self.data[name] = str(value)
 
 
 class LotForm(forms.ModelForm):

@@ -35,7 +35,10 @@
 //   what the user ticked and chose in the list, closes the dialog and
 //   moves focus to where the user was working. The dialog's buttons
 //   stay disabled until then. If the page cannot be fetched, the page
-//   is reloaded.
+//   is reloaded. While the dialog's form is posted, and while that
+//   refresh is under way, the dialog's body is inert, so that nothing
+//   in it, such as a link to another form, replaces the form whose
+//   save is pending.
 //
 // OrgSynLab.place is the placement's arithmetic and
 // OrgSynLab.detailSearch the address's, each kept apart from the page
@@ -212,11 +215,20 @@
   let saving = false; // a save is posted and its refresh not done
   let posting = false; // the dialog's form is being posted
 
+  // The body takes neither pointer nor keyboard while its form is
+  // posted or a save's refresh is under way, so that nothing in it, a
+  // link choosing another quarter among them, replaces the form whose
+  // save is pending.
+  const guardBody = () => {
+    dialogBody.inert = posting || saving;
+  };
+
   const lockDialog = (locked) => {
     saving = locked;
     for (const button of dialog.querySelectorAll("button")) {
       button.disabled = locked;
     }
+    guardBody();
   };
 
   const plain = (event) => event.button === 0 && !event.ctrlKey
@@ -338,16 +350,21 @@
 
     // The form is in: show the dialog, or, where the dialog already
     // shows and the form is back with errors, move to the first one.
+    // The form is in: show the dialog when a link of the page asked for
+    // it; a form that arrives for a dialog closed meanwhile stays shut.
     dialogBody.addEventListener("htmx:afterSwap", () => {
+      const opening = loading !== null;
       loading = null;
-      if (!dialog.open) {
-        dialog.showModal();
-        return;
-      }
+      if (!dialog.open && opening) dialog.showModal();
+    });
+
+    // A form back with errors: move to the first, once the body takes
+    // input again.
+    const focusError = () => {
       const wrong = dialogBody.querySelector(
         ".lab-field--error :is(input, select, textarea)");
       if (wrong) wrong.focus();
-    });
+    };
 
     // A form that could not be requested opens as the page it is.
     // htmx fires the request's events on its source, the body, not on
@@ -371,8 +388,13 @@
     // without a session or its CSRF cookie, reloads the page; one that
     // does not reach the server leaves the form as it was, to send
     // again.
-    dialog.addEventListener("htmx:beforeRequest", () => {
+    // Only a post counts: a link that loads another form into the
+    // dialog leaves it free to close.
+    dialog.addEventListener("htmx:beforeRequest", (event) => {
+      const config = event.detail.requestConfig;
+      if (!config || String(config.verb).toLowerCase() !== "post") return;
       posting = true;
+      guardBody();
     });
     dialog.addEventListener("htmx:responseError", () => {
       posting = false;
@@ -383,7 +405,12 @@
     // which is before the refresh does.
     dialog.addEventListener("htmx:afterRequest", () => {
       posting = false;
-      if (saving) lockDialog(true);
+      if (saving) {
+        lockDialog(true);
+      } else {
+        guardBody();
+        if (dialog.open) focusError();
+      }
     });
 
     document.addEventListener("lab-saved", async (event) => {

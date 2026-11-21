@@ -2875,6 +2875,15 @@ Entering another value for the same quarter replaces it; leaving the
 count empty removes it.
 Subsequent deliveries add to consumption in the quarter of the delivery
 note's date.
+To correct a quarter, choose **Ändern** (**Change**) beside its value
+in the item page's table of quarters, or **Nachtragen** (**Enter**)
+where it has none. The form opens in a dialog for that quarter, filled
+in with the stored count and naming the value a save replaces; it shows
+the same chart and table, whose links switch to another quarter. A
+quarter that has not begun, or that holds lines of a historical
+delivery note, has no such link. Every entry, change and removal of a
+quarter's value appears in the item's history under **Verbrauch Q3
+2026** and the like, with the old and new count.
 
 To record old paper delivery notes, tick **nachgetragen – Bestand bleibt
 unverändert** (**entered later – stock unchanged**) on the delivery form.
