@@ -110,6 +110,20 @@ leaves this file then.
   request short: a pane that stays grey, which choosing a row again
   ends, is signal enough of a stalled connection.
 
+- **Historical notes at the edge of entered quarters.** The entered
+  quarterly consumption reaches further back than the historical
+  delivery notes at hand, so the oldest notes may not line up with the
+  quarters entered: a quarter that holds a historical note refuses an
+  entered value, and the other way round. Possibly no change to the
+  application is needed, and those few notes are best left out. To be
+  settled when the old data is entered; no change for now.
+- **A maintenance section for catching up history.** Entering past
+  consumption and historical delivery notes is a one-time job, not a
+  recurring action, yet both are offered in the main views (`Verbrauch
+  nachtragen` among an item's actions, `nachgetragen` on the delivery
+  note form). Wanted: move them into a maintenance section of their
+  own. Open: what else belongs there, and who may use it.
+
 - **Faster tests.** `docs/DEVELOPMENT.md` records what was done.
   Still slow:
   - 25 tests in `webapp/tests/test_demo_command.py` and
