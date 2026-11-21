@@ -100,6 +100,13 @@ leaves this file then.
   measurements to the stylesheets. The diagram's band layout
   (database-diagram) and A4 printing (print-layout) are what those
   specs are about, and stay.
+- **Sorting and filtering the item list in place.** Sorting and
+  filtering reload the whole list. Wanted: htmx partial swaps of the
+  table and its counts. The owner decided on 2026-11-21 to swap them
+  with the htmx extension Idiomorph, which morphs the old markup into
+  the new instead of replacing it, so that focus, scroll position,
+  the selected row and the column widths survive the swap. Open:
+  whether the dialogs' refresh after a save moves to Idiomorph too.
 - **Say when an item's details fail to load.** While the details of a
   chosen row load, the pane is greyed out and takes no input; when the
   request fails, the previous item's details come back with nothing
