@@ -436,7 +436,7 @@ The admin SHALL list articles, items, batches, vessels, delivery notes and the m
 
 ### Requirement: Bulk lots
 **Reason**: A lot was a batch and a vessel at once. "Batches" keeps the origin, "Vessels" the place and amount.
-**Migration**: "Batches" and "Vessels"; the migration empties the stock records, and the demo data set records batches and vessels anew.
+**Migration**: "Batches" and "Vessels"; the demo data set records batches and vessels anew.
 
 ### Requirement: Bulk list
 **Reason**: The vessel list replaces it, with the batch list beside it.

@@ -102,9 +102,9 @@ reversed; a wrong one is undone by a transfer back or a correction.
 
 ### Fillings
 
-`bookings.fill` takes a required vessel, and a check constraint
-requires a vessel movement on every filling; the migration leaves no
-filling without one (Migration).
+`bookings.fill` takes a required vessel, and the filling form offers
+no choice without one. No check constraint backs it, so that the
+schema migration runs on databases whose demo rows predate it.
 
 ### Tasks
 
@@ -137,25 +137,10 @@ entry. An entry a batch names is not deleted.
 
 ### Migration
 
-The migrations empty the stock and task records instead of converting
-them: delivery notes with their lines, item movements, entered
-consumption, items, lots with their movements, and tasks with their
-steps, each with its change history. The task counter keeps its
-value, so no task number is issued twice.
-Articles, substances, vocabularies, notebooks and journal entries stay.
-Converting lots would carry states the new rules forbid into the new
-tables: a failed task whose step made a lot of its product would gain a
-product batch, an ended task linked to its lot only by text would lose
-it, lot history would hold origins no batch keeps, and fillings without
-a lot would need a ledger rule of their own. The application has no
-users, and the test server's database is rewritten by
-`demo_data --replace` after deploy, as after the migration of
-`tasks-on-imports`.
-
-An `inventory` migration deletes those records, drops `Lot`,
-`LotMovement` and their history, and creates `Batch`, `Vessel` and
-`VesselMovement`; a `tasks` migration, depending on it, drops
-`Task.batch` from the task and its history.
+The migrations are what `makemigrations` generates for the new models,
+with no data step: the lot tables and `Task.batch` are dropped and the
+new tables created. Before 1.0 no data is carried over; the test
+server's database is rewritten by `demo_data --replace` after deploy.
 
 ### Batch numbers regardless of case
 

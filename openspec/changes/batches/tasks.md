@@ -71,15 +71,11 @@
   unchanged on every seeding day (`test_demo_records.py`,
   `test_demo_changes.py`, `test_demo_days.py`); `--replace` deletes
   batches, those without vessels among them (`test_demo_command.py`)
-- [ ] 1.12 Migration: a database populated at the previous migration
-  migrates to empty stock and task records with articles, substances,
-  notebooks and entries kept, and the next task number follows the
-  counter's value (`test_migration_batches.py`)
-- [ ] 1.13 Existing tests that name lots, bulk addresses or fillings
+- [ ] 1.12 Existing tests that name lots, bulk addresses or fillings
   without a lot moved to the new rules: `test_shell.py`,
   `test_inventory_movements.py`, `test_inventory_admin.py`, and any
   other the area runs turn up
-- [ ] 1.14 Bookings against a closing task: a batch recording, a flask
+- [ ] 1.13 Bookings against a closing task: a batch recording, a flask
   booking and a flask correction prepared while the task was open and
   stored after it closed are refused; on PostgreSQL, two connections
   overlapping a booking with a closure, either winning, and an admin
@@ -92,10 +88,9 @@
 
 ## 2. Implementation
 
-- [ ] 2.1 Models and migrations: `Batch` with `number_key`, `Vessel`,
-  `VesselMovement`, `Movement.vessel_movement` with its check
-  constraint, `Task.batch` dropped, histories, the emptying described
-  in design.md
+- [ ] 2.1 Models and generated schema migrations: `Batch` with
+  `number_key`, `Vessel`, `VesselMovement`, `Movement.vessel_movement`,
+  `Task.batch` dropped, histories
 - [ ] 2.2 `inventory.bookings`: batch recording with its first vessel,
   vessel opening, filling with a required vessel, withdrawal,
   transfer, correction, remainder write-off for a task, reversals
