@@ -123,7 +123,7 @@ fixed.
 After a flask's task is closed, the flask takes nothing back: a
 correction of it and the reversal of a filling or withdrawal from it are
 refused, so closed stock cannot reappear for filling or planning. A
-batch a step made is never deleted, so an ended task cannot lose its
+batch a step made is never deleted outside the demo reset, so an ended task cannot lose its
 product batch. The task list's `Charge`
 column joins the product batches' numbers; its search and the admin's
 search match the numbers of the task's batches.
@@ -140,7 +140,8 @@ entry. An entry a batch names is not deleted.
 The migrations empty the stock and task records instead of converting
 them: delivery notes with their lines, item movements, entered
 consumption, items, lots with their movements, and tasks with their
-steps, each with its change history, and they reset the task counter.
+steps, each with its change history. The task counter keeps its
+value, so no task number is issued twice.
 Articles, substances, vocabularies, notebooks and journal entries stay.
 Converting lots would carry states the new rules forbid into the new
 tables: a failed task whose step made a lot of its product would gain a
@@ -158,8 +159,11 @@ An `inventory` migration deletes those records, drops `Lot`,
 
 ### Batch numbers regardless of case
 
-`Batch.number_key`, not editable, holds `number.casefold()` for a made
-batch and is empty for a bought one; a unique constraint on it among
+`Batch.number_key`, not editable and up to 100 characters, since
+casefolding can lengthen a number, holds `number.casefold()` for a made
+batch and is empty for a bought one. The model sets it on every save, so
+every path that changes the number, the admin's included, saves the key
+with it; a unique constraint on it among
 made batches enforces the rule on SQLite and PostgreSQL alike, where a
 constraint on `Lower(number)` would not fold `ß` or non-ASCII letters
 on SQLite.
@@ -170,9 +174,15 @@ Recording a batch from a step, and every booking on a flask, lock the
 task's row (`select_for_update`) and check in that transaction that the
 task is open, or for a flask's correction or reversal that it is, as
 the withdrawal booking already checks a step's task. Closing a task
-takes the same lock before writing off, so a booking validated while
-the task was open and stored after it closed is refused. The demo
-seeder closes its tasks through the same service.
+takes the same lock and validates under it, in the forms as they
+already do and in the admin, whose save revalidates the task's end,
+failure and substance under the lock and shows the error at the field;
+so a booking that commits first makes the closure's validation see its
+batch, and one validated while the task was open and stored after it
+closed is refused. The demo seeder closes its tasks through the same
+service. As with the import lock (collection-import "One lock"),
+SQLite takes no row lock: the guarantee holds on PostgreSQL, where a
+test with two connections overlaps a booking and a closure.
 
 ## Risks / Trade-offs
 

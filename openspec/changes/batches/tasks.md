@@ -10,9 +10,11 @@
   `Endprodukt`, `Zwischenprodukt`, `Reagenz`), at most one flask per
   batch, opening, correction, withdrawal and its reversal, transfer
   into an existing and into a new vessel, across unit kinds through the
-  molar mass, refused without one, into a flask and above the amount, the `transfer_in`
-  naming the `transfer_out`, atomic conditional updates; a closed task's flask refusing
-  corrections and reversals; a batch made by a step never deleted
+  molar mass, refused without one, into a flask, above the amount
+  and when the converted amount rounds to zero; the `transfer_in`
+  naming the `transfer_out`; atomic conditional updates; a closed
+  task's flask refusing corrections and reversals; a batch made by a
+  step not deleted outside the demo reset
   (`test_inventory_vessels.py`, replacing `test_inventory_bulk.py`
   and `test_inventory_withdrawals.py`)
 - [ ] 1.3 Filling: a vessel required by the booking and the form, the
@@ -71,16 +73,22 @@
   batches, those without vessels among them (`test_demo_command.py`)
 - [ ] 1.12 Migration: a database populated at the previous migration
   migrates to empty stock and task records with articles, substances,
-  notebooks and entries kept (`test_migration_batches.py`)
+  notebooks and entries kept, and the next task number follows the
+  counter's value (`test_migration_batches.py`)
 - [ ] 1.13 Existing tests that name lots, bulk addresses or fillings
   without a lot moved to the new rules: `test_shell.py`,
   `test_inventory_movements.py`, `test_inventory_admin.py`, and any
   other the area runs turn up
 - [ ] 1.14 Bookings against a closing task: a batch recording, a flask
   booking and a flask correction prepared while the task was open and
-  stored after it closed are refused; the made-number key folds `ß`
-  (`Straße` and `STRASSE` collide); a task's substance refused once a
-  step made a batch, in the form and the admin
+  stored after it closed are refused; on PostgreSQL, two connections
+  overlapping a booking with a closure, either winning, and an admin
+  closure or substance change losing to a batch that committed first,
+  with the error at its field; the made-number key folds `ß` (`Straße`
+  and `STRASSE` collide), an admin rename frees the old number and
+  claims the new key; a task's substance refused once a step made a
+  batch, in the form and the admin; the demo reset replacing a flask
+  with transfers and a remainder
 
 ## 2. Implementation
 
