@@ -629,9 +629,12 @@ class LinksTests(DialogCase):
             sorted([movement_url(self.delivery), movement_url(filling)]))
         for link in reversals:
             self.assertIn("data-dialog", link.attrs)
+        # The quarters of the consumption table link their own form
+        # (end-product-inventory "Item page").
         self.assertEqual(
             {a.text() for a in root.find("main").find_all("a")
-             if "data-dialog" in a.attrs},
+             if "data-dialog" in a.attrs
+             and "year=" not in a.get("href", "")},
             {*DIALOG_LINKS, "Stornieren"})
 
     def test_links_on_the_page_of_an_item_without_a_number(self) -> None:
