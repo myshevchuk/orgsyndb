@@ -314,6 +314,9 @@ msgstr "Angelegt"
 msgid "No field changed"
 msgstr "Kein Feld geändert"
 
+msgid "Consumption Q%(quarter)s %(year)s"
+msgstr "Verbrauch Q%(quarter)s %(year)s"
+
 msgid "New item"
 msgstr "Neuer Artikel"
 
@@ -369,6 +372,17 @@ msgstr "%(coverage)s Quartale"
 
 msgid "Consumption"
 msgstr "Verbrauch"
+
+msgctxt "consumption quarter"
+msgid "Change"
+msgstr "Ändern"
+
+msgctxt "consumption quarter"
+msgid "Enter"
+msgstr "Nachtragen"
+
+msgid "A save replaces the entered value %(stored)s."
+msgstr "Ein Speichern ersetzt den eingetragenen Wert %(stored)s."
 
 msgid "Consumption per quarter"
 msgstr "Verbrauch je Quartal"

@@ -35,7 +35,10 @@
 //   what the user ticked and chose in the list, closes the dialog and
 //   moves focus to where the user was working. The dialog's buttons
 //   stay disabled until then. If the page cannot be fetched, the page
-//   is reloaded.
+//   is reloaded. While the dialog's form is posted, and while that
+//   refresh is under way, the dialog's body is inert, so that nothing
+//   in it, such as a link to another form, replaces the form whose
+//   save is pending.
 //
 // OrgSynLab.place is the placement's arithmetic and
 // OrgSynLab.detailSearch the address's, each kept apart from the page
@@ -212,11 +215,20 @@
   let saving = false; // a save is posted and its refresh not done
   let posting = false; // the dialog's form is being posted
 
+  // The body takes neither pointer nor keyboard while its form is
+  // posted or a save's refresh is under way, so that nothing in it, a
+  // link choosing another quarter among them, replaces the form whose
+  // save is pending.
+  const guardBody = () => {
+    dialogBody.inert = posting || saving;
+  };
+
   const lockDialog = (locked) => {
     saving = locked;
     for (const button of dialog.querySelectorAll("button")) {
       button.disabled = locked;
     }
+    guardBody();
   };
 
   const plain = (event) => event.button === 0 && !event.ctrlKey
@@ -373,6 +385,7 @@
     // again.
     dialog.addEventListener("htmx:beforeRequest", () => {
       posting = true;
+      guardBody();
     });
     dialog.addEventListener("htmx:responseError", () => {
       posting = false;
@@ -383,7 +396,11 @@
     // which is before the refresh does.
     dialog.addEventListener("htmx:afterRequest", () => {
       posting = false;
-      if (saving) lockDialog(true);
+      if (saving) {
+        lockDialog(true);
+      } else {
+        guardBody();
+      }
     });
 
     document.addEventListener("lab-saved", async (event) => {

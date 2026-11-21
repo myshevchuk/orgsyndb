@@ -1,5 +1,5 @@
 """The change history of an item, a lot or a delivery note as its page
-shows it."""
+shows it; an item's includes that of its entered consumption."""
 
 from dataclasses import dataclass
 from datetime import date
@@ -10,7 +10,7 @@ from django.db import models
 from django.utils import formats
 from django.utils.translation import gettext as _
 
-from inventory.models import plain
+from inventory.models import EnteredConsumption, Item, plain
 
 FIELDS = {
     "item": ["status", "stocked_on", "compartment", "box", "note"],
@@ -32,11 +32,14 @@ class Change:
 
 @dataclass(frozen=True)
 class Entry:
-    """A record of the history: its time, the user who made it, or None,
-    whether it created the record, and the changes it made otherwise."""
+    """A record of the history: its TIME, the USER who made it, or None,
+    its HEADING, ``Consumption Q<n> <year>`` in the active language for
+    a record of entered consumption and empty for the others, whether it
+    CREATED the record, and the CHANGES it made otherwise."""
 
     time: Any
     user: Any
+    heading: str
     created: bool
     changes: list[Change]
 
@@ -61,9 +64,9 @@ def shown_field(field: models.Field, value: Any) -> str:
     return str(labels[value]) if value in labels else shown(value)
 
 
-def history_entries(record: models.Model) -> list[Entry]:
-    """Return the history of RECORD, an item, a lot or a delivery note,
-    newest record first.
+def _own(record: models.Model) -> list[tuple[Any, Entry]]:
+    """Return the history records of RECORD, each with its entry, newest
+    record first.
 
     The record that created it has no changes; each later record lists
     the fields, of those its page shows, whose values differ from the
@@ -72,7 +75,7 @@ def history_entries(record: models.Model) -> list[Entry]:
     records = list(record.history.select_related("history_user"))
     fields = [type(record)._meta.get_field(name)
               for name in FIELDS[type(record)._meta.model_name]]
-    entries = []
+    found = []
     for position, current in enumerate(records):
         before = records[position + 1] if position + 1 < len(records) \
             else None
@@ -85,8 +88,59 @@ def history_entries(record: models.Model) -> list[Entry]:
                     changes.append(Change(label=str(field.verbose_name),
                                           old=shown_field(field, old),
                                           new=shown_field(field, new)))
-        entries.append(Entry(time=current.history_date,
-                             user=current.history_user,
-                             created=current.history_type == "+",
-                             changes=changes))
-    return entries
+        found.append((current, Entry(
+            time=current.history_date, user=current.history_user,
+            heading="", created=current.history_type == "+",
+            changes=changes)))
+    return found
+
+
+def _consumption(item: Item) -> list[tuple[Any, Entry]]:
+    """Return the history records of the entered consumption of ITEM,
+    each with its entry, in the order they were recorded.
+
+    A record lists the quarter's count as a change from the count of the
+    record before it for the same year and quarter, removals included,
+    from none (``–``) when there is none, to none for a removal.
+    """
+    label = str(EnteredConsumption._meta.get_field("count").verbose_name)
+    counts: dict[tuple[int, int], int | None] = {}
+    found = []
+    for record in EnteredConsumption.history.filter(
+            item_id=item.pk).select_related("history_user").order_by(
+                "history_id"):
+        key = (record.year, record.quarter)
+        new = None if record.history_type == "-" else record.count
+        found.append((record, Entry(
+            time=record.history_date, user=record.history_user,
+            heading=_("Consumption Q%(quarter)s %(year)s") % {
+                "quarter": record.quarter, "year": record.year},
+            created=False,
+            changes=[Change(label=label, old=shown(counts.get(key)),
+                            new=shown(new))])))
+        counts[key] = new
+    return found
+
+
+def history_entries(record: models.Model) -> list[Entry]:
+    """Return the history of RECORD, an item, a lot or a delivery note,
+    newest record first.
+
+    The record that created it has no changes; each later record lists
+    the fields, of those its page shows, whose values differ from the
+    record before it. An item's history also holds the entries of its
+    entered consumption, headed ``Consumption Q<quarter> <year>`` in the
+    active language, each listing the change of that quarter's count
+    (``Entry`` and ``_consumption``); the entries then follow one
+    another by time, and of those made at one moment the consumption's
+    come first.
+    """
+    own = _own(record)
+    if not isinstance(record, Item):
+        return [entry for _record, entry in own]
+    found = [((each.history_date, 0, each.history_id), entry)
+             for each, entry in own]
+    found += [((each.history_date, 1, each.history_id), entry)
+              for each, entry in _consumption(record)]
+    return [entry for _key, entry in sorted(found, key=lambda pair: pair[0],
+                                            reverse=True)]

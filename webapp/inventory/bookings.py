@@ -531,16 +531,39 @@ def reverse(user: Any, movement: Movement, *, note: str) -> Movement:
         raise Refused(done) from error
 
 
+def has_begun(year: int, quarter: int, today: Date) -> bool:
+    """Tell whether the QUARTER of YEAR has begun by TODAY, the current
+    quarter included."""
+    return (year, quarter) <= quarter_of(today)
+
+
+def held_quarters(item: Item, year: int | None = None
+                  ) -> set[tuple[int, int]]:
+    """Return the quarters, as pairs of year and quarter, in which ITEM
+    has a line of a historical delivery note that is not reversed, and
+    which therefore take no entered consumption value; only those of
+    YEAR when it is given."""
+    lines = DeliveryLine.objects.filter(
+        item=item, delivery_note__historical=True,
+        delivery_note__reversed=False)
+    if year is not None:
+        lines = lines.filter(delivery_note__date__year=year)
+    return {quarter_of(line.delivery_note.date)
+            for line in lines.select_related("delivery_note")}
+
+
 def enter_consumption(user: Any, item: Item, *, year: int, quarter: int,
                       count: int | None) -> EnteredConsumption | None:
     """Set the entered consumption of ITEM in QUARTER of YEAR to COUNT
     containers, entered by USER, and return it; a COUNT of None removes
     the quarter's value and returns None.
 
-    Refuse an item whose article has no article number, a QUARTER
-    outside 1 to 4, a YEAR below 1, a quarter after the current one, a
-    COUNT below zero, and a value for a quarter in which the item has lines of a
-    historical note that is not reversed.
+    The change is recorded in the history of the entered consumption as
+    made by USER, a removal included. Refuse an item whose article has
+    no article number, a QUARTER outside 1 to 4, a YEAR below 1, a
+    quarter that has not begun (``has_begun``), a COUNT below zero, and
+    a value for a quarter in which the item has lines of a historical
+    note that is not reversed (``held_quarters``).
     """
     if _stored_number(item.article_id) is None:
         raise Refused(_("An item without an article number has never "
@@ -549,30 +572,29 @@ def enter_consumption(user: Any, item: Item, *, year: int, quarter: int,
         raise Refused({"quarter": _("The quarter is 1, 2, 3 or 4.")})
     if year < 1:
         raise Refused({"year": _("The year must be above zero.")})
-    if (year, quarter) > quarter_of(timezone.localdate()):
+    if not has_begun(year, quarter, timezone.localdate()):
         raise Refused({"quarter": _("The quarter has not begun yet.")})
     if count is not None and count < 0:
         raise Refused({"count": _("The count may not be negative.")})
     with transaction.atomic():
-        entered = EnteredConsumption.objects.filter(item=item, year=year,
-                                                    quarter=quarter)
-        if count is None:
-            entered.delete()
-            return None
         list(Item.objects.select_for_update().filter(pk=item.pk))
-        if any(quarter_of(line.delivery_note.date) == (year, quarter)
-               for line in DeliveryLine.objects.filter(
-                   item=item, delivery_note__historical=True,
-                   delivery_note__reversed=False,
-                   delivery_note__date__year=year
-               ).select_related("delivery_note")):
+        record = EnteredConsumption.objects.filter(
+            item=item, year=year, quarter=quarter).first()
+        if count is None:
+            if record is not None:
+                _attributed(record, user).delete()
+            return None
+        if (year, quarter) in held_quarters(item, year):
             raise Refused({"quarter": _(
                 "Historical delivery notes hold this quarter's consumption; "
                 "reverse them before entering a value.")})
-        record, _created = EnteredConsumption.objects.update_or_create(
-            item=item, year=year, quarter=quarter,
-            defaults={"count": count, "entered_by": user,
-                      "entered_at": timezone.now()})
+        if record is None:
+            record = EnteredConsumption(item=item, year=year,
+                                        quarter=quarter)
+        record.count = count
+        record.entered_by = user
+        record.entered_at = timezone.now()
+        _attributed(record, user).save()
         return record
 
 

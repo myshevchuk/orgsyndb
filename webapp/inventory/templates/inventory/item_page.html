@@ -34,30 +34,7 @@
 {% if item.note %}<h2>{% translate "Note" context "inventory" %}</h2>
 <div class="lab-note">{{ item.note|linebreaks }}</div>
 {% endif %}<h2>{% translate "Consumption" %}</h2>
-<figure class="consumption-chart">
-{% localize off %}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="img" aria-labelledby="consumption-title">
-<title id="consumption-title">{% translate "Consumption per quarter" %}</title>
-<line class="chart-axis" x1="0" y1="{{ chart.baseline }}" x2="{{ chart.width }}" y2="{{ chart.baseline }}"/>
-{% for bar in chart.bars %}<g class="chart-bar">
-<title>{{ bar.title }}</title>
-<rect x="{{ bar.x }}" y="{{ bar.y }}" width="24" height="{{ bar.height }}"/>
-<text x="{{ bar.label_x }}" y="{{ chart.baseline|add:14 }}" text-anchor="middle">Q{{ bar.quarter.1 }}</text>
-</g>
-{% endfor %}{% if chart.mean_y is not None %}<line class="chart-mean" x1="0" y1="{{ chart.mean_y }}" x2="{{ chart.width }}" y2="{{ chart.mean_y }}"/>
-{% endif %}{% for year, x in chart.years %}<text class="chart-year" x="{{ x }}" y="{{ chart.baseline|add:30 }}" text-anchor="middle">{{ year }}</text>
-{% endfor %}</svg>{% endlocalize %}
-{% if chart.mean_y is not None %}<figcaption>{% translate "The line marks the mean per quarter." %}</figcaption>{% endif %}
-</figure>
-<div class="table-scroll">
-<table class="inventory-table consumption-table">
-<thead>
-<tr><th scope="col">{% translate "Quarter" %}</th><th scope="col">{% translate "Entered" %}</th><th scope="col">{% translate "Deliveries" %}</th><th scope="col">{% translate "Total" %}</th></tr>
-</thead>
-<tbody>
-{% for row in quarters %}<tr><th scope="row">Q{{ row.quarter }} {{ row.year|unlocalize }}</th><td class="number">{{ row.entered }}</td><td class="number">{{ row.delivered }}</td><td class="number">{{ row.total }}</td></tr>
-{% endfor %}</tbody>
-</table>
-</div>
+{% include "inventory/consumption.html" with link_mode="dialog" %}
 <h2>{% translate "Movements" %}</h2>
 <div class="table-scroll">
 <table class="inventory-table">

@@ -525,14 +525,50 @@ class LedgerRow:
 
 @dataclass(frozen=True)
 class QuarterRow:
-    """A quarter of the chart's table: its entered value, its deliveries
-    and their sum."""
+    """A quarter of the chart's table: its entered value, ``stored``
+    telling whether there is one, its deliveries and their sum, and the
+    path of the consumption form for the quarter, None where the table
+    offers none."""
 
     year: int
     quarter: int
     entered: int
     delivered: int
     total: int
+    stored: bool = False
+    href: str | None = None
+
+
+def consumption_section(item: Item, today: date, links: bool
+                        ) -> dict[str, Any]:
+    """Return the context of the template ``inventory/consumption.html``
+    for ITEM as of TODAY: ``figures``, its consumption (see
+    ``inventory.figures.consumption``), ``chart``, and ``quarters``, a
+    ``QuarterRow`` for each quarter the chart draws, with ``links``
+    telling whether any row has a link.
+
+    A row has the path of the consumption form for its quarter when
+    LINKS is true, the item has an article number, the quarter has begun
+    and the item has no line of a historical delivery note in it that is
+    not reversed; the quarter then takes an entered value (see
+    ``bookings.enter_consumption``).
+    """
+    figures = consumption(item, today)
+    open_for_links = links and item.article_number is not None
+    held = bookings.held_quarters(item) if open_for_links else set()
+    rows = []
+    for year, quarter in quarters_shown(today.year):
+        key = (year, quarter)
+        takes = (open_for_links and bookings.has_begun(year, quarter, today)
+                 and key not in held)
+        rows.append(QuarterRow(
+            year=year, quarter=quarter,
+            entered=figures.entered.get(key, 0),
+            delivered=figures.delivered.get(key, 0),
+            total=figures.total(key), stored=key in figures.entered,
+            href=consumption_url(item, year, quarter) if takes else None))
+    return {"figures": figures, "chart": chart(figures, today.year),
+            "quarters": rows, "links": any(row.href for row in rows)}
 
 
 def item_page(request: HttpRequest, pk: int) -> HttpResponse:
@@ -541,7 +577,6 @@ def item_page(request: HttpRequest, pk: int) -> HttpResponse:
     item = get_object_or_404(Item.objects.select_related(
         "article__substance"), pk=pk)
     today = timezone.localdate()
-    figures = consumption(item, today)
     movements = item.movements.select_related(
         "user", "delivery_note", "reversal").order_by("-id")
     ledger = []
@@ -558,15 +593,7 @@ def item_page(request: HttpRequest, pk: int) -> HttpResponse:
     return render(request, "inventory/item_page.html", {
         "item": item,
         "today": today,
-        "figures": figures,
-        "chart": chart(figures, today.year),
-        "quarters": [QuarterRow(year=year, quarter=quarter,
-                                entered=figures.entered.get((year, quarter),
-                                                            0),
-                                delivered=figures.delivered.get(
-                                    (year, quarter), 0),
-                                total=figures.total((year, quarter)))
-                     for year, quarter in quarters_shown(today.year)],
+        **consumption_section(item, today, request.user.is_authenticated),
         "ledger": ledger,
         "lots": [(lot, containers_from(lot, item, mass)) for lot in lots],
         "bulk": bulk(item, lots),
@@ -740,6 +767,13 @@ def item_url(item: Item, action: str = "") -> str:
                                                  else "")
 
 
+def consumption_url(item: Item, year: int, quarter: int) -> str:
+    """Return the path of ITEM's consumption form for the QUARTER of
+    YEAR."""
+    query = urlencode({"year": year, "quarter": quarter})
+    return f"{item_url(item, 'consumption')}?{query}"
+
+
 def lot_url(lot: Lot, action: str = "") -> str:
     """Return the path of LOT's page, or of its form ACTION."""
     return f"/lab/inventory/bulk/{lot.pk}/" + (f"{action}/" if action
@@ -909,11 +943,40 @@ def movement_reverse(request: HttpRequest, pk: int, movement: int
          "cancel": item_url(item)}, dialog=True)
 
 
+def fixed_quarter(request: HttpRequest, today: date
+                  ) -> tuple[int, int] | None:
+    """Return the year and quarter that the query of REQUEST, ``year``
+    and ``quarter``, names as a quarter that has begun by TODAY; None
+    when either is missing, not a whole number, outside 1 to 9999 and 1
+    to 4, or when the quarter has not begun."""
+    values = [request.GET.get(name, "") for name in ("year", "quarter")]
+    if not all(value.isascii() and value.isdigit() for value in values):
+        return None
+    year, quarter = map(int, values)
+    if not (1 <= year <= 9999 and 1 <= quarter <= 4
+            and bookings.has_begun(year, quarter, today)):
+        return None
+    return year, quarter
+
+
 @item_form
 def item_consumption(request: HttpRequest, pk: int) -> HttpResponse:
     """Enter the consumption of a quarter of the item PK, or remove it
-    with an empty count."""
+    with an empty count.
+
+    A query ``year=<year>&quarter=<quarter>`` naming a quarter that has
+    begun fixes the form to that quarter (see ``fixed_quarter``), which
+    shows the quarter's stored count, if any, as the value a save
+    replaces; any other query leaves the year and quarter to choose.
+    The form shows the item's consumption beside its fields
+    (``consumption_section``).
+    """
     item = get_object_or_404(Item, pk=pk)
+    today = timezone.localdate()
+    fixed = fixed_quarter(request, today)
+    stored = None if fixed is None else item.entered_consumption.filter(
+        year=fixed[0], quarter=fixed[1]).values_list(
+            "count", flat=True).first()
 
     def book(data: dict[str, Any]) -> HttpResponse:
         bookings.enter_consumption(request.user, item, **data)
@@ -921,9 +984,13 @@ def item_consumption(request: HttpRequest, pk: int) -> HttpResponse:
                      % {"item": item}, item_url(item), item)
 
     return form_page(
-        request, ConsumptionForm(request.POST or None), book,
+        request,
+        ConsumptionForm(request.POST or None, fixed=fixed, stored=stored),
+        book,
         {"title": _("Enter consumption of %(item)s") % {"item": item},
-         "cancel": item_url(item)}, dialog=True)
+         "cancel": item_url(item), "fixed": fixed, "stored": stored,
+         **consumption_section(item, today, True)},
+        template="inventory/consumption_form.html", dialog=True)
 
 
 @login_required
