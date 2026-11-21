@@ -517,7 +517,7 @@ class DetailsKeepTheirTableTests(WidgetCase):
                 ("list", page(self.client.get(f"{LIST}?selected={item.pk}"))),
                 ("detail", page(self.client.get(detail_url(item), **HTMX)))):
             with self.subTest(source=source):
-                pane = pane_of(root) if source == "list" else root
+                pane = pane_of(root)
                 self.assertEqual(pane.get("data-item"), str(item.pk))
                 grid = pane.find("table", cls="detail-table")
                 self.assertIsNotNone(grid)
