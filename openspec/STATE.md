@@ -142,7 +142,7 @@ leaves this file then.
   - The root suite's slowest tests have not been measured; run it
     with `--durations=30` to find them.
   - `tests/test_deploy_gate.py::ShutdownTests::test_sigterm_when_idle`
-    failed twice on CI with "the process did not exit" (2026-11-21,
+    failed three times on CI with "the process did not exit" (2026-11-21,
     branches that touched no deploy code) and passed on the reruns. The
     gate exited with status 0, but after the test's 15 s wait: SIGTERM
     probably lands during an update cycle under load. Find what delays
