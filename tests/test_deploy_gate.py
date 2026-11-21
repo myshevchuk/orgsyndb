@@ -11,6 +11,7 @@ cycle ends after the failed fetch. Every process a test starts is stopped
 when the test ends.
 """
 
+import ctypes
 import http.client
 import json
 import os
@@ -1120,6 +1121,27 @@ class ShutdownTests(GateCase):
             process.wait(timeout=15)
         except subprocess.TimeoutExpired:
             self.fail("the process did not exit\n" + self.output())
+        self.assertFalse(self.listening(self.port))
+
+    def test_sigterm_received_by_another_thread(self) -> None:
+        """Requirement: Gate (the program exits on `SIGTERM`, whichever
+        of its threads the kernel hands the signal to while the main
+        thread waits for the next cycle)."""
+        process = self.start()
+        self.assertTrue(wait_for(lambda: "cannot fetch the collection"
+                                 in self.output(), 10), self.output())
+        time.sleep(0.5)
+        others = [int(task.name) for task in
+                  Path(f"/proc/{process.pid}/task").iterdir()
+                  if int(task.name) != process.pid]
+        self.assertTrue(others, "the program runs no other thread")
+        tgkill = ctypes.CDLL(None, use_errno=True).tgkill
+        self.assertEqual(tgkill(process.pid, others[0], signal.SIGTERM), 0)
+        try:
+            process.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            self.fail("the process did not exit\n" + self.output())
+        self.assertEqual(process.returncode, 0)
         self.assertFalse(self.listening(self.port))
 
     def test_a_check_leaves_nothing_when_it_ends_by_an_error(self) -> None:

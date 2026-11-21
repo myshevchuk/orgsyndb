@@ -120,6 +120,7 @@ import http.client
 import json
 import os
 import re
+import select
 import shutil
 import signal
 import subprocess
@@ -1338,8 +1339,8 @@ class CheckHandler(BaseHTTPRequestHandler):
         return self.server.gate  # type: ignore[attr-defined]
 
     @property
-    def woken(self) -> threading.Event:
-        """The event a wake-up sets, which ``run`` waits for."""
+    def woken(self) -> "Wake":
+        """What a wake-up sets, which ``run`` waits for."""
         return self.server.woken  # type: ignore[attr-defined]
 
     def log_message(self, format: str, *args: object) -> None:
@@ -1482,7 +1483,7 @@ class CheckHandler(BaseHTTPRequestHandler):
         self.answer(result.status, result.lines)
 
 
-def serve_gate(config: Settings, woken: threading.Event
+def serve_gate(config: Settings, woken: "Wake"
                ) -> tuple[ThreadingHTTPServer, Gate]:
     """Start the builder's server on ORGSYNDB_GATE_BIND and
     ORGSYNDB_GATE_PORT in a thread, after removing check directories a
@@ -1503,6 +1504,47 @@ def serve_gate(config: Settings, woken: threading.Event
     return server, gate
 
 
+class Wake:
+    """What the main thread waits on between cycles: a wake-up set from
+    any thread, or a signal, whichever thread the kernel hands it to.
+    The signal module writes each signal's number to the same pipe as
+    a wake-up, so a signal another thread receives still ends the wait
+    and its handler then runs in the main thread. Create it in the main
+    thread; it takes over ``signal.set_wakeup_fd``."""
+
+    def __init__(self) -> None:
+        self._read, self._write = os.pipe()
+        for end in (self._read, self._write):
+            os.set_blocking(end, False)
+        self._event = threading.Event()
+        signal.set_wakeup_fd(self._write, warn_on_full_buffer=False)
+
+    def set(self) -> None:
+        """Ask for the next cycle now, or after the one running."""
+        self._event.set()
+        try:
+            os.write(self._write, b"\0")
+        except BlockingIOError:
+            pass
+
+    def wait(self, seconds: float) -> None:
+        """Return once a wake-up was set, which is then cleared, or
+        SECONDS have passed, whichever comes first; a signal's handler
+        runs as soon as the signal arrives."""
+        deadline = time.monotonic() + seconds
+        while not self._event.is_set():
+            left = deadline - time.monotonic()
+            if left <= 0:
+                break
+            select.select([self._read], [], [], left)
+            try:
+                while os.read(self._read, 512):
+                    pass
+            except BlockingIOError:
+                pass
+        self._event.clear()
+
+
 def run(config: Settings) -> int:
     """Repeat the cycle every ORGSYNDB_INTERVAL seconds, or at once on
     SIGHUP or a wake-up, running the builder's server beside it while
@@ -1510,7 +1552,7 @@ def run(config: Settings) -> int:
     ends it with exit status 0. A SIGHUP or wake-up during a cycle
     starts one more after it, however many arrive. Raise OSError when
     the server cannot listen."""
-    wake = threading.Event()
+    wake = Wake()
     signal.signal(signal.SIGHUP, lambda *_: wake.set())
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     log(f"collection {config.collection_repo} ({config.collection_ref}); "
@@ -1526,7 +1568,6 @@ def run(config: Settings) -> int:
             except (Failure, OSError) as exc:
                 log(f"error: {exc}")
             wake.wait(config.interval)
-            wake.clear()
     finally:
         if served is not None:
             server, gate = served
