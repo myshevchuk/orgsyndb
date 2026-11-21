@@ -206,14 +206,14 @@ class OrderRunwayTests(SimpleTestCase):
 
 class UsableBulkTests(SimpleTestCase):
 
-    def test_two_lots_of_the_shared_scenario(self) -> None:
+    def test_two_vessels_of_the_shared_scenario(self) -> None:
         self.assertEqual(forecast.usable_bulk([D(360)], D(20)), D(340))
 
-    def test_lots_too_small_to_fill(self) -> None:
-        """Scenario: Lots too small to fill."""
+    def test_vessels_too_small_to_fill(self) -> None:
+        """Scenario: Vessels too small to fill."""
         self.assertEqual(forecast.usable_bulk([D(6), D(6)], D(10)), D(0))
 
-    def test_each_lot_counts_its_amount_less_the_largest_size(self) -> None:
+    def test_each_vessel_counts_its_amount_less_the_largest_size(self) -> None:
         self.assertEqual(
             forecast.usable_bulk([D(25), D(10), D(9), D(40)], D(10)),
             D(15 + 0 + 0 + 30))
@@ -221,7 +221,7 @@ class UsableBulkTests(SimpleTestCase):
     def test_no_largest_size_counts_every_amount(self) -> None:
         self.assertEqual(forecast.usable_bulk([D(5), D(7)], D(0)), D(12))
 
-    def test_no_lot_gives_nothing(self) -> None:
+    def test_no_vessel_gives_nothing(self) -> None:
         self.assertEqual(forecast.usable_bulk([], D(10)), D(0))
 
     def test_the_result_is_a_decimal_and_keeps_its_places(self) -> None:
@@ -242,7 +242,7 @@ class ArticleRunwayTests(SimpleTestCase):
         self.assertAlmostEqual(found, 62.320, places=3)
         self.assertEqual(math.floor(found), 62)
 
-    def test_each_size_given_the_whole_lot_would_claim_more(self) -> None:
+    def test_each_size_given_the_whole_vessel_would_claim_more(self) -> None:
         model = quarterly(9)
         self.assertEqual(
             math.floor(self.runway([(model, 0, D(10))], 360)), 277)
@@ -351,7 +351,7 @@ class SharedBulkTests(PlanningCase):
         large = self.item("NV-2", "NV-2", "20", "mg", 0)
         for year, quarter in WINDOW:
             self.enter(large, year, quarter, 9)
-        self.lot("NV-2", "mg", "360")
+        self.vessel("NV-2", "mg", "360")
         return small, large
 
     def test_bulk_shared_by_two_sizes(self) -> None:
@@ -379,33 +379,33 @@ class SharedBulkTests(PlanningCase):
         self.assertEqual(math.floor(found.runway), 101)
         self.assertEqual(math.floor(found.items[0].runway_on_hand), 101)
 
-    def test_lots_too_small_to_fill(self) -> None:
-        """Scenario: Lots too small to fill."""
+    def test_vessels_too_small_to_fill(self) -> None:
+        """Scenario: Vessels too small to fill."""
         self.planned_item("NV-3", size="10", quantity=10)
-        self.lot("NV-3", "mg", "6")
-        self.lot("NV-3", "mg", "6")
+        self.vessel("NV-3", "mg", "6")
+        self.vessel("NV-3", "mg", "6")
         found = self.forecast("NV-3")
         self.assertEqual(found.usable_bulk, D(0))
         self.assertAlmostEqual(found.runway, found.items[0].runway_on_hand,
                                places=6)
 
-    def test_a_lot_of_the_largest_size_counts_nothing(self) -> None:
+    def test_a_vessel_of_the_largest_size_counts_nothing(self) -> None:
         self.planned_item("NV-3", size="10", quantity=10)
-        self.lot("NV-3", "mg", "10")
+        self.vessel("NV-3", "mg", "10")
         self.assertEqual(self.forecast("NV-3").usable_bulk, D(0))
 
-    def test_lots_in_other_units_and_other_articles(self) -> None:
+    def test_vessels_in_other_units_and_other_articles(self) -> None:
         self.planned_item("NV-3", size="10", quantity=10)
-        self.lot("NV-3", "g", "1")
-        self.lot("NV-3", "mg", "600")
-        self.lot("NV-3", "mg", "0")
-        self.lot("NV-9", "mg", "5000")
+        self.vessel("NV-3", "g", "1")
+        self.vessel("NV-3", "mg", "600")
+        self.vessel("NV-3", "mg", "0")
+        self.vessel("NV-9", "mg", "5000")
         self.assertEqual(self.forecast("NV-3").usable_bulk, D(1580))
 
     def test_the_largest_size_is_that_of_the_items_with_demand(self) -> None:
         self.planned_item("NV-3", size="10", quantity=10)
         self.item("NV-3", "NV-3", "100", "mg", 0)
-        self.lot("NV-3", "mg", "100")
+        self.vessel("NV-3", "mg", "100")
         found = self.forecast("NV-3")
         self.assertEqual(found.usable_bulk, D(90))
         self.assertAlmostEqual(found.runway, 132.469, places=3)
@@ -418,7 +418,7 @@ class SharedBulkTests(PlanningCase):
         gram = self.item("NV-4", "NV-4", "1", "g", 2)
         for year, quarter in WINDOW:
             self.enter(gram, year, quarter, 3)
-        self.lot("NV-4", "g", "2.5")
+        self.vessel("NV-4", "g", "2.5")
         found = self.forecast("NV-4")
         self.assertEqual(found.bulk_unit, Unit.MG)
         self.assertEqual(found.usable_bulk, D(1500))
@@ -426,7 +426,7 @@ class SharedBulkTests(PlanningCase):
     def test_the_bulk_unit_is_micromole_for_a_compound_with_a_mass(
             self) -> None:
         self.planned_item("CH-0012", size="10", unit="mg", quantity=10)
-        self.lot("CH-0012", "mg", "100")
+        self.vessel("CH-0012", "mg", "100")
         found = self.forecast("CH-0012")
         self.assertEqual(found.bulk_unit, Unit.UMOL)
         self.assertAlmostEqual(float(found.usable_bulk),
@@ -445,7 +445,7 @@ class SharedBulkTests(PlanningCase):
         self.item("NV-9", size="1", unit="mg", quantity=0,
                   status="not_needed")
         self.planned_item("NV-9", size="1", unit="umol", quantity=10)
-        self.lot("NV-9", "umol", "100")
+        self.vessel("NV-9", "umol", "100")
         found = self.forecast("NV-9")
         self.assertEqual(found.bulk_unit, Unit.UMOL)
         self.assertEqual(found.usable_bulk, D(99))
@@ -454,7 +454,7 @@ class SharedBulkTests(PlanningCase):
         """A substance with a molar mass has a bulk of µmol, whatever
         the index says."""
         self.planned_item("NV-5", size="10", unit="mg", quantity=10)
-        self.lot("NV-5", "mg", "100")
+        self.vessel("NV-5", "mg", "100")
         self.assertEqual(self.forecast("NV-5").bulk_unit, Unit.MG)
         self.item("NV-5", mw="100", size="5", unit="mg")
         found = self.forecast("NV-5")
@@ -464,7 +464,7 @@ class SharedBulkTests(PlanningCase):
         mg = self.planned_item("NV-6", size="10", unit="mg", quantity=0)
         micro = self.planned_item("NV-6", size="1", unit="umol",
                                   quantity=10)
-        self.lot("NV-6", "mg", "350")
+        self.vessel("NV-6", "mg", "350")
         found = self.forecast("NV-6")
         self.assertEqual(found.usable_bulk, D(340))
         self.assertAlmostEqual(found.runway, 55.112, places=3)
@@ -473,17 +473,17 @@ class SharedBulkTests(PlanningCase):
                                places=3)
         self.assertEqual(by_item[mg.pk].runway_on_hand, 0)
 
-    def test_a_small_lot_binds_before_the_item_that_does_not_convert(
+    def test_a_small_vessel_binds_before_the_item_that_does_not_convert(
             self) -> None:
         self.planned_item("NV-6", size="10", unit="mg", quantity=0)
         self.planned_item("NV-6", size="1", unit="umol", quantity=10)
-        self.lot("NV-6", "mg", "40")
+        self.vessel("NV-6", "mg", "40")
         self.assertAlmostEqual(self.forecast("NV-6").runway, 10.3515,
                                places=3)
 
-    def test_a_lot_that_does_not_convert_counts_nothing(self) -> None:
+    def test_a_vessel_that_does_not_convert_counts_nothing(self) -> None:
         self.planned_item("NV-7", size="10", unit="mg", quantity=10)
-        self.lot("NV-7", "umol", "1000")
+        self.vessel("NV-7", "umol", "1000")
         found = self.forecast("NV-7")
         self.assertEqual(found.usable_bulk, D(0))
         self.assertAlmostEqual(found.runway, found.items[0].runway_on_hand,

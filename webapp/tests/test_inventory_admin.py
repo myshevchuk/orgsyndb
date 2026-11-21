@@ -5,17 +5,18 @@ from datetime import date
 from decimal import Decimal
 
 from inventory.bookings import book_note, correct, fill
-from inventory.models import (Article, DeliveryNote, Item, Lot, LotMovement,
-                              Movement)
+from inventory.models import (Article, Batch, DeliveryNote, Item, Movement,
+                              Vessel, VesselMovement)
 
-from . import (make_article, make_item, make_lot, make_substance, make_user,
-               page)
+from . import (make_article, make_batch, make_item, make_substance,
+               make_task, make_user, make_vessel, page, past)
 from .inventory_support import InventoryCase
 
 ADMIN = "/lab/admin/inventory/"
 ARTICLES = ADMIN + "article/"
 ITEMS = ADMIN + "item/"
-LOTS = ADMIN + "lot/"
+BATCHES = ADMIN + "batch/"
+VESSELS = ADMIN + "vessel/"
 NOTES = ADMIN + "deliverynote/"
 MOVEMENTS = ADMIN + "movement/"
 
@@ -54,13 +55,13 @@ class AdminCase(InventoryCase):
 class AccessTests(AdminCase):
 
     def test_staff_enter(self) -> None:
-        for path in (ARTICLES, ITEMS, LOTS, NOTES, MOVEMENTS):
+        for path in (ARTICLES, ITEMS, BATCHES, VESSELS, NOTES, MOVEMENTS):
             with self.subTest(path=path):
                 self.assertEqual(self.client.get(path).status_code, 200)
 
     def test_anonymous_users_are_sent_to_the_admin_sign_in(self) -> None:
         self.client.logout()
-        for path in (ARTICLES, ITEMS, LOTS, NOTES, MOVEMENTS):
+        for path in (ARTICLES, ITEMS, BATCHES, VESSELS, NOTES, MOVEMENTS):
             with self.subTest(path=path):
                 done = self.client.get(path)
                 self.assertEqual(done.status_code, 302)
@@ -69,7 +70,7 @@ class AccessTests(AdminCase):
 
     def test_users_without_staff_status_are_kept_out(self) -> None:
         self.client.force_login(self.worker)
-        for path in (ARTICLES, ITEMS, LOTS, NOTES, MOVEMENTS):
+        for path in (ARTICLES, ITEMS, BATCHES, VESSELS, NOTES, MOVEMENTS):
             with self.subTest(path=path):
                 done = self.client.get(path)
                 self.assertIn(done.status_code, (302, 403))
@@ -108,14 +109,37 @@ class ListTests(AdminCase):
         self.assertIn(f"{ITEMS}{wanted.pk}/change/", text)
         self.assertNotIn(f"{ITEMS}{other.pk}/change/", text)
 
-    def test_search_lots_by_the_substances_key_and_names(self) -> None:
-        wanted = self.lot("CH-0012", batch="B-ONE")
-        other = self.lot("CH-0013", batch="B-TWO")
+    def test_search_vessels_by_the_substances_key_and_names(self) -> None:
+        wanted = self.vessel("CH-0012", number="B-ONE")
+        other = self.vessel("CH-0013", number="B-TWO")
         for query in ("cinnamic", "cinnamic-acid", "zimts"):
             with self.subTest(query=query):
-                text = self.client.get(f"{LOTS}?q={query}").content.decode()
-                self.assertIn(f"{LOTS}{wanted.pk}/change/", text)
-                self.assertNotIn(f"{LOTS}{other.pk}/change/", text)
+                text = self.client.get(
+                    f"{VESSELS}?q={query}").content.decode()
+                self.assertIn(f"{VESSELS}{wanted.pk}/change/", text)
+                self.assertNotIn(f"{VESSELS}{other.pk}/change/", text)
+
+    def test_search_batches_by_the_substances_key_and_names(self) -> None:
+        wanted = self.batch("CH-0012", number="B-ONE")
+        other = self.batch("CH-0013", number="B-TWO")
+        for query in ("cinnamic", "cinnamic-acid", "zimts"):
+            with self.subTest(query=query):
+                text = self.client.get(
+                    f"{BATCHES}?q={query}").content.decode()
+                self.assertIn(f"{BATCHES}{wanted.pk}/change/", text)
+                self.assertNotIn(f"{BATCHES}{other.pk}/change/", text)
+
+    def test_search_batches_by_number_and_supplier_batch(self) -> None:
+        made = self.batch("CH-0012", number="KL0412")
+        bought = self.batch("CH-0012", source="bought", supplier="Sigma",
+                            supplier_batch="MKCK1234")
+        for query, want, other in (("kl04", made, bought),
+                                   ("mkck", bought, made)):
+            with self.subTest(query=query):
+                text = self.client.get(
+                    f"{BATCHES}?q={query}").content.decode()
+                self.assertIn(f"{BATCHES}{want.pk}/change/", text)
+                self.assertNotIn(f"{BATCHES}{other.pk}/change/", text)
 
     def test_articles_are_listed_and_searched(self) -> None:
         wanted = self.stocked("CH-0012", "Zimtsäure").article
@@ -148,11 +172,13 @@ class HistoryTests(AdminCase):
         self.assertEqual(done.status_code, 200)
         self.assertIn("lab-worker-xy", done.content.decode("utf-8"))
 
-    def test_the_change_history_of_a_lot(self) -> None:
-        lot = make_lot(self.worker, "CH-0012", "mg", "5")
-        done = self.client.get(f"{LOTS}{lot.pk}/history/")
-        self.assertEqual(done.status_code, 200)
-        self.assertIn("lab-worker-xy", done.content.decode("utf-8"))
+    def test_the_change_history_of_a_vessel_and_a_batch(self) -> None:
+        vessel = make_vessel(self.worker, article="CH-0012")
+        for base, record in ((VESSELS, vessel), (BATCHES, vessel.batch)):
+            with self.subTest(base=base):
+                done = self.client.get(f"{base}{record.pk}/history/")
+                self.assertEqual(done.status_code, 200)
+                self.assertIn("lab-worker-xy", done.content.decode("utf-8"))
 
     def test_the_change_history_of_a_note(self) -> None:
         item = self.stocked()
@@ -192,13 +218,29 @@ class ReadOnlyTests(AdminCase):
             f"{ITEMS}{item.pk}/change/").content.decode("utf-8")
         self.assertIn("CH-0012", text)
 
-    def test_the_fixed_fields_of_a_lot_are_read_only(self) -> None:
-        lot = self.lot("CH-0012", batch="B-1")
-        names = editable(self.client.get(f"{LOTS}{lot.pk}/change/"))
-        self.assertIn("batch", names)
-        for fixed in ("substance", "source", "unit", "amount"):
+    def test_the_fixed_fields_of_a_vessel_are_read_only(self) -> None:
+        vessel = self.vessel("CH-0012", number="B-1")
+        names = editable(self.client.get(f"{VESSELS}{vessel.pk}/change/"))
+        self.assertLessEqual({"location", "note"}, names)
+        for fixed in ("batch", "unit", "flask", "amount"):
             with self.subTest(field=fixed):
                 self.assertNotIn(fixed, names)
+
+    def test_the_fixed_fields_of_a_batch_are_read_only(self) -> None:
+        task = make_task(self.kl, "CH-0012", steps=1, started=past(1))
+        batch = self.batch("CH-0012", number="B-1",
+                           task_step=task.steps.get())
+        names = editable(self.client.get(f"{BATCHES}{batch.pk}/change/"))
+        self.assertIn("number", names)
+        for fixed in ("substance", "source", "task_step", "number_key"):
+            with self.subTest(field=fixed):
+                self.assertNotIn(fixed, names)
+
+    def test_the_vessel_page_shows_its_fixed_fields(self) -> None:
+        vessel = self.vessel("CH-0012", number="B-1", location="Regal")
+        text = self.client.get(
+            f"{VESSELS}{vessel.pk}/change/").content.decode("utf-8")
+        self.assertIn("B-1", text)
 
     def test_a_note_keeps_its_date_kind_and_lines(self) -> None:
         item = self.stocked()
@@ -307,28 +349,55 @@ class DeletionTests(AdminCase):
                                  "post": "yes"})
         self.assertTrue(Item.objects.filter(pk=item.pk).exists())
 
-    def test_a_lot_with_only_its_opening_is_deleted(self) -> None:
-        lot = self.lot("CH-0012")
-        self.assertEqual(self.delete(LOTS, lot), 302)
-        self.assertFalse(Lot.objects.filter(pk=lot.pk).exists())
-        self.assertFalse(LotMovement.objects.filter(lot_id=lot.pk).exists())
+    def test_a_vessel_with_only_its_opening_is_deleted(self) -> None:
+        vessel = self.vessel("CH-0012")
+        self.assertEqual(self.delete(VESSELS, vessel), 302)
+        self.assertFalse(Vessel.objects.filter(pk=vessel.pk).exists())
+        self.assertFalse(
+            VesselMovement.objects.filter(vessel_id=vessel.pk).exists())
+        self.assertTrue(Batch.objects.filter(pk=vessel.batch_id).exists())
 
-    def test_a_lot_with_a_filling_stays(self) -> None:
+    def test_a_vessel_with_a_filling_stays(self) -> None:
         item = self.stocked()
-        lot = self.lot("CH-0012", "mg", "50")
-        fill(self.worker, item, count=1, lot=lot)
-        self.delete(LOTS, lot)
-        self.assertTrue(Lot.objects.filter(pk=lot.pk).exists())
-        self.assertEqual(lot.movements.count(), 2)
+        vessel = self.vessel("CH-0012", "mg", "50")
+        fill(self.worker, item, count=1, vessel=vessel)
+        self.delete(VESSELS, vessel)
+        self.assertTrue(Vessel.objects.filter(pk=vessel.pk).exists())
+        self.assertEqual(vessel.movements.count(), 2)
 
-    def test_the_bulk_action_does_not_delete_a_used_lot(self) -> None:
+    def test_the_bulk_action_does_not_delete_a_used_vessel(self) -> None:
         item = self.stocked()
-        lot = self.lot("CH-0012", "mg", "50")
-        fill(self.worker, item, count=1, lot=lot)
-        self.client.post(LOTS, {"action": "delete_selected",
-                                "_selected_action": [lot.pk],
-                                "post": "yes"})
-        self.assertTrue(Lot.objects.filter(pk=lot.pk).exists())
+        vessel = self.vessel("CH-0012", "mg", "50")
+        fill(self.worker, item, count=1, vessel=vessel)
+        self.client.post(VESSELS, {"action": "delete_selected",
+                                   "_selected_action": [vessel.pk],
+                                   "post": "yes"})
+        self.assertTrue(Vessel.objects.filter(pk=vessel.pk).exists())
+
+    def test_a_batch_without_vessels_is_deleted(self) -> None:
+        batch = self.batch("CH-0012")
+        self.assertEqual(self.delete(BATCHES, batch), 302)
+        self.assertFalse(Batch.objects.filter(pk=batch.pk).exists())
+
+    def test_a_batch_with_a_vessel_stays(self) -> None:
+        vessel = self.vessel("CH-0012")
+        self.delete(BATCHES, vessel.batch)
+        self.assertTrue(Batch.objects.filter(pk=vessel.batch_id).exists())
+
+    def test_a_batch_a_step_made_stays(self) -> None:
+        task = make_task(self.kl, "CH-0012", steps=1, started=past(1))
+        batch = self.batch("CH-0012", task_step=task.steps.get())
+        self.delete(BATCHES, batch)
+        self.assertTrue(Batch.objects.filter(pk=batch.pk).exists())
+
+    def test_the_bulk_action_does_not_delete_such_batches(self) -> None:
+        task = make_task(self.kl, "CH-0012", steps=1, started=past(1))
+        made = self.batch("CH-0012", task_step=task.steps.get())
+        stored = self.vessel("CH-0012").batch
+        self.client.post(BATCHES, {
+            "action": "delete_selected",
+            "_selected_action": [made.pk, stored.pk], "post": "yes"})
+        self.assertEqual(Batch.objects.count(), 2)
 
     def test_a_delivery_note_is_never_deleted(self) -> None:
         item = self.stocked()
@@ -356,13 +425,14 @@ class DeletionTests(AdminCase):
                 self.assertTrue(
                     Movement.objects.filter(pk=movement.pk).exists())
 
-    def test_a_lot_movement_is_never_deleted(self) -> None:
-        lot = self.lot("CH-0012")
-        movement = lot.movements.get()
-        done = self.client.post(f"{ADMIN}lotmovement/{movement.pk}/delete/",
-                                {"post": "yes"})
+    def test_a_vessel_movement_is_never_deleted(self) -> None:
+        vessel = self.vessel("CH-0012")
+        movement = vessel.movements.get()
+        done = self.client.post(
+            f"{ADMIN}vesselmovement/{movement.pk}/delete/", {"post": "yes"})
         self.assertIn(done.status_code, (403, 404))
-        self.assertTrue(LotMovement.objects.filter(pk=movement.pk).exists())
+        self.assertTrue(
+            VesselMovement.objects.filter(pk=movement.pk).exists())
 
 
 class HistoryRestoreTests(AdminCase):
@@ -414,16 +484,64 @@ class DeletionCheckTests(AdminCase):
         self.assertTrue(Item.objects.filter(pk=item.pk).exists())
         self.assertEqual(Movement.objects.filter(item=item).count(), 2)
 
-    def test_a_lot_booked_after_the_check_is_not_deleted(self) -> None:
+    def test_a_vessel_booked_after_the_check_is_not_deleted(self) -> None:
         from django.contrib import admin
         from django.core.exceptions import PermissionDenied
-        from inventory.bookings import correct_lot
-        lot = make_lot(self.worker, "CH-0012", "mg", "50")
-        spare = make_lot(self.worker, "CH-0012", "mg", "5")
-        correct_lot(self.worker, lot, amount=Decimal("40"), note="gewogen")
+        from inventory.bookings import correct_vessel
+        vessel = make_vessel(self.worker, article="CH-0012", unit="mg",
+                             amount="50")
+        spare = make_vessel(self.worker, article="CH-0012", unit="mg",
+                            amount="5")
+        correct_vessel(self.worker, vessel, amount=Decimal("40"),
+                       note="gewogen")
         with self.assertRaises(PermissionDenied):
-            admin.site._registry[Lot].delete_queryset(
-                self.request(), Lot.objects.filter(pk__in=[lot.pk,
-                                                           spare.pk]))
-        self.assertEqual(Lot.objects.count(), 2)
-        self.assertEqual(LotMovement.objects.count(), 3)
+            admin.site._registry[Vessel].delete_queryset(
+                self.request(), Vessel.objects.filter(pk__in=[vessel.pk,
+                                                              spare.pk]))
+        self.assertEqual(Vessel.objects.count(), 2)
+        self.assertEqual(VesselMovement.objects.count(), 3)
+
+    def test_a_batch_given_a_vessel_after_the_check_is_not_deleted(
+            self) -> None:
+        from django.contrib import admin
+        from django.core.exceptions import PermissionDenied
+        batch = make_batch(self.worker, "CH-0012")
+        make_vessel(self.worker, batch, unit="mg", amount="5")
+        with self.assertRaises(PermissionDenied):
+            admin.site._registry[Batch].delete_model(self.request(), batch)
+        self.assertTrue(Batch.objects.filter(pk=batch.pk).exists())
+
+
+class RenameTests(AdminCase):
+    """Design (Batch numbers regardless of case): the key follows the
+    number whatever path changes it."""
+
+    def post(self, batch: Batch, **over: str):
+        data = {"number": batch.number, "journal_entry": "", "date": "",
+                "note": "", "supplier": "", "supplier_article_number": "",
+                "supplier_batch": "", "yield_amount": "",
+                "yield_unit": ""}
+        data.update(over)
+        return self.client.post(f"{BATCHES}{batch.pk}/change/", data)
+
+    def test_a_rename_frees_the_old_number_and_claims_the_new_key(
+            self) -> None:
+        batch = make_batch(self.worker, "CH-0012", number="KL1")
+        done = self.post(batch, number="KL2")
+        self.assertEqual(done.status_code, 302)
+        batch = Batch.objects.get(pk=batch.pk)
+        self.assertEqual((batch.number, batch.number_key), ("KL2", "kl2"))
+        make_batch(self.worker, "CH-0012", number="kl1")
+        other = make_batch(self.worker, "CH-0012", number="KL3")
+        refused = self.post(other, number="kl2")
+        self.assertEqual(refused.status_code, 200)
+        self.assertEqual(Batch.objects.get(pk=other.pk).number, "KL3")
+
+    def test_a_number_another_batch_has_is_an_error_at_the_number(
+            self) -> None:
+        make_batch(self.worker, "CH-0012", number="Straße")
+        other = make_batch(self.worker, "CH-0012", number="KL3")
+        done = self.post(other, number="STRASSE")
+        self.assertEqual(done.status_code, 200)
+        self.assertIn("number", done.context["adminform"].form.errors)
+        self.assertEqual(Batch.objects.get(pk=other.pk).number, "KL3")

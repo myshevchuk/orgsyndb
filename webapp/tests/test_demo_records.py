@@ -122,14 +122,14 @@ class AccountTests(SeededCase):
 
     def test_mwolf_only_on_records_older_than_a_year(self) -> None:
         from inventory.models import (DeliveryNote, EnteredConsumption,
-                                      LotMovement, Movement)
+                                      Movement, VesselMovement)
         from tasks.models import Task
         mwolf = self.account("mwolf")
         year_ago = noon(DAY) - timedelta(days=365)
         times = [
             *Movement.objects.filter(user=mwolf).values_list(
                 "booked_at", flat=True),
-            *LotMovement.objects.filter(user=mwolf).values_list(
+            *VesselMovement.objects.filter(user=mwolf).values_list(
                 "booked_at", flat=True),
             *DeliveryNote.objects.filter(created_by=mwolf).values_list(
                 "created_at", flat=True),
@@ -529,43 +529,113 @@ class InventoryTests(SeededCase):
         self.assertEqual(corrections.count(), 1)
         self.assertTrue(corrections.get().note.strip())
 
-    def test_lots(self) -> None:
-        from inventory.models import Lot, LotMovement, Movement
-        lots = Lot.objects.all()
-        self.assertTrue(lots.exists())
-        for lot in lots:
-            with self.subTest(lot=str(lot)):
-                self.assertTrue(lot.batch and lot.location and lot.made_on)
+    def test_every_filling_names_a_vessel(self) -> None:
+        """Requirement: Demo inventory (fillings, each from a vessel and
+        naming its movement)."""
+        from inventory.models import Movement
         fillings = Movement.objects.filter(kind=Movement.Kind.FILLING)
         self.assertTrue(fillings.exists())
         for filling in fillings:
             with self.subTest(filling=filling.pk):
-                if filling.item.article.article_number is None:
-                    self.assertIsNone(filling.bulk_movement)
-                    continue
-                self.assertIsNotNone(filling.bulk_movement)
-                self.assertEqual(filling.bulk_movement.lot.substance,
+                self.assertIsNotNone(filling.vessel_movement)
+                self.assertEqual(filling.vessel_movement.kind, "filling")
+                self.assertEqual(filling.vessel_movement.vessel.substance,
                                  filling.item.article.substance)
         self.assertTrue(fillings.filter(
             item__article__article_number__isnull=True).exists())
-        self.assertGreaterEqual(lots.filter(amount=0).count(), 1)
-        corrected = LotMovement.objects.filter(
-            kind=LotMovement.Kind.CORRECTION)
+
+    def test_the_vessels(self) -> None:
+        """Requirement: Demo inventory (one vessel used up, one corrected
+        with a note, and one transfer from a flask into a stored
+        vessel)."""
+        from inventory.models import Vessel, VesselMovement
+        self.assertTrue(Vessel.objects.exists())
+        self.assertGreaterEqual(Vessel.objects.filter(amount=0).count(), 1)
+        corrected = VesselMovement.objects.filter(
+            kind=VesselMovement.Kind.CORRECTION)
         self.assertEqual(corrected.count(), 1)
         self.assertTrue(corrected.get().note.strip())
-        self.assertTrue(lots.filter(substance__key="new-compound-7",
-                                    unit="umol").exists())
+        sent = VesselMovement.objects.filter(
+            kind=VesselMovement.Kind.TRANSFER_OUT)
+        self.assertEqual(sent.count(), 1)
+        out = sent.get()
+        self.assertTrue(out.vessel.flask)
+        received = out.transferred
+        self.assertEqual(received.kind, "transfer_in")
+        self.assertFalse(received.vessel.flask)
+        self.assertEqual(received.vessel.batch, out.vessel.batch)
+        self.assertTrue(received.vessel.location)
 
-    def test_bought_and_intermediate_lots(self) -> None:
-        from inventory.models import Article, Lot
-        bought = Lot.objects.filter(source="bought")
+    def test_a_vessel_of_every_unit_the_demo_uses(self) -> None:
+        from inventory.models import Vessel
+        self.assertTrue(Vessel.objects.filter(
+            batch__substance__key="new-compound-7", unit="umol").exists())
+
+    def test_batches_made_without_a_step(self) -> None:
+        """Requirement: Demo inventory (made batches recorded without a
+        step, each with its number, the date it was made and a stored
+        vessel with a location)."""
+        from inventory.models import Batch
+        loose = Batch.objects.filter(source="made", task_step=None)
+        self.assertTrue(loose.exists())
+        for batch in loose:
+            with self.subTest(batch=str(batch)):
+                self.assertTrue(batch.number)
+                self.assertIsNotNone(batch.date)
+                self.assertTrue(batch.vessels.filter(
+                    flask=False).exclude(location="").exists())
+                self.assertFalse(batch.vessels.filter(flask=True).exists())
+
+    def test_batches_made_by_a_step_name_its_entry(self) -> None:
+        """Requirement: Demo inventory (made batches recorded from task
+        steps, each naming its step's journal entry where the step names
+        one, two of them naming one entry)."""
+        from django.db.models import Count
+
+        from inventory.models import Batch
+        made = Batch.objects.exclude(task_step=None)
+        self.assertTrue(made.exists())
+        for batch in made.select_related("task_step"):
+            with self.subTest(batch=str(batch)):
+                self.assertEqual(batch.source, "made")
+                if batch.task_step.journal_entry_id is not None:
+                    self.assertEqual(batch.journal_entry_id,
+                                     batch.task_step.journal_entry_id)
+        shared = Batch.objects.exclude(journal_entry=None).values(
+            "journal_entry").annotate(n=Count("pk")).filter(n__gte=2)
+        self.assertTrue(shared)
+
+    def test_a_bought_batch_with_its_supplier_fields(self) -> None:
+        """Requirement: Demo inventory (a batch bought from a supplier,
+        with the supplier's article number and batch)."""
+        from inventory.models import Batch
+        bought = Batch.objects.filter(source="bought")
         self.assertTrue(bought.exists())
-        self.assertTrue(all(lot.supplier.strip() for lot in bought))
-        self.assertTrue(Lot.objects.filter(source="made").exists())
-        intermediate = [
-            lot for lot in Lot.objects.filter(source="made", amount__gt=0)
-            if not Article.objects.filter(pk=lot.substance_id).exists()]
-        self.assertTrue(intermediate)
+        for batch in bought:
+            with self.subTest(batch=str(batch)):
+                self.assertTrue(batch.supplier.strip())
+                self.assertEqual(batch.number, "")
+                self.assertIsNone(batch.task_step)
+        self.assertTrue(bought.exclude(supplier_article_number="")
+                        .exclude(supplier_batch="").exists())
+
+    def test_an_open_vessel_of_an_intermediate_without_an_article(
+            self) -> None:
+        """Requirement: Demo inventory (an open vessel of a made batch of
+        a substance that has no article)."""
+        from inventory.models import Article, Vessel
+        found = [vessel for vessel in Vessel.objects.filter(
+            batch__source="made", amount__gt=0)
+            if not Article.objects.filter(
+                pk=vessel.batch.substance_id).exists()]
+        self.assertTrue(found)
+        self.assertTrue(all(v.kind == "intermediate" or v.flask
+                            for v in found))
+
+    def test_every_kind_of_vessel_appears(self) -> None:
+        from inventory.models import Vessel
+        kinds = {vessel.kind for vessel in Vessel.objects.all()}
+        self.assertLessEqual({"end-product", "intermediate"}, kinds)
 
     def test_notes(self) -> None:
         """Scenario: Notes."""
@@ -689,8 +759,9 @@ class TaskTests(SeededCase):
 
     def test_the_position_without_a_number_has_its_task(self) -> None:
         """Requirement: Demo tasks and parameters (an ended task of
-        `1-phenylethanol` with a batch and its product lot)."""
-        from planning.plan import batch_lots
+        `1-phenylethanol`, whose article has no article number, with its
+        product batch)."""
+        from inventory.models import Batch
         from tasks.models import State, Task
         tasks = list(Task.objects.filter(substance__key=NUMBERLESS[1]))
         self.assertTrue(tasks)
@@ -698,99 +769,149 @@ class TaskTests(SeededCase):
         self.assertTrue(ended)
         for task in ended:
             with self.subTest(task=task.number):
-                self.assertTrue(task.batch)
-                self.assertTrue(batch_lots(task))
+                self.assertTrue(Batch.objects.filter(
+                    task_step__task=task, substance=task.substance,
+                    source="made").exists())
 
-    def test_batches_link_tasks_and_lots(self) -> None:
-        from inventory.models import Lot
-        from planning.plan import batch_lots, batch_tasks
-        from tasks.models import State, Task
-        batched = [task for task in Task.objects.exclude(batch="")
-                   if task.state == State.ENDED]
-        self.assertTrue(batched)
-        for task in batched:
-            with self.subTest(task=task.number):
-                self.assertTrue(batch_lots(task))
-        for lot in Lot.objects.all():
-            with self.subTest(lot=str(lot)):
-                self.assertTrue(batch_tasks(lot))
+    def test_the_position_without_a_number_is_filled_from_the_flask(
+            self) -> None:
+        """Requirement: Demo inventory (one item of `1-phenylethanol`
+        filled 89 days before `D` from the flask of the product batch of
+        its task, which ends after that filling, and never delivered)."""
+        from inventory.models import Movement
+        (item,) = self.items(None)
+        self.assertEqual(item.article.substance.key, NUMBERLESS[1])
+        self.assertFalse(item.movements.filter(
+            kind=Movement.Kind.DELIVERY).exists())
+        filling = item.movements.get(kind=Movement.Kind.FILLING,
+                                     date=DAY - timedelta(days=89))
+        self.assertGreater(filling.date, O)
+        vessel = filling.vessel_movement.vessel
+        self.assertTrue(vessel.flask)
+        task = vessel.batch.task_step.task
+        self.assertEqual(task.substance.key, NUMBERLESS[1])
+        self.assertEqual(vessel.batch.substance, task.substance)
+        self.assertGreater(task.ended, filling.date)
+        self.assertEqual(vessel.amount, 0)
 
-    def test_ended_tasks_have_their_lots(self) -> None:
-        """Scenario: Ended tasks have their lots (every ended task that
-        has not failed has a batch and a product lot)."""
-        from inventory.models import Lot
-        from planning.plan import batch_lots
+    def test_batches_link_their_tasks(self) -> None:
+        """Requirement: Demo tasks and parameters (each such task lists
+        its batches and each batch its task)."""
+        from inventory.models import Batch
+        for batch in Batch.objects.exclude(task_step=None).select_related(
+                "task_step__task"):
+            task = batch.task_step.task
+            with self.subTest(batch=str(batch)):
+                self.assertIn(f"/lab/inventory/batches/{batch.pk}/", [
+                    a.get("href") for a in
+                    self.get(f"/lab/tasks/{task.number}/").find_all("a")])
+                self.assertIn(f"/lab/tasks/{task.number}/", [
+                    a.get("href") for a in self.get(
+                        f"/lab/inventory/batches/{batch.pk}/").find_all("a")])
+
+    def test_ended_tasks_have_their_batches(self) -> None:
+        """Scenario: Ended tasks have their batches (every ended task
+        that has not failed has a product batch)."""
+        from inventory.models import Batch
         from tasks.models import State, Task
         ended = [task for task in Task.objects.all()
                  if task.state == State.ENDED]
         self.assertTrue(ended)
         for task in ended:
             with self.subTest(task=task.number):
-                self.assertTrue(task.batch)
                 self.assertFalse(task.failed)
-                product = Lot.objects.filter(
-                    source="made", substance=task.substance,
-                    batch=task.batch)
-                self.assertTrue(product.exists())
-                self.assertTrue(set(product) <= set(batch_lots(task)))
+                self.assertTrue(Batch.objects.filter(
+                    task_step__task=task, substance=task.substance,
+                    source="made").exists())
+
+    def test_every_other_ended_task_recorded_from_its_last_step(
+            self) -> None:
+        """Requirement: Demo tasks and parameters (every other ended
+        task that has not failed with a product batch recorded from its
+        last step)."""
+        from inventory.models import Batch
+        from tasks.models import State, Task
+        for task in Task.objects.exclude(substance__key=NUMBERLESS[1]):
+            if task.state != State.ENDED:
+                continue
+            last = task.steps.order_by("position").last()
+            with self.subTest(task=task.number):
+                self.assertTrue(Batch.objects.filter(
+                    task_step=last, substance=task.substance,
+                    source="made").exists())
 
     def test_one_task_failed(self) -> None:
-        """Scenario: Ended tasks have their lots (one task is failed and
-        has no batch)."""
+        """Scenario: Ended tasks have their batches (one task is failed
+        and has no product batch)."""
+        from inventory.models import Batch
         from tasks.models import State, Task
         failed = Task.objects.filter(failed=True)
         self.assertEqual(failed.count(), 1)
         task = failed.get()
         self.assertEqual(task.state, State.FAILED)
-        self.assertEqual(task.batch, "")
+        self.assertFalse(Batch.objects.filter(
+            task_step__task=task, substance=task.substance).exists())
         self.assertIsNotNone(task.ended)
         self.assertFalse(task.needs_follow_up)
         self.assertIn("Fehlgeschlagen",
                       self.get(f"/lab/tasks/{task.number}/").text())
 
-    def test_a_step_made_a_lot_withdrawn_in_part_into_the_next(
+    def test_no_flask_of_a_closed_task_holds_an_amount(self) -> None:
+        """Scenario: Ended tasks have their batches (no flask of a task
+        that is ended, failed or cancelled holds an amount)."""
+        from inventory.models import Vessel
+        from tasks.models import State
+        flasks = Vessel.objects.filter(flask=True)
+        self.assertTrue(flasks.exists())
+        for flask in flasks.select_related("batch__task_step__task"):
+            task = flask.batch.task_step.task
+            if task.state in (State.ENDED, State.FAILED, State.CANCELLED):
+                with self.subTest(vessel=flask.pk, task=task.number):
+                    self.assertEqual(flask.amount, 0)
+
+    def test_a_step_made_a_batch_withdrawn_in_part_into_the_next(
             self) -> None:
-        """Scenario: Ended tasks have their lots (one lot was made by a
-        task step and has a withdrawal into another step of the same
-        task); Requirement: Demo tasks and parameters (a running task of
-        a sequence with the first step done, which made a lot of its
-        intermediate, withdrawn in part into the second)."""
-        from inventory.models import Lot, LotMovement
-        from tasks.models import State, Task
-        made = list(Lot.objects.exclude(task_step=None))
-        self.assertTrue(made)
-        withdrawn = [
-            lot for lot in made
-            if lot.movements.filter(
-                kind=LotMovement.Kind.WITHDRAWAL,
-                task_step__task=lot.task_step.task).exclude(
-                    task_step=lot.task_step).exists()]
-        self.assertTrue(withdrawn)
+        """Scenario: Ended tasks have their batches (one batch was made by
+        a task step and its flask has a withdrawal into another step of
+        the same task); Requirement: Demo tasks and parameters (a running
+        task of a sequence with the first step done, which made a batch
+        of its intermediate whose flask was withdrawn in part into the
+        second)."""
+        from inventory.models import Batch, VesselMovement
+        from tasks.models import State
         found = []
-        for lot in withdrawn:
-            task = lot.task_step.task
+        for batch in Batch.objects.exclude(task_step=None):
+            flask = batch.vessels.filter(flask=True).first()
+            if flask is None:
+                continue
+            taken = flask.movements.filter(
+                kind=VesselMovement.Kind.WITHDRAWAL,
+                task_step__task=batch.task_step.task).exclude(
+                    task_step=batch.task_step)
+            if not taken.exists():
+                continue
+            task = batch.task_step.task
             first, second = task.steps.order_by("position")
             if (task.state == State.RUNNING and task.sequence is not None
-                    and lot.task_step == first and first.done_on
+                    and batch.task_step == first and first.done_on
                     and second.done_on is None):
-                found.append((lot, task, first, second))
+                found.append((batch, flask, task, first, second))
         self.assertTrue(found)
-        for lot, task, first, second in found:
-            with self.subTest(lot=str(lot)):
-                self.assertEqual(lot.source, "made")
+        for batch, flask, task, first, second in found:
+            with self.subTest(batch=str(batch)):
+                self.assertEqual(batch.source, "made")
                 self.assertTrue(first.entry.substances.filter(
-                    role="product", substance=lot.substance).exists())
-                taken = lot.movements.get(
-                    kind=LotMovement.Kind.WITHDRAWAL)
+                    role="product", substance=batch.substance).exists())
+                taken = flask.movements.get(
+                    kind=VesselMovement.Kind.WITHDRAWAL)
                 self.assertEqual(taken.task_step, second)
-                self.assertGreater(lot.amount, 0)
+                self.assertGreater(flask.amount, 0)
                 self.assertLess(
-                    lot.amount,
-                    lot.movements.get(kind=LotMovement.Kind.OPENING)
-                    .amount)
-                self.assertEqual(
-                    lot.amount, taken.amount_after)
-                text = self.get(f"/lab/inventory/bulk/{lot.pk}/").text()
+                    flask.amount,
+                    flask.movements.get(
+                        kind=VesselMovement.Kind.OPENING).amount)
+                self.assertEqual(flask.amount, taken.amount_after)
+                text = self.get(f"/lab/inventory/batches/{batch.pk}/").text()
                 self.assertIn(task.number, text)
 
     def test_numbers_follow_creation(self) -> None:
@@ -864,29 +985,33 @@ class StockedStepTests(SeededCase):
             [[a.get("href") for a in item.find_all("a")]
              for item in items], [["/procedures/osdb-0002/"]])
 
-    def test_an_earlier_task_made_the_lot_it_starts_from(self) -> None:
-        """Scenario: A demo task from stock (an open lot of
-        `salicylic-acid` lists the first step of an ended task of
-        `SEQ-0001` as the step that made it)."""
-        from inventory.models import Lot
+    def test_an_earlier_task_made_the_batch_it_starts_from(self) -> None:
+        """Scenario: A demo task from stock (an open vessel of
+        `salicylic-acid` belongs to a batch whose page names the first
+        step of an ended task of `SEQ-0001` as the step that made
+        it)."""
+        from inventory.models import Vessel
         from tasks.models import State
         found = []
-        for lot in Lot.objects.filter(substance__key="salicylic-acid",
-                                      amount__gt=0, source="made"):
-            step = lot.task_step
+        for vessel in Vessel.objects.filter(
+                batch__substance__key="salicylic-acid", amount__gt=0,
+                batch__source="made"):
+            step = vessel.batch.task_step
             if (step is not None and step.position == 1
                     and step.task.sequence is not None
                     and step.task.sequence.key == "SEQ-0001"
                     and step.task.state == State.ENDED):
-                found.append((lot, step))
+                found.append((vessel, step))
         self.assertTrue(found)
-        for lot, step in found:
-            with self.subTest(lot=str(lot)):
+        for vessel, step in found:
+            with self.subTest(vessel=str(vessel)):
                 self.assertEqual(step.entry.procedure.key, "OSDB-0001")
                 self.assertIsNotNone(step.done_on)
-                self.assertLess(lot.made_on,
+                self.assertFalse(vessel.flask)
+                self.assertLess(vessel.batch.date,
                                 self.planned().created_at.date())
-                text = self.get(f"/lab/inventory/bulk/{lot.pk}/").text()
+                text = self.get(
+                    f"/lab/inventory/batches/{vessel.batch_id}/").text()
                 self.assertIn(step.task.number, text)
 
 
@@ -929,13 +1054,13 @@ class RecordedPastTests(SeededCase):
     def test_times_within_the_inventory_life(self) -> None:
         """Scenario: Times within the inventory's life."""
         from inventory.models import (DeliveryNote, EnteredConsumption,
-                                      LotMovement, Movement)
+                                      Movement, VesselMovement)
         from tasks.models import Task
         first = datetime.combine(O, time(8), BERLIN)
         last = datetime.combine(DAY, time(18), BERLIN)
         stamps = [
             *Movement.objects.values_list("booked_at", flat=True),
-            *LotMovement.objects.values_list("booked_at", flat=True),
+            *VesselMovement.objects.values_list("booked_at", flat=True),
             *DeliveryNote.objects.values_list("created_at", flat=True),
             *Task.objects.values_list("created_at", flat=True),
             *EnteredConsumption.objects.values_list("entered_at",
@@ -960,8 +1085,8 @@ class RecordedPastTests(SeededCase):
                     self.assertLessEqual(day, DAY)
 
     def test_movements_were_booked_in_order(self) -> None:
-        from inventory.models import LotMovement, Movement
-        for model in (Movement, LotMovement):
+        from inventory.models import Movement, VesselMovement
+        for model in (Movement, VesselMovement):
             with self.subTest(model=model.__name__):
                 booked = list(model.objects.order_by("id").values_list(
                     "booked_at", flat=True))
@@ -1052,7 +1177,7 @@ class LanguageTests(TestCase):
 def snapshot() -> dict:
     """The records that must not depend on the language, without their
     IDs."""
-    from inventory.models import Item, Lot, Movement
+    from inventory.models import Batch, Item, Movement, Vessel
     from registry.models import Substance
     from tasks.models import Task
     return {
@@ -1063,7 +1188,11 @@ def snapshot() -> dict:
         "movements": sorted(Movement.objects.values_list(
             "item__article__article_number", "item__size", "item__unit",
             "kind", "count", "date"), key=repr),
-        "lots": sorted(Lot.objects.values_list("batch", "amount")),
+        "batches": sorted(Batch.objects.values_list(
+            "number", "source", "supplier_batch", "date"), key=repr),
+        "vessels": sorted(Vessel.objects.values_list(
+            "batch__number", "batch__supplier_batch", "unit", "amount",
+            "flask", "location"), key=repr),
         "tasks": sorted(Task.objects.values_list(
             "number", "substance__key", "started", "ended")),
     }

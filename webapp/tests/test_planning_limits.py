@@ -37,7 +37,7 @@ class LimitTests(PlanningCase):
         for year, quarter in WINDOW:
             self.enter(item, year, quarter,
                        1 if (year, quarter) == WINDOW[-5] else 0)
-        self.lot("NV-9", "mg", "3000")
+        self.vessel("NV-9", "mg", "3000")
         found = self.forecast("NV-9")
         self.assertGreater(found.runway, 1e6)
         self.assertIsNone(found.latest_start)

@@ -1,23 +1,23 @@
-"""Tests of the batches between tasks and bulk lots (production-planning:
-Batches between tasks and bulk; task-tracker: Task page;
-end-product-inventory: Bulk lot page, Inventory forms)."""
+"""Tests of the batches of tasks (production-planning: Batches of
+tasks; task-tracker: Task page; end-product-inventory: Batch page,
+Inventory forms)."""
 
 from datetime import date
+from decimal import Decimal
 from urllib.parse import parse_qs, urlsplit
 
-from inventory.models import Lot
-from planning.plan import batch_lots, batch_tasks
+from inventory.models import Batch
 
-from . import (field_value, make_lot, make_substance, make_task,
-               substance_for, task_url)
+from . import (field_value, make_batch, make_task, make_vessel, past,
+               task_url)
 from .collection_support import accept
-from .inventory_support import NEW_LOT, lot_data, lot_url
+from .inventory_support import NEW_BATCH, batch_data, batch_url
 from .planning_support import PlanningCase
 
-RECORD_DE = "Als Bulk erfassen"
-RECORD_EN = "Record as bulk"
-BATCH = "B-2026-031"
-ENDED = date(2026, 10, 30)
+RECORD_DE = "Charge erfassen"
+RECORD_EN = "Record batch"
+OLD_DE = ("Los erfassen", "Als Bulk erfassen")
+OLD_EN = ("Record a lot", "Record as bulk")
 
 
 def hrefs(root) -> list[str]:
@@ -30,308 +30,199 @@ class BatchCase(PlanningCase):
         super().setUp()
         self.item("CH-0012", size="10", unit="umol", quantity=3)
 
-    def ended(self, substance: str = "CH-0012", batch: str = BATCH, **over):
-        return make_task(self.kl, substance=substance, batch=batch,
-                         started=date(2026, 10, 1), ended=ENDED,
-                         report=True, qc_list=True, **over)
+    def running(self, substance: str = "CH-0012", steps: int = 2, **over):
+        return make_task(self.kl, substance=substance,
+                         started=date(2026, 10, 1), steps=steps, **over)
 
     def task_page(self, task, signed_in: bool = False):
         return self.get(task_url(task), signed_in)
 
-    def lot_page(self, lot):
-        return self.get(lot_url(lot))
+    def batch_page(self, batch):
+        return self.get(batch_url(batch))
 
-    def record_link(self, task, signed_in: bool = True):
+    def record_links(self, task, signed_in: bool = True):
         root = self.task_page(task, signed_in)
-        found = [a for a in root.find_all("a")
-                 if a.text() in (RECORD_DE, RECORD_EN)]
-        return found[0] if found else None
+        return [a for a in root.find_all("a")
+                if a.text() in (RECORD_DE, RECORD_EN)]
 
 
 class LinkTests(BatchCase):
+    """Requirement: Batches of tasks (a batch made by a step belongs to
+    that task, and to no other)."""
 
-    def test_task_and_lot_of_one_batch_link_each_other(self) -> None:
-        task = self.ended()
-        lot = self.lot("CH-0012", batch=BATCH)
-        self.assertIn(lot_url(lot), hrefs(self.task_page(task)))
-        self.assertIn(task_url(task), hrefs(self.lot_page(lot)))
+    def test_a_task_and_its_batch_link_each_other(self) -> None:
+        task = self.running()
+        batch = make_batch(self.kl, "CH-0012", number="KL0412",
+                           task_step=task.steps.get(position=2))
+        self.assertIn(batch_url(batch), hrefs(self.task_page(task)))
+        self.assertIn(task_url(task), hrefs(self.batch_page(batch)))
 
-    def test_same_batch_other_substance(self) -> None:
-        """Scenario: Same batch, other substance."""
-        lot = self.lot("new-compound-7", batch="B-001")
-        task = make_task(self.kl, substance="CH-0012", batch="B-001")
-        self.assertNotIn(lot_url(lot), hrefs(self.task_page(task)))
-        self.assertNotIn(task_url(task), hrefs(self.lot_page(lot)))
+    def test_a_batch_without_a_step_links_no_task(self) -> None:
+        """Scenario: A batch without a step."""
+        task = self.running()
+        batch = make_batch(self.kl, "CH-0012", number="KL0412")
+        self.assertNotIn(batch_url(batch), hrefs(self.task_page(task)))
+        self.assertNotIn(task_url(task), hrefs(self.batch_page(batch)))
 
-    def test_a_task_of_the_substance_without_its_article_number(
+    def test_a_batch_without_a_step_stays_unlinked_beside_one_with(
             self) -> None:
-        task = self.ended(substance="cinnamic-acid")
-        lot = self.lot("CH-0012", batch=BATCH)
-        self.assertIn(lot_url(lot), hrefs(self.task_page(task)))
-        self.assertIn(task_url(task), hrefs(self.lot_page(lot)))
+        """The link is the step: a batch of the same substance recorded
+        without one stays unlinked while the task has a batch of its
+        own."""
+        task = self.running()
+        make_batch(self.kl, "CH-0012", number="KL1",
+                   task_step=task.steps.get(position=2))
+        loose = make_batch(self.kl, "CH-0012", number="KL2")
+        self.assertNotIn(batch_url(loose), hrefs(self.task_page(task)))
+        self.assertNotIn(task_url(task), hrefs(self.batch_page(loose)))
 
-    def test_a_lot_of_a_substance_without_an_article_belongs_too(
-            self) -> None:
-        task = self.ended(substance="acetophenone")
-        lot = self.lot("acetophenone", batch=BATCH, source="made")
-        self.assertIn(lot_url(lot), hrefs(self.task_page(task)))
-        self.assertIn(task_url(task), hrefs(self.lot_page(lot)))
+    def test_a_batch_belongs_to_the_task_of_its_step_alone(self) -> None:
+        task = self.running()
+        other = self.running()
+        batch = make_batch(self.kl, "CH-0012", number="KL1",
+                           task_step=other.steps.get(position=1))
+        self.assertNotIn(batch_url(batch), hrefs(self.task_page(task)))
+        self.assertNotIn(task_url(task), hrefs(self.batch_page(batch)))
+        self.assertIn(task_url(other), hrefs(self.batch_page(batch)))
+        self.assertIn(batch_url(batch), hrefs(self.task_page(other)))
 
-    def test_other_batches_do_not_link(self) -> None:
-        task = self.ended()
-        lot = self.lot("CH-0012", batch="B-2026-032")
-        self.assertNotIn(lot_url(lot), hrefs(self.task_page(task)))
-        self.assertNotIn(task_url(task), hrefs(self.lot_page(lot)))
+    def test_an_intermediate_batch_belongs_to_the_task_too(self) -> None:
+        task = self.running()
+        batch = make_batch(self.kl, "acetophenone", number="KL1",
+                           task_step=task.steps.get(position=1))
+        self.assertIn(batch_url(batch), hrefs(self.task_page(task)))
+        self.assertIn(task_url(task), hrefs(self.batch_page(batch)))
 
-    def test_empty_batches_do_not_link(self) -> None:
-        task = make_task(self.kl, substance="CH-0012", batch="")
-        lot = self.lot("CH-0012", batch="")
-        self.assertNotIn(lot_url(lot), hrefs(self.task_page(task)))
-        self.assertNotIn(task_url(task), hrefs(self.lot_page(lot)))
+    def test_several_batches_of_one_step_are_all_linked(self) -> None:
+        task = self.running()
+        step = task.steps.get(position=2)
+        batches = [make_batch(self.kl, "CH-0012", number=f"KL{n}",
+                              task_step=step) for n in range(3)]
+        found = hrefs(self.task_page(task))
+        for batch in batches:
+            with self.subTest(batch=batch.number):
+                self.assertIn(batch_url(batch), found)
 
-    def test_a_task_without_a_batch_does_not_link_to_a_lot_with_one(
-            self) -> None:
-        task = make_task(self.kl, substance="CH-0012")
-        lot = self.lot("CH-0012", batch=BATCH)
-        self.assertNotIn(lot_url(lot), hrefs(self.task_page(task)))
-        self.assertNotIn(task_url(task), hrefs(self.lot_page(lot)))
+    def test_a_cancelled_tasks_batch_stays_linked(self) -> None:
+        task = self.running(cancelled=True)
+        batch = make_batch(self.kl, "CH-0012", number="KL1",
+                           task_step=task.steps.get(position=1))
+        self.assertIn(batch_url(batch), hrefs(self.task_page(task)))
+        self.assertIn(task_url(task), hrefs(self.batch_page(batch)))
 
-    def test_every_task_and_lot_of_the_batch_is_linked(self) -> None:
-        first = self.ended()
-        second = make_task(self.kl, substance="CH-0012", batch=BATCH)
-        other = self.ended(batch="B-2")
-        lots = [self.lot("CH-0012", batch=BATCH),
-                self.lot("CH-0012", batch=BATCH)]
-        lot_hrefs = hrefs(self.lot_page(lots[0]))
-        self.assertIn(task_url(first), lot_hrefs)
-        self.assertIn(task_url(second), lot_hrefs)
-        self.assertNotIn(task_url(other), lot_hrefs)
-        for task in (first, second):
-            with self.subTest(task=task.number):
-                found = hrefs(self.task_page(task))
-                for lot in lots:
-                    self.assertIn(lot_url(lot), found)
-
-    def test_a_cancelled_task_belongs_to_its_batch_all_the_same(
-            self) -> None:
-        task = make_task(self.kl, substance="CH-0012", batch=BATCH,
-                         cancelled=True)
-        lot = self.lot("CH-0012", batch=BATCH)
-        self.assertIn(lot_url(lot), hrefs(self.task_page(task)))
+    def test_the_batch_is_listed_under_the_step_that_made_it(self) -> None:
+        task = self.running()
+        batch = make_batch(self.kl, "CH-0012", number="KL1",
+                           task_step=task.steps.get(position=2))
+        make_vessel(self.kl, batch, unit="g", amount="2", flask=True)
+        items = self.task_page(task).find("ol").find_all("li")
+        self.assertNotIn(batch_url(batch), hrefs(items[0]))
+        self.assertIn(batch_url(batch), hrefs(items[1]))
 
 
-class RecordAsBulkTests(BatchCase):
+class RecordLinkTests(BatchCase):
+    """Requirement: Task page (`Charge erfassen` while the task is
+    planned or running)."""
 
-    def test_the_link_of_an_ended_task(self) -> None:
-        task = self.ended()
-        link = self.record_link(task)
-        self.assertIsNotNone(link)
-        self.assertEqual(link.text(), RECORD_DE)
-        parts = urlsplit(link.get("href"))
-        self.assertEqual(parts.path, NEW_LOT)
-        self.assertEqual(parse_qs(parts.query),
-                         {"substance": ["cinnamic-acid"], "batch": [BATCH],
-                          "made_on": ["2026-10-30"]})
+    def test_the_link_of_each_step_of_a_running_task(self) -> None:
+        task = self.running()
+        links = self.record_links(task)
+        self.assertEqual(
+            sorted(a.get("href") for a in links),
+            sorted(f"{NEW_BATCH}?step={step.pk}"
+                   for step in task.steps.all()))
+        self.assertEqual({a.text() for a in links}, {RECORD_DE})
+
+    def test_a_planned_task_offers_it_too(self) -> None:
+        task = make_task(self.kl, substance="CH-0012", steps=1)
+        self.assertEqual(len(self.record_links(task)), 1)
 
     def test_the_english_label(self) -> None:
         accept(language="en")
-        link = self.record_link(self.ended())
-        self.assertEqual(link.text(), RECORD_EN)
+        links = self.record_links(self.running())
+        self.assertEqual({a.text() for a in links}, {RECORD_EN})
 
     def test_the_link_needs_a_signed_in_user(self) -> None:
-        self.assertIsNone(self.record_link(self.ended(), signed_in=False))
+        self.assertEqual(self.record_links(self.running(),
+                                           signed_in=False), [])
 
-    def test_the_link_needs_an_ended_task(self) -> None:
-        for fields in ({}, {"started": date(2026, 10, 1)}):
+    def test_a_task_that_is_not_planned_or_running_offers_none(self) -> None:
+        for fields in ({"ended": date(2026, 10, 30), "report": True,
+                        "qc_list": True},
+                       {"cancelled": True},
+                       {"ended": date(2026, 10, 30), "failed": True}):
             with self.subTest(**fields):
-                task = make_task(self.kl, substance="CH-0012", batch=BATCH,
-                                 **fields)
-                self.assertIsNone(self.record_link(task))
+                task = self.running(**fields)
+                self.assertEqual(self.record_links(task), [])
 
-    def test_a_cancelled_task_does_not_offer_it(self) -> None:
-        task = make_task(self.kl, substance="CH-0012", batch=BATCH,
-                         started=date(2026, 10, 1), ended=ENDED,
-                         cancelled=True)
-        self.assertIsNone(self.record_link(task))
+    def test_a_task_without_steps_offers_none(self) -> None:
+        task = make_task(self.kl, substance="CH-0012",
+                         started=date(2026, 10, 1))
+        self.assertEqual(self.record_links(task), [])
 
-    def test_the_link_needs_a_batch(self) -> None:
-        self.assertIsNone(self.record_link(self.ended(batch="")))
-
-    def test_the_link_needs_no_article(self) -> None:
-        """An intermediate has lots though it is no article."""
-        link = self.record_link(self.ended(substance="acetophenone"))
-        self.assertIsNotNone(link)
-        parts = urlsplit(link.get("href"))
-        self.assertEqual(parse_qs(parts.query)["substance"],
-                         ["acetophenone"])
-
-    def test_the_link_is_offered_though_the_batch_has_a_lot(self) -> None:
-        self.lot("CH-0012", batch=BATCH)
-        self.assertIsNotNone(self.record_link(self.ended()))
-
-    def test_bulk_from_an_ended_task(self) -> None:
-        """Scenario: Bulk from an ended task."""
-        task = self.ended()
-        link = self.record_link(task)
-        form = self.get(link.get("href"), True)
-        done = self.client.post(NEW_LOT, lot_data(
-            substance=field_value(form, "substance"),
-            batch=field_value(form, "batch"),
-            made_on=field_value(form, "made_on"), amount="50"))
-        self.assertEqual(done.status_code, 302)
-        lot = Lot.objects.get(batch=BATCH)
-        self.assertEqual(lot.substance.key, "cinnamic-acid")
-        self.assertEqual(lot.source, "made")
-        self.assertEqual(lot.made_on, ENDED)
-        self.assertIn(lot_url(lot), hrefs(self.task_page(task)))
-        self.assertIn(task_url(task), hrefs(self.lot_page(lot)))
+    def test_the_old_links_are_gone(self) -> None:
+        for fields in ({}, {"ended": date(2026, 10, 30), "report": True,
+                            "qc_list": True}):
+            with self.subTest(**fields):
+                task = self.running(**fields)
+                texts = {a.text() for a in self.task_page(
+                    task, True).find_all("a")}
+                self.assertFalse(texts & set(OLD_DE + OLD_EN), texts)
 
 
-class NewLotFormTests(BatchCase):
+class BatchFromAStepTests(BatchCase):
 
-    def setUp(self) -> None:
-        super().setUp()
-        self.client.force_login(self.kl)
-
-    def form(self, query: str):
-        return self.get(NEW_LOT + query)
-
-    def test_new_lot_from_the_query(self) -> None:
-        """Scenario: New lot from the query."""
-        root = self.form(
-            "?substance=cinnamic-acid&batch=B-2026-031&made_on=2026-10-30")
-        self.assertEqual(field_value(root, "substance"), "cinnamic-acid")
-        self.assertEqual(field_value(root, "source"), "made")
-        self.assertEqual(field_value(root, "batch"), BATCH)
-        self.assertEqual(field_value(root, "made_on"), "2026-10-30")
-
-    def test_each_parameter_fills_its_own_field(self) -> None:
-        root = self.form("?batch=B-7")
-        self.assertEqual(field_value(root, "batch"), "B-7")
-        self.assertIn(field_value(root, "substance"), (None, ""))
-        self.assertIn(field_value(root, "made_on"), (None, ""))
-        root = self.form("?made_on=2026-10-30")
-        self.assertEqual(field_value(root, "made_on"), "2026-10-30")
-        self.assertIn(field_value(root, "batch"), (None, ""))
-
-    def test_the_substance_alone_still_fills_in(self) -> None:
-        root = self.form("?substance=cinnamic-acid")
-        self.assertEqual(field_value(root, "substance"), "cinnamic-acid")
-        self.assertIn(field_value(root, "batch"), (None, ""))
-
-    def test_without_a_query_the_fields_are_empty(self) -> None:
-        root = self.form("")
-        for name in ("substance", "batch", "made_on"):
-            with self.subTest(name=name):
-                self.assertIn(field_value(root, name), (None, ""))
-
-    def test_special_characters_survive(self) -> None:
-        root = self.form("?substance=A%26B&batch=%22x%22+y")
-        self.assertEqual(field_value(root, "substance"), "A&B")
-        self.assertEqual(field_value(root, "batch"), '"x" y')
-
-    def test_the_posted_values_win(self) -> None:
-        make_substance("nv-7")
-        done = self.client.post(
-            NEW_LOT + "?substance=cinnamic-acid&batch=B-1",
-            lot_data(substance="nv-7", batch="B-2", amount="5"))
-        self.assertEqual(done.status_code, 302)
-        lot = Lot.objects.get()
-        self.assertEqual((lot.substance.key, lot.batch), ("nv-7", "B-2"))
-
-
-class StepLotTests(BatchCase):
-    """Requirement: Batches between tasks and bulk (a lot made by a step
-    of the task belongs to it too)."""
-
-    def running(self, batch: str = BATCH, steps: int = 2):
-        return make_task(self.kl, substance="CH-0012", batch=batch,
-                         started=date(2026, 10, 1), steps=steps)
-
-    def test_a_lot_made_by_a_step_belongs_to_the_task_whatever_its_batch(
-            self) -> None:
-        task = self.running()
-        step = task.steps.get(position=1)
-        lot = self.lot("CH-0012", batch="B-OTHER", task_step=step)
-        self.assertEqual(batch_lots(task), [lot])
-        self.assertEqual(batch_tasks(lot), [task])
-        self.assertIn(lot_url(lot), hrefs(self.task_page(task)))
-        self.assertIn(task_url(task), hrefs(self.lot_page(lot)))
-
-    def test_a_lot_without_a_batch_made_by_a_step_belongs_too(self) -> None:
-        task = self.running(batch="")
-        lot = self.lot("CH-0012", task_step=task.steps.get(position=2))
-        self.assertEqual(batch_lots(task), [lot])
-        self.assertEqual(batch_tasks(lot), [task])
-
-    def test_an_intermediate_of_another_substance_belongs_to_the_task(
-            self) -> None:
-        task = self.running()
-        lot = make_lot(self.kl, substance=substance_for("acetophenone"),
-                       task_step=task.steps.get(position=1))
-        self.assertEqual(batch_lots(task), [lot])
-        self.assertEqual(batch_tasks(lot), [task])
-        self.assertIn(task_url(task), hrefs(self.lot_page(lot)))
-
-    def test_a_lot_of_the_batch_and_the_step_is_listed_once(self) -> None:
-        task = self.running()
-        lot = self.lot("CH-0012", batch=BATCH,
-                       task_step=task.steps.get(position=2))
-        self.assertEqual(batch_lots(task), [lot])
-        self.assertEqual(batch_tasks(lot), [task])
-
-    def test_the_lots_of_both_kinds_come_in_the_order_of_their_ids(
-            self) -> None:
-        task = self.running()
-        first = self.lot("CH-0012", batch="B-X",
-                         task_step=task.steps.get(position=1))
-        second = self.lot("CH-0012", batch=BATCH)
-        third = self.lot("CH-0012", batch="B-Y",
-                         task_step=task.steps.get(position=2))
-        self.assertEqual(batch_lots(task), [first, second, third])
-
-    def test_the_lot_of_a_step_of_another_task_does_not_belong(self) -> None:
-        task = self.running()
-        other = self.running(batch="B-2")
-        lot = self.lot("CH-0012", batch="B-3",
-                       task_step=other.steps.get(position=1))
-        self.assertEqual(batch_lots(task), [])
-        self.assertEqual(batch_tasks(lot), [other])
-        self.assertNotIn(lot_url(lot), hrefs(self.task_page(task)))
-        self.assertNotIn(task_url(task), hrefs(self.lot_page(lot)))
-
-    def test_a_task_belonging_by_batch_and_another_by_step_are_both_listed(
-            self) -> None:
-        by_step = self.running(batch="B-2")
-        by_batch = make_task(self.kl, substance="CH-0012", batch=BATCH)
-        lot = self.lot("CH-0012", batch=BATCH,
-                       task_step=by_step.steps.get(position=1))
-        self.assertEqual(batch_tasks(lot), [by_step, by_batch])
-
-
-class BulkFromAStepTests(BatchCase):
-
-    def test_bulk_from_a_tasks_step(self) -> None:
-        """Scenario: Bulk from a task's step."""
-        task = make_task(self.kl, substance="CH-0012", batch=BATCH,
-                         started=date(2026, 10, 1), steps=2)
+    def test_a_batch_from_a_tasks_step(self) -> None:
+        """Scenario: A batch from a task's step."""
+        task = self.running("CH-0012", steps=2)
         last = task.steps.get(position=2)
         root = self.task_page(task, signed_in=True)
         items = root.find("ol").find_all("li")
         links = [a for a in items[-1].find_all("a")
-                 if a.text() in ("Los erfassen", "Record a lot")]
+                 if a.text() == RECORD_DE]
         self.assertEqual([a.get("href") for a in links],
-                         [f"{NEW_LOT}?step={last.pk}"])
+                         [f"{NEW_BATCH}?step={last.pk}"])
         href = links[0].get("href")
         form = self.get(href)
-        done = self.client.post(href, lot_data(
-            substance=field_value(form, "substance"),
-            batch=field_value(form, "batch"),
-            made_on=field_value(form, "made_on"), amount="50"))
+        self.assertEqual(field_value(form, "substance"), "cinnamic-acid")
+        done = self.client.post(href, batch_data(
+            substance=field_value(form, "substance"), number="KL0412",
+            step=field_value(form, "step"), amount="2", unit="g"))
         self.assertEqual(done.status_code, 302)
-        lot = Lot.objects.get()
-        self.assertEqual((lot.substance.key, lot.source, lot.batch,
-                          lot.task_step),
-                         ("cinnamic-acid", "made", BATCH, last))
-        self.assertIn(lot_url(lot), hrefs(self.task_page(task)))
-        self.assertIn(task_url(task), hrefs(self.lot_page(lot)))
+        batch = Batch.objects.get()
+        self.assertEqual(
+            (batch.number, batch.substance.key, batch.source,
+             batch.task_step), ("KL0412", "cinnamic-acid", "made", last))
+        flask = batch.vessels.get()
+        self.assertEqual((flask.flask, flask.amount),
+                         (True, Decimal("2000")))
+        self.assertIn(batch_url(batch), hrefs(self.task_page(task)))
+        self.assertIn(task_url(task), hrefs(self.batch_page(batch)))
+
+    def test_the_query_of_the_link_fills_the_form(self) -> None:
+        task = self.running("CH-0012", steps=1)
+        step = task.steps.get()
+        parts = urlsplit(self.record_links(task)[0].get("href"))
+        self.assertEqual(parts.path, NEW_BATCH)
+        self.assertEqual(parse_qs(parts.query), {"step": [str(step.pk)]})
+
+    def test_a_batch_from_a_step_of_a_planned_task(self) -> None:
+        task = make_task(self.kl, substance="CH-0012", steps=1)
+        step = task.steps.get()
+        self.client.force_login(self.kl)
+        done = self.client.post(
+            f"{NEW_BATCH}?step={step.pk}", batch_data(
+                step=str(step.pk), amount="1", unit="g", number="KL1"))
+        self.assertEqual(done.status_code, 302)
+        self.assertEqual(Batch.objects.get().task_step, step)
+
+    def test_the_form_of_an_ended_tasks_step_is_refused(self) -> None:
+        task = make_task(self.kl, substance="CH-0012", steps=1,
+                         started=past(2), ended=past(1))
+        step = task.steps.get()
+        self.client.force_login(self.kl)
+        done = self.client.post(
+            f"{NEW_BATCH}?step={step.pk}", batch_data(
+                step=str(step.pk), amount="1", unit="g", number="KL1"))
+        self.assertEqual(done.status_code, 200)
+        self.assertEqual(Batch.objects.count(), 0)

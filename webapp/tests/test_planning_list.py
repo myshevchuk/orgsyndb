@@ -9,7 +9,7 @@ from tasks.models import Task
 
 from . import field_value, make_task, page, table, task_form_data
 from .collection_support import accept
-from .inventory_support import (BULK, LEVELS, TODAY, has_amount, has_number,
+from .inventory_support import (VESSELS, LEVELS, TODAY, has_amount, has_number,
                                 item_url, newest_movement, num)
 from .planning_support import (COLUMNS_DE, COLUMNS_EN, PLAN, WINDOW,
                                PlanningCase, has_date, quarters_back,
@@ -188,7 +188,7 @@ class ColumnTests(ListCase):
         large = self.item("NV-2", "NV-2", "20", "mg", 0)
         for year, quarter in WINDOW:
             self.enter(large, year, quarter, 9)
-        self.lot("NV-2", "mg", "360")
+        self.vessel("NV-2", "mg", "360")
         row = self.articles()["NV-2"]
         self.assertTrue(has_amount(row["Bulk"].text(), "340", "mg"),
                         row["Bulk"].text())
@@ -343,9 +343,9 @@ class ActionTests(ListCase):
     def test_actions(self) -> None:
         """Scenario: Actions."""
         first = self.planned_item("NV-1", quantity=1)
-        self.lot("NV-1", "mg", "20")
+        self.vessel("NV-1", "mg", "20")
         self.planned_item("NV-2", quantity=10)
-        self.lot("NV-2", "umol", "1000")
+        self.vessel("NV-2", "umol", "1000")
         self.planned_item("NV-3", quantity=10)
         rows = self.articles(signed_in=True)
         self.assertEqual(set(rows), {"NV-1", "NV-2", "NV-3"})
@@ -356,7 +356,7 @@ class ActionTests(ListCase):
                          [item_url(first, "fill")])
         second = rows["NV-2"]["Maßnahmen"]
         self.assertTrue([a for a in second.find_all("a")
-                         if a.text() == CHECK_DE and a.get("href") == BULK])
+                         if a.text() == CHECK_DE and a.get("href") == VESSELS])
         self.assertNotIn(PLAN_DE, second.text())
         third = rows["NV-3"]["Maßnahmen"]
         plan_links = [a for a in third.find_all("a")
@@ -374,7 +374,7 @@ class ActionTests(ListCase):
 
     def test_fill_is_due_below_the_buffer(self) -> None:
         item = self.planned_item("NV-1", quantity=10)
-        self.lot("NV-1", "mg", "20")
+        self.vessel("NV-1", "mg", "20")
         self.assertNotIn("Abfüllen", self.actions("NV-1").text())
         self.parameters(buffer_days=61)
         links = [a for a in self.actions("NV-1").find_all("a")
@@ -382,23 +382,23 @@ class ActionTests(ListCase):
         self.assertEqual([a.get("href") for a in links],
                          [item_url(item, "fill")])
 
-    def test_fill_needs_a_container_in_the_lots(self) -> None:
+    def test_fill_needs_a_container_in_the_vessels(self) -> None:
         self.planned_item("NV-1", quantity=1)
         self.assertNotIn("Abfüllen", self.actions("NV-1").text())
-        self.lot("NV-1", "mg", "0.5")
+        self.vessel("NV-1", "mg", "0.5")
         self.assertNotIn("Abfüllen", self.actions("NV-1").text())
-        self.lot("NV-1", "mg", "1")
+        self.vessel("NV-1", "mg", "1")
         self.assertIn("Abfüllen 1 mg", self.actions("NV-1").text())
 
-    def test_fill_is_not_offered_from_a_used_up_lot(self) -> None:
+    def test_fill_is_not_offered_from_a_used_up_vessel(self) -> None:
         self.planned_item("NV-1", quantity=1)
-        self.lot("NV-1", "mg", "0")
+        self.vessel("NV-1", "mg", "0")
         self.assertNotIn("Abfüllen", self.actions("NV-1").text())
 
     def test_fill_is_decided_per_size(self) -> None:
         small = self.planned_item("NV-1", size="1", quantity=1)
         self.planned_item("NV-1", size="5", quantity=40)
-        self.lot("NV-1", "mg", "20")
+        self.vessel("NV-1", "mg", "20")
         links = [a for a in self.actions("NV-1").find_all("a")
                  if a.text().startswith("Abfüllen")]
         self.assertEqual([(a.text(), a.get("href")) for a in links],
@@ -407,41 +407,42 @@ class ActionTests(ListCase):
     def test_fill_for_each_size_that_is_low(self) -> None:
         small = self.planned_item("NV-1", size="1", quantity=1)
         large = self.planned_item("NV-1", size="5", quantity=1)
-        self.lot("NV-1", "mg", "50")
+        self.vessel("NV-1", "mg", "50")
         links = [a for a in self.actions("NV-1").find_all("a")
                  if a.text().startswith("Abfüllen")]
         self.assertEqual([(a.text(), a.get("href")) for a in links],
                          [("Abfüllen 1 mg", item_url(small, "fill")),
                           ("Abfüllen 5 mg", item_url(large, "fill"))])
 
-    def test_fill_is_not_offered_for_a_lot_that_does_not_convert(
+    def test_fill_is_not_offered_for_a_vessel_that_does_not_convert(
             self) -> None:
         self.planned_item("NV-1", quantity=1)
-        self.lot("NV-1", "umol", "1000")
+        self.vessel("NV-1", "umol", "1000")
         text = self.actions("NV-1").text()
         self.assertNotIn("Abfüllen", text)
         self.assertIn(CHECK_DE, text)
 
     def test_the_size_is_shown_as_the_item_list_shows_it(self) -> None:
         self.planned_item("NV-1", size="2.5", quantity=1)
-        self.lot("NV-1", "mg", "50")
+        self.vessel("NV-1", "mg", "50")
         self.assertIn("Abfüllen 2,5 mg", self.actions("NV-1").text())
 
-    def test_check_bulk_for_a_lot_that_does_not_convert(self) -> None:
+    def test_check_bulk_for_a_vessel_that_does_not_convert(self) -> None:
         self.planned_item("NV-1", quantity=25)
-        self.lot("NV-1", "umol", "1000")
+        self.vessel("NV-1", "umol", "1000")
         links = [a for a in self.actions("NV-1").find_all("a")
                  if a.text() == CHECK_DE]
-        self.assertEqual([a.get("href") for a in links], [BULK])
+        self.assertEqual([a.get("href") for a in links], [VESSELS])
 
-    def test_check_bulk_is_not_offered_for_a_used_up_lot(self) -> None:
+    def test_check_bulk_is_not_offered_for_a_used_up_vessel(self) -> None:
         self.planned_item("NV-1", quantity=25)
-        self.lot("NV-1", "umol", "0")
+        self.vessel("NV-1", "umol", "0")
         self.assertNotIn(CHECK_DE, self.actions("NV-1").text())
 
-    def test_check_bulk_is_not_offered_when_every_lot_converts(self) -> None:
+    def test_check_bulk_is_not_offered_when_every_vessel_converts(
+            self) -> None:
         self.planned_item("NV-1", quantity=10)
-        self.lot("NV-1", "g", "1")
+        self.vessel("NV-1", "g", "1")
         self.assertNotIn(CHECK_DE, self.actions("NV-1").text())
 
     def test_plan_synthesis_for_high_and_medium(self) -> None:
@@ -491,36 +492,36 @@ class ActionTests(ListCase):
         make_task(self.kl, substance="cinnamic-acid")
         self.assertNotIn(PLAN_DE, self.actions("CH-0012", True).text())
 
-    def test_a_lot_that_does_not_convert_stops_the_offer(self) -> None:
+    def test_a_vessel_that_does_not_convert_stops_the_offer(self) -> None:
         self.planned_item("NV-1", quantity=10)
-        self.lot("NV-1", "umol", "1000")
+        self.vessel("NV-1", "umol", "1000")
         text = self.actions("NV-1", True).text()
         self.assertNotIn(PLAN_DE, text)
         self.assertIn(CHECK_DE, text)
 
-    def test_a_lot_that_converts_does_not_stop_the_offer(self) -> None:
+    def test_a_vessel_that_converts_does_not_stop_the_offer(self) -> None:
         self.planned_item("NV-1", quantity=10)
-        self.lot("NV-1", "mg", "1.5")
+        self.vessel("NV-1", "mg", "1.5")
         self.assertIn(PLAN_DE, self.actions("NV-1", True).text())
 
-    def test_a_used_up_lot_that_does_not_convert_does_not_stop_it(
+    def test_a_used_up_vessel_that_does_not_convert_does_not_stop_it(
             self) -> None:
         self.planned_item("NV-1", quantity=10)
-        self.lot("NV-1", "umol", "0")
+        self.vessel("NV-1", "umol", "0")
         self.assertIn(PLAN_DE, self.actions("NV-1", True).text())
 
     def test_an_article_to_be_listed_for_its_action_alone(self) -> None:
         self.planned_item("NV-1", quantity=25)
         self.planned_item("NV-2", quantity=25)
-        self.lot("NV-2", "umol", "1000")
+        self.vessel("NV-2", "umol", "1000")
         self.assertEqual(self.shown(), ["NV-2"])
 
     def test_the_english_texts(self) -> None:
         accept(language="en")
         self.planned_item("NV-1", quantity=1)
-        self.lot("NV-1", "mg", "20")
+        self.vessel("NV-1", "mg", "20")
         self.planned_item("NV-2", quantity=10)
-        self.lot("NV-2", "umol", "1000")
+        self.vessel("NV-2", "umol", "1000")
         self.planned_item("NV-3", quantity=10)
         rows = self.articles(signed_in=True)
         self.assertIn("Fill 1 mg", rows["NV-1"]["Actions"].text())

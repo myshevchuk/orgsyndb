@@ -7,7 +7,7 @@ from datetime import date
 from decimal import Decimal
 from urllib.parse import parse_qs, urlsplit
 
-from inventory.bookings import Refused, correct, fill
+from inventory.bookings import Refused, correct
 from inventory.models import EnteredConsumption, Item
 
 from . import field_value, make_substance, page, table
@@ -108,8 +108,8 @@ class StockEntryTests(FormCase):
         item = self.item("S-1", size="10", unit="mg", quantity=0,
                          stocked_on=None)
         self.assertIsNone(fresh(item).stocked_on)
-        fill(self.kl, item, count=3, date=date(2026, 10, 20))
-        fill(self.kl, item, count=2, date=date(2026, 11, 2))
+        self.filling(item, 3, day=date(2026, 10, 20))
+        self.filling(item, 2, day=date(2026, 11, 2))
         stored = fresh(item)
         self.assertEqual(stored.stocked_on, date(2026, 10, 20))
         self.assertTrue(stored.is_new(TODAY))
@@ -143,7 +143,7 @@ class StockEntryTests(FormCase):
     def test_a_later_movement_keeps_the_date(self) -> None:
         item = self.item("S-4", size="10", unit="mg", quantity=5,
                          stocked_on=date(2020, 1, 1))
-        fill(self.kl, item, count=1)
+        self.filling(item, 1)
         self.assertEqual(fresh(item).stocked_on, date(2020, 1, 1))
 
     def test_stock_entry_in_the_future(self) -> None:
@@ -332,7 +332,7 @@ class PlanningTests(PlanningCase):
     def test_a_dormant_size_does_not_choose_the_bulk_unit(self) -> None:
         """Scenario: A dormant size does not choose the bulk unit."""
         alone = self.planned_item("NV-2", "1", "umol", 10)
-        self.lot("NV-2", "umol", "100")
+        self.vessel("NV-2", "umol", "100")
         without = self.forecast("NV-2")
         gone = self.planned_item("NV-2", "1", "mg", 0)
         Item.objects.filter(pk=gone.pk).update(status="discontinued")

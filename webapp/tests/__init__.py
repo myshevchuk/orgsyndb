@@ -342,52 +342,95 @@ def make_item(user: Any, article: str | None = "CH-0001",
 BASE_FACTOR = {"mg": 1, "g": 1000, "umol": 1, "mmol": 1000}
 
 
-def make_lot(user: Any, article: str = "CH-0001", unit: str = "mg",
-             amount: str = "50", batch: str = "", location: str = "",
-             made_on: date | None = None, note: str = "",
-             substance: Any = None, source: str = "made",
-             supplier: str = "", mw: Any = None,
-             task_step: Any = None) -> Any:
-    """A lot holding ``amount`` of ``unit``, kept in the base unit, with
-    its opening movement. It is of ``substance``, or of the substance
+def _made_number() -> str:
+    """A made-batch number no batch has yet, for a test that does not
+    care about it."""
+    from inventory.models import Batch
+    count = Batch.objects.count()
+    while True:
+        count += 1
+        if not Batch.objects.filter(number_key=f"auto-{count}").exists():
+            return f"AUTO-{count}"
+
+
+def make_batch(user: Any, article: str = "CH-0001", number: str = "",
+               source: str = "made", substance: Any = None, mw: Any = None,
+               task_step: Any = None, journal_entry: Any = None,
+               date: date | None = None, supplier: str = "",
+               supplier_article_number: str = "", supplier_batch: str = "",
+               note: str = "", yield_amount: str | None = None,
+               yield_unit: str = "") -> Any:
+    """A batch, created and saved as the models hold it, with no vessel.
+
+    It is of ``substance``, or of the substance
     ``substance_for(article)``, which ``make_item`` gives to the item of
-    that article number; ``task_step`` is the step that made it."""
+    that article number. A made batch with no ``number`` gets a number
+    of its own; a bought batch has none. ``yield_amount`` is given in
+    ``yield_unit`` and kept in its base unit; ``task_step`` is the step
+    that made the batch."""
     from decimal import Decimal
-    from django.utils import timezone
-    from inventory.models import Lot, LotMovement
+    from inventory.models import Batch
     if substance is None:
         substance = substance_for(
             article, **({"mw": mw} if mw is not None else {}))
     elif mw is not None:
         substance = make_substance(substance.key, mw=mw)
-    base = Decimal(amount) * BASE_FACTOR[unit]
-    lot = Lot(substance=substance, source=source, supplier=supplier,
-              unit=unit, amount=base, batch=batch, location=location,
-              made_on=made_on, note=note,
-              **({"task_step": task_step} if task_step else {}))
-    lot._history_user = user
-    lot.save()
-    LotMovement.objects.create(
-        lot=lot, kind=LotMovement.Kind.OPENING, amount=base,
-        amount_after=base, date=timezone.localdate(),
-        booked_at=timezone.now(), user=user)
-    return lot
+    if source == "made" and not number:
+        number = _made_number()
+    made = source == "made"
+    batch = Batch(
+        substance=substance, source=source,
+        number=number if made else "", date=date, note=note,
+        journal_entry=journal_entry if made else None,
+        task_step=task_step if made else None,
+        supplier=supplier, supplier_article_number=supplier_article_number,
+        supplier_batch=supplier_batch,
+        yield_amount=(None if yield_amount is None else
+                      Decimal(yield_amount) * BASE_FACTOR[yield_unit]),
+        yield_unit=yield_unit)
+    batch._history_user = user
+    batch.save()
+    return batch
 
 
-def make_withdrawal(user: Any, lot: Any, step: Any, amount: str,
-                    day: date | None = None) -> Any:
-    """A withdrawal of ``amount`` in the lot's unit from ``lot`` into
-    the task step ``step``, booked as the booking would: the lot's
-    amount falls and the movement names the step."""
+def make_vessel(user: Any, batch: Any = None, unit: str = "mg",
+                amount: str = "50", location: str = "", flask: bool = False,
+                note: str = "", **batch_fields: Any) -> Any:
+    """A vessel of ``batch`` holding ``amount`` of ``unit``, kept in the
+    base unit, with its opening movement. Without a ``batch`` one is
+    made by ``make_batch`` from ``batch_fields``, such as ``article``,
+    ``substance``, ``number``, ``source`` or ``task_step``."""
     from decimal import Decimal
     from django.utils import timezone
-    from inventory.models import Lot, LotMovement
-    base = Decimal(amount) * BASE_FACTOR[lot.unit]
-    left = lot.amount - base
-    Lot.objects.filter(pk=lot.pk).update(amount=left)
-    lot.amount = left
-    return LotMovement.objects.create(
-        lot=lot, kind=LotMovement.Kind.WITHDRAWAL, amount=base,
+    from inventory.models import Vessel, VesselMovement
+    if batch is None:
+        batch = make_batch(user, **batch_fields)
+    base = Decimal(amount) * BASE_FACTOR[unit]
+    vessel = Vessel(batch=batch, unit=unit, amount=base, flask=flask,
+                    location=location, note=note)
+    vessel._history_user = user
+    vessel.save()
+    VesselMovement.objects.create(
+        vessel=vessel, kind=VesselMovement.Kind.OPENING, amount=base,
+        amount_after=base, date=timezone.localdate(),
+        booked_at=timezone.now(), user=user)
+    return vessel
+
+
+def make_withdrawal(user: Any, vessel: Any, step: Any, amount: str,
+                    day: date | None = None) -> Any:
+    """A withdrawal of ``amount`` in the vessel's unit from ``vessel``
+    into the task step ``step``, booked as the booking would: the
+    vessel's amount falls and the movement names the step."""
+    from decimal import Decimal
+    from django.utils import timezone
+    from inventory.models import Vessel, VesselMovement
+    base = Decimal(amount) * BASE_FACTOR[vessel.unit]
+    left = vessel.amount - base
+    Vessel.objects.filter(pk=vessel.pk).update(amount=left)
+    vessel.amount = left
+    return VesselMovement.objects.create(
+        vessel=vessel, kind=VesselMovement.Kind.WITHDRAWAL, amount=base,
         amount_after=left, date=day or timezone.localdate(),
         booked_at=timezone.now(), user=user, task_step=step)
 
@@ -423,7 +466,7 @@ def task_form_data(**over: Any) -> dict[str, str]:
     makes its sequence's target; ``start_step`` is a number."""
     data = {"substance": "aspirin", "priority": "medium", "assignee": "",
             "started": "", "ended": "", "sequence": "", "start_step": "",
-            "steps_total": "", "steps_done": "", "batch": "", "note": ""}
+            "steps_total": "", "steps_done": "", "note": ""}
     data.update(over)
     if over.get("sequence") and "substance" not in over:
         data["substance"] = sequence_target(over["sequence"],
@@ -444,7 +487,7 @@ def edit_data(task: Any, **over: Any) -> dict[str, str]:
         start_step=str(getattr(task, "start_step", 1)),
         steps_total=str(task.steps.count() or ""),
         steps_done=str(task.steps.filter(done_on__isnull=False).count()),
-        batch=task.batch or "", note=task.note or "")
+        note=task.note or "")
     for flag in ("report", "qc_list", "cancelled", "failed"):
         if getattr(task, flag, False):
             data[flag] = "on"

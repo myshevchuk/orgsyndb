@@ -21,7 +21,7 @@ from .inventory_support import (
     has_amount,
     has_number,
     item_url,
-    lot_url,
+    vessel_url,
 )
 from .test_inventory_table import body_rows
 
@@ -29,7 +29,7 @@ HTMX = {"HTTP_HX_REQUEST": "true"}
 COOKIE = "item-list-view"
 # The states of the cookie that remembers the view: none, and both views.
 VIEWS = (None, "table", "details")
-LOT_PAGE = re.compile(r"^/lab/inventory/bulk/\d+/$")
+VESSEL_PAGE = re.compile(r"^/lab/inventory/vessels/\d+/$")
 MISSING = "nicht hinterlegt"
 ACTIONS = ("Artikelnr. eintragen", "Abgabe buchen", "Abfüllen",
            "Bestand korrigieren", "Verbrauch nachtragen", "Bearbeiten")
@@ -125,8 +125,8 @@ class DetailsOfAnItemTests(DetailCase):
         for quarter, count in ((1, 6), (2, 5), (3, 7)):
             self.enter(item, 2026, quarter, count)
         self.deliver(item, 2, date(2026, 10, 15))
-        lot = self.lot("CH-0012", "mg", "50", batch="B-7",
-                       location="Kühlschrank 2")
+        vessel = self.vessel("CH-0012", "mg", "50", number="B-7",
+                             location="Kühlschrank 2")
         root = self.listing(f"?selected={item.pk}")
         pane = pane_of(root)
         self.assertEqual(pane.get("data-item"), str(item.pk))
@@ -146,10 +146,10 @@ class DetailsOfAnItemTests(DetailCase):
         self.assertTrue(has_number(stock.text(), "3"), stock.text())
         self.assertEqual(text.count(MISSING), 2)
         self.assertIn("Kühlschrank 2", text)
-        batch = [a for a in pane.find_all("a")
-                 if a.get("href") == lot_url(lot)]
-        self.assertEqual(len(batch), 1)
-        self.assertIn("B-7", batch[0].text())
+        shown = [a for a in pane.find_all("a")
+                 if a.get("href") == vessel_url(vessel)]
+        self.assertEqual(len(shown), 1)
+        self.assertIn("B-7", shown[0].text())
         self.assertTrue(has_amount(text, "50", "mg"), text)
         header, years = table(pane)
         self.assertEqual(header, ["Jahr", "Q1", "Q2", "Q3", "Q4", "Summe"])
@@ -222,30 +222,56 @@ class DetailsOfAnItemTests(DetailCase):
     def test_the_locations_that_are_set(self) -> None:
         self.decoy()
         item = self.item("CH-0012", quantity=1, compartment="2", box="7")
-        self.lot("CH-0012", "mg", "50")
+        self.vessel("CH-0012", "mg", "50")
         pane = self.listed(item)
         self.assertEqual(definition(pane, "Fach").text(), "2")
         self.assertEqual(definition(pane, "Box").text(), "7")
         self.assertEqual(pane.text().count(MISSING), 1)
 
-    def test_an_item_without_lots_links_none(self) -> None:
+    def test_a_flask_without_a_location_shows_kolben(self) -> None:
+        """Requirement: Item list (`Kolben` for a flask without a
+        location)."""
+        self.decoy()
+        item = self.item("CH-0012", "(E)-Zimtsäure", quantity=1,
+                         compartment="2", box="7")
+        flask = self.vessel("CH-0012", "g", "2", number="KL0412",
+                            flask=True)
+        pane = self.listed(item)
+        self.assertEqual(pane.text().count(MISSING), 0)
+        link = next(a for a in pane.find_all("a")
+                    if a.get("href") == vessel_url(flask))
+        self.assertIn("KL0412", link.text())
+        self.assertIn("Kolben", pane.text())
+
+    def test_a_stored_vessel_without_a_location_is_not_recorded(
+            self) -> None:
+        self.decoy()
+        item = self.item("CH-0012", "(E)-Zimtsäure", quantity=1,
+                         compartment="2", box="7")
+        self.vessel("CH-0012", "mg", "50", number="KL0412")
+        pane = self.listed(item)
+        self.assertEqual(pane.text().count(MISSING), 1)
+        self.assertNotIn("Kolben", pane.text())
+
+    def test_an_item_without_vessels_links_none(self) -> None:
         self.decoy()
         item = self.item(None, "Neuverbindung 9", quantity=2)
         pane = self.listed(item)
         self.assertEqual([a for a in pane.find_all("a")
-                          if LOT_PAGE.match(a.get("href", ""))], [])
+                          if VESSEL_PAGE.match(a.get("href", ""))], [])
         self.assertIn("10 µmol", pane.text())
         self.assertEqual(pane.text().count(MISSING), 2)
 
-    def test_the_lots_of_the_substance_only(self) -> None:
+    def test_the_vessels_of_the_substance_only(self) -> None:
         self.decoy()
         item = self.item("CH-0012", "(E)-Zimtsäure")
-        mine = self.lot("CH-0012", "mg", "50", batch="B-7")
-        self.lot("CH-0001", "mg", "20", batch="B-9")
+        mine = self.vessel("CH-0012", "mg", "50", number="B-7")
+        self.vessel("CH-0001", "mg", "20", number="B-9")
+        self.vessel("CH-0012", "mg", "0", number="B-8")
         pane = self.listed(item)
         self.assertEqual([a.get("href") for a in pane.find_all("a")
-                          if LOT_PAGE.match(a.get("href", ""))],
-                         [lot_url(mine)])
+                          if VESSEL_PAGE.match(a.get("href", ""))],
+                         [vessel_url(mine)])
 
     def test_the_head_marks_a_new_item_and_its_status(self) -> None:
         self.decoy()
@@ -518,7 +544,7 @@ class DetailViewTests(DetailCase):
         self.item("A-2", category="Ester")
         third = self.item("A-3", category="Ester")
         self.enter(third, 2026, 1, 3)
-        self.lot("A-3", "mg", "50", batch="B-3", location="Regal 1")
+        self.vessel("A-3", "mg", "50", number="B-3", location="Regal 1")
         root = self.listing("?category=Ester")
         row = next((r for r in body_rows(root)
                     if r.get("data-item") == str(third.pk)), None)
@@ -541,7 +567,7 @@ class DetailViewTests(DetailCase):
     def test_the_loaded_pane_matches_the_lists_for_each_item(self) -> None:
         items = [self.means_item("A-1"), self.item(None, "Neuverbindung 9"),
                  self.item("A-3", status="discontinued", compartment="2")]
-        self.lot("A-1", "mg", "50", batch="B-1")
+        self.vessel("A-1", "mg", "50", number="B-1")
         for item in items:
             with self.subTest(item=item.pk):
                 loaded = page(self.client.get(detail_url(item), **HTMX))

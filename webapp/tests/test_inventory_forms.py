@@ -5,17 +5,17 @@ from datetime import date
 from decimal import Decimal
 
 from inventory.bookings import book_note, fill
-from inventory.models import (DeliveryNote, EnteredConsumption, Item, Lot,
-                              LotMovement, Movement)
+from inventory.models import DeliveryNote, EnteredConsumption, Item, Movement
 
 from . import (context_form, datalist, field_value, make_article,
                make_substance, page, sent_messages)
 from .collection_support import accept
-from .inventory_support import (LIST, MICRO, NEW_ITEM, NEW_LOT, NEW_NOTE,
-                                TODAY, FormCase, InventoryCase, fill_data,
-                                fresh, item_data, item_url, lot_data, lot_url,
+from .inventory_support import (BATCHES, LIST, MICRO, NEW_BATCH, NEW_ITEM,
+                                NEW_NOTE, TODAY, VESSELS, FormCase,
+                                InventoryCase, batch_data, batch_url,
+                                fill_data, fresh, item_data, item_url,
                                 movement_url, newest_movement, note_data,
-                                note_url, snapshot)
+                                note_url, snapshot, vessel_url)
 
 
 def form_names(root, anchor: str) -> set[str]:
@@ -35,7 +35,7 @@ class PermissionTests(InventoryCase):
         movement = self.deliver_movement(item, 1)
         historical = book_note(self.kl, date=date(2025, 3, 12),
                                historical=True, lines=[(item, 1)])
-        lot = self.lot("CH-0012")
+        vessel = self.vessel("CH-0012")
         today = TODAY.isoformat()
         return {
             NEW_ITEM: item_data(size="50"),
@@ -51,11 +51,17 @@ class PermissionTests(InventoryCase):
             movement_url(movement): {"note": "x"},
             item_url(item, "consumption"): {"year": "2026", "quarter": "1",
                                             "count": "3"},
-            NEW_LOT: lot_data(),
-            lot_url(lot, "edit"): {"batch": "X", "location": "",
-                                   "made_on": "", "note": ""},
-            lot_url(lot, "correct"): {"amount": "1", "date": today,
-                                      "note": "x"},
+            NEW_BATCH: batch_data(),
+            batch_url(vessel.batch, "edit"): {
+                "number": "X", "journal_entry": "", "date": "", "note": ""},
+            batch_url(vessel.batch, "vessels/new"): {
+                "amount": "1", "unit": "mg", "location": "", "note": ""},
+            vessel_url(vessel, "edit"): {"location": "X", "note": ""},
+            vessel_url(vessel, "correct"): {"amount": "1", "date": today,
+                                            "note": "x"},
+            vessel_url(vessel, "transfer"): {
+                "amount": "1", "target": "", "location": "X",
+                "date": today, "note": ""},
         }
 
     def test_form_without_sign_in(self) -> None:
@@ -77,10 +83,10 @@ class PermissionTests(InventoryCase):
     def test_the_pages_that_show_data_need_no_sign_in(self) -> None:
         item = self.item("CH-0012", quantity=9)
         note = self.deliver(item, 1)
-        lot = self.lot("CH-0012")
-        for path in (LIST, "/lab/inventory/end-products/bulk/",
-                     "/lab/inventory/deliveries/", item_url(item),
-                     lot_url(lot), note_url(note)):
+        vessel = self.vessel("CH-0012")
+        for path in (LIST, BATCHES, VESSELS, "/lab/inventory/deliveries/",
+                     item_url(item), batch_url(vessel.batch),
+                     vessel_url(vessel), note_url(note)):
             with self.subTest(path=path):
                 self.assertEqual(self.client.get(path).status_code, 200)
 
@@ -97,8 +103,12 @@ class PermissionTests(InventoryCase):
             f"/lab/inventory/items/{item.pk}/movements/9999/reverse/",
             "/lab/inventory/deliveries/9999/edit/",
             "/lab/inventory/deliveries/9999/reverse/",
-            "/lab/inventory/bulk/9999/edit/",
-            "/lab/inventory/bulk/9999/correct/"]
+            "/lab/inventory/batches/9999/edit/",
+            "/lab/inventory/batches/9999/vessels/new/",
+            "/lab/inventory/vessels/9999/edit/",
+            "/lab/inventory/vessels/9999/correct/",
+            "/lab/inventory/vessels/9999/transfer/",
+            "/lab/inventory/vessels/9999/withdraw/"]
         before = snapshot()
         for path in missing:
             with self.subTest(path=path, method="GET"):
@@ -686,7 +696,7 @@ class FillFormTests(FormCase):
     def test_the_form_holds_the_fields_of_the_spec(self) -> None:
         root = page(self.client.get(self.url()))
         self.assertEqual(form_names(root, "count"),
-                         {"count", "date", "lot", "amount", "note"})
+                         {"count", "date", "vessel", "amount", "note"})
         buttons = root.find_all(("button", "input"), name="propose")
         self.assertEqual(len(buttons), 1)
         shown = buttons[0].text() or buttons[0].get("value")
@@ -699,146 +709,184 @@ class FillFormTests(FormCase):
         self.assertEqual(button.text() or button.get("value"),
                          "Propose amount")
 
-    def test_filling_without_a_lot(self) -> None:
-        done = self.client.post(self.url(), fill_data(
-            count="5", note="Charge 7", date="2026-11-01"))
-        self.assertRedirects(done, item_url(self.target),
-                             fetch_redirect_response=False)
-        self.assertEqual(fresh(self.target).quantity, 7)
-        movement = newest_movement(self.target)
-        self.assertEqual((movement.kind, movement.count, movement.note,
-                          movement.date, movement.user),
-                         ("filling", 5, "Charge 7", date(2026, 11, 1),
-                          self.kl))
-        self.assertIsNone(movement.bulk_movement)
-        self.assertMessageNames(done, "CH-0012", "Probe")
+    def test_no_filling_without_a_vessel(self) -> None:
+        """Scenario: No filling without a vessel."""
+        self.vessel("CH-0012", "mg", "50")
+        before = snapshot()
+        self.refused(self.client.post(self.url(), fill_data(
+            count="3", vessel="")), "vessel")
+        self.assertEqual(snapshot(), before)
+        self.assertEqual(fresh(self.target).quantity, 2)
 
-    def test_the_lots_offered_are_the_open_ones_of_the_article(self) -> None:
-        open_lot = self.lot("CH-0012", "mg", "50")
-        used = self.lot("CH-0012", "mg", "0")
-        other = self.lot("CH-0013", "mg", "50")
+    def test_the_vessels_offered_are_the_open_ones_of_the_article(
+            self) -> None:
+        open_vessel = self.vessel("CH-0012", "mg", "50")
+        used = self.vessel("CH-0012", "mg", "0")
+        other = self.vessel("CH-0013", "mg", "50")
         root = page(self.client.get(self.url()))
         values = [o.get("value") for o in
-                  root.find("select", name="lot").find_all("option")]
-        self.assertIn("", values)
-        self.assertIn(str(open_lot.pk), values)
+                  root.find("select", name="vessel").find_all("option")]
+        self.assertIn(str(open_vessel.pk), values)
         self.assertNotIn(str(used.pk), values)
         self.assertNotIn(str(other.pk), values)
 
+    def test_vessels_offered_for_a_filling(self) -> None:
+        """Scenario: Vessels offered for a filling."""
+        batch = self.batch("CH-0012", number="KL0412")
+        flask = self.vessel("CH-0012", "g", "2", batch=batch, flask=True)
+        self.vessel("CH-0012", "mg", "0")
+        root = page(self.client.get(self.url()))
+        offered = {o.get("value"): o.text() for o in
+                   root.find("select", name="vessel").find_all("option")
+                   if o.get("value")}
+        self.assertEqual(offered,
+                         {str(flask.pk): f"KL0412 #{flask.pk} · Kolben · 2 g"})
+
+    def test_a_stored_vessel_is_offered_with_its_kind_and_location(
+            self) -> None:
+        batch = self.batch("CH-0012", number="KL0412")
+        stored = self.vessel("CH-0012", "mg", "50", batch=batch,
+                             location="Regal 3")
+        root = page(self.client.get(self.url()))
+        offered = {o.get("value"): o.text() for o in
+                   root.find("select", name="vessel").find_all("option")
+                   if o.get("value")}
+        self.assertEqual(
+            offered,
+            {str(stored.pk):
+             f"KL0412 #{stored.pk} · Endprodukt · Regal 3 · 50 mg"})
+
     def test_propose_amount(self) -> None:
         """Scenario: Filling with conversion (the button)."""
-        lot = self.lot("CH-0012", "mg", "50")
+        vessel = self.vessel("CH-0012", "mg", "50")
         before = snapshot()
         done = self.client.post(self.url(), fill_data(
-            count="5", lot=str(lot.pk), propose="1"))
+            count="5", vessel=str(vessel.pk), propose="1"))
         self.assertEqual(done.status_code, 200)
         root = page(done)
         self.assertEqual(field_value(root, "amount"), "7,408")
         self.assertEqual(field_value(root, "count"), "5")
-        self.assertEqual(field_value(root, "lot"), str(lot.pk))
+        self.assertEqual(field_value(root, "vessel"), str(vessel.pk))
         self.assertFalse(context_form(done).errors)
         self.assertEqual(snapshot(), before)
         self.assertEqual(sent_messages(done), [])
 
     def test_booking_the_proposal(self) -> None:
-        lot = self.lot("CH-0012", "mg", "50")
+        vessel = self.vessel("CH-0012", "mg", "50")
         done = self.client.post(self.url(), fill_data(
-            count="5", lot=str(lot.pk), amount="7,408"))
+            count="5", vessel=str(vessel.pk), amount="7,408",
+            note="Charge 7", date="2026-11-01"))
         self.assertRedirects(done, item_url(self.target),
                              fetch_redirect_response=False)
         self.assertEqual(fresh(self.target).quantity, 7)
-        self.assertEqual(fresh(lot).amount, Decimal("42.592"))
+        self.assertEqual(fresh(vessel).amount, Decimal("42.592"))
         movement = newest_movement(self.target)
-        self.assertEqual(movement.bulk_movement,
-                         lot.movements.order_by("-pk").first())
-        self.assertEqual(movement.bulk_movement.kind, "filling")
+        self.assertEqual(movement.vessel_movement,
+                         vessel.movements.order_by("-pk").first())
+        self.assertEqual(movement.vessel_movement.kind, "filling")
+        self.assertEqual((movement.kind, movement.count, movement.note,
+                          movement.date, movement.user),
+                         ("filling", 5, "Charge 7", date(2026, 11, 1),
+                          self.kl))
+        self.assertMessageNames(done, "CH-0012", "Probe")
 
     def test_an_empty_amount_books_the_proposal(self) -> None:
-        lot = self.lot("CH-0012", "g", "1")
-        self.client.post(self.url(), fill_data(count="1", lot=str(lot.pk)))
-        self.assertEqual(fresh(lot).amount, Decimal("998.5184"))
+        vessel = self.vessel("CH-0012", "g", "1")
+        self.client.post(self.url(), fill_data(count="1",
+                                               vessel=str(vessel.pk)))
+        self.assertEqual(fresh(vessel).amount, Decimal("998.5184"))
 
-    def test_the_amount_is_in_the_unit_of_the_lot_with_a_comma(self) -> None:
-        lot = self.lot("CH-0012", "mg", "50")
+    def test_the_amount_is_in_the_unit_of_the_vessel_with_a_comma(
+            self) -> None:
+        vessel = self.vessel("CH-0012", "mg", "50")
         self.client.post(self.url(), fill_data(
-            count="5", lot=str(lot.pk), amount="7,4"))
-        self.assertEqual(fresh(lot).amount, Decimal("42.6"))
+            count="5", vessel=str(vessel.pk), amount="7,4"))
+        self.assertEqual(fresh(vessel).amount, Decimal("42.6"))
 
     def test_the_button_replaces_the_amount_typed(self) -> None:
-        lot = self.lot("CH-0012", "mg", "50")
+        vessel = self.vessel("CH-0012", "mg", "50")
         done = self.client.post(self.url(), fill_data(
-            count="5", lot=str(lot.pk), amount="1", propose="1"))
+            count="5", vessel=str(vessel.pk), amount="1", propose="1"))
         self.assertEqual(field_value(page(done), "amount"), "7,408")
 
     def test_the_proposal_follows_the_count(self) -> None:
-        lot = self.lot("CH-0012", "mg", "50")
+        vessel = self.vessel("CH-0012", "mg", "50")
         done = self.client.post(self.url(), fill_data(
-            count="10", lot=str(lot.pk), propose="1"))
+            count="10", vessel=str(vessel.pk), propose="1"))
         self.assertEqual(field_value(page(done), "amount"), "14,816")
 
-    def test_the_proposal_is_shown_in_the_unit_of_the_lot(self) -> None:
+    def test_the_proposal_is_shown_in_the_unit_of_the_vessel(self) -> None:
         stock = self.item("X-1", size="10", unit="mg", quantity=0)
-        lot = self.lot("X-1", "g", "1")
+        vessel = self.vessel("X-1", "g", "1")
         done = self.client.post(item_url(stock, "fill"), fill_data(
-            count="5", lot=str(lot.pk), propose="1"))
+            count="5", vessel=str(vessel.pk), propose="1"))
         self.assertEqual(field_value(page(done), "amount"), "0,05")
 
     def test_without_a_molar_mass_the_proposal_is_refused(self) -> None:
         stock = self.item("X-1", size="10", unit="umol", quantity=0)
-        lot = self.lot("X-1", "mg", "50")
+        vessel = self.vessel("X-1", "mg", "50")
         before = snapshot()
         done = self.client.post(item_url(stock, "fill"), fill_data(
-            count="5", lot=str(lot.pk), propose="1"))
+            count="5", vessel=str(vessel.pk), propose="1"))
         self.refused(done, "amount")
         self.assertEqual(snapshot(), before)
 
     def test_without_a_molar_mass_the_amount_is_required(self) -> None:
         stock = self.item("X-1", size="10", unit="umol", quantity=0)
-        lot = self.lot("X-1", "mg", "50")
+        vessel = self.vessel("X-1", "mg", "50")
         before = snapshot()
         self.refused(self.client.post(item_url(stock, "fill"), fill_data(
-            count="5", lot=str(lot.pk))), "amount")
+            count="5", vessel=str(vessel.pk))), "amount")
         self.assertEqual(snapshot(), before)
         self.client.post(item_url(stock, "fill"), fill_data(
-            count="5", lot=str(lot.pk), amount="3"))
-        self.assertEqual(fresh(lot).amount, Decimal("47"))
+            count="5", vessel=str(vessel.pk), amount="3"))
+        self.assertEqual(fresh(vessel).amount, Decimal("47"))
 
-    def test_an_amount_above_the_lot_refuses_both(self) -> None:
-        lot = self.lot("CH-0012", "mg", "5")
+    def test_an_amount_above_the_vessel_refuses_both(self) -> None:
+        vessel = self.vessel("CH-0012", "mg", "5")
         before = snapshot()
         self.refused(self.client.post(self.url(), fill_data(
-            count="5", lot=str(lot.pk))), "amount")
+            count="5", vessel=str(vessel.pk))), "amount")
         self.refused(self.client.post(self.url(), fill_data(
-            count="1", lot=str(lot.pk), amount="5,1")), "amount")
+            count="1", vessel=str(vessel.pk), amount="5,1")), "amount")
         self.assertEqual(snapshot(), before)
 
     def test_an_amount_of_zero_is_refused(self) -> None:
-        lot = self.lot("CH-0012", "mg", "5")
+        vessel = self.vessel("CH-0012", "mg", "5")
         before = snapshot()
         self.refused(self.client.post(self.url(), fill_data(
-            count="1", lot=str(lot.pk), amount="0")), "amount")
+            count="1", vessel=str(vessel.pk), amount="0")), "amount")
         self.assertEqual(snapshot(), before)
 
-    def test_a_lot_that_is_not_open_or_not_of_the_article(self) -> None:
-        used = self.lot("CH-0012", "mg", "0")
-        other = self.lot("CH-0013", "mg", "50")
+    def test_a_vessel_that_is_not_open_or_not_of_the_article(self) -> None:
+        used = self.vessel("CH-0012", "mg", "0")
+        other = self.vessel("CH-0013", "mg", "50")
         before = snapshot()
-        for lot in (used, other):
-            with self.subTest(lot=lot.pk):
+        for vessel in (used, other):
+            with self.subTest(vessel=vessel.pk):
                 self.refused(self.client.post(self.url(), fill_data(
-                    count="1", lot=str(lot.pk), amount="1")), "lot")
+                    count="1", vessel=str(vessel.pk), amount="1")),
+                    "vessel")
         self.refused(self.client.post(self.url(), fill_data(
-            count="1", lot="9999", amount="1")), "lot")
+            count="1", vessel="9999", amount="1")), "vessel")
         self.assertEqual(snapshot(), before)
+
+    def test_a_flask_is_filled_from_like_any_vessel(self) -> None:
+        flask = self.vessel("CH-0012", "g", "2", flask=True)
+        self.client.post(self.url(), fill_data(count="5",
+                                               vessel=str(flask.pk)))
+        self.assertEqual(fresh(flask).amount, Decimal("1992.592"))
 
     def test_refused_fields(self) -> None:
+        vessel = self.vessel("CH-0012", "mg", "50")
         before = snapshot()
         for field, value in (("count", "0"), ("count", "-1"),
                              ("count", "x"), ("count", ""),
                              ("date", "2026-11-05")):
             with self.subTest(field=field, value=value):
                 self.refused(self.client.post(
-                    self.url(), fill_data(**{field: value})), field)
+                    self.url(), fill_data(**{"vessel": str(vessel.pk),
+                                             field: value})), field)
         self.assertEqual(snapshot(), before)
 
 
@@ -1023,199 +1071,6 @@ class ConsumptionFormTests(FormCase):
         self.assertEqual(self.target.movements.count(), 1)
 
 
-class NewLotTests(FormCase):
-
-    def test_the_form_holds_the_fields_of_the_spec(self) -> None:
-        names = form_names(page(self.client.get(NEW_LOT)), "substance")
-        self.assertEqual(names, {"substance", "source", "supplier", "unit",
-                                 "amount", "batch", "location", "made_on",
-                                 "note"})
-
-    def test_the_substance_comes_from_the_url(self) -> None:
-        root = page(self.client.get(f"{NEW_LOT}?substance=cinnamic-acid"))
-        self.assertEqual(field_value(root, "substance"), "cinnamic-acid")
-
-    def test_the_source_is_made_by_default(self) -> None:
-        root = page(self.client.get(NEW_LOT))
-        self.assertEqual(field_value(root, "source"), "made")
-        options = root.find("select", name="source").find_all("option")
-        self.assertEqual(
-            {o.get("value"): o.text() for o in options if o.get("value")},
-            {"made": "hergestellt", "bought": "gekauft"})
-
-    def test_the_substance_offers_every_substance(self) -> None:
-        make_substance("no-article", "No article")
-        options = datalist(page(self.client.get(NEW_LOT)), "substance")
-        self.assertEqual(options, {"cinnamic-acid": "(E)-Zimtsäure",
-                                   "no-article": "No article"})
-
-    def test_the_location_offers_the_locations_in_use(self) -> None:
-        self.lot("A-1", location="Kühlraum")
-        self.lot("A-2", location="Regal 3")
-        self.lot("A-3", location="Kühlraum")
-        self.lot("A-4")
-        options = datalist(page(self.client.get(NEW_LOT)), "location")
-        self.assertEqual(set(options) - {""}, {"Kühlraum", "Regal 3"})
-
-    def test_new_bulk_lot(self) -> None:
-        done = self.client.post(NEW_LOT, lot_data(
-            batch="B-1", location="Kühlraum", made_on="2026-10-01",
-            note="Rest", source="bought", supplier="Sigma"))
-        lot = Lot.objects.get()
-        self.assertRedirects(done, lot_url(lot),
-                             fetch_redirect_response=False)
-        self.assertEqual(
-            (lot.substance.key, lot.source, lot.supplier, lot.unit,
-             lot.batch, lot.location, lot.made_on, lot.note),
-            ("cinnamic-acid", "bought", "Sigma", "mg", "B-1", "Kühlraum",
-             date(2026, 10, 1), "Rest"))
-        self.assertEqual(lot.amount, Decimal("50"))
-        movement = lot.movements.get()
-        self.assertEqual((movement.kind, movement.amount,
-                          movement.amount_after, movement.user),
-                         ("opening", Decimal("50"), Decimal("50"),
-                          self.kl))
-        self.assertMessageNames(done, "Zimtsäure", "B-1")
-
-    def test_the_amount_is_in_the_unit_of_the_lot(self) -> None:
-        cases = [("g", "1", "1000"), ("mmol", "2,5", "2500"),
-                 ("umol", "5", "5"), ("mg", "47,5", "47.5")]
-        for unit, amount, base in cases:
-            with self.subTest(unit=unit):
-                Lot.objects.all().delete()
-                self.client.post(NEW_LOT, lot_data(unit=unit,
-                                                   amount=amount))
-                lot = Lot.objects.get()
-                self.assertEqual(lot.unit, unit)
-                self.assertEqual(lot.amount, Decimal(base))
-
-    def test_refused_fields(self) -> None:
-        cases = {"substance": ["", "no-such-substance", "CH-0012"],
-                 "unit": ["", "kg"],
-                 "amount": ["", "-1", "x"], "batch": ["b" * 101],
-                 "location": ["l" * 101], "supplier": ["s" * 101],
-                 "source": ["stolen"], "made_on": ["x", "2026-13-01"]}
-        for field, values in cases.items():
-            for value in values:
-                with self.subTest(field=field, value=value):
-                    self.refused(self.client.post(
-                        NEW_LOT, lot_data(**{field: value})), field)
-        self.assertEqual(Lot.objects.count(), 0)
-        self.assertEqual(LotMovement.objects.count(), 0)
-
-    def test_the_form_keeps_what_was_typed(self) -> None:
-        done = self.client.post(NEW_LOT, lot_data(batch="B-9", amount="-1"))
-        self.assertEqual(field_value(page(done), "batch"), "B-9")
-        self.assertEqual(sent_messages(done), [])
-
-    def test_a_lot_of_zero_may_be_entered(self) -> None:
-        self.client.post(NEW_LOT, lot_data(amount="0"))
-        self.assertEqual(Lot.objects.get().amount, 0)
-
-
-class LotEditTests(FormCase):
-
-    def setUp(self) -> None:
-        super().setUp()
-        self.target = self.lot("CH-0012", "mg", "50", batch="B-1",
-                               location="Alt", made_on=date(2026, 10, 1),
-                               note="alt", source="bought",
-                               supplier="Sigma")
-
-    def test_the_form_holds_the_fields_of_the_spec(self) -> None:
-        root = page(self.client.get(lot_url(self.target, "edit")))
-        self.assertEqual(form_names(root, "batch"),
-                         {"batch", "location", "made_on", "note"})
-        self.assertEqual(field_value(root, "batch"), "B-1")
-        self.assertEqual(field_value(root, "location"), "Alt")
-        self.assertEqual(field_value(root, "note"), "alt")
-
-    def test_changing_a_lot(self) -> None:
-        self.client.force_login(self.ae)
-        done = self.client.post(lot_url(self.target, "edit"), {
-            "batch": "B-2", "location": "Neu", "made_on": "2026-09-01",
-            "note": "neu"})
-        self.assertRedirects(done, lot_url(self.target),
-                             fetch_redirect_response=False)
-        lot = fresh(self.target)
-        self.assertEqual((lot.batch, lot.location, lot.made_on, lot.note),
-                         ("B-2", "Neu", date(2026, 9, 1), "neu"))
-        self.assertEqual(lot.history.count(), 2)
-        self.assertEqual(lot.history.first().history_user, self.ae)
-        self.assertMessageNames(done, "Zimtsäure", "B-2")
-
-    def test_substance_source_unit_and_amount_are_fixed(self) -> None:
-        make_substance("other")
-        self.client.post(lot_url(self.target, "edit"), {
-            "batch": "B-2", "location": "", "made_on": "", "note": "",
-            "substance": "other", "source": "made", "unit": "g",
-            "amount": "7"})
-        lot = fresh(self.target)
-        self.assertEqual(
-            (lot.substance.key, lot.source, lot.unit, lot.amount,
-             lot.batch),
-            ("cinnamic-acid", "bought", "mg", Decimal("50"), "B-2"))
-        self.assertEqual(lot.movements.count(), 1)
-
-    def test_a_refused_edit_changes_nothing(self) -> None:
-        before = snapshot()
-        self.refused(self.client.post(lot_url(self.target, "edit"), {
-            "batch": "b" * 101, "location": "", "made_on": "",
-            "note": ""}), "batch")
-        self.assertEqual(snapshot(), before)
-
-
-class LotCorrectionFormTests(FormCase):
-
-    def setUp(self) -> None:
-        super().setUp()
-        self.target = self.lot("CH-0012", "mg", "50")
-
-    def data(self, **over: str) -> dict[str, str]:
-        data = {"amount": "47,5", "date": TODAY.isoformat(),
-                "note": "nachgewogen"}
-        data.update(over)
-        return data
-
-    def url(self) -> str:
-        return lot_url(self.target, "correct")
-
-    def test_the_form_holds_the_fields_of_the_spec(self) -> None:
-        names = form_names(page(self.client.get(self.url())), "amount")
-        self.assertEqual(names, {"amount", "date", "note"})
-
-    def test_correction_of_a_lot(self) -> None:
-        """Scenario: Correction of a lot (the form)."""
-        done = self.client.post(self.url(), self.data())
-        self.assertRedirects(done, lot_url(self.target),
-                             fetch_redirect_response=False)
-        self.assertEqual(fresh(self.target).amount, Decimal("47.5"))
-        newest = self.target.movements.order_by("-pk").first()
-        self.assertEqual((newest.kind, newest.note, newest.user),
-                         ("correction", "nachgewogen", self.kl))
-        self.assertMessageNames(done, "(E)-Zimtsäure")
-
-    def test_the_amount_is_in_the_unit_of_the_lot(self) -> None:
-        lot = self.lot("X-1", "g", "1")
-        self.client.post(lot_url(lot, "correct"), self.data(amount="0,5"))
-        self.assertEqual(fresh(lot).amount, Decimal("500"))
-
-    def test_a_note_is_required(self) -> None:
-        before = snapshot()
-        self.refused(self.client.post(self.url(), self.data(note="")),
-                     "note")
-        self.assertEqual(snapshot(), before)
-
-    def test_refused_fields(self) -> None:
-        before = snapshot()
-        for field, value in (("amount", "-1"), ("amount", "x"),
-                             ("amount", ""), ("date", "2026-11-05")):
-            with self.subTest(field=field, value=value):
-                self.refused(self.client.post(
-                    self.url(), self.data(**{field: value})), field)
-        self.assertEqual(snapshot(), before)
-
-
 class StaleEditTests(FormCase):
     """An edit of a record's metadata keeps the count, amount or state
     a booking changed after the record was loaded."""
@@ -1230,18 +1085,6 @@ class StaleEditTests(FormCase):
         form.save()
         self.assertEqual(fresh(item).quantity, 3)
         self.assertEqual(fresh(item).note, "Neu")
-
-    def test_a_lot_edit_keeps_a_correction_booked_meanwhile(self) -> None:
-        from inventory.bookings import correct_lot
-        from inventory.forms import LotEditForm
-        lot = self.lot(amount="50")
-        form = LotEditForm({"batch": "B-1", "location": "", "made_on": "",
-                            "note": ""}, instance=fresh(lot))
-        self.assertTrue(form.is_valid())
-        correct_lot(self.kl, lot, amount=Decimal("40"), note="gewogen")
-        form.save()
-        self.assertEqual(fresh(lot).amount, Decimal("40"))
-        self.assertEqual(fresh(lot).batch, "B-1")
 
     def test_a_note_edit_keeps_a_reversal_booked_meanwhile(self) -> None:
         from inventory.bookings import reverse_historical

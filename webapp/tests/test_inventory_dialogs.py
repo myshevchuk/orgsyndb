@@ -293,13 +293,13 @@ class ErrorsInTheDialogTests(DialogCase):
         self.assertEqual(snapshot(), before)
 
     def test_a_refused_filling_shows_the_refusal(self) -> None:
-        """A filling above the lot's amount is refused by the booking,
+        """A filling above the vessel's amount is refused by the booking,
         not by the form."""
-        lot = self.lot("CH-0012", "mg", "5")
+        vessel = self.vessel("CH-0012", "mg", "5")
         url = self.urls()["fill"]
         before = snapshot()
         done = self.client.post(url, fill_data(
-            count="5", lot=str(lot.pk)), **HTMX)
+            count="5", vessel=str(vessel.pk)), **HTMX)
         root = self.assert_partial(done, url)
         self.assertTrue(errors_at(root, "amount"))
         self.assertEqual(snapshot(), before)
@@ -319,43 +319,43 @@ class ErrorsInTheDialogTests(DialogCase):
         self.assertNotIn("HX-Trigger", done)
 
     def test_propose_amount_fills_in_the_amount(self) -> None:
-        lot = self.lot("CH-0012", "mg", "50")
+        vessel = self.vessel("CH-0012", "mg", "50")
         url = self.urls()["fill"]
         before = snapshot()
         done = self.client.post(url, fill_data(
-            count="5", lot=str(lot.pk), propose="1"), **HTMX)
+            count="5", vessel=str(vessel.pk), propose="1"), **HTMX)
         root = self.assert_partial(done, url)
         self.assertEqual(field_value(root, "amount"), "7,408")
         self.assertEqual(field_value(root, "count"), "5")
-        self.assertEqual(field_value(root, "lot"), str(lot.pk))
+        self.assertEqual(field_value(root, "vessel"), str(vessel.pk))
         self.assertEqual(snapshot(), before)
         self.assertNotIn("HX-Trigger", done)
 
-    def test_propose_amount_without_a_lot_shows_the_error(self) -> None:
+    def test_propose_amount_without_a_vessel_shows_the_error(self) -> None:
         url = self.urls()["fill"]
         before = snapshot()
         done = self.client.post(url, fill_data(
             count="5", propose="1"), **HTMX)
         root = self.assert_partial(done, url)
-        self.assertTrue(errors_at(root, "lot"))
+        self.assertTrue(errors_at(root, "vessel"))
         self.assertEqual(snapshot(), before)
 
     def test_propose_amount_without_a_molar_mass_shows_the_error(
             self) -> None:
         stock = self.item("X-1", size="10", unit="umol", quantity=0)
-        lot = self.lot("X-1", "mg", "50")
+        vessel = self.vessel("X-1", "mg", "50")
         url = item_url(stock, "fill")
         before = snapshot()
         done = self.client.post(url, fill_data(
-            count="5", lot=str(lot.pk), propose="1"), **HTMX)
+            count="5", vessel=str(vessel.pk), propose="1"), **HTMX)
         root = self.assert_partial(done, url)
         self.assertTrue(errors_at(root, "amount"))
         self.assertEqual(snapshot(), before)
 
     def test_propose_amount_on_a_page_answers_the_page(self) -> None:
-        lot = self.lot("CH-0012", "mg", "50")
+        vessel = self.vessel("CH-0012", "mg", "50")
         done = self.client.post(self.urls()["fill"], fill_data(
-            count="5", lot=str(lot.pk), propose="1"))
+            count="5", vessel=str(vessel.pk), propose="1"))
         root = page(done)
         self.assertIsNotNone(root.find("html"))
         self.assertNotIn("hx-post", root.find("main").find("form").attrs)
@@ -363,15 +363,15 @@ class ErrorsInTheDialogTests(DialogCase):
 
     def test_propose_amount_after_a_history_restore_answers_the_page(
             self) -> None:
-        lot = self.lot("CH-0012", "mg", "50")
+        vessel = self.vessel("CH-0012", "mg", "50")
         done = self.client.post(self.urls()["fill"], fill_data(
-            count="5", lot=str(lot.pk), propose="1"), **RESTORE)
+            count="5", vessel=str(vessel.pk), propose="1"), **RESTORE)
         self.assertIsNotNone(page(done).find("html"))
 
     def test_the_propose_answer_varies_on_both_headers(self) -> None:
-        lot = self.lot("CH-0012", "mg", "50")
+        vessel = self.vessel("CH-0012", "mg", "50")
         done = self.client.post(self.urls()["fill"], fill_data(
-            count="5", lot=str(lot.pk), propose="1"), **HTMX)
+            count="5", vessel=str(vessel.pk), propose="1"), **HTMX)
         self.assertLessEqual(
             {"hx-request", "hx-history-restore-request"}, vary_of(done))
 
@@ -622,8 +622,7 @@ class LinksTests(DialogCase):
 
     def test_links_on_the_item_page(self) -> None:
         """Scenario: Item forms as dialogs (the page)."""
-        from inventory.bookings import fill
-        filling = fill(self.kl, self.target, count=1)
+        filling = self.filling(self.target, 1)
         root = page(self.client.get(item_url(self.target)))
         self.assert_dialog_links(root.find("main"), self.target)
         reversals = self.links_in(root)["Stornieren"]

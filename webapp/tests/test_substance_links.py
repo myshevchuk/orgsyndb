@@ -8,7 +8,7 @@ from django.test import TestCase
 from inventory.models import Item
 from tasks.models import Task
 
-from . import (context_form, datalist, make_item, make_lot, make_substance,
+from . import (context_form, datalist, make_item, make_substance, make_vessel,
                make_task, make_user, page, substance_for, table, task_url)
 from .collection_support import accept
 from .demo_support import SeededCase
@@ -86,12 +86,17 @@ class InventoryLinkTests(TestCase):
     def setUpTestData(cls) -> None:
         cls.kl = make_user("kl", "KL")
 
-    def test_the_item_page_the_lot_page_and_the_bulk_list(self) -> None:
+    def test_the_item_page_the_batch_and_vessel_pages_and_the_lists(
+            self) -> None:
+        """Requirement: Substance links (the substance of an item, a
+        batch, a vessel or a task)."""
         item = make_item(self.kl, "CH-0012")
-        lot = make_lot(self.kl, "CH-0012", batch="B-1")
+        vessel = make_vessel(self.kl, article="CH-0012", number="B-1")
         for path in (f"/lab/inventory/items/{item.pk}/",
-                     f"/lab/inventory/bulk/{lot.pk}/",
-                     "/lab/inventory/end-products/bulk/",
+                     f"/lab/inventory/batches/{vessel.batch_id}/",
+                     f"/lab/inventory/vessels/{vessel.pk}/",
+                     "/lab/inventory/batches/",
+                     "/lab/inventory/vessels/",
                      "/lab/inventory/end-products/"):
             with self.subTest(path=path):
                 root = page(self.client.get(path))
@@ -117,7 +122,7 @@ class DatalistTests(TestCase):
 
     def test_every_substance_is_offered_by_key_with_its_name(self) -> None:
         for path in ("/lab/tasks/new/", "/lab/inventory/end-products/new/",
-                     "/lab/inventory/bulk/new/"):
+                     "/lab/inventory/batches/new/"):
             with self.subTest(path=path):
                 self.assertEqual(self.options(path), {
                     "cinnamic-acid": "(E)-Zimtsäure",

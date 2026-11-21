@@ -11,7 +11,7 @@ from django.contrib.staticfiles import finders
 from django.test import SimpleTestCase, TestCase
 
 from . import (HTMX, REPO, SHELL_SCRIPT, berlin, frozen, make_item,
-               make_lot, make_task, make_user, page, shell_scripts,
+               make_task, make_user, make_vessel, page, shell_scripts,
                substance_for, table, task_url, ticking)
 from . import navigation_support as ns
 from .collection_support import accept, make_import
@@ -227,7 +227,7 @@ class InventoryShellTests(TestCase):
     def setUp(self) -> None:
         self.enterContext(ticking(berlin(2026, 11, 4, 8)))
         self.item = make_item(self.kl, "CH-0012", quantity=5)
-        self.lot = make_lot(self.kl, "CH-0012")
+        self.vessel = make_vessel(self.kl, article="CH-0012")
 
     def marks(self, path: str) -> dict[str, str]:
         response = self.client.get(path)
@@ -235,13 +235,17 @@ class InventoryShellTests(TestCase):
         return ns.marks(response)
 
     def paths(self) -> list[str]:
-        return ["/lab/inventory/end-products/bulk/",
+        return ["/lab/inventory/batches/",
+                "/lab/inventory/vessels/",
                 "/lab/inventory/deliveries/",
                 f"/lab/inventory/items/{self.item.pk}/",
-                f"/lab/inventory/bulk/{self.lot.pk}/",
+                f"/lab/inventory/batches/{self.vessel.batch_id}/",
+                f"/lab/inventory/vessels/{self.vessel.pk}/",
+                f"/lab/inventory/vessels/{self.vessel.pk}/transfer/",
+                f"/lab/inventory/batches/{self.vessel.batch_id}/vessels/new/",
                 "/lab/inventory/end-products/new/",
                 "/lab/inventory/deliveries/new/",
-                "/lab/inventory/bulk/new/",
+                "/lab/inventory/batches/new/",
                 f"/lab/inventory/items/{self.item.pk}/fill/",
                 f"/lab/inventory/items/{self.item.pk}/edit/"]
 

@@ -123,7 +123,7 @@ class FigureTests(OverviewCase):
         make_task(self.kl, substance="CH-0012", started=SEVENTH)
         make_task(self.kl, substance="CH-0010")
         make_task(self.kl, substance="Aspirin")
-        self.lot("CH-0012", "mg", "50")
+        self.vessel("CH-0012", "mg", "50")
 
     def test_figures_and_lists(self) -> None:
         """Scenario: Figures and lists."""
@@ -132,18 +132,18 @@ class FigureTests(OverviewCase):
         shown = figures(root)
         self.assertEqual(list(shown), [
             "Abgegeben 2026", "Fällige Synthesen", "Aufgaben",
-            "Offene Bulk-Lose"])
+            "Offene Gefäße"])
         delivered = shown["Abgegeben 2026"].text()
         self.assertTrue(delivered.startswith("5 "), delivered)
         self.assertIn("Vorjahr bis 07.11.2025: 4", delivered)
         self.assertIn("1 laufend · 2 geplant", shown["Aufgaben"].text())
-        self.assertEqual(shown["Offene Bulk-Lose"].text(), "1")
+        self.assertEqual(shown["Offene Gefäße"].text(), "1")
         links = {term: value.find("a").get("href")
                  for term, value in shown.items() if value.find("a")}
         self.assertEqual(links, {
             "Fällige Synthesen": "/lab/planning/",
             "Aufgaben": "/lab/tasks/",
-            "Offene Bulk-Lose": "/lab/inventory/end-products/bulk/"})
+            "Offene Gefäße": "/lab/inventory/vessels/"})
         requested = entries(root, "Meistgefragt 2026")
         self.assertEqual(len(requested), 2)
         self.assertTrue(requested[0].startswith("CH-0012"), requested)
@@ -156,14 +156,17 @@ class FigureTests(OverviewCase):
                          ["LS-3", "LS-2", "LS-1", "LS-00", "LS-0"])
         self.assertIn("02.10.2026", latest[0])
 
-    def test_open_lots_of_any_substance(self) -> None:
+    def test_open_vessels_of_any_substance_flasks_among_them(self) -> None:
+        """Requirement: Overview page (`Offene Gefäße`, the number of
+        vessels of any substance holding an amount above zero)."""
         self.item("CH-0012", quantity=5)
-        self.lot("CH-0012", "mg", "50")
-        self.lot("acetophenone", "mg", "5", source="made")
-        self.lot("CH-0012", "mg", "20", source="bought", supplier="Sigma")
-        self.lot("acetophenone", "mg", "0")
+        self.vessel("CH-0012", "mg", "50")
+        self.vessel("acetophenone", "mg", "5", source="made")
+        self.vessel("CH-0012", "mg", "20", source="bought", supplier="Sigma")
+        self.vessel("acetophenone", "mg", "0")
+        self.vessel("CH-0012", "g", "2", flask=True)
         shown = figures(self.get())
-        self.assertEqual(shown["Offene Bulk-Lose"].text(), "3")
+        self.assertEqual(shown["Offene Gefäße"].text(), "4")
 
     def test_names_come_from_the_substances_of_the_articles(self) -> None:
         zimt = self.item("CH-0012", quantity=40)
@@ -356,7 +359,7 @@ class SummaryTests(OverviewCase):
             self.with_mean_quarter(self.item(article, quantity=20), 4)
         self.with_mean_quarter(self.item("LO-1", quantity=3), 4)
         make_task(self.kl, substance="OK-1", started=date(2026, 11, 1))
-        self.lot("OK-1", "mg", "50")
+        self.vessel("OK-1", "mg", "50")
         response = self.client.get(SUMMARY)
         self.assertEqual(response.status_code, 200)
         root = page(response)
@@ -441,3 +444,12 @@ class SpanTests(SimpleTestCase):
         self.assertEqual(months[-1], (2026, 11))
         self.assertEqual(len(months), 12)
         self.assertEqual(months_ending(date(2026, 1, 31))[0], (2025, 2))
+
+    def test_the_open_vessels_figure_in_english(self) -> None:
+        """Requirement: Overview page (`Open vessels`)."""
+        self.vessel("CH-0012", "mg", "50")
+        accept(language="en")
+        shown = figures(self.get())
+        self.assertIn("Open vessels", shown)
+        self.assertEqual(shown["Open vessels"].text(), "1")
+        self.assertNotIn("Open bulk lots", shown)

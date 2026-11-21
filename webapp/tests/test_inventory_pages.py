@@ -1,18 +1,20 @@
-"""Tests of the item, bulk lot and delivery note pages (end-product-
-inventory: Item page, Bulk lot page, Delivery list)."""
+"""Tests of the item, batch, vessel and delivery note pages (end-product-
+inventory: Item page, Batch page, Vessel page, Delivery list)."""
 
 from collections import Counter
 from datetime import date
 from decimal import Decimal
 
-from inventory.bookings import (book_note, correct, correct_lot, fill, reverse,
-                                reverse_historical)
+from inventory.bookings import (book_note, correct, correct_vessel, reverse,
+                                reverse_historical, transfer, withdraw)
 
-from . import page
+from . import make_batch, make_task, make_vessel, page, past
 from .collection_support import accept
-from .inventory_support import (InventoryCase, MICRO, cells,
+from .inventory_support import (MICRO, InventoryCase, batch_url, cells,
                                 has_amount, has_number, item_url, ledger,
-                                lot_url, movement_url, note_url, num)
+                                movement_url, note_url, num, vessel_ledger,
+                                vessel_url)
+from .journal_support import entry_of, make_notebook
 
 QUARTERS = [(year, quarter) for year in (2024, 2025, 2026)
             for quarter in (1, 2, 3, 4)]
@@ -152,7 +154,7 @@ class LedgerTests(PageCase):
 
     def booked(self):
         item = self.item("CH-0012", quantity=10)
-        filling = fill(self.kl, item, count=4, note="Charge 7")
+        filling = self.filling(item, 4, note="Charge 7")
         delivery = self.deliver_movement(item, 2)
         correction = correct(self.kl, item, count=9, note="gezählt")
         return item, filling, delivery, correction
@@ -268,49 +270,53 @@ class ItemHistoryTests(PageCase):
         self.assertLess(text.find("neu"), text.rfind("Angelegt"))
 
 
-class LotPageTests(PageCase):
+class VesselPageTests(PageCase):
 
     def filled(self):
         item = self.item("CH-0012", size="10", unit="umol", quantity=0)
-        lot = self.lot("CH-0012", "mg", "50", batch="B-1",
-                       location="Kühlraum", made_on=date(2026, 10, 1),
-                       note="Rest")
-        fill(self.kl, item, count=5, lot=lot)
-        return item, lot
+        vessel = self.vessel("CH-0012", "mg", "50", number="B-1",
+                             location="Kühlraum", date=date(2026, 10, 1),
+                             note="Rest")
+        from inventory.bookings import fill
+        fill(self.kl, item, count=5, vessel=vessel)
+        return item, vessel
 
     def test_the_record(self) -> None:
-        _, lot = self.filled()
-        text = self.show(lot_url(lot)).text()
-        for expected in ("CH-0012", "B-1", "Kühlraum", "01.10.2026", "Rest"):
+        _, vessel = self.filled()
+        root = self.show(vessel_url(vessel))
+        self.assertIn(f"B-1 #{vessel.pk}", root.find("h1").text())
+        text = root.text()
+        for expected in ("CH-0012", "B-1", "Kühlraum", "Rest", "Endprodukt"):
             with self.subTest(expected=expected):
                 self.assertIn(expected, text)
         self.assertTrue(has_amount(text, "42,592", "mg"), text)
         self.assertNotIn("aufgebraucht", text)
+        hrefs = [a.get("href") for a in root.find_all("a")]
+        self.assertIn(batch_url(vessel.batch), hrefs)
+        self.assertIn("/lab/registry/substances/cinnamic-acid/", hrefs)
 
-    def test_the_substance_the_source_and_the_supplier(self) -> None:
+    def test_the_kind_of_a_flask(self) -> None:
+        flask = self.vessel("CH-0012", "g", "2", flask=True)
+        self.assertIn("Kolben", self.show(vessel_url(flask)).text())
+
+    def test_the_substance_the_source_and_the_kind(self) -> None:
         self.item("CH-0012")
-        lot = self.lot("CH-0012", "mg", "5", source="bought",
-                       supplier="Sigma")
-        root = self.show(lot_url(lot))
-        self.assertIn("/lab/registry/substances/cinnamic-acid/",
-                      [a.get("href") for a in root.find_all("a")])
-        text = root.text()
-        for expected in ("(E)-Zimtsäure", "CH-0012", "gekauft", "Sigma"):
-            with self.subTest(expected=expected):
-                self.assertIn(expected, text)
-
-    def test_a_lot_of_a_substance_without_an_article(self) -> None:
-        lot = self.lot("acetophenone", "mg", "5", source="made")
-        root = self.show(lot_url(lot))
+        reagent = self.vessel("acetophenone", "mg", "5", source="bought",
+                              supplier="Sigma")
+        root = self.show(vessel_url(reagent))
         self.assertIn("/lab/registry/substances/acetophenone/",
                       [a.get("href") for a in root.find_all("a")])
-        self.assertIn("hergestellt", root.text())
+        self.assertIn("Reagenz", root.text())
         self.assertNotRegex(root.text(), r"[A-Z]{2}-\d{4}")
 
-    def test_lot_page_after_a_filling(self) -> None:
-        """Scenario: Lot page after a filling."""
-        item, lot = self.filled()
-        rows = ledger(self.show(lot_url(lot)))
+    def test_an_intermediate(self) -> None:
+        vessel = self.vessel("acetophenone", "mg", "5", source="made")
+        self.assertIn("Zwischenprodukt", self.show(vessel_url(vessel)).text())
+
+    def test_vessel_page_after_a_filling(self) -> None:
+        """Scenario: Vessel page after a filling."""
+        item, vessel = self.filled()
+        rows = vessel_ledger(self.show(vessel_url(vessel)))
         self.assertEqual([kind for kind, _ in rows], ["filling", "opening"])
         newest = rows[0][1]
         self.assertIn(item_url(item),
@@ -322,45 +328,287 @@ class LotPageTests(PageCase):
         opening = rows[1][1].text()
         self.assertTrue(has_number(opening, "50"), opening)
 
-    def test_a_used_up_lot_is_marked(self) -> None:
-        lot = self.lot("CH-0012", "mg", "5")
-        correct_lot(self.kl, lot, amount=Decimal("0"), note="leer")
-        text = self.show(lot_url(lot)).text()
+    def test_vessel_page_after_a_transfer(self) -> None:
+        """Scenario: Vessel page after a transfer."""
+        flask = self.vessel("CH-0012", "g", "2", number="KL0412",
+                            flask=True)
+        out, into = transfer(self.kl, flask, amount=Decimal("1.5"),
+                             location="Kühlschrank 2")
+        rows = vessel_ledger(self.show(vessel_url(flask)))
+        self.assertEqual([kind for kind, _ in rows],
+                         ["transfer_out", "opening"])
+        self.assertIn(vessel_url(into.vessel),
+                      [a.get("href") for a in rows[0][1].find_all("a")])
+        back = vessel_ledger(self.show(vessel_url(into.vessel)))
+        self.assertEqual([kind for kind, _ in back], ["transfer_in"])
+        self.assertIn(vessel_url(flask),
+                      [a.get("href") for a in back[0][1].find_all("a")])
+        self.assertEqual(out.transferred, into)
+
+    def test_a_withdrawal_names_its_task_and_step(self) -> None:
+        plain = make_task(self.kl, "Aspirin", steps=2, started=past(1))
+        vessel = self.vessel("CH-0012", "g", "2")
+        withdraw(self.kl, vessel, task_step=plain.steps.get(position=2),
+                 amount=Decimal("0.5"))
+        (row,) = [row for kind, row in vessel_ledger(
+            self.show(vessel_url(vessel))) if kind == "withdrawal"]
+        self.assertIn(f"/lab/tasks/{plain.number}/",
+                      [a.get("href") for a in row.find_all("a")])
+        self.assertIn(plain.number, row.text())
+        self.assertIn("Stufe 2", row.text())
+
+    def test_a_reversal_names_the_movement_it_reverses(self) -> None:
+        from inventory.bookings import reverse_withdrawal
+        plain = make_task(self.kl, "Aspirin", steps=1, started=past(1))
+        vessel = self.vessel("CH-0012", "g", "2")
+        taken = withdraw(self.kl, vessel, task_step=plain.steps.get(),
+                         amount=Decimal("0.5"))
+        reverse_withdrawal(self.kl, taken)
+        rows = vessel_ledger(self.show(vessel_url(vessel)))
+        self.assertEqual([kind for kind, _ in rows],
+                         ["reversal", "withdrawal", "opening"])
+        self.assertIn("Entnahme", rows[0][1].text())
+
+    def test_a_remainder_is_listed(self) -> None:
+        from inventory.bookings import write_off_flasks
+        task = make_task(self.kl, "CH-0012", steps=1, started=past(1))
+        from .task_support import make_product_batch
+        flask = make_product_batch(task, "2", "g", flask=True
+                                   ).vessels.get()
+        write_off_flasks(self.kl, task)
+        rows = vessel_ledger(self.show(vessel_url(flask)))
+        self.assertEqual([kind for kind, _ in rows],
+                         ["remainder", "opening"])
+        self.assertIn("aufgebraucht", self.show(vessel_url(flask)).text())
+
+    def test_a_used_up_vessel_is_marked(self) -> None:
+        vessel = self.vessel("CH-0012", "mg", "5")
+        correct_vessel(self.kl, vessel, amount=Decimal("0"), note="leer")
+        text = self.show(vessel_url(vessel)).text()
         self.assertIn("aufgebraucht", text)
 
-    def test_the_amount_shows_in_the_unit_of_the_lot(self) -> None:
-        lot = self.lot("X-1", "mmol", "2.5")
-        self.assertTrue(has_amount(self.show(lot_url(lot)).text(), "2,5",
-                                   "mmol"))
+    def test_the_amount_shows_in_the_unit_of_the_vessel(self) -> None:
+        vessel = self.vessel("X-1", "mmol", "2.5")
+        self.assertTrue(has_amount(self.show(vessel_url(vessel)).text(),
+                                   "2,5", "mmol"))
 
     def test_corrections_and_reversals_are_listed(self) -> None:
-        item, lot = self.filled()
-        correct_lot(self.kl, lot, amount=Decimal("40"), note="nachgewogen")
+        item, vessel = self.filled()
+        correct_vessel(self.kl, vessel, amount=Decimal("40"),
+                       note="nachgewogen")
         reverse(self.kl, item.movements.get(kind="filling"), note="doppelt")
-        rows = ledger(self.show(lot_url(lot)))
+        rows = vessel_ledger(self.show(vessel_url(vessel)))
         self.assertEqual([kind for kind, _ in rows],
                          ["reversal", "correction", "filling", "opening"])
         self.assertIn("nachgewogen", rows[1][1].text())
 
     def test_the_actions_of_a_signed_in_user(self) -> None:
-        lot = self.lot()
-        root = self.show(lot_url(lot))
-        self.assertIsNone(root.find("a", href=lot_url(lot, "correct")))
-        self.assertIsNone(root.find("a", href=lot_url(lot, "edit")))
+        vessel = self.vessel()
+        root = self.show(vessel_url(vessel))
+        self.assertIsNone(root.find("a", href=vessel_url(vessel, "correct")))
+        self.assertIsNone(root.find("a", href=vessel_url(vessel, "edit")))
         self.client.force_login(self.kl)
-        root = self.show(lot_url(lot))
+        root = self.show(vessel_url(vessel))
         self.assertEqual([a.text() for a in root.find_all(
-            "a", href=lot_url(lot, "correct"))], ["Korrigieren"])
+            "a", href=vessel_url(vessel, "correct"))], ["Korrigieren"])
         self.assertEqual([a.text() for a in root.find_all(
-            "a", href=lot_url(lot, "edit"))], ["Bearbeiten"])
+            "a", href=vessel_url(vessel, "edit"))], ["Bearbeiten"])
 
-    def test_the_lot_keeps_a_history(self) -> None:
-        lot = self.lot()
-        self.assertIn("Angelegt", self.show(lot_url(lot)).text())
+    def test_the_vessel_keeps_a_history(self) -> None:
+        vessel = self.vessel()
+        self.assertIn("Angelegt", self.show(vessel_url(vessel)).text())
 
-    def test_an_unknown_lot_answers_404(self) -> None:
+    def test_an_unknown_vessel_answers_404(self) -> None:
         self.assertEqual(
-            self.client.get("/lab/inventory/bulk/9999/").status_code, 404)
+            self.client.get("/lab/inventory/vessels/9999/").status_code,
+            404)
+
+
+class BatchPageTests(PageCase):
+
+    def test_a_made_batch(self) -> None:
+        make_notebook("AE-1", self.kl)
+        self.item("CH-0012", name="Zimtsäure")
+        task = make_task(self.kl, "CH-0012", steps=2, started=past(1))
+        step = task.steps.get(position=2)
+        batch = make_batch(
+            self.kl, "CH-0012", number="KL0412", date=date(2026, 10, 30),
+            note="Rest", task_step=step, journal_entry=entry_of("AE-1/9"),
+            yield_amount="2", yield_unit="g")
+        root = self.show(batch_url(batch))
+        self.assertIn("KL0412", root.find("h1").text())
+        text = root.text()
+        for expected in ("CH-0012", "Zimtsäure", "hergestellt", "AE-1/9",
+                         "30.10.2026", "Rest"):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, text)
+        self.assertRegex(text, rf"{task.number}\W+Stufe 2")
+        self.assertTrue(has_amount(text, "2", "g"), text)
+        hrefs = [a.get("href") for a in root.find_all("a")]
+        for href in ("/lab/registry/substances/cinnamic-acid/",
+                     "/lab/journal/AE-1/", f"/lab/tasks/{task.number}/"):
+            with self.subTest(href=href):
+                self.assertIn(href, hrefs)
+
+    def test_a_bought_batch(self) -> None:
+        batch = make_batch(
+            self.kl, "acetophenone", source="bought", supplier="Sigma",
+            supplier_article_number="C80857", supplier_batch="MKCK1234",
+            date=date(2026, 11, 2))
+        root = self.show(batch_url(batch))
+        self.assertIn("MKCK1234", root.find("h1").text())
+        text = root.text()
+        for expected in ("gekauft", "Sigma", "C80857", "MKCK1234",
+                         "02.11.2026"):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, text)
+        self.assertNotRegex(text, r"[A-Z]{2}-\d{4}")
+
+    def test_a_field_without_a_value_shows_a_dash(self) -> None:
+        batch = make_batch(self.kl, "acetophenone", number="KL1")
+        self.assertIn("–", self.show(batch_url(batch)).text())
+
+    def test_a_batch_without_a_number_shows_its_id(self) -> None:
+        batch = make_batch(self.kl, "acetophenone", source="bought")
+        self.assertIn(f"#{batch.pk}", self.show(batch_url(batch)).find(
+            "h1").text())
+
+    def test_the_vessels_open_ones_first_then_by_id(self) -> None:
+        batch = make_batch(self.kl, "CH-0012", number="KL0412")
+        used = make_vessel(self.kl, batch, unit="mg", amount="0",
+                           location="A")
+        first = make_vessel(self.kl, batch, unit="g", amount="1",
+                            location="B")
+        second = make_vessel(self.kl, batch, unit="mg", amount="30",
+                             flask=True)
+        root = self.show(batch_url(batch))
+        order = [a.get("href") for a in root.find("main").find_all("a")
+                 if a.get("href", "").startswith("/lab/inventory/vessels/")
+                 and a.get("href").rstrip("/").split("/")[-1].isdigit()]
+        self.assertEqual(order, [vessel_url(first), vessel_url(second),
+                                 vessel_url(used)])
+        rows = {a.text(): a.closest("tr") for a in root.find_all("a")
+                if a.get("href") in order}
+        self.assertEqual(sorted(rows), sorted(
+            f"#{v.pk}" for v in (used, first, second)))
+        self.assertIn("aufgebraucht", rows[f"#{used.pk}"].text())
+        self.assertNotIn("aufgebraucht", rows[f"#{first.pk}"].text())
+        self.assertIn("Kolben", rows[f"#{second.pk}"].text())
+        self.assertIn("B", rows[f"#{first.pk}"].text())
+        self.assertTrue(has_amount(rows[f"#{first.pk}"].text(), "1", "g"))
+
+    def test_where_a_batch_went(self) -> None:
+        """Scenario: Where a batch went."""
+        item = self.item("CH-0012", size="10", unit="umol", quantity=0)
+        batch = make_batch(self.kl, "CH-0012", number="KL0412")
+        flask = make_vessel(self.kl, batch, unit="mg", amount="2000",
+                            flask=True)
+        from inventory.bookings import fill
+        fill(self.kl, item, count=5, vessel=flask)
+        _out, into = transfer(self.kl, flask, amount=Decimal("1992.592"),
+                              location="Kühlschrank 2")
+        root = self.show(batch_url(batch))
+        order = [a.get("href") for a in root.find("main").find_all("a")
+                 if a.get("href") in (vessel_url(flask),
+                                      vessel_url(into.vessel))]
+        self.assertEqual(order[:2], [vessel_url(into.vessel),
+                                     vessel_url(flask)])
+        flask_row = next(a for a in root.find_all("a")
+                         if a.get("href") == vessel_url(flask)
+                         ).closest("tr")
+        self.assertIn("aufgebraucht", flask_row.text())
+        filling = next(a for a in root.find_all("a")
+                       if a.get("href") == item_url(item)).closest("tr")
+        self.assertTrue(has_number(filling.text(), "5"), filling.text())
+        self.assertIn(f"#{flask.pk}", filling.text())
+
+    def test_fillings_newest_first_and_a_reversed_one_marked(self) -> None:
+        first = self.item("CH-0012", size="10", unit="umol", quantity=0)
+        second = self.item("CH-0012", size="50", unit="umol", quantity=0)
+        vessel = self.vessel("CH-0012", "g", "2")
+        from inventory.bookings import fill
+        one = fill(self.kl, first, count=1, vessel=vessel,
+                   date=date(2026, 10, 1))
+        fill(self.kl, second, count=1, vessel=vessel,
+             date=date(2026, 10, 20))
+        reverse(self.kl, one, note="doppelt")
+        root = self.show(batch_url(vessel.batch))
+        rows = [a.closest("tr") for a in root.find("main").find_all("a")
+                if a.get("href") in (item_url(first), item_url(second))]
+        rows = [r for r in rows if r is not None]
+        hrefs = [[a.get("href") for a in r.find_all("a")
+                  if a.get("href") in (item_url(first), item_url(second))][0]
+                 for r in rows]
+        self.assertEqual(hrefs, [item_url(second), item_url(first)])
+        self.assertNotIn("storniert", rows[0].text())
+        self.assertIn("storniert", rows[1].text())
+
+    def test_the_actions_of_a_signed_in_user(self) -> None:
+        batch = make_batch(self.kl, "CH-0012", number="KL0412")
+        root = self.show(batch_url(batch))
+        self.assertIsNone(root.find("a", href=batch_url(batch, "edit")))
+        self.assertIsNone(root.find(
+            "a", href=batch_url(batch, "vessels/new")))
+        self.client.force_login(self.kl)
+        root = self.show(batch_url(batch))
+        self.assertEqual([a.text() for a in root.find_all(
+            "a", href=batch_url(batch, "edit"))], ["Bearbeiten"])
+        self.assertEqual([a.text() for a in root.find_all(
+            "a", href=batch_url(batch, "vessels/new"))], ["Neues Gefäß"])
+
+    def test_the_batch_keeps_a_history(self) -> None:
+        batch = make_batch(self.kl, "CH-0012", number="KL0412")
+        self.assertIn("Angelegt", self.show(batch_url(batch)).text())
+
+    def test_the_task_and_the_batch_link_each_other(self) -> None:
+        """production-planning, Batches of tasks (a batch from a step)."""
+        task = make_task(self.kl, "CH-0012", steps=1, started=past(1))
+        batch = make_batch(self.kl, "CH-0012", number="KL0412",
+                           task_step=task.steps.get())
+        self.assertIn(f"/lab/tasks/{task.number}/", [
+            a.get("href") for a in self.show(batch_url(batch)).find_all("a")])
+        self.assertIn(batch_url(batch), [
+            a.get("href") for a in self.show(
+                f"/lab/tasks/{task.number}/").find_all("a")])
+
+    def test_a_batch_without_a_step_links_no_task(self) -> None:
+        task = make_task(self.kl, "CH-0012", steps=1, started=past(1))
+        batch = make_batch(self.kl, "CH-0012", number="KL0412")
+        self.assertNotIn(f"/lab/tasks/{task.number}/", [
+            a.get("href") for a in self.show(batch_url(batch)).find_all("a")])
+        self.assertNotIn(batch_url(batch), [
+            a.get("href") for a in self.show(
+                f"/lab/tasks/{task.number}/").find_all("a")])
+
+    def test_an_unknown_batch_answers_404(self) -> None:
+        self.assertEqual(
+            self.client.get("/lab/inventory/batches/9999/").status_code,
+            404)
+
+
+class ItemPageVesselTests(PageCase):
+    """Requirement: Item page (its bulk: the open vessels of its
+    substance, each with its batch and amount and linking to its
+    page)."""
+
+    def test_the_open_vessels_with_their_batches(self) -> None:
+        item = self.item("CH-0012", size="10", unit="umol")
+        open_one = self.vessel("CH-0012", "mg", "50", number="B-7")
+        flask = self.vessel("CH-0012", "g", "2", number="B-8", flask=True)
+        used = self.vessel("CH-0012", "mg", "0", number="B-USED")
+        other = self.vessel("CH-0013", "mg", "20", number="B-OTHER")
+        root = self.show(item_url(item))
+        hrefs = [a.get("href") for a in root.find_all("a")]
+        for vessel in (open_one, flask):
+            with self.subTest(vessel=vessel.pk):
+                self.assertIn(vessel_url(vessel), hrefs)
+        for vessel in (used, other):
+            with self.subTest(vessel=vessel.pk):
+                self.assertNotIn(vessel_url(vessel), hrefs)
+        text = root.text()
+        self.assertIn("B-7", text)
+        self.assertTrue(has_amount(text, "50", "mg"), text)
+        self.assertTrue(has_amount(text, "2", "g"), text)
 
 
 class NotePageTests(PageCase):

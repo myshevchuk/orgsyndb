@@ -6,11 +6,13 @@ from datetime import date
 from tasks.models import Task
 
 from . import (NOT_IN_COLLECTION, Element, berlin, frozen, make_article,
-               make_lot, make_task, make_withdrawal, page, past,
-               substance_for, task_form_data, task_url)
+               make_batch, make_task, make_vessel, make_withdrawal, page,
+               past, substance_for, task_form_data, task_url)
 from .collection_support import (accept, changed_collection,
                                  import_collection, without_ids)
-from .task_support import TaskCase, history_text, steps_of
+from .inventory_support import batch_url, has_amount, vessel_url
+from .journal_support import entry_of
+from .task_support import TaskCase, history_text, make_product_batch, steps_of
 
 
 class PageCase(TaskCase):
@@ -39,10 +41,12 @@ class DetailTests(PageCase):
     def test_the_page_shows_the_record(self) -> None:
         task = make_task(
             self.kl, substance="Probe", priority="high", assignee=self.ae,
-            started=past(3, 11), steps=5, done=2,
-            batch="B-17", report=True,
+            started=past(3, 11), steps=5, done=2, report=True,
             note="Zeile eins\nZeile zwei")
+        batch = make_product_batch(task, number="B-17")
         root = self.show(task)
+        self.assertIn(batch_url(batch), [a.get("href")
+                                         for a in root.find_all("a")])
         heading = root.find("h1").text()
         self.assertIn(task.number, heading)
         self.assertIn("Probe", heading)
@@ -444,9 +448,8 @@ class StepHistoryTests(PageCase):
         self.assertIn("Stufe 2", text)
 
 
-def lot_href(lot, action: str = "", step=None) -> str:
-    path = f"/lab/inventory/bulk/{lot.pk}/" + (
-        f"{action}/" if action else "")
+def vessel_href(vessel, action: str = "", step=None) -> str:
+    path = vessel_url(vessel, action)
     return f"{path}?step={step.pk}" if step else path
 
 
@@ -480,16 +483,19 @@ class FailedPageTests(PageCase):
         self.assertIn("Failed", text)
         self.assertNotIn("Follow-up", text)
 
-    def test_a_failed_task_offers_no_record_as_bulk(self) -> None:
+    def test_a_failed_task_offers_no_record(self) -> None:
         task = make_task(self.kl, started=past(1), ended=past(2),
-                         failed=True)
+                         failed=True, steps=1)
         self.client.force_login(self.kl)
-        self.assertNotIn("Als Bulk erfassen", self.show(task).text())
+        text = self.show(task).text()
+        for gone in ("Charge erfassen", "Als Bulk erfassen",
+                     "Los erfassen"):
+            self.assertNotIn(gone, text)
 
 
-class StepLotsPageTests(PageCase):
-    """Requirement: Task page (under each step the lots it made and the
-    withdrawals booked into it, and the links to record either)."""
+class StepBatchesPageTests(PageCase):
+    """Requirement: Task page (under each step the batches it made and
+    the withdrawals booked into it, and the links to record either)."""
 
     def setUp(self) -> None:
         super().setUp()
@@ -503,30 +509,57 @@ class StepLotsPageTests(PageCase):
         self.client.logout()
         return Task.objects.order_by("-pk").first()
 
-    def test_a_step_lists_the_lots_it_made(self) -> None:
-        lot = make_lot(self.kl, substance=self.task.substance,
-                       task_step=self.first)
+    def test_a_step_lists_the_batches_it_made(self) -> None:
+        batch = make_batch(self.kl, substance=self.task.substance,
+                           number="KL0412", task_step=self.first)
         first, second = step_items(self.show(self.task))
-        self.assertIn(lot_href(lot), hrefs(first))
-        self.assertNotIn(lot_href(lot), hrefs(second))
+        self.assertIn(batch_url(batch), hrefs(first))
+        self.assertNotIn(batch_url(batch), hrefs(second))
+        self.assertIn("KL0412", first.text())
+
+    def test_a_batch_shows_its_entry_its_flask_and_its_stored_amount(
+            self) -> None:
+        entry = entry_of("AE-1/9")
+        batch = make_batch(self.kl, substance=self.task.substance,
+                           number="KL0412", task_step=self.first,
+                           journal_entry=entry)
+        make_vessel(self.kl, batch, unit="g", amount="2", flask=True)
+        make_vessel(self.kl, batch, unit="mg", amount="300",
+                    location="Regal")
+        text = step_items(self.show(self.task))[0].text()
+        self.assertIn("AE-1/9", text)
+        self.assertTrue(has_amount(text, "2", "g"), text)
+        self.assertTrue(has_amount(text, "300", "mg"), text)
+
+    def test_an_empty_flask_shows_no_amount_while_stored_vessels_do(
+            self) -> None:
+        batch = make_batch(self.kl, substance=self.task.substance,
+                           number="KL0412", task_step=self.first)
+        make_vessel(self.kl, batch, unit="g", amount="0", flask=True)
+        make_vessel(self.kl, batch, unit="mg", amount="300",
+                    location="Regal")
+        text = step_items(self.show(self.task))[0].text()
+        self.assertTrue(has_amount(text, "300", "mg"), text)
+        self.assertFalse(has_amount(text, "0", "g"), text)
 
     def test_a_step_lists_the_withdrawals_into_it(self) -> None:
-        lot = make_lot(self.kl, substance=self.task.substance)
-        make_withdrawal(self.kl, lot, self.second, "1")
+        vessel = make_vessel(self.kl, substance=self.task.substance)
+        make_withdrawal(self.kl, vessel, self.second, "1")
         first, second = step_items(self.show(self.task))
-        self.assertIn(lot_href(lot), hrefs(second))
-        self.assertNotIn(lot_href(lot), hrefs(first))
+        self.assertIn(vessel_href(vessel), hrefs(second))
+        self.assertNotIn(vessel_href(vessel), hrefs(first))
 
-    def test_the_lots_of_other_tasks_are_not_listed(self) -> None:
+    def test_the_batches_of_other_tasks_are_not_listed(self) -> None:
         other = make_task(self.kl, "Aspirin", started=past(1), steps=1)
-        lot = make_lot(self.kl, substance=other.substance,
-                       task_step=other.steps.get())
+        batch = make_batch(self.kl, substance=other.substance,
+                           task_step=other.steps.get())
         for item in step_items(self.show(self.task)):
-            self.assertNotIn(lot_href(lot), hrefs(item))
+            self.assertNotIn(batch_url(batch), hrefs(item))
 
-    def test_each_step_of_an_open_task_offers_to_record_a_lot(self) -> None:
-        """Requirement: Task page (`Los erfassen` to
-        `/lab/inventory/bulk/new/?step=<id>`)."""
+    def test_each_step_of_an_open_task_offers_to_record_a_batch(
+            self) -> None:
+        """Requirement: Task page (`Charge erfassen` to
+        `/lab/inventory/batches/new/?step=<id>`)."""
         self.client.force_login(self.kl)
         planned = make_task(self.kl, "Aspirin", steps=2)
         for task in (self.task, planned):
@@ -534,21 +567,27 @@ class StepLotsPageTests(PageCase):
             for step, item in zip(steps_of(task), items, strict=True):
                 with self.subTest(task=task.number, step=step.position):
                     links = [a for a in item.find_all("a")
-                             if a.text() == "Los erfassen"]
+                             if a.text() == "Charge erfassen"]
                     self.assertEqual(
                         [a.get("href") for a in links],
-                        [f"/lab/inventory/bulk/new/?step={step.pk}"])
+                        [f"/lab/inventory/batches/new/?step={step.pk}"])
+
+    def test_the_old_links_are_gone(self) -> None:
+        self.client.force_login(self.kl)
+        for item in step_items(self.show(self.task)):
+            texts = {a.text() for a in item.find_all("a")}
+            self.assertFalse(texts & {"Los erfassen", "Als Bulk erfassen"})
 
     def test_the_link_in_english(self) -> None:
         self.client.force_login(self.kl)
         accept(language="en")
         item = step_items(self.show(self.task))[0]
-        self.assertIn("Record a lot", [a.text() for a in item.find_all("a")])
+        self.assertIn("Record batch", [a.text() for a in item.find_all("a")])
 
     def test_no_links_to_record_without_a_sign_in(self) -> None:
         for item in step_items(self.show(self.task)):
             self.assertEqual([a for a in item.find_all("a")
-                              if a.text() in ("Los erfassen",
+                              if a.text() in ("Charge erfassen",
                                               "Entnahme buchen")], [])
 
     def test_no_links_to_record_on_a_task_that_is_not_open(self) -> None:
@@ -566,51 +605,67 @@ class StepLotsPageTests(PageCase):
                 (item,) = step_items(self.show(task))
                 self.assertEqual(
                     [a for a in item.find_all("a")
-                     if a.text() in ("Los erfassen", "Entnahme buchen")],
+                     if a.text() in ("Charge erfassen", "Entnahme buchen")],
                     [])
 
-    def test_a_withdrawal_may_be_booked_from_the_open_lots_of_the_substrates(
+    def test_a_withdrawal_comes_from_the_open_vessels_of_the_substrates(
             self) -> None:
         """Requirement: Task page (`Entnahme buchen`, listing the open
-        lots of the step's substrates)."""
+        vessels of the step's substrates)."""
         task = self.sequence_task()
         first, second = steps_of(task)
         self.client.force_login(self.kl)
-        open_lot = make_lot(self.kl, substance=substance_for(
+        open_vessel = make_vessel(self.kl, substance=substance_for(
             "4-acetylbiphenyl"))
-        used_up = make_lot(self.kl, substance=substance_for(
+        used_up = make_vessel(self.kl, substance=substance_for(
             "4-acetylbiphenyl"), amount="0")
-        other = make_lot(self.kl, substance=substance_for("cinnamic-acid"))
+        other = make_vessel(self.kl, substance=substance_for(
+            "cinnamic-acid"))
         items = step_items(self.show(task))
         self.assertIn("Entnahme buchen", items[1].text())
-        self.assertIn(lot_href(open_lot, "withdraw", second),
+        self.assertIn(vessel_href(open_vessel, "withdraw", second),
                       hrefs(items[1]))
-        for lot in (used_up, other):
-            with self.subTest(lot=lot.pk):
-                self.assertNotIn(lot_href(lot, "withdraw", second),
+        for vessel in (used_up, other):
+            with self.subTest(vessel=vessel.pk):
+                self.assertNotIn(vessel_href(vessel, "withdraw", second),
                                  hrefs(items[1]))
-        self.assertNotIn(lot_href(open_lot, "withdraw", first),
+        self.assertNotIn(vessel_href(open_vessel, "withdraw", first),
                          hrefs(items[0]))
 
-    def test_a_step_without_an_entry_offers_every_open_lot(self) -> None:
+    def test_a_flask_is_offered_for_a_withdrawal_too(self) -> None:
+        task = self.sequence_task()
+        first, second = steps_of(task)
         self.client.force_login(self.kl)
-        mine = make_lot(self.kl, substance=self.task.substance)
-        other = make_lot(self.kl, substance=substance_for("cinnamic-acid"))
-        used_up = make_lot(self.kl, substance=self.task.substance,
-                           amount="0")
+        intermediate = make_batch(
+            self.kl, substance=substance_for("4-acetylbiphenyl"),
+            task_step=first)
+        flask = make_vessel(self.kl, intermediate, unit="g", amount="1",
+                            flask=True)
+        items = step_items(self.show(task))
+        self.assertIn(vessel_href(flask, "withdraw", second),
+                      hrefs(items[1]))
+
+    def test_a_step_without_an_entry_offers_every_open_vessel(self) -> None:
+        self.client.force_login(self.kl)
+        mine = make_vessel(self.kl, substance=self.task.substance)
+        other = make_vessel(self.kl, substance=substance_for(
+            "cinnamic-acid"))
+        used_up = make_vessel(self.kl, substance=self.task.substance,
+                              amount="0")
         first, second = step_items(self.show(self.task))
         for item, step in ((first, self.first), (second, self.second)):
             with self.subTest(step=step.position):
                 self.assertIn("Entnahme buchen", item.text())
-                self.assertIn(lot_href(mine, "withdraw", step), hrefs(item))
-                self.assertIn(lot_href(other, "withdraw", step),
+                self.assertIn(vessel_href(mine, "withdraw", step),
                               hrefs(item))
-                self.assertNotIn(lot_href(used_up, "withdraw", step),
+                self.assertIn(vessel_href(other, "withdraw", step),
+                              hrefs(item))
+                self.assertNotIn(vessel_href(used_up, "withdraw", step),
                                  hrefs(item))
 
     def test_the_withdrawal_link_in_english(self) -> None:
         self.client.force_login(self.kl)
-        make_lot(self.kl, substance=self.task.substance)
+        make_vessel(self.kl, substance=self.task.substance)
         accept(language="en")
         item = step_items(self.show(self.task))[0]
         self.assertIn("Book a withdrawal", item.text())

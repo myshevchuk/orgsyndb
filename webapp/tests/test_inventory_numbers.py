@@ -8,12 +8,13 @@ from typing import Any
 from inventory.bookings import Refused, book_note
 from inventory.models import Article, EnteredConsumption, Item
 
-from . import (datalist, field_value, make_article, make_item, make_lot,
-               make_substance, make_user, page, table)
-from .inventory_support import (DELIVERIES, LIST, NEW_ITEM, NEW_LOT,
+from . import (datalist, field_value, make_article, make_item, make_substance,
+               make_user, make_vessel, page, table)
+from .inventory_support import (DELIVERIES, LIST, MICRO, NEW_BATCH, NEW_ITEM,
                                 NEW_NOTE, SUBSTANCE_PAGE, FormCase,
                                 InventoryCase, fresh, has_amount,
-                                item_data, item_url, note_data, snapshot)
+                                has_number, item_data, item_url, note_data,
+                                snapshot)
 
 ADMIN_ITEMS = "/lab/admin/inventory/item/"
 ADMIN_ARTICLES = "/lab/admin/inventory/article/"
@@ -85,10 +86,10 @@ class ItemTests(InventoryCase):
         self.deliver(item, 2)
         self.assertEqual(fresh(item).quantity, 3)
 
-    def test_the_lots_of_its_substance_are_its_bulk(self) -> None:
+    def test_the_vessels_of_its_substance_are_its_bulk(self) -> None:
         item = numberless(self.kl, size="10", unit="mg")
-        make_lot(self.kl, substance=item.article.substance, amount="50")
-        make_lot(self.kl, "CH-0012", amount="90")
+        make_vessel(self.kl, substance=item.article.substance, amount="50")
+        make_vessel(self.kl, article="CH-0012", amount="90")
         header, rows = table(page(self.client.get(LIST)))
         cell = next(r for r in rows
                     if r["Name"].text() == "Neuverbindung 9")[
@@ -216,7 +217,7 @@ class DatalistTests(FormCase):
     def test_keys_labelled_with_names(self) -> None:
         """Scenario: Substances offered."""
         make_substance("no-article", "No article")
-        for path in (NEW_ITEM, NEW_LOT):
+        for path in (NEW_ITEM, NEW_BATCH):
             with self.subTest(path=path):
                 options = datalist(page(self.client.get(path)),
                                    "substance")
@@ -287,7 +288,7 @@ class PageTests(FormCase):
         self.assertNotIn("Verbrauch nachtragen", links)
         self.assertIn("Abfüllen", links)
         self.assertFalse([a for a in root.find_all("a") if a.get(
-            "href", "").startswith("/lab/inventory/bulk/new/")])
+            "href", "").startswith("/lab/inventory/batches/new/")])
 
     def test_a_numbered_page_keeps_its_links(self) -> None:
         item = self.item("CH-0012", "Zimtsäure")
@@ -369,3 +370,133 @@ class AdminTests(InventoryCase):
         self.client.post(self.change(item), {
             "category": "", "article_number": "CH-0022"})
         self.assertEqual(fresh(item).article.article_number, "CH-0021")
+
+
+class BulkOfAnItemTests(InventoryCase):
+    """Requirement: Filling from bulk (an item's bulk is the amount in
+    the open vessels of its substance, flasks among them), here in the
+    list's column and on the item page."""
+
+    def bulk_cells(self) -> dict[str, object]:
+        header, rows = table(page(self.client.get(LIST)))
+        return {f"{row[header[0]].text()} "
+                f"{row['Gebinde'].text().replace(' ', '')}":
+                row["Bulk verfügbar"]
+                for row in rows}
+
+    def test_containers_from_bulk(self) -> None:
+        """Scenario: Containers from bulk."""
+        self.item("CH-0012", size="10", unit="umol")
+        self.vessel("CH-0012", "mg", "50")
+        cell = self.bulk_cells()[f"CH-0012 10{MICRO}mol"]
+        self.assertTrue(has_amount(cell.text(), "50", "mg"), cell.text())
+        self.assertTrue(has_number(cell.text(), "33"), cell.text())
+
+    def test_vessels_are_not_pooled(self) -> None:
+        """Scenario: Vessels are not pooled."""
+        self.item("X-1", size="10", unit="mg")
+        self.vessel("X-1", "mg", "6")
+        self.vessel("X-1", "mg", "6")
+        cell = self.bulk_cells()["X-1 10mg"]
+        self.assertTrue(has_amount(cell.text(), "12", "mg"), cell.text())
+        self.assertTrue(has_number(cell.text(), "0"), cell.text())
+
+    def test_a_flask_counts_like_any_open_vessel(self) -> None:
+        self.item("CH-0012", size="10", unit="umol")
+        self.vessel("CH-0012", "mg", "50", flask=True)
+        cell = self.bulk_cells()[f"CH-0012 10{MICRO}mol"]
+        self.assertTrue(has_amount(cell.text(), "50", "mg"), cell.text())
+        self.assertTrue(has_number(cell.text(), "33"), cell.text())
+
+    def test_the_vessels_of_several_batches_add_up_in_the_amount(
+            self) -> None:
+        self.item("X-1", size="10", unit="mg")
+        self.vessel("X-1", "mg", "25", flask=True)
+        self.vessel("X-1", "mg", "25", location="Regal")
+        cell = self.bulk_cells()["X-1 10mg"]
+        self.assertTrue(has_amount(cell.text(), "50", "mg"), cell.text())
+        self.assertTrue(has_number(cell.text(), "4"), cell.text())
+
+    def test_the_division_is_exact(self) -> None:
+        self.item("CH-0012", size="10", unit="umol")
+        self.vessel("CH-0012", "mg", "148.16")
+        cell = self.bulk_cells()[f"CH-0012 10{MICRO}mol"]
+        self.assertTrue(has_number(cell.text(), "100"), cell.text())
+
+    def test_each_size_counts_its_own_containers(self) -> None:
+        self.item("CH-0012", size="10", unit="umol")
+        self.item("CH-0012", size="50", unit="umol")
+        self.vessel("CH-0012", "mg", "50")
+        cells = self.bulk_cells()
+        self.assertTrue(has_number(cells[f"CH-0012 10{MICRO}mol"].text(),
+                                   "33"))
+        self.assertTrue(has_number(cells[f"CH-0012 50{MICRO}mol"].text(),
+                                   "6"))
+
+    def test_the_amount_is_shown_by_unit(self) -> None:
+        self.item("X-1", size="10", unit="mg")
+        self.vessel("X-1", "mg", "50")
+        self.vessel("X-1", "g", "1")
+        text = self.bulk_cells()["X-1 10mg"].text()
+        self.assertTrue(has_amount(text, "50", "mg"), text)
+        self.assertTrue(has_amount(text, "1", "g"), text)
+        self.assertTrue(has_number(text, "105"), text)
+
+    def test_a_vessel_that_does_not_convert_is_left_out(self) -> None:
+        self.item("X-9", size="10", unit="umol")
+        self.vessel("X-9", "umol", "35")
+        self.vessel("X-9", "mg", "500")
+        text = self.bulk_cells()[f"X-9 10{MICRO}mol"].text()
+        self.assertTrue(has_amount(text, "35", MICRO + "mol"), text)
+        self.assertTrue(has_amount(text, "500", "mg"), text)
+        self.assertTrue(has_number(text, "3"), text)
+
+    def test_used_up_vessels_and_other_articles_are_left_out(self) -> None:
+        self.item("X-1", size="10", unit="mg")
+        self.vessel("X-1", "mg", "0")
+        self.vessel("X-2", "mg", "90")
+        text = self.bulk_cells()["X-1 10mg"].text()
+        self.assertNotIn("90", text)
+        self.assertNotIn("mg", text)
+
+    def test_an_item_without_vessels_shows_no_bulk(self) -> None:
+        self.item("X-1", size="10", unit="mg")
+        self.assertNotIn("mg", self.bulk_cells()["X-1 10mg"].text())
+
+    def test_the_item_page_shows_the_open_vessels(self) -> None:
+        item = self.item("CH-0012", size="10", unit="umol")
+        self.vessel("CH-0012", "mg", "50", number="B-7")
+        self.vessel("CH-0012", "mg", "0", number="B-USED")
+        self.vessel("CH-0013", "mg", "20", number="B-OTHER")
+        text = page(self.client.get(item_url(item))).text()
+        self.assertIn("B-7", text)
+        self.assertTrue(has_amount(text, "50", "mg"), text)
+        self.assertTrue(has_number(text, "33"), text)
+        self.assertNotIn("B-USED", text)
+        self.assertNotIn("B-OTHER", text)
+
+    def test_the_item_page_names_a_flask_and_a_stored_vessel(self) -> None:
+        item = self.item("CH-0012", size="10", unit="umol")
+        self.vessel("CH-0012", "mg", "50", number="B-7", flask=True)
+        self.vessel("CH-0012", "mg", "20", number="B-8", location="Regal 3")
+        text = page(self.client.get(item_url(item))).text()
+        for shown in ("B-7", "B-8", "Regal 3"):
+            self.assertIn(shown, text)
+
+    def test_a_vessel_belongs_to_every_size_of_its_article(self) -> None:
+        small = self.item("CH-0012", size="10", unit="umol")
+        large = self.item("CH-0012", size="50", unit="umol")
+        self.vessel("CH-0012", "mg", "50", number="B-7")
+        for item in (small, large):
+            with self.subTest(item=item.pk):
+                self.assertIn("B-7", page(self.client.get(
+                    item_url(item))).text())
+
+    def test_made_and_bought_vessels_side_by_side(self) -> None:
+        item = self.item("CH-0012", size="10", unit="umol")
+        self.vessel("CH-0012", "mg", "50", source="made", number="M-1")
+        self.vessel("CH-0012", "mg", "20", source="bought",
+                    supplier="Sigma", supplier_batch="S-1")
+        text = page(self.client.get(item_url(item))).text()
+        self.assertTrue(has_amount(text, "50", "mg"), text)
+        self.assertTrue(has_amount(text, "20", "mg"), text)

@@ -11,13 +11,15 @@ from typing import Any
 
 from django.test import TestCase
 
-from . import (berlin, edit_data, load_demo_registry, make_demo_accounts,
-               make_demo_notebooks, make_lot, make_user, substance_for,
-               task_form_data, task_url, ticking)
+from . import (add_steps, berlin, edit_data, load_demo_registry,
+               make_batch, make_demo_accounts, make_demo_notebooks,
+               make_user, make_vessel, substance_for, task_form_data,
+               task_url, ticking)
 from .collection_support import import_collection
+from .inventory_support import Refusals
 
 NEW = "/lab/tasks/new/"
-NEW_LOT = "/lab/inventory/bulk/new/"
+NEW_BATCH = "/lab/inventory/batches/new/"
 NOW = berlin(2026, 11, 4, 8)
 TODAY_ISO = "2026-11-04"
 
@@ -66,14 +68,25 @@ def history_text(root) -> str:
     raise AssertionError("the page shows no history")
 
 
-def make_product_lot(task: Any, amount: str = "5", unit: str = "g",
-                     **extra: Any) -> Any:
-    """A made lot of ``task``'s substance with ``task``'s batch, which
-    is the task's product lot (task-tracker "Task record"), booked by
-    the task's creator; ``extra`` replaces what ``make_lot`` takes."""
-    return make_lot(task.created_by, **{
-        "substance": task.substance, "batch": task.batch, "unit": unit,
-        "amount": amount, "source": "made", **extra})
+def make_product_batch(task: Any, amount: str = "5", unit: str = "g",
+                       flask: bool = False, **extra: Any) -> Any:
+    """A made batch of ``task``'s substance recorded from the task's
+    last step, which is added when it has none, so that it is a product
+    batch of the task (task-tracker "Task record"), with one vessel
+    holding ``amount`` of ``unit``, a flask when ``flask`` is true and a
+    stored vessel otherwise; return the batch. The rows are written as
+    they stand, so the task may be in any state. ``extra`` replaces
+    what ``make_batch`` takes."""
+    if not task.steps.exists():
+        add_steps(task, 1)
+    step = task.steps.order_by("position").last()
+    batch = make_batch(task.created_by, **{
+        "substance": task.substance, "task_step": step,
+        "journal_entry": step.journal_entry, "source": "made",
+        "yield_amount": amount, "yield_unit": unit, **extra})
+    make_vessel(task.created_by, batch, unit=unit, amount=amount,
+                flask=flask)
+    return batch
 
 
 def steps_of(task: Any) -> list[Any]:
@@ -81,9 +94,9 @@ def steps_of(task: Any) -> list[Any]:
     return list(task.steps.order_by("position"))
 
 
-class StepCase(TaskCase):
+class StepCase(Refusals, TaskCase):
     """The task case with a clock that stands at 2026-11-04 and ticks,
-    for the tests of lots made by a step and of withdrawals into one;
+    for the tests of batches made by a step and of withdrawals into one;
     ``cls.first`` is the demo collection's import, whose sequence
     ``SEQ-0002`` has the steps ``OSDB-0004``, making
     ``4-acetylbiphenyl``, and entry 1 of ``OSDB-0009``, which takes it

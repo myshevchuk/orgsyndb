@@ -9,8 +9,8 @@ from django.db import models
 
 from tasks.models import Task
 
-from . import (NOT_IN_COLLECTION, context_form, field_value, make_lot,
-               make_task, make_user, make_withdrawal, page, task_form_data,
+from . import (NOT_IN_COLLECTION, context_form, field_value, make_task,
+               make_user, make_vessel, make_withdrawal, page, task_form_data,
                task_steps, task_url)
 from .collection_support import (accept, import_collection, longer_collection,
                                  retargeted_collection, shortened_collection,
@@ -244,10 +244,10 @@ class ChangingTheStartTests(StartCase):
     the rules for changing the sequence."""
 
     def booked(self, task: Task) -> Any:
-        """The first step of TASK, with a lot it made."""
+        """The first step of TASK, with a batch it made."""
         first = steps_of(task)[0]
-        make_lot(self.kl, substance=first.products()[0], source="made",
-                 task_step=first, unit="g", amount="2")
+        make_vessel(self.kl, substance=first.products()[0], source="made",
+                    task_step=first, unit="g", amount="2", flask=True)
         return first
 
     def test_changing_the_start_step_replaces_the_steps(self) -> None:
@@ -318,9 +318,9 @@ class ChangingTheStartTests(StartCase):
         task = self.only_task()
         self.assertEqual((task.start_step, task_steps(task)), (1, before))
 
-    def test_no_change_with_a_lot_made(self) -> None:
+    def test_no_change_with_a_batch_made(self) -> None:
         """Requirement: Task record (a save may change `start_step` only
-        while no step has made a lot)."""
+        while no step has made a batch)."""
         task = self.followed()
         self.booked(task)
         self.refused(self.change(task, start_step="2"), "start_step")
@@ -332,9 +332,10 @@ class ChangingTheStartTests(StartCase):
         """Requirement: Task record (a save may change `start_step` only
         while no step has taken a withdrawal)."""
         task = self.followed()
-        lot = make_lot(self.kl, substance=steps_of(task)[1].substrates()[0],
-                       unit="g", amount="5")
-        make_withdrawal(self.kl, lot, steps_of(task)[1], "1")
+        vessel = make_vessel(
+            self.kl, substance=steps_of(task)[1].substrates()[0],
+            unit="g", amount="5")
+        make_withdrawal(self.kl, vessel, steps_of(task)[1], "1")
         self.refused(self.change(task, start_step="2"), "start_step")
         self.assertEqual(self.only_task().start_step, 1)
 
@@ -500,9 +501,8 @@ class PageTests(StartCase):
         self.assertIn("ab Stufe 2", text)
 
 
-class AdminTests(StartCase):
-    """Requirement: Tasks in the admin (the plan read-only; the same
-    refusal of a substance change)."""
+class AdminBase(StartCase):
+    """The admin's change page of a task and the form it posts."""
 
     def setUp(self) -> None:
         super().setUp()
@@ -533,6 +533,11 @@ class AdminTests(StartCase):
                      "steps-MAX_NUM_FORMS": "1000"})
         data.update(over)
         return data
+
+
+class AdminTests(AdminBase):
+    """Requirement: Tasks in the admin (the plan read-only; the same
+    refusal of a substance change)."""
 
     def test_the_plan_shows_read_only(self) -> None:
         """Scenario: The plan read-only in the admin (the sequence and
@@ -604,3 +609,115 @@ class AdminTests(StartCase):
                 key=CINNAMIC).pk))
         self.assertEqual(done.status_code, 302)
         self.assertEqual(Task.objects.get().substance.key, CINNAMIC)
+
+
+class AdminClosingTests(AdminBase):
+    """Requirement: Tasks in the admin (a save that ends, fails or
+    cancels a task writes off its flasks, and a substance changed on a
+    task one of whose steps made a batch is refused)."""
+
+    def running(self) -> Task:
+        return make_task(self.kl, "Aspirin", started=date(2025, 3, 1),
+                         steps=2)
+
+    def post(self, task: Task, **over: Any) -> Any:
+        response = self.change_page(task)
+        return self.client.post(
+            f"/lab/admin/tasks/task/{task.pk}/change/",
+            self.posted(response, **over))
+
+    def newest(self, vessel: Any) -> Any:
+        return vessel.movements.order_by("-pk").first()
+
+    def test_ending_through_the_admin(self) -> None:
+        """Scenario: Ending through the admin."""
+        from decimal import Decimal
+
+        from django.utils import timezone
+
+        from . import make_batch, substance_for
+        task = self.running()
+        intermediate = make_batch(
+            self.kl, substance=substance_for("4-acetylbiphenyl"),
+            task_step=task.steps.get(position=1))
+        flask = make_vessel(self.kl, intermediate, unit="mg", amount="300",
+                            flask=True)
+        done = self.post(task, ended="2025-03-04", failed="on")
+        self.assertEqual(done.status_code, 302)
+        task.refresh_from_db()
+        self.assertEqual((task.state, task.ended),
+                         ("failed", date(2025, 3, 4)))
+        flask.refresh_from_db()
+        self.assertEqual(flask.amount, 0)
+        latest = self.newest(flask)
+        self.assertEqual((latest.kind, latest.amount, latest.date),
+                         ("remainder", Decimal("300"),
+                          timezone.localdate()))
+
+    def test_ending_with_a_product_batch_writes_the_flask_off(self) -> None:
+        from .task_support import make_product_batch
+        task = self.running()
+        flask = make_product_batch(task, "2", "g", flask=True
+                                   ).vessels.get()
+        done = self.post(task, ended="2025-03-04")
+        self.assertEqual(done.status_code, 302)
+        flask.refresh_from_db()
+        self.assertEqual(flask.amount, 0)
+        self.assertEqual(self.newest(flask).kind, "remainder")
+
+    def test_cancelling_writes_the_flasks_off(self) -> None:
+        from .task_support import make_product_batch
+        task = self.running()
+        flask = make_product_batch(task, "2", "g", flask=True
+                                   ).vessels.get()
+        done = self.post(task, cancelled="on")
+        self.assertEqual(done.status_code, 302)
+        flask.refresh_from_db()
+        self.assertEqual(flask.amount, 0)
+
+    def test_an_end_without_a_product_batch_is_an_error_at_the_end(
+            self) -> None:
+        from decimal import Decimal
+
+        from . import make_batch, substance_for
+        task = self.running()
+        intermediate = make_batch(
+            self.kl, substance=substance_for("4-acetylbiphenyl"),
+            task_step=task.steps.get(position=1))
+        flask = make_vessel(self.kl, intermediate, unit="mg", amount="300",
+                            flask=True)
+        done = self.post(task, ended="2025-03-04")
+        self.assertEqual(done.status_code, 200)
+        self.assertIn("ended", done.context["adminform"].form.errors)
+        task.refresh_from_db()
+        self.assertIsNone(task.ended)
+        flask.refresh_from_db()
+        self.assertEqual(flask.amount, Decimal("300"))
+        self.assertEqual(flask.movements.count(), 1)
+
+    def test_a_save_that_closes_nothing_keeps_the_flask(self) -> None:
+        from decimal import Decimal
+
+        from .task_support import make_product_batch
+        task = self.running()
+        flask = make_product_batch(task, "2", "g", flask=True
+                                   ).vessels.get()
+        done = self.post(task, note="Aus dem Admin")
+        self.assertEqual(done.status_code, 302)
+        flask.refresh_from_db()
+        self.assertEqual(flask.amount, Decimal("2000"))
+
+    def test_the_admin_refuses_another_substance_once_a_step_made_a_batch(
+            self) -> None:
+        from registry.models import Substance
+
+        from . import make_batch
+        task = self.running()
+        make_batch(self.kl, substance=task.substance,
+                   task_step=task.steps.get(position=1))
+        done = self.post(task, substance=Substance.objects.get(
+            key=CINNAMIC).pk)
+        self.assertEqual(done.status_code, 200)
+        self.assertIn("substance", done.context["adminform"].form.errors)
+        task.refresh_from_db()
+        self.assertEqual(task.substance.key, "aspirin")

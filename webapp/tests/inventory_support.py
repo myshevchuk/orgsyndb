@@ -1,30 +1,39 @@
 """Fixtures and helpers shared by the inventory tests."""
 
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date
 from decimal import Decimal
 from typing import Any
 
 from django.test import TestCase
 
-from . import (berlin, context_form, make_item, make_lot, make_user,
-               sent_messages, substance_for, ticking)
+from . import (berlin, context_form, make_batch, make_item, make_user,
+               make_vessel, sent_messages, substance_for, ticking)
 
 NOW = berlin(2026, 11, 4, 8)
 TODAY = date(2026, 11, 4)
 MICRO = "µ"
 LIST = "/lab/inventory/end-products/"
-BULK = "/lab/inventory/end-products/bulk/"
+BATCHES = "/lab/inventory/batches/"
+VESSELS = "/lab/inventory/vessels/"
 DELIVERIES = "/lab/inventory/deliveries/"
 NEW_ITEM = "/lab/inventory/end-products/new/"
 NEW_NOTE = "/lab/inventory/deliveries/new/"
-NEW_LOT = "/lab/inventory/bulk/new/"
+NEW_BATCH = "/lab/inventory/batches/new/"
 COMPOUND_PAGE = re.compile(r"/compounds/[^/]+/\Z")
 SUBSTANCE_PAGE = re.compile(r"/lab/registry/substances/[^/]+/\Z")
 NOTE_PAGE = re.compile(r"/lab/inventory/deliveries/\d+/\Z")
 KINDS = {"opening": "Anfangsbestand", "delivery": "Abgabe",
          "filling": "Abfüllung", "correction": "Korrektur",
          "reversal": "Storno"}
+VESSEL_KINDS = {"opening": "Anfangsmenge", "filling": "Abfüllung",
+                "withdrawal": "Entnahme",
+                "transfer_out": "Umfüllung (Abgang)",
+                "transfer_in": "Umfüllung (Zugang)",
+                "correction": "Korrektur", "remainder": "Restausbuchung",
+                "reversal": "Storno"}
 LEVELS = {"out": "aufgebraucht", "critical": "kritisch", "low": "niedrig",
           "watch": "beobachten", "ok": "ausreichend",
           "undelivered": "noch nie abgegeben", "dormant": "ruhend"}
@@ -59,9 +68,18 @@ def movement_url(movement: Any, action: str = "reverse") -> str:
             f"{movement.pk}/{action}/")
 
 
-def lot_url(lot: Any, action: str = "") -> str:
-    return f"/lab/inventory/bulk/{lot.pk}/" + (
+def batch_url(batch: Any, action: str = "") -> str:
+    return f"/lab/inventory/batches/{batch.pk}/" + (
         f"{action}/" if action else "")
+
+
+def vessel_url(vessel: Any, action: str = "") -> str:
+    return f"/lab/inventory/vessels/{vessel.pk}/" + (
+        f"{action}/" if action else "")
+
+
+def vessel_movement_url(movement: Any, action: str = "reverse") -> str:
+    return f"/lab/inventory/vessels/movements/{movement.pk}/{action}/"
 
 
 def note_url(note: Any, action: str = "") -> str:
@@ -100,9 +118,9 @@ def has_amount(text: str, number: str, unit: str) -> bool:
 def snapshot() -> dict[str, Any]:
     """Everything the bookings change, to compare before and after a
     refusal."""
-    from inventory.models import (Article, DeliveryLine, DeliveryNote,
-                                  EnteredConsumption, Item, Lot, LotMovement,
-                                  Movement)
+    from inventory.models import (Article, Batch, DeliveryLine,
+                                  DeliveryNote, EnteredConsumption, Item,
+                                  Movement, Vessel, VesselMovement)
     return {
         "articles": sorted(Article.objects.values_list(
             "pk", "article_number", "category")),
@@ -114,10 +132,12 @@ def snapshot() -> dict[str, Any]:
         "lines": sorted(DeliveryLine.objects.values_list("pk", "count")),
         "entered": sorted(EnteredConsumption.objects.values_list(
             "item_id", "year", "quarter", "count")),
-        "lots": sorted(Lot.objects.values_list(
-            "pk", "amount", "batch", "location", "note")),
-        "lot_movements": sorted(LotMovement.objects.values_list(
-            "pk", "amount")),
+        "batches": sorted(Batch.objects.values_list(
+            "pk", "number", "journal_entry_id", "yield_amount", "note")),
+        "vessels": sorted(Vessel.objects.values_list(
+            "pk", "amount", "location", "note")),
+        "vessel_movements": sorted(VesselMovement.objects.values_list(
+            "pk", "kind", "amount")),
     }
 
 
@@ -139,6 +159,21 @@ def ledger(root: Any) -> list[tuple[str, Any]]:
         text = row.text()
         named = [(text.find(label), kind) for kind, label in KINDS.items()
                  if label in text]
+        if named:
+            found.append((min(named)[1], row))
+    return found
+
+
+def vessel_ledger(root: Any) -> list[tuple[str, Any]]:
+    """The body rows of a vessel's page that show a movement, in page
+    order, each with the kind its text names."""
+    found = []
+    for row in root.find_all("tr"):
+        if not row.find("td"):
+            continue
+        text = row.text()
+        named = [(text.find(label), kind)
+                 for kind, label in VESSEL_KINDS.items() if label in text]
         if named:
             found.append((min(named)[1], row))
     return found
@@ -173,7 +208,38 @@ def note_blocks(root: Any) -> list[tuple[Any, Any]]:
     return blocks
 
 
-class InventoryCase(TestCase):
+class Refusals:
+    """A mixin for test cases that book through ``inventory.bookings``."""
+
+    @contextmanager
+    def refusing(self, field: str | None = None) -> Iterator[None]:
+        """The block's booking raises ``Refused``, with an error at
+        ``field`` when that is given, and changes nothing the
+        ``snapshot`` holds."""
+        from inventory.bookings import Refused
+        before = snapshot()
+        with self.assertRaises(Refused) as caught:
+            yield
+        if field is not None:
+            self.assertIn(field, caught.exception.message_dict)
+        self.assertEqual(snapshot(), before)
+
+    def refused(self, response: Any, field: str | None = None) -> None:
+        """The form is shown again with errors."""
+        self.assertEqual(response.status_code, 200)
+        errors = context_form(response).errors
+        self.assertTrue(errors, "the form shows no error")
+        if field is not None:
+            self.assertIn(field, errors)
+
+    def assertMessageNames(self, response: Any, *names: str) -> None:
+        shown = sent_messages(response)
+        self.assertEqual(len(shown), 1)
+        self.assertTrue(any(name in shown[0].message for name in names),
+                        f"{shown[0].message!r} names none of {names}")
+
+
+class InventoryCase(Refusals, TestCase):
     """A test case with two accounts, the demo collection and a clock
     that stands at 2026-11-04 and ticks."""
 
@@ -195,12 +261,32 @@ class InventoryCase(TestCase):
         return make_item(self.kl, article, name, size, unit, quantity,
                          **extra)
 
-    def lot(self, article: str = "CH-0001", unit: str = "mg",
-            amount: str = "50", **extra: Any) -> Any:
-        """A lot of the substance ``substance_for(article)``, the
+    def batch(self, article: str = "CH-0001", **extra: Any) -> Any:
+        """A batch of the substance ``substance_for(article)``, the
         substance of the item of that article number (see
-        ``make_lot``)."""
-        return make_lot(self.kl, article, unit, amount, **extra)
+        ``make_batch``)."""
+        return make_batch(self.kl, article, **extra)
+
+    def vessel(self, article: str = "CH-0001", unit: str = "mg",
+               amount: str = "50", **extra: Any) -> Any:
+        """A stored vessel of a new batch of the substance
+        ``substance_for(article)``, the substance of the item of that
+        article number (see ``make_vessel``); ``batch``, ``flask`` and
+        the keywords of ``make_batch`` pass on."""
+        return make_vessel(self.kl, unit=unit, amount=amount,
+                           article=article, **extra)
+
+    def filling(self, item: Any, count: int, day: date | None = None,
+                note: str = "", **extra: Any) -> Any:
+        """Book a filling of ``count`` containers of ``item`` from a new
+        stored vessel of its substance, which holds twice what they
+        take; return the item's movement."""
+        from inventory.bookings import fill
+        vessel = make_vessel(
+            self.kl, unit=item.unit, amount=str(item.size * count * 2),
+            substance=item.article.substance)
+        return fill(self.kl, item, count=count, vessel=vessel, date=day,
+                    note=note, **extra)
 
     def deliver(self, item: Any, count: int, day: date | None = None,
                 user: Any = None, **extra: Any) -> Any:
@@ -250,26 +336,12 @@ class InventoryCase(TestCase):
 
 class FormCase(InventoryCase):
     """A test case with a signed-in user and the substance
-    ``cinnamic-acid``, which ``item_data`` and ``lot_data`` name."""
+    ``cinnamic-acid``, which ``item_data`` and ``batch_data`` name."""
 
     def setUp(self) -> None:
         super().setUp()
         self.client.force_login(self.kl)
         self.cinnamic = substance_for("CH-0012")
-
-    def refused(self, response: Any, field: str | None = None) -> None:
-        """The form is shown again with errors."""
-        self.assertEqual(response.status_code, 200)
-        errors = context_form(response).errors
-        self.assertTrue(errors, "the form shows no error")
-        if field is not None:
-            self.assertIn(field, errors)
-
-    def assertMessageNames(self, response: Any, *names: str) -> None:
-        shown = sent_messages(response)
-        self.assertEqual(len(shown), 1)
-        self.assertTrue(any(name in shown[0].message for name in names),
-                        f"{shown[0].message!r} names none of {names}")
 
 
 def item_data(**over: str) -> dict[str, str]:
@@ -299,17 +371,19 @@ def note_data(*lines: tuple[Any, int], **over: str) -> dict[str, str]:
 
 
 def fill_data(**over: str) -> dict[str, str]:
-    data = {"count": "5", "date": TODAY.isoformat(), "lot": "",
+    data = {"count": "5", "date": TODAY.isoformat(), "vessel": "",
             "amount": "", "note": ""}
     data.update(over)
     return data
 
 
-def lot_data(**over: str) -> dict[str, str]:
-    """The new-lot form with the substance ``cinnamic-acid``."""
-    data = {"substance": "cinnamic-acid", "source": "made", "supplier": "",
-            "unit": "mg", "amount": "50", "batch": "", "location": "",
-            "made_on": "", "note": ""}
+def batch_data(**over: str) -> dict[str, str]:
+    """The new-batch form with the substance ``cinnamic-acid`` and no
+    amount: a made batch of the number ``KL0412``."""
+    data = {"substance": "cinnamic-acid", "source": "made",
+            "number": "KL0412", "journal_entry": "", "date": "",
+            "supplier": "", "supplier_article_number": "",
+            "supplier_batch": "", "note": "", "amount": "", "unit": "mg",
+            "location": ""}
     data.update(over)
     return data
-

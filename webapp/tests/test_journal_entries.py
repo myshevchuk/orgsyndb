@@ -124,3 +124,55 @@ class NamedTwiceTests(SeededCase):
                          steps[1].journal_entry_id)
         self.assertEqual(Task.objects.filter(
             steps__journal_entry__number=9).distinct().count(), 2)
+
+
+class BatchEntryTests(JournalCase):
+    """Requirement: Notebooks and entries (an entry is created when a
+    batch first names it, and an entry a batch names cannot be
+    deleted)."""
+
+    def setUp(self) -> None:
+        from . import substance_for
+        self.client.force_login(self.kl)
+        substance_for("CH-0012")
+
+    def record(self, number: str, entry: str):
+        from .inventory_support import NEW_BATCH, batch_data
+        return self.client.post(NEW_BATCH, batch_data(
+            number=number, journal_entry=entry))
+
+    def test_a_batch_creates_the_entry_it_names(self) -> None:
+        from inventory.models import Batch
+        self.assertEqual(entries_named("AE-1/9"), 0)
+        done = self.record("AE1009FA", "AE-1/9")
+        self.assertEqual(done.status_code, 302)
+        self.assertEqual(entries_named("AE-1/9"), 1)
+        self.assertEqual(str(Batch.objects.get().journal_entry), "AE-1/9")
+
+    def test_two_batches_of_one_entry_make_one_entry(self) -> None:
+        from inventory.models import Batch
+        self.record("AE1009FA", "AE-1/9")
+        self.record("AE1009FB", "AE-1/9")
+        self.assertEqual(entries_named("AE-1/9"), 1)
+        self.assertEqual(
+            Batch.objects.filter(journal_entry__number=9).count(), 2)
+
+    def test_a_batch_and_a_step_name_one_entry(self) -> None:
+        from . import make_task
+        step = make_task(self.kl, "Aspirin", steps=1).steps.get()
+        done = self.client.post(step_journal_url(step),
+                                {"journal_entry": "AE-1/9"})
+        self.assertEqual(done.status_code, 302)
+        self.record("AE1009FA", "AE-1/9")
+        self.assertEqual(entries_named("AE-1/9"), 1)
+
+    def test_an_entry_a_batch_names_cannot_be_deleted(self) -> None:
+        from django.db.models import ProtectedError
+
+        from . import make_batch, substance_for
+        entry = entry_of("AE-1/9")
+        make_batch(self.kl, substance=substance_for("CH-0012"),
+                   journal_entry=entry)
+        with self.assertRaises(ProtectedError):
+            entry.delete()
+        self.assertEqual(entries_named("AE-1/9"), 1)

@@ -2,6 +2,7 @@
 Item movements)."""
 
 from datetime import date
+from decimal import Decimal
 
 from inventory.bookings import (Refused, book_note, correct, fill, reverse,
                                 reverse_historical)
@@ -34,7 +35,7 @@ class DeliveryTests(InventoryCase):
         self.assertEqual(movement.date, TODAY)
         self.assertIsNotNone(movement.booked_at)
         self.assertIsNone(movement.reverses)
-        self.assertIsNone(movement.bulk_movement)
+        self.assertIsNone(movement.vessel_movement)
 
     def test_the_note_is_stored_with_its_fields(self) -> None:
         item = self.item()
@@ -125,7 +126,7 @@ class FillingTests(InventoryCase):
 
     def test_a_filling_adds_containers(self) -> None:
         item = self.item(quantity=2)
-        movement = fill(self.kl, item, count=5, note="Charge 7")
+        movement = self.filling(item, 5, note="Charge 7")
         self.assertEqual(fresh(item).quantity, 7)
         movement = Movement.objects.get(pk=movement.pk)
         self.assertEqual(movement.item, item)
@@ -134,33 +135,37 @@ class FillingTests(InventoryCase):
         self.assertEqual((movement.user, movement.note),
                          (self.kl, "Charge 7"))
         self.assertEqual(movement.date, TODAY)
-        self.assertIsNone(movement.bulk_movement)
+        self.assertIsNotNone(movement.vessel_movement)
         self.assertIsNone(movement.delivery_note)
 
     def test_the_date_may_be_given(self) -> None:
         item = self.item()
-        movement = fill(self.kl, item, count=1, date=date(2026, 9, 1))
+        movement = self.filling(item, 1, day=date(2026, 9, 1))
         self.assertEqual(movement.date, date(2026, 9, 1))
 
     def test_a_count_of_zero_or_less_is_refused(self) -> None:
         item = self.item()
+        vessel = self.vessel("CH-0001", "mg", "50")
         before = snapshot()
         for count in (0, -3):
             with self.subTest(count=count), self.assertRaises(Refused):
-                fill(self.kl, item, count=count)
+                fill(self.kl, item, count=count, vessel=vessel,
+                     amount=Decimal("1"))
         self.assertEqual(snapshot(), before)
 
     def test_a_date_after_today_is_refused(self) -> None:
         item = self.item()
+        vessel = self.vessel("CH-0001", "mg", "50")
         before = snapshot()
         with self.assertRaises(Refused):
-            fill(self.kl, item, count=1, date=date(2026, 11, 5))
+            fill(self.kl, item, count=1, date=date(2026, 11, 5),
+                 vessel=vessel, amount=Decimal("1"))
         self.assertEqual(snapshot(), before)
 
     def test_the_quantity_of_a_stale_instance_is_not_trusted(self) -> None:
         item = self.item(quantity=5)
         item.quantity = 100
-        fill(self.kl, item, count=1)
+        self.filling(item, 1)
         self.assertEqual(fresh(item).quantity, 6)
         self.assertEqual(newest_movement(item).quantity_after, 6)
 
@@ -259,7 +264,7 @@ class ReversalTests(InventoryCase):
 
     def test_reversing_a_filling_takes_the_containers_back(self) -> None:
         item = self.item(quantity=0)
-        filling = fill(self.kl, item, count=5)
+        filling = self.filling(item, 5)
         reverse(self.kl, filling, note="doppelt")
         self.assertEqual(fresh(item).quantity, 0)
         newest = newest_movement(item)
@@ -268,7 +273,7 @@ class ReversalTests(InventoryCase):
 
     def test_a_filling_whose_containers_are_gone_is_refused(self) -> None:
         item = self.item(quantity=0)
-        filling = fill(self.kl, item, count=5)
+        filling = self.filling(item, 5)
         self.deliver(item, 4)
         before = snapshot()
         with self.assertRaises(Refused):
@@ -279,7 +284,7 @@ class ReversalTests(InventoryCase):
     def test_a_filling_still_there_may_be_reversed_after_deliveries(
             self) -> None:
         item = self.item(quantity=5)
-        filling = fill(self.kl, item, count=3)
+        filling = self.filling(item, 3)
         self.deliver(item, 4)
         reverse(self.kl, filling, note="doppelt")
         self.assertEqual(fresh(item).quantity, 1)

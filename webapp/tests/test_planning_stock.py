@@ -48,8 +48,8 @@ class StockCase(PlanningCase):
         return self.planned_item("CH-0012", quantity=quantity)
 
     def stock(self, key: str, amount: str = "5", **extra: Any) -> Any:
-        """An open lot of the substance ``key``, of ``amount`` g."""
-        return self.lot(key, "g", amount, **extra)
+        """An open vessel of the substance ``key``, of ``amount`` g."""
+        return self.vessel(key, "g", amount, **extra)
 
     def starts(self, article: str = "CH-0010") -> list[tuple[Any, ...]]:
         """The ``starts`` of the article's row as (the sequence's key,
@@ -85,7 +85,7 @@ class StartStepTests(StockCase):
 
     def test_a_stocked_intermediate_skips_a_step(self) -> None:
         """Requirement: Starting from stock (the last step whose
-        preceding step's intermediate has an open lot)."""
+        preceding step's intermediate has an open vessel)."""
         self.asa()
         self.stock("salicylic-acid")
         self.assertEqual(self.starts(), [("SEQ-0001", 2, "salicylic-acid")])
@@ -96,27 +96,27 @@ class StartStepTests(StockCase):
         self.asa()
         self.assertEqual(self.starts(), [("SEQ-0001", 1, None)])
 
-    def test_a_used_up_lot_does_not_count(self) -> None:
-        """Requirement: Starting from stock (a lot whose amount is above
+    def test_a_used_up_vessel_does_not_count(self) -> None:
+        """Requirement: Starting from stock (a vessel whose amount is above
         zero)."""
         self.asa()
         self.stock("salicylic-acid", "0")
         self.assertEqual(self.starts(), [("SEQ-0001", 1, None)])
 
-    def test_a_bought_lot_counts(self) -> None:
+    def test_a_bought_vessel_counts(self) -> None:
         """Requirement: Starting from stock (whatever its source)."""
         self.asa()
         self.stock("salicylic-acid", source="bought", supplier="ChemPur")
         self.assertEqual(self.starts(), [("SEQ-0001", 2, "salicylic-acid")])
 
-    def test_any_one_open_lot_is_enough(self) -> None:
-        """Requirement: Starting from stock (has an open lot)."""
+    def test_any_one_open_vessel_is_enough(self) -> None:
+        """Requirement: Starting from stock (has an open vessel)."""
         self.asa()
         self.stock("salicylic-acid", "0")
         self.stock("salicylic-acid", "0.001")
         self.assertEqual(self.starts(), [("SEQ-0001", 2, "salicylic-acid")])
 
-    def test_a_lot_of_another_substance_does_not_count(self) -> None:
+    def test_a_vessel_of_another_substance_does_not_count(self) -> None:
         """Requirement: Starting from stock (the intermediate of step
         `k - 1`, not any substance the sequence mentions)."""
         self.asa()
@@ -169,7 +169,7 @@ class StartStepTests(StockCase):
         self.assertEqual(self.starts("CH-0012"),
                          [("SEQ-0003", 1, None), ("SEQ-0004", 1, None)])
 
-    def test_the_latest_step_with_a_lot_is_proposed(self) -> None:
+    def test_the_latest_step_with_a_vessel_is_proposed(self) -> None:
         """Requirement: Starting from stock (the last step `k`)."""
         self.cinnamic()
         self.stock("benzaldehyde")
@@ -183,7 +183,7 @@ class StartStepTests(StockCase):
     def test_a_later_intermediate_alone_skips_the_earlier_steps(
             self) -> None:
         """Requirement: Starting from stock (the last step `k` such that
-        the intermediate of step `k - 1` has an open lot, whether or
+        the intermediate of step `k - 1` has an open vessel, whether or
         not an earlier one has)."""
         self.cinnamic()
         self.stock("ethyl-cinnamate")
@@ -202,7 +202,7 @@ class StartStepTests(StockCase):
     def test_plan_synthesis_stays_a_flag(self) -> None:
         """Requirement: Planning list (the synthesis action is offered
         when the priority is high or medium, no task is planned or
-        running and every open lot converts)."""
+        running and every open vessel converts)."""
         self.asa()
         self.stock("salicylic-acid")
         plan = Plan(TODAY)

@@ -1,6 +1,7 @@
-"""Tests of the item, bulk and delivery lists (end-product-inventory: Item
-list, Bulk list, Delivery list)."""
+"""Tests of the item, batch, vessel and delivery lists (end-product-
+inventory: Item list, Batch list, Vessel list, Delivery list)."""
 
+import re
 from datetime import date, datetime, timezone
 from urllib.parse import quote
 
@@ -8,11 +9,12 @@ from inventory.bookings import book_note, reverse, reverse_historical
 
 from . import field_value, frozen, make_substance, page, table
 from .collection_support import accept
-from .inventory_support import (BULK, COMPOUND_PAGE, DELIVERIES, LEVELS, LIST,
-                                MICRO, NEW_ITEM, NEW_LOT, NEW_NOTE,
-                                SUBSTANCE_PAGE, InventoryCase, has_amount,
-                                has_number, item_url, note_blocks, note_url,
-                                num)
+from .inventory_support import (BATCHES, COMPOUND_PAGE, DELIVERIES, LEVELS,
+                                LIST, MICRO, NEW_BATCH, NEW_ITEM, NEW_NOTE,
+                                SUBSTANCE_PAGE, VESSELS, InventoryCase,
+                                batch_url, has_amount, has_number, item_url,
+                                note_blocks, note_url, num, vessel_url)
+from .journal_support import entry_of, make_notebook
 
 COLUMNS_DE = ["Artikelnr.", "Name", "Kategorie", "Gebinde", "Bestand",
               "Ø Jahr", "Abgegeben", "Reichweite", "Fach", "Box",
@@ -20,10 +22,14 @@ COLUMNS_DE = ["Artikelnr.", "Name", "Kategorie", "Gebinde", "Bestand",
 COLUMNS_EN = ["Article no.", "Name", "Category", "Container", "Stock",
               "Mean per year", "Delivered", "Coverage", "Compartment",
               "Box", "Bulk available", "Note"]
-BULK_DE = ["Name", "Artikelnr.", "Herkunft", "Charge", "Menge", "Ort",
-           "Datum", "Bemerkung"]
-BULK_EN = ["Name", "Article no.", "Source", "Batch", "Amount", "Location",
-           "Date", "Note"]
+BATCHES_DE = ["Charge", "Name", "Artikelnr.", "Herkunft", "Laborjournal",
+              "Datum", "Ausbeute", "Bestand"]
+BATCHES_EN = ["Batch", "Name", "Article no.", "Source", "Lab notebook",
+              "Date", "Yield", "Stock"]
+VESSELS_DE = ["Gefäß", "Name", "Artikelnr.", "Art", "Charge", "Herkunft",
+              "Menge", "Ort", "Datum", "Bemerkung"]
+VESSELS_EN = ["Vessel", "Name", "Article no.", "Kind", "Batch", "Source",
+              "Amount", "Location", "Date", "Note"]
 
 
 class ListCase(InventoryCase):
@@ -326,7 +332,8 @@ class ItemListFurnishingTests(ListCase):
 
 class SectionTabTests(ListCase):
 
-    TABS = [(LIST, "Artikel"), (BULK, "Bulk"), (DELIVERIES, "Lieferungen")]
+    TABS = [(LIST, "Artikel"), (BATCHES, "Chargen"), (VESSELS, "Gefäße"),
+            (DELIVERIES, "Lieferungen")]
 
     def tabs(self, path: str):
         response = self.client.get(path)
@@ -335,7 +342,7 @@ class SectionTabTests(ListCase):
         self.assertIsNotNone(nav, f"{path} has no section tabs")
         return nav.find_all("a")
 
-    def test_the_three_lists_carry_the_tabs(self) -> None:
+    def test_the_four_lists_carry_the_tabs(self) -> None:
         for current, _ in self.TABS:
             with self.subTest(path=current):
                 links = self.tabs(current)
@@ -349,13 +356,218 @@ class SectionTabTests(ListCase):
     def test_english_tabs(self) -> None:
         accept(language="en")
         self.assertEqual([a.text() for a in self.tabs(LIST)],
-                         ["Items", "Bulk", "Deliveries"])
+                         ["Items", "Batches", "Vessels", "Deliveries"])
 
 
-class BulkListTests(InventoryCase):
+class OldAddressTests(InventoryCase):
+    """Requirement: Bulk list (removed): the old addresses are gone."""
+
+    def test_the_old_addresses_answer_404(self) -> None:
+        vessel = self.vessel("CH-0012")
+        self.client.force_login(self.kl)
+        for path in ("/lab/inventory/end-products/bulk/",
+                     "/lab/inventory/bulk/", "/lab/inventory/bulk/new/",
+                     f"/lab/inventory/bulk/{vessel.pk}/",
+                     f"/lab/inventory/bulk/{vessel.pk}/edit/",
+                     f"/lab/inventory/bulk/{vessel.pk}/correct/",
+                     f"/lab/inventory/bulk/{vessel.pk}/withdraw/",
+                     "/lab/inventory/bulk/movements/1/reverse/"):
+            with self.subTest(path=path):
+                self.assertEqual(self.client.get(path).status_code, 404)
+
+
+class BatchListTests(InventoryCase):
 
     def listing(self, query: str = ""):
-        response = self.client.get(BULK + query)
+        response = self.client.get(BATCHES + query)
+        self.assertEqual(response.status_code, 200)
+        return page(response)
+
+    def rows(self, query: str = "") -> dict[str, dict]:
+        """The rows by the batch as it shows."""
+        header, rows = table(self.listing(query))
+        return {r["Charge"].text(): r for r in rows}
+
+    def numbers(self, query: str = "") -> list[str]:
+        header, rows = table(self.listing(query))
+        return [r["Charge"].text() for r in rows]
+
+    def test_columns(self) -> None:
+        self.batch()
+        self.assertEqual(table(self.listing())[0], BATCHES_DE)
+
+    def test_english_columns(self) -> None:
+        accept(language="en")
+        self.batch()
+        self.assertEqual(table(self.listing())[0], BATCHES_EN)
+
+    def test_batches_of_either_source(self) -> None:
+        """Scenario: Batches of either source."""
+        from . import make_batch, make_task, make_vessel, past
+        make_notebook("AE-1", self.kl)
+        self.item("CH-0012", name="Zimtsäure")
+        task = make_task(self.kl, "CH-0012", steps=1, started=past(1))
+        made = make_batch(
+            self.kl, "CH-0012", number="KL0412", date=date(2026, 10, 30),
+            task_step=task.steps.get(), journal_entry=entry_of("AE-1/9"),
+            yield_amount="2", yield_unit="g")
+        make_vessel(self.kl, made, unit="g", amount="2")
+        bought = make_batch(
+            self.kl, "acetophenone", source="bought", supplier="Sigma",
+            supplier_batch="MKCK1234", date=date(2026, 11, 2))
+        header, rows = table(self.listing())
+        self.assertEqual([r["Charge"].text() for r in rows],
+                         ["MKCK1234", "KL0412"])
+        first, second = rows
+        self.assertEqual(first["Artikelnr."].text(), "")
+        self.assertEqual(first["Herkunft"].text(), "gekauft · Sigma")
+        self.assertEqual(first["Bestand"].text(), "–")
+        self.assertEqual([a.get("href") for a in first["Charge"].find_all(
+            "a")], [batch_url(bought)])
+        self.assertEqual(second["Artikelnr."].text(), "CH-0012")
+        self.assertEqual(second["Herkunft"].text(),
+                         f"hergestellt · {task.number}")
+        self.assertEqual([a.get("href") for a in second["Herkunft"].find_all(
+            "a")], [f"/lab/tasks/{task.number}/"])
+        self.assertEqual(second["Laborjournal"].text(), "AE-1/9")
+        self.assertEqual([a.get("href") for a in second[
+            "Laborjournal"].find_all("a")], ["/lab/journal/AE-1/"])
+        self.assertEqual(second["Datum"].text(), "30.10.2026")
+        self.assertTrue(has_amount(second["Ausbeute"].text(), "2", "g"))
+        self.assertTrue(has_amount(second["Bestand"].text(), "2", "g"))
+        self.assertEqual([a.get("href") for a in second["Charge"].find_all(
+            "a")], [batch_url(made)])
+        self.assertEqual(second["Name"].text(), "Zimtsäure")
+        self.assertEqual([a.get("href") for a in second["Name"].find_all(
+            "a")], ["/lab/registry/substances/cinnamic-acid/"])
+
+    def test_the_source_and_the_supplier(self) -> None:
+        self.batch("X-1", number="B-M", source="made")
+        self.batch("X-1", source="bought", supplier_batch="B-B")
+        self.batch("X-1", source="bought", supplier="Sigma",
+                   supplier_batch="B-S")
+        rows = self.rows()
+        self.assertEqual(rows["B-M"]["Herkunft"].text(), "hergestellt")
+        self.assertEqual(rows["B-B"]["Herkunft"].text(), "gekauft")
+        self.assertEqual(rows["B-S"]["Herkunft"].text(), "gekauft · Sigma")
+
+    def test_the_source_in_english(self) -> None:
+        accept(language="en")
+        self.batch("X-1", number="B-M", source="made")
+        self.batch("X-1", source="bought", supplier="Sigma",
+                   supplier_batch="B-S")
+        rows = {r["Batch"].text(): r for r in table(self.listing())[1]}
+        self.assertEqual(rows["B-M"]["Source"].text(), "made")
+        self.assertEqual(rows["B-S"]["Source"].text(), "bought · Sigma")
+
+    def test_a_made_batch_without_a_step_names_no_task(self) -> None:
+        self.batch("X-1", number="B-M")
+        row = self.rows()["B-M"]
+        self.assertEqual(row["Herkunft"].text(), "hergestellt")
+        self.assertEqual(row["Herkunft"].find_all("a"), [])
+
+    def test_a_bought_batch_without_a_supplier_batch_shows_its_id(
+            self) -> None:
+        batch = self.batch("X-1", source="bought", supplier="Sigma")
+        self.assertIn(f"#{batch.pk}", self.rows())
+
+    def test_batches_of_an_intermediate_have_no_article_number(self) -> None:
+        self.item("CH-0012", name="Zimtsäure")
+        self.batch("acetophenone", number="B-I")
+        self.batch("CH-0012", source="bought", supplier="Sigma",
+                   supplier_batch="B-C")
+        rows = self.rows()
+        self.assertEqual(rows["B-I"]["Artikelnr."].text(), "")
+        self.assertEqual(rows["B-C"]["Artikelnr."].text(), "CH-0012")
+
+    def test_the_article_of_an_article_without_a_number_is_empty(
+            self) -> None:
+        self.item(None, "Ohne Nummer")
+        self.batch("Ohne Nummer", number="B-N")
+        self.assertEqual(self.rows()["B-N"]["Artikelnr."].text(), "")
+
+    def test_the_stock_is_the_amount_in_the_open_vessels_by_unit(
+            self) -> None:
+        from . import make_vessel
+        batch = self.batch("X-1", number="B-S")
+        make_vessel(self.kl, batch, unit="g", amount="1", flask=True)
+        make_vessel(self.kl, batch, unit="g", amount="0.5", location="A")
+        make_vessel(self.kl, batch, unit="mg", amount="30", location="B")
+        make_vessel(self.kl, batch, unit="mg", amount="0", location="C")
+        text = self.rows()["B-S"]["Bestand"].text()
+        self.assertTrue(has_amount(text, "1,5", "g"), text)
+        self.assertTrue(has_amount(text, "30", "mg"), text)
+
+    def test_a_batch_with_only_used_up_vessels_shows_a_dash(self) -> None:
+        from . import make_vessel
+        batch = self.batch("X-1", number="B-U")
+        make_vessel(self.kl, batch, amount="0")
+        self.assertEqual(self.rows()["B-U"]["Bestand"].text(), "–")
+
+    def test_the_yield_shows_three_places_rounded_half_up(self) -> None:
+        self.batch("X-1", number="B-1", yield_amount="7.4085",
+                   yield_unit="mg")
+        self.assertTrue(has_amount(self.rows()["B-1"]["Ausbeute"].text(),
+                                   "7,409", "mg"))
+
+    def test_rows_are_ordered_by_date_newest_first_and_undated_last(
+            self) -> None:
+        self.batch("X-1", number="B-OLD", date=date(2020, 1, 1))
+        self.batch("X-1", number="B-NEW", date=date(2026, 5, 1))
+        self.batch("X-1", number="B-NONE1")
+        self.batch("X-1", number="B-NONE2")
+        self.batch("X-1", number="B-MID", date=date(2025, 1, 1))
+        self.assertEqual(self.numbers(), ["B-NEW", "B-MID", "B-OLD",
+                                          "B-NONE2", "B-NONE1"])
+
+    def test_every_batch_is_listed_with_or_without_vessels(self) -> None:
+        self.batch("X-1", number="B-1")
+        self.vessel("X-2", number="B-2")
+        self.assertEqual(sorted(self.numbers()), ["B-1", "B-2"])
+
+    def test_searching_batches(self) -> None:
+        """Scenario: Searching batches."""
+        self.batch("CH-0012", number="KL0412", date=date(2026, 10, 30))
+        self.batch("acetophenone", source="bought", supplier="Sigma",
+                   supplier_batch="MKCK1234", date=date(2026, 11, 2))
+        self.assertEqual(self.numbers("?q=kl04"), ["KL0412"])
+        self.assertEqual(self.numbers("?q=sigma"), ["MKCK1234"])
+
+    def test_the_search_covers_number_supplier_batch_supplier_and_substance(
+            self) -> None:
+        self.batch("CH-0012", number="KL0412")
+        self.batch("acetophenone", source="bought", supplier="Merck",
+                   supplier_batch="ZZ99")
+        cases = {"kl0412": ["KL0412"], "KL04": ["KL0412"],
+                 "zz9": ["ZZ99"], "merck": ["ZZ99"], "MERCK": ["ZZ99"],
+                 "cinnamic": ["KL0412"], "zimt": ["KL0412"],
+                 "acetophenone": ["ZZ99"], "nichts": []}
+        for text, want in cases.items():
+            with self.subTest(q=text):
+                self.assertEqual(self.numbers(f"?q={quote(text)}"), want)
+
+    def test_the_form_keeps_its_value(self) -> None:
+        self.batch("X-1", number="KL1")
+        self.assertEqual(field_value(self.listing("?q=kl"), "q"), "kl")
+
+    def test_the_link_to_a_new_batch_is_for_signed_in_users(self) -> None:
+        self.batch()
+        self.assertIsNone(self.listing().find("a", href=NEW_BATCH))
+        self.client.force_login(self.kl)
+        links = self.listing().find_all("a", href=NEW_BATCH)
+        self.assertEqual([a.text() for a in links], ["Neue Charge"])
+
+    def test_the_english_link(self) -> None:
+        accept(language="en")
+        self.client.force_login(self.kl)
+        links = self.listing().find_all("a", href=NEW_BATCH)
+        self.assertEqual([a.text() for a in links], ["New batch"])
+
+
+class VesselListTests(InventoryCase):
+
+    def listing(self, query: str = ""):
+        response = self.client.get(VESSELS + query)
         self.assertEqual(response.status_code, 200)
         return page(response)
 
@@ -369,23 +581,30 @@ class BulkListTests(InventoryCase):
         return [r["Charge"].text() for r in rows]
 
     def test_columns(self) -> None:
-        self.lot()
-        self.assertEqual(table(self.listing())[0], BULK_DE)
+        self.vessel()
+        self.assertEqual(table(self.listing())[0], VESSELS_DE)
 
     def test_english_columns(self) -> None:
         accept(language="en")
-        self.lot()
-        self.assertEqual(table(self.listing())[0], BULK_EN)
+        self.vessel()
+        self.assertEqual(table(self.listing())[0], VESSELS_EN)
 
     def test_a_row(self) -> None:
         self.item("CH-0012", name="Zimtsäure")
-        self.lot("CH-0012", "mg", "50", batch="B-1", location="Kühlraum",
-                 made_on=date(2026, 10, 1), note="Rest")
+        vessel = self.vessel(
+            "CH-0012", "mg", "50", number="B-1", location="Kühlraum",
+            date=date(2026, 10, 1), note="Rest")
         row = self.rows()["B-1"]
+        self.assertEqual(row["Gefäß"].text(), f"#{vessel.pk}")
+        self.assertEqual([a.get("href") for a in row["Gefäß"].find_all("a")],
+                         [vessel_url(vessel)])
         self.assertEqual(row["Artikelnr."].text(), "CH-0012")
         self.assertEqual(row["Name"].text(), "Zimtsäure")
         self.assertEqual([a.get("href") for a in row["Name"].find_all("a")],
                          ["/lab/registry/substances/cinnamic-acid/"])
+        self.assertEqual(row["Art"].text(), "Endprodukt")
+        self.assertEqual([a.get("href") for a in row["Charge"].find_all(
+            "a")], [batch_url(vessel.batch)])
         self.assertEqual(row["Herkunft"].text(), "hergestellt")
         self.assertTrue(has_amount(row["Menge"].text(), "50", "mg"))
         self.assertEqual(row["Ort"].text(), "Kühlraum")
@@ -393,80 +612,137 @@ class BulkListTests(InventoryCase):
         self.assertEqual(row["Bemerkung"].text(), "Rest")
 
     def test_the_source_and_the_supplier(self) -> None:
-        self.lot("X-1", batch="B-M", source="made")
-        self.lot("X-1", batch="B-B", source="bought")
-        self.lot("X-1", batch="B-S", source="bought", supplier="Sigma")
+        self.vessel("X-1", number="B-M", source="made")
+        self.vessel("X-1", source="bought", supplier_batch="B-B")
+        self.vessel("X-1", source="bought", supplier="Sigma",
+                    supplier_batch="B-S")
         rows = self.rows()
         self.assertEqual(rows["B-M"]["Herkunft"].text(), "hergestellt")
         self.assertEqual(rows["B-B"]["Herkunft"].text(), "gekauft")
         self.assertEqual(rows["B-S"]["Herkunft"].text(), "gekauft · Sigma")
 
-    def test_the_source_in_english(self) -> None:
-        accept(language="en")
-        self.lot("X-1", batch="B-M", source="made")
-        self.lot("X-1", batch="B-S", source="bought", supplier="Sigma")
-        rows = {r["Batch"].text(): r for r in table(self.listing())[1]}
-        self.assertEqual(rows["B-M"]["Source"].text(), "made")
-        self.assertEqual(rows["B-S"]["Source"].text(), "bought · Sigma")
-
-    def test_lots_of_an_intermediate(self) -> None:
-        """Scenario: Lots of an intermediate."""
-        self.item("CH-0012", name="Zimtsäure")
-        self.lot("acetophenone", batch="B-I", source="made")
-        self.lot("CH-0012", batch="B-C", source="bought", supplier="Sigma")
-        rows = self.rows()
-        self.assertEqual(rows["B-I"]["Artikelnr."].text(), "")
-        self.assertEqual(rows["B-I"]["Herkunft"].text(), "hergestellt")
-        self.assertEqual(rows["B-C"]["Artikelnr."].text(), "CH-0012")
-        self.assertEqual(rows["B-C"]["Herkunft"].text(), "gekauft · Sigma")
-
-    def test_the_article_of_an_article_without_a_number_is_empty(
-            self) -> None:
-        self.item(None, "Ohne Nummer")
-        self.lot("Ohne Nummer", batch="B-N")
-        self.assertEqual(self.rows()["B-N"]["Artikelnr."].text(), "")
-
-    def test_the_amount_shows_in_the_unit_of_the_lot(self) -> None:
-        self.lot("X-1", "g", "1", batch="B-G")
-        self.lot("X-1", "mmol", "2.5", batch="B-M")
+    def test_the_amount_shows_in_the_unit_of_the_vessel(self) -> None:
+        self.vessel("X-1", "g", "1", number="B-G")
+        self.vessel("X-1", "mmol", "2.5", number="B-M")
         rows = self.rows()
         self.assertTrue(has_amount(rows["B-G"]["Menge"].text(), "1", "g"))
         self.assertTrue(
             has_amount(rows["B-M"]["Menge"].text(), "2,5", "mmol"))
 
     def test_the_amount_shows_three_places_rounded_half_up(self) -> None:
-        self.lot("X-1", "mg", "7.4085", batch="B-1")
+        self.vessel("X-1", "mg", "7.4085", number="B-1")
         self.assertTrue(has_amount(self.rows()["B-1"]["Menge"].text(),
                                    "7,409", "mg"))
 
     def test_the_name_is_the_substances(self) -> None:
-        self.lot("X-1", "mg", "5", batch="B-1")
+        self.vessel("X-1", "mg", "5", number="B-1")
         self.assertEqual(self.rows()["B-1"]["Name"].text(), "X-1")
 
-    def test_rows_are_ordered_by_name_then_date(self) -> None:
+    def test_rows_are_ordered_by_name_then_batch_date_then_id(self) -> None:
         beta = make_substance("s1", "beta")
         alpha = make_substance("s2", "Alpha")
         gamma = make_substance("s3", "Gamma")
-        self.lot(substance=gamma, batch="B-3", made_on=date(2020, 1, 1))
-        self.lot(substance=beta, batch="B-2")
-        self.lot(substance=beta, batch="B-1", made_on=date(2025, 1, 1))
-        self.lot(substance=alpha, batch="B-0", made_on=date(2026, 5, 1))
-        self.assertEqual(self.batches(), ["B-0", "B-1", "B-2", "B-3"])
+        self.vessel(substance=gamma, number="B-3", date=date(2020, 1, 1))
+        self.vessel(substance=beta, number="B-2")
+        self.vessel(substance=beta, number="B-1", date=date(2025, 1, 1))
+        self.vessel(substance=alpha, number="B-0", date=date(2026, 5, 1))
+        self.vessel(substance=beta, number="B-2b")
+        self.assertEqual(self.batches(),
+                         ["B-0", "B-1", "B-2", "B-2b", "B-3"])
 
-    def test_used_up_lots(self) -> None:
-        """Scenario: Used-up lots."""
-        self.lot("X-1", "mg", "5", batch="B-OPEN")
-        self.lot("X-1", "mg", "0", batch="B-USED")
+    def test_used_up_vessels(self) -> None:
+        """Scenario: Used-up vessels."""
+        self.vessel("X-1", "mg", "5", number="B-OPEN")
+        self.vessel("X-1", "mg", "0", number="B-USED")
         self.assertEqual(self.batches(), ["B-OPEN"])
         self.assertEqual(sorted(self.batches("?empty=1")),
                          ["B-OPEN", "B-USED"])
 
-    def test_the_link_to_a_new_lot_is_for_signed_in_users(self) -> None:
-        self.lot()
-        self.assertIsNone(self.listing().find("a", href=NEW_LOT))
+    def test_a_flask_is_listed_with_its_kind(self) -> None:
+        self.vessel("X-1", "g", "2", number="B-F", flask=True)
+        row = self.rows()["B-F"]
+        self.assertEqual(row["Art"].text(), "Kolben")
+        self.assertEqual(row["Ort"].text(), "")
+
+    def test_vessels_by_kind(self) -> None:
+        """Scenario: Vessels by kind."""
+        self.item("CH-0012", name="Zimtsäure")
+        from . import make_batch, make_vessel
+        made = make_batch(self.kl, "CH-0012", number="KL0412")
+        make_vessel(self.kl, made, unit="g", amount="2", flask=True)
+        self.vessel("acetophenone", number="B-I")
+        self.vessel("acetophenone", source="bought", supplier="Sigma",
+                    supplier_batch="B-R")
+        rows = self.rows()
+        self.assertEqual({k: v["Art"].text() for k, v in rows.items()},
+                         {"KL0412": "Kolben", "B-I": "Zwischenprodukt",
+                          "B-R": "Reagenz"})
+        self.assertEqual(rows["KL0412"]["Artikelnr."].text(), "CH-0012")
+        self.assertEqual(rows["B-I"]["Artikelnr."].text(), "")
+        self.assertEqual(rows["B-R"]["Artikelnr."].text(), "")
+        self.assertEqual(rows["B-R"]["Herkunft"].text(), "gekauft · Sigma")
+        self.assertEqual(self.batches("?kind=reagent"), ["B-R"])
+
+    def test_every_kind_has_its_filter(self) -> None:
+        self.item("CH-0012", name="Zimtsäure")
+        from . import make_batch, make_vessel
+        made = make_batch(self.kl, "CH-0012", number="KL0412")
+        make_vessel(self.kl, made, unit="g", amount="2", flask=True)
+        make_vessel(self.kl, made, unit="g", amount="1", location="Regal")
+        self.vessel("acetophenone", number="B-I")
+        self.vessel("acetophenone", source="bought", supplier_batch="B-R")
+        cases = {"flask": ["KL0412"], "end-product": ["KL0412"],
+                 "intermediate": ["B-I"], "reagent": ["B-R"]}
+        for kind, want in cases.items():
+            with self.subTest(kind=kind):
+                self.assertEqual(self.batches(f"?kind={kind}"), want)
+        self.assertEqual(
+            sorted(self.batches("?kind=flask")
+                   + self.batches("?kind=end-product")), ["KL0412"] * 2)
+
+    def test_another_kind_lists_every_kind(self) -> None:
+        self.vessel("acetophenone", number="B-I")
+        self.vessel("acetophenone", source="bought", supplier_batch="B-R")
+        for query in ("?kind=other", "?kind=", ""):
+            with self.subTest(query=query):
+                self.assertEqual(sorted(self.batches(query)),
+                                 ["B-I", "B-R"])
+
+    def test_the_kind_filter_combines_with_used_up_vessels(self) -> None:
+        self.vessel("acetophenone", "mg", "0", number="B-I")
+        self.vessel("acetophenone", number="B-J")
+        self.assertEqual(self.batches("?kind=intermediate"), ["B-J"])
+        self.assertEqual(sorted(self.batches("?kind=intermediate&empty=1")),
+                         ["B-I", "B-J"])
+
+    def test_the_page_offers_each_kind_and_shows_the_one_in_force(
+            self) -> None:
+        self.vessel("acetophenone", number="B-I")
+        root = self.listing("?kind=reagent")
+        controls = [el for el in root.find("main").find_all(
+            ("a", "option", "input"))
+            if el.closest("nav") is None]
+        offered = set()
+        for el in controls:
+            offered.update(re.findall(r"kind=([a-z-]+)", el.get("href", "")))
+            if el.tag != "a" and el.get("value"):
+                offered.add(el.get("value"))
+        self.assertLessEqual({"flask", "end-product", "intermediate",
+                              "reagent"}, offered)
+        marked = [el for el in controls
+                  if {"aria-current", "selected", "checked"} & set(el.attrs)]
+        shown = " ".join(el.get("href", "") + el.get("value", "")
+                         for el in marked)
+        self.assertIn("reagent", shown)
+        for other in ("flask", "end-product", "intermediate"):
+            self.assertNotIn(other, shown)
+
+    def test_the_link_to_a_new_batch_is_for_signed_in_users(self) -> None:
+        self.vessel()
+        self.assertIsNone(self.listing().find("a", href=NEW_BATCH))
         self.client.force_login(self.kl)
-        links = self.listing().find_all("a", href=NEW_LOT)
-        self.assertEqual([a.text() for a in links], ["Neues Bulk"])
+        links = self.listing().find_all("a", href=NEW_BATCH)
+        self.assertEqual([a.text() for a in links], ["Neue Charge"])
 
 
 class DeliveryListTests(InventoryCase):

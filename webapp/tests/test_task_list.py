@@ -5,9 +5,10 @@ from urllib.parse import quote
 
 from django.test import TestCase
 
-from . import (field_value, make_task, make_user, numbers, page, past, table,
-               task_url)
+from . import (field_value, make_batch, make_task, make_user, numbers, page,
+               past, substance_for, table, task_url)
 from .collection_support import accept
+from .task_support import make_product_batch
 
 COLUMNS_DE = ["Nr.", "Produkt", "Priorität", "Bearbeitung", "Beginn",
               "Ende", "Fortschritt", "Charge", "Bericht", "QC-Liste",
@@ -130,8 +131,8 @@ class ColumnTests(ListCase):
     def test_a_row(self) -> None:
         task = make_task(self.kl, substance="Probe", priority="high",
                          assignee=self.ae, started=date(2025, 11, 3),
-                         steps=5, done=2, batch="B-17",
-                         report=True)
+                         steps=5, done=2, report=True)
+        make_product_batch(task, number="B-17")
         header, rows = table(self.listing())
         row = rows[0]
         link = row["Nr."].find("a")
@@ -155,6 +156,23 @@ class ColumnTests(ListCase):
         self.assertEqual(row["Bericht"].text(), "ja")
         self.assertEqual(row["QC-Liste"].text(), "nein")
         self.assertIn("In Arbeit", row["Status"].text())
+
+    def test_the_batch_column_joins_the_product_batches(self) -> None:
+        """Requirement: Task list (the numbers of its product batches,
+        joined by `, `)."""
+        task = make_task(self.kl, substance="Probe", started=past(1),
+                         steps=2)
+        make_product_batch(task, number="B-17")
+        make_product_batch(task, number="B-18")
+        make_batch(self.kl, substance=substance_for("acetophenone"),
+                   number="B-IM", task_step=task.steps.get(position=1))
+        _, rows = table(self.listing())
+        self.assertEqual(rows[0]["Charge"].text(), "B-17, B-18")
+
+    def test_a_task_without_a_product_batch_has_an_empty_cell(self) -> None:
+        make_task(self.kl, substance="Probe", started=past(1), steps=1)
+        _, rows = table(self.listing())
+        self.assertEqual(rows[0]["Charge"].text(), "")
 
     def test_title_is_the_user_name_without_a_full_name(self) -> None:
         plain = make_user("plain", "PL")
@@ -327,9 +345,11 @@ class FilterTests(ListCase):
             self.make(self.kl, substance="Zimt-Derivat"),
             self.make(self.kl, substance="Aspirin",
                       note="Vorstufe von Zimts\u00e4ure"),
-            self.make(self.kl, substance="Aspirin", batch="ZIMT-7",
+            self.make(self.kl, substance="Aspirin", steps=1,
                       cancelled=True),
         ]
+        make_batch(self.kl, substance=found[4].substance, number="ZIMT-7",
+                   task_step=found[4].steps.get())
         self.make(self.kl, substance="Aspirin")
         self.make(self.ae, substance="CH-0012")
         self.make(None, substance="CH-0012")
@@ -351,12 +371,19 @@ class FilterTests(ListCase):
 
     def test_text_is_found_in_every_field(self) -> None:
         by_product = self.make(None, substance="Ferrocen")
-        by_batch = self.make(None, substance="A", batch="FC-0815")
+        by_batch = self.make(None, substance="A", steps=1)
+        make_batch(self.kl, substance=by_batch.substance, number="FC-0815",
+                   task_step=by_batch.steps.get())
+        by_intermediate = self.make(None, substance="D", steps=1)
+        make_batch(self.kl, substance=substance_for("acetophenone"),
+                   number="FC-0816", task_step=by_intermediate.steps.get())
         by_note = self.make(None, substance="B", note="mit Ferrocen-Rest")
         self.make(None, substance="C")
         self.assertEqual(self.shown("?q=ferrocen"),
                          [by_product.number, by_note.number])
-        self.assertEqual(self.shown("?q=fc-08"), [by_batch.number])
+        self.assertEqual(self.shown("?q=fc-0815"), [by_batch.number])
+        self.assertEqual(self.shown("?q=FC-0816"),
+                         [by_intermediate.number])
 
     def test_text_is_found_in_the_number(self) -> None:
         tasks = [self.make(None) for _ in range(3)]
