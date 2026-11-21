@@ -2661,41 +2661,48 @@ and has no **Enter consumption** or **New bulk lot** link.
 
 Enter items and past quarterly consumption by hand; there is no Excel
 import. The heading **Endprodukte** (**End products**) shows the number
-of items in the whole inventory. The table offers **Artikelnr.**
-(**Article no.**), **Name**, **Kategorie** (**Category**), **Gebinde**
-(**Container**), **Bestand** (**Stock**), **Ø Jahr** (**Mean per year**),
+of items in the whole inventory.
+
+Use the two-part switch above the list to choose **Tabelle** (**Table**)
+to compare items or **Details** to find where the selected item is stored
+and read its consumption figures. The details pane opens beside the
+table or below it in a narrow window.
+
+Both views start with **Artikelnr.** (**Article no.**), **Name**,
+**Kategorie** (**Category**), **Gebinde** (**Container**) and
+**Bestand** (**Stock**), in that order. These five columns are always
+visible and keep the same widths in both views.
+
+**Tabelle** adds **Ø Jahr** (**Mean per year**),
 **Abgegeben** (**Delivered**), **Reichweite** (**Coverage**), **Fach**
 (**Compartment**), **Box**, **Bulk verfügbar** (**Bulk available**) and
-**Bemerkung** (**Note**) in that order. Only **Bemerkung** starts hidden.
-Use **Spalten** (**Columns**) to show it.
+**Bemerkung** (**Note**), in that order. Only **Bemerkung** starts hidden.
+Use **Spalten** (**Columns**) to show or hide these additional columns.
+In **Details**, **Spalten** is unavailable.
 
 **Bestand** counts containers. **Ø Jahr** gives containers per year,
 and **Abgegeben** shows this year's consumption as a plain container
 count. **Reichweite** tells you how many quarters the stock will last at
 the mean rate of consumption. Small lines under these headings show the
-units and the current year for **Abgegeben**. With **Details** off, click
-an article number or the name of an unnumbered item to open its page.
+units and the current year for **Abgegeben**.
 
-To find where an item is stored and read its consumption figures without
-leaving the list, tick **Details** above the table. The pane opens beside
-the table or below it in a narrow window. With the default column
-choices, the table narrows to **Artikelnr.**, **Name**, **Gebinde**,
-**Bestand** and **Reichweite**. Untick **Details** to return to your
-usual table view.
+In either view, select an item with a plain click on its row, away from
+links and the check box. When focus is in the table, press ↑ or ↓ to
+select the previous or next row. A click on a link follows it in either
+view. The article number opens the item page, as does the name of an
+unnumbered item. Use the row's check box to select it for a delivery note.
 
-With **Details** on, click a row or one of its links to choose the item.
-Use the row's check box to select it for a delivery note. Use a modifier
-key such as Ctrl or Command, or the middle mouse button, to follow a
-row link. When focus is in the table, press ↑ or ↓ to choose the previous
-or next row. While details load, the pane dims and you cannot click its
-links. When the details arrive, the list highlights the chosen row and
-updates the address with `detail=<id>`. If loading fails, the pane,
-highlight and address stay on the previous item.
+Selecting a row loads that item's details in either view. While they
+load, the pane dims and its links are unavailable. When the details
+arrive, the list highlights the selected row and updates the address
+with `selected=<id>`. If loading fails, the pane, highlight and address
+stay on the previous item.
 
-Reload or share that address to open the same item with **Details** on.
-The pane shows the first listed item when the address names no item
-in the list. Changing a filter or the sort order also selects the first
-listed item. If the list is empty, the pane shows no item.
+Reloading, filtering, reordering and choosing **Zurücksetzen**
+(**Reset**) keep the selection while the item is listed. If the address
+names no listed item, the list selects its first row. An empty list has
+no selection. Share the address to select the same item in the
+recipient's own view.
 
 The pane shows the item's name, article number when present, container
 size and category when set. It marks new items with **neu** (**new**) and
@@ -2796,26 +2803,27 @@ consumption**) shows the scale from **wenig** (**little**) to **viel**
 (**much**). It is checked by default; uncheck it to hide the consumption
 colours.
 
-To fit more information on screen, use **Spalten** to show or hide any
-column except **Artikelnr.**, **Name** and **Bestand**. **Zeilenhöhe**
-(**Row height**) offers **Kompakt** (**Compact**), the default, and
-**Sehr kompakt** (**Very compact**). Your browser remembers the columns,
-row height, consumption colours and **Details** setting across pages.
-**Details** starts off by default. You can bookmark the address to save
-the filters and sort order separately from those view settings.
+To fit more rows on screen, use **Zeilenhöhe** (**Row height**) to choose
+**Kompakt** (**Compact**), the default, or **Sehr kompakt** (**Very
+compact**). Your browser uses local storage to remember column choices,
+row height and consumption colours across pages. It remembers the view
+in the `item-list-view` cookie, separately from the address. **Tabelle**
+is the default. Bookmark the address to save your filters and sort order.
 
 The **Bestandsstatus**, **Weitere Filter** and **Spalten** menus open beside
 their buttons. Without JavaScript, these menus open in the centre of the
 window. Choose **Filtern** (**Filter**) to apply filter choices. You can
-still change the view for the current page. Choosing another row in
-**Details** requires JavaScript.
+still change the view for the current page. Saving changes to view
+settings and selecting another row by click or arrow key require
+JavaScript in either view. JavaScript also animates the switch when your
+browser supports view transitions and reduced motion is off.
 
 For a long or wide list, scroll inside the table's box. The column headers
 stay at the top, and **Artikelnr.** stays at the left. The box is at most
 the window's height. Printing includes every listed row and uses the
-columns selected in **Spalten**, even with **Details** on. The details
-pane, filter controls, menus, view controls and the note below the table
-stay on screen only.
+columns selected in **Spalten** in either view. The details pane, filter
+controls, menus, view controls and the note below the table stay on
+screen only.
 
 #### Book deliveries and correct counts
 
