@@ -69,6 +69,67 @@ def seed(day: date) -> tuple[str, str]:
         return run()
 
 
+# One write of the data set per test process and day: the first class
+# that needs it writes it and records every table it changed; later
+# classes put those tables' rows back in their own transaction, which
+# takes a fraction of the time the write does.
+_written: dict[date, tuple[tuple[str, str], dict[str, list[tuple]]]] = {}
+
+
+def _tables() -> dict[str, list[tuple]]:
+    """Every row of every table of the test database, by table."""
+    from django.db import connection
+    found = {}
+    with connection.cursor() as cursor:
+        for table in connection.introspection.table_names(cursor):
+            name = connection.ops.quote_name(table)
+            cursor.execute(f"SELECT * FROM {name}")
+            found[table] = cursor.fetchall()
+    return found
+
+
+def _restore(changed: dict[str, list[tuple]]) -> None:
+    """Make each table of CHANGED hold exactly its rows, and move the
+    id sequences past them."""
+    from django.apps import apps
+    from django.core.management.color import no_style
+    from django.db import connection
+    with connection.cursor() as cursor:
+        for table, rows in changed.items():
+            name = connection.ops.quote_name(table)
+            cursor.execute(f"DELETE FROM {name}")
+            if rows:
+                marks = ", ".join(["%s"] * len(rows[0]))
+                cursor.executemany(
+                    f"INSERT INTO {name} VALUES ({marks})", rows)
+        models = [model for model in apps.get_models(
+            include_auto_created=True) if model._meta.db_table in changed]
+        for statement in connection.ops.sequence_reset_sql(no_style(),
+                                                           models):
+            cursor.execute(statement)
+
+
+def seed_once(day: date) -> tuple[str, str]:
+    """Write the data set as of DAY, with the clock at noon of DAY, as
+    ``seed`` does, and return the output and errors of its first write.
+
+    The first call for a day in a test process writes the data set; a
+    later one puts back the rows that write left, so the database holds
+    the same records either way. It must run in a transaction that is
+    rolled back afterwards, as ``setUpTestData`` does, on a database
+    that holds only what the migrations wrote."""
+    if day in _written:
+        output, changed = _written[day]
+        _restore(changed)
+        return output
+    before = _tables()
+    output = seed(day)
+    after = _tables()
+    _written[day] = output, {table: rows for table, rows in after.items()
+                             if rows != before.get(table)}
+    return output
+
+
 def lab_records() -> dict[str, int]:
     """The number of each kind of lab record the database holds."""
     from django.contrib.auth import get_user_model
@@ -110,7 +171,7 @@ class SeededCase(TestCase):
 
     @classmethod
     def setUpTestData(cls) -> None:
-        cls.output = seed(cls.DAY)
+        cls.output = seed_once(cls.DAY)
 
     def setUp(self) -> None:
         self.enterContext(frozen(datetime(
