@@ -10,7 +10,7 @@ The `inventory` package SHALL keep batches (`Chargen`), each a quantity of one s
 - `date` (`Datum`, `Date`), the day it was made or received, or none, never after today;
 - `note`.
 
-The substance, source and `task_step` are fixed once the batch exists. A batch may be of any substance, intermediates and reagents among them, and one substance may have made and bought batches side by side; a journal entry may be named by no batch, one or several. A batch shows as its number, a bought batch as its supplier's batch number, and either, when it has none, as `#<id>`. A batch is recorded from a task step only while the step's task is planned or running, and then names the step's journal entry when the step names one. Its yield shows in its unit to three decimal places, rounded half up. A batch that has vessels cannot be deleted.
+The substance, source and `task_step` are fixed once the batch exists. A batch may be of any substance, intermediates and reagents among them, and one substance may have made and bought batches side by side; a journal entry may be named by no batch, one or several. A batch shows as its number, a bought batch as its supplier's batch number, and either, when it has none, as `#<id>`. A batch is recorded from a task step only while the step's task is planned or running, and then names the step's journal entry when the step names one. Its yield shows in its unit to three decimal places, rounded half up. A batch that has vessels, or that a task step made, cannot be deleted.
 
 #### Scenario: Made and bought batches
 - **WHEN** a signed-in user records a batch of `cinnamic-acid` made in the lab with the number `KL0412FA`, and another bought from `Sigma` with the supplier's article number `C80857` and the supplier's batch `MKCK1234`
@@ -43,7 +43,7 @@ Its amount changes only by its movements, each holding `kind`, `amount`, `amount
 - `remainder` (`Restausbuchung`, `Remainder written off`), a flask's whole amount, booked when the task of its batch's step ends, fails or is cancelled (task-tracker "Task record");
 - `reversal` (`Storno`, `Reversal`), the amount a reversed filling or withdrawal returns, the withdrawal named by `reverses`, each withdrawal reversed at most once.
 
-Vessel movements are never edited or deleted, except that deleting a vessel in the admin deletes its opening movement with it.
+A flask whose task is ended, failed or cancelled stays at zero: a correction of it, and the reversal of a filling or withdrawal from it, are refused. Vessel movements are never edited or deleted, except that deleting a vessel in the admin deletes its opening movement with it.
 
 #### Scenario: Yield into the flask
 - **WHEN** a signed-in user records from the last step of a running task of `cinnamic-acid` a batch `KL0412` with the amount `2` g and no location
@@ -64,6 +64,10 @@ Vessel movements are never edited or deleted, except that deleting a vessel in t
 #### Scenario: Transfer without a molar mass
 - **WHEN** a batch of a substance without a molar mass has a flask in `mg` and a stored vessel in `µmol`, and a signed-in user posts a transfer from the flask into that vessel
 - **THEN** the form shows an error at the target and neither vessel changes
+
+#### Scenario: A closed task's flask stays empty
+- **WHEN** 5 containers of an item were filled from the flask of a batch whose task has since ended, and a signed-in user reverses that filling, and then corrects the flask to `1` g with a note
+- **THEN** both are refused with an error, the item keeps its containers and the flask holds nothing
 
 #### Scenario: Correction of a vessel
 - **WHEN** a signed-in user corrects a vessel of `50` mg to `47,5` mg with the note `nachgewogen`
@@ -414,7 +418,7 @@ A substance is named by its key, offered through a `datalist` of every substance
 - **THEN** the form names the quarter `Q3 2026` and has no field for the year or the quarter, holds the count 400, names 400 as the value a save replaces, and shows the item's chart and its table of quarters, the third quarter's row linking `Ändern` to the form for that quarter; the same request with `?year=2026&quarter=9` opens the form with fields for the year and the quarter and no value named
 
 ### Requirement: Inventory in the admin
-The admin SHALL list articles, items, batches, vessels, delivery notes and the movements for staff, with search by article number and by the substance's key and names, and the change history of each record. It shows movements, delivery notes' dates, kinds and lines, and the fixed fields read-only, an article's number among them once it has one; an article number entered there is given as the edit form gives it, only while the article has none. It deletes no movement or delivery note, deletes an article only while it has no items, deletes an item or vessel only while its one movement is the opening and, for an item, no delivery note has a line of it, and deletes a batch only while it has no vessel.
+The admin SHALL list articles, items, batches, vessels, delivery notes and the movements for staff, with search by article number and by the substance's key and names, and the change history of each record. It shows movements, delivery notes' dates, kinds and lines, and the fixed fields read-only, an article's number among them once it has one; an article number entered there is given as the edit form gives it, only while the article has none. It deletes no movement or delivery note, deletes an article only while it has no items, deletes an item or vessel only while its one movement is the opening and, for an item, no delivery note has a line of it, and deletes a batch only while it has no vessel and no task step made it.
 
 #### Scenario: Deleting a booked item
 - **WHEN** a staff user deletes an item that has a delivery

@@ -105,14 +105,28 @@ reversed; a wrong one is undone by a transfer back or a correction.
 `bookings.fill` takes a required vessel. The rule is enforced by the
 booking and its form, not by a check constraint: a constraint would
 fail the migration on databases that hold fillings without a lot, and
-those exist only in demo data, which `demo_data --replace` rewrites.
+the old filling form allowed them. A filling the migration carries over
+without a vessel movement stays in the item's ledger, shows no vessel,
+and its reversal takes the containers back as before, returning nothing
+to any vessel.
 
 ### Tasks
 
 `Task.batch` goes. A task's batches are the batches whose `task_step`
 is one of its steps; its product batches are those of its substance.
 Ending without failing needs a product batch. A batch can be recorded
-only from a step of a planned or running task. The task list's `Charge`
+only from a step of a planned or running task, so a task needs a step
+to end without failing, and a task entered after the fact is created
+running, its batch recorded, and then ended. The write-off runs in one
+service that the actions, the form's save and the admin's `save_model`
+call inside the transaction that closes the task, after validation, so
+a refused save writes off nothing.
+
+After a flask's task is closed, the flask takes nothing back: a
+correction of it and the reversal of a filling or withdrawal from it are
+refused, so closed stock cannot reappear for filling or planning. A
+batch a step made is never deleted, so an ended task cannot lose its
+product batch. The task list's `Charge`
 column joins the product batches' numbers; its search and the admin's
 search match the numbers of the task's batches.
 
@@ -125,13 +139,28 @@ entry. An entry a batch names is not deleted.
 
 ### Migration
 
-One migration renames `Lot` to `Vessel` and `LotMovement` to
-`VesselMovement`, adds `Batch`, creates one batch per lot (made: the
-lot's batch text as number, `L<id>` when empty, suffixed ` (<id>)` when
-it repeats another made lot's regardless of case; the lot's source,
-supplier, date and step), points each vessel at its batch, drops the
-moved fields and `Task.batch`, and sets `flask` off. Links that only
-the batch text held are not reconstructed; the application has no
+An `inventory` migration renames `Lot` to `Vessel` and `LotMovement`
+to `VesselMovement` in place, so movement ids and the `PROTECT` links
+from item movements and reversals stay intact, and renames
+`HistoricalLot` with them. It adds `Batch` and creates one batch per
+live lot, with the lot's source, supplier, date and step; a made
+batch's number is `L<lot id>`, always unique and short, and the lot's
+batch text, which may be up to 100 characters and need not be unique,
+goes into the batch's note. It points each vessel at its batch, drops
+the moved fields from the vessel and its history, and sets `flask` off.
+A `tasks` migration, depending on it, drops `Task.batch` from the task
+and its history.
+
+The unique constraint on made numbers compares `Lower(number)`; on
+SQLite `lower()` folds ASCII only, so the forms also compare
+`casefold()` before saving, and the constraint is the backstop on
+PostgreSQL. A test migrates a database populated at the previous
+migration (lots of both sources, with and without batch text, a
+filling with and without a lot, a withdrawal and its reversal, a task
+with a batch) and checks the batches, vessels, movement links and
+histories that result. Links that only
+the batch text held are not reconstructed, so a converted ended task
+may lack its product batch; the application has no
 users, and the test server's database is rewritten by
 `demo_data --replace`.
 

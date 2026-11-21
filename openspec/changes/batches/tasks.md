@@ -9,9 +9,10 @@
 - [ ] 1.2 Vessels: the batch's substance, kinds derived (`Kolben`,
   `Endprodukt`, `Zwischenprodukt`, `Reagenz`), at most one flask per
   batch, opening, correction, withdrawal and its reversal, transfer
-  into an existing and into a new vessel, transfer refused into a
-  flask, across unit kinds and above the amount, the `transfer_in`
-  naming the `transfer_out`, atomic conditional updates
+  into an existing and into a new vessel, across unit kinds through the
+  molar mass, refused without one, into a flask and above the amount, the `transfer_in`
+  naming the `transfer_out`, atomic conditional updates; a closed task's flask refusing
+  corrections and reversals; a batch made by a step never deleted
   (`test_inventory_vessels.py`, replacing `test_inventory_bulk.py`
   and `test_inventory_withdrawals.py`)
 - [ ] 1.3 Filling: a vessel required by the booking and the form, the
@@ -36,8 +37,12 @@
   `test_inventory_lists.py`)
 - [ ] 1.6 Tasks: no `batch` field; ending needs a product batch by
   action and by form; `fail` only without one; end, fail and a
-  cancelling save write off flasks with a `remainder` dated today, the
-  end message naming the amounts; the list's `Charge` column and `q`
+  form and admin saves that end, fail or cancel write off flasks with a
+  `remainder` dated today, also for a backdated end and for an
+  intermediate's flask on failure, the end message naming the amounts;
+  a refused save leaving task and flask unchanged; ending refused
+  without a step; the steps total refused where it would remove a step
+  that made a batch or took a withdrawal; the list's `Charge` column and `q`
   over batch numbers; the page's product batches, per-step batches
   with flask and stored amounts, `Charge erfassen`, no `Als Bulk
   erfassen`; a sequence change refused once a step made a batch; the
@@ -62,7 +67,10 @@
   entry, a bought batch with supplier fields, a transfer from a flask,
   no flask of a closed task holding an amount, the demo planning
   unchanged on every seeding day (`test_demo_records.py`,
-  `test_demo_changes.py`, `test_demo_days.py`)
+  `test_demo_changes.py`, `test_demo_days.py`); `--replace` deletes
+  batches, those without vessels among them (`test_demo_command.py`)
+- [ ] 1.12 Migration: a database populated at the previous migration
+  migrates as design.md states (`test_migration_batches.py`)
 
 ## 2. Implementation
 
@@ -102,7 +110,8 @@
 - [ ] 4.1 Both suites pass on CI
 - [ ] 4.2 On the test server after `demo_data --replace`: record a
   batch from a step into the flask, fill containers from it, transfer
-  the rest, end the task and see the remainder; the vessel list's
+  part of the rest into a stored vessel, end the task and see the
+  remainder written off; the vessel list's
   kinds; a notebook page's batches
 
 ## 5. Review and archive
