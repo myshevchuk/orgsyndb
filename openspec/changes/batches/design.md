@@ -53,7 +53,7 @@ replaces `bulk_movement`. All stay in `inventory`.
 
 `Batch`: `substance` (fixed), `source` (`made`/`bought`, fixed),
 `number` (made: required, at most 30 characters, unique among made
-batches by `Lower(number)`; bought: empty), `journal_entry` (made,
+batches regardless of case (Batch numbers regardless of case); bought: empty), `journal_entry` (made,
 optional), `task_step` (made, optional, fixed), `date`, `yield_amount`
 and `yield_unit` (made, optional), `supplier`,
 `supplier_article_number` and `supplier_batch` (bought, at most 100, 50
@@ -102,13 +102,9 @@ reversed; a wrong one is undone by a transfer back or a correction.
 
 ### Fillings
 
-`bookings.fill` takes a required vessel. The rule is enforced by the
-booking and its form, not by a check constraint: a constraint would
-fail the migration on databases that hold fillings without a lot, and
-the old filling form allowed them. A filling the migration carries over
-without a vessel movement stays in the item's ledger, shows no vessel,
-and its reversal takes the containers back as before, returning nothing
-to any vessel.
+`bookings.fill` takes a required vessel, and a check constraint
+requires a vessel movement on every filling; the migration leaves no
+filling without one (Migration).
 
 ### Tasks
 
@@ -120,7 +116,9 @@ to end without failing, and a task entered after the fact is created
 running, its batch recorded, and then ended. The write-off runs in one
 service that the actions, the form's save and the admin's `save_model`
 call inside the transaction that closes the task, after validation, so
-a refused save writes off nothing.
+a refused save writes off nothing. A task's substance is fixed once one
+of its steps made a batch, since the batch's substance and step are
+fixed.
 
 After a flask's task is closed, the flask takes nothing back: a
 correction of it and the reversal of a filling or withdrawal from it are
@@ -139,30 +137,42 @@ entry. An entry a batch names is not deleted.
 
 ### Migration
 
-An `inventory` migration renames `Lot` to `Vessel` and `LotMovement`
-to `VesselMovement` in place, so movement ids and the `PROTECT` links
-from item movements and reversals stay intact, and renames
-`HistoricalLot` with them. It adds `Batch` and creates one batch per
-live lot, with the lot's source, supplier, date and step; a made
-batch's number is `L<lot id>`, always unique and short, and the lot's
-batch text, which may be up to 100 characters and need not be unique,
-goes into the batch's note. It points each vessel at its batch, drops
-the moved fields from the vessel and its history, and sets `flask` off.
-A `tasks` migration, depending on it, drops `Task.batch` from the task
-and its history.
-
-The unique constraint on made numbers compares `Lower(number)`; on
-SQLite `lower()` folds ASCII only, so the forms also compare
-`casefold()` before saving, and the constraint is the backstop on
-PostgreSQL. A test migrates a database populated at the previous
-migration (lots of both sources, with and without batch text, a
-filling with and without a lot, a withdrawal and its reversal, a task
-with a batch) and checks the batches, vessels, movement links and
-histories that result. Links that only
-the batch text held are not reconstructed, so a converted ended task
-may lack its product batch; the application has no
+The migrations empty the stock and task records instead of converting
+them: delivery notes with their lines, item movements, entered
+consumption, items, lots with their movements, and tasks with their
+steps, each with its change history, and they reset the task counter.
+Articles, substances, vocabularies, notebooks and journal entries stay.
+Converting lots would carry states the new rules forbid into the new
+tables: a failed task whose step made a lot of its product would gain a
+product batch, an ended task linked to its lot only by text would lose
+it, lot history would hold origins no batch keeps, and fillings without
+a lot would need a ledger rule of their own. The application has no
 users, and the test server's database is rewritten by
-`demo_data --replace`.
+`demo_data --replace` after deploy, as after the migration of
+`tasks-on-imports`.
+
+An `inventory` migration deletes those records, drops `Lot`,
+`LotMovement` and their history, and creates `Batch`, `Vessel` and
+`VesselMovement`; a `tasks` migration, depending on it, drops
+`Task.batch` from the task and its history.
+
+### Batch numbers regardless of case
+
+`Batch.number_key`, not editable, holds `number.casefold()` for a made
+batch and is empty for a bought one; a unique constraint on it among
+made batches enforces the rule on SQLite and PostgreSQL alike, where a
+constraint on `Lower(number)` would not fold `ß` or non-ASCII letters
+on SQLite.
+
+### Bookings against a closing task
+
+Recording a batch from a step, and every booking on a flask, lock the
+task's row (`select_for_update`) and check in that transaction that the
+task is open, or for a flask's correction or reversal that it is, as
+the withdrawal booking already checks a step's task. Closing a task
+takes the same lock before writing off, so a booking validated while
+the task was open and stored after it closed is refused. The demo
+seeder closes its tasks through the same service.
 
 ## Risks / Trade-offs
 

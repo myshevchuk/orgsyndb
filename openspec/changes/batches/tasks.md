@@ -70,13 +70,24 @@
   `test_demo_changes.py`, `test_demo_days.py`); `--replace` deletes
   batches, those without vessels among them (`test_demo_command.py`)
 - [ ] 1.12 Migration: a database populated at the previous migration
-  migrates as design.md states (`test_migration_batches.py`)
+  migrates to empty stock and task records with articles, substances,
+  notebooks and entries kept (`test_migration_batches.py`)
+- [ ] 1.13 Existing tests that name lots, bulk addresses or fillings
+  without a lot moved to the new rules: `test_shell.py`,
+  `test_inventory_movements.py`, `test_inventory_admin.py`, and any
+  other the area runs turn up
+- [ ] 1.14 Bookings against a closing task: a batch recording, a flask
+  booking and a flask correction prepared while the task was open and
+  stored after it closed are refused; the made-number key folds `ß`
+  (`Straße` and `STRASSE` collide); a task's substance refused once a
+  step made a batch, in the form and the admin
 
 ## 2. Implementation
 
-- [ ] 2.1 Models and migration: `Batch`, `Vessel`, `VesselMovement`,
-  `Movement.vessel_movement`, `Task.batch` dropped, histories, the
-  conversion of lots described in design.md
+- [ ] 2.1 Models and migrations: `Batch` with `number_key`, `Vessel`,
+  `VesselMovement`, `Movement.vessel_movement` with its check
+  constraint, `Task.batch` dropped, histories, the emptying described
+  in design.md
 - [ ] 2.2 `inventory.bookings`: batch recording with its first vessel,
   vessel opening, filling with a required vessel, withdrawal,
   transfer, correction, remainder write-off for a task, reversals
@@ -89,7 +100,8 @@
 - [ ] 2.5 Planning, overview, journal and registry views and
   templates
 - [ ] 2.6 Admin for batches and vessels
-- [ ] 2.7 Demo data and seeding
+- [ ] 2.7 Demo data and seeding, closing tasks through the write-off
+  service, the `1-phenylethanol` task ending after its filling
 - [ ] 2.8 `schema_diagram.py` grid and declared links; regenerate
   `webapp/docs/database-schema.html`
 - [ ] 2.9 German catalogues of `inventory`, `tasks`, `planning`,

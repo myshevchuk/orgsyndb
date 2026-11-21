@@ -10,7 +10,7 @@ The `inventory` package SHALL keep batches (`Chargen`), each a quantity of one s
 - `date` (`Datum`, `Date`), the day it was made or received, or none, never after today;
 - `note`.
 
-The substance, source and `task_step` are fixed once the batch exists. A batch may be of any substance, intermediates and reagents among them, and one substance may have made and bought batches side by side; a journal entry may be named by no batch, one or several. A batch shows as its number, a bought batch as its supplier's batch number, and either, when it has none, as `#<id>`. A batch is recorded from a task step only while the step's task is planned or running, and then names the step's journal entry when the step names one. Its yield shows in its unit to three decimal places, rounded half up. A batch that has vessels, or that a task step made, cannot be deleted.
+The substance, source and `task_step` are fixed once the batch exists. A batch may be of any substance, intermediates and reagents among them, and one substance may have made and bought batches side by side; a journal entry may be named by no batch, one or several. A batch shows as its number, a bought batch as its supplier's batch number, and either, when it has none, as `#<id>`. A batch is recorded from a task step only while the step's task is planned or running, and then names the step's journal entry when the step names one. Its yield shows in its unit to three decimal places, rounded half up. A batch that has vessels, or that a task step made, cannot be deleted, except by `demo_data --replace` (lab-demo "Demo data command").
 
 #### Scenario: Made and bought batches
 - **WHEN** a signed-in user records a batch of `cinnamic-acid` made in the lab with the number `KL0412FA`, and another bought from `Sigma` with the supplier's article number `C80857` and the supplier's batch `MKCK1234`
@@ -43,7 +43,7 @@ Its amount changes only by its movements, each holding `kind`, `amount`, `amount
 - `remainder` (`Restausbuchung`, `Remainder written off`), a flask's whole amount, booked when the task of its batch's step ends, fails or is cancelled (task-tracker "Task record");
 - `reversal` (`Storno`, `Reversal`), the amount a reversed filling or withdrawal returns, the withdrawal named by `reverses`, each withdrawal reversed at most once.
 
-A flask whose task is ended, failed or cancelled stays at zero: a correction of it, and the reversal of a filling or withdrawal from it, are refused. Vessel movements are never edited or deleted, except that deleting a vessel in the admin deletes its opening movement with it.
+A flask whose task is ended, failed or cancelled stays at zero: a correction of it, and the reversal of a filling or withdrawal from it, are refused. Recording a batch from a step and every booking on a flask check the task's state in the transaction that books, so that one prepared while the task was open and stored after it closed is refused and changes nothing. Vessel movements are never edited or deleted, except that deleting a vessel in the admin deletes its opening movement with it.
 
 #### Scenario: Yield into the flask
 - **WHEN** a signed-in user records from the last step of a running task of `cinnamic-acid` a batch `KL0412` with the amount `2` g and no location
@@ -436,7 +436,7 @@ The admin SHALL list articles, items, batches, vessels, delivery notes and the m
 
 ### Requirement: Bulk lots
 **Reason**: A lot was a batch and a vessel at once. "Batches" keeps the origin, "Vessels" the place and amount.
-**Migration**: Each lot becomes a batch with one vessel.
+**Migration**: "Batches" and "Vessels"; the migration empties the stock records, and the demo data set records batches and vessels anew.
 
 ### Requirement: Bulk list
 **Reason**: The vessel list replaces it, with the batch list beside it.

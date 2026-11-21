@@ -4,7 +4,7 @@
 The data set SHALL open the inventory on the opening day `O`, `D` less 400 days, and hold:
 
 - items of seven articles: `CH-0001`, `CH-0002`, `CH-0010`, `CH-0012`, `CH-0013` and `CH-0016`, the articles of the substances that set `item_number` in `examples/demo`; and `NV-0007`, the article of the substance `new-compound-7`, `Neuverbindung 7` (`New compound 7`), which the demo registry adds. At least one article has three sizes, and the sizes use the units `mg`, `g` and `umol`;
-- one item of the substance `1-phenylethanol`, whose article has no article number, opened after `O`, filled 89 days before `D` from the flask of its ended task's product batch, and never delivered;
+- one item of the substance `1-phenylethanol`, whose article has no article number, opened after `O`, filled 89 days before `D` from the flask of the product batch of its task, which ends after that filling, and never delivered;
 - sizes that planning leaves out: `CH-0012` in 1 g, `discontinued`, and `CH-0010` in 25 g, `not_needed`, each set aside after its opening count and never delivered; and `CH-0001` in 250 mg, whose consumption is entered for the four quarters from the eighth to the fifth before the quarter of `O` and is none since;
 - `CH-0013` in 1 g, opened 60 days before `D`, with a delivery of one container every 15 days from then on;
 - each item's opening count, dated `O`, or later for a size added afterwards, and a compartment and a box, numbers such as `3` and `12`, the sizes of an article in one compartment;

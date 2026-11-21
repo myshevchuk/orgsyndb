@@ -109,7 +109,9 @@ None.
 - Tests across `webapp/tests/` that touch lots, task batches, the
   demo, planning, the overview and the diagram.
 - `README.md` sections on the inventory and tasks.
-- The test server's lab database is rewritten with
-  `demo_data --replace` after deploy; the migration does not carry
-  links that only batch text held.
+- **BREAKING** The migrations empty the stock and task records
+  (delivery notes, items and their movements, entered consumption,
+  lots, tasks); articles, substances, notebooks and journal entries
+  stay. The test server's lab database is rewritten with
+  `demo_data --replace` after deploy.
 - No new dependency.
