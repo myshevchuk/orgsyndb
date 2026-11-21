@@ -93,9 +93,11 @@ an amount.
 
 A transfer is two movements: `transfer_out` on the source and
 `transfer_in` on the target, the second naming the first. The target is
-a vessel of the same batch, not a flask, whose unit is of the same
-kind, or a new stored vessel created by the transfer in the source's
-unit, whose first movement is then the `transfer_in`. Transfers are not
+a vessel of the same batch, not a flask, or a new stored vessel created
+by the transfer in the source's unit, whose first movement is then the
+`transfer_in`. Each movement holds the amount in its own vessel's base
+unit; across mass and amount of substance the transfer converts through
+the molar mass, as a filling does, and is refused without one. Transfers are not
 reversed; a wrong one is undone by a transfer back or a correction.
 
 ### Fillings

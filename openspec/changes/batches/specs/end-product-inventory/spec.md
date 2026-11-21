@@ -38,7 +38,7 @@ Its amount changes only by its movements, each holding `kind`, `amount`, `amount
 - `opening` (`Anfangsmenge`, `Opening amount`), the amount the vessel opens with: its batch's yield, or an amount entered;
 - `filling` (`Abfüllung`, `Filling`), the amount taken into an item's containers, more than zero and at most the vessel's amount;
 - `withdrawal` (`Entnahme`, `Withdrawal`), the amount taken into a task step, named by `task_step`, more than zero and at most the vessel's amount;
-- `transfer_out` (`Umfüllung (Abgang)`, `Transfer out`) and `transfer_in` (`Umfüllung (Zugang)`, `Transfer in`), an amount passed from one vessel to another of the same batch, more than zero and at most the source's amount, booked together, the `transfer_in` naming the `transfer_out` as `transfer`; the target is a stored vessel whose unit is of the same kind as the source's, mass or amount of substance, or a new stored vessel in the source's unit, whose first movement the `transfer_in` is;
+- `transfer_out` (`Umfüllung (Abgang)`, `Transfer out`) and `transfer_in` (`Umfüllung (Zugang)`, `Transfer in`), an amount passed from one vessel to another of the same batch, more than zero and at most the source's amount, booked together, the `transfer_in` naming the `transfer_out` as `transfer`; the target is a stored vessel, or a new stored vessel in the source's unit, whose first movement the `transfer_in` is; the `transfer_out` holds the amount in the source's base unit and the `transfer_in` that amount converted into the target's, rounded half up to six places, units converting as for a filling (Filling from bulk), and a transfer between a mass and an amount of substance is refused when the substance has no molar mass;
 - `correction` (`Korrektur`, `Correction`), the amount weighed, with a required note;
 - `remainder` (`Restausbuchung`, `Remainder written off`), a flask's whole amount, booked when the task of its batch's step ends, fails or is cancelled (task-tracker "Task record");
 - `reversal` (`Storno`, `Reversal`), the amount a reversed filling or withdrawal returns, the withdrawal named by `reverses`, each withdrawal reversed at most once.
@@ -56,6 +56,14 @@ Vessel movements are never edited or deleted, except that deleting a vessel in t
 #### Scenario: Transfer into a new vessel
 - **WHEN** the flask of `KL0412` holds `2` g and a signed-in user transfers `1,5` g from it into a new vessel in `Kühlschrank 2`
 - **THEN** the flask holds `0,5` g and the new vessel `1,5` g, whose only movement is a `transfer_in` naming the flask's `transfer_out`
+
+#### Scenario: Transfer across units
+- **WHEN** a batch of `cinnamic-acid`, whose molar mass is 148.16, has a flask holding `1` g and a stored vessel in `µmol` holding `100` µmol, and a signed-in user transfers `148,16` mg from the flask into that vessel
+- **THEN** the flask holds `851,84` mg and the vessel `1100` µmol
+
+#### Scenario: Transfer without a molar mass
+- **WHEN** a batch of a substance without a molar mass has a flask in `mg` and a stored vessel in `µmol`, and a signed-in user posts a transfer from the flask into that vessel
+- **THEN** the form shows an error at the target and neither vessel changes
 
 #### Scenario: Correction of a vessel
 - **WHEN** a signed-in user corrects a vessel of `50` mg to `47,5` mg with the note `nachgewogen`
@@ -335,7 +343,7 @@ For a signed-in user, the application SHALL offer:
 - `/lab/inventory/batches/<id>/edit/`: the number, journal entry and yield of a made batch, the supplier, supplier's article number and supplier's batch of a bought one, and the date and note;
 - `/lab/inventory/batches/<id>/vessels/new/`: a new stored vessel of the batch with its opening amount, its unit, its location, with the `datalist` of the locations in use, and its note;
 - `/lab/inventory/vessels/<id>/withdraw/`: a withdrawal from an open vessel into a step of a task that is planned or running, chosen among those tasks' steps or given as `?step=<id>`, with the amount in the vessel's unit and the date; an amount above the vessel's is refused;
-- `/lab/inventory/vessels/<id>/transfer/`: a transfer from an open vessel, with the amount in its unit, the date and a note, into a stored vessel of the same batch whose unit is of the same kind, chosen among them, or into a new vessel at the location given; an amount above the vessel's is refused;
+- `/lab/inventory/vessels/<id>/transfer/`: a transfer from an open vessel, with the amount in its unit, the date and a note, into a stored vessel of the same batch, chosen among them, or into a new vessel at the location given; an amount above the vessel's, and a target whose unit converts from the source's only through a molar mass the substance lacks, are refused, the latter with an error at the target;
 - `/lab/inventory/vessels/movements/<id>/reverse/`, a POST: reverses a withdrawal not yet reversed;
 - `/lab/inventory/vessels/<id>/edit/`, for the location and note, and `/lab/inventory/vessels/<id>/correct/`.
 
