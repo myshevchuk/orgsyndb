@@ -100,6 +100,17 @@ leaves this file then.
   measurements to the stylesheets. The diagram's band layout
   (database-diagram) and A4 printing (print-layout) are what those
   specs are about, and stay.
+- **Faster tests.** `docs/DEVELOPMENT.md` records what was done.
+  Still slow:
+  - 25 tests in `webapp/tests/test_demo_command.py` and
+    `test_demo_records.py` call `seed` themselves and write the demo
+    data set each time; those that only read it could use
+    `seed_once` or a seeded class.
+  - The PostgreSQL job is the longest on CI, about 6.5 minutes against
+    2 for SQLite.
+  - The root suite's slowest tests have not been measured; run it
+    with `--durations=30` to find them.
+
 - **Procedure history from Git.** The collection's history is in Git,
   so the lab could show how a procedure changed between versions.
 - **Compounds back into a static collection.** Once the lab's
@@ -110,7 +121,7 @@ leaves this file then.
   lab application, the owner decided on 2026-11-15. Once the change
   that regroups the menu and merges the substance views is done, take
   the demo down: unpublish GitHub Pages in the repository's settings;
-  delete `.github/workflows/demo-site.yml`, the demo-site spec and
+  delete `.github/workflows/demo-site.yml` and
   `tests/test_demo_site.py`; and drop the demo site from `README.md`
   (the live-demo link, the path-prefix note, the deployment section)
   and from `AGENTS.md` (pushes to `main` deploy it). Open, following
