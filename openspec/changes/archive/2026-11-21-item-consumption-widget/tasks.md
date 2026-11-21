@@ -55,4 +55,4 @@
   and from the dialog opened in the item list's details; switch
   quarters in the dialog, save, and click another quarter while the
   save is under way; the history shows the change
-- [ ] 3.3 On the test server, by the owner
+- [x] 3.3 On the test server, by the owner
