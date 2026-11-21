@@ -1,6 +1,7 @@
-"""Tests of the details of one item that the item list shows beside its
-table: in the list, in the view that loads them in place and in the rows
-that ask for them (end-product-inventory: Item list).
+"""Tests of the selected item of the item list and its details: the
+item that ``selected`` names, the details the list shows for it in both
+views, the view that loads them in place and the rows that ask for them
+(end-product-inventory: Item list).
 
 The details are one element, ``#item-detail``, that carries the id of
 its item as ``data-item``; the row of that item carries
@@ -25,6 +26,9 @@ from .inventory_support import (
 from .test_inventory_table import body_rows
 
 HTMX = {"HTTP_HX_REQUEST": "true"}
+COOKIE = "item-list-view"
+# The states of the cookie that remembers the view: none, and both views.
+VIEWS = (None, "table", "details")
 LOT_PAGE = re.compile(r"^/lab/inventory/bulk/\d+/$")
 MISSING = "nicht hinterlegt"
 ACTIONS = ("Artikelnr. eintragen", "Abgabe buchen", "Abfüllen",
@@ -76,23 +80,45 @@ def outline(node: Element) -> tuple:
 
 class DetailCase(InventoryCase):
 
-    def listing(self, query: str = "") -> Element:
+    def listing(self, query: str = "", view: str | None = None) -> Element:
+        """The list's page, with the cookie that remembers the view set
+        to VIEW, or without the cookie when VIEW is None."""
+        if view is None:
+            self.client.cookies.pop(COOKIE, None)
+        else:
+            self.client.cookies[COOKIE] = view
         response = self.client.get(LIST + query)
         self.assertEqual(response.status_code, 200)
         return page(response)
 
-    def pane(self, query: str = "") -> Element:
-        return pane_of(self.listing(query))
+    def pane(self, query: str = "", view: str | None = None) -> Element:
+        return pane_of(self.listing(query, view))
 
-    def shown(self, query: str = "") -> str | None:
+    def shown(self, query: str = "", view: str | None = None) -> str | None:
         """The id of the item whose details the list shows."""
-        return self.pane(query).get("data-item")
+        return self.pane(query, view).get("data-item")
+
+    def listed(self, item: Any) -> Element:
+        """The details the list shows with ``selected`` naming ITEM,
+        which are those of ITEM."""
+        pane = self.pane(f"?selected={item.pk}")
+        self.assertEqual(pane.get("data-item"), str(item.pk))
+        return pane
+
+    def decoy(self) -> Any:
+        """An item that the list shows before the items without a
+        category, so that the details of the first item listed are not
+        those of a test's item."""
+        if not hasattr(self, "_decoy"):
+            self._decoy = self.item("A-0")
+        return self._decoy
 
 
 class DetailsOfAnItemTests(DetailCase):
 
     def test_details_of_an_item(self) -> None:
         """Scenario: Details of an item."""
+        self.decoy()
         item = self.item("CH-0012", "(E)-Zimtsäure", "100", "mg",
                          quantity=5)
         self.enter_year(item, 2024, 4)
@@ -101,7 +127,7 @@ class DetailsOfAnItemTests(DetailCase):
         self.deliver(item, 2, date(2026, 10, 15))
         lot = self.lot("CH-0012", "mg", "50", batch="B-7",
                        location="Kühlschrank 2")
-        root = self.listing(f"?detail={item.pk}")
+        root = self.listing(f"?selected={item.pk}")
         pane = pane_of(root)
         self.assertEqual(pane.get("data-item"), str(item.pk))
         self.assertIsNone(pane.closest("table"))
@@ -113,7 +139,7 @@ class DetailsOfAnItemTests(DetailCase):
                           if SUBSTANCE_PAGE.search(a.get("href", ""))],
                          ["/lab/registry/substances/cinnamic-acid/"])
         _, rows = table(root)
-        level = next(name[6:] for name in rows[0]["Bestand"].classes
+        level = next(name[6:] for name in rows[1]["Bestand"].classes
                      if name.startswith("level-"))
         stock = pane.find(cls=f"level-{level}")
         self.assertIsNotNone(stock, level)
@@ -139,11 +165,12 @@ class DetailsOfAnItemTests(DetailCase):
         self.assertIn(item_url(item), links(pane).values())
 
     def test_the_quarters_of_the_current_year(self) -> None:
+        self.decoy()
         item = self.item("CH-0012", "(E)-Zimtsäure", quantity=6)
         for quarter, count in ((1, 6), (2, 5), (3, 7)):
             self.enter(item, 2026, quarter, count)
         self.deliver(item, 2, date(2026, 10, 15))
-        pane = self.pane(f"?detail={item.pk}")
+        pane = self.listed(item)
         bars = pane.find_all(cls="quarter-bar")
         self.assertEqual(len(bars), 4)
         self.assertEqual(["current" in bar.classes for bar in bars],
@@ -151,10 +178,11 @@ class DetailsOfAnItemTests(DetailCase):
         self.assertIn("laufend", bars[3].text())
 
     def test_quarters_to_come_are_empty(self) -> None:
+        self.decoy()
         item = self.item("Q-1")
         self.enter(item, 2026, 1, 3)
         with ticking(berlin(2026, 5, 4, 8)):
-            pane = self.pane(f"?detail={item.pk}")
+            pane = self.listed(item)
         _, years = table(pane)
         self.assertEqual([cell.text() for cell in years[2].values()],
                          ["2026", "3", "0", "", "", "3"])
@@ -164,8 +192,9 @@ class DetailsOfAnItemTests(DetailCase):
         self.assertIsNone(bars[2].find(cls="bar"))
 
     def test_the_means_and_the_coverage(self) -> None:
+        self.decoy()
         item = self.means_item()
-        pane = self.pane(f"?detail={item.pk}")
+        pane = self.listed(item)
         self.assertEqual(definition(pane, "Ø Jahr").text(), "18,0")
         self.assertEqual(definition(pane, "Ø Quartal").text(), "4,5")
         self.assertEqual(definition(pane, "2026 bis 4. November").text(),
@@ -175,146 +204,206 @@ class DetailsOfAnItemTests(DetailCase):
         self.assertTrue(has_number(pane.text(), "0,7"), pane.text())
 
     def test_means_there_are_not_show_a_dash(self) -> None:
+        self.decoy()
         item = self.item("N-1")
-        pane = self.pane(f"?detail={item.pk}")
+        pane = self.listed(item)
         self.assertEqual(definition(pane, "Ø Jahr").text(), "–")
         self.assertEqual(definition(pane, "Ø Quartal").text(), "–")
 
     def test_projected_means_are_marked(self) -> None:
+        self.decoy()
         item = self.item("P-1", quantity=3)
         self.enter(item, 2026, 2, 6)
-        pane = self.pane(f"?detail={item.pk}")
+        pane = self.listed(item)
         for term in ("Ø Jahr", "Ø Quartal"):
             with self.subTest(term=term):
                 self.assertIn("projected", definition(pane, term).classes)
 
     def test_the_locations_that_are_set(self) -> None:
+        self.decoy()
         item = self.item("CH-0012", quantity=1, compartment="2", box="7")
         self.lot("CH-0012", "mg", "50")
-        pane = self.pane(f"?detail={item.pk}")
+        pane = self.listed(item)
         self.assertEqual(definition(pane, "Fach").text(), "2")
         self.assertEqual(definition(pane, "Box").text(), "7")
         self.assertEqual(pane.text().count(MISSING), 1)
 
     def test_an_item_without_lots_links_none(self) -> None:
+        self.decoy()
         item = self.item(None, "Neuverbindung 9", quantity=2)
-        pane = self.pane(f"?detail={item.pk}")
+        pane = self.listed(item)
         self.assertEqual([a for a in pane.find_all("a")
                           if LOT_PAGE.match(a.get("href", ""))], [])
         self.assertIn("10 µmol", pane.text())
         self.assertEqual(pane.text().count(MISSING), 2)
 
     def test_the_lots_of_the_substance_only(self) -> None:
+        self.decoy()
         item = self.item("CH-0012", "(E)-Zimtsäure")
         mine = self.lot("CH-0012", "mg", "50", batch="B-7")
         self.lot("CH-0001", "mg", "20", batch="B-9")
-        pane = self.pane(f"?detail={item.pk}")
+        pane = self.listed(item)
         self.assertEqual([a.get("href") for a in pane.find_all("a")
                           if LOT_PAGE.match(a.get("href", ""))],
                          [lot_url(mine)])
 
     def test_the_head_marks_a_new_item_and_its_status(self) -> None:
+        self.decoy()
         fresh = self.item("N-1", stocked_on=date(2026, 2, 1))
         old = self.item("N-2")
         set_aside = self.item("N-3", status="discontinued")
         self.assertIsNotNone(
-            self.pane(f"?detail={fresh.pk}").find("sup", "mark-new"))
+            self.listed(fresh).find("sup", "mark-new"))
         self.assertIsNone(
-            self.pane(f"?detail={old.pk}").find("sup", "mark-new"))
+            self.listed(old).find("sup", "mark-new"))
         self.assertIn("auslaufend",
-                      self.pane(f"?detail={set_aside.pk}").text())
+                      self.listed(set_aside).text())
         self.assertNotIn("auslaufend",
-                         self.pane(f"?detail={old.pk}").text())
+                         self.listed(old).text())
 
     def test_the_note_shows(self) -> None:
+        self.decoy()
         item = self.item("N-1", note="Kühl lagern")
         self.assertIn("Kühl lagern",
-                      self.pane(f"?detail={item.pk}").text())
+                      self.listed(item).text())
 
 
 class ChosenItemTests(DetailCase):
 
-    def test_details_of_the_first_item(self) -> None:
-        """Scenario: Details of the first item."""
+    def test_the_first_item_selected(self) -> None:
+        """Scenario: The first item selected."""
         first = self.item("A-1", category="Säuren")
         second = self.item("A-2", category="Ester")
-        for query, wanted in (
-                ("", second), (f"?detail={second.pk + 999}", second),
-                (f"?category={quote('Säuren')}&detail={second.pk}", first)):
-            with self.subTest(query=query):
-                self.assertEqual(self.shown(query), str(wanted.pk))
-        root = self.listing(f"?category=Basen&detail={second.pk}")
-        self.assertEqual(root.find_all(attrs={"data-item": True}), [])
-        self.assertEqual(chosen_rows(root), [])
-
-    def test_a_listed_item_is_chosen_wherever_it_stands(self) -> None:
-        self.item("A-1", category="Säuren")
-        second = self.item("A-2", category="Ester")
-        third = self.item("A-3", category="Basen")
-        for chosen in (second, third):
-            with self.subTest(item=chosen.pk):
-                self.assertEqual(self.shown(f"?detail={chosen.pk}"),
-                                 str(chosen.pk))
-
-    def test_a_detail_that_names_no_item_falls_back(self) -> None:
-        first = self.item("A-1")
-        for value in ("abc", "", "-1", "1.5", "99999999", "9" * 5000):
-            with self.subTest(detail=value):
-                self.assertEqual(self.shown(f"?detail={value}"),
-                                 str(first.pk))
-
-    def test_an_item_the_filters_leave_out_is_not_chosen(self) -> None:
-        listed = self.item("A-1", category="Ester")
-        left_out = self.item("A-2", category="Säuren")
-        for query in (f"?category=Ester&detail={left_out.pk}",
-                      f"?q=A-1&detail={left_out.pk}"):
-            with self.subTest(query=query):
-                root = self.listing(query)
-                self.assertEqual(pane_of(root).get("data-item"),
-                                 str(listed.pk))
-                self.assertEqual([row.get("data-item")
-                                  for row in chosen_rows(root)],
-                                 [str(listed.pk)])
-
-    def test_the_chosen_row_is_marked(self) -> None:
-        self.item("A-1", category="Ester")
-        second = self.item("A-2", category="Säuren")
-        for query, wanted in (("", "A-1"), (f"?detail={second.pk}", "A-2")):
-            with self.subTest(query=query):
-                root = self.listing(query)
-                header, rows = table(root)
-                marked = chosen_rows(root)
-                self.assertEqual(len(marked), 1)
-                self.assertEqual(marked[0].get("data-item"),
-                                 pane_of(root).get("data-item"))
-                self.assertEqual(
-                    [row[header[0]].text() for row in rows
-                     if row[header[0]].parent is marked[0]], [wanted])
-
-    def test_no_item_no_details(self) -> None:
-        lone = self.item("A-0")
-        self.assertEqual(self.shown(f"?detail={lone.pk}"), str(lone.pk))
-        lone.delete()
-        for query in ("", "?detail=5"):
-            with self.subTest(query=query):
-                root = self.listing(query)
+        for view in VIEWS:
+            for query, wanted in (
+                    ("", second),
+                    (f"?selected={second.pk + 999}", second),
+                    (f"?category={quote('Säuren')}&selected={second.pk}",
+                     first)):
+                with self.subTest(query=query, view=view):
+                    self.assertEqual(self.shown(query, view),
+                                     str(wanted.pk))
+            with self.subTest(view=view):
+                root = self.listing(
+                    f"?category=Basen&selected={second.pk}", view)
                 self.assertEqual(root.find_all(attrs={"data-item": True}),
                                  [])
                 self.assertEqual(chosen_rows(root), [])
-        item = self.item("A-1")
-        root = self.listing(f"?q=nothing&detail={item.pk}")
-        self.assertEqual(root.find_all(attrs={"data-item": True}), [])
-        self.assertEqual(chosen_rows(root), [])
 
-    def test_a_list_cut_by_the_filters_chooses_its_own_first_row(
+    def test_a_listed_item_is_selected_wherever_it_stands(self) -> None:
+        self.item("A-1", category="Säuren")
+        second = self.item("A-2", category="Ester")
+        third = self.item("A-3", category="Basen")
+        for view in VIEWS:
+            for chosen in (second, third):
+                with self.subTest(item=chosen.pk, view=view):
+                    self.assertEqual(
+                        self.shown(f"?selected={chosen.pk}", view),
+                        str(chosen.pk))
+
+    def test_a_selected_that_names_no_item_falls_back(self) -> None:
+        first = self.item("A-1")
+        for view in VIEWS:
+            for value in ("abc", "", "-1", "1.5", "99999999", "9" * 5000):
+                with self.subTest(selected=value, view=view):
+                    self.assertEqual(self.shown(f"?selected={value}", view),
+                                     str(first.pk))
+
+    def test_an_item_the_filters_leave_out_is_not_selected(self) -> None:
+        listed = self.item("A-1", category="Ester")
+        left_out = self.item("A-2", category="Säuren")
+        for view in VIEWS:
+            for query in (f"?category=Ester&selected={left_out.pk}",
+                          f"?q=A-1&selected={left_out.pk}"):
+                with self.subTest(query=query, view=view):
+                    root = self.listing(query, view)
+                    self.assertEqual(pane_of(root).get("data-item"),
+                                     str(listed.pk))
+                    self.assertEqual([row.get("data-item")
+                                      for row in chosen_rows(root)],
+                                     [str(listed.pk)])
+
+    def test_the_selected_row_is_marked_in_both_views(self) -> None:
+        self.item("A-1", category="Ester")
+        second = self.item("A-2", category="Säuren")
+        for view in VIEWS:
+            for query, wanted in (("", "A-1"),
+                                  (f"?selected={second.pk}", "A-2")):
+                with self.subTest(query=query, view=view):
+                    root = self.listing(query, view)
+                    header, rows = table(root)
+                    marked = chosen_rows(root)
+                    self.assertEqual(len(marked), 1)
+                    self.assertEqual(marked[0].get("data-item"),
+                                     pane_of(root).get("data-item"))
+                    self.assertEqual(
+                        [row[header[0]].text() for row in rows
+                         if row[header[0]].parent is marked[0]], [wanted])
+
+    def test_the_pane_is_in_the_page_in_both_views(self) -> None:
+        self.item("A-1", category="Ester")
+        second = self.item("A-2", category="Säuren")
+        for view in VIEWS:
+            with self.subTest(view=view):
+                root = self.listing(f"?selected={second.pk}", view)
+                layout = root.find(cls="item-layout")
+                self.assertIs(pane_of(root).closest("div"), layout)
+                self.assertIn("A-2", pane_of(root).text())
+
+    def test_detail_is_no_longer_read(self) -> None:
+        first = self.item("A-1", category="Ester")
+        second = self.item("A-2", category="Säuren")
+        for view in VIEWS:
+            for query in (f"?detail={second.pk}",
+                          f"?detail={second.pk}&sort=name"):
+                with self.subTest(query=query, view=view):
+                    root = self.listing(query, view)
+                    self.assertEqual(pane_of(root).get("data-item"),
+                                     str(first.pk))
+                    self.assertEqual([row.get("data-item")
+                                      for row in chosen_rows(root)],
+                                     [str(first.pk)])
+
+    def test_selected_wins_over_detail(self) -> None:
+        self.item("A-1", category="Ester")
+        second = self.item("A-2", category="Säuren")
+        third = self.item("A-3", category="Basen")
+        self.assertEqual(
+            self.shown(f"?detail={second.pk}&selected={third.pk}"),
+            str(third.pk))
+
+    def test_no_item_no_details(self) -> None:
+        lone = self.item("A-0")
+        self.assertEqual(self.shown(f"?selected={lone.pk}"), str(lone.pk))
+        lone.delete()
+        for view in VIEWS:
+            for query in ("", "?selected=5"):
+                with self.subTest(query=query, view=view):
+                    root = self.listing(query, view)
+                    self.assertEqual(
+                        root.find_all(attrs={"data-item": True}), [])
+                    self.assertEqual(chosen_rows(root), [])
+        item = self.item("A-1")
+        for view in VIEWS:
+            with self.subTest(view=view):
+                root = self.listing(f"?q=nothing&selected={item.pk}", view)
+                self.assertEqual(root.find_all(attrs={"data-item": True}),
+                                 [])
+                self.assertEqual(chosen_rows(root), [])
+
+    def test_a_list_cut_by_the_filters_selects_its_own_first_row(
             self) -> None:
         """The details always belong to a row of the table."""
         self.item("A-1")
         second = self.item("A-2")
-        root = self.listing("?q=A-2")
-        self.assertEqual([row.get("data-item") for row in chosen_rows(root)],
-                         [str(second.pk)])
-        self.assertEqual(pane_of(root).get("data-item"), str(second.pk))
+        for view in VIEWS:
+            with self.subTest(view=view):
+                root = self.listing("?q=A-2", view)
+                self.assertEqual(
+                    [row.get("data-item") for row in chosen_rows(root)],
+                    [str(second.pk)])
+                self.assertEqual(pane_of(root).get("data-item"),
+                                 str(second.pk))
 
 
 class RowTests(DetailCase):
@@ -357,12 +446,13 @@ class RowTests(DetailCase):
 class LinkTests(DetailCase):
 
     def actions(self, item: Any) -> dict[str, str]:
-        found = links(self.pane(f"?detail={item.pk}"))
+        found = links(self.listed(item))
         return {text: href for text, href in found.items()
                 if text in ACTIONS}
 
     def test_links_in_the_details(self) -> None:
         """Scenario: Links in the details."""
+        self.decoy()
         item = self.item(None, "Neuverbindung 9")
         self.client.force_login(self.kl)
         self.assertEqual(self.actions(item), {
@@ -374,6 +464,7 @@ class LinkTests(DetailCase):
         self.assertEqual(self.actions(item), {})
 
     def test_the_links_of_an_item_with_an_article_number(self) -> None:
+        self.decoy()
         item = self.item("CH-0012")
         self.deliver(item, 1)
         self.client.force_login(self.kl)
@@ -385,22 +476,24 @@ class LinkTests(DetailCase):
             "Bearbeiten": item_url(item, "edit")})
 
     def test_no_reversals_in_the_details(self) -> None:
+        self.decoy()
         item = self.item("CH-0012")
         self.deliver(item, 1)
         self.client.force_login(self.kl)
-        pane = self.pane(f"?detail={item.pk}")
+        pane = self.listed(item)
         self.assertEqual([a.get("href") for a in pane.find_all("a")
                           if "/reverse/" in a.get("href", "")], [])
         self.assertNotIn("Stornieren", links(pane))
 
     def test_everyone_may_open_the_items_page(self) -> None:
+        self.decoy()
         item = self.item("CH-0012")
         for signed_in in (False, True):
             with self.subTest(signed_in=signed_in):
                 if signed_in:
                     self.client.force_login(self.kl)
                 self.assertIn(item_url(item),
-                              links(self.pane(f"?detail={item.pk}"))
+                              links(self.listed(item))
                               .values())
 
 
@@ -436,13 +529,14 @@ class DetailViewTests(DetailCase):
         alone = [c for c in pane.children if isinstance(c, Element)]
         self.assertEqual(len(alone), 1)
         self.assertEqual(alone[0].get("data-item"), str(third.pk))
-        listed = self.pane(f"?category=Ester&detail={third.pk}")
+        listed = self.pane(f"?category=Ester&selected={third.pk}")
         self.assertEqual(outline(alone[0]), outline(listed))
         plain = self.client.get(row.get("hx-get"))
         self.assertIn(plain.status_code, (302, 303))
         target = urlsplit(plain["Location"])
         self.assertEqual(target.path, LIST)
-        self.assertEqual(parse_qs(target.query)["detail"], [str(third.pk)])
+        self.assertEqual(parse_qs(target.query).get("selected"),
+                         [str(third.pk)])
 
     def test_the_loaded_pane_matches_the_lists_for_each_item(self) -> None:
         items = [self.means_item("A-1"), self.item(None, "Neuverbindung 9"),
@@ -456,7 +550,7 @@ class DetailViewTests(DetailCase):
                 self.assertEqual(len(alone), 1)
                 self.assertEqual(
                     outline(alone[0]),
-                    outline(self.pane(f"?detail={item.pk}")))
+                    outline(self.listed(item)))
 
     def test_the_loaded_pane_follows_the_user(self) -> None:
         item = self.item(None, "Neuverbindung 9")
@@ -476,8 +570,17 @@ class DetailViewTests(DetailCase):
                 self.assertIn(response.status_code, (302, 303))
                 target = urlsplit(response["Location"])
                 self.assertEqual(target.path, LIST)
-                self.assertEqual(parse_qs(target.query)["detail"],
-                                 [str(item.pk)])
+                self.assertEqual(parse_qs(target.query),
+                                 {"selected": [str(item.pk)]})
+
+    def test_the_redirect_leads_to_the_item_selected(self) -> None:
+        self.decoy()
+        item = self.item("CH-0012")
+        response = self.client.get(detail_url(item), follow=True)
+        root = page(response)
+        self.assertEqual(pane_of(root).get("data-item"), str(item.pk))
+        self.assertEqual([row.get("data-item")
+                          for row in chosen_rows(root)], [str(item.pk)])
 
     def test_the_answer_varies_with_the_header(self) -> None:
         item = self.item("CH-0012")

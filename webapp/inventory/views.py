@@ -25,10 +25,9 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.formats import localize_input
 from django.utils.text import capfirst
 from django.utils.translation import gettext as _
-from django.utils.translation import pgettext
-from django.utils.translation import gettext_lazy
+from django.utils.translation import gettext_lazy, pgettext_lazy
 from django.views.decorators.http import require_POST
-from django.views.decorators.vary import vary_on_headers
+from django.views.decorators.vary import vary_on_cookie, vary_on_headers
 
 from inventory import bookings
 from inventory.bookings import Refused
@@ -108,25 +107,62 @@ def located(text: str) -> tuple[Any, ...] | None:
     return natural(text) if text else None
 
 
-# The value each sort key orders a row by, None for a row without one,
-# in the order of the list's columns.
-SORT_VALUES: dict[str, Callable[[Row], Any]] = {
-    "number": lambda row: row.item.article_number,
-    "name": lambda row: row.item.name.casefold(),
-    "category": lambda row: folded(row.item.category),
-    "container": lambda row: row.item.container_order(),
-    "stock": lambda row: (LEVEL_ORDER[row.figures.level],
-                          row.figures.coverage is None,
-                          row.figures.coverage or 0),
-    "mean_year": lambda row: row.figures.mean_year,
-    "this_year": lambda row: row.figures.this_year,
-    "coverage": lambda row: row.figures.coverage,
-    "compartment": lambda row: located(row.item.compartment),
-    "box": lambda row: located(row.item.box),
-    "bulk": lambda row: row.bulk.containers if row.bulk.lots else None,
-    "note": lambda row: folded(row.item.note),
-}
-SORTS = tuple(SORT_VALUES)
+@dataclass(frozen=True)
+class ColumnSpec:
+    """A column of the item list as the model defines it. KEY is its
+    sort key, LABEL its heading and UNIT the text beneath it, both lazy
+    strings of the active language, UNIT possibly holding ``%(year)s``
+    for the current year. NUMERIC tells whether it right-aligns its
+    numbers. VALUE gives the value that orders a row when the list is
+    sorted by the column, None for a row without one. GROUP is ``base``
+    for a column both views show and ``table`` for one the table view
+    adds; SHOWN tells whether it shows at first."""
+
+    key: str
+    label: Any
+    unit: Any
+    numeric: bool
+    value: Callable[[Row], Any]
+    group: str
+    shown: bool = True
+
+
+# The item list's columns in the order they appear, those of the base
+# group first.
+COLUMN_MODEL: tuple[ColumnSpec, ...] = (
+    ColumnSpec("number", gettext_lazy("Article no."), "", False,
+               lambda row: row.item.article_number, "base"),
+    ColumnSpec("name", gettext_lazy("Name"), "", False,
+               lambda row: row.item.name.casefold(), "base"),
+    ColumnSpec("category", gettext_lazy("Category"), "", False,
+               lambda row: folded(row.item.category), "base"),
+    ColumnSpec("container", gettext_lazy("Container"), "", True,
+               lambda row: row.item.container_order(), "base"),
+    ColumnSpec("stock", gettext_lazy("Stock"), gettext_lazy("containers"),
+               True,
+               lambda row: (LEVEL_ORDER[row.figures.level],
+                            row.figures.coverage is None,
+                            row.figures.coverage or 0), "base"),
+    ColumnSpec("mean_year", gettext_lazy("Mean per year"),
+               gettext_lazy("containers / year"), True,
+               lambda row: row.figures.mean_year, "table"),
+    ColumnSpec("this_year", pgettext_lazy("item list", "Delivered"),
+               gettext_lazy("%(year)s · containers"), True,
+               lambda row: row.figures.this_year, "table"),
+    ColumnSpec("coverage", gettext_lazy("Coverage"),
+               gettext_lazy("quarters"), True,
+               lambda row: row.figures.coverage, "table"),
+    ColumnSpec("compartment", gettext_lazy("Compartment"), "", False,
+               lambda row: located(row.item.compartment), "table"),
+    ColumnSpec("box", gettext_lazy("Box"), "", False,
+               lambda row: located(row.item.box), "table"),
+    ColumnSpec("bulk", gettext_lazy("Bulk available"), "", False,
+               lambda row: row.bulk.containers if row.bulk.lots else None,
+               "table"),
+    ColumnSpec("note", pgettext_lazy("inventory", "Note"), "", False,
+               lambda row: folded(row.item.note), "table", shown=False),
+)
+SORTS = tuple(spec.key for spec in COLUMN_MODEL)
 DEFAULT_SORT = "category"
 # The parameters of the filters; the last three sit under "More
 # filters".
@@ -134,11 +170,8 @@ FILTERS = ("q", "category", "stock", "container", "compartment", "box")
 MORE_FILTERS = ("container", "compartment", "box")
 # The columns that break ties in the default order.
 TIES = ("number", "container")
-# The columns that right-align their numbers; those the view controls
-# cannot hide; and those hidden until the user shows them.
-NUMERIC = ("container", "stock", "mean_year", "this_year", "coverage")
-FIXED_COLUMNS = ("number", "name", "stock")
-HIDDEN_COLUMNS = ("note",)
+# The cookie that remembers the view of the item list.
+VIEW_COOKIE = "item-list-view"
 
 
 @dataclass(frozen=True)
@@ -193,21 +226,25 @@ class ItemFilters:
                 and (not self.q or self.q.casefold() in row.searched()))
 
     def link(self, sort: str, descending: bool = False,
-             filtered: bool = True) -> str:
+             filtered: bool = True, selected: str = "") -> str:
         """The list's address in the order of SORT, reversed when
-        DESCENDING, with the filters in force when FILTERED."""
+        DESCENDING, with the filters in force when FILTERED, and
+        naming the item SELECTED, an id, unless that is empty."""
         pairs = [(name, getattr(self, name)) for name in FILTERS
                  if filtered and getattr(self, name)]
         pairs.append(("sort", sort))
         if descending:
             pairs.append(("dir", "desc"))
+        if selected:
+            pairs.append(("selected", selected))
         return "?" + urlencode(pairs)
 
     def ordered(self, rows: list[Row]) -> list[Row]:
         """ROWS, given in the default order, in the order in force: by
         the sort key's value, reversed when descending, rows without one
         after the others; ties keep their order."""
-        value = SORT_VALUES[self.sort]
+        value = next(spec.value for spec in COLUMN_MODEL
+                     if spec.key == self.sort)
         present = [row for row in rows if value(row) is not None]
         present.sort(key=value, reverse=self.descending)
         return present + [row for row in rows if value(row) is None]
@@ -215,60 +252,67 @@ class ItemFilters:
 
 @dataclass(frozen=True)
 class Column:
-    """A column of the item list: its sort KEY, its LABEL, the UNIT shown
-    beneath it, the HREF its header links to, and ARIA_SORT,
-    ``ascending`` or ``descending`` for the column in force, else
-    empty."""
+    """A column of the item list as a page shows it: the SPEC that
+    defines it, its LABEL and UNIT in the active language, the HREF its
+    header links to, and ARIA_SORT, ``ascending`` or ``descending`` for
+    the column in force, else empty."""
 
-    key: str
+    spec: ColumnSpec
     label: str
     unit: str
     href: str
     aria_sort: str
 
     @property
+    def key(self) -> str:
+        """The column's sort key."""
+        return self.spec.key
+
+    @property
     def numeric(self) -> bool:
         """Whether the column right-aligns its numbers."""
-        return self.key in NUMERIC
+        return self.spec.numeric
+
+    @property
+    def table_only(self) -> bool:
+        """Whether the table view alone shows the column."""
+        return self.spec.group == "table"
+
+    @property
+    def shown(self) -> bool:
+        """Whether the column shows at first."""
+        return self.spec.shown
+
+    @property
+    def classes(self) -> str:
+        """The classes of the column's header and cells: ``col-`` and
+        its key, ``number`` for a numeric column and ``table-only`` for
+        one that only the table view shows."""
+        return " ".join([f"col-{self.key}",
+                         *(["number"] if self.numeric else []),
+                         *(["table-only"] if self.table_only else [])])
 
 
-def column_labels(year: int) -> list[tuple[str, str, str]]:
-    """The item list's columns in the active language, in their order,
-    each as its key, its label and the unit beneath it, with YEAR the
-    current year."""
-    return [
-        ("number", _("Article no."), ""), ("name", _("Name"), ""),
-        ("category", _("Category"), ""), ("container", _("Container"), ""),
-        ("stock", _("Stock"), _("containers")),
-        ("mean_year", _("Mean per year"), _("containers / year")),
-        ("this_year", pgettext("item list", "Delivered"),
-         _("%(year)s · containers") % {"year": year}),
-        ("coverage", _("Coverage"), _("quarters")),
-        ("compartment", _("Compartment"), ""), ("box", _("Box"), ""),
-        ("bulk", _("Bulk available"), ""),
-        ("note", pgettext("inventory", "Note"), "")]
+def columns(filters: ItemFilters, year: int, selected: str = ""
+            ) -> list[Column]:
+    """The columns of the list FILTERS shows in YEAR, in the model's
+    order, each header linking to the list sorted by it, reversed when
+    it is in force and not reversed, and naming the item SELECTED, an
+    id, unless that is empty."""
+    return [Column(
+        spec=spec, label=str(spec.label),
+        unit=str(spec.unit) % {"year": year},
+        href=filters.link(spec.key, spec.key == filters.sort
+                          and not filters.descending, selected=selected),
+        aria_sort=("descending" if filters.descending else "ascending")
+        if spec.key == filters.sort else "") for spec in COLUMN_MODEL]
 
 
-def columns(filters: ItemFilters, year: int) -> list[Column]:
-    """The columns of the list FILTERS shows in YEAR, each header
-    linking to the list sorted by it, reversed when it is in force and
-    not reversed."""
-    found = []
-    for key, label, unit in column_labels(year):
-        current = key == filters.sort
-        found.append(Column(
-            key=key, label=label, unit=unit,
-            href=filters.link(key, current and not filters.descending),
-            aria_sort=("descending" if filters.descending else "ascending")
-            if current else ""))
-    return found
-
-
-def order_text(filters: ItemFilters, year: int) -> str:
+def order_text(filters: ItemFilters) -> str:
     """The order FILTERS put the list in, in words: the sorting column
     and the columns that break its ties, each ascending or
     descending."""
-    labels = {key: label for key, label, _unit in column_labels(year)}
+    labels = {spec.key: str(spec.label) for spec in COLUMN_MODEL}
     rest = ", ".join(labels[key] for key in TIES if key != filters.sort)
     if filters.descending:
         return _("%(column)s descending, %(rest)s ascending") % {
@@ -336,11 +380,13 @@ MEANINGS = {
 }
 
 
-def stock_menu(rows: list[Row], filters: ItemFilters) -> list[StockEntry]:
+def stock_menu(rows: list[Row], filters: ItemFilters, selected: str = ""
+               ) -> list[StockEntry]:
     """The stock menu's entries: every level, then each level in urgency
     order, each counting the items of ROWS that every filter of FILTERS
     but the level admits, and linking to the list with those filters,
-    the order in force and its level."""
+    the order in force, its level and the item SELECTED, an id, unless
+    that is empty."""
     others = replace(filters, stock="")
     counts = Counter(row.figures.level for row in rows
                      if others.admits(row))
@@ -350,7 +396,7 @@ def stock_menu(rows: list[Row], filters: ItemFilters) -> list[StockEntry]:
         return StockEntry(
             level=level, label=label, meaning=meaning, count=count,
             href=LIST + replace(filters, stock=level).link(
-                filters.sort, filters.descending),
+                filters.sort, filters.descending, selected=selected),
             current=filters.stock == level)
 
     return [entry("", _("All stock statuses"), "", counts.total()),
@@ -366,22 +412,25 @@ def row_of(item: Item, today: date, lots: list[Lot]) -> Row:
                statistics=statistics(figures, today))
 
 
-def chosen_row(rows: list[Row], detail: str) -> Row | None:
-    """The row of ROWS whose item's id is the number DETAIL, else the
-    first row, else None for no rows. A DETAIL that is not a whole
+def chosen_row(rows: list[Row], selected: str) -> Row | None:
+    """The row of ROWS whose item's id is the number SELECTED, else the
+    first row, else None for no rows. A SELECTED that is not a whole
     number, or names no item of ROWS, chooses the first row."""
     for row in rows:
-        if str(row.item.pk) == detail:
+        if str(row.item.pk) == selected:
             return row
     return rows[0] if rows else None
 
 
+@vary_on_cookie
 def item_list(request: HttpRequest) -> HttpResponse:
     """List the items the query's filters select, with their figures,
-    heats and bulk, in the order the query names, and beside them the
-    details of the item ``detail`` names among those listed, else of the
-    first one listed. The switch of the details is on when the query
-    holds ``detail``."""
+    heats and bulk, in the order the query names, in the view the cookie
+    ``item-list-view`` remembers, ``details`` or else ``table``. The
+    item that ``selected`` names among those listed, else the first one
+    listed, is the selected one: its row is marked and its details
+    shown, and the list's own links and its filter form name it. The
+    answer varies with the cookies."""
     today = timezone.localdate()
     filters = ItemFilters.from_query(request.GET)
     items = sorted(Item.objects.select_related("article__substance"),
@@ -393,22 +442,24 @@ def item_list(request: HttpRequest) -> HttpResponse:
         shown = by_category(shown)
     containers = {container_code(item): item.container for item in
                   sorted(items, key=Item.container_order)}
-    menu = stock_menu(rows, filters)
-    shown_columns = columns(filters, today.year)
-    chosen = chosen_row(shown, request.GET.get("detail", ""))
+    chosen = chosen_row(shown, request.GET.get("selected", ""))
+    selected = str(chosen.item.pk) if chosen else ""
+    menu = stock_menu(rows, filters, selected)
+    shown_columns = columns(filters, today.year, selected)
     return render(request, "inventory/item_list.html", {
         "rows": shown,
         "chosen": chosen,
-        "detail_on": "detail" in request.GET,
+        "selected": selected,
+        "view": ("details" if request.COOKIES.get(VIEW_COOKIE) == "details"
+                 else "table"),
         "total": len(rows),
         "filters": filters,
         "columns": shown_columns,
-        "view_columns": [(column, column.key not in HIDDEN_COLUMNS)
-                         for column in shown_columns
-                         if column.key not in FIXED_COLUMNS],
-        "order": order_text(filters, today.year),
+        "table_columns": [column for column in shown_columns
+                          if column.table_only],
+        "order": order_text(filters),
         "reset": filters.link(filters.sort, filters.descending,
-                              filtered=False),
+                              filtered=False, selected=selected),
         "categories": sorted({item.category for item in items
                               if item.category}),
         "containers": list(containers.items()),
@@ -426,13 +477,13 @@ def item_list(request: HttpRequest) -> HttpResponse:
 def item_detail(request: HttpRequest, pk: int) -> HttpResponse:
     """Answer an htmx request (``HX-Request: true``) with the details of
     the item PK alone, as the item list shows them beside its table,
-    and any other request with a redirect to the list with ``detail``
+    and any other request with a redirect to the list with ``selected``
     naming the item. Answer 404 for an unknown ID. The answer varies
     with the ``HX-Request`` header."""
     item = get_object_or_404(Item.objects.select_related(
         "article__substance"), pk=pk)
     if request.headers.get("HX-Request") != "true":
-        return redirect(f"{LIST}?{urlencode({'detail': item.pk})}")
+        return redirect(f"{LIST}?{urlencode({'selected': item.pk})}")
     today = timezone.localdate()
     lots = list(Lot.objects.filter(substance_id=item.article_id,
                                    amount__gt=0).order_by("made_on", "id"))

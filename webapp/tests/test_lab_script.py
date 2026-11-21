@@ -1,5 +1,5 @@
 """Tests of the placement of popups and of the address of the item
-list's details in ``lab.js`` under Node (end-product-inventory: Item
+list's selection in ``lab.js`` under Node (end-product-inventory: Item
 list). They skip, naming node, when it is absent.
 
 The script runs with ``vm`` in a fresh context that defines neither
@@ -10,7 +10,7 @@ import json
 import shutil
 import subprocess
 from unittest import TestCase, skipUnless
-from urllib.parse import parse_qs
+from urllib.parse import parse_qsl
 
 from . import REPO
 
@@ -34,10 +34,20 @@ const context = vm.createContext({});
 vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), context,
                 { filename: process.argv[1] });
 const cases = JSON.parse(fs.readFileSync(0, "utf8"));
-const search = context.OrgSynLab.detailSearch;
+const search = context.OrgSynLab.paramSearch;
 process.stdout.write(JSON.stringify(
   typeof search === "function"
-    ? cases.map(([text, id]) => search(text, id)) : null));
+    ? cases.map(([text, name, value]) => search(text, name, value))
+    : null));
+"""
+GONE_RUNNER = r"""
+const fs = require("fs");
+const vm = require("vm");
+const context = vm.createContext({});
+vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), context,
+                { filename: process.argv[1] });
+process.stdout.write(JSON.stringify(
+  Object.keys(context.OrgSynLab).sort()));
 """
 SIZE = {"width": 300, "height": 200}
 
@@ -88,14 +98,15 @@ class PlaceTests(TestCase):
 
 
 @skipUnless(NODE, "node is not installed")
-class DetailSearchTests(TestCase):
-    """``OrgSynLab.detailSearch(search, id)`` takes SEARCH, the query
-    string of an address as ``location.search`` holds it, with or
-    without its leading ``?``, and ID, an item's id as a number or as
-    text, or null; it returns the query string with the parameter
-    ``detail`` set to ID, or removed when ID is null, every other
-    parameter kept, as ``?`` and the parameters, or as ``""`` when none
-    is left."""
+class ParamSearchTests(TestCase):
+    """``OrgSynLab.paramSearch(search, name, value)`` takes SEARCH, the
+    query string of an address as ``location.search`` holds it, with or
+    without its leading ``?``, NAME, a parameter's name, and VALUE, a
+    number or text, or null; it returns the query string with the
+    parameter NAME set to VALUE, or removed when VALUE is null, every
+    other parameter kept in its order, as ``?`` and the parameters, or
+    as ``""`` when none is left. Repeated occurrences of NAME become
+    one, at the place of the first."""
 
     def search(self, *cases: tuple) -> list[str]:
         done = subprocess.run(
@@ -103,52 +114,104 @@ class DetailSearchTests(TestCase):
             input=json.dumps(cases), capture_output=True, text=True,
             check=True)
         found = json.loads(done.stdout)
-        self.assertIsNotNone(found, "OrgSynLab.detailSearch is not defined")
+        self.assertIsNotNone(found, "OrgSynLab.paramSearch is not defined")
         return found
 
-    def test_setting_detail(self) -> None:
-        found = self.search(("", 5), ("?", 5), ("?category=Ester", 5),
-                            ("category=Ester", "7"))
-        self.assertEqual(found, ["?detail=5", "?detail=5",
-                                 "?category=Ester&detail=5",
-                                 "?category=Ester&detail=7"])
+    def pairs(self, *cases: tuple) -> list[list[tuple[str, str]]]:
+        """The parameters of each answer, in order."""
+        found = self.search(*cases)
+        for text in found:
+            self.assertTrue(text.startswith("?"), text)
+        return [parse_qsl(text[1:], keep_blank_values=True)
+                for text in found]
 
-    def test_replacing_detail(self) -> None:
-        found = self.search(("?detail=3", 5),
-                            ("?q=zimt&detail=3&stock=low", 5),
-                            ("detail=3&detail=4", 5))
-        self.assertTrue(all(text.startswith("?") for text in found))
-        self.assertEqual([parse_qs(text[1:]) for text in found], [
-            {"detail": ["5"]},
-            {"q": ["zimt"], "detail": ["5"], "stock": ["low"]},
-            {"detail": ["5"]}])
+    def test_setting_a_parameter(self) -> None:
+        found = self.search(("", "selected", 5), ("?", "selected", 5),
+                            ("?category=Ester", "selected", 5),
+                            ("category=Ester", "selected", "7"))
+        self.assertEqual(found, ["?selected=5", "?selected=5",
+                                 "?category=Ester&selected=5",
+                                 "?category=Ester&selected=7"])
 
-    def test_removing_detail(self) -> None:
-        found = self.search(("?detail=3", None), ("detail=3", None),
-                            ("", None), ("?", None))
-        self.assertEqual(found, ["", "", "", ""])
+    def test_any_name_will_do(self) -> None:
+        found = self.search(("?q=zimt", "stock", "low"),
+                            ("?q=zimt&stock=low", "q", None),
+                            ("?q=zimt&stock=low", "stock", None))
+        self.assertEqual(found, ["?q=zimt&stock=low", "?stock=low",
+                                 "?q=zimt"])
 
-    def test_removing_detail_keeps_the_other_parameters(self) -> None:
-        found = self.search(("?category=Ester&detail=3", None),
-                            ("?detail=3&q=zimt&stock=low", None),
-                            ("?q=zimt", None))
-        self.assertTrue(all(text.startswith("?") for text in found))
-        self.assertEqual([parse_qs(text[1:]) for text in found], [
-            {"category": ["Ester"]},
-            {"q": ["zimt"], "stock": ["low"]},
-            {"q": ["zimt"]}])
+    def test_replacing_a_parameter(self) -> None:
+        found = self.pairs(("?selected=3", "selected", 5),
+                           ("?q=zimt&selected=3&stock=low", "selected", 5),
+                           ("selected=3&selected=4", "selected", 5))
+        self.assertEqual(found, [
+            [("selected", "5")],
+            [("q", "zimt"), ("selected", "5"), ("stock", "low")],
+            [("selected", "5")]])
+
+    def test_removing_a_parameter(self) -> None:
+        found = self.search(("?selected=3", "selected", None),
+                            ("selected=3", "selected", None),
+                            ("", "selected", None), ("?", "selected", None),
+                            ("?selected=3&selected=4", "selected", None))
+        self.assertEqual(found, ["", "", "", "", ""])
+
+    def test_removing_a_parameter_keeps_the_others(self) -> None:
+        found = self.pairs(("?category=Ester&selected=3", "selected", None),
+                           ("?selected=3&q=zimt&stock=low", "selected",
+                            None),
+                           ("?q=zimt", "selected", None))
+        self.assertEqual(found, [
+            [("category", "Ester")],
+            [("q", "zimt"), ("stock", "low")],
+            [("q", "zimt")]])
+
+    def test_the_others_keep_their_order(self) -> None:
+        found = self.pairs(
+            ("?sort=name&dir=desc&category=Ester", "selected", 5),
+            ("?sort=name&selected=1&dir=desc&category=Ester", "selected",
+             None))
+        self.assertEqual(found, [
+            [("sort", "name"), ("dir", "desc"), ("category", "Ester"),
+             ("selected", "5")],
+            [("sort", "name"), ("dir", "desc"), ("category", "Ester")]])
+
+    def test_repeated_occurrences_become_one_at_the_first_place(
+            self) -> None:
+        found = self.pairs(
+            ("?q=a&selected=1&stock=low&selected=2", "selected", 9),
+            ("?selected=1&q=a&selected=2", "selected", 9))
+        self.assertEqual(found, [
+            [("q", "a"), ("selected", "9"), ("stock", "low")],
+            [("selected", "9"), ("q", "a")]])
 
     def test_values_stay_as_they_were_meant(self) -> None:
-        found = self.search(
-            ("?category=S%C3%A4uren&q=a%26b+c&detail=3", 9),
-            ("?category=S%C3%A4uren&q=a%26b+c&detail=3", None))
-        self.assertEqual([parse_qs(text[1:]) for text in found], [
-            {"category": ["Säuren"], "q": ["a&b c"], "detail": ["9"]},
-            {"category": ["Säuren"], "q": ["a&b c"]}])
+        found = self.pairs(
+            ("?category=S%C3%A4uren&q=a%26b+c&selected=3", "selected", 9),
+            ("?category=S%C3%A4uren&q=a%26b+c&selected=3", "selected",
+             None),
+            ("?q=a", "category", "Säuren & Ester"))
+        self.assertEqual(found, [
+            [("category", "Säuren"), ("q", "a&b c"), ("selected", "9")],
+            [("category", "Säuren"), ("q", "a&b c")],
+            [("q", "a"), ("category", "Säuren & Ester")]])
 
-    def test_repeated_parameters_are_kept(self) -> None:
-        found = self.search(("?item=1&item=2&detail=3", 4),
-                            ("?item=1&item=2&detail=3", None))
-        self.assertEqual([parse_qs(text[1:]) for text in found], [
-            {"item": ["1", "2"], "detail": ["4"]},
-            {"item": ["1", "2"]}])
+    def test_repeated_other_parameters_are_kept(self) -> None:
+        found = self.pairs(("?item=1&item=2&selected=3", "selected", 4),
+                           ("?item=1&item=2&selected=3", "selected", None))
+        self.assertEqual(found, [
+            [("item", "1"), ("item", "2"), ("selected", "4")],
+            [("item", "1"), ("item", "2")]])
+
+
+@skipUnless(NODE, "node is not installed")
+class ExportTests(TestCase):
+
+    def test_the_detail_search_is_gone(self) -> None:
+        done = subprocess.run(
+            [NODE, "-e", GONE_RUNNER, str(SCRIPT)],
+            capture_output=True, text=True, check=True)
+        exported = json.loads(done.stdout)
+        self.assertIn("place", exported)
+        self.assertIn("paramSearch", exported)
+        self.assertNotIn("detailSearch", exported)

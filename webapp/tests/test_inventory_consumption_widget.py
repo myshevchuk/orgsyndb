@@ -511,12 +511,14 @@ class DetailsKeepTheirTableTests(WidgetCase):
     def test_the_details_pane_has_no_quarter_links(self) -> None:
         """The compact table of the item list's details carries no
         links."""
+        self.item("A-0")
         item = self.scenario_item()
         for source, root in (
-                ("list", page(self.client.get(f"{LIST}?detail={item.pk}"))),
+                ("list", page(self.client.get(f"{LIST}?selected={item.pk}"))),
                 ("detail", page(self.client.get(detail_url(item), **HTMX)))):
             with self.subTest(source=source):
-                pane = pane_of(root) if source == "list" else root
+                pane = pane_of(root)
+                self.assertEqual(pane.get("data-item"), str(item.pk))
                 grid = pane.find("table", cls="detail-table")
                 self.assertIsNotNone(grid)
                 self.assertEqual(grid.find_all("a"), [])

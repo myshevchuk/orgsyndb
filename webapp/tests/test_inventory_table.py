@@ -1,11 +1,12 @@
 """Tests of the item list's table: its columns and order, the filters
-above it, the stock menu, the view controls, the consumption heat, the
-box that keeps the headers in view and the stylesheet's rules for the
-details beside the table (end-product-inventory: Item list,
-Consumption heat)."""
+above it, the stock menu, the view controls, the two views and the
+cookie that remembers the view, the consumption heat, the box that
+keeps the headers in view and the stylesheet's rules for the views
+(end-product-inventory: Item list, Consumption heat)."""
 
 import re
 from pathlib import Path
+from typing import Any
 from urllib.parse import parse_qs, quote, urlsplit
 
 from django.test import SimpleTestCase
@@ -26,11 +27,13 @@ COLUMNS = ["Artikelnr.", "Name", "Kategorie", "Gebinde", "Bestand",
 KEYS = ["number", "name", "category", "container", "stock", "mean_year",
         "this_year", "coverage", "compartment", "box", "bulk", "note"]
 SORTED_COLUMNS = dict(zip(KEYS, COLUMNS))
-# The columns the view controls may hide, and those hidden at first.
-OPTIONAL = [key for key in KEYS if key not in ("number", "name", "stock")]
+# The base columns, which both views show and no user can hide, and the
+# table view's own columns, which a user may hide.
+BASE = KEYS[:5]
+TABLE_VIEW = KEYS[5:]
+# The columns hidden at first.
 HIDDEN = {"note"}
-# The columns that stay while the details show.
-DETAILED = ["number", "name", "container", "stock", "coverage"]
+COOKIE = "item-list-view"
 LEVEL_VALUES = ["out", "critical", "low", "watch", "ok", "undelivered",
                 "dormant"]
 LEVEL_LABELS = ["aufgebraucht", "kritisch", "niedrig", "beobachten",
@@ -67,7 +70,19 @@ def body_rows(root) -> list:
 
 class TableCase(InventoryCase):
 
-    def listing(self, query: str = ""):
+    def remember(self, view: str | None) -> None:
+        """Set the cookie that remembers the view to VIEW, or leave it
+        out when VIEW is None."""
+        if view is None:
+            self.client.cookies.pop(COOKIE, None)
+        else:
+            self.client.cookies[COOKIE] = view
+
+    def listing(self, query: str = "", view: str | None = None):
+        """The list's page, after setting the cookie that remembers the
+        view to VIEW unless that is None."""
+        if view is not None:
+            self.remember(view)
         response = self.client.get(LIST + query)
         self.assertEqual(response.status_code, 200)
         return page(response)
@@ -140,6 +155,36 @@ class ColumnTests(TableCase):
                 for key, cell in zip(KEYS, cells):
                     self.assertIn(f"col-{key}", cell.classes)
 
+    def test_the_base_columns_come_first(self) -> None:
+        """Scenario: Base columns first."""
+        self.means_item("T-1", note="Notiz")
+        root = self.listing()
+        header, rows = table(root)
+        self.assertEqual(header[:5], ["Artikelnr.", "Name", "Kategorie",
+                                      "Gebinde", "Bestand"])
+        self.assertEqual(header[5:], ["Ø Jahr", "Abgegeben", "Reichweite",
+                                      "Fach", "Box", "Bulk verfügbar",
+                                      "Bemerkung"])
+        cells = [c for c in root.find("tbody").find("tr").children
+                 if not isinstance(c, str) and c.tag == "td"]
+        self.assertEqual([[n[4:] for n in c.classes
+                           if n.startswith("col-")][0] for c in cells],
+                         KEYS)
+
+    def test_the_table_views_cells_are_marked_as_its_own(self) -> None:
+        """Scenario: Base columns first (the marks)."""
+        self.item("T-1")
+        self.item(None, "Ohne Nummer")
+        grid = self.listing().find("table")
+        for tr in [tr for tr in grid.find_all("tr")
+                   if tr.closest("table") is grid]:
+            cells = [c for c in tr.children
+                     if not isinstance(c, str) and c.tag in ("th", "td")]
+            for key, cell in zip(KEYS, cells):
+                with self.subTest(row=tr.text()[:30], column=key):
+                    self.assertEqual("table-only" in cell.classes,
+                                     key in TABLE_VIEW)
+
     def test_the_heading_counts_the_inventory(self) -> None:
         self.item("T-1", category="A")
         self.item("T-2", category="B")
@@ -199,7 +244,7 @@ class SortTests(TableCase):
     def test_sorting_by_a_column(self) -> None:
         self.item("A-1", category="Säuren")
         self.item("A-2")
-        self.item("A-3", category="Ester")
+        first = self.item("A-3", category="Ester")
         root = self.listing("?sort=category")
         header, rows = table(root)
         self.assertEqual([row[header[0]].text() for row in rows],
@@ -210,10 +255,12 @@ class SortTests(TableCase):
                          ["A-1", "A-3", "A-2"])
         headers = self.headers(root)
         self.assertEqual(headers["Kategorie"].get("aria-sort"), "ascending")
+        selected = [str(first.pk)]
         self.assertEqual(self.header_link(root, "Kategorie"),
-                         {"sort": ["category"], "dir": ["desc"]})
+                         {"sort": ["category"], "dir": ["desc"],
+                          "selected": selected})
         self.assertEqual(self.header_link(root, "Artikelnr."),
-                         {"sort": ["number"]})
+                         {"sort": ["number"], "selected": selected})
         self.assertEqual([name for name, th in headers.items()
                           if th.get("aria-sort") is not None],
                          ["Kategorie"])
@@ -366,15 +413,30 @@ class SortTests(TableCase):
                 self.assertEqual(self.articles(query), ["E-1", "E-2", "E-3"])
 
     def test_the_header_links_keep_the_filters(self) -> None:
+        """The list the filters leave empty names no selection."""
         self.item("K-1", category="Grün")
         root = self.listing(f"?category={quote('Grün')}&q=k&stock=watch"
                             "&sort=name&dir=desc")
+        self.assertEqual(self.articles(f"?category={quote('Grün')}"
+                                       "&stock=watch"), [])
         self.assertEqual(self.header_link(root, "Name"), {
             "category": ["Grün"], "q": ["k"], "stock": ["watch"],
             "sort": ["name"]})
         self.assertEqual(self.header_link(root, "Bulk verfügbar"), {
             "category": ["Grün"], "q": ["k"], "stock": ["watch"],
             "sort": ["bulk"]})
+
+    def test_the_header_links_keep_the_filters_and_the_selection(
+            self) -> None:
+        self.item("K-1", category="Grün")
+        second = self.item("K-2", category="Grün")
+        root = self.listing(f"?category={quote('Grün')}&q=k"
+                            f"&sort=name&dir=desc&selected={second.pk}")
+        for column in ("Name", "Bulk verfügbar"):
+            with self.subTest(column=column):
+                link = self.header_link(root, column)
+                self.assertEqual(link.get("selected"), [str(second.pk)])
+                self.assertEqual(link.get("q"), ["k"])
 
 
 class FilterTests(TableCase):
@@ -401,17 +463,20 @@ class FilterTests(TableCase):
 
     def test_the_filters_keep_the_order_and_reset_to_it(self) -> None:
         self.item("CH-0012", "(E)-Zimtsäure", "100", "mg")
-        self.item("CH-0016", "Isopentylacetat", "100", "mg")
+        first = self.item("CH-0016", "Isopentylacetat", "100", "mg")
         self.item("CH-0010", "Aspirin", "1", "g")
         root = self.listing(f"?container={quote('100 mg')}"
                             "&sort=name&dir=desc")
         header, rows = table(root)
         self.assertEqual([row[header[0]].text() for row in rows],
                          ["CH-0016", "CH-0012"])
+        selected = [str(first.pk)]
         self.assertEqual(self.header_link(root, "Name"),
-                         {"container": ["100 mg"], "sort": ["name"]})
+                         {"container": ["100 mg"], "sort": ["name"],
+                          "selected": selected})
         self.assertEqual(query_of(self.reset_link(root).get("href")),
-                         {"sort": ["name"], "dir": ["desc"]})
+                         {"sort": ["name"], "dir": ["desc"],
+                          "selected": selected})
         self.assertIsNone(self.reset_link(self.listing()))
 
     def test_the_form_above_the_table(self) -> None:
@@ -523,11 +588,11 @@ class FilterTests(TableCase):
         self.assertEqual(field_value(root, "q"), "o")
 
     def test_without_a_reversed_order_no_dir_is_kept(self) -> None:
-        self.item("O-1")
+        item = self.item("O-1")
         form = self.listing().find("form", id="filters")
         self.assertEqual({i.get("name"): i.get("value") for i in
                           form.find_all("input", type="hidden")},
-                         {"sort": "category"})
+                         {"sort": "category", "selected": str(item.pk)})
 
     def test_the_column_filters_are_gone(self) -> None:
         self.item("CH-0012", "(E)-Zimtsäure", note="Kühlschrank")
@@ -678,7 +743,7 @@ class PopupTests(TableCase):
 class ViewControlTests(TableCase):
 
     def test_view_controls(self) -> None:
-        """Scenario: View controls."""
+        """Scenario: Columns a user may hide, View controls."""
         self.item("V-1")
         root = self.listing()
         columns = root.find(id="columns-menu")
@@ -687,7 +752,7 @@ class ViewControlTests(TableCase):
             "popovertarget": "columns-menu"}))
         boxes = columns.find_all("input", type="checkbox")
         self.assertEqual([box.get("id") for box in boxes],
-                         [f"column-{key}" for key in OPTIONAL])
+                         [f"column-{key}" for key in TABLE_VIEW])
         self.assertEqual({box.get("id")[7:] for box in boxes
                           if "checked" not in box.attrs}, HIDDEN)
         labels = {box.get("id")[7:]: box.parent.text() for box in boxes}
@@ -704,14 +769,7 @@ class ViewControlTests(TableCase):
         self.assertEqual(heat.get("type"), "checkbox")
         self.assertIn("checked", heat.attrs)
         self.assertIn("Verbrauch einfärben", heat.parent.text())
-        detail = root.find("input", id="detail-switch")
-        self.assertIsNotNone(detail, "the view controls lack the switch")
-        self.assertEqual(detail.get("type"), "checkbox")
-        self.assertEqual(detail.get("data-remember"), "item-list:detail")
-        self.assertNotIn("checked", detail.attrs)
-        self.assertIn("Details", detail.parent.text())
-        self.assertIsNotNone(detail.closest("main"))
-        controls = [*boxes, height, heat, detail]
+        controls = [*boxes, height, heat]
         for control in controls:
             with self.subTest(control=control.get("id")):
                 self.assertTrue(control.get("data-remember"))
@@ -721,6 +779,19 @@ class ViewControlTests(TableCase):
         remembered = [c.get("data-remember") for c in controls]
         self.assertEqual(len(set(remembered)), len(remembered))
 
+    def test_the_menu_offers_no_base_column(self) -> None:
+        """Scenario: Columns a user may hide."""
+        self.item("V-1")
+        for view in (None, "table", "details"):
+            with self.subTest(view=view):
+                boxes = self.listing(view=view).find(
+                    id="columns-menu").find_all("input", type="checkbox")
+                offered = {box.get("id") for box in boxes}
+                self.assertEqual(offered,
+                                 {f"column-{key}" for key in TABLE_VIEW})
+                for key in BASE:
+                    self.assertNotIn(f"column-{key}", offered)
+
     def test_the_columns_shown_at_first(self) -> None:
         """Item list: Fach and Box show at first, Bemerkung does not."""
         self.item("V-1")
@@ -728,24 +799,22 @@ class ViewControlTests(TableCase):
             "input", type="checkbox")
         shown = {box.get("id")[7:]: "checked" in box.attrs
                  for box in boxes}
+        self.assertEqual(set(shown), set(TABLE_VIEW))
         self.assertTrue(shown["compartment"])
         self.assertTrue(shown["box"])
         self.assertFalse(shown["note"])
         self.assertEqual({key for key, on in shown.items() if not on},
                          {"note"})
 
-    def test_the_switch_is_checked_by_detail_in_the_query(self) -> None:
+    def test_the_old_switch_is_gone(self) -> None:
         item = self.item("V-1")
-        for query, checked in (
-                ("", False), ("?category=A", False),
-                (f"?detail={item.pk}", True),
-                ("?detail=999999", True),
-                (f"?q=v&detail={item.pk}&sort=name", True)):
+        for query in ("", f"?detail={item.pk}", f"?selected={item.pk}"):
             with self.subTest(query=query):
-                switch = self.listing(query).find("input",
-                                                  id="detail-switch")
-                self.assertIsNotNone(switch)
-                self.assertEqual("checked" in switch.attrs, checked)
+                root = self.listing(query)
+                self.assertIsNone(root.find(id="detail-switch"))
+                self.assertEqual(
+                    [e.get("data-remember") for e in root.walk()
+                     if e.get("data-remember") == "item-list:detail"], [])
 
     def test_signed_in_extras_keep_their_places(self) -> None:
         self.client.force_login(self.kl)
@@ -755,6 +824,259 @@ class ViewControlTests(TableCase):
         self.assertEqual(header, COLUMNS)
         box = rows[0]["Artikelnr."].find("input", type="checkbox")
         self.assertEqual(box.get("form"), "pick")
+
+
+class ViewTests(TableCase):
+    """The two views, the switch between them and the cookie that
+    remembers the view."""
+
+    def radios(self, root) -> dict[str, Any]:
+        found = root.find_all("input", type="radio", name="view")
+        self.assertEqual(sorted(r.get("id") for r in found),
+                         ["view-details", "view-table"])
+        return {r.get("id"): r for r in found}
+
+    def label_of(self, root, control) -> str:
+        wrapping = control.closest("label")
+        if wrapping is not None:
+            return wrapping.text()
+        named = [e for e in root.find_all("label")
+                 if e.get("for") == control.get("id")]
+        self.assertEqual(len(named), 1)
+        return named[0].text()
+
+    def test_the_switch_is_a_fieldset_of_two_radios(self) -> None:
+        self.item("V-1")
+        root = self.listing()
+        radios = self.radios(root)
+        table_radio, details_radio = radios["view-table"], \
+            radios["view-details"]
+        fieldset = table_radio.closest("fieldset")
+        self.assertIsNotNone(fieldset)
+        self.assertIs(details_radio.closest("fieldset"), fieldset)
+        self.assertEqual(fieldset.find("legend").text(), "Ansicht")
+        self.assertEqual(self.label_of(root, table_radio), "Tabelle")
+        self.assertEqual(self.label_of(root, details_radio), "Details")
+        self.assertIsNotNone(fieldset.closest("main"))
+        self.assertIsNotNone(root.find("div", cls="item-layout"))
+
+    def test_the_switch_belongs_to_no_form(self) -> None:
+        self.item("V-1")
+        for radio in self.radios(self.listing()).values():
+            with self.subTest(radio=radio.get("id")):
+                self.assertIsNone(radio.closest("form"))
+                self.assertIsNone(radio.get("form"))
+                self.assertIsNone(radio.get("data-remember"))
+
+    def test_the_view_comes_from_the_cookie(self) -> None:
+        """Scenario: The view from the cookie."""
+        self.item("V-1")
+        for cookie, view in ((None, "table"), ("details", "details"),
+                             ("table", "table"), ("other", "table"),
+                             ("", "table")):
+            with self.subTest(cookie=cookie):
+                self.remember(cookie)
+                root = self.listing()
+                radios = self.radios(root)
+                self.assertEqual(
+                    [name for name, radio in radios.items()
+                     if "checked" in radio.attrs], [f"view-{view}"])
+                self.assertEqual(root.find(cls="item-layout")
+                                 .get("data-view"), view)
+
+    def test_the_cookie_does_not_change_the_rows(self) -> None:
+        self.item("V-1")
+        self.item("V-2")
+        wanted = self.articles()
+        for cookie in ("details", "table", "other"):
+            with self.subTest(cookie=cookie):
+                self.listing(view=cookie)
+                self.assertEqual(self.articles(), wanted)
+
+    def test_no_link_or_form_names_a_view(self) -> None:
+        """Scenario: The view from the cookie (the links)."""
+        self.client.force_login(self.kl)
+        self.item("V-1", category="Ester")
+        self.item("V-2", category="Säuren")
+        for cookie in (None, "details", "table", "other"):
+            with self.subTest(cookie=cookie):
+                self.remember(cookie)
+                root = self.listing("?category=Ester&stock=ok&sort=name")
+                for link in root.find_all("a"):
+                    href = link.get("href", "")
+                    self.assertNotIn("view", parse_qs(urlsplit(href).query),
+                                     href)
+                for form in root.find_all("form"):
+                    self.assertNotIn("view", parse_qs(
+                        urlsplit(form.get("action", "")).query))
+                    self.assertEqual(form.find_all(
+                        ("input", "select", "textarea", "button"),
+                        name="view"), [])
+                self.assertEqual(
+                    [c.get("id") for c in root.find_all(
+                        ("input", "select", "textarea", "button"),
+                        name="view")
+                     if c.closest("form") is not None
+                     or c.get("form") is not None], [])
+
+    def test_a_view_in_the_address_is_not_read(self) -> None:
+        self.item("V-1")
+        for query in ("?view=details", "?view=table"):
+            with self.subTest(query=query):
+                self.remember(None)
+                root = self.listing(query)
+                self.assertEqual(root.find(cls="item-layout")
+                                 .get("data-view"), "table")
+                self.assertNotIn("checked",
+                                 self.radios(root)["view-details"].attrs)
+                root = self.listing(query, view="details")
+                self.assertEqual(root.find(cls="item-layout")
+                                 .get("data-view"), "details")
+
+
+class GeneratedRuleTests(TableCase):
+    """The rules that hide the table view's columns: the page's head
+    holds them, one per column, and the stylesheet none."""
+
+    def style(self, root) -> str:
+        found = [e for e in root.find("head").find_all("style")
+                 if "#column-" in e.text()]
+        self.assertEqual(len(found), 1, "the head holds no such <style>")
+        return found[0].text()
+
+    def test_the_head_holds_one_rule_per_table_view_column(self) -> None:
+        self.item("G-1")
+        text = self.style(self.listing())
+        found = [(part.strip(), body) for selector, body in rules(text)
+                 for part in selector.split(",")]
+        self.assertEqual(
+            sorted(part for part, _ in found),
+            sorted(f"main:has(#column-{key}:not(:checked)) "
+                   f".item-table .col-{key}" for key in TABLE_VIEW))
+        for part, body in found:
+            with self.subTest(rule=part):
+                self.assertRegex(body, r"display:\s*none")
+
+    def test_no_rule_names_a_base_column(self) -> None:
+        self.item("G-1")
+        text = self.style(self.listing())
+        for key in BASE:
+            with self.subTest(column=key):
+                self.assertNotIn(f"#column-{key}", text)
+                self.assertNotIn(f".col-{key}", text)
+
+    def test_the_rules_are_the_same_in_both_views(self) -> None:
+        self.item("G-1")
+        wanted = self.style(self.listing())
+        for cookie in ("details", "table"):
+            with self.subTest(cookie=cookie):
+                self.assertEqual(self.style(self.listing(view=cookie)),
+                                 wanted)
+
+
+class SelectionKeptTests(TableCase):
+    """The links and the field of the page that name the selected row
+    (Item list: Scenario "The selection kept")."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.second = self.item("A-2", category="Ester")
+        self.third = self.item("A-3", category="Ester")
+        self.other = self.item("A-1", category="Säuren")
+
+    def carriers(self, root) -> dict[str, list[str | None]]:
+        """The ``selected`` that the form's field, the stock levels'
+        links, the headers' links and the reset link name, each as the
+        list of values, with None for a link that names none."""
+        form = root.find("form", id="filters")
+        found: dict[str, list[str | None]] = {
+            "field": [i.get("value") for i in
+                      form.find_all("input", name="selected")]}
+
+        def selected(links) -> list[str | None]:
+            return [(query_of(a.get("href")).get("selected") or [None])[0]
+                    for a in links]
+
+        found["stock levels"] = selected(
+            root.find(id="stock-menu").find_all("a"))
+        found["headers"] = selected(root.find("thead").find_all("a"))
+        found["reset"] = selected(
+            [a for a in root.find_all("a") if a.text() == "Zurücksetzen"])
+        return found
+
+    def assert_names(self, root, item) -> None:
+        for name, values in self.carriers(root).items():
+            with self.subTest(carrier=name):
+                self.assertTrue(values, f"the page has no {name}")
+                self.assertEqual(set(values), {str(item.pk)})
+
+    def test_the_selection_kept(self) -> None:
+        """Scenario: The selection kept."""
+        for view in (None, "details"):
+            self.remember(view)
+            for query, wanted in (
+                    (f"?category=Ester&selected={self.third.pk}",
+                     self.third),
+                    ("?category=Ester", self.second),
+                    (f"?category=Ester&selected={self.other.pk}",
+                     self.second)):
+                with self.subTest(query=query, view=view):
+                    self.assert_names(self.listing(query), wanted)
+
+    def test_an_empty_list_names_no_selection(self) -> None:
+        for view in (None, "details"):
+            self.remember(view)
+            for query in ("?category=Basen",
+                          f"?category=Basen&selected={self.third.pk}"):
+                with self.subTest(query=query, view=view):
+                    root = self.listing(query)
+                    carried = self.carriers(root)
+                    self.assertEqual(carried["field"], [])
+                    self.assertTrue(carried["stock levels"])
+                    self.assertTrue(carried["headers"])
+                    self.assertEqual(len(carried["reset"]), 1)
+                    for name, values in carried.items():
+                        self.assertEqual([v for v in values
+                                          if v is not None], [], name)
+
+    def test_the_first_row_stands_in_without_a_selection(self) -> None:
+        root = self.listing()
+        first = root.find("tbody").find("tr").get("data-item")
+        for name, values in self.carriers(root).items():
+            if name != "reset":
+                with self.subTest(carrier=name):
+                    self.assertEqual(set(values), {first})
+
+    def test_the_first_row_of_the_order_in_force_stands_in(self) -> None:
+        root = self.listing("?sort=number&dir=desc")
+        self.assertEqual(root.find("tbody").find("tr").get("data-item"),
+                         str(self.third.pk))
+        for name, values in self.carriers(root).items():
+            if name != "reset":
+                with self.subTest(carrier=name):
+                    self.assertEqual(set(values), {str(self.third.pk)})
+
+    def test_the_links_keep_their_filters(self) -> None:
+        root = self.listing(f"?category=Ester&sort=name"
+                            f"&selected={self.third.pk}")
+        stock = [query_of(a.get("href")) for a in
+                 root.find(id="stock-menu").find_all("a")]
+        self.assertTrue(stock)
+        for query in stock:
+            self.assertEqual(query.get("category"), ["Ester"])
+            self.assertEqual(query.get("selected"), [str(self.third.pk)])
+        reset = [a for a in root.find_all("a")
+                 if a.text() == "Zurücksetzen"][0]
+        self.assertEqual(query_of(reset.get("href")), {
+            "sort": ["name"], "selected": [str(self.third.pk)]})
+
+    def test_the_field_is_hidden_and_belongs_to_the_filter_form(
+            self) -> None:
+        root = self.listing(f"?selected={self.third.pk}")
+        found = root.find("form", id="filters").find_all("input",
+                                                         name="selected")
+        self.assertEqual([f.get("type") for f in found], ["hidden"])
+        self.assertEqual(len(root.find_all("input", name="selected")), 1)
 
 
 class HeatTests(TableCase):
@@ -860,16 +1182,6 @@ def located(text: str) -> list[tuple[int, str, str]]:
             if not m.group(1).strip().startswith("@")]
 
 
-def columns_hit(selector: str) -> set[str]:
-    """The keys of the columns a selector that hides cells reaches: the
-    ones it names, or, when it names them only inside ``:not()``, all
-    the others."""
-    plain = re.sub(r":not\([^)]*\)", "", selector)
-    named = set(re.findall(r"\.col-(\w+)", plain))
-    excepted = set(re.findall(r"\.col-(\w+)", selector)) - named
-    return named or (set(KEYS) - excepted if excepted else set())
-
-
 class StylesheetTests(SimpleTestCase):
 
     @classmethod
@@ -900,16 +1212,12 @@ class StylesheetTests(SimpleTestCase):
                      ".lab-table-note"):
             self.assertIn(part, hidden)
 
-    def test_unchecked_columns_are_hidden(self) -> None:
-        """Scenario: View controls (the stylesheet)."""
-        found = rules(self.text)
-        for key in OPTIONAL:
-            with self.subTest(column=key):
-                self.assertTrue(any(
-                    f"#column-{key}:not(:checked)" in selector
-                    and f".col-{key}" in selector
-                    and re.search(r"display:\s*none", body)
-                    for selector, body in found), key)
+    def test_the_stylesheet_holds_no_rule_per_column(self) -> None:
+        """The rules that hide a column of ``Spalten`` come with the
+        page, not with the stylesheet."""
+        for selector, _ in rules(self.text):
+            with self.subTest(selector=selector):
+                self.assertNotIn("#column-", selector)
 
     def test_the_switch_drops_the_heat(self) -> None:
         found = rules(self.text)
@@ -970,42 +1278,96 @@ class StylesheetTests(SimpleTestCase):
                 if needle in selector
                 and any(a <= start < b for a, b in spans)]
 
-    def test_the_switch_narrows_the_table_on_screen(self) -> None:
-        """Item list: while the details show, the table keeps five
-        columns."""
-        hidden: set[str] = set()
-        for selector, body in self.screen_rules("#detail-switch:checked"):
-            if re.search(r"display:\s*none", body):
-                hidden |= columns_hit(selector)
-        self.assertEqual(hidden, set(KEYS) - set(DETAILED))
+    def hiding(self, needle: str) -> list[tuple[int, str, str]]:
+        """Each rule of the stylesheet whose selector holds NEEDLE and
+        whose body hides, as its place, one selector of its list and its
+        body."""
+        return [(start, part.strip(), body)
+                for start, selector, body in located(self.text)
+                for part in selector.split(",")
+                if needle in part
+                and re.search(r"display:\s*none", body)]
 
-    def test_the_switch_rules_are_for_the_screen_alone(self) -> None:
+    def test_the_details_view_hides_the_table_views_columns(self) -> None:
+        """Item list: while the details view shows, the table keeps the
+        base columns."""
+        scripted = [part for _, part, _ in self.hiding(".table-only")
+                    if re.search(r"\[data-view=[\"']?details[\"']?\]", part)
+                    and "[data-scripted]" in part
+                    and ":not([data-scripted])" not in part]
+        self.assertTrue(scripted, "no rule hides .table-only by data-view")
+        plain = [part for _, part, _ in self.hiding(".table-only")
+                 if "#view-details:checked" in part
+                 and ":not([data-scripted])" in part]
+        self.assertTrue(plain, "no rule hides .table-only by the radio")
+
+    def test_the_table_views_columns_hide_on_screen_alone(self) -> None:
+        spans = screen_blocks(blanked(self.text))
+        found = self.hiding(".table-only")
+        self.assertTrue(found)
+        for place, part, _ in found:
+            with self.subTest(selector=part):
+                self.assertTrue(any(a <= place < b for a, b in spans))
+
+    def test_the_views_do_not_depend_on_the_old_switch(self) -> None:
+        for _, selector, _ in located(self.text):
+            with self.subTest(selector=selector):
+                self.assertNotIn("detail-switch", selector)
+
+    def test_the_radio_rules_are_for_the_screen_alone(self) -> None:
         spans = screen_blocks(blanked(self.text))
         found = [start for start, selector, _ in located(self.text)
-                 if "#detail-switch" in selector]
+                 if "#view-details" in selector]
         self.assertTrue(found)
         for place in found:
             with self.subTest(at=place):
                 self.assertTrue(any(a <= place < b for a, b in spans))
 
-    def test_the_switch_shows_the_pane(self) -> None:
-        shown = self.screen_rules("#detail-switch:checked")
-        self.assertTrue(any("#item-detail" in selector
-                            for selector, _ in shown))
-        for selector, body in shown:
-            if "#item-detail" in selector:
-                self.assertNotRegex(body, r"display:\s*none", selector)
+    def test_the_details_view_shows_the_pane(self) -> None:
+        shown = [(part.strip(), body)
+                 for start, selector, body in located(self.text)
+                 for part in selector.split(",")
+                 if "#item-detail" in part
+                 and re.search(r"display:\s*(?!none\b)[a-z]", body)]
         self.assertTrue(any(
-            re.search(r"display:\s*(?!none\b)[a-z]", body)
-            for selector, body in shown if "#item-detail" in selector))
+            re.search(r"\[data-view=[\"']?details[\"']?\]", part)
+            and "[data-scripted]" in part for part, _ in shown), shown)
+        self.assertTrue(any(
+            "#view-details:checked" in part
+            and ":not([data-scripted])" in part for part, _ in shown),
+            shown)
 
-    def test_the_rows_show_a_pointer_and_the_chosen_one_a_mark(self) -> None:
-        shown = self.screen_rules("#detail-switch:checked")
-        self.assertTrue(any(
-            "tr" in selector and re.search(r"cursor:\s*pointer", body)
-            for selector, body in shown))
-        self.assertTrue(any("aria-current" in selector
-                            for selector, _ in shown))
+    def test_the_table_takes_its_natural_width(self) -> None:
+        """Item list: a base column is as wide in one view as in the
+        other, so the table does not stretch to its box."""
+        ours = (".item-table", "table.item-table",
+                ".inventory-table.item-table")
+        widths = [(start, part.strip(), width.strip())
+                  for start, selector, body in located(self.text)
+                  for part in selector.split(",")
+                  for width in re.findall(r"(?<![-\w])width:\s*([^;}]+)",
+                                          body)
+                  if part.strip() in ours]
+        self.assertTrue(widths, "no rule sets the width of .item-table")
+        start, part, width = widths[-1]
+        self.assertNotEqual(width, "100%")
+        if part == ".item-table":
+            every = [at for at, selector, body in located(self.text)
+                     if selector.strip() == ".inventory-table"
+                     and re.search(r"(?<![-\w])width:\s*100%", body)]
+            self.assertTrue(every and all(at < start for at in every),
+                            "the rule does not follow .inventory-table")
+
+    def test_the_marked_row_is_marked_in_both_views(self) -> None:
+        marks = [(part.strip(), body)
+                 for _, selector, body in located(self.text)
+                 for part in selector.split(",")
+                 if re.search(r"\btr\[aria-current", part)]
+        self.assertTrue(marks, "no rule marks the row")
+        both = [part for part, body in marks
+                if not re.search(r"view-|data-view|detail-switch", part)
+                and re.search(r"background|box-shadow", body)]
+        self.assertTrue(both, marks)
 
     def test_the_pane_is_hidden_without_the_switch_and_on_paper(
             self) -> None:
@@ -1030,3 +1392,74 @@ class StylesheetTests(SimpleTestCase):
                             for body in waiting), waiting)
         self.assertTrue(any(re.search(r"opacity:\s*0?\.\d+", body)
                             for body in waiting), waiting)
+
+    def motion_spans(self) -> list[tuple[int, int]]:
+        """The spans of the bodies of the blocks that apply only where
+        the user has not asked for reduced motion."""
+        text = blanked(self.text)
+        spans = []
+        for found in re.finditer(
+                r"@media[^{}]*prefers-reduced-motion:\s*no-preference"
+                r"[^{}]*\{", text):
+            body, end = balanced(text, found.start())
+            spans.append((end - len(body) - 1, end))
+        return spans
+
+    def named(self) -> dict[str, list[tuple[int, str]]]:
+        """The names that rules give to view transitions, each with the
+        places and selectors of the rules that give it."""
+        found: dict[str, list[tuple[int, str]]] = {}
+        for start, selector, body in located(self.text):
+            for name in re.findall(
+                    r"view-transition-name:\s*([\w-]+)", body):
+                found.setdefault(name, []).append((start, selector))
+        return found
+
+    def test_the_table_box_and_the_pane_are_named_for_the_transition(
+            self) -> None:
+        names = self.named()
+        boxed = [name for name, places in names.items()
+                 if any("table-scroll" in selector
+                        or "table-sticky" in selector
+                        for _, selector in places)]
+        paned = [name for name, places in names.items()
+                 if any("item-detail" in selector
+                        for _, selector in places)]
+        self.assertTrue(boxed, "the table box has no name")
+        self.assertTrue(paned, "the pane has no name")
+        self.assertFalse(set(boxed) & set(paned))
+        self.assertNotIn("none", boxed + paned)
+
+    def test_the_transition_is_for_users_who_accept_motion(self) -> None:
+        """The names and the snapshots' rules sit in
+        ``prefers-reduced-motion: no-preference`` alone."""
+        spans = self.motion_spans()
+        self.assertTrue(spans, "no block for no-preference")
+        places = [(place, selector)
+                  for found in self.named().values()
+                  for place, selector in found]
+        places += [(start, selector)
+                   for start, selector, _ in located(self.text)
+                   if "::view-transition" in selector]
+        self.assertTrue(places)
+        for place, selector in places:
+            with self.subTest(selector=selector):
+                self.assertTrue(any(a <= place < b for a, b in spans))
+
+    def test_the_tables_snapshots_are_drawn_unscaled(self) -> None:
+        names = self.named()
+        box = next((name for name, places in names.items()
+                    if any("table-scroll" in selector
+                           or "table-sticky" in selector
+                           for _, selector in places)), None)
+        self.assertIsNotNone(box, "the table box has no name")
+        for side in ("old", "new"):
+            with self.subTest(snapshot=side):
+                found = [body for _, selector, body in located(self.text)
+                         if re.search(
+                             rf"::view-transition-{side}\(\s*{box}\s*\)",
+                             selector)]
+                self.assertTrue(found, f"no rule for the {side} snapshot")
+                self.assertTrue(any(
+                    re.search(r"object-fit:\s*none", body)
+                    for body in found), found)

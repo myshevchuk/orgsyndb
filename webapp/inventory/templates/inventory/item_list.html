@@ -1,5 +1,8 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n l10n lab inventory %}
 {% block title %}{% translate "End products" %}{% endblock %}
+{% block head %}<style>
+{% for column in table_columns %}main:has(#column-{{ column.key }}:not(:checked)) .item-table .col-{{ column.key }} { display: none; }
+{% endfor %}</style>{% endblock %}
 {% block main %}
 <div class="lab-heading">
 <h1>{% translate "End products" %}</h1>
@@ -20,6 +23,7 @@
 {% if filters.stock %}<input type="hidden" name="stock" value="{{ filters.stock }}">
 {% endif %}<input type="hidden" name="sort" value="{{ filters.sort }}">
 {% if filters.descending %}<input type="hidden" name="dir" value="desc">
+{% endif %}{% if selected %}<input type="hidden" name="selected" value="{{ selected }}">
 {% endif %}<button type="submit">{% translate "Filter" %}</button>
 </form>
 <div class="lab-control">
@@ -56,7 +60,7 @@
 <div id="columns-menu" class="lab-popup lab-menu" popover>
 <fieldset>
 <legend>{% translate "Columns" %}</legend>
-{% for column, checked in view_columns %}<label><input type="checkbox" id="column-{{ column.key }}" data-remember="item-list:column-{{ column.key }}"{% if checked %} checked{% endif %}> {{ column.label }}</label>
+{% for column in table_columns %}<label><input type="checkbox" id="column-{{ column.key }}" data-remember="item-list:column-{{ column.key }}"{% if column.shown %} checked{% endif %}> {{ column.label }}</label>
 {% endfor %}</fieldset>
 </div>
 </div>
@@ -64,7 +68,11 @@
 <div class="table-caption">
 <p id="list-summary" class="list-summary" data-refresh>{% blocktranslate with shown=rows|length count total=total %}{{ shown }} of {{ total }} item{% plural %}{{ shown }} of {{ total }} items{% endblocktranslate %} · {{ order }}{% if filters.active %} · <a href="{{ reset }}">{% translate "Reset" %}</a>{% endif %}</p>
 <div class="lab-view-controls">
-<p class="detail-switch"><label><input type="checkbox" id="detail-switch" data-remember="item-list:detail"{% if detail_on %} checked{% endif %}> {% translate "Details" %}</label></p>
+<fieldset class="view-switch">
+<legend class="visually-hidden">{% translate "View" context "item list" %}</legend>
+<label><input type="radio" id="view-table" name="view" value="table" class="visually-hidden"{% if view == "table" %} checked{% endif %}><span>{% translate "Table" context "item list" %}</span></label>
+<label><input type="radio" id="view-details" name="view" value="details" class="visually-hidden"{% if view == "details" %} checked{% endif %}><span>{% translate "Details" %}</span></label>
+</fieldset>
 <label>{% translate "Row height" %}
 <select id="row-height" data-remember="item-list:row-height">
 <option value="compact" selected>{% translate "Compact" %}</option>
@@ -73,28 +81,17 @@
 <p class="heat-legend"><label><input type="checkbox" id="heat-switch" data-remember="item-list:heat" checked> {% translate "Colour consumption" %}</label> <span class="heat-scale">{% translate "little" context "consumption" %}{% for name in heats %} <span class="heat-swatch {{ name }}" aria-hidden="true"></span>{% endfor %} {% translate "much" context "consumption" %}</span></p>
 </div>
 </div>
-<div class="item-layout">
+<div class="item-layout" data-view="{{ view }}">
 <div class="table-scroll table-sticky">
 <table class="inventory-table item-table">
 <thead>
-<tr>{% for column in columns %}<th scope="col" class="col-{{ column.key }}{% if column.numeric %} number{% endif %}"{% if column.aria_sort %} aria-sort="{{ column.aria_sort }}"{% endif %}><a href="{{ column.href }}">{{ column.label }}</a>{% if column.unit %}<small>{{ column.unit }}</small>{% endif %}</th>{% endfor %}</tr>
+<tr>{% for column in columns %}<th scope="col" class="{{ column.classes }}"{% if column.aria_sort %} aria-sort="{{ column.aria_sort }}"{% endif %}><a href="{{ column.href }}">{{ column.label }}</a>{% if column.unit %}<small>{{ column.unit }}</small>{% endif %}</th>{% endfor %}</tr>
 </thead>
 <tbody id="item-rows" data-refresh hx-target="#item-detail" hx-swap="outerHTML" hx-sync="this:replace" hx-indicator="#item-detail">
-{% for row in rows %}{% with item=row.item figures=row.figures %}<tr data-item="{{ item.pk }}" hx-get="/lab/inventory/items/{{ item.pk }}/detail/" hx-trigger="item-select"{% if row is chosen %} aria-current="true"{% endif %}{% if row.category_start %} class="category-start"{% endif %}>
-<td class="col-number">{% if item.article_number %}{% if user.is_authenticated %}<input type="checkbox" name="item" value="{{ item.pk }}" form="pick" aria-label="{% blocktranslate %}Select {{ item }}{% endblocktranslate %}"> {% endif %}<a href="/lab/inventory/items/{{ item.pk }}/">{{ item.article_number }}</a>{% endif %}</td>
-<td class="col-name">{% if not item.article_number %}<a href="/lab/inventory/items/{{ item.pk }}/">{{ item.name }}</a>{% else %}{% substance item.substance %}{% endif %}{% if item|new_on:today %}<sup class="mark-new">{% translate "new" context "item" %}</sup>{% endif %}</td>
-<td class="col-category">{{ item.category }}</td>
-<td class="col-container number">{{ item.container }}</td>
-<td class="col-stock number stock level-{{ figures.level }}" title="{{ figures.level|level_label }}">{{ item.quantity }}<span class="visually-hidden"> {{ figures.level|level_label }}</span></td>
-<td class="col-mean_year number{% if row.heat_mean %} {{ row.heat_mean }}{% endif %}{% if figures.projected %} projected" title="{% translate "projected from the current year" %}{% endif %}">{% if figures.mean_year is not None %}{{ figures.mean_year|floatformat:1 }}{% endif %}</td>
-<td class="col-this_year number{% if row.heat_year %} {{ row.heat_year }}{% endif %}">{{ figures.this_year }}</td>
-<td class="col-coverage number{% if figures.projected and figures.coverage is not None %} projected" title="{% translate "projected from the current year" %}{% endif %}">{% if figures.coverage is not None %}{{ figures.coverage|floatformat:1 }}{% endif %}</td>
-<td class="col-compartment">{{ item.compartment }}</td>
-<td class="col-box">{{ item.box }}</td>
-<td class="col-bulk">{% include "inventory/bulk.html" with bulk=row.bulk %}</td>
-<td class="col-note">{{ item.note }}</td>
+{% for row in rows %}<tr data-item="{{ row.item.pk }}" hx-get="/lab/inventory/items/{{ row.item.pk }}/detail/" hx-trigger="item-select"{% if row is chosen %} aria-current="true"{% endif %}{% if row.category_start %} class="category-start"{% endif %}>
+{% for column in columns %}{% partial cell %}{% endfor %}
 </tr>
-{% endwith %}{% endfor %}</tbody>
+{% endfor %}</tbody>
 </table>
 </div>
 {% partialdef detail inline %}{% if chosen %}{% with item=chosen.item figures=chosen.figures statistics=chosen.statistics bulk=chosen.bulk %}{% translate "not recorded" as missing %}<aside id="item-detail" class="item-detail" data-refresh data-item="{{ item.pk }}" aria-labelledby="item-detail-title">
@@ -144,4 +141,17 @@
 {% endif %}{% endpartialdef %}
 </div>
 <p class="lab-table-note">{% blocktranslate trimmed %}<strong>Stock:</strong> colours and meanings in the filter “Stock status”. <strong>Details</strong> shows the chosen item's compartment, box, bulk and consumption beside the table.{% endblocktranslate %}</p>
+{% partialdef cell %}{% with item=row.item figures=row.figures %}{% if column.key == "number" %}<td class="{{ column.classes }}">{% if item.article_number %}{% if user.is_authenticated %}<input type="checkbox" name="item" value="{{ item.pk }}" form="pick" aria-label="{% blocktranslate %}Select {{ item }}{% endblocktranslate %}"> {% endif %}<a href="/lab/inventory/items/{{ item.pk }}/">{{ item.article_number }}</a>{% endif %}</td>
+{% elif column.key == "name" %}<td class="{{ column.classes }}">{% if not item.article_number %}<a href="/lab/inventory/items/{{ item.pk }}/">{{ item.name }}</a>{% else %}{% substance item.substance %}{% endif %}{% if item|new_on:today %}<sup class="mark-new">{% translate "new" context "item" %}</sup>{% endif %}</td>
+{% elif column.key == "category" %}<td class="{{ column.classes }}">{{ item.category }}</td>
+{% elif column.key == "container" %}<td class="{{ column.classes }}">{{ item.container }}</td>
+{% elif column.key == "stock" %}<td class="{{ column.classes }} stock level-{{ figures.level }}" title="{{ figures.level|level_label }}">{{ item.quantity }}<span class="visually-hidden"> {{ figures.level|level_label }}</span></td>
+{% elif column.key == "mean_year" %}<td class="{{ column.classes }}{% if row.heat_mean %} {{ row.heat_mean }}{% endif %}{% if figures.projected %} projected" title="{% translate "projected from the current year" %}{% endif %}">{% if figures.mean_year is not None %}{{ figures.mean_year|floatformat:1 }}{% endif %}</td>
+{% elif column.key == "this_year" %}<td class="{{ column.classes }}{% if row.heat_year %} {{ row.heat_year }}{% endif %}">{{ figures.this_year }}</td>
+{% elif column.key == "coverage" %}<td class="{{ column.classes }}{% if figures.projected and figures.coverage is not None %} projected" title="{% translate "projected from the current year" %}{% endif %}">{% if figures.coverage is not None %}{{ figures.coverage|floatformat:1 }}{% endif %}</td>
+{% elif column.key == "compartment" %}<td class="{{ column.classes }}">{{ item.compartment }}</td>
+{% elif column.key == "box" %}<td class="{{ column.classes }}">{{ item.box }}</td>
+{% elif column.key == "bulk" %}<td class="{{ column.classes }}">{% include "inventory/bulk.html" with bulk=row.bulk %}</td>
+{% elif column.key == "note" %}<td class="{{ column.classes }}">{{ item.note }}</td>
+{% endif %}{% endwith %}{% endpartialdef %}
 {% endblock %}
