@@ -203,8 +203,11 @@
   focusable();
 
   // While a row's details load, the pane takes neither pointer nor
-  // keyboard, so the previous item's links cannot be used; it is
-  // usable again once the request ends without swapping.
+  // keyboard, so the previous item's links cannot be used; once the
+  // request ends, swapped or not, the pane in the page is usable. The
+  // body's hx-sync aborts a request before the next one starts, so no
+  // other row's request is pending then. The pane's class is no guide:
+  // until it settles, a swapped-in pane carries the old one's.
   document.addEventListener("htmx:beforeRequest", (event) => {
     const pane = document.getElementById("item-detail");
     if (pane && event.target.matches && event.target.matches(ROWS)) {
@@ -214,7 +217,7 @@
   document.addEventListener("htmx:afterRequest", (event) => {
     const pane = document.getElementById("item-detail");
     if (pane && event.target.matches && event.target.matches(ROWS)) {
-      pane.inert = pane.classList.contains("htmx-request");
+      pane.inert = false;
     }
   });
 
