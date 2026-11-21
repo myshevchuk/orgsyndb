@@ -120,6 +120,10 @@ leaves this file then.
     2 for SQLite.
   - The root suite's slowest tests have not been measured; run it
     with `--durations=30` to find them.
+  - `tests/test_deploy_gate.py::ShutdownTests::test_sigterm_when_idle`
+    failed once on CI with "the process did not exit" (2026-11-21, a
+    branch that touched no deploy code) and passed on the rerun: its
+    wait for the process is too short on a loaded runner.
 
 - **Procedure history from Git.** The collection's history is in Git,
   so the lab could show how a procedure changed between versions.
