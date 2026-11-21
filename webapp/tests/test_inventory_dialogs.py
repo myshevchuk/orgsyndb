@@ -267,11 +267,12 @@ class ErrorsInTheDialogTests(DialogCase):
         """Scenario: Errors stay in the dialog."""
         url = self.urls()["correct"]
         before = snapshot()
+        count = fresh(self.target).quantity
         done = self.client.post(url, correction(count="x"), **HTMX)
         root = self.assert_partial(done, url)
         self.assertTrue(errors_at(root, "count"))
         self.assertEqual(errors_at(root, "note"), [])
-        self.assertEqual(fresh(self.target).quantity, 7)
+        self.assertEqual(fresh(self.target).quantity, count)
         self.assertEqual(snapshot(), before)
 
     def test_an_invalid_form_of_each_kind_stays_in_the_dialog(self) -> None:
@@ -652,7 +653,9 @@ class MarkupTests(DialogCase):
         for signed_in in (True, False):
             if not signed_in:
                 self.client.logout()
-            for path in paths:
+            # A form page sends a visitor to sign in (Permissions).
+            for path in paths if signed_in else [
+                    p for p in paths if p != self.urls()["fill"]]:
                 with self.subTest(path=path, signed_in=signed_in):
                     root = page(self.client.get(path))
                     dialogs = root.find_all("dialog")
