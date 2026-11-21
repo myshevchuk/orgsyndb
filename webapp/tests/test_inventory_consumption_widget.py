@@ -651,6 +651,41 @@ class QuarterFormTests(QuarterFormCase):
                     self.target.entered_consumption.get(
                         year=2026, quarter=3).count, 400)
 
+    def test_the_url_names_the_quarter_saved(self) -> None:
+        """A post to the fixed form saves the quarter its URL names,
+        whatever year and quarter the post holds."""
+        url = form_url(self.target, 2026, 3)
+        before = {(c.year, c.quarter): c.count
+                  for c in self.target.entered_consumption.all()}
+        response = self.client.post(
+            url, {"year": "2025", "quarter": "2", "count": "41"})
+        self.assertEqual(response.status_code, 302)
+        after = {(c.year, c.quarter): c.count
+                 for c in self.target.entered_consumption.all()}
+        self.assertEqual(after, {**before, (2026, 3): 41})
+
+    def test_a_refusal_shows_in_the_fixed_form(self) -> None:
+        """A quarter that a historical note holds refuses a value, and the
+        fixed form says why."""
+        book_note(self.kl, date=date(2026, 2, 10), historical=True,
+                  lines=[(self.target, 2)])
+        url = form_url(self.target, 2026, 1)
+        for mode, header in self.modes():
+            with self.subTest(mode=mode):
+                response = self.client.post(
+                    url, {"year": "2026", "quarter": "1", "count": "3"},
+                    **header)
+                self.assertEqual(response.status_code, 200)
+                root = page(response)
+                scope = root if header else root.find("main")
+                self.assertTrue(scope.find_all("ul", cls="errorlist"))
+                self.assertFalse(self.target.entered_consumption.filter(
+                    year=2026, quarter=1).exists())
+
+    def test_an_oversized_query_opens_the_editable_form(self) -> None:
+        scope = self.get("?year=" + "9" * 5000 + "&quarter=3", {})
+        self.assertIsNotNone(scope.find("select", name="quarter"))
+
     def test_a_valid_post_replaces_the_quarters_value(self) -> None:
         url = form_url(self.target, 2026, 3)
         data = {"year": "2026", "quarter": "3", "count": "41"}

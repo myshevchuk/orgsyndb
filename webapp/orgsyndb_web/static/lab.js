@@ -350,16 +350,21 @@
 
     // The form is in: show the dialog, or, where the dialog already
     // shows and the form is back with errors, move to the first one.
+    // The form is in: show the dialog when a link of the page asked for
+    // it; a form that arrives for a dialog closed meanwhile stays shut.
     dialogBody.addEventListener("htmx:afterSwap", () => {
+      const opening = loading !== null;
       loading = null;
-      if (!dialog.open) {
-        dialog.showModal();
-        return;
-      }
+      if (!dialog.open && opening) dialog.showModal();
+    });
+
+    // A form back with errors: move to the first, once the body takes
+    // input again.
+    const focusError = () => {
       const wrong = dialogBody.querySelector(
         ".lab-field--error :is(input, select, textarea)");
       if (wrong) wrong.focus();
-    });
+    };
 
     // A form that could not be requested opens as the page it is.
     // htmx fires the request's events on its source, the body, not on
@@ -383,7 +388,11 @@
     // without a session or its CSRF cookie, reloads the page; one that
     // does not reach the server leaves the form as it was, to send
     // again.
-    dialog.addEventListener("htmx:beforeRequest", () => {
+    // Only a post counts: a link that loads another form into the
+    // dialog leaves it free to close.
+    dialog.addEventListener("htmx:beforeRequest", (event) => {
+      const config = event.detail.requestConfig;
+      if (!config || String(config.verb).toLowerCase() !== "post") return;
       posting = true;
       guardBody();
     });
@@ -400,6 +409,7 @@
         lockDialog(true);
       } else {
         guardBody();
+        if (dialog.open) focusError();
       }
     });
 

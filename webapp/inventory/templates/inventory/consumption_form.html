@@ -6,6 +6,7 @@
 {% endif %}<form class="lab-form" method="post" action="{{ request.get_full_path }}"{% if dialog %} hx-post="{{ request.get_full_path }}" hx-target="#lab-dialog-body" hx-swap="innerHTML" hx-disabled-elt="#lab-dialog button"{% endif %}>{% csrf_token %}
 {{ form.non_field_errors }}{% for field in form.hidden_fields %}{{ field }}{% endfor %}
 {% if fixed %}<p class="lab-quarter"><strong>Q{{ fixed.1 }} {{ fixed.0|unlocalize }}</strong></p>
+{% for field in form.hidden_fields %}{{ field.errors }}{% endfor %}
 {% if stored is not None %}<p class="lab-help">{% blocktranslate %}A save replaces the entered value {{ stored }}.{% endblocktranslate %}</p>
 {% endif %}{% endif %}{% for field in form.visible_fields %}<div class="lab-field{% if field.errors %} lab-field--error{% endif %}">
 {{ field.label_tag }}

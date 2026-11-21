@@ -950,7 +950,8 @@ def fixed_quarter(request: HttpRequest, today: date
     when either is missing, not a whole number, outside 1 to 9999 and 1
     to 4, or when the quarter has not begun."""
     values = [request.GET.get(name, "") for name in ("year", "quarter")]
-    if not all(value.isascii() and value.isdigit() for value in values):
+    if not all(value.isascii() and value.isdigit() and len(value) <= 4
+               for value in values):
         return None
     year, quarter = map(int, values)
     if not (1 <= year <= 9999 and 1 <= quarter <= 4
