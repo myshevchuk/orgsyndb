@@ -42,6 +42,13 @@ leaves this file then.
   delivery and writing its note become one step and no delivery goes
   unrecorded. Open: the layout and letterhead of today's notes,
   whether the application assigns the note numbers, and signatures.
+- **Stock-taking (Inventur).** Once an item's containers are kept per
+  batch, the yearly count should give each batch, and the share of
+  unknown batch, its counted number, and assign the batches printed
+  on old containers to that share. The owner deferred it on
+  2026-11-22. Open: a form per item, rows per batch and one note,
+  against a stock-taking record of the lab's own, filled over days;
+  whether it replaces the per-batch correction.
 - **Numbers of the database's own.** Article numbers are the
   company's, on delivery notes, and only end products get one, at
   their first delivery; until then an item has none and links to no
