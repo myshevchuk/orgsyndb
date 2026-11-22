@@ -1,0 +1,1 @@
+{% load i18n %}{{ batch.get_source_display }}{% if batch.source == "made" and batch.task_step %} · <a href="/lab/tasks/{{ batch.task_step.task.number }}/">{{ batch.task_step.task.number }}</a>{% elif batch.supplier %} · {{ batch.supplier }}{% endif %}

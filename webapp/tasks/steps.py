@@ -84,14 +84,14 @@ class StepChange:
                 "The sequence cannot be set, changed or cleared while a "
                 "step is done.") if by_sequence else _(
                 "The start step cannot be changed while a step is done.")}
-        if any(step.lots.exists() or step.lot_movements.exists()
+        if any(step.batches.exists() or step.vessel_movements.exists()
                for step in self.stored):
             return {field: _(
                 "The sequence cannot be set, changed or cleared while a "
-                "step has made a lot or taken a withdrawal.")
+                "step has made a batch or taken a withdrawal.")
                 if by_sequence else _(
                 "The start step cannot be changed while a step has made "
-                "a lot or taken a withdrawal.")}
+                "a batch or taken a withdrawal.")}
         if any(step.journal_entry_id is not None for step in self.stored):
             return {field: _(
                 "The sequence cannot be set, changed or cleared while a "
@@ -123,12 +123,12 @@ class StepChange:
         """Return the errors that refuse the change, by form field.
 
         A save that plans the steps anew may not do so while a stored
-        step is done, has made a lot or taken a withdrawal, or names a
+        step is done, has made a batch or taken a withdrawal, or names a
         journal entry; the sequence it plans from may not be withdrawn,
         its target must be SUBSTANCE, when given, and START may not
         exceed its steps. The steps done may not exceed the steps the
         task has after the save; without a sequence, the total may not
-        fall below the stored steps done; and a step that made a lot,
+        fall below the stored steps done; and a step that made a batch,
         took a withdrawal or names a journal entry may not be removed.
         """
         errors = self._plan_errors() if self.replaces else {}
@@ -143,10 +143,10 @@ class StepChange:
         if not errors:
             field = "sequence" if self.changes_sequence else (
                 "start_step" if self.replaces else "steps_total")
-            if any(step.lots.exists() or step.lot_movements.exists()
+            if any(step.batches.exists() or step.vessel_movements.exists()
                    for step in removed):
                 errors[field] = _(
-                    "A step that made a lot or took a withdrawal cannot "
+                    "A step that made a batch or took a withdrawal cannot "
                     "be removed.")
             elif any(step.journal_entry_id is not None for step in removed):
                 errors[field] = _(

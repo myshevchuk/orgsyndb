@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Any
 
 from django.contrib import messages
@@ -16,10 +17,13 @@ from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy, pgettext_lazy
 from django.views.decorators.http import require_POST
 
-from inventory.models import Lot, LotMovement
+from inventory.bookings import write_off_flasks
+from inventory.figures import stock_of
+from inventory.models import Batch, Vessel, VesselMovement, shown
 from journal.entries import entry_for
 from orgsyndb_web import lock
-from planning.plan import Plan, TaskPriority, batch_lots, bulk_link
+from planning.plan import Plan, TaskPriority
+from tasks.closing import amounts
 from tasks.forms import TaskEditForm, TaskForm
 from tasks.history import history_entries
 from tasks.models import Priority, State, Task, TaskStep
@@ -75,11 +79,28 @@ class Filters:
 def searched_text(task: Task) -> str:
     """The text the list's search looks in, folded for a comparison
     regardless of case: the number, the substance's key and names, the
-    batch and the note."""
+    numbers of its batches and the note. The task's steps and their
+    batches are read as prefetched."""
     substance = task.substance
     parts = [task.number, substance.key, substance.name, substance.name_de,
-             task.batch, task.note]
+             *(batch.number for batch in made_batches(task)), task.note]
     return "\n".join(parts).casefold()
+
+
+def made_batches(task: Task) -> list[Batch]:
+    """Return the batches the steps of TASK made, in the order of their
+    IDs, as prefetched with the steps (``steps__batches``)."""
+    return sorted((batch for step in task.steps.all()
+                   for batch in step.batches.all()),
+                  key=lambda batch: batch.pk)
+
+
+def product_numbers(task: Task) -> str:
+    """Return the numbers of the product batches of TASK, the made
+    batches of its substance, in the order of their IDs, joined by
+    ``, ``; the steps and their batches are read as prefetched."""
+    return ", ".join(batch.number for batch in made_batches(task)
+                     if batch.substance_id == task.substance_id)
 
 
 def selected(tasks: list[Task], filters: Filters,
@@ -109,7 +130,7 @@ def task_list(request: HttpRequest) -> HttpResponse:
     filters = Filters.from_query(request.GET,
                                  {user.initials for user in accounts})
     tasks = list(Task.objects.select_related("assignee", "substance")
-                 .prefetch_related("steps"))
+                 .prefetch_related("steps__batches"))
     plan = Plan(timezone.localdate())
     priorities = {task.pk: plan.task_priority(task) for task in tasks}
     counted = selected(tasks, filters, priorities, by_state=False)
@@ -118,7 +139,8 @@ def task_list(request: HttpRequest) -> HttpResponse:
                        priorities[task.pk].priority,
                        priorities[task.pk].slack))
     return render(request, "tasks/list.html", {
-        "tasks": [(task, priorities[task.pk]) for task in shown],
+        "tasks": [(task, priorities[task.pk], product_numbers(task))
+                  for task in shown],
         "filters": filters,
         "accounts": accounts,
         "state_filters": STATE_FILTERS,
@@ -132,16 +154,28 @@ def task_list(request: HttpRequest) -> HttpResponse:
 
 
 @dataclass(frozen=True)
+class MadeBatch:
+    """A batch a step made as the task page lists it: the BATCH, the
+    amount its FLASK holds, a pair of the amount and its unit, or None
+    when it has no flask or the flask holds nothing, and the amounts
+    STORED in its stored vessels, such pairs by unit."""
+
+    batch: Batch
+    flask: tuple[Decimal, str] | None = None
+    stored: list[tuple[Decimal, str]] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class Step:
     """A step of a task as its page lists it: its ID and POSITION; its
     PROCEDURE's ID, empty for a step without an entry, and whether the
     procedure is KNOWN, not withdrawn; the NUMBER of its entry, its
     position, for an entry of a general procedure that is not
     withdrawn, else None; the SIGNATURE of its entry when the entry is
-    withdrawn, else empty; the day it was DONE_ON, or None; the LOTS it
-    made and the WITHDRAWALS booked into it, in the order of their IDs;
-    the open lots OFFERED for a withdrawal into it, empty unless the
-    page offers one; and the JOURNAL_ENTRY it is written down in, or
+    withdrawn, else empty; the day it was DONE_ON, or None; the BATCHES
+    it made and the WITHDRAWALS booked into it, in the order of their
+    IDs; the open vessels OFFERED for a withdrawal into it, empty unless
+    the page offers one; and the JOURNAL_ENTRY it is written down in, or
     None."""
 
     id: int
@@ -151,24 +185,43 @@ class Step:
     number: int | None
     signature: str
     done_on: Any
-    lots: list[Lot] = field(default_factory=list)
-    withdrawals: list[LotMovement] = field(default_factory=list)
-    offered: list[Lot] = field(default_factory=list)
+    batches: list[MadeBatch] = field(default_factory=list)
+    withdrawals: list[VesselMovement] = field(default_factory=list)
+    offered: list[Vessel] = field(default_factory=list)
     journal_entry: Any = None
+
+
+def made_by(step: TaskStep) -> list[MadeBatch]:
+    """Return the batches STEP made, in the order of their IDs, each
+    with the amount of its flask while that holds one and the amounts of
+    its stored vessels."""
+    found = []
+    for batch in step.batches.select_related(
+            "substance", "journal_entry__notebook").order_by("id"):
+        vessels = list(batch.vessels.order_by("id"))
+        flask = next((vessel for vessel in vessels
+                      if vessel.flask and vessel.amount > 0), None)
+        found.append(MadeBatch(
+            batch=batch,
+            flask=None if flask is None else (
+                shown(flask.amount, flask.unit), flask.unit_label),
+            stored=stock_of([vessel for vessel in vessels
+                             if not vessel.flask])))
+    return found
 
 
 def shown_step(step: TaskStep, offer: bool = False) -> Step:
     """Return STEP, its entry and procedure read, as its task's page
-    lists it, with the lots it made and the withdrawals into it; when
-    OFFER, with the open lots of its substrates, or of any substance
+    lists it, with the batches it made and the withdrawals into it; when
+    OFFER, with the open vessels of its substrates, or of any substance
     for a step without an entry, as those offered for a withdrawal."""
     records = {
         "id": step.pk, "position": step.position, "done_on": step.done_on,
-        "lots": list(step.lots.select_related("substance").order_by("id")),
-        "withdrawals": list(step.lot_movements.filter(
-            kind=LotMovement.Kind.WITHDRAWAL).select_related(
-                "lot__substance", "reversal").order_by("id")),
-        "offered": offered_lots(step) if offer else [],
+        "batches": made_by(step),
+        "withdrawals": list(step.vessel_movements.filter(
+            kind=VesselMovement.Kind.WITHDRAWAL).select_related(
+                "vessel__batch", "reversal").order_by("id")),
+        "offered": offered_vessels(step) if offer else [],
         "journal_entry": step.journal_entry}
     entry = step.entry
     if entry is None:
@@ -182,27 +235,28 @@ def shown_step(step: TaskStep, offer: bool = False) -> Step:
         signature=entry.signature if entry.withdrawn else "", **records)
 
 
-def offered_lots(step: TaskStep) -> list[Lot]:
-    """Return the open lots a withdrawal into STEP may come from: those
-    of its substrates, or of any substance for a step without an entry,
-    by substance key and then by ID."""
-    lots = Lot.objects.filter(amount__gt=0).select_related("substance")
+def offered_vessels(step: TaskStep) -> list[Vessel]:
+    """Return the open vessels a withdrawal into STEP may come from:
+    those of its substrates, or of any substance for a step without an
+    entry, by substance key and then by ID."""
+    vessels = Vessel.objects.filter(amount__gt=0).select_related(
+        "batch__substance")
     substrates = step.substrates()
     if substrates is not None:
-        lots = lots.filter(substance__in=substrates)
-    return list(lots.order_by("substance__key", "id"))
+        vessels = vessels.filter(batch__substance__in=substrates)
+    return list(vessels.order_by("batch__substance__key", "id"))
 
 
 def task_page(request: HttpRequest, number: str) -> HttpResponse:
     """Show the task NUMBER with its priority, sequence, steps, actions,
-    the forecast of each article it matches, the lots that belong to it
-    and its history; answer 404 for an unknown number.
+    the forecast of each article it matches, its product batches and its
+    history; answer 404 for an unknown number.
 
-    Each step lists the lots it made and the withdrawals into it, and
+    Each step lists the batches it made and the withdrawals into it, and
     the journal entry it names. For a signed-in user each step offers
     the form that sets its journal entry, and, while the task is planned
-    or running, to record a lot it made and a withdrawal from the open
-    lots ``offered_lots`` gives.
+    or running, to record a batch it made and a withdrawal from the open
+    vessels ``offered_vessels`` gives.
     """
     task = get_object_or_404(Task.objects.select_related(
         "assignee", "created_by", "substance", "sequence"), number=number)
@@ -224,8 +278,7 @@ def task_page(request: HttpRequest, number: str) -> HttpResponse:
         "history": history_entries(task),
         "shown": plan.task_priority(task),
         "articles": plan.articles_of(task),
-        "lots": batch_lots(task),
-        "bulk_link": bulk_link(task),
+        "product_batches": task.product_batches().order_by("id"),
     })
 
 
@@ -246,14 +299,15 @@ def form_page(request: HttpRequest, form_class: type[TaskForm],
             lock.hold()
             if task.pk is not None:
                 task = Task.objects.select_for_update().get(pk=task.pk)
-            form = form_class(request.POST, instance=task)
+            form = form_class(request.POST, instance=task,
+                              user=request.user)
             if form.is_valid():
                 saved = form.save()
                 messages.success(request, _("Task %(number)s saved.")
                                  % {"number": saved.number})
                 return redirect("task", number=saved.number)
     else:
-        form = form_class(instance=task, initial=initial)
+        form = form_class(instance=task, initial=initial, user=request.user)
     return render(request, "tasks/form.html", {"form": form, "task": task})
 
 
@@ -293,7 +347,6 @@ def _end(task: Task) -> str:
 
 def _fail(task: Task) -> str:
     task.failed = True
-    task.batch = ""
     task.ended = timezone.localdate()
     return _("Task %(number)s failed.")
 
@@ -314,13 +367,16 @@ class Action:
     task, the CHANGE it makes to one, which returns the message of the
     change and saves the steps it marks done, the REFUSAL shown when it
     does not apply, and the FIELDS of the task the change sets, the
-    only ones it saves; a change that sets none saves no task record."""
+    only ones it saves; a change that sets none saves no task record.
+    CLOSES tells whether the change closes the task, so that the flasks
+    of its batches are written off in the same transaction."""
 
     label: Any
     applies: Callable[[Task], bool]
     change: Callable[[Task], str]
     refusal: Any
     fields: tuple[str, ...]
+    closes: bool = False
 
 
 ACTIONS = {
@@ -335,16 +391,16 @@ ACTIONS = {
                      "step."), ()),
     "end": Action(
         gettext_lazy("End"),
-        lambda t: t.state == State.RUNNING and t.has_product_lot, _end,
-        gettext_lazy("Only a running task with a batch and a product lot, "
-                     "a lot of its product made in the lab with that "
-                     "batch, can be ended."), ("ended",)),
+        lambda t: t.state == State.RUNNING and t.has_product_batch, _end,
+        gettext_lazy("Only a running task with a product batch, a batch "
+                     "of its substance made by one of its steps, can be "
+                     "ended."), ("ended",), closes=True),
     "fail": Action(
         gettext_lazy("Failed"),
-        lambda t: t.state == State.RUNNING and not t.has_product_lot,
+        lambda t: t.state == State.RUNNING and not t.has_product_batch,
         _fail,
-        gettext_lazy("Only a running task without a product lot can "
-                     "fail."), ("failed", "batch", "ended")),
+        gettext_lazy("Only a running task without a product batch can "
+                     "fail."), ("failed", "ended"), closes=True),
     "report": Action(
         gettext_lazy("Report done"),
         lambda t: t.state == State.ENDED and not t.report, _report,
@@ -368,7 +424,9 @@ def task_action(request: HttpRequest, number: str, action: str
     The task is read, checked and saved in one transaction, locked on
     PostgreSQL, and only the fields the action sets are written, so
     actions on one task at once neither act on a stale state nor undo
-    each other. An action that does not apply to the task's state
+    each other. An action that closes the task, ``end`` and ``fail``,
+    writes off what its flasks hold in that transaction, and its message
+    names the amounts. An action that does not apply to the task's state
     changes nothing and leaves an error message. Answer 404 for an
     unknown task or action, and 405 for a request other than POST.
     """
@@ -383,10 +441,15 @@ def task_action(request: HttpRequest, number: str, action: str
             text = chosen.change(task)
             if chosen.fields:
                 task.save(update_fields=chosen.fields)
+            written = write_off_flasks(request.user, task) \
+                if chosen.closes else []
             done, total = task.step_counts
     if applies:
-        messages.success(request, text % {
-            "number": task.number, "done": done, "total": total})
+        text = text % {"number": task.number, "done": done, "total": total}
+        if written:
+            text += " " + _("Written off: %(amounts)s.") % {
+                "amounts": amounts(written)}
+        messages.success(request, text)
     else:
         messages.error(request, chosen.refusal)
     return redirect("task", number=task.number)

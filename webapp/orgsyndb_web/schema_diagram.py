@@ -138,11 +138,11 @@ class Schema:
 
 GRID = (
     (("inventory_deliverynote",), ("inventory_movement",),
-     ("inventory_lotmovement",), (HUB, "accounts_accesstoken"),
+     ("inventory_vesselmovement",), (HUB, "accounts_accesstoken"),
      ("collection_import", "collection_procedureauthor"),
      ("journal_notebook",)),
     (("inventory_deliveryline",), ("inventory_item",),
-     ("inventory_enteredconsumption",), ("inventory_lot",),
+     ("inventory_enteredconsumption",), ("inventory_vessel", "inventory_batch"),
      ("collection_procedure", "collection_scopeentry"),
      ("journal_entry",)),
     (("inventory_article",), ("registry_substance",),
@@ -155,9 +155,6 @@ GRID = (
 )
 
 LINKS = (
-    Link("tasks_task", "batch", "inventory_lot", "batch", "same batch",
-         "A lot belongs to a task when the two share a batch and the "
-         "task's substance is the lot's."),
     Link("tasks_counter", "name", "tasks_task", "number", "T-###",
          "The counter named task issues the task numbers, T- and at "
          "least three digits."),

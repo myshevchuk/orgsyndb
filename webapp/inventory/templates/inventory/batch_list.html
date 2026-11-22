@@ -1,0 +1,32 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n lab inventory %}
+{% block title %}{% translate "Batches" %}{% endblock %}
+{% block main %}
+<div class="lab-heading">
+<h1>{% translate "Batches" %}</h1>
+{% if user.is_authenticated %}<p class="actions"><a href="/lab/inventory/batches/new/">{% translate "New batch" %}</a></p>{% endif %}
+</div>
+{% include "inventory/tabs.html" %}
+<form class="lab-filters" method="get" action="/lab/inventory/batches/">
+<label>{% translate "Search" %} <input type="search" name="q" value="{{ q }}" autocomplete="off"></label>
+<button type="submit">{% translate "Filter" %}</button>
+</form>
+<div class="table-scroll">
+<table class="inventory-table">
+<thead>
+<tr><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Article no." %}</th><th scope="col">{% translate "Source" %}</th><th scope="col">{% translate "Lab notebook" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Yield" %}</th><th scope="col">{% translate "Stock" %}</th></tr>
+</thead>
+<tbody>
+{% for batch, stock in rows %}<tr>
+<td><a href="/lab/inventory/batches/{{ batch.pk }}/">{{ batch }}</a></td>
+<td>{% substance batch.substance %}</td>
+<td>{{ batch.article_number|default_if_none:"" }}</td>
+<td>{% include "inventory/batch_source.html" %}</td>
+<td>{% if batch.journal_entry %}<a href="/lab/journal/{{ batch.journal_entry.notebook.code }}/">{{ batch.journal_entry }}</a>{% endif %}</td>
+<td>{{ batch.date|default_if_none:"" }}</td>
+<td class="number">{{ batch|in_yield_unit }}</td>
+<td class="number">{% for amount, unit in stock %}{{ amount|decimal }} {{ unit }}{% if not forloop.last %} · {% endif %}{% empty %}–{% endfor %}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% endblock %}

@@ -15,7 +15,7 @@ from urllib.parse import urlencode, urlsplit
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import redirect_to_login
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.forms import BaseForm
 from django.http import Http404, HttpRequest, HttpResponse
@@ -33,31 +33,51 @@ from inventory import bookings
 from inventory.bookings import Refused
 from inventory.chart import chart, quarters_shown
 from inventory.figures import (Bulk, Consumption, bulk, consumption,
-                               containers_from, molar_mass, proposed_amount)
-from inventory.forms import (ROWS, ConsumptionForm, CorrectionForm,
-                             FillForm, ItemEditForm, ItemForm,
-                             LotCorrectionForm, LotEditForm, LotForm,
+                               containers_from, molar_mass, newest_first,
+                               open_amounts, proposed_amount)
+from inventory.forms import (ROWS, BatchEditForm, BatchForm,
+                             ConsumptionForm, CorrectionForm, FillForm,
+                             ItemEditForm, ItemForm, NewVesselForm,
                              NoteEditForm, NoteForm, ReversalForm,
-                             WithdrawalForm, show_refusal)
+                             TransferForm, VesselCorrectionForm,
+                             VesselEditForm, WithdrawalForm, show_refusal)
 from inventory.history import history_entries
-from inventory.models import (FACTOR, LEVEL_ORDER, Article, DeliveryNote,
-                              Item, Level, Lot, LotMovement, Movement,
-                              Source, plain)
+from inventory.models import (FACTOR, LEVEL_ORDER, Article, Batch,
+                              DeliveryNote, Item, Level, Movement, Source,
+                              Unit, Vessel, VesselKind, VesselMovement,
+                              plain, shown)
 from inventory.statistics import Statistics, statistics
+from journal.entries import entry_for
 from planning import plan
 from tasks.models import TaskStep
 
 LIST = "/lab/inventory/end-products/"
-BULK = "/lab/inventory/end-products/bulk/"
+BATCHES = "/lab/inventory/batches/"
+VESSELS = "/lab/inventory/vessels/"
 DELIVERIES = "/lab/inventory/deliveries/"
 
 
 def tabs(current: str) -> list[dict[str, Any]]:
-    """Return the section tabs of the three lists, marking CURRENT, the
+    """Return the section tabs of the four lists, marking CURRENT, the
     path of the list shown."""
     return [{"url": url, "label": label, "current": url == current}
-            for url, label in ((LIST, _("Items")), (BULK, _("Bulk")),
+            for url, label in ((LIST, _("Items")), (BATCHES, _("Batches")),
+                               (VESSELS, _("Vessels")),
                                (DELIVERIES, _("Deliveries")))]
+
+
+def open_vessels(item: Item | None = None) -> list[Vessel]:
+    """Return the open vessels, those holding an amount above zero, of
+    ITEM's substance, or of every substance when ITEM is None, by their
+    batch's date, oldest first and undated ones last, then by ID, each
+    with its batch, substance and the substance's article read."""
+    vessels = Vessel.objects.filter(amount__gt=0).select_related(
+        "batch__substance__article")
+    if item is not None:
+        vessels = vessels.filter(batch__substance_id=item.article_id)
+    return sorted(vessels, key=lambda vessel: (
+        vessel.batch.date is None, vessel.batch.date or date.min,
+        vessel.pk))
 
 
 @dataclass(frozen=True)
@@ -157,7 +177,7 @@ COLUMN_MODEL: tuple[ColumnSpec, ...] = (
     ColumnSpec("box", gettext_lazy("Box"), "", False,
                lambda row: located(row.item.box), "table"),
     ColumnSpec("bulk", gettext_lazy("Bulk available"), "", False,
-               lambda row: row.bulk.containers if row.bulk.lots else None,
+               lambda row: row.bulk.containers if row.bulk.vessels else None,
                "table"),
     ColumnSpec("note", pgettext_lazy("inventory", "Note"), "", False,
                lambda row: folded(row.item.note), "table", shown=False),
@@ -404,11 +424,11 @@ def stock_menu(rows: list[Row], filters: ItemFilters, selected: str = ""
                     counts[level]) for level in Level)]
 
 
-def row_of(item: Item, today: date, lots: list[Lot]) -> Row:
-    """The row of ITEM as of TODAY, with its bulk among LOTS, the open
-    lots, and without heats."""
+def row_of(item: Item, today: date, vessels: list[Vessel]) -> Row:
+    """The row of ITEM as of TODAY, with its bulk among VESSELS, the
+    open vessels, and without heats."""
     figures = consumption(item, today)
-    return Row(item=item, figures=figures, bulk=bulk(item, lots),
+    return Row(item=item, figures=figures, bulk=bulk(item, vessels),
                statistics=statistics(figures, today))
 
 
@@ -435,8 +455,8 @@ def item_list(request: HttpRequest) -> HttpResponse:
     filters = ItemFilters.from_query(request.GET)
     items = sorted(Item.objects.select_related("article__substance"),
                    key=Item.sort_key)
-    lots = list(Lot.objects.filter(amount__gt=0).order_by("made_on", "id"))
-    rows = heated([row_of(item, today, lots) for item in items])
+    vessels = open_vessels()
+    rows = heated([row_of(item, today, vessels) for item in items])
     shown = filters.ordered([row for row in rows if filters.admits(row)])
     if filters.sort == "category":
         shown = by_category(shown)
@@ -485,29 +505,65 @@ def item_detail(request: HttpRequest, pk: int) -> HttpResponse:
     if request.headers.get("HX-Request") != "true":
         return redirect(f"{LIST}?{urlencode({'selected': item.pk})}")
     today = timezone.localdate()
-    lots = list(Lot.objects.filter(substance_id=item.article_id,
-                                   amount__gt=0).order_by("made_on", "id"))
     return render(request, "inventory/item_list.html#detail", {
-        "chosen": row_of(item, today, lots),
+        "chosen": row_of(item, today, open_vessels(item)),
         "today": today,
     })
 
 
-def lot_list(request: HttpRequest) -> HttpResponse:
-    """List the open lots of every substance, and the used-up ones too
-    with ``empty=1``, by the substance's name regardless of case, then
-    by date, oldest first and lots without one last."""
+def batch_list(request: HttpRequest) -> HttpResponse:
+    """List the batches of every substance, newest date first and
+    undated ones last, then newest recorded first, each with the amount
+    in its open vessels; ``q`` selects those in whose number, supplier's
+    batch number or supplier, or in whose substance's key or names, the
+    text is found regardless of case."""
+    q = request.GET.get("q", "").strip()
+    words = q.casefold()
+    found = []
+    for batch in Batch.objects.select_related(
+            "substance__article", "task_step__task",
+            "journal_entry__notebook"):
+        substance = batch.substance
+        text = "\n".join([batch.number, batch.supplier_batch,
+                          batch.supplier, substance.key, substance.name,
+                          substance.name_de]).casefold()
+        if not words or words in text:
+            found.append(batch)
+    found = newest_first(found)
+    stock = open_amounts(found)
+    return render(request, "inventory/batch_list.html", {
+        "rows": [(batch, stock[batch.pk]) for batch in found],
+        "q": q,
+        "tabs": tabs(BATCHES),
+    })
+
+
+def vessel_list(request: HttpRequest) -> HttpResponse:
+    """List the open vessels of every substance, and the used-up ones
+    too with ``empty=1``, by the substance's name regardless of case,
+    then by their batch's date, oldest first and vessels without one
+    last, then by ID. ``kind`` names one of ``VesselKind`` and lists the
+    vessels of that kind; another value lists every kind."""
     empty = request.GET.get("empty") == "1"
-    lots = Lot.objects.select_related("substance__article")
+    kind = request.GET.get("kind", "")
+    if kind not in VesselKind.values:
+        kind = ""
+    vessels = Vessel.objects.select_related("batch__substance__article",
+                                            "batch__task_step__task")
     if not empty:
-        lots = lots.filter(amount__gt=0)
-    shown = sorted(lots, key=lambda lot: (
-        lot.substance.shown_name.casefold(), lot.made_on is None,
-        lot.made_on or date.min, lot.pk))
-    return render(request, "inventory/lot_list.html", {
-        "lots": shown,
+        vessels = vessels.filter(amount__gt=0)
+    found = sorted((vessel for vessel in vessels
+                    if not kind or vessel.kind == kind),
+                   key=lambda vessel: (
+                       vessel.batch.substance.shown_name.casefold(),
+                       vessel.batch.date is None,
+                       vessel.batch.date or date.min, vessel.pk))
+    return render(request, "inventory/vessel_list.html", {
+        "vessels": found,
         "empty": empty,
-        "tabs": tabs(BULK),
+        "kind": kind,
+        "kinds": VesselKind.choices,
+        "tabs": tabs(VESSELS),
     })
 
 
@@ -639,15 +695,15 @@ def item_page(request: HttpRequest, pk: int) -> HttpResponse:
     mass = molar_mass(item)
     found = plan.article(item.article_number, today) \
         if item.article_number is not None else None
-    lots = Lot.objects.filter(substance_id=item.article_id,
-                              amount__gt=0).order_by("made_on", "id")
+    vessels = open_vessels(item)
     return render(request, "inventory/item_page.html", {
         "item": item,
         "today": today,
         **consumption_section(item, today, request.user.is_authenticated),
         "ledger": ledger,
-        "lots": [(lot, containers_from(lot, item, mass)) for lot in lots],
-        "bulk": bulk(item, lots),
+        "vessels": [(vessel, containers_from(vessel, item, mass))
+                    for vessel in vessels],
+        "bulk": bulk(item, vessels),
         "forecast": found,
         "entry": found.entry(item) if found else None,
         "history": history_entries(item),
@@ -655,37 +711,80 @@ def item_page(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @dataclass(frozen=True)
-class LotLedgerRow:
-    """A movement of a lot as its page shows it: the ITEM a filling
-    filled, or None, and whether a withdrawal may still be REVERSIBLE."""
+class VesselLedgerRow:
+    """A movement of a vessel as its page shows it: the ITEM a filling
+    filled, or None; the OTHER vessel of a transfer, or None; and
+    whether a withdrawal may still be REVERSIBLE."""
 
-    movement: LotMovement
+    movement: VesselMovement
     item: Item | None
+    other: Vessel | None
     reversible: bool
 
 
-def lot_page(request: HttpRequest, pk: int) -> HttpResponse:
-    """Show the lot PK with its movements, the step that made it, the
-    tasks that belong to it and its history; answer 404 for an unknown
-    ID."""
-    lot = get_object_or_404(Lot.objects.select_related(
-        "substance__article", "task_step__task",
-        "task_step__entry__procedure"), pk=pk)
-    movements = lot.movements.select_related(
+def vessel_page(request: HttpRequest, pk: int) -> HttpResponse:
+    """Show the vessel PK with its batch, its movements and its history;
+    answer 404 for an unknown ID."""
+    vessel = get_object_or_404(Vessel.objects.select_related(
+        "batch__substance__article"), pk=pk)
+    movements = vessel.movements.select_related(
         "user", "item_movement__item__article", "task_step__task",
-        "task_step__entry__procedure", "reverses", "reversal").order_by(
-            "-id")
-    return render(request, "inventory/lot_page.html", {
-        "lot": lot,
-        "ledger": [LotLedgerRow(
+        "task_step__entry__procedure", "reverses", "reversal",
+        "transfer__vessel", "transferred__vessel").order_by("-id")
+    rows = []
+    for movement in movements:
+        other = None
+        if movement.kind == VesselMovement.Kind.TRANSFER_IN:
+            other = movement.transfer.vessel
+        elif movement.kind == VesselMovement.Kind.TRANSFER_OUT \
+                and hasattr(movement, "transferred"):
+            other = movement.transferred.vessel
+        rows.append(VesselLedgerRow(
             movement=movement,
             item=movement.item_movement.item
             if hasattr(movement, "item_movement") else None,
-            reversible=movement.kind == LotMovement.Kind.WITHDRAWAL
-            and not hasattr(movement, "reversal"))
-            for movement in movements],
-        "tasks": plan.batch_tasks(lot),
-        "history": history_entries(lot),
+            other=other,
+            reversible=movement.kind == VesselMovement.Kind.WITHDRAWAL
+            and not hasattr(movement, "reversal")))
+    return render(request, "inventory/vessel_page.html", {
+        "vessel": vessel,
+        "ledger": rows,
+        "history": history_entries(vessel),
+    })
+
+
+@dataclass(frozen=True)
+class FillingRow:
+    """A filling from a vessel of a batch as the batch's page shows it:
+    the MOVEMENT of the vessel, the ITEM filled, and whether the
+    filling is REVERSED."""
+
+    movement: VesselMovement
+    item: Item
+    reversed: bool
+
+
+def batch_page(request: HttpRequest, pk: int) -> HttpResponse:
+    """Show the batch PK with its vessels, the fillings from them and
+    its history; answer 404 for an unknown ID."""
+    batch = get_object_or_404(Batch.objects.select_related(
+        "substance__article", "journal_entry__notebook",
+        "task_step__task", "task_step__entry__procedure"), pk=pk)
+    vessels = sorted(batch.vessels.select_related(
+        "batch__substance__article"), key=lambda vessel: (
+            not vessel.amount > 0, vessel.pk))
+    fillings = VesselMovement.objects.filter(
+        vessel__batch=batch, kind=VesselMovement.Kind.FILLING
+        ).select_related("vessel", "item_movement__item__article",
+                         "item_movement__reversal").order_by("-id")
+    return render(request, "inventory/batch_page.html", {
+        "batch": batch,
+        "vessels": vessels,
+        "fillings": [FillingRow(
+            movement=movement, item=movement.item_movement.item,
+            reversed=hasattr(movement.item_movement, "reversal"))
+            for movement in fillings if hasattr(movement, "item_movement")],
+        "history": history_entries(batch),
     })
 
 
@@ -825,10 +924,16 @@ def consumption_url(item: Item, year: int, quarter: int) -> str:
     return f"{item_url(item, 'consumption')}?{query}"
 
 
-def lot_url(lot: Lot, action: str = "") -> str:
-    """Return the path of LOT's page, or of its form ACTION."""
-    return f"/lab/inventory/bulk/{lot.pk}/" + (f"{action}/" if action
-                                               else "")
+def batch_url(batch: Batch, action: str = "") -> str:
+    """Return the path of BATCH's page, or of its form ACTION."""
+    return f"/lab/inventory/batches/{batch.pk}/" + (
+        f"{action}/" if action else "")
+
+
+def vessel_url(vessel: Vessel, action: str = "") -> str:
+    """Return the path of VESSEL's page, or of its form ACTION."""
+    return f"/lab/inventory/vessels/{vessel.pk}/" + (
+        f"{action}/" if action else "")
 
 
 def note_url(note: DeliveryNote, action: str = "") -> str:
@@ -908,11 +1013,11 @@ def item_edit(request: HttpRequest, pk: int) -> HttpResponse:
 
 @item_form
 def item_fill(request: HttpRequest, pk: int) -> HttpResponse:
-    """Book a filling of the item PK, from a lot or none.
+    """Book a filling of the item PK from a vessel of its substance.
 
     The button ``propose`` books nothing: it shows the form again with
-    the amount set to the proposal for the count and lot entered, or an
-    error at the amount when there is no molar mass to convert with.
+    the amount set to the proposal for the count and vessel entered, or
+    an error at the amount when there is no molar mass to convert with.
     """
     item = get_object_or_404(Item, pk=pk)
     form = FillForm(request.POST or None, item=item)
@@ -933,18 +1038,15 @@ def item_fill(request: HttpRequest, pk: int) -> HttpResponse:
 def proposed(request: HttpRequest, form: FillForm, item: Item) -> FillForm:
     """Return the valid FORM of ITEM again with the amount set to the
     proposal, or FORM with an error where none can be made."""
-    lot = form.cleaned_data["lot"]
-    if lot is None:
-        form.add_error("lot", _("Choose a lot to propose an amount."))
-        return form
-    base = proposed_amount(item, form.cleaned_data["count"], lot)
+    vessel = form.cleaned_data["vessel"]
+    base = proposed_amount(item, form.cleaned_data["count"], vessel)
     if base is None:
         form.add_error("amount", _(
             "Without a molar mass of the substance, enter the amount "
             "taken."))
         return form
     data = request.POST.copy()
-    data["amount"] = localize_input(plain(base / FACTOR[lot.unit]))
+    data["amount"] = localize_input(plain(base / FACTOR[vessel.unit]))
     again = FillForm(data, item=item)
     again.is_valid()
     return again
@@ -1108,134 +1210,209 @@ def note_reverse(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 def locations() -> Any:
-    """The locations of the lots, for the location's ``datalist``."""
-    return Lot.objects.exclude(location="").order_by("location") \
+    """The locations of the vessels, for the location's ``datalist``."""
+    return Vessel.objects.exclude(location="").order_by("location") \
         .values_list("location", flat=True).distinct()
 
 
-def query_step(request: HttpRequest) -> TaskStep | None:
-    """Return the task step whose ID the query's ``step`` names, or None
-    when the query names none; answer 404 for an unknown or malformed
-    ID."""
-    value = request.GET.get("step", "")
+def chosen_step(request: HttpRequest) -> TaskStep | None:
+    """Return the task step whose ID the query's ``step`` names, or, when
+    the query has none, the posted ``step``; None when neither names one.
+    Answer 404 for an unknown or malformed ID."""
+    value = request.GET.get("step", "") or request.POST.get("step", "")
     if not value:
         return None
     if not value.isdigit():
         raise Http404
     return get_object_or_404(TaskStep.objects.select_related(
-        "task__substance", "entry__procedure"), pk=int(value))
+        "task__substance", "entry__procedure", "journal_entry__notebook"),
+        pk=int(value))
 
 
 def step_initial(step: TaskStep) -> dict[str, Any]:
-    """Return the values the new-lot form takes from STEP: the first
-    substance the step makes, made in the lab, today, and its task's
-    batch when that substance is the task's."""
+    """Return the values the new-batch form takes from STEP: the first
+    substance the step makes, made in the lab, today."""
     products = step.products()
-    substance = products[0] if products else None
-    task = step.task
-    return {"substance": substance.key if substance else "",
-            "source": Source.MADE,
-            "batch": task.batch if substance == task.substance else "",
-            "made_on": timezone.localdate()}
+    return {"substance": products[0].key if products else "",
+            "source": Source.MADE, "date": timezone.localdate()}
 
 
 @login_required
-def lot_new(request: HttpRequest) -> HttpResponse:
-    """Create a bulk lot with its opening amount, booked by the
-    signed-in user; ``substance``, ``batch`` and ``made_on`` in the
-    query fill in the substance's key, the batch and the date.
+def batch_new(request: HttpRequest) -> HttpResponse:
+    """Record a batch, booked by the signed-in user; ``substance`` in the
+    query fills in the substance's key.
 
-    ``step`` in the query makes the lot one made by that task step and
-    fills in the form from it (``step_initial``); a substance the step
-    does not make is refused at the substance. An unknown step answers
-    404.
+    ``step`` in the query, or posted, makes the batch one made by that
+    task step and fills in the form from it (``step_initial``); the
+    amount is then its yield. An unknown step answers 404.
     """
-    step = query_step(request)
+    step = chosen_step(request)
 
     def book(data: dict[str, Any]) -> HttpResponse:
-        lot = bookings.create_lot(request.user, task_step=step, **data)
-        return saved(request, _("Bulk lot %(lot)s created.") % {"lot": lot},
-                     lot_url(lot))
+        amount = data["amount"]
+        with transaction.atomic():
+            text = data["journal_entry"]
+            batch = bookings.record_batch(
+                request.user, substance=data["substance"],
+                source=data["source"], number=data["number"],
+                journal_entry=entry_for(text) if text else None,
+                task_step=step, date=data["date"],
+                supplier=data["supplier"],
+                supplier_article_number=data["supplier_article_number"],
+                supplier_batch=data["supplier_batch"], note=data["note"],
+                amount=amount, unit=data["unit"] if amount is not None
+                else "", location=data["location"])
+        return saved(request, _("Batch %(batch)s recorded.")
+                     % {"batch": batch}, batch_url(batch))
 
     initial = step_initial(step) if step is not None else {
-        "substance": request.GET.get("substance", ""),
-        "batch": request.GET.get("batch", ""),
-        "made_on": request.GET.get("made_on", "")}
-    title = _("New bulk lot") if step is None else _(
-        "New bulk lot of %(task)s, %(step)s") % {
+        "substance": request.GET.get("substance", "")}
+    title = _("New batch") if step is None else _(
+        "New batch of %(task)s, %(step)s") % {
             "task": step.task.number, "step": step.label}
-    return form_page(request, LotForm(request.POST or None, initial=initial),
-                     book, {"title": title, "cancel": BULK,
-                            "substances": True, "locations": locations()})
+    return form_page(
+        request, BatchForm(request.POST or None, initial=initial,
+                           step=step), book,
+        {"title": title, "cancel": BATCHES, "substances": True,
+         "locations": locations()})
 
 
 @login_required
-def lot_withdraw(request: HttpRequest, pk: int) -> HttpResponse:
-    """Book a withdrawal from the lot PK into a task step, chosen in the
-    form or filled in from ``step`` in the query; answer 404 for an
-    unknown lot."""
-    lot = get_object_or_404(Lot, pk=pk)
+def batch_edit(request: HttpRequest, pk: int) -> HttpResponse:
+    """Change the batch PK: its number, journal entry and yield when
+    made, its supplier's fields when bought, and its date and note;
+    answer 404 for an unknown batch."""
+    batch = get_object_or_404(Batch.objects.select_related(
+        "journal_entry__notebook"), pk=pk)
 
     def book(data: dict[str, Any]) -> HttpResponse:
-        bookings.withdraw(request.user, lot, task_step=data["step"],
+        try:
+            with transaction.atomic():
+                form.instance._history_user = request.user
+                form.save()
+        except IntegrityError as error:
+            raise Refused({"number": _(
+                "Another made batch has this number.")}) from error
+        return saved(request, _("Batch %(batch)s saved.")
+                     % {"batch": form.instance}, batch_url(batch))
+
+    form = BatchEditForm(request.POST or None, instance=batch)
+    return form_page(request, form, book,
+                     {"title": _("Edit %(item)s") % {"item": batch},
+                      "cancel": batch_url(batch)})
+
+
+@login_required
+def vessel_new(request: HttpRequest, pk: int) -> HttpResponse:
+    """Open a stored vessel of the batch PK with its opening amount,
+    booked by the signed-in user; answer 404 for an unknown batch."""
+    batch = get_object_or_404(Batch, pk=pk)
+
+    def book(data: dict[str, Any]) -> HttpResponse:
+        vessel = bookings.open_vessel(request.user, batch, **data)
+        return saved(request, _("Vessel %(vessel)s opened.")
+                     % {"vessel": vessel}, batch_url(batch))
+
+    return form_page(
+        request, NewVesselForm(request.POST or None), book,
+        {"title": _("New vessel of %(batch)s") % {"batch": batch},
+         "cancel": batch_url(batch), "locations": locations()})
+
+
+@login_required
+def vessel_withdraw(request: HttpRequest, pk: int) -> HttpResponse:
+    """Book a withdrawal from the vessel PK into a task step, chosen in
+    the form or filled in from ``step`` in the query; answer 404 for an
+    unknown vessel."""
+    vessel = get_object_or_404(Vessel.objects.select_related("batch"),
+                               pk=pk)
+
+    def book(data: dict[str, Any]) -> HttpResponse:
+        bookings.withdraw(request.user, vessel, task_step=data["step"],
                           amount=data["amount"], date=data["date"])
-        return saved(request, _("Withdrawal from %(lot)s booked.")
-                     % {"lot": lot}, lot_url(lot))
+        return saved(request, _("Withdrawal from %(vessel)s booked.")
+                     % {"vessel": vessel}, vessel_url(vessel))
 
     return form_page(
         request, WithdrawalForm(request.POST or None, initial={
             "step": request.GET.get("step", "")}), book,
-        {"title": _("Withdraw from %(lot)s") % {"lot": lot},
-         "cancel": lot_url(lot), "unit": lot.unit_label})
+        {"title": _("Withdraw from %(vessel)s") % {"vessel": vessel},
+         "cancel": vessel_url(vessel), "unit": vessel.unit_label})
 
 
 @login_required
 @require_POST
-def lot_movement_reverse(request: HttpRequest, pk: int) -> HttpResponse:
-    """Reverse the withdrawal PK and return to its lot's page with a
+def vessel_movement_reverse(request: HttpRequest, pk: int
+                            ) -> HttpResponse:
+    """Reverse the withdrawal PK and return to its vessel's page with a
     message; a refusal leaves an error message. Answer 404 for an
     unknown movement and 405 for a request other than POST."""
-    movement = get_object_or_404(LotMovement.objects.select_related("lot"),
-                                 pk=pk)
-    lot = movement.lot
+    movement = get_object_or_404(
+        VesselMovement.objects.select_related("vessel__batch"), pk=pk)
+    vessel = movement.vessel
     try:
         bookings.reverse_withdrawal(request.user, movement)
     except Refused as refused:
         messages.error(request, " ".join(refused.messages))
-        return redirect(lot_url(lot))
-    return saved(request, _("Withdrawal from %(lot)s reversed.")
-                 % {"lot": lot}, lot_url(lot))
+        return redirect(vessel_url(vessel))
+    return saved(request, _("Withdrawal from %(vessel)s reversed.")
+                 % {"vessel": vessel}, vessel_url(vessel))
 
 
 @login_required
-def lot_edit(request: HttpRequest, pk: int) -> HttpResponse:
-    """Change the batch, location, date and note of the lot PK."""
-    lot = get_object_or_404(Lot, pk=pk)
+def vessel_transfer(request: HttpRequest, pk: int) -> HttpResponse:
+    """Transfer an amount from the vessel PK into another stored vessel
+    of its batch or into a new one; answer 404 for an unknown vessel."""
+    vessel = get_object_or_404(Vessel.objects.select_related(
+        "batch__substance"), pk=pk)
 
     def book(data: dict[str, Any]) -> HttpResponse:
-        form.save()
-        return saved(request, _("Bulk lot %(lot)s saved.") % {"lot": lot},
-                     lot_url(lot))
-
-    form = LotEditForm(request.POST or None, instance=lot)
-    return form_page(request, form, book,
-                     {"title": _("Edit %(item)s") % {"item": lot},
-                      "cancel": lot_url(lot), "locations": locations()})
-
-
-@login_required
-def lot_correct(request: HttpRequest, pk: int) -> HttpResponse:
-    """Set the amount of the lot PK after weighing."""
-    lot = get_object_or_404(Lot, pk=pk)
-
-    def book(data: dict[str, Any]) -> HttpResponse:
-        bookings.correct_lot(request.user, lot, **data)
-        return saved(request, _("Amount of %(lot)s corrected.")
-                     % {"lot": lot}, lot_url(lot))
+        bookings.transfer(request.user, vessel, **data)
+        return saved(request, _("Transfer from %(vessel)s booked.")
+                     % {"vessel": vessel}, vessel_url(vessel))
 
     return form_page(
-        request, LotCorrectionForm(request.POST or None, initial={
-            "amount": lot.shown_amount}), book,
-        {"title": _("Correct the amount of %(lot)s") % {"lot": lot},
-         "cancel": lot_url(lot), "unit": lot.unit_label})
+        request, TransferForm(request.POST or None, source=vessel), book,
+        {"title": _("Transfer from %(vessel)s") % {"vessel": vessel},
+         "cancel": vessel_url(vessel), "unit": vessel.unit_label,
+         "locations": locations()})
 
+
+@login_required
+def vessel_edit(request: HttpRequest, pk: int) -> HttpResponse:
+    """Change the location and note of the vessel PK; answer 404 for an
+    unknown vessel."""
+    vessel = get_object_or_404(Vessel.objects.select_related("batch"),
+                               pk=pk)
+
+    def book(data: dict[str, Any]) -> HttpResponse:
+        form.instance._history_user = request.user
+        form.save()
+        return saved(request, _("Vessel %(vessel)s saved.")
+                     % {"vessel": vessel}, vessel_url(vessel))
+
+    form = VesselEditForm(request.POST or None, instance=vessel)
+    return form_page(request, form, book,
+                     {"title": _("Edit %(item)s") % {"item": vessel},
+                      "cancel": vessel_url(vessel),
+                      "locations": locations()})
+
+
+@login_required
+def vessel_correct(request: HttpRequest, pk: int) -> HttpResponse:
+    """Set the amount of the vessel PK after weighing; answer 404 for an
+    unknown vessel."""
+    vessel = get_object_or_404(Vessel.objects.select_related("batch"),
+                               pk=pk)
+
+    def book(data: dict[str, Any]) -> HttpResponse:
+        bookings.correct_vessel(request.user, vessel, **data)
+        return saved(request, _("Amount of %(vessel)s corrected.")
+                     % {"vessel": vessel}, vessel_url(vessel))
+
+    return form_page(
+        request, VesselCorrectionForm(request.POST or None, initial={
+            "amount": vessel.shown_amount}), book,
+        {"title": _("Correct the amount of %(vessel)s") % {
+            "vessel": vessel},
+         "cancel": vessel_url(vessel), "unit": vessel.unit_label})

@@ -137,10 +137,6 @@ msgid "Containers"
 msgstr "Gebinde"
 
 msgctxt "substance"
-msgid "Bulk lots"
-msgstr "Bulk-Lose"
-
-msgctxt "substance"
 msgid "Tasks"
 msgstr "Aufträge"
 
@@ -189,3 +185,7 @@ msgstr "Alle"
 
 msgid "The molfile holds a NUL character."
 msgstr "Die Molfile-Datei enthält ein NUL-Zeichen."
+
+msgctxt "substance"
+msgid "Batches"
+msgstr "Chargen"

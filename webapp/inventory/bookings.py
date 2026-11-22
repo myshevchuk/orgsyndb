@@ -1,5 +1,5 @@
-"""Every change of an item's quantity or a lot's amount, and the records
-that go with it.
+"""Every change of an item's quantity or a vessel's amount, and the
+records that go with it.
 
 Each booking runs in one transaction. A quantity or an amount changes
 by one conditional ``UPDATE`` of the row, which names the condition the
@@ -7,14 +7,21 @@ change needs, such as ``quantity >= n``, and is read back in the same
 transaction; the value an instance passed in holds is never trusted.
 Two bookings prepared from the same quantity therefore never take more
 than it holds, on PostgreSQL and SQLite alike. A booking that changes
-several rows locks items before lots and items in the order of their
-IDs, so that two bookings never wait for each other. A booking that is
-refused raises Refused and changes nothing.
+several rows locks tasks first, then items, then vessels, each in the
+order of their IDs, so that two bookings never wait for each other. A
+booking that is refused raises Refused and changes nothing.
+
+Recording a batch from a task step and every booking on a flask lock the
+row of the task and check in the booking's transaction that the task is
+planned or running, so that a booking prepared while the task was open
+and stored after it closed is refused. A closure of the task takes the
+same lock. On SQLite, which takes no row lock, that holds for no two
+bookings that overlap.
 """
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from datetime import date as Date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from django.core.exceptions import ValidationError
@@ -26,13 +33,17 @@ from django.utils.formats import number_format
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 
-from inventory.figures import proposed_amount, quarter_of, to_base
-from inventory.models import (BASE_UNIT, Article, DeliveryLine,
-                              DeliveryNote, EnteredConsumption, Item, Lot,
-                              LotMovement, Movement, Source, Unit, shown)
+from inventory.figures import (BASE_PLACES, convert, proposed_amount,
+                               quarter_of, to_base)
+from inventory.models import (BASE_UNIT, Article, Batch, DeliveryLine,
+                              DeliveryNote, EnteredConsumption, Item,
+                              Movement, Source, Unit, Vessel,
+                              VesselMovement, shown)
 from orgsyndb_web import lock
 from registry.models import Substance
 from tasks.models import State, Task, TaskStep
+
+OPEN = (State.PLANNED, State.RUNNING)
 
 
 class Refused(ValidationError):
@@ -98,8 +109,8 @@ def _quantity(item_id: int) -> int:
         "quantity", flat=True).get()
 
 
-def _amount(lot_id: int) -> Decimal:
-    return Lot.objects.filter(pk=lot_id).values_list(
+def _amount(vessel_id: int) -> Decimal:
+    return Vessel.objects.filter(pk=vessel_id).values_list(
         "amount", flat=True).get()
 
 
@@ -118,22 +129,55 @@ def _add(item: Item, count: int) -> int:
     return _quantity(item.pk)
 
 
-def _lot_change(lot: Lot, amount: Decimal) -> Decimal:
-    """Add AMOUNT, in the lot's base unit and possibly negative, to LOT
-    and return its new amount; refuse a change that would leave less
-    than zero."""
-    rows = Lot.objects.filter(pk=lot.pk)
+def _vessel_change(vessel: Vessel, amount: Decimal) -> Decimal:
+    """Add AMOUNT, in the vessel's base unit and possibly negative, to
+    VESSEL and return its new amount; refuse a change that would leave
+    less than zero."""
+    rows = Vessel.objects.filter(pk=vessel.pk)
     if amount < 0:
         rows = rows.filter(amount__gte=-amount)
     if not rows.update(amount=Round(F("amount") + amount, 6)):
-        left = _amount(lot.pk)
+        left = _amount(vessel.pk)
         if not left:
-            raise Refused({"lot": _("The lot is used up.")})
+            raise Refused({"vessel": _("The vessel is used up.")})
         raise Refused({"amount": _(
-            "The lot holds only %(amount)s %(unit)s.") % {
-                "amount": number_format(shown(left, lot.unit)),
-                "unit": Unit(lot.unit).label}})
-    return _amount(lot.pk)
+            "The vessel holds only %(amount)s %(unit)s.") % {
+                "amount": number_format(shown(left, vessel.unit)),
+                "unit": Unit(vessel.unit).label}})
+    return _amount(vessel.pk)
+
+
+def _lock_tasks(task_ids: Iterable[int]) -> dict[int, Task]:
+    """Lock the rows of the tasks TASK_IDS in the order of their IDs and
+    return the tasks as stored, by ID. The caller provides the
+    transaction."""
+    return {task.pk: task for task in Task.objects.select_for_update()
+            .filter(pk__in=set(task_ids)).order_by("pk")}
+
+
+def _flask_task(vessel: Vessel) -> int | None:
+    """Return the ID of the task whose step made the batch of VESSEL
+    when VESSEL is a flask, else None."""
+    return Vessel.objects.filter(pk=vessel.pk, flask=True).values_list(
+        "batch__task_step__task_id", flat=True).first()
+
+
+def _closed(task: Task) -> Refused:
+    """Return the refusal of a booking on the flask of the closed TASK."""
+    return Refused({"vessel": _(
+        "The flask belongs to task %(number)s, which is neither planned "
+        "nor running; it takes no booking.") % {"number": task.number}})
+
+
+def _hold_flask(vessel: Vessel) -> None:
+    """Lock the task of VESSEL's batch when VESSEL is a flask and refuse
+    unless the task is planned or running. The caller provides the
+    transaction."""
+    task_id = _flask_task(vessel)
+    if task_id is not None:
+        task = _lock_tasks([task_id])[task_id]
+        if task.state not in OPEN:
+            raise _closed(task)
 
 
 def _movement(user: Any, item: Item, kind: str, count: int, after: int,
@@ -151,12 +195,12 @@ def _movement(user: Any, item: Item, kind: str, count: int, after: int,
     return movement
 
 
-def _lot_movement(user: Any, lot: Lot, kind: str, amount: Decimal,
-                  after: Decimal, day: Date, note: str = "",
-                  **fields: Any) -> LotMovement:
-    return LotMovement.objects.create(
-        lot=lot, kind=kind, amount=amount, amount_after=after, date=day,
-        booked_at=timezone.now(), user=user, note=note, **fields)
+def _vessel_movement(user: Any, vessel: Vessel, kind: str,
+                     amount: Decimal, after: Decimal, day: Date,
+                     note: str = "", **fields: Any) -> VesselMovement:
+    return VesselMovement.objects.create(
+        vessel=vessel, kind=kind, amount=amount, amount_after=after,
+        date=day, booked_at=timezone.now(), user=user, note=note, **fields)
 
 
 def _number(article_number: str | None) -> str | None:
@@ -423,50 +467,67 @@ def reverse_historical(user: Any, delivery_note: DeliveryNote, *,
     return stored
 
 
-def fill(user: Any, item: Item, *, count: int, date: Date | None = None,
-         note: str = "", lot: Lot | None = None,
+def fill(user: Any, item: Item, *, count: int, vessel: Vessel | None,
+         date: Date | None = None, note: str = "",
          amount: Decimal | None = None) -> Movement:
-    """Book COUNT containers filled into ITEM by USER, dated DATE, today
-    by default, and return the movement.
+    """Book COUNT containers filled into ITEM from VESSEL by USER, dated
+    DATE, today by default, and return the item's movement, which names
+    the vessel's.
 
-    With a LOT, the filling takes AMOUNT, in the lot's unit, from it in
-    the same transaction, and the item's movement names the lot's. An
-    AMOUNT of None takes the proposed amount: COUNT times the item's
-    size, converted into the lot's base unit through the molar mass of
-    the item's substance where the kinds differ. Refuse a COUNT of zero
-    or less, a DATE after today, a lot of another substance than the
-    item's, a lot that is used up, an AMOUNT above the lot's or one that rounds
-    to zero in six places of the base unit, and the proposal when there
-    is no molar mass to convert with.
+    The filling takes AMOUNT, in the vessel's unit, from the vessel in
+    the same transaction. An AMOUNT of None takes the proposed amount:
+    COUNT times the item's size, converted into the vessel's base unit
+    through the molar mass of the item's substance where the kinds
+    differ. Refuse, at ``vessel``, a VESSEL of None, one of another
+    substance than the item's, one that is used up and the flask of a
+    task that is neither planned nor running; refuse a COUNT of zero or
+    less, a DATE after today, an AMOUNT above the vessel's or one that
+    rounds to zero in six places of its unit or of the base unit, and the
+    proposal when there is no molar mass to convert with.
     """
     day = _day(date)
     if count <= 0:
         raise Refused({"count": _("The count must be above zero.")})
-    if lot is not None and lot.substance_id != item.article_id:
-        raise Refused({"lot": _("The lot holds another substance.")})
+    if vessel is None:
+        raise Refused({"vessel": _(
+            "Choose the vessel the containers are filled from.")})
+    if vessel.batch.substance_id != item.article_id:
+        raise Refused({"vessel": _("The vessel holds another substance.")})
     with transaction.atomic():
+        _hold_flask(vessel)
         after = _add(item, count)
-        taken = None
-        if lot is not None:
-            base = _taken(item, count, lot, amount)
-            taken = _lot_movement(user, lot, LotMovement.Kind.FILLING, base,
-                                  _lot_change(lot, -base), day, note)
+        base = _taken(item, count, vessel, amount)
+        taken = _vessel_movement(
+            user, vessel, VesselMovement.Kind.FILLING, base,
+            _vessel_change(vessel, -base), day, note)
         return _movement(user, item, Movement.Kind.FILLING, count, after,
-                         day, note=note, bulk_movement=taken)
+                         day, note=note, vessel_movement=taken)
 
 
-def _taken(item: Item, count: int, lot: Lot, amount: Decimal | None
+def _passed(amount: Decimal, unit: str, message: str) -> Decimal:
+    """Return AMOUNT of UNIT in its base unit, rounded half up to six
+    places; refuse with MESSAGE, at ``amount``, an AMOUNT that is zero or
+    less, or that rounds to zero in six places of UNIT or of its base
+    unit."""
+    if amount.quantize(BASE_PLACES, ROUND_HALF_UP) <= 0 \
+            or to_base(amount, unit) <= 0:
+        raise Refused({"amount": message})
+    return to_base(amount, unit)
+
+
+def _taken(item: Item, count: int, vessel: Vessel, amount: Decimal | None
            ) -> Decimal:
-    """Return the amount COUNT containers of ITEM take from LOT, in its
-    base unit: AMOUNT, given in the lot's unit, or the proposal."""
-    if amount is None:
-        base = proposed_amount(item, count, lot)
-        if base is None:
-            raise Refused({"amount": _(
-                "Without a molar mass of the substance, enter the amount "
-                "taken.")})
-    else:
-        base = to_base(amount, lot.unit)
+    """Return the amount COUNT containers of ITEM take from VESSEL, in
+    its base unit: AMOUNT, given in the vessel's unit, or the
+    proposal."""
+    if amount is not None:
+        return _passed(amount, vessel.unit,
+                       _("The amount taken must be above zero."))
+    base = proposed_amount(item, count, vessel)
+    if base is None:
+        raise Refused({"amount": _(
+            "Without a molar mass of the substance, enter the amount "
+            "taken.")})
     if base <= 0:
         raise Refused({"amount": _(
             "The amount taken must be above zero.")})
@@ -495,10 +556,11 @@ def reverse(user: Any, movement: Movement, *, note: str) -> Movement:
     today, and return the reversal.
 
     A delivery's count goes back into the item. A filling's count is
-    taken back out, and its amount returns to its lot with a lot
+    taken back out, and its amount returns to its vessel with a vessel
     reversal. Refuse an empty NOTE, a movement of another kind, one
-    already reversed, and a filling whose containers are no longer
-    there.
+    already reversed, a filling whose containers are no longer there,
+    and a filling from the flask of a task that is neither planned nor
+    running.
     """
     text = _required(note)
     if not movement.reversible:
@@ -508,6 +570,9 @@ def reverse(user: Any, movement: Movement, *, note: str) -> Movement:
     item = movement.item
     try:
         with transaction.atomic():
+            taken = movement.vessel_movement
+            if taken is not None:
+                _hold_flask(taken.vessel)
             if Movement.objects.filter(reverses=movement).exists():
                 raise Refused(done)
             returned = None
@@ -518,15 +583,15 @@ def reverse(user: Any, movement: Movement, *, note: str) -> Movement:
                 if after is None:
                     raise Refused(_("The containers of the filling are no "
                                     "longer there."))
-                taken = movement.bulk_movement
                 if taken is not None:
-                    returned = _lot_movement(
-                        user, taken.lot, LotMovement.Kind.REVERSAL,
-                        taken.amount, _lot_change(taken.lot, taken.amount),
-                        day, text)
+                    returned = _vessel_movement(
+                        user, taken.vessel, VesselMovement.Kind.REVERSAL,
+                        taken.amount,
+                        _vessel_change(taken.vessel, taken.amount), day,
+                        text)
             return _movement(user, item, Movement.Kind.REVERSAL,
                              movement.count, after, day, note=text,
-                             reverses=movement, bulk_movement=returned)
+                             reverses=movement, vessel_movement=returned)
     except IntegrityError as error:
         raise Refused(done) from error
 
@@ -598,31 +663,75 @@ def enter_consumption(user: Any, item: Item, *, year: int, quarter: int,
         return record
 
 
-def create_lot(user: Any, *, substance: Substance, unit: str,
-               amount: Decimal, source: str = Source.MADE,
-               supplier: str = "", batch: str = "", location: str = "",
-               made_on: Date | None = None, note: str = "",
-               date: Date | None = None, task_step: TaskStep | None = None
-               ) -> Lot:
-    """Create a bulk lot of SUBSTANCE holding AMOUNT of UNIT, made in
-    the lab or bought as SOURCE says, from SUPPLIER, with its opening
-    movement booked by USER and dated DATE, today by default.
+def _field_checked(model: type[Any], **values: Any) -> None:
+    """Refuse a value that the field of MODEL named by its keyword does
+    not allow, such as a text that is too long or an unknown unit."""
+    for name, value in values.items():
+        try:
+            model._meta.get_field(name).clean(value, None)
+        except ValidationError as error:
+            raise Refused({name: " ".join(error.messages)}) from error
 
-    A lot made by the task step TASK_STEP names it. The amount is kept
-    in the base unit of UNIT, rounded half up to six places. Refuse an
-    AMOUNT below zero, an unknown UNIT or SOURCE, a DATE after today, a
-    value too long for its field, a TASK_STEP for a bought lot, and a
-    SUBSTANCE the step does not make (``TaskStep.products``).
+
+def _batch_amount(amount: Decimal | None, unit: str, required: bool
+                  ) -> Decimal | None:
+    """Return AMOUNT of UNIT in the base unit, rounded half up to six
+    places, or None for an AMOUNT of None that is not REQUIRED; refuse
+    an unknown or empty UNIT with an amount, an AMOUNT below zero, and
+    for a REQUIRED amount one that is missing or not above zero."""
+    if amount is None:
+        if required:
+            raise Refused({"amount": _("Enter the yield.")})
+        return None
+    _field_checked(Vessel, unit=unit)
+    base = to_base(amount, unit)
+    if base < 0 or (required and base <= 0):
+        raise Refused({"amount": _(
+            "The yield must be above zero.") if required else _(
+            "The amount may not be negative.")})
+    return base
+
+
+def record_batch(user: Any, *, substance: Substance,
+                 source: str = Source.MADE, number: str = "",
+                 journal_entry: Any = None, task_step: TaskStep | None = None,
+                 date: Date | None = None, supplier: str = "",
+                 supplier_article_number: str = "", supplier_batch: str = "",
+                 note: str = "", amount: Decimal | None = None,
+                 unit: str = "", location: str = "") -> Batch:
+    """Record a batch of SUBSTANCE, made in the lab or bought as SOURCE
+    says, booked by USER, and return it.
+
+    A made batch has a NUMBER and may name a JOURNAL_ENTRY, an entry of
+    the lab journal; a bought one has the SUPPLIER and the supplier's
+    article number and batch. DATE is the day it was made or received,
+    or None.
+
+    With an AMOUNT of UNIT the batch opens its first vessel in the same
+    transaction, a stored vessel at LOCATION. A batch made by the task
+    step TASK_STEP needs the AMOUNT, which is its yield: it opens the
+    batch's flask when LOCATION is empty and a stored vessel there
+    otherwise, and the batch names the step's journal entry when the
+    step names one, whatever JOURNAL_ENTRY says. The row of the step's
+    task is locked and its state checked in the transaction.
+
+    Refuse a SOURCE that is neither made nor bought; a made batch
+    without a number, or with a supplier's field; a bought batch with a
+    number, entry or step; a NUMBER another made batch has regardless of
+    case, naming that batch; a SUBSTANCE the step does not make
+    (``TaskStep.products``); a step whose task is neither planned nor
+    running; an AMOUNT below zero, or for a step one that is not above
+    zero or missing; an unknown UNIT; a DATE after today; and a value
+    too long for its field. A refusal changes nothing.
     """
-    day = _day(date)
-    if unit not in BASE_UNIT:
-        raise Refused({"unit": _("The unit is mg, g, µmol or mmol.")})
-    if amount < 0:
-        raise Refused({"amount": _("The amount may not be negative.")})
+    if source not in Source.values:
+        raise Refused({"source": _("The source is made or bought.")})
+    made = source == Source.MADE
+    number = (number or "").strip()
     if task_step is not None:
-        if source != Source.MADE:
+        if not made:
             raise Refused({"source": _(
-                "A lot made by a task step is made in the lab.")})
+                "A batch made by a task step is made in the lab.")})
         if substance not in task_step.products():
             raise Refused({"substance": _(
                 "Step %(position)s of task %(number)s does not make "
@@ -630,83 +739,259 @@ def create_lot(user: Any, *, substance: Substance, unit: str,
                     "position": task_step.position,
                     "number": task_step.task.number,
                     "substance": substance.key}})
-    base = to_base(amount, unit)
-    lot = Lot(substance=substance, source=source, supplier=supplier,
-              unit=unit, amount=base, batch=batch, location=location,
-              made_on=made_on, note=note, task_step=task_step)
-    _checked(lot)
+    base = _batch_amount(amount, unit, task_step is not None)
+    _field_checked(Vessel, location=location)
+    batch = Batch(
+        substance=substance, source=source, number=number,
+        journal_entry=journal_entry, task_step=task_step, date=date,
+        yield_amount=base if task_step is not None else None,
+        yield_unit=unit if task_step is not None else "",
+        supplier=supplier, supplier_article_number=supplier_article_number,
+        supplier_batch=supplier_batch, note=note)
+    _checked(batch)
+    try:
+        with transaction.atomic():
+            if task_step is not None:
+                task = _lock_tasks([task_step.task_id])[task_step.task_id]
+                if task.state not in OPEN:
+                    raise Refused({"step": _(
+                        "Task %(number)s is neither planned nor "
+                        "running.") % {"number": task.number}})
+                entry = TaskStep.objects.filter(
+                    pk=task_step.pk).values_list(
+                        "journal_entry_id", flat=True).first()
+                if entry is not None:
+                    batch.journal_entry_id = entry
+            if made:
+                holder = Batch.objects.filter(
+                    source=Source.MADE, number_key=number.casefold()
+                    ).first()
+                if holder is not None:
+                    raise Refused({"number": _taken_number(holder)})
+            _attributed(batch, user).save(force_insert=True)
+            if base is not None:
+                _open(user, batch, unit, base, _day(None),
+                      flask=task_step is not None and not location,
+                      location=location)
+    except IntegrityError as error:
+        raise Refused({"number": _taken_number(None)}) from error
+    return batch
+
+
+def _taken_number(holder: Batch | None) -> str:
+    """Return the refusal text of a batch number that the made batch
+    HOLDER has regardless of case; HOLDER is None when it is not
+    known."""
+    if holder is None:
+        return _("Another made batch has this number.")
+    return _("Batch %(batch)s has this number.") % {"batch": holder}
+
+
+def _open(user: Any, batch: Batch, unit: str, base: Decimal, day: Date, *,
+          flask: bool = False, location: str = "",
+          kind: str = VesselMovement.Kind.OPENING, **fields: Any
+          ) -> VesselMovement:
+    """Store a vessel of BATCH in UNIT holding BASE, its base unit, at
+    LOCATION, and its first movement of KIND dated DAY, which takes the
+    keywords FIELDS; return the movement."""
+    vessel = Vessel(batch=batch, unit=unit, amount=base, flask=flask,
+                    location=location)
+    _attributed(vessel, user).save(force_insert=True)
+    return _vessel_movement(user, vessel, kind, base, base, day,
+                            **fields)
+
+
+def open_vessel(user: Any, batch: Batch, *, unit: str, amount: Decimal,
+                location: str = "", note: str = "",
+                date: Date | None = None) -> Vessel:
+    """Open a stored vessel of BATCH holding AMOUNT of UNIT, booked by
+    USER with an opening movement dated DATE, today by default, and
+    return it.
+
+    The amount is kept in the base unit of UNIT, rounded half up to six
+    places. Refuse an AMOUNT below zero, an unknown UNIT, a DATE after
+    today, and a LOCATION or NOTE too long for its field.
+    """
+    day = _day(date)
+    base = _batch_amount(amount, unit, False)
+    vessel = Vessel(batch=batch, unit=unit, amount=base, location=location,
+                    note=note)
+    _checked(vessel)
     with transaction.atomic():
-        _attributed(lot, user).save()
-        _lot_movement(user, lot, LotMovement.Kind.OPENING, base, base, day)
-    return lot
+        _attributed(vessel, user).save(force_insert=True)
+        _vessel_movement(user, vessel, VesselMovement.Kind.OPENING, base,
+                         base, day)
+    return vessel
 
 
-def correct_lot(user: Any, lot: Lot, *, amount: Decimal, note: str,
-                date: Date | None = None) -> LotMovement:
-    """Set the amount of LOT to AMOUNT, weighed and given in the lot's
-    unit, with NOTE, by USER, dated DATE, today by default; return the
-    lot's movement.
+def correct_vessel(user: Any, vessel: Vessel, *, amount: Decimal, note: str,
+                   date: Date | None = None) -> VesselMovement:
+    """Set the amount of VESSEL to AMOUNT, weighed and given in the
+    vessel's unit, with NOTE, by USER, dated DATE, today by default;
+    return the vessel's movement.
 
-    Refuse an AMOUNT below zero, an empty NOTE and a DATE after today.
+    Refuse an AMOUNT below zero, an empty NOTE, a DATE after today, and
+    the flask of a task that is neither planned nor running; the task's
+    row is locked while its state is checked.
     """
     day = _day(date)
     text = _required(note)
     if amount < 0:
         raise Refused({"amount": _("The amount may not be negative.")})
-    base = to_base(amount, lot.unit)
+    base = to_base(amount, vessel.unit)
     with transaction.atomic():
-        Lot.objects.filter(pk=lot.pk).update(amount=base)
-        return _lot_movement(user, lot, LotMovement.Kind.CORRECTION, base,
-                             _amount(lot.pk), day, text)
+        _hold_flask(vessel)
+        Vessel.objects.filter(pk=vessel.pk).update(amount=base)
+        return _vessel_movement(
+            user, vessel, VesselMovement.Kind.CORRECTION, base,
+            _amount(vessel.pk), day, text)
 
 
-def withdraw(user: Any, lot: Lot, *, task_step: TaskStep, amount: Decimal,
-             date: Date | None = None, note: str = "") -> LotMovement:
-    """Book AMOUNT, in the lot's unit, taken from LOT into the task step
-    TASK_STEP by USER, dated DATE, today by default, and return the
+def withdraw(user: Any, vessel: Vessel, *, task_step: TaskStep,
+             amount: Decimal, date: Date | None = None, note: str = ""
+             ) -> VesselMovement:
+    """Book AMOUNT, in the vessel's unit, taken from VESSEL into the task
+    step TASK_STEP by USER, dated DATE, today by default, and return the
     withdrawal.
 
     Refuse an AMOUNT that is not above zero or rounds to zero in six
-    places of the base unit, an AMOUNT above the lot's, a lot that is
-    used up, a DATE after today, and a step whose task is neither
-    planned nor running; the task's row is locked while its state is
-    checked.
+    places of its unit or of the base unit, an AMOUNT above the vessel's,
+    a vessel that is used up, a DATE after today, a step whose task is neither planned
+    nor running, and the flask of a task that is neither; the rows of
+    the tasks are locked while their states are checked.
     """
     day = _day(date)
-    base = to_base(amount, lot.unit)
-    if base <= 0:
-        raise Refused({"amount": _(
-            "The amount taken must be above zero.")})
+    base = _passed(amount, vessel.unit,
+                   _("The amount taken must be above zero."))
     with transaction.atomic():
-        task = Task.objects.select_for_update().get(pk=task_step.task_id)
-        if task.state not in (State.PLANNED, State.RUNNING):
+        flask = _flask_task(vessel)
+        tasks = _lock_tasks([task_step.task_id,
+                             *([] if flask is None else [flask])])
+        task = tasks[task_step.task_id]
+        if task.state not in OPEN:
             raise Refused({"step": _(
                 "Task %(number)s is neither planned nor running.")
                 % {"number": task.number}})
-        return _lot_movement(user, lot, LotMovement.Kind.WITHDRAWAL, base,
-                             _lot_change(lot, -base), day, note,
-                             task_step=task_step)
+        if flask is not None and tasks[flask].state not in OPEN:
+            raise _closed(tasks[flask])
+        return _vessel_movement(
+            user, vessel, VesselMovement.Kind.WITHDRAWAL, base,
+            _vessel_change(vessel, -base), day, note, task_step=task_step)
 
 
-def reverse_withdrawal(user: Any, movement: LotMovement) -> LotMovement:
+def reverse_withdrawal(user: Any, movement: VesselMovement
+                       ) -> VesselMovement:
     """Reverse the withdrawal MOVEMENT by USER, dated today: its amount
-    returns to its lot, and the reversal names it as ``reverses``.
+    returns to its vessel, and the reversal names it as ``reverses``.
     Return the reversal.
 
-    Refuse a movement of another kind and a withdrawal already
-    reversed.
+    Refuse a movement of another kind, a withdrawal already reversed,
+    and a withdrawal from the flask of a task that is neither planned
+    nor running.
     """
-    if movement.kind != LotMovement.Kind.WITHDRAWAL:
+    if movement.kind != VesselMovement.Kind.WITHDRAWAL:
         raise Refused(_("Only a withdrawal can be reversed here."))
     done = _("The withdrawal is already reversed.")
     try:
         with transaction.atomic():
-            if LotMovement.objects.filter(reverses=movement).exists():
+            vessel = movement.vessel
+            _hold_flask(vessel)
+            if VesselMovement.objects.filter(reverses=movement).exists():
                 raise Refused(done)
-            lot = movement.lot
-            return _lot_movement(
-                user, lot, LotMovement.Kind.REVERSAL, movement.amount,
-                _lot_change(lot, movement.amount), timezone.localdate(),
-                reverses=movement)
+            return _vessel_movement(
+                user, vessel, VesselMovement.Kind.REVERSAL, movement.amount,
+                _vessel_change(vessel, movement.amount),
+                timezone.localdate(), reverses=movement)
     except IntegrityError as error:
         raise Refused(done) from error
+
+
+def transfer(user: Any, source: Vessel, *, amount: Decimal,
+             target: Vessel | None = None, location: str = "",
+             date: Date | None = None, note: str = ""
+             ) -> tuple[VesselMovement, VesselMovement]:
+    """Pass AMOUNT, in the unit of the vessel SOURCE, from SOURCE to
+    another vessel of its batch, booked by USER, dated DATE, today by
+    default, and return the ``transfer_out`` of SOURCE and the
+    ``transfer_in`` that names it.
+
+    The target is the stored vessel TARGET, or, when that is None, a new
+    stored vessel at LOCATION in the unit of SOURCE, whose first
+    movement is the ``transfer_in``. The ``transfer_in`` holds the
+    amount converted into the target's base unit, through the molar
+    mass of the substance across mass and amount of substance, rounded
+    half up to six places.
+
+    Refuse, at ``amount``, an AMOUNT that is not above zero or rounds to
+    zero in six places of its unit or of the base unit, one above the
+    source's, and one whose converted amount rounds
+    to zero; at ``vessel``, a source that is used up; at ``target``, a
+    TARGET of another batch, a flask or SOURCE itself, and one the
+    amount does not convert into for want of a molar mass; and a DATE
+    after today. A source that is the flask of a task that is neither
+    planned nor running is refused too. A refusal changes nothing.
+    """
+    day = _day(date)
+    base = _passed(amount, source.unit,
+                   _("The amount passed must be above zero."))
+    if target is None:
+        _field_checked(Vessel, location=location)
+        converted = base
+    else:
+        if target.batch_id != source.batch_id or target.flask \
+                or target.pk == source.pk:
+            raise Refused({"target": _(
+                "Choose another stored vessel of the same batch.")})
+        converted = convert(base, BASE_UNIT[source.unit],
+                            BASE_UNIT[target.unit],
+                            source.batch.substance.mw)
+        if converted is None:
+            raise Refused({"target": _(
+                "The substance has no molar mass to convert the amount "
+                "into the unit of the target.")})
+        converted = converted.quantize(BASE_PLACES, ROUND_HALF_UP)
+        if converted <= 0:
+            raise Refused({"amount": _(
+                "The amount rounds to zero in the target's unit.")})
+    with transaction.atomic():
+        _hold_flask(source)
+        list(Vessel.objects.select_for_update().filter(
+            pk__in=[source.pk, *([] if target is None else [target.pk])]
+            ).order_by("pk").values_list("pk", flat=True))
+        out = _vessel_movement(
+            user, source, VesselMovement.Kind.TRANSFER_OUT, base,
+            _vessel_change(source, -base), day, note)
+        if target is None:
+            into = _open(user, source.batch, source.unit, converted, day,
+                         location=location, note=note,
+                         kind=VesselMovement.Kind.TRANSFER_IN,
+                         transfer=out)
+        else:
+            into = _vessel_movement(
+                user, target, VesselMovement.Kind.TRANSFER_IN, converted,
+                _vessel_change(target, converted), day, note, transfer=out)
+    return out, into
+
+
+def write_off_flasks(user: Any, task: Task) -> list[VesselMovement]:
+    """Empty each flask of the batches the steps of TASK made that still
+    holds an amount, by a ``remainder`` movement of USER dated today,
+    and return the movements; a flask without an amount books nothing.
+
+    The row of TASK is locked, and the write-off belongs to the
+    transaction that closes the task: callers that end, fail or cancel a
+    task call it inside that transaction.
+    """
+    day = timezone.localdate()
+    booked = []
+    with transaction.atomic():
+        _lock_tasks([task.pk])
+        for flask in Vessel.objects.select_for_update().filter(
+                flask=True, batch__task_step__task_id=task.pk
+                ).order_by("pk"):
+            if flask.amount > 0:
+                left = flask.amount
+                booked.append(_vessel_movement(
+                    user, flask, VesselMovement.Kind.REMAINDER, left,
+                    _vessel_change(flask, -left), day))
+    return booked

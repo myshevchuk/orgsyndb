@@ -17,12 +17,6 @@ msgstr "Das Datum darf nicht in der Zukunft liegen."
 msgid "A note is required."
 msgstr "Eine Bemerkung ist nötig."
 
-msgid "The lot is used up."
-msgstr "Das Bulk ist aufgebraucht."
-
-msgid "The lot holds only %(amount)s %(unit)s."
-msgstr "Das Bulk enthält nur %(amount)s %(unit)s."
-
 msgid "The count may not be negative."
 msgstr "Die Anzahl darf nicht negativ sein."
 
@@ -74,9 +68,6 @@ msgstr "Das Jahr muss größer als null sein."
 msgid "Historical delivery notes hold this quarter's consumption; reverse them before entering a value."
 msgstr "Nachgetragene Lieferscheine enthalten den Verbrauch dieses Quartals; sie sind vor dem Nachtragen eines Werts zu stornieren."
 
-msgid "The unit is mg, g, µmol or mmol."
-msgstr "Die Einheit ist mg, g, µmol oder mmol."
-
 msgid "The amount may not be negative."
 msgstr "Die Menge darf nicht negativ sein."
 
@@ -123,14 +114,8 @@ msgstr "Bitte einen Artikel wählen."
 msgid "Enter a count."
 msgstr "Bitte eine Anzahl angeben."
 
-msgid "Bulk lot"
-msgstr "Bulk"
-
 msgid "Amount taken"
 msgstr "Entnommene Menge"
-
-msgid "In the unit of the lot; left empty, the proposed amount is taken."
-msgstr "In der Einheit des Bulks; leer gelassen wird die vorgeschlagene Menge entnommen."
 
 msgid "Year"
 msgstr "Jahr"
@@ -223,14 +208,8 @@ msgstr "Charge"
 msgid "Location"
 msgstr "Ort"
 
-msgid "bulk lot"
-msgstr "Bulk"
-
-msgid "bulk lots"
-msgstr "Bulks"
-
 msgid "Opening amount"
-msgstr "Anfangsbestand"
+msgstr "Anfangsmenge"
 
 msgid "Filling"
 msgstr "Abfüllung"
@@ -252,12 +231,6 @@ msgstr "Gebucht am"
 
 msgid "User"
 msgstr "Person"
-
-msgid "bulk movement"
-msgstr "Bulk-Buchung"
-
-msgid "bulk movements"
-msgstr "Bulk-Buchungen"
 
 msgid "Delivery"
 msgstr "Abgabe"
@@ -287,11 +260,6 @@ msgid "%(count)s container"
 msgid_plural "%(count)s containers"
 msgstr[0] "%(count)s Gebinde"
 msgstr[1] "%(count)s Gebinde"
-
-msgid "%(count)s lot does not convert"
-msgid_plural "%(count)s lots do not convert"
-msgstr[0] "%(count)s Bulk nicht umrechenbar"
-msgstr[1] "%(count)s Bulks nicht umrechenbar"
 
 msgid "The amount is in %(unit)s."
 msgstr "Die Menge ist in %(unit)s."
@@ -420,12 +388,6 @@ msgstr "Gebinde"
 msgid "does not convert"
 msgstr "nicht umrechenbar"
 
-msgid "No open bulk lot."
-msgstr "Kein offenes Bulk."
-
-msgid "New bulk lot"
-msgstr "Neues Bulk"
-
 msgid "no container left"
 msgstr "kein Gebinde übrig"
 
@@ -437,9 +399,6 @@ msgstr "unter dem Durchschnitt je Quartal"
 
 msgid "below twice the mean per quarter"
 msgstr "unter dem doppelten Durchschnitt je Quartal"
-
-msgid "Used-up lots too"
-msgstr "Auch aufgebrauchte"
 
 msgid "used up"
 msgstr "aufgebraucht"
@@ -480,9 +439,6 @@ msgstr "%(item)s bearbeiten"
 msgid "Filling of %(item)s booked."
 msgstr "Abfüllung von %(item)s gebucht."
 
-msgid "Choose a lot to propose an amount."
-msgstr "Für einen Vorschlag bitte ein Bulk wählen."
-
 msgid "Fill %(item)s"
 msgstr "%(item)s abfüllen"
 
@@ -515,18 +471,6 @@ msgstr "Lieferschein %(note)s storniert."
 
 msgid "Reverse delivery note %(note)s"
 msgstr "Lieferschein %(note)s stornieren"
-
-msgid "Bulk lot %(lot)s created."
-msgstr "Bulk %(lot)s angelegt."
-
-msgid "Bulk lot %(lot)s saved."
-msgstr "Bulk %(lot)s gespeichert."
-
-msgid "Amount of %(lot)s corrected."
-msgstr "Menge von %(lot)s korrigiert."
-
-msgid "Correct the amount of %(lot)s"
-msgstr "Menge von %(lot)s korrigieren"
 
 msgid "Enter article number"
 msgstr "Artikelnr. eintragen"
@@ -748,14 +692,6 @@ msgstr "Herkunft"
 msgid "Supplier"
 msgstr "Lieferant"
 
-msgctxt "lot source"
-msgid "made"
-msgstr "hergestellt"
-
-msgctxt "lot source"
-msgid "bought"
-msgstr "gekauft"
-
 msgid "Another article has this article number."
 msgstr "Ein anderer Artikel hat diese Artikelnummer."
 
@@ -774,9 +710,6 @@ msgstr "Die Nummer der Lieferscheine des Artikels; leer, bis er zum ersten Mal a
 msgid "Entered once, when the article is first delivered; fixed from then on, and saved on the article for every size of it."
 msgstr "Wird einmal eingetragen, wenn der Artikel zum ersten Mal abgegeben wird, und steht danach fest; gilt für alle Gebinde des Artikels."
 
-msgid "The lot holds another substance."
-msgstr "Das Bulk enthält eine andere Substanz."
-
 msgid "Without a molar mass of the substance, enter the amount taken."
 msgstr "Ohne Molmasse der Substanz die entnommene Menge eingeben."
 
@@ -792,12 +725,6 @@ msgstr "Hergestellt in"
 msgid "Task step"
 msgstr "Stufe"
 
-msgid "Item or task"
-msgstr "Artikel oder Aufgabe"
-
-msgid "A lot made by a task step is made in the lab."
-msgstr "Ein Bulk aus einer Stufe ist im Labor hergestellt."
-
 msgid "Step %(position)s of task %(number)s does not make %(substance)s."
 msgstr "Stufe %(position)s der Aufgabe %(number)s stellt %(substance)s nicht her."
 
@@ -810,14 +737,248 @@ msgstr "Hier lässt sich nur eine Entnahme stornieren."
 msgid "The withdrawal is already reversed."
 msgstr "Die Entnahme ist bereits storniert."
 
-msgid "New bulk lot of %(task)s, %(step)s"
-msgstr "Neues Bulk aus %(task)s, %(step)s"
+#, python-format
+msgid "Batch %(batch)s has this number."
+msgstr "Die Charge %(batch)s hat diese Nummer."
 
-msgid "Withdrawal from %(lot)s booked."
-msgstr "Entnahme aus %(lot)s gebucht."
+msgid "The vessel is used up."
+msgstr "Das Gefäß ist aufgebraucht."
 
-msgid "Withdraw from %(lot)s"
-msgstr "Entnahme aus %(lot)s"
+#, python-format
+msgid "The vessel holds only %(amount)s %(unit)s."
+msgstr "Das Gefäß enthält nur %(amount)s %(unit)s."
 
-msgid "Withdrawal from %(lot)s reversed."
-msgstr "Entnahme aus %(lot)s storniert."
+#, python-format
+msgid "The flask belongs to task %(number)s, which is neither planned nor running; it takes no booking."
+msgstr "Der Kolben gehört zur Aufgabe %(number)s, die weder geplant ist noch läuft; er nimmt keine Buchung an."
+
+msgid "Choose the vessel the containers are filled from."
+msgstr "Bitte das Gefäß wählen, aus dem abgefüllt wird."
+
+msgid "The vessel holds another substance."
+msgstr "Das Gefäß enthält eine andere Substanz."
+
+msgid "Enter the yield."
+msgstr "Bitte die Ausbeute angeben."
+
+msgid "The yield must be above zero."
+msgstr "Die Ausbeute muss größer als null sein."
+
+msgid "The source is made or bought."
+msgstr "Die Herkunft ist hergestellt oder gekauft."
+
+msgid "A batch made by a task step is made in the lab."
+msgstr "Eine Charge aus einer Stufe ist im Labor hergestellt."
+
+msgid "Another made batch has this number."
+msgstr "Eine andere hergestellte Charge hat diese Nummer."
+
+msgid "The amount passed must be above zero."
+msgstr "Die umgefüllte Menge muss größer als null sein."
+
+msgid "Choose another stored vessel of the same batch."
+msgstr "Bitte ein anderes gelagertes Gefäß derselben Charge wählen."
+
+msgid "The substance has no molar mass to convert the amount into the unit of the target."
+msgstr "Die Substanz hat keine Molmasse, um die Menge in die Einheit des Zielgefäßes umzurechnen."
+
+msgid "The amount rounds to zero in the target's unit."
+msgstr "Die Menge ergibt in der Einheit des Zielgefäßes null."
+
+msgid "Vessel"
+msgstr "Gefäß"
+
+msgid "In the unit of the vessel; left empty, the proposed amount is taken."
+msgstr "In der Einheit des Gefäßes; leer gelassen wird die vorgeschlagene Menge entnommen."
+
+msgid "The entry the batch is written down in, as <code>/<number>; it is created when it is first named."
+msgstr "Der Eintrag, in dem die Charge aufgeschrieben ist, als <Kürzel>/<Nummer>; er wird angelegt, wenn er zum ersten Mal genannt wird."
+
+msgid "Supplier's article no."
+msgstr "Artikelnr. des Lieferanten"
+
+msgid "Supplier's batch"
+msgstr "Charge des Lieferanten"
+
+msgid "Opens the batch's first vessel."
+msgstr "Öffnet das erste Gefäß der Charge."
+
+msgid "Where the first vessel is stored; left empty for a batch made by a step, the amount stays in its flask."
+msgstr "Wo das erste Gefäß gelagert wird; bei einer Charge aus einer Stufe bleibt die Menge, wenn das Feld leer ist, im Kolben."
+
+msgid "The yield. It waits in the batch's flask unless a location is given."
+msgstr "Die Ausbeute. Sie bleibt im Kolben der Charge, solange kein Ort angegeben ist."
+
+msgid "The entry of the step."
+msgstr "Der Eintrag der Stufe."
+
+msgid "Choose the unit of the amount."
+msgstr "Bitte die Einheit der Menge wählen."
+
+msgid "Yield"
+msgstr "Ausbeute"
+
+msgid "Choose the unit of the yield."
+msgstr "Bitte die Einheit der Ausbeute wählen."
+
+msgid "Target vessel"
+msgstr "Zielgefäß"
+
+msgid "Location of a new vessel"
+msgstr "Ort eines neuen Gefäßes"
+
+msgid "Choose a vessel, or enter the location of a new one."
+msgstr "Bitte ein Gefäß wählen oder den Ort eines neuen angeben."
+
+msgid "Leave the location empty when a vessel is chosen."
+msgstr "Bei gewähltem Gefäß den Ort leer lassen."
+
+msgctxt "batch source"
+msgid "made"
+msgstr "hergestellt"
+
+msgctxt "batch source"
+msgid "bought"
+msgstr "gekauft"
+
+msgid "batch"
+msgstr "Charge"
+
+msgid "batches"
+msgstr "Chargen"
+
+msgid "A made batch needs a number."
+msgstr "Eine hergestellte Charge braucht eine Nummer."
+
+msgid "A made batch has none."
+msgstr "Eine hergestellte Charge hat keine."
+
+msgid "A bought batch has none."
+msgstr "Eine gekaufte Charge hat keine."
+
+msgid "The yield and its unit are given together."
+msgstr "Ausbeute und Einheit werden zusammen angegeben."
+
+msgid "Flask"
+msgstr "Kolben"
+
+msgid "End product"
+msgstr "Endprodukt"
+
+msgid "Intermediate"
+msgstr "Zwischenprodukt"
+
+msgid "Reagent"
+msgstr "Reagenz"
+
+msgid "vessel"
+msgstr "Gefäß"
+
+msgid "vessels"
+msgstr "Gefäße"
+
+msgid "Transfer out"
+msgstr "Umfüllung (Abgang)"
+
+msgid "Transfer in"
+msgstr "Umfüllung (Zugang)"
+
+msgid "Remainder written off"
+msgstr "Restausbuchung"
+
+msgid "Transfer"
+msgstr "Umfüllen"
+
+msgid "vessel movement"
+msgstr "Gefäßbuchung"
+
+msgid "vessel movements"
+msgstr "Gefäßbuchungen"
+
+msgid "Batches"
+msgstr "Chargen"
+
+msgid "New batch"
+msgstr "Neue Charge"
+
+msgid "New vessel"
+msgstr "Neues Gefäß"
+
+msgid "Vessels"
+msgstr "Gefäße"
+
+msgid "No vessel."
+msgstr "Kein Gefäß."
+
+msgid "Fillings"
+msgstr "Abfüllungen"
+
+#, python-format
+msgid "%(count)s vessel does not convert"
+msgid_plural "%(count)s vessels do not convert"
+msgstr[0] "%(count)s Gefäß nicht umrechenbar"
+msgstr[1] "%(count)s Gefäße nicht umrechenbar"
+
+msgid "No open vessel."
+msgstr "Kein offenes Gefäß."
+
+msgid "All kinds"
+msgstr "Alle Arten"
+
+msgid "Used-up vessels too"
+msgstr "Auch aufgebrauchte"
+
+msgid "Item, task or vessel"
+msgstr "Artikel, Aufgabe oder Gefäß"
+
+#, python-format
+msgid "Batch %(batch)s recorded."
+msgstr "Charge %(batch)s erfasst."
+
+#, python-format
+msgid "New batch of %(task)s, %(step)s"
+msgstr "Neue Charge aus %(task)s, %(step)s"
+
+#, python-format
+msgid "Batch %(batch)s saved."
+msgstr "Charge %(batch)s gespeichert."
+
+#, python-format
+msgid "Vessel %(vessel)s opened."
+msgstr "Gefäß %(vessel)s angelegt."
+
+#, python-format
+msgid "New vessel of %(batch)s"
+msgstr "Neues Gefäß der Charge %(batch)s"
+
+#, python-format
+msgid "Withdrawal from %(vessel)s booked."
+msgstr "Entnahme aus %(vessel)s gebucht."
+
+#, python-format
+msgid "Withdraw from %(vessel)s"
+msgstr "Entnahme aus %(vessel)s"
+
+#, python-format
+msgid "Withdrawal from %(vessel)s reversed."
+msgstr "Entnahme aus %(vessel)s storniert."
+
+#, python-format
+msgid "Transfer from %(vessel)s booked."
+msgstr "Umfüllung von %(vessel)s gebucht."
+
+#, python-format
+msgid "Transfer from %(vessel)s"
+msgstr "Umfüllen von %(vessel)s"
+
+#, python-format
+msgid "Vessel %(vessel)s saved."
+msgstr "Gefäß %(vessel)s gespeichert."
+
+#, python-format
+msgid "Amount of %(vessel)s corrected."
+msgstr "Menge von %(vessel)s korrigiert."
+
+#, python-format
+msgid "Correct the amount of %(vessel)s"
+msgstr "Menge von %(vessel)s korrigieren"

@@ -11,7 +11,9 @@ from django.utils.translation import get_language
 from django.utils.translation import gettext_lazy as _
 
 from collection.models import Sequence
+from inventory.bookings import write_off_flasks
 from registry.forms import SubstanceKeyField
+from tasks.closing import CLOSED
 from tasks.models import Task
 from tasks.steps import StepChange
 
@@ -48,6 +50,10 @@ class TaskForm(forms.ModelForm):
     many steps done; both are left empty as none. The rules of the
     steps are those of ``tasks.steps.StepChange``, whose errors the
     form shows at their fields.
+
+    USER is the account that makes the save: a save that leaves the task
+    ended, failed or cancelled writes off the flasks of its batches as
+    USER's booking.
     """
 
     substance = SubstanceKeyField()
@@ -73,7 +79,7 @@ class TaskForm(forms.ModelForm):
         model = Task
         fields = ["substance", "priority", "assignee", "started", "ended",
                   "sequence", "start_step", "steps_total", "steps_done",
-                  "batch", "report", "qc_list", "note"]
+                  "report", "qc_list", "note"]
         widgets = {
             "started": DATE,
             "ended": DATE,
@@ -84,8 +90,9 @@ class TaskForm(forms.ModelForm):
                           "priority."),
         }
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, user: Any = None, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        self.user = user
         task = self.instance
         self.fields["sequence"].queryset = Sequence.objects.filter(
             Q(withdrawn=False) | Q(pk=task.sequence_id)).order_by("key")
@@ -119,12 +126,17 @@ class TaskForm(forms.ModelForm):
 
     def save(self, commit: bool = True) -> Task:
         """Save the task and, when COMMIT, give it its steps, both in one
-        transaction; the steps done the form marks newly take today."""
+        transaction; the steps done the form marks newly take today. A
+        task left ended, failed or cancelled has the flasks of its
+        batches written off in that transaction
+        (``inventory.bookings.write_off_flasks``)."""
         if not commit:
             return super().save(commit=False)
         with transaction.atomic():
             task = super().save()
             self.steps.apply(timezone.localdate())
+            if task.state in CLOSED:
+                write_off_flasks(self.user, task)
         return task
 
 

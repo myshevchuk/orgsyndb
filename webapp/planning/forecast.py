@@ -367,7 +367,7 @@ def article_runway(items: Sequence[Holding], bulk: Decimal,
 
 def usable_bulk(amounts: Iterable[Decimal], largest: Decimal) -> Decimal:
     """Return the bulk that can be filled in whole containers: the sum of
-    AMOUNTS, one per lot, each less LARGEST, the largest container size,
+    AMOUNTS, one per vessel, each less LARGEST, the largest container size,
     where positive."""
     return sum((amount - largest for amount in amounts if amount > largest),
                Decimal(0))

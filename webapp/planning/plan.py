@@ -16,7 +16,6 @@ from itertools import pairwise
 from typing import Any, NamedTuple
 from urllib.parse import urlencode
 
-from django.db.models import Q
 from django.utils.translation import gettext as _
 
 from collection.models import EntrySubstance, Sequence
@@ -25,7 +24,7 @@ from inventory.figures import (Consumption, bulk, consumption, convert,
                                counted_lines, figures_of, molar_mass,
                                quarter_of)
 from inventory.models import (BASE_UNIT, Article, EnteredConsumption, Item,
-                              Level, Lot, Unit)
+                              Level, Unit, Vessel)
 from planning import forecast
 from planning.forecast import Model, Rhythm
 from planning.models import Parameters
@@ -72,7 +71,7 @@ class ItemForecast:
     its container size in the article's bulk unit, None when it does not
     convert. FIGURES is its consumption, RHYTHM its delivery rhythm, and
     FILL whether filling it from bulk is due: its runway on hand is
-    below the buffer and the open lots would fill at least one of its
+    below the buffer and the open vessels would fill at least one of its
     containers.
     """
 
@@ -100,13 +99,14 @@ class ArticleForecast:
 
     SUBSTANCE is the article's substance and NAME its name; ITEMS are
     all its items in the item list's order. BULK_UNIT is the unit its
-    bulk is counted in, USABLE_BULK what its open lots that convert can fill in whole containers, and
-    UNCONVERTIBLE whether an open lot does not convert. CERTAINTY is
-    the one each item with demand is planned at. RUNWAY, SLACK and
-    LATEST_START follow from those and from SYNTHESIS_DAYS, the longest
-    of the last BASIS_COUNT syntheses or, with BASIS_COUNT None, the
-    default. YIELD_AMOUNT is what a new synthesis must yield in the bulk
-    unit, None when no item with demand converts, and YIELD_MG the same
+    bulk is counted in, USABLE_BULK what its open vessels that convert
+    can fill in whole containers, and UNCONVERTIBLE whether an open
+    vessel does not convert. CERTAINTY is the one each item with demand
+    is planned at. RUNWAY, SLACK and LATEST_START follow from those and
+    from SYNTHESIS_DAYS, the longest of the last BASIS_COUNT syntheses
+    or, with BASIS_COUNT None, the default. YIELD_AMOUNT is what a new
+    synthesis must yield in the bulk unit, None when no item with demand
+    converts, and YIELD_MG the same
     in mg when the bulk unit is µmol; LACKING maps the ID of each item
     with demand that does not convert to the containers it lacks. ROUGH
     tells whether any figure comes from the quarterly model.
@@ -183,7 +183,7 @@ class TaskLine:
 class Start(NamedTuple):
     """Where a synthesis by SEQUENCE can start: at its STEP, from 1,
     taking the INTERMEDIATE of the step before it, a substance with an
-    open lot, from stock; INTERMEDIATE is None for step 1."""
+    open vessel, from stock; INTERMEDIATE is None for step 1."""
 
     sequence: Sequence
     step: int
@@ -275,9 +275,10 @@ class Plan:
                                                       "article_number"))
 
     @cached_property
-    def lots(self) -> list[Lot]:
-        """The open lots."""
-        return list(Lot.objects.filter(amount__gt=0))
+    def vessels(self) -> list[Vessel]:
+        """The open vessels, flasks among them, each with its batch."""
+        return list(Vessel.objects.filter(amount__gt=0).select_related(
+            "batch"))
 
     @cached_property
     def sequences(self) -> dict[int, list[tuple[Sequence, list[Any]]]]:
@@ -314,8 +315,9 @@ class Plan:
         """Return where a synthesis of the substance of FOUND can start,
         one start for each sequence of ``sequences`` that makes it, in
         order of ID: the last step whose preceding step's intermediate
-        has an open lot, of any source, or step 1 when none has."""
-        stocked = {lot.substance_id for lot in self.lots}
+        has an open vessel, of any kind or source, or step 1 when none
+        has."""
+        stocked = {vessel.batch.substance_id for vessel in self.vessels}
         starts = []
         for sequence, intermediates in self.sequences.get(
                 found.substance.pk, []):
@@ -368,16 +370,16 @@ class Plan:
             return None
         mass = molar_mass(items[0])
         unit = Unit.UMOL if mass else BASE_UNIT[planned[0].unit]
-        lots = [lot for lot in self.lots
-                if lot.substance_id == items[0].article_id]
+        vessels = [vessel for vessel in self.vessels
+                   if vessel.batch.substance_id == items[0].article_id]
         entries = [self._item(item, unit, mass) for item in items]
         held = [entry for entry in entries if entry.model is not None]
         if not held:
             return None
         largest = max((entry.size for entry in held
                        if entry.size is not None), default=Decimal(0))
-        converted = [convert(lot.amount, BASE_UNIT[lot.unit], unit, mass)
-                     for lot in lots]
+        converted = [convert(vessel.amount, BASE_UNIT[vessel.unit], unit,
+                             mass) for vessel in vessels]
         usable = forecast.usable_bulk(
             [amount for amount in converted if amount is not None],
             largest)
@@ -458,7 +460,7 @@ class Plan:
             rhythm=forecast.rhythm([day for day, _ in orders], self.today),
             fill=(on_hand is not None
                   and on_hand < self.parameters.buffer_days
-                  and bulk(item, self.lots).containers > 0))
+                  and bulk(item, self.vessels).containers > 0))
 
     def _durations(self, article_number: str) -> list[int]:
         """Return the durations in days of the ended tasks that match
@@ -551,41 +553,3 @@ def task_priority(task: Task, today: date) -> TaskPriority:
     parameters: computed from its slack when it is planned or running
     and matches an article with a forecast, else the one entered."""
     return Plan(today).task_priority(task)
-
-
-def batch_lots(task: Task) -> list[Lot]:
-    """Return the lots that belong to TASK, each once, in the order of
-    their IDs: those of its substance with its batch, when it has one,
-    and those a step of TASK made, whatever their substance and
-    batch."""
-    belongs = Q(task_step__task=task)
-    if task.batch:
-        belongs |= Q(batch=task.batch, substance_id=task.substance_id)
-    return list(Lot.objects.filter(belongs).select_related("substance")
-                .order_by("id"))
-
-
-def batch_tasks(lot: Lot) -> list[Task]:
-    """Return the tasks that belong to LOT, each once, by number: those
-    of its substance with its batch, when it has one, and the task of
-    the step that made it."""
-    belongs = Q(pk__in=[]) if lot.task_step_id is None else Q(
-        steps=lot.task_step_id)
-    if lot.batch:
-        belongs |= Q(batch=lot.batch, substance_id=lot.substance_id)
-    return sorted(Task.objects.filter(belongs).distinct(),
-                  key=lambda task: task.serial)
-
-
-def bulk_link(task: Task) -> str | None:
-    """Return the path of the new-lot form filled in from TASK, or None.
-
-    The form is filled in when TASK is ended, neither cancelled nor
-    failed, and has a batch: with its substance's key, the batch, and
-    the end date.
-    """
-    if task.state != State.ENDED or not task.batch:
-        return None
-    return "/lab/inventory/bulk/new/?" + urlencode({
-        "substance": task.substance.key, "batch": task.batch,
-        "made_on": task.ended.isoformat()})

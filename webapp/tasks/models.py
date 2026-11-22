@@ -64,8 +64,8 @@ class Task(models.Model):
     A task's number, ``T-`` and at least three digits, is assigned when
     it is first saved and never given again. Its state follows from its
     dates and its cancelled and failed flags; see ``state``. A task
-    that is ended and has not failed has a batch and a product lot; see
-    ``has_product_lot`` and ``clean``. Its steps are the
+    that is ended and has not failed has a product batch; see
+    ``product_batches`` and ``clean``. Its steps are the
     ``TaskStep`` rows of ``steps``, which ``tasks.steps`` gives it from
     its ``sequence``, an imported sequence, from the sequence's step
     ``start_step`` on, or as plain steps; ``start_step`` is 1 for a task
@@ -94,7 +94,6 @@ class Task(models.Model):
         related_name="tasks")
     start_step = models.PositiveIntegerField(
         _("Start at step"), default=1, validators=[MinValueValidator(1)])
-    batch = models.CharField(_("Batch"), max_length=30, blank=True)
     report = models.BooleanField(_("Report"), default=False)
     qc_list = models.BooleanField(_("QC list"), default=False)
     cancelled = models.BooleanField(_("Cancelled"), default=False)
@@ -164,24 +163,33 @@ class Task(models.Model):
         return (self.state in (State.PLANNED, State.RUNNING)
                 or self.needs_follow_up)
 
+    def batches(self) -> Any:
+        """The batches the task's steps made, as a queryset."""
+        from inventory.models import Batch
+        return Batch.objects.filter(task_step__task=self)
+
+    def product_batches(self) -> Any:
+        """The task's batches whose substance is the task's, as a
+        queryset; empty for a task that is not saved."""
+        return self.batches().filter(substance_id=self.substance_id)
+
     @property
-    def has_product_lot(self) -> bool:
-        """Whether the task has a batch and a product lot: a lot of its
-        substance, made in the lab, whose batch is the task's."""
-        return bool(self.batch) and self.substance.lots.filter(
-            source="made", batch=self.batch).exists()
+    def has_product_batch(self) -> bool:
+        """Whether a step of the task made a batch of its substance."""
+        return self.pk is not None and self.product_batches().exists()
 
     def clean(self) -> None:
-        """Check the rules that tie the dates, the batch and the product
-        lot together.
+        """Check the rules that tie the dates, the batches and the
+        substance together.
 
         Neither date may lie after today, and an end needs a start and
-        may not precede it. A failed task has no batch. A task that is
-        ended, neither cancelled nor failed, has a batch and a product
-        lot (``has_product_lot``). A saved task with a sequence whose
+        may not precede it. A failed task has no product batch. A task
+        that is ended, neither cancelled nor failed, has one
+        (``has_product_batch``). A saved task with a sequence whose
         substance differs from the stored one has the sequence's target
-        as its substance. Raise ValidationError with the errors by
-        field. The rules of the steps, among them the target of a
+        as its substance, and a saved task one of whose steps made a
+        batch keeps its substance. Raise ValidationError with the errors
+        by field. The rules of the steps, among them the target of a
         sequence set or changed, are ``tasks.steps.StepChange``'s.
         """
         errors: dict[str, str] = {}
@@ -195,25 +203,36 @@ class Task(models.Model):
                 errors["ended"] = _("An end needs a start.")
             elif self.ended < self.started:
                 errors["ended"] = _("The end may not precede the start.")
-        if self.failed and self.batch:
-            errors["batch"] = _("A failed task has no batch.")
-        elif self.state == State.ENDED and "ended" not in errors \
-                and self.substance_id is not None:
-            if not self.batch:
-                errors["batch"] = _(
-                    "An ended task needs the batch of its product lot.")
-            elif not self.has_product_lot:
+        if self.substance_id is not None:
+            if self.failed and self.has_product_batch:
+                errors["failed"] = _(
+                    "A task with a product batch has not failed.")
+            elif self.state == State.ENDED and "ended" not in errors \
+                    and not self.has_product_batch:
                 errors["ended"] = _(
-                    "Record a lot of the product, made in the lab, with "
-                    "the batch %(batch)s before ending the task.") % {
-                        "batch": self.batch}
+                    "Record a batch of the product from a step before "
+                    "ending the task.")
         if self.substance_changed_off_target():
             errors["substance"] = _(
                 "A task of the sequence %(key)s makes its target, "
                 "%(name)s.") % {"key": self.sequence.key,
                                 "name": self.sequence.target.shown_name}
+        elif self.substance_changed_after_batch():
+            errors["substance"] = _(
+                "The substance cannot change once a step has made a "
+                "batch.")
         if errors:
             raise ValidationError(errors)
+
+    def substance_changed_after_batch(self) -> bool:
+        """Whether the task is saved, one of its steps made a batch, and
+        its substance differs from the stored one."""
+        if self.pk is None or self.substance_id is None:
+            return False
+        stored = Task.objects.filter(pk=self.pk).values_list(
+            "substance_id", flat=True).first()
+        return (stored is not None and stored != self.substance_id
+                and self.batches().exists())
 
     def substance_changed_off_target(self) -> bool:
         """Whether the task is saved, has a sequence, and has a substance

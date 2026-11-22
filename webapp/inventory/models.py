@@ -1,6 +1,6 @@
 """The inventory: articles, their items counted in containers, the items'
-movements, delivery notes, entered consumption, and bulk lots of
-substances with their own movements.
+movements, delivery notes, entered consumption, batches of substances,
+and the vessels that hold a batch's amounts with their own movements.
 
 Counts and amounts change only through ``inventory.bookings``.
 """
@@ -273,130 +273,254 @@ class DeliveryLine(models.Model):
 
 
 class Source(models.TextChoices):
-    """Where a lot comes from."""
+    """Where a batch comes from."""
 
-    MADE = "made", pgettext_lazy("lot source", "made")
-    BOUGHT = "bought", pgettext_lazy("lot source", "bought")
+    MADE = "made", pgettext_lazy("batch source", "made")
+    BOUGHT = "bought", pgettext_lazy("batch source", "bought")
 
 
-class Lot(models.Model):
-    """A bulk lot of a substance, not yet aliquoted, made in the lab or
-    bought.
+class Batch(models.Model):
+    """A batch: a quantity of one substance with one origin, made in the
+    lab or bought.
 
-    The amount is kept in the base unit of the lot's unit, mg or µmol,
-    and changes only by the lot's movements. A lot at zero is used up.
-    A lot made in the lab may name the TASK_STEP that made it, never a
-    bought one. The substance, source, unit and step are fixed once the
-    lot exists. A lot belongs to every item of its substance's article.
+    A made batch has a NUMBER, unique among made batches regardless of
+    case and of their substance, and may name the JOURNAL_ENTRY it is
+    written down in, the TASK_STEP that made it, and its yield. The
+    yield is kept in the base unit of YIELD_UNIT, mg or µmol. A bought
+    batch has the SUPPLIER, the supplier's article number and the
+    supplier's batch, and no number, entry, step or yield. The
+    substance, source and step are fixed once the batch exists. Its
+    amounts are held by its vessels.
+
+    ``save`` sets NUMBER_KEY, the key that makes the numbers unique.
     """
 
     substance = models.ForeignKey(
         "registry.Substance", verbose_name=_("Substance"),
-        on_delete=models.PROTECT, related_name="lots")
+        on_delete=models.PROTECT, related_name="batches")
     source = models.CharField(_("Source"), max_length=6,
                               choices=Source.choices, default=Source.MADE)
-    supplier = models.CharField(_("Supplier"), max_length=100, blank=True)
-    unit = models.CharField(_("Unit"), max_length=4, choices=Unit.choices)
-    amount = models.DecimalField(_("Amount"), max_digits=18,
-                                 decimal_places=6, default=0)
-    batch = models.CharField(_("Batch"), max_length=100, blank=True)
-    location = models.CharField(_("Location"), max_length=100, blank=True)
-    made_on = models.DateField(_("Date"), null=True, blank=True)
+    number = models.CharField(_("Batch"), max_length=30, blank=True)
+    number_key = models.CharField(max_length=100, blank=True,
+                                  editable=False)
+    journal_entry = models.ForeignKey(
+        "journal.Entry", verbose_name=_("Lab notebook"),
+        on_delete=models.PROTECT, null=True, blank=True,
+        related_name="batches")
     task_step = models.ForeignKey(
         "tasks.TaskStep", verbose_name=_("Made by step"),
         on_delete=models.PROTECT, null=True, blank=True,
-        related_name="lots")
+        related_name="batches")
+    date = models.DateField(_("Date"), null=True, blank=True,
+                            validators=[not_in_future])
+    yield_amount = models.DecimalField(
+        _("Yield"), max_digits=18, decimal_places=6, null=True, blank=True)
+    yield_unit = models.CharField(_("Unit"), max_length=4,
+                                  choices=Unit.choices, blank=True)
+    supplier = models.CharField(_("Supplier"), max_length=100, blank=True)
+    supplier_article_number = models.CharField(
+        _("Supplier's article no."), max_length=50, blank=True)
+    supplier_batch = models.CharField(_("Supplier's batch"), max_length=50,
+                                      blank=True)
     note = models.TextField(pgettext_lazy("inventory", "Note"), blank=True)
 
-    history = RecordedHistory(excluded_fields=["amount"])
+    history = RecordedHistory()
 
     class Meta:
-        ordering = ["substance__key", "id"]
-        verbose_name = _("bulk lot")
-        verbose_name_plural = _("bulk lots")
+        ordering = ["id"]
+        verbose_name = _("batch")
+        verbose_name_plural = _("batches")
         constraints = [
-            models.CheckConstraint(condition=Q(amount__gte=0),
-                                   name="inventory_lot_amount_not_negative"),
-            models.CheckConstraint(
-                condition=Q(task_step__isnull=True) | Q(source=Source.MADE),
-                name="inventory_lot_step_made"),
+            models.UniqueConstraint(
+                fields=["number_key"], condition=Q(source=Source.MADE),
+                name="inventory_batch_number_once"),
         ]
 
-    def clean(self) -> None:
-        """Refuse a change of the batch of a made lot that would leave a
-        task without its product lot: an ended task of the lot's
-        substance and old batch that has neither failed nor been
-        cancelled, when no other made lot of that substance carries the
-        old batch."""
-        super().clean()
-        if self.pk is None or self.source != "made":
-            return
-        stored = type(self).objects.filter(pk=self.pk).values_list(
-            "batch", flat=True).first()
-        if not stored or stored == self.batch:
-            return
-        from tasks.models import Task
-        orphaned = Task.objects.filter(
-            substance_id=self.substance_id, batch=stored,
-            ended__isnull=False, cancelled=False, failed=False).exists()
-        others = type(self).objects.filter(
-            substance_id=self.substance_id, source="made",
-            batch=stored).exclude(pk=self.pk).exists()
-        if orphaned and not others:
-            raise ValidationError({"batch": _(
-                "An ended task has this lot as its only product lot; "
-                "its batch cannot change.")})
-
     def __str__(self) -> str:
-        shown = f"{self.substance.shown_name} {self.batch or f'#{self.pk}'}"
-        number = self.article_number
-        return f"{number} {shown}" if number else shown
+        if self.source == Source.MADE:
+            return self.number or f"#{self.pk}"
+        return self.supplier_batch or f"#{self.pk}"
+
+    def clean(self) -> None:
+        """Refuse a made batch without a number or with a supplier's
+        field, a bought batch that has a number, entry, step or yield,
+        and a yield without its unit or a unit without its yield."""
+        super().clean()
+        errors: dict[str, str] = {}
+        if self.source == Source.MADE:
+            if not self.number:
+                errors["number"] = _("A made batch needs a number.")
+            for name in ("supplier", "supplier_article_number",
+                         "supplier_batch"):
+                if getattr(self, name):
+                    errors[name] = _("A made batch has none.")
+        else:
+            for name in ("number", "journal_entry", "task_step",
+                         "yield_amount"):
+                if getattr(self, name) not in (None, ""):
+                    errors[name] = _("A bought batch has none.")
+        if (self.yield_amount is None) != (not self.yield_unit) \
+                and "yield_amount" not in errors:
+            errors["yield_amount"] = _(
+                "The yield and its unit are given together.")
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Save the batch with NUMBER_KEY set from its number: the
+        number casefolded for a made batch, empty for a bought one. A
+        save that names ``update_fields`` and writes the number or the
+        source writes the key too."""
+        self.number_key = self.number.casefold() \
+            if self.source == Source.MADE else ""
+        fields = kwargs.get("update_fields")
+        if fields is not None and {"number", "source"} & set(fields):
+            kwargs["update_fields"] = {*fields, "number_key"}
+        super().save(*args, **kwargs)
 
     @property
     def article_number(self) -> str | None:
-        """The article number of the lot's substance, or None."""
+        """The article number of the batch's substance, or None."""
         return self.substance.article_number
 
     @property
     def origin(self) -> str:
         """The source as the active language names it, followed by the
         supplier when there is one, as ``gekauft · Sigma``."""
-        shown = str(Source(self.source).label)
-        return f"{shown} · {self.supplier}" if self.supplier else shown
+        shown_source = str(Source(self.source).label)
+        return f"{shown_source} · {self.supplier}" if self.supplier \
+            else shown_source
+
+    @property
+    def shown_yield(self) -> Decimal | None:
+        """The yield in its unit, rounded half up to three places; None
+        without a yield."""
+        if self.yield_amount is None:
+            return None
+        return shown(self.yield_amount, self.yield_unit)
+
+    @property
+    def yield_unit_label(self) -> str:
+        """The yield's unit as it is shown, such as ``µmol``; empty
+        without one."""
+        return str(Unit(self.yield_unit).label) if self.yield_unit else ""
+
+
+class VesselKind(models.TextChoices):
+    """What a vessel is for, which follows from its flag, its batch and
+    its substance."""
+
+    FLASK = "flask", _("Flask")
+    END_PRODUCT = "end-product", _("End product")
+    INTERMEDIATE = "intermediate", _("Intermediate")
+    REAGENT = "reagent", _("Reagent")
+
+
+class Vessel(models.Model):
+    """A weighed amount of one batch in one place.
+
+    The amount is kept in the base unit of the vessel's UNIT, mg or
+    µmol, and changes only by the vessel's movements. A vessel at zero
+    is used up. FLASK tells whether it is its batch's reaction flask,
+    which holds the batch's yield until the task of its step ends; a
+    batch has at most one. The batch, unit and flask flag are fixed once
+    the vessel exists. A vessel belongs to every item of its substance's
+    article.
+    """
+
+    batch = models.ForeignKey(Batch, verbose_name=_("Batch"),
+                              on_delete=models.PROTECT,
+                              related_name="vessels")
+    unit = models.CharField(_("Unit"), max_length=4, choices=Unit.choices)
+    amount = models.DecimalField(_("Amount"), max_digits=18,
+                                 decimal_places=6, default=0)
+    flask = models.BooleanField(_("Flask"), default=False)
+    location = models.CharField(_("Location"), max_length=100, blank=True)
+    note = models.TextField(pgettext_lazy("inventory", "Note"), blank=True)
+
+    history = RecordedHistory(excluded_fields=["amount"])
+
+    class Meta:
+        ordering = ["batch__substance__key", "id"]
+        verbose_name = _("vessel")
+        verbose_name_plural = _("vessels")
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(amount__gte=0),
+                name="inventory_vessel_amount_not_negative"),
+            models.UniqueConstraint(
+                fields=["batch"], condition=Q(flask=True),
+                name="inventory_vessel_one_flask"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.batch} #{self.pk}"
+
+    @property
+    def substance(self) -> Any:
+        """The substance of the vessel's batch."""
+        return self.batch.substance
+
+    @property
+    def article_number(self) -> str | None:
+        """The article number of the vessel's substance, or None."""
+        return self.batch.substance.article_number
+
+    @property
+    def kind(self) -> str:
+        """The vessel's kind, a value of ``VesselKind``: ``flask`` for a
+        flask; for a stored vessel ``end-product`` when its substance has
+        an article, else ``intermediate`` for a made batch and
+        ``reagent`` for a bought one."""
+        if self.flask:
+            return VesselKind.FLASK
+        if hasattr(self.batch.substance, "article"):
+            return VesselKind.END_PRODUCT
+        return VesselKind.INTERMEDIATE \
+            if self.batch.source == Source.MADE else VesselKind.REAGENT
+
+    @property
+    def kind_label(self) -> str:
+        """The kind as the active language names it."""
+        return VesselKind(self.kind).label
 
     @property
     def shown_amount(self) -> Decimal:
-        """The amount in the lot's unit, rounded half up to three
+        """The amount in the vessel's unit, rounded half up to three
         places."""
         return shown(self.amount, self.unit)
 
     @property
     def unit_label(self) -> str:
-        """The lot's unit as it is shown, such as ``µmol``."""
+        """The vessel's unit as it is shown, such as ``µmol``."""
         return str(Unit(self.unit).label)
 
 
-class LotMovement(models.Model):
-    """A change of a lot's amount: AMOUNT in the lot's base unit, and
-    AMOUNT_AFTER, the lot's amount once it was booked.
+class VesselMovement(models.Model):
+    """A change of a vessel's amount: AMOUNT in the vessel's base unit,
+    and AMOUNT_AFTER, the vessel's amount once it was booked.
 
     A withdrawal names the TASK_STEP the amount went into; no other kind
     names a step. The reversal of a withdrawal names it as REVERSES, and
     a withdrawal is reversed at most once; the reversal of a filling is
-    named by the item's movement instead.
+    named by the item's movement instead. A transfer is two movements,
+    and the ``transfer_in`` names the ``transfer_out`` as TRANSFER.
     """
 
     class Kind(models.TextChoices):
         OPENING = "opening", _("Opening amount")
         FILLING = "filling", _("Filling")
         WITHDRAWAL = "withdrawal", _("Withdrawal")
+        TRANSFER_OUT = "transfer_out", _("Transfer out")
+        TRANSFER_IN = "transfer_in", _("Transfer in")
         CORRECTION = "correction", _("Correction")
+        REMAINDER = "remainder", _("Remainder written off")
         REVERSAL = "reversal", _("Reversal")
 
-    lot = models.ForeignKey(Lot, on_delete=models.CASCADE,
-                            related_name="movements",
-                            verbose_name=_("bulk lot"))
-    kind = models.CharField(_("Kind"), max_length=10, choices=Kind.choices)
+    vessel = models.ForeignKey(Vessel, on_delete=models.CASCADE,
+                               related_name="movements",
+                               verbose_name=_("vessel"))
+    kind = models.CharField(_("Kind"), max_length=12, choices=Kind.choices)
     amount = models.DecimalField(_("Amount"), max_digits=18,
                                  decimal_places=6)
     amount_after = models.DecimalField(_("Amount after"), max_digits=18,
@@ -410,27 +534,33 @@ class LotMovement(models.Model):
     task_step = models.ForeignKey(
         "tasks.TaskStep", verbose_name=_("task step"),
         on_delete=models.PROTECT, null=True, blank=True,
-        related_name="lot_movements")
+        related_name="vessel_movements")
+    transfer = models.OneToOneField(
+        "self", verbose_name=_("Transfer"), on_delete=models.PROTECT,
+        null=True, blank=True, related_name="transferred")
     reverses = models.OneToOneField(
         "self", verbose_name=_("Reverses"), on_delete=models.PROTECT,
         null=True, blank=True, related_name="reversal")
 
     class Meta:
         ordering = ["-id"]
-        verbose_name = _("bulk movement")
-        verbose_name_plural = _("bulk movements")
+        verbose_name = _("vessel movement")
+        verbose_name_plural = _("vessel movements")
         constraints = [
             models.CheckConstraint(
                 condition=Q(kind="withdrawal", task_step__isnull=False)
                 | (~Q(kind="withdrawal") & Q(task_step__isnull=True)),
-                name="inventory_lotmovement_withdrawal_step"),
+                name="inventory_vesselmovement_withdrawal_step"),
             models.CheckConstraint(
                 condition=Q(reverses__isnull=True) | Q(kind="reversal"),
-                name="inventory_lotmovement_reverses"),
+                name="inventory_vesselmovement_reverses"),
+            models.CheckConstraint(
+                condition=Q(transfer__isnull=True) | Q(kind="transfer_in"),
+                name="inventory_vesselmovement_transfer"),
         ]
 
     def __str__(self) -> str:
-        return f"{self.lot} {self.get_kind_display()}"
+        return f"{self.vessel} {self.get_kind_display()}"
 
 
 class Movement(models.Model):
@@ -440,9 +570,9 @@ class Movement(models.Model):
     correction the quantity entered; QUANTITY_AFTER is the item's
     quantity once the movement was booked. DATE is the day it took
     place, BOOKED_AT the time it was booked. A delivery names its
-    DELIVERY_NOTE; a filling from a lot, and the reversal of one, name
-    the lot's movement as BULK_MOVEMENT; a reversal names the movement it
-    REVERSES, which is reversed at most once.
+    DELIVERY_NOTE; a filling from a vessel, and the reversal of one, name
+    the vessel's movement as VESSEL_MOVEMENT; a reversal names the
+    movement it REVERSES, which is reversed at most once.
     """
 
     class Kind(models.TextChoices):
@@ -468,8 +598,8 @@ class Movement(models.Model):
         DeliveryNote, verbose_name=_("delivery note"),
         on_delete=models.PROTECT, null=True, blank=True,
         related_name="movements")
-    bulk_movement = models.OneToOneField(
-        LotMovement, verbose_name=_("bulk movement"),
+    vessel_movement = models.OneToOneField(
+        VesselMovement, verbose_name=_("vessel movement"),
         on_delete=models.PROTECT, null=True, blank=True,
         related_name="item_movement")
     reverses = models.OneToOneField(
