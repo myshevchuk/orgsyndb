@@ -48,7 +48,7 @@
 ## 4. Verification
 
 - [ ] 4.1 Both suites pass on CI
-- [ ] 4.2 On the test server after `demo_data --replace`: an item page's
+- [x] 4.2 On the test server after `demo_data --replace`: an item page's
   containers by batch; a delivery of unknown containers booking an
   assignment; its reversal; a correction of one share; the batch page's
   items and deliveries; a row's batch choice narrowed to its item

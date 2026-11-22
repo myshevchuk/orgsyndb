@@ -49,6 +49,13 @@ leaves this file then.
   2026-11-22. Open: a form per item, rows per batch and one note,
   against a stock-taking record of the lab's own, filled over days;
   whether it replaces the per-batch correction.
+- **Only the batches an item holds on a delivery row.** A row's batch
+  choice offers every batch of the item's substance, which is needed
+  to deliver containers of unknown batch, but otherwise lengthens the
+  list and invites a wrong choice. The owner wants a switch on the
+  form, decided on 2026-11-22: show every batch, or only those the
+  item holds containers of. Deferred to the coming rework of the
+  inventory's interface.
 - **Numbers of the database's own.** Article numbers are the
   company's, on delivery notes, and only end products get one, at
   their first delivery; until then an item has none and links to no
