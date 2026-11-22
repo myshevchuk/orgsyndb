@@ -1,0 +1,36 @@
+{% load i18n planning inventory lab %}{% with found=row.forecast %}<div class="planning-block" data-article="{{ found.article_number }}"{% if found.article_number != selected %} hidden{% endif %}>
+<section class="widget">
+<div class="widget__head"><h2>{% translate "Containers and demand" %}</h2><span class="widget__note compound-key">{{ found.article_number }}</span></div>
+<div class="widget__body widget__body--flush"><div class="table-scroll">
+<table class="widget-table planning-containers">
+<thead>
+<tr><th scope="col">{% translate "Container" %}</th><th scope="col">{% translate "Stock" %}</th><th scope="col" class="num">{% translate "Runway" %}</th><th scope="col" class="num">{% translate "Demand per year" %}</th></tr>
+</thead>
+<tbody>
+{% for entry in found.items %}<tr>
+<td class="nowrap"><a href="/lab/inventory/items/{{ entry.item.pk }}/">{{ entry.item.container }}</a></td>
+<td><span class="stock level-{{ entry.figures.level }}">{{ entry.item.quantity }} <span class="level-label">{{ entry.figures.level|level_label }}</span></span></td>
+<td class="num{% if entry.runway_on_hand is None %} muted{% endif %}">{% if entry.runway_on_hand is not None %}{{ entry.runway_on_hand|days }}{% else %}–{% endif %}</td>
+<td class="num{% if entry.per_year is None %} muted{% endif %}">{% if entry.per_year is not None %}{{ entry.per_year|decimal }}{% else %}–{% endif %}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div></div>
+</section>
+<section class="widget">
+<div class="widget__head"><h2>{% translate "Planning details" %}</h2><span class="widget__note"><span class="badge priority priority--{{ found.priority }}">{{ found.priority_label }}</span></span></div>
+<div class="widget__body widget__body--flush">
+<table class="kv-table"><tbody>
+<tr><th scope="row">{% translate "Substance" %}</th><td>{% substance found.substance %}</td></tr>
+<tr><th scope="row">{% translate "Last delivery" %}</th><td{% if not found.last_delivery %} class="muted"{% endif %}>{{ found.last_delivery|default_if_none:"–" }}</td></tr>
+<tr><th scope="row">{% translate "Bulk" %}</th><td{% if not found.usable_bulk %} class="muted"{% endif %}>{{ found.usable_bulk|amount }} {{ found.bulk_unit_label }}</td></tr>
+<tr><th scope="row">{% translate "Runway" %}</th><td><strong>{{ found.runway|days }}</strong>{{ found.rough|rough }}</td></tr>
+<tr><th scope="row">{% translate "Synthesis time" %}</th><td><strong>{{ found.synthesis_days|days }}</strong> <span class="kv-sub">{% include "planning/basis.html" %}</span></td></tr>
+<tr><th scope="row">{% translate "Latest start" %}</th><td{% if not found.latest_start %} class="muted"{% endif %}>{% if found.latest_start %}<strong>{{ found.latest_start }}</strong>{% else %}–{% endif %}</td></tr>
+<tr><th scope="row">{% translate "Tasks" %}</th><td{% if not row.tasks %} class="muted"{% endif %}>{% if row.tasks %}<ul class="planning-lines">
+{% for line in row.tasks %}<li><a href="/lab/tasks/{{ line.task.number }}/">{{ line.task.number }}</a> {% include "tasks/state.html" with task=line.task %}{% if line.late %} <span class="badge badge--late">{% translate "late" %}</span>{% endif %} <span class="kv-sub">{% blocktranslate with end=line.end|date:"SHORT_DATE_FORMAT" %}expected end {{ end }}{% endblocktranslate %}</span></li>
+{% endfor %}</ul>{% else %}–{% endif %}</td></tr>
+</tbody></table>
+</div>
+</section>
+</div>{% endwith %}

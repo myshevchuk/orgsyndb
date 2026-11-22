@@ -5,40 +5,52 @@
 <h1>{% translate "Planning" %}</h1>
 <p class="actions">{% if all %}<a href="/lab/planning/">{% translate "Urgent articles only" %}</a>{% else %}<a href="/lab/planning/?all=1">{% translate "All articles" %}</a>{% endif %}</p>
 </div>
-{% include "planning/parameters.html" %}
-{% if rows %}<div class="table-scroll">
-<table class="inventory-table planning-table">
+{% if rows %}<div class="planning-grid">
+<section class="widget planning-list">
+<div class="widget__head">
+<h2>{% translate "Planning list" %}</h2>
+<span class="widget__count" data-planning-count>{{ rows|length }}</span>
+<div class="planning-filters" role="group" aria-label="{% translate "Filter" context "planning" %}" hidden>
+<button type="button" class="planning-filter" data-plan-filter="all" aria-pressed="true">{% translate "All" %}</button>
+<button type="button" class="planning-filter" data-plan-filter="high" aria-pressed="false">{% translate "High priority" %}</button>
+<button type="button" class="planning-filter" data-plan-filter="action" aria-pressed="false">{% translate "With action" %}</button>
+<button type="button" class="planning-filter" data-plan-filter="late" aria-pressed="false">{% translate "Late" %}</button>
+</div>
+</div>
+<div class="widget__body widget__body--flush">
+<div class="table-scroll">
+<table id="planning-list" class="widget-table planning-table" data-sortable>
 <thead>
-<tr><th scope="col">{% translate "Article no." %}</th><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Containers" %}</th><th scope="col">{% translate "Demand per year" %}</th><th scope="col">{% translate "Last delivery" %}</th><th scope="col">{% translate "Bulk" %}</th><th scope="col">{% translate "Runway" %}</th><th scope="col">{% translate "Synthesis time" %}</th><th scope="col">{% translate "Latest start" %}</th><th scope="col">{% translate "Priority" %}</th><th scope="col">{% translate "Tasks" %}</th><th scope="col">{% translate "Actions" context "planning" %}</th></tr>
+<tr><th scope="col">{% translate "Article" %}</th><th scope="col" class="num">{% translate "Runway" %}</th><th scope="col" class="num">{% translate "Synthesis time" %}</th><th scope="col">{% translate "Latest start" %}</th><th scope="col">{% translate "Priority" %}</th><th scope="col">{% translate "Tasks" %}</th><th scope="col">{% translate "Actions" context "planning" %}</th></tr>
 </thead>
 <tbody>
-{% for row in rows %}{% with found=row.forecast %}<tr>
-<td>{{ found.article_number }}</td>
-<td>{% substance found.substance %}</td>
-<td><ul class="planning-cell">
-{% for entry in found.items %}<li><a href="/lab/inventory/items/{{ entry.item.pk }}/">{{ entry.item.container }}</a>: <span class="stock level-{{ entry.figures.level }}">{{ entry.item.quantity }} <span class="level-label">{{ entry.figures.level|level_label }}</span></span>{% if entry.runway_on_hand is not None %} · {{ entry.runway_on_hand|days }}{% endif %}</li>
-{% endfor %}</ul></td>
-<td class="number"><ul class="planning-cell">
-{% for entry in found.items %}<li>{% if entry.per_year is not None %}{{ entry.per_year|decimal }}{% else %}–{% endif %}</li>
-{% endfor %}</ul></td>
-<td>{{ found.last_delivery|default_if_none:"–" }}</td>
-<td class="number">{{ found.usable_bulk|amount }} {{ found.bulk_unit_label }}</td>
-<td class="number">{{ found.runway|days }}{{ found.rough|rough }}</td>
-<td class="number">{{ found.synthesis_days|days }} {% include "planning/basis.html" %}</td>
-<td>{{ found.latest_start|default_if_none:"–" }}</td>
-<td><span class="priority priority--{{ found.priority }}">{{ found.priority_label }}</span></td>
-<td><ul class="planning-cell">
-{% for line in row.tasks %}<li><a href="/lab/tasks/{{ line.task.number }}/">{{ line.task.number }}</a> {% include "tasks/state.html" with task=line.task %} {% blocktranslate with end=line.end|date:"SHORT_DATE_FORMAT" %}expected end {{ end }}{% endblocktranslate %}{% if line.late %} <span class="badge badge--late">{% translate "late" %}</span>{% endif %}</li>
-{% endfor %}</ul></td>
-<td><ul class="planning-cell">
+{% for row in rows %}{% with found=row.forecast %}<tr data-article="{{ found.article_number }}" data-priority="{{ found.priority }}"{% if row.fill or row.check_bulk or row.plan_synthesis %} data-action="1"{% endif %}{% if row.tasks|has_late %} data-late="1"{% endif %}{% if found.article_number == selected %} aria-current="true"{% endif %}>
+<td><a class="planning-select" href="/lab/planning/?{% if all %}all=1&amp;{% endif %}selected={{ found.article_number|urlencode:"" }}">{{ found.substance.shown_name }}</a> <span class="kv-sub compound-key">{{ found.article_number }}</span></td>
+<td class="num" data-sort="{{ found.runway|whole_days }}">{{ found.runway|days }}{{ found.rough|rough }}</td>
+<td class="num" data-sort="{{ found.synthesis_days|whole_days }}">{{ found.synthesis_days|days }}</td>
+<td class="{% if found.latest_start %}nowrap{% else %}muted{% endif %}" data-sort="{% if found.latest_start %}{{ found.latest_start|date:'Y-m-d' }}{% else %}–{% endif %}">{{ found.latest_start|default_if_none:"–" }}</td>
+<td data-sort="{{ found.priority|priority_rank }}"><span class="badge priority priority--{{ found.priority }}">{{ found.priority_label }}</span></td>
+<td{% if not row.tasks %} class="muted"{% endif %}>{% if row.tasks %}<ul class="planning-lines">
+{% for line in row.tasks %}<li><a href="/lab/tasks/{{ line.task.number }}/">{{ line.task.number }}</a> {% include "tasks/state.html" with task=line.task %}{% if line.late %} <span class="badge badge--late">{% translate "late" %}</span>{% endif %}</li>
+{% endfor %}</ul>{% else %}–{% endif %}</td>
+<td{% if not row.fill and not row.check_bulk and not row.plan_synthesis %} class="muted"{% endif %}>{% if row.fill or row.check_bulk or row.plan_synthesis %}<ul class="planning-lines">
 {% for item in row.fill %}<li><a href="/lab/inventory/items/{{ item.pk }}/fill/">{% blocktranslate with container=item.container %}Fill {{ container }}{% endblocktranslate %}</a></li>
 {% endfor %}{% if row.check_bulk %}<li><a href="/lab/inventory/vessels/">{% translate "Check bulk" %}</a></li>
 {% endif %}{% if row.plan_synthesis %}{% for start in row.starts %}<li>{% if user.is_authenticated %}<a href="{{ start.link }}">{{ start.label }}</a>{% else %}{{ start.label }}{% endif %}</li>
 {% empty %}<li>{% if user.is_authenticated %}<a href="/lab/tasks/new/?substance={{ found.substance.key|urlencode }}">{% translate "Plan synthesis" %}</a>{% else %}{% translate "Plan synthesis" %}{% endif %}</li>
-{% endfor %}{% endif %}</ul></td>
+{% endfor %}{% endif %}</ul>{% else %}–{% endif %}</td>
 </tr>
 {% endwith %}{% endfor %}</tbody>
 </table>
 </div>
+<p class="lab-empty planning-no-match" hidden>{% translate "No row matches the filter." %}</p>
+</div>
+</section>
+<aside class="planning-inspector" aria-label="{% translate "Article details" %}">
+{% for row in rows %}{% include "planning/inspector.html" %}{% endfor %}
+</aside>
+{% include "planning/parameters.html" %}
+</div>
 {% else %}<p>{% if all %}{% translate "No article has a forecast." %}{% else %}{% translate "No article needs a synthesis or another action." %}{% endif %}</p>
+{% include "planning/parameters.html" %}
 {% endif %}{% endblock %}

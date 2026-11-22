@@ -2,6 +2,7 @@
 
 import math
 from decimal import ROUND_FLOOR, Decimal
+from typing import Any
 
 from django import template
 from django.utils.formats import number_format
@@ -61,3 +62,28 @@ def rough(flag: bool) -> SafeString:
     if not flag:
         return mark_safe("")
     return format_html(' <span class="lab-mark">({})</span>', _("rough"))
+
+
+PRIORITY_RANK = {"high": "1", "medium": "2", "low": "3"}
+
+
+@register.filter
+def whole_days(value: float | int | None) -> str:
+    """Return VALUE as whole days rounded down, written as digits;
+    nothing for None."""
+    if value is None:
+        return ""
+    return str(math.floor(value))
+
+
+@register.filter
+def priority_rank(value: str) -> str:
+    """Return the sort rank of priority VALUE: ``1`` for high, ``2`` for
+    medium and ``3`` for low."""
+    return PRIORITY_RANK.get(value, "")
+
+
+@register.filter
+def has_late(tasks: list[Any]) -> bool:
+    """Return whether any task line in TASKS is marked late."""
+    return any(line.late for line in tasks)

@@ -275,3 +275,76 @@ msgstr "Median der letzten 730 Tage"
 
 msgid "fewer than three deliveries in the past 730 days"
 msgstr "weniger als drei Lieferungen in den letzten 730 Tagen"
+
+msgid "Planning list"
+msgstr "Planungsliste"
+
+msgid "Article"
+msgstr "Artikel"
+
+msgctxt "planning"
+msgid "Filter"
+msgstr "Filter"
+
+msgid "High priority"
+msgstr "Priorität hoch"
+
+msgid "With action"
+msgstr "Mit Maßnahme"
+
+msgid "Late"
+msgstr "Verspätet"
+
+msgid "No row matches the filter."
+msgstr "Keine Zeile passt zum Filter."
+
+msgid "Article details"
+msgstr "Artikeldetails"
+
+msgid "Containers and demand"
+msgstr "Gebinde & Bedarf"
+
+msgid "Planning details"
+msgstr "Planungsdetails"
+
+msgid "Buffer"
+msgstr "Puffer"
+
+msgid "Default synthesis time"
+msgstr "Synthesedauer (Vorgabe)"
+
+msgid "until three syntheses exist"
+msgstr "bis drei Synthesen vorliegen"
+
+msgctxt "planning"
+msgid "History"
+msgstr "Historie"
+
+msgid "%(count)s quarter"
+msgid_plural "%(count)s quarters"
+msgstr[0] "%(count)s Quartal"
+msgstr[1] "%(count)s Quartale"
+
+msgid "Order model"
+msgstr "Auftragsmodell"
+
+msgid "from %(count)s order"
+msgid_plural "from %(count)s orders"
+msgstr[0] "ab %(count)s Auftrag"
+msgstr[1] "ab %(count)s Aufträgen"
+
+msgid "Priority bands"
+msgstr "Prioritätsschwellen"
+
+msgctxt "planning"
+msgid "Target"
+msgstr "Ziel"
+
+#, python-format
+msgid ""
+"%(certainty)s · buffer %(buffer)s d · default %(synthesis)s d · %(history)s Q "
+"· from %(orders)s orders · < %(high)s / < %(medium)s d · target %(target)s d"
+msgstr ""
+"%(certainty)s · Puffer %(buffer)s T. · Vorgabe %(synthesis)s T. · "
+"%(history)s Q. · ab %(orders)s Auftr. · < %(high)s / < %(medium)s T. · Ziel "
+"%(target)s T."
