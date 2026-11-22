@@ -8,6 +8,7 @@ from . import field_value, make_user, page, table
 from .inventory_support import (DELIVERIES, LIST, NEW_ITEM, NEW_NOTE,
                                 FormCase, InventoryCase, fresh, item_url,
                                 note_data, note_url)
+from .widget_support import history_widget, item_widget, kv
 
 ADMIN_ITEMS = "/lab/admin/inventory/item/"
 
@@ -97,8 +98,8 @@ class ItemFormTests(FormCase):
             "category": "", "note": "",
             "status": "active", "stocked_on": "2019-01-02",
             "compartment": "3", "box": "12"})
-        history = page(self.client.get(item_url(item))).find(
-            "ul", "lab-history").text()
+        history = history_widget(page(self.client.get(
+            item_url(item)))).text()
         for shown in ("Fach", "Box", "2", "3", "7", "12"):
             with self.subTest(shown=shown):
                 self.assertIn(shown, history)
@@ -221,12 +222,10 @@ class PageTests(FormCase):
         bare = self.item("CH-0010")
         for record, wanted in ((item, ("2", "7")), (bare, ("–", "–"))):
             with self.subTest(item=record.article.article_number):
-                metadata = page(self.client.get(item_url(record))).find(
-                    "dl", "metadata")
-                terms = [dt.text() for dt in metadata.find_all("dt")]
-                values = [dd.text() for dd in metadata.find_all("dd")]
-                self.assertEqual((values[terms.index("Fach")],
-                                  values[terms.index("Box")]), wanted)
+                data = kv(item_widget(page(self.client.get(
+                    item_url(record)))))
+                self.assertEqual((data["Fach"].text(), data["Box"].text()),
+                                 wanted)
 
     def test_a_pick_list(self) -> None:
         """Scenario: A pick list."""

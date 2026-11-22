@@ -62,6 +62,24 @@ vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), context,
 process.stdout.write(JSON.stringify(
   Object.keys(context.OrgSynLab).sort()));
 """
+SORT_RUNNER = r"""
+const fs = require("fs");
+const vm = require("vm");
+const context = vm.createContext({});
+vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), context,
+                { filename: process.argv[1] });
+const cases = JSON.parse(fs.readFileSync(0, "utf8"));
+const order = context.OrgSynLab.sortOrder;
+process.stdout.write(JSON.stringify(
+  typeof order === "function"
+    ? cases.map(([keys, descending, locale]) =>
+        Array.from(order(keys, descending, locale)))
+    : null));
+"""
+SWEDISH_RUNNER = r"""
+process.stdout.write(JSON.stringify(
+  Intl.Collator.supportedLocalesOf(["sv"]).length > 0));
+"""
 SIZE = {"width": 300, "height": 200}
 
 
@@ -313,3 +331,201 @@ class ExportTests(TestCase):
             [NODE, "-e", GONE_RUNNER, str(SCRIPT)],
             capture_output=True, text=True, check=True)
         self.assertIn("narrowBatches", json.loads(done.stdout))
+
+
+@skipUnless(NODE, "node is not installed")
+class SortOrderTests(TestCase):
+    """``OrgSynLab.sortOrder(keys, descending, locale)`` takes KEYS, the
+    sort keys of a table's rows in their page order, as strings, whether
+    to sort DESCENDING, and a LOCALE, a language tag; it returns the
+    indices of the rows in their new order (web-app: Widgets)."""
+
+    def order(self, keys: list[str], descending: bool = False,
+              locale: str = "de") -> list[int]:
+        return self.orders((keys, descending, locale))[0]
+
+    def orders(self, *cases: tuple) -> list[list[int]]:
+        done = subprocess.run(
+            [NODE, "-e", SORT_RUNNER, str(SCRIPT)],
+            input=json.dumps(cases), capture_output=True, text=True,
+            check=True)
+        found = json.loads(done.stdout)
+        self.assertIsNotNone(found, "lab.js exports no sortOrder")
+        return found
+
+    def sorted_keys(self, keys: list[str], descending: bool = False,
+                    locale: str = "de") -> list[str]:
+        return [keys[i] for i in self.order(keys, descending, locale)]
+
+    def test_numbers_dates_and_text(self) -> None:
+        """Scenario: Numbers, dates and text."""
+        keys = ["Abgabe", "10", "2026-01-02T09:15", "–", "-3,5",
+                "01.01.2026", "", "2"]
+        ascending, descending = self.orders((keys, False, "de"),
+                                            (keys, True, "de"))
+        self.assertEqual([keys[i] for i in ascending], [
+            "-3,5", "2", "10", "01.01.2026", "2026-01-02T09:15", "Abgabe",
+            "–", ""])
+        self.assertEqual([keys[i] for i in descending], [
+            "Abgabe", "2026-01-02T09:15", "01.01.2026", "10", "2", "-3,5",
+            "–", ""])
+        self.assertEqual(ascending, [4, 7, 1, 5, 2, 0, 3, 6])
+        self.assertEqual(descending, [0, 2, 5, 1, 7, 4, 3, 6])
+
+    def test_equal_keys_keep_their_order(self) -> None:
+        """Scenario: Equal keys keep their order."""
+        self.assertEqual(self.order(["b", "a", "b", "a"]), [1, 3, 0, 2])
+
+    def test_equal_keys_keep_their_order_descending_too(self) -> None:
+        self.assertEqual(self.order(["b", "a", "b", "a"], True),
+                         [0, 2, 1, 3])
+        self.assertEqual(self.order(["2", "1", "2", "1"], True),
+                         [0, 2, 1, 3])
+
+    def test_a_decimal_comma_and_a_decimal_point_are_numbers(self) -> None:
+        keys = ["1,5", "1.25", "-0,5", "-1.5", "0", "10,0", "9"]
+        self.assertEqual(self.sorted_keys(keys), [
+            "-1.5", "-0,5", "0", "1.25", "1,5", "9", "10,0"])
+
+    def test_the_same_value_in_two_forms_is_equal(self) -> None:
+        self.assertEqual(self.order(["1,5", "1.5", "1,50"]), [0, 1, 2])
+        self.assertEqual(self.order(["1.5", "1,5", "1,50"]), [0, 1, 2])
+        self.assertEqual(self.order(["1,5", "1.5"], True), [0, 1])
+
+    def test_numbers_compare_by_value_not_by_text(self) -> None:
+        self.assertEqual(self.sorted_keys(["9", "10", "100", "2"]),
+                         ["2", "9", "10", "100"])
+        self.assertEqual(self.sorted_keys(["9", "10", "100", "2"], True),
+                         ["100", "10", "9", "2"])
+
+    def test_a_sign_is_part_of_the_number(self) -> None:
+        keys = ["+2", "-2", "1", "-10"]
+        self.assertEqual(self.sorted_keys(keys), ["-10", "-2", "1", "+2"])
+
+    def test_a_number_with_a_unit_is_text(self) -> None:
+        """The text of a cell is its key only as a whole."""
+        keys = ["10 mg", "Abgabe", "5", "2026-01-02"]
+        self.assertEqual(self.sorted_keys(keys),
+                         ["5", "2026-01-02", "10 mg", "Abgabe"])
+
+    def test_a_lone_sign_is_text(self) -> None:
+        keys = ["-", "5", "+"]
+        self.assertEqual(self.sorted_keys(keys)[0], "5")
+
+    def test_dates_in_both_forms_by_their_order(self) -> None:
+        keys = ["31.12.2025", "2026-01-01", "15.02.2025", "2025-03-09"]
+        self.assertEqual(self.sorted_keys(keys), [
+            "15.02.2025", "2025-03-09", "31.12.2025", "2026-01-01"])
+        self.assertEqual(self.sorted_keys(keys, True), [
+            "2026-01-01", "31.12.2025", "2025-03-09", "15.02.2025"])
+
+    def test_a_german_date_is_not_read_as_text(self) -> None:
+        """Read as text, ``31.12.2025`` would follow ``01.01.2026``."""
+        self.assertEqual(self.order(["01.01.2026", "31.12.2025"]), [1, 0])
+
+    def test_dates_with_times(self) -> None:
+        keys = ["2026-01-02T10:05", "02.01.2026 09:15",
+                "2026-01-02T09:15", "03.01.2026 00:00", "2026-01-02"]
+        self.assertEqual(self.sorted_keys(keys), [
+            "2026-01-02", "02.01.2026 09:15", "2026-01-02T09:15",
+            "2026-01-02T10:05", "03.01.2026 00:00"])
+
+    def test_a_date_without_a_time_precedes_that_days_times(self) -> None:
+        self.assertEqual(self.order(["2026-01-02T00:01", "2026-01-02"]),
+                         [1, 0])
+        self.assertEqual(self.order(["02.01.2026 00:01", "02.01.2026"]),
+                         [1, 0])
+
+    def test_one_moment_in_two_forms_is_equal(self) -> None:
+        self.assertEqual(self.order(
+            ["2026-01-02T09:15", "02.01.2026 09:15"]), [0, 1])
+        self.assertEqual(self.order(
+            ["02.01.2026 09:15", "2026-01-02T09:15"]), [0, 1])
+        self.assertEqual(self.order(
+            ["02.01.2026 09:15", "2026-01-02T09:15"], True), [0, 1])
+        self.assertEqual(self.order(["2026-01-02", "02.01.2026"]), [0, 1])
+
+    def test_a_year_alone_is_a_number_and_precedes_dates(self) -> None:
+        self.assertEqual(self.order(["2025-01-01", "2026"]), [1, 0])
+
+    def test_the_groups_numbers_dates_text(self) -> None:
+        keys = ["Zebra", "2026-05-05", "7", "apfel", "01.01.2000", "-1"]
+        self.assertEqual(self.sorted_keys(keys), [
+            "-1", "7", "01.01.2000", "2026-05-05", "apfel", "Zebra"])
+
+    def test_descending_reverses_the_groups(self) -> None:
+        keys = ["Zebra", "2026-05-05", "7", "apfel", "01.01.2000", "-1"]
+        self.assertEqual(self.sorted_keys(keys, True), [
+            "Zebra", "apfel", "2026-05-05", "01.01.2000", "7", "-1"])
+
+    def test_a_dash_and_an_empty_key_come_last_either_way(self) -> None:
+        keys = ["–", "b", "", "a", "–", "3"]
+        ascending, descending = self.orders((keys, False, "de"),
+                                            (keys, True, "de"))
+        self.assertEqual([keys[i] for i in ascending],
+                         ["3", "a", "b", "–", "", "–"])
+        self.assertEqual([keys[i] for i in descending],
+                         ["b", "a", "3", "–", "", "–"])
+
+    def test_a_dash_and_an_empty_key_keep_their_order_among_themselves(
+            self) -> None:
+        for descending in (False, True):
+            with self.subTest(descending=descending):
+                self.assertEqual(
+                    self.order(["", "–", "", "–"], descending),
+                    [0, 1, 2, 3])
+                self.assertEqual(
+                    self.order(["–", "", "–"], descending), [0, 1, 2])
+
+    def test_nothing_but_dashes_and_empty_keys(self) -> None:
+        self.assertEqual(self.order(["–", ""]), [0, 1])
+        self.assertEqual(self.order(["", "–"], True), [0, 1])
+
+    def test_no_rows_and_one_row(self) -> None:
+        self.assertEqual(self.order([]), [])
+        self.assertEqual(self.order([], True), [])
+        self.assertEqual(self.order(["x"]), [0])
+        self.assertEqual(self.order(["–"], True), [0])
+
+    def test_the_result_is_a_permutation_of_the_indices(self) -> None:
+        keys = ["b", "3", "", "01.01.2026", "–", "a", "3", "b"]
+        for descending in (False, True):
+            with self.subTest(descending=descending):
+                self.assertEqual(sorted(self.order(keys, descending)),
+                                 list(range(len(keys))))
+
+    def test_a_long_run_of_equal_keys_keeps_its_order(self) -> None:
+        keys = ["a", "b"] * 30
+        self.assertEqual(self.order(keys),
+                         list(range(0, 60, 2)) + list(range(1, 60, 2)))
+        self.assertEqual(self.order(keys, True),
+                         list(range(1, 60, 2)) + list(range(0, 60, 2)))
+
+    def test_text_follows_the_collation_of_the_language(self) -> None:
+        keys = ["Zebra", "Äpfel", "apfel", "Birne"]
+        self.assertEqual(self.sorted_keys(keys, locale="de"),
+                         ["apfel", "Äpfel", "Birne", "Zebra"])
+        self.assertEqual(self.sorted_keys(keys, True, locale="de"),
+                         ["Zebra", "Birne", "Äpfel", "apfel"])
+
+    def test_text_is_not_ordered_by_code_unit(self) -> None:
+        """Code-unit order puts every capital before every small
+        letter."""
+        self.assertEqual(self.sorted_keys(["b", "A", "a", "B"]),
+                         ["a", "A", "b", "B"])
+
+    def test_the_language_changes_the_order(self) -> None:
+        done = subprocess.run([NODE, "-e", SWEDISH_RUNNER],
+                              capture_output=True, text=True, check=True)
+        if not json.loads(done.stdout):
+            self.skipTest("node has no Swedish collation")
+        keys = ["Zebra", "Äpfel", "Apfel"]
+        self.assertEqual(self.sorted_keys(keys, locale="de"),
+                         ["Apfel", "Äpfel", "Zebra"])
+        self.assertEqual(self.sorted_keys(keys, locale="sv"),
+                         ["Apfel", "Zebra", "Äpfel"])
+
+    def test_a_language_node_lacks_falls_back(self) -> None:
+        keys = ["b", "a", "3"]
+        self.assertEqual(self.sorted_keys(keys, locale="tlh"),
+                         ["3", "a", "b"])

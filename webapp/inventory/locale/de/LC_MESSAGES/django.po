@@ -1021,3 +1021,15 @@ msgstr "Gebinde nach Charge"
 
 msgid "No containers."
 msgstr "Keine Gebinde."
+
+msgid "Time"
+msgstr "Zeitpunkt"
+
+msgid "Subject"
+msgstr "Betreff"
+
+msgid "Change"
+msgstr "Änderung"
+
+msgid "Item data"
+msgstr "Artikeldaten"

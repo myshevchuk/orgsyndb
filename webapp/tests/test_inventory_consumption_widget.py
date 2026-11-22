@@ -19,6 +19,7 @@ from .inventory_support import (LIST, FormCase, cells, has_number,
                                 historical_line, item_url, num)
 from .test_inventory_detail import detail_url, pane_of
 from .test_inventory_dialogs import HTMX, controls_of, errors_at
+from .widget_support import history_entries
 
 LABEL = re.compile(r"Q([1-4]) (\d{4})")
 CHANGE, ENTER = "Ändern", "Nachtragen"
@@ -50,25 +51,26 @@ def changed(text: str, old: str, new: str) -> bool:
         text) is not None
 
 
-def history_items(root: Element) -> list[Element]:
-    """The entries of the page's change history, in page order."""
-    box = root.find("ul", cls="lab-history")
-    assert box is not None, "the page shows no history"
-    return [li for li in box.children
-            if isinstance(li, Element) and li.tag == "li"]
+def history_texts(root: Element) -> list[str]:
+    """The text of each entry of the page's change history, in page
+    order."""
+    return [entry.text for entry in history_entries(root)]
 
 
 def quarter_rows(root: Element) -> dict[tuple[int, int], Element]:
-    """The rows of the first table of ``root``, the table of quarters,
-    by year and quarter."""
-    grid = root.find("table")
-    assert grid is not None, "no table of quarters"
-    rows = {}
-    for row in grid.find_all("tr"):
-        head = row.find("th", scope="row")
-        found = LABEL.match(head.text()) if head is not None else None
-        if found:
-            rows[(int(found.group(2)), int(found.group(1)))] = row
+    """The rows of the table of quarters in ``root``, the first table
+    with rows headed ``Q<n> <year>``, by year and quarter."""
+    grids = root.find_all("table")
+    assert grids, "no table of quarters"
+    rows: dict[tuple[int, int], Element] = {}
+    for grid in grids:
+        for row in grid.find_all("tr"):
+            head = row.find("th", scope="row")
+            found = LABEL.match(head.text()) if head is not None else None
+            if found:
+                rows[(int(found.group(2)), int(found.group(1)))] = row
+        if rows:
+            break
     return rows
 
 
@@ -205,7 +207,7 @@ class ItemPageHistoryTests(WidgetCase):
         self.assertEqual(done.status_code, 302)
 
     def entries(self, item: Any) -> list[str]:
-        return [li.text() for li in history_items(self.item_page(item))]
+        return history_texts(self.item_page(item))
 
     def test_history_of_entered_consumption(self) -> None:
         """Scenario: History of entered consumption."""

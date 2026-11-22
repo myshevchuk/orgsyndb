@@ -17,8 +17,8 @@ from .collection_support import accept
 from .inventory_support import (MICRO, TODAY, delivery_line, has_amount,
                                 has_number, historical_line, item_url,
                                 newest_movement)
-from .planning_support import (WINDOW, PlanningCase, has_date, has_days,
-                               section)
+from .planning_support import WINDOW, PlanningCase, has_date, has_days
+from .widget_support import widget
 
 D = Decimal
 NO_FORECAST_DE = "Kein Verbrauch, keine Prognose."
@@ -308,8 +308,8 @@ class YieldTests(PlanningCase):
 class PageCase(PlanningCase):
 
     def prognosis(self, item, signed_in: bool = False):
-        return section(self.get(item_url(item), signed_in), "Prognose",
-                       "Forecast")
+        return widget(self.get(item_url(item), signed_in), "Prognose",
+                      "Forecast")
 
 
 class ForecastPageTests(PageCase):

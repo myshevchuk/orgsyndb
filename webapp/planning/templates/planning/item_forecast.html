@@ -1,38 +1,29 @@
-{% load i18n planning inventory %}<h2>{% translate "Forecast" %}</h2>
-{% if entry.model %}{% with found=forecast settings=forecast.parameters model=entry.model %}<dl class="metadata">
-<dt>{% translate "Demand model" %}</dt>
-<dd>{% if model.rough %}{% blocktranslate with m=model.m|figure v=model.v|figure count=model.quarters %}quarterly totals: m = {{ m }}, v = {{ v }} from {{ count }} quarters{% endblocktranslate %}{% else %}{% blocktranslate with rate=model.rate|figure:4 count=model.sizes|length median=model.median|figure largest=model.largest %}orders: λ = {{ rate }} per day from {{ count }} orders, median {{ median }} and largest {{ largest }} containers{% endblocktranslate %}{% endif %}{{ model.rough|rough }}</dd>
-<dt>{% translate "Runway on hand" %}</dt>
-<dd>{% blocktranslate with runway=entry.runway_on_hand|days stock=entry.item.quantity certainty=settings.certainty|percent %}{{ runway }} for {{ stock }} containers at a certainty of {{ certainty }}{% endblocktranslate %}{{ model.rough|rough }}</dd>
-</dl>
+{% load i18n planning inventory %}<section class="widget">
+<div class="widget__head"><h2>{% translate "Forecast" %}</h2></div>
+<div class="widget__body widget__body--flush">
+{% if entry.model %}{% with found=forecast settings=forecast.parameters model=entry.model %}<table class="kv-table"><tbody>
+<tr><th scope="row">{% translate "Demand model" %}</th> <td>{% if model.rough %}<strong>{% translate "Quarterly totals" %}</strong>{{ model.rough|rough }} <span class="kv-sub">{% blocktranslate with m=model.m|figure v=model.v|figure count=model.quarters %}m = {{ m }}, v = {{ v }} from {{ count }} quarters{% endblocktranslate %}</span>{% else %}<strong>{% blocktranslate with rate=model.rate|figure:4 %}λ = {{ rate }} per day{% endblocktranslate %}</strong> <span class="kv-sub">{% blocktranslate with count=model.sizes|length median=model.median|figure largest=model.largest %}{{ count }} orders · median {{ median }} · max. {{ largest }} containers{% endblocktranslate %}</span>{% endif %}</td></tr>
+<tr><th scope="row">{% translate "Runway on hand" %}</th> <td><strong>{{ entry.runway_on_hand|days }}</strong>{{ model.rough|rough }} <span class="kv-sub">{% blocktranslate with stock=entry.item.quantity certainty=settings.certainty|percent %}for {{ stock }} containers at a certainty of {{ certainty }}{% endblocktranslate %}</span></td></tr>
+</tbody></table>
 <h3>{% blocktranslate with article=found.article_number %}Article {{ article }}{% endblocktranslate %}</h3>
-<dl class="metadata">
-<dt>{% translate "Usable bulk" %}</dt>
-<dd>{% blocktranslate with amount=found.usable_bulk|amount unit=found.bulk_unit_label %}{{ amount }} {{ unit }}, each open vessel less the largest container size{% endblocktranslate %}</dd>
-<dt>{% translate "Runway" %}</dt>
-<dd>{% blocktranslate with runway=found.runway|days certainty=found.certainty|percent %}{{ runway }} at a certainty of {{ certainty }} for each size{% endblocktranslate %}{{ found.rough|rough }}</dd>
-<dt>{% translate "Synthesis time" %}</dt>
-<dd>{{ found.synthesis_days|days }} {% include "planning/basis.html" %}</dd>
-<dt>{% translate "Slack" %}</dt>
-<dd>{% blocktranslate with slack=found.slack|days buffer=settings.buffer_days|days %}{{ slack }}: the runway less the buffer ({{ buffer }}) and the synthesis time{% endblocktranslate %}{{ found.rough|rough }}</dd>
-<dt>{% translate "Latest start" %}</dt>
-<dd>{{ found.latest_start|default_if_none:"–" }}{{ found.rough|rough }}</dd>
-<dt>{% translate "Priority" %}</dt>
-<dd>{% blocktranslate with priority=found.priority_label high=settings.high_days medium=settings.medium_days %}{{ priority }}: high below {{ high }} and medium below {{ medium }} days of slack{% endblocktranslate %}{{ found.rough|rough }}</dd>
-<dt>{% translate "New synthesis" %}</dt>
-<dd>{% if found.yield_amount is not None %}{{ found.yield_amount|amount }} {{ found.bulk_unit_label }}{% if found.yield_mg is not None %} ({{ found.yield_mg }} mg){% endif %}{% endif %}{% for item, count in found.lacking_items %}{% if found.yield_amount is not None or not forloop.first %} · {% endif %}{{ count }} × {{ item.container }}{% endfor %}; {% blocktranslate with days=found.yield_days|days synthesis=found.synthesis_days|days buffer=settings.buffer_days|days target=settings.target_days|days certainty=found.certainty|percent %}to last {{ days }} (synthesis time {{ synthesis }}, buffer {{ buffer }}, target {{ target }}) at a certainty of {{ certainty }} for each size, beyond the containers and the usable bulk{% endblocktranslate %}{{ found.rough|rough }}</dd>
-</dl>
+<table class="kv-table"><tbody>
+<tr><th scope="row">{% translate "Usable bulk" %}</th> <td><strong>{{ found.usable_bulk|amount }} {{ found.bulk_unit_label }}</strong> <span class="kv-sub">{% translate "each open vessel less the largest container size" %}</span></td></tr>
+<tr><th scope="row">{% translate "Runway" %}</th> <td><strong>{{ found.runway|days }}</strong>{{ found.rough|rough }} <span class="kv-sub">{% blocktranslate with certainty=found.certainty|percent %}at a certainty of {{ certainty }} for each size{% endblocktranslate %}</span></td></tr>
+<tr><th scope="row">{% translate "Synthesis time" %}</th> <td><strong>{{ found.synthesis_days|days }}</strong> <span class="kv-sub">{% include "planning/basis.html" %}</span></td></tr>
+<tr><th scope="row">{% translate "Slack" %}</th> <td><strong>{{ found.slack|days }}</strong>{{ found.rough|rough }} <span class="kv-sub">{% blocktranslate with buffer=settings.buffer_days|days %}runway less buffer ({{ buffer }}) and synthesis time{% endblocktranslate %}</span></td></tr>
+<tr><th scope="row">{% translate "Latest start" %}</th> <td><strong>{{ found.latest_start|default_if_none:"–" }}</strong>{{ found.rough|rough }}</td></tr>
+<tr><th scope="row">{% translate "Priority" %}</th> <td><strong>{{ found.priority_label }}</strong>{{ found.rough|rough }} <span class="kv-sub">{% blocktranslate with high=settings.high_days medium=settings.medium_days %}high below {{ high }} and medium below {{ medium }} days of slack{% endblocktranslate %}</span></td></tr>
+<tr><th scope="row">{% translate "New synthesis" %}</th> <td><strong>{% if found.yield_amount is not None %}{{ found.yield_amount|amount }} {{ found.bulk_unit_label }}{% if found.yield_mg is not None %} ({{ found.yield_mg }} mg){% endif %}{% endif %}{% for item, count in found.lacking_items %}{% if found.yield_amount is not None or not forloop.first %} · {% endif %}{{ count }} × {{ item.container }}{% endfor %}</strong>{{ found.rough|rough }} <span class="kv-sub">{% blocktranslate with days=found.yield_days|days synthesis=found.synthesis_days|days buffer=settings.buffer_days|days target=settings.target_days|days certainty=found.certainty|percent %}to last {{ days }} (synthesis time {{ synthesis }}, buffer {{ buffer }}, target {{ target }}) at a certainty of {{ certainty }} for each size, beyond the containers and the usable bulk{% endblocktranslate %}</span></td></tr>
+</tbody></table>
 <h3>{% translate "Delivery rhythm" %}</h3>
-<dl class="metadata">
-<dt>{% translate "Last delivery" %}</dt>
-<dd>{{ entry.rhythm.last|default_if_none:"–" }}</dd>
-<dt>{% translate "Deliveries in the past 365 days" %}</dt>
-<dd>{{ entry.rhythm.past_year }}</dd>
-<dt>{% translate "Usual interval" %}</dt>
-<dd>{% if entry.rhythm.interval is not None %}{% blocktranslate with interval=entry.rhythm.interval|days %}{{ interval }}, the median of the past 730 days{% endblocktranslate %}{% else %}{% translate "– (fewer than three deliveries in the past 730 days)" %}{% endif %}</dd>
-<dt>{% translate "Next delivery expected" %}</dt>
-<dd>{{ entry.rhythm.next|default_if_none:"–" }}</dd>
-</dl>
-{% endwith %}{% elif figures.level == "dormant" %}<p>{% translate "Dormant, no forecast." %}</p>
-{% else %}<p>{% translate "No consumption, no forecast." %}</p>
+<table class="kv-table"><tbody>
+<tr><th scope="row">{% translate "Last delivery" %}</th> <td>{{ entry.rhythm.last|default_if_none:"–" }}</td></tr>
+<tr><th scope="row">{% translate "Deliveries in the past 365 days" %}</th> <td>{{ entry.rhythm.past_year }}</td></tr>
+<tr><th scope="row">{% translate "Usual interval" %}</th> <td>{% if entry.rhythm.interval is not None %}<strong>{{ entry.rhythm.interval|days }}</strong> <span class="kv-sub">{% translate "median of the past 730 days" %}</span>{% else %}– <span class="kv-sub">{% translate "fewer than three deliveries in the past 730 days" %}</span>{% endif %}</td></tr>
+<tr><th scope="row">{% translate "Next delivery expected" %}</th> <td>{% if entry.rhythm.next %}<strong>{{ entry.rhythm.next }}</strong>{% else %}–{% endif %}</td></tr>
+</tbody></table>
+{% endwith %}{% elif figures.level == "dormant" %}<p class="lab-empty">{% translate "Dormant, no forecast." %}</p>
+{% else %}<p class="lab-empty">{% translate "No consumption, no forecast." %}</p>
 {% endif %}
+</div>
+</section>

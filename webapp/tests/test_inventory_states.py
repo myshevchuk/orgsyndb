@@ -14,6 +14,7 @@ from . import field_value, make_substance, page, table
 from .inventory_support import (LEVELS, LIST, NEW_ITEM, TODAY, FormCase,
                                 InventoryCase, fresh, item_data, item_url)
 from .planning_support import PlanningCase
+from .widget_support import history_widget, item_widget, kv
 
 PROJECTED = "hochgerechnet aus dem laufenden Jahr"
 
@@ -159,8 +160,8 @@ class StockEntryTests(FormCase):
         item = self.item("S-7")
         self.client.post(item_url(item, "edit"), edit_data(
             fresh(item), status="discontinued", stocked_on="2024-03-01"))
-        history = page(self.client.get(item_url(item))).find(
-            "ul", "lab-history").text()
+        history = history_widget(page(self.client.get(
+            item_url(item)))).text()
         for shown in ("Status", "auslaufend", "aktiv", "Im Bestand seit",
                       "01.03.2024", "02.01.2019"):
             with self.subTest(shown=shown):
@@ -296,7 +297,7 @@ class PageTests(InventoryCase):
         item = self.item("D-1", quantity=4, stocked_on=date(2024, 3, 1))
         Item.objects.filter(pk=item.pk).update(status="discontinued")
         root = page(self.client.get(item_url(item)))
-        text = root.find("dl", "metadata").text()
+        text = item_widget(root).text()
         self.assertIn("auslaufend", text)
         self.assertIn("01.03.2024", text)
         stock = root.find(cls="level-dormant")
@@ -311,8 +312,8 @@ class PageTests(InventoryCase):
 
     def test_an_active_item_shows_no_status(self) -> None:
         item = self.item("A-1")
-        self.assertNotIn("Status", page(self.client.get(
-            item_url(item))).find("dl", "metadata").text())
+        self.assertNotIn("Status", kv(item_widget(page(self.client.get(
+            item_url(item))))))
 
 
 class PlanningTests(PlanningCase):

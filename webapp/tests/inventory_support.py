@@ -308,10 +308,12 @@ def newest_movement(item: Any) -> Any:
 
 
 def ledger(root: Any) -> list[tuple[str, Any]]:
-    """The body rows of a page that show a movement, in page order, each
-    with the kind its text names."""
+    """The body rows of an item page's movements table, ``#movements``,
+    in page order, each with the kind its text names."""
+    movements = root.find("table", id="movements")
+    assert movements is not None, "the page has no table #movements"
     found = []
-    for row in root.find_all("tr"):
+    for row in movements.find_all("tr"):
         if not row.find("td"):
             continue
         text = row.text()
@@ -324,10 +326,11 @@ def ledger(root: Any) -> list[tuple[str, Any]]:
 
 def vessel_ledger(root: Any) -> list[tuple[str, Any]]:
     """The body rows of a vessel's page that show a movement, in page
-    order, each with the kind its text names."""
+    order, each with the kind its text names; the rows of the history
+    widget, ``#history``, are left out."""
     found = []
     for row in root.find_all("tr"):
-        if not row.find("td"):
+        if not row.find("td") or row.closest("details") is not None:
             continue
         text = row.text()
         named = [(text.find(label), kind)
