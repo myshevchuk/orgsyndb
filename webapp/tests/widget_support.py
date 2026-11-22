@@ -107,6 +107,15 @@ def grid(table: Element) -> tuple[list[str], list[dict[str, Element]]]:
                     if tr.closest("thead") is None]
 
 
+def widget_grid(found: Element
+                ) -> tuple[list[str], list[dict[str, Element]]]:
+    """The header texts and the body rows of the table of the widget
+    ``found``, as ``grid`` gives them; fail when it holds none."""
+    inside = found.find("table")
+    assert inside is not None, f"the widget {title_of(found)!r} has no table"
+    return grid(inside)
+
+
 def body_rows(table: Element) -> list[Element]:
     """The rows of ``table`` outside its ``thead``."""
     return [tr for tr in table.find_all("tr")

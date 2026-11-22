@@ -10,10 +10,10 @@ from . import (berlin, frozen, make_group, make_batch, make_item,
 from .collection_support import accept, make_import, make_procedure
 from .demo_support import SeededCase
 from .inventory_support import SUBSTANCE_PAGE
-from .planning_support import section
 from .registry_support import (REGISTRY, VOCABULARIES, RegistryCase,
                                substance_url, term_url)
 from .structure_support import ETHANOL
+from .widget_support import kv, widget, widget_grid
 
 COLUMNS_DE = ["Name", "Schlüssel", "Kurzname", "Bestandsgruppe",
               "Stoffklassen", "Summenformel", "Molmasse", "Artikelnr."]
@@ -288,11 +288,11 @@ class SubstancePageTests(RegistryCase):
 
 
 class SectionTests(RegistryCase):
-    """The sections ``Gebinde``, ``Chargen`` and ``Aufträge``."""
+    """The widgets ``Gebinde``, ``Chargen`` and ``Aufträge``."""
 
     def sections(self, key: str) -> dict:
         root = self.get(substance_url(key))
-        return {name: section(root, name)
+        return {name: widget(root, name)
                 for name in ("Gebinde", "Chargen", "Aufträge")}
 
     def test_empty_sections_say_none(self) -> None:
@@ -306,7 +306,7 @@ class SectionTests(RegistryCase):
         root = self.get(substance_url("acetophenone"))
         for name in ("Containers", "Batches", "Tasks"):
             with self.subTest(section=name):
-                self.assertIn("None", section(root, name).text())
+                self.assertIn("None", widget(root, name).text())
 
     def test_the_containers_of_its_article(self) -> None:
         small = make_item(self.kl, "CH-0012", size="10", unit="umol",
@@ -349,7 +349,8 @@ class SectionTests(RegistryCase):
         make_vessel(self.kl, batch, unit="mg", amount="30", location="A")
         make_vessel(self.kl, batch, unit="mg", amount="0", location="B")
         held = self.sections("cinnamic-acid")["Chargen"]
-        text = held.text()
+        (row,) = widget_grid(held)[1]
+        text = row["Bestand"].text()
         self.assertTrue(has_amount(text, "2", "g"), text)
         self.assertTrue(has_amount(text, "30", "mg"), text)
 
@@ -569,7 +570,9 @@ class DemoRegistryPageTests(SeededCase):
                           if h.startswith("/compounds/")], [])
         self.assertFalse([a for a in content.find_all("a") if a.text()
                           in ("In der Sammlung", "In the collection")])
-        held = section(root, "Gebinde")
+        self.assertEqual(
+            kv(widget(root, "Verbindung"))["Artikelnr."].text(), "CH-0012")
+        held = widget(root, "Gebinde")
         self.assertTrue(held.find_all("a"))
         self.assertTrue(all(
             re.fullmatch(r"/lab/inventory/items/\d+/", a.get("href"))
@@ -589,8 +592,10 @@ class DemoRegistryPageTests(SeededCase):
 
 
 def figures(root: Any) -> list[Any]:
-    """The ``figure.structure`` elements of a page."""
-    return root.find_all("figure", "structure")
+    """The ``figure.structure`` elements of the widget ``Verbindung``
+    of a page."""
+    return widget(root, "Verbindung", "Compound").find_all(
+        "figure", "structure")
 
 
 class StructureFigureTests(RegistryCase):

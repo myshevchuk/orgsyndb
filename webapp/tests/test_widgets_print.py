@@ -36,6 +36,17 @@ def print_blocks(text: str) -> list[str]:
     return blocks
 
 
+def screen_blocks(text: str) -> list[str]:
+    """The contents of the stylesheet's ``@media screen`` blocks."""
+    blocks, position = [], 0
+    for found in re.finditer(r"@media\s+screen\s*\{", text):
+        if found.start() < position:
+            continue
+        body, position = balanced(text, found.start())
+        blocks.append(body)
+    return blocks
+
+
 def rules(block: str) -> list[tuple[list[str], dict[str, str]]]:
     """The style rules directly in ``block``, each as its selectors,
     with white space made single and the space around ``>`` kept
@@ -95,3 +106,26 @@ class ScreenOnlyLayoutTests(SimpleTestCase):
             if ".item-grid" in names:
                 with self.subTest(selectors=names):
                     self.assertNotEqual(declarations.get("display"), "grid")
+
+
+class SubstanceLayoutTests(SimpleTestCase):
+    """The substance page's grid is for the screen, and the page's
+    structure figure has no rule of its own outside its widget."""
+
+    def test_the_substance_grid_is_a_grid_on_the_screen_only(self) -> None:
+        text = CSS.read_text(encoding="utf-8")
+        for names, declarations in rules(text):
+            if ".substance-grid" in names:
+                with self.subTest(selectors=names):
+                    self.assertNotEqual(declarations.get("display"), "grid")
+        shown = [declarations for block in screen_blocks(text)
+                 for names, declarations in rules(block)
+                 if ".substance-grid" in names]
+        self.assertTrue(any(d.get("display") == "grid" for d in shown),
+                        f"no @media screen rule sets .substance-grid "
+                        f"to display: grid: {shown}")
+
+    def test_no_rule_styles_a_figure_directly_in_main(self) -> None:
+        text = re.sub(r"/\*.*?\*/", "",
+                      CSS.read_text(encoding="utf-8"), flags=re.DOTALL)
+        self.assertIsNone(re.search(r"main\s*>\s*\.structure", text))
