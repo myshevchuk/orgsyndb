@@ -30,15 +30,19 @@ layout, it is removed rather than re-specified.
 - Tables a template marks as sortable sort in the browser by the
   column whose header is activated, through `lab.js`; without the
   script they keep the server's order.
-- The change history, which every record page shows through one
-  template, becomes a collapsible widget holding a table of time,
-  user, subject and change, one row per changed field. This changes
-  the item, batch, vessel, delivery note and task pages alike.
+- The change history becomes one collapsible widget, closed by
+  default, holding a table of time, user, subject and change, one row
+  per changed field. The item, batch, vessel and delivery note pages
+  share its template already; the task page, which writes its own
+  copy, moves onto it.
+- Collapsible widgets print open, and a widget's open state and a
+  table's sorting survive the refresh after a form saved in a
+  dialog.
 - The item page as the owner's chosen mockup: a figures strip of
   stock, coverage, means, the current year, usable bulk and latest
   start; two columns of widgets, consumption, movements (sortable)
-  and bulk on the left, item data, containers by batch, forecast,
-  delivery rhythm and history on the right. The forecast becomes a
+  and bulk on the left, item data, containers by batch, the
+  forecast with its delivery rhythm, and history on the right. The forecast becomes a
   key–value widget: each figure in bold, the parameters it used on
   the line under it.
 
@@ -50,22 +54,27 @@ None.
 
 ### Modified Capabilities
 
-- `web-app`: a new requirement, Widgets, states the shared rules:
-  record pages group their data into widgets, the same data in the
-  same widget on every page, and sortable tables keep their server
-  order without the script.
+- `web-app`: a new requirement, Widgets, states the shared rules for
+  pages whose spec shows their data in widgets: the same data in the
+  same kind of widget, collapsible widgets kept in the page and
+  printed open, sorting in the browser with the server's order
+  without the script, and both kept across a dialog's refresh.
 
 The Item page (end-product-inventory), Item forecast
 (production-planning) and Change history (web-app) requirements stay
-true: they name the data and its order, not its layout, and each
-forecast figure still names the parameters it used.
+true: they name the data and its order, not its layout; the
+forecast widget keeps everything it holds under `Prognose`, the
+delivery rhythm included, and each figure still names the parameters
+it used.
 
 ## Impact
 
-- `site/assets/css/screen.css` (widget classes), `webapp/orgsyndb_web/
-  static/lab.css` and `lab.js` (sorting).
+- `site/assets/css/screen.css` (widget classes; `print.css` is not
+  touched), `webapp/orgsyndb_web/static/lab.css` and `lab.js`
+  (sorting, refresh state, printing).
 - Templates: `inventory/item_page.html`, `inventory/history.html`,
-  `planning/item_forecast.html`; the German message catalogue for the
-  forecast's split strings.
-- Tests that read the history as `ul.lab-history` move to the table.
+  `tasks/page.html`, `planning/item_forecast.html`; the German
+  catalogues of `inventory`, `tasks` and `planning`.
+- Tests that read the old item-page and history markup move to the
+  new markup (listed in tasks).
 - The help pages, if they show or describe the item page.
