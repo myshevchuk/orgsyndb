@@ -20,7 +20,8 @@ APP_TABLES = {
     "vocabulary_chemicalclass", "vocabulary_group", "vocabulary_project",
     "vocabulary_reactiontype", "inventory_article", "inventory_item",
     "inventory_movement", "inventory_deliverynote", "inventory_deliveryline",
-    "inventory_batch", "inventory_vessel", "inventory_vesselmovement",
+    "inventory_batchstock", "inventory_batch", "inventory_vessel",
+    "inventory_vesselmovement",
     "inventory_enteredconsumption",
     "tasks_task", "tasks_taskstep", "tasks_counter", "planning_parameters",
     "demo_demomark",
@@ -87,6 +88,11 @@ class CollectionTests(unittest.TestCase):
         note = self.column("inventory_movement", "delivery_note_id")
         self.assertEqual((note.key, note.nullable, note.on_delete),
                          ("FK", True, "PROTECT"))
+        batch = self.column("inventory_movement", "batch_id")
+        self.assertEqual((batch.key, batch.type, batch.nullable, batch.ref,
+                          batch.on_delete),
+                         ("FK", "bigint", True, "inventory_batch",
+                          "PROTECT"))
         taken = self.column("inventory_movement", "vessel_movement_id")
         self.assertEqual((taken.key, taken.ref, taken.nullable),
                          ("1:1", "inventory_vesselmovement", True))
@@ -98,6 +104,31 @@ class CollectionTests(unittest.TestCase):
                          ("1:1", "inventory_movement"))
         self.assertEqual(self.column("inventory_movement", "booked_at").type,
                          "timestamptz")
+
+    def test_the_columns_of_a_share(self) -> None:
+        """Scenario: Only the application's tables (the box
+        ``inventory_batchstock``)."""
+        found = {c.name: c for c in self.table("inventory_batchstock").columns}
+        self.assertLessEqual({"id", "item_id", "batch_id", "quantity"},
+                             set(found))
+        self.assertEqual((found["id"].key, found["id"].type),
+                         ("PK", "bigint"))
+        self.assertEqual(
+            (found["item_id"].key, found["item_id"].type,
+             found["item_id"].nullable, found["item_id"].ref,
+             found["item_id"].on_delete),
+            ("FK", "bigint", False, "inventory_item", "CASCADE"))
+        self.assertEqual(
+            (found["batch_id"].key, found["batch_id"].type,
+             found["batch_id"].nullable, found["batch_id"].ref,
+             found["batch_id"].on_delete),
+            ("FK", "bigint", True, "inventory_batch", "PROTECT"))
+        self.assertEqual(found["quantity"].check, ">= 0")
+
+    def test_the_batch_of_a_delivery_line(self) -> None:
+        batch = self.column("inventory_deliveryline", "batch_id")
+        self.assertEqual((batch.key, batch.ref, batch.on_delete),
+                         ("FK", "inventory_batch", "PROTECT"))
 
     def test_unique_columns_and_short_types(self) -> None:
         self.assertEqual(self.column("accounts_user", "initials").key, "UQ")
@@ -409,8 +440,17 @@ class ConstraintTests(unittest.TestCase):
         self.assertEqual(
             self.constraint("inventory_entered_quarter").condition,
             "quarter >= 1 AND quarter <= 4")
-        self.assertEqual(self.constraint("inventory_line_item_once").columns,
-                         ("delivery_note_id", "item_id"))
+        lines = [c for c in self.schema.constraints
+                 if c.table == "inventory_deliveryline"
+                 and c.kind == "unique"]
+        self.assertEqual([c.columns for c in lines],
+                         [("delivery_note_id", "item_id", "batch_id")])
+        shares = [c for c in self.schema.constraints
+                  if c.table == "inventory_batchstock"
+                  and c.kind == "unique"]
+        self.assertEqual(sorted(c.columns for c in shares),
+                         [("item_id",), ("item_id", "batch_id")])
+        self.assertTrue(all(c.condition for c in shares))
         numbers = [c for c in self.schema.constraints
                    if c.table == "inventory_batch" and c.kind == "unique"
                    and c.columns == ("number_key",)]
@@ -819,7 +859,11 @@ class PageTests(unittest.TestCase):
                 ("inventory_vesselmovement", "reverses_id",
                  "inventory_vesselmovement"),
                 ("inventory_movement", "vessel_movement_id",
-                 "inventory_vesselmovement")):
+                 "inventory_vesselmovement"),
+                ("inventory_movement", "batch_id", "inventory_batch"),
+                ("inventory_deliveryline", "batch_id", "inventory_batch"),
+                ("inventory_batchstock", "item_id", "inventory_item"),
+                ("inventory_batchstock", "batch_id", "inventory_batch")):
             with self.subTest(column=f"{source}.{column}"):
                 edge = self.edge(source, column)
                 self.assertEqual((edge["to"], edge["class"]),
@@ -906,7 +950,10 @@ class PageTests(unittest.TestCase):
                 ("inventory_movement", "delivery_note_id", "many zero_one"),
                 ("inventory_movement", "vessel_movement_id",
                  "zero_one zero_one"),
-                ("inventory_deliveryline", "item_id", "many one")):
+                ("inventory_deliveryline", "item_id", "many one"),
+                ("inventory_movement", "batch_id", "many zero_one"),
+                ("inventory_batchstock", "item_id", "many one"),
+                ("inventory_batchstock", "batch_id", "many zero_one")):
             with self.subTest(column=column):
                 self.assertEqual(self.edge(source, column)["ends"], ends)
 

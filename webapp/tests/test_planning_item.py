@@ -14,8 +14,9 @@ from planning.forecast import OrderModel, QuarterlyModel
 
 from . import make_task
 from .collection_support import accept
-from .inventory_support import (MICRO, TODAY, has_amount, has_number,
-                                item_url, newest_movement)
+from .inventory_support import (MICRO, TODAY, delivery_line, has_amount,
+                                has_number, historical_line, item_url,
+                                newest_movement)
 from .planning_support import (WINDOW, PlanningCase, has_date, has_days,
                                section)
 
@@ -176,7 +177,7 @@ class FigureTests(PlanningCase):
         self.orders(item, *[(date(2026, month, 10), 2)
                             for month in range(1, 7)])
         gone = book_note(self.kl, date=date(2026, 7, 10),
-                         lines=[(item, 99)], historical=True)
+                         lines=[historical_line(item, 99)], historical=True)
         self.deliver(item, 98, date(2026, 8, 10))
         self.assertEqual(self.sizes(), [2] * 6 + [98, 99])
         reverse(self.kl, newest_movement(item), note="falsch")
@@ -454,6 +455,78 @@ class ForecastPageTests(PageCase):
         self.assertIn("Prognose", headings)
 
 
+class RhythmNoteTests(PlanningCase):
+    """Requirement: Item forecast (the delivery rhythm counts notes, not
+    lines: a note with two lines of an item, one for each batch, is one
+    delivery)."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.item_ = self.item("NV-1", "NV-1", "1", "mg", 40)
+        self.a = self.batch("NV-1", number="B1")
+        self.b = self.batch("NV-1", number="B2")
+
+    def rhythm(self) -> forecast.Rhythm:
+        found = self.forecast("NV-1")
+        self.assertIsNotNone(found)
+        return found.entry(self.item_).rhythm
+
+    def two_batches(self, day: date, historical: bool = False) -> None:
+        line = historical_line if historical else delivery_line
+        book_note(self.kl, date=day, historical=historical, lines=[
+            line(self.item_, 2, self.a), line(self.item_, 3, self.b)])
+
+    def test_a_note_with_two_batch_lines_counts_once(self) -> None:
+        self.two_batches(date(2026, 8, 1))
+        self.deliver(self.item_, 1, date(2026, 9, 1))
+        self.deliver(self.item_, 1, date(2026, 10, 1))
+        found = self.rhythm()
+        self.assertEqual(found.past_year, 3)
+        self.assertEqual(found.last, date(2026, 10, 1))
+        self.assertEqual(found.interval, 31)
+        self.assertEqual(found.next, date(2026, 11, 1))
+
+    def test_a_historical_note_with_two_batch_lines_counts_once(
+            self) -> None:
+        self.two_batches(date(2026, 8, 1), historical=True)
+        self.deliver(self.item_, 1, date(2026, 9, 1))
+        self.deliver(self.item_, 1, date(2026, 10, 1))
+        found = self.rhythm()
+        self.assertEqual((found.past_year, found.interval), (3, 31))
+
+    def test_two_notes_of_one_day_count_twice(self) -> None:
+        self.deliver(self.item_, 1, date(2026, 8, 1), batch=self.a)
+        self.deliver(self.item_, 1, date(2026, 8, 1), batch=self.b)
+        self.deliver(self.item_, 1, date(2026, 9, 1))
+        found = self.rhythm()
+        self.assertEqual(found.past_year, 3)
+        self.assertEqual(found.interval, 16)
+
+    def test_a_note_keeps_counting_while_one_of_its_lines_is_reversed(
+            self) -> None:
+        self.two_batches(date(2026, 8, 1))
+        self.deliver(self.item_, 1, date(2026, 9, 1))
+        self.deliver(self.item_, 1, date(2026, 10, 1))
+        reverse(self.kl, self.item_.movements.get(
+            kind="delivery", batch=self.a, date=date(2026, 8, 1)),
+            note="falsch")
+        found = self.rhythm()
+        self.assertEqual((found.past_year, found.interval), (3, 31))
+
+    def test_a_note_whose_lines_are_all_reversed_does_not_count(
+            self) -> None:
+        self.two_batches(date(2026, 8, 1))
+        self.deliver(self.item_, 1, date(2026, 9, 1))
+        self.deliver(self.item_, 1, date(2026, 10, 1))
+        for batch in (self.a, self.b):
+            reverse(self.kl, self.item_.movements.get(
+                kind="delivery", batch=batch, date=date(2026, 8, 1)),
+                note="falsch")
+        found = self.rhythm()
+        self.assertEqual(found.past_year, 2)
+        self.assertIsNone(found.interval)
+
+
 class RhythmPageTests(PageCase):
 
     def test_delivery_rhythm(self) -> None:
@@ -503,7 +576,7 @@ class RhythmPageTests(PageCase):
         self.deliver(item, 1, date(2026, 10, 1))
         reverse(self.kl, newest_movement(item), note="falsch")
         gone = book_note(self.kl, date=date(2026, 10, 10),
-                         lines=[(item, 1)], historical=True)
+                         lines=[historical_line(item, 1)], historical=True)
         reverse_historical(self.kl, gone, note="falsch")
         text = self.prognosis(item).text()
         self.assertTrue(has_date(text, date(2026, 9, 1)), text)

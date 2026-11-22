@@ -133,7 +133,7 @@ def seed_once(day: date) -> tuple[str, str]:
 def lab_records() -> dict[str, int]:
     """The number of each kind of lab record the database holds."""
     from django.contrib.auth import get_user_model
-    from inventory.models import (Article, Batch, DeliveryNote,
+    from inventory.models import (Article, Batch, BatchStock, DeliveryNote,
                                   EnteredConsumption, Item, Movement, Vessel)
     from planning.models import Parameters
     from registry.models import Substance
@@ -148,6 +148,7 @@ def lab_records() -> dict[str, int]:
         "articles": Article.objects.count(),
         "tasks": Task.objects.count(),
         "items": Item.objects.count(),
+        "stocks": BatchStock.objects.count(),
         "movements": Movement.objects.count(),
         "notes": DeliveryNote.objects.count(),
         "batches": Batch.objects.count(),

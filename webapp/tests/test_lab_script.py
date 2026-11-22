@@ -40,6 +40,19 @@ process.stdout.write(JSON.stringify(
     ? cases.map(([text, name, value]) => search(text, name, value))
     : null));
 """
+NARROW_RUNNER = r"""
+const fs = require("fs");
+const vm = require("vm");
+const context = vm.createContext({});
+vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), context,
+                { filename: process.argv[1] });
+const cases = JSON.parse(fs.readFileSync(0, "utf8"));
+const narrow = context.OrgSynLab.narrowBatches;
+process.stdout.write(JSON.stringify(
+  typeof narrow === "function"
+    ? cases.map(([key, groups, chosen]) => narrow(key, groups, chosen))
+    : null));
+"""
 GONE_RUNNER = r"""
 const fs = require("fs");
 const vm = require("vm");
@@ -205,6 +218,85 @@ class ParamSearchTests(TestCase):
 
 
 @skipUnless(NODE, "node is not installed")
+class NarrowBatchesTests(TestCase):
+    """``OrgSynLab.narrowBatches(key, groups, chosen)`` takes KEY, the
+    key of the substance chosen in a row or typed on the new-item form,
+    the empty string for none, GROUPS, the keys of the batch choice's
+    optgroups, and CHOSEN, the key of the group of the batch chosen, or
+    null for none; it returns ``{hidden, clear}``: the keys of the
+    groups to hide, and whether the batch chosen is to be cleared
+    (end-product-inventory: Inventory forms, "Batches narrowed to the
+    item")."""
+
+    def narrow(self, *cases: tuple) -> list[dict]:
+        done = subprocess.run(
+            [NODE, "-e", NARROW_RUNNER, str(SCRIPT)],
+            input=json.dumps(cases), capture_output=True, text=True,
+            check=True)
+        found = json.loads(done.stdout)
+        self.assertIsNotNone(found,
+                             "OrgSynLab.narrowBatches is not defined")
+        return found
+
+    def test_the_groups_of_other_substances_are_hidden(self) -> None:
+        """Scenario: Batches narrowed to the item."""
+        found = self.narrow(
+            ("cinnamic-acid", ["acetophenone", "cinnamic-acid"], None),
+            ("cinnamic-acid", ["cinnamic-acid"], None),
+            ("acetophenone", ["acetophenone", "cinnamic-acid", "no-article"],
+             None))
+        self.assertEqual(found, [
+            {"hidden": ["acetophenone"], "clear": False},
+            {"hidden": [], "clear": False},
+            {"hidden": ["cinnamic-acid", "no-article"], "clear": False}])
+
+    def test_a_batch_that_is_hidden_is_cleared(self) -> None:
+        """Scenario: Batches narrowed to the item (nothing chosen)."""
+        found = self.narrow(
+            ("cinnamic-acid", ["acetophenone", "cinnamic-acid"],
+             "acetophenone"),
+            ("acetophenone", ["acetophenone", "cinnamic-acid"],
+             "cinnamic-acid"))
+        self.assertEqual(found, [
+            {"hidden": ["acetophenone"], "clear": True},
+            {"hidden": ["cinnamic-acid"], "clear": True}])
+
+    def test_a_batch_that_stays_offered_is_kept(self) -> None:
+        found = self.narrow(
+            ("cinnamic-acid", ["acetophenone", "cinnamic-acid"],
+             "cinnamic-acid"))
+        self.assertEqual(found,
+                         [{"hidden": ["acetophenone"], "clear": False}])
+
+    def test_without_a_substance_nothing_is_hidden(self) -> None:
+        found = self.narrow(
+            ("", ["acetophenone", "cinnamic-acid"], None),
+            ("", ["acetophenone", "cinnamic-acid"], "acetophenone"),
+            ("", [], None))
+        self.assertEqual(found, [{"hidden": [], "clear": False}] * 3)
+
+    def test_a_substance_that_has_no_group_hides_them_all(self) -> None:
+        found = self.narrow(
+            ("typed-by-hand", ["acetophenone", "cinnamic-acid"], None),
+            ("typed-by-hand", ["acetophenone", "cinnamic-acid"],
+             "acetophenone"))
+        self.assertEqual(found, [
+            {"hidden": ["acetophenone", "cinnamic-acid"], "clear": False},
+            {"hidden": ["acetophenone", "cinnamic-acid"], "clear": True}])
+
+    def test_the_groups_keep_their_order(self) -> None:
+        found = self.narrow(("b", ["d", "a", "b", "c"], None))
+        self.assertEqual(found, [{"hidden": ["d", "a", "c"],
+                                  "clear": False}])
+
+    def test_no_groups_hide_nothing(self) -> None:
+        found = self.narrow(("cinnamic-acid", [], None),
+                            ("cinnamic-acid", [], "acetophenone"))
+        self.assertEqual(found[0], {"hidden": [], "clear": False})
+        self.assertEqual(found[1], {"hidden": [], "clear": True})
+
+
+@skipUnless(NODE, "node is not installed")
 class ExportTests(TestCase):
 
     def test_the_detail_search_is_gone(self) -> None:
@@ -215,3 +307,9 @@ class ExportTests(TestCase):
         self.assertIn("place", exported)
         self.assertIn("paramSearch", exported)
         self.assertNotIn("detailSearch", exported)
+
+    def test_the_narrowing_is_exported(self) -> None:
+        done = subprocess.run(
+            [NODE, "-e", GONE_RUNNER, str(SCRIPT)],
+            capture_output=True, text=True, check=True)
+        self.assertIn("narrowBatches", json.loads(done.stdout))

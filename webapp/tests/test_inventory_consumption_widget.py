@@ -16,7 +16,7 @@ from inventory.bookings import (book_note, enter_consumption,
 from . import (Element, berlin, field_value, frozen, page)
 from .collection_support import accept
 from .inventory_support import (LIST, FormCase, cells, has_number,
-                                item_url, num)
+                                historical_line, item_url, num)
 from .test_inventory_detail import detail_url, pane_of
 from .test_inventory_dialogs import HTMX, controls_of, errors_at
 
@@ -126,7 +126,7 @@ class WidgetCase(FormCase):
         self.enter(item, 2026, 3, 40)
         self.enter(item, 2025, 2, 0)
         book_note(self.kl, date=date(2026, 2, 10), historical=True,
-                  lines=[(item, 2)])
+                  lines=[historical_line(item, 2)])
         return item
 
 
@@ -371,7 +371,7 @@ class ItemPageLinkTests(WidgetCase):
     def test_a_reversed_historical_note_frees_its_quarter(self) -> None:
         item = self.item("CH-0012", quantity=5)
         note = book_note(self.kl, date=date(2026, 2, 10), historical=True,
-                         lines=[(item, 2)])
+                         lines=[historical_line(item, 2)])
         self.assertIsNone(link_of(self.rows(item)[(2026, 1)]))
         reverse_historical(self.kl, note, note="falsch")
         link = link_of(self.rows(item)[(2026, 1)])
@@ -599,7 +599,7 @@ class QuarterFormTests(QuarterFormCase):
         """A quarter that a historical note holds refuses a value, and the
         fixed form says why."""
         book_note(self.kl, date=date(2026, 2, 10), historical=True,
-                  lines=[(self.target, 2)])
+                  lines=[historical_line(self.target, 2)])
         url = form_url(self.target, 2026, 1)
         for mode, header in self.modes():
             with self.subTest(mode=mode):
@@ -663,7 +663,7 @@ class SectionTests(QuarterFormCase):
         self.deliver(self.target, 4, date(2026, 8, 20))
         self.enter(self.target, 2025, 1, 11)
         book_note(self.kl, date=date(2026, 3, 5), historical=True,
-                  lines=[(self.target, 3)])
+                  lines=[historical_line(self.target, 3)])
 
     def test_the_section_shows_the_item_pages_chart_and_table(self) -> None:
         shown = self.item_page(self.target)

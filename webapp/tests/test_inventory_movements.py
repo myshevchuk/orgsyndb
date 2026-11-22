@@ -8,7 +8,8 @@ from inventory.bookings import (Refused, book_note, correct, fill, reverse,
                                 reverse_historical)
 from inventory.models import DeliveryNote, Item, Movement
 
-from .inventory_support import (InventoryCase, TODAY, fresh, newest_movement,
+from .inventory_support import (InventoryCase, TODAY, delivery_line, fresh,
+                                historical_line, newest_movement, share,
                                 snapshot)
 
 
@@ -24,8 +25,10 @@ class DeliveryTests(InventoryCase):
     def test_delivery(self) -> None:
         """Scenario: Delivery."""
         item = self.item(quantity=5)
+        batch = self.batch("CH-0001", number="KL0412")
         note = book_note(self.kl, date=TODAY, number="LS-2026-117",
-                         recipient="Produktion", lines=[(item, 2)])
+                         recipient="Produktion",
+                         lines=[delivery_line(item, 2, batch)])
         self.assertEqual(fresh(item).quantity, 3)
         movement = newest_movement(item)
         self.assertEqual(movement.kind, Movement.Kind.DELIVERY)
@@ -33,6 +36,7 @@ class DeliveryTests(InventoryCase):
         self.assertEqual(movement.user, self.kl)
         self.assertEqual(movement.delivery_note, note)
         self.assertEqual(movement.date, TODAY)
+        self.assertEqual(movement.batch, batch)
         self.assertIsNotNone(movement.booked_at)
         self.assertIsNone(movement.reverses)
         self.assertIsNone(movement.vessel_movement)
@@ -41,7 +45,7 @@ class DeliveryTests(InventoryCase):
         item = self.item()
         made = book_note(self.kl, date=date(2026, 10, 15), number="LS-1",
                          recipient="Produktion", note="Eilig",
-                         lines=[(item, 2)])
+                         lines=[delivery_line(item, 2)])
         note = DeliveryNote.objects.get(pk=made.pk)
         self.assertEqual(
             (note.number, note.date, note.recipient, note.note),
@@ -50,8 +54,9 @@ class DeliveryTests(InventoryCase):
         self.assertFalse(note.reversed)
         self.assertEqual(note.created_by, self.kl)
         self.assertIsNotNone(note.created_at)
-        line = note.lines.get()
-        self.assertEqual((line.item, line.count), (item, 2))
+        stored = note.lines.get()
+        self.assertEqual((stored.item, stored.count), (item, 2))
+        self.assertEqual(stored.batch, newest_movement(item).batch)
 
     def test_the_movement_is_dated_as_the_note(self) -> None:
         item = self.item()
@@ -66,35 +71,39 @@ class DeliveryTests(InventoryCase):
 
     def test_more_than_the_quantity_is_refused(self) -> None:
         item = self.item(quantity=5)
+        batch = self.batch()
         before = snapshot()
         with self.assertRaises(Refused):
-            self.deliver(item, 6)
+            self.deliver(item, 6, batch=batch)
         self.assertEqual(snapshot(), before)
 
     def test_a_count_of_zero_or_less_is_refused(self) -> None:
         item = self.item(quantity=5)
+        batch = self.batch()
         before = snapshot()
         for count in (0, -1):
             with self.subTest(count=count), self.assertRaises(Refused):
-                self.deliver(item, count)
+                self.deliver(item, count, batch=batch)
         self.assertEqual(snapshot(), before)
 
     def test_a_note_dated_after_today_is_refused(self) -> None:
         item = self.item()
+        batch = self.batch()
         before = snapshot()
         with self.assertRaises(Refused):
-            self.deliver(item, 1, date(2026, 11, 5))
+            self.deliver(item, 1, date(2026, 11, 5), batch=batch)
         self.assertEqual(snapshot(), before)
 
     def test_the_quantity_of_a_stale_instance_is_not_trusted(self) -> None:
         item = self.item(quantity=5)
+        batch = self.batch()
         item.quantity = 100
         before = snapshot()
         with self.assertRaises(Refused):
-            self.deliver(item, 6)
+            self.deliver(item, 6, batch=batch)
         self.assertEqual(snapshot(), before)
         item.quantity = 0
-        self.deliver(item, 2)
+        self.deliver(item, 2, batch=batch)
         self.assertEqual(fresh(item).quantity, 3)
 
     def test_concurrent_deliveries(self) -> None:
@@ -231,6 +240,7 @@ class ReversalTests(InventoryCase):
         movement = Movement.objects.get(pk=movement.pk)
         self.assertEqual(movement.kind, Movement.Kind.REVERSAL)
         self.assertEqual(movement.reverses, delivery)
+        self.assertEqual(movement.batch, delivery.batch)
         self.assertEqual(movement.quantity_after, 5)
         self.assertEqual((movement.user, movement.note),
                          (self.kl, "falsch gebucht"))
@@ -274,7 +284,7 @@ class ReversalTests(InventoryCase):
     def test_a_filling_whose_containers_are_gone_is_refused(self) -> None:
         item = self.item(quantity=0)
         filling = self.filling(item, 5)
-        self.deliver(item, 4)
+        self.deliver(item, 4, batch=filling.batch)
         before = snapshot()
         with self.assertRaises(Refused):
             reverse(self.kl, filling, note="doppelt")
@@ -285,9 +295,10 @@ class ReversalTests(InventoryCase):
             self) -> None:
         item = self.item(quantity=5)
         filling = self.filling(item, 3)
-        self.deliver(item, 4)
+        self.deliver(item, 4, batch=self.batch("CH-0001"))
         reverse(self.kl, filling, note="doppelt")
         self.assertEqual(fresh(item).quantity, 1)
+        self.assertEqual(share(item, filling.batch), 0)
 
     def test_a_note_is_required(self) -> None:
         item = self.item(quantity=5)
@@ -313,7 +324,7 @@ class ReversalTests(InventoryCase):
     def test_a_historical_note_has_no_movement_to_reverse(self) -> None:
         item = self.item(quantity=5)
         note = book_note(self.kl, date=date(2025, 3, 12), historical=True,
-                         lines=[(item, 2)])
+                         lines=[historical_line(item, 2)])
         self.assertEqual(item.movements.count(), 1)
         reverse_historical(self.kl, note, note="falsch")
         self.assertEqual(item.movements.count(), 1)

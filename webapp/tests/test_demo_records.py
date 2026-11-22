@@ -446,6 +446,7 @@ class InventoryTests(SeededCase):
             with self.subTest(item=str(item)):
                 self.assertEqual(first.kind, Movement.Kind.OPENING)
                 self.assertGreaterEqual(first.date, O)
+                self.assertIsNone(first.batch)
             opened_on_o += first.date == O
         self.assertGreater(opened_on_o, 0)
 
@@ -573,10 +574,11 @@ class InventoryTests(SeededCase):
 
     def test_batches_made_without_a_step(self) -> None:
         """Requirement: Demo inventory (made batches recorded without a
-        step, each with its number, the date it was made and a stored
-        vessel with a location)."""
+        step, some each with its number, the date it was made and a
+        stored vessel with a location)."""
         from inventory.models import Batch
-        loose = Batch.objects.filter(source="made", task_step=None)
+        loose = Batch.objects.filter(source="made", task_step=None,
+                                     vessels__isnull=False).distinct()
         self.assertTrue(loose.exists())
         for batch in loose:
             with self.subTest(batch=str(batch)):
@@ -585,6 +587,132 @@ class InventoryTests(SeededCase):
                 self.assertTrue(batch.vessels.filter(
                     flask=False).exclude(location="").exists())
                 self.assertFalse(batch.vessels.filter(flask=True).exists())
+
+    def test_batches_recorded_by_number_alone(self) -> None:
+        """Requirement: Demo inventory (made batches recorded without a
+        step, others with their number alone and no vessel, among them
+        one of every substance with delivered items that no task
+        makes)."""
+        from inventory.models import Batch, DeliveryLine
+        from tasks.models import Task
+        bare = Batch.objects.filter(source="made", task_step=None,
+                                    vessels=None)
+        self.assertTrue(bare.exists())
+        for batch in bare:
+            with self.subTest(batch=str(batch)):
+                self.assertTrue(batch.number)
+                self.assertIsNone(batch.date)
+                self.assertFalse(batch.vessels.exists())
+        delivered = {line.item.article.substance for line in
+                     DeliveryLine.objects.select_related(
+                         "item__article__substance")}
+        unmade = [substance for substance in delivered
+                  if not Task.objects.filter(substance=substance).exists()
+                  and not Batch.objects.filter(
+                      substance=substance, task_step__isnull=False
+                  ).exists()]
+        for substance in unmade:
+            with self.subTest(substance=substance.key):
+                self.assertTrue(bare.filter(substance=substance).exists())
+
+    def test_every_delivery_line_names_a_batch_of_its_substance(
+            self) -> None:
+        """Requirement: Demo inventory (every delivery line naming a
+        batch of its item's substance)."""
+        from inventory.models import DeliveryLine
+        lines = DeliveryLine.objects.select_related(
+            "item__article", "batch", "delivery_note")
+        self.assertTrue(lines.exists())
+        self.assertTrue(lines.filter(delivery_note__historical=True
+                                     ).exists())
+        for line in lines:
+            with self.subTest(line=line.pk):
+                self.assertIsNotNone(line.batch)
+                self.assertEqual(line.batch.substance_id,
+                                 line.item.article_id)
+
+    def test_every_delivery_names_the_batch_of_its_line(self) -> None:
+        from inventory.models import DeliveryLine, Movement
+        deliveries = Movement.objects.filter(kind=Movement.Kind.DELIVERY)
+        self.assertTrue(deliveries.exists())
+        for movement in deliveries:
+            with self.subTest(movement=movement.pk):
+                self.assertIsNotNone(movement.batch)
+                line = DeliveryLine.objects.get(
+                    delivery_note=movement.delivery_note,
+                    item=movement.item, batch=movement.batch)
+                self.assertEqual(line.count, movement.count)
+
+    def test_the_quantity_of_every_item_is_the_sum_of_its_shares(
+            self) -> None:
+        """Requirement: Demo inventory (containers by batch)."""
+        from inventory.models import Item
+        for item in Item.objects.all():
+            with self.subTest(item=str(item)):
+                held = list(item.stocks.all())
+                self.assertEqual(sum(s.quantity for s in held),
+                                 item.quantity)
+                self.assertEqual(
+                    sum(s.batch_id is None for s in held), 1)
+                for stock in held:
+                    if stock.batch_id is not None:
+                        self.assertEqual(stock.batch.substance_id,
+                                         item.article_id)
+
+    def test_the_demo_holds_assignments(self) -> None:
+        """Requirement: Demo inventory (current delivery notes with
+        lines delivering containers of unknown batch, so that the data
+        set holds assignments)."""
+        from inventory.models import Movement
+        assignments = Movement.objects.filter(
+            kind=Movement.Kind.ASSIGNMENT)
+        self.assertTrue(assignments.exists())
+        for assignment in assignments:
+            with self.subTest(assignment=assignment.pk):
+                self.assertIsNotNone(assignment.batch)
+                self.assertGreater(assignment.count, 0)
+                note = assignment.delivery_note
+                self.assertIsNotNone(note)
+                self.assertFalse(note.historical)
+                self.assertEqual(assignment.date, note.date)
+                before = assignment.item.movements.filter(
+                    pk__lt=assignment.pk).order_by("-pk").first()
+                self.assertEqual(assignment.quantity_after,
+                                 before.quantity_after)
+                self.assertTrue(assignment.item.movements.filter(
+                    kind=Movement.Kind.DELIVERY, delivery_note=note,
+                    batch=assignment.batch, pk__gt=assignment.pk
+                ).exists())
+
+    def test_containers_by_batch(self) -> None:
+        """Scenario: Containers by batch."""
+        from inventory.models import Item, Movement
+        two, unknown = [], []
+        for item in Item.objects.all():
+            held = list(item.stocks.filter(quantity__gt=0))
+            if len([s for s in held if s.batch_id is not None]) >= 2:
+                two.append(item)
+            if any(s.batch_id is None for s in held):
+                unknown.append(item)
+        self.assertTrue(two, "no item holds containers of two batches")
+        self.assertTrue(unknown, "no item holds containers of unknown "
+                        "batch")
+        item = two[0]
+        hrefs = [a.get("href") for a in self.get(
+            f"/lab/inventory/items/{item.pk}/").find_all("a")]
+        for stock in item.stocks.filter(quantity__gt=0,
+                                        batch__isnull=False):
+            with self.subTest(batch=stock.batch_id):
+                self.assertIn(f"/lab/inventory/batches/{stock.batch_id}/",
+                              hrefs)
+        self.assertIn("unbekannt", self.get(
+            f"/lab/inventory/items/{unknown[0].pk}/").text())
+        assigned = Movement.objects.filter(
+            kind=Movement.Kind.ASSIGNMENT).first()
+        self.assertIsNotNone(assigned)
+        rows = self.get(f"/lab/inventory/items/{assigned.item_id}/"
+                        ).find_all("tr")
+        self.assertTrue(any("Zuordnung" in row.text() for row in rows))
 
     def test_batches_made_by_a_step_name_its_entry(self) -> None:
         """Requirement: Demo inventory (made batches recorded from task

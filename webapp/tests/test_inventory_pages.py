@@ -11,7 +11,8 @@ from inventory.bookings import (book_note, correct, correct_vessel, reverse,
 from . import make_batch, make_task, make_vessel, page, past
 from .collection_support import accept
 from .inventory_support import (MICRO, InventoryCase, batch_url, cells,
-                                has_amount, has_number, item_url, ledger,
+                                delivery_line, has_amount, has_number,
+                                historical_line, item_url, ledger,
                                 movement_url, note_url, num, vessel_ledger,
                                 vessel_url)
 from .journal_support import entry_of, make_notebook
@@ -517,8 +518,10 @@ class BatchPageTests(PageCase):
                          if a.get("href") == vessel_url(flask)
                          ).closest("tr")
         self.assertIn("aufgebraucht", flask_row.text())
-        filling = next(a for a in root.find_all("a")
-                       if a.get("href") == item_url(item)).closest("tr")
+        rows = [a.closest("tr") for a in root.find_all("a")
+                if a.get("href") == item_url(item)]
+        filling = next(row for row in rows if row is not None
+                       and f"#{flask.pk}" in row.text())
         self.assertTrue(has_number(filling.text(), "5"), filling.text())
         self.assertIn(f"#{flask.pk}", filling.text())
 
@@ -535,7 +538,8 @@ class BatchPageTests(PageCase):
         root = self.show(batch_url(vessel.batch))
         rows = [a.closest("tr") for a in root.find("main").find_all("a")
                 if a.get("href") in (item_url(first), item_url(second))]
-        rows = [r for r in rows if r is not None]
+        rows = [r for r in rows
+                if r is not None and f"#{vessel.pk}" in r.text()]
         hrefs = [[a.get("href") for a in r.find_all("a")
                   if a.get("href") in (item_url(first), item_url(second))][0]
                  for r in rows]
@@ -619,7 +623,8 @@ class NotePageTests(PageCase):
                            quantity=9)
         note = book_note(self.kl, date=date(2026, 10, 15), number="LS-9",
                          recipient="Produktion", note="Eilig",
-                         lines=[(first, 2), (second, 3)])
+                         lines=[delivery_line(first, 2),
+                                delivery_line(second, 3)])
         root = self.show(note_url(note))
         self.assertIn("LS-9", root.find("h1").text())
         text = root.text()
@@ -641,7 +646,7 @@ class NotePageTests(PageCase):
     def test_a_historical_note(self) -> None:
         item = self.item(quantity=9)
         note = book_note(self.kl, date=date(2025, 3, 12), historical=True,
-                         number="ALT-1", lines=[(item, 4)])
+                         number="ALT-1", lines=[historical_line(item, 4)])
         text = self.show(note_url(note)).text()
         self.assertIn("nachgetragen", text)
         self.assertIn("12.03.2025", text)

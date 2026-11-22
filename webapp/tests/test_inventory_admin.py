@@ -10,7 +10,8 @@ from inventory.models import (Article, Batch, DeliveryNote, Item, Movement,
 
 from . import (make_article, make_batch, make_item, make_substance,
                make_task, make_user, make_vessel, page, past)
-from .inventory_support import InventoryCase
+from .inventory_support import (InventoryCase, count_after, delivery_line,
+                                historical_line, set_shares, shares)
 
 ADMIN = "/lab/admin/inventory/"
 ARTICLES = ADMIN + "article/"
@@ -183,7 +184,7 @@ class HistoryTests(AdminCase):
     def test_the_change_history_of_a_note(self) -> None:
         item = self.stocked()
         note = book_note(self.worker, date=date(2026, 11, 4),
-                         lines=[(item, 1)])
+                         lines=[delivery_line(item, 1)])
         done = self.client.get(f"{NOTES}{note.pk}/history/")
         self.assertEqual(done.status_code, 200)
         self.assertIn("lab-worker-xy", done.content.decode("utf-8"))
@@ -332,7 +333,7 @@ class DeletionTests(AdminCase):
     def test_an_item_with_a_line_of_a_historical_note_stays(self) -> None:
         item = self.stocked()
         book_note(self.worker, date=date(2025, 3, 12), historical=True,
-                  lines=[(item, 1)])
+                  lines=[historical_line(item, 1)])
         self.delete(ITEMS, item)
         self.assertTrue(Item.objects.filter(pk=item.pk).exists())
 
@@ -407,7 +408,8 @@ class DeletionTests(AdminCase):
         item = self.stocked()
         note = self.deliver(item, 1)
         historical = book_note(self.worker, date=date(2025, 3, 12),
-                               historical=True, lines=[(item, 1)])
+                               historical=True,
+                               lines=[historical_line(item, 1)])
         for each in (note, historical):
             with self.subTest(historical=each.historical):
                 self.assertNotEqual(self.delete(NOTES, each), 302)
@@ -439,6 +441,105 @@ class DeletionTests(AdminCase):
             VesselMovement.objects.filter(pk=movement.pk).exists())
 
 
+class ShareAdminTests(AdminCase):
+    """Requirement: Inventory in the admin (an item's shares, and the
+    deletion of a batch that a share, a line or a movement names)."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        from inventory.models import BatchStock
+        self.stocks = BatchStock
+        self.a = make_batch(self.worker, "CH-0012", number="KL0412")
+
+    def with_opening_in(self, batch: Batch) -> Item:
+        """An item whose one movement is an opening count of 2 in
+        BATCH."""
+        from inventory.bookings import create_item
+        from registry.models import Substance
+        return create_item(
+            self.worker, substance=Substance.objects.get(
+                key="cinnamic-acid"), article_number=None, quantity=2,
+            size=Decimal("77"), unit="mg", batch=batch)
+
+    def test_the_shares_of_an_item_are_shown(self) -> None:
+        item = self.stocked()
+        set_shares(item, (self.a, 3), (None, 2))
+        text = page(self.client.get(f"{ITEMS}{item.pk}/change/")).text()
+        self.assertIn("KL0412", text)
+        self.assertIn("unbekannt", text)
+        self.assertEqual(count_after(text, "KL0412", ["unbekannt"]), 3)
+        self.assertEqual(count_after(text, "unbekannt", ["KL0412"]), 2)
+
+    def test_the_shares_of_an_item_are_read_only(self) -> None:
+        item = self.stocked()
+        set_shares(item, (self.a, 3), (None, 2))
+        names = editable(self.client.get(f"{ITEMS}{item.pk}/change/"))
+        self.assertEqual({n for n in names if n == "quantity"
+                          or n.startswith(("stocks", "batch"))}, set())
+        self.client.post(f"{ITEMS}{item.pk}/change/", {
+            "note": "Neu", "stocks-TOTAL_FORMS": "1",
+            "stocks-INITIAL_FORMS": "1", "stocks-0-quantity": "99",
+            "stocks-0-id": str(self.stocks.objects.get(
+                item=item, batch=self.a).pk)})
+        self.assertEqual(shares(item), {self.a.pk: 3, None: 2})
+
+    def test_a_batch_with_a_share_stays(self) -> None:
+        item = self.stocked()
+        self.stocks.objects.create(item=item, batch=self.a, quantity=0)
+        self.delete(BATCHES, self.a)
+        self.assertTrue(Batch.objects.filter(pk=self.a.pk).exists())
+
+    def test_a_batch_a_line_names_stays(self) -> None:
+        item = self.stocked()
+        book_note(self.worker, date=date(2025, 3, 12), historical=True,
+                  lines=[(item, self.a, 1)])
+        self.assertFalse(self.stocks.objects.filter(batch=self.a).exists())
+        self.delete(BATCHES, self.a)
+        self.assertTrue(Batch.objects.filter(pk=self.a.pk).exists())
+
+    def test_a_batch_a_movement_names_stays(self) -> None:
+        self.with_opening_in(self.a)
+        self.stocks.objects.filter(batch=self.a).delete()
+        self.delete(BATCHES, self.a)
+        self.assertTrue(Batch.objects.filter(pk=self.a.pk).exists())
+
+    def test_the_bulk_action_does_not_delete_a_batch_with_a_share(
+            self) -> None:
+        item = self.stocked()
+        self.stocks.objects.create(item=item, batch=self.a, quantity=0)
+        spare = make_batch(self.worker, "CH-0012", number="KL0413")
+        self.client.post(BATCHES, {
+            "action": "delete_selected",
+            "_selected_action": [self.a.pk, spare.pk], "post": "yes"})
+        self.assertTrue(Batch.objects.filter(pk=self.a.pk).exists())
+
+    def test_a_batch_given_a_share_after_the_check_is_not_deleted(
+            self) -> None:
+        from django.contrib import admin
+        from django.core.exceptions import PermissionDenied
+        from django.test import RequestFactory
+        request = RequestFactory().post("/")
+        request.user = self.staff
+        item = self.stocked()
+        self.stocks.objects.create(item=item, batch=self.a, quantity=0)
+        with self.assertRaises(PermissionDenied):
+            admin.site._registry[Batch].delete_model(request, self.a)
+        self.assertTrue(Batch.objects.filter(pk=self.a.pk).exists())
+
+    def test_an_item_with_only_its_opening_is_deleted_with_its_shares(
+            self) -> None:
+        item = self.with_opening_in(self.a)
+        self.assertTrue(self.stocks.objects.filter(item=item).exists())
+        self.assertEqual(self.delete(ITEMS, item), 302)
+        self.assertFalse(Item.objects.filter(pk=item.pk).exists())
+        self.assertFalse(self.stocks.objects.filter(item_id=item.pk).exists())
+        self.assertTrue(Batch.objects.filter(pk=self.a.pk).exists())
+
+    def test_a_batch_without_anything_is_still_deleted(self) -> None:
+        self.assertEqual(self.delete(BATCHES, self.a), 302)
+        self.assertFalse(Batch.objects.filter(pk=self.a.pk).exists())
+
+
 class HistoryRestoreTests(AdminCase):
     """Old versions are shown, never restored."""
 
@@ -446,7 +547,7 @@ class HistoryRestoreTests(AdminCase):
         from inventory.bookings import reverse_historical
         item = self.stocked()
         note = book_note(self.worker, date=date(2025, 3, 12),
-                         historical=True, lines=[(item, 4)])
+                         historical=True, lines=[historical_line(item, 4)])
         reverse_historical(self.worker, note, note="falsch")
         first = note.history.order_by("history_id").first()
         url = f"{NOTES}{note.pk}/history/{first.history_id}/"

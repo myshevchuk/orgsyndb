@@ -8,8 +8,9 @@ from inventory.bookings import (Refused, book_note, enter_consumption,
 from inventory.models import (DeliveryLine, DeliveryNote, EnteredConsumption,
                               Movement)
 
-from .inventory_support import (InventoryCase, TODAY, fresh, newest_movement,
-                                snapshot)
+from .inventory_support import (InventoryCase, TODAY, batch_for,
+                                delivery_line, fresh, historical_line,
+                                newest_movement, snapshot)
 
 
 class CurrentNoteTests(InventoryCase):
@@ -19,7 +20,8 @@ class CurrentNoteTests(InventoryCase):
         first = self.item("CH-0001", quantity=5)
         second = self.item("CH-0002", quantity=3)
         note = book_note(self.kl, date=TODAY,
-                         lines=[(first, 2), (second, 3)])
+                         lines=[delivery_line(first, 2),
+                                delivery_line(second, 3)])
         self.assertEqual((fresh(first).quantity, fresh(second).quantity),
                          (3, 0))
         self.assertEqual(
@@ -29,14 +31,16 @@ class CurrentNoteTests(InventoryCase):
             movement = item.movements.get(kind="delivery")
             self.assertEqual((movement.delivery_note, movement.count),
                              (note, count))
+            self.assertEqual(movement.batch, note.lines.get(item=item).batch)
 
     def test_one_line_too_many_refuses_the_note(self) -> None:
         """Scenario: One line too many refuses the note."""
         first = self.item("CH-0001", quantity=5)
         second = self.item("CH-0002", quantity=3)
+        lines = [delivery_line(first, 2), delivery_line(second, 4)]
         before = snapshot()
         with self.assertRaises(Refused):
-            book_note(self.kl, date=TODAY, lines=[(first, 2), (second, 4)])
+            book_note(self.kl, date=TODAY, lines=lines)
         self.assertEqual(snapshot(), before)
         self.assertEqual(DeliveryNote.objects.count(), 0)
         self.assertEqual((fresh(first).quantity, fresh(second).quantity),
@@ -47,9 +51,10 @@ class CurrentNoteTests(InventoryCase):
         second = self.item("CH-0002", quantity=5)
         stale = type(second).objects.get(pk=second.pk)
         self.deliver(second, 4)
+        lines = [delivery_line(first, 2), delivery_line(stale, 4)]
         before = snapshot()
         with self.assertRaises(Refused):
-            book_note(self.kl, date=TODAY, lines=[(first, 2), (stale, 4)])
+            book_note(self.kl, date=TODAY, lines=lines)
         self.assertEqual(snapshot(), before)
 
     def test_a_note_needs_a_line(self) -> None:
@@ -60,26 +65,29 @@ class CurrentNoteTests(InventoryCase):
 
     def test_no_item_twice_in_one_note(self) -> None:
         item = self.item(quantity=9)
+        lines = [delivery_line(item, 1), delivery_line(item, 2)]
         before = snapshot()
         with self.assertRaises(Refused):
-            book_note(self.kl, date=TODAY, lines=[(item, 1), (item, 2)])
+            book_note(self.kl, date=TODAY, lines=lines)
         self.assertEqual(snapshot(), before)
 
     def test_a_line_needs_a_count_above_zero(self) -> None:
         item = self.item(quantity=9)
         other = self.item("CH-0002", quantity=9)
+        good, batch = delivery_line(other, 1), batch_for(item)
         before = snapshot()
         for count in (0, -1):
             with self.subTest(count=count), self.assertRaises(Refused):
                 book_note(self.kl, date=TODAY,
-                          lines=[(other, 1), (item, count)])
+                          lines=[good, delivery_line(item, count, batch)])
         self.assertEqual(snapshot(), before)
 
     def test_a_date_after_today_is_refused(self) -> None:
         item = self.item()
+        lines = [delivery_line(item, 1)]
         before = snapshot()
         with self.assertRaises(Refused):
-            book_note(self.kl, date=date(2026, 11, 5), lines=[(item, 1)])
+            book_note(self.kl, date=date(2026, 11, 5), lines=lines)
         self.assertEqual(snapshot(), before)
 
     def test_the_date_may_be_today(self) -> None:
@@ -117,14 +125,14 @@ class NumberTests(InventoryCase):
         self.deliver(item, 1, number="LS-1")
         with self.assertRaises(Refused):
             book_note(self.kl, date=date(2025, 3, 12), number="LS-1",
-                      historical=True, lines=[(item, 1)])
+                      historical=True, lines=[historical_line(item, 1)])
 
 
 class HistoricalNoteTests(InventoryCase):
 
     def historical(self, item, count, day=date(2025, 3, 12), **extra):
         return book_note(self.kl, date=day, historical=True,
-                         lines=[(item, count)], **extra)
+                         lines=[historical_line(item, count)], **extra)
 
     def test_historical_note(self) -> None:
         """Scenario: Historical note."""
@@ -147,6 +155,7 @@ class HistoricalNoteTests(InventoryCase):
         """Scenario: Historical note in a quarter with an entered value."""
         item = self.item(quantity=5)
         self.enter(item, 2025, 1, 6)
+        batch_for(item)
         before = snapshot()
         with self.assertRaises(Refused):
             self.historical(item, 4)
@@ -170,10 +179,11 @@ class HistoricalNoteTests(InventoryCase):
         first = self.item("CH-0001")
         second = self.item("CH-0002")
         self.enter(second, 2025, 1, 6)
+        lines = [historical_line(first, 1), historical_line(second, 1)]
         before = snapshot()
         with self.assertRaises(Refused):
             book_note(self.kl, date=date(2025, 3, 12), historical=True,
-                      lines=[(first, 1), (second, 1)])
+                      lines=lines)
         self.assertEqual(snapshot(), before)
 
     def test_an_entered_value_of_another_item_does_not_matter(self) -> None:
@@ -234,7 +244,7 @@ class HistoricalReversalTests(InventoryCase):
     def note(self, item=None):
         item = item or self.item(quantity=5)
         return book_note(self.kl, date=date(2025, 3, 12), historical=True,
-                         lines=[(item, 4)])
+                         lines=[historical_line(item, 4)])
 
     def test_a_historical_note_is_marked_reversed(self) -> None:
         note = self.note()
@@ -279,7 +289,9 @@ class HistoricalReversalTests(InventoryCase):
     def test_a_current_note_is_reversed_line_by_line(self) -> None:
         first = self.item("CH-0001", quantity=5)
         second = self.item("CH-0002", quantity=5)
-        note = book_note(self.kl, date=TODAY, lines=[(first, 2), (second, 3)])
+        note = book_note(self.kl, date=TODAY,
+                         lines=[delivery_line(first, 2),
+                                delivery_line(second, 3)])
         reverse(self.kl, first.movements.get(kind="delivery"), note="x")
         self.assertFalse(DeliveryNote.objects.get(pk=note.pk).reversed)
         self.assertEqual((fresh(first).quantity, fresh(second).quantity),

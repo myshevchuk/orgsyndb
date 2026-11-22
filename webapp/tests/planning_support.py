@@ -11,7 +11,7 @@ from datetime import date, timedelta
 from typing import Any
 
 from . import Element, make_task, parse
-from .inventory_support import TODAY, InventoryCase
+from .inventory_support import TODAY, InventoryCase, historical_line
 
 PLAN = "/lab/planning/"
 VESSEL_LIST = "/lab/inventory/vessels/"
@@ -234,7 +234,7 @@ class PlanningCase(InventoryCase):
         note, which leaves its quantity as it is."""
         from inventory.bookings import book_note
         for day, count in orders:
-            book_note(self.kl, date=day, lines=[(item, count)],
+            book_note(self.kl, date=day, lines=[historical_line(item, count)],
                       historical=True)
 
     def parameters(self, **over: Any) -> Any:

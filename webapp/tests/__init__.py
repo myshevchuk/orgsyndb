@@ -302,7 +302,8 @@ def make_item(user: Any, article: str | None = "CH-0001",
               compartment: str = "", box: str = "",
               status: str | None = None) -> Any:
     """An item of the inventory ``end-products``, booked by ``user``,
-    that entered stock on ``stocked_on``.
+    that entered stock on ``stocked_on``, with ``quantity`` containers
+    of unknown batch.
 
     The item is a size of the article of ``substance``; without one, of
     the substance ``substance_for(article)``, named ``name`` (``Probe``
@@ -313,7 +314,7 @@ def make_item(user: Any, article: str | None = "CH-0001",
     """
     from decimal import Decimal
     from django.utils import timezone
-    from inventory.models import Item, Movement
+    from inventory.models import BatchStock, Item, Movement
     fields = {**({"name_de": name_de} if name_de else {}),
               **({"mw": mw} if mw is not None else {})}
     if substance is None:
@@ -332,6 +333,8 @@ def make_item(user: Any, article: str | None = "CH-0001",
                 **({"status": status} if status else {}))
     item._history_user = user
     item.save()
+    BatchStock.objects.update_or_create(
+        item=item, batch=None, defaults={"quantity": quantity})
     Movement.objects.create(
         item=item, kind=Movement.Kind.OPENING, count=quantity,
         quantity_after=quantity, date=moved, booked_at=timezone.now(),
