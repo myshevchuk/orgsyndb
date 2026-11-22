@@ -103,12 +103,23 @@
   // parameter keeps its text and its place. It is "?" and the
   // parameters, or "" when none is left. Repeated NAME parameters become
   // one, at the place of the first.
+  // The decoded name of the query pair PAIR, or its raw name when it
+  // does not decode.
+  const paramName = (pair) => {
+    const raw = pair.split("=", 1)[0];
+    try {
+      return decodeURIComponent(raw.replace(/\+/g, " "));
+    } catch {
+      return raw;
+    }
+  };
+
   const paramSearch = (search, name, value) => {
     const kept = [];
     let placed = value === null || value === undefined;
     for (const pair of search.replace(/^\?/, "").split("&")) {
       if (pair === "") continue;
-      if (pair.split("=", 1)[0] !== name) {
+      if (paramName(pair) !== name) {
         kept.push(pair);
       } else if (!placed) {
         kept.push(`${name}=${encodeURIComponent(value)}`);
@@ -788,6 +799,7 @@
     const planCount = planGrid.querySelector("[data-planning-count]");
     const planFilterGroup = planGrid.querySelector(".planning-filters");
     const planNoMatch = planGrid.querySelector(".planning-no-match");
+    const planStatus = planGrid.querySelector(".planning-status");
 
     const planRows = () => [...planBody.querySelectorAll("tr[data-article]")];
     const planBlocks = () => [
@@ -890,6 +902,11 @@
         }
         if (planCount) planCount.textContent = String(shownCount);
         if (planNoMatch) planNoMatch.hidden = shownCount > 0;
+        if (planStatus) {
+          planStatus.textContent = shownCount > 0
+            ? planStatus.dataset.text.replace("{n}", String(shownCount))
+            : (planNoMatch ? planNoMatch.textContent : "");
+        }
         if (selectedHidden && firstShown) {
           selectPlanRow(firstShown);
         }

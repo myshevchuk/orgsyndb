@@ -164,7 +164,9 @@ class PlanningLayoutTests(SimpleTestCase):
 
     def test_the_planning_grid_is_a_grid_on_the_screen_only(self) -> None:
         text = CSS.read_text(encoding="utf-8")
-        for names, declarations in rules(text):
+        for names, declarations in [*rules(text),
+                                    *(rule for block in print_blocks(text)
+                                      for rule in rules(block))]:
             if ".planning-grid" in names:
                 with self.subTest(selectors=names):
                     self.assertNotEqual(declarations.get("display"), "grid")

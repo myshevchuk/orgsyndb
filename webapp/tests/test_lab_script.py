@@ -163,7 +163,8 @@ class ParamSearchTests(TestCase):
     parameter NAME set to VALUE, or removed when VALUE is null, every
     other parameter kept in its order, as ``?`` and the parameters, or
     as ``""`` when none is left. Repeated occurrences of NAME become
-    one, at the place of the first."""
+    one, at the place of the first; a name is compared decoded, so an
+    encoded spelling of NAME is the same parameter."""
 
     def search(self, *cases: tuple) -> list[str]:
         done = subprocess.run(
@@ -205,6 +206,13 @@ class ParamSearchTests(TestCase):
             [("selected", "5")],
             [("q", "zimt"), ("selected", "5"), ("stock", "low")],
             [("selected", "5")]])
+
+    def test_an_encoded_name_is_the_same_parameter(self) -> None:
+        found = self.pairs(
+            ("?selected=NV-1&%73elected=NV-2", "selected", "NV-3"),
+            ("?q=zimt&sel%65cted=NV-2", "selected", "NV-3"))
+        self.assertEqual(found, [[("selected", "NV-3")],
+                                 [("q", "zimt"), ("selected", "NV-3")]])
 
     def test_removing_a_parameter(self) -> None:
         found = self.search(("?selected=3", "selected", None),
