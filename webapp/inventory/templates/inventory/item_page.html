@@ -32,11 +32,11 @@
 <tbody>
 {% for row in ledger %}{% with movement=row.movement %}<tr>
 <td class="nowrap" data-sort="{{ movement.date|date:'Y-m-d' }}">{{ movement.date }}</td>
-<td class="nowrap" data-sort="{{ movement.booked_at|date:'Y-m-d\TH:i' }}">{{ movement.booked_at }}</td>
-<td>{{ movement.get_kind_display }}{% if row.reversed %} <span class="badge badge--reversed">{% translate "reversed" %}</span>{% endif %}</td>
+<td data-sort="{{ movement.booked_at|date:'Y-m-d\TH:i' }}">{{ movement.booked_at }}</td>
+<td data-sort="{{ movement.get_kind_display }}">{{ movement.get_kind_display }}{% if row.reversed %} <span class="badge badge--reversed">{% translate "reversed" %}</span>{% endif %}</td>
 <td class="num" data-sort="{{ movement.count|unlocalize }}">{{ movement.count }}</td>
 <td class="num" data-sort="{{ movement.quantity_after|unlocalize }}">{{ movement.quantity_after }}</td>
-<td class="nowrap">{% if movement.batch %}<a href="/lab/inventory/batches/{{ movement.batch.pk }}/">{{ movement.batch }}</a>{% else %}{% translate "unknown" %}{% endif %}</td>
+<td>{% if movement.batch %}<a href="/lab/inventory/batches/{{ movement.batch.pk }}/">{{ movement.batch }}</a>{% else %}{% translate "unknown" %}{% endif %}</td>
 <td>{% person movement.user %}</td>
 <td>{% if movement.delivery_note %}<a href="/lab/inventory/deliveries/{{ movement.delivery_note.pk }}/">{{ movement.delivery_note }}</a> {{ movement.delivery_note.recipient }}{% endif %}</td>
 <td>{% if movement.delivery_note.note %}{{ movement.delivery_note.note }} {% endif %}{{ movement.note }}</td>

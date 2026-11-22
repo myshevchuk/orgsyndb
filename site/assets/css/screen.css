@@ -656,6 +656,7 @@ details.widget:not([open]) > summary.widget__head { border-bottom: 0; }
   border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
   text-align: left;
   vertical-align: top;
+  overflow-wrap: anywhere;
 }
 .widget-table tbody tr:last-child td,
 .widget-table tbody tr:last-child th { border-bottom: 0; }

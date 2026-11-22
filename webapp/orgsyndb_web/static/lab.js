@@ -581,6 +581,18 @@
         });
       }
     }
+    const boxScroll = new Map();
+    for (const box of document.querySelectorAll(".table-scroll")) {
+      const table = box.id ? null : box.querySelector("table[id]");
+      const id = box.id || (table && table.id);
+      if (id && (box.scrollTop || box.scrollLeft)) {
+        boxScroll.set(id, {
+          byBox: Boolean(box.id),
+          top: box.scrollTop,
+          left: box.scrollLeft,
+        });
+      }
+    }
     for (const node of refreshParts(fresh)) {
       htmx.process(node);
       enhanceSortable(node);
@@ -593,6 +605,14 @@
       const table = document.getElementById(id);
       if (table && table.matches("table[data-sortable]")) {
         sortTable(table, state.colIndex, state.descending);
+      }
+    }
+    for (const [id, pos] of boxScroll) {
+      const el = document.getElementById(id);
+      const box = pos.byBox ? el : el && el.closest(".table-scroll");
+      if (box) {
+        box.scrollTop = pos.top;
+        box.scrollLeft = pos.left;
       }
     }
     restoreList(ticked);

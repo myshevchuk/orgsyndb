@@ -512,7 +512,6 @@ main:has(#heat-switch:not(:checked)) .item-table td[class*="heat-"] { background
     font: inherit;
   }
   th > button.sort-header::after { content: none; }
-  .item-grid { display: block; }
 }
 
 /* On screen, the item list's box scrolls both ways, at most the window's
@@ -678,23 +677,40 @@ body.lab-framed main { padding: 0; }
 body.lab-framed .lab-demo { margin-bottom: var(--space-2); }
 
 /* Item page widget grid and widget-local adjustments. */
-.item-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(19rem, 0.95fr);
-  gap: 0.85rem;
-  align-items: start;
-}
-.item-col {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-  min-width: 0;
-}
-@media (max-width: 60rem) {
-  .item-grid { grid-template-columns: minmax(0, 1fr); }
-}
 @media screen {
+  .item-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 18.5rem;
+    gap: 0.85rem;
+    align-items: start;
+  }
+  .item-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    min-width: 0;
+  }
+  @media (max-width: 60rem) {
+    .item-grid { grid-template-columns: minmax(0, 1fr); }
+  }
   .table-scroll--tall { max-height: 24rem; overflow: auto; }
+}
+#movements thead th {
+  white-space: normal;
+  padding: 0.25rem 0.25rem;
+}
+#movements td {
+  padding: 0.25rem 0.25rem;
+}
+#movements td:nth-child(3) {
+  overflow-wrap: normal;
+}
+#movements th > button.sort-header {
+  gap: 0.15rem;
+  text-align: left;
+}
+#movements th.num > button.sort-header {
+  text-align: right;
 }
 .figures-strip .stock {
   display: inline-flex;
