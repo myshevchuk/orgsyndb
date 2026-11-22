@@ -189,3 +189,13 @@ msgstr "Die Molfile-Datei enthält ein NUL-Zeichen."
 msgctxt "substance"
 msgid "Batches"
 msgstr "Chargen"
+
+msgid "Compound"
+msgstr "Verbindung"
+
+msgid "Article / size"
+msgstr "Artikel / Gebinde"
+
+msgctxt "substance"
+msgid "Task"
+msgstr "Auftrag"
