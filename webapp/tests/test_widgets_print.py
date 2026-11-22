@@ -129,3 +129,30 @@ class SubstanceLayoutTests(SimpleTestCase):
         text = re.sub(r"/\*.*?\*/", "",
                       CSS.read_text(encoding="utf-8"), flags=re.DOTALL)
         self.assertIsNone(re.search(r"main\s*>\s*\.structure", text))
+
+
+class OverviewLayoutTests(SimpleTestCase):
+    """The overview's grid is for the screen, and the rules of the
+    overview's former markup are gone."""
+
+    def test_the_overview_grid_is_a_grid_on_the_screen_only(self) -> None:
+        text = CSS.read_text(encoding="utf-8")
+        for names, declarations in rules(text):
+            if ".overview-grid" in names:
+                with self.subTest(selectors=names):
+                    self.assertNotEqual(declarations.get("display"), "grid")
+        shown = [declarations for block in screen_blocks(text)
+                 for names, declarations in rules(block)
+                 if ".overview-grid" in names]
+        self.assertTrue(any(d.get("display") == "grid" for d in shown),
+                        f"no @media screen rule sets .overview-grid "
+                        f"to display: grid: {shown}")
+
+    def test_no_rule_styles_the_former_overview_markup(self) -> None:
+        text = re.sub(r"/\*.*?\*/", "",
+                      CSS.read_text(encoding="utf-8"), flags=re.DOTALL)
+        for name in (".overview-part", ".overview-stock", ".overview-next",
+                     ".overview-months", ".lab-figures", ".overview-list",
+                     ".deliveries-chart figcaption"):
+            with self.subTest(selector=name):
+                self.assertNotIn(name, text)

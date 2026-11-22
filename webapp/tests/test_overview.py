@@ -1,63 +1,62 @@
 """Tests of the lab's overview at /lab/ and its summary at /lab/summary/
 (lab-overview: Overview page, Summary for the home page; web-app: Paths
-under /lab/, Page shell)."""
+under /lab/, Page shell, Widgets)."""
 
 from datetime import date
 
 from django.test import SimpleTestCase
 
-from . import berlin, make_task, page, shell_scripts, table, ticking
+from . import make_task, page, shell_scripts
 from .collection_support import accept
 from . import navigation_support as ns
 from .inventory_support import historical_line
-from .planning_support import PlanningCase
-
-OVERVIEW = "/lab/"
-SUMMARY = "/lab/summary/"
-SEVENTH = date(2026, 11, 7)
-
-
-def figures(root) -> dict:
-    """The overview's figures, each ``dd`` by the text of its ``dt``;
-    each pair sits in a ``div`` of the ``dl``."""
-    return {pair.find("dt").text(): pair.find("dd")
-            for pair in root.find("dl", "lab-figures").find_all("div")}
-
-
-def section_of(root, heading: str):
-    """The element that holds the ``h2`` HEADING and what follows it."""
-    for h2 in root.find_all("h2"):
-        if h2.text() == heading:
-            return h2.parent
-    raise AssertionError(f"no heading {heading!r}")
-
-
-def entries(root, heading: str) -> list[str]:
-    """The texts of the list under HEADING."""
-    found = section_of(root, heading).find("ol")
-    return [] if found is None else [li.text() for li in found.find_all("li")]
+from .overview_support import (FIGURES, OVERVIEW, SEVENTH, SUMMARY,
+                               WIDGET_TITLES, WIDGET_TITLES_EN,
+                               OverviewCase, figure_values, figures,
+                               hrefs, stock_widget)
+from .widget_support import (tiles, title_of, widget, widget_grid,
+                             widgets)
 
 
 def bars(root) -> tuple[list, list]:
     """The chart's bars of the current months and of the year before."""
-    svg = root.find("svg")
+    svg = widget(root, "Abgaben je Monat", "Deliveries per month").find(
+        "svg")
     current = [r for r in svg.find_all("rect") if "current" in r.classes]
     previous = [r for r in svg.find_all("rect") if "previous" in r.classes]
     return current, previous
 
 
-def title_of(element) -> str:
+def month_labels(root) -> list[str]:
+    """The texts of the chart's month labels: its ``text`` elements
+    that are not value labels."""
+    svg = widget(root, "Abgaben je Monat", "Deliveries per month").find(
+        "svg")
+    return [t.text() for t in svg.find_all("text")
+            if "chart-value" not in t.classes]
+
+
+def value_labels(root) -> list:
+    """The chart's value labels, ``text.chart-value``."""
+    svg = widget(root, "Abgaben je Monat", "Deliveries per month").find(
+        "svg")
+    return svg.find_all("text", cls="chart-value")
+
+
+def title_of_bar(element) -> str:
     return element.find("title").text()
 
 
-class OverviewCase(PlanningCase):
+def rows(root, title: str) -> list[dict]:
+    """The body rows of the table of the widget titled TITLE, each
+    as its cells by column header."""
+    return widget_grid(widget(root, title))[1]
 
-    def get(self, path: str = OVERVIEW, signed_in: bool = False):
-        return super().get(path, signed_in)
 
-    def at_the_seventh(self) -> None:
-        """Let the clock stand at 2026-11-07."""
-        self.enterContext(ticking(berlin(2026, 11, 7, 9)))
+def texts(root, title: str, column: str) -> list[str]:
+    """The text of each cell of COLUMN in the table of the widget
+    titled TITLE."""
+    return [row[column].text() for row in rows(root, title)]
 
 
 class StockBarTests(OverviewCase):
@@ -70,7 +69,9 @@ class StockBarTests(OverviewCase):
         root = self.get()
         sections = root.find_all("section", "lab-overview")
         self.assertEqual(len(sections), 1)
-        links = sections[0].find("div", "stock-bar").find_all("a")
+        found = stock_widget(root)
+        self.assertEqual(len(root.find_all("div", "stock-bar")), 1)
+        links = found.find("div", "stock-bar").find_all("a")
         self.assertEqual([(sorted(c for c in a.classes
                                   if c.startswith("level-")), a.text())
                           for a in links],
@@ -83,22 +84,24 @@ class StockBarTests(OverviewCase):
         self.assertEqual([a.get("style") for a in links],
                          ["flex-grow: 1", "flex-grow: 2"])
         shell_scripts(root)
-        self.assertIn("3 Artikel", sections[0].text())
+        self.assertIn("3 Artikel", found.text())
+        for label in ("niedrig", "ausreichend"):
+            with self.subTest(label=label):
+                self.assertIn(label, found.text())
 
     def test_the_heading_and_the_order(self) -> None:
         self.item("A-1")
         root = self.get()
         self.assertEqual(root.find("h1").text(), "Labor auf einen Blick")
         section = root.find("section", "lab-overview")
-        headings = [h.text() for h in section.find_all("h2")]
-        self.assertEqual(headings, [
-            "Bestand", "Nächste Synthesen", "Abgaben je Monat",
-            "Meistgefragt 2026", "Empfänger 2026", "Letzte Lieferscheine"])
+        self.assertEqual([title_of(w) for w in widgets(section)],
+                         list(WIDGET_TITLES))
         order = [e for e in section.walk()
-                 if e.tag in ("dl", "table", "svg")
-                 or "stock-bar" in e.classes]
-        self.assertTrue("stock-bar" in order[0].classes)
-        self.assertEqual(order[1].tag, "dl")
+                 if "figures-strip" in e.classes or "widget" in e.classes]
+        self.assertIn("figures-strip", order[0].classes)
+        walked = list(root.walk())
+        self.assertLess(walked.index(root.find("h1")),
+                        walked.index(section))
 
 
 class FigureTests(OverviewCase):
@@ -111,61 +114,42 @@ class FigureTests(OverviewCase):
         """Requirement: Overview page (`Open vessels`)."""
         self.vessel("CH-0012", "mg", "50")
         accept(language="en")
-        shown = figures(self.get())
+        shown = figure_values(self.get())
         self.assertIn("Open vessels", shown)
-        self.assertEqual(shown["Open vessels"].text(), "1")
+        self.assertEqual(shown["Open vessels"], "1")
         self.assertNotIn("Open bulk lots", shown)
-
-    def scenario(self) -> None:
-        from inventory.bookings import reverse
-        from inventory.models import Movement
-        zimt = self.item("CH-0012", "(E)-Zimtsäure", quantity=40)
-        aspirin = self.item("CH-0010", "Aspirin", quantity=40)
-        self.deliver(zimt, 3, date(2026, 3, 2), recipient="AK Weber",
-                     number="LS-1")
-        self.deliver(aspirin, 2, date(2026, 10, 1), number="LS-2")
-        self.deliver(zimt, 4, date(2025, 6, 1), number="LS-0")
-        self.deliver(zimt, 5, date(2025, 12, 1), number="LS-00")
-        note = self.deliver(aspirin, 6, date(2026, 10, 2), number="LS-3",
-                            recipient="AK Weber")
-        reverse(self.kl, Movement.objects.get(delivery_note=note,
-                                              kind="delivery"),
-                note="Falsch gebucht")
-        make_task(self.kl, substance="CH-0012", started=SEVENTH)
-        make_task(self.kl, substance="CH-0010")
-        make_task(self.kl, substance="Aspirin")
-        self.vessel("CH-0012", "mg", "50")
 
     def test_figures_and_lists(self) -> None:
         """Scenario: Figures and lists."""
         self.scenario()
         root = self.get()
-        shown = figures(root)
-        self.assertEqual(list(shown), [
-            "Abgegeben 2026", "Fällige Synthesen", "Aufgaben",
-            "Offene Gefäße"])
-        delivered = shown["Abgegeben 2026"].text()
-        self.assertTrue(delivered.startswith("5 "), delivered)
+        shown = figure_values(root)
+        self.assertEqual(list(shown), list(FIGURES))
+        delivered = shown["Abgegeben 2026"]
+        self.assertRegex(delivered, r"^5(?!\d)")
         self.assertIn("Vorjahr bis 07.11.2025: 4", delivered)
-        self.assertIn("1 laufend · 2 geplant", shown["Aufgaben"].text())
-        self.assertEqual(shown["Offene Gefäße"].text(), "1")
-        links = {term: value.find("a").get("href")
-                 for term, value in shown.items() if value.find("a")}
+        self.assertIn("1 laufend · 2 geplant", shown["Aufgaben"])
+        self.assertEqual(shown["Offene Gefäße"], "1")
+        links = {label: hrefs(each)[0]
+                 for label, each in figures(root).items() if hrefs(each)}
         self.assertEqual(links, {
             "Fällige Synthesen": "/lab/planning/",
             "Aufgaben": "/lab/tasks/",
             "Offene Gefäße": "/lab/inventory/vessels/"})
-        requested = entries(root, "Meistgefragt 2026")
-        self.assertEqual(len(requested), 2)
-        self.assertTrue(requested[0].startswith("CH-0012"), requested)
-        self.assertTrue(requested[0].endswith(" 3"), requested[0])
-        self.assertTrue(requested[1].startswith("CH-0010"))
-        self.assertTrue(requested[1].endswith(" 2"), requested[1])
-        self.assertEqual(entries(root, "Empfänger 2026"), ["AK Weber 3"])
-        latest = entries(root, "Letzte Lieferscheine")
-        self.assertEqual([text.split()[0] for text in latest],
+        requested = rows(root, "Meistgefragt 2026")
+        self.assertEqual([r["Artikelnr."].text() for r in requested],
+                         ["CH-0012", "CH-0010"])
+        self.assertEqual([r["Gebinde"].text() for r in requested],
+                         ["3", "2"])
+        self.assertEqual(
+            [(r["Empfänger"].text(), r["Gebinde"].text())
+             for r in rows(root, "Empfänger 2026")], [("AK Weber", "3")])
+        self.assertEqual(texts(root, "Letzte Lieferscheine", "Beleg"),
                          ["LS-3", "LS-2", "LS-1", "LS-00", "LS-0"])
-        self.assertIn("02.10.2026", latest[0])
+        self.assertEqual(
+            texts(root, "Letzte Lieferscheine", "Datum"),
+            ["02.10.2026", "01.10.2026", "02.03.2026", "01.12.2025",
+             "01.06.2025"])
 
     def test_open_vessels_of_any_substance_flasks_among_them(self) -> None:
         """Requirement: Overview page (`Offene Gefäße`, the number of
@@ -176,36 +160,34 @@ class FigureTests(OverviewCase):
         self.vessel("CH-0012", "mg", "20", source="bought", supplier="Sigma")
         self.vessel("acetophenone", "mg", "0")
         self.vessel("CH-0012", "g", "2", flask=True)
-        shown = figures(self.get())
-        self.assertEqual(shown["Offene Gefäße"].text(), "4")
+        self.assertEqual(figure_values(self.get())["Offene Gefäße"], "4")
 
     def test_names_come_from_the_substances_of_the_articles(self) -> None:
         zimt = self.item("CH-0012", quantity=40)
         self.deliver(zimt, 3, date(2026, 3, 2), number="LS-1")
-        requested = entries(self.get(), "Meistgefragt 2026")
+        requested = rows(self.get(), "Meistgefragt 2026")
         self.assertEqual(len(requested), 1)
-        self.assertIn("CH-0012", requested[0])
-        self.assertIn("(E)-Zimtsäure", requested[0])
+        self.assertEqual(requested[0]["Artikelnr."].text(), "CH-0012")
+        self.assertEqual(requested[0]["Substanz"].text(), "(E)-Zimtsäure")
         accept(language="en")
-        requested = entries(self.get(), "Most requested in 2026")
-        self.assertIn("(E)-Cinnamic acid", requested[0])
+        requested = rows(self.get(), "Most requested in 2026")
+        self.assertEqual(requested[0]["Substance"].text(),
+                         "(E)-Cinnamic acid")
 
     def test_the_latest_notes_link_their_pages(self) -> None:
         self.scenario()
         from inventory.models import DeliveryNote
-        links = section_of(self.get(), "Letzte Lieferscheine").find(
-            "ol").find_all("a")
-        self.assertEqual(links[0].get("href"),
+        first = rows(self.get(), "Letzte Lieferscheine")[0]["Beleg"]
+        self.assertEqual(first.find("a").get("href"),
                          f"/lab/inventory/deliveries/"
                          f"{DeliveryNote.objects.get(number='LS-3').pk}/")
 
     def test_a_note_without_number(self) -> None:
         item = self.item("CH-0012", quantity=5)
         note = self.deliver(item, 1, date(2026, 11, 2), number=None)
-        link = section_of(self.get(), "Letzte Lieferscheine").find(
-            "ol").find("a")
-        self.assertEqual(link.text(), "–")
-        self.assertEqual(link.get("href"),
+        cell = rows(self.get(), "Letzte Lieferscheine")[0]["Beleg"]
+        self.assertEqual(cell.find("a").text(), "–")
+        self.assertEqual(cell.find("a").get("href"),
                          f"/lab/inventory/deliveries/{note.pk}/")
 
     def test_historical_notes_count(self) -> None:
@@ -213,8 +195,8 @@ class FigureTests(OverviewCase):
         item = self.item("CH-0012", quantity=5)
         book_note(self.kl, date=date(2026, 2, 1),
                   lines=[historical_line(item, 7)], historical=True)
-        self.assertTrue(figures(self.get())["Abgegeben 2026"].text()
-                        .startswith("7 "))
+        self.assertRegex(figure_values(self.get())["Abgegeben 2026"],
+                         r"^7(?!\d)")
 
     def test_five_entries_at_most(self) -> None:
         for number in range(7):
@@ -222,25 +204,26 @@ class FigureTests(OverviewCase):
             self.deliver(item, number + 1, date(2026, 5, 1),
                          recipient=f"Empfänger {number}")
         root = self.get()
-        for heading in ("Meistgefragt 2026", "Empfänger 2026",
-                        "Letzte Lieferscheine"):
-            with self.subTest(heading=heading):
-                self.assertEqual(len(entries(root, heading)), 5)
-        self.assertTrue(entries(root, "Meistgefragt 2026")[0]
-                        .startswith("A-6"),
-                        entries(root, "Meistgefragt 2026"))
-        self.assertEqual(entries(root, "Empfänger 2026")[0],
-                         "Empfänger 6 7")
+        for title in ("Meistgefragt 2026", "Empfänger 2026",
+                      "Letzte Lieferscheine"):
+            with self.subTest(title=title):
+                self.assertEqual(len(rows(root, title)), 5)
+        self.assertEqual(texts(root, "Meistgefragt 2026", "Artikelnr.")[0],
+                         "A-6")
+        self.assertEqual(texts(root, "Empfänger 2026", "Empfänger")[0],
+                         "Empfänger 6")
+        self.assertEqual(texts(root, "Empfänger 2026", "Gebinde")[0], "7")
 
 
 class LeapDayTests(OverviewCase):
 
     def test_the_last_years_span_ends_on_the_28th(self) -> None:
+        from . import berlin, ticking
         self.enterContext(ticking(berlin(2028, 2, 29, 9)))
         item = self.item("CH-0012", quantity=20)
         self.deliver(item, 2, date(2027, 2, 28))
         self.deliver(item, 3, date(2027, 3, 1))
-        text = figures(self.get())["Abgegeben 2028"].text()
+        text = figure_values(self.get())["Abgegeben 2028"]
         self.assertIn("Vorjahr bis 28.02.2027: 2", text)
 
 
@@ -255,22 +238,32 @@ class ChartTests(OverviewCase):
         item = self.item("CH-0012", quantity=20)
         self.deliver(item, 3, date(2026, 3, 2))
         self.deliver(item, 4, date(2025, 3, 15))
-        current, previous = bars(self.get())
+        root = self.get()
+        current, previous = bars(root)
         self.assertEqual(len(current), 12)
         self.assertEqual(len(previous), 12)
-        self.assertEqual(title_of(current[0]), "Dezember 2025: 0")
-        self.assertEqual(title_of(previous[0]), "Dezember 2024: 0")
-        self.assertEqual(title_of(current[3]), "März 2026: 3")
-        self.assertEqual(title_of(previous[3]), "März 2025: 4")
-        self.assertEqual(title_of(current[-1]), "November 2026: 0")
+        self.assertEqual(title_of_bar(current[0]), "Dezember 2025: 0")
+        self.assertEqual(title_of_bar(previous[0]), "Dezember 2024: 0")
+        self.assertEqual(title_of_bar(current[3]), "März 2026: 3")
+        self.assertEqual(title_of_bar(previous[3]), "März 2025: 4")
+        self.assertEqual(title_of_bar(current[-1]), "November 2026: 0")
         heights = [float(r.get("height")) for r in current]
         self.assertGreater(heights[3], 0)
         self.assertEqual(heights[:3], [0.0] * 3)
+        labels = value_labels(root)
+        self.assertEqual(sorted(t.text() for t in labels), ["3", "4"])
+        svg = root.find("svg")
+        _, _, width, height = (float(n) for n in
+                               svg.get("viewbox").split())
+        for label in labels:
+            with self.subTest(label=label.text()):
+                self.assertGreaterEqual(float(label.get("y")) - 11, 0)
+                self.assertLessEqual(float(label.get("y")), height)
+                self.assertTrue(0 <= float(label.get("x")) <= width)
 
     def test_each_month_is_labelled(self) -> None:
         self.item("A-1")
-        svg = self.get().find("svg")
-        labels = [t.text() for t in svg.find_all("text")]
+        labels = month_labels(self.get())
         self.assertEqual(len(labels), 12)
         self.assertEqual(labels[0], "Dez")
 
@@ -285,41 +278,41 @@ class NextSynthesesTests(OverviewCase):
             self.planned_item(f"NV-{number}", quantity=quantity)
         task = self.running("NV-1", 1)
         root = self.get()
-        header, rows = table(section_of(root, "Nächste Synthesen"))
+        header, found = widget_grid(widget(root, "Nächste Synthesen"))
         self.assertEqual(header, ["Artikelnr.", "Name", "Priorität",
                                   "Spätester Start", "Aufgabe"])
         plan = Plan(date(2026, 11, 4))
         wanted = [found.article_number for found in sorted(
             plan.forecasts(),
             key=lambda found: (found.slack, found.article_number))][:5]
-        self.assertEqual([row["Artikelnr."].text() for row in rows],
+        self.assertEqual([row["Artikelnr."].text() for row in found],
                          wanted)
         self.assertEqual(wanted[0], "NV-1")
-        first = rows[0]["Aufgabe"]
+        first = found[0]["Aufgabe"]
         self.assertEqual(first.find("a").get("href"),
                          f"/lab/tasks/{task.number}/")
         self.assertIn("verspätet", first.text())
-        self.assertEqual(rows[1]["Aufgabe"].text(), "–")
-        due = sum(found.priority in (Priority.HIGH, Priority.MEDIUM)
-                  for found in plan.forecasts())
-        value = figures(root)["Fällige Synthesen"].text()
-        self.assertTrue(value.startswith(f"{due} "), value)
+        self.assertEqual(found[1]["Aufgabe"].text(), "–")
+        due = sum(each.priority in (Priority.HIGH, Priority.MEDIUM)
+                  for each in plan.forecasts())
+        value = figure_values(root)["Fällige Synthesen"]
+        self.assertRegex(value, rf"^{due}(?!\d)")
         self.assertIn("1 verspätet", value)
-        self.assertEqual(section_of(root, "Nächste Synthesen").find(
+        self.assertEqual(widget(root, "Nächste Synthesen").find(
             "a", href="/lab/planning/").text(), "Zur Planung")
 
     def test_the_name_is_the_substances(self) -> None:
         self.planned_item("NV-1", quantity=0, name="Erste")
-        _, rows = table(section_of(self.get(), "Nächste Synthesen"))
-        self.assertEqual(rows[0]["Name"].text(), "Erste")
-        self.assertEqual([a.get("href") for a in rows[0]["Name"].find_all(
+        found = rows(self.get(), "Nächste Synthesen")
+        self.assertEqual(found[0]["Name"].text(), "Erste")
+        self.assertEqual([a.get("href") for a in found[0]["Name"].find_all(
             "a")], ["/lab/registry/substances/nv-1/"])
 
     def test_the_article_links_its_first_item(self) -> None:
         self.planned_item("NV-1", size="5", quantity=0)
         first = self.planned_item("NV-1", size="1", quantity=0)
-        _, rows = table(section_of(self.get(), "Nächste Synthesen"))
-        self.assertEqual(rows[0]["Artikelnr."].find("a").get("href"),
+        found = rows(self.get(), "Nächste Synthesen")
+        self.assertEqual(found[0]["Artikelnr."].find("a").get("href"),
                          f"/lab/inventory/items/{first.pk}/")
 
 
@@ -329,23 +322,22 @@ class EmptyTests(OverviewCase):
         """Scenario: An empty lab."""
         root = self.get()
         self.assertEqual(root.find("div", "stock-bar").find_all("a"), [])
-        for term, value in figures(root).items():
-            with self.subTest(term=term):
-                self.assertTrue(value.text().startswith("0"), value.text())
-        self.assertIn("Keine Prognosen.",
-                      section_of(root, "Nächste Synthesen").text())
-        self.assertIsNone(section_of(root, "Nächste Synthesen")
-                          .find("table"))
+        for label, value in figure_values(root).items():
+            with self.subTest(label=label):
+                self.assertTrue(value.startswith("0"), value)
+        found = widget(root, "Nächste Synthesen")
+        self.assertIn("Keine Prognosen.", found.text())
+        self.assertIsNone(found.find("table"))
         current, previous = bars(root)
         self.assertEqual(len(current), 12)
         self.assertEqual(len(previous), 12)
         self.assertTrue(all(float(r.get("height")) == 0
                             for r in current + previous))
-        for heading in ("Meistgefragt 2026", "Empfänger 2026",
-                        "Letzte Lieferscheine"):
-            with self.subTest(heading=heading):
-                self.assertIn("Keine Abgaben.",
-                              section_of(root, heading).text())
+        self.assertEqual(value_labels(root), [])
+        for title in ("Meistgefragt 2026", "Empfänger 2026",
+                      "Letzte Lieferscheine"):
+            with self.subTest(title=title):
+                self.assertIn("Keine Abgaben.", widget(root, title).text())
 
 
 class EnglishTests(OverviewCase):
@@ -355,11 +347,12 @@ class EnglishTests(OverviewCase):
         accept(language="en")
         root = self.get()
         self.assertEqual(root.find("h1").text(), "Lab at a glance")
-        headings = [h.text() for h in root.find_all("h2")]
-        for heading in ("Inventory", "Next syntheses",
-                        "Deliveries per month", "Latest delivery notes"):
-            with self.subTest(heading=heading):
-                self.assertIn(heading, headings)
+        titles = [title_of(w) for w in widgets(root)]
+        for title in ("Inventory", "Next syntheses",
+                      "Deliveries per month", "Latest delivery notes"):
+            with self.subTest(title=title):
+                self.assertIn(title, titles)
+        self.assertEqual(titles, list(WIDGET_TITLES_EN))
 
 
 class SummaryTests(OverviewCase):
@@ -378,7 +371,12 @@ class SummaryTests(OverviewCase):
         self.assertEqual(len(sections), 1)
         links = sections[0].find("div", "stock-bar").find_all("a")
         self.assertEqual([a.text() for a in links], ["1", "2"])
-        self.assertEqual(len(figures(root)), 4)
+        self.assertEqual(len(tiles(sections[0])), 4)
+        self.assertEqual(list(figures(root)), list(FIGURES))
+        self.assertEqual(
+            [hrefs(each) for each in figures(root).values()],
+            [[], ["/lab/planning/"], ["/lab/tasks/"],
+             ["/lab/inventory/vessels/"]])
         self.assertEqual(sections[0].find("a", href="/lab/").text(),
                          "Zur Übersicht")
         self.assertIsNone(root.find("section", "lab-overview"))
@@ -430,7 +428,8 @@ class PathTests(OverviewCase):
         """Scenario: Entry and outside paths."""
         response = self.client.get(OVERVIEW)
         self.assertEqual(response.status_code, 200)
-        self.assertIsNotNone(page(response).find("section", "lab-overview"))
+        self.assertEqual(
+            len(page(response).find_all("section", "lab-overview")), 1)
         self.assertEqual(self.client.get("/procedures/").status_code, 404)
 
     def test_the_navigation_marks_the_overview_as_the_menu_says(
