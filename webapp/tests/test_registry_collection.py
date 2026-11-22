@@ -12,23 +12,18 @@ from . import Element, make_group, make_substance, page
 from .collection_support import accept
 from .demo_support import SeededCase
 from .registry_support import REGISTRY, substance_url
+from .widget_support import kv, title_of, widget, widget_grid, widgets
 
 
-def headings(root: Element) -> list[str]:
-    return [h.text() for h in root.find("main").find_all("h2")]
+def titles(root: Element) -> list[str | None]:
+    """The titles of the widgets of a page."""
+    return [title_of(w) for w in widgets(root)]
 
 
-def items_under(root: Element, heading: str) -> list[Element]:
-    """The items of the list that follows the ``h2`` HEADING."""
-    main = root.find("main")
-    found = [h for h in main.find_all("h2") if h.text() == heading]
-    assert len(found) == 1, f"{len(found)} headings {heading!r}"
-    siblings = [c for c in found[0].parent.children
-                if isinstance(c, Element)]
-    after = siblings[siblings.index(found[0]) + 1]
-    assert after.tag == "ul", after.tag
-    return [li for li in after.children
-            if isinstance(li, Element) and li.tag == "li"]
+def rows_under(root: Element, *title: str) -> list[dict[str, Element]]:
+    """The body rows of the table of the widget titled TITLE, each as a
+    mapping from column header to cell."""
+    return widget_grid(widget(root, *title))[1]
 
 
 def link(item: Element) -> tuple[str | None, str]:
@@ -46,24 +41,28 @@ class SectionsTests(SeededCase):
         return page(response)
 
     def test_made_by_with_yield_and_badge(self) -> None:
-        (item,) = items_under(self.get("acetylsalicylic-acid"),
-                              "Hergestellt nach")
-        self.assertEqual(link(item), ("/procedures/osdb-0002/",
-                                      "OSDB-0002 Aspirin (Acetylsalicylsäure)"))
-        self.assertIn(" · 75 % · ", item.text())
-        badge = item.find("span", cls="badge")
+        (row,) = rows_under(self.get("acetylsalicylic-acid"),
+                            "Hergestellt nach")
+        self.assertEqual(link(row["Vorschrift"]), (
+            "/procedures/osdb-0002/",
+            "OSDB-0002 Aspirin (Acetylsalicylsäure)"))
+        self.assertEqual(row["Ausbeute"].text(), "75 %")
+        badge = row["Status"].find("span", cls="badge")
         self.assertEqual(badge.text(), "Entwurf")
         self.assertIn("badge--draft", badge.classes)
 
     def test_the_sequences(self) -> None:
-        (item,) = items_under(self.get("acetylsalicylic-acid"),
-                              "Synthesewege")
-        self.assertEqual(link(item)[0], "/sequences/seq-0001/")
-        self.assertIn("Aspirin", link(item)[1])
+        (row,) = rows_under(self.get("acetylsalicylic-acid"),
+                            "Synthesewege")
+        cell = row["Syntheseweg"]
+        self.assertEqual(link(cell)[0], "/sequences/seq-0001/")
+        self.assertIn("Aspirin", link(cell)[1])
 
     def test_the_route_tree(self) -> None:
-        (top,) = items_under(self.get("acetylsalicylic-acid"),
-                             "Herstellungswege")
+        tree = widget(self.get("acetylsalicylic-acid"),
+                      "Herstellungswege").find("ul", cls="route-tree")
+        (top,) = [li for li in tree.children
+                  if isinstance(li, Element) and li.tag == "li"]
         self.assertIn("route-step", top.classes)
         self.assertEqual(link(top)[0], "/procedures/osdb-0002/")
         compounds = [li for li in top.find_all("li")
@@ -81,27 +80,28 @@ class SectionsTests(SeededCase):
 
     def test_a_substance_made_and_used(self) -> None:
         root = self.get("salicylic-acid")
-        self.assertEqual([link(li)[0] for li in
-                          items_under(root, "Hergestellt nach")],
+        self.assertEqual([link(row["Vorschrift"])[0] for row in
+                          rows_under(root, "Hergestellt nach")],
                          ["/procedures/osdb-0001/"])
-        used = items_under(root, "Verwendet in")
-        self.assertEqual([link(li)[0] for li in used],
+        used = rows_under(root, "Verwendet in")
+        self.assertEqual([link(row["Vorschrift"])[0] for row in used],
                          ["/procedures/osdb-0002/"])
-        self.assertEqual(used[0].find("span", cls="badge").text(),
+        self.assertEqual(used[0]["Status"].find("span", cls="badge").text(),
                          "Entwurf")
-        self.assertNotIn("Herstellungswege", headings(root))
+        self.assertNotIn("Herstellungswege", titles(root))
 
     def test_an_entry_of_a_general_procedure(self) -> None:
-        made = items_under(self.get("1-biphenyl-4-yl-ethanol"),
-                           "Hergestellt nach")
-        self.assertEqual([link(li)[0] for li in made],
+        made = rows_under(self.get("1-biphenyl-4-yl-ethanol"),
+                          "Hergestellt nach")
+        self.assertEqual([link(row["Vorschrift"])[0] for row in made],
                          ["/procedures/osdb-0005/", "/procedures/osdb-0009/"])
-        self.assertIn(" · 90 % · ", made[0].text())
-        self.assertIn(" · Eintrag 1 · 90 % · ", made[1].text())
+        self.assertEqual(made[0]["Ausbeute"].text(), "90 %")
+        self.assertEqual(made[1]["Eintrag"].text(), "Eintrag 1")
+        self.assertEqual(made[1]["Ausbeute"].text(), "90 %")
 
     def test_sections_without_items_are_left_out(self) -> None:
         make_substance("lonely-compound")
-        shown = headings(self.get("lonely-compound"))
+        shown = titles(self.get("lonely-compound"))
         for name in ("Hergestellt nach", "Verwendet in", "Synthesewege",
                      "Herstellungswege"):
             with self.subTest(section=name):
@@ -109,33 +109,36 @@ class SectionsTests(SeededCase):
 
     def test_a_withdrawn_procedure_is_left_out(self) -> None:
         Procedure.objects.filter(key="OSDB-0002").update(withdrawn=True)
-        shown = headings(self.get("acetylsalicylic-acid"))
+        shown = titles(self.get("acetylsalicylic-acid"))
         self.assertNotIn("Hergestellt nach", shown)
         self.assertNotIn("Herstellungswege", shown)
 
     def test_a_procedure_without_a_status_has_no_badge(self) -> None:
         Procedure.objects.filter(key="OSDB-0001").update(status="")
-        (item,) = items_under(self.get("salicylic-acid"), "Hergestellt nach")
-        self.assertIsNone(item.find("span", cls="badge"))
+        (row,) = rows_under(self.get("salicylic-acid"), "Hergestellt nach")
+        self.assertIsNone(row["Status"].find("span", cls="badge"))
 
     def test_the_english_texts(self) -> None:
         accept(language="en")
         root = self.get("1-biphenyl-4-yl-ethanol")
         for name in ("Made by", "Routes"):
             with self.subTest(section=name):
-                self.assertIn(name, headings(root))
-        made = items_under(root, "Made by")
-        self.assertIn(" · entry 1 · 90 % · ", made[1].text())
-        self.assertEqual(made[0].find("span", cls="badge").text(), "draft")
-        shown = headings(self.get("salicylic-acid"))
-        self.assertIn("Used in", shown)
-        self.assertIn("Sequences", headings(self.get("acetylsalicylic-acid")))
+                self.assertIn(name, titles(root))
+        made = rows_under(root, "Made by")
+        self.assertEqual(made[1]["Entry"].text(), "entry 1")
+        self.assertEqual(made[1]["Yield"].text(), "90 %")
+        self.assertEqual(made[0]["Status"].find("span", cls="badge").text(),
+                         "draft")
+        self.assertIn("Used in", titles(self.get("salicylic-acid")))
+        self.assertIn("Sequences",
+                      titles(self.get("acetylsalicylic-acid")))
 
     def test_the_copy_button(self) -> None:
-        main = self.get("acetylsalicylic-acid").find("main")
-        code = main.find("code", attrs={"data-smiles": True})
+        cell = kv(widget(self.get("acetylsalicylic-acid"),
+                         "Verbindung"))["SMILES"]
+        code = cell.find("code", attrs={"data-smiles": True})
         self.assertEqual(code.text(), "CC(=O)Oc1ccccc1C(=O)O")
-        (button,) = main.find_all("button",
+        (button,) = cell.find_all("button",
                                   attrs={"data-copy-smiles": True})
         self.assertEqual((button.get("type"), button.text()),
                          ("button", "Kopieren"))

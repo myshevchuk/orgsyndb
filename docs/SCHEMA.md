@@ -299,8 +299,9 @@ sequence names it as its target, linking those sequences by title,
 ordered by ID. The procedures and sequences come from accepted imports
 and link to their pages on the static site.
 
-**Routes** follows **Sequences** when that section is present, before
-**Containers**. The lab draws the tree from the collection’s imported
+**Routes** follows **Sequences** when that section is present; it comes
+after **Containers**, **Batches** and **Tasks**, which head the page beside
+the record, and can be folded away. The lab draws the tree from the collection’s imported
 procedures, including those that make the substance’s starting materials.
 It appears only when a route goes beyond one step.
 When no procedure makes any of the starting materials, **Made by** already

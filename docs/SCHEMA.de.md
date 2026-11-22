@@ -334,7 +334,9 @@ nach Nummer geordnet. Vorschriften und Synthesewege stammen aus
 angenommenen Importen und verlinken ihre Seiten auf der statischen Website.
 
 **Herstellungswege** folgt auf **Synthesewege**, sofern dieser Abschnitt
-vorhanden ist, vor **Gebinde**. Die Laboranwendung zeichnet den Baum aus den
+vorhanden ist; er steht nach **Gebinde**, **Chargen** und **Aufträge**, die
+neben dem Datensatz oben auf der Seite stehen, und lässt sich einklappen. Die
+Laboranwendung zeichnet den Baum aus den
 importierten Vorschriften der Sammlung, einschließlich der Vorschriften
 für die Ausgangsstoffe. Er erscheint nur, wenn ein Weg über eine Stufe
 hinausgeht. Stellt keine Vorschrift einen der Ausgangsstoffe

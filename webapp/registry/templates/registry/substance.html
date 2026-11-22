@@ -1,65 +1,144 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n lab inventory %}
 {% block title %}{{ substance.shown_name }}{% endblock %}
 {% block main %}
+<div class="substance-head">
+<div class="substance-head__title">
 <h1>{{ substance.shown_name }}</h1>
+<span class="substance-head__key">{{ substance.key }}</span>
+<span class="badge badge--planned">{{ substance.group.shown_label }}</span>{% for term in classes %}
+<span class="badge badge--class">{{ term.shown_label }}</span>{% endfor %}
+</div>
 {% if user.is_authenticated %}<div class="lab-actions">
 <a href="/lab/registry/substances/{{ substance.key }}/edit/">{% translate "Edit" %}</a>
 </div>
-{% endif %}{% if substance.molfile %}<figure class="structure"><img src="/lab/registry/substances/{{ substance.key }}/structure.svg" alt="{% blocktranslate with name=substance.shown_name %}Structure of {{ name }}{% endblocktranslate %}"></figure>
-{% endif %}<dl class="metadata">
-<dt>{% translate "Key" %}</dt>
-<dd>{{ substance.key }}</dd>
-<dt>{% translate "Name" %}</dt>
-<dd>{{ substance.name }}</dd>
-<dt>{% translate "German name" %}</dt>
-<dd>{{ substance.name_de|default:"–" }}</dd>
-<dt>{% translate "Short name" %}</dt>
-<dd>{{ substance.short_name|default:"–" }}</dd>
-<dt>{% translate "Inventory group" %}</dt>
-<dd><a href="/lab/registry/groups/">{{ substance.group.shown_label }}</a></dd>
-<dt>{% translate "Chemical classes" %}</dt>
-<dd>{% for term in classes %}{{ term.shown_label }}{% if not forloop.last %}, {% endif %}{% empty %}–{% endfor %}</dd>
-<dt>{% translate "Formula" %}</dt>
-<dd>{{ substance.formula|default:"–" }}</dd>
-<dt>{% translate "Molar mass" %}</dt>
-<dd>{% if substance.mw is not None %}{{ substance.mw|decimal }} g/mol{% else %}–{% endif %}</dd>
-<dt>{% translate "SMILES" %}</dt>
-<dd>{% if substance.smiles %}<code data-smiles>{{ substance.smiles }}</code> <button type="button" class="copy-button" data-copy-smiles data-copied="{% site_string "copied" %}" data-selected="{% site_string "selected" %}" hidden>{% site_string "copy" %}</button>{% else %}–{% endif %}</dd>
-<dt>{% translate "CAS number" %}</dt>
-<dd>{{ substance.cas|default:"–" }}</dd>
-<dt>{% translate "Article no." %}</dt>
-<dd>{{ substance.article_number|default_if_none:"–" }}</dd>
-<dt>{% translate "Note" %}</dt>
-<dd>{{ substance.note|linebreaksbr|default:"–" }}</dd>
-</dl>
-{% if made_by %}<h2>{% translate "Made by" context "substance" %}</h2>
-<ul class="lab-links">
-{% for made in made_by %}<li>{% include "registry/procedure_item.html" with procedure=made.procedure entry=made.entry yield_percent=made.yield_percent %}</li>
-{% endfor %}</ul>
-{% endif %}{% if used_in %}<h2>{% translate "Used in" context "substance" %}</h2>
-<ul class="lab-links">
-{% for procedure in used_in %}<li>{% include "registry/procedure_item.html" with procedure=procedure entry=None yield_percent=None %}</li>
-{% endfor %}</ul>
-{% endif %}{% if sequences %}<h2>{% translate "Sequences" context "substance" %}</h2>
-<ul class="lab-links">
-{% for sequence in sequences %}<li><a href="/sequences/{{ sequence.key|lower }}/">{{ sequence.key }} {{ sequence.shown_title }}</a></li>
-{% endfor %}</ul>
-{% endif %}{% if route %}<h2>{% translate "Routes" context "substance" %}</h2>
+{% endif %}</div>
+<div class="substance-grid">
+<aside class="substance-aside">
+<section class="widget">
+<div class="widget__head"><h2>{% translate "Compound" %}</h2><span class="widget__note compound-key">{{ substance.key }}</span></div>
+{% if substance.molfile %}<figure class="structure"><img src="/lab/registry/substances/{{ substance.key }}/structure.svg" alt="{% blocktranslate with name=substance.shown_name %}Structure of {{ name }}{% endblocktranslate %}"></figure>
+{% endif %}<div class="widget__body widget__body--flush">
+<table class="kv-table"><tbody>
+<tr><th scope="row">{% translate "Article no." %}</th><td{% if not substance.article_number %} class="muted"{% endif %}>{% if substance.article_number %}<strong>{{ substance.article_number }}</strong>{% else %}–{% endif %}</td></tr>
+<tr><th scope="row">{% translate "Formula" %}</th><td{% if not substance.formula %} class="muted"{% endif %}>{{ substance.formula|default:"–" }}</td></tr>
+<tr><th scope="row">{% translate "Molar mass" %}</th><td{% if substance.mw is None %} class="muted"{% endif %}>{% if substance.mw is not None %}{{ substance.mw|decimal }} g/mol{% else %}–{% endif %}</td></tr>
+<tr><th scope="row">{% translate "CAS number" %}</th><td{% if not substance.cas %} class="muted"{% endif %}>{{ substance.cas|default:"–" }}</td></tr>
+<tr><th scope="row">{% translate "SMILES" %}</th><td{% if not substance.smiles %} class="muted"{% endif %}>{% if substance.smiles %}<div class="smiles-row"><code data-smiles>{{ substance.smiles }}</code><button type="button" class="copy-button" data-copy-smiles data-copied="{% site_string "copied" %}" data-selected="{% site_string "selected" %}" hidden>{% site_string "copy" %}</button></div>{% else %}–{% endif %}</td></tr>
+<tr><th scope="row">{% translate "Inventory group" %}</th><td><a href="/lab/registry/groups/">{{ substance.group.shown_label }}</a></td></tr>
+<tr><th scope="row">{% translate "Chemical classes" %}</th><td{% if not classes %} class="muted"{% endif %}>{% for term in classes %}{{ term.shown_label }}{% if not forloop.last %}, {% endif %}{% empty %}–{% endfor %}</td></tr>
+<tr><th scope="row">{% translate "Key" %}</th><td><span class="compound-key">{{ substance.key }}</span></td></tr>
+<tr><th scope="row">{% translate "Name" %}</th><td>{{ substance.name }}</td></tr>
+<tr><th scope="row">{% translate "German name" %}</th><td{% if not substance.name_de %} class="muted"{% endif %}>{{ substance.name_de|default:"–" }}</td></tr>
+<tr><th scope="row">{% translate "Short name" %}</th><td{% if not substance.short_name %} class="muted"{% endif %}>{{ substance.short_name|default:"–" }}</td></tr>
+<tr><th scope="row">{% translate "Note" %}</th><td{% if not substance.note %} class="muted"{% endif %}>{% if substance.note %}{{ substance.note|linebreaksbr }}{% else %}–{% endif %}</td></tr>
+</tbody></table>
+</div>
+</section>
+</aside>
+<div class="substance-main">
+<div class="substance-trio">
+<section class="widget">
+<div class="widget__head"><h2>{% translate "Containers" context "substance" %}</h2>{% if items %}<span class="widget__count">{{ items|length }}</span>{% endif %}</div>
+<div class="widget__body widget__body--flush">
+{% if items %}<div class="table-scroll">
+<table class="widget-table">
+<thead><tr><th scope="col">{% translate "Article / size" %}</th><th scope="col" class="num">{% translate "Stock" %}</th></tr></thead>
+<tbody>
+{% for item in items %}<tr>
+<td><a href="/lab/inventory/items/{{ item.pk }}/">{% if item.article_number %}{{ item.article_number }} · {% endif %}{{ item.container }}</a></td>
+<td class="num">{% blocktranslate count count=item.quantity %}{{ count }} container{% plural %}{{ count }} containers{% endblocktranslate %}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% else %}<p class="lab-empty">{% translate "None" context "registry" %}</p>
+{% endif %}</div>
+</section>
+<section class="widget">
+<div class="widget__head"><h2>{% translate "Batches" context "substance" %}</h2>{% if batches %}<span class="widget__count">{{ batches|length }}</span>{% endif %}</div>
+<div class="widget__body widget__body--flush">
+{% if batches %}<div class="table-scroll">
+<table class="widget-table">
+<thead><tr><th scope="col">{% translate "Batch" %}</th><th scope="col" class="num">{% translate "Stock" %}</th></tr></thead>
+<tbody>
+{% for batch, stock in batches %}<tr>
+<td><a href="/lab/inventory/batches/{{ batch.pk }}/">{{ batch }}</a></td>
+<td class="num{% if not stock %} muted{% endif %}">{% if stock %}{% for amount, unit in stock %}{% if not forloop.first %}, {% endif %}{{ amount|decimal }} {{ unit }}{% endfor %}{% else %}–{% endif %}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% else %}<p class="lab-empty">{% translate "None" context "registry" %}</p>
+{% endif %}</div>
+</section>
+<section class="widget">
+<div class="widget__head"><h2>{% translate "Tasks" context "substance" %}</h2>{% if tasks %}<span class="widget__count">{{ tasks|length }}</span>{% endif %}</div>
+<div class="widget__body widget__body--flush">
+{% if tasks %}<div class="table-scroll">
+<table class="widget-table">
+<thead><tr><th scope="col">{% translate "Task" context "substance" %}</th><th scope="col">{% translate "Status" %}</th></tr></thead>
+<tbody>
+{% for task in tasks %}<tr>
+<td class="nowrap"><a href="/lab/tasks/{{ task.number }}/">{{ task.number }}</a></td>
+<td>{% include "tasks/state.html" %}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% else %}<p class="lab-empty">{% translate "None" context "registry" %}</p>
+{% endif %}</div>
+</section>
+</div>
+{% if made_by %}<section class="widget">
+<div class="widget__head"><h2>{% translate "Made by" context "substance" %}</h2><span class="widget__count">{{ made_by|length }}</span></div>
+<div class="widget__body widget__body--flush"><div class="table-scroll">
+<table class="widget-table">
+<thead><tr><th scope="col">{% translate "Procedure" %}</th><th scope="col">{% translate "Entry" %}</th><th scope="col" class="num">{% translate "Yield" %}</th><th scope="col">{% translate "Status" %}</th></tr></thead>
+<tbody>
+{% for made in made_by %}<tr>
+<td><a href="/procedures/{{ made.procedure.key|lower }}/"><strong>{{ made.procedure.key }}</strong> {{ made.procedure.shown_title }}</a></td>
+<td class="{% if made.entry %}nowrap{% else %}muted{% endif %}">{% if made.entry %}{% blocktranslate with entry=made.entry %}entry {{ entry }}{% endblocktranslate %}{% else %}–{% endif %}</td>
+<td class="num{% if made.yield_percent is None %} muted{% endif %}">{% if made.yield_percent is not None %}{{ made.yield_percent|decimal }} %{% else %}–{% endif %}</td>
+<td{% if not made.procedure.status %} class="muted"{% endif %}>{% if made.procedure.status %}<span class="badge badge--{{ made.procedure.status }}">{% site_string "status_"|add:made.procedure.status %}</span>{% else %}–{% endif %}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div></div>
+</section>
+{% endif %}{% if used_in %}<section class="widget">
+<div class="widget__head"><h2>{% translate "Used in" context "substance" %}</h2><span class="widget__count">{{ used_in|length }}</span></div>
+<div class="widget__body widget__body--flush"><div class="table-scroll">
+<table class="widget-table">
+<thead><tr><th scope="col">{% translate "Procedure" %}</th><th scope="col">{% translate "Status" %}</th></tr></thead>
+<tbody>
+{% for procedure in used_in %}<tr>
+<td><a href="/procedures/{{ procedure.key|lower }}/"><strong>{{ procedure.key }}</strong> {{ procedure.shown_title }}</a></td>
+<td{% if not procedure.status %} class="muted"{% endif %}>{% if procedure.status %}<span class="badge badge--{{ procedure.status }}">{% site_string "status_"|add:procedure.status %}</span>{% else %}–{% endif %}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div></div>
+</section>
+{% endif %}{% if sequences %}<section class="widget">
+<div class="widget__head"><h2>{% translate "Sequences" context "substance" %}</h2><span class="widget__count">{{ sequences|length }}</span></div>
+<div class="widget__body widget__body--flush"><div class="table-scroll">
+<table class="widget-table">
+<thead><tr><th scope="col">{% translate "Sequence" %}</th></tr></thead>
+<tbody>
+{% for sequence in sequences %}<tr>
+<td><a href="/sequences/{{ sequence.key|lower }}/"><strong>{{ sequence.key }}</strong> {{ sequence.shown_title }}</a></td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div></div>
+</section>
+{% endif %}{% if route %}<details id="substance-routes" class="widget" open>
+<summary class="widget__head"><h2>{% translate "Routes" context "substance" %}</h2><span class="widget__count">{{ route|length }}</span></summary>
+<div class="widget__body">
 <ul class="route-tree">
 {% include "registry/route_steps.html" with steps=route %}</ul>
-{% endif %}<h2>{% translate "Containers" context "substance" %}</h2>
-{% if items %}<ul class="lab-links">
-{% for item in items %}<li><a href="/lab/inventory/items/{{ item.pk }}/">{% if item.article_number %}{{ item.article_number }} · {% endif %}{{ item.container }}</a> {% blocktranslate count count=item.quantity %}{{ count }} container{% plural %}{{ count }} containers{% endblocktranslate %}</li>
-{% endfor %}</ul>
-{% else %}<p>{% translate "None" context "registry" %}</p>
-{% endif %}<h2>{% translate "Batches" context "substance" %}</h2>
-{% if batches %}<ul class="lab-links">
-{% for batch, stock in batches %}<li><a href="/lab/inventory/batches/{{ batch.pk }}/">{{ batch }}</a>{% for amount, unit in stock %} {{ amount|decimal }} {{ unit }}{% endfor %}</li>
-{% endfor %}</ul>
-{% else %}<p>{% translate "None" context "registry" %}</p>
-{% endif %}<h2>{% translate "Tasks" context "substance" %}</h2>
-{% if tasks %}<ul class="lab-links">
-{% for task in tasks %}<li><a href="/lab/tasks/{{ task.number }}/">{{ task.number }}</a> {% include "tasks/state.html" %}</li>
-{% endfor %}</ul>
-{% else %}<p>{% translate "None" context "registry" %}</p>
-{% endif %}{% endblock %}
+</div>
+</details>
+{% endif %}</div>
+</div>
+{% endblock %}

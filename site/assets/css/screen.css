@@ -595,6 +595,31 @@ details.widget[open] > summary.widget__head h2::before {
 details.widget:not([open]) > summary.widget__head { border-bottom: 0; }
 
 .widget .table-scroll { margin: 0; }
+.widget .badge {
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  padding: 0 0.45rem;
+  white-space: nowrap;
+}
+.widget .structure {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.widget .structure img {
+  max-width: 100%;
+  max-height: 7.5rem;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
 
 .kv-table {
   width: 100%;
@@ -625,6 +650,19 @@ details.widget:not([open]) > summary.widget__head { border-bottom: 0; }
   text-align: right;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+.kv-table .muted { color: var(--muted); }
+.compound-key { font-family: var(--font-mono); font-size: 0.92em; }
+.smiles-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.kv-table .copy-button {
+  margin-left: 0;
+  font-size: 0.6875rem;
+  padding: 0.05rem 0.4rem;
 }
 .kv-sub {
   display: block;
