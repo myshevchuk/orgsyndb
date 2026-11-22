@@ -14,19 +14,24 @@ Diese Anleitung gibt es auch auf Deutsch: [PLANNING.de.md](PLANNING.de.md).
 ## Find the figures behind a priority
 
 Open **Planning (Planung)** between **Inventory (Bestand)** and **Tasks
-(Aufgaben)** in the navigation. The list shows articles with high or medium
-priority and articles with an action due. It puts the smallest **Slack
-(Spielraum)** first: this is the time left before a new synthesis needs to
-start. Choose **All articles (Alle Artikel)** to see every article with a
-forecast.
+(Aufgaben)** in the navigation. The list shows articles with high or
+medium priority and articles with an action due. It puts the smallest
+**Slack (Spielraum)** first: this is the time left before a new synthesis
+needs to start. Choose **All articles (Alle Artikel)** to see every
+article with a forecast. Click an article's row, or move with the arrow
+keys, to see its **Containers and demand (Gebinde & Bedarf)** and
+**Planning details (Planungsdetails)** beside the list. The buttons **All
+(Alle)**, **High priority (Priorität hoch)**, **With action (Mit
+Maßnahme)** and **Late (Verspätet)** narrow the list.
 
 An *article* groups all container sizes with the same article number. Each
 size has its own stock and demand. Follow a container size to its inventory
 page and the **Forecast (Prognose)** section for the calculation's basis.
 The task page also shows the forecast for its product.
 
-The line above the planning table gives the parameters currently in force.
-The defaults in this guide apply unless staff have changed them.
+The **Planning parameters (Planungsparameter)** box below the list gives
+the parameters currently in force; it is closed when the page opens. The
+defaults in this guide apply unless staff have changed them.
 
 ## How the application estimates demand
 
@@ -189,9 +194,10 @@ before rounding.
 ## Check whether a running task can finish in time
 
 The article's priority answers how urgently a **new synthesis** is needed.
-It continues to use the full synthesis time even when work is running.
-The planning list shows planned and running tasks beside it, with their
-expected end dates.
+It continues to use the full synthesis time even when work is running. The
+planning list shows planned and running tasks beside it, and the selected
+article's **Planning details (Planungsdetails)** give their expected end
+dates.
 
 A task's own slack answers whether **that task** can supply the product in
 time. A planned task needs the full synthesis time. A running task needs
