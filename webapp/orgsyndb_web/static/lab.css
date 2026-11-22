@@ -705,8 +705,8 @@ table.note-lines { padding: 0; }
   font-variant-numeric: tabular-nums;
 }
 .lab-empty { color: var(--muted); font-family: var(--font-ui); }
-.deliveries-chart { margin: 0; }
-.deliveries-chart svg { width: 100%; height: auto; display: block; font-family: var(--font-ui); font-size: 11px; }
+.deliveries-chart { margin: 0; overflow-x: auto; }
+.deliveries-chart svg { width: 100%; min-width: 34rem; height: auto; display: block; font-family: var(--font-ui); font-size: 11px; }
 .deliveries-chart rect.current { fill: var(--link); }
 .deliveries-chart rect.previous { fill: var(--border); }
 .deliveries-chart text { fill: var(--muted); }

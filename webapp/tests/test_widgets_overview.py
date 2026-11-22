@@ -649,6 +649,26 @@ class ChartCoordinateTests(SimpleTestCase):
             self.assertGreaterEqual(
                 self.coordinate(tallest, "label_y") - FONT, 0)
 
+    def test_wide_paired_labels_do_not_overlap(self) -> None:
+        """Two labels of a month too wide to stand side by side stand
+        a line apart, inside the drawing."""
+        drawing = self.drawn([1001] * 12, [1000] * 12)
+        for month in drawing.months:
+            previous, current = month.previous, month.current
+            self.assertGreaterEqual(
+                abs(self.coordinate(previous, "label_y")
+                    - self.coordinate(current, "label_y")), FONT)
+            for bar in (previous, current):
+                self.assertGreaterEqual(bar.label_y - FONT, 0)
+
+    def test_narrow_paired_labels_keep_their_place(self) -> None:
+        """Labels narrow enough to stand side by side stay above their
+        own bars."""
+        from overview.chart import LABEL_GAP
+        for month in self.drawn([21] * 12, [22] * 12).months:
+            for bar in (month.previous, month.current):
+                self.assertAlmostEqual(bar.label_y, bar.y - LABEL_GAP)
+
     def test_every_label_lies_inside_the_drawing(self) -> None:
         drawing = self.drawn([4, 0, 7, 1, 9, 2, 8, 3, 6, 5, 10, 12],
                              [12, 11, 0, 5, 0, 1, 2, 3, 4, 5, 6, 7])

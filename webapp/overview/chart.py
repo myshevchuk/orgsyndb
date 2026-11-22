@@ -2,7 +2,7 @@
 chart drawn on the server, each month beside the same month a year
 before."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 
 from django.utils import dateformat
@@ -11,10 +11,12 @@ from overview.figures import Month
 
 WIDTH = 600
 HEIGHT = 180
-TOP = 18
+TOP = 29
 BOTTOM = 24
 BAR = 16
 LABEL_GAP = 4
+LINE = 11
+DIGIT = 6.5
 SPAN = WIDTH // 12
 
 
@@ -53,6 +55,21 @@ class Chart:
     months: list[MonthBars]
 
 
+def apart(earlier: Bar, later: Bar) -> tuple[Bar, Bar]:
+    """Return the bars of a month, EARLIER and LATER, with the higher
+    label raised a line above the other when both labels show, are too
+    wide to stand side by side and would stand less than a line apart;
+    otherwise unchanged."""
+    widths = DIGIT * (len(str(earlier.value)) + len(str(later.value))) / 2
+    if (not earlier.value or not later.value
+            or widths <= later.label_x - earlier.label_x
+            or abs(earlier.label_y - later.label_y) >= LINE):
+        return earlier, later
+    if earlier.label_y <= later.label_y:
+        return replace(earlier, label_y=later.label_y - LINE), later
+    return earlier, replace(later, label_y=earlier.label_y - LINE)
+
+
 def chart(months: list[Month], current: list[int], previous: list[int]
           ) -> Chart:
     """Return the chart of MONTHS, oldest first, with the containers
@@ -74,9 +91,12 @@ def chart(months: list[Month], current: list[int], previous: list[int]
                        x=x, y=y, height=height,
                        label_x=x + BAR / 2, label_y=y - LABEL_GAP)
 
+        earlier = bar(before, date(year - 1, month, 1), left)
+        later = bar(now, date(year, month, 1), left + BAR + 2)
+        earlier, later = apart(earlier, later)
         drawn.append(MonthBars(
-            previous=bar(before, date(year - 1, month, 1), left),
-            current=bar(now, date(year, month, 1), left + BAR + 2),
+            previous=earlier,
+            current=later,
             label=dateformat.format(date(year, month, 1), "M"),
             label_x=position * SPAN + SPAN // 2))
     return Chart(width=WIDTH, height=HEIGHT, baseline=baseline,
