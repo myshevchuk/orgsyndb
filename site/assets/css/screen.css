@@ -338,13 +338,15 @@ h1 { font-size: 2.25rem; }
     grid-column: 1 / -1;
   }
   .procedure-content:has(> [data-section="procedure"]):has(> [data-section="notes"]) > [data-section="procedure"],
-  .procedure-content:has(> [data-section="procedure"]):has(> [data-section="notes"]) > [data-section="workup"] {
+  .procedure-content:has(> [data-section="procedure"]):has(> [data-section="notes"]) > [data-section="procedure"] + [data-section="workup"] {
     grid-column: 1;
   }
   .procedure-content:has(> [data-section="procedure"]):has(> [data-section="notes"]) > [data-section="notes"] {
     grid-column: 2;
   }
-  .procedure-content:has(> [data-section="procedure"]):has(> [data-section="workup"]):has(> [data-section="notes"]) > [data-section="notes"] {
+  /* Notes reaches down beside Workup only when Workup directly follows
+     Procedure; otherwise it stays in the procedure's row. */
+  .procedure-content:has(> [data-section="procedure"] + [data-section="workup"]):has(> [data-section="notes"]) > [data-section="notes"] {
     grid-row: span 2;
   }
 }
@@ -391,7 +393,8 @@ h1 { font-size: 2.25rem; }
 /* Style metadata lists inside widgets like the lab's key-value table. */
 .widget dl.metadata {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  /* A long declared label wraps instead of pushing its value out. */
+  grid-template-columns: fit-content(45%) minmax(0, 1fr);
   gap: 0;
   margin: 0;
   padding: 0;

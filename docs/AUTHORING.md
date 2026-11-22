@@ -378,13 +378,14 @@ list related procedures. Under **Authors**, each account's name links to
 `/authors/<user name>/`, for example `/authors/klehmann/`. The site shows names
 exactly as the accounts have them, including capitalization. The author
 directory, author pages and catalogue's **Author** filter show these names too.
-The panel's three boxes are **Compound** (the products and their data),
+The panel has up to three boxes: **Compound** (the products and their data),
 **Details** (reaction type to modified time) and **Synthesis context**
-(starting materials, precursor and used-in links, sequences). Each of the eight
-body sections follows in a box of its own. On a wide screen the panel's boxes
-stand side by side above the body, and **Notes** stands beside **Procedure**
-and **Workup and Purification**, which refer to it; in a narrow window and in
-print the boxes follow one another in order.
+(starting materials, precursor and used-in links, sequences; shown only when it
+has one of them). Each of the eight body sections follows in a box of its own.
+On a wide screen the panel's boxes stand side by side above the body, and
+**Notes** stands beside **Procedure** and **Workup and Purification**, which
+refer to it; in a narrow window and in print the boxes follow one another in
+order.
 
 After each product or starting-material link, the panel shows the substance’s
 article number and short name when supplied, in that order.

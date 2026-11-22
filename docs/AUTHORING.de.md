@@ -451,14 +451,15 @@ Unter **Autoren** verlinkt der Name jedes Kontos auf `/authors/<user name>/`,
 zum Beispiel `/authors/klehmann/`. Die Website zeigt die Namen genau wie in den
 Konten gespeichert, einschließlich der Groß- und Kleinschreibung. Das
 Autorenverzeichnis, die Autorenseiten und der Filter **Autor** im Katalog
-zeigen ebenfalls diese Namen. Das Datenfeld besteht aus drei Kästen:
+zeigen ebenfalls diese Namen. Das Datenfeld besteht aus bis zu drei Kästen:
 **Verbindung** (die Produkte und ihre Daten), **Angaben** (Reaktionstyp bis
 Änderungszeit) und **Synthesekontext** (Ausgangsstoffe, Vorstufen, Verwendungen
-und Synthesewege). Jeder der acht Abschnitte des Textes folgt in einem eigenen
-Kasten. Auf einem breiten Bildschirm stehen die Kästen des Datenfelds
-nebeneinander über dem Text, und **Anmerkungen** steht neben **Durchführung**
-und **Aufarbeitung und Reinigung**, die darauf verweisen; in einem schmalen
-Fenster und im Ausdruck folgen die Kästen in ihrer Reihenfolge aufeinander.
+und Synthesewege; nur wenn es davon etwas gibt). Jeder der acht Abschnitte des
+Textes folgt in einem eigenen Kasten. Auf einem breiten Bildschirm stehen die
+Kästen des Datenfelds nebeneinander über dem Text, und **Anmerkungen** steht
+neben **Durchführung** und **Aufarbeitung und Reinigung**, die darauf
+verweisen; in einem schmalen Fenster und im Ausdruck folgen die Kästen in ihrer
+Reihenfolge aufeinander.
 
 Nach jedem Produkt- oder Ausgangsstofflink zeigt das Datenfeld
 Artikelnummer und Kurzname des Stoffs, sofern vorhanden, in dieser

@@ -71,6 +71,8 @@ thead { display: table-header-group; }
   padding: 0;
   break-after: avoid;
 }
+/* The compound's title stays with its first figure. */
+.procedure .widget__head + .structure { break-before: avoid; }
 .procedure .widget__body { padding: 0; }
 
 .table-scroll { overflow: visible; }
