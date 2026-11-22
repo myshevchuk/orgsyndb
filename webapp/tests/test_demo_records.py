@@ -15,6 +15,7 @@ from .demo_support import (ACCOUNTS, ARTICLES, DAY, DELIVERIES,
                            NUMBERLESS, PLAN, TASKS, SeededCase, noon,
                            opening, run, seed)
 from .registry_support import demo_registry
+from .widget_support import widget
 
 O = opening(DAY)
 DEFAULT_PARAMETERS = {"certainty": 0.95, "buffer_days": 28,
@@ -698,18 +699,16 @@ class InventoryTests(SeededCase):
         self.assertTrue(unknown, "no item holds containers of unknown "
                         "batch")
         item = two[0]
-        shares = self.get(f"/lab/inventory/items/{item.pk}/").find(
-            "dl", cls="batch-stock")
-        self.assertIsNotNone(shares)
+        shares = widget(self.get(f"/lab/inventory/items/{item.pk}/"),
+                        "Gebinde nach Charge")
         hrefs = [a.get("href") for a in shares.find_all("a")]
         for stock in item.stocks.filter(quantity__gt=0,
                                         batch__isnull=False):
             with self.subTest(batch=stock.batch_id):
                 self.assertIn(f"/lab/inventory/batches/{stock.batch_id}/",
                               hrefs)
-        shares = self.get(f"/lab/inventory/items/{unknown[0].pk}/").find(
-            "dl", cls="batch-stock")
-        self.assertIsNotNone(shares)
+        shares = widget(self.get(f"/lab/inventory/items/{unknown[0].pk}/"),
+                        "Gebinde nach Charge")
         self.assertIn("unbekannt", shares.text())
         assigned = Movement.objects.filter(
             kind=Movement.Kind.ASSIGNMENT).first()
