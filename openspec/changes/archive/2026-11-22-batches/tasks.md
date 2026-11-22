@@ -123,7 +123,7 @@
 ## 4. Verification
 
 - [x] 4.1 Both suites pass on CI
-- [ ] 4.2 On the test server after `demo_data --replace`: record a
+- [x] 4.2 On the test server after `demo_data --replace`: record a
   batch from a step into the flask, fill containers from it, transfer
   part of the rest into a stored vessel, end the task and see the
   remainder written off; the vessel list's
@@ -132,4 +132,4 @@
 ## 5. Review and archive
 
 - [x] 5.1 Codex reviewer
-- [ ] 5.2 Archive and squash-merge into `develop`
+- [x] 5.2 Archive and squash-merge into `develop`
