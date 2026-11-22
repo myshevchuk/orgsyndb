@@ -25,7 +25,8 @@ procedure and sequence schemas, the theme, the lab application
 and the tests. The lab application in `webapp/` uses Django, a Python web
 framework, to track synthesis tasks and the end-product inventory at
 `/lab/` beside the static site. The inventory counts containers ready to
-deliver, records deliveries and tracks bulk material available for filling.
+deliver, records deliveries and tracks which batches and vessels supply
+material for filling.
 See [Container deployment](#container-deployment) to run both.
 
 The repository holds no procedures of its own apart from a demo.
@@ -1365,7 +1366,7 @@ This keeps the demo apart from `webapp/db.sqlite3`. The command loads
 back from today in Europe/Berlin. For example, a successful run prints:
 
 ```text
-Demo data as of 2026-11-07 written: 5 accounts, 21 substances, 17 items, 234 delivery notes and 21 tasks.
+Demo data as of 2026-11-07 written: 5 accounts, 21 substances, 17 items, 234 delivery notes and 22 tasks.
 ```
 
 The date and counts depend on the day you run it. Open
@@ -1930,21 +1931,27 @@ accepted collection import's German or English language, or German until an impo
 accepted.
 
 Each task has a number such as `T-001`, the substance it makes, priority,
-assignee, start and end dates, ordered steps, calculated progress,
-batch number, report and QC-list flags, and a note. QC means quality control;
-the flag records whether the batch is on the QC list. A task is
+assignee, start and end dates, ordered steps, calculated progress, report
+and QC-list flags, and a note. QC means quality control. The flag records
+whether the task's product is on the QC list. A task is
 **Cancelled** when its cancelled flag is set. Otherwise, a set failed
 flag makes it **Fehlgeschlagen** (**Failed**). For the remaining tasks,
 dates determine whether they are planned, running or ended. Ended tasks
 missing the report or QC-list flag show **Follow-up** and stay in the
-active list until both flags are set. Failed tasks have no batch and need
-no follow-up.
+active list until both flags are set. Failed tasks need no follow-up.
+
+A batch records one substance from one source. A task's batches are the
+ones its steps record. A **product batch** is one of those batches of
+the task's own substance. The task list's **Charge** (**Batch**) column
+shows the product batch numbers, and the task page links to their
+records.
 
 To enter a task, sign in and choose **New task**. In **Substance**, enter
 a key from the [substance registry](#substance-registry); the suggestions
 pair each key with its name. Add a missing substance in the registry
 first. `/lab/tasks/new/?substance=cinnamic-acid`, for example, fills in
-that key. Search the task list by substance key or either language's name.
+that key. Search the task list by substance key, either language's name
+or the number of a batch its steps recorded.
 
 In **Sequence**, choose an imported synthesis sequence by ID and title,
 or leave it empty to plan steps yourself. The sequence must make the
@@ -1965,9 +1972,10 @@ the start step, plans the steps anew. At that save, the sequence must not
 be withdrawn, must make the task's substance, and must have at least that
 many steps.
 You can set, change or clear the sequence, or change the start step,
-only while none of the task's steps is done, has made a lot, has received
-material from a lot, or names a journal entry. A task with a sequence
-also refuses a substance change away from the sequence's target.
+only while none of the task's steps is done, has made a batch, has
+received a withdrawal, or names a journal entry. The task's substance
+is fixed once any step makes a batch. A task with a sequence also
+refuses a substance change away from the sequence's target.
 
 Other saves, such as a note, flag or date change, keep the sequence,
 start step, steps, entries and planned imports even if a later import
@@ -1981,10 +1989,9 @@ With a sequence, the form shows the task's step count and ignores changes
 to **Steps total**. Clearing the sequence gives the task as many plain
 steps as **Steps total** specifies.
 
-A withdrawal records material taken from a bulk lot into a task step.
-A step that made a lot, received a withdrawal or names a journal entry
-cannot be removed. **Steps total** cannot remove a step that names a
-journal entry.
+A withdrawal records material taken from a vessel into a task step.
+A **vessel** holds a weighed amount of one batch. A step that made a
+batch, received a withdrawal or names a journal entry cannot be removed.
 
 **Steps done** marks the first that many steps done. Steps already done
 keep their dates; newly done steps take today. The remaining steps have
@@ -1995,21 +2002,29 @@ no progress value.
 
 Use **Beginnen** (**Start**) on the task page to start a planned task.
 On a running task, **Stufe erledigt** (**Step done**) marks the first open
-step done today. Before ending the task, enter its batch and record a
-product lot: a lot of the task's substance, made in the lab, with that
-batch. **Abschließen** (**End**) is offered only when a running task has
-both. It sets the end date to today and marks every open step done on
-that date. Ending without a batch and product lot is refused. On an
-ended task, the report and QC-list buttons set those flags.
+step done today. Record at least one product batch from a step before
+ending the task. **Abschließen** (**End**) appears on a running task once
+it has a product batch. It sets the end date to today and marks every
+open step done on that date. On an ended task, the report and QC-list
+buttons set those flags.
 
-If a running synthesis fails and has no product lot, choose
-**Fehlgeschlagen** (**Failed**). This sets the end date to today, clears
-the batch and leaves the steps as they are.
+If a running synthesis fails and has no product batch, choose
+**Fehlgeschlagen** (**Failed**). This sets the end date to today and
+keeps the steps as they are.
 
 Choose **Edit** on the task page to change its fields, including the
-**Cancelled** and **Failed** flags. The form refuses a batch on a failed
-task. Unless the task is cancelled or failed, saving an end date requires
-a batch and a product lot.
+**Cancelled** and **Failed** flags. The form refuses the **Failed** flag
+on a task with a product batch. Unless the task is cancelled or failed,
+saving an end date requires a product batch.
+
+To enter a successful synthesis after the fact, save the task as running,
+record its product batch from a step, then save the end date.
+
+Ending, failing or cancelling a task writes off any material left in
+its batches' flasks. A flask is the vessel that holds the step's yield
+when you record a batch without a storage location. Fill containers or
+transfer the material to a stored vessel before you close the task if
+you want to keep it. The flask's ledger records the write-off.
 
 The task page links its sequence and adds **ab Stufe &lt;k&gt;**
 (**from step &lt;k&gt;**) after its ID when the task starts after step 1.
@@ -2029,14 +2044,15 @@ to clear it. A saved value shows **Laborjournal von Stufe &lt;n&gt; gespeichert.
 (**Lab notebook of step &lt;n&gt; saved.**) and appears in the task's change
 history. An invalid value shows an error and changes nothing.
 
-Under each step, the page also lists the lots it made and the withdrawals
-booked into it, each linking to its lot. While the task is planned or
-running, you can sign in and choose **Los erfassen** (**Record a lot**)
-to open `/lab/inventory/bulk/new/?step=<id>` for that step. When open lots
+Under each step, the page links to the batches it made and shows the
+amounts in their flasks and stored vessels. Withdrawals into the step
+link to their source vessels. While the task is planned or running,
+sign in and choose **Charge erfassen** (**Record batch**) to open
+`/lab/inventory/batches/new/?step=<id>` for that step. When open vessels
 are available, **Entnahme buchen** (**Book a withdrawal**) lists those of
-the step's substrates, the substances it takes. For a plain step, it
-lists every open lot. Choose a lot to open its withdrawal form with the
-step filled in.
+the step's substrates, the substances it takes. An open vessel holds an
+amount above zero. For a plain step, the action lists every open vessel.
+Choose one to open its withdrawal form with the step filled in.
 
 A withdrawn sequence or procedure appears without a link, marked
 **nicht in der Sammlung** (**not in the collection**). A step whose entry
@@ -2049,8 +2065,8 @@ including start-step changes, newest first. Step changes are headed
 removals **Stufe &lt;n&gt; entfernt** (**Step &lt;n&gt; removed**).
 Staff can also inspect a task's steps in `/lab/admin/`.
 The sequence, start step and steps are read-only there; use the task
-form to plan steps. The admin also refuses a substance change away from
-the sequence's target.
+form to plan steps. The same rules for changing the substance apply in
+the admin.
 
 Planned and running tasks use a computed priority when their substance's
 inventory article has a forecast. An article is one substance with its
@@ -2077,20 +2093,14 @@ A planned or running task also shows its own slack and is marked
 task counts only its remaining synthesis time, so its priority can differ
 from the article's priority for starting a new synthesis.
 
-The task page links to bulk lots with the same nonempty batch when the
-task and lot name the same substance. It also includes lots made by the
-task's steps, whatever their substance or batch. If you are signed in,
-an ended task with a batch offers **Als Bulk erfassen** (**Record as bulk**).
-This opens the new-lot form with the substance, batch and end date filled
-in, including for a substance without an article.
-
 ### Demo deployment
 
 Use a separate test deployment to explore the lab with invented records:
 substances and vocabularies, inventory and stock levels, delivery notes,
-bulk lots and fillings, lab notebooks, tasks in every state, and planning
-priorities and actions, all with histories. One task for `CH-0013` is
-failed and has no batch. Every ended task that has not failed has its product lot.
+batches, vessels and fillings, lab notebooks, tasks in every state, and
+planning priorities and actions, all with histories. One task for
+`CH-0013` is failed and has no product batch. Each successfully ended
+task has a product batch recorded from its last step.
 **Never set `ORGSYNDB_DEMO=true` on a stack that keeps real records.**
 
 Before the first start and before creating accounts, set these values in
@@ -2125,16 +2135,18 @@ forty zeros, release `demo` and trigger `catch-up`. This lets you use the demo
 before any collection build. Its tasks follow the
 imported sequences `SEQ-0001` and `SEQ-0002`; one is running with the
 first of its two steps done. This running `SEQ-0002` task's first step
-names journal entry `CE-3/2` and made a lot of `4-acetylbiphenyl`. Part of
-that lot was withdrawn into its second step.
+names journal entry `CE-3/2` and records two batches of
+`4-acetylbiphenyl` under that entry. One batch is in a stored vessel.
+A withdrawal takes part of the other batch's flask into the second step.
 
 The planned `SEQ-0001` task for `CH-0010` starts at step 2 and has just
-one step, `OSDB-0002`. It uses salicylic acid from an open 5 g lot made
-by the first step of the second ended `SEQ-0001` task. Every other task
-with a sequence starts at step 1. The demo's planning list initially
-shows no stock proposal because the articles with sequences already
-have a planned or running task. Cancel the planned `SEQ-0001` task to
-see `CH-0010` offer **Synthese planen über SEQ-0001 ab Stufe 2,
+one step, `OSDB-0002`. It can draw on a stored vessel with 5 g of
+salicylic acid from a batch made by the first step of the second ended
+`SEQ-0001` task. Every other task with a sequence starts at step 1.
+The demo's planning list initially shows no stock proposal because
+the articles with sequences already have a planned or running task.
+Edit the planned `SEQ-0001` task, set **Cancelled** and save to see
+`CH-0010` offer **Synthese planen über SEQ-0001 ab Stufe 2,
 Salicylsäure vorrätig** (**Plan synthesis via SEQ-0001 from step 2,
 Salicylic acid in stock**).
 
@@ -2145,13 +2157,21 @@ which no demo procedure names. Their names and molar masses come from the
 lab registry. Conversions between mg and µmol use those molar masses.
 
 There is also an item **1-Phenylethanol** without an article number. It
-enters stock later, is filled without a bulk lot and is never delivered.
-Its synthesis task names the substance `1-phenylethanol` and has a batch
-and a product lot. The item links to its substance and has no forecast.
+enters stock later and is never delivered. Its task fills the item from
+the product batch's flask 89 days before seeding and transfers some of
+the yield to a stored vessel. The task ends the next day and writes off
+the remainder in the flask. The item links to its substance and has no
+forecast.
 
-The bulk list also includes a made lot of `ethyl-cinnamate` beside one
-bought from **ChemPur GmbH**, and the intermediate `4-acetylbiphenyl`
-made in the lab, with a task for each substance.
+The batch list shows made batches of `ethyl-cinnamate` beside one bought
+from **ChemPur GmbH**, supplier article `CP-4471`, batch `CP240917`.
+The demo has tasks for `ethyl-cinnamate` and the intermediate
+`4-acetylbiphenyl`. It also records made batches of stored stock without
+task steps. The vessels include one measured in µmol for `NV-0007` and
+an open vessel of an intermediate with no article. Every filling
+records the movement on its source vessel. The vessel list and ledgers
+show used-up vessels, a correction with a note and the transfer from the
+**1-Phenylethanol** flask.
 
 Every demo item has a compartment and a box. The item list shows all
 seven stock levels on any seeding day.
@@ -2264,8 +2284,8 @@ Four figures follow:
   [Production planning](#production-planning) explains the calculation.
 - **Aufgaben** (**Tasks**) shows the running and planned task counts and
   links to the task list.
-- **Offene Bulk-Lose** (**Open bulk lots**) counts lots of any substance with
-  material remaining and links to the bulk list.
+- **Offene Gefäße** (**Open vessels**) counts vessels of any substance with
+  material remaining, including flasks. It links to the vessel list.
 
 **Nächste Synthesen** (**Next syntheses**) lists up to five articles with
 a forecast, smallest slack first, in the same order as planning's
@@ -2324,9 +2344,11 @@ chemical registry identifier. To narrow the list, choose an
 list shows substances in name order, with their inventory group, chemical
 classes, formula, molar mass and article number.
 Open a substance's name to see its full record, its structure image when
-it has a molfile, containers, open bulk lots and tasks. **Copy**
-(**Kopieren**) beside the SMILES string copies it. When
-the collection's procedures involve the substance, the page also lists
+it has a molfile, containers, batches and tasks. **Chargen** (**Batches**)
+lists batches newest first, links to their records and shows the amount
+in their open vessels by unit. **Copy** (**Kopieren**) beside the SMILES
+string copies it. When the collection's procedures involve the
+substance, the page also lists
 them: **Made by** (**Hergestellt nach**), the procedures and
 general-procedure entries that make it, each with its yield and status;
 **Used in** (**Verwendet in**), the procedures that start from it;
@@ -2385,8 +2407,10 @@ and saves nothing. Saving opens the notebook page with **Laborjournal
 Open a code to read `/lab/journal/<code>/`: its owner, note and entries in
 number order. `AE-2/8` means entry 8 of notebook `AE-2`; numbers run from 1
 to 9999 and have no leading zero. The entry's contents stay on paper. The app
-creates an entry record when an import or a task step first names it.
+creates an entry record when an import, a task step or a batch first names it.
 Each row links to the procedures and task steps that name that entry.
+Its **Chargen** (**Batches**) column links to each batch that names the
+entry and shows its substance.
 A withdrawn procedure is marked **nicht in der Sammlung** (**not in the
 collection**) and has no link. A notebook without entries shows **Keine
 Einträge.** (**No entries.**).
@@ -2586,10 +2610,19 @@ list; `/lab/` opens the [lab overview](#lab-overview). You can read the
 inventory without signing in. Use the same account as for tasks to enter
 items, book stock changes or edit records.
 
-The lists have three tabs: **Items**, **Bulk** at
-`/lab/inventory/end-products/bulk/`, and **Deliveries** at
-`/lab/inventory/deliveries/`. Bulk is material that has not yet been
-divided into containers.
+The inventory has four tabs.
+
+- **Artikel** (**Items**), `/lab/inventory/end-products/`, shows the
+  stock of finished containers by article and size.
+- **Chargen** (**Batches**), `/lab/inventory/batches/`, shows where each
+  batch came from and how much material remains.
+- **Gefäße** (**Vessels**), `/lab/inventory/vessels/`, shows where the
+  material is held and how much is in each vessel.
+- **Lieferungen** (**Deliveries**), `/lab/inventory/deliveries/`, lists
+  delivery notes.
+
+**Bulk** is the material an item or article can draw on from open
+vessels of its substance, including flasks.
 
 #### Enter items and find stock
 
@@ -2652,12 +2685,13 @@ not count towards this date.
 
 An item without an article number shows its container and name; its page
 heading is the name alone. It links to its substance and shows that
-substance's open lots. Its article has no forecast; tasks of the same
-substance keep their entered priority. You can fill containers from a
-matching lot or without a lot and correct their count, but cannot book
-deliveries or enter past consumption, even zero.
+substance's open vessels. Its article has no forecast; tasks of the
+same substance keep their entered priority. You can fill containers
+from an open vessel of the same substance and correct their count.
+Booking deliveries or entering past consumption, even zero, requires
+an article number.
 Its page offers **Enter article number** in place of **Book delivery**,
-and has no **Enter consumption** or **New bulk lot** link.
+and has no **Enter consumption** or **New batch** link.
 
 Enter items and past quarterly consumption by hand; there is no Excel
 import. The heading **Endprodukte** (**End products**) shows the number
@@ -2723,10 +2757,10 @@ in a new tab still works as a page of its own.
 Under **Fertige Gebinde** (**Finished containers**), read **Fach** and
 **Box** to find the finished containers. Each empty field reads **nicht
 hinterlegt** (**not recorded**). Under **Bulk, separat gelagert**
-(**Bulk, stored separately**), the pane lists each open bulk lot of the
-substance with its location, batch and amount. An unrecorded bulk
-location also reads **nicht hinterlegt**. Click a batch to open its
-lot page.
+(**Bulk, stored separately**), the pane lists each open vessel of the
+substance with its batch and amount. It shows the location when recorded.
+Without a location, a flask shows **Kolben** (**Flask**) and a stored
+vessel shows **nicht hinterlegt**. Select a vessel to open its page.
 
 Under **Verbrauch** (**Consumption**), read this year's consumption to
 date in containers and the means per year and per quarter. A mean or
@@ -2774,7 +2808,7 @@ regardless of case. Containers sort from smallest to largest, with mass
 sizes before amount-of-substance sizes, so 100 mg, 250 mg and 1 g come
 before µmol sizes. Locations sort with `2` before
 `10`. Consumption and coverage sort by value, smallest first; bulk sorts
-by how many containers the open lots would fill. Items without a value
+by how many containers the open vessels would fill. Items without a value
 in the sorting column come last in either direction. Ties sort by article
 number, then container size. Unnumbered items follow numbered ones and
 sort by name, then container size.
@@ -2866,8 +2900,9 @@ Choose **Correct count** after counting the containers, and give a note
 explaining the correction. To undo a mistaken delivery or filling,
 choose **Reverse** beside its ledger entry and give a note. A reversed
 delivery restores stock and no longer counts as consumption. Reversing
-a filling removes its containers and returns any amount taken to its
-bulk lot; it is refused if those containers are no longer available.
+a filling removes its containers and returns the amount taken to its
+source vessel. The reversal requires enough containers in stock and,
+for a filling from a flask, a task that is still planned or running.
 
 You cannot edit or delete ledger entries or delete delivery notes. A
 delivery note's date and lines are fixed; its number, recipient and note
@@ -2959,63 +2994,113 @@ three delivery notes in the past 730 days, it shows their usual interval,
 the median gap in whole days, and the next delivery expected that long
 after the last. Each forecast figure names the parameters it uses.
 
-#### Record bulk and fill containers
+#### Record a batch
 
-Choose **New bulk lot** on the bulk list to record material not yet
-divided into containers. Choose any substance by key, including an
-intermediate or a reagent made in the lab. Choose **hergestellt** (**made**),
-the default, or **gekauft** (**bought**), and optionally enter a supplier.
-The same substance can have made and bought lots. Enter the amount in
-`mg`, `g`, `µmol` or `mmol`, batch, location, date and note. The substance,
-source and unit cannot change after creation.
+Record a batch to trace material to the step that made it or to its
+supplier. For a synthesis, choose **Charge erfassen** (**Record batch**)
+under the step while the task is planned or running. The form fills in
+the first product of the step, or the task's substance for a plain step,
+and today's date. Choose a substance the step makes and enter the batch
+number and yield. If the step already names a journal entry, the batch
+uses that entry and the field is read-only. You can record several
+batches from one entry, for example for separate fractions.
 
-To record material made by a task step, choose **Record a lot** under
-that step on the task page. The form at
-`/lab/inventory/bulk/new/?step=<id>` fills in the step's first product,
-or the task's substance for a plain step, and today's date. It also
-fills in the task's batch when that substance is the task's substance.
-Enter the amount and save. The form refuses a substance the step does
-not make and a bought source. The lot's step cannot change after creation.
+Enter the yield in `mg`, `g`, `µmol` or `mmol`. Leave the location
+empty to put the yield in a flask. Enter a location to record it directly
+in a stored vessel. The yield stays on the batch record as material
+moves out of its vessels.
 
-The bulk list shows all open lots, including substances without an
-article. It shows the substance's name, article number when present and
-source, with the supplier beside it when given. Each lot's page has its
-own ledger; correcting its amount requires a note. A lot at zero is used
-up and leaves the bulk list unless you tick **Used-up lots too**.
+For a purchase or material made without a recorded step, choose
+**Neue Charge** (**New batch**) on the batch or vessel list. Select any
+substance by key. A substance can have made and bought batches. The form
+at `/lab/inventory/batches/new/` accepts `?substance=<key>` to fill in
+the key, as the **New batch** link on a numbered item's page does.
 
-The lot page links to tasks with the same nonempty batch and substance.
-For a lot made by a step, it shows that step and links to its task.
-Each withdrawal shows the task and step that received the material,
-with a link to the task. A reversal identifies the withdrawal it reverses.
-The new-lot form at `/lab/inventory/bulk/new/` accepts `substance`, `batch`
-and `made_on` in the query to fill in the substance key, batch and date.
-The task page's **Record as bulk** link supplies these values from the
-ended task.
+- For **hergestellt** (**made**), the default, enter a batch number of at
+  most 30 characters. Made batch numbers are unique across substances
+  and regardless of case. You can also enter a journal reference as
+  `<code>/<number>`.
+- For **gekauft** (**bought**), you can enter the supplier, the
+  supplier's article number and the supplier's batch number.
 
-To record material taken into a synthesis, sign in and choose **Entnahme**
-(**Withdraw**) on an open lot's page. At
-`/lab/inventory/bulk/<id>/withdraw/`, choose a step of a planned or running
-task, enter the amount in the lot's unit and a date, and save. The amount
-must be greater than zero and cannot exceed the lot's remaining amount.
-To undo a withdrawal, choose **Stornieren** (**Reverse**) beside it on
-the lot page. This returns its amount to the lot; each withdrawal can be
-reversed only once.
+The date defaults to today. You can add a note. Enter an amount and a
+unit to open the first stored vessel, and enter its location if known.
+The batch's substance, source and making step are fixed once saved.
 
-On an item page, choose **Fill** to add containers. You may select an
-open bulk lot of the same substance and enter the amount taken in the
-lot's unit. **Menge vorschlagen** (**Propose amount**) calculates the
-amount for the container count without booking it. Leaving the amount
-empty when booking uses that proposal. Conversion between mass and
-amount of substance uses the molar mass in the registry; without it,
-enter the amount yourself. Booking adds the containers and deducts the bulk
-amount together. If the lot has too little material, neither changes.
-Each item shows its open lots and how many containers they could still
-fill, counted separately for each lot.
+Search **Chargen** (**Batches**) by the substance's key or name, the
+batch number, the supplier's batch number or the supplier. The list
+shows source, journal entry, date, yield and stock by unit, newest
+dated batches first. Open a batch to see its task step and journal
+entry or its supplier details, its vessels, fillings and change
+history. **Bearbeiten** (**Edit**) updates the batch details.
+**Neues Gefäß** (**New vessel**) records a stored vessel with its own
+opening amount, unit, location and note.
 
-Staff can inspect articles, items, bulk lots, delivery notes and movements
-at `/lab/admin/`. An item or lot can be deleted only while its ledger holds
-just its opening entry; an item must also have no delivery-note lines.
-Deleting such an item or lot also deletes its opening entry.
+#### Find and move material in vessels
+
+The vessel list shows open vessels of every substance, including
+substances without an article. It shows the batch, source, amount,
+location and batch date. To narrow the list, choose an **Art** (**Kind**).
+
+- **Kolben** (**Flask**) holds the yield recorded from a task step
+  without a storage location.
+- **Endprodukt** (**End product**) is a stored vessel whose substance
+  has an article.
+- **Zwischenprodukt** (**Intermediate**) is a stored vessel of a made
+  batch whose substance has no article.
+- **Reagenz** (**Reagent**) is a stored vessel of a bought batch whose
+  substance has no article.
+
+A vessel at zero is used up. Tick **Auch aufgebrauchte** (**Used-up
+vessels too**) to include those vessels. Open a vessel to see its batch,
+amount, location and ledger. The ledger links fillings to items,
+withdrawals to their task steps and transfers to the other vessel.
+Reversals identify the movement they reverse. Use **Bearbeiten**
+(**Edit**) to change the location or note. After weighing, use
+**Korrigieren** (**Correct**) to record the amount and give a note.
+Each vessel keeps its batch and unit and stays a flask or a stored vessel.
+
+To take material into a synthesis, choose **Entnahme** (**Withdraw**)
+on an open vessel at `/lab/inventory/vessels/<id>/withdraw/`. Select
+a step of a planned or running task, then enter the amount in the
+vessel's unit and the date. The amount must be above zero and within
+the available stock. **Stornieren** (**Reverse**) beside a withdrawal
+returns the amount to the vessel. Each withdrawal can be reversed once.
+A closed task's flask stays empty. You can correct its amount or
+reverse a withdrawal only while the task is planned or running.
+
+To move material into storage or divide a batch between vessels, choose
+**Umfüllen** (**Transfer**) on the source vessel. Enter the amount in
+the source vessel's unit and choose another stored vessel of the same
+batch or enter a location for a new one. Enter the date and any note.
+A new vessel uses the source's unit. A transfer between mass and amount
+of substance requires the substance's molar mass. Both ledgers record
+the transfer. If it was wrong, use a transfer back where allowed or
+record a correction.
+
+#### Fill containers
+
+On an item page, choose **Abfüllen** (**Fill**) and select an open
+vessel of the same substance. The form shows the vessels' kind,
+location when recorded and amount. Enter the container count and,
+optionally, the amount taken in the vessel's unit. **Menge vorschlagen**
+(**Propose amount**) calculates that amount without booking it. Leaving
+the amount empty when booking uses the proposal. Conversion between
+mass and amount of substance uses the molar mass in the registry.
+Enter the amount yourself if the conversion needs a missing molar mass.
+Booking adds the containers and deducts the amount from the vessel
+together. If there is too little material, neither changes.
+
+The item's **Bulk** section lists its open vessels and how many whole
+containers each can fill. The total adds the counts for vessels whose
+amounts convert into the item's unit.
+
+Staff can inspect articles, items, batches, vessels, delivery notes
+and movements at `/lab/admin/`. A batch can be deleted only if it has
+no vessels and no task step made it. An item or vessel can be deleted
+only while its ledger holds just its opening entry. An item must also
+have no delivery-note lines. Deleting such an item or vessel deletes
+its opening entry.
 An article can be deleted only while it has no items; its article number
 is read-only once set.
 
@@ -3031,7 +3116,7 @@ synthesis durations, with the same figures visible to everyone. Choose
 **Planung** (**Planning**) or open `/lab/planning/`.
 
 Planning groups the container sizes of an article because one synthesis
-replenishes the bulk used to fill them. Tasks and bulk lots match the
+replenishes the bulk used to fill them. Tasks and vessels match the
 article by substance. An article without a number has no forecast.
 Dormant and never-delivered items have no demand model, runway or actions
 and do not contribute to planning figures. If every item is dormant or
@@ -3041,9 +3126,10 @@ size gives the article a forecast.
 
 An article's **runway** is how many days the stock lasts at the chosen
 certainty, 95 % by default. Bulk is shared between sizes so that it counts
-once. **Usable bulk** counts each convertible open lot's amount less the
-largest container size with demand, at least zero, so that the amount
-counted can fill whole containers.
+once. For **usable bulk**, planning subtracts the largest convertible
+container size with demand from each convertible open vessel's amount.
+Vessels with less material contribute zero. The estimate accounts for
+the need to fill whole containers.
 
 The synthesis time is the longest of the article's last three completed
 syntheses; cancelled and failed tasks do not count. Until three exist,
@@ -3062,10 +3148,11 @@ The planning list shows articles with a forecast whose priority is high
 or medium, or for which an action is due. Choose **All articles**
 (`/lab/planning/?all=1`) to see every article with a forecast. Rows are
 ordered by slack, smallest first, then by article number. Each row shows
-the article number and name; each container size with stock, level and
-runway on hand; demand per year; last delivery; usable bulk; article
-runway; synthesis time; latest start; priority; tasks; and actions.
-Container sizes link to their item pages. Planned and running tasks link
+the article number and name, with stock, level and runway on hand for
+each container size. Container sizes link to their item pages. The row
+also shows demand per year, the last delivery and usable bulk in the
+**Bulk** column. It gives the article's runway, synthesis time, latest
+start, priority, tasks and actions. Planned and running tasks link
 to their task pages and show their expected end, with **verspätet**
 (**late**) when their slack is below zero. The line above the table shows
 the parameters in force.
@@ -3073,16 +3160,17 @@ the parameters in force.
 Use the actions offered for each article:
 
 - `Abfüllen <size>` (`Fill <size>`) opens that size's filling form
-  when its filled containers last less than the buffer and the open lots
-  can fill at least one container.
-- **Bulk prüfen** (**Check bulk**) opens the bulk list when an open lot
-  cannot be converted because its substance has no molar mass in the
-  registry.
+  when its filled containers last less than the buffer and an open
+  vessel can fill at least one container.
+- **Bulk prüfen** (**Check bulk**) opens the vessel list when the amount
+  in an open vessel cannot be converted because its substance has no
+  molar mass in the registry.
 - The synthesis action appears when priority is high or medium,
-  no matching task is planned or running, and every open lot of the
-  article converts.
-  An unconvertible lot may hold enough material, so check it first. This
-  action is a link when you are signed in and plain text otherwise.
+  no matching task is planned or running, and the amounts in all open
+  vessels of the article's substance can be converted. A vessel whose
+  amount cannot be converted may hold enough material, so check it
+  first. This action is a link when you are signed in and plain text
+  otherwise.
   For each sequence that makes the article's substance and is not
   withdrawn, it offers **Synthese planen über &lt;ID&gt;**
   (**Plan synthesis via &lt;ID&gt;**), in sequence-ID order.
@@ -3092,12 +3180,13 @@ Use the actions offered for each article:
 
 To skip work whose product is already in stock, planning proposes the
 latest sequence step whose preceding step's intermediate has an open
-lot, whether made or bought. An intermediate is the first product of
-one step that the next step takes as a substrate. An open lot has an
-amount above zero. When no such intermediate is in stock, planning
-proposes step 1. For a later step, the action adds **ab Stufe &lt;k&gt;,
-&lt;name&gt; vorrätig** (**from step &lt;k&gt;, &lt;name&gt; in stock**).
-Planning reserves nothing and does not check whether the lot holds
+vessel. An intermediate is the first product of one step that the next
+step takes as a substrate. Any vessel with an amount above zero counts,
+including a flask or a vessel of a bought batch. When no such
+intermediate is in stock, planning proposes step 1. For a later step,
+the action adds **ab Stufe &lt;k&gt;, &lt;name&gt; vorrätig**
+(**from step &lt;k&gt;, &lt;name&gt; in stock**).
+Planning reserves nothing and does not check whether the vessel holds
 enough. Check the amount and confirm or change **Start at step** before
 saving the task. Skipping steps does not shorten the forecast's synthesis
 time.

@@ -1,10 +1,13 @@
 # Understanding production planning
 
 The forecast helps you decide when to fill containers from bulk, when to
-start a synthesis, and how much it needs to produce. Bulk is material held
-in lots for filling containers. The forecast replaces a personal estimate
-of urgency with the same calculation for everyone. You can see the stock,
-demand, synthesis time, and assumptions behind the result.
+start a synthesis, and how much it needs to produce. Bulk is the material
+held in open vessels of the article's substance, including flasks. A vessel
+holds a weighed amount of one batch. A batch records material from one
+synthesis or purchase. An open vessel holds an amount above zero.
+The forecast replaces a personal estimate of urgency with the same
+calculation for everyone. You can see the stock, demand, synthesis time,
+and assumptions behind the result.
 
 Diese Anleitung gibt es auch auf Deutsch: [PLANNING.de.md](PLANNING.de.md).
 
@@ -125,24 +128,25 @@ under Runway on hand.
 ### Why usable bulk is smaller than the recorded amount
 
 **Usable bulk (Nutzbares Bulk)** allows for filling whole containers from
-separate lots. For each open lot, the calculation subtracts the article's
-largest container size among the sizes with demand. A lot smaller than
-that size contributes zero. Missing containers are also rounded up to
-whole containers.
+separate vessels. For each open vessel, the calculation subtracts the
+article's largest convertible container size among the sizes with demand.
+A vessel holding less than that size contributes zero. The calculation
+also rounds shortages up to whole containers.
 
-For example, with 10 mg and 20 mg sizes and one lot of 360 mg, the forecast
+For example, with 10 mg and 20 mg sizes and one vessel of 360 mg, the forecast
 counts **340 mg** as usable bulk. With no filled containers and quarterly
 demand of nine containers per size in each of 12 quarters, the article's
 runway is **62 days** at the default certainty. Giving each size the whole
-lot would count the same material twice.
+vessel would count the same material twice.
 
-Two separate lots of 6 mg cannot fill a 10 mg container. Their combined
-12 mg therefore contributes **zero usable bulk** to that article.
+Two vessels of 6 mg each cannot fill a 10 mg container, even when they
+hold the same batch. Their combined 12 mg counts as **zero usable bulk**.
 
-Converting between mg and µmol needs the compound's molar mass. A lot that
-cannot be converted is excluded from usable bulk and triggers **Check bulk
-(Bulk prüfen)**. A size that cannot be converted relies on its own filled
-containers and can limit the article's runway.
+Converting between mg and µmol needs the compound's molar mass. If a
+vessel's amount cannot be converted, planning leaves it out of usable
+bulk and offers **Check bulk (Bulk prüfen)**. A size that cannot be
+converted relies on its own filled containers and can limit the article's
+runway.
 
 ## Work out when synthesis needs to start
 
@@ -221,9 +225,9 @@ apply:
 
 | Action | Why it appears and what it opens |
 | --- | --- |
-| **Fill (Abfüllen)** followed by a size | That size's filled containers last less than the buffer, and the open lots can fill at least one container. Open the filling form for that size. |
-| **Check bulk (Bulk prüfen)** | An open lot cannot be converted because the molar mass is missing. Open the bulk list to check it; the lot may contain enough material to avoid a synthesis. |
-| **Plan synthesis (Synthese planen)** | Priority is high or medium, no matching task is planned or running, and every open lot of the article can be converted. Open a new task with the article's substance key filled in, together with the sequence and proposed start step when a sequence makes that substance. |
+| **Fill (Abfüllen)** followed by a size | That size's filled containers last less than the buffer, and an open vessel can fill at least one container. Open the filling form for that size and select an open vessel of the same substance. |
+| **Check bulk (Bulk prüfen)** | An open vessel's amount cannot be converted because the molar mass is missing. Open the vessel list to check its amount. It may hold enough material to avoid a synthesis. |
+| **Plan synthesis (Synthese planen)** | Priority is high or medium, no matching task is planned or running, and the amounts in all open vessels of the article's substance can be converted. Open a new task with the article's substance key filled in, together with the sequence and proposed start step when a sequence makes that substance. |
 
 A *sequence* is an ordered route through synthesis steps. For each
 sequence in the collection that makes the article's substance and is not
@@ -233,14 +237,14 @@ makes the substance, the action remains **Plan synthesis (Synthese
 planen)** and fills in only the substance key.
 
 To skip work whose product is already in stock, planning proposes the
-latest step whose preceding step's *intermediate* has an open lot.
+latest step whose preceding step's *intermediate* has an open vessel.
 The intermediate is the first product of one step that the next step
-takes as a substrate. An open lot has an amount above zero; made and
-bought lots both count. If none is in stock, planning proposes step 1.
+takes as a substrate. Any open vessel counts, including a flask or a
+vessel of a bought batch. If none is in stock, planning proposes step 1.
 For a later step, the action adds **from step &lt;k&gt;, &lt;name&gt; in stock
 (ab Stufe &lt;k&gt;, &lt;name&gt; vorrätig)**, naming that intermediate.
 
-Planning reserves nothing and does not check whether the lot holds
+Planning reserves nothing and does not check whether the vessel holds
 enough. Check the amount and confirm or change **Start at step (Beginn
 ab Stufe)** in the task form. The task's sequence must make its substance;
 its steps start at the step you choose. Skipping steps does not shorten
@@ -263,11 +267,17 @@ containers and usable bulk, then rounds the missing material up to whole
 mg or µmol. An amount in µmol is also shown in mg. If a size cannot be
 converted, its missing amount appears as a count of its own containers.
 
-After a synthesis ends, a signed-in user can use **Record as bulk (Als Bulk
-erfassen)** on a task with a batch and a matching article. It opens a new
-lot with the article, batch, and end date filled in. Enter the amount and
-save it. The task and lot pages link records with the same batch only when
-their articles also match.
+While the task is planned or running, sign in and choose **Record batch
+(Charge erfassen)** under the step that made the material. Enter the batch
+number and yield. The batch uses the step's journal entry when the step
+names one. The task links to the batch and the batch links back to the task.
+To end the task successfully, record at least one batch of the task's
+substance from one of its steps.
+
+With a location, the yield goes straight into a stored vessel. Without
+one, it goes into a flask. You can fill containers from the flask or use
+**Transfer (Umfüllen)** to move material to a stored vessel of the same
+batch. Closing the task writes off whatever remains in its flasks.
 
 ## Read the delivery rhythm
 

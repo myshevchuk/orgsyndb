@@ -2,7 +2,10 @@
 
 Die Prognose hilft Ihnen zu entscheiden, wann Sie Gebinde aus Bulk
 abfüllen, wann Sie eine Synthese beginnen und wie viel sie liefern muss.
-Bulk ist Material, das in Chargen zum Abfüllen bereitliegt. Die Prognose
+Bulk ist das Material in offenen Gefäßen mit der Substanz des Artikels,
+einschließlich Kolben. Ein Gefäß enthält eine gewogene Menge einer Charge.
+Eine Charge erfasst Material aus einer Herstellung oder einem Einkauf.
+Ein Gefäß ist offen, wenn es eine Menge über null enthält. Die Prognose
 ersetzt eine persönliche Einschätzung der Dringlichkeit durch dieselbe
 Berechnung für alle. Bestand, Bedarf, Synthesedauer und die Annahmen hinter
 dem Ergebnis bleiben sichtbar.
@@ -140,27 +143,27 @@ unterscheiden.
 ### Warum nutzbares Bulk kleiner als die erfasste Menge ist
 
 **Nutzbares Bulk** berücksichtigt, dass Sie ganze Gebinde aus getrennten
-Chargen abfüllen. Von jeder offenen Charge zieht die Berechnung die größte
-Gebindegröße des Artikels unter den Größen mit Bedarf ab. Eine kleinere
-Charge trägt null bei. Auch fehlende Gebinde rundet die Berechnung auf
-ganze Gebinde auf.
+Gefäßen abfüllen. Von der Menge in jedem offenen Gefäß zieht die Berechnung
+die größte umrechenbare Gebindegröße des Artikels mit Bedarf ab. Ein Gefäß
+mit weniger Inhalt trägt null bei. Die Berechnung rundet auch den
+Fehlbedarf auf ganze Gebinde auf.
 
-Bei Größen von 10 mg und 20 mg und einer Charge mit 360 mg zählt die
+Bei Größen von 10 mg und 20 mg und einem Gefäß mit 360 mg zählt die
 Prognose zum Beispiel **340 mg** als nutzbares Bulk. Ohne abgefüllte
 Gebinde und bei einem Quartalsbedarf von neun Gebinden je Größe in jedem
 von zwölf Quartalen beträgt die Reichweite des Artikels bei der
-vorgegebenen Sicherheit **62 Tage**. Würde jede Größe die ganze Charge
+vorgegebenen Sicherheit **62 Tage**. Würde jede Größe den ganzen Gefäßinhalt
 erhalten, würde dasselbe Material doppelt zählen.
 
-Zwei getrennte Chargen mit je 6 mg können kein Gebinde von 10 mg füllen.
-Ihre zusammen 12 mg tragen deshalb **null nutzbares Bulk** zu diesem
-Artikel bei.
+Zwei Gefäße mit je 6 mg können kein Gebinde von 10 mg füllen, auch wenn
+sie Material derselben Charge enthalten. Ihre zusammen 12 mg zählen als
+**null nutzbares Bulk**.
 
 Für die Umrechnung zwischen mg und µmol braucht die Anwendung die molare
-Masse der Verbindung. Eine nicht umrechenbare Charge zählt nicht zum
-nutzbaren Bulk und löst **Bulk prüfen** aus. Eine nicht umrechenbare
-Gebindegröße ist auf ihre eigenen abgefüllten Gebinde angewiesen und kann
-die Reichweite des Artikels begrenzen.
+Masse der Verbindung. Lässt sich die Menge in einem Gefäß nicht umrechnen,
+lässt die Planung sie beim nutzbaren Bulk weg und bietet **Bulk prüfen**
+an. Eine nicht umrechenbare Gebindegröße ist auf ihre eigenen abgefüllten
+Gebinde angewiesen und kann die Reichweite des Artikels begrenzen.
 
 ## Ermitteln, wann die Synthese beginnen muss
 
@@ -244,9 +247,9 @@ zutreffen:
 
 | Maßnahme | Warum sie erscheint und was sie öffnet |
 | --- | --- |
-| **Abfüllen** mit einer Größe | Die abgefüllten Gebinde dieser Größe reichen kürzer als der Puffer, und die offenen Chargen können mindestens ein Gebinde füllen. Öffnen Sie das Abfüllformular für diese Größe. |
-| **Bulk prüfen** | Eine offene Charge lässt sich wegen fehlender molarer Masse nicht umrechnen. Öffnen Sie die Bulk-Liste zur Prüfung; die Charge könnte genug Material enthalten, um eine Synthese zu vermeiden. |
-| **Synthese planen** | Die Priorität ist hoch oder mittel, keine passende Aufgabe ist geplant oder läuft, und alle offenen Chargen des Artikels lassen sich umrechnen. Öffnen Sie eine neue Aufgabe mit ausgefülltem Substanzschlüssel sowie Syntheseweg und vorgeschlagener Anfangsstufe, wenn ein Syntheseweg diese Substanz herstellt. |
+| **Abfüllen** mit einer Größe | Die abgefüllten Gebinde dieser Größe reichen kürzer als der Puffer, und ein offenes Gefäß reicht für mindestens ein Gebinde. Öffnen Sie das Abfüllformular für diese Größe und wählen Sie ein offenes Gefäß derselben Substanz. |
+| **Bulk prüfen** | Die Menge in einem offenen Gefäß lässt sich wegen fehlender molarer Masse nicht umrechnen. Öffnen Sie die Gefäßliste und prüfen Sie die Menge. Sie könnte ausreichen, um eine Synthese zu vermeiden. |
+| **Synthese planen** | Die Priorität ist hoch oder mittel, keine passende Aufgabe ist geplant oder läuft, und die Mengen in allen offenen Gefäßen der Substanz des Artikels lassen sich umrechnen. Öffnen Sie eine neue Aufgabe mit ausgefülltem Substanzschlüssel sowie Syntheseweg und vorgeschlagener Anfangsstufe, wenn ein Syntheseweg diese Substanz herstellt. |
 
 Ein *Syntheseweg* ist eine geordnete Folge von Synthesestufen. Für jeden
 Syntheseweg in der Sammlung, der die Substanz des Artikels herstellt und
@@ -257,18 +260,18 @@ dann ist nur der Substanzschlüssel ausgefüllt.
 
 Um Arbeit zu überspringen, deren Produkt bereits vorrätig ist, schlägt
 die Planung die späteste Stufe vor, für deren vorangehende Stufe das
-*Zwischenprodukt* in einer offenen Charge vorliegt. Das Zwischenprodukt
+*Zwischenprodukt* in einem offenen Gefäß vorliegt. Das Zwischenprodukt
 ist das erste Produkt einer Stufe, das die nächste Stufe als Substrat
-einsetzt. Eine offene Charge hat eine Menge über null; hergestellte und
-gekaufte Chargen zählen gleichermaßen. Ist keines dieser Zwischenprodukte
-vorrätig, schlägt die Planung Stufe 1 vor. Bei einer späteren Stufe ergänzt
+einsetzt. Jedes offene Gefäß zählt, auch ein Kolben oder ein Gefäß einer
+gekauften Charge. Ist keines dieser Zwischenprodukte vorrätig, schlägt
+die Planung Stufe 1 vor. Bei einer späteren Stufe ergänzt
 die Maßnahme **ab Stufe &lt;k&gt;, &lt;name&gt; vorrätig** und nennt damit
 das Zwischenprodukt.
 
-Die Planung reserviert nichts und prüft nicht, ob die Menge ausreicht.
-Prüfen Sie die Menge und bestätigen oder ändern Sie **Beginn ab Stufe**
-im Aufgabenformular. Der Syntheseweg der Aufgabe muss deren Substanz
-herstellen; die Stufen der Aufgabe beginnen bei der gewählten Stufe.
+Die Planung reserviert nichts und prüft nicht, ob die Menge im Gefäß
+ausreicht. Prüfen Sie die Menge und bestätigen oder ändern Sie
+**Beginn ab Stufe** im Aufgabenformular. Der Syntheseweg der Aufgabe muss
+deren Substanz herstellen. Die Aufgabe beginnt bei der gewählten Stufe.
 Das Überspringen von Stufen verkürzt die Synthesedauer der Prognose nicht.
 
 Synthese planen ist ein Link, wenn Sie angemeldet sind, sonst reiner Text.
@@ -289,12 +292,19 @@ die fehlende Materialmenge auf ganze mg oder µmol auf. Eine Menge in µmol
 erscheint zusätzlich in mg. Lässt sich eine Größe nicht umrechnen, erscheint
 ihre fehlende Menge als Anzahl ihrer eigenen Gebinde.
 
-Nach dem Ende einer Synthese können angemeldete Personen auf einer Aufgabe
-mit Charge und passendem Artikel **Als Bulk erfassen** verwenden. Das
-öffnet eine neue Charge mit ausgefülltem Artikel, Chargenbezeichnung und
-Enddatum. Tragen Sie die Menge ein und speichern Sie. Aufgaben- und
-Bulk-Seiten verknüpfen Einträge mit derselben Chargenbezeichnung nur dann,
-wenn auch ihre Artikel passen.
+Melden Sie sich an, solange die Aufgabe geplant ist oder läuft, und
+wählen Sie **Charge erfassen** bei der Stufe, die das Material hergestellt
+hat. Tragen Sie die Chargennummer und die Ausbeute ein. Die Charge
+übernimmt den Laborjournaleintrag der Stufe, wenn diese einen nennt.
+Die Aufgabenseite und die Chargenseite verlinken aufeinander. Um die
+Aufgabe erfolgreich abzuschließen, erfassen Sie bei einer ihrer Stufen
+mindestens eine Charge der Substanz der Aufgabe.
+
+Wenn Sie einen Ort angeben, kommt die Ausbeute direkt in ein gelagertes
+Gefäß. Ohne Ortsangabe kommt sie in einen Kolben. Sie können Gebinde aus
+dem Kolben abfüllen oder Material mit **Umfüllen** in ein gelagertes
+Gefäß derselben Charge überführen. Beim Schließen der Aufgabe bucht die
+Anwendung die Reste in ihren Kolben aus.
 
 ## Den Lieferrhythmus lesen
 
