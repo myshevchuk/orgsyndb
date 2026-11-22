@@ -195,7 +195,7 @@ h2 {
 <div class="wrap">
   <header>
     <h1>OrgSynDB tables</h1>
-    <p class="lede">The lab application has {{ table_count }} tables in {{ package_count }} packages, plus {{ history_count }} history tables and Django's own tables. Column types are the ones PostgreSQL creates. SQLite stores the same columns under its own type names.</p>
+    <p class="lede">The lab application has {{ table_count }} tables in {{ package_count }} packages, plus {{ history_count }} history tables and Django's own tables. Column types are the ones PostgreSQL creates.</p>
     <ul class="apps" aria-label="Packages">
       {% for label, name in packages %}<li class="app-{{ label }}"><span class="sw"></span><b>{{ label }}</b> {{ name }}</li>
       {% endfor %}<li class="app-history"><span class="sw"></span><b>simple_history</b> change history</li>

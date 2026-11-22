@@ -13,6 +13,7 @@ from django.core.exceptions import ImproperlyConfigured
 WEBAPP = Path(__file__).resolve().parent.parent
 DEBUG_SECRET_KEY = "django-insecure-orgsyndb-debug-only"
 DEBUG_HOSTS = ["localhost", "127.0.0.1"]
+LOCAL_DATABASE = "postgres://lab:lab@localhost:5432/lab"
 TRUE = ("1", "true", "yes", "on")
 FALSE = ("0", "false", "no", "off")
 DEFAULT_URL = "http://localhost:8000"
@@ -44,21 +45,16 @@ def database(url: str) -> dict[str, Any]:
     """Return Django's settings of the database named by URL.
 
     URL is ``postgres://<user>:<password>@<host>[:<port>]/<name>``, also
-    with the scheme ``postgresql``, or ``sqlite:///<path>``. User name
+    with the scheme ``postgresql``. User name
     and password may be percent-encoded. Raise ImproperlyConfigured
     naming ``ORGSYNDB_DATABASE_URL`` for another scheme, or when the URL
     names no database.
     """
     name = "ORGSYNDB_DATABASE_URL"
-    if url.startswith("sqlite:///"):
-        path = url.removeprefix("sqlite:///")
-        if not path:
-            raise ImproperlyConfigured(f"{name} names no SQLite file: {url}")
-        return {"ENGINE": "django.db.backends.sqlite3", "NAME": path}
     parts = urlsplit(url)
     if parts.scheme not in ("postgres", "postgresql"):
         raise ImproperlyConfigured(
-            f"{name} must start with postgres:// or sqlite:///: {url}")
+            f"{name} must start with postgres://: {url}")
     database_name = unquote(parts.path.lstrip("/"))
     if not database_name:
         raise ImproperlyConfigured(f"{name} names no database: {url}")
@@ -160,8 +156,8 @@ def settings_from(environ: Mapping[str, str]) -> dict[str, Any]:
     The result holds ``DEBUG`` from ``ORGSYNDB_DEBUG``, ``SECRET_KEY``
     from ``ORGSYNDB_SECRET_KEY``, ``ALLOWED_HOSTS`` from the
     comma-separated ``ORGSYNDB_ALLOWED_HOSTS``, ``DATABASES`` from
-    ``ORGSYNDB_DATABASE_URL`` (by default the SQLite file
-    ``webapp/db.sqlite3``), ``ORGSYNDB_DEMO`` from the flag of that name,
+    ``ORGSYNDB_DATABASE_URL`` (by default ``LOCAL_DATABASE``, the local
+    development database), ``ORGSYNDB_DEMO`` from the flag of that name,
     which permits writing the demo data, and ``ORGSYNDB_BUILDER_TOKEN``,
     the token the builder signs its manifests with, empty when unset,
     which turns the manifest path off, ``ORGSYNDB_WAKE_URL``, the
@@ -190,8 +186,8 @@ def settings_from(environ: Mapping[str, str]) -> dict[str, Any]:
                 "ORGSYNDB_ALLOWED_HOSTS is not set; list the host names "
                 "the site is reached by, separated by commas")
         hosts = list(DEBUG_HOSTS)
-    url = (environ.get("ORGSYNDB_DATABASE_URL", "").strip()
-           or f"sqlite:///{WEBAPP / 'db.sqlite3'}")
+    url = environ.get("ORGSYNDB_DATABASE_URL", "").strip() \
+        or LOCAL_DATABASE
     return {
         "DEBUG": debug,
         "SECRET_KEY": secret_key,

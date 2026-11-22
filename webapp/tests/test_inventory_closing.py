@@ -2,17 +2,16 @@
 Vessels, Inventory forms; task-tracker: Task record, Tasks in the admin;
 the design's "Bookings against a closing task").
 
-The first classes run on every database: a booking prepared while the
-task was open and stored after it closed is refused. The last ones run
-on PostgreSQL alone, where two connections overlap a booking with a
-closure; SQLite takes no row lock.
+The first classes check that a booking prepared while the task was
+open and stored after it closed is refused. The last ones overlap a
+booking with a closure through two connections.
 """
 
 import threading
 from datetime import date
 from decimal import Decimal
 from typing import Any, Callable
-from unittest import mock, skipUnless
+from unittest import mock
 
 from django.db import close_old_connections, connection, transaction
 from django.test import Client, TransactionTestCase
@@ -151,12 +150,9 @@ class PreparedWhileOpenTests(InventoryCase):
                          Decimal("500"))
 
 
-@skipUnless(connection.vendor == "postgresql",
-            "needs the row lock of PostgreSQL")
 class OverlapTests(TransactionTestCase):
     """Two connections overlap a booking with a closure, either winning
-    (Vessels: on PostgreSQL this holds for bookings and closures that
-    overlap)."""
+    (Vessels: this holds for bookings and closures that overlap)."""
 
     TIMEOUT = 20
 

@@ -144,8 +144,7 @@ leaves this file then.
     `test_demo_records.py` call `seed` themselves and write the demo
     data set each time; those that only read it could use
     `seed_once` or a seeded class.
-  - The PostgreSQL job is the longest on CI, about 6.5 minutes against
-    2 for SQLite.
+  - The lab suite takes about 6.5 minutes on CI's PostgreSQL job.
   - The root suite's slowest tests have not been measured; run it
     with `--durations=30` to find them.
 

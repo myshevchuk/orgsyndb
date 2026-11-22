@@ -6,7 +6,6 @@ neither Django nor a database.
 import ast
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tomllib
@@ -78,15 +77,6 @@ class ProjectFileTests(unittest.TestCase):
         self.assertFalse((WEBAPP / "orgsyndb_web" / "index.py").exists(),
                          "the collection index module is removed")
         self.assertTrue((WEBAPP / "tests" / "__init__.py").is_file())
-
-    def test_database_file_is_ignored(self) -> None:
-        if shutil.which("git") is None:
-            self.skipTest("git not found")
-        done = subprocess.run(
-            ["git", "-C", str(REPO), "check-ignore", "-q",
-             "webapp/db.sqlite3"])
-        self.assertEqual(done.returncode, 0,
-                         "webapp/db.sqlite3 is not ignored")
 
 
 class RootSuiteTests(unittest.TestCase):

@@ -41,21 +41,12 @@ class HoldTests(TestCase):
         self.assertIsNone(lock.hold())
         self.assertIsNone(lock.hold())
 
-    def test_sqlite_does_nothing(self) -> None:
-        """Requirement: One lock (on SQLite it does nothing)."""
-        from orgsyndb_web import lock
-        with mock.patch.object(connection, "vendor", "sqlite"), \
-                mock.patch.object(connection, "cursor") as cursor:
-            lock.hold()
-        self.assertFalse(cursor.called)
-
     def test_postgresql_takes_an_advisory_lock(self) -> None:
-        """Requirement: One lock (on PostgreSQL by `SELECT
-        pg_advisory_xact_lock(<key>)` with a fixed key)."""
+        """Requirement: One lock (by `SELECT pg_advisory_xact_lock(<key>)`
+        with a fixed key)."""
         from orgsyndb_web import lock
         statements = []
-        with mock.patch.object(connection, "vendor", "postgresql"), \
-                mock.patch.object(connection, "cursor") as cursor:
+        with mock.patch.object(connection, "cursor") as cursor:
             lock.hold()
             lock.hold()
         for opened in (cursor.return_value,

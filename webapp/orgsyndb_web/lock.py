@@ -32,17 +32,15 @@ def hold() -> None:
     """Take the lock inside the current transaction of the default
     database; it is released when that transaction ends.
 
-    On PostgreSQL this waits for ``pg_advisory_xact_lock`` with the
-    fixed ``KEY``; on SQLite, which lets one writer in at a time, it does
-    nothing. Raise TransactionManagementError when no transaction is
+    This waits for ``pg_advisory_xact_lock`` with the fixed ``KEY``.
+    Raise TransactionManagementError when no transaction is
     open, that is, with autocommit on.
     """
     if not connection.in_atomic_block:
         raise TransactionManagementError(
             "the lock is held only inside a transaction")
-    if connection.vendor == "postgresql":
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT pg_advisory_xact_lock(%s)", [KEY])
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_advisory_xact_lock(%s)", [KEY])
 
 
 def hold_covered() -> None:

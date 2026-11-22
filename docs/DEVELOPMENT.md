@@ -19,7 +19,7 @@ serially. The full suites run on CI for every pushed branch:
 | Workflow | File | Runs | Blocks a merge |
 |---|---|---|---|
 | `Program` | `program.yml` | root suite, Fedora, latest stable Emacs | yes |
-| `Lab application` | `webapp.yml` | lab suite on SQLite and PostgreSQL | yes |
+| `Lab application` | `webapp.yml` | lab suite on PostgreSQL | yes |
 | `Emacs versions (informational)` | `emacs.yml` | Emacs tests on older stable Emacs | no |
 
 The baseline for a change is the CI result of the commit its branch
@@ -67,8 +67,7 @@ write takes seconds, and every such class used to make one.
 asks for a day, compares every table before and after, and keeps the
 rows of the tables that changed. Later calls for that day delete those
 tables' rows and insert the kept ones, then reset the id sequences
-with `connection.ops.sequence_reset_sql`, which PostgreSQL needs and
-SQLite ignores. The restore runs inside the class's
+with `connection.ops.sequence_reset_sql`. The restore runs inside the class's
 `setUpTestData` transaction, so it is rolled back like the write it
 replaces. `SeededCase` uses it.
 

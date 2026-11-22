@@ -6,7 +6,7 @@ by one conditional ``UPDATE`` of the row, which names the condition the
 change needs, such as ``quantity >= n``, and is read back in the same
 transaction; the value an instance passed in holds is never trusted.
 Two bookings prepared from the same quantity therefore never take more
-than it holds, on PostgreSQL and SQLite alike. A booking that changes
+than it holds. A booking that changes
 several rows locks tasks first, then items, then vessels, each in the
 order of their IDs, so that two bookings never wait for each other. A
 booking that is refused raises Refused and changes nothing.
@@ -15,8 +15,7 @@ Recording a batch from a task step and every booking on a flask lock the
 row of the task and check in the booking's transaction that the task is
 planned or running, so that a booking prepared while the task was open
 and stored after it closed is refused. A closure of the task takes the
-same lock. On SQLite, which takes no row lock, that holds for no two
-bookings that overlap.
+same lock.
 """
 
 from collections.abc import Iterable, Sequence

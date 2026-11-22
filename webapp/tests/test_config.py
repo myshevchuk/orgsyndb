@@ -1,7 +1,6 @@
 """Tests of the application's settings (web-app: Settings from the
 environment, Paths under /lab/)."""
 
-from pathlib import Path
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -11,7 +10,6 @@ from orgsyndb_web.config import settings_from
 
 from . import PASSWORD, field_value, make_user, page
 
-WEBAPP = Path(__file__).resolve().parents[1]
 BASE = {"ORGSYNDB_SECRET_KEY": "k", "ORGSYNDB_ALLOWED_HOSTS": "lab.test"}
 
 
@@ -94,20 +92,21 @@ class DatabaseUrlTests(SimpleTestCase):
         self.assertEqual((db["HOST"], db["PORT"], db["NAME"]),
                          ("db", "", "lab"))
 
-    def test_sqlite_url(self) -> None:
-        db = self.database("sqlite:////tmp/x.sqlite3")
-        self.assertEqual(db["ENGINE"], "django.db.backends.sqlite3")
-        self.assertEqual(str(db["NAME"]), "/tmp/x.sqlite3")
+    def test_sqlite_url_is_refused(self) -> None:
+        with self.assertRaises(ImproperlyConfigured) as caught:
+            self.database("sqlite:////tmp/x.sqlite3")
+        self.assertIn("ORGSYNDB_DATABASE_URL", str(caught.exception))
 
     def test_other_scheme_is_refused(self) -> None:
         with self.assertRaises(ImproperlyConfigured) as caught:
             self.database("mysql://db/lab")
         self.assertIn("ORGSYNDB_DATABASE_URL", str(caught.exception))
 
-    def test_default_is_the_sqlite_file_of_the_application(self) -> None:
+    def test_default_is_the_local_development_database(self) -> None:
         db = settings_from(BASE)["DATABASES"]["default"]
-        self.assertEqual(db["ENGINE"], "django.db.backends.sqlite3")
-        self.assertEqual(Path(str(db["NAME"])), WEBAPP / "db.sqlite3")
+        self.assertEqual(db["ENGINE"], "django.db.backends.postgresql")
+        self.assertEqual((db["NAME"], db["USER"], db["HOST"], db["PORT"]),
+                         ("lab", "lab", "localhost", "5432"))
 
 
 class NoIndexPathTests(SimpleTestCase):
