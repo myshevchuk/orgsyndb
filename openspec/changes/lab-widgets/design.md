@@ -60,14 +60,19 @@ Class names: `.widget` on a `section` or `details`, `.widget__head`
 as in the mockups. The title is an `h2` inside the title bar, so the
 pages' heading outline stays (site-theme heading rules).
 
-### Printing opens collapsible widgets by script
+### Printing: a print rule in `lab.css`, the script as fallback
 
-Browsers do not print the content of a closed `details`, and pure CSS
-cannot open it in every engine. `lab.js` opens every closed
+Browsers do not print the content of a closed `details`. A rule in
+the print block of `lab.css`, `details.widget::details-content {
+content-visibility: visible; }`, opens it on paper in current
+browsers without the script; `lab.js` also opens every closed
 `details.widget` on `beforeprint` and closes those it opened on
-`afterprint`. Rejected: rules in `print.css`, which WeasyPrint also
-reads and whose warnings fail the print tests (print-layout
-"Warning-free rendering").
+`afterprint`, for engines without `::details-content`. `print.css`
+hides every `button`; the sort buttons that `lab.js` puts into the
+headers are shown again by a print rule in `lab.css`
+(`th > button.sort-header`), so the headers print. Rejected: rules in
+`print.css`, which WeasyPrint also reads for procedure PDFs and whose
+warnings fail the print tests (print-layout "Warning-free rendering").
 
 ### One history template, one row per changed field
 
@@ -90,13 +95,19 @@ returning the indices of the rows in their new order, tested under
 Node like the script's other pure functions; the collator falls back
 to the default locale where Node lacks the language. Key rules are
 those of the requirement. Templates give `data-sort` to amounts (the
-amount in the base unit), to a date shown with its booking time, and
-to any cell mixing a number with a mark.
+amount in the base unit), to every date and time (ISO 8601, so that
+English pages, which show ISO dates, and German pages, which show
+`DD.MM.YYYY`, sort alike), and to any cell mixing a number with a
+mark.
 
-Activation: a header becomes a button inside the `th`; the first
-activation sorts ascending, each further one flips the direction;
-activating another column starts it ascending and clears the
-previous header's `aria-sort`.
+Activation: `lab.js` wraps each header's label in a
+`button.sort-header` inside the `th`, so that without the script the
+header is plain text; the first activation sorts ascending, each
+further one flips the direction; activating another column starts it
+ascending and clears the previous header's `aria-sort`. One click
+listener on `document` handles every sort button, so that headers in
+a part put in by a refresh sort without being bound anew; the wrapping
+runs again on each part a refresh puts in.
 
 ### Refresh carries view state by `id`
 
