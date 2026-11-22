@@ -19,5 +19,5 @@
 
 ## 4. Review and archive
 
-- [ ] 4.1 Codex reviewer
+- [x] 4.1 Codex reviewer
 - [ ] 4.2 Archive and squash-merge into `develop`

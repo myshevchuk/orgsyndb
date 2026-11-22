@@ -1307,7 +1307,9 @@ uv run pytest
 
 The suite needs a PostgreSQL server. By default it connects to
 `postgres://lab:lab@localhost:5432/lab`, the local development database;
-set `ORGSYNDB_DATABASE_URL` to use another. One way to provide it is a
+set `ORGSYNDB_DATABASE_URL` to use another. The tests run in a
+separate database Django creates beside it, `test_lab` for `lab`, so
+the role needs permission to create databases. One way to provide it is a
 container: `podman run -d --name orgsyndb-pg -e POSTGRES_USER=lab -e
 POSTGRES_PASSWORD=lab -e POSTGRES_DB=lab -p 127.0.0.1:5432:5432
 postgres:18`, or the same with `docker`. The
