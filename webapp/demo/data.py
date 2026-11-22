@@ -149,12 +149,13 @@ class EnterConsumption(Change):
 @dataclass(frozen=True, kw_only=True)
 class BookNote(Change):
     """Book the delivery note NUMBER dated DAY, current or HISTORICAL,
-    with LINES, pairs of an item key and a count."""
+    with LINES, triples of an item key, the key of a batch of the item's
+    substance and a count."""
 
     number: str
     day: date
     recipient: str
-    lines: tuple[tuple[str, int], ...]
+    lines: tuple[tuple[str, str, int], ...]
     historical: bool = False
 
 
@@ -168,7 +169,8 @@ class ReverseNote(Change):
 
 @dataclass(frozen=True, kw_only=True)
 class ReverseDelivery(Change):
-    """Reverse the delivery of ITEM by the current note NUMBER."""
+    """Reverse the deliveries of ITEM by the current note NUMBER, one
+    for each batch the note's lines of the item name."""
 
     number: str
     item: str
@@ -179,12 +181,14 @@ class ReverseDelivery(Change):
 class RecordBatch(Change):
     """Record the batch KEY of the substance SUBSTANCE, by its key, made
     in the lab with the number NUMBER or bought as SOURCE says, with its
-    supplier's fields, dated DATE, the day it was made or received.
+    supplier's fields, dated DATE, the day it was made or received, or
+    None for a batch known by its number alone.
 
-    The batch's first vessel holds AMOUNT, in UNIT, at LOCATION. STEP,
-    when given, is the task step that made the batch, as the key of its
-    task and its position: the amount is then the batch's yield and
-    waits in its flask when LOCATION is empty."""
+    The batch's first vessel holds AMOUNT, in UNIT, at LOCATION; an
+    AMOUNT of None opens none. STEP, when given, is the task step that
+    made the batch, as the key of its task and its position: the amount
+    is then the batch's yield and waits in its flask when LOCATION is
+    empty."""
 
     key: str
     substance: str
@@ -194,9 +198,9 @@ class RecordBatch(Change):
     supplier_article_number: str
     supplier_batch: str
     unit: str
-    amount: Decimal
+    amount: Decimal | None
     location: str
-    date: date
+    date: date | None
     step: tuple[str, int] | None = None
 
 
@@ -245,9 +249,12 @@ class SetStatus(Change):
 
 @dataclass(frozen=True, kw_only=True)
 class Correct(Change):
-    """Set the quantity of ITEM to COUNT, dated the change's day."""
+    """Set the share of ITEM of the batch BATCH, by its key, or of
+    unknown batch when BATCH is None, to COUNT, dated the change's
+    day."""
 
     item: str
+    batch: str | None
     count: int
     note: str
 
@@ -621,6 +628,9 @@ REVERSED = ("CH-0016", 0, 14)
 CORRECTED = ("CH-0016", 1, 180)
 CORRECTED_VESSEL = ("CH-0016", 2, 370, "1.5")
 DUPLICATED = 2
+# The number of the batch of an article's old stock starts with this
+# text, and ends with the article number.
+LEGACY_PREFIX = "ALT-"
 FACTOR = {"mg": Decimal(1), "g": Decimal(1000), "umol": Decimal(1),
           "mmol": Decimal(1000)}
 MASS_UNITS = ("mg", "g")
@@ -757,7 +767,7 @@ def changes(today: date, language: str) -> list[Change]:
              fields={**DEFAULTS, "target_days": 180})
     line.add(line.day(200), PARAMETERS, SaveParameters, user="klehmann",
              fields={"target_days": 365})
-    orders: list[tuple[date, str, int]] = []
+    orders: list[tuple[date, str, str, int]] = []
     numbers = _numbers(line)
     for article in ARTICLES:
         orders += _article(line, article, numbers)
@@ -815,9 +825,14 @@ def _numbers(line: _Timeline) -> dict[tuple[str, Any], str]:
 
 def _article(line: _Timeline, article: _Article,
              numbers: dict[tuple[str, Any], str]) -> list[
-                 tuple[date, str, int]]:
+                 tuple[date, str, str, int]]:
     """Add the changes of ARTICLE but its delivery notes, and return its
-    orders, each a day, an item key and a count."""
+    order lines, each a day, an item key, a batch key and a count.
+
+    The article's orders from before the opening name its batch of old
+    stock, recorded by its number alone on the opening day; the later
+    ones name the batches the items' containers are of (``_share_out``).
+    """
     history = quarter_start(back(quarter_of(line.opening), 1))
     yields = set()
     for position, synthesis in enumerate(article.syntheses):
@@ -832,11 +847,20 @@ def _article(line: _Timeline, article: _Article,
         for offset in synthesis.fills)
     taken: dict[int, Decimal] = defaultdict(Decimal)
     found = []
+    legacy = f"{article.number}/legacy"
     for turn, size in enumerate(article.sizes):
         key = size_key(article.number, size)
         own = _orders(line, size, history)
-        found += [(day, key, count) for day, count in own]
-        _size(line, article, turn, size, key, own, opportunities, taken)
+        found += [(day, key, legacy, count) for day, count in own
+                  if day < line.opening]
+        found += _size(line, article, turn, size, key, own, opportunities,
+                       taken, legacy)
+    if found:
+        line.add(line.opening, BATCH, RecordBatch, user="klehmann",
+                 key=legacy, substance=article.substance, source="made",
+                 number=f"{LEGACY_PREFIX}{article.number}", supplier="",
+                 supplier_article_number="", supplier_batch="", unit="",
+                 amount=None, location="", date=None)
     for position in sorted(yields):
         synthesis = article.syntheses[position]
         key = f"{article.number}#{position}"
@@ -896,10 +920,17 @@ def _orders(line: _Timeline, size: _Size, history: date
 def _size(line: _Timeline, article: _Article, turn: int, size: _Size,
           key: str, orders: list[tuple[date, int]],
           opportunities: list[tuple[int, int]],
-          taken: dict[int, Decimal]) -> None:
+          taken: dict[int, Decimal], legacy: str
+          ) -> list[tuple[date, str, str, int]]:
     """Add the opening count, entered consumption, fillings and
     corrections of the item KEY, so that its stock covers its ORDERS
-    and is ``size.final`` on the seeding day.
+    and is ``size.final`` on the seeding day, and return the lines of
+    its orders from the opening on, each a day, KEY, a batch key and a
+    count.
+
+    The opening count is of unknown batch. LEGACY is the key of the
+    article's batch of old stock, which a line names for containers of
+    unknown batch.
 
     Each filling but the last fills what the orders until the next take
     and a cushion of the largest order; the last fills what leaves the
@@ -959,13 +990,15 @@ def _size(line: _Timeline, article: _Article, turn: int, size: _Size,
                                              turn),
                  item=key, vessel=f"{article.number}#{position}",
                  count=count, amount=amount)
-    if correction:
-        counted = opening + sum(count for day, _, count in booked
-                                if day <= correction) - sum(
-            count for day, count in demand.items() if day <= correction)
+    lines, corrected = _share_out(
+        opening, [(day, f"{article.number}#{position}", count)
+                  for day, position, count in booked],
+        current, current.index(reversal) if reversal else None,
+        correction, legacy, key)
+    if corrected:
         line.add(correction, CORRECTION, Correct,
-                 user=staff(CORRECTED[2]), item=key, count=counted,
-                 note=line.text(NOTES["correction"]))
+                 user=staff(CORRECTED[2]), item=key, batch=corrected[0],
+                 count=corrected[1], note=line.text(NOTES["correction"]))
     if size.opened == 0 and (size.gap or size.rate):
         _entered(line, key, size, turn)
     if size.status != "active":
@@ -977,6 +1010,81 @@ def _size(line: _Timeline, article: _Article, turn: int, size: _Size,
                  user=staff((day - line.opening).days),
                  number=reversal[0].isoformat(), item=key,
                  note=line.text(NOTES["reversed delivery"]))
+    return [(order[0], key, batch, count)
+            for order, split in zip(current, lines)
+            for batch, count in split]
+
+
+def _share_out(opening: int, fills: list[tuple[date, str, int]],
+               orders: list[tuple[date, int]], reversed_order: int | None,
+               corrected: date | None, legacy: str, key: str
+               ) -> tuple[list[list[tuple[str, int]]],
+                          tuple[str | None, int] | None]:
+    """Follow the shares of the item KEY through the day's changes and
+    return the batches of each of its ORDERS, and the correction.
+
+    The item opens with OPENING containers of unknown batch. FILLS are
+    a day, a batch key and a count each; ORDERS a day and a count each.
+    An order takes from the batches filled last first; what they do not
+    hold it takes from the item's old stock, naming the batch LEGACY,
+    which the booking fills from the containers of unknown batch. An
+    order that no single batch covers is several lines. The order
+    REVERSED_ORDER, a position or None, is reversed two days after its
+    day and returns each line's containers to its batch. On the day
+    CORRECTED, or none, one container is found missing from the share
+    of unknown batch, or from the largest share when that holds none.
+
+    Return, for each order, the pairs of a batch key and a count that
+    its lines hold, and the correction as the batch key, None for
+    unknown batch, and the count its share is set to. Raise ValueError
+    when an order is not covered.
+    """
+    events = [(day, FILL, n, "fill", (batch, count))
+              for n, (day, batch, count) in enumerate(fills)]
+    events += [(day, NOTE, n, "order", n)
+               for n, (day, _count) in enumerate(orders)]
+    if reversed_order is not None:
+        events.append((orders[reversed_order][0] + timedelta(days=2),
+                       REVERSAL, 0, "reversal", reversed_order))
+    if corrected is not None:
+        events.append((corrected, CORRECTION, 0, "correction", None))
+    held: dict[str | None, int] = {None: opening}
+    recency: dict[str, int] = {}
+    lines: list[list[tuple[str, int]]] = [[] for _ in orders]
+    correction = None
+    for turn, (day, _rank, _n, kind, what) in enumerate(
+            sorted(events, key=lambda event: event[:3])):
+        if kind == "fill":
+            held[what[0]] = held.get(what[0], 0) + what[1]
+            recency[what[0]] = turn
+        elif kind == "order":
+            remaining = orders[what][1]
+            known = sorted((batch for batch, count in held.items()
+                            if batch not in (None, legacy) and count),
+                           key=lambda batch: recency[batch], reverse=True)
+            for batch in [*known, legacy]:
+                own = held.get(batch, 0)
+                take = min(remaining, own + (held[None]
+                                             if batch == legacy else 0))
+                if take == 0:
+                    continue
+                if batch == legacy:
+                    held[None] -= max(take - own, 0)
+                    own = max(own, take)
+                held[batch] = own - take
+                lines[what].append((batch, take))
+                remaining -= take
+            if remaining:
+                raise ValueError(f"{key} runs out on {day}")
+        elif kind == "reversal":
+            for batch, count in lines[what]:
+                held[batch] = held.get(batch, 0) + count
+        else:
+            target = None if held[None] else max(
+                held, key=lambda batch: held[batch])
+            held[target] -= 1
+            correction = (target, held[target])
+    return lines, correction
 
 
 def place(article: _Article, turn: int) -> tuple[str, str]:
@@ -1122,14 +1230,16 @@ def _task(line: _Timeline, key: str, substance: str,
                  position=position, entry=entry)
 
 
-def _notes(line: _Timeline, orders: list[tuple[date, str, int]]) -> None:
-    """Add the delivery notes of ORDERS: one note a day, numbered by
-    year in the order of their dates; historical for the days before
-    the opening, entered in its first weeks, one of them twice and
-    reversed; and the reversal of the delivery ``REVERSED`` names."""
-    by_day: dict[date, list[tuple[str, int]]] = defaultdict(list)
-    for day, key, count in orders:
-        by_day[day].append((key, count))
+def _notes(line: _Timeline, orders: list[tuple[date, str, str, int]]
+           ) -> None:
+    """Add the delivery notes of ORDERS, each a day, an item key, a batch
+    key and a count: one note a day, numbered by year in the order of
+    their dates; historical for the days before the opening, entered in
+    its first weeks, one of them twice and reversed; and the reversal of
+    the delivery ``REVERSED`` names."""
+    by_day: dict[date, list[tuple[str, str, int]]] = defaultdict(list)
+    for day, key, batch, count in orders:
+        by_day[day].append((key, batch, count))
     days = sorted(by_day)
     historical = [day for day in days if day < line.opening]
     duplicate = historical[DUPLICATED] if len(historical) > DUPLICATED \

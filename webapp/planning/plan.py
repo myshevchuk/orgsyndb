@@ -441,8 +441,10 @@ class Plan:
         item has no demand model."""
         entered = {(row.year, row.quarter): row.count for row in
                    EnteredConsumption.objects.filter(item=item)}
-        orders = [(line.delivery_note.date, line.count)
-                  for line in counted_lines(item)]
+        lines = counted_lines(item)
+        orders = [(line.delivery_note.date, line.count) for line in lines]
+        notes = {line.delivery_note_id: line.delivery_note.date
+                 for line in lines}
         delivered: dict[tuple[int, int], int] = {}
         for day, count in orders:
             delivered[quarter_of(day)] = delivered.get(
@@ -457,7 +459,7 @@ class Plan:
             item=item, model=model, runway_on_hand=on_hand,
             size=convert(item.size, item.unit, unit, mass),
             figures=figures,
-            rhythm=forecast.rhythm([day for day, _ in orders], self.today),
+            rhythm=forecast.rhythm(notes.values(), self.today),
             fill=(on_hand is not None
                   and on_hand < self.parameters.buffer_days
                   and bulk(item, self.vessels).containers > 0))

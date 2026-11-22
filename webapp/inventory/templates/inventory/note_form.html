@@ -11,11 +11,12 @@
 </div>
 {% endfor %}<table class="note-lines">
 <thead>
-<tr><th scope="col">{% translate "Item" %}</th><th scope="col">{% translate "Count" %}</th></tr>
+<tr><th scope="col">{% translate "Item" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "Count" %}</th></tr>
 </thead>
 <tbody>
-{% for item, count in form.rows %}<tr>
+{% for item, batch, count in form.rows %}<tr>
 <td class="lab-field{% if item.errors %} lab-field--error{% endif %}">{{ item }}{{ item.errors }}</td>
+<td class="lab-field{% if batch.errors %} lab-field--error{% endif %}">{{ batch }}{{ batch.errors }}</td>
 <td class="lab-field{% if count.errors %} lab-field--error{% endif %}">{{ count }}{{ count.errors }}</td>
 </tr>
 {% endfor %}</tbody>

@@ -1,7 +1,7 @@
 """Fixtures and helpers shared by the inventory tests."""
 
 import re
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import date
 from decimal import Decimal
@@ -26,8 +26,8 @@ COMPOUND_PAGE = re.compile(r"/compounds/[^/]+/\Z")
 SUBSTANCE_PAGE = re.compile(r"/lab/registry/substances/[^/]+/\Z")
 NOTE_PAGE = re.compile(r"/lab/inventory/deliveries/\d+/\Z")
 KINDS = {"opening": "Anfangsbestand", "delivery": "Abgabe",
-         "filling": "Abfüllung", "correction": "Korrektur",
-         "reversal": "Storno"}
+         "assignment": "Zuordnung", "filling": "Abfüllung",
+         "correction": "Korrektur", "reversal": "Storno"}
 VESSEL_KINDS = {"opening": "Anfangsmenge", "filling": "Abfüllung",
                 "withdrawal": "Entnahme",
                 "transfer_out": "Umfüllung (Abgang)",
@@ -115,6 +115,66 @@ def has_amount(text: str, number: str, unit: str) -> bool:
         text) is not None
 
 
+NUMBER = re.compile(r"(?<![\w.,])\d+(?![\w.,])")
+
+
+def _follows(node: Any) -> Any:
+    """The element after ``node`` among its siblings when it is a term
+    or a cell, which its description or its neighbour completes."""
+    from . import Element
+    if node.tag not in ("dt", "td", "th") or node.parent is None:
+        return None
+    siblings = [c for c in node.parent.children if isinstance(c, Element)]
+    later = siblings[siblings.index(node) + 1:]
+    return later[0] if later else None
+
+
+def count_after(text: str, label: str, others: list[str]) -> int | None:
+    """The first whole number that ``text`` shows after ``label`` and
+    before any of ``others``, None when there is none."""
+    start = text.index(label) + len(label)
+    stops = [i for i in (text.find(o, start) for o in others) if i >= 0]
+    found = NUMBER.search(text[start:min(stops, default=len(text))])
+    return int(found.group()) if found else None
+
+
+def count_beside(node: Any, label: str, others: list[str],
+                 skip: Callable[[Any], bool] | None = None
+                 ) -> int | None:
+    """The count a page shows with ``label``, found from the element
+    ``node`` that shows it: the first whole number after the label, in
+    the nearest element around ``node``, its neighbour cell or
+    description included, that shows one before another of ``others``;
+    the elements for which ``skip`` holds are left out of the texts."""
+    while node is not None and node.tag not in ("main", "body", "#root"):
+        after = _follows(node)
+        text = " ".join(part for part in (
+            node.text(skip), after.text(skip) if after is not None else "")
+            if part)
+        if label in text:
+            found = count_after(text, label, others)
+            if found is not None:
+                return found
+        node = node.parent
+    return None
+
+
+class _Model:
+    """A model of ``inventory.models`` that is imported when a test
+    first uses it, so that a module of tests that names it is collected
+    where the model is missing, and its tests fail one by one."""
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def __getattr__(self, attribute: str) -> Any:
+        from inventory import models
+        return getattr(getattr(models, self.name), attribute)
+
+
+BatchStock = _Model("BatchStock")
+
+
 def snapshot() -> dict[str, Any]:
     """Everything the bookings change, to compare before and after a
     refusal."""
@@ -143,6 +203,104 @@ def snapshot() -> dict[str, Any]:
 
 def fresh(record: Any) -> Any:
     return type(record).objects.get(pk=record.pk)
+
+
+def share(item: Any, batch: Any = None) -> int:
+    """The containers of ``item`` in the share of ``batch``, the share of
+    unknown batch for None; zero where the item has no such row."""
+    from inventory.models import BatchStock
+    return sum(BatchStock.objects.filter(
+        item=item, batch=batch).values_list("quantity", flat=True))
+
+
+def shares(item: Any) -> dict[int | None, int]:
+    """The shares of ``item`` that hold containers, by the id of their
+    batch, None for the share of unknown batch."""
+    from inventory.models import BatchStock
+    return {stock.batch_id: stock.quantity for stock in
+            BatchStock.objects.filter(item=item) if stock.quantity}
+
+
+def expected(*pairs: tuple[Any, int]) -> dict[int | None, int]:
+    """The shares ``shares`` returns for the PAIRS of a batch, None for
+    unknown, and the containers it holds; a pair of zero holds none."""
+    return {None if batch is None else batch.pk: count
+            for batch, count in pairs if count}
+
+
+def stock_snapshot() -> list[tuple[int, int | None, int]]:
+    """Every share of every item: its item, its batch and its count."""
+    from inventory.models import BatchStock
+    return sorted(BatchStock.objects.values_list(
+        "item_id", "batch_id", "quantity"),
+        key=lambda row: (row[0], row[1] is not None, row[1] or 0))
+
+
+def set_shares(item: Any, *pairs: tuple[Any, int]) -> None:
+    """Give ``item`` the shares of PAIRS, each a batch, None for the
+    share of unknown batch, and the containers it holds, and the
+    quantity that is their sum; a share the item has and PAIRS leave out
+    becomes zero. Nothing is booked."""
+    from inventory.models import BatchStock, Item
+    BatchStock.objects.filter(item=item).update(quantity=0)
+    for batch, count in pairs:
+        BatchStock.objects.update_or_create(
+            item=item, batch=batch, defaults={"quantity": count})
+    Item.objects.filter(pk=item.pk).update(
+        quantity=sum(count for _, count in pairs))
+
+
+def batch_for(item: Any, user: Any = None) -> Any:
+    """The first batch of the substance of ``item``, or a made batch of
+    it that is created when there is none."""
+    from django.contrib.auth import get_user_model
+    from inventory.models import Batch
+    found = Batch.objects.filter(
+        substance=item.article.substance).order_by("pk").first()
+    if found is not None:
+        return found
+    from . import make_batch
+    return make_batch(user or get_user_model().objects.order_by(
+        "pk").first(), substance=item.article.substance)
+
+
+def delivery_line(item: Any, count: int, batch: Any = None
+                  ) -> tuple[Any, Any, int]:
+    """The line of ``count`` containers of ``item`` from ``batch``, for
+    ``book_note``; when BATCH is None, the first batch whose share of
+    the item holds ``count`` containers, else the first batch of the
+    item's substance.
+
+    The containers of unknown batch that the line takes beyond what the
+    batch holds are first moved into the batch's share, as a stock
+    count would have left them, so that the booking books no
+    assignment; the move is left out when the item holds fewer than
+    ``count`` altogether, and the booking is refused as before."""
+    from django.db.models import F
+    from inventory.models import Batch, BatchStock
+    if batch is None:
+        holding = BatchStock.objects.filter(
+            item=item, batch__isnull=False, quantity__gte=count
+        ).order_by("batch_id").values_list("batch_id", flat=True).first()
+        batch = (Batch.objects.get(pk=holding) if holding is not None
+                 else batch_for(item))
+    needed = max(count - share(item, batch), 0)
+    if 0 < needed <= share(item, None):
+        BatchStock.objects.filter(item=item, batch=None).update(
+            quantity=F("quantity") - needed)
+        BatchStock.objects.get_or_create(
+            item=item, batch=batch, defaults={"quantity": 0})
+        BatchStock.objects.filter(item=item, batch=batch).update(
+            quantity=F("quantity") + needed)
+    return item, batch, count
+
+
+def historical_line(item: Any, count: int, batch: Any = None
+                    ) -> tuple[Any, Any, int]:
+    """The line of ``count`` containers of ``item`` from ``batch``, the
+    first batch of its substance when it is None, for a historical
+    note, which moves no stock."""
+    return item, batch or batch_for(item), count
 
 
 def newest_movement(item: Any) -> Any:
@@ -212,17 +370,22 @@ class Refusals:
     """A mixin for test cases that book through ``inventory.bookings``."""
 
     @contextmanager
-    def refusing(self, field: str | None = None) -> Iterator[None]:
+    def refusing(self, field: str | None = None, *, shares: bool = False
+                 ) -> Iterator[Any]:
         """The block's booking raises ``Refused``, with an error at
         ``field`` when that is given, and changes nothing the
-        ``snapshot`` holds."""
+        ``snapshot`` holds, nor the shares of the items when SHARES is
+        true. The refusal is the value of the block."""
         from inventory.bookings import Refused
         before = snapshot()
+        held = stock_snapshot() if shares else None
         with self.assertRaises(Refused) as caught:
-            yield
+            yield caught
         if field is not None:
             self.assertIn(field, caught.exception.message_dict)
         self.assertEqual(snapshot(), before)
+        if shares:
+            self.assertEqual(stock_snapshot(), held)
 
     def refused(self, response: Any, field: str | None = None) -> None:
         """The form is shown again with errors."""
@@ -289,11 +452,13 @@ class InventoryCase(Refusals, TestCase):
                     note=note, **extra)
 
     def deliver(self, item: Any, count: int, day: date | None = None,
-                user: Any = None, **extra: Any) -> Any:
-        """Book a current note with one line; return the note."""
+                user: Any = None, batch: Any = None, **extra: Any) -> Any:
+        """Book a current note with one line of ``count`` containers of
+        ``batch``, the first batch of the item's substance by default
+        (see ``delivery_line``); return the note."""
         from inventory.bookings import book_note
         return book_note(user or self.kl, date=day or TODAY,
-                         lines=[(item, count)], **extra)
+                         lines=[delivery_line(item, count, batch)], **extra)
 
     def deliver_movement(self, item: Any, count: int,
                          day: date | None = None) -> Any:
@@ -355,16 +520,24 @@ def item_data(**over: str) -> dict[str, str]:
     return data
 
 
-def note_data(*lines: tuple[Any, int], **over: str) -> dict[str, str]:
-    """The delivery-note form with the lines ``(item, count)`` in its
-    first rows and the other rows empty."""
+def note_data(*lines: tuple[Any, ...], **over: str) -> dict[str, str]:
+    """The delivery-note form with the lines ``(item, count)`` or
+    ``(item, count, batch)`` in its first rows and the other rows empty.
+    A line without a batch names the batch ``delivery_line`` chooses,
+    after it has moved the containers the line needs into its share."""
     data = {"number": "", "date": TODAY.isoformat(), "recipient": "",
             "note": ""}
     for index in range(10):
         data[f"item_{index}"] = ""
+        data[f"batch_{index}"] = ""
         data[f"count_{index}"] = ""
-    for index, (item, count) in enumerate(lines):
+    for index, (item, count, *chosen) in enumerate(lines):
+        batch = chosen[0] if chosen else None
+        if isinstance(count, int) and count > 0:
+            _, batch, _ = delivery_line(item, count, batch)
+        batch = batch or batch_for(item)
         data[f"item_{index}"] = str(item.pk)
+        data[f"batch_{index}"] = str(batch.pk)
         data[f"count_{index}"] = str(count)
     data.update(over)
     return data

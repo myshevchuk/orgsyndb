@@ -9,6 +9,7 @@ from django.test import SimpleTestCase
 from . import berlin, make_task, page, shell_scripts, table, ticking
 from .collection_support import accept
 from . import navigation_support as ns
+from .inventory_support import historical_line
 from .planning_support import PlanningCase
 
 OVERVIEW = "/lab/"
@@ -127,7 +128,8 @@ class FigureTests(OverviewCase):
         self.deliver(zimt, 5, date(2025, 12, 1), number="LS-00")
         note = self.deliver(aspirin, 6, date(2026, 10, 2), number="LS-3",
                             recipient="AK Weber")
-        reverse(self.kl, Movement.objects.get(delivery_note=note),
+        reverse(self.kl, Movement.objects.get(delivery_note=note,
+                                              kind="delivery"),
                 note="Falsch gebucht")
         make_task(self.kl, substance="CH-0012", started=SEVENTH)
         make_task(self.kl, substance="CH-0010")
@@ -209,8 +211,8 @@ class FigureTests(OverviewCase):
     def test_historical_notes_count(self) -> None:
         from inventory.bookings import book_note
         item = self.item("CH-0012", quantity=5)
-        book_note(self.kl, date=date(2026, 2, 1), lines=[(item, 7)],
-                  historical=True)
+        book_note(self.kl, date=date(2026, 2, 1),
+                  lines=[historical_line(item, 7)], historical=True)
         self.assertTrue(figures(self.get())["Abgegeben 2026"].text()
                         .startswith("7 "))
 

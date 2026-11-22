@@ -91,13 +91,15 @@ The data set SHALL open the inventory on the opening day `O`, `D` less 400 days,
 - one item of the substance `1-phenylethanol`, whose article has no article number, opened after `O`, filled 89 days before `D` from the flask of the product batch of its task, which ends after that filling, and never delivered;
 - sizes that planning leaves out: `CH-0012` in 1 g, `discontinued`, and `CH-0010` in 25 g, `not_needed`, each set aside after its opening count and never delivered; and `CH-0001` in 250 mg, whose consumption is entered for the four quarters from the eighth to the fifth before the quarter of `O` and is none since;
 - `CH-0013` in 1 g, opened 60 days before `D`, with a delivery of one container every 15 days from then on;
-- each item's opening count, dated `O`, or later for a size added afterwards, and a compartment and a box, numbers such as `3` and `12`, the sizes of an article in one compartment;
+- each item's opening count, dated `O`, or later for a size added afterwards, of unknown batch, and a compartment and a box, numbers such as `3` and `12`, the sizes of an article in one compartment;
 - for the items that have them, entered consumption for each of the seven quarters from the eighth before the quarter of `O` to the second before it, and for `CH-0001` in 250 mg for the four from the eighth to the fifth, entered in the 30 days from `O`;
+- every delivery line naming a batch of its item's substance;
 - historical delivery notes dated from the first day of the quarter before that of `O` to the day before `O`, entered in the 30 days from `O`, one of them later reversed with a note;
-- current delivery notes from `O` on, each with a recipient, some with several lines;
+- current delivery notes from `O` on, each with a recipient, some with several lines, lines delivering containers of unknown batch among them, so that the data set holds assignments (end-product-inventory "Stock by batch");
+- on the day `D`, an item holding containers of two batches, and an item holding containers of unknown batch;
 - every delivery note numbered `LS-<year>-<nnn>`, where `<year>` is the year of its date and `<nnn>` counts the notes of that year in the order of their dates from `001`;
 - one delivery reversed with a note, and one correction with a note;
-- batches and vessels: made batches recorded from task steps, each naming its step's journal entry where the step names one, two of them naming one entry; made batches recorded without a step, each with its number, the date it was made and a stored vessel with a location; a batch of `NV-0007` with a vessel in `umol`; a batch bought from a supplier, with the supplier's article number and batch; and an open vessel of a made batch of a substance that has no article;
+- batches and vessels: made batches recorded from task steps, each naming its step's journal entry where the step names one, two of them naming one entry; made batches recorded without a step of two kinds: some each with its number, the date it was made and a stored vessel with a location, and others with their number alone and no vessel, the batches printed on old containers, among them one of every substance with delivered items that no task makes; a batch of `NV-0007` with a vessel in `umol`; a batch bought from a supplier, with the supplier's article number and batch; and an open vessel of a made batch of a substance that has no article;
 - fillings, each from a vessel and naming its movement; one vessel used up, one corrected with a note, and one transfer from a flask into a stored vessel.
 
 #### Scenario: Item list
@@ -115,6 +117,10 @@ The data set SHALL open the inventory on the opening day `O`, `D` less 400 days,
 #### Scenario: New positions
 - **WHEN** the data set is written as of 2026-11-07 and a test client requests `/lab/inventory/end-products/`
 - **THEN** the items `1-Phenylethanol` and `CH-0013` of 1 g are marked `neu` and no other item is, and the means of `CH-0013` of 1 g are projected
+
+#### Scenario: Containers by batch
+- **WHEN** the data set is written as of `D` and a test client requests the pages of the items
+- **THEN** one page lists containers of two batches, one lists `unbekannt` among its containers by batch, and one ledger holds an assignment
 
 ### Requirement: Demo tasks and parameters
 The data set SHALL hold tasks for the articles of the demo inventory and for its item without an article number, each checked by the task's own validation before every save, as a form's would be, and numbered in the order they were created:

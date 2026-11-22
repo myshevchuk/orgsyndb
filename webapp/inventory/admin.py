@@ -6,8 +6,9 @@ the fields it shows editable, restores no earlier version, adds no
 record, and deletes no movement or delivery note. It deletes an article
 only while it has no items, an item or a vessel only while its one
 movement is the opening, and an item only while no delivery note has a
-line of it. It deletes a batch only while it has no vessel and no task
-step made it.
+line of it. It deletes a batch only while no vessel, share, delivery
+line or movement names it and no task step made it. An item's shares
+show on its change page, read-only.
 """
 
 from typing import Any
@@ -18,6 +19,7 @@ from django.db import transaction
 from django.db.models import Model, QuerySet
 from django.forms import ModelForm
 from django.http import HttpRequest, HttpResponse
+from django.utils.html import format_html, format_html_join
 from django.utils.translation import gettext_lazy as _
 from simple_history.admin import SimpleHistoryAdmin
 
@@ -30,10 +32,13 @@ from inventory.models import (Article, Batch, DeliveryLine, DeliveryNote,
 def deletable(record: Item | Vessel | Batch) -> bool:
     """Whether RECORD can be deleted: for an item or a vessel, that it
     has no movement but its opening and, for an item, no line of a
-    delivery note; for a batch, that it has no vessel and no task step
-    made it."""
+    delivery note; for a batch, that no vessel, share, delivery line or
+    movement names it and no task step made it."""
     if isinstance(record, Batch):
-        return record.task_step_id is None and not record.vessels.exists()
+        return record.task_step_id is None and not (
+            record.vessels.exists() or record.stocks.exists()
+            or record.delivery_lines.exists()
+            or record.item_movements.exists())
     if record.movements.exclude(kind=Movement.Kind.OPENING).exists():
         return False
     return not (isinstance(record, Item) and record.delivery_lines.exists())
@@ -192,7 +197,17 @@ class ItemAdmin(OpeningOnlyAdmin):
     search_fields = ("article__article_number", "article__substance__key",
                      "article__substance__name",
                      "article__substance__name_de")
-    readonly_fields = ("article", "size", "unit", "quantity")
+    readonly_fields = ("article", "size", "unit", "quantity", "shares")
+
+    @admin.display(description=_("Containers by batch"))
+    def shares(self, item: Item) -> str:
+        """Return the shares of ITEM as a list, each a batch and its
+        containers, the batches first and then ``unknown``."""
+        return format_html_join(
+            "", "<div>{}: {}</div>",
+            [(stock.batch or _("unknown"), stock.quantity)
+             for stock in item.stocks.select_related("batch")]) \
+            or format_html("{}", "–")
 
 
 class BatchAdminForm(ModelForm):
@@ -215,7 +230,8 @@ class BatchAdminForm(ModelForm):
 class BatchAdmin(OpeningOnlyAdmin):
     """The batches, whose substance, source and task step are fixed and
     whose yield changes in the batch's form. A batch is deleted only
-    while it has no vessel and no task step made it."""
+    while no vessel, share, delivery line or movement names it and no
+    task step made it."""
 
     form = BatchAdminForm
     list_display = ("__str__", "substance", "source", "number", "supplier",
@@ -253,8 +269,8 @@ class VesselAdmin(OpeningOnlyAdmin):
 
 class DeliveryLineInline(admin.TabularInline):
     model = DeliveryLine
-    fields = ("item", "count")
-    readonly_fields = ("item", "count")
+    fields = ("item", "batch", "count")
+    readonly_fields = ("item", "batch", "count")
     extra = 0
     can_delete = False
 
@@ -304,11 +320,11 @@ class ReadOnlyAdmin(admin.ModelAdmin):
 
 @admin.register(Movement)
 class MovementAdmin(ReadOnlyAdmin):
-    list_display = ("item", "kind", "count", "quantity_after", "date",
-                    "booked_at", "user", "delivery_note")
+    list_display = ("item", "kind", "batch", "count", "quantity_after",
+                    "date", "booked_at", "user", "delivery_note")
     list_filter = ("kind",)
     list_select_related = ("item__article__substance", "user",
-                           "delivery_note")
+                           "delivery_note", "batch")
     search_fields = ("item__article__article_number",
                      "item__article__substance__key",
                      "item__article__substance__name")

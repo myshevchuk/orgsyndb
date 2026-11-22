@@ -16,8 +16,8 @@ from .demo_support import (ACCOUNTS, DAY, lab_records, noon, opening, run,
                            seed, task_counter)
 
 EMPTY = {"accounts": 0, "substances": 0, "terms": 0, "articles": 0,
-         "tasks": 0, "items": 0, "movements": 0, "notes": 0, "batches": 0,
-         "vessels": 0, "consumption": 0, "parameters": 0}
+         "tasks": 0, "items": 0, "stocks": 0, "movements": 0, "notes": 0,
+         "batches": 0, "vessels": 0, "consumption": 0, "parameters": 0}
 
 
 def demo_marks() -> int:
@@ -199,6 +199,43 @@ class ReplaceTests(TestCase):
         self.assertFalse(VesselMovement.objects.filter(
             vessel_id=vessel.pk).exists())
         self.assertEqual(lab_records(), before)
+
+    def test_replace_deletes_the_shares_before_their_items_and_batches(
+            self) -> None:
+        """Design (Migration plan): the reset deletes shares before items
+        and batches, so that a second replacement runs on a seeded
+        database."""
+        from decimal import Decimal
+
+        from inventory.bookings import create_item
+        from inventory.models import Batch, BatchStock, Item
+        from registry.models import Substance
+
+        from . import make_batch
+        seed(DAY)
+        before = lab_records()
+        self.assertGreater(before["stocks"], 0)
+        kl = make_user("kl", "KL9")
+        stray = make_batch(kl, "CH-0012", number="STRAY-3")
+        item = create_item(
+            kl, substance=Substance.objects.get(key="cinnamic-acid"),
+            article_number=None, size=Decimal("7"), unit="mg", quantity=2,
+            batch=stray)
+        self.assertTrue(BatchStock.objects.filter(batch=stray).exists())
+        with frozen(noon(DAY)):
+            run("--replace")
+        self.assertFalse(BatchStock.objects.filter(batch_id=stray.pk).exists())
+        self.assertFalse(Batch.objects.filter(pk=stray.pk).exists())
+        self.assertFalse(Item.objects.filter(pk=item.pk).exists())
+        self.assertEqual(lab_records(), before)
+
+    def test_replace_twice_runs_on_a_seeded_database(self) -> None:
+        seed(DAY)
+        before = lab_records()
+        for _ in range(2):
+            with frozen(noon(DAY)):
+                run("--replace")
+            self.assertEqual(lab_records(), before)
 
     def test_replace_deletes_a_flask_with_transfers_and_a_remainder(
             self) -> None:

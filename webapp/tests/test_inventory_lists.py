@@ -12,7 +12,8 @@ from .collection_support import accept
 from .inventory_support import (BATCHES, COMPOUND_PAGE, DELIVERIES, LEVELS,
                                 LIST, MICRO, NEW_BATCH, NEW_ITEM, NEW_NOTE,
                                 SUBSTANCE_PAGE, VESSELS, InventoryCase,
-                                batch_url, has_amount, has_number, item_url,
+                                batch_url, delivery_line, has_amount,
+                                has_number, historical_line, item_url,
                                 note_blocks, note_url, num, vessel_url)
 from .journal_support import entry_of, make_notebook
 
@@ -781,7 +782,8 @@ class DeliveryListTests(InventoryCase):
         second = self.item("X-1", name="Anderes", size="2.5", unit="mg",
                            quantity=20)
         book_note(self.kl, date=date(2026, 10, 15), number="LS-9",
-                  recipient="Produktion", lines=[(first, 2), (second, 7)])
+                  recipient="Produktion",
+                  lines=[delivery_line(first, 2), delivery_line(second, 7)])
         text = self.listing().text()
         for expected in ("LS-9", "15.10.2026", "Produktion", "CH-0012",
                          "Zimtsäure", "X-1", "Anderes"):
@@ -795,14 +797,16 @@ class DeliveryListTests(InventoryCase):
         item = self.item("X-1", quantity=50)
         other = self.item("X-2", quantity=50)
         book_note(self.kl, date=date(2025, 3, 1), number="H-1",
-                  historical=True, lines=[(item, 1)])
+                  historical=True, lines=[historical_line(item, 1)])
         gone = book_note(self.kl, date=date(2025, 3, 2), number="H-2",
-                         historical=True, lines=[(item, 1)])
+                         historical=True, lines=[historical_line(item, 1)])
         reverse_historical(self.kl, gone, note="falsch")
         self.deliver(item, 1, date(2026, 10, 1), number="C-1")
         some = book_note(self.kl, date=date(2026, 10, 3), number="C-3",
-                         lines=[(item, 1), (other, 1)])
-        reverse(self.kl, item.movements.get(delivery_note=some),
+                         lines=[delivery_line(item, 1),
+                                delivery_line(other, 1)])
+        reverse(self.kl, item.movements.get(delivery_note=some,
+                                            kind="delivery"),
                 note="falsch")
         blocks = {link.text(): block.text()
                   for link, block in note_blocks(self.listing())}
@@ -821,9 +825,11 @@ class DeliveryListTests(InventoryCase):
         other = self.item("X-2", quantity=50)
         keep = self.deliver(item, 1, date(2026, 10, 1), number="C-1")
         note = book_note(self.kl, date=date(2026, 10, 2), number="C-2",
-                         lines=[(item, 1), (other, 1)])
+                         lines=[delivery_line(item, 1),
+                                delivery_line(other, 1)])
         for each in (item, other):
-            reverse(self.kl, each.movements.get(delivery_note=note),
+            reverse(self.kl, each.movements.get(delivery_note=note,
+                                                kind="delivery"),
                     note="falsch")
         blocks = {link.text(): block.text()
                   for link, block in note_blocks(self.listing())}
@@ -844,7 +850,7 @@ class DeliveryListTests(InventoryCase):
     def test_the_item_filter_lists_historical_notes_too(self) -> None:
         item = self.item("X-1", quantity=20)
         book_note(self.kl, date=date(2025, 3, 1), number="H-1",
-                  historical=True, lines=[(item, 1)])
+                  historical=True, lines=[historical_line(item, 1)])
         self.deliver(item, 1, date(2026, 10, 1), number="LS-1")
         self.assertEqual(self.numbers(f"?item={item.pk}"), ["LS-1", "H-1"])
 

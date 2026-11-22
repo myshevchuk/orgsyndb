@@ -43,9 +43,9 @@ from inventory.forms import (ROWS, BatchEditForm, BatchForm,
                              VesselEditForm, WithdrawalForm, show_refusal)
 from inventory.history import history_entries
 from inventory.models import (FACTOR, LEVEL_ORDER, Article, Batch,
-                              DeliveryNote, Item, Level, Movement, Source,
-                              Vessel, VesselKind, VesselMovement,
-                              plain)
+                              DeliveryLine, DeliveryNote, Item, Level,
+                              Movement, Source, Vessel, VesselKind,
+                              VesselMovement, plain)
 from inventory.statistics import Statistics, statistics
 from journal.entries import entry_for
 from planning import plan
@@ -597,7 +597,7 @@ def note_list(request: HttpRequest) -> HttpResponse:
     q = request.GET.get("q", "").strip()
     chosen = request.GET.get("item", "").strip()
     notes = DeliveryNote.objects.annotate(line_count=Count("lines")) \
-        .prefetch_related("lines__item").order_by(
+        .prefetch_related("lines__item", "lines__batch").order_by(
             *DeliveryNote._meta.ordering)
     if chosen.isdigit():
         notes = notes.filter(pk__in=DeliveryNote.objects.filter(
@@ -679,13 +679,18 @@ def consumption_section(item: Item, today: date, links: bool
 
 
 def item_page(request: HttpRequest, pk: int) -> HttpResponse:
-    """Show the item PK with its figures, chart, movements, bulk,
-    forecast and history; answer 404 for an unknown ID."""
+    """Show the item PK with its figures, containers by batch, chart,
+    movements, bulk, forecast and history; answer 404 for an unknown
+    ID.
+
+    The containers by batch are the shares above zero: ``stocks`` those
+    of a batch, and ``unknown`` the containers of unknown batch.
+    """
     item = get_object_or_404(Item.objects.select_related(
         "article__substance"), pk=pk)
     today = timezone.localdate()
     movements = item.movements.select_related(
-        "user", "delivery_note", "reversal").order_by("-id")
+        "user", "delivery_note", "reversal", "batch").order_by("-id")
     ledger = []
     for movement in movements:
         done = hasattr(movement, "reversal")
@@ -696,9 +701,14 @@ def item_page(request: HttpRequest, pk: int) -> HttpResponse:
     found = plan.article(item.article_number, today) \
         if item.article_number is not None else None
     vessels = open_vessels(item)
+    held = [stock for stock in item.stocks.select_related("batch")
+            if stock.quantity]
     return render(request, "inventory/item_page.html", {
         "item": item,
         "today": today,
+        "stocks": [stock for stock in held if stock.batch_id is not None],
+        "unknown": sum(stock.quantity for stock in held
+                       if stock.batch_id is None),
         **consumption_section(item, today, request.user.is_authenticated),
         "ledger": ledger,
         "vessels": [(vessel, containers_from(vessel, item, mass))
@@ -764,9 +774,25 @@ class FillingRow:
     reversed: bool
 
 
+@dataclass(frozen=True)
+class LineRow:
+    """A delivery line as the page of its batch shows it: the LINE, and
+    whether it is of a HISTORICAL note and whether its delivery or its
+    historical note is REVERSED."""
+
+    line: DeliveryLine
+    historical: bool
+    reversed: bool
+
+
 def batch_page(request: HttpRequest, pk: int) -> HttpResponse:
-    """Show the batch PK with its vessels, the fillings from them and
-    its history; answer 404 for an unknown ID."""
+    """Show the batch PK with its vessels, the fillings from them, the
+    items holding containers of it, the delivery lines that name it and
+    its history; answer 404 for an unknown ID.
+
+    The lines are those of current and of historical notes, newest note
+    first.
+    """
     batch = get_object_or_404(Batch.objects.select_related(
         "substance__article", "journal_entry__notebook",
         "task_step__task", "task_step__entry__procedure"), pk=pk)
@@ -777,6 +803,13 @@ def batch_page(request: HttpRequest, pk: int) -> HttpResponse:
         vessel__batch=batch, kind=VesselMovement.Kind.FILLING
         ).select_related("vessel", "item_movement__item__article",
                          "item_movement__reversal").order_by("-id")
+    undone = set(Movement.objects.filter(
+        kind=Movement.Kind.DELIVERY, batch=batch, reversal__isnull=False
+        ).values_list("delivery_note_id", "item_id"))
+    lines = batch.delivery_lines.select_related(
+        "delivery_note", "item__article__substance").order_by(
+            "-delivery_note__date", "-delivery_note__created_at",
+            "-delivery_note_id", "-id")
     return render(request, "inventory/batch_page.html", {
         "batch": batch,
         "vessels": vessels,
@@ -784,24 +817,39 @@ def batch_page(request: HttpRequest, pk: int) -> HttpResponse:
             movement=movement, item=movement.item_movement.item,
             reversed=hasattr(movement.item_movement, "reversal"))
             for movement in fillings if hasattr(movement, "item_movement")],
+        "stocks": batch.stocks.filter(quantity__gt=0).select_related(
+            "item__article__substance"),
+        "lines": [LineRow(
+            line=line, historical=line.delivery_note.historical,
+            reversed=line.delivery_note.reversed
+            if line.delivery_note.historical
+            else (line.delivery_note_id, line.item_id) in undone)
+            for line in lines],
         "history": history_entries(batch),
     })
 
 
 def note_page(request: HttpRequest, pk: int) -> HttpResponse:
     """Show the delivery note PK with its lines, their movements and the
-    history; answer 404 for an unknown ID."""
+    history; answer 404 for an unknown ID.
+
+    A line of a current note is shown with its delivery movement, found
+    by item and batch; the assignments the note booked are left out.
+    """
     note = get_object_or_404(
         DeliveryNote.objects.annotate(line_count=Count("lines")), pk=pk)
-    movements = {movement.item_id: movement for movement in
-                 note.movements.select_related("user", "reversal")}
+    movements = {(movement.item_id, movement.batch_id): movement
+                 for movement in note.movements.filter(
+                     kind=Movement.Kind.DELIVERY).select_related(
+                         "user", "reversal")}
+    shown = [(line, movements.get((line.item_id, line.batch_id)))
+             for line in note.lines.select_related(
+                 "item__article__substance", "batch")]
     return render(request, "inventory/note_page.html", {
         "note": note,
         "state": note_states([note])[note.pk],
-        "lines": [(line, movements.get(line.item_id),
-                   hasattr(movements.get(line.item_id), "reversal"))
-                  for line in note.lines.select_related(
-                      "item__article__substance")],
+        "lines": [(line, movement, hasattr(movement, "reversal"))
+                  for line, movement in shown],
         "history": history_entries(note),
     })
 
@@ -1060,7 +1108,8 @@ def fill_context(item: Item) -> dict[str, Any]:
 
 @item_form
 def item_correct(request: HttpRequest, pk: int) -> HttpResponse:
-    """Set the count of the item PK after counting."""
+    """Set the count of one share of the item PK after counting: the
+    share of the batch chosen, or of unknown batch."""
     item = get_object_or_404(Item, pk=pk)
 
     def book(data: dict[str, Any]) -> HttpResponse:
@@ -1069,8 +1118,7 @@ def item_correct(request: HttpRequest, pk: int) -> HttpResponse:
                      % {"item": item}, item_url(item), item)
 
     return form_page(
-        request, CorrectionForm(request.POST or None, initial={
-            "count": item.quantity}), book,
+        request, CorrectionForm(request.POST or None, item=item), book,
         {"title": _("Correct the count of %(item)s") % {"item": item},
          "cancel": item_url(item)}, dialog=True)
 

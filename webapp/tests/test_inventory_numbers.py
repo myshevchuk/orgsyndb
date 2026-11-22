@@ -13,8 +13,8 @@ from . import (datalist, field_value, make_article, make_item, make_substance,
 from .inventory_support import (DELIVERIES, LIST, MICRO, NEW_BATCH, NEW_ITEM,
                                 NEW_NOTE, SUBSTANCE_PAGE, FormCase,
                                 InventoryCase, fresh, has_amount,
-                                has_number, item_data, item_url, note_data,
-                                snapshot)
+                                has_number, historical_line, item_data,
+                                item_url, note_data, snapshot)
 
 ADMIN_ITEMS = "/lab/admin/inventory/item/"
 ADMIN_ARTICLES = "/lab/admin/inventory/article/"
@@ -56,12 +56,13 @@ class ItemTests(InventoryCase):
     def test_a_delivery_line_is_refused(self) -> None:
         """Scenario: First delivery needs the article number."""
         item = numberless(self.kl)
+        lines = [historical_line(item, 2)]
         before = snapshot()
         for historical in (False, True):
             with self.subTest(historical=historical), \
                     self.assertRaises(Refused) as refused:
-                book_note(self.kl, date=date(2026, 3, 12),
-                          lines=[(item, 2)], historical=historical)
+                book_note(self.kl, date=date(2026, 3, 12), lines=lines,
+                          historical=historical)
             self.assertEqual(refused.exception.line, 0)
         self.assertUnchanged(before)
         self.assertEqual(fresh(item).quantity, 4)
@@ -195,8 +196,9 @@ class NoteFormTests(FormCase):
 
     def test_a_posted_line_is_refused(self) -> None:
         item = numberless(self.kl, quantity=5)
+        data = note_data((item, 2))
         before = snapshot()
-        response = self.client.post(NEW_NOTE, note_data((item, 2)))
+        response = self.client.post(NEW_NOTE, data)
         self.refused(response, "item_0")
         self.assertUnchanged(before)
 

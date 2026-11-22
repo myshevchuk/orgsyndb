@@ -39,9 +39,9 @@ from collection.models import (EntrySubstance, Import, IssuedId, Outcome,
 from demo import data
 from demo.models import DemoMark
 from inventory import bookings
-from inventory.models import (Article, Batch, DeliveryLine, DeliveryNote,
-                              EnteredConsumption, Item, Movement, Vessel,
-                              VesselMovement)
+from inventory.models import (Article, Batch, BatchStock, DeliveryLine,
+                              DeliveryNote, EnteredConsumption, Item,
+                              Movement, Vessel, VesselMovement)
 from journal.entries import entry_for
 from journal.models import Entry, Notebook
 from orgsyndb_web import lock
@@ -117,9 +117,11 @@ def clear() -> None:
     first.
 
     Receiving halves of transfers and reversals go before the movements
-    they name, movements before the notes, vessels and task steps they
-    name, vessels before their batches, batches before the task steps
-    that made them and the journal entries they name, records before the
+    they name, movements before the notes, batches, vessels and task
+    steps they name, delivery lines and shares before the batches and
+    items they name, vessels before their batches, batches before the
+    task steps that made them and the journal entries they name, records
+    before the
     substances and terms they name,
     tasks and their steps before the sequences, entries and imports they
     name, sequence steps before the entries they name, task steps and
@@ -133,6 +135,7 @@ def clear() -> None:
     Movement.objects.exclude(reverses=None).delete()
     Movement.objects.all().delete()
     DeliveryLine.objects.all().delete()
+    BatchStock.objects.all().delete()
     DeliveryNote.objects.all().delete()
     VesselMovement.objects.exclude(transfer=None).delete()
     VesselMovement.objects.exclude(reverses=None).delete()
@@ -203,6 +206,7 @@ class _Writer:
     def __init__(self) -> None:
         self.users: dict[str, Any] = {}
         self.items: dict[str, Item] = {}
+        self.batches: dict[str, Batch] = {}
         self.vessels: dict[str, Vessel] = {}
         self.notes: dict[str, DeliveryNote] = {}
         self.tasks: dict[str, Task] = {}
@@ -249,19 +253,19 @@ class _Writer:
             case data.BookNote():
                 self.notes[change.number] = bookings.book_note(
                     user, date=change.day,
-                    lines=[(self.items[key], count)
-                           for key, count in change.lines],
+                    lines=[(self.items[key], self.batches[batch], count)
+                           for key, batch, count in change.lines],
                     number=change.number, recipient=change.recipient,
                     historical=change.historical)
             case data.ReverseNote():
                 self.notes[change.number] = bookings.reverse_historical(
                     user, self.notes[change.number], note=change.note)
             case data.ReverseDelivery():
-                movement = Movement.objects.get(
-                    delivery_note=self.notes[change.number],
-                    item=self.items[change.item],
-                    kind=Movement.Kind.DELIVERY)
-                bookings.reverse(user, movement, note=change.note)
+                for movement in Movement.objects.filter(
+                        delivery_note=self.notes[change.number],
+                        item=self.items[change.item],
+                        kind=Movement.Kind.DELIVERY).order_by("pk"):
+                    bookings.reverse(user, movement, note=change.note)
             case data.RecordBatch():
                 batch = bookings.record_batch(
                     user, substance=Substance.objects.get(
@@ -273,7 +277,9 @@ class _Writer:
                     supplier_batch=change.supplier_batch,
                     amount=change.amount, unit=change.unit,
                     location=change.location)
-                self.vessels[change.key] = batch.vessels.get()
+                self.batches[change.key] = batch
+                if change.amount is not None:
+                    self.vessels[change.key] = batch.vessels.get()
             case data.Withdraw():
                 bookings.withdraw(user, self.vessels[change.vessel],
                                   task_step=self.step(change.task,
@@ -294,9 +300,11 @@ class _Writer:
                 item._history_user = user
                 item.save(update_fields=["status"])
             case data.Correct():
-                bookings.correct(user, self.items[change.item],
-                                 count=change.count, note=change.note,
-                                 date=day)
+                bookings.correct(
+                    user, self.items[change.item], count=change.count,
+                    note=change.note, date=day,
+                    batch=self.batches[change.batch] if change.batch
+                    else None)
             case data.CorrectVessel():
                 bookings.correct_vessel(
                     user, self.vessels[change.vessel],

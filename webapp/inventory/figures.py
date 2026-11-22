@@ -131,9 +131,14 @@ class Consumption:
 
 def counted_lines(item: Item | None = None) -> list[DeliveryLine]:
     """Return the delivery lines of ITEM, or of every item when it is
-    None, that count as consumption: those of current notes whose
-    movement is not reversed, and those of historical notes that are not
-    reversed."""
+    None, that count as consumption: those of current notes whose own
+    delivery movement is not reversed, and those of historical notes that
+    are not reversed.
+
+    A line is matched to its delivery by note, item and batch, so that
+    the reversal of one line leaves the note's other lines of the item in
+    the result.
+    """
     movements = Movement.objects.filter(kind=Movement.Kind.DELIVERY,
                                         reversal__isnull=False)
     lines = DeliveryLine.objects.select_related(
@@ -141,12 +146,13 @@ def counted_lines(item: Item | None = None) -> list[DeliveryLine]:
     if item is not None:
         movements = movements.filter(item=item)
         lines = lines.filter(item=item)
-    reversed_lines = set(movements.values_list("item_id",
-                                               "delivery_note_id"))
+    reversed_lines = set(movements.values_list(
+        "item_id", "delivery_note_id", "batch_id"))
     return [line for line in lines
             if not (line.delivery_note.historical
                     and line.delivery_note.reversed)
-            and (line.item_id, line.delivery_note_id) not in reversed_lines]
+            and (line.item_id, line.delivery_note_id, line.batch_id)
+            not in reversed_lines]
 
 
 # The days of a quarter, in ten-thousandths, so that a projection

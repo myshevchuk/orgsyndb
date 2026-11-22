@@ -12,10 +12,11 @@ from . import (context_form, datalist, field_value, make_article,
 from .collection_support import accept
 from .inventory_support import (BATCHES, LIST, MICRO, NEW_BATCH, NEW_ITEM,
                                 NEW_NOTE, TODAY, VESSELS, FormCase,
-                                InventoryCase, batch_data, batch_url,
-                                fill_data, fresh, item_data, item_url,
-                                movement_url, newest_movement, note_data,
-                                note_url, snapshot, vessel_url)
+                                InventoryCase, batch_data, batch_for,
+                                batch_url, fill_data, fresh, historical_line,
+                                item_data, item_url, movement_url,
+                                newest_movement, note_data, note_url,
+                                snapshot, vessel_url)
 
 
 def form_names(root, anchor: str) -> set[str]:
@@ -34,7 +35,8 @@ class PermissionTests(InventoryCase):
         item = self.item("CH-0012", quantity=9)
         movement = self.deliver_movement(item, 1)
         historical = book_note(self.kl, date=date(2025, 3, 12),
-                               historical=True, lines=[(item, 1)])
+                               historical=True,
+                               lines=[historical_line(item, 1)])
         vessel = self.vessel("CH-0012")
         today = TODAY.isoformat()
         return {
@@ -167,8 +169,9 @@ class NewItemTests(FormCase):
     def test_the_form_holds_the_fields_of_the_spec(self) -> None:
         names = form_names(page(self.client.get(NEW_ITEM)), "substance")
         self.assertEqual(names, {"substance", "article_number", "category",
-                                 "size", "unit", "quantity", "stocked_on",
-                                 "compartment", "box", "note"})
+                                 "size", "unit", "quantity", "batch",
+                                 "stocked_on", "compartment", "box",
+                                 "note"})
 
     def test_the_unit_choices(self) -> None:
         root = page(self.client.get(NEW_ITEM))
@@ -405,7 +408,8 @@ class NoteFormTests(FormCase):
         names = form_names(page(self.client.get(NEW_NOTE)), "number")
         expected = {"number", "date", "recipient", "note", "historical"}
         for index in range(10):
-            expected |= {f"item_{index}", f"count_{index}"}
+            expected |= {f"item_{index}", f"batch_{index}",
+                         f"count_{index}"}
         self.assertEqual(names, expected)
 
     def test_the_historical_check_box(self) -> None:
@@ -447,7 +451,9 @@ class NoteFormTests(FormCase):
         second = self.item("CH-0002", quantity=5)
         data = note_data()
         data.update({"item_3": str(first.pk), "count_3": "1",
-                     "item_7": str(second.pk), "count_7": "2"})
+                     "batch_3": str(batch_for(first).pk),
+                     "item_7": str(second.pk), "count_7": "2",
+                     "batch_7": str(batch_for(second).pk)})
         self.client.post(NEW_NOTE, data)
         self.assertEqual(DeliveryNote.objects.get().lines.count(), 2)
         self.assertEqual((fresh(first).quantity, fresh(second).quantity),
@@ -477,8 +483,9 @@ class NoteFormTests(FormCase):
     def test_one_line_too_many_refuses_the_note(self) -> None:
         first = self.item("CH-0001", quantity=5)
         second = self.item("CH-0002", quantity=3)
+        data = note_data((first, 2), (second, 4))
         before = snapshot()
-        done = self.client.post(NEW_NOTE, note_data((first, 2), (second, 4)))
+        done = self.client.post(NEW_NOTE, data)
         self.refused(done, "count_1")
         self.assertNotIn("count_0", context_form(done).errors)
         self.assertEqual(snapshot(), before)
@@ -506,9 +513,9 @@ class NoteFormTests(FormCase):
         """Scenario: Historical note in a quarter with an entered value."""
         item = self.item(quantity=5)
         self.enter(item, 2025, 1, 6)
+        data = note_data((item, 4), date="2025-03-12", historical="on")
         before = snapshot()
-        done = self.client.post(NEW_NOTE, note_data(
-            (item, 4), date="2025-03-12", historical="on"))
+        done = self.client.post(NEW_NOTE, data)
         self.refused(done, "count_0")
         self.assertEqual(snapshot(), before)
 
@@ -646,7 +653,7 @@ class HistoricalReversalFormTests(FormCase):
         self.stocked = self.item(quantity=5)
         self.target = book_note(self.kl, date=date(2025, 3, 12),
                                 historical=True, number="ALT-1",
-                                lines=[(self.stocked, 4)])
+                                lines=[historical_line(self.stocked, 4)])
 
     def test_the_form_asks_for_a_note(self) -> None:
         root = page(self.client.get(note_url(self.target, "reverse")))
@@ -904,7 +911,7 @@ class CorrectFormTests(FormCase):
     def test_the_form_holds_the_fields_of_the_spec(self) -> None:
         root = page(self.client.get(item_url(self.target, "correct")))
         self.assertEqual(form_names(root, "count"),
-                         {"count", "date", "note"})
+                         {"count", "batch", "date", "note"})
 
     def test_correcting_the_count(self) -> None:
         done = self.client.post(item_url(self.target, "correct"),
@@ -989,7 +996,7 @@ class MovementReversalFormTests(FormCase):
     def test_a_filling_whose_containers_are_gone_changes_nothing(
             self) -> None:
         filling = self.filling(self.target, 3)
-        self.deliver(self.target, 5)
+        self.deliver(self.target, 5, batch=filling.batch)
         before = snapshot()
         self.client.post(movement_url(filling), {"note": "x"})
         self.assertEqual(snapshot(), before)
@@ -1057,7 +1064,7 @@ class ConsumptionFormTests(FormCase):
 
     def test_a_quarter_with_historical_notes_is_refused(self) -> None:
         book_note(self.kl, date=date(2025, 3, 12), historical=True,
-                  lines=[(self.target, 4)])
+                  lines=[historical_line(self.target, 4)])
         before = snapshot()
         self.refused(self.client.post(self.url(), self.data(
             year="2025", quarter="1")))
@@ -1091,7 +1098,7 @@ class StaleEditTests(FormCase):
         from inventory.forms import NoteEditForm
         item = self.item()
         note = book_note(self.kl, date=date(2025, 3, 12), historical=True,
-                         lines=[(item, 4)])
+                         lines=[historical_line(item, 4)])
         form = NoteEditForm({"number": "", "recipient": "Produktion",
                              "note": ""}, instance=fresh(note))
         self.assertTrue(form.is_valid())

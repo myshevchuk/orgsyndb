@@ -7,7 +7,8 @@ from decimal import Decimal
 from inventory.bookings import Refused, book_note, enter_consumption, reverse
 from inventory.models import EnteredConsumption
 
-from .inventory_support import InventoryCase, fresh, snapshot
+from .inventory_support import (InventoryCase, fresh, historical_line,
+                                snapshot)
 
 
 class QuarterTests(InventoryCase):
@@ -34,9 +35,9 @@ class QuarterTests(InventoryCase):
     def test_lines_of_historical_notes_count(self) -> None:
         item = self.item(quantity=5)
         book_note(self.kl, date=date(2025, 8, 3), historical=True,
-                  lines=[(item, 4)])
+                  lines=[historical_line(item, 4)])
         book_note(self.kl, date=date(2025, 9, 30), historical=True,
-                  lines=[(item, 3)])
+                  lines=[historical_line(item, 3)])
         self.assertEqual(self.consumption(item).quarters[(2025, 3)], 7)
 
     def test_each_item_has_its_own_consumption(self) -> None:
@@ -93,7 +94,7 @@ class MeanTests(InventoryCase):
         item = self.item(quantity=5)
         self.enter_year(item, 2025, 8)
         note = book_note(self.kl, date=date(2024, 5, 2), historical=True,
-                         lines=[(item, 1)])
+                         lines=[historical_line(item, 1)])
         self.assertAlmostEqual(
             float(self.consumption(item).mean_year), 16.5)
         reverse_historical(self.kl, note, note="falsch")

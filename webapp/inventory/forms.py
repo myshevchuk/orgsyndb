@@ -5,6 +5,8 @@ The booking forms validate what a person typed; the bookings in
 the field it names by ``show_refusal``.
 """
 
+from collections.abc import Iterator
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
@@ -18,8 +20,8 @@ from django.utils.translation import pgettext_lazy
 
 from inventory.bookings import Refused
 from inventory.figures import to_base
-from inventory.models import (FACTOR, Batch, DeliveryNote, Item, Source,
-                              Unit, Vessel)
+from inventory.models import (FACTOR, Batch, BatchStock, DeliveryNote, Item,
+                              Source, Unit, Vessel)
 from journal.entries import entry_for, named
 from registry.forms import SubstanceKeyField, decimal_field
 from tasks.models import TaskStep
@@ -40,6 +42,7 @@ ARTICLE_NUMBER_HELP = _("The number of the article's delivery notes; "
 CATEGORY_HELP = _("Saved on the article, for every size of it.")
 NOTE = forms.Textarea(attrs={"rows": 3})
 ROWS = 10
+UNKNOWN = _("unknown")
 
 
 def show_refusal(form: BaseForm, refused: Refused,
@@ -68,12 +71,88 @@ def not_in_future(day: Any) -> None:
         raise forms.ValidationError(_("The date may not lie in the future."))
 
 
+@dataclass(frozen=True)
+class SubstanceGroup:
+    """The heading of the batches of one substance in a batch choice:
+    the substance's KEY and its LABEL, its name in the active
+    language."""
+
+    key: str
+    label: str
+
+
+class BatchChoices(forms.models.ModelChoiceIterator):
+    """The choices of a ``BatchField``: the empty choice, then the
+    batches grouped by their substance, each group headed by a
+    ``SubstanceGroup``, in the order of the substances' keys."""
+
+    def __iter__(self) -> Iterator[Any]:
+        if self.field.empty_label is not None:
+            yield "", self.field.empty_label
+        groups: dict[str, tuple[SubstanceGroup, list[Any]]] = {}
+        for batch in self.queryset.select_related("substance").order_by(
+                "substance__key", "pk"):
+            substance = batch.substance
+            group = groups.setdefault(substance.key, (SubstanceGroup(
+                substance.key, substance.shown_name), []))
+            group[1].append(self.choice(batch))
+        for group, options in groups.values():
+            yield group, options
+
+
+class BatchSelect(forms.Select):
+    """A drop-down list whose options are grouped by substance: each
+    ``optgroup`` carries its substance's key as ``data-substance``,
+    which the page's script reads (``lab.js``)."""
+
+    template_name = "inventory/batch_select.html"
+
+
+class BatchField(forms.ModelChoiceField):
+    """A choice among batches, grouped by their substance and shown as
+    ``Batch.__str__`` shows them. FOR names the control whose substance
+    the batch must belong to, which the page's script reads to offer
+    that substance's batches alone; the form checks the match itself."""
+
+    iterator = BatchChoices
+
+    def __init__(self, *, queryset: Any, follows: str, label: Any,
+                 required: bool = False, empty_label: Any = "",
+                 aria_label: Any = None, **kwargs: Any) -> None:
+        attrs = {"data-batch-for": follows}
+        if aria_label:
+            attrs["aria-label"] = aria_label
+        super().__init__(queryset=queryset, required=required, label=label,
+                         empty_label=empty_label, to_field_name=None,
+                         widget=BatchSelect(attrs=attrs), **kwargs)
+
+
+class ItemSelect(forms.Select):
+    """A drop-down list of items whose options carry their substance's
+    key as ``data-substance``."""
+
+    def create_option(self, name: str, value: Any, label: Any,
+                      selected: bool, index: int, subindex: int | None = None,
+                      attrs: dict[str, Any] | None = None
+                      ) -> dict[str, Any]:
+        """Return the option as the base class does, with the substance
+        of an item's option as ``data-substance``."""
+        option = super().create_option(name, value, label, selected, index,
+                                       subindex, attrs)
+        instance = getattr(value, "instance", None)
+        if instance is not None:
+            option["attrs"]["data-substance"] = instance.substance.key
+        return option
+
+
 class ItemForm(forms.ModelForm):
     """A new item with its opening count, of the substance named by its
     key. The article number and the category are the article's: they
     make the substance's article when it has none, and otherwise are
     checked against it and saved on it by the booking. The size, in up
-    to three places, must be above zero."""
+    to three places, must be above zero. The opening count is of the
+    BATCH chosen, of a batch of the substance, or of unknown batch when
+    none is chosen."""
 
     substance = SubstanceKeyField()
     article_number = forms.CharField(
@@ -84,6 +163,11 @@ class ItemForm(forms.ModelForm):
                                help_text=CATEGORY_HELP)
     size = decimal_field(_("Size"), max_digits=10, decimal_places=3)
     quantity = forms.IntegerField(label=_("Opening count"), min_value=0)
+    batch = BatchField(
+        queryset=Batch.objects.all(), follows="substance", label=_("Batch"),
+        empty_label=UNKNOWN,
+        help_text=_("The batch the opening count is of; left empty, it is "
+                    "of unknown batch."))
 
     class Meta:
         model = Item
@@ -98,8 +182,8 @@ class ItemForm(forms.ModelForm):
         help_texts = {"stocked_on": STOCKED_ON_HELP}
 
     field_order = ["substance", "article_number", "category", "size",
-                   "unit", "quantity", "stocked_on", "compartment", "box",
-                   "note"]
+                   "unit", "quantity", "batch", "stocked_on", "compartment",
+                   "box", "note"]
 
     def clean_size(self) -> Decimal:
         """Return the size; refuse one of zero or less."""
@@ -107,6 +191,16 @@ class ItemForm(forms.ModelForm):
         if size <= 0:
             raise forms.ValidationError(_("The size must be above zero."))
         return size
+
+    def clean(self) -> dict[str, Any]:
+        """Refuse a batch of another substance than the one named, at the
+        batch."""
+        cleaned = super().clean()
+        batch, substance = cleaned.get("batch"), cleaned.get("substance")
+        if batch is not None and substance is not None \
+                and batch.substance_id != substance.pk:
+            self.add_error("batch", _("The batch is of another substance."))
+        return cleaned
 
     def validate_unique(self) -> None:
         """Leave the identity of article, size and unit to the booking,
@@ -194,9 +288,14 @@ class ItemChoiceField(forms.ModelChoiceField):
 
 
 class NoteForm(forms.Form):
-    """A delivery note with up to ten lines, each an item and a count;
-    rows left empty are ignored, and a row with only one of the two is
-    refused."""
+    """A delivery note with up to ten lines, each an item, the batch it
+    is delivered from and a count; rows left empty are ignored, and a row
+    with only some of the three is refused at the field missing.
+
+    A row's batches are those of the substances of the items the form
+    offers, and the batch must be one of its item's substance. An item
+    may be in several rows, once for each batch.
+    """
 
     number = forms.CharField(label=_("Number"), max_length=30,
                              required=False)
@@ -214,11 +313,16 @@ class NoteForm(forms.Form):
         items = Item.objects.filter(
             article__article_number__isnull=False).select_related(
                 "article__substance")
+        batches = Batch.objects.filter(
+            substance_id__in=items.values("article_id"))
         for row in range(ROWS):
             self.fields[f"item_{row}"] = ItemChoiceField(
                 queryset=items, required=False, label=_("Item"),
-                empty_label="", widget=forms.Select(attrs={
+                empty_label="", widget=ItemSelect(attrs={
                     "aria-label": _("Item %(row)s") % {"row": row + 1}}))
+            self.fields[f"batch_{row}"] = BatchField(
+                queryset=batches, follows=f"item_{row}", label=_("Batch"),
+                aria_label=_("Batch %(row)s") % {"row": row + 1})
             self.fields[f"count_{row}"] = forms.IntegerField(
                 label=_("Count"), required=False, min_value=1,
                 widget=forms.NumberInput(attrs={
@@ -231,11 +335,11 @@ class NoteForm(forms.Form):
         return [self[name] for name in ("number", "date", "recipient",
                                         "note", "historical")]
 
-    def rows(self) -> list[tuple[Any, Any]]:
-        """Return the bound fields of each row: its item and its
-        count."""
-        return [(self[f"item_{row}"], self[f"count_{row}"])
-                for row in range(ROWS)]
+    def rows(self) -> list[tuple[Any, Any, Any]]:
+        """Return the bound fields of each row: its item, its batch and
+        its count."""
+        return [(self[f"item_{row}"], self[f"batch_{row}"],
+                 self[f"count_{row}"]) for row in range(ROWS)]
 
     def clean_number(self) -> str:
         """Return the number stripped; refuse one another note has."""
@@ -246,33 +350,45 @@ class NoteForm(forms.Form):
         return number
 
     def clean(self) -> dict[str, Any]:
-        """Collect the rows that hold a line into ``lines``, pairs of an
-        item and a count, and ``rows``, the row of each line; refuse a
-        row with only an item or only a count, an item twice and a note
-        without lines."""
+        """Collect the rows that hold a line into ``lines``, triples of
+        an item, a batch and a count, and ``rows``, the row of each line.
+
+        Refuse a row that lacks its item, its batch or its count, at the
+        field missing; a batch of another substance than the item's and
+        an item with a batch twice, at the batch; and a note without
+        lines.
+        """
         cleaned = super().clean()
         lines, rows, seen = [], [], set()
         for row in range(ROWS):
-            item = cleaned.get(f"item_{row}")
-            count = cleaned.get(f"count_{row}")
-            typed = (self.data.get(f"item_{row}"),
-                     self.data.get(f"count_{row}"))
-            if f"item_{row}" in self.errors or f"count_{row}" in self.errors:
+            names = [f"{kind}_{row}" for kind in ("item", "batch", "count")]
+            item, batch, count = (cleaned.get(name) for name in names)
+            if any(name in self.errors for name in names):
                 continue
-            if item is None and count is None:
-                if typed[0] or typed[1]:
-                    self.add_error(f"item_{row}", _("Choose an item."))
+            if item is None and batch is None and count is None:
+                if any(self.data.get(name) for name in names):
+                    self.add_error(names[0], _("Choose an item."))
                 continue
             if item is None:
-                self.add_error(f"item_{row}", _("Choose an item."))
-            elif count is None:
-                self.add_error(f"count_{row}", _("Enter a count."))
-            elif item.pk in seen:
-                self.add_error(f"item_{row}",
-                               _("The item is already in the note."))
-            else:
-                seen.add(item.pk)
-                lines.append((item, count))
+                self.add_error(names[0], _("Choose an item."))
+                if batch is None:
+                    self.add_error(names[1], _("Choose a batch."))
+                if count is None:
+                    self.add_error(names[2], _("Enter a count."))
+                continue
+            if count is None:
+                self.add_error(names[2], _("Enter a count."))
+            if batch is None:
+                self.add_error(names[1], _("Choose a batch."))
+            elif batch.substance_id != item.article_id:
+                self.add_error(names[1],
+                               _("The batch is of another substance."))
+            elif (item.pk, batch.pk) in seen:
+                self.add_error(names[1], _(
+                    "The item and batch are already in the note."))
+            elif count is not None:
+                seen.add((item.pk, batch.pk))
+                lines.append((item, batch, count))
                 rows.append(row)
         if not lines and not self.errors:
             raise forms.ValidationError(
@@ -340,16 +456,35 @@ def vessel_label(vessel: Vessel) -> str:
 
 
 class CorrectionForm(forms.Form):
-    """The count of an item's containers after counting, with a note."""
+    """The count of one share of an item's containers after counting,
+    with a note.
+
+    The share is the one of unknown batch, which the empty choice of
+    ``batch`` stands for and which is chosen by default, or one of the
+    batches of ITEM's substance. Each choice shows the containers the
+    item holds of it; a batch of another substance is refused at the
+    batch.
+    """
 
     count = forms.IntegerField(label=_("Count"), min_value=0)
+    batch = forms.ModelChoiceField(
+        queryset=Batch.objects.none(), required=False, label=_("Batch"))
     date = forms.DateField(label=_("Date"), widget=DATE,
                            validators=[not_in_future])
     note = forms.CharField(label=pgettext_lazy("inventory", "Note"),
                            widget=NOTE)
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, item: Item, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        held = {stock.batch_id: stock.quantity
+                for stock in BatchStock.objects.filter(item=item)}
+        batch = self.fields["batch"]
+        batch.queryset = Batch.objects.filter(
+            substance_id=item.article_id).select_related("substance")
+        batch.empty_label = f"{UNKNOWN} · {held.get(None, 0)}"
+        batch.label_from_instance = lambda obj: \
+            f"{obj} · {held.get(obj.pk, 0)}"
+        self.fields["count"].initial = held.get(None, 0)
         self.fields["date"].initial = timezone.localdate()
 
 

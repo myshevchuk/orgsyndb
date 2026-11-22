@@ -25,8 +25,8 @@ procedure and sequence schemas, the theme, the lab application
 and the tests. The lab application in `webapp/` uses Django, a Python web
 framework, to track synthesis tasks and the end-product inventory at
 `/lab/` beside the static site. The inventory counts containers ready to
-deliver, records deliveries and tracks which batches and vessels supply
-material for filling.
+deliver by batch, including containers whose batch is unknown. It records
+deliveries and tracks which batches and vessels supply material for filling.
 See [Container deployment](#container-deployment) to run both.
 
 The repository holds no procedures of its own apart from a demo.
@@ -2183,6 +2183,17 @@ show used-up vessels, a correction with a note and the transfer from the
 
 Every demo item has a compartment and a box. The item list shows all
 seven stock levels on any seeding day.
+
+The demo records opening counts as **unbekannt** (**unknown**). Each
+article with orders has a batch for its old stock, recorded as
+`ALT-<article number>` with no date or vessel. Historical delivery lines
+name this batch. Current orders draw from the most recently filled
+batch first and use the `ALT` batch for containers of unknown batch.
+Deliveries that use unknown stock book assignments to record its batch.
+An order that spans batches uses one line per batch. On the seeding day
+you can find an item holding containers from two batches and an item
+holding containers of unknown batch.
+
 `CH-0012` in 1 g is **auslaufend** (**discontinued**), and `CH-0010` in
 25 g is **nicht benötigt** (**not needed**). Both were set aside after
 their opening counts and have never been delivered. `CH-0001` in 250 mg
@@ -2637,15 +2648,24 @@ vessels of its substance, including flasks.
 An **article** is one substance with an article number and category;
 the number may stay empty until its first delivery. An **item** is one
 container size of that article. All sizes share the substance's name
-and the article's number and category. Stock is a count of containers.
+and the article's number and category. An item's stock is the sum of
+its **shares**, the counts for each batch that has held its containers
+and the count for containers of unknown batch.
 
 Choose **New item** on the item list. In **Substance**, enter a key from
 the [substance registry](#substance-registry); suggestions show every
 key with its name. Create a missing substance in the registry first.
 Enter the container size and unit (`mg`, `µmol`, `g` or `mmol`), opening
-count and note. No two items of one article may share size and unit,
-even without an article number. The article, size and unit cannot change
-after creation.
+count and note. You can choose one batch of the substance for the entire
+opening count. Leave **Charge** (**Batch**) at **unbekannt** (**unknown**)
+to record the count under unknown batch. The form groups batches by
+substance. With JavaScript, typing a substance key narrows the choice to
+that substance and clears a selected batch if it disappears from the
+list. Without JavaScript, all groups stay visible. The form accepts only
+a batch of the item's substance.
+
+No two items of one article may share size and unit, even without an
+article number. The article, size and unit cannot change after creation.
 
 If the substance has no article, the form creates it with the optional
 article number and category you enter. If it already has an article,
@@ -2872,16 +2892,21 @@ screen only.
 Enter the item's article number before its first delivery. Delivery-note
 rows offer only items with an article number, for current and historical
 deliveries alike. A delivery note (`Lieferschein`) holds an optional
-number, date, recipient, note and up to ten lines of items and container
-counts.
+number, date, recipient, note and up to ten lines. Each line, including
+one entered later on a historical note, needs an item, a batch of its
+substance and a container count. Use one line per item and batch. For
+example, use two lines to deliver two containers of `KL0412` and one of
+`KL0413` of the same item. The form refuses a line with a missing batch
+or a batch of another substance.
 
 To book a request for several articles, sign in and tick their rows in
 the item list's **Artikelnr.** (**Article no.**) column. Only items with an
 article number have a check box. Choose **Lieferschein mit Auswahl**
 (**Delivery note from selection**) above the table. The new note form
 opens with the selected items in its first rows, in the list's order
-from top to bottom. Enter the container counts. If you select more than
-ten items, only the first ten appear; book a second note for the rest.
+from top to bottom. Select the batches and enter the container counts.
+If you select more than ten items, only the first ten appear. Book a
+second note for the rest.
 
 For one item, choose **Book delivery** on its item page to fill the
 note's first row. To start an empty note, choose **New delivery note** on
@@ -2891,31 +2916,67 @@ container size, name and location, for example
 An empty compartment or box is left out of the label; an item with neither
 shows no location.
 
-Booking the note reduces stock for all lines together. If any line
-exceeds the available stock, the whole note is refused and nothing
-changes. The deliveries list shows newest notes first and lets you
-filter by text or item.
+With JavaScript, choosing an item narrows that row's batch choices to
+the item's substance and clears a selected batch if it disappears from
+the list. Without JavaScript, all the form's batch choices stay visible.
 
-The note's page shows **Fach** and **Box** beside every line. Print it to
-use as a pick list when fetching the containers. These are the items'
-current locations: historical notes and reprints also show where the
-items are now.
+Old stock entered without a batch stays under **unbekannt** (**unknown**)
+until you deliver it. Use the batch number printed on the containers.
+If it has no record yet, choose [**New batch**](#record-a-batch) for the
+item's substance. Enter the batch number, clear the default date and
+leave the amount empty. Yearly stock-taking (**Inventur**) to assign
+batches outside a delivery is still pending.
 
-Stock changes only through bookings: the opening count, deliveries,
-fillings, corrections after counting, and reversals. The item page keeps
-these in a ledger showing the date, person and count after each booking.
-Choose **Correct count** after counting the containers, and give a note
-explaining the correction. To undo a mistaken delivery or filling,
-choose **Reverse** beside its ledger entry and give a note. A reversed
-delivery restores stock and no longer counts as consumption. Reversing
-a filling removes its containers and returns the amount taken to its
-source vessel. The reversal requires enough containers in stock and,
-for a filling from a flask, a task that is still planned or running.
+Each line of a current note uses containers already recorded under its
+batch first. If that share is too small, the application moves the
+shortfall from unknown stock into the named batch before booking the
+delivery. The item's ledger shows this move as **Zuordnung**
+(**Assignment**) and links it to the delivery note. If a line asks for
+more containers than its batch and the item's unknown stock hold
+together, the application refuses the whole note and changes nothing.
+A historical note records consumption without changing stock.
+
+The deliveries list shows newest notes first and lets you filter by
+text or item. Both the list and the note page show the batch on each
+line. On the note page, each batch links to its own page. Each line also
+shows the item's current **Fach** and **Box**, including on historical
+notes and reprints. Print the note as a pick list when fetching the
+containers.
+
+On the item page, **Gebinde nach Charge** (**Containers by batch**)
+shows the count for each batch with stock and links to its page. It
+shows the **unbekannt** count when there are containers of unknown
+batch. Open a batch to see which items hold its containers and how
+many they hold. The batch page also lists its current and historical
+delivery lines, with **nachgetragen** (**entered later**) and
+**storniert** (**reversed**) where applicable.
+
+Stock changes only through bookings. The item page's ledger records the
+opening count, deliveries, assignments, fillings, corrections and
+reversals. Each entry shows its date, who booked it, the item's total
+count after the booking and the batch, or **unbekannt** for a movement
+in that share.
+
+After counting the containers, choose **Bestand korrigieren**
+(**Correct count**) to correct one share. Choose a batch of the item's
+substance or keep the default, **unbekannt**. Each choice shows its
+recorded count. Enter the actual count for that share and a note
+explaining the correction. The item's total changes by the difference.
+
+In the item ledger, **Stornieren** (**Reverse**) is available only for
+deliveries and fillings. Give a note when you reverse a booking.
+Reversing a delivery returns the containers to the delivery's batch
+and removes the delivery from consumption. Any assignment stays in
+the ledger and in effect. Reversing a filling removes its containers
+from the filling's batch and returns the amount taken to the source
+vessel. That batch must still hold enough containers. For a filling
+from a flask, the task must still be planned or running.
 
 You cannot edit or delete ledger entries or delete delivery notes. A
 delivery note's date and lines are fixed; its number, recipient and note
 can be edited. Reverse a current note's deliveries one line at a time
-from the items' ledgers.
+from the items' ledgers. If the note has several lines for one item,
+reversing a line affects only that line's batch.
 
 #### Enter past consumption and read stock levels
 
@@ -3096,19 +3157,21 @@ optionally, the amount taken in the vessel's unit. **Menge vorschlagen**
 the amount empty when booking uses the proposal. Conversion between
 mass and amount of substance uses the molar mass in the registry.
 Enter the amount yourself if the conversion needs a missing molar mass.
-Booking adds the containers and deducts the amount from the vessel
-together. If there is too little material, neither changes.
+The booking adds the containers to the item's share for the vessel's
+batch and deducts the amount from the vessel in the same operation.
+If there is too little material, neither changes.
 
 The item's **Bulk** section lists its open vessels and how many whole
 containers each can fill. The total adds the counts for vessels whose
 amounts convert into the item's unit.
 
 Staff can inspect articles, items, batches, vessels, delivery notes
-and movements at `/lab/admin/`. A batch can be deleted only if it has
-no vessels and no task step made it. An item or vessel can be deleted
-only while its ledger holds just its opening entry. An item must also
-have no delivery-note lines. Deleting such an item or vessel deletes
-its opening entry.
+and movements at `/lab/admin/`. The item's counts by batch are
+read-only. A batch can be deleted only if no task step made it and no
+vessel, stock share, delivery line or movement refers to it. An item or
+vessel can be deleted only while its ledger holds just its opening
+entry. An item must also have no delivery-note lines. Deleting such an
+item or vessel deletes its opening entry.
 An article can be deleted only while it has no items; its article number
 is read-only once set.
 
