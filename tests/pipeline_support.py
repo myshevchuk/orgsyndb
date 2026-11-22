@@ -1857,6 +1857,18 @@ class Page:
             pairs.append(DefPair(dt.norm(), dt, dd, gap))
         return pairs
 
+    def panel_lists(self) -> list[Node]:
+        """The ``dl.metadata`` lists of ``div.procedure-details``, in
+        document order; none when the page has no such wrapper."""
+        details = self.find("div", "procedure-details")
+        return [] if details is None else details.find_all("dl", "metadata")
+
+    def panel_pairs(self) -> list[DefPair]:
+        """The metadata panel of a procedure page: the dt/dd pairs of
+        every list of the details wrapper, in document order."""
+        return [pair for panel in self.panel_lists()
+                for pair in self.definition_pairs(panel)]
+
     def resolve(self, ref: str) -> str:
         """The URL path ``ref`` resolves to from this page, followed by
         ``?`` and its query, still encoded, when it has one. A fragment

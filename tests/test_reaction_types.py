@@ -208,8 +208,7 @@ class ReactionTypeSiteTests(cs.CatalogueCase):
         for item in self.esterifications():
             with self.subTest(procedure=item.id):
                 page = self.page(f"procedures/{item.slug}/index.html")
-                pairs = {pair.label: pair for pair in page.definition_pairs(
-                    page.find("dl", "metadata"))}
+                pairs = {pair.label: pair for pair in page.panel_pairs()}
                 self.assertEqual(pairs["Reaction type"].definition.norm(),
                                  self.NEW_LABEL)
                 self.assertEqual(rows[item.id][2].norm(), self.NEW_LABEL)

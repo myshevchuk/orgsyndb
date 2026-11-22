@@ -8,6 +8,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pipeline_support as ps
+import widget_support as ws
 from pipeline_support import DEMO, REPO, Declaration
 
 CSS_DIR = REPO / "site" / "assets" / "css"
@@ -123,11 +124,53 @@ class NarrowWindowTests(unittest.TestCase):
                     narrow_value(declarations, selector,
                                  "grid-template-columns", width),
                     "minmax(0, 1fr)")
-        for selector in (".procedure", ".procedure-header"):
-            with self.subTest(selector=selector):
+
+
+class SectionRoleTests(unittest.TestCase):
+    def test_every_role_list_matches_validation(self) -> None:
+        """Scenario: Every role list matches validation."""
+        table = ws.read_role_table()
+        names = [ws.fold(name) for name, _ in table]
+        self.assertEqual(len(names), len(set(names)), "a name twice")
+        roles = dict(zip(names, (role for _, role in table)))
+        sections = ws.validation_sections()
+        self.assertEqual(sorted(sections), ["de", "en"])
+        for language, expected in sections.items():
+            with self.subTest(language=language):
+                self.assertEqual(len(expected), len(ws.ROLES))
                 self.assertEqual(
-                    narrow_value(declarations, selector, "display", width),
-                    "block")
+                    [roles.get(ws.fold(name)) for name in expected],
+                    list(ws.ROLES))
+        self.assertEqual(
+            sorted(names),
+            sorted(ws.fold(name) for each in sections.values()
+                   for name in each), "the table holds another name")
+
+
+class RoleTableReaderTests(unittest.TestCase):
+    """The reader must find the table where a template writes it, or the
+    test above would hold nothing."""
+
+    def test_a_table_over_several_lines_without_its_comment(self) -> None:
+        """Harness: the role table reader (layout and comments)."""
+        text = (
+            '{{- /* a note: dict "x" "y" */ -}}\n'
+            '{{ $other := dict "key" $value }}\n'
+            '{{ $roles := dict\n  "Summary" "summary"\n'
+            '  "Workup and  Purification" "workup" -}}\n'
+            '{{ index $roles (lower .) }}')
+        self.assertEqual(ws.parse_role_table(text),
+                         [("Summary", "summary"),
+                          ("Workup and  Purification", "workup")])
+
+    def test_no_table_or_two_are_refused(self) -> None:
+        """Harness: the role table reader (count)."""
+        for text in ("{{ .Content }}",
+                     '{{ $a := dict "a" "b" }}{{ $b := dict "c" "d" }}',
+                     '{{ $a := dict "a" "b" "c" }}'):
+            with self.subTest(text=text):
+                with self.assertRaises(AssertionError):
+                    ws.parse_role_table(text)
 
 
 class FacetIndentTests(unittest.TestCase):

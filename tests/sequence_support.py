@@ -278,11 +278,11 @@ def check_body(case: unittest.TestCase, page: Page, sequence: Sequence,
 def check_panel_sequences(case: unittest.TestCase, page: Page,
                           item: Content, sequences: list[Sequence],
                           locale: str) -> None:
-    """The ``Sequences`` pair of a procedure's panel: one ``a.sequence``
-    per sequence that has the procedure as a step, by ID."""
+    """The ``Sequences`` pair of a procedure's panel, which ends the
+    context widget: one ``a.sequence`` per sequence that has the
+    procedure as a step, by ID."""
     label = TEXTS[locale]["heading"]
-    panel = page.find("dl", "metadata")
-    pairs = {p.label: p for p in page.definition_pairs(panel)}
+    pairs = {p.label: p for p in page.panel_pairs()}
     wanted = sequences_of(item, sequences)
     if not wanted:
         case.assertNotIn(label, pairs)

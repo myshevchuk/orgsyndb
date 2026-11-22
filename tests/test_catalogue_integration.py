@@ -465,8 +465,7 @@ class CatalogueFixtureTests(DetailsChecks, cs.CatalogueCase):
         self.assertEqual([t for lv, t in term.headings() if lv == 1],
                          ["Ä. Müller"])
         panel = self.page("procedures/osdb-0921/index.html")
-        pairs = {p.label: p for p in panel.definition_pairs(
-            panel.find("dl", "metadata"))}
+        pairs = {p.label: p for p in panel.panel_pairs()}
         self.assertEqual(
             [(link.target, link.node.norm())
              for link in panel.links(pairs["Authors"].definition)],
@@ -535,8 +534,8 @@ class CatalogueFixtureTests(DetailsChecks, cs.CatalogueCase):
         self.assertEqual(identity.norm(), "OSDB-0921 checked by B. Example")
         self.assertEqual(identity.find("span", "sign-off").norm(),
                          "by B. Example")
-        labels = [p.label for p in checked.definition_pairs(
-            checked.find("dl", "metadata"))]
+        labels = [p.label for p in checked.panel_pairs()]
+        self.assertIn("Created", labels)
         self.assertNotIn("Checked by", labels)
         draft = self.page("procedures/osdb-0923/index.html")
         self.assertIsNone(draft.find("span", "sign-off"))
