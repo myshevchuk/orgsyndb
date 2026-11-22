@@ -11,21 +11,25 @@ from overview.figures import Month
 
 WIDTH = 600
 HEIGHT = 180
-TOP = 10
+TOP = 18
 BOTTOM = 24
 BAR = 16
+LABEL_GAP = 4
 SPAN = WIDTH // 12
 
 
 @dataclass(frozen=True)
 class Bar:
-    """A bar: its value, its title, and its place in the drawing."""
+    """A bar: its value, its title, its place in the drawing, and the
+    anchor of its value label."""
 
     value: int
     title: str
     x: int
     y: float
     height: float
+    label_x: float
+    label_y: float
 
 
 @dataclass(frozen=True)
@@ -64,9 +68,11 @@ def chart(months: list[Month], current: list[int], previous: list[int]
 
         def bar(value: int, day: date, x: int) -> Bar:
             height = value * scale
+            y = baseline - height
             return Bar(value=value,
                        title=f"{dateformat.format(day, 'F Y')}: {value}",
-                       x=x, y=baseline - height, height=height)
+                       x=x, y=y, height=height,
+                       label_x=x + BAR / 2, label_y=y - LABEL_GAP)
 
         drawn.append(MonthBars(
             previous=bar(before, date(year - 1, month, 1), left),
