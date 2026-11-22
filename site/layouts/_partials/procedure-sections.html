@@ -1,0 +1,36 @@
+{{- /* Split a procedure's rendered body on level-2 headings and wrap each
+section in a widget carrying its validation role in data-section. Content
+before the first h2 stays outside any section. The role table below maps
+all sixteen section names of tools/validate.py SECTIONS_BY_LANGUAGE
+(English and German, case- and whitespace-folded) to the eight roles. */ -}}
+{{ $roles := dict
+  "summary" "summary"
+  "reagents" "reagents"
+  "procedure" "procedure"
+  "workup and purification" "workup"
+  "characterization" "characterization"
+  "notes" "notes"
+  "hazards and waste disposal" "hazards"
+  "references" "references"
+  "zusammenfassung" "summary"
+  "reagenzien" "reagents"
+  "durchführung" "procedure"
+  "aufarbeitung und reinigung" "workup"
+  "charakterisierung" "characterization"
+  "anmerkungen" "notes"
+  "gefahren und entsorgung" "hazards"
+  "literatur" "references"
+-}}
+{{ $parts := split (string .Content) "<h2" -}}
+{{ with index $parts 0 }}{{ . | safeHTML }}{{ end -}}
+{{ range after 1 $parts -}}
+{{ $chunks := split . "</h2>" -}}
+{{ $heading := printf "<h2%s</h2>" (index $chunks 0) -}}
+{{ $body := delimit (after 1 $chunks) "</h2>" -}}
+{{ $label := $heading | plainify | replaceRE "\\s+" " " | strings.TrimSpace | lower -}}
+{{ $role := index $roles $label -}}
+<section class="widget procedure-section"{{ with $role }} data-section="{{ . }}"{{ end }}>
+<div class="widget__head">{{ $heading | safeHTML }}</div>
+<div class="widget__body">{{ $body | safeHTML }}</div>
+</section>
+{{ end -}}

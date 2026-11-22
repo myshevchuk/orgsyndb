@@ -121,6 +121,11 @@ print_modified = "last modified"
 print_page = "Page"
 print_of = "of"
 
+widget_compound = "Compound"
+widget_products = "Products"
+widget_details = "Details"
+widget_context = "Synthesis context"
+
 label_product = "Product"
 label_products = "Products"
 label_formula = "Formula"
