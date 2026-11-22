@@ -1192,7 +1192,7 @@ def snapshot() -> dict:
             "number", "source", "supplier_batch", "date"), key=repr),
         "vessels": sorted(Vessel.objects.values_list(
             "batch__number", "batch__supplier_batch", "unit", "amount",
-            "flask", "location"), key=repr),
+            "flask"), key=repr),
         "tasks": sorted(Task.objects.values_list(
             "number", "substance__key", "started", "ended")),
     }

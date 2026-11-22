@@ -106,6 +106,15 @@ class FigureTests(OverviewCase):
         super().setUp()
         self.at_the_seventh()
 
+    def test_the_open_vessels_figure_in_english(self) -> None:
+        """Requirement: Overview page (`Open vessels`)."""
+        self.vessel("CH-0012", "mg", "50")
+        accept(language="en")
+        shown = figures(self.get())
+        self.assertIn("Open vessels", shown)
+        self.assertEqual(shown["Open vessels"].text(), "1")
+        self.assertNotIn("Open bulk lots", shown)
+
     def scenario(self) -> None:
         from inventory.bookings import reverse
         from inventory.models import Movement
@@ -444,12 +453,3 @@ class SpanTests(SimpleTestCase):
         self.assertEqual(months[-1], (2026, 11))
         self.assertEqual(len(months), 12)
         self.assertEqual(months_ending(date(2026, 1, 31))[0], (2025, 2))
-
-    def test_the_open_vessels_figure_in_english(self) -> None:
-        """Requirement: Overview page (`Open vessels`)."""
-        self.vessel("CH-0012", "mg", "50")
-        accept(language="en")
-        shown = figures(self.get())
-        self.assertIn("Open vessels", shown)
-        self.assertEqual(shown["Open vessels"].text(), "1")
-        self.assertNotIn("Open bulk lots", shown)

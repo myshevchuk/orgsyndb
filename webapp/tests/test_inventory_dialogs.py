@@ -139,6 +139,7 @@ class DialogCase(FormCase):
         self.target = self.item("CH-0012", size="10", unit="umol",
                                 quantity=5)
         self.delivery = self.deliver_movement(self.target, 2)
+        self.source = self.vessel("CH-0012", "mg", "50")
 
     def urls(self) -> dict[str, str]:
         return {"edit": item_url(self.target, "edit"),
@@ -150,7 +151,8 @@ class DialogCase(FormCase):
     def valid_posts(self) -> dict[str, dict[str, str]]:
         return {"edit": {"category": "", "status": "active",
                          "note": "Neu"},
-                "fill": fill_data(count="1"),
+                "fill": fill_data(count="1", vessel=str(self.source.pk),
+                                  amount="1"),
                 "correct": correction(),
                 "consumption": {"year": "2026", "quarter": "1",
                                 "count": "3"},

@@ -779,9 +779,10 @@ class TransferTests(TransferCase):
                              target=self.stored(), date=date(2026, 11, 1))
         self.assertEqual((out.date, into.date),
                          (date(2026, 11, 1), date(2026, 11, 1)))
+        target = self.stored()
         with self.refusing("date"):
             transfer(self.kl, self.flask, amount=Decimal("1"),
-                     target=self.stored(), date=date(2026, 11, 5))
+                     target=target, date=date(2026, 11, 5))
 
     def test_transfer_across_units(self) -> None:
         """Scenario: Transfer across units."""

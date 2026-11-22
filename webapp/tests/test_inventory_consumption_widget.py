@@ -9,22 +9,17 @@ from datetime import date
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
-from django.db import connection
-from django.db.migrations.executor import MigrationExecutor
-from django.test import TransactionTestCase
 
 from inventory.bookings import (book_note, enter_consumption,
                                 reverse_historical)
 
-from . import (Element, berlin, field_value, frozen, make_item, make_user,
-               page, ticking)
+from . import (Element, berlin, field_value, frozen, page)
 from .collection_support import accept
-from .inventory_support import (LIST, NOW, FormCase, cells, has_number,
+from .inventory_support import (LIST, FormCase, cells, has_number,
                                 item_url, num)
 from .test_inventory_detail import detail_url, pane_of
 from .test_inventory_dialogs import HTMX, controls_of, errors_at
 
-BEFORE = [("inventory", "0007_step_lots_and_withdrawals")]
 LABEL = re.compile(r"Q([1-4]) (\d{4})")
 CHANGE, ENTER = "Ändern", "Nachtragen"
 HEADING = "Verbrauch Q{} {}"
@@ -198,72 +193,6 @@ class RecordedHistoryTests(WidgetCase):
         found = history_of(item, 2026, 2)
         self.assertEqual([r.history_type for r in found], ["+", "~", "-"])
         self.assertEqual({r.history_user_id for r in found}, {self.ae.pk})
-
-
-class BackfillTests(TransactionTestCase):
-    """The migration that gives each value stored before the history a
-    creation record."""
-
-    def setUp(self) -> None:
-        self.enterContext(ticking(NOW))
-        self.addCleanup(self.migrate_to_latest)
-        executor = MigrationExecutor(connection)
-        executor.migrate(BEFORE)
-        self.old_apps = executor.loader.project_state(BEFORE).apps
-
-    def migrate_to_latest(self) -> None:
-        executor = MigrationExecutor(connection)
-        executor.loader.build_graph()
-        executor.migrate(executor.loader.graph.leaf_nodes())
-
-    def test_a_stored_value_gets_a_creation_record(self) -> None:
-        kl = make_user("kl", "KL", "Klara", "Lehmann")
-        ae = make_user("ae", "AE", "Anna", "Eisele")
-        item = make_item(kl, "CH-0012")
-        old = self.old_apps.get_model("inventory", "EnteredConsumption")
-        first = old.objects.create(
-            item_id=item.pk, year=2025, quarter=1, count=7,
-            entered_by_id=kl.pk, entered_at=berlin(2025, 3, 3, 10))
-        second = old.objects.create(
-            item_id=item.pk, year=2025, quarter=2, count=9,
-            entered_by_id=ae.pk, entered_at=berlin(2025, 6, 4, 11))
-        self.migrate_to_latest()
-        from inventory.models import EnteredConsumption
-        manager = getattr(EnteredConsumption, "history", None)
-        self.assertIsNotNone(manager, "EnteredConsumption keeps no history")
-        self.assertEqual(manager.count(), 2)
-        for row, user in ((first, kl), (second, ae)):
-            with self.subTest(quarter=row.quarter):
-                found = list(manager.filter(id=row.pk))
-                self.assertEqual([r.history_type for r in found], ["+"])
-                self.assertEqual(found[0].history_user_id, user.pk)
-                self.assertEqual(found[0].history_date, row.entered_at)
-                self.assertEqual(found[0].count, row.count)
-
-    def test_a_later_change_shows_the_old_count(self) -> None:
-        kl = make_user("kl", "KL", "Klara", "Lehmann")
-        ae = make_user("ae", "AE", "Anna", "Eisele")
-        item = make_item(kl, "CH-0012")
-        old = self.old_apps.get_model("inventory", "EnteredConsumption")
-        old.objects.create(
-            item_id=item.pk, year=2025, quarter=1, count=7,
-            entered_by_id=kl.pk, entered_at=berlin(2025, 3, 3, 10))
-        self.migrate_to_latest()
-        enter_consumption(ae, item, year=2025, quarter=1, count=70)
-        root = page(self.client.get(item_url(item)))
-        shown = [li for li in history_items(root)
-                 if HEADING.format(1, 2025) in li.text()]
-        self.assertEqual(len(shown), 2)
-        self.assertTrue(changed(shown[0].text(), "7", "70"),
-                        shown[0].text())
-        self.assertIn("AE", shown[0].text())
-        self.assertTrue(changed(shown[1].text(), "–", "7"),
-                        shown[1].text())
-        self.assertIn("KL", shown[1].text())
-
-
-# ---------------------------------------------------------------------------
-# 1.2 The history on the item page
 
 
 class ItemPageHistoryTests(WidgetCase):

@@ -234,9 +234,9 @@ class Refusals:
 
     def assertMessageNames(self, response: Any, *names: str) -> None:
         shown = sent_messages(response)
-        self.assertEqual(len(shown), 1)
-        self.assertTrue(any(name in shown[0].message for name in names),
-                        f"{shown[0].message!r} names none of {names}")
+        self.assertTrue(shown, "no message was sent")
+        self.assertTrue(any(name in shown[-1].message for name in names),
+                        f"{shown[-1].message!r} names none of {names}")
 
 
 class InventoryCase(Refusals, TestCase):

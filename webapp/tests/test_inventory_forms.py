@@ -4,7 +4,7 @@ inventory: Inventory forms; web-app: Permissions)."""
 from datetime import date
 from decimal import Decimal
 
-from inventory.bookings import book_note, fill
+from inventory.bookings import book_note
 from inventory.models import DeliveryNote, EnteredConsumption, Item, Movement
 
 from . import (context_form, datalist, field_value, make_article,
@@ -968,7 +968,7 @@ class MovementReversalFormTests(FormCase):
         self.assertMessageNames(done, "CH-0001", "Probe")
 
     def test_reversing_a_filling(self) -> None:
-        filling = fill(self.kl, self.target, count=3)
+        filling = self.filling(self.target, 3)
         self.client.post(movement_url(filling), {"note": "doppelt"})
         self.assertEqual(fresh(self.target).quantity, 3)
 
@@ -988,7 +988,7 @@ class MovementReversalFormTests(FormCase):
 
     def test_a_filling_whose_containers_are_gone_changes_nothing(
             self) -> None:
-        filling = fill(self.kl, self.target, count=3)
+        filling = self.filling(self.target, 3)
         self.deliver(self.target, 5)
         before = snapshot()
         self.client.post(movement_url(filling), {"note": "x"})

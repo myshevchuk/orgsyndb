@@ -318,7 +318,11 @@ class DeletionTests(AdminCase):
     def test_an_item_with_a_correction_or_filling_stays(self) -> None:
         for number, action in enumerate((
                 lambda item: correct(self.worker, item, count=3, note="x"),
-                lambda item: fill(self.worker, item, count=1))):
+                lambda item: fill(self.worker, item, count=1,
+                                  amount=Decimal("1"),
+                                  vessel=self.vessel(
+                                      item.article_number, "mg",
+                                      "50")))):
             with self.subTest(action=number):
                 item = self.stocked(f"CH-1{number}")
                 action(item)
