@@ -76,6 +76,32 @@ process.stdout.write(JSON.stringify(
         Array.from(order(keys, descending, locale)))
     : null));
 """
+FILTER_RUNNER = r"""
+const fs = require("fs");
+const vm = require("vm");
+const context = vm.createContext({});
+vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), context,
+                { filename: process.argv[1] });
+const cases = JSON.parse(fs.readFileSync(0, "utf8"));
+const shows = context.OrgSynLab.planFilterShows;
+process.stdout.write(JSON.stringify(
+  typeof shows === "function"
+    ? cases.map(([row, filter]) => shows(row, filter))
+    : null));
+"""
+STEP_RUNNER = r"""
+const fs = require("fs");
+const vm = require("vm");
+const context = vm.createContext({});
+vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), context,
+                { filename: process.argv[1] });
+const cases = JSON.parse(fs.readFileSync(0, "utf8"));
+const step = context.OrgSynLab.planStep;
+process.stdout.write(JSON.stringify(
+  typeof step === "function"
+    ? cases.map(([shown, current, key]) => step(shown, current, key))
+    : null));
+"""
 SWEDISH_RUNNER = r"""
 process.stdout.write(JSON.stringify(
   Intl.Collator.supportedLocalesOf(["sv"]).length > 0));
@@ -332,6 +358,14 @@ class ExportTests(TestCase):
             capture_output=True, text=True, check=True)
         self.assertIn("narrowBatches", json.loads(done.stdout))
 
+    def test_the_planning_helpers_are_exported(self) -> None:
+        done = subprocess.run(
+            [NODE, "-e", GONE_RUNNER, str(SCRIPT)],
+            capture_output=True, text=True, check=True)
+        exported = json.loads(done.stdout)
+        self.assertIn("planFilterShows", exported)
+        self.assertIn("planStep", exported)
+
 
 @skipUnless(NODE, "node is not installed")
 class SortOrderTests(TestCase):
@@ -529,3 +563,133 @@ class SortOrderTests(TestCase):
         keys = ["b", "a", "3"]
         self.assertEqual(self.sorted_keys(keys, locale="tlh"),
                          ["3", "a", "b"])
+
+
+@skipUnless(NODE, "node is not installed")
+class PlanFilterTests(TestCase):
+    """``OrgSynLab.planFilterShows(row, filter)`` tells whether the
+    planning list's filter FILTER, one of ``"all"``, ``"high"``,
+    ``"action"`` and ``"late"``, shows ROW, an object with ``priority``,
+    a string (``"high"``, ``"medium"`` or ``"low"``), and the booleans
+    ``action`` and ``late``; it returns a boolean (production-planning:
+    Planning list)."""
+
+    ROWS = [{"priority": priority, "action": action, "late": late}
+            for priority in ("high", "medium", "low")
+            for action in (False, True) for late in (False, True)]
+
+    def shows(self, *cases: tuple) -> list[bool]:
+        done = subprocess.run(
+            [NODE, "-e", FILTER_RUNNER, str(SCRIPT)],
+            input=json.dumps(cases), capture_output=True, text=True,
+            check=True)
+        found = json.loads(done.stdout)
+        self.assertIsNotNone(found, "lab.js exports no planFilterShows")
+        return found
+
+    def test_all_shows_every_row(self) -> None:
+        found = self.shows(*[(row, "all") for row in self.ROWS])
+        self.assertEqual(len(found), len(self.ROWS))
+        for row, shown in zip(self.ROWS, found):
+            with self.subTest(row=row):
+                self.assertIs(shown, True)
+
+    def test_high_shows_the_rows_of_high_priority(self) -> None:
+        found = self.shows(*[(row, "high") for row in self.ROWS])
+        for row, shown in zip(self.ROWS, found):
+            with self.subTest(row=row):
+                self.assertIs(shown, row["priority"] == "high")
+
+    def test_action_shows_the_rows_with_an_action(self) -> None:
+        found = self.shows(*[(row, "action") for row in self.ROWS])
+        for row, shown in zip(self.ROWS, found):
+            with self.subTest(row=row):
+                self.assertIs(shown, row["action"])
+
+    def test_late_shows_the_rows_with_a_late_task(self) -> None:
+        found = self.shows(*[(row, "late") for row in self.ROWS])
+        for row, shown in zip(self.ROWS, found):
+            with self.subTest(row=row):
+                self.assertIs(shown, row["late"])
+
+    def test_a_filter_looks_at_its_own_attribute_only(self) -> None:
+        quiet = {"priority": "low", "action": False, "late": False}
+        found = self.shows(
+            ({**quiet, "late": True}, "action"),
+            ({**quiet, "action": True}, "late"),
+            ({**quiet, "action": True, "late": True}, "high"),
+            ({**quiet, "priority": "medium"}, "high"))
+        self.assertEqual(found, [False, False, False, False])
+
+
+@skipUnless(NODE, "node is not installed")
+class PlanStepTests(TestCase):
+    """``OrgSynLab.planStep(shown, current, key)`` takes SHOWN, a list of
+    booleans, one for each row of the planning list in its current order,
+    whether the row shows; CURRENT, the index of the selected row, or -1
+    for none; and KEY, ``"ArrowUp"`` or ``"ArrowDown"``. It returns the
+    index of the nearest row that shows before (up) or after (down)
+    CURRENT, and CURRENT when there is none (production-planning:
+    Planning list)."""
+
+    def step(self, shown: list[bool], current: int, key: str) -> int:
+        return self.steps((shown, current, key))[0]
+
+    def steps(self, *cases: tuple) -> list[int]:
+        done = subprocess.run(
+            [NODE, "-e", STEP_RUNNER, str(SCRIPT)],
+            input=json.dumps(cases), capture_output=True, text=True,
+            check=True)
+        found = json.loads(done.stdout)
+        self.assertIsNotNone(found, "lab.js exports no planStep")
+        return found
+
+    def test_down_moves_to_the_next_row(self) -> None:
+        self.assertEqual(self.step([True] * 4, 1, "ArrowDown"), 2)
+
+    def test_up_moves_to_the_previous_row(self) -> None:
+        self.assertEqual(self.step([True] * 4, 2, "ArrowUp"), 1)
+
+    def test_the_last_row_stays_on_down(self) -> None:
+        self.assertEqual(self.step([True] * 3, 2, "ArrowDown"), 2)
+
+    def test_the_first_row_stays_on_up(self) -> None:
+        self.assertEqual(self.step([True] * 3, 0, "ArrowUp"), 0)
+
+    def test_rows_that_do_not_show_are_skipped(self) -> None:
+        shown = [True, False, False, True, True]
+        self.assertEqual(self.steps(
+            (shown, 0, "ArrowDown"), (shown, 3, "ArrowUp"),
+            (shown, 3, "ArrowDown"), (shown, 4, "ArrowUp")),
+            [3, 0, 4, 3])
+
+    def test_no_further_row_that_shows_stays_put(self) -> None:
+        shown = [True, True, False, False]
+        self.assertEqual(self.step(shown, 1, "ArrowDown"), 1)
+        shown = [False, False, True, True]
+        self.assertEqual(self.step(shown, 2, "ArrowUp"), 2)
+
+    def test_a_selected_row_that_does_not_show_moves_by_position(
+            self) -> None:
+        shown = [True, False, True]
+        self.assertEqual(self.steps((shown, 1, "ArrowDown"),
+                                    (shown, 1, "ArrowUp")), [2, 0])
+
+    def test_without_a_selection_down_gives_the_first_row_that_shows(
+            self) -> None:
+        self.assertEqual(self.steps(
+            ([True, True], -1, "ArrowDown"),
+            ([False, False, True, True], -1, "ArrowDown")), [0, 2])
+
+    def test_without_a_selection_up_stays_without_one(self) -> None:
+        self.assertEqual(self.step([True, True], -1, "ArrowUp"), -1)
+
+    def test_nothing_shows(self) -> None:
+        self.assertEqual(self.steps(
+            ([False, False], 0, "ArrowDown"), ([False, False], 1, "ArrowUp"),
+            ([False, False], -1, "ArrowDown"), ([], -1, "ArrowDown")),
+            [0, 1, -1, -1])
+
+    def test_one_row(self) -> None:
+        self.assertEqual(self.steps(([True], 0, "ArrowDown"),
+                                    ([True], 0, "ArrowUp")), [0, 0])
