@@ -6,8 +6,9 @@ rebuilt the item page. The substance page, `registry/substance.html`,
 still shows a `dl.metadata`, a lone `figure.structure` and headed
 `ul.lab-links` lists whose lines `registry/procedure_item.html`
 writes; the route tree, `registry/route_steps.html`, uses the same
-line for each step. The owner chose mockup A
-(`~/local/workspace/orgsyndb/ui-widgets-survey/mockups/substance-A.html`).
+line for each step. The owner chose mockup A of
+the UI survey, kept outside the repository; this design states what
+the change takes from it.
 
 ## Goals / Non-Goals
 
@@ -31,9 +32,10 @@ line for each step. The owner chose mockup A
 
 ### Layout
 
-The heading line holds the `h1` with the name, then the key in
-monospace and the inventory group and chemical classes as small
-marks. Below it, a grid of two columns: on the left, a row of the
+The heading line holds the `h1` with the name, then, as in the
+mockup, the key in monospace and the inventory group and chemical
+classes as small marks; the spec does not require them, the compound
+widget holds the same values. Below it, a grid of two columns: on the left, a row of the
 three widgets `Gebinde`, `Chargen` and `Aufträge`, then `Hergestellt
 nach`, `Verwendet in`, `Synthesewege` and `Herstellungswege`; on the
 right, the compound widget. Below 60 rem the columns stack, the
@@ -42,29 +44,41 @@ screen`, as the item page's does, so print keeps block flow.
 
 ### Compound widget
 
-A `section.widget` titled `Verbindung` with the key as its note,
-holding the `figure.structure` on a white stage and a `.kv-table`
-with the rows of the requirement in its order. The name and German
-name, which the mockup leaves out, stay as rows: the requirement
-names them. The title, rows and order are what the procedure change
-repeats.
+A `section.widget` titled `Verbindung` (`Compound`) with the key as
+its note, holding the `figure.structure` and a `.kv-table` with the
+rows article number, formula, molar mass, CAS number, SMILES with its
+copy button, inventory group (linking `/lab/registry/groups/`),
+chemical classes, key, name, German name, short name and note. The
+order follows the mockup; the spec names the data, not the order. The
+name and German name, which the mockup leaves out, stay: the
+requirement names them.
+
+The figure stands on the page background, not on a white stage, so
+that the dark scheme's inversion of `.structure img` (`screen.css`)
+keeps the drawing visible. The widget's own rules, such as the
+figure's size inside it, go into `site/assets/css/screen.css` beside
+the other widget classes, so that the procedure page can use them;
+`lab.css`'s rule `main > .structure`, which no page needs once the
+figure moves, goes.
 
 ### Tables instead of middot lines
 
-`Hergestellt nach` has the columns `Vorschrift`, `Eintrag`,
-`Ausbeute` and `Status`; `Verwendet in` `Vorschrift` and `Status`;
-`Synthesewege` `ID` and `Syntheseweg`; `Gebinde` `Artikel / Gebinde`
-and `Bestand`; `Chargen` `Charge` and `Bestand`; `Aufträge` `Auftrag`
-and `Status`. An empty cell reads `–`. Each title bar shows the
-number of rows. The route tree keeps `procedure_item.html`'s line, a
+Column labels, German (English): `Hergestellt nach` has `Vorschrift`
+(`Procedure`), `Eintrag` (`Entry`), `Ausbeute` (`Yield`) and `Status`
+(`Status`); `Verwendet in` `Vorschrift` and `Status`; `Synthesewege`
+`Syntheseweg` (`Sequence`), one cell holding the link `<ID> <title>`;
+`Gebinde` `Artikel / Gebinde` (`Article / size`) and `Bestand`
+(`Stock`), the latter `<n> Gebinde`; `Chargen` `Charge` (`Batch`) and
+`Bestand`; `Aufträge` `Auftrag` (`Task`) and `Status`. An empty cell
+reads `–`. A title bar shows the number of rows when there is at
+least one; an empty widget has no count and reads `Keine`. The route tree keeps `procedure_item.html`'s line, a
 tree's step being no table row.
 
 ### Herstellungswege collapsible, open
 
 The tree is the longest part of the page. It sits in a
 `details.widget` with an `id`, open when the page loads, so that it
-reads as today and can be folded away; its state survives a refresh
-as every collapsible widget's does.
+reads as today and can be folded away.
 
 ## Risks / Trade-offs
 

@@ -9,11 +9,11 @@ introduced (web-app "Widgets").
 
 ## What Changes
 
-- The substance's data moves into a compound widget at the top right:
-  the structure drawing, then a key–value table of article number,
-  formula, molar mass, CAS number, SMILES with its copy button,
-  inventory group, chemical classes, key, name, German name, short
-  name and note. The heading line keeps the name and adds the key,
+- The substance's data moves into a compound widget, `Verbindung`, at
+  the top right: the structure drawing, then a key–value table of
+  article number, formula, molar mass, CAS number, SMILES with its
+  copy button, inventory group, chemical classes, key, name, German
+  name, short name and note. The heading line keeps the name and adds the key,
   the inventory group and the chemical classes as short marks.
 - Containers, batches and tasks become three table widgets side by
   side: article and size with the count; batch with its amount in
@@ -25,9 +25,9 @@ introduced (web-app "Widgets").
 - `Herstellungswege` keeps its tree, in a collapsible widget, open
   when the page loads.
 - **BREAKING** (spec text only) The Registry pages requirement stops
-  prescribing the middot-joined line format for the substance page's
-  procedure lists; it names their values instead. The route tree's
-  steps keep the line format.
+  prescribing the substance page's definition list and the
+  middot-joined line format of its lists; it names their values
+  instead. The route tree's steps keep the line format.
 
 ## Capabilities
 
@@ -45,8 +45,10 @@ None.
 ## Impact
 
 - Templates: `registry/substance.html`; `registry/procedure_item.html`
-  stays for the route tree. `lab.css` for the page's grid if the
-  shared widget classes do not suffice.
+  stays for the route tree. `site/assets/css/screen.css` for the
+  compound widget, `lab.css` for the page's grid.
 - German catalogue of `registry` for new column labels.
 - Tests: `test_registry_pages.py` and `test_registry_collection.py`
-  read the old lists and definition list.
+  read the old sections and lists.
+- Documents: `docs/SCHEMA.md` and `docs/SCHEMA.de.md` describe the
+  order of the page's parts.
