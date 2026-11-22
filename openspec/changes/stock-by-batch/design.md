@@ -33,9 +33,12 @@ consumption all read `Item.quantity` or delivery movements.
   foreign key with `PROTECT`. A row whose `batch` is null is the share
   of unknown batch.
 - `quantity` is a `PositiveIntegerField` with a check of `>= 0`.
-- One unique constraint on (item, batch) with `nulls_distinct=False`
-  keeps one row per batch and one unknown row per item (PostgreSQL 15
-  and later).
+- Two conditional unique constraints keep one row per (item, batch)
+  where the batch is set, and one row per item where it is null. One
+  constraint with `nulls_distinct=False` would do the same, but the
+  table diagram notes for every unique constraint over a nullable
+  column that null rows never conflict, which that constraint would
+  make false.
 - The unknown row is created with the item. A batch row is created by
   the first booking into it, and kept at zero once emptied.
 
@@ -44,10 +47,18 @@ Every share change is a conditional `UPDATE … SET quantity = quantity
 changes by the same amount in the same transaction. An assignment is
 therefore two conditional updates, unknown down and batch up.
 
-Bookings that create a batch row lock the item row first (`_lock`), so
-concurrent first bookings into one batch create the row once. A unique
-violation that still occurs is refused like a lost race, never shown
-as a server error.
+Every booking that changes a share (`create_item` aside, whose item
+is new) takes its locks before it reads a share, computes a shortfall
+or a correction's difference, or touches a vessel: the task of a flask
+first, then every item it changes in the order of their IDs (`_lock`),
+then vessels. `fill`, `book_note`, `correct` and `reverse` all follow
+this order, so no two of them wait for each other, a correction never
+applies a difference read before a concurrent filling, and concurrent
+first bookings into one batch create its row once. The conditional
+updates stay as the guard of last resort. A unique violation that
+still occurs is refused like a lost race, never shown as a server
+error. Overlap tests with two connections, as for task closure, cover
+a delivery against a correction and a filling against a correction.
 
 `Item.quantity` stays stored, because the list sorts and filters by it
 and planning reads it. It always equals the sum of the shares. A
@@ -96,10 +107,29 @@ batch too, as the owner decided, and still move no stock. Reading a
 note as reversed or partly reversed looks only at the note's delivery
 movements and leaves out its assignments.
 
+### Readers of delivery lines
+
+Lines of one item are no longer unique per note, so every reader that
+joins lines and movements by note and item now also matches by batch
+and by the movement's kind:
+
+- `counted_lines()` (`inventory/figures.py`), which consumption, the
+  overview and planning read, leaves out a line whose own delivery is
+  reversed, and keeps its siblings of other batches;
+- the note page matches each line to its delivery movement and
+  ignores assignments;
+- planning's rhythm (`planning/plan.py`, `forecast.py`) counts the
+  distinct notes of the surviving lines, not the lines. Deduplicating
+  by date would merge two real notes of one day.
+
+The batch page lists delivery lines rather than delivery movements,
+so historical lines show too.
+
 ### Choosing a batch in a form
 
-On a delivery row and on the new-item form, the batch is a `<select>`
-of every batch of the substances offered. The batches are grouped in
+On a delivery row, the batch is a `<select>` of every batch of the
+substances offered; on the new-item form, of every batch of every
+substance, since a new item may be the first of its substance. The batches are grouped in
 one `<optgroup>` per substance, carrying `data-substance` with the
 substance's key, and each item option carries the same attribute.
 `lab.js` hides the groups of other substances than the one chosen in
@@ -139,7 +169,12 @@ a delivery waits for the Inventur.
 
 ## Migration Plan
 
-The migration is schema-only. It adds `BatchStock`, `Movement.batch`
-and `DeliveryLine.batch` (non-null, with no default), and swaps the
-line constraint. Before 1.0 there is no data to carry. The test
-server is reseeded with `demo_data --replace` after deploy.
+The migration is schema-only, shaped so that it runs on old demo rows.
+It adds `BatchStock`, `Movement.batch`, and `DeliveryLine.batch` as a
+nullable column. Forms, bookings and the admin require the line's
+batch, so the database's null serves only lines written before the
+migration. It also swaps the line constraint. Items migrated without
+share rows stay so until reseeding. The test server is reseeded with
+`demo_data --replace` right after deploy. The demo's reset deletes
+shares before items and batches, and lines and movements before
+batches, so a second replacement runs on a seeded database.

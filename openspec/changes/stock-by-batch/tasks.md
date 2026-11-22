@@ -3,11 +3,14 @@
 - [ ] 1.1 Stock by batch: shares after opening, filling, delivery,
   assignment, correction and both reversals; the quantity equals the
   sum of the shares after each; refusals change nothing; concurrent
-  deliveries of one batch
+  deliveries of one batch; overlap tests with two connections of a
+  delivery and a filling each against a correction
 - [ ] 1.2 Delivery notes: lines with a batch, current and historical;
   one item in two batches; a batch twice, a missing batch and a batch
   of another substance refused; reversed and partly reversed notes
-  leave assignments out
+  leave assignments out; one of two batch lines of an item reversed
+  keeps the other in consumption and on the note page; a note of two
+  batch lines counts once in the forecast's rhythm
 - [ ] 1.3 Forms: the new-item batch, the delivery rows' batch choice
   with its `data-substance` groups, the correction's shares; the
   narrowing function of `lab.js` under Node
@@ -15,7 +18,8 @@
   column; the note page's and the delivery list's batch; the batch
   page's items and deliveries; the admin's shares and batch deletion
 - [ ] 1.5 Demo and diagram: the demo inventory scenarios; the diagram
-  boxes and movement keys
+  boxes and movement keys; `demo_data --replace` over a seeded
+  database
 - [ ] 1.6 Existing tests that book notes, corrections or opening
   counts brought to the new signatures
 
@@ -24,15 +28,18 @@
 - [ ] 2.1 `BatchStock`, `Movement.batch`, `DeliveryLine.batch`, the
   `assignment` kind; a schema-only migration
 - [ ] 2.2 Bookings: one share helper; `create_item`, `fill`,
-  `book_note`, `correct`, `reverse` keep shares and quantity together
-- [ ] 2.3 Forms, views and templates: new item, delivery note, correction,
+  `book_note`, `correct`, `reverse` keep shares and quantity together,
+  locking tasks, items and vessels in that order before reading
+- [ ] 2.3 Readers of lines: `counted_lines()`, the note page, the
+  forecast's rhythm
+- [ ] 2.4 Forms, views and templates: new item, delivery note, correction,
   item page, note page, delivery list, batch page
-- [ ] 2.4 `lab.js`: narrowing a row's or the new-item form's batch
+- [ ] 2.5 `lab.js`: narrowing a row's or the new-item form's batch
   choice to the chosen substance
-- [ ] 2.5 Admin: shares read-only on the item, batch deletion rule
-- [ ] 2.6 Demo data and seeding; schema diagram grid and regenerated
+- [ ] 2.6 Admin: shares read-only on the item, batch deletion rule
+- [ ] 2.7 Demo data and seeding, the reset order; schema diagram grid and regenerated
   `webapp/docs/database-schema.html`
-- [ ] 2.7 German catalogue
+- [ ] 2.8 German catalogue
 
 ## 3. Documentation
 
