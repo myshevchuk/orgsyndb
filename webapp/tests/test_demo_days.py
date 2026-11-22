@@ -7,6 +7,7 @@ from typing import Any
 from . import table
 from .demo_support import (ITEMS, LEVELS, NUMBERLESS, PLAN, SEEDING_DAYS,
                            SeededCase)
+from .planning_support import rows_by_article, task_texts
 
 LISTED = {"CH-0012", "CH-0013", "CH-0010", "CH-0016", "NV-0007"}
 ALSO_WITH_ALL = {"CH-0001", "CH-0002"}
@@ -22,25 +23,17 @@ MARGIN = 10
 class DayChecks:
     """The checks of one seeding day; mixed into a SeededCase per day."""
 
-    def rows(self: Any, query: str = "") -> dict[str, dict[str, Any]]:
-        header, rows = table(self.get(PLAN + query))
-        return {row[header[0]].text(): row for row in rows}
+    def rows(self: Any, query: str = "") -> dict[str, Any]:
+        return rows_by_article(self.get(PLAN + query))
 
-    def priority(self: Any, row: dict[str, Any]) -> str:
-        span = row["Priorität"].find("span", cls="priority")
-        self.assertIsNotNone(span)
-        return next(name.removeprefix("priority--")
-                    for name in span.classes
-                    if name.startswith("priority--"))
+    def priority(self: Any, row: Any) -> str:
+        return row.element.get("data-priority")
 
-    def tasks(self: Any, row: dict[str, Any]) -> list[Any]:
-        """The tasks the row lists, each with its line's text."""
+    def tasks(self: Any, row: Any) -> list[Any]:
+        """The tasks the row lists, each with the text of its line."""
         from tasks.models import Task
-        found = []
-        for line in row["Aufgaben"].find_all("li"):
-            number = line.find("a").text()
-            found.append((Task.objects.get(number=number), line.text()))
-        return found
+        return [(Task.objects.get(number=number), text)
+                for number, text in task_texts(row["Aufgaben"]).items()]
 
     def test_listed_articles(self: Any) -> None:
         self.assertEqual(set(self.rows()), LISTED)

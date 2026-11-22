@@ -57,10 +57,24 @@
 //   the page loads and whenever that control changes or is typed in;
 //   with no substance, every group shows.
 //
+// - On the planning list (.planning-grid), reveals the filter buttons
+//   and filters rows in the browser by data-priority, data-action and
+//   data-late, updating the shown count, moving the selection to the
+//   first shown row when the selected row is hidden, and showing the
+//   no-match note when nothing shows while keeping the inspector's
+//   article. A plain click in a row (not on other links or buttons) or
+//   on its article link, or ArrowUp/ArrowDown in the list over the rows
+//   that show, selects the row without loading a page, switches the
+//   inspector block matched by data-article, marks the row with
+//   aria-current="true", focuses it and writes `selected` into the
+//   address with history.replaceState.
+//
 // OrgSynLab.place is the placement's arithmetic,
-// OrgSynLab.paramSearch the address's and OrgSynLab.narrowBatches the
-// batch choice's, each kept apart from the page so that tests can run
-// it without one.
+// OrgSynLab.paramSearch the address's, OrgSynLab.narrowBatches the
+// batch choice's, OrgSynLab.sortOrder the table sorting's, and
+// OrgSynLab.planFilterShows and OrgSynLab.planStep the planning list's
+// filtering and arrow-key stepping, each kept apart from the page so
+// that tests can run it without one.
 (() => {
   "use strict";
 
@@ -89,12 +103,23 @@
   // parameter keeps its text and its place. It is "?" and the
   // parameters, or "" when none is left. Repeated NAME parameters become
   // one, at the place of the first.
+  // The decoded name of the query pair PAIR, or its raw name when it
+  // does not decode.
+  const paramName = (pair) => {
+    const raw = pair.split("=", 1)[0];
+    try {
+      return decodeURIComponent(raw.replace(/\+/g, " "));
+    } catch {
+      return raw;
+    }
+  };
+
   const paramSearch = (search, name, value) => {
     const kept = [];
     let placed = value === null || value === undefined;
     for (const pair of search.replace(/^\?/, "").split("&")) {
       if (pair === "") continue;
-      if (pair.split("=", 1)[0] !== name) {
+      if (paramName(pair) !== name) {
         kept.push(pair);
       } else if (!placed) {
         kept.push(`${name}=${encodeURIComponent(value)}`);
@@ -182,7 +207,37 @@
     return items.map((item) => item.index);
   };
 
-  globalThis.OrgSynLab = { place, paramSearch, narrowBatches, sortOrder };
+  // Whether the planning list's FILTER ("all", "high", "action" or
+  // "late") shows ROW ({ priority, action, late }).
+  const planFilterShows = (row, filter) => {
+    if (filter === "high") return row.priority === "high";
+    if (filter === "action") return Boolean(row.action);
+    if (filter === "late") return Boolean(row.late);
+    return true;
+  };
+
+  // The index of the nearest shown row before ("ArrowUp") or after
+  // ("ArrowDown") CURRENT in SHOWN, a list of booleans in current row
+  // order; returns CURRENT when none lies in that direction.
+  const planStep = (shown, current, key) => {
+    if (key === "ArrowDown") {
+      for (let i = current + 1; i < shown.length; i += 1) {
+        if (shown[i]) return i;
+      }
+      return current;
+    }
+    if (key === "ArrowUp") {
+      for (let i = Math.min(current - 1, shown.length - 1); i >= 0; i -= 1) {
+        if (shown[i]) return i;
+      }
+      return current;
+    }
+    return current;
+  };
+
+  globalThis.OrgSynLab = {
+    place, paramSearch, narrowBatches, sortOrder, planFilterShows, planStep,
+  };
   if (typeof document === "undefined") return;
 
   let open = null;
@@ -735,6 +790,128 @@
       dialog.close();
       focusAfterSave();
     });
+  }
+
+  const planGrid = document.querySelector(".planning-grid");
+  const planTable = planGrid && planGrid.querySelector("table[data-sortable]");
+  const planBody = planTable && planTable.tBodies[0];
+  if (planGrid && planTable && planBody) {
+    const planCount = planGrid.querySelector("[data-planning-count]");
+    const planFilterGroup = planGrid.querySelector(".planning-filters");
+    const planNoMatch = planGrid.querySelector(".planning-no-match");
+    const planStatus = planGrid.querySelector(".planning-status");
+
+    const planRows = () => [...planBody.querySelectorAll("tr[data-article]")];
+    const planBlocks = () => [
+      ...planGrid.querySelectorAll("[data-article]"),
+    ].filter((el) => el.tagName !== "TR");
+
+    for (const row of planRows()) row.tabIndex = -1;
+    if (planFilterGroup) planFilterGroup.hidden = false;
+
+    const selectPlanRow = (row, focusMode = null) => {
+      const article = row.dataset.article;
+      for (const each of planRows()) {
+        if (each === row) {
+          each.setAttribute("aria-current", "true");
+        } else {
+          each.removeAttribute("aria-current");
+        }
+      }
+      for (const block of planBlocks()) {
+        block.hidden = block.dataset.article !== article;
+      }
+      try {
+        history.replaceState(
+          history.state, "",
+          `${location.pathname}${paramSearch(location.search, "selected",
+                                             article)}`
+          + location.hash);
+      } catch {
+        // The address cannot change: the page shows the article regardless.
+      }
+      if (focusMode === "click") {
+        row.focus({ preventScroll: true });
+      } else if (focusMode === "key") {
+        row.focus();
+      }
+    };
+
+    planTable.addEventListener("click", (event) => {
+      if (!plain(event) || !(event.target instanceof Element)) return;
+      const row = event.target.closest("tbody tr[data-article]");
+      if (!row || !planBody.contains(row)) return;
+      const selectLink = event.target.closest("a.planning-select");
+      if (selectLink && row.contains(selectLink)) {
+        event.preventDefault();
+      } else if (event.target.closest("a, button, input, select, textarea")) {
+        return;
+      }
+      selectPlanRow(row, "click");
+    });
+
+    planTable.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+      if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
+        return;
+      }
+      const rows = planRows();
+      const shown = rows.map((row) => !row.hidden);
+      const focused = event.target instanceof Element
+        ? event.target.closest("tbody tr[data-article]") : null;
+      const marked = rows.find(
+        (row) => row.getAttribute("aria-current") === "true") || null;
+      const current = rows.indexOf(focused && planBody.contains(focused)
+        ? focused : marked);
+      const next = planStep(shown, current, event.key);
+      event.preventDefault();
+      if (next >= 0 && rows[next] && shown[next]
+          && (next !== current || rows[next] !== marked)) {
+        selectPlanRow(rows[next], "key");
+      }
+    });
+
+    if (planFilterGroup) {
+      planFilterGroup.addEventListener("click", (event) => {
+        if (!plain(event) || !(event.target instanceof Element)) return;
+        const button = event.target.closest("button[data-plan-filter]");
+        if (!button || !planFilterGroup.contains(button)) return;
+        const filter = button.dataset.planFilter;
+        for (const each of planFilterGroup.querySelectorAll(
+          "button[data-plan-filter]")) {
+          each.setAttribute(
+            "aria-pressed",
+            each.dataset.planFilter === filter ? "true" : "false");
+        }
+        let shownCount = 0;
+        let firstShown = null;
+        let selectedHidden = false;
+        for (const row of planRows()) {
+          const visible = planFilterShows({
+            priority: row.dataset.priority || "",
+            action: row.dataset.action === "1",
+            late: row.dataset.late === "1",
+          }, filter);
+          row.hidden = !visible;
+          if (visible) {
+            shownCount += 1;
+            if (!firstShown) firstShown = row;
+          } else if (row.getAttribute("aria-current") === "true") {
+            selectedHidden = true;
+          }
+        }
+        if (planCount) planCount.textContent = String(shownCount);
+        if (planNoMatch) planNoMatch.hidden = shownCount > 0;
+        if (planStatus) {
+          planStatus.textContent = shownCount > 0
+            ? planStatus.dataset.text.replace("{n}", String(shownCount))
+            : (planNoMatch ? planNoMatch.textContent : "");
+        }
+        if (selectedHidden && firstShown) {
+          selectPlanRow(firstShown);
+        }
+      });
+    }
   }
 
   if (!layout) return;

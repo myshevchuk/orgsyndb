@@ -15,11 +15,14 @@ Die englische Fassung ist [PLANNING.md](PLANNING.md).
 ## Die Zahlen hinter einer Priorität finden
 
 Öffnen Sie **Planung** zwischen **Bestand** und **Aufgaben** in der
-Navigation. Die Liste zeigt Artikel mit hoher oder mittlerer Priorität
-und Artikel, bei denen eine Maßnahme ansteht. Der kleinste **Spielraum**
-steht zuerst: Das ist die Zeit, die bis zum nötigen Beginn einer neuen
-Synthese bleibt. Mit **Alle Artikel** sehen Sie jeden Artikel mit einer
-Prognose.
+Navigation. Die Liste zeigt Artikel mit hoher oder mittlerer Priorität und
+Artikel, bei denen eine Maßnahme ansteht. Der kleinste **Spielraum** steht
+zuerst: Das ist die Zeit, die bis zum nötigen Beginn einer neuen Synthese
+bleibt. Mit **Alle Artikel** sehen Sie jeden Artikel mit einer Prognose.
+Klicken Sie in die Zeile eines Artikels oder wechseln Sie mit den
+Pfeiltasten, um neben der Liste seine **Gebinde & Bedarf** und
+**Planungsdetails** zu sehen. Die Schaltflächen **Alle**, **Priorität
+hoch**, **Mit Maßnahme** und **Verspätet** schränken die Liste ein.
 
 Ein *Artikel* fasst alle Gebindegrößen mit derselben Artikelnummer
 zusammen. Jede Größe hat ihren eigenen Bestand und Bedarf. Folgen Sie
@@ -27,9 +30,10 @@ einer Gebindegröße zur Bestandsseite und dort zum Abschnitt **Prognose**,
 um die Berechnungsgrundlage zu sehen. Auch die Aufgabenseite zeigt die
 Prognose für ihr Produkt.
 
-Die Zeile über der Planungstabelle nennt die aktuell geltenden Parameter.
-Die Vorgabewerte in dieser Anleitung gelten, solange das Personal sie
-nicht geändert hat.
+Der Kasten **Planungsparameter** unter der Liste nennt die aktuell
+geltenden Parameter; er ist beim Öffnen der Seite geschlossen. Die
+Vorgabewerte in dieser Anleitung gelten, solange das Personal sie nicht
+geändert hat.
 
 ## Wie die Anwendung den Bedarf schätzt
 
@@ -207,10 +211,11 @@ Prioritätsgrenzen zählen die Werte vor der Rundung.
 
 ## Prüfen, ob eine laufende Aufgabe rechtzeitig fertig wird
 
-Die Priorität des Artikels beantwortet, wie dringend eine **neue Synthese**
-nötig ist. Sie verwendet weiterhin die volle Synthesedauer, auch wenn
-bereits Arbeit läuft. Die Planungsliste zeigt daneben geplante und
-laufende Aufgaben mit ihrem voraussichtlichen Ende.
+Die Priorität des Artikels beantwortet, wie dringend eine **neue
+Synthese** nötig ist. Sie verwendet weiterhin die volle Synthesedauer,
+auch wenn bereits Arbeit läuft. Die Planungsliste zeigt daneben geplante
+und laufende Aufgaben, die **Planungsdetails** des gewählten Artikels ihr
+voraussichtliches Ende.
 
 Der eigene Spielraum einer Aufgabe beantwortet, ob **diese Aufgabe** das
 Produkt rechtzeitig bereitstellen kann. Eine geplante Aufgabe braucht die

@@ -13,11 +13,17 @@ def planning_list(request: HttpRequest) -> HttpResponse:
     smallest first, then by article number."""
     every = request.GET.get("all") == "1"
     plan = Plan(timezone.localdate())
-    rows = [plan.row(found) for found in plan.forecasts()]
+    rows = sorted(
+        (row for row in (plan.row(found) for found in plan.forecasts())
+         if every or row.listed),
+        key=lambda row: (row.forecast.slack, row.forecast.article_number))
+    wanted = request.GET.get("selected")
+    numbers = [row.forecast.article_number for row in rows]
+    selected = (wanted if wanted in numbers
+                else (numbers[0] if numbers else None))
     return render(request, "planning/list.html", {
-        "rows": sorted((row for row in rows if every or row.listed),
-                       key=lambda row: (row.forecast.slack,
-                                        row.forecast.article_number)),
+        "rows": rows,
+        "selected": selected,
         "all": every,
         "parameters": plan.parameters,
     })

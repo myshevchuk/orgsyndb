@@ -156,3 +156,30 @@ class OverviewLayoutTests(SimpleTestCase):
                      ".deliveries-chart figcaption"):
             with self.subTest(selector=name):
                 self.assertNotIn(name, text)
+
+
+class PlanningLayoutTests(SimpleTestCase):
+    """The planning page's grid is for the screen, and the rules of the
+    page's former markup are gone."""
+
+    def test_the_planning_grid_is_a_grid_on_the_screen_only(self) -> None:
+        text = CSS.read_text(encoding="utf-8")
+        for names, declarations in [*rules(text),
+                                    *(rule for block in print_blocks(text)
+                                      for rule in rules(block))]:
+            if ".planning-grid" in names:
+                with self.subTest(selectors=names):
+                    self.assertNotEqual(declarations.get("display"), "grid")
+        shown = [declarations for block in screen_blocks(text)
+                 for names, declarations in rules(block)
+                 if ".planning-grid" in names]
+        self.assertTrue(any(d.get("display") == "grid" for d in shown),
+                        f"no @media screen rule sets .planning-grid "
+                        f"to display: grid: {shown}")
+
+    def test_no_rule_styles_the_former_planning_markup(self) -> None:
+        text = re.sub(r"/\*.*?\*/", "",
+                      CSS.read_text(encoding="utf-8"), flags=re.DOTALL)
+        for name in (".lab-parameters", ".planning-cell"):
+            with self.subTest(selector=name):
+                self.assertNotIn(name, text)

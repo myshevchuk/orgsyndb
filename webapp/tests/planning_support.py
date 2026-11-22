@@ -12,17 +12,29 @@ from typing import Any
 
 from . import Element, make_task, parse
 from .inventory_support import TODAY, InventoryCase, historical_line
+from .widget_support import (body_rows, cells_of, grid, kv, title_of, widget,
+                             widgets)
 
 PLAN = "/lab/planning/"
 VESSEL_LIST = "/lab/inventory/vessels/"
 NEW_TASK = "/lab/tasks/new/"
 HEADINGS = ("h1", "h2", "h3", "h4", "h5", "h6")
-COLUMNS_DE = ["Artikelnr.", "Name", "Gebinde", "Bedarf/Jahr",
-              "Letzte Lieferung", "Bulk", "Reichweite", "Synthesedauer",
-              "Spätester Start", "Priorität", "Aufgaben", "Maßnahmen"]
-COLUMNS_EN = ["Article no.", "Name", "Containers", "Demand per year",
-              "Last delivery", "Bulk", "Runway", "Synthesis time",
-              "Latest start", "Priority", "Tasks", "Actions"]
+COLUMNS_DE = ["Artikel", "Reichweite", "Synthesedauer", "Spätester Start",
+              "Priorität", "Aufgaben", "Maßnahmen"]
+COLUMNS_EN = ["Article", "Runway", "Synthesis time", "Latest start",
+              "Priority", "Tasks", "Actions"]
+FILTERS_DE = ["Alle", "Priorität hoch", "Mit Maßnahme", "Verspätet"]
+FILTERS_EN = ["All", "High priority", "With action", "Late"]
+LIST_TITLES = ("Planungsliste", "Planning list")
+CONTAINERS_TITLES = ("Gebinde & Bedarf", "Containers and demand")
+CONTAINER_COLUMNS_DE = ["Gebinde", "Bestand", "Reichweite", "Bedarf/Jahr"]
+CONTAINER_COLUMNS_EN = ["Container", "Stock", "Runway", "Demand per year"]
+DETAILS_TITLES = ("Planungsdetails", "Planning details")
+DETAIL_KEYS_DE = ["Substanz", "Letzte Lieferung", "Bulk", "Reichweite",
+                  "Synthesedauer", "Spätester Start", "Aufgaben"]
+DETAIL_KEYS_EN = ["Substance", "Last delivery", "Bulk", "Runway",
+                  "Synthesis time", "Latest start", "Tasks"]
+PARAMETERS_TITLES = ("Planungsparameter", "Planning parameters")
 DEFAULTS = {"certainty": 0.95, "buffer_days": 28,
             "default_synthesis_days": 21, "history_quarters": 12,
             "min_orders": 6, "high_days": 14, "medium_days": 56,
@@ -203,11 +215,115 @@ def titles(cell: Element) -> list[str]:
     return [e.get("title") for e in [cell, *cell.walk()] if e.get("title")]
 
 
-def rows_by_article(root: Element) -> dict[str, dict[str, Element]]:
-    """The planning list's rows by article number."""
-    from . import table
-    header, rows = table(root)
-    return {row[header[0]].text(): row for row in rows}
+class Row(dict):
+    """The cells of a row of the planning list by header text; ELEMENT
+    is the row's ``tr``."""
+
+    element: Element
+
+
+def list_widget(root: Element) -> Element:
+    """The widget ``Planungsliste`` of the page."""
+    return widget(root, *LIST_TITLES)
+
+
+def list_table(root: Element) -> Element | None:
+    """The table of the widget ``Planungsliste``, None when the page has
+    no such widget or the widget no table."""
+    for found in widgets(root):
+        if title_of(found) in LIST_TITLES:
+            return found.find("table")
+    return None
+
+
+def rows_by_article(root: Element) -> dict[str, Row]:
+    """The planning list's rows by their ``data-article``, in page
+    order, each as a ``Row``; empty when the page has no list table.
+    Fail when two rows name one article or a row names none."""
+    found = list_table(root)
+    if found is None:
+        return {}
+    header, _ = grid(found)
+    rows: dict[str, Row] = {}
+    for tr in body_rows(found):
+        article = tr.get("data-article")
+        assert article, f"a row of the list has no data-article: {tr.attrs}"
+        assert article not in rows, f"two rows name the article {article}"
+        row = Row(zip(header, cells_of(tr)))
+        row.element = tr
+        rows[article] = row
+    return rows
+
+
+def blocks(root: Element) -> dict[str, Element]:
+    """The blocks of the inspector by their ``data-article``: the
+    elements that carry the attribute and are no table rows. Fail when
+    two of them name one article."""
+    found: dict[str, Element] = {}
+    for node in root.find_all(attrs={"data-article": True}):
+        if node.tag == "tr":
+            continue
+        article = node.get("data-article")
+        assert article not in found, \
+            f"two blocks of the inspector name the article {article}"
+        found[article] = node
+    return found
+
+
+def block_of(root: Element, article: str) -> Element:
+    """The inspector's block of ``article``, hidden or not."""
+    found = blocks(root)
+    assert article in found, \
+        f"the inspector has no block of {article}; it has {list(found)}"
+    return found[article]
+
+
+def shown_blocks(root: Element) -> list[str]:
+    """The articles of the inspector's blocks that carry no
+    ``hidden``."""
+    return [article for article, node in blocks(root).items()
+            if "hidden" not in node.attrs]
+
+
+def containers_of(block: Element) -> Element:
+    """The widget ``Gebinde & Bedarf`` of ``block``."""
+    return widget(block, *CONTAINERS_TITLES)
+
+
+def container_rows(block: Element) -> list[dict[str, Element]]:
+    """The rows of the containers table of ``block``, each by header
+    text."""
+    inside = containers_of(block).find("table")
+    assert inside is not None, "the widget of the containers has no table"
+    return grid(inside)[1]
+
+
+def details_of(block: Element) -> Element:
+    """The widget ``Planungsdetails`` of ``block``."""
+    return widget(block, *DETAILS_TITLES)
+
+
+def details(block: Element) -> dict[str, Element]:
+    """The value cells of the widget ``Planungsdetails`` of ``block``
+    by key."""
+    return kv(details_of(block))
+
+
+def task_texts(cell: Element) -> dict[str, str]:
+    """The text of ``cell`` from each linked task's number to the next
+    one's, by number."""
+    text = cell.text()
+    spots, position = [], 0
+    for link in cell.find_all("a"):
+        if not link.get("href", "").startswith("/lab/tasks/"):
+            continue
+        number = link.text()
+        position = text.index(number, position)
+        spots.append((position, number))
+        position += len(number)
+    ends = [start for start, _ in spots[1:]] + [len(text)]
+    return {number: text[start:end]
+            for (start, number), end in zip(spots, ends)}
 
 
 # ---------------------------------------------------------------------------
@@ -225,6 +341,15 @@ class PlanningCase(InventoryCase):
         quarters before 2026-11-04: ``m`` and ``v`` are
         ``per_quarter``."""
         item = self.item(article, name or article, size, unit, quantity)
+        for year, quarter in WINDOW:
+            self.enter(item, year, quarter, per_quarter)
+        return item
+
+    def demo_item(self, article: str = "CH-0012", quantity: int = 10,
+                  per_quarter: int = 9) -> Any:
+        """Like ``planned_item``, but the substance keeps the name of
+        the demo collection, as ``item`` gives it."""
+        item = self.item(article, size="10", unit="umol", quantity=quantity)
         for year, quarter in WINDOW:
             self.enter(item, year, quarter, per_quarter)
         return item

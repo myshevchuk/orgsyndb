@@ -14,6 +14,7 @@ from .demo_support import (ACCOUNTS, ARTICLES, DAY, DELIVERIES,
                            DEMO_PASSWORD, ITEMS, LOGIN, NOTE_NUMBER,
                            NUMBERLESS, PLAN, TASKS, SeededCase, noon,
                            opening, run, seed)
+from .planning_support import block_of, details
 from .registry_support import demo_registry
 from .widget_support import widget
 
@@ -825,10 +826,9 @@ class TaskTests(SeededCase):
                  if task.state == State.ENDED
                  and task.substance.key == "cinnamic-acid"]
         self.assertGreaterEqual(len(ended), 3)
-        header, rows = table(self.get(PLAN))
-        row = next(row for row in rows if row[header[0]].text() == "CH-0012")
+        found = block_of(self.get(PLAN), "CH-0012")
         self.assertIn("längste der letzten 3 Synthesen",
-                      row["Synthesedauer"].text())
+                      details(found)["Synthesedauer"].text())
 
     def test_sequences(self) -> None:
         """Requirement: Demo tasks and parameters (tasks of `SEQ-0001`
