@@ -18,12 +18,12 @@ web-app "Widgets".
   wide left column; the chart shows each bar's value and a legend for
   the current and the previous year.
 - `Meistgefragt`, `Empfänger` and `Letzte Lieferscheine` become table
-  widgets in a right column, with column headers and a proportion bar
-  beside each count.
+  widgets in a right column, with column headers; the two ranking
+  lists show a proportion bar beside each count.
 - **BREAKING** (spec text only) The Overview page requirement stops
-  prescribing a single `section.lab-overview`, its `h2` headings, the
-  `dl.lab-figures` and the `ol` lists; it names the data and its order
-  instead. The Summary requirement's scenario follows.
+  prescribing its `h2` headings, the `dl.lab-figures` and the `ol`
+  lists; it names the data and its order instead. The page keeps its
+  `section.lab-overview`, which web-app "Paths under /lab/" names. The Summary requirement's scenario follows.
 
 ## Capabilities
 
@@ -41,10 +41,12 @@ None.
 
 - Templates: `overview/overview.html`, `overview/_summary.html`,
   `overview/summary.html`.
+- `overview/chart.py`: room above the bars and label coordinates.
 - `lab.css` (the overview's grid under `@media screen`; the old
-  `.lab-overview`, `.overview-*`, `.lab-figures` rules that no page
-  uses afterwards removed); `site/assets/css/screen.css` only for a
-  rule other pages can reuse.
+  `.overview-*`, `.lab-figures` and chart-caption rules that no page
+  uses afterwards removed); `site/assets/css/screen.css` for rules
+  other pages can reuse and for `.home-lab-frame`'s heights if the
+  summary no longer fits.
 - German catalogue of `overview` for new labels.
 - Tests: `test_overview.py` reads the old markup.
 - The home page frames the summary: its height may change.

@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Overview page
-The package `overview` SHALL answer `/lab/` with the page `Labor auf einen Blick` (`Lab at a glance`), readable without signing in, showing its data in widgets (web-app "Widgets"):
+The package `overview` SHALL answer `/lab/` with the page `Labor auf einen Blick` (`Lab at a glance`), readable without signing in, showing its data in widgets (web-app "Widgets"), in this order:
 
 - **Figures**, in this order:
   - `Abgegeben <year>` (`Delivered in <year>`), the current year: the containers delivered from 1 January through today, then `Vorjahr bis <date>: <n>` (`Last year to <date>: <n>`), the containers delivered from 1 January of the year before through `<date>`, the same day a year before, 28 February for 29 February;
@@ -10,11 +10,11 @@ The package `overview` SHALL answer `/lab/` with the page `Labor auf einen Blick
   - `Offene Gefäße` (`Open vessels`), the number of vessels, of any substance, holding an amount above zero, linking to `/lab/inventory/vessels/`.
 - **`Bestand` (`Inventory`)**: a stock bar, `div.stock-bar`, of one link per level at which items are, in the order of Stock levels (end-product-inventory), each carrying `level-<level>`, linking to `/lab/inventory/end-products/?stock=<level>`, as wide as its share of the items, holding the number of items at that level and titled with the level's name and that number; each of those levels named with its number; and the number of items.
 - **`Nächste Synthesen` (`Next syntheses`)**: the five articles with a forecast of the smallest slack, ordered as the planning list orders them, each with its article number, linking to the page of its first item in the item list's order; the article's name; the priority; the latest start, or `–`; and the first of the article's planned and running tasks, running first, then by number, its number linking to its page, with its state and the mark `verspätet` when its slack is below zero, or `–`; and a link `Zur Planung` (`To planning`) to `/lab/planning/`. Without a forecast, the text `Keine Prognosen.` (`No forecasts.`) stands in place of the articles.
-- **`Abgaben je Monat` (`Deliveries per month`)**: an inline `svg` with a bar per month of the twelve months ending with the current one, oldest first, its height the containers delivered in that month, and beside it a bar `.previous` for the same month a year before, each bar titled `<month> <year>: <n>`, the month as the language names it, and each month labelled below its bars.
+- **`Abgaben je Monat` (`Deliveries per month`)**: an inline `svg` with a bar per month of the twelve months ending with the current one, oldest first, its height the containers delivered in that month, and beside it a bar `.previous` for the same month a year before, each bar titled `<month> <year>: <n>`, the month as the language names it, and each month labelled below its bars; each bar of a value above 0 shows its value above it, as a `text.chart-value`, and a legend names the bars `Aktuelle 12 Monate` (`Last 12 months`) and `Vorjahresmonat` (`Same month a year before`).
 - **The year's lists**, each of at most five rows:
-  - `Meistgefragt <year>` (`Most requested in <year>`): the article numbers with the most containers delivered in the current year, most first, then by article number, each with the article's name and the containers;
+  - `Meistgefragt <year>` (`Most requested in <year>`): the article numbers with the most containers delivered in the current year, most first, then by article number, each linking to the page of the article's first item in the item list's order, with the article's name and the containers;
   - `Empfänger <year>` (`Recipients in <year>`): the recipients of the most containers delivered in the current year, most first, then by recipient regardless of case, notes without a recipient left out, each with the containers;
-  - `Letzte Lieferscheine` (`Latest delivery notes`): the first five notes of the delivery list (end-product-inventory "Delivery list"), each with its date, its number linking to its page, or `–` linking to it for a note without one, its recipient, and the containers of its lines.
+  - `Letzte Lieferscheine` (`Latest delivery notes`): the first five notes of the delivery list (end-product-inventory "Delivery list"), each with its date, its number linking to its page, or `–` linking to it for a note without one, its recipient, or `–` for a note without one, and the containers of its lines.
 
   A list without entries reads `Keine Abgaben.` (`No deliveries.`).
 
@@ -30,7 +30,7 @@ The figures and the stock are the page's summary, which `/lab/summary/` shows al
 
 #### Scenario: Deliveries per month
 - **WHEN** on 2026-11-07 the notes of 2026-03-02 deliver 3 containers and of 2025-03-15 4, and a test client requests `/lab/`
-- **THEN** the `svg` holds twelve bars and twelve bars `.previous`, the first pair titled for December 2025 and December 2024, the bar of March 2026 titled with 3 and the `.previous` bar beside it, for March 2025, with 4
+- **THEN** the `svg` holds twelve bars and twelve bars `.previous`, the first pair titled for December 2025 and December 2024, the bar of March 2026 titled with 3 and the `.previous` bar beside it, for March 2025, with 4, and exactly two `text.chart-value`, reading 3 and 4, each lying wholly inside the drawing
 
 #### Scenario: Next syntheses
 - **WHEN** seven articles have a forecast, the one of the smallest slack with a running task whose slack is below zero, and a test client requests `/lab/`
@@ -38,7 +38,7 @@ The figures and the stock are the page's summary, which `/lab/summary/` shows al
 
 #### Scenario: An empty lab
 - **WHEN** the database holds no items, notes, tasks or vessels, and a test client requests `/lab/`
-- **THEN** the page answers 200, the stock bar holds no link, the figures read 0, `Keine Prognosen.` stands in the widget `Nächste Synthesen`, the `svg` holds twelve bars and twelve bars `.previous`, all of height 0, and each of the year's lists reads `Keine Abgaben.`
+- **THEN** the page answers 200, the stock bar holds no link, the figures read 0, `Keine Prognosen.` stands in the widget `Nächste Synthesen`, the `svg` holds twelve bars and twelve bars `.previous`, all of height 0, no `text.chart-value`, and each of the year's lists reads `Keine Abgaben.`
 
 #### Scenario: Overview in English
 - **WHEN** the latest accepted import's language is `en` and a test client requests `/lab/`
@@ -49,4 +49,4 @@ The figures and the stock are the page's summary, which `/lab/summary/` shows al
 
 #### Scenario: Summary
 - **WHEN** the database holds two items at the level ok and one at low, one running task and one open vessel, and a test client not signed in requests `/lab/summary/`
-- **THEN** the page holds one `section.lab-summary` with the stock bar's links `level-low` and `level-ok`, the four figures with their links, and the link to `/lab/`, and no widget `Nächste Synthesen`, no table and no `svg`
+- **THEN** the page holds one `section.lab-summary` with the stock bar's links `level-low` and `level-ok`, the four figures, those of syntheses due, tasks and open vessels with their links, and the link to `/lab/`, and no widget `Nächste Synthesen`, no table and no `svg`
