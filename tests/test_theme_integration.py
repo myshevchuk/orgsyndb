@@ -21,6 +21,7 @@ import general_support as gs
 import navigation_support as ns
 import pipeline_support as ps
 import sequence_support as ss
+import widget_support as ws
 from pipeline_support import Content, Node, Page, Sequence
 
 BANNER = "Sample data — quantities not experimentally verified."
@@ -37,10 +38,14 @@ TABS = [("/procedures/", "All procedures"),
         ("/authors/", "Authors")]
 REAGENT_HEADER = ["Reagent", "CAS", "MW (g/mol)", "Amount", "mmol", "Equiv"]
 # "Products" takes the place of "Product" for a procedure with several.
-PANEL_LABELS = ["Product", "Formula", "MW", "CAS", "SMILES",
-                "Starting materials", "Reaction type", "Tags", "Authors",
-                "Checked by", "Created", "Modified", "Precursors",
-                "Used in", "Sequences"]
+# The labels of the compound widget, then those of the details widget,
+# then those of the context widget.
+COMPOUND_LABELS = ["Product", "Formula", "MW", "CAS", "SMILES"]
+DETAILS_LABELS = ["Reaction type", "Tags", "Authors", "Checked by",
+                  "Created", "Modified"]
+CONTEXT_LABELS = ["Starting materials", "Precursors", "Used in",
+                  "Sequences"]
+PANEL_LABELS = [*COMPOUND_LABELS, *DETAILS_LABELS, *CONTEXT_LABELS]
 FONT_SUFFIXES = (".woff", ".woff2", ".ttf", ".otf", ".eot")
 TAXONOMIES = {"reaction_types": "Reaction types", "tags": "Tags",
               "authors": "Authors"}
@@ -91,9 +96,11 @@ class SiteCase(fs.ProcedureFieldsMixin, ps.ThemeBuildCase):
                             / item.slug / "index.html")
 
     def panel(self, page: Page) -> dict[str, ps.DefPair]:
-        panel = page.find("dl", "metadata")
-        self.assertIsNotNone(panel, f"{page.url} has no dl.metadata")
-        return {pair.label: pair for pair in page.definition_pairs(panel)}
+        """The metadata panel: the pairs of every list of the details
+        wrapper, in document order."""
+        pairs = page.panel_pairs()
+        self.assertTrue(pairs, f"{page.url} has no metadata panel")
+        return {pair.label: pair for pair in pairs}
 
     def table_ids(self, page: Page) -> list[str]:
         """The ID cells of the body rows of the page's procedure table."""
@@ -139,7 +146,6 @@ class SiteCase(fs.ProcedureFieldsMixin, ps.ThemeBuildCase):
                   ("MW", single),
                   ("CAS", single and compound.get("cas")),
                   ("SMILES", single),
-                  ("Starting materials", item.substrates),
                   ("Reaction type", data.get("reaction_types")),
                   ("Tags", data.get("tags")),
                   ("Authors", data.get("authors")),
@@ -148,10 +154,29 @@ class SiteCase(fs.ProcedureFieldsMixin, ps.ThemeBuildCase):
                   *declared,
                   ("Created", data.get("date")),
                   ("Modified", data.get("lastmod")),
+                  ("Starting materials", item.substrates),
                   ("Precursors", self.precursors(item)),
                   ("Used in", self.used_in(item)),
                   ("Sequences", self.sequences_of(item))]
         return [label for label, present in wanted if present]
+
+    def expected_widgets(self, item: Content) -> list[tuple[str, list[str]]]:
+        """The title and the labels of each details widget of ``item``:
+        the compound widget always, the others when they have a pair."""
+        labels = self.expected_labels(item)
+        compound = [l for l in labels if l in [*COMPOUND_LABELS, "Products"]]
+        context = [l for l in labels if l in CONTEXT_LABELS]
+        details = [l for l in labels if l not in compound + context]
+        found = [("Compound" if len(item.products) == 1 else "Products",
+                  compound)]
+        found += [(title, shown) for title, shown in (
+            ("Details", details), ("Synthesis context", context)) if shown]
+        return found
+
+    def widgets_of(self, page: Page) -> list[tuple[str, list[str]]]:
+        """The title and the labels of each details widget of ``page``,
+        after the checks of its markup."""
+        return [(w.title, w.labels) for w in ws.details_widgets(self, page)]
 
 
 class ShippedSiteTests(SiteCase):
@@ -413,29 +438,33 @@ class ShippedSiteTests(SiteCase):
         key = header.find("dl", "key-facts")
         facts = header.find("p", "print-facts")
         actions = header.find("p", "actions")
-        figure = header.find("figure", "structure")
         for node, what in ((h1, "h1"), (key, "dl.key-facts"),
-                           (facts, "p.print-facts"), (actions, "p.actions"),
-                           (figure, "figure.structure")):
+                           (facts, "p.print-facts"), (actions, "p.actions")):
             self.assertIsNotNone(node, f"header has no {what}")
         parts = [page.index_of(n)
-                 for n in (identity, h1, key, facts, actions, figure)]
+                 for n in (identity, h1, key, facts, actions)]
         self.assertEqual(parts, sorted(parts), "header parts out of order")
-        self.assertIs(header.elements()[-1], figure)
+        self.assertIs(header.elements()[-1], actions)
+        self.assertEqual(header.find_all("figure"), [])
         button = actions.find("button", "print-button")
         self.assertIsNotNone(button, "no button.print-button")
         self.assertEqual(button.attrs.get("type"), "button")
         self.assertIn("data-print", button.attrs)
         self.assertIn("hidden", button.attrs)
         self.assertEqual(button.norm(), "Print / Save as PDF")
-        for outside in (h1, marked, key, figure):
+        for outside in (h1, marked, key):
             self.assertFalse(outside.within(article),
                              f"{outside.tag} lies inside the article")
-        self.assertEqual(article.find_all("figure"), [])
-        # The desktop columns wrap the details and body; reading and
-        # indexing order still starts with the metadata panel.
-        panel = article.find("dl", "metadata")
-        self.assertIsNotNone(panel, "no dl.metadata")
+        # The details wrapper starts the article, so reading and indexing
+        # order begin with the metadata panel.
+        panel = article.find("div", "procedure-details")
+        self.assertIsNotNone(panel, "no div.procedure-details")
+        self.assertIs(article.elements()[0], panel)
+        self.assertTrue(page.panel_lists(), "no dl.metadata in the details")
+        for lists in page.panel_lists():
+            self.assertTrue(lists.within(panel))
+        self.assertTrue(
+            ws.compound_widget(self, page).node.within(article))
         summary = page.heading("Summary")
         terms = article.find("span", "index-terms")
         index = article.find("span", data_smiles_index=True)
@@ -454,11 +483,20 @@ class ShippedSiteTests(SiteCase):
         page = ps.load_page(self.public, path)
         panel = self.panel(page)
         self.assertEqual(
+            self.widgets_of(page),
+            [("Compound", ["Product", "Formula", "MW", "CAS", "SMILES"]),
+             ("Details", ["Reaction type", "Tags", "Authors",
+                          "Lab notebook", "Project", "Working time",
+                          "Inert atmosphere", "Created", "Modified"]),
+             ("Synthesis context",
+              ["Starting materials", "Precursors", "Sequences"])])
+        self.assertEqual(
             list(panel),
             ["Product", "Formula", "MW", "CAS", "SMILES",
-             "Starting materials", "Reaction type", "Tags", "Authors",
+             "Reaction type", "Tags", "Authors",
              "Lab notebook", "Project", "Working time", "Inert atmosphere",
-             "Created", "Modified", "Precursors", "Sequences"])
+             "Created", "Modified", "Starting materials", "Precursors",
+             "Sequences"])
         text = {label: pair.definition.norm()
                 for label, pair in panel.items()}
         self.assertEqual(
@@ -537,6 +575,39 @@ class ShippedSiteTests(SiteCase):
             with self.subTest(label=label):
                 self.assertNotEqual(pair.gap, "")
                 self.assertEqual(pair.gap.strip(), "")
+
+    def test_the_compound_rows_follow_the_labs_order(self) -> None:
+        """Scenario: Compound rows in the lab's order."""
+        page = self.page_of(self.by_id()["OSDB-0002"])
+        shown = [l for l in ws.compound_widget(self, page).labels
+                 if l != "Product"]
+        self.assertEqual(shown, ["Formula", "MW", "CAS", "SMILES"])
+        lab = {"Formula": "Formula", "MW": "Molar mass",
+               "CAS": "CAS number", "SMILES": "SMILES"}
+        rows = ws.lab_row_labels()
+        for label in lab.values():
+            self.assertIn(label, rows, "the lab template lost a row")
+        self.assertEqual(sorted(shown, key=lambda l: rows.index(lab[l])),
+                         shown)
+
+    def test_the_context_widget_exists_only_with_a_pair(self) -> None:
+        """Scenario: No context widget without links (every page)."""
+        for item, page in self.procedure_pages():
+            with self.subTest(procedure=item.id):
+                widgets = ws.details_widgets(self, page)
+                titles = [w.title for w in widgets]
+                self.assertIn(titles[0], ("Compound", "Products"))
+                self.assertEqual(
+                    [t for t in titles if t in ("Compound", "Products")],
+                    titles[:1], "not one compound widget, first")
+                pairs = [l for w in widgets for l in w.labels]
+                has_pair = any(l in CONTEXT_LABELS for l in pairs)
+                self.assertEqual("Synthesis context" in titles, has_pair)
+                if has_pair:
+                    self.assertEqual(titles[-1], "Synthesis context")
+                    self.assertTrue(all(
+                        l in CONTEXT_LABELS for l in widgets[-1].labels))
+                self.assertEqual(len(page.panel_lists()), len(widgets))
 
     def test_notes_after_every_compound_link(self) -> None:
         """Scenario: Notes after every compound link. Every page is
@@ -665,6 +736,8 @@ class ShippedSiteTests(SiteCase):
                     for label in shown]
                 self.assertEqual(positions, sorted(set(positions)))
                 self.assertEqual(shown, self.expected_labels(item))
+                self.assertEqual(self.widgets_of(page),
+                                 self.expected_widgets(item))
                 for label, pair in pairs.items():
                     self.assertNotEqual(pair.gap, "", label)
                     self.assertEqual(pair.gap.strip(), "", label)
@@ -780,10 +853,10 @@ class ShippedSiteTests(SiteCase):
         path = self.public / "procedures" / "osdb-0003" / "index.html"
         self.assertTrue(path.is_file(), "osdb-0003 is not built")
         page = ps.load_page(self.public, path)
-        figure = page.find("figure", "structure")
-        self.assertIsNotNone(figure, "no figure.structure")
-        self.assertTrue(figure.within(
-            page.find("header", "procedure-header")))
+        figures = ws.compound_widget(self, page).figures
+        self.assertEqual(len(figures), 1, "not one figure.structure")
+        figure = figures[0]
+        self.assertIn("data-pagefind-ignore", figure.attrs)
         self.assertFalse(figure.has_class("structure--placeholder"))
         image = figure.find("img")
         self.assertIsNotNone(image, "no img in the figure")
@@ -797,15 +870,74 @@ class ShippedSiteTests(SiteCase):
                          "Structure of Isopentyl acetate")
         path = self.public / "procedures" / "osdb-0002" / "index.html"
         page = ps.load_page(self.public, path)
-        figure = page.find("figure", "structure")
-        self.assertIsNotNone(figure, "no figure.structure")
-        self.assertTrue(figure.within(
-            page.find("header", "procedure-header")))
+        figures = ws.compound_widget(self, page).figures
+        self.assertEqual(len(figures), 1, "not one figure.structure")
+        figure = figures[0]
+        self.assertIn("data-pagefind-ignore", figure.attrs)
         self.assertTrue(figure.has_class("structure--placeholder"))
         slot = figure.find("div", "structure__slot")
         self.assertIsNotNone(slot, "no div.structure__slot")
         self.assertEqual(slot.norm(), "No structure image")
         self.assertEqual(page.find_all("img"), [])
+
+    # --- procedure body sections ---------------------------------------
+
+    SECTION_NAMES = ["Summary", "Reagents", "Procedure",
+                     "Workup and Purification", "Characterization", "Notes",
+                     "Hazards and Waste Disposal", "References"]
+
+    def test_sections_of_the_markdown_seed(self) -> None:
+        """Scenario: Sections of the Markdown seed."""
+        page = self.page_of(self.by_id()["OSDB-0002"])
+        sections = ws.check_sections(self, page)
+        self.assertEqual(len(sections), 8)
+        self.assertEqual([h.norm() for _, h in sections], self.SECTION_NAMES)
+        self.assertEqual([s.attrs.get("data-section") for s, _ in sections],
+                         list(ws.ROLES))
+        self.assertEqual(
+            [h.attrs.get("id") for _, h in sections],
+            [name.lower().replace(" ", "-") for name in self.SECTION_NAMES])
+        for section, heading in sections:
+            self.assertIs(heading.parent.parent, section)
+            self.assertIn("widget__head", heading.parent.classes)
+
+    def test_every_h2_of_a_body_stands_in_its_own_section(self) -> None:
+        """Scenario: Sections of the Markdown seed (every page, one h2 per
+        section and none outside)."""
+        for item, page in self.procedure_pages():
+            with self.subTest(procedure=item.id):
+                sections = ws.check_sections(self, page)
+                self.assertEqual(
+                    [h.norm() for _, h in sections],
+                    re.findall(r"(?m)^## (.+?)\s*$", item.body))
+                self.assertEqual([s.attrs.get("data-section")
+                                  for s, _ in sections], list(ws.ROLES))
+                article = page.find("article", "procedure")
+                details = article.find("div", "procedure-details")
+                self.assertEqual(
+                    len(article.find_all("h2")),
+                    len(sections) + len(details.find_all("h2"))
+                    + (1 if item.is_general else 0))
+
+    def test_note_links_lie_in_their_sections(self) -> None:
+        """Scenario: Note links still resolve."""
+        page = self.page_of(self.by_id()["OSDB-0003"])
+        sections = ws.check_sections(self, page)
+        notes = ws.section_of(sections, "notes")
+        for number in (1, 2):
+            found = page.find_all(id=f"note-{number}")
+            self.assertEqual(len(found), 1, f"#note-{number}")
+            self.assertTrue(found[0].within(notes), f"#note-{number}")
+        for number, role in ((1, "procedure"), (2, "workup")):
+            section = ws.section_of(sections, role)
+            links = [l for l in page.links(section)
+                     if l.href == f"#note-{number}"]
+            self.assertEqual(len(links), 1, f"link to #note-{number}")
+        article = page.find("article", "procedure")
+        self.assertEqual(
+            sorted(l.href for l in page.links(article)
+                   if l.href.startswith("#note-")),
+            ["#note-1", "#note-2"])
 
     # --- general procedures --------------------------------------------
 
@@ -846,6 +978,28 @@ class ShippedSiteTests(SiteCase):
                 "acetophenone", "1-phenylethanol", "4-bromoacetophenone",
                 "1-4-bromophenyl-ethanol")])
 
+    def test_the_scope_is_a_widget(self) -> None:
+        """Scenario: Scope widget."""
+        item = self.by_id()["OSDB-0009"]
+        page = self.page_of(item)
+        scope = page.find("section", "scope")
+        self.assertIsNotNone(scope, "no section.scope")
+        self.assertTrue(scope.has_class("widget"))
+        head, body = scope.elements()
+        self.assertEqual((head.tag, head.has_class("widget__head")),
+                         ("div", True))
+        self.assertEqual((body.tag, body.has_class("widget__body")),
+                         ("div", True))
+        self.assertEqual([h.tag for h in head.elements()], ["h2"])
+        self.assertEqual(len(body.find_all("table", "scope-table")), 1)
+        article = page.find("article", "procedure")
+        children = article.elements()
+        order = [children.index(page.find(tag, cls)) for tag, cls in (
+            ("div", "procedure-details"), ("section", "scope"),
+            ("div", "procedure-content"))]
+        self.assertEqual(order, sorted(order))
+        self.assertEqual(len(set(order)), 3)
+
     def test_no_scope_table_on_a_specific_procedure(self) -> None:
         """Scenario: No scope table on a specific procedure."""
         checked = 0
@@ -879,7 +1033,7 @@ class ShippedSiteTests(SiteCase):
         page = self.page_of(item)
         gs.check_scheme_figure(self, page, item,
                                "structures/aryl-ketone-reduction.svg", "en")
-        image = page.find("header", "procedure-header").find("img")
+        image = ws.compound_widget(self, page).figures[0].find("img")
         self.assertEqual(
             image.attrs.get("alt"),
             "Scheme of Secondary benzylic alcohols by sodium borohydride "
@@ -894,10 +1048,11 @@ class ShippedSiteTests(SiteCase):
         page = self.page_of(item)
         panel = self.panel(page)
         self.assertEqual(list(panel), [
-            "Products", "Starting materials", "Reaction type", "Tags",
-            "Authors", "Lab notebook", "Project", "Working time",
-            "Inert atmosphere", "Created", "Modified", "Precursors",
-            "Sequences"])
+            "Products", "Reaction type", "Tags", "Authors", "Lab notebook",
+            "Project", "Working time", "Inert atmosphere", "Created",
+            "Modified", "Starting materials", "Precursors", "Sequences"])
+        self.assertEqual([title for title, _ in self.widgets_of(page)],
+                         ["Products", "Details", "Synthesis context"])
         self.assertEqual(
             [(label, panel[label].definition.norm())
              for label in ("Lab notebook", "Project", "Working time",
@@ -1356,21 +1511,21 @@ class GeneralFixtureSiteTests(SiteCase):
         """Scenario: Scheme image of a general procedure (the
         placeholder)."""
         page = self.page_of(self.item())
-        header = page.find("header", "procedure-header")
-        figures = header.find_all("figure", "structure")
+        widget = ws.compound_widget(self, page)
+        self.assertEqual(widget.title, "Products")
+        figures = widget.figures
         self.assertEqual(len(figures), 1)
-        self.assertIs(header.elements()[-1], figures[0])
+        self.assertIn("data-pagefind-ignore", figures[0].attrs)
         self.assertTrue(figures[0].has_class("structure--placeholder"))
         slot = figures[0].find("div", "structure__slot")
         self.assertIsNotNone(slot, "no div.structure__slot")
         self.assertEqual(slot.norm(), "No structure image")
-        self.assertEqual(header.find_all("img"), [])
+        self.assertEqual(widget.node.find_all("img"), [])
         registry = self.registry()
         self.assertTrue(registry["ethyl-acetate"].get("structure_image"),
                         "no product sets a structure image")
         demo = self.page_of(self.by_id()["OSDB-0009"])
-        figure = demo.find("header", "procedure-header").find(
-            "figure", "structure")
+        figure = ws.compound_widget(self, demo).figures[0]
         self.assertFalse(figure.has_class("structure--placeholder"))
         self.assertEqual(figure.find("img").attrs.get("alt"),
                          "Scheme of " + self.by_id()["OSDB-0009"].title)
@@ -1505,6 +1660,11 @@ class TwoProductSiteTests(SiteCase):
         self.assertEqual(list(panel), [
             "Products", "Reaction type", "Tags", "Authors", "Created",
             "Modified"])
+        self.assertEqual(
+            self.widgets_of(page),
+            [("Products", ["Products"]),
+             ("Details", ["Reaction type", "Tags", "Authors", "Created",
+                          "Modified"])])
         links = panel["Products"].definition.find_all("a", "compound")
         self.assertEqual([(page.resolve(l.attrs["href"]), l.norm())
                           for l in links],
@@ -1522,10 +1682,11 @@ class TwoProductSiteTests(SiteCase):
     def test_one_figure_per_product_with_an_image(self) -> None:
         """Scenario: One figure per product with an image."""
         page = self.page_0907()
-        header = page.find("header", "procedure-header")
-        figures = header.find_all("figure", "structure")
+        widget = ws.compound_widget(self, page)
+        self.assertEqual(widget.title, "Products")
+        figures = widget.figures
         self.assertEqual(len(figures), 1)
-        self.assertIs(header.elements()[-1], figures[0])
+        self.assertIn("data-pagefind-ignore", figures[0].attrs)
         self.assertFalse(figures[0].has_class("structure--placeholder"))
         images = figures[0].find_all("img")
         self.assertEqual(len(images), 1)

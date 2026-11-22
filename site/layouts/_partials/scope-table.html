@@ -18,8 +18,9 @@ nothing. */ -}}
 {{ range $entries }}{{ if isset . $key }}{{ $set = true }}{{ end }}{{ end -}}
 {{ if $set }}{{ $columns = $columns | append $key }}{{ end -}}
 {{ end -}}
-<section class="scope" aria-labelledby="scope-heading">
-<h2 id="scope-heading">{{ T "scope_heading" }}</h2>
+<section class="scope widget" aria-labelledby="scope-heading">
+<div class="widget__head"><h2 id="scope-heading">{{ T "scope_heading" }}</h2></div>
+<div class="widget__body widget__body--flush">
 <div class="table-scroll" tabindex="0" role="region" aria-label="{{ T "scope_heading" }}">
 <table class="scope-table">
 <thead>
@@ -52,6 +53,7 @@ nothing. */ -}}
 {{ end -}}
 </tbody>
 </table>
+</div>
 </div>
 </section>
 {{ end -}}

@@ -10,6 +10,7 @@ from typing import Any
 
 import field_support as fs
 import pipeline_support as ps
+import widget_support as ws
 from pipeline_support import Content, Node, Page
 
 OPTIONAL_COLUMNS = ("scale", "time", "temperature", "note")
@@ -55,7 +56,10 @@ def check_scope_table(case: unittest.TestCase, page: Page, item: Content,
                       registry: dict[str, dict], fields: list[fs.Field],
                       locale: str, first_heading: str) -> Node:
     """The ``section.scope`` of the page of the general procedure
-    ``item``: its place, its heading, its header cells and, for each
+    ``item``: its place between the details wrapper and the body's
+    ``div.procedure-content``, its widget markup (the class ``widget``,
+    the ``h2`` in a ``div.widget__head``, the table in a
+    ``div.widget__body``), its heading, its header cells and, for each
     entry, its cells, the compound links with the notes the compound
     ``fields`` give them. ``first_heading`` is the text of the body's
     first heading. Returns the table."""
@@ -69,14 +73,29 @@ def check_scope_table(case: unittest.TestCase, page: Page, item: Content,
     case.assertIsNotNone(details, "no details wrapper")
     summary = page.heading(first_heading)
     case.assertIsNotNone(summary, f"no {first_heading} heading")
-    order = [page.index_of(n) for n in (details, section, summary)]
+    content = article.find("div", "procedure-content")
+    case.assertIsNotNone(content, "no div.procedure-content")
+    order = [page.index_of(n) for n in (details, section, content, summary)]
     case.assertEqual(order, sorted(order),
                      "the scope lies between the details and the body")
     case.assertFalse(section.within(details))
+    case.assertIs(section.parent, article)
+    case.assertIs(content.parent, article)
+    case.assertTrue(section.has_class("widget"), "the scope is no widget")
+    parts = section.elements()
+    case.assertEqual(len(parts), 2, "the scope has no head and body")
+    head, body = parts
+    case.assertEqual((head.tag, head.has_class("widget__head")),
+                     ("div", True))
+    case.assertEqual((body.tag, body.has_class("widget__body")),
+                     ("div", True))
+    case.assertEqual([h.norm() for h in head.find_all("h2")],
+                     [texts["heading"]])
     case.assertEqual([h.norm() for h in section.find_all("h2")],
                      [texts["heading"]])
-    tables = section.find_all("table", "scope-table")
-    case.assertEqual(len(tables), 1, "not one table.scope-table")
+    tables = body.find_all("table", "scope-table")
+    case.assertEqual(len(tables), 1, "not one table.scope-table in the body")
+    case.assertEqual(len(section.find_all("table", "scope-table")), 1)
     table = tables[0]
     rows = table.find_all("tr")
     case.assertEqual(len(rows), 1 + len(item.scope))
@@ -158,12 +177,13 @@ def check_scope_row(case: unittest.TestCase, page: Page, cells: list[Node],
 
 def check_scheme_figure(case: unittest.TestCase, page: Page, item: Content,
                         image: str, locale: str) -> None:
-    """The header of ``item`` ends with one ``figure.structure`` holding
-    the scheme image ``image``, with the alt text ``Scheme of <title>``."""
-    header = page.find("header", "procedure-header")
-    figures = header.find_all("figure", "structure")
+    """The compound widget of ``item`` holds one ``figure.structure``,
+    and the header none; the figure carries ``data-pagefind-ignore`` and
+    holds the scheme image ``image``, with the alt text ``Scheme of
+    <title>``."""
+    figures = ws.compound_widget(case, page).figures
     case.assertEqual(len(figures), 1)
-    case.assertIs(header.elements()[-1], figures[0])
+    case.assertIn("data-pagefind-ignore", figures[0].attrs)
     case.assertFalse(figures[0].has_class("structure--placeholder"))
     images = figures[0].find_all("img")
     case.assertEqual(len(images), 1)

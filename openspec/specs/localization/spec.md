@@ -16,6 +16,7 @@ Every text that a layout shows SHALL come from the interface strings of the site
 - the page titles `Vorschriften`, `Reaktionstypen`, `Schlagwörter`, `Autoren`, `Synthesewege` and `Hilfe`;
 - on sequence pages the key facts `Stufen` and `Gesamtausbeute`, the steps `Stufe <k>` and `Eintrag <n>`, and in the sequence directory the header cells `Syntheseweg`, `Zielverbindung`, `Stufen` and `Gesamtausbeute`; the panel label `Synthesewege`;
 - the section tabs `Alle Vorschriften`, `Allgemeine Vorschriften`, `Reaktionstypen`, `Schlagwörter` and `Autoren` (in a `nav` with `aria-label="Vorschriften"`);
+- on a procedure page the widget titles `Verbindung`, `Produkte`, `Angaben` and `Synthesekontext`;
 - the panel and key-fact labels `Produkt`, `Produkte`, `Summenformel`, `Molmasse`, `CAS`, `SMILES`, `Ausgangsstoffe`, `Ansatzgröße`, `Ausbeute`, `Reaktionstyp`, `Schlagwörter`, `Autoren`, `Geprüft von`, `Erstellt`, `Geändert`, `Vorstufen`, `Verwendet in`, and the sign-off `von <names>`;
 - on a general procedure's page the heading `Anwendungsbereich` and the scope-table header cells `Eintrag`, `Ausgangsstoffe`, `Produkte`, `Ausbeute`, `Ansatzgröße`, `Zeit`, `Temperatur` and `Anmerkung`, and the scheme `alt` text `Schema von <title>`;
 - on `/general-procedures/` the title `Allgemeine Vorschriften`, the scope `Nur allgemeine Vorschriften` and the header search field labelled `Allgemeine Vorschriften durchsuchen`;
@@ -43,7 +44,7 @@ The site script holds no language: the copy button carries its messages in `data
 
 #### Scenario: German metadata panel
 - **WHEN** a test reads `public/procedures/osdb-0002/index.html` of that build
-- **THEN** its panel labels are, in order, `Produkt`, `Summenformel`, `Molmasse`, `CAS`, `SMILES`, `Ausgangsstoffe`, `Reaktionstyp`, `Schlagwörter`, `Autoren`, `Erstellt`, `Geändert`, `Vorstufen`, `Synthesewege`, its product link reads `Acetylsalicylsäure`, its key facts are `Ansatzgröße` `20 mmol` and `Ausbeute` `75 %`, the molecular weight reads `180,16 g/mol`, the reaction type is a link to `/reaction_types/acylation/` reading `Acylierung`, and the status badge reads `Entwurf`
+- **THEN** its details widgets are headed `Verbindung`, `Angaben` and `Synthesekontext`, its panel labels are, in order, `Produkt`, `Summenformel`, `Molmasse`, `CAS`, `SMILES`, `Reaktionstyp`, `Schlagwörter`, `Autoren`, `Laborjournal`, `Projekt`, `Arbeitszeit`, `Schutzgas`, `Erstellt`, `Geändert`, `Ausgangsstoffe`, `Vorstufen`, `Synthesewege`, its product link reads `Acetylsalicylsäure`, its key facts are `Ansatzgröße` `20 mmol` and `Ausbeute` `75 %`, the molecular weight reads `180,16 g/mol`, the reaction type is a link to `/reaction_types/acylation/` reading `Acylierung`, and the status badge reads `Entwurf`
 
 #### Scenario: German catalogue and home page
 - **WHEN** a test reads `public/procedures/index.html`, `public/tags/cinnamate/index.html` and `public/index.html` of that build

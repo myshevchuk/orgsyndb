@@ -43,12 +43,12 @@ class MarkupFieldTests(tti.SiteCase):
     def test_markup_in_a_label_is_text(self) -> None:
         """Scenario: Markup in a label is text."""
         page = self.page_of(self.by_id()["OSDB-0002"])
-        panel = page.find("dl", "metadata")
-        pairs = {pair.label: pair for pair in page.definition_pairs(panel)}
+        details = page.find("div", "procedure-details")
+        pairs = {pair.label: pair for pair in page.panel_pairs()}
         self.assertEqual(pairs["Project"].definition.norm(),
                          f"Teaching › {self.LABEL}")
-        self.assertEqual(panel.find_all("b"), [])
-        self.assertEqual(panel.find_all("i"), [])
+        self.assertEqual(details.find_all("b"), [])
+        self.assertEqual(details.find_all("i"), [])
 
     def test_markup_in_a_value_beside_a_link_is_text(self) -> None:
         """Scenario: Markup in a value, and a compound without one (the

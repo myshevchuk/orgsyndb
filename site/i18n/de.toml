@@ -121,6 +121,11 @@ print_modified = "zuletzt geändert"
 print_page = "Seite"
 print_of = "von"
 
+widget_compound = "Verbindung"
+widget_products = "Produkte"
+widget_details = "Angaben"
+widget_context = "Synthesekontext"
+
 label_product = "Produkt"
 label_products = "Produkte"
 label_formula = "Summenformel"

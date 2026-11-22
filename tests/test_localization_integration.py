@@ -10,6 +10,7 @@ import catalogue_support as cs
 import general_support as gs
 import navigation_support as ns
 import pipeline_support as ps
+import widget_support as ws
 from pipeline_support import Page
 
 TABS = [("/procedures/", "Alle Vorschriften"),
@@ -20,9 +21,13 @@ FOOTER = (r"^OrgSynDB · interne Vorschriften · Stand "
           r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}$")
 BANNER = "Beispieldaten – Mengenangaben nicht experimentell überprüft."
 PANEL_LABELS = ["Produkt", "Summenformel", "Molmasse", "CAS", "SMILES",
-                "Ausgangsstoffe", "Reaktionstyp", "Schlagwörter", "Autoren",
-                "Laborjournal", "Projekt", "Arbeitszeit", "Schutzgas",
-                "Erstellt", "Geändert", "Vorstufen", "Synthesewege"]
+                "Reaktionstyp", "Schlagwörter", "Autoren", "Laborjournal",
+                "Projekt", "Arbeitszeit", "Schutzgas", "Erstellt",
+                "Geändert", "Ausgangsstoffe", "Vorstufen", "Synthesewege"]
+# The widgets of that panel: title and labels.
+PANEL_WIDGETS = [("Verbindung", PANEL_LABELS[:5]),
+                 ("Angaben", PANEL_LABELS[5:14]),
+                 ("Synthesekontext", PANEL_LABELS[14:])]
 TITLES = {"procedures/index.html": "Vorschriften",
           "general-procedures/index.html": "Allgemeine Vorschriften",
           "reaction_types/index.html": "Reaktionstypen",
@@ -138,8 +143,10 @@ class GermanSiteTests(GermanCase):
         self.assertEqual(page.find("span", "badge").norm(), "Entwurf")
         self.assertEqual(page.find("button", "print-button").norm(),
                          "Drucken / Als PDF speichern")
-        panel = page.find("dl", "metadata")
-        pairs = {p.label: p.definition for p in page.definition_pairs(panel)}
+        pairs = {p.label: p.definition for p in page.panel_pairs()}
+        self.assertEqual(
+            [(w.title, w.labels) for w in ws.details_widgets(self, page)],
+            PANEL_WIDGETS)
         self.assertEqual(list(pairs), PANEL_LABELS)
         self.assertEqual(pairs["Produkt"].norm(),
                          self.linked("acetylsalicylic-acid"))
@@ -168,10 +175,32 @@ class GermanSiteTests(GermanCase):
                          ("Kopieren", "Kopiert"))
         self.assertIsNotNone(page.heading("Reagenzien"))
 
+    def test_german_sections_carry_the_same_roles(self) -> None:
+        """Scenario: German sections carry the same roles."""
+        page = self.page("procedures/osdb-0002/index.html")
+        sections = ws.check_sections(self, page)
+        self.assertEqual(
+            [h.norm() for _, h in sections],
+            ["Zusammenfassung", "Reagenzien", "Durchführung",
+             "Aufarbeitung und Reinigung", "Charakterisierung",
+             "Anmerkungen", "Gefahren und Entsorgung", "Literatur"])
+        self.assertEqual(
+            {h.norm(): s.attrs.get("data-section") for s, h in sections},
+            dict(zip(["Zusammenfassung", "Reagenzien", "Durchführung",
+                      "Aufarbeitung und Reinigung", "Charakterisierung",
+                      "Anmerkungen", "Gefahren und Entsorgung", "Literatur"],
+                     ws.ROLES)))
+        self.assertEqual(
+            ws.section_of(sections, "procedure").find("h2").norm(),
+            "Durchführung")
+        self.assertEqual(
+            ws.section_of(sections, "notes").find("h2").norm(),
+            "Anmerkungen")
+
     def test_declared_fields_in_the_german_panel(self) -> None:
         """Scenario: Declared fields in the German panel."""
         page = self.page("procedures/osdb-0002/index.html")
-        pairs = page.definition_pairs(page.find("dl", "metadata"))
+        pairs = page.panel_pairs()
         labels = [p.label for p in pairs]
         first = labels.index("Autoren") + 1
         self.assertEqual(
@@ -272,17 +301,19 @@ class GermanSiteTests(GermanCase):
         gs.check_scheme_figure(self, page, item,
                                "structures/aryl-ketone-reduction.svg", "de")
         self.assertEqual(
-            page.find("header", "procedure-header").find("img")
+            ws.compound_widget(self, page).figures[0].find("img")
             .attrs.get("alt"),
             "Schema von Sekundäre Benzylalkohole durch Reduktion mit "
             "Natriumborhydrid")
-        panel = {p.label: p.definition
-                 for p in page.definition_pairs(page.find("dl", "metadata"))}
+        panel = {p.label: p.definition for p in page.panel_pairs()}
+        self.assertEqual(
+            [w.title for w in ws.details_widgets(self, page)],
+            ["Produkte", "Angaben", "Synthesekontext"])
         self.assertEqual(
             list(panel),
-            ["Produkte", "Ausgangsstoffe", "Reaktionstyp", "Schlagwörter",
-             "Autoren", "Laborjournal", "Projekt", "Arbeitszeit",
-             "Schutzgas", "Erstellt", "Geändert", "Vorstufen",
+            ["Produkte", "Reaktionstyp", "Schlagwörter", "Autoren",
+             "Laborjournal", "Projekt", "Arbeitszeit", "Schutzgas",
+             "Erstellt", "Geändert", "Ausgangsstoffe", "Vorstufen",
              "Synthesewege"])
         self.assertEqual(
             [(label, panel[label].norm()) for label in
@@ -449,8 +480,9 @@ class GermanGeneralFixtureTests(GermanCase):
     def test_the_placeholder_is_german(self) -> None:
         """Scenario: Scheme image of a general procedure (German)."""
         page = self.page("procedures/osdb-0140/index.html")
-        figure = page.find("header", "procedure-header").find(
-            "figure", "structure")
+        widget = ws.compound_widget(self, page)
+        self.assertEqual(widget.title, "Produkte")
+        (figure,) = widget.figures
         self.assertTrue(figure.has_class("structure--placeholder"))
         self.assertEqual(figure.find("div", "structure__slot").norm(),
                          "Keine Strukturformel")

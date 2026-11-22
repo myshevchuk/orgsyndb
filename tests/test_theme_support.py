@@ -34,6 +34,23 @@ class PageModelTests(unittest.TestCase):
         self.assertEqual([d.gap for d in page.definition_pairs()],
                          ["\n", "", ""])
 
+    def test_the_panel_is_every_metadata_list_of_the_details(self) -> None:
+        """Harness: the metadata panel of a procedure page."""
+        page = ps.parse_page(
+            '<dl class="key-facts"><dt>Scale<dd>1</dl>'
+            '<div class="procedure-details">'
+            '<section class="widget"><dl class="metadata">'
+            '<dt>A<dd>x<dt>B<dd>y</dl></section>'
+            '<section class="widget"><dl class="metadata">'
+            '<dt>C<dd>z</dl></section></div>'
+            '<dl class="metadata"><dt>D<dd>w</dl>')
+        self.assertEqual(len(page.panel_lists()), 2)
+        self.assertEqual([(d.label, d.definition.norm())
+                          for d in page.panel_pairs()],
+                         [("A", "x"), ("B", "y"), ("C", "z")])
+        self.assertEqual(ps.parse_page("<dl><dt>A<dd>x</dl>").panel_pairs(),
+                         [])
+
     def test_links_resolve_against_the_page_url(self) -> None:
         """Harness: link targets, attributes and class lookups."""
         page = ps.parse_page(
