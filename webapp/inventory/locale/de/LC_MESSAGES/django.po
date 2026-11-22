@@ -35,6 +35,9 @@ msgstr "Bitte die Charge wählen."
 msgid "The batch is of another substance."
 msgstr "Die Charge gehört zu einem anderen Stoff."
 
+msgid "The batch no longer exists."
+msgstr "Die Charge gibt es nicht mehr."
+
 msgid "The stock changed while this was booked; check the counts and book again."
 msgstr "Der Bestand hat sich während der Buchung geändert; bitte die Anzahlen prüfen und neu buchen."
 

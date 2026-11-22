@@ -371,6 +371,10 @@ class NoteForm(forms.Form):
                 continue
             if item is None:
                 self.add_error(names[0], _("Choose an item."))
+                if batch is None:
+                    self.add_error(names[1], _("Choose a batch."))
+                if count is None:
+                    self.add_error(names[2], _("Enter a count."))
                 continue
             if count is None:
                 self.add_error(names[2], _("Enter a count."))

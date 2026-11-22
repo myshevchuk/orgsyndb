@@ -43,8 +43,7 @@
 
 ## 3. Documentation
 
-- [x] 3.1 `README.md` inventory section, `docs/SCHEMA.md`,
-  `docs/SCHEMA.de.md`, `docs/GLOSSARY.de.md`
+- [x] 3.1 `README.md`: overview, inventory sections, demo
 
 ## 4. Verification
 
@@ -56,5 +55,5 @@
 
 ## 5. Review and archive
 
-- [ ] 5.1 Codex reviewer
+- [x] 5.1 Codex reviewer
 - [ ] 5.2 Archive and squash-merge into `develop`

@@ -34,7 +34,7 @@
 {% if item.note %}<h2>{% translate "Note" context "inventory" %}</h2>
 <div class="lab-note">{{ item.note|linebreaks }}</div>
 {% endif %}<h2>{% translate "Containers by batch" %}</h2>
-{% if stocks or unknown %}<dl class="metadata">
+{% if stocks or unknown %}<dl class="metadata batch-stock">
 {% for stock in stocks %}<dt><a href="/lab/inventory/batches/{{ stock.batch.pk }}/">{{ stock.batch }}</a></dt>
 <dd>{{ stock.quantity }}</dd>
 {% endfor %}{% if unknown %}<dt>{% translate "unknown" %}</dt>

@@ -363,7 +363,8 @@ def create_item(user: Any, *, substance: Substance,
     opening count's date. Refuse a QUANTITY below zero, a SIZE of zero
     or less, an unknown UNIT, a DATE or STOCKED_ON after today, a value
     too long for its field, an article number another article has or
-    other than the article's, a BATCH of another substance, and an item
+    other than the article's, a BATCH of another substance or one
+    deleted before the item is stored, and an item
     whose size and unit another item of the article has; a refusal
     changes nothing.
     """
@@ -397,6 +398,10 @@ def create_item(user: Any, *, substance: Substance,
             _movement(user, item, Movement.Kind.OPENING, quantity, quantity,
                       day, batch=batch)
     except IntegrityError as error:
+        if batch is not None and not Batch.objects.filter(
+                pk=batch.pk).exists():
+            raise Refused({"batch": _("The batch no longer exists.")}
+                          ) from error
         raise Refused({"size": taken}) from error
     return item
 

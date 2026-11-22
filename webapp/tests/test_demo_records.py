@@ -698,15 +698,19 @@ class InventoryTests(SeededCase):
         self.assertTrue(unknown, "no item holds containers of unknown "
                         "batch")
         item = two[0]
-        hrefs = [a.get("href") for a in self.get(
-            f"/lab/inventory/items/{item.pk}/").find_all("a")]
+        shares = self.get(f"/lab/inventory/items/{item.pk}/").find(
+            "dl", cls="batch-stock")
+        self.assertIsNotNone(shares)
+        hrefs = [a.get("href") for a in shares.find_all("a")]
         for stock in item.stocks.filter(quantity__gt=0,
                                         batch__isnull=False):
             with self.subTest(batch=stock.batch_id):
                 self.assertIn(f"/lab/inventory/batches/{stock.batch_id}/",
                               hrefs)
-        self.assertIn("unbekannt", self.get(
-            f"/lab/inventory/items/{unknown[0].pk}/").text())
+        shares = self.get(f"/lab/inventory/items/{unknown[0].pk}/").find(
+            "dl", cls="batch-stock")
+        self.assertIsNotNone(shares)
+        self.assertIn("unbekannt", shares.text())
         assigned = Movement.objects.filter(
             kind=Movement.Kind.ASSIGNMENT).first()
         self.assertIsNotNone(assigned)

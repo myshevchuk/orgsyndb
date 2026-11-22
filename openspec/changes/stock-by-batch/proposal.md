@@ -80,7 +80,6 @@ None.
   `webapp/docs/database-schema.html`.
 - Tests across `webapp/tests/` that book deliveries, corrections and
   opening counts.
-- Docs: `README.md` (inventory), `docs/SCHEMA*.md`,
-  `docs/GLOSSARY.de.md`.
+- Docs: `README.md` (overview, inventory, demo).
 - The migration carries no data. The test server is reseeded with
   `demo_data --replace`. No new dependency.
