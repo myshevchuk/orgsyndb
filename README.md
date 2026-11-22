@@ -2286,9 +2286,10 @@ use the item list's colours and urgency order. Each segment's width shows
 its share of the items, and its number is the item count at that level.
 Hover over a segment for the level's name and count; choose it to open
 the item list filtered to that level. Levels without items are absent.
-The line below the bar gives the total number of items.
+A legend under the bar names each level shown with its count, and the
+line below it gives the total number of items.
 
-Four figures follow:
+Four figures head the page, above the stock bar:
 
 - **Abgegeben &lt;year&gt;** (**Delivered in &lt;year&gt;**) counts containers
   delivered from 1 January through today. **Vorjahr bis &lt;date&gt;: &lt;n&gt;**
@@ -2319,18 +2320,20 @@ replaces the table.
 
 **Abgaben je Monat** (**Deliveries per month**) charts the twelve months
 ending with the current month. Each month's bar sits beside a grey bar
-for the same month a year before. Hover over a bar for its month, year
-and container count.
+for the same month a year before. Each bar shows its container count
+above it, unless the count is 0, and a legend names the two colours.
+Hover over a bar for its month, year and container count.
 
 **Meistgefragt &lt;year&gt;** (**Most requested in &lt;year&gt;**) lists up to
 five articles with the most containers delivered this year, with names
 and counts. **Empfänger &lt;year&gt;** (**Recipients in &lt;year&gt;**) lists
 up to five recipients by the same measure; notes without a recipient
-are excluded.
+are excluded. In both lists a bar beside each count shows its share of
+the list's largest count.
 **Letzte Lieferscheine** (**Latest delivery notes**) shows the first five
 notes in the delivery list, with number, date, recipient and container
 count. Follow the number to open a note; a note without a number uses
-`–` as its link. Empty lists show **Keine Abgaben.** (**No deliveries.**).
+`–` as its link, and a note without a recipient shows `–` for it. Empty lists show **Keine Abgaben.** (**No deliveries.**).
 
 The yearly delivery figure, monthly chart and yearly lists use
 delivery-note lines that count as consumption, using the note's date.

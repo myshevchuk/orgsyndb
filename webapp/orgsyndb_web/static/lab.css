@@ -664,63 +664,95 @@ table.note-lines { padding: 0; }
 .lab-links { font-family: var(--font-ui); }
 .badge--late { background: var(--banner-bg); color: var(--banner-fg); border-color: var(--banner-border); }
 
-/* The overview at /lab/: its parts in columns where the window allows,
-   the stock bar of the level colours, the figures, and the chart of
-   the deliveries per month. The summary is the first part alone, made
-   to be framed by the site's home page. */
-.lab-overview {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
-  gap: var(--space-4) var(--space-5);
-}
-.overview-part h2 { margin-top: 0; }
-.overview-stock, .overview-next, .overview-months { grid-column: 1 / -1; }
+/* The overview at /lab/: the stock bar and its legend, the chart of the
+   deliveries per month, and the summary framed by the site's home page. */
 .stock-bar {
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
-  min-height: 2.25rem;
-  border-radius: 0.25rem;
+  min-height: 1.75rem;
+  border-radius: 0.2rem;
   overflow: hidden;
   font-family: var(--font-ui);
-  font-weight: 600;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 .stock-bar a {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 2.25rem;
+  min-width: 1.8rem;
   text-decoration: none;
 }
 .stock-bar a:hover, .stock-bar a:focus-visible { text-decoration: underline; }
-.lab-figures {
+.stock-legend {
+  list-style: none;
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2) var(--space-5);
-  margin: var(--space-3) 0 0;
-  font-family: var(--font-ui);
+  gap: 0.25rem 0.85rem;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  font-size: 0.75rem;
+  color: var(--muted);
 }
-.lab-figures dt { color: var(--muted); font-size: 0.875rem; }
-.lab-figures dd { margin: 0; }
-.lab-figures .figure { font-size: 1.5rem; font-weight: 700; }
-.lab-figures a { text-decoration: none; }
-.lab-figures a:hover { text-decoration: underline; }
-.overview-list { font-family: var(--font-ui); padding-left: var(--space-4); }
-.overview-list .count { font-weight: 600; }
+.stock-legend li { display: inline-flex; align-items: center; gap: 0.3rem; margin: 0; }
+.stock-legend .swatch { width: 0.72rem; height: 0.72rem; border-radius: 0.125rem; }
+.stock-count {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
 .lab-empty { color: var(--muted); font-family: var(--font-ui); }
-.deliveries-chart { margin: 0; max-width: 48rem; }
-.deliveries-chart svg { width: 100%; height: auto; font-family: var(--font-ui); font-size: 11px; }
-.deliveries-chart .current { fill: var(--link); }
-.deliveries-chart .previous { fill: var(--border); }
+.deliveries-chart { margin: 0; overflow-x: auto; }
+.deliveries-chart svg { width: 100%; min-width: 34rem; height: auto; display: block; font-family: var(--font-ui); font-size: 11px; }
+.deliveries-chart rect.current { fill: var(--link); }
+.deliveries-chart rect.previous { fill: var(--border); }
 .deliveries-chart text { fill: var(--muted); }
+.deliveries-chart text.chart-value {
+  fill: var(--fg);
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.deliveries-chart text.chart-value.previous { fill: var(--muted); font-weight: 400; }
 .deliveries-chart .chart-axis { stroke: var(--border); }
-.deliveries-chart figcaption { color: var(--muted); font-family: var(--font-ui); font-size: 0.875rem; }
+.chart-legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.85rem;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.chart-legend li { display: inline-flex; align-items: center; gap: 0.3rem; margin: 0; }
+.chart-legend .swatch { width: 0.72rem; height: 0.72rem; border-radius: 0.125rem; }
+.chart-swatch--current { background: var(--link); }
+.chart-swatch--previous { background: var(--border); }
 body.lab-framed { display: block; min-height: 0; margin: 0; padding: 0; max-width: none; }
 body.lab-framed main { padding: 0; }
 body.lab-framed .lab-demo { margin-bottom: var(--space-2); }
+body.lab-framed .figures-strip { margin-bottom: 0.6rem; }
+body.lab-framed .lab-links { margin: 0.5rem 0 0; font-size: 0.8125rem; }
 
-/* Item and substance page widget grids and widget-local adjustments. */
+/* Overview, item and substance page widget grids and widget-local adjustments. */
 @media screen {
+  .overview-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(19rem, 0.95fr);
+    gap: 0.85rem;
+    align-items: start;
+  }
+  .overview-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    min-width: 0;
+  }
   .item-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 18.5rem;
@@ -764,7 +796,7 @@ body.lab-framed .lab-demo { margin-bottom: var(--space-2); }
     align-items: start;
   }
   @media (max-width: 60rem) {
-    .item-grid, .substance-grid { grid-template-columns: minmax(0, 1fr); }
+    .overview-grid, .item-grid, .substance-grid { grid-template-columns: minmax(0, 1fr); }
     .substance-aside { grid-column: auto; grid-row: auto; position: static; }
     .substance-main { grid-column: auto; grid-row: auto; }
   }

@@ -1,0 +1,10 @@
+{% load i18n %}<section class="widget">
+<div class="widget__head"><h2>{% translate "Inventory" %}</h2></div>
+<div class="widget__body">
+<div class="stock-bar">{% for part in summary.parts %}<a class="level-{{ part.level }}" href="/lab/inventory/end-products/?stock={{ part.level }}" style="flex-grow: {{ part.count }}" title="{{ part.label }}: {{ part.count }}">{{ part.count }}</a>{% endfor %}</div>
+{% if summary.parts %}<ul class="stock-legend">
+{% for part in summary.parts %}<li><span class="swatch level-{{ part.level }}"></span> {{ part.label }} ({{ part.count }})</li>
+{% endfor %}</ul>
+{% endif %}<p class="stock-count">{% blocktranslate count count=summary.items %}{{ count }} item{% plural %}{{ count }} items{% endblocktranslate %}</p>
+</div>
+</section>

@@ -3,66 +3,117 @@
 {% block main %}
 <h1>{% translate "Lab at a glance" %}</h1>
 <section class="lab-overview">
-<div class="overview-part overview-stock">
-<h2>{% translate "Inventory" %}</h2>
-{% include "overview/_summary.html" %}
-</div>
-<div class="overview-part overview-next">
-<h2>{% translate "Next syntheses" %}</h2>
+{% include "overview/_figures.html" %}
+<div class="overview-grid">
+<div class="overview-col">
+{% include "overview/_stock.html" %}
+<section class="widget">
+<div class="widget__head"><h2>{% translate "Next syntheses" %}</h2><span class="widget__note"><a href="/lab/planning/">{% translate "To planning" %}</a></span></div>
+<div class="widget__body widget__body--flush">
 {% if next %}<div class="table-scroll">
-<table class="inventory-table">
+<table class="widget-table">
 <thead>
 <tr><th scope="col">{% translate "Article no." %}</th><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Priority" %}</th><th scope="col">{% translate "Latest start" %}</th><th scope="col">{% translate "Task" %}</th></tr>
 </thead>
 <tbody>
 {% for entry in next %}<tr>
-<td><a href="/lab/inventory/items/{{ entry.item.pk }}/">{{ entry.forecast.article_number }}</a></td>
+<td class="nowrap"><a href="/lab/inventory/items/{{ entry.item.pk }}/">{{ entry.forecast.article_number }}</a></td>
 <td>{% substance entry.forecast.substance %}</td>
 <td>{{ entry.forecast.priority_label }}</td>
-<td>{{ entry.forecast.latest_start|default_if_none:"–" }}</td>
-<td>{% if entry.task %}<a href="/lab/tasks/{{ entry.task.task.number }}/">{{ entry.task.task.number }}</a> {{ entry.state }}{% if entry.task.late %} <span class="badge badge--late">{% translate "late" %}</span>{% endif %}{% else %}–{% endif %}</td>
+<td class="nowrap">{{ entry.forecast.latest_start|default_if_none:"–" }}</td>
+<td class="nowrap">{% if entry.task %}<a href="/lab/tasks/{{ entry.task.task.number }}/">{{ entry.task.task.number }}</a> {{ entry.state }}{% if entry.task.late %} <span class="badge badge--late">{% translate "late" %}</span>{% endif %}{% else %}<span class="muted">–</span>{% endif %}</td>
 </tr>
 {% endfor %}</tbody>
 </table>
 </div>
 {% else %}<p class="lab-empty">{% translate "No forecasts." %}</p>
-{% endif %}<p class="lab-links"><a href="/lab/planning/">{% translate "To planning" %}</a></p>
-</div>
-<div class="overview-part overview-months">
-<h2>{% translate "Deliveries per month" %}</h2>
+{% endif %}</div>
+</section>
+<section class="widget">
+<div class="widget__head"><h2>{% translate "Deliveries per month" %}</h2></div>
+<div class="widget__body">
 <figure class="deliveries-chart">
 {% localize off %}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="img" aria-labelledby="deliveries-title">
 <title id="deliveries-title">{% translate "Containers delivered per month, beside the year before" %}</title>
 <line class="chart-axis" x1="0" y1="{{ chart.baseline }}" x2="{{ chart.width }}" y2="{{ chart.baseline }}"/>
 {% for month in chart.months %}<g class="chart-month">
 <rect class="previous" x="{{ month.previous.x }}" y="{{ month.previous.y }}" width="16" height="{{ month.previous.height }}"><title>{{ month.previous.title }}</title></rect>
+{% if month.previous.value %}<text class="chart-value previous" x="{{ month.previous.label_x }}" y="{{ month.previous.label_y }}" text-anchor="middle">{{ month.previous.value }}</text>{% endif %}
 <rect class="current" x="{{ month.current.x }}" y="{{ month.current.y }}" width="16" height="{{ month.current.height }}"><title>{{ month.current.title }}</title></rect>
+{% if month.current.value %}<text class="chart-value current" x="{{ month.current.label_x }}" y="{{ month.current.label_y }}" text-anchor="middle">{{ month.current.value }}</text>{% endif %}
 <text x="{{ month.label_x }}" y="{{ chart.baseline|add:16 }}" text-anchor="middle">{{ month.label }}</text>
 </g>
 {% endfor %}</svg>{% endlocalize %}
-<figcaption>{% translate "The grey bar is the same month a year before." %}</figcaption>
 </figure>
+<ul class="chart-legend">
+<li><span class="swatch chart-swatch--current"></span> {% translate "Last 12 months" %}</li>
+<li><span class="swatch chart-swatch--previous"></span> {% translate "Same month a year before" %}</li>
+</ul>
 </div>
-<div class="overview-part">
-<h2>{% blocktranslate with year=year|stringformat:"d" %}Most requested in {{ year }}{% endblocktranslate %}</h2>
-{% if requested %}<ol class="overview-list">
-{% for entry in requested %}<li><a href="/lab/inventory/items/{{ entry.item.pk }}/">{{ entry.article_number }}</a> {% substance entry.item.substance %} <span class="count">{{ entry.count }}</span></li>
-{% endfor %}</ol>
+</section>
+</div>
+<div class="overview-col">
+<section class="widget">
+<div class="widget__head"><h2>{% blocktranslate with year=year|stringformat:"d" %}Most requested in {{ year }}{% endblocktranslate %}</h2>{% if requested %}<span class="widget__count">{{ requested|length }}</span>{% endif %}</div>
+<div class="widget__body widget__body--flush">
+{% if requested %}{% with top=requested.0.count %}<div class="table-scroll">
+<table class="widget-table">
+<thead>
+<tr><th scope="col">{% translate "Article no." %}</th><th scope="col">{% translate "Substance" %}</th><th scope="col" class="num">{% translate "Containers" %}</th></tr>
+</thead>
+<tbody>
+{% for entry in requested %}<tr>
+<td class="nowrap"><a href="/lab/inventory/items/{{ entry.item.pk }}/">{{ entry.article_number }}</a></td>
+<td>{% substance entry.item.substance %}</td>
+<td class="num"><span class="rank-cell"><span class="rank-bar" aria-hidden="true"><span style="width: {% widthratio entry.count top 100 %}%"></span></span><strong>{{ entry.count }}</strong></span></td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>{% endwith %}
 {% else %}<p class="lab-empty">{% translate "No deliveries." %}</p>
 {% endif %}</div>
-<div class="overview-part">
-<h2>{% blocktranslate with year=year|stringformat:"d" %}Recipients in {{ year }}{% endblocktranslate %}</h2>
-{% if recipients %}<ol class="overview-list">
-{% for recipient, count in recipients %}<li>{{ recipient }} <span class="count">{{ count }}</span></li>
-{% endfor %}</ol>
+</section>
+<section class="widget">
+<div class="widget__head"><h2>{% blocktranslate with year=year|stringformat:"d" %}Recipients in {{ year }}{% endblocktranslate %}</h2>{% if recipients %}<span class="widget__count">{{ recipients|length }}</span>{% endif %}</div>
+<div class="widget__body widget__body--flush">
+{% if recipients %}{% with top=recipients.0.1 %}<div class="table-scroll">
+<table class="widget-table">
+<thead>
+<tr><th scope="col">{% translate "Recipient" %}</th><th scope="col" class="num">{% translate "Containers" %}</th></tr>
+</thead>
+<tbody>
+{% for recipient, count in recipients %}<tr>
+<td>{{ recipient }}</td>
+<td class="num"><span class="rank-cell"><span class="rank-bar" aria-hidden="true"><span style="width: {% widthratio count top 100 %}%"></span></span><strong>{{ count }}</strong></span></td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>{% endwith %}
 {% else %}<p class="lab-empty">{% translate "No deliveries." %}</p>
 {% endif %}</div>
-<div class="overview-part">
-<h2>{% translate "Latest delivery notes" %}</h2>
-{% if latest %}<ol class="overview-list">
-{% for entry in latest %}<li><a href="/lab/inventory/deliveries/{{ entry.note.pk }}/">{{ entry.note.number|default:"–" }}</a> {{ entry.note.date }}{% if entry.note.recipient %} · {{ entry.note.recipient }}{% endif %} <span class="count">{{ entry.count }}</span></li>
-{% endfor %}</ol>
+</section>
+<section class="widget">
+<div class="widget__head"><h2>{% translate "Latest delivery notes" %}</h2>{% if latest %}<span class="widget__count">{{ latest|length }}</span>{% endif %}</div>
+<div class="widget__body widget__body--flush">
+{% if latest %}<div class="table-scroll">
+<table class="widget-table">
+<thead>
+<tr><th scope="col">{% translate "Note" context "delivery note" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Recipient" %}</th><th scope="col" class="num">{% translate "Containers" %}</th></tr>
+</thead>
+<tbody>
+{% for entry in latest %}<tr>
+<td class="nowrap"><a href="/lab/inventory/deliveries/{{ entry.note.pk }}/">{{ entry.note.number|default:"–" }}</a></td>
+<td class="nowrap">{{ entry.note.date }}</td>
+<td{% if not entry.note.recipient %} class="muted"{% endif %}>{{ entry.note.recipient|default:"–" }}</td>
+<td class="num">{{ entry.count }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
 {% else %}<p class="lab-empty">{% translate "No deliveries." %}</p>
 {% endif %}</div>
+</section>
+</div>
+</div>
 </section>
 {% endblock %}

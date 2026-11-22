@@ -1,0 +1,6 @@
+{% load i18n %}<div class="figures-strip">
+<div class="figure-tile"><span class="figure-tile__label">{% blocktranslate with year=summary.today.year|stringformat:"d" %}Delivered in {{ year }}{% endblocktranslate %}</span><span class="figure-tile__value">{{ summary.this_year }}</span><span class="figure-tile__sub">{% blocktranslate with day=summary.last_year_end|date:"SHORT_DATE_FORMAT" number=summary.last_year %}Last year to {{ day }}: {{ number }}{% endblocktranslate %}</span></div>
+<div class="figure-tile"><span class="figure-tile__label">{% translate "Syntheses due" %}</span><span class="figure-tile__value"><a href="/lab/planning/">{{ summary.due }}</a>{% if summary.late %} <span class="badge badge--late">{% blocktranslate count count=summary.late %}{{ count }} late{% plural %}{{ count }} late{% endblocktranslate %}</span>{% endif %}</span></div>
+<div class="figure-tile"><span class="figure-tile__label">{% translate "Tasks" %}</span><span class="figure-tile__value"><a href="/lab/tasks/">{% blocktranslate with running=summary.running planned=summary.planned %}{{ running }} running · {{ planned }} planned{% endblocktranslate %}</a></span></div>
+<div class="figure-tile"><span class="figure-tile__label">{% translate "Open vessels" %}</span><span class="figure-tile__value"><a href="/lab/inventory/vessels/">{{ summary.vessels }}</a></span></div>
+</div>

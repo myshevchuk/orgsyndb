@@ -57,8 +57,11 @@ msgstr "Abgaben je Monat"
 msgid "Containers delivered per month, beside the year before"
 msgstr "Abgegebene Gebinde je Monat, neben dem Vorjahr"
 
-msgid "The grey bar is the same month a year before."
-msgstr "Der graue Balken ist derselbe Monat ein Jahr zuvor."
+msgid "Last 12 months"
+msgstr "Aktuelle 12 Monate"
+
+msgid "Same month a year before"
+msgstr "Vorjahresmonat"
 
 msgid "Most requested in %(year)s"
 msgstr "Meistgefragt %(year)s"
@@ -68,6 +71,10 @@ msgstr "Empfänger %(year)s"
 
 msgid "Latest delivery notes"
 msgstr "Letzte Lieferscheine"
+
+msgctxt "delivery note"
+msgid "Note"
+msgstr "Beleg"
 
 msgid "No deliveries."
 msgstr "Keine Abgaben."
