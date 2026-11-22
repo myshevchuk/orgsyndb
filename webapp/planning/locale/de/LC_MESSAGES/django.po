@@ -173,9 +173,6 @@ msgstr "Artikel %(article)s"
 msgid "Usable bulk"
 msgstr "Nutzbares Bulk"
 
-msgid "%(amount)s %(unit)s, each open lot less the largest container size"
-msgstr "%(amount)s %(unit)s, jedes offene Bulk abzüglich der größten Gebindegröße"
-
 msgid "%(runway)s at a certainty of %(certainty)s for each size"
 msgstr "%(runway)s bei einer Sicherheit von %(certainty)s je Größe"
 
@@ -234,3 +231,7 @@ msgstr "Synthese planen über %(sequence)s"
 
 msgid "Plan synthesis via %(sequence)s from step %(step)s, %(name)s in stock"
 msgstr "Synthese planen über %(sequence)s ab Stufe %(step)s, %(name)s vorrätig"
+
+#, python-format
+msgid "%(amount)s %(unit)s, each open vessel less the largest container size"
+msgstr "%(amount)s %(unit)s, jedes offene Gefäß abzüglich der größten Gebindegröße"

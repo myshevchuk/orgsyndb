@@ -1,7 +1,7 @@
 # end-product-inventory Specification
 
 ## Purpose
-Count the lab's end products in the lab application: articles, each one substance of the registry with its article number and category; items, an article in containers of one size, changed only by movements, delivery notes current and historical, consumption per quarter with its means and coverage, stock levels, bulk lots and filling from them, their lists, pages and forms, and the admin.
+Count the lab's end products in the lab application: articles, each one substance of the registry with its article number and category; items, an article in containers of one size, changed only by movements, delivery notes current and historical, consumption per quarter with its means and coverage, stock levels, batches of every substance and the vessels that hold them, filling from vessels, their lists, pages and forms, and the admin.
 ## Requirements
 ### Requirement: Items
 The `inventory` package SHALL keep items, each a container size of an article (Articles), with a change history:
@@ -31,7 +31,7 @@ No two items of one article share size and unit. The size and unit are fixed onc
 - **THEN** the item is saved as the first size of a new article of that substance, without an article number
 
 #### Scenario: Stock entry by the first filling
-- **WHEN** on 2026-11-04 a signed-in user creates an item with an opening count of 0, fills 3 containers dated 2026-10-20, and fills 2 more dated 2026-11-02
+- **WHEN** on 2026-11-04 a signed-in user creates an item with an opening count of 0, fills 3 containers from a vessel of its substance dated 2026-10-20, and fills 2 more dated 2026-11-02
 - **THEN** its `stocked_on` is 2026-10-20 and it is new
 
 #### Scenario: Stock entry by the opening count
@@ -39,13 +39,13 @@ No two items of one article share size and unit. The size and unit are fixed onc
 - **THEN** its `stocked_on` was 2026-11-04 and is 2019-05-02, its history records the change, and it is not new
 
 ### Requirement: Item movements
-Every change of an item's quantity SHALL be a movement holding `kind`, `count`, `quantity_after`, `date`, `booked_at`, `user`, `note`, and `delivery_note`, `bulk_movement` and `reverses` where they apply:
+Every change of an item's quantity SHALL be a movement holding `kind`, `count`, `quantity_after`, `date`, `booked_at`, `user`, `note`, and `delivery_note`, `vessel_movement` and `reverses` where they apply:
 
 - `opening` (`Anfangsbestand`, `Opening count`): the first movement of every item, its `count` the quantity entered on creation;
 - `delivery` (`Abgabe`, `Delivery`): `count` containers out, more than zero and at most the quantity, booked by a line of the current delivery note `delivery_note` and dated as the note;
-- `filling` (`Abfüllung`, `Filling`): `count` containers in, more than zero; `bulk_movement` the lot's movement when a lot was named;
+- `filling` (`Abfüllung`, `Filling`): `count` containers in, more than zero, taken from a vessel (Filling from bulk), `vessel_movement` the vessel's filling;
 - `correction` (`Korrektur`, `Correction`): `count` the quantity counted, at least zero; a note is required;
-- `reversal` (`Storno`, `Reversal`): undoes one delivery or filling, named by `reverses`, adding back a delivery's count or taking back a filling's, and returning a filling's amount to its lot with a lot reversal; a movement is reversed at most once, a reversal of a filling whose containers are no longer there is refused, and a note is required.
+- `reversal` (`Storno`, `Reversal`): undoes one delivery or filling, named by `reverses`, adding back a delivery's count or taking back a filling's, and returning a filling's amount to its vessel with a vessel reversal; a movement is reversed at most once, a reversal of a filling whose containers are no longer there is refused, and a note is required.
 
 `date` is the day the movement took place, today by default and never after today; `booked_at` is the time it was booked. The quantity changes by one atomic conditional update in the transaction that stores the movement, so two bookings prepared from the same quantity can never take more than it holds, on PostgreSQL and SQLite alike, and `quantity_after` is the quantity after that update. A refused movement changes nothing. Movements are never edited or deleted, in the views or the admin, except that deleting an item in the admin deletes its opening movement with it.
 
@@ -158,50 +158,29 @@ Every item therefore has a level. Their order, from the most urgent, is out, cri
 - **WHEN** on 2026-11-04 one item has the entered value 5 for the fourth quarter of 2024 and none since, and another has 5 for the first quarter of 2025 and none since
 - **THEN** the first is dormant and the second is not
 
-### Requirement: Bulk lots
-The `inventory` package SHALL keep bulk lots, each with a change history: `substance`, a substance of the registry; `source` (`Herkunft`, `Source`), `made` (`hergestellt`, `made`) or `bought` (`gekauft`, `bought`); `supplier` (`Lieferant`, `Supplier`), optional, at most 100 characters; `unit`, one of `mg`, `g`, `umol` and `mmol`, in which the lot is entered and shown; `amount`, at least zero, kept in the lot's base unit, `mg` for `mg` and `g` and `µmol` for `µmol` and `mmol`, with six decimal places; `batch`, `location`, at most 100 characters, and `made_on`, each optional; `task_step`, for a made lot only, the task step that made it (task-tracker "Task record"), whose entry has the lot's substance among its products, or, for a step without an entry, whose task makes the lot's substance; and `note`. The substance, source, unit and `task_step` are fixed once the lot is created. A lot may be of any substance, intermediates and house-made reagents among them, and one substance may have made and bought lots side by side; a lot belongs to every item of its substance's article, when the substance has one. Its amount shows in its unit to three decimal places, rounded half up.
-
-Its amount changes only by its movements, each holding `kind`, `amount`, `amount_after`, `date`, `booked_at`, `user`, `note`, and `task_step` and `reverses` where they apply, by one atomic conditional update in the transaction that stores the movement, as for items: `opening`, the amount entered on creation; `filling`, the amount taken, more than zero and at most the lot's amount; `withdrawal` (`Entnahme`, `Withdrawal`), the amount taken into a task step, named by `task_step`, more than zero and at most the lot's amount; `correction`, the amount weighed, with a required note; `reversal`, the amount a reversed filling or withdrawal returns, the withdrawal named by `reverses`, each withdrawal reversed at most once. A lot at zero is used up. Lot movements are never edited or deleted, except that deleting a lot in the admin deletes its opening movement with it.
-
-#### Scenario: Correction of a lot
-- **WHEN** a signed-in user corrects a lot of `50` mg to `47,5` mg with the note `nachgewogen`
-- **THEN** the lot holds `47,5` mg and its newest movement is that correction
-
-#### Scenario: Made and bought lots
-- **WHEN** a signed-in user creates a lot of `cinnamic-acid` made in the lab and another bought from the supplier `Sigma`
-- **THEN** both lots exist with their sources, the second with its supplier, and the items of the article `CH-0012` count both among their bulk
-
-#### Scenario: Lot of a substance without an article
-- **WHEN** a signed-in user creates a lot of the substance `acetophenone`, which has no article
-- **THEN** the lot exists and belongs to no item
-
-#### Scenario: A lot made by a step
-- **WHEN** a signed-in user records, from the first step of a task following `SEQ-0002`, a lot of `4-acetylbiphenyl` of `2` g
-- **THEN** the lot exists, made in the lab, with that step as its `task_step`, and recording one of `cinnamic-acid` from that step is refused with an error at the substance
-
-#### Scenario: Withdrawal and its reversal
-- **WHEN** a signed-in user withdraws `500` mg of that lot into the second step, and then reverses the withdrawal
-- **THEN** the lot holds `1,5` g after the withdrawal and `2` g after the reversal, the withdrawal names the step, the reversal names the withdrawal, and reversing it again is refused
-
 ### Requirement: Filling from bulk
-Filling an item SHALL optionally name an open lot of its substance and the amount taken from it, in the lot's unit. The proposed amount is the count times the item's size, converted into the lot's base unit and rounded half up to six places, shown in the lot's unit. The filling form has, besides its button to book, a button `Menge vorschlagen` (`Propose amount`), which books nothing and shows the form again with the values entered and the amount set to the proposal for the count and lot entered. When a lot is named and the amount is left empty, the proposed amount is booked. Units of the same kind convert by their factors: 1 g is 1000 mg, and 1 mmol is 1000 µmol. Mass and amount of substance convert through the molar mass of the item's substance in g/mol. Without that molar mass across kinds, nothing is proposed, the amount is required, and `Menge vorschlagen` shows an error at the amount. The item's filling and the lot's filling are stored in one transaction. An amount above the lot's, or one that rounds to zero, refuses both.
+Filling an item SHALL name an open vessel of its substance and the amount taken from it, in the vessel's unit; a filling without a vessel is refused. The proposed amount is the count times the item's size, converted into the vessel's base unit and rounded half up to six places, shown in the vessel's unit. The filling form has, besides its button to book, a button `Menge vorschlagen` (`Propose amount`), which books nothing and shows the form again with the values entered and the amount set to the proposal for the count and vessel entered. When the amount is left empty, the proposed amount is booked. Units of the same kind convert by their factors: 1 g is 1000 mg, and 1 mmol is 1000 µmol. Mass and amount of substance convert through the molar mass of the item's substance in g/mol. Without that molar mass across kinds, nothing is proposed, the amount is required, and `Menge vorschlagen` shows an error at the amount. The item's filling and the vessel's filling are stored in one transaction. An amount above the vessel's, or one that rounds to zero, refuses both.
 
-Wherever an item shows its bulk, it shows the amount of its open lots by unit and the number of its containers they would still fill. That number is, for each open lot that converts into the item's unit, its amount converted and divided by the size and rounded down, summed over the lots. A lot that does not convert is left out of that number and counted as not convertible.
+An item's bulk is the amount in the open vessels of its substance, flasks among them. Wherever an item shows its bulk, it shows that amount by unit and the number of its containers the vessels would still fill. That number is, for each open vessel that converts into the item's unit, its amount converted and divided by the size and rounded down, summed over the vessels. A vessel that does not convert is left out of that number and counted as not convertible.
 
 #### Scenario: Filling with conversion
-- **WHEN** an item `CH-0012` of 10 µmol, whose substance has the molar mass 148.16, has a lot of `50` mg, and a signed-in user fills 5 containers from it
-- **THEN** `Menge vorschlagen` shows the form with the amount `7,408` and books nothing; booking it gives the item 5 more containers, the lot holds `42,592` mg, and the item's movement names the lot's movement
+- **WHEN** an item `CH-0012` of 10 µmol, whose substance has the molar mass 148.16, has a vessel of `50` mg, and a signed-in user fills 5 containers from it
+- **THEN** `Menge vorschlagen` shows the form with the amount `7,408` and books nothing; booking it gives the item 5 more containers, the vessel holds `42,592` mg, and the item's movement names the vessel's movement
 
-#### Scenario: Small filling from a lot in grams
-- **WHEN** an item `CH-0012` of 10 µmol, whose substance has the molar mass 148.16, has a lot of `1` g, and a signed-in user fills 1 container from it, leaving the amount empty
-- **THEN** the lot holds 998,5184 mg, shown as `0,999` g
+#### Scenario: Small filling from a vessel in grams
+- **WHEN** an item `CH-0012` of 10 µmol, whose substance has the molar mass 148.16, has a vessel of `1` g, and a signed-in user fills 1 container from it, leaving the amount empty
+- **THEN** the vessel holds 998,5184 mg, shown as `0,999` g
+
+#### Scenario: No filling without a vessel
+- **WHEN** a signed-in user posts the filling form of an item with the count 3 and no vessel
+- **THEN** the form shows an error at the vessel and the item keeps its quantity
 
 #### Scenario: Containers from bulk
-- **WHEN** an item `CH-0012` of 10 µmol, whose substance has the molar mass 148.16, has one open lot of `50` mg
+- **WHEN** an item `CH-0012` of 10 µmol, whose substance has the molar mass 148.16, has one open vessel of `50` mg
 - **THEN** it shows `50 mg` and 33 containers
 
-#### Scenario: Lots are not pooled
-- **WHEN** an item of 10 mg has two open lots of `6` mg
+#### Scenario: Vessels are not pooled
+- **WHEN** an item of 10 mg has two open vessels of `6` mg
 - **THEN** it shows 0 containers from bulk
 
 ### Requirement: Item list
@@ -227,7 +206,7 @@ A user switches between the views; the browser remembers the view last chosen in
 
 One item listed is selected: the one `selected=<id>` names among those listed; without it, or naming none of them, the first item listed, and none when the list is empty. The selected row is marked in both views. In either view, a click without a modifier key in a row, but not on its links or its check box, selects its item, and so do the arrow keys up and down; a link in a row leads where it links. Selecting an item loads its details in place; once they have arrived its row is marked and the address names it in `selected`, so that a reload selects the same item. The marked row and the address name the item whose details the list holds, also while another item's details are loading and when loading them fails. Filtering the list and changing its order keep the selected item while the list still holds it.
 
-The details view shows, beside the base columns, the details of the selected item: its article number, name and container; its quantity with its level, and its coverage; its compartment and box, each `nicht hinterlegt` (`not recorded`) when it is not set; each open lot of its substance with its location, or `nicht hinterlegt`, its batch and its amount, linking to the lot's page; its consumption: the current year's so far, the means per year and per quarter, `–` for a mean there is not, and the consumption of each quarter of the current year and of the two years before it, with each year's sum, the quarters to come left empty, and the years whose quarters hold an entered value above zero; its note; and a link to its page, and for a signed-in user the item page's links but `Stornieren` (Item page).
+The details view shows, beside the base columns, the details of the selected item: its article number, name and container; its quantity with its level, and its coverage; its compartment and box, each `nicht hinterlegt` (`not recorded`) when it is not set; each open vessel of its substance with its location, or `Kolben` for a flask without one, or `nicht hinterlegt`, its batch and its amount, linking to the vessel's page; its consumption: the current year's so far, the means per year and per quarter, `–` for a mean there is not, and the consumption of each quarter of the current year and of the two years before it, with each year's sum, the quarters to come left empty, and the years whose quarters hold an entered value above zero; its note; and a link to its page, and for a signed-in user the item page's links but `Stornieren` (Item page).
 
 A signed-in user sees a link `Neuer Artikel` (`New item`), and, in the row of each item that has an article number, a check box `item` with the item's id, belonging to a form that requests `/lab/inventory/deliveries/new/` with the button `Lieferschein mit Auswahl` (`Delivery note from selection`). On paper the list prints every row of its table, without the details.
 
@@ -284,8 +263,8 @@ A signed-in user sees a link `Neuer Artikel` (`New item`), and, in the row of ea
 - **THEN** the second answer shows the details view and the others the table view, and no answer's links name a view
 
 #### Scenario: Details of an item
-- **WHEN** on 2026-11-04 an item `CH-0012` `(E)-Zimtsäure` of 100 mg holding 3 containers has no compartment or box, the entered values 4 for each quarter of 2024 and 6, 5 and 7 for the first three quarters of 2026, and a delivery of 2 dated 2026-10-15, an open lot `B-7` of `50` mg of its substance lies in `Kühlschrank 2`, and a test client requests the list with `selected` naming that item
-- **THEN** the details show `CH-0012`, `(E)-Zimtsäure`, `100 mg` and 3 containers with their level, `nicht hinterlegt` for the compartment and the box, `Kühlschrank 2` and `B-7`, linking to the lot's page, the consumption 4, 4, 4, 4 and 16 for 2024, 0, 0, 0, 0 and 0 for 2025, and 6, 5, 7, 2 and 20 for 2026, name 2024 and 2026 as holding entered values, and link to the item's page
+- **WHEN** on 2026-11-04 an item `CH-0012` `(E)-Zimtsäure` of 100 mg holding 3 containers has no compartment or box, the entered values 4 for each quarter of 2024 and 6, 5 and 7 for the first three quarters of 2026, and a delivery of 2 dated 2026-10-15, an open vessel of the batch `B-7` holding `50` mg of its substance lies in `Kühlschrank 2`, and a test client requests the list with `selected` naming that item
+- **THEN** the details show `CH-0012`, `(E)-Zimtsäure`, `100 mg` and 3 containers with their level, `nicht hinterlegt` for the compartment and the box, `Kühlschrank 2` and `B-7`, linking to the vessel's page, the consumption 4, 4, 4, 4 and 16 for 2024, 0, 0, 0, 0 and 0 for 2025, and 6, 5, 7, 2 and 20 for 2026, name 2024 and 2026 as holding entered values, and link to the item's page
 
 #### Scenario: The first item selected
 - **WHEN** the database holds `A-1` in the category `Säuren` and `A-2` in `Ester`, and a test client requests the list, then with `selected` naming no item, then with `category=Säuren` and `selected` naming `A-2`, and then with `category=Basen` and `selected` naming `A-2`
@@ -303,17 +282,6 @@ A signed-in user sees a link `Neuer Artikel` (`New item`), and, in the row of ea
 - **WHEN** a test client requests the list with `category=Ester` holding `A-2` and `A-3`, then, as htmx does, the details the row of `A-3` loads in place, and then the same address without htmx
 - **THEN** the second answer holds the details of `A-3` alone, as the list with `selected` naming `A-3` shows them; the third redirects to the list with `selected` naming `A-3`
 
-### Requirement: Bulk list
-`/lab/inventory/end-products/bulk/` SHALL list the open bulk lots, of every substance, with the columns `Name`, `Artikelnr.`, `Herkunft`, `Charge`, `Menge`, `Ort`, `Datum` and `Bemerkung` (`Name`, `Article no.`, `Source`, `Batch`, `Amount`, `Location`, `Date`, `Note`): the name being the lot's substance's, linking to its page; the article number that of the substance's article, empty when there is none; and the source `hergestellt` or `gekauft`, followed by the supplier when there is one. The lots are ordered by name regardless of case, then date, oldest first and lots without one last. `empty=1` adds the used-up lots. The item list, the bulk list and the delivery list carry section tabs `Artikel`, `Bulk` and `Lieferungen` (`Items`, `Bulk`, `Deliveries`) in the site's `nav.section-tabs` markup. A signed-in user sees a link `Neues Bulk` (`New bulk lot`).
-
-#### Scenario: Used-up lots
-- **WHEN** the database holds an open lot and a used-up lot, and a test client requests the bulk list with and without `empty=1`
-- **THEN** it lists both with it and only the open lot without
-
-#### Scenario: Lots of an intermediate
-- **WHEN** the database holds an open lot of `acetophenone`, which has no article, made in the lab, and one of `cinnamic-acid` bought from `Sigma`, and a test client requests the bulk list
-- **THEN** it lists the first with an empty article number and `hergestellt`, and the second with `CH-0012` and `gekauft · Sigma`
-
 ### Requirement: Delivery list
 `/lab/inventory/deliveries/` SHALL list the delivery notes, newest date first, then newest booking first, each with its number linking to its page, date, recipient, the mark `nachgetragen` (`entered later`) on a historical note and `storniert` (`reversed`) on a reversed one, and its lines with article number, name, size and count; a current note shows `storniert` when all its lines are reversed and `teilweise storniert` (`partly reversed`) when some are. GET parameters filter it and keep their values: `q`, text found regardless of case in the number or recipient, and `item`, an item's id. `/lab/inventory/deliveries/<id>/` shows one note with its lines, each with the article number, name, size, compartment, box and count, their movements and the change history, and an unknown id answers 404. A signed-in user sees a link `Neuer Lieferschein` (`New delivery note`).
 
@@ -326,7 +294,7 @@ A signed-in user sees a link `Neuer Artikel` (`New item`), and, in the row of ea
 - **THEN** the line shows `2` and `7` in the columns `Fach` and `Box`
 
 ### Requirement: Item page
-`/lab/inventory/items/<id>/` SHALL show the article number and name as heading, or the name alone for an item without an article number, followed by the mark `neu` for a new item; the substance, linking to its page; the category, size and note; the `status` when it is not `active`; the `stocked_on`, `–` when there is none; the compartment and the box, `–` for each that is not set; the quantity with its level; the means and coverage; the current year's consumption; a chart of the consumption of each quarter of the two complete years before the current one and of the current year, an inline `svg` with one bar per quarter titled with the quarter and its value and, when the item has a mean, a line at the mean per quarter, followed by a table of each quarter's entered value, deliveries and total, in which a signed-in user sees beside each quarter's entered value a link to the consumption form for that quarter (Inventory forms), `Ändern` (`Change`) where the quarter has an entered value and `Nachtragen` (`Enter`) where it has none, except on the page of an item without an article number, beside a quarter that has not begun, and beside a quarter that holds lines of a historical note that is not reversed (Consumption), and each such link opens its form in a dialog over the page (web-app "Form dialogs"); the movements in booking order, newest first, with date, booking time, kind, count, quantity after, the user's initials, the delivery note with its number and recipient, the note, and the mark `storniert` (`reversed`) on a reversed movement; the open lots of its substance with the number of containers they would fill; under `Prognose` (`Forecast`), the item's forecast, as `production-planning` states under Item forecast; and the change history, which includes that of the item's entered consumption: each entry, change and removal of a quarter's value, headed `Verbrauch Q<quarter> <year>` (`Consumption Q<quarter> <year>`), with the old and new count, `–` standing for none; the entries of item and entered consumption are shown together, newest first, and of entries made at the same moment those of the entered consumption first. A signed-in user sees the links `Abgabe buchen` (`Book delivery`), to the new delivery note with the item in its first line, `Abfüllen` (`Fill`), `Bestand korrigieren` (`Correct count`), `Verbrauch nachtragen` (`Enter consumption`), `Bearbeiten` (`Edit`), and `Stornieren` (`Reverse`) beside each delivery and filling not yet reversed; for an item without an article number, `Artikelnr. eintragen` (`Enter article number`), to its edit form, takes the place of `Abgabe buchen`, and `Verbrauch nachtragen` is left out. An unknown id answers 404.
+`/lab/inventory/items/<id>/` SHALL show the article number and name as heading, or the name alone for an item without an article number, followed by the mark `neu` for a new item; the substance, linking to its page; the category, size and note; the `status` when it is not `active`; the `stocked_on`, `–` when there is none; the compartment and the box, `–` for each that is not set; the quantity with its level; the means and coverage; the current year's consumption; a chart of the consumption of each quarter of the two complete years before the current one and of the current year, an inline `svg` with one bar per quarter titled with the quarter and its value and, when the item has a mean, a line at the mean per quarter, followed by a table of each quarter's entered value, deliveries and total, in which a signed-in user sees beside each quarter's entered value a link to the consumption form for that quarter (Inventory forms), `Ändern` (`Change`) where the quarter has an entered value and `Nachtragen` (`Enter`) where it has none, except on the page of an item without an article number, beside a quarter that has not begun, and beside a quarter that holds lines of a historical note that is not reversed (Consumption), and each such link opens its form in a dialog over the page (web-app "Form dialogs"); the movements in booking order, newest first, with date, booking time, kind, count, quantity after, the user's initials, the delivery note with its number and recipient, the note, and the mark `storniert` (`reversed`) on a reversed movement; its bulk (Filling from bulk): the open vessels of its substance, each with its batch and amount and linking to its page, and the number of containers they would fill; under `Prognose` (`Forecast`), the item's forecast, as `production-planning` states under Item forecast; and the change history, which includes that of the item's entered consumption: each entry, change and removal of a quarter's value, headed `Verbrauch Q<quarter> <year>` (`Consumption Q<quarter> <year>`), with the old and new count, `–` standing for none; the entries of item and entered consumption are shown together, newest first, and of entries made at the same moment those of the entered consumption first. A signed-in user sees the links `Abgabe buchen` (`Book delivery`), to the new delivery note with the item in its first line, `Abfüllen` (`Fill`), `Bestand korrigieren` (`Correct count`), `Verbrauch nachtragen` (`Enter consumption`), `Bearbeiten` (`Edit`), and `Stornieren` (`Reverse`) beside each delivery and filling not yet reversed; for an item without an article number, `Artikelnr. eintragen` (`Enter article number`), to its edit form, takes the place of `Abgabe buchen`, and `Verbrauch nachtragen` is left out. An unknown id answers 404.
 
 #### Scenario: Chart and ledger
 - **WHEN** on 2026-11-04 a test client requests the page of an item with entered values for three quarters of 2025 and two deliveries in 2026
@@ -348,13 +316,6 @@ A signed-in user sees a link `Neuer Artikel` (`New item`), and, in the row of ea
 - **WHEN** user `KL` enters 400 for the third quarter of 2026 of an item, then changes the item's note, then enters 40 for the same quarter, then removes it, and a test client requests the item's page
 - **THEN** its history holds, newest first, an entry headed `Verbrauch Q3 2026` changing the count from 40 to `–`, one changing it from 400 to 40, the item's change of its note, and one headed `Verbrauch Q3 2026` changing the count from `–` to 400, each naming `KL`
 
-### Requirement: Bulk lot page
-`/lab/inventory/bulk/<id>/` SHALL show the lot's substance, linking to its page, and the article number of the substance's article when there is one; its source and supplier; its batch, amount, location, date and note, the mark `aufgebraucht` (`used up`) at zero, its movements in booking order, newest first, with date, booking time, kind, amount, amount after, the user's initials, note and, for a filling, the item filled, for a withdrawal, the task and step it went into, linking to the task, and for a reversal the movement it reverses, the step that made the lot, linking to its task, when it was made by one, each task that belongs to the lot through its batch, linking to it, and its change history. A signed-in user sees the links `Korrigieren` (`Correct`), `Bearbeiten` (`Edit`) and, on an open lot, `Entnahme` (`Withdraw`), and beside each withdrawal not yet reversed a button `Stornieren` (`Reverse`). An unknown id answers 404.
-
-#### Scenario: Lot page after a filling
-- **WHEN** a test client requests the page of a lot from which 5 containers of an item were filled
-- **THEN** its newest movement is that filling, linking to the item
-
 ### Requirement: Inventory forms
 For a signed-in user, the application SHALL offer:
 
@@ -362,16 +323,19 @@ For a signed-in user, the application SHALL offer:
 - `/lab/inventory/items/<id>/edit/`: the item's note, `status`, `stocked_on`, compartment and box, the last two each with a `datalist` of the values in use, and its article's category and, while the article has none, its article number, both saved on the article for every size of it, as the form says beside them;
 - `/lab/inventory/deliveries/new/`: a delivery note with ten rows for lines, each offering the items with an article number, each shown as its article number, container and name and, where they are set, `Fach <compartment>` and `Box <box>` (`Compartment <compartment>`, `Box <box>`), joined by ` · ` and the locations by ` / `, rows left empty being ignored, and a check box `nachgetragen – Bestand bleibt unverändert` (`entered later – stock unchanged`) for a historical note; `?item=<id>`, given once or several times, puts those items in the first rows in the order given, up to ten, leaving out ids of items it does not offer and ids given twice;
 - `/lab/inventory/deliveries/<id>/reverse/`: marking a historical note reversed, with its note;
-- `/lab/inventory/items/<id>/fill/` and `/correct/`: a movement;
+- `/lab/inventory/items/<id>/fill/`: a filling, its vessel chosen among the open vessels of the item's substance, each offered as the vessel, its kind, its location where it has one, and its amount, joined by ` · `; and `/lab/inventory/items/<id>/correct/`: a correction;
 - `/lab/inventory/items/<id>/movements/<movement id>/reverse/`: the reversal of a delivery or filling, with its note;
 - `/lab/inventory/items/<id>/consumption/`: the entered value of a year and quarter, replacing an earlier one of that quarter, or removing it when left empty; `?year=<year>&quarter=<quarter>`, naming a quarter that has begun, fixes the form to that quarter, which it names in place of the fields for the year and the quarter, and fills in its entered value, zero included, naming it as the value a save replaces, or leaves the count empty where the quarter has none; other values of the two parameters are ignored, and the form opens as without them; beside its fields the form shows the item's consumption as the item page does, its chart and its table of quarters with their links, a link choosing its quarter in the form;
 - `/lab/inventory/deliveries/<id>/edit/`: a note's number, recipient and note;
-- `/lab/inventory/bulk/new/`: a new lot with its opening amount, its substance by key, its source, `hergestellt` when none is chosen, and its supplier, and the location with a `datalist` of the locations in use; `?substance=<key>`, `?batch=<batch>` and `?made_on=<date>` fill in those fields, and `?step=<id>` makes the lot one made by that task step, filling in the first product of the step's entry, or the task's substance for a step without one, its task's batch when the substance is the task's, and today, and refusing a substance the step does not make;
-- `/lab/inventory/bulk/<id>/withdraw/`: a withdrawal from an open lot into a step of a task that is planned or running, chosen among those tasks' steps or given as `?step=<id>`, with the amount in the lot's unit and the date; an amount above the lot's is refused;
-- `/lab/inventory/bulk/movements/<id>/reverse/`, a POST: reverses a withdrawal not yet reversed;
-- `/lab/inventory/bulk/<id>/edit/`, for the batch, location, date and note, refusing at the batch a change that would leave an ended task that has neither failed nor been cancelled without its product lot (task-tracker "Task record"), and `/correct/`.
+- `/lab/inventory/batches/new/`: a new batch with its substance by key; its source, `hergestellt` when none is chosen; for a made batch its number and its journal entry, given as `<code>/<number>` as a task step names one (task-tracker "Task page"); for a bought batch its supplier, the supplier's article number and the supplier's batch; its date, today by default; its note; and an amount, its unit and a location, with a `datalist` of the locations in use, that open the batch's first vessel, a stored one, when the amount is given. `?substance=<key>` fills in the substance. `?step=<id>` records a batch made by that task step: the source is `hergestellt`, the substance is filled in with the first product of the step's entry, or the task's substance for a step without one, and a substance the step does not make is refused; the journal entry is the step's, shown and not editable, when the step names one; and the amount is required and is the batch's yield, opening a flask when no location is given and a stored vessel at the location given. A step whose task is neither planned nor running, a number another made batch has regardless of case, a number on a bought batch, an amount without its unit, and a journal entry whose code is no notebook's are refused;
+- `/lab/inventory/batches/<id>/edit/`: the number, journal entry and yield of a made batch, the supplier, supplier's article number and supplier's batch of a bought one, and the date and note;
+- `/lab/inventory/batches/<id>/vessels/new/`: a new stored vessel of the batch with its opening amount, its unit, its location, with the `datalist` of the locations in use, and its note;
+- `/lab/inventory/vessels/<id>/withdraw/`: a withdrawal from an open vessel into a step of a task that is planned or running, chosen among those tasks' steps or given as `?step=<id>`, with the amount in the vessel's unit and the date; an amount above the vessel's is refused;
+- `/lab/inventory/vessels/<id>/transfer/`: a transfer from an open vessel, with the amount in the source vessel's unit, the date and a note, into a stored vessel of the same batch, chosen among them, or into a new vessel at the location given; an amount above the vessel's, and a target whose unit converts from the source's only through a molar mass the substance lacks, are refused, the latter with an error at the target;
+- `/lab/inventory/vessels/movements/<id>/reverse/`, a POST: reverses a withdrawal not yet reversed;
+- `/lab/inventory/vessels/<id>/edit/`, for the location and note, and `/lab/inventory/vessels/<id>/correct/`.
 
-A substance is named by its key, offered through a `datalist` of every substance's key labelled with its name; an unknown key is an error at the field. On the new-item form, the article number and the category make the substance's article when it has none, an empty number giving it none. When the substance has an article, a field left empty leaves the article's value as it is; a category entered replaces the article's; an article number entered gives the article that number when it has none, as the edit form does, and must otherwise be its number, or the form shows an error at it. On the edit form, the category field holds the article's category and saves what it holds, empty included, and the article number, offered only while the article has none, gives it one when entered and leaves it without one when empty. Invalid input shows the form again with the errors beside their fields and saves nothing. A saved form leads, with a message naming the record, to the page of the delivery note for the forms of notes, and to the page of the item or lot for every other; a form saved in a dialog leaves the page it was opened from in place instead. On an item's page and in the item list's details, the links to the item's edit form, its filling, its count correction and its consumption, and on its page each link `Stornieren` beside a movement, open those forms in a dialog over the page (web-app "Form dialogs"); `Abgabe buchen` leads to the new delivery note's form page.
+A substance is named by its key, offered through a `datalist` of every substance's key labelled with its name; an unknown key is an error at the field. On the new-item form, the article number and the category make the substance's article when it has none, an empty number giving it none. When the substance has an article, a field left empty leaves the article's value as it is; a category entered replaces the article's; an article number entered gives the article that number when it has none, as the edit form does, and must otherwise be its number, or the form shows an error at it. On the edit form, the category field holds the article's category and saves what it holds, empty included, and the article number, offered only while the article has none, gives it one when entered and leaves it without one when empty. Invalid input shows the form again with the errors beside their fields and saves nothing. A saved form leads, with a message naming the record, to the page of the delivery note for the forms of notes, to the page of the batch for the new-batch form, and to the page of the item, batch or vessel for every other; a form saved in a dialog leaves the page it was opened from in place instead. On an item's page and in the item list's details, the links to the item's edit form, its filling, its count correction and its consumption, and on its page each link `Stornieren` beside a movement, open those forms in a dialog over the page (web-app "Form dialogs"); `Abgabe buchen` leads to the new delivery note's form page.
 
 #### Scenario: New item
 - **WHEN** user `KL` posts an item of the substance `cinnamic-acid`, whose article is `CH-0012`, of 10 µmol with an opening count of 12
@@ -397,9 +361,13 @@ A substance is named by its key, offered through a `datalist` of every substance
 - **WHEN** a signed-in user posts the edit form of an item with an article number with a different article number, size and unit
 - **THEN** those fields are unchanged
 
-#### Scenario: New lot from the query
-- **WHEN** a signed-in user requests `/lab/inventory/bulk/new/?substance=cinnamic-acid&batch=B-2026-031&made_on=2026-10-30`
-- **THEN** the form holds the substance `cinnamic-acid`, the source `hergestellt`, the batch `B-2026-031` and the date 2026-10-30
+#### Scenario: A batch from a step
+- **WHEN** on 2026-11-04 a signed-in user requests `/lab/inventory/batches/new/?step=<id>` for the last step of a running task of `cinnamic-acid`, a step that names the journal entry `AE-1/9`
+- **THEN** the form holds the substance `cinnamic-acid`, the source `hergestellt`, the date 2026-11-04 and the journal entry `AE-1/9`, not editable, and posting it without an amount shows an error at the amount
+
+#### Scenario: Vessels offered for a filling
+- **WHEN** an item of `CH-0012` has an open flask of the batch `KL0412` holding `2` g and a used-up vessel of another batch, and a signed-in user requests the item's filling form
+- **THEN** it offers the flask alone, as `KL0412 #<id> · Kolben · 2 g`
 
 #### Scenario: Substances offered
 - **WHEN** the demo data set is written and a signed-in user requests the new-item form
@@ -434,7 +402,7 @@ A substance is named by its key, offered through a `datalist` of every substance
 - **THEN** the form names the quarter `Q3 2026` and has no field for the year or the quarter, holds the count 400, names 400 as the value a save replaces, and shows the item's chart and its table of quarters, the third quarter's row linking `Ändern` to the form for that quarter; the same request with `?year=2026&quarter=9` opens the form with fields for the year and the quarter and no value named
 
 ### Requirement: Inventory in the admin
-The admin SHALL list articles, items, bulk lots, delivery notes and the movements for staff, with search by article number and by the substance's key and names, and the change history of each record. It shows movements, delivery notes' dates, kinds and lines, and the fixed fields read-only, an article's number among them once it has one; an article number entered there is given as the edit form gives it, only while the article has none. It deletes no movement or delivery note, deletes an article only while it has no items, and deletes an item or lot only while its one movement is the opening and, for an item, no delivery note has a line of it.
+The admin SHALL list articles, items, batches, vessels, delivery notes and the movements for staff, with search by article number and by the substance's key and names, and the change history of each record. It shows movements, delivery notes' dates, kinds and lines, and the fixed fields read-only, an article's number among them once it has one; an article number entered there is given as the edit form gives it, only while the article has none. It deletes no movement or delivery note, deletes an article only while it has no items, deletes an item or vessel only while its one movement is the opening and, for an item, no delivery note has a line of it, and deletes a batch only while it has no vessel and no task step made it.
 
 #### Scenario: Deleting a booked item
 - **WHEN** a staff user deletes an item that has a delivery
@@ -473,4 +441,125 @@ The `inventory` package SHALL keep articles, each with a change history: `substa
 #### Scenario: One number for every size
 - **WHEN** an article without a number has items of 10 µmol and of 50 µmol and a signed-in user gives the first the article number `CH-0021`
 - **THEN** both items show `CH-0021`
+
+### Requirement: Batches
+The `inventory` package SHALL keep batches (`Chargen`), each a quantity of one substance with one origin, with a change history:
+
+- `substance`, a substance of the registry;
+- `source` (`Herkunft`, `Source`), `made` (`hergestellt`, `made`) or `bought` (`gekauft`, `bought`);
+- for a made batch: `number` (`Charge`, `Batch`), required, at most 30 characters, unique among made batches regardless of case and of their substance; `journal_entry` (`Laborjournal`, `Lab notebook`), the journal entry it is written down in (lab-journal "Notebooks and entries"), or none; `task_step`, the task step that made it, or none: a step whose entry has the batch's substance among its products, or, for a step without an entry, whose task makes the batch's substance; and `yield` (`Ausbeute`, `Yield`), an amount above zero in one of the units `mg`, `g`, `umol` and `mmol`, or none;
+- for a bought batch: `supplier` (`Lieferant`, `Supplier`), at most 100 characters, and `supplier_article_number` (`Artikelnr. des Lieferanten`, `Supplier's article no.`) and `supplier_batch` (`Charge des Lieferanten`, `Supplier's batch`), at most 50 characters each, each optional; a bought batch has no number, journal entry, step or yield;
+- `date` (`Datum`, `Date`), the day it was made or received, or none, never after today;
+- `note`.
+
+The substance, source and `task_step` are fixed once the batch exists. A batch may be of any substance, intermediates and reagents among them, and one substance may have made and bought batches side by side; a journal entry may be named by no batch, one or several. A batch shows as its number, a bought batch as its supplier's batch number, and either, when it has none, as `#<id>`. A batch is recorded from a task step only while the step's task is planned or running, and then names the step's journal entry when the step names one. Its yield shows in its unit to three decimal places, rounded half up. A batch that has vessels, or that a task step made, cannot be deleted, except by `demo_data --replace` (lab-demo "Demo data command").
+
+#### Scenario: Made and bought batches
+- **WHEN** a signed-in user records a batch of `cinnamic-acid` made in the lab with the number `KL0412FA`, and another bought from `Sigma` with the supplier's article number `C80857` and the supplier's batch `MKCK1234`
+- **THEN** both batches exist with their sources, the first showing as `KL0412FA` and the second as `MKCK1234` with its supplier and article number
+
+#### Scenario: Numbers unique regardless of case
+- **WHEN** a made batch `KL0412FA` of `cinnamic-acid` exists and a signed-in user records a made batch of `acetophenone` with the number `kl0412fa`
+- **THEN** the form shows an error at the number and no batch is created
+
+#### Scenario: Fractions of one entry
+- **WHEN** the first step of a running task following `SEQ-0002` names the journal entry `CE-3/2`, and a signed-in user records from that step two batches of `4-acetylbiphenyl`, `CE3002FA` and `CE3002FB`, and then one of `cinnamic-acid`
+- **THEN** the first two exist, each made by that step and naming `CE-3/2`, and the third is refused with an error at the substance
+
+#### Scenario: Not from an ended task
+- **WHEN** a signed-in user posts the new-batch form for a step of an ended task
+- **THEN** the form shows an error and no batch is created
+
+### Requirement: Vessels
+The `inventory` package SHALL keep vessels (`Gefäße`), each a weighed amount of one batch in one place, with a change history: `batch`; `unit`, one of `mg`, `g`, `umol` and `mmol`, in which the vessel is entered and shown; `amount`, at least zero, kept in the vessel's base unit, `mg` for `mg` and `g` and `µmol` for `µmol` and `mmol`, with six decimal places; `flask` (`Kolben`, `Flask`), whether it is its batch's reaction flask; `location` (`Ort`, `Location`), optional, at most 100 characters; and `note`. The batch, unit and `flask` are fixed once the vessel exists. A vessel's substance is its batch's, and a vessel belongs to every item of its substance's article, when the substance has one. Its amount shows in its unit to three decimal places, rounded half up. A vessel at zero is used up, and one above zero is open. A vessel shows as its batch followed by `#<id>`.
+
+A flask is made only by recording a batch from a task step with its yield and without a location (Inventory forms), and a batch has at most one; every other vessel is stored. A vessel's kind (`Art`, `Kind`) is `Kolben` (`Flask`) for a flask; for a stored vessel it is `Endprodukt` (`End product`) when its substance has an article, else `Zwischenprodukt` (`Intermediate`) when its batch is made and `Reagenz` (`Reagent`) when it is bought.
+
+Its amount changes only by its movements, each holding `kind`, `amount`, `amount_after`, `date`, `booked_at`, `user`, `note`, and `task_step`, `transfer` and `reverses` where they apply, by one atomic conditional update in the transaction that stores the movement, as for items:
+
+- `opening` (`Anfangsmenge`, `Opening amount`), the amount the vessel opens with: its batch's yield, or an amount entered;
+- `filling` (`Abfüllung`, `Filling`), the amount taken into an item's containers, more than zero and at most the vessel's amount;
+- `withdrawal` (`Entnahme`, `Withdrawal`), the amount taken into a task step, named by `task_step`, more than zero and at most the vessel's amount;
+- `transfer_out` (`Umfüllung (Abgang)`, `Transfer out`) and `transfer_in` (`Umfüllung (Zugang)`, `Transfer in`), an amount passed from one vessel to another of the same batch, more than zero and at most the source's amount, booked together, the `transfer_in` naming the `transfer_out` as `transfer`; the target is a stored vessel, or a new stored vessel in the source's unit, whose first movement the `transfer_in` is; the `transfer_out` holds the amount in the source's base unit and the `transfer_in` that amount converted into the target's, rounded half up to six places, a transfer whose converted amount rounds to zero being refused whole, units converting as for a filling (Filling from bulk), and a transfer between a mass and an amount of substance is refused when the substance has no molar mass;
+- `correction` (`Korrektur`, `Correction`), the amount weighed, with a required note;
+- `remainder` (`Restausbuchung`, `Remainder written off`), a flask's whole amount, booked when the task of its batch's step ends, fails or is cancelled (task-tracker "Task record");
+- `reversal` (`Storno`, `Reversal`), the amount a reversed filling or withdrawal returns, the withdrawal named by `reverses`, each withdrawal reversed at most once.
+
+A flask whose task is ended, failed or cancelled stays at zero: a correction of it, and the reversal of a filling or withdrawal from it, are refused. Recording a batch from a step and every booking on a flask check the task's state in the transaction that books, so that one prepared while the task was open and stored after it closed is refused and changes nothing; on PostgreSQL this holds for bookings and closures that overlap. Vessel movements are never edited or deleted, except that deleting a vessel in the admin deletes its opening movement with it, and `demo_data --replace` deletes every vessel with its movements.
+
+#### Scenario: Yield into the flask
+- **WHEN** a signed-in user records from the last step of a running task of `cinnamic-acid` a batch `KL0412` with the amount `2` g and no location
+- **THEN** the batch's yield is `2` g, and its one vessel is a flask holding `2` g whose only movement is the opening
+
+#### Scenario: Yield stored at once
+- **WHEN** a signed-in user records the same batch with the location `Kühlschrank 2`
+- **THEN** its one vessel is stored in `Kühlschrank 2`, of the kind `Endprodukt`, holding `2` g, and the batch has no flask
+
+#### Scenario: Transfer into a new vessel
+- **WHEN** the flask of `KL0412` holds `2` g and a signed-in user transfers `1,5` g from it into a new vessel in `Kühlschrank 2`
+- **THEN** the flask holds `0,5` g and the new vessel `1,5` g, whose only movement is a `transfer_in` naming the flask's `transfer_out`
+
+#### Scenario: Transfer across units
+- **WHEN** a batch of `cinnamic-acid`, whose molar mass is 148.16, has a flask in `mg` holding `1000` mg and a stored vessel in `µmol` holding `100` µmol, and a signed-in user transfers `148,16`, in the flask's unit, from the flask into that vessel
+- **THEN** the flask holds `851,84` mg and the vessel `1100` µmol
+
+#### Scenario: Transfer without a molar mass
+- **WHEN** a batch of a substance without a molar mass has a flask in `mg` and a stored vessel in `µmol`, and a signed-in user posts a transfer from the flask into that vessel
+- **THEN** the form shows an error at the target and neither vessel changes
+
+#### Scenario: A closed task's flask stays empty
+- **WHEN** 5 containers of an item were filled from the flask of a batch whose task has since ended, and a signed-in user reverses that filling, and then corrects the flask to `1` g with a note
+- **THEN** both are refused with an error, the item keeps its containers and the flask holds nothing
+
+#### Scenario: Correction of a vessel
+- **WHEN** a signed-in user corrects a vessel of `50` mg to `47,5` mg with the note `nachgewogen`
+- **THEN** the vessel holds `47,5` mg and its newest movement is that correction
+
+#### Scenario: Withdrawal and its reversal
+- **WHEN** a signed-in user withdraws `500` mg of a vessel holding `2` g into a step of a running task, and then reverses the withdrawal
+- **THEN** the vessel holds `1,5` g after the withdrawal and `2` g after the reversal, the withdrawal names the step, the reversal names the withdrawal, and reversing it again is refused
+
+#### Scenario: Kinds of vessels
+- **WHEN** the database holds the flask of a made batch of `cinnamic-acid`, a stored vessel of the same batch, a stored vessel of a made batch of `acetophenone`, which has no article, and one of a bought batch of `acetophenone`
+- **THEN** their kinds are `Kolben`, `Endprodukt`, `Zwischenprodukt` and `Reagenz`
+
+### Requirement: Batch list
+`/lab/inventory/batches/` SHALL list the batches, of every substance, with the columns `Charge`, `Name`, `Artikelnr.`, `Herkunft`, `Laborjournal`, `Datum`, `Ausbeute` and `Bestand` (`Batch`, `Name`, `Article no.`, `Source`, `Lab notebook`, `Date`, `Yield`, `Stock`): the batch as it shows, linking to its page; its substance's name, linking to the substance's page; the article number of the substance's article, empty when there is none; the source, `hergestellt` followed for a batch made by a step by its task's number linking to the task's page, or `gekauft` followed by the supplier when there is one; the journal entry, linking to its notebook's page; the date; the yield; and the amount in its open vessels by unit, `–` when it has none. The batches are ordered by date, newest first and batches without one last, then newest first. The GET parameter `q` lists the batches in whose number, supplier's batch number or supplier, or in whose substance's key, name or German name, the text is found regardless of case; the form keeps its value. The item list, the batch list, the vessel list and the delivery list carry section tabs `Artikel`, `Chargen`, `Gefäße` and `Lieferungen` (`Items`, `Batches`, `Vessels`, `Deliveries`) in the site's `nav.section-tabs` markup. A signed-in user sees a link `Neue Charge` (`New batch`).
+
+#### Scenario: Batches of either source
+- **WHEN** the database holds a made batch `KL0412` of `cinnamic-acid` dated 2026-10-30, made by a step of task `T-007` and naming the journal entry `AE-1/9`, with an open vessel of `2` g, and a batch of `acetophenone` bought from `Sigma` dated 2026-11-02 without vessels, and a test client requests the batch list
+- **THEN** it lists the bought batch first, with an empty article number, `gekauft · Sigma` and `–`, and then `KL0412` with `CH-0012`, `hergestellt · T-007` linking to the task's page, `AE-1/9` linking to `/lab/journal/AE-1/` and `2 g`
+
+#### Scenario: Searching batches
+- **WHEN** the same database is listed with `q=kl04` and with `q=sigma`
+- **THEN** the first lists `KL0412` alone and the second the bought batch alone
+
+### Requirement: Batch page
+`/lab/inventory/batches/<id>/` SHALL show the batch as heading; its substance, linking to its page, and the article number of the substance's article when there is one; its source; for a made batch, its journal entry linking to its notebook's page, the step that made it as its task's number and `Stufe <n>` (`Step <n>`) linking to the task's page, and its yield; for a bought batch, its supplier, the supplier's article number and the supplier's batch; its date and note; each field `–` when it has no value; its vessels, the open ones first, then by id, each as `#<id>` linking to its page, with its kind, location, amount and, at zero, the mark `aufgebraucht` (`used up`); the fillings from its vessels, newest first, each with its date, the item filled linking to its page, the count and the vessel, and the mark `storniert` (`reversed`) on a reversed one; and its change history. A signed-in user sees the links `Bearbeiten` (`Edit`) and `Neues Gefäß` (`New vessel`). An unknown id answers 404.
+
+#### Scenario: Where a batch went
+- **WHEN** 5 containers of an item of `CH-0012` were filled from the flask of `KL0412`, its rest was transferred into a new vessel, and a test client requests the batch's page
+- **THEN** it lists the stored vessel and then the flask, marked `aufgebraucht`, and the filling of 5 linking to the item's page
+
+### Requirement: Vessel list
+`/lab/inventory/vessels/` SHALL list the open vessels, of every substance, with the columns `Gefäß`, `Name`, `Artikelnr.`, `Art`, `Charge`, `Herkunft`, `Menge`, `Ort`, `Datum` and `Bemerkung` (`Vessel`, `Name`, `Article no.`, `Kind`, `Batch`, `Source`, `Amount`, `Location`, `Date`, `Note`): `#<id>`, linking to the vessel's page; its substance's name, linking to the substance's page; the article number of the substance's article, empty when there is none; its kind; its batch, linking to the batch's page; the batch's source as the batch list shows it; its amount; its location; its batch's date; and its note. The vessels are ordered by name regardless of case, then by their batch's date, oldest first and vessels without one last, then by id. `empty=1` adds the used-up vessels. `kind=<kind>`, one of `flask`, `end-product`, `intermediate` and `reagent`, lists the vessels of that kind; another value lists every kind. The page offers each kind and shows the one in force. A signed-in user sees a link `Neue Charge` (`New batch`).
+
+#### Scenario: Used-up vessels
+- **WHEN** the database holds an open vessel and a used-up vessel, and a test client requests the vessel list with and without `empty=1`
+- **THEN** it lists both with it and only the open vessel without
+
+#### Scenario: Vessels by kind
+- **WHEN** the database holds an open flask of a made batch of `cinnamic-acid`, an open vessel of a made batch of `acetophenone`, which has no article, and one of a batch of `acetophenone` bought from `Sigma`, and a test client requests the vessel list, and then with `kind=reagent`
+- **THEN** the first lists the three with the kinds `Kolben`, `Zwischenprodukt` and `Reagenz`, the first with `CH-0012` and the others with an empty article number, the last with `gekauft · Sigma`; the second lists the bought vessel alone
+
+### Requirement: Vessel page
+`/lab/inventory/vessels/<id>/` SHALL show the vessel as heading; its batch, linking to its page; its substance, linking to its page, and the article number of the substance's article when there is one; its kind, amount, location and note, and the mark `aufgebraucht` (`used up`) at zero; its movements in booking order, newest first, with date, booking time, kind, amount, amount after, the user's initials, note and, for a filling, the item filled, for a withdrawal, the task and step it went into, linking to the task, for a transfer, the other vessel, linking to its page, and for a reversal the movement it reverses; and its change history. A signed-in user sees the links `Korrigieren` (`Correct`), `Bearbeiten` (`Edit`) and, on an open vessel, `Entnahme` (`Withdraw`) and `Umfüllen` (`Transfer`), and beside each withdrawal not yet reversed a button `Stornieren` (`Reverse`). An unknown id answers 404.
+
+#### Scenario: Vessel page after a filling
+- **WHEN** a test client requests the page of a vessel from which 5 containers of an item were filled
+- **THEN** its newest movement is that filling, linking to the item
+
+#### Scenario: Vessel page after a transfer
+- **WHEN** a test client requests the page of a flask from which an amount was transferred into a new vessel
+- **THEN** its newest movement is the `transfer_out`, linking to the new vessel's page
 

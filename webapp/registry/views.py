@@ -15,7 +15,8 @@ from django.utils.translation import gettext_lazy
 
 from collection import routes
 from collection.models import EntrySubstance, Procedure, Role, Sequence
-from inventory.models import Item, Lot
+from inventory.figures import newest_first, open_amounts
+from inventory.models import Batch, Item
 from registry import snapshot
 from registry.forms import SubstanceForm
 from registry.models import Substance, SubstanceClass
@@ -159,7 +160,7 @@ def route(substance: Substance) -> list[dict[str, Any]]:
 def substance_page(request: HttpRequest, key: str) -> HttpResponse:
     """Show the substance KEY with its fields, the procedures that make
     it and that start from it, the sequences whose target it is, its
-    route tree, its article's items, its open lots and its tasks;
+    route tree, its article's items, its batches and its tasks;
     answer 404 for an unknown key."""
     substance = get_object_or_404(
         Substance.objects.select_related("group").defer("structure_svg"),
@@ -167,6 +168,8 @@ def substance_page(request: HttpRequest, key: str) -> HttpResponse:
     items = sorted(Item.objects.filter(article_id=substance.pk)
                    .select_related("article__substance"),
                    key=Item.sort_key)
+    batches = newest_first(Batch.objects.filter(substance=substance))
+    stock = open_amounts(batches)
     return render(request, "registry/substance.html", {
         "substance": substance,
         "classes": [term for term, _depth in tree_order(
@@ -177,8 +180,7 @@ def substance_page(request: HttpRequest, key: str) -> HttpResponse:
             target=substance, withdrawn=False).order_by("key"),
         "route": route(substance),
         "items": items,
-        "lots": Lot.objects.filter(substance=substance, amount__gt=0)
-        .order_by("made_on", "id"),
+        "batches": [(batch, stock[batch.pk]) for batch in batches],
         "tasks": sorted(Task.objects.filter(substance=substance),
                         key=lambda task: task.serial),
     })

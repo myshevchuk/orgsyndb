@@ -59,7 +59,7 @@ def above_zero(value: Decimal) -> None:
 
 class Substance(LockedWrites, models.Model):
     """A substance of the registry: a compound, or a mixture or solution
-    taken as one, which articles, lots and tasks refer to. Its saves and
+    taken as one, which articles, batches and tasks refer to. Its saves and
     deletions take the lock (``orgsyndb_web.lock``)."""
 
     objects = LockedQuerySet.as_manager()

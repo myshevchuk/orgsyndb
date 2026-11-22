@@ -14,7 +14,7 @@ from . import Element, make_task, parse
 from .inventory_support import TODAY, InventoryCase
 
 PLAN = "/lab/planning/"
-BULK_LIST = "/lab/inventory/end-products/bulk/"
+VESSEL_LIST = "/lab/inventory/vessels/"
 NEW_TASK = "/lab/tasks/new/"
 HEADINGS = ("h1", "h2", "h3", "h4", "h5", "h6")
 COLUMNS_DE = ["Artikelnr.", "Name", "Gebinde", "Bedarf/Jahr",

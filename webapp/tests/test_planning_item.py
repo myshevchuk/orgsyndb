@@ -216,12 +216,12 @@ class YieldTests(PlanningCase):
     the target days at the article's certainty."""
 
     def test_the_usable_bulk_is_taken_off(self) -> None:
-        """41.3 containers lacking make 42 mg; a lot of 6 mg counts 5."""
+        """41.3 containers lacking make 42 mg; a vessel of 6 mg counts 5."""
         self.planned_item("NV-1", quantity=10)
         self.assertEqual(self.forecast("NV-1").yield_amount, D(42))
-        self.lot("NV-1", "mg", "6")
+        self.vessel("NV-1", "mg", "6")
         self.assertEqual(self.forecast("NV-1").yield_amount, D(37))
-        self.lot("NV-1", "mg", "11")
+        self.vessel("NV-1", "mg", "11")
         self.assertEqual(self.forecast("NV-1").yield_amount, D(27))
 
     def test_nothing_lacking_gives_zero(self) -> None:
@@ -230,7 +230,7 @@ class YieldTests(PlanningCase):
 
     def test_bulk_beyond_the_need_gives_zero(self) -> None:
         self.planned_item("NV-1", quantity=10)
-        self.lot("NV-1", "mg", "500")
+        self.vessel("NV-1", "mg", "500")
         self.assertEqual(self.forecast("NV-1").yield_amount, D(0))
 
     def test_the_time_is_the_synthesis_time_the_buffer_and_the_target(
@@ -259,7 +259,7 @@ class YieldTests(PlanningCase):
         large = self.item("NV-2", "NV-2", "20", "mg", 0)
         for year, quarter in WINDOW:
             self.enter(large, year, quarter, 9)
-        self.lot("NV-2", "mg", "360")
+        self.vessel("NV-2", "mg", "360")
         found = self.forecast("NV-2")
         self.assertEqual(found.yield_amount, D(1280))
         self.assertEqual(found.lacking, {})
@@ -268,7 +268,7 @@ class YieldTests(PlanningCase):
         """A compound with a molar mass has a bulk of µmol; the yield
         shows also in whole mg."""
         self.planned_item("CH-0012", size="10", unit="umol", quantity=5)
-        self.lot("CH-0012", "mg", "20")
+        self.vessel("CH-0012", "mg", "20")
         found = self.forecast("CH-0012")
         self.assertEqual(found.bulk_unit, "umol")
         self.assertEqual(found.yield_amount, D(346))
@@ -379,7 +379,7 @@ class ForecastPageTests(PageCase):
         large = self.item("NV-2", "NV-2", "20", "mg", 0)
         for year, quarter in WINDOW:
             self.enter(large, year, quarter, 9)
-        self.lot("NV-2", "mg", "360")
+        self.vessel("NV-2", "mg", "360")
         for item in (small, large):
             with self.subTest(item=item.size):
                 text = self.prognosis(item).text()
@@ -402,7 +402,7 @@ class ForecastPageTests(PageCase):
     def test_micromoles_and_milligrams(self) -> None:
         item = self.planned_item("CH-0012", size="10", unit="umol",
                                  quantity=5)
-        self.lot("CH-0012", "mg", "20")
+        self.vessel("CH-0012", "mg", "20")
         text = self.prognosis(item).text()
         self.assertTrue(has_amount(text, "346", MICRO + "mol"), text)
         self.assertTrue(has_amount(text, "52", "mg"), text)

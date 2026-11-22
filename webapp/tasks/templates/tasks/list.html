@@ -32,7 +32,7 @@
 <tr><th>{% translate "No." %}</th><th>{% translate "Product" %}</th><th>{% translate "Priority" %}</th><th>{% translate "Assignee" %}</th><th>{% translate "Started" %}</th><th>{% translate "Ended" context "date" %}</th><th>{% translate "Progress" %}</th><th>{% translate "Batch" %}</th><th>{% translate "Report" %}</th><th>{% translate "QC list" %}</th><th>{% translate "State" %}</th></tr>
 </thead>
 <tbody>
-{% for task, shown in tasks %}<tr data-state="{{ task.state }}">
+{% for task, shown, batches in tasks %}<tr data-state="{{ task.state }}">
 <td><a href="/lab/tasks/{{ task.number }}/">{{ task.number }}</a></td>
 <td>{% substance task.substance %}</td>
 <td>{% include "tasks/priority.html" %}</td>
@@ -40,7 +40,7 @@
 <td>{{ task.started|default_if_none:"" }}</td>
 <td>{{ task.ended|default_if_none:"" }}</td>
 <td>{% include "tasks/progress.html" %}</td>
-<td>{{ task.batch }}</td>
+<td>{{ batches }}</td>
 <td>{{ task.report|yes_no }}</td>
 <td>{{ task.qc_list|yes_no }}</td>
 <td>{% include "tasks/state.html" %}</td>

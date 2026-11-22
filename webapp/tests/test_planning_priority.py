@@ -73,7 +73,7 @@ class ArticleSlackTests(PlanningCase):
         large = self.item("NV-2", "NV-2", "20", "mg", 0)
         for year, quarter in WINDOW:
             self.enter(large, year, quarter, 9)
-        self.lot("NV-2", "mg", "360")
+        self.vessel("NV-2", "mg", "360")
         found = self.forecast("NV-2")
         self.assertEqual(math.floor(found.slack), 13)
         self.assertEqual(found.priority, "high")

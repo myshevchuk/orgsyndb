@@ -7,9 +7,9 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
-from inventory.models import (BASE_UNIT, FACTOR, DeliveryLine,
-                              EnteredConsumption, Item, Level, Lot, Movement,
-                              Status, Unit, shown)
+from inventory.models import (BASE_UNIT, FACTOR, Batch, DeliveryLine,
+                              EnteredConsumption, Item, Level, Movement,
+                              Status, Unit, Vessel, shown)
 
 MASS = (Unit.MG, Unit.G)
 BASE_PLACES = Decimal("0.000001")
@@ -48,15 +48,16 @@ def molar_mass(item: Item) -> Decimal | None:
     return item.article.substance.mw
 
 
-def proposed_amount(item: Item, count: int, lot: Lot) -> Decimal | None:
-    """Return the amount COUNT containers of ITEM take from LOT, in the
-    lot's base unit, rounded half up to six places.
+def proposed_amount(item: Item, count: int, vessel: Vessel
+                    ) -> Decimal | None:
+    """Return the amount COUNT containers of ITEM take from VESSEL, in
+    the vessel's base unit, rounded half up to six places.
 
-    Return None when the item's unit and the lot's are of different
+    Return None when the item's unit and the vessel's are of different
     kinds and the item's substance has no molar mass.
     """
     taken = convert(Decimal(count) * item.size, item.unit,
-                    BASE_UNIT[lot.unit], molar_mass(item))
+                    BASE_UNIT[vessel.unit], molar_mass(item))
     if taken is None:
         return None
     return taken.quantize(BASE_PLACES, ROUND_HALF_UP)
@@ -225,50 +226,87 @@ def consumption(item: Item, today: date) -> Consumption:
 
 @dataclass(frozen=True)
 class Bulk:
-    """The open lots an item can be filled from.
+    """The open vessels an item can be filled from.
 
-    AMOUNTS pairs each unit the lots are kept in with their summed
+    AMOUNTS pairs each unit the vessels are kept in with their summed
     amount in it, rounded half up to three places. CONTAINERS is the
-    number of the item's containers the lots that convert would still
-    fill, counted lot by lot; UNCONVERTIBLE counts the lots that do not
-    convert into the item's unit. LOTS are the lots.
+    number of the item's containers the vessels that convert would
+    still fill, counted vessel by vessel; UNCONVERTIBLE counts the
+    vessels that do not convert into the item's unit. VESSELS are the
+    vessels.
     """
 
-    lots: list[Lot] = field(default_factory=list)
+    vessels: list[Vessel] = field(default_factory=list)
     amounts: list[tuple[Decimal, str]] = field(default_factory=list)
     containers: int = 0
     unconvertible: int = 0
 
 
-def containers_from(lot: Lot, item: Item, mass: Number | None
+def containers_from(vessel: Vessel, item: Item, mass: Number | None
                     ) -> int | None:
-    """Return the number of ITEM's containers LOT would still fill, with
-    MASS the molar mass of the item's substance; None when the lot does
-    not convert into the item's unit."""
-    converted = convert(lot.amount, BASE_UNIT[lot.unit], item.unit, mass)
+    """Return the number of ITEM's containers VESSEL would still fill,
+    with MASS the molar mass of the item's substance; None when the
+    vessel does not convert into the item's unit."""
+    converted = convert(vessel.amount, BASE_UNIT[vessel.unit], item.unit,
+                        mass)
     if converted is None:
         return None
     return int((converted / item.size).to_integral_value(ROUND_FLOOR))
 
 
-def bulk(item: Item, lots: Iterable[Lot]) -> Bulk:
-    """Return the bulk of ITEM among LOTS: the open lots of its
-    substance."""
-    mine = [lot for lot in lots
-            if lot.amount > 0 and lot.substance_id == item.article_id]
+def bulk(item: Item, vessels: Iterable[Vessel]) -> Bulk:
+    """Return the bulk of ITEM among VESSELS: the open vessels of its
+    substance, flasks among them. Each vessel's batch is read."""
+    mine = [vessel for vessel in vessels
+            if vessel.amount > 0
+            and vessel.batch.substance_id == item.article_id]
     if not mine:
         return Bulk()
     mass = molar_mass(item)
     totals: dict[str, Decimal] = {}
     containers = unconvertible = 0
-    for lot in mine:
-        totals[lot.unit] = totals.get(lot.unit, Decimal(0)) + lot.amount
-        filled = containers_from(lot, item, mass)
+    for vessel in mine:
+        totals[vessel.unit] = totals.get(vessel.unit, Decimal(0)) \
+            + vessel.amount
+        filled = containers_from(vessel, item, mass)
         if filled is None:
             unconvertible += 1
         else:
             containers += filled
-    return Bulk(lots=mine,
+    return Bulk(vessels=mine,
                 amounts=[(shown(amount, unit), str(Unit(unit).label))
                          for unit, amount in totals.items()],
                 containers=containers, unconvertible=unconvertible)
+
+
+def stock_of(vessels: Iterable[Vessel]) -> list[tuple[Decimal, str]]:
+    """Return the amount in the open VESSELS, those holding an amount
+    above zero, each unit they are kept in with the summed amount in it,
+    rounded half up to three places, and the unit as it is shown."""
+    totals: dict[str, Decimal] = {}
+    for vessel in vessels:
+        if vessel.amount > 0:
+            totals[vessel.unit] = totals.get(vessel.unit, Decimal(0)) \
+                + vessel.amount
+    return [(shown(amount, unit), str(Unit(unit).label))
+            for unit, amount in totals.items()]
+
+
+def newest_first(batches: Iterable[Batch]) -> list[Batch]:
+    """Return BATCHES ordered by date, newest first and undated ones
+    last, then by ID, newest first."""
+    return sorted(batches, key=lambda batch: (
+        batch.date is None,
+        -(batch.date.toordinal() if batch.date else 0), -batch.pk))
+
+
+def open_amounts(batches: Iterable[Batch]
+                 ) -> dict[int, list[tuple[Decimal, str]]]:
+    """Return, for each batch of BATCHES by its ID, the amount in its
+    open vessels by unit as ``stock_of`` gives it; a batch without an
+    open vessel maps to an empty list."""
+    held: dict[int, list[Vessel]] = {batch.pk: [] for batch in batches}
+    for vessel in Vessel.objects.filter(batch_id__in=held, amount__gt=0
+                                        ).order_by("id"):
+        held[vessel.batch_id].append(vessel)
+    return {pk: stock_of(vessels) for pk, vessels in held.items()}

@@ -10,8 +10,8 @@ from .journal_support import (JOURNAL, NEW_NOTEBOOK, JournalCase,
 
 LIST_DE = ["Journal", "Inhaber", "Einträge", "Notiz"]
 LIST_EN = ["Notebook", "Owner", "Entries", "Note"]
-ENTRIES_DE = ["Eintrag", "Vorschrift", "Aufgabenschritte"]
-ENTRIES_EN = ["Entry", "Procedure", "Task steps"]
+ENTRIES_DE = ["Eintrag", "Vorschrift", "Aufgabenschritte", "Chargen"]
+ENTRIES_EN = ["Entry", "Procedure", "Task steps", "Batches"]
 
 
 def hrefs(element: Any) -> list[str]:
@@ -182,8 +182,8 @@ class NotebookPageTests(DemoJournalCase):
         self.assertIn("Kristallisationen", text)
 
     def test_the_columns(self) -> None:
-        """Requirement: Journal pages (`Eintrag`, `Vorschrift` and
-        `Aufgabenschritte`)."""
+        """Requirement: Journal pages (`Eintrag`, `Vorschrift`,
+        `Aufgabenschritte` and `Chargen`)."""
         self.assertEqual(table(self.anonymous(notebook_url("AE-1")))[0],
                          ENTRIES_DE)
 
@@ -283,6 +283,34 @@ class NotebookPageTests(DemoJournalCase):
         row = rows_of(self.anonymous(notebook_url("CE-1")))["CE-1/9"]
         self.assertEqual(row["Vorschrift"].text(), "")
         self.assertEqual(row["Aufgabenschritte"].text(), "")
+        self.assertEqual(row["Chargen"].text(), "")
+
+    def test_every_batch_of_the_demo_is_listed_at_its_entry(self) -> None:
+        """Requirement: Journal pages (`Chargen`, each batch that names
+        the entry, linking to the batch's page)."""
+        from inventory.models import Batch
+        named = Batch.objects.exclude(journal_entry=None).select_related(
+            "journal_entry__notebook")
+        self.assertTrue(named, "no demo batch names an entry")
+        for batch in named:
+            with self.subTest(batch=batch.pk):
+                entry = batch.journal_entry
+                rows = rows_of(self.anonymous(
+                    notebook_url(entry.notebook.code)))
+                cell = rows[str(entry)]["Chargen"]
+                self.assertIn(f"/lab/inventory/batches/{batch.pk}/",
+                              hrefs(cell))
+                self.assertIn(str(batch), cell.text())
+
+    def test_the_demo_has_two_batches_of_one_entry(self) -> None:
+        """Requirement: Demo inventory (two of them naming one
+        entry)."""
+        from django.db.models import Count
+
+        from inventory.models import Batch
+        shared = Batch.objects.exclude(journal_entry=None).values(
+            "journal_entry").annotate(n=Count("pk")).filter(n__gte=2)
+        self.assertTrue(shared)
 
     def test_the_edit_link_is_for_signed_in_users(self) -> None:
         """Requirement: Journal pages (for a signed-in user it links
@@ -303,6 +331,78 @@ class NotebookPageTests(DemoJournalCase):
                  if a.text() == "Edit"]
         self.assertEqual([a.get("href") for a in links],
                          [notebook_url("AE-1", "edit")])
+
+
+class BatchesOfAnEntryTests(JournalCase):
+    """Requirement: Journal pages (`Chargen`)."""
+
+    def make(self, number: str, key: str = "cinnamic-acid", **fields: Any):
+        from . import make_batch, substance_for
+        return make_batch(self.kl, substance=substance_for(key),
+                          number=number, **fields)
+
+    def test_batches_of_an_entry(self) -> None:
+        """Scenario: Batches of an entry."""
+        entry = entry_of("AE-1/9")
+        first = self.make("AE1009FA", journal_entry=entry)
+        second = self.make("AE1009FB", journal_entry=entry)
+        rows = rows_of(self.get(notebook_url("AE-1")))
+        cell = rows["AE-1/9"]["Chargen"]
+        self.assertEqual(sorted(hrefs(cell)), sorted([
+            f"/lab/inventory/batches/{first.pk}/",
+            f"/lab/inventory/batches/{second.pk}/"]))
+        text = cell.text()
+        self.assertIn("AE1009FA", text)
+        self.assertIn("AE1009FB", text)
+
+    def test_each_batch_is_followed_by_its_substances_name(self) -> None:
+        entry = entry_of("AE-1/9")
+        self.make("AE1009FA", "cinnamic-acid", journal_entry=entry)
+        self.make("AE1009FB", "acetophenone", journal_entry=entry)
+        text = rows_of(self.get(notebook_url("AE-1")))[
+            "AE-1/9"]["Chargen"].text()
+        self.assertRegex(text, r"AE1009FA\W+\(E\)-Cinnamic acid|"
+                               r"AE1009FA\W+\(E\)-Zimtsäure")
+        self.assertRegex(text, r"AE1009FB\W+acetophenone")
+
+    def test_another_entrys_batches_are_not_listed(self) -> None:
+        mine = self.make("AE1009FA", journal_entry=entry_of("AE-1/9"))
+        other = self.make("AE1010", journal_entry=entry_of("AE-1/10"))
+        self.make("LOOSE")
+        rows = rows_of(self.get(notebook_url("AE-1")))
+        self.assertEqual(hrefs(rows["AE-1/9"]["Chargen"]),
+                         [f"/lab/inventory/batches/{mine.pk}/"])
+        self.assertEqual(hrefs(rows["AE-1/10"]["Chargen"]),
+                         [f"/lab/inventory/batches/{other.pk}/"])
+
+    def test_a_batch_makes_an_entry_a_row(self) -> None:
+        entry_of("AE-1/9")
+        rows = rows_of(self.get(notebook_url("AE-1")))
+        self.assertEqual(rows["AE-1/9"]["Chargen"].text(), "")
+        self.make("AE1009FA", journal_entry=entry_of("AE-1/9"))
+        rows = rows_of(self.get(notebook_url("AE-1")))
+        self.assertIn("AE1009FA", rows["AE-1/9"]["Chargen"].text())
+
+    def test_a_task_step_and_a_batch_name_one_entry(self) -> None:
+        from . import make_task
+        from tasks.models import TaskStep
+        task = make_task(self.kl, "Aspirin", steps=1)
+        entry = entry_of("AE-1/9")
+        TaskStep.objects.filter(pk=task.steps.get().pk).update(
+            journal_entry=entry)
+        batch = self.make("AE1009FA", journal_entry=entry,
+                          task_step=task.steps.get())
+        row = rows_of(self.get(notebook_url("AE-1")))["AE-1/9"]
+        self.assertEqual(hrefs(row["Aufgabenschritte"]),
+                         [task_url(task)])
+        self.assertEqual(hrefs(row["Chargen"]),
+                         [f"/lab/inventory/batches/{batch.pk}/"])
+
+    def test_the_header_in_english(self) -> None:
+        accept(language="en")
+        entry_of("AE-1/9")
+        self.assertEqual(table(self.get(notebook_url("AE-1")))[0],
+                         ENTRIES_EN)
 
 
 class EmptyNotebookTests(JournalCase):

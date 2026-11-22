@@ -20,7 +20,8 @@ APP_TABLES = {
     "vocabulary_chemicalclass", "vocabulary_group", "vocabulary_project",
     "vocabulary_reactiontype", "inventory_article", "inventory_item",
     "inventory_movement", "inventory_deliverynote", "inventory_deliveryline",
-    "inventory_lot", "inventory_lotmovement", "inventory_enteredconsumption",
+    "inventory_batch", "inventory_vessel", "inventory_vesselmovement",
+    "inventory_enteredconsumption",
     "tasks_task", "tasks_taskstep", "tasks_counter", "planning_parameters",
     "demo_demomark",
     "collection_import", "collection_procedure", "collection_scopeentry",
@@ -86,9 +87,12 @@ class CollectionTests(unittest.TestCase):
         note = self.column("inventory_movement", "delivery_note_id")
         self.assertEqual((note.key, note.nullable, note.on_delete),
                          ("FK", True, "PROTECT"))
-        bulk = self.column("inventory_movement", "bulk_movement_id")
-        self.assertEqual((bulk.key, bulk.ref),
-                         ("1:1", "inventory_lotmovement"))
+        taken = self.column("inventory_movement", "vessel_movement_id")
+        self.assertEqual((taken.key, taken.ref, taken.nullable),
+                         ("1:1", "inventory_vesselmovement", True))
+        self.assertNotIn("bulk_movement_id",
+                         [c.name for c in
+                          self.table("inventory_movement").columns])
         reverses = self.column("inventory_movement", "reverses_id")
         self.assertEqual((reverses.key, reverses.ref),
                          ("1:1", "inventory_movement"))
@@ -225,17 +229,95 @@ class CollectionTests(unittest.TestCase):
                     (found.key, found.ref, found.on_delete,
                      found.nullable), ("FK", ref, "PROTECT", True))
 
-    def test_lots_and_tasks_name_substances(self) -> None:
-        for name in ("inventory_lot", "tasks_task"):
+    def test_batches_and_tasks_name_substances(self) -> None:
+        for name in ("inventory_batch", "tasks_task"):
             with self.subTest(table=name):
                 found = self.column(name, "substance_id")
                 self.assertEqual((found.key, found.ref, found.nullable),
                                  ("FK", "registry_substance", False))
-        names = [c.name for c in self.table("inventory_lot").columns]
-        for gone in ("inventory", "article_number"):
-            self.assertNotIn(gone, names)
         self.assertNotIn("product",
                          [c.name for c in self.table("tasks_task").columns])
+
+    def test_the_task_has_no_batch_column(self) -> None:
+        self.assertNotIn("batch",
+                         [c.name for c in self.table("tasks_task").columns])
+
+    def test_the_lot_tables_are_gone(self) -> None:
+        for name in ("inventory_lot", "inventory_lotmovement",
+                     "inventory_historicallot"):
+            self.assertNotIn(name, APP_TABLES)
+            self.assertNotIn(name, [t.name for t in self.schema.tables])
+
+    def test_the_columns_of_a_batch(self) -> None:
+        """Requirement: Tables and columns (the batch's box)."""
+        found = {c.name: c for c in self.table("inventory_batch").columns}
+        self.assertLessEqual(
+            {"id", "substance_id", "source", "number", "number_key",
+             "journal_entry_id", "task_step_id", "date", "yield_amount",
+             "yield_unit", "supplier", "supplier_article_number",
+             "supplier_batch", "note"}, set(found))
+        self.assertEqual(found["id"].key, "PK")
+        self.assertEqual(found["number"].type, "varchar(30)")
+        self.assertEqual(found["number_key"].type, "varchar(100)")
+        self.assertEqual(found["supplier"].type, "varchar(100)")
+        self.assertEqual(found["supplier_article_number"].type,
+                         "varchar(50)")
+        self.assertEqual(found["supplier_batch"].type, "varchar(50)")
+        self.assertEqual((found["yield_amount"].type,
+                          found["yield_amount"].nullable),
+                         ("numeric(18,6)", True))
+        self.assertEqual((found["date"].type, found["date"].nullable),
+                         ("date", True))
+        for column, ref in (("journal_entry_id", "journal_entry"),
+                            ("task_step_id", "tasks_taskstep")):
+            with self.subTest(column=column):
+                self.assertEqual(
+                    (found[column].key, found[column].ref,
+                     found[column].nullable, found[column].on_delete),
+                    ("FK", ref, True, "PROTECT"))
+        notes = " ".join(found["source"].notes)
+        self.assertIn("made", notes)
+        self.assertIn("bought", notes)
+
+    def test_the_columns_of_a_vessel(self) -> None:
+        found = {c.name: c for c in self.table("inventory_vessel").columns}
+        self.assertLessEqual(
+            {"id", "batch_id", "unit", "amount", "flask", "location",
+             "note"}, set(found))
+        self.assertEqual(
+            (found["batch_id"].key, found["batch_id"].ref,
+             found["batch_id"].nullable, found["batch_id"].on_delete),
+            ("FK", "inventory_batch", False, "PROTECT"))
+        self.assertEqual(found["amount"].type, "numeric(18,6)")
+        self.assertEqual(found["flask"].type, "boolean")
+        self.assertEqual(found["location"].type, "varchar(100)")
+        self.assertNotIn("substance_id", found)
+
+    def test_the_columns_of_a_vessel_movement(self) -> None:
+        found = {c.name: c for c
+                 in self.table("inventory_vesselmovement").columns}
+        self.assertLessEqual(
+            {"id", "vessel_id", "kind", "amount", "amount_after", "date",
+             "booked_at", "user_id", "note", "task_step_id", "transfer_id",
+             "reverses_id"}, set(found))
+        self.assertEqual(
+            (found["vessel_id"].key, found["vessel_id"].ref,
+             found["vessel_id"].on_delete),
+            ("FK", "inventory_vessel", "CASCADE"))
+        for column, ref in (("transfer_id", "inventory_vesselmovement"),
+                            ("reverses_id", "inventory_vesselmovement")):
+            with self.subTest(column=column):
+                self.assertEqual(
+                    (found[column].key, found[column].ref,
+                     found[column].nullable), ("1:1", ref, True))
+        self.assertEqual(
+            (found["task_step_id"].key, found["task_step_id"].ref,
+             found["task_step_id"].nullable),
+            ("FK", "tasks_taskstep", True))
+        notes = " ".join(found["kind"].notes)
+        for kind in ("opening", "filling", "withdrawal", "transfer_out",
+                     "transfer_in", "correction", "remainder", "reversal"):
+            self.assertIn(kind, notes)
 
     def test_docstrings(self) -> None:
         item = self.table("inventory_item")
@@ -251,7 +333,8 @@ class CollectionTests(unittest.TestCase):
             ("inventory_historicalarticle", "inventory_article", ()),
             ("inventory_historicaldeliverynote", "inventory_deliverynote",
              ()),
-            ("inventory_historicallot", "inventory_lot", ("amount",)),
+            ("inventory_historicalbatch", "inventory_batch", ()),
+            ("inventory_historicalvessel", "inventory_vessel", ("amount",)),
             ("inventory_historicalenteredconsumption",
              "inventory_enteredconsumption", ()),
             ("registry_historicalsubstance", "registry_substance",
@@ -271,7 +354,7 @@ class CollectionTests(unittest.TestCase):
             ("registry_historicalsubstanceclass", "registry_substanceclass",
              ())})
         self.assertIn("not in history",
-                      self.column("inventory_lot", "amount").notes)
+                      self.column("inventory_vessel", "amount").notes)
         layout = self.schema.history
         self.assertEqual(
             [c.name for c in layout.columns],
@@ -328,9 +411,11 @@ class ConstraintTests(unittest.TestCase):
             "quarter >= 1 AND quarter <= 4")
         self.assertEqual(self.constraint("inventory_line_item_once").columns,
                          ("delivery_note_id", "item_id"))
-        self.assertEqual(
-            self.constraint("inventory_lot_amount_not_negative").condition,
-            "amount >= 0")
+        numbers = [c for c in self.schema.constraints
+                   if c.table == "inventory_batch" and c.kind == "unique"
+                   and c.columns == ("number_key",)]
+        self.assertEqual(len(numbers), 1)
+        self.assertTrue(numbers[0].condition)
 
     def test_positive_checks(self) -> None:
         self.assertIn("inventory_item.quantity", self.schema.positive_checks)
@@ -679,7 +764,7 @@ class PageTests(unittest.TestCase):
             sorted((e["from"], e["column"]) for e in to_people),
             sorted([("inventory_deliverynote", "created_by_id"),
                     ("inventory_movement", "user_id"),
-                    ("inventory_lotmovement", "user_id"),
+                    ("inventory_vesselmovement", "user_id"),
                     ("inventory_enteredconsumption", "entered_by_id"),
                     ("tasks_task", "assignee_id"),
                     ("tasks_task", "created_by_id"),
@@ -695,41 +780,56 @@ class PageTests(unittest.TestCase):
 
     def test_links_of_a_task(self) -> None:
         """Scenario: Links of a task."""
-        for source, column, target, target_column in (
-                ("tasks_task", "batch", "inventory_lot", "batch"),
-                ("tasks_counter", "name", "tasks_task", "number")):
-            with self.subTest(column=f"{source}.{column}"):
-                edge = self.edge(source, column)
-                self.assertEqual(
-                    (edge["class"], edge["to"], edge["target-column"]),
-                    ("soft kind-value", target, target_column))
-                tip = re.search(r"<title>(.*?)</title>", edge["body"],
-                                re.DOTALL).group(1)
-                note = next(link.note for link in sd.LINKS
-                            if (link.source, link.column)
-                            == (source, column))
-                self.assertTrue(note)
-                self.assertEqual(tip.splitlines()[1],
-                                 note.replace("'", "&#x27;"))
+        edge = self.edge("tasks_counter", "name")
+        self.assertEqual(
+            (edge["class"], edge["to"], edge["target-column"]),
+            ("soft kind-value", "tasks_task", "number"))
+        tip = re.search(r"<title>(.*?)</title>", edge["body"],
+                        re.DOTALL).group(1)
+        note = next(link.note for link in sd.LINKS
+                    if (link.source, link.column)
+                    == ("tasks_counter", "name"))
+        self.assertTrue(note)
+        self.assertEqual(tip.splitlines()[1],
+                         note.replace("'", "&#x27;"))
         self.assertEqual(
             sorted((e["from"], e["column"]) for e in self.edges()
                    if e["class"].endswith("kind-value")),
-            [("tasks_counter", "name"), ("tasks_task", "batch")])
+            [("tasks_counter", "name")])
         self.assertEqual(
             sorted((link.source, link.column) for link in sd.LINKS),
-            [("tasks_counter", "name"), ("tasks_task", "batch")])
+            [("tasks_counter", "name")])
 
-    def test_the_declared_batch_link_names_the_substance(self) -> None:
-        note = next(link.note for link in sd.LINKS
-                    if (link.source, link.column) == ("tasks_task", "batch"))
-        self.assertIn("substance", note)
-        self.assertNotIn("product", note)
+    def test_the_batch_value_link_is_gone(self) -> None:
+        self.assertNotIn(("tasks_task", "batch"),
+                         [(link.source, link.column) for link in sd.LINKS])
+
+    def test_links_of_the_inventory_records(self) -> None:
+        """Requirement: Links between tables (the new foreign keys)."""
+        for source, column, target in (
+                ("inventory_batch", "journal_entry_id", "journal_entry"),
+                ("inventory_batch", "task_step_id", "tasks_taskstep"),
+                ("inventory_vessel", "batch_id", "inventory_batch"),
+                ("inventory_vesselmovement", "vessel_id",
+                 "inventory_vessel"),
+                ("inventory_vesselmovement", "task_step_id",
+                 "tasks_taskstep"),
+                ("inventory_vesselmovement", "transfer_id",
+                 "inventory_vesselmovement"),
+                ("inventory_vesselmovement", "reverses_id",
+                 "inventory_vesselmovement"),
+                ("inventory_movement", "vessel_movement_id",
+                 "inventory_vesselmovement")):
+            with self.subTest(column=f"{source}.{column}"):
+                edge = self.edge(source, column)
+                self.assertEqual((edge["to"], edge["class"]),
+                                 (target, "kind-key"))
 
     def test_links_to_the_registry(self) -> None:
         """Scenario: Links to the registry."""
         for source, column, target in (
                 ("tasks_task", "substance_id", "registry_substance"),
-                ("inventory_lot", "substance_id", "registry_substance"),
+                ("inventory_batch", "substance_id", "registry_substance"),
                 ("inventory_article", "substance_id", "registry_substance"),
                 ("inventory_item", "article_id", "inventory_article"),
                 ("registry_substance", "group_id", "vocabulary_group"),
@@ -804,7 +904,7 @@ class PageTests(unittest.TestCase):
         """Scenario: Line ends."""
         for source, column, ends in (
                 ("inventory_movement", "delivery_note_id", "many zero_one"),
-                ("inventory_movement", "bulk_movement_id",
+                ("inventory_movement", "vessel_movement_id",
                  "zero_one zero_one"),
                 ("inventory_deliveryline", "item_id", "many one")):
             with self.subTest(column=column):

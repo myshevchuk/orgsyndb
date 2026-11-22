@@ -219,9 +219,6 @@ msgctxt "priority"
 msgid "entered"
 msgstr "manuell"
 
-msgid "Record as bulk"
-msgstr "Als Bulk erfassen"
-
 msgid "A synthesis sequence of the collection; its steps become the task's steps."
 msgstr "Ein Syntheseweg der Sammlung; seine Stufen werden die Stufen der Aufgabe."
 
@@ -273,35 +270,14 @@ msgstr "erledigt am %(day)s"
 msgid "Failed"
 msgstr "Fehlgeschlagen"
 
-msgid "A failed task has no batch."
-msgstr "Eine fehlgeschlagene Aufgabe hat keine Charge."
-
-msgid "An ended task needs the batch of its product lot."
-msgstr "Eine abgeschlossene Aufgabe braucht die Charge ihres Produkt-Bulks."
-
-msgid "Record a lot of the product, made in the lab, with the batch %(batch)s before ending the task."
-msgstr "Vor dem Abschluss bitte ein im Labor hergestelltes Bulk des Produkts mit der Charge %(batch)s erfassen."
-
 msgid "Task %(number)s failed."
 msgstr "Aufgabe %(number)s ist fehlgeschlagen."
-
-msgid "Only a running task with a batch and a product lot, a lot of its product made in the lab with that batch, can be ended."
-msgstr "Nur eine Aufgabe in Arbeit mit Charge und Produkt-Bulk, einem im Labor hergestellten Bulk ihres Produkts mit dieser Charge, kann abgeschlossen werden."
-
-msgid "Only a running task without a product lot can fail."
-msgstr "Nur eine Aufgabe in Arbeit ohne Produkt-Bulk kann fehlschlagen."
-
-msgid "A step that made a lot or took a withdrawal cannot be removed."
-msgstr "Eine Stufe, die ein Bulk hergestellt oder eine Entnahme erhalten hat, lässt sich nicht entfernen."
 
 msgid "Made:"
 msgstr "Hergestellt:"
 
 msgid "Withdrawn:"
 msgstr "Entnommen:"
-
-msgid "Record a lot"
-msgstr "Los erfassen"
 
 msgid "Book a withdrawal"
 msgstr "Entnahme buchen"
@@ -333,9 +309,6 @@ msgstr "ab Stufe %(step)s"
 msgid "The start step cannot be changed while a step is done."
 msgstr "Die Anfangsstufe kann nicht geändert werden, solange eine Stufe erledigt ist."
 
-msgid "The start step cannot be changed while a step has made a lot or taken a withdrawal."
-msgstr "Die Anfangsstufe kann nicht geändert werden, solange eine Stufe ein Bulk hergestellt oder eine Entnahme erhalten hat."
-
 msgid "The start step cannot be changed while a step names a lab notebook entry."
 msgstr "Die Anfangsstufe kann nicht geändert werden, solange eine Stufe einen Eintrag im Laborjournal nennt."
 
@@ -348,5 +321,39 @@ msgstr "Die Anfangsstufe darf die %(count)s Stufen des Synthesewegs %(key)s nich
 msgid "A task of the sequence %(key)s makes its target, %(name)s."
 msgstr "Eine Aufgabe des Synthesewegs %(key)s ergibt dessen Ziel, %(name)s."
 
-msgid "The sequence cannot be set, changed or cleared while a step has made a lot or taken a withdrawal."
-msgstr "Der Syntheseweg kann nicht gesetzt, geändert oder entfernt werden, solange eine Stufe ein Bulk hergestellt oder eine Entnahme erhalten hat."
+msgid "A task with a product batch has not failed."
+msgstr "Eine Aufgabe mit einer Produktcharge ist nicht fehlgeschlagen."
+
+msgid "Record a batch of the product from a step before ending the task."
+msgstr "Vor dem Abschluss bitte aus einer Stufe eine Charge des Produkts erfassen."
+
+msgid "The substance cannot change once a step has made a batch."
+msgstr "Die Substanz lässt sich nicht mehr ändern, sobald eine Stufe eine Charge hergestellt hat."
+
+msgid "The sequence cannot be set, changed or cleared while a step has made a batch or taken a withdrawal."
+msgstr "Der Syntheseweg kann nicht gesetzt, geändert oder entfernt werden, solange eine Stufe eine Charge hergestellt oder eine Entnahme erhalten hat."
+
+msgid "The start step cannot be changed while a step has made a batch or taken a withdrawal."
+msgstr "Die Anfangsstufe kann nicht geändert werden, solange eine Stufe eine Charge hergestellt oder eine Entnahme erhalten hat."
+
+msgid "A step that made a batch or took a withdrawal cannot be removed."
+msgstr "Eine Stufe, die eine Charge hergestellt oder eine Entnahme erhalten hat, lässt sich nicht entfernen."
+
+msgid "Flask"
+msgstr "Kolben"
+
+msgid "stored"
+msgstr "gelagert"
+
+msgid "Record batch"
+msgstr "Charge erfassen"
+
+msgid "Only a running task with a product batch, a batch of its substance made by one of its steps, can be ended."
+msgstr "Nur eine Aufgabe in Arbeit mit einer Produktcharge, einer von einer ihrer Stufen hergestellten Charge ihrer Substanz, kann abgeschlossen werden."
+
+msgid "Only a running task without a product batch can fail."
+msgstr "Nur eine Aufgabe in Arbeit ohne Produktcharge kann fehlschlagen."
+
+#, python-format
+msgid "Written off: %(amounts)s."
+msgstr "Ausgebucht: %(amounts)s."

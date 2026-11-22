@@ -398,8 +398,8 @@ class SortTests(TableCase):
         self.item("CH-0001", size="10", unit="mg")
         self.item("CH-0002", size="10", unit="mg")
         self.item("CH-0010", size="10", unit="mg")
-        self.lot("CH-0001", "mg", "50")
-        self.lot("CH-0002", "mg", "5")
+        self.vessel("CH-0001", "mg", "50")
+        self.vessel("CH-0002", "mg", "5")
         self.assertEqual(self.articles("?sort=bulk"),
                          ["CH-0002", "CH-0001", "CH-0010"])
         self.assertEqual(self.articles("?sort=bulk&dir=desc"),
@@ -721,7 +721,7 @@ class PopupTests(TableCase):
         popups."""
         self.item("C-1", quantity=3)
         self.enter(self.item("C-2"), 2026, 1, 3)
-        self.lot("C-1", "mg", "50", location="Kühlschrank 2")
+        self.vessel("C-1", "mg", "50", location="Kühlschrank 2")
         root = self.listing()
         grid = root.find("table")
         self.assertEqual([e.tag for e in grid.walk()

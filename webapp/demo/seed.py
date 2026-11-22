@@ -39,15 +39,16 @@ from collection.models import (EntrySubstance, Import, IssuedId, Outcome,
 from demo import data
 from demo.models import DemoMark
 from inventory import bookings
-from inventory.models import (Article, DeliveryLine, DeliveryNote,
-                              EnteredConsumption, Item, Lot, LotMovement,
-                              Movement)
+from inventory.models import (Article, Batch, DeliveryLine, DeliveryNote,
+                              EnteredConsumption, Item, Movement, Vessel,
+                              VesselMovement)
 from journal.entries import entry_for
 from journal.models import Entry, Notebook
 from orgsyndb_web import lock
 from planning.models import Parameters
 from registry import snapshot
 from registry.models import Substance, SubstanceClass
+from tasks.closing import CLOSED
 from tasks.models import Counter, Task, TaskStep
 from tasks.steps import StepChange
 from vocabulary.models import ChemicalClass, Group, Project, ReactionType
@@ -86,13 +87,13 @@ def histories() -> list[type]:
 def holds_records() -> bool:
     """Whether the database holds lab records: an account, access token,
     lab notebook or its entry, substance, vocabulary term, article,
-    task, item, delivery note, bulk lot, entered consumption value,
+    task, item, delivery note, batch, entered consumption value,
     stored planning parameters, import of the collection, imported
     procedure or sequence, issued ID, change-history record or the demo
     mark."""
     return any(model.objects.exists() for model in (
         get_user_model(), AccessToken, Notebook, Entry, Substance, *TERMS,
-        Article, Task, Item, DeliveryNote, Lot, EnteredConsumption,
+        Article, Task, Item, DeliveryNote, Batch, EnteredConsumption,
         Parameters, Import, Procedure, Sequence, IssuedId, DemoMark,
         *histories()))
 
@@ -115,9 +116,11 @@ def clear() -> None:
     transaction, in which the lock (``orgsyndb_web.lock``) is taken
     first.
 
-    Reversals go before the movements they reverse, movements before
-    the notes, lots and task steps they name, lots before the task steps
-    that made them, records before the substances and terms they name,
+    Receiving halves of transfers and reversals go before the movements
+    they name, movements before the notes, vessels and task steps they
+    name, vessels before their batches, batches before the task steps
+    that made them and the journal entries they name, records before the
+    substances and terms they name,
     tasks and their steps before the sequences, entries and imports they
     name, sequence steps before the entries they name, task steps and
     procedures before the journal entries they name, journal entries
@@ -131,9 +134,11 @@ def clear() -> None:
     Movement.objects.all().delete()
     DeliveryLine.objects.all().delete()
     DeliveryNote.objects.all().delete()
-    LotMovement.objects.exclude(reverses=None).delete()
-    LotMovement.objects.all().delete()
-    Lot.objects.all().delete()
+    VesselMovement.objects.exclude(transfer=None).delete()
+    VesselMovement.objects.exclude(reverses=None).delete()
+    VesselMovement.objects.all().delete()
+    Vessel.objects.all().delete()
+    Batch.objects.all().delete()
     TaskStep.objects.all().delete()
     Task.objects.all().delete()
     Step.objects.all().delete()
@@ -198,7 +203,7 @@ class _Writer:
     def __init__(self) -> None:
         self.users: dict[str, Any] = {}
         self.items: dict[str, Item] = {}
-        self.lots: dict[str, Lot] = {}
+        self.vessels: dict[str, Vessel] = {}
         self.notes: dict[str, DeliveryNote] = {}
         self.tasks: dict[str, Task] = {}
         self.parameters: Parameters | None = None
@@ -257,26 +262,32 @@ class _Writer:
                     item=self.items[change.item],
                     kind=Movement.Kind.DELIVERY)
                 bookings.reverse(user, movement, note=change.note)
-            case data.OpenLot():
-                self.lots[change.key] = bookings.create_lot(
+            case data.RecordBatch():
+                batch = bookings.record_batch(
                     user, substance=Substance.objects.get(
                         key=change.substance),
-                    source=change.source, supplier=change.supplier,
-                    unit=change.unit, amount=change.amount,
-                    batch=change.batch, location=change.location,
-                    made_on=change.made_on, date=day,
+                    source=change.source, number=change.number,
                     task_step=self.step(*change.step) if change.step
-                    else None)
+                    else None, date=change.date, supplier=change.supplier,
+                    supplier_article_number=change.supplier_article_number,
+                    supplier_batch=change.supplier_batch,
+                    amount=change.amount, unit=change.unit,
+                    location=change.location)
+                self.vessels[change.key] = batch.vessels.get()
             case data.Withdraw():
-                bookings.withdraw(user, self.lots[change.lot],
+                bookings.withdraw(user, self.vessels[change.vessel],
                                   task_step=self.step(change.task,
                                                       change.position),
                                   amount=change.amount, date=day)
             case data.Fill():
                 bookings.fill(user, self.items[change.item],
                               count=change.count, date=day,
-                              lot=self.lots[change.lot] if change.lot
-                              else None, amount=change.amount)
+                              vessel=self.vessels[change.vessel],
+                              amount=change.amount)
+            case data.Transfer():
+                bookings.transfer(user, self.vessels[change.vessel],
+                                  amount=change.amount,
+                                  location=change.location, date=day)
             case data.SetStatus():
                 item = Item.objects.get(pk=self.items[change.item].pk)
                 item.status = change.status
@@ -286,10 +297,10 @@ class _Writer:
                 bookings.correct(user, self.items[change.item],
                                  count=change.count, note=change.note,
                                  date=day)
-            case data.CorrectLot():
-                bookings.correct_lot(user, self.lots[change.lot],
-                                     amount=change.amount, note=change.note,
-                                     date=day)
+            case data.CorrectVessel():
+                bookings.correct_vessel(
+                    user, self.vessels[change.vessel],
+                    amount=change.amount, note=change.note, date=day)
             case data.SaveTask():
                 self.save_task(user, change.key, change.fields)
             case _:
@@ -327,8 +338,9 @@ class _Writer:
                   ) -> None:
         """Create the task KEY, made by USER, or change it, after the
         validation the task form applies, and give it its steps; its
-        number is assigned on creation. Raise ValidationError when the
-        task or its steps are refused."""
+        number is assigned on creation. A task left ended, failed or
+        cancelled has the flasks of its batches written off. Raise
+        ValidationError when the task or its steps are refused."""
         task = self.tasks.get(key) or Task(created_by=user)
         done, total = task.step_counts
         sequence = task.sequence
@@ -357,6 +369,8 @@ class _Writer:
         task._history_user = user
         task.save()
         steps.apply(timezone.localdate(), user)
+        if task.state in CLOSED:
+            bookings.write_off_flasks(user, task)
         self.tasks[key] = task
 
 

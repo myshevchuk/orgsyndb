@@ -36,9 +36,6 @@ msgstr[1] "%(count)s verspätet"
 msgid "%(running)s running · %(planned)s planned"
 msgstr "%(running)s laufend · %(planned)s geplant"
 
-msgid "Open bulk lots"
-msgstr "Offene Bulk-Lose"
-
 msgid "To the overview"
 msgstr "Zur Übersicht"
 
@@ -74,3 +71,6 @@ msgstr "Letzte Lieferscheine"
 
 msgid "No deliveries."
 msgstr "Keine Abgaben."
+
+msgid "Open vessels"
+msgstr "Offene Gefäße"

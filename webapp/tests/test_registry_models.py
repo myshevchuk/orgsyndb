@@ -10,8 +10,8 @@ from django.test import TestCase
 
 from registry.models import Substance, SubstanceClass
 
-from . import (make_article, make_class, make_group, make_item, make_lot,
-               make_substance, make_task, make_user, page, table)
+from . import (make_article, make_class, make_group, make_item,
+               make_batch, make_substance, make_task, make_user, page, table)
 from .collection_support import accept
 
 # Check digits that verify and ones that do not.
@@ -218,9 +218,9 @@ class DeletionTests(TestCase):
             made.delete()
         self.assertTrue(Substance.objects.filter(key="a").exists())
 
-    def test_a_substance_with_a_lot_cannot_be_deleted(self) -> None:
+    def test_a_substance_with_a_batch_cannot_be_deleted(self) -> None:
         made = make_substance("a")
-        make_lot(self.kl, substance=made)
+        make_batch(self.kl, substance=made)
         with self.assertRaises(ProtectedError):
             made.delete()
 

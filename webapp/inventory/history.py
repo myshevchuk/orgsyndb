@@ -1,5 +1,6 @@
-"""The change history of an item, a lot or a delivery note as its page
-shows it; an item's includes that of its entered consumption."""
+"""The change history of an item, a batch, a vessel or a delivery note as
+its page shows it; an item's includes that of its entered
+consumption."""
 
 from dataclasses import dataclass
 from datetime import date
@@ -10,11 +11,15 @@ from django.db import models
 from django.utils import formats
 from django.utils.translation import gettext as _
 
-from inventory.models import EnteredConsumption, Item, plain
+from inventory.models import EnteredConsumption, Item, Unit, plain
+from inventory.models import shown as in_unit
+from journal.models import Entry as JournalEntry
 
 FIELDS = {
     "item": ["status", "stocked_on", "compartment", "box", "note"],
-    "lot": ["batch", "location", "made_on", "note"],
+    "batch": ["number", "journal_entry", "yield_amount", "supplier",
+              "supplier_article_number", "supplier_batch", "date", "note"],
+    "vessel": ["location", "note"],
     "deliverynote": ["number", "recipient", "note", "reversed",
                      "reversal_note"],
 }
@@ -64,6 +69,28 @@ def shown_field(field: models.Field, value: Any) -> str:
     return str(labels[value]) if value in labels else shown(value)
 
 
+def _raw(row: Any, field: models.Field) -> Any:
+    """Return the value of FIELD in the history record ROW that a change
+    compares: the yield with its unit, any other field as stored."""
+    if field.name == "yield_amount":
+        return (row.yield_amount, row.yield_unit)
+    return getattr(row, field.attname)
+
+
+def _text(field: models.Field, value: Any, entries: dict[int, str]) -> str:
+    """Return VALUE, as ``_raw`` gives it, of FIELD as the history shows
+    it: a journal entry as ``<code>/<number>``, a yield in its unit, any
+    other value as ``shown_field`` writes it."""
+    if field.name == "journal_entry":
+        return entries.get(value, "–") if value else "–"
+    if field.name == "yield_amount":
+        amount, unit = value
+        if amount is None:
+            return "–"
+        return f"{shown(in_unit(amount, unit))} {Unit(unit).label}"
+    return shown_field(field, value)
+
+
 def _own(record: models.Model) -> list[tuple[Any, Entry]]:
     """Return the history records of RECORD, each with its entry, newest
     record first.
@@ -75,6 +102,11 @@ def _own(record: models.Model) -> list[tuple[Any, Entry]]:
     records = list(record.history.select_related("history_user"))
     fields = [type(record)._meta.get_field(name)
               for name in FIELDS[type(record)._meta.model_name]]
+    ids = {row.journal_entry_id for row in records
+           if hasattr(row, "journal_entry_id")} - {None}
+    entries = {entry.pk: str(entry) for entry in
+               JournalEntry.objects.select_related("notebook").filter(
+                   pk__in=ids)}
     found = []
     for position, current in enumerate(records):
         before = records[position + 1] if position + 1 < len(records) \
@@ -82,12 +114,13 @@ def _own(record: models.Model) -> list[tuple[Any, Entry]]:
         changes = []
         if before is not None:
             for field in fields:
-                old = getattr(before, field.attname)
-                new = getattr(current, field.attname)
+                old = _raw(before, field)
+                new = _raw(current, field)
                 if old != new:
-                    changes.append(Change(label=str(field.verbose_name),
-                                          old=shown_field(field, old),
-                                          new=shown_field(field, new)))
+                    changes.append(Change(
+                        label=str(field.verbose_name),
+                        old=_text(field, old, entries),
+                        new=_text(field, new, entries)))
         found.append((current, Entry(
             time=current.history_date, user=current.history_user,
             heading="", created=current.history_type == "+",

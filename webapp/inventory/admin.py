@@ -4,9 +4,10 @@ Counts and amounts change only by bookings, so the admin shows
 movements, the fixed fields and the quantities read-only, saves only
 the fields it shows editable, restores no earlier version, adds no
 record, and deletes no movement or delivery note. It deletes an article
-only while it has no items, an item or a lot only while its one
+only while it has no items, an item or a vessel only while its one
 movement is the opening, and an item only while no delivery note has a
-line of it.
+line of it. It deletes a batch only while it has no vessel and no task
+step made it.
 """
 
 from typing import Any
@@ -17,16 +18,22 @@ from django.db import transaction
 from django.db.models import Model, QuerySet
 from django.forms import ModelForm
 from django.http import HttpRequest, HttpResponse
+from django.utils.translation import gettext_lazy as _
 from simple_history.admin import SimpleHistoryAdmin
 
 from inventory import bookings
-from inventory.models import (Article, DeliveryLine, DeliveryNote, Item,
-                              Lot, LotMovement, Movement)
+from inventory.forms import number_holder
+from inventory.models import (Article, Batch, DeliveryLine, DeliveryNote,
+                              Item, Movement, Vessel, VesselMovement)
 
 
-def deletable(record: Item | Lot) -> bool:
-    """Whether RECORD, an item or a lot, has no movement but its opening
-    and, for an item, no line of a delivery note."""
+def deletable(record: Item | Vessel | Batch) -> bool:
+    """Whether RECORD can be deleted: for an item or a vessel, that it
+    has no movement but its opening and, for an item, no line of a
+    delivery note; for a batch, that it has no vessel and no task step
+    made it."""
+    if isinstance(record, Batch):
+        return record.task_step_id is None and not record.vessels.exists()
     if record.movements.exclude(kind=Movement.Kind.OPENING).exists():
         return False
     return not (isinstance(record, Item) and record.delivery_lines.exists())
@@ -60,8 +67,9 @@ class RecordAdmin(SimpleHistoryAdmin):
 
 
 class OpeningOnlyAdmin(RecordAdmin):
-    """The admin of a record that may be deleted only with its opening
-    movement as its one movement."""
+    """The admin of a record that may be deleted only while it passes
+    ``deletable``: with its opening movement as its one movement, for an
+    item or a vessel."""
 
     def has_add_permission(self, request: HttpRequest) -> bool:
         return False
@@ -187,16 +195,60 @@ class ItemAdmin(OpeningOnlyAdmin):
     readonly_fields = ("article", "size", "unit", "quantity")
 
 
-@admin.register(Lot)
-class LotAdmin(OpeningOnlyAdmin):
-    list_display = ("__str__", "substance", "source", "batch", "unit",
-                    "amount", "location", "made_on")
+class BatchAdminForm(ModelForm):
+    """The change form of a batch, which refuses a number another made
+    batch has regardless of case."""
+
+    def clean_number(self) -> str:
+        """Return the number; refuse one another made batch has
+        regardless of case, naming that batch."""
+        number = self.cleaned_data["number"].strip()
+        holder = number_holder(number, self.instance.pk)
+        if holder is not None:
+            raise ValidationError(
+                _("Batch %(batch)s has this number."),
+                params={"batch": holder})
+        return number
+
+
+@admin.register(Batch)
+class BatchAdmin(OpeningOnlyAdmin):
+    """The batches, whose substance, source and task step are fixed and
+    whose yield changes in the batch's form. A batch is deleted only
+    while it has no vessel and no task step made it."""
+
+    form = BatchAdminForm
+    list_display = ("__str__", "substance", "source", "number", "supplier",
+                    "supplier_batch", "date")
+    list_filter = ("source",)
     list_select_related = ("substance",)
-    search_fields = ("substance__key", "substance__name",
+    search_fields = ("number", "supplier", "supplier_batch",
+                     "substance__key", "substance__name",
                      "substance__name_de",
-                     "substance__article__article_number",
-                     "batch", "supplier")
-    readonly_fields = ("substance", "source", "unit", "amount", "task_step")
+                     "substance__article__article_number")
+    readonly_fields = ("substance", "source", "task_step", "yield_amount",
+                       "yield_unit")
+
+    def get_deleted_objects(self, objs: Any, request: HttpRequest
+                            ) -> tuple[Any, ...]:
+        """Return what deleting OBJS deletes, as the admin does, with
+        every batch of OBJS that a task step made named as protected."""
+        deleted, counts, needed, protected = admin.ModelAdmin \
+            .get_deleted_objects(self, objs, request)
+        blocked = [str(record) for record in objs if not deletable(record)]
+        return deleted, counts, needed, [*protected, *blocked]
+
+
+@admin.register(Vessel)
+class VesselAdmin(OpeningOnlyAdmin):
+    list_display = ("__str__", "batch", "unit", "amount", "flask",
+                    "location")
+    list_select_related = ("batch__substance",)
+    search_fields = ("batch__number", "batch__supplier_batch",
+                     "batch__supplier", "batch__substance__key",
+                     "batch__substance__name", "batch__substance__name_de",
+                     "batch__substance__article__article_number")
+    readonly_fields = ("batch", "unit", "amount", "flask")
 
 
 class DeliveryLineInline(admin.TabularInline):
@@ -262,11 +314,12 @@ class MovementAdmin(ReadOnlyAdmin):
                      "item__article__substance__name")
 
 
-@admin.register(LotMovement)
-class LotMovementAdmin(ReadOnlyAdmin):
-    list_display = ("lot", "kind", "amount", "amount_after", "date",
+@admin.register(VesselMovement)
+class VesselMovementAdmin(ReadOnlyAdmin):
+    list_display = ("vessel", "kind", "amount", "amount_after", "date",
                     "booked_at", "user", "task_step")
     list_filter = ("kind",)
-    list_select_related = ("lot__substance", "user")
-    search_fields = ("lot__substance__key", "lot__substance__name",
-                     "lot__batch")
+    list_select_related = ("vessel__batch__substance", "user")
+    search_fields = ("vessel__batch__substance__key",
+                     "vessel__batch__substance__name",
+                     "vessel__batch__number")

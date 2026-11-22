@@ -93,7 +93,7 @@ class NewItemFormTests(FormCase):
         self.assertEqual(movement.date, date(2026, 11, 4))
         self.assertIsNotNone(movement.booked_at)
         self.assertIsNone(movement.delivery_note)
-        self.assertIsNone(movement.bulk_movement)
+        self.assertIsNone(movement.vessel_movement)
         self.assertIsNone(movement.reverses)
         self.assertRedirects(response, item_url(item),
                              fetch_redirect_response=False)

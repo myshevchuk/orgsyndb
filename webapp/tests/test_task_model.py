@@ -114,7 +114,6 @@ class DefaultTests(TestCase):
         self.assertIsNone(task.ended)
         self.assertIsNone(task.sequence)
         self.assertEqual(list(task.steps.all()), [])
-        self.assertFalse(task.batch)
         self.assertFalse(task.report)
         self.assertFalse(task.qc_list)
         self.assertFalse(task.cancelled)
@@ -148,10 +147,15 @@ class DefaultTests(TestCase):
         self.assertNotIn("substance", self.errors())
         self.assertIn("substance", self.errors(substance=None))
 
-    def test_batch_is_at_most_30_characters(self) -> None:
-        self.assertNotIn("batch", self.errors(batch="b" * 30))
-        self.assertIn("batch", self.errors(batch="b" * 31))
-        self.assertNotIn("batch", self.errors(batch=""))
+    def test_a_task_has_no_batch_field(self) -> None:
+        """Requirement: Task record (`Task.batch` is gone; a task's
+        batches are those its steps made)."""
+        names = {field.name for field in Task._meta.get_fields()}
+        self.assertNotIn("batch", names)
+        self.assertNotIn("batch", {f.name for f in
+                                   Task.history.model._meta.get_fields()})
+        task = make_task(self.kl, self.substance)
+        self.assertFalse(hasattr(task, "batch"))
 
 
 class NumberTests(TestCase):
@@ -214,14 +218,14 @@ class HistoryTests(TestCase):
     def test_the_failed_flag_is_kept_in_the_history(self) -> None:
         """Requirement: Task record (`failed`; tasks keep a change
         history)."""
-        task = make_task(self.kl, started=past(1), batch="B-8")
+        task = make_task(self.kl, started=past(1))
         task._history_user = self.kl
         task.failed = True
-        task.batch = ""
         task.ended = past(1)
         task.save()
         newest = task.history.first()
-        self.assertEqual((newest.failed, newest.batch), (True, ""))
+        self.assertEqual((newest.failed, newest.ended),
+                         (True, past(1)))
         self.assertIs(task.history.last().failed, False)
 
     def test_history_names_the_task(self) -> None:
@@ -344,6 +348,19 @@ class StepRecordTests(TaskCase):
         make_task(self.kl, steps=1)
         task.delete()
         self.assertEqual(TaskStep.objects.count(), 1)
+
+    def test_a_task_whose_step_made_a_batch_cannot_be_deleted(self) -> None:
+        """Requirement: Batches (a batch a task step made is never
+        deleted, so neither is the step or its task)."""
+        from tasks.models import TaskStep
+        from . import make_batch
+        task = make_task(self.kl, "CH-0012", steps=2)
+        step = task.steps.get(position=1)
+        make_batch(self.kl, substance=task.substance, task_step=step)
+        with self.assertRaises(ProtectedError):
+            task.delete()
+        self.assertTrue(Task.objects.filter(pk=task.pk).exists())
+        self.assertEqual(TaskStep.objects.filter(task=task).count(), 2)
 
     def test_an_entry_a_step_names_cannot_be_deleted(self) -> None:
         """Requirement: Imported rows (a scope entry that a row names

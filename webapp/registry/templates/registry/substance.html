@@ -52,9 +52,9 @@
 {% for item in items %}<li><a href="/lab/inventory/items/{{ item.pk }}/">{% if item.article_number %}{{ item.article_number }} · {% endif %}{{ item.container }}</a> {% blocktranslate count count=item.quantity %}{{ count }} container{% plural %}{{ count }} containers{% endblocktranslate %}</li>
 {% endfor %}</ul>
 {% else %}<p>{% translate "None" context "registry" %}</p>
-{% endif %}<h2>{% translate "Bulk lots" context "substance" %}</h2>
-{% if lots %}<ul class="lab-links">
-{% for lot in lots %}<li><a href="/lab/inventory/bulk/{{ lot.pk }}/">{{ lot.batch|default:lot.pk }}</a> {{ lot.origin }}</li>
+{% endif %}<h2>{% translate "Batches" context "substance" %}</h2>
+{% if batches %}<ul class="lab-links">
+{% for batch, stock in batches %}<li><a href="/lab/inventory/batches/{{ batch.pk }}/">{{ batch }}</a>{% for amount, unit in stock %} {{ amount|decimal }} {{ unit }}{% endfor %}</li>
 {% endfor %}</ul>
 {% else %}<p>{% translate "None" context "registry" %}</p>
 {% endif %}<h2>{% translate "Tasks" context "substance" %}</h2>

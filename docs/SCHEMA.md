@@ -292,7 +292,7 @@ root; they do not work under a path prefix or without the lab.
 
 The lab substance page shows the record, structure image when present,
 procedures that make or use it, sequences whose target it is, its route
-tree, containers, open bulk lots and tasks. **Made by** and **Used in**
+tree, containers, batches and tasks. **Made by** and **Used in**
 list procedures by ID; **Made by** lists each general-procedure entry
 that makes the substance. **Sequences** follows **Used in** when any
 sequence names it as its target, linking those sequences by title,

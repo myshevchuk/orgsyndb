@@ -108,9 +108,9 @@
 {% include "inventory/item_actions.html" %}</p>
 {% endif %}<h3>{% translate "Finished containers" %}</h3>
 <dl class="detail-location"><dt>{% translate "Compartment" %}</dt><dd>{{ item.compartment|default:missing }}</dd><dt>{% translate "Box" %}</dt><dd>{{ item.box|default:missing }}</dd></dl>
-{% if bulk.lots %}<h3>{% translate "Bulk, stored separately" %}</h3>
+{% if bulk.vessels %}<h3>{% translate "Bulk, stored separately" %}</h3>
 <ul class="detail-lots">
-{% for lot in bulk.lots %}<li><strong>{{ lot.location|default:missing }}</strong> <a href="/lab/inventory/bulk/{{ lot.pk }}/">{% translate "Batch" %} {{ lot.batch|default:lot.pk }}</a> · {{ lot.amount|in_lot_unit:lot }}</li>
+{% for vessel in bulk.vessels %}<li><strong>{% if vessel.location %}{{ vessel.location }}{% elif vessel.flask %}{% translate "Flask" %}{% else %}{{ missing }}{% endif %}</strong> <a href="/lab/inventory/vessels/{{ vessel.pk }}/">{{ vessel }}</a> · {{ vessel.amount|in_vessel_unit:vessel }}</li>
 {% endfor %}</ul>
 {% endif %}<h3>{% translate "Consumption" %}</h3>
 <dl class="detail-figures">

@@ -1,19 +1,25 @@
 """Tests of the task forms (task-tracker: Task forms, Task record)."""
 
 from datetime import date
+from decimal import Decimal
 
+from django.utils import timezone
+
+from inventory.bookings import record_batch
+from inventory.models import Vessel
 from tasks.models import Task
 
 from . import (berlin, context_form, done_days, edit_data, field_value,
-               frozen, make_lot, make_task, page, past, sent_messages,
-               substance_for, task_form_data, task_steps, task_url)
+               frozen, make_batch, make_task, make_vessel, make_withdrawal,
+               page, past, sent_messages, substance_for, task_form_data,
+               task_steps, task_url)
 from .collection_support import (accept, changed_collection,
                                  import_collection, without_ids)
-from .task_support import NEW, TaskCase, history_text, make_product_lot
+from .task_support import NEW, TaskCase, history_text, make_product_batch
 
 FIELDS = {"substance", "priority", "assignee", "started", "ended", "sequence",
-          "start_step", "steps_total", "steps_done", "batch", "report",
-          "qc_list", "note"}
+          "start_step", "steps_total", "steps_done", "report", "qc_list",
+          "note"}
 
 
 class FormCase(TaskCase):
@@ -69,28 +75,24 @@ class CreateTests(FormCase):
         self.assertIn(f"Task {number} saved.", page(done).text())
 
     def test_all_fields_are_saved(self) -> None:
-        make_lot(self.kl, substance=substance_for("Probe"), batch="B-9")
         self.client.post(NEW, task_form_data(
             substance="probe", priority="low", assignee=str(self.ae.pk),
-            started="2025-03-02", ended="2025-03-05", steps_total="5",
-            steps_done="3", batch="B-9", report="on", qc_list="on",
-            note="Zeile eins\nZeile zwei"))
+            started="2025-03-02", steps_total="5", steps_done="3",
+            report="on", qc_list="on", note="Zeile eins\nZeile zwei"))
         task = self.only_task()
         self.assertEqual(
             (task.substance.key, task.priority, task.assignee),
             ("probe", "low", self.ae))
-        self.assertEqual((task.started, task.ended),
-                         (past(2), past(5)))
+        self.assertEqual((task.started, task.ended), (past(2), None))
         self.assertEqual(task.steps.count(), 5)
         self.assertEqual(
             [d is not None for d in done_days(task)],
             [True, True, True, False, False])
-        self.assertEqual(task.batch, "B-9")
         self.assertTrue(task.report)
         self.assertTrue(task.qc_list)
         self.assertFalse(task.cancelled)
         self.assertIn("Zeile zwei", task.note)
-        self.assertEqual(task.state, "ended")
+        self.assertEqual(task.state, "running")
 
     def test_steps_done_defaults_to_zero(self) -> None:
         self.client.post(NEW, task_form_data(steps_total="4"))
@@ -165,9 +167,12 @@ class ValidationTests(FormCase):
         self.assertEqual(Task.objects.count(), 0)
 
     def test_same_day_is_allowed(self) -> None:
-        make_lot(self.kl, substance=substance_for("Aspirin"), batch="B-1")
-        self.client.post(NEW, task_form_data(
-            started="2025-03-04", ended="2025-03-04", batch="B-1"))
+        self.client.post(NEW, task_form_data(started="2025-03-04",
+                                             steps_total="1"))
+        task = self.only_task()
+        make_product_batch(task)
+        done = self.change(task, ended="2025-03-04")
+        self.assertEqual(done.status_code, 302)
         self.assertEqual(self.only_task().state, "ended")
 
     def test_dates_may_not_lie_in_the_future(self) -> None:
@@ -219,11 +224,6 @@ class ValidationTests(FormCase):
                     substance=text)), "substance")
         self.assertEqual(Task.objects.count(), 0)
 
-    def test_batch_is_bounded(self) -> None:
-        self.refused(self.client.post(NEW, task_form_data(
-            batch="b" * 31)), "batch")
-        self.assertEqual(Task.objects.count(), 0)
-
     def test_priority_must_be_one_of_the_three(self) -> None:
         self.refused(self.client.post(NEW, task_form_data(
             priority="urgent")), "priority")
@@ -234,11 +234,9 @@ class ValidationTests(FormCase):
 
     def test_the_form_keeps_what_was_typed(self) -> None:
         done = self.client.post(NEW, task_form_data(
-            substance="probe", batch="B-9", steps_total="3",
-            steps_done="4"))
+            substance="probe", steps_total="3", steps_done="4"))
         root = page(done)
         self.assertEqual(field_value(root, "substance"), "probe")
-        self.assertEqual(field_value(root, "batch"), "B-9")
         self.assertEqual(field_value(root, "steps_done"), "4")
 
     def test_a_refused_form_sends_no_success_message(self) -> None:
@@ -251,15 +249,13 @@ class EditTests(FormCase):
     def test_the_form_shows_the_task(self) -> None:
         task = make_task(self.kl, substance="Probe", priority="low",
                          assignee=self.ae, started=past(2),
-                         steps=5, done=2, batch="B-9",
-                         report=True, note="Notiz")
+                         steps=5, done=2, report=True, note="Notiz")
         root = page(self.client.get(task_url(task, "edit")))
         self.assertEqual(field_value(root, "substance"), "probe")
         self.assertEqual(field_value(root, "priority"), "low")
         self.assertEqual(field_value(root, "assignee"), str(self.ae.pk))
         self.assertEqual(field_value(root, "steps_total"), "5")
         self.assertEqual(field_value(root, "steps_done"), "2")
-        self.assertEqual(field_value(root, "batch"), "B-9")
         self.assertEqual(field_value(root, "report"), "on")
         self.assertEqual(field_value(root, "qc_list"), "")
         self.assertEqual(field_value(root, "note"), "Notiz")
@@ -268,12 +264,11 @@ class EditTests(FormCase):
         task = make_task(self.kl, substance="Probe")
         self.client.force_login(self.ae)
         done = self.client.post(task_url(task, "edit"), edit_data(
-            task, priority="high", batch="B-1", cancelled="on"))
+            task, priority="high", cancelled="on"))
         self.assertRedirects(done, task_url(task),
                              fetch_redirect_response=False)
         task.refresh_from_db()
         self.assertEqual(task.priority, "high")
-        self.assertEqual(task.batch, "B-1")
         self.assertTrue(task.cancelled)
         self.assertEqual(task.state, "cancelled")
         self.assertEqual(task.created_by, self.kl)
@@ -301,8 +296,8 @@ class EditTests(FormCase):
 
     def test_flags_can_be_turned_off(self) -> None:
         task = make_task(self.kl, started=past(1), ended=past(2),
-                         report=True, qc_list=True, batch="B-7")
-        make_product_lot(task)
+                         report=True, qc_list=True, steps=1)
+        make_product_batch(task)
         data = edit_data(task)
         del data["report"]
         self.client.post(task_url(task, "edit"), data)
@@ -533,9 +528,7 @@ class SequenceFieldTests(FormCase):
     def test_a_withdrawn_sequence_is_kept_by_a_save(self) -> None:
         """Scenario: Sequence gone from the collection (through the
         form)."""
-        make_lot(self.kl, substance=substance_for("CH-0010"), batch="B-1")
-        self.create(sequence="SEQ-0001", started="2025-03-01",
-                    ended="2025-03-02", batch="B-1")
+        self.create(sequence="SEQ-0001", started="2025-03-01")
         task = self.only_task()
         import_collection(without_ids("SEQ-0001"))
         done = self.change(task, report="on")
@@ -633,10 +626,10 @@ class ConsistencyTests(FormCase):
         self.assertIn("Stufe 3", text)
 
 
-class ProductLotTests(FormCase):
+class ProductBatchTests(FormCase):
     """Requirement: Task record (a task that is ended and has not failed
-    has a batch and a product lot, and a save that would end one without
-    them is refused) and Task forms."""
+    has a product batch, and a save that would end one without it is
+    refused) and Task forms."""
 
     def running(self, **fields) -> Task:
         return make_task(self.kl, "Aspirin", started=past(1), steps=2,
@@ -649,62 +642,243 @@ class ProductLotTests(FormCase):
         self.assertTrue(any(name in errors for name in fields),
                         f"no error at {fields}: {sorted(errors)}")
 
-    def test_ending_needs_a_product_lot(self) -> None:
-        """Scenario: Ending needs a product lot (through the form)."""
-        task = self.running(batch="B-7")
+    def test_ending_needs_a_product_batch(self) -> None:
+        """Scenario: Ending needs a product batch (through the form)."""
+        task = self.running()
         done = self.change(task, ended="2025-03-04")
-        self.refused_at(done, "ended", "batch")
+        self.refused_at(done, "ended")
         task.refresh_from_db()
         self.assertIsNone(task.ended)
         self.assertEqual(task.history.count(), 1)
-        make_product_lot(task)
+        record_batch(self.kl, substance=task.substance, number="KL1",
+                     task_step=task.steps.get(position=2),
+                     amount=Decimal("2"), unit="g")
         done = self.change(task, ended="2025-03-04")
         self.assertRedirects(done, task_url(task),
                              fetch_redirect_response=False)
         task.refresh_from_db()
         self.assertEqual((task.ended, task.state), (past(4), "ended"))
 
-    def test_ending_needs_a_batch(self) -> None:
-        task = self.running()
-        make_product_lot(task, batch="")
-        self.refused_at(self.change(task, ended="2025-03-04"), "ended",
-                        "batch")
-        task.refresh_from_db()
-        self.assertIsNone(task.ended)
-
-    def test_only_a_made_lot_of_the_substance_and_the_batch_counts(
+    def test_only_a_batch_of_the_substance_made_by_a_step_of_the_task_counts(
             self) -> None:
-        """Requirement: Task record (a made lot of its substance whose
-        batch is the task's batch)."""
-        task = self.running(batch="B-7")
-        make_product_lot(task, source="bought", supplier="Sigma")
-        make_product_lot(task, substance=substance_for("Probe"))
-        make_product_lot(task, batch="B-8")
-        self.refused_at(self.change(task, ended="2025-03-04"), "ended",
-                        "batch")
+        """Requirement: Task record (its product batches those of the
+        batches its steps made whose substance is the task's)."""
+        task = self.running()
+        other = self.running()
+        make_batch(self.kl, substance=substance_for("Probe"),
+                   task_step=task.steps.get(position=1))
+        make_batch(self.kl, substance=task.substance)
+        make_batch(self.kl, substance=task.substance, source="bought",
+                   supplier="Sigma")
+        make_batch(self.kl, substance=task.substance,
+                   task_step=other.steps.get(position=1))
+        self.refused_at(self.change(task, ended="2025-03-04"), "ended")
         task.refresh_from_db()
         self.assertIsNone(task.ended)
 
-    def test_a_new_task_that_ended_needs_its_lot_too(self) -> None:
+    def test_a_new_task_that_ended_is_refused(self) -> None:
+        """Requirement: Task record (a task entered after the fact is
+        created running, its batch recorded, and then ended)."""
         data = task_form_data(started="2025-03-01", ended="2025-03-04",
-                              batch="B-7")
-        self.refused_at(self.client.post(NEW, data), "ended", "batch")
+                              steps_total="2")
+        self.refused_at(self.client.post(NEW, data), "ended")
         self.assertEqual(Task.objects.count(), 0)
-        make_lot(self.kl, substance=substance_for("Aspirin"), batch="B-7")
-        self.assertEqual(self.client.post(NEW, data).status_code, 302)
-        self.assertEqual(self.only_task().state, "ended")
 
-    def test_a_task_not_ended_needs_no_lot(self) -> None:
-        task = self.running(batch="B-7")
+    def test_ending_needs_a_step(self) -> None:
+        task = make_task(self.kl, "Aspirin", started=past(1))
+        self.refused_at(self.change(task, ended="2025-03-04"), "ended")
+        task.refresh_from_db()
+        self.assertIsNone(task.ended)
+
+    def test_a_task_not_ended_needs_no_batch(self) -> None:
+        task = self.running()
         done = self.change(task, note="Notiz")
         self.assertEqual(done.status_code, 302)
         task.refresh_from_db()
         self.assertEqual(task.note, "Notiz")
 
 
+class WriteOffTests(FormCase):
+    """Requirement: Task record (a save that ends, fails or cancels a
+    task writes off what its flasks hold, dated the day it is booked,
+    and a refused save writes off nothing)."""
+
+    def running(self, **fields) -> Task:
+        return make_task(self.kl, "CH-0012", started=past(1), steps=2,
+                         **fields)
+
+    def newest(self, vessel: Vessel):
+        return vessel.movements.order_by("-pk").first()
+
+    def test_a_backdated_end_books_the_remainder_today(self) -> None:
+        task = self.running()
+        flask = make_product_batch(task, "2", "g", flask=True
+                                   ).vessels.get()
+        done = self.change(task, ended="2025-03-04")
+        self.assertEqual(done.status_code, 302)
+        task.refresh_from_db()
+        self.assertEqual(task.ended, past(4))
+        flask.refresh_from_db()
+        self.assertEqual(flask.amount, 0)
+        latest = self.newest(flask)
+        self.assertEqual((latest.kind, latest.amount, latest.date),
+                         ("remainder", Decimal("2000"),
+                          timezone.localdate()))
+
+    def test_a_failure_writes_off_an_intermediates_flask(self) -> None:
+        task = self.running()
+        intermediate = make_batch(
+            self.kl, substance=substance_for("acetophenone"),
+            task_step=task.steps.get(position=1))
+        flask = make_vessel(self.kl, intermediate, unit="mg", amount="300",
+                            flask=True)
+        done = self.change(task, ended="2025-03-04", failed="on")
+        self.assertEqual(done.status_code, 302)
+        flask.refresh_from_db()
+        self.assertEqual(flask.amount, 0)
+        latest = self.newest(flask)
+        self.assertEqual((latest.kind, latest.amount, latest.date),
+                         ("remainder", Decimal("300"),
+                          timezone.localdate()))
+
+    def test_cancelling_writes_off_the_flasks(self) -> None:
+        task = self.running()
+        flask = make_product_batch(task, "2", "g", flask=True
+                                   ).vessels.get()
+        done = self.change(task, cancelled="on")
+        self.assertEqual(done.status_code, 302)
+        flask.refresh_from_db()
+        self.assertEqual(flask.amount, 0)
+        self.assertEqual(self.newest(flask).kind, "remainder")
+
+    def test_stored_vessels_are_left(self) -> None:
+        task = self.running()
+        batch = make_product_batch(task, "2", "g", flask=True)
+        stored = make_vessel(self.kl, batch, unit="g", amount="1",
+                             location="Regal")
+        self.change(task, ended="2025-03-04")
+        stored.refresh_from_db()
+        self.assertEqual(stored.amount, Decimal("1000"))
+
+    def test_a_refused_save_keeps_the_flask(self) -> None:
+        """Scenario: A refused save keeps the flask."""
+        task = self.running()
+        intermediate = make_batch(
+            self.kl, substance=substance_for("acetophenone"),
+            task_step=task.steps.get(position=1))
+        flask = make_vessel(self.kl, intermediate, unit="mg", amount="300",
+                            flask=True)
+        done = self.change(task, ended="2025-03-04")
+        self.assertEqual(done.status_code, 200)
+        self.assertIn("ended", context_form(done).errors)
+        task.refresh_from_db()
+        self.assertEqual((task.state, task.ended), ("running", None))
+        flask.refresh_from_db()
+        self.assertEqual(flask.amount, Decimal("300"))
+        self.assertEqual(flask.movements.count(), 1)
+
+    def test_a_save_that_does_not_close_the_task_keeps_the_flask(
+            self) -> None:
+        task = self.running()
+        flask = make_product_batch(task, "2", "g", flask=True
+                                   ).vessels.get()
+        self.change(task, note="Notiz")
+        flask.refresh_from_db()
+        self.assertEqual(flask.amount, Decimal("2000"))
+
+
+class BatchBoundSteps(FormCase):
+    """Requirement: Task record and Task forms (the substance, the
+    sequence, the start step and the steps total of a task whose steps
+    made a batch or took a withdrawal)."""
+
+    def test_the_substance_is_fixed_once_a_step_made_a_batch(self) -> None:
+        task = make_task(self.kl, "Probe", started=past(1), steps=2)
+        self.assertEqual(self.change(task, substance="aspirin"
+                                     ).status_code, 302)
+        task.refresh_from_db()
+        make_batch(self.kl, substance=task.substance,
+                   task_step=task.steps.get(position=1))
+        done = self.change(task, substance="probe")
+        self.assertEqual(done.status_code, 200)
+        self.assertIn("substance", context_form(done).errors)
+        task.refresh_from_db()
+        self.assertEqual(task.substance.key, "aspirin")
+        self.assertEqual(self.change(task, note="Notiz").status_code, 302)
+
+    def test_the_total_cannot_remove_a_step_that_made_a_batch(self) -> None:
+        task = make_task(self.kl, "Probe", started=past(1), steps=3)
+        make_batch(self.kl, substance=task.substance,
+                   task_step=task.steps.get(position=3))
+        self.refused(self.change(task, steps_total="2"), "steps_total")
+        self.assertEqual(Task.objects.get(pk=task.pk).steps.count(), 3)
+
+    def test_the_total_cannot_remove_a_step_that_took_a_withdrawal(
+            self) -> None:
+        task = make_task(self.kl, "Probe", started=past(1), steps=3)
+        vessel = make_vessel(self.kl, article="CH-0012", unit="g",
+                             amount="2")
+        make_withdrawal(self.kl, vessel, task.steps.get(position=3), "0.5")
+        self.refused(self.change(task, steps_total="2"), "steps_total")
+        self.assertEqual(Task.objects.get(pk=task.pk).steps.count(), 3)
+
+    def test_the_total_may_remove_steps_that_did_nothing(self) -> None:
+        task = make_task(self.kl, "Probe", started=past(1), steps=3)
+        make_batch(self.kl, substance=task.substance,
+                   task_step=task.steps.get(position=1))
+        done = self.change(task, steps_total="1")
+        self.assertEqual(done.status_code, 302)
+        self.assertEqual(Task.objects.get(pk=task.pk).steps.count(), 1)
+
+    def test_the_sequence_is_fixed_once_a_step_made_a_batch(self) -> None:
+        """Requirement: Task record (a sequence changes only while no
+        step has made a batch or taken a withdrawal)."""
+        self.create(sequence="SEQ-0002", started="2025-03-01")
+        task = self.only_task()
+        first = task.steps.get(position=1)
+        make_batch(self.kl, substance=first.products()[0],
+                   task_step=first)
+        before = task_steps(task)
+        for fields in ({"sequence": "SEQ-0001"},
+                       {"sequence": "", "steps_total": "2"}):
+            with self.subTest(**fields):
+                self.refused(self.change(self.only_task(), **fields),
+                             "sequence")
+                self.assertEqual(task_steps(self.only_task()), before)
+        self.assertEqual(self.only_task().sequence.key, "SEQ-0002")
+
+    def test_the_start_step_is_fixed_once_a_step_made_a_batch(self) -> None:
+        self.create(sequence="SEQ-0001", started="2025-03-01")
+        task = self.only_task()
+        first = task.steps.get(position=1)
+        make_batch(self.kl, substance=first.products()[0],
+                   task_step=first)
+        done = self.change(self.only_task(), start_step="2")
+        self.assertEqual(done.status_code, 200)
+        self.assertEqual(self.only_task().start_step, 1)
+
+    def test_a_sequence_is_fixed_once_a_step_took_a_withdrawal(self) -> None:
+        self.create(sequence="SEQ-0002", started="2025-03-01")
+        task = self.only_task()
+        vessel = make_vessel(self.kl, article="CH-0012", unit="g",
+                             amount="2")
+        make_withdrawal(self.kl, vessel, task.steps.get(position=2), "0.5")
+        self.refused(self.change(task, sequence="SEQ-0001"), "sequence")
+        self.assertEqual(self.only_task().sequence.key, "SEQ-0002")
+
+    def test_a_save_that_leaves_the_plan_may_follow_a_batch(self) -> None:
+        self.create(sequence="SEQ-0002", started="2025-03-01")
+        task = self.only_task()
+        first = task.steps.get(position=1)
+        make_batch(self.kl, substance=first.products()[0],
+                   task_step=first)
+        done = self.change(self.only_task(), note="Notiz")
+        self.assertEqual(done.status_code, 302)
+
+
 class FailedTaskTests(FormCase):
-    """Requirement: Task forms (failed, on the edit form only; a batch on
-    a failed task is invalid) and Task record."""
+    """Requirement: Task forms (failed, on the edit form only) and Task
+    record."""
 
     def running(self, **fields) -> Task:
         return make_task(self.kl, "Aspirin", started=past(1), steps=2,
@@ -716,15 +890,14 @@ class FailedTaskTests(FormCase):
         self.assertRedirects(done, task_url(task),
                              fetch_redirect_response=False)
         task.refresh_from_db()
-        self.assertEqual((task.state, task.batch, task.ended),
-                         ("failed", "", past(4)))
+        self.assertEqual((task.state, task.ended), ("failed", past(4)))
         self.assertFalse(task.needs_follow_up)
         text = page(self.client.get(task_url(task))).text()
         self.assertIn("Fehlgeschlagen", text)
 
-    def test_a_failed_task_needs_no_product_lot(self) -> None:
+    def test_a_failed_task_needs_no_product_batch(self) -> None:
         """Requirement: Task record (a task that is ended and has not
-        failed has a batch and a product lot)."""
+        failed has a product batch)."""
         task = self.running()
         self.change(task, ended="2025-03-04", failed="on")
         task = Task.objects.get(pk=task.pk)
@@ -733,18 +906,26 @@ class FailedTaskTests(FormCase):
         task.refresh_from_db()
         self.assertEqual((task.note, task.state), ("Notiz", "failed"))
 
-    def test_a_batch_on_a_failed_task_is_refused(self) -> None:
-        """Requirement: Task forms (a batch on a failed task)."""
-        task = self.running(batch="B-8")
+    def test_a_task_with_a_product_batch_cannot_be_marked_failed(
+            self) -> None:
+        """Requirement: Task record (a failed task has no product
+        batch)."""
+        task = self.running()
+        make_product_batch(task)
         done = self.change(task, ended="2025-03-04", failed="on")
         self.assertEqual(done.status_code, 200)
-        errors = context_form(done).errors
-        self.assertTrue("batch" in errors or "failed" in errors,
-                        sorted(errors))
+        self.assertTrue(context_form(done).errors)
         task.refresh_from_db()
-        self.assertEqual((task.failed, task.batch, task.ended),
-                         (False, "B-8", None))
+        self.assertEqual((task.failed, task.ended), (False, None))
         self.assertEqual(task.history.count(), 1)
+
+    def test_a_batch_of_an_intermediate_does_not_stop_a_failure(
+            self) -> None:
+        task = self.running()
+        make_batch(self.kl, substance=substance_for("Probe"),
+                   task_step=task.steps.get(position=1))
+        done = self.change(task, ended="2025-03-04", failed="on")
+        self.assertEqual(done.status_code, 302)
 
     def test_the_flag_can_be_turned_off(self) -> None:
         task = self.running()

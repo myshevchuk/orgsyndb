@@ -5,8 +5,8 @@ from typing import Any
 
 from vocabulary.models import Project, ReactionType
 
-from . import (berlin, frozen, make_group, make_item, make_lot,
-               make_substance, make_task, table)
+from . import (berlin, frozen, make_group, make_batch, make_item,
+               make_substance, make_task, make_vessel, table)
 from .collection_support import accept, make_import, make_procedure
 from .demo_support import SeededCase
 from .inventory_support import SUBSTANCE_PAGE
@@ -288,12 +288,12 @@ class SubstancePageTests(RegistryCase):
 
 
 class SectionTests(RegistryCase):
-    """The sections ``Gebinde``, ``Bulk-Lose`` and ``Aufträge``."""
+    """The sections ``Gebinde``, ``Chargen`` and ``Aufträge``."""
 
     def sections(self, key: str) -> dict:
         root = self.get(substance_url(key))
         return {name: section(root, name)
-                for name in ("Gebinde", "Bulk-Lose", "Aufträge")}
+                for name in ("Gebinde", "Chargen", "Aufträge")}
 
     def test_empty_sections_say_none(self) -> None:
         for name, held in self.sections("acetophenone").items():
@@ -304,7 +304,7 @@ class SectionTests(RegistryCase):
     def test_the_sections_in_english(self) -> None:
         accept(language="en")
         root = self.get(substance_url("acetophenone"))
-        for name in ("Containers", "Bulk lots", "Tasks"):
+        for name in ("Containers", "Batches", "Tasks"):
             with self.subTest(section=name):
                 self.assertIn("None", section(root, name).text())
 
@@ -321,25 +321,58 @@ class SectionTests(RegistryCase):
                    for item in (small, large)))
         self.assertNotIn("Keine", held.text())
 
-    def test_the_open_lots_and_no_used_up_one(self) -> None:
+    def test_the_batches_of_the_substance(self) -> None:
+        """Requirement: Registry pages (`Chargen`, its batches, each
+        linking to its page)."""
+        from datetime import date
         cinnamic = self.records["cinnamic"]
-        open_lot = make_lot(self.kl, substance=cinnamic, amount="5",
-                            batch="B-1")
-        make_lot(self.kl, substance=cinnamic, amount="0", batch="B-USED")
-        make_lot(self.kl, substance=self.records["acetophenone"],
-                 amount="5", batch="B-OTHER")
-        held = self.sections("cinnamic-acid")["Bulk-Lose"]
-        self.assertEqual([a.get("href") for a in held.find_all("a")],
-                         [f"/lab/inventory/bulk/{open_lot.pk}/"])
+        older = make_batch(self.kl, substance=cinnamic, number="B-1",
+                           date=date(2026, 1, 1))
+        newer = make_batch(self.kl, substance=cinnamic, number="B-2",
+                           date=date(2026, 6, 1))
+        undated = make_batch(self.kl, substance=cinnamic, number="B-3")
+        make_batch(self.kl, substance=self.records["acetophenone"],
+                   number="B-OTHER")
+        held = self.sections("cinnamic-acid")["Chargen"]
+        self.assertEqual(
+            [a.get("href") for a in held.find_all("a")],
+            [f"/lab/inventory/batches/{batch.pk}/"
+             for batch in (newer, older, undated)])
+        self.assertNotIn("Keine", held.text())
 
-    def test_the_lots_of_a_substance_without_an_article(self) -> None:
-        lot = make_lot(self.kl, substance=self.records["acetophenone"],
-                       amount="5", batch="B-1")
-        held = self.sections("acetophenone")["Bulk-Lose"]
+    def test_a_batch_is_followed_by_the_amount_in_its_open_vessels(
+            self) -> None:
+        from .inventory_support import has_amount
+        cinnamic = self.records["cinnamic"]
+        batch = make_batch(self.kl, substance=cinnamic, number="B-1")
+        make_vessel(self.kl, batch, unit="g", amount="2", flask=True)
+        make_vessel(self.kl, batch, unit="mg", amount="30", location="A")
+        make_vessel(self.kl, batch, unit="mg", amount="0", location="B")
+        held = self.sections("cinnamic-acid")["Chargen"]
+        text = held.text()
+        self.assertTrue(has_amount(text, "2", "g"), text)
+        self.assertTrue(has_amount(text, "30", "mg"), text)
+
+    def test_a_batch_without_vessels_is_listed(self) -> None:
+        batch = make_batch(self.kl, substance=self.records["cinnamic"],
+                           number="B-1")
+        held = self.sections("cinnamic-acid")["Chargen"]
         self.assertEqual([a.get("href") for a in held.find_all("a")],
-                         [f"/lab/inventory/bulk/{lot.pk}/"])
+                         [f"/lab/inventory/batches/{batch.pk}/"])
+
+    def test_the_batches_of_a_substance_without_an_article(self) -> None:
+        batch = make_batch(self.kl,
+                           substance=self.records["acetophenone"],
+                           number="B-1")
+        held = self.sections("acetophenone")["Chargen"]
+        self.assertEqual([a.get("href") for a in held.find_all("a")],
+                         [f"/lab/inventory/batches/{batch.pk}/"])
         self.assertIn("Keine", self.sections("acetophenone")["Gebinde"]
                       .text())
+
+    def test_no_bulk_lots_section_remains(self) -> None:
+        root = self.get(substance_url("cinnamic-acid"))
+        self.assertNotIn("Bulk-Lose", root.text())
 
     def test_the_tasks(self) -> None:
         task = make_task(self.kl, self.records["cinnamic"])

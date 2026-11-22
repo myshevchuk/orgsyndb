@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from inventory.figures import consumption, counted_lines
-from inventory.models import DeliveryNote, Item, Level, Lot
+from inventory.models import DeliveryNote, Item, Level, Vessel
 from planning.plan import ArticleForecast, Plan, TaskLine
 from tasks.models import Priority, State
 
@@ -165,7 +165,7 @@ class Summary:
     of ITEMS; the containers delivered this year and last year through
     the same day, LAST_YEAR_END; the articles whose priority is high or
     medium, the planned and running tasks that are LATE; the RUNNING and
-    PLANNED tasks; and the open LOTS."""
+    PLANNED tasks; and the open VESSELS."""
 
     today: date
     parts: list[StockPart]
@@ -177,13 +177,13 @@ class Summary:
     late: int
     running: int
     planned: int
-    lots: int
+    vessels: int
 
 
 def summary(today: date, plan: Plan, items: list[Item],
             deliveries: list[Delivered]) -> Summary:
     """Return the summary on TODAY of ITEMS, every item, of DELIVERIES
-    and of what PLAN holds; the open lots counted are those of any
+    and of what PLAN holds; the open vessels counted are those of any
     substance."""
     end = a_year_before(today)
     states = Counter(task.state for task in plan.tasks)
@@ -198,7 +198,7 @@ def summary(today: date, plan: Plan, items: list[Item],
                 for found in plan.forecasts()),
         late=len(late), running=states[State.RUNNING],
         planned=states[State.PLANNED],
-        lots=Lot.objects.filter(amount__gt=0).count())
+        vessels=Vessel.objects.filter(amount__gt=0).count())
 
 
 def next_syntheses(plan: Plan) -> list[NextSynthesis]:

@@ -19,7 +19,7 @@ A database SHALL be a demo database when it holds the demo mark, which the demo 
 - **THEN** neither page has an element with the class `lab-demo` or `lab-demo-accounts`
 
 ### Requirement: Demo data command
-`manage.py demo_data` SHALL write the demo data set as of today in `Europe/Berlin`, `D`, into the database, all in one transaction, so that a failure leaves the database as it was, its records, histories and task counter included. Lab records are accounts with their access tokens, notebooks with their entries, substances, vocabulary terms, articles, tasks, items, delivery notes, bulk lots, entered consumption values, stored planning parameters, the collection's imports with their procedures, scope entries and sequences, issued IDs (collection-import "Imported rows"), change-history records and the demo mark. The command writes only with `ORGSYNDB_DEMO` true:
+`manage.py demo_data` SHALL write the demo data set as of today in `Europe/Berlin`, `D`, into the database, all in one transaction, so that a failure leaves the database as it was, its records, histories and task counter included. Lab records are accounts with their access tokens, notebooks with their entries, substances, vocabulary terms, articles, tasks, items, delivery notes, batches with their vessels, entered consumption values, stored planning parameters, the collection's imports with their procedures, scope entries and sequences, issued IDs (collection-import "Imported rows"), change-history records and the demo mark. The command writes only with `ORGSYNDB_DEMO` true:
 
 - without options, it exits 1 with a message and changes nothing when `ORGSYNDB_DEMO` is not true, the message naming `ORGSYNDB_DEMO`, or when the database holds lab records, the message naming `--replace`;
 - `--replace` deletes every lab record, with the movements, lines and change histories that belong to them, sets the task counter to zero and writes the data set, when the database is a demo database or holds no lab records. On any other database it exits 1 with a message saying it replaces only a demo database, and changes nothing; when `ORGSYNDB_DEMO` is not true, it exits 1 as above;
@@ -88,7 +88,7 @@ Every account but `mwolf` has the password `demo` and the email address `<user n
 The data set SHALL open the inventory on the opening day `O`, `D` less 400 days, and hold:
 
 - items of seven articles: `CH-0001`, `CH-0002`, `CH-0010`, `CH-0012`, `CH-0013` and `CH-0016`, the articles of the substances that set `item_number` in `examples/demo`; and `NV-0007`, the article of the substance `new-compound-7`, `Neuverbindung 7` (`New compound 7`), which the demo registry adds. At least one article has three sizes, and the sizes use the units `mg`, `g` and `umol`;
-- one item of the substance `1-phenylethanol`, whose article has no article number, opened after `O`, filled without a lot 89 days before `D`, and never delivered;
+- one item of the substance `1-phenylethanol`, whose article has no article number, opened after `O`, filled 89 days before `D` from the flask of the product batch of its task, which ends after that filling, and never delivered;
 - sizes that planning leaves out: `CH-0012` in 1 g, `discontinued`, and `CH-0010` in 25 g, `not_needed`, each set aside after its opening count and never delivered; and `CH-0001` in 250 mg, whose consumption is entered for the four quarters from the eighth to the fifth before the quarter of `O` and is none since;
 - `CH-0013` in 1 g, opened 60 days before `D`, with a delivery of one container every 15 days from then on;
 - each item's opening count, dated `O`, or later for a size added afterwards, and a compartment and a box, numbers such as `3` and `12`, the sizes of an article in one compartment;
@@ -97,7 +97,8 @@ The data set SHALL open the inventory on the opening day `O`, `D` less 400 days,
 - current delivery notes from `O` on, each with a recipient, some with several lines;
 - every delivery note numbered `LS-<year>-<nnn>`, where `<year>` is the year of its date and `<nnn>` counts the notes of that year in the order of their dates from `001`;
 - one delivery reversed with a note, and one correction with a note;
-- bulk lots, each with a batch, a location and the date it was made, and fillings from them, each naming its lot's movement; one lot used up, one lot corrected with a note, one lot of `NV-0007` in `umol`, one lot bought from a supplier, and one open lot, made in the lab, of a substance that has no article.
+- batches and vessels: made batches recorded from task steps, each naming its step's journal entry where the step names one, two of them naming one entry; made batches recorded without a step, each with its number, the date it was made and a stored vessel with a location; a batch of `NV-0007` with a vessel in `umol`; a batch bought from a supplier, with the supplier's article number and batch; and an open vessel of a made batch of a substance that has no article;
+- fillings, each from a vessel and naming its movement; one vessel used up, one corrected with a note, and one transfer from a flask into a stored vessel.
 
 #### Scenario: Item list
 - **WHEN** the data set is written as of `D` and a test client requests `/lab/inventory/end-products/`
@@ -120,10 +121,11 @@ The data set SHALL hold tasks for the articles of the demo inventory and for its
 
 - tasks in each state: planned, running, ended with `report` and `qc_list` on, ended needing follow-up, failed, and cancelled; on `D` the task list's default filter counts at least two planned, three running and two follow-up tasks;
 - at least three ended tasks matching `CH-0012`, so that its synthesis time is `längste der letzten 3 Synthesen`;
-- tasks of the sequences `SEQ-0001`, of the substance of `CH-0010`, and `SEQ-0002`, of the substance of `CH-0002`, of the data set's import, each with one step per step of its sequence from the one it starts at (task-tracker "Task record"); the first step of an ended task of `SEQ-0001` made a lot of salicylic acid, from which the planned task of `SEQ-0001` starts at its second step; one of them running with the first of its two steps done, which made a lot of its intermediate, and that lot withdrawn in part into its second step;
+- tasks of the sequences `SEQ-0001`, of the substance of `CH-0010`, and `SEQ-0002`, of the substance of `CH-0002`, of the data set's import, each with one step per step of its sequence from the one it starts at (task-tracker "Task record"); the first step of an ended task of `SEQ-0001` made a batch of salicylic acid, stored in a vessel, from which the planned task of `SEQ-0001` starts at its second step; one of them running with the first of its two steps done, which made a batch of its intermediate whose flask was withdrawn in part into its second step;
 - one task without an assignee;
-- an ended task of `1-phenylethanol`, whose article has no article number, with a batch and its product lot;
-- every other ended task that has not failed with a batch and a product lot of that batch, so that each such task lists its lots and each lot its task.
+- an ended task of `1-phenylethanol`, whose article has no article number, with its product batch;
+- every other ended task that has not failed with a product batch recorded from its last step, so that each such task lists its batches and each batch its task;
+- no flask of a task that is ended, failed or cancelled holding an amount.
 
 The planning parameters are stored, created with `target_days` 180 more than a year before `D` and changed to 365 since, every other value the default.
 
@@ -135,13 +137,13 @@ The planning parameters are stored, created with `target_days` 180 more than a y
 - **WHEN** the data set is written and a test reads the stored planning parameters
 - **THEN** their `target_days` is 365, every other value is its default, and their history lists a change of `target_days` from 180 to 365
 
-#### Scenario: Ended tasks have their lots
+#### Scenario: Ended tasks have their batches
 - **WHEN** the data set is written as of `D`
-- **THEN** every ended task that has not failed has a batch and a product lot, one task is failed and has no batch, and one lot was made by a task step and has a withdrawal into another step of the same task
+- **THEN** every ended task that has not failed has a product batch, one task is failed and has none, one batch was made by a task step and its flask has a withdrawal into another step of the same task, and no flask of a task that is ended, failed or cancelled holds an amount
 
 #### Scenario: A demo task from stock
 - **WHEN** the demo data set is written and a test client requests the page of the planned task of `SEQ-0001`
-- **THEN** it shows `SEQ-0001 ab Stufe 2` and one step, of `OSDB-0002`, and an open lot of `salicylic-acid` lists the first step of an ended task of `SEQ-0001` as the step that made it
+- **THEN** it shows `SEQ-0001 ab Stufe 2` and one step, of `OSDB-0002`, and an open vessel of `salicylic-acid` belongs to a batch whose page names the first step of an ended task of `SEQ-0001` as the step that made it
 
 ### Requirement: Demo planning
 On `D`, under the data set's parameters, the planning list SHALL show without `all=1` exactly the articles `CH-0012`, `CH-0013`, `CH-0010`, `CH-0016` and `NV-0007`:
@@ -182,7 +184,7 @@ The data set's free texts, categories, notes, recipients and locations, SHALL be
 
 #### Scenario: Same records whatever the language
 - **WHEN** the data set is written as of one day, once over an accepted import of language `en` and once on an empty database
-- **THEN** both databases hold the same items by article number, size, unit and quantity, the same movements by kind, count and date, the same lots by batch and amount, and the same tasks by number, substance and dates
+- **THEN** both databases hold the same items by article number, size, unit and quantity, the same movements by kind, count and date, the same batches by number, the same vessels by batch and amount, and the same tasks by number, substance and dates
 
 ### Requirement: Demo notebooks
 The data set SHALL register the notebooks `AE-1` of `klehmann`, `AE-2` of `aschmidt`, `CE-1` of `jkoch` and `CE-3` of `mwolf`, with no note, on `O` and made by `klehmann`, and `webapp/demo/registry.json` SHALL list them as the snapshot does. The data set's import gives the procedures the entries their `notebook` names (collection-import "Applying an import"), and the done first step of the running task of `SEQ-0002` names the entry `CE-3/2`.

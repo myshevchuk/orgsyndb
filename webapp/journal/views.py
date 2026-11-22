@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
 
 from collection.models import Procedure
+from inventory.models import Batch
 from journal.forms import NotebookEditForm, NotebookForm
 from journal.models import Notebook
 from tasks.models import TaskStep
@@ -32,14 +33,17 @@ def notebook_list(request: HttpRequest) -> HttpResponse:
 
 def notebook_page(request: HttpRequest, code: str) -> HttpResponse:
     """Show the notebook CODE with its owner, its note and its entries by
-    number, each with the procedures and the task steps that name it;
-    answer 404 for an unknown code."""
+    number, each with the procedures and the task steps that name it and
+    the batches it made, in the order of their IDs; answer 404 for an
+    unknown code."""
     notebook = get_object_or_404(Notebook.objects.select_related("user"),
                                  code=code)
     entries = notebook.entries.order_by("number").prefetch_related(
         Prefetch("procedures", queryset=Procedure.objects.order_by("key")),
         Prefetch("task_steps", queryset=TaskStep.objects.select_related(
-            "task").order_by("task__number", "position")))
+            "task").order_by("task__number", "position")),
+        Prefetch("batches", queryset=Batch.objects.select_related(
+            "substance").order_by("id")))
     return render(request, "journal/notebook.html", {
         "notebook": notebook, "entries": entries})
 

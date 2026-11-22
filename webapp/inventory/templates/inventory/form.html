@@ -5,12 +5,12 @@
 {% partialdef form inline %}{% if dialog %}<h2 id="lab-dialog-title">{{ title }}</h2>
 {% endif %}<form class="lab-form" method="post"{% if dialog %} action="{{ request.path }}" hx-post="{{ request.path }}" hx-target="#lab-dialog-body" hx-swap="innerHTML" hx-disabled-elt="#lab-dialog button"{% endif %}>{% csrf_token %}
 {{ form.non_field_errors }}
-{% for field in form %}<div class="lab-field{% if field.errors %} lab-field--error{% endif %}">
+{% for field in form %}{% if field.is_hidden %}{{ field }}{{ field.errors }}{% else %}<div class="lab-field{% if field.errors %} lab-field--error{% endif %}">
 {% if field.widget_type == "checkbox" %}{{ field }} {{ field.label_tag }}{% else %}{{ field.label_tag }}
 {{ field }}{% endif %}
 {% if field.help_text %}<p class="lab-help" id="{{ field.auto_id }}_helptext">{{ field.help_text }}</p>{% endif %}
 {{ field.errors }}
-</div>
+</div>{% endif %}
 {% endfor %}{% if unit %}<p class="lab-help">{% blocktranslate %}The amount is in {{ unit }}.{% endblocktranslate %}</p>
 {% endif %}{% if substances %}{% substance_datalist %}
 {% endif %}{% if categories %}<datalist id="categories">

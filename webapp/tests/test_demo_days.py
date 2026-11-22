@@ -99,12 +99,12 @@ class DayChecks:
 
     def test_ch_0010_offers_the_first_step_without_stock(self: Any
                                                           ) -> None:
-        """Scenario: Nothing in stock (every salicylic-acid lot at
+        """Scenario: Nothing in stock (every salicylic-acid vessel at
         zero)."""
-        from inventory.models import Lot
+        from inventory.models import Vessel
         self.stocked_actions()
-        Lot.objects.filter(substance__key="salicylic-acid").update(
-            amount=0)
+        Vessel.objects.filter(batch__substance__key="salicylic-acid"
+                              ).update(amount=0)
         cell = self.rows()["CH-0010"]["Maßnahmen"]
         self.assertIn("Synthese planen über SEQ-0001", cell.text())
         self.assertNotIn("ab Stufe", cell.text())
@@ -147,6 +147,25 @@ class DayChecks:
             with self.subTest(item=str(item)):
                 text = self.get(f"/lab/inventory/items/{item.pk}/").text()
                 self.assertIn("Kein Verbrauch, keine Prognose.", text)
+
+    def test_no_flask_of_a_closed_task_holds_an_amount(self: Any) -> None:
+        """Requirement: Demo tasks and parameters (no flask of a task
+        that is ended, failed or cancelled holding an amount), on every
+        seeding day."""
+        from inventory.models import Vessel
+        from tasks.models import State
+        for flask in Vessel.objects.filter(flask=True).select_related(
+                "batch__task_step__task"):
+            task = flask.batch.task_step.task
+            if task.state in (State.ENDED, State.FAILED, State.CANCELLED):
+                self.assertEqual(flask.amount, 0, (flask.pk, task.number))
+
+    def test_every_filling_names_a_vessel(self: Any) -> None:
+        """Requirement: Demo inventory (fillings, each from a vessel and
+        naming its movement), on every seeding day."""
+        from inventory.models import Movement
+        for filling in Movement.objects.filter(kind="filling"):
+            self.assertIsNotNone(filling.vessel_movement, filling.pk)
 
     def test_slack_lies_well_inside_its_band(self: Any) -> None:
         """Each article's slack lies at least ten days inside the band of

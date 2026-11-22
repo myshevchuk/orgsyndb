@@ -76,3 +76,6 @@ msgstr "Aufgabenschritte"
 
 msgid "No entries."
 msgstr "Keine Einträge."
+
+msgid "Batches"
+msgstr "Chargen"

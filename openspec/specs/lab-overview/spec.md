@@ -11,7 +11,7 @@ The package `overview` SHALL answer `/lab/` with the page `Labor auf einen Blick
   - `Abgegeben <year>` (`Delivered in <year>`), the current year: the containers delivered from 1 January through today, then `Vorjahr bis <date>: <n>` (`Last year to <date>: <n>`), the containers delivered from 1 January of the year before through `<date>`, the same day a year before, 28 February for 29 February;
   - `Fällige Synthesen` (`Syntheses due`), the number of articles whose forecast's priority is high or medium (production-planning "Slack and priority"), linking to `/lab/planning/`, then, when some planned or running task's slack is below zero, `<n> verspätet` (`<n> late`), the number of those tasks;
   - `Aufgaben` (`Tasks`), `<n> laufend · <m> geplant` (`<n> running · <m> planned`), the numbers of running and planned tasks, linking to `/lab/tasks/`;
-  - `Offene Bulk-Lose` (`Open bulk lots`), the number of lots, of any substance, holding an amount above zero, linking to `/lab/inventory/end-products/bulk/`.
+  - `Offene Gefäße` (`Open vessels`), the number of vessels, of any substance, holding an amount above zero, linking to `/lab/inventory/vessels/`.
 - **Next syntheses.** The `h2` `Nächste Synthesen` (`Next syntheses`), then a table of the five articles with a forecast of the smallest slack, ordered as the planning list orders them, with the columns `Artikelnr.`, `Name`, `Priorität`, `Spätester Start` and `Aufgabe` (`Article no.`, `Name`, `Priority`, `Latest start`, `Task`): the article number, linking to the page of its first item in the item list's order; the article's name; the priority; the latest start, or `–`; and the first of the article's planned and running tasks, running first, then by number, its number linking to its page, with its state and the mark `verspätet` when its slack is below zero, or `–`. A link `Zur Planung` (`To planning`) to `/lab/planning/` follows. Without a forecast, the text `Keine Prognosen.` (`No forecasts.`) takes the table's place.
 - **Deliveries per month.** The `h2` `Abgaben je Monat` (`Deliveries per month`), then an inline `svg` with a bar per month of the twelve months ending with the current one, oldest first, its height the containers delivered in that month, and beside it a bar `.previous` for the same month a year before, each bar titled `<month> <year>: <n>`, the month as the language names it, and each month labelled below its bars.
 - **Lists.** Each with an `h2` and an `ol`:
@@ -28,8 +28,8 @@ The stock bar and the figures are the page's summary, which `/lab/summary/` show
 - **THEN** the page has one `section.lab-overview`, whose stock bar holds the links `level-low` reading 1 and `level-ok` reading 2, in this order, linking to `/lab/inventory/end-products/?stock=low` and `?stock=ok`
 
 #### Scenario: Figures and lists
-- **WHEN** on 2026-11-07 notes of 2026-03-02 deliver 3 containers of `CH-0012` to `AK Weber` and of 2026-10-01 2 of `CH-0010` without a recipient, notes of 2025-06-01 and 2025-12-01 deliver 4 and 5 of `CH-0012`, a current note of 2026-10-02 delivering 6 of `CH-0010` is reversed, one task is running and two are planned, and one lot is open, and a test client requests `/lab/`
-- **THEN** the figures read 5 delivered in 2026, 4 to 07.11.2025, `1 laufend · 2 geplant` and 1 open lot; the most requested are `CH-0012` with 3 and `CH-0010` with 2; the recipients `AK Weber` with 3 alone; and the latest notes are those of 2026-10-02, 2026-10-01, 2026-03-02, 2025-12-01 and 2025-06-01
+- **WHEN** on 2026-11-07 notes of 2026-03-02 deliver 3 containers of `CH-0012` to `AK Weber` and of 2026-10-01 2 of `CH-0010` without a recipient, notes of 2025-06-01 and 2025-12-01 deliver 4 and 5 of `CH-0012`, a current note of 2026-10-02 delivering 6 of `CH-0010` is reversed, one task is running and two are planned, and one vessel is open, and a test client requests `/lab/`
+- **THEN** the figures read 5 delivered in 2026, 4 to 07.11.2025, `1 laufend · 2 geplant` and 1 open vessel; the most requested are `CH-0012` with 3 and `CH-0010` with 2; the recipients `AK Weber` with 3 alone; and the latest notes are those of 2026-10-02, 2026-10-01, 2026-03-02, 2025-12-01 and 2025-06-01
 
 #### Scenario: Deliveries per month
 - **WHEN** on 2026-11-07 the notes of 2026-03-02 deliver 3 containers and of 2025-03-15 4, and a test client requests `/lab/`
@@ -40,7 +40,7 @@ The stock bar and the figures are the page's summary, which `/lab/summary/` show
 - **THEN** the table lists five articles in the planning list's order, the first naming the task with `verspätet`, and `Fällige Synthesen` counts the articles of high or medium priority with `1 verspätet`
 
 #### Scenario: An empty lab
-- **WHEN** the database holds no items, notes, tasks or lots, and a test client requests `/lab/`
+- **WHEN** the database holds no items, notes, tasks or vessels, and a test client requests `/lab/`
 - **THEN** the page answers 200, the stock bar holds no link, the figures read 0, `Keine Prognosen.` replaces the table, the `svg` holds twelve bars and twelve bars `.previous`, all of height 0, and each list shows `Keine Abgaben.`
 
 #### Scenario: Overview in English
@@ -51,6 +51,6 @@ The stock bar and the figures are the page's summary, which `/lab/summary/` show
 `/lab/summary/` SHALL show, readable without signing in, the overview's summary alone: a `section.lab-summary` holding the `h1` `Labor auf einen Blick` (`Lab at a glance`), visually hidden, the stock bar and the figures as the overview page shows them, and a link `Zur Übersicht` (`To the overview`) to `/lab/`, every link opening in the top window. It is a page made to be framed: the web-app Page shell states its shell, without the site's header and with the demo note of a demo database. The site's home page frames it in a build that links the lab (site-theme "Home page").
 
 #### Scenario: Summary
-- **WHEN** the database holds two items at the level ok and one at low, one running task and one open lot, and a test client not signed in requests `/lab/summary/`
+- **WHEN** the database holds two items at the level ok and one at low, one running task and one open vessel, and a test client not signed in requests `/lab/summary/`
 - **THEN** the page holds one `section.lab-summary` with the stock bar's links `level-low` and `level-ok`, the four figures with their links, and the link to `/lab/`, and no `section.lab-overview`, no table and no `svg`
 

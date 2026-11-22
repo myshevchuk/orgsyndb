@@ -5,7 +5,7 @@ from django.test import TestCase
 
 from tasks.models import Task
 
-from . import make_task, make_user, page
+from . import add_steps, make_batch, make_task, make_user, page
 
 ADMIN = "/lab/admin/"
 TASKS = "/lab/admin/tasks/task/"
@@ -19,8 +19,10 @@ class AdminCase(TestCase):
                               is_superuser=True)
         cls.worker = make_user("lab-worker-kl", "KL")
         cls.first = make_task(cls.worker, substance="Aspirin")
-        cls.second = make_task(cls.worker, substance="Zimtsäure",
-                               batch="B-77")
+        cls.second = make_task(cls.worker, substance="Zimtsäure", steps=2)
+        cls.batch = make_batch(
+            cls.worker, substance=cls.second.substance, number="B-77",
+            task_step=cls.second.steps.get(position=2))
         cls.third = make_task(cls.worker, substance="Ferrocen")
 
     def setUp(self) -> None:
@@ -82,11 +84,22 @@ class TaskListTests(AdminCase):
                 self.assertIn(f"{TASKS}{wanted.pk}/change/", text)
                 self.assertNotIn(f"{TASKS}{self.first.pk}/change/", text)
 
-    def test_search_by_batch(self) -> None:
-        text = self.client.get(f"{TASKS}?q=B-77").content.decode()
+    def test_search_by_the_number_of_a_batch(self) -> None:
+        """Requirement: Tasks in the admin (search by the numbers of its
+        batches)."""
+        text = self.client.get(f"{TASKS}?q=b-77").content.decode()
         self.assertIn(self.second.number, text)
         self.assertNotIn(self.first.number, text)
         self.assertNotIn(self.third.number, text)
+
+    def test_search_by_the_number_of_a_batch_of_another_substance(
+            self) -> None:
+        add_steps(self.first, 1)
+        make_batch(self.worker, "acetophenone", number="ZW-1",
+                   task_step=self.first.steps.get())
+        text = self.client.get(f"{TASKS}?q=zw-1").content.decode()
+        self.assertIn(self.first.number, text)
+        self.assertNotIn(self.second.number, text)
 
 
 class HistoryTests(AdminCase):

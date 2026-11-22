@@ -9,6 +9,7 @@ from decimal import Decimal
 from typing import Any
 
 from django import forms
+from django.core.exceptions import ValidationError
 from django.forms import BaseForm
 from django.utils import timezone
 from django.utils.formats import number_format
@@ -16,7 +17,10 @@ from django.utils.translation import gettext_lazy as _
 from django.utils.translation import pgettext_lazy
 
 from inventory.bookings import Refused
-from inventory.models import DeliveryNote, Item, Lot, Source
+from inventory.figures import to_base
+from inventory.models import (FACTOR, Batch, DeliveryNote, Item, Source,
+                              Unit, Vessel)
+from journal.entries import entry_for, named
 from registry.forms import SubstanceKeyField, decimal_field
 from tasks.models import TaskStep
 
@@ -299,37 +303,40 @@ class ReversalForm(forms.Form):
 
 
 class FillForm(forms.Form):
-    """A filling of an item, from one of the open lots of its substance
-    or from none. The amount, in the lot's unit, may be left empty to take
-    the proposal."""
+    """A filling of an item from one of the open vessels of its
+    substance. The amount, in the vessel's unit, may be left empty to
+    take the proposal."""
 
     count = forms.IntegerField(label=_("Count"), min_value=1)
     date = forms.DateField(label=_("Date"), widget=DATE,
                            validators=[not_in_future])
-    lot = forms.ModelChoiceField(queryset=Lot.objects.none(),
-                                 label=_("Bulk lot"), required=False,
-                                 empty_label="–")
+    vessel = forms.ModelChoiceField(queryset=Vessel.objects.none(),
+                                    label=_("Vessel"), empty_label="–")
     amount = decimal_field(_("Amount taken"), required=False,
-                           help_text=_("In the unit of the lot; left empty, "
-                                       "the proposed amount is taken."))
+                           help_text=_("In the unit of the vessel; left "
+                                       "empty, the proposed amount is "
+                                       "taken."))
     note = forms.CharField(label=pgettext_lazy("inventory", "Note"),
                            required=False, widget=NOTE)
 
     def __init__(self, *args: Any, item: Item, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        lot = self.fields["lot"]
-        lot.queryset = Lot.objects.filter(
-            substance_id=item.article_id, amount__gt=0).order_by(
-                "made_on", "id")
-        lot.label_from_instance = lot_label
+        vessel = self.fields["vessel"]
+        vessel.queryset = Vessel.objects.filter(
+            batch__substance_id=item.article_id, amount__gt=0
+            ).select_related("batch__substance__article").order_by(
+                "batch__date", "id")
+        vessel.label_from_instance = vessel_label
         self.fields["date"].initial = timezone.localdate()
 
 
-def lot_label(lot: Lot) -> str:
-    """Return LOT as the filling form offers it: its batch, or its
-    number, and the amount it holds."""
-    return (f"{lot.batch or f'#{lot.pk}'} · "
-            f"{number_format(lot.shown_amount)} {lot.unit_label}")
+def vessel_label(vessel: Vessel) -> str:
+    """Return VESSEL as the filling form offers it: the vessel, its
+    kind, its location where it has one, and the amount it holds,
+    joined by `` · ``."""
+    parts = [str(vessel), str(vessel.kind_label), vessel.location,
+             f"{number_format(vessel.shown_amount)} {vessel.unit_label}"]
+    return " · ".join(part for part in parts if part)
 
 
 class CorrectionForm(forms.Form):
@@ -381,32 +388,232 @@ class ConsumptionForm(forms.Form):
                 self.data[name] = str(value)
 
 
-class LotForm(forms.ModelForm):
-    """A new bulk lot of a substance named by its key, made in the lab
-    unless the source chosen says bought, with its opening amount in
-    the lot's unit."""
+LOCATION = forms.TextInput(attrs={"list": "locations",
+                                  "autocomplete": "off"})
+
+
+class EntryField(forms.CharField):
+    """A lab notebook entry written ``<code>/<number>``, such as
+    ``AE-2/8``. The cleaned value is the text stripped, empty for none;
+    text that names no entry of a notebook the application has is an
+    error at the field. Cleaning creates no entry."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        kwargs.setdefault("label", _("Lab notebook"))
+        kwargs.setdefault("required", False)
+        kwargs.setdefault("max_length", 30)
+        kwargs.setdefault("widget", forms.TextInput(attrs={
+            "autocomplete": "off", "placeholder": "AE-2/8"}))
+        kwargs.setdefault("help_text", _(
+            "The entry the batch is written down in, as <code>/<number>; "
+            "it is created when it is first named."))
+        super().__init__(**kwargs)
+
+    def clean(self, value: Any) -> str:
+        """Return the entry VALUE names as text; refuse one that
+        ``journal.entries.named`` refuses."""
+        text = super().clean(value)
+        if text:
+            try:
+                named(text)
+            except ValidationError as error:
+                raise forms.ValidationError(error.messages) from error
+        return text
+
+
+def number_holder(number: str, own: int | None = None) -> Batch | None:
+    """Return the made batch other than the one with ID OWN that has
+    NUMBER regardless of case, or None."""
+    return Batch.objects.filter(
+        source=Source.MADE, number_key=number.casefold()
+    ).exclude(pk=own).first() if number else None
+
+
+class BatchForm(forms.Form):
+    """A new batch of a substance named by its key, made in the lab
+    unless the source chosen says bought.
+
+    The amount, in the unit chosen, opens the batch's first vessel at
+    the location given. For a batch made by the task STEP the form
+    holds the step as a hidden field and the step's journal entry, when
+    the step names one, in a field that cannot be changed, and the
+    amount, its yield, is required.
+    """
 
     substance = SubstanceKeyField()
-    amount = decimal_field(_("Amount"), min_value=0)
+    source = forms.ChoiceField(label=_("Source"), choices=Source.choices,
+                               required=False)
+    number = forms.CharField(label=_("Batch"), max_length=30,
+                             required=False)
+    journal_entry = EntryField()
+    date = forms.DateField(label=_("Date"), widget=DATE, required=False,
+                           validators=[not_in_future])
+    supplier = forms.CharField(label=_("Supplier"), max_length=100,
+                               required=False)
+    supplier_article_number = forms.CharField(
+        label=_("Supplier's article no."), max_length=50, required=False)
+    supplier_batch = forms.CharField(label=_("Supplier's batch"),
+                                     max_length=50, required=False)
+    note = forms.CharField(label=pgettext_lazy("inventory", "Note"),
+                           required=False, widget=NOTE)
+    amount = decimal_field(
+        _("Amount"), required=False,
+        help_text=_("Opens the batch's first vessel."))
+    unit = forms.ChoiceField(label=_("Unit"), choices=Unit.choices,
+                             required=False)
+    location = forms.CharField(
+        label=_("Location"), max_length=100, required=False,
+        widget=LOCATION,
+        help_text=_("Where the first vessel is stored; left empty for a "
+                    "batch made by a step, the amount stays in its "
+                    "flask."))
 
-    class Meta:
-        model = Lot
-        fields = ["substance", "source", "supplier", "unit", "amount",
-                  "batch", "location", "made_on", "note"]
-        widgets = {
-            "location": forms.TextInput(attrs={"list": "locations",
-                                               "autocomplete": "off"}),
-            "made_on": DATE,
-            "note": NOTE,
-        }
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, step: TaskStep | None = None,
+                 **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self.fields["source"].required = False
+        self.step = step
+        self.fields["date"].initial = timezone.localdate()
+        self.fields["unit"].initial = Unit.MG
+        if step is None:
+            return
+        self.fields["step"] = forms.IntegerField(
+            widget=forms.HiddenInput, required=False, initial=step.pk)
+        self.fields["amount"].help_text = _(
+            "The yield. It waits in the batch's flask unless a location "
+            "is given.")
+        if step.journal_entry_id is not None:
+            field = self.fields["journal_entry"]
+            field.disabled = True
+            field.initial = str(step.journal_entry)
+            field.help_text = _("The entry of the step.")
 
     def clean_source(self) -> str:
         """Return the source chosen, ``made`` when none is."""
         return self.cleaned_data.get("source") or Source.MADE
+
+    def clean(self) -> dict[str, Any]:
+        """Refuse an amount without its unit, and for a batch made by a
+        step an amount that is missing."""
+        cleaned = super().clean()
+        amount = cleaned.get("amount")
+        if amount is not None and not cleaned.get("unit") \
+                and "unit" not in self.errors:
+            self.add_error("unit", _("Choose the unit of the amount."))
+        if self.step is not None and amount is None \
+                and "amount" not in self.errors:
+            self.add_error("amount", _("Enter the yield."))
+        return cleaned
+
+
+class BatchEditForm(forms.ModelForm):
+    """The fields of a batch that may change: for a made batch its
+    number, journal entry and yield, for a bought one the supplier, the
+    supplier's article number and the supplier's batch, and for both the
+    date and the note.
+
+    The yield is given in YIELD_UNIT; ``save`` stores it in that unit's
+    base unit. A number another made batch has regardless of case is
+    refused at the number.
+    """
+
+    journal_entry = EntryField()
+    yield_amount = decimal_field(_("Yield"), required=False, min_value=0)
+    yield_unit = forms.ChoiceField(label=_("Unit"), choices=Unit.choices,
+                                   required=False)
+
+    class Meta:
+        model = Batch
+        fields = ["number", "supplier", "supplier_article_number",
+                  "supplier_batch", "date", "note"]
+        widgets = {"date": DATE, "note": NOTE}
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        batch = self.instance
+        if batch.source == Source.MADE:
+            for name in ("supplier", "supplier_article_number",
+                         "supplier_batch"):
+                del self.fields[name]
+            self.initial["journal_entry"] = str(batch.journal_entry) \
+                if batch.journal_entry_id else ""
+            self.initial["yield_amount"] = (
+                (batch.yield_amount / FACTOR[batch.yield_unit]).normalize()
+                if batch.yield_amount is not None else None)
+            self.initial["yield_unit"] = batch.yield_unit or Unit.G
+        else:
+            for name in ("number", "journal_entry", "yield_amount",
+                         "yield_unit"):
+                del self.fields[name]
+
+    def clean_number(self) -> str:
+        """Return the number stripped; refuse one another made batch has
+        regardless of case, naming that batch."""
+        number = self.cleaned_data["number"].strip()
+        holder = number_holder(number, self.instance.pk)
+        if holder is not None:
+            raise forms.ValidationError(
+                _("Batch %(batch)s has this number."),
+                params={"batch": holder})
+        return number
+
+    def clean(self) -> dict[str, Any]:
+        """Set the yield of a made batch from the amount and unit
+        entered, none for an empty amount; a submission that names
+        neither field leaves the yield as it is. An amount without a
+        unit is an error at the unit, and one that is not above zero an
+        error at the amount."""
+        cleaned = super().clean()
+        if self.instance.source != Source.MADE or not (
+                {"yield_amount", "yield_unit"} & set(self.data)):
+            return cleaned
+        amount = cleaned.get("yield_amount")
+        unit = cleaned.get("yield_unit")
+        if "yield_amount" in self.errors or "yield_unit" in self.errors:
+            return cleaned
+        if amount is None:
+            self.instance.yield_amount, self.instance.yield_unit = None, ""
+        elif not unit:
+            self.add_error("yield_unit", _("Choose the unit of the yield."))
+        elif amount <= 0 or to_base(amount, unit) <= 0:
+            self.add_error("yield_amount", _("The yield must be above zero."))
+        else:
+            self.instance.yield_amount = to_base(amount, unit)
+            self.instance.yield_unit = unit
+        return cleaned
+
+    def save(self, commit: bool = True) -> Batch:
+        """Return the batch with the form's values; with COMMIT, save
+        the form's fields of it and no other. The journal entry, given
+        as text, is the entry ``journal.entries.entry_for`` returns."""
+        batch = super().save(commit=False)
+        if commit:
+            fields = [name for name in self._meta.fields
+                      if name in self.fields]
+            if "journal_entry" in self.fields:
+                text = self.cleaned_data["journal_entry"]
+                batch.journal_entry = entry_for(text) if text else None
+                fields.append("journal_entry")
+            if batch.source == Source.MADE and (
+                    {"yield_amount", "yield_unit"} & set(self.data)):
+                fields += ["yield_amount", "yield_unit"]
+            batch.save(update_fields=fields)
+        return batch
+
+
+class NewVesselForm(forms.Form):
+    """A new stored vessel of a batch: its opening amount in the unit
+    chosen, its location and its note."""
+
+    amount = decimal_field(_("Amount"), min_value=0)
+    unit = forms.ChoiceField(label=_("Unit"), choices=Unit.choices)
+    location = forms.CharField(label=_("Location"), max_length=100,
+                               required=False, widget=LOCATION)
+    note = forms.CharField(label=pgettext_lazy("inventory", "Note"),
+                           required=False, widget=NOTE)
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.fields["unit"].initial = Unit.MG
 
 
 class StepField(forms.ModelChoiceField):
@@ -429,8 +636,8 @@ class StepField(forms.ModelChoiceField):
 
 
 class WithdrawalForm(forms.Form):
-    """An amount taken from a lot into a step of a task that is planned
-    or running, in the lot's unit."""
+    """An amount taken from a vessel into a step of a task that is
+    planned or running, in the vessel's unit."""
 
     step = StepField(label=_("Task step"), empty_label="–")
     amount = decimal_field(_("Amount taken"))
@@ -442,22 +649,58 @@ class WithdrawalForm(forms.Form):
         self.fields["date"].initial = timezone.localdate()
 
 
-class LotEditForm(MetadataForm):
-    """The fields of a bulk lot that may change."""
+class TransferForm(forms.Form):
+    """A transfer of an amount, in the unit of the source vessel, into a
+    stored vessel of the same batch chosen in TARGET, or into a new
+    vessel at LOCATION. Exactly one of the two is given."""
+
+    amount = decimal_field(_("Amount"))
+    target = forms.ModelChoiceField(
+        queryset=Vessel.objects.none(), required=False,
+        label=_("Target vessel"), empty_label="–")
+    location = forms.CharField(
+        label=_("Location of a new vessel"), max_length=100,
+        required=False, widget=LOCATION)
+    date = forms.DateField(label=_("Date"), widget=DATE,
+                           validators=[not_in_future])
+    note = forms.CharField(label=pgettext_lazy("inventory", "Note"),
+                           required=False, widget=NOTE)
+
+    def __init__(self, *args: Any, source: Vessel, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        target = self.fields["target"]
+        target.queryset = Vessel.objects.filter(
+            batch_id=source.batch_id, flask=False).exclude(
+                pk=source.pk).select_related("batch").order_by("id")
+        target.label_from_instance = vessel_label
+        self.fields["date"].initial = timezone.localdate()
+
+    def clean(self) -> dict[str, Any]:
+        """Refuse a transfer that names neither a target vessel nor a
+        location, and one that names both."""
+        cleaned = super().clean()
+        if "target" in self.errors or "location" in self.errors:
+            return cleaned
+        if cleaned.get("target") is None and not cleaned.get("location"):
+            self.add_error("target", _(
+                "Choose a vessel, or enter the location of a new one."))
+        elif cleaned.get("target") is not None and cleaned.get("location"):
+            self.add_error("location", _(
+                "Leave the location empty when a vessel is chosen."))
+        return cleaned
+
+
+class VesselEditForm(MetadataForm):
+    """The fields of a vessel that may change."""
 
     class Meta:
-        model = Lot
-        fields = ["batch", "location", "made_on", "note"]
-        widgets = {
-            "location": forms.TextInput(attrs={"list": "locations",
-                                               "autocomplete": "off"}),
-            "made_on": DATE,
-            "note": NOTE,
-        }
+        model = Vessel
+        fields = ["location", "note"]
+        widgets = {"location": LOCATION, "note": NOTE}
 
 
-class LotCorrectionForm(forms.Form):
-    """A lot's amount after weighing, in its unit, with a note."""
+class VesselCorrectionForm(forms.Form):
+    """A vessel's amount after weighing, in its unit, with a note."""
 
     amount = decimal_field(_("Amount"), min_value=0)
     date = forms.DateField(label=_("Date"), widget=DATE,

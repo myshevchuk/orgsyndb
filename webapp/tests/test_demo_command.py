@@ -16,8 +16,8 @@ from .demo_support import (ACCOUNTS, DAY, lab_records, noon, opening, run,
                            seed, task_counter)
 
 EMPTY = {"accounts": 0, "substances": 0, "terms": 0, "articles": 0,
-         "tasks": 0, "items": 0, "movements": 0, "notes": 0, "lots": 0,
-         "consumption": 0, "parameters": 0}
+         "tasks": 0, "items": 0, "movements": 0, "notes": 0, "batches": 0,
+         "vessels": 0, "consumption": 0, "parameters": 0}
 
 
 def demo_marks() -> int:
@@ -176,6 +176,58 @@ class ReplaceTests(TestCase):
         before = lab_records()
         with frozen(noon(DAY)):
             run("--replace")
+        self.assertEqual(lab_records(), before)
+
+    def test_replace_deletes_batches_those_without_vessels_among_them(
+            self) -> None:
+        """Requirement: Demo data command (`--replace` deletes every lab
+        record, batches with their vessels)."""
+        from inventory.models import Batch, Vessel, VesselMovement
+        from . import make_batch
+        seed(DAY)
+        before = lab_records()
+        kl = make_user("kl", "KL9")
+        loose = make_batch(kl, "CH-0012", number="STRAY-1")
+        stored = make_batch(kl, "CH-0012", number="STRAY-2")
+        from . import make_vessel
+        vessel = make_vessel(kl, stored, location="Regal")
+        with frozen(noon(DAY)):
+            run("--replace")
+        self.assertFalse(Batch.objects.filter(pk=loose.pk).exists())
+        self.assertFalse(Batch.objects.filter(pk=stored.pk).exists())
+        self.assertFalse(Vessel.objects.filter(pk=vessel.pk).exists())
+        self.assertFalse(VesselMovement.objects.filter(
+            vessel_id=vessel.pk).exists())
+        self.assertEqual(lab_records(), before)
+
+    def test_replace_deletes_a_flask_with_transfers_and_a_remainder(
+            self) -> None:
+        """Requirement: Vessels (`demo_data --replace` deletes every
+        vessel with its movements): a flask whose movements name each
+        other."""
+        from decimal import Decimal
+
+        from inventory.bookings import transfer, write_off_flasks
+        from inventory.models import Batch, Vessel, VesselMovement
+        from tasks.models import Task
+
+        from . import make_task, past
+        from .task_support import make_product_batch
+        seed(DAY)
+        before = lab_records()
+        kl = make_user("kl", "KL9")
+        task = make_task(kl, "CH-0012", steps=1, started=past(1))
+        batch = make_product_batch(task, "2", "g", flask=True)
+        flask = batch.vessels.get()
+        transfer(kl, flask, amount=Decimal("1.5"), location="Regal")
+        write_off_flasks(kl, task)
+        self.assertEqual(VesselMovement.objects.filter(
+            vessel__batch=batch).count(), 4)
+        with frozen(noon(DAY)):
+            run("--replace")
+        self.assertFalse(Batch.objects.filter(pk=batch.pk).exists())
+        self.assertFalse(Vessel.objects.filter(batch_id=batch.pk).exists())
+        self.assertFalse(Task.objects.filter(pk=task.pk).exists())
         self.assertEqual(lab_records(), before)
 
     def test_replace_removes_the_histories(self) -> None:

@@ -325,7 +325,7 @@ Pfadpräfix oder ohne Labor funktionieren sie nicht.
 
 Die Stoffseite im Labor zeigt den Datensatz, ein vorhandenes Strukturbild,
 Vorschriften zur Herstellung oder Verwendung, Synthesewege mit diesem
-Ziel, den Herstellungsbaum, Gebinde, offene Bulk-Lose und Aufträge.
+Ziel, den Herstellungsbaum, Gebinde, Chargen und Aufträge.
 **Hergestellt nach** und **Verwendet in** listen Vorschriften nach Nummer;
 **Hergestellt nach** nennt jeden Eintrag einer allgemeinen Vorschrift,
 der den Stoff herstellt. **Synthesewege** folgt auf **Verwendet in**, wenn

@@ -1,0 +1,67 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n lab inventory %}
+{% block title %}{{ batch }}{% endblock %}
+{% block main %}
+<h1>{% translate "Batch" %} {{ batch }}</h1>
+{% if user.is_authenticated %}<div class="lab-actions">
+<a href="/lab/inventory/batches/{{ batch.pk }}/edit/">{% translate "Edit" %}</a>
+<a href="/lab/inventory/batches/{{ batch.pk }}/vessels/new/">{% translate "New vessel" %}</a>
+</div>
+{% endif %}<dl class="metadata">
+<dt>{% translate "Substance" %}</dt>
+<dd>{% substance batch.substance %}</dd>
+{% if batch.article_number %}<dt>{% translate "Article no." %}</dt>
+<dd>{{ batch.article_number }}</dd>
+{% endif %}<dt>{% translate "Source" %}</dt>
+<dd>{{ batch.get_source_display }}</dd>
+{% if batch.source == "made" %}<dt>{% translate "Lab notebook" %}</dt>
+<dd>{% if batch.journal_entry %}<a href="/lab/journal/{{ batch.journal_entry.notebook.code }}/">{{ batch.journal_entry }}</a>{% else %}–{% endif %}</dd>
+<dt>{% translate "Made by step" %}</dt>
+<dd>{% if batch.task_step %}<a href="/lab/tasks/{{ batch.task_step.task.number }}/">{{ batch.task_step.task.number }}</a> · {{ batch.task_step.label }}{% else %}–{% endif %}</dd>
+<dt>{% translate "Yield" %}</dt>
+<dd>{{ batch|in_yield_unit|default:"–" }}</dd>
+{% else %}<dt>{% translate "Supplier" %}</dt>
+<dd>{{ batch.supplier|default:"–" }}</dd>
+<dt>{% translate "Supplier's article no." %}</dt>
+<dd>{{ batch.supplier_article_number|default:"–" }}</dd>
+<dt>{% translate "Supplier's batch" %}</dt>
+<dd>{{ batch.supplier_batch|default:"–" }}</dd>
+{% endif %}<dt>{% translate "Date" %}</dt>
+<dd>{{ batch.date|default_if_none:"–" }}</dd>
+</dl>
+{% if batch.note %}<h2>{% translate "Note" context "inventory" %}</h2>
+<div class="lab-note">{{ batch.note|linebreaks }}</div>
+{% endif %}<h2>{% translate "Vessels" %}</h2>
+{% if vessels %}<div class="table-scroll">
+<table class="inventory-table">
+<thead>
+<tr><th scope="col">{% translate "Vessel" %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Amount" %}</th></tr>
+</thead>
+<tbody>
+{% for vessel in vessels %}<tr>
+<td><a href="/lab/inventory/vessels/{{ vessel.pk }}/">#{{ vessel.pk }}</a></td>
+<td>{{ vessel.kind_label }}</td>
+<td>{{ vessel.location }}</td>
+<td class="number">{{ vessel.amount|in_vessel_unit:vessel }}{% if not vessel.amount %} <span class="badge badge--reversed">{% translate "used up" %}</span>{% endif %}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% else %}<p>{% translate "No vessel." %}</p>
+{% endif %}{% if fillings %}<h2>{% translate "Fillings" %}</h2>
+<div class="table-scroll">
+<table class="inventory-table">
+<thead>
+<tr><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Item" %}</th><th scope="col">{% translate "Count" %}</th><th scope="col">{% translate "Vessel" %}</th></tr>
+</thead>
+<tbody>
+{% for row in fillings %}<tr>
+<td>{{ row.movement.date }}</td>
+<td><a href="/lab/inventory/items/{{ row.item.pk }}/">{% if row.item.article_number %}{{ row.item.article_number }} · {% endif %}{{ row.item.container }}</a>{% if row.reversed %} <span class="badge badge--reversed">{% translate "reversed" %}</span>{% endif %}</td>
+<td class="number">{{ row.movement.item_movement.count }}</td>
+<td><a href="/lab/inventory/vessels/{{ row.movement.vessel.pk }}/">#{{ row.movement.vessel.pk }}</a></td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% endif %}{% include "inventory/history.html" %}
+{% endblock %}

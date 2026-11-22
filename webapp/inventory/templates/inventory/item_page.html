@@ -57,25 +57,27 @@
 </table>
 </div>
 <h2>{% translate "Bulk" %}</h2>
-{% if lots %}<p>{% include "inventory/bulk.html" %}</p>
+{% if vessels %}<p>{% include "inventory/bulk.html" %}</p>
 <div class="table-scroll">
 <table class="inventory-table">
 <thead>
-<tr><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "Amount" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Containers" %}</th></tr>
+<tr><th scope="col">{% translate "Vessel" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col">{% translate "Amount" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Containers" %}</th></tr>
 </thead>
 <tbody>
-{% for lot, containers in lots %}<tr>
-<td><a href="/lab/inventory/bulk/{{ lot.pk }}/">{{ lot.batch|default:lot.pk }}</a></td>
-<td class="number">{{ lot.amount|in_lot_unit:lot }}</td>
-<td>{{ lot.location }}</td>
-<td>{{ lot.made_on|default_if_none:"" }}</td>
+{% for vessel, containers in vessels %}<tr>
+<td><a href="/lab/inventory/vessels/{{ vessel.pk }}/">#{{ vessel.pk }}</a></td>
+<td><a href="/lab/inventory/batches/{{ vessel.batch.pk }}/">{{ vessel.batch }}</a></td>
+<td>{{ vessel.kind_label }}</td>
+<td class="number">{{ vessel.amount|in_vessel_unit:vessel }}</td>
+<td>{{ vessel.location }}</td>
+<td>{{ vessel.batch.date|default_if_none:"" }}</td>
 <td class="number">{% if containers is None %}<span class="lab-mark">{% translate "does not convert" %}</span>{% else %}{{ containers }}{% endif %}</td>
 </tr>
 {% endfor %}</tbody>
 </table>
 </div>
-{% else %}<p>{% translate "No open bulk lot." %}</p>
-{% endif %}{% if user.is_authenticated and item.article_number %}<p class="actions"><a href="/lab/inventory/bulk/new/?substance={{ item.substance.key|urlencode }}">{% translate "New bulk lot" %}</a></p>
+{% else %}<p>{% translate "No open vessel." %}</p>
+{% endif %}{% if user.is_authenticated and item.article_number %}<p class="actions"><a href="/lab/inventory/batches/new/?substance={{ item.substance.key|urlencode }}">{% translate "New batch" %}</a></p>
 {% endif %}{% include "planning/item_forecast.html" %}
 {% include "inventory/history.html" %}
 </div>

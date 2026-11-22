@@ -176,31 +176,37 @@ class ReverseDelivery(Change):
 
 
 @dataclass(frozen=True, kw_only=True)
-class OpenLot(Change):
-    """Create the bulk lot KEY of the substance SUBSTANCE, by its key,
-    made in the lab or bought as SOURCE says, from SUPPLIER, with its
-    opening amount, in UNIT, dated the change's day; STEP, when given,
-    is the task step that made it, as the key of its task and its
-    position."""
+class RecordBatch(Change):
+    """Record the batch KEY of the substance SUBSTANCE, by its key, made
+    in the lab with the number NUMBER or bought as SOURCE says, with its
+    supplier's fields, dated DATE, the day it was made or received.
+
+    The batch's first vessel holds AMOUNT, in UNIT, at LOCATION. STEP,
+    when given, is the task step that made the batch, as the key of its
+    task and its position: the amount is then the batch's yield and
+    waits in its flask when LOCATION is empty."""
 
     key: str
     substance: str
     source: str
+    number: str
     supplier: str
+    supplier_article_number: str
+    supplier_batch: str
     unit: str
     amount: Decimal
-    batch: str
     location: str
-    made_on: date
+    date: date
     step: tuple[str, int] | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
 class Withdraw(Change):
-    """Take AMOUNT, in the lot's unit, from LOT into the step at
-    POSITION of the task TASK, dated the change's day."""
+    """Take AMOUNT, in the vessel's unit, from the first vessel of the
+    batch VESSEL into the step at POSITION of the task TASK, dated the
+    change's day."""
 
-    lot: str
+    vessel: str
     task: str
     position: int
     amount: Decimal
@@ -208,13 +214,25 @@ class Withdraw(Change):
 
 @dataclass(frozen=True, kw_only=True)
 class Fill(Change):
-    """Fill COUNT containers of ITEM from LOT, taking AMOUNT in the lot's
-    unit, or from no lot when LOT is None, dated the change's day."""
+    """Fill COUNT containers of ITEM from the first vessel of the batch
+    VESSEL, taking AMOUNT in the vessel's unit, dated the change's
+    day."""
 
     item: str
-    lot: str | None
+    vessel: str
     count: int
-    amount: Decimal | None
+    amount: Decimal
+
+
+@dataclass(frozen=True, kw_only=True)
+class Transfer(Change):
+    """Pass AMOUNT, in the unit of the first vessel of the batch VESSEL,
+    which is a flask, into a new stored vessel at LOCATION, dated the
+    change's day."""
+
+    vessel: str
+    amount: Decimal
+    location: str
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -235,11 +253,11 @@ class Correct(Change):
 
 
 @dataclass(frozen=True, kw_only=True)
-class CorrectLot(Change):
-    """Set the amount of LOT to AMOUNT, in its unit, dated the change's
-    day."""
+class CorrectVessel(Change):
+    """Set the amount of the first vessel of the batch VESSEL to AMOUNT,
+    in its unit, dated the change's day."""
 
-    lot: str
+    vessel: str
     amount: Decimal
     note: str
 
@@ -307,11 +325,12 @@ class _Size:
 
 
 @dataclass(frozen=True)
-class _StepLot:
-    """A lot of the substance SUBSTANCE, by its key, that the step at
-    POSITION of a synthesis makes on the day MADE, holding AMOUNT in
-    UNIT, and the WITHDRAWALS from it into the synthesis's steps, each
-    a day, a step's position and an amount in UNIT."""
+class _StepBatch:
+    """A batch of the substance SUBSTANCE, by its key, that the step at
+    POSITION of a synthesis makes on the day MADE, yielding AMOUNT in
+    UNIT, and the WITHDRAWALS from its flask into the synthesis's steps,
+    each a day, a step's position and an amount in UNIT. The yield waits
+    in the flask unless STORED, and the batch's number ends in SUFFIX."""
 
     substance: str
     unit: str
@@ -319,6 +338,8 @@ class _StepLot:
     position: int
     made: int
     withdrawals: tuple[tuple[int, int, str], ...] = ()
+    stored: bool = False
+    suffix: str = ""
 
 
 @dataclass(frozen=True)
@@ -329,12 +350,17 @@ class _Synthesis:
     it is empty, from its step START_STEP on; STEPS names the procedures
     of its steps, in order, and
     STEPS_DONE the days on which a number of them is done; its steps
-    make the STEP_LOTS, and the JOURNAL entries are named by its steps,
+    make the STEP_BATCHES, and the JOURNAL entries are named by its steps,
     each a day, a step's position and an entry ``<code>/<number>``. A
-    synthesis that ends yields its product lot the day it ends, which
-    fills its article's items on the days FILLS and keeps REST, in the
-    lot's unit. A synthesis that FAILED ends that day as failed, with
-    no batch and no lot.
+    synthesis that ends has a step to end with, a plain one when it
+    follows no sequence, and records its product batch from its last
+    step on the day RECORDED, the day it ends by default: its yield
+    fills its article's items on the days FILLS, keeps REST, in the
+    vessel's unit, and, with MOVED, a day and an amount, passes that
+    amount on that day from the flask into a stored vessel. The batch
+    waits in its flask when FLASK and is stored at LOCATION otherwise;
+    ending the task writes off what the flask holds. A synthesis that
+    FAILED ends that day as failed, with no batch.
     """
 
     by: str
@@ -350,10 +376,13 @@ class _Synthesis:
     start_step: int = 1
     steps: tuple[str, ...] = ()
     steps_done: tuple[tuple[int, int], ...] = ()
-    step_lots: tuple[_StepLot, ...] = ()
+    step_batches: tuple[_StepBatch, ...] = ()
     journal: tuple[tuple[int, int, str], ...] = ()
     fills: tuple[int, ...] = ()
     rest: str = "0"
+    recorded: int | None = None
+    flask: bool = False
+    moved: tuple[int, str] | None = None
     location: Text = ("Chemikalienschrank 3", "Chemicals cabinet 3")
     priority: str = "medium"
     note: Text = ("", "")
@@ -367,11 +396,11 @@ class _Article:
     number: str
     substance: str
     category: Text
-    lot_unit: str
+    vessel_unit: str
     sizes: tuple[_Size, ...]
     syntheses: tuple[_Synthesis, ...] = ()
     # The molar mass in g/mol the fillings convert with, where the
-    # lot's unit and the items' differ in kind.
+    # vessel's unit and the items' differ in kind.
     mass: str | None = None
     numbered: bool = True
 
@@ -421,8 +450,8 @@ ARTICLES = (
          _Synthesis("klehmann", 225, "jkoch", started=230,
                     ended=261, report=266, qc=270, sequence="SEQ-0001",
                     steps=SEQ_1, steps_done=((245, 1),),
-                    step_lots=(_StepLot("salicylic-acid", "g", "5", 1,
-                                        245),),
+                    step_batches=(_StepBatch("salicylic-acid", "g", "5", 1,
+                                        245, stored=True),),
                     fills=(262, 310, 350), location=DESICCATOR),
          _Synthesis("aschmidt", 380, "aschmidt",
                     sequence="SEQ-0001", start_step=2, steps=SEQ_1[1:],
@@ -478,16 +507,21 @@ ARTICLES = (
          _Synthesis("klehmann", 380, "jkoch", started=388,
                     sequence="SEQ-0002", steps=SEQ_2,
                     steps_done=((396, 1),), journal=((396, 1, "CE-3/2"),),
-                    step_lots=(_StepLot("4-acetylbiphenyl", "g", "3", 1,
-                                        396, ((398, 2, "2"),)),))),
+                    step_batches=(_StepBatch("4-acetylbiphenyl", "g", "3", 1,
+                                        396, ((398, 2, "2"),),
+                                        suffix="FA"),
+                               _StepBatch("4-acetylbiphenyl", "g", "1.5", 1,
+                                        396, stored=True,
+                                        suffix="FB")))),
         mass="198.26"),
     _Article(
         "1-phenylethanol", "1-phenylethanol",
         ("Alkohole", "Alcohols"), "mg",
         (_Size("100", "mg", final=8, opened=310),),
         (_Synthesis("aschmidt", 280, "aschmidt",
-                    started=285, ended=305, report=308, qc=309,
-                    fills=(311,), rest="150"),),
+                    started=285, ended=312, report=314, qc=315,
+                    fills=(311,), rest="150", recorded=305, flask=True,
+                    moved=(311, "200")),),
         numbered=False),
     _Article(
         "NV-0007", "new-compound-7",
@@ -506,16 +540,19 @@ ARTICLES = (
 @dataclass(frozen=True)
 class _Intermediate:
     """A substance without an article, by its KEY, that a synthesis
-    yields a lot of, the day it ends, holding AMOUNT in UNIT: made in
-    the lab, or, with a SUPPLIER, bought from it; a bought lot has a
-    lot made in the lab beside it, holding MADE in UNIT, with the same
-    batch."""
+    yields a batch of, recorded from its step the day it ends, yielding
+    AMOUNT in UNIT. With a SUPPLIER, a batch bought from it, with its
+    ARTICLE and BATCH numbers, is received that day beside the batch
+    made in the lab, which then yields MADE in UNIT, and the bought one
+    AMOUNT."""
 
     key: str
     unit: str
     amount: str
     synthesis: _Synthesis
     supplier: str = ""
+    article: str = ""
+    batch: str = ""
     made: str = ""
 
 
@@ -534,7 +571,33 @@ INTERMEDIATES = (
                          "Lieferanten.",
                          "Contract synthesis; the batch is the "
                          "supplier's.")),
-        supplier="ChemPur GmbH", made="2"),
+        supplier="ChemPur GmbH", article="CP-4471", batch="CP240917",
+        made="2"),
+)
+
+
+@dataclass(frozen=True)
+class _Loose:
+    """A batch of the substance SUBSTANCE, by its key, made in the lab
+    before the application and recorded without a step on the day
+    ENTERED, in days after the opening, by BY: it was MADE that many
+    days after the opening, a negative number of days before it, and its
+    stored vessel holds AMOUNT in UNIT at LOCATION."""
+
+    substance: str
+    unit: str
+    amount: str
+    made: int
+    entered: int
+    by: str
+    location: Text
+
+
+LOOSE = (
+    _Loose("ethyl-cinnamate", "g", "8", -150, 3, "mwolf",
+           ("Kühlschrank 2, Fach 2", "Fridge 2, shelf 2")),
+    _Loose("methyl-salicylate", "g", "12", -220, 5, "tbauer",
+           ("Exsikkator 1", "Desiccator 1")),
 )
 
 RECIPIENTS: tuple[Text, ...] = (
@@ -551,12 +614,12 @@ FIRST_WEEKS = ("mwolf", "tbauer")
 VARIATION = (0.9, 1.1, 1.0, 0.85, 1.15, 1.0, 1.0)
 # The delivery reversed: its article, the position of its size and the
 # position of the order among the size's current orders. The size
-# corrected: its article, its position and the day. The lot corrected:
+# corrected: its article, its position and the day. The vessel corrected:
 # its article, the position of its synthesis, the day and the amount
 # found missing. The historical note entered twice, by its position.
 REVERSED = ("CH-0016", 0, 14)
 CORRECTED = ("CH-0016", 1, 180)
-CORRECTED_LOT = ("CH-0016", 2, 370, "1.5")
+CORRECTED_VESSEL = ("CH-0016", 2, 370, "1.5")
 DUPLICATED = 2
 FACTOR = {"mg": Decimal(1), "g": Decimal(1000), "umol": Decimal(1),
           "mmol": Decimal(1000)}
@@ -571,7 +634,7 @@ NOTES = {
                           "Wrong recipient; container taken back."),
     "correction": ("Inventur: ein Gebinde fehlt.",
                    "Stocktaking: one container missing."),
-    "lot correction": ("Nachgewogen.", "Weighed again."),
+    "vessel correction": ("Nachgewogen.", "Weighed again."),
     "duplicate": ("Doppelt erfasst, siehe {number}.",
                   "Entered twice, see {number}."),
 }
@@ -627,11 +690,11 @@ class _Timeline:
         return found
 
 
-# Ranks of the changes of one day: a task ends after its product lot
-# is recorded.
-ACCOUNT, REGISTRY, PARAMETERS, ITEM, TASK, LOT, END, FILL, WITHDRAWAL, \
-    NOTE, REVERSAL, CORRECTION, ENTRY, HISTORICAL, LOT_CORRECTION, \
-    STATUS = range(16)
+# Ranks of the changes of one day: a task ends after its product batch
+# is recorded and its flask emptied.
+ACCOUNT, REGISTRY, PARAMETERS, ITEM, TASK, BATCH, END, FILL, WITHDRAWAL, \
+    TRANSFER, NOTE, REVERSAL, CORRECTION, ENTRY, HISTORICAL, \
+    VESSEL_CORRECTION, STATUS = range(17)
 
 
 def staff(offset: int, turn: int = 0) -> str:
@@ -660,14 +723,14 @@ def back(quarter: tuple[int, int], count: int) -> tuple[int, int]:
 
 
 def amount_of(article: _Article, size: _Size, count: int) -> Decimal:
-    """The amount COUNT containers of SIZE take from a lot of ARTICLE, in
-    the lot's unit, rounded half up to three places."""
+    """The amount COUNT containers of SIZE take from a vessel of ARTICLE,
+    in the vessel's unit, rounded half up to three places."""
     base = Decimal(count) * Decimal(size.size) * FACTOR[size.unit]
-    if (size.unit in MASS_UNITS) != (article.lot_unit in MASS_UNITS):
+    if (size.unit in MASS_UNITS) != (article.vessel_unit in MASS_UNITS):
         mass = Decimal(article.mass)
         base = (base * 1000 / mass if size.unit in MASS_UNITS
                 else base * mass / 1000)
-    return (base / FACTOR[article.lot_unit]).quantize(
+    return (base / FACTOR[article.vessel_unit]).quantize(
         Decimal("0.001"), ROUND_HALF_UP)
 
 
@@ -695,58 +758,78 @@ def changes(today: date, language: str) -> list[Change]:
     line.add(line.day(200), PARAMETERS, SaveParameters, user="klehmann",
              fields={"target_days": 365})
     orders: list[tuple[date, str, int]] = []
-    batches = _batches(line)
+    numbers = _numbers(line)
     for article in ARTICLES:
-        orders += _article(line, article, batches)
+        orders += _article(line, article, numbers)
     for intermediate in INTERMEDIATES:
-        _intermediate(line, intermediate, batches)
+        _intermediate(line, intermediate, numbers)
+    _loose(line, numbers)
     _notes(line, orders)
     return line.changes()
 
 
-def _batches(line: _Timeline) -> dict[tuple[str, Any], str]:
-    """The batch of each synthesis that ends, by its article, or its
-    intermediate's key, and its position, and of each lot a step makes,
-    by its synthesis's key and the lot's position among its step lots:
-    ``B<yy>-<nnn>``, numbered in the order of the days of the ends and
-    the step lots."""
+def _initials(user: str) -> str:
+    """The initials of the demo account USER, by its user name."""
+    return next(account.initials for account in ACCOUNTS
+                if account.username == user)
+
+
+def _last(synthesis: _Synthesis) -> int:
+    """The position of the last step of SYNTHESIS, a task with one
+    plain step when it follows no sequence."""
+    return len(synthesis.steps) or 1
+
+
+def _numbers(line: _Timeline) -> dict[tuple[str, Any], str]:
+    """The number of each made batch: of each synthesis that ends, by its
+    article, or its intermediate's key, and its position; of each batch
+    a step makes, by its synthesis's key and its position among the
+    step batches; and of each loose batch, by ``loose`` and its
+    position.
+
+    A number is the initials of the account that records the batch, the
+    year of its day and a serial of three digits, numbered in the order
+    of the days the batches are made, then the suffix of a step batch.
+    """
     syntheses = [(article.number, position, synthesis)
                  for article in ARTICLES
                  for position, synthesis in enumerate(article.syntheses)]
     syntheses += [(intermediate.key, 0, intermediate.synthesis)
                   for intermediate in INTERMEDIATES]
-    made: list[tuple[date, str, Any]] = [
-        (line.day(synthesis.ended), number, position)
-        for number, position, synthesis in syntheses
-        if synthesis.ended is not None]
-    made += [(line.day(lot.made), f"{number}#{position}", index)
-             for number, position, synthesis in syntheses
-             for index, lot in enumerate(synthesis.step_lots)]
-    return {(number, position): f"B{day:%y}-{index:03d}"
-            for index, (day, number, position)
+    made: list[tuple[date, tuple[str, Any], str, str]] = []
+    for number, position, synthesis in syntheses:
+        if synthesis.ended is not None:
+            day = line.day(synthesis.recorded if synthesis.recorded
+                           is not None else synthesis.ended)
+            made.append((day, (number, position),
+                         _initials(synthesis.by), ""))
+        made += [(line.day(batch.made), (f"{number}#{position}", index),
+                  _initials(synthesis.by), batch.suffix)
+                 for index, batch in enumerate(synthesis.step_batches)]
+    made += [(line.day(loose.made), ("loose", index), _initials(loose.by),
+              "") for index, loose in enumerate(LOOSE)]
+    return {key: f"{initials}{day:%y}{serial:03d}{suffix}"
+            for serial, (day, key, initials, suffix)
             in enumerate(sorted(made, key=lambda entry: entry[0]), 1)}
 
 
 def _article(line: _Timeline, article: _Article,
-             batches: dict[tuple[str, int], str]) -> list[
+             numbers: dict[tuple[str, Any], str]) -> list[
                  tuple[date, str, int]]:
     """Add the changes of ARTICLE but its delivery notes, and return its
     orders, each a day, an item key and a count."""
     history = quarter_start(back(quarter_of(line.opening), 1))
-    yields = {}
+    yields = set()
     for position, synthesis in enumerate(article.syntheses):
         key = f"{article.number}#{position}"
-        batch = batches.get((article.number, position), "")
-        _task(line, key, article.substance, synthesis, batch)
-        _step_lots(line, key, synthesis, batches)
+        _task(line, key, article.substance, synthesis)
+        _step_batches(line, key, synthesis, numbers)
         if synthesis.ended is not None:
-            yields[position] = batch
+            yields.add(position)
     opportunities = sorted(
         (offset, position) for position, synthesis
         in enumerate(article.syntheses) if position in yields
         for offset in synthesis.fills)
-    # The syntheses of an article without an article number fill its
-    # containers directly, not from their lots.
     taken: dict[int, Decimal] = defaultdict(Decimal)
     found = []
     for turn, size in enumerate(article.sizes):
@@ -754,24 +837,43 @@ def _article(line: _Timeline, article: _Article,
         own = _orders(line, size, history)
         found += [(day, key, count) for day, count in own]
         _size(line, article, turn, size, key, own, opportunities, taken)
-    for position, batch in yields.items():
+    for position in sorted(yields):
         synthesis = article.syntheses[position]
-        made = line.day(synthesis.ended)
-        line.add(made, LOT, OpenLot, user=synthesis.by,
-                 key=f"{article.number}#{position}",
-                 substance=article.substance, source="made", supplier="",
-                 unit=article.lot_unit,
-                 amount=taken[position] + Decimal(synthesis.rest),
-                 batch=batch, location=line.text(synthesis.location),
-                 made_on=made)
-    if article.number == CORRECTED_LOT[0]:
-        _, position, offset, less = CORRECTED_LOT
+        key = f"{article.number}#{position}"
+        moved = Decimal(synthesis.moved[1]) if synthesis.moved else 0
+        _product(line, key, article.substance, article.vessel_unit,
+                 taken[position] + moved + Decimal(synthesis.rest),
+                 synthesis, numbers[(article.number, position)])
+        if synthesis.moved:
+            offset, _amount = synthesis.moved
+            line.add(line.day(offset), TRANSFER, Transfer,
+                     user=staff(offset), vessel=key, amount=moved,
+                     location=line.text(synthesis.location))
+    if article.number == CORRECTED_VESSEL[0]:
+        _, position, offset, less = CORRECTED_VESSEL
         rest = Decimal(article.syntheses[position].rest)
-        line.add(line.day(offset), LOT_CORRECTION, CorrectLot,
-                 user=staff(offset), lot=f"{article.number}#{position}",
+        line.add(line.day(offset), VESSEL_CORRECTION, CorrectVessel,
+                 user=staff(offset), vessel=f"{article.number}#{position}",
                  amount=rest - Decimal(less),
-                 note=line.text(NOTES["lot correction"]))
+                 note=line.text(NOTES["vessel correction"]))
     return found
+
+
+def _product(line: _Timeline, key: str, substance: str, unit: str,
+             amount: Decimal, synthesis: _Synthesis, number: str) -> None:
+    """Record the product batch KEY of SYNTHESIS, of the substance
+    SUBSTANCE by its key and with the number NUMBER, from the last step
+    of its task, yielding AMOUNT in UNIT, on the day the synthesis
+    records it: in its flask, or stored at its location."""
+    recorded = line.day(synthesis.recorded if synthesis.recorded
+                        is not None else synthesis.ended)
+    line.add(recorded, BATCH, RecordBatch, user=synthesis.by, key=key,
+             substance=substance, source="made", number=number,
+             supplier="", supplier_article_number="", supplier_batch="",
+             unit=unit, amount=amount,
+             location="" if synthesis.flask
+             else line.text(synthesis.location),
+             date=recorded, step=(key, _last(synthesis)))
 
 
 def _orders(line: _Timeline, size: _Size, history: date
@@ -851,15 +953,12 @@ def _size(line: _Timeline, article: _Article, turn: int, size: _Size,
              category=line.text(article.category),
              size=Decimal(size.size), unit=size.unit, quantity=opening)
     for day, position, count in booked:
-        amount = amount_of(article, size, count) if article.numbered \
-            else None
-        if amount is not None:
-            taken[position] += amount
+        amount = amount_of(article, size, count)
+        taken[position] += amount
         line.add(day, FILL, Fill, user=staff((day - line.opening).days,
                                              turn),
-                 item=key, lot=f"{article.number}#{position}"
-                 if article.numbered else None, count=count,
-                 amount=amount)
+                 item=key, vessel=f"{article.number}#{position}",
+                 count=count, amount=amount)
     if correction:
         counted = opening + sum(count for day, _, count in booked
                                 if day <= correction) - sum(
@@ -917,54 +1016,72 @@ def _entered(line: _Timeline, key: str, size: _Size, turn: int) -> None:
 
 
 def _intermediate(line: _Timeline, intermediate: _Intermediate,
-                  batches: dict[tuple[str, Any], str]) -> None:
-    """Add the task of INTERMEDIATE and the lot it yields the day it
-    ends, made in the lab or bought from the intermediate's supplier,
-    and beside a bought lot the lot made in the lab with its batch."""
+                  numbers: dict[tuple[str, Any], str]) -> None:
+    """Add the task of INTERMEDIATE and the batch it yields the day it
+    ends, recorded from its step and stored; beside it, when the
+    intermediate has a supplier, the batch bought from it that day."""
     synthesis = intermediate.synthesis
-    batch = batches[(intermediate.key, 0)]
     key = f"{intermediate.key}#0"
-    _task(line, key, intermediate.key, synthesis, batch)
-    made = line.day(synthesis.ended)
-    lot = {"user": synthesis.by, "substance": intermediate.key,
-           "unit": intermediate.unit, "batch": batch,
-           "location": line.text(synthesis.location), "made_on": made}
-    line.add(made, LOT, OpenLot, key=key,
-             source="bought" if intermediate.supplier else "made",
-             supplier=intermediate.supplier,
-             amount=Decimal(intermediate.amount), **lot)
-    if intermediate.made:
-        line.add(made, LOT, OpenLot, key=f"{key}/made", source="made",
-                 supplier="", amount=Decimal(intermediate.made), **lot)
+    _task(line, key, intermediate.key, synthesis)
+    _product(line, key, intermediate.key, intermediate.unit,
+             Decimal(intermediate.made or intermediate.amount), synthesis,
+             numbers[(intermediate.key, 0)])
+    if intermediate.supplier:
+        made = line.day(synthesis.ended)
+        line.add(made, BATCH, RecordBatch, user=synthesis.by,
+                 key=f"{key}/bought", substance=intermediate.key,
+                 source="bought", number="", supplier=intermediate.supplier,
+                 supplier_article_number=intermediate.article,
+                 supplier_batch=intermediate.batch, unit=intermediate.unit,
+                 amount=Decimal(intermediate.amount),
+                 location=line.text(synthesis.location), date=made)
 
 
-def _step_lots(line: _Timeline, key: str, synthesis: _Synthesis,
-               batches: dict[tuple[str, Any], str]) -> None:
-    """Add the lots the steps of the task KEY of SYNTHESIS make, each
-    the day it is made, and the withdrawals from them into its
-    steps."""
-    for index, made in enumerate(synthesis.step_lots):
-        lot = f"{key}/{index}"
-        line.add(line.day(made.made), LOT, OpenLot, user=synthesis.by,
-                 key=lot, substance=made.substance, source="made",
-                 supplier="", unit=made.unit, amount=Decimal(made.amount),
-                 batch=batches[(key, index)],
-                 location=line.text(synthesis.location),
-                 made_on=line.day(made.made), step=(key, made.position))
+def _loose(line: _Timeline, numbers: dict[tuple[str, Any], str]) -> None:
+    """Record the LOOSE batches, each without a step, with its stored
+    vessel."""
+    for index, found in enumerate(LOOSE):
+        line.add(line.day(found.entered), BATCH, RecordBatch, user=found.by,
+                 key=f"loose#{index}", substance=found.substance,
+                 source="made", number=numbers[("loose", index)],
+                 supplier="", supplier_article_number="", supplier_batch="",
+                 unit=found.unit, amount=Decimal(found.amount),
+                 location=line.text(found.location),
+                 date=line.day(found.made))
+
+
+def _step_batches(line: _Timeline, key: str, synthesis: _Synthesis,
+               numbers: dict[tuple[str, Any], str]) -> None:
+    """Record the batches the steps of the task KEY of SYNTHESIS make,
+    each the day it is made, and the withdrawals from their flasks into
+    its steps."""
+    for index, made in enumerate(synthesis.step_batches):
+        vessel = f"{key}/{index}"
+        line.add(line.day(made.made), BATCH, RecordBatch, user=synthesis.by,
+                 key=vessel, substance=made.substance, source="made",
+                 number=numbers[(key, index)], supplier="",
+                 supplier_article_number="", supplier_batch="",
+                 unit=made.unit, amount=Decimal(made.amount),
+                 location=line.text(synthesis.location) if made.stored
+                 else "", date=line.day(made.made),
+                 step=(key, made.position))
         for offset, position, amount in made.withdrawals:
             line.add(line.day(offset), WITHDRAWAL, Withdraw,
-                     user=synthesis.assignee or synthesis.by, lot=lot,
-                     task=key, position=position, amount=Decimal(amount))
+                     user=synthesis.assignee or synthesis.by,
+                     vessel=vessel, task=key, position=position,
+                     amount=Decimal(amount))
 
 
 def _task(line: _Timeline, key: str, substance: str,
-          synthesis: _Synthesis, batch: str) -> None:
+          synthesis: _Synthesis) -> None:
     """Add the changes of the task KEY of SYNTHESIS, of the substance
     SUBSTANCE by its key: its creation, then its start, steps, end or
     failure, report, QC list and cancellation, each on its day, and the
     journal entries its steps name, each after the day's other changes
-    of the task; an end comes after the day's lots."""
-    total = len(synthesis.steps) or None
+    of the task; an end comes after the day's batches. A task that ends
+    without a sequence has one plain step."""
+    total = len(synthesis.steps) or (1 if synthesis.ended is not None
+                                     else None)
     fields: dict[str, Any] = {
         "substance": substance, "assignee": synthesis.assignee,
         "priority": synthesis.priority, "note": line.text(synthesis.note),
@@ -983,7 +1100,7 @@ def _task(line: _Timeline, key: str, substance: str,
     later += [(offset, {"steps_done": done})
               for offset, done in synthesis.steps_done]
     if synthesis.ended is not None:
-        ended = {"ended": line.day(synthesis.ended), "batch": batch}
+        ended = {"ended": line.day(synthesis.ended)}
         if total:
             ended["steps_done"] = total
         later.append((synthesis.ended, ended))

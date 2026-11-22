@@ -6,7 +6,7 @@ from decimal import Decimal
 from django import template
 from django.utils.formats import number_format
 
-from inventory.models import Item, Level, Lot, plain, shown
+from inventory.models import Batch, Item, Level, Vessel, plain, shown
 
 register = template.Library()
 
@@ -19,10 +19,19 @@ def decimal(value: Decimal | None) -> str:
 
 
 @register.filter
-def in_lot_unit(amount: Decimal, lot: Lot) -> str:
-    """Return AMOUNT, kept in the base unit of LOT, in the lot's unit,
-    rounded half up to three places, with the unit."""
-    return f"{number_format(shown(amount, lot.unit))} {lot.unit_label}"
+def in_vessel_unit(amount: Decimal, vessel: Vessel) -> str:
+    """Return AMOUNT, kept in the base unit of VESSEL, in the vessel's
+    unit, rounded half up to three places, with the unit."""
+    return f"{number_format(shown(amount, vessel.unit))} {vessel.unit_label}"
+
+
+@register.filter
+def in_yield_unit(batch: Batch) -> str:
+    """Return the yield of BATCH in its unit, rounded half up to three
+    places, with the unit; empty for a batch without a yield."""
+    if batch.yield_amount is None:
+        return ""
+    return f"{number_format(batch.shown_yield)} {batch.yield_unit_label}"
 
 
 @register.filter

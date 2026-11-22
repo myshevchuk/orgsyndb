@@ -8,7 +8,7 @@
 <h3>{% blocktranslate with article=found.article_number %}Article {{ article }}{% endblocktranslate %}</h3>
 <dl class="metadata">
 <dt>{% translate "Usable bulk" %}</dt>
-<dd>{% blocktranslate with amount=found.usable_bulk|amount unit=found.bulk_unit_label %}{{ amount }} {{ unit }}, each open lot less the largest container size{% endblocktranslate %}</dd>
+<dd>{% blocktranslate with amount=found.usable_bulk|amount unit=found.bulk_unit_label %}{{ amount }} {{ unit }}, each open vessel less the largest container size{% endblocktranslate %}</dd>
 <dt>{% translate "Runway" %}</dt>
 <dd>{% blocktranslate with runway=found.runway|days certainty=found.certainty|percent %}{{ runway }} at a certainty of {{ certainty }} for each size{% endblocktranslate %}{{ found.rough|rough }}</dd>
 <dt>{% translate "Synthesis time" %}</dt>
