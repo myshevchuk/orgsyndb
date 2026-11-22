@@ -15,9 +15,9 @@
 
 ## 3. Verification
 
-- [ ] 3.1 The lab suite passes locally on PostgreSQL and on CI
+- [x] 3.1 The lab suite passes locally on PostgreSQL and on CI
 
 ## 4. Review and archive
 
 - [x] 4.1 Codex reviewer
-- [ ] 4.2 Archive and squash-merge into `develop`
+- [x] 4.2 Archive and squash-merge into `develop`
