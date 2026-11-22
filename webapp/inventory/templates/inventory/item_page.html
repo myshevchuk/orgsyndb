@@ -33,13 +33,21 @@
 </dl>
 {% if item.note %}<h2>{% translate "Note" context "inventory" %}</h2>
 <div class="lab-note">{{ item.note|linebreaks }}</div>
+{% endif %}<h2>{% translate "Containers by batch" %}</h2>
+{% if stocks or unknown %}<dl class="metadata">
+{% for stock in stocks %}<dt><a href="/lab/inventory/batches/{{ stock.batch.pk }}/">{{ stock.batch }}</a></dt>
+<dd>{{ stock.quantity }}</dd>
+{% endfor %}{% if unknown %}<dt>{% translate "unknown" %}</dt>
+<dd>{{ unknown }}</dd>
+{% endif %}</dl>
+{% else %}<p>{% translate "No containers." %}</p>
 {% endif %}<h2>{% translate "Consumption" %}</h2>
 {% include "inventory/consumption.html" with link_mode="dialog" %}
 <h2>{% translate "Movements" %}</h2>
 <div class="table-scroll">
 <table class="inventory-table">
 <thead>
-<tr><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Booked at" %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col">{% translate "Count" %}</th><th scope="col">{% translate "Stock after" %}</th><th scope="col">{% translate "User" %}</th><th scope="col">{% translate "Delivery note" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th>{% if user.is_authenticated %}<th scope="col"><span class="visually-hidden">{% translate "Actions" %}</span></th>{% endif %}</tr>
+<tr><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Booked at" %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col">{% translate "Count" %}</th><th scope="col">{% translate "Stock after" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "User" %}</th><th scope="col">{% translate "Delivery note" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th>{% if user.is_authenticated %}<th scope="col"><span class="visually-hidden">{% translate "Actions" %}</span></th>{% endif %}</tr>
 </thead>
 <tbody>
 {% for row in ledger %}{% with movement=row.movement %}<tr>
@@ -48,6 +56,7 @@
 <td>{{ movement.get_kind_display }}{% if row.reversed %} <span class="badge badge--reversed">{% translate "reversed" %}</span>{% endif %}</td>
 <td class="number">{{ movement.count }}</td>
 <td class="number">{{ movement.quantity_after }}</td>
+<td>{% if movement.batch %}<a href="/lab/inventory/batches/{{ movement.batch.pk }}/">{{ movement.batch }}</a>{% else %}{% translate "unknown" %}{% endif %}</td>
 <td>{% person movement.user %}</td>
 <td>{% if movement.delivery_note %}<a href="/lab/inventory/deliveries/{{ movement.delivery_note.pk }}/">{{ movement.delivery_note }}</a> {{ movement.delivery_note.recipient }}{% endif %}</td>
 <td>{% if movement.delivery_note.note %}{{ movement.delivery_note.note }} {% endif %}{{ movement.note }}</td>

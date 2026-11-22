@@ -47,10 +47,20 @@
 //   refresh is under way, the dialog's body is inert, so that nothing
 //   in it, such as a link to another form, replaces the form whose
 //   save is pending.
+// - Narrows each batch choice (a select marked data-batch-for, whose
+//   options sit in one optgroup per substance, marked data-substance
+//   with the substance's key) to the substance of the control that
+//   data-batch-for names: the chosen option of an item select, by its
+//   data-substance, or the text typed in the new-item form's
+//   substance field. It hides and disables the groups of other
+//   substances, and clears a chosen batch that it hid. It does so when
+//   the page loads and whenever that control changes or is typed in;
+//   with no substance, every group shows.
 //
-// OrgSynLab.place is the placement's arithmetic and
-// OrgSynLab.paramSearch the address's, each kept apart from the page
-// so that tests can run it without one.
+// OrgSynLab.place is the placement's arithmetic,
+// OrgSynLab.paramSearch the address's and OrgSynLab.narrowBatches the
+// batch choice's, each kept apart from the page so that tests can run
+// it without one.
 (() => {
   "use strict";
 
@@ -95,7 +105,18 @@
     return kept.length ? `?${kept.join("&")}` : "";
   };
 
-  globalThis.OrgSynLab = { place, paramSearch };
+  // What narrowing a batch choice to the substance KEY ("" for none)
+  // does, given GROUPS, the keys of the choice's optgroups in order,
+  // and CHOSEN, the key of the group of the batch chosen, or null for
+  // none: the keys of the groups to hide, and whether the chosen batch
+  // is to be cleared. With a KEY, every group but its own is hidden
+  // and a batch of any other group is cleared; with none, nothing is.
+  const narrowBatches = (key, groups, chosen) => ({
+    hidden: key === "" ? [] : groups.filter((group) => group !== key),
+    clear: key !== "" && chosen !== null && chosen !== key,
+  });
+
+  globalThis.OrgSynLab = { place, paramSearch, narrowBatches };
   if (typeof document === "undefined") return;
 
   let open = null;
@@ -180,6 +201,52 @@
         }
       } catch {
         // Storage refused: the choice lasts until the page is left.
+      }
+    });
+  }
+
+  // The key of the substance a control that drives a batch choice
+  // holds: the data-substance of an item select's chosen option, or
+  // the text of the substance field; "" for none.
+  const substanceOf = (control) => {
+    if (control.tagName === "SELECT") {
+      const option = control.selectedOptions[0];
+      return option && option.dataset.substance || "";
+    }
+    return control.value.trim();
+  };
+
+  const narrow = (select) => {
+    const driver = select.form
+      && select.form.elements.namedItem(select.dataset.batchFor);
+    if (!driver) return;
+    const groups = [...select.querySelectorAll("optgroup[data-substance]")];
+    const option = select.selectedOptions[0];
+    const group = option && option.parentElement.matches("optgroup")
+      ? option.parentElement.dataset.substance : null;
+    const { hidden, clear } = narrowBatches(
+      substanceOf(driver), groups.map((each) => each.dataset.substance),
+      group);
+    for (const each of groups) {
+      each.hidden = each.disabled = hidden.includes(each.dataset.substance);
+    }
+    if (clear) select.value = "";
+  };
+
+  for (const select of document.querySelectorAll("select[data-batch-for]")) {
+    narrow(select);
+  }
+  // Delegated, so that each control that drives a choice is heard.
+  for (const type of ["change", "input"]) {
+    document.addEventListener(type, (event) => {
+      const control = event.target;
+      if (!(control instanceof Element) || !control.name) return;
+      for (const select of document.querySelectorAll(
+        "select[data-batch-for]")) {
+        if (select.form === control.form
+            && select.dataset.batchFor === control.name) {
+          narrow(select);
+        }
       }
     });
   }

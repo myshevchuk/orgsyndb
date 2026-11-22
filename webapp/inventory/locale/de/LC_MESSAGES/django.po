@@ -26,8 +26,17 @@ msgstr "Diesen Artikel gibt es schon in dieser Größe und Einheit."
 msgid "A delivery note needs at least one line."
 msgstr "Ein Lieferschein braucht mindestens eine Zeile."
 
-msgid "The item is already in the note."
-msgstr "Der Artikel steht schon auf dem Lieferschein."
+msgid "The item and batch are already in the note."
+msgstr "Artikel und Charge stehen schon auf dem Lieferschein."
+
+msgid "Choose the batch."
+msgstr "Bitte die Charge wählen."
+
+msgid "The batch is of another substance."
+msgstr "Die Charge gehört zu einem anderen Stoff."
+
+msgid "The stock changed while this was booked; check the counts and book again."
+msgstr "Der Bestand hat sich während der Buchung geändert; bitte die Anzahlen prüfen und neu buchen."
 
 msgid "The count must be above zero."
 msgstr "Die Anzahl muss größer als null sein."
@@ -35,8 +44,8 @@ msgstr "Die Anzahl muss größer als null sein."
 msgid "Another delivery note has this number."
 msgstr "Ein anderer Lieferschein hat diese Nummer."
 
-msgid "Only %(quantity)s containers of %(item)s are left."
-msgstr "Von %(item)s sind nur noch %(quantity)s Gebinde übrig."
+msgid "Only %(quantity)s containers of %(item)s are left for the batch %(batch)s."
+msgstr "Von %(item)s sind für die Charge %(batch)s nur noch %(quantity)s Gebinde übrig."
 
 msgid "%(item)s has an entered consumption value for Q%(quarter)s %(year)s."
 msgstr "%(item)s hat für Q%(quarter)s %(year)s einen nachgetragenen Verbrauch."
@@ -108,8 +117,14 @@ msgstr "Anzahl"
 msgid "Count %(row)s"
 msgstr "Anzahl %(row)s"
 
+msgid "Batch %(row)s"
+msgstr "Charge %(row)s"
+
 msgid "Choose an item."
 msgstr "Bitte einen Artikel wählen."
+
+msgid "Choose a batch."
+msgstr "Bitte eine Charge wählen."
 
 msgid "Enter a count."
 msgstr "Bitte eine Anzahl angeben."
@@ -213,6 +228,9 @@ msgstr "Anfangsmenge"
 
 msgid "Filling"
 msgstr "Abfüllung"
+
+msgid "Assignment"
+msgstr "Zuordnung"
 
 msgid "Correction"
 msgstr "Korrektur"
@@ -982,3 +1000,21 @@ msgstr "Menge von %(vessel)s korrigiert."
 #, python-format
 msgid "Correct the amount of %(vessel)s"
 msgstr "Menge von %(vessel)s korrigieren"
+
+msgid "unknown"
+msgstr "unbekannt"
+
+msgid "share"
+msgstr "Anteil"
+
+msgid "shares"
+msgstr "Anteile"
+
+msgid "The batch the opening count is of; left empty, it is of unknown batch."
+msgstr "Die Charge, zu der der Anfangsbestand gehört; ohne Angabe ist er von unbekannter Charge."
+
+msgid "Containers by batch"
+msgstr "Gebinde nach Charge"
+
+msgid "No containers."
+msgstr "Keine Gebinde."

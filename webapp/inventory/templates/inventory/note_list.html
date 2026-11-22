@@ -27,7 +27,7 @@
 <td>{{ note.date }}</td>
 <td>{{ note.recipient }}</td>
 <td><ul class="note-lines">
-{% for line in note.lines.all %}<li>{{ line.item.article_number }} {{ line.item.name }} · {{ line.item.container }} × {{ line.count }}</li>
+{% for line in note.lines.all %}<li>{{ line.item.article_number }} {{ line.item.name }} · {{ line.item.container }}{% if line.batch %} · {{ line.batch }}{% endif %} × {{ line.count }}</li>
 {% endfor %}</ul></td>
 </tr>
 {% endfor %}</tbody>

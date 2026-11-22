@@ -418,8 +418,8 @@ class Rhythm:
 
 
 def rhythm(dates: Iterable[date], today: date) -> Rhythm:
-    """Return the delivery rhythm of the deliveries on DATES, in any
-    order, as of TODAY."""
+    """Return the delivery rhythm of the deliveries on DATES, one date
+    for each delivery and in any order, as of TODAY."""
     found = sorted(dates)
     recent = [day for day in found if (today - day).days < 730]
     interval = None

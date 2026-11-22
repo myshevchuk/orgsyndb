@@ -1,15 +1,21 @@
 """Every change of an item's quantity or a vessel's amount, and the
 records that go with it.
 
-Each booking runs in one transaction. A quantity or an amount changes
+Each booking runs in one transaction. A share of an item, which is the
+containers of one batch or of unknown batch, and a vessel's amount change
 by one conditional ``UPDATE`` of the row, which names the condition the
 change needs, such as ``quantity >= n``, and is read back in the same
-transaction; the value an instance passed in holds is never trusted.
-Two bookings prepared from the same quantity therefore never take more
-than it holds. A booking that changes
-several rows locks tasks first, then items, then vessels, each in the
-order of their IDs, so that two bookings never wait for each other. A
-booking that is refused raises Refused and changes nothing.
+transaction; the value an instance passed in holds is never trusted. An
+item's quantity changes by the same amount as the share, in the same
+transaction, so that it is always the sum of the item's shares. Two
+bookings prepared from the same share therefore never take more than it
+holds. A booking that changes several rows locks tasks first, then items,
+then vessels, each in the order of their IDs, and does so before it reads
+a share or a vessel, so that two bookings never wait for each other and
+a booking reads what the booking before it stored. A booking that is
+refused raises Refused and changes nothing; so does one that meets a
+unique violation, such as a concurrent first booking into one share
+would cause.
 
 Recording a batch from a task step and every booking on a flask lock the
 row of the task and check in the booking's transaction that the task is
@@ -34,9 +40,9 @@ from django.utils.translation import gettext_lazy
 
 from inventory.figures import (BASE_PLACES, convert, proposed_amount,
                                quarter_of, to_base)
-from inventory.models import (BASE_UNIT, Article, Batch, DeliveryLine,
-                              DeliveryNote, EnteredConsumption, Item,
-                              Movement, Source, Unit, Vessel,
+from inventory.models import (BASE_UNIT, Article, Batch, BatchStock,
+                              DeliveryLine, DeliveryNote, EnteredConsumption,
+                              Item, Movement, Source, Unit, Vessel,
                               VesselMovement, shown)
 from orgsyndb_web import lock
 from registry.models import Substance
@@ -113,18 +119,31 @@ def _amount(vessel_id: int) -> Decimal:
         "amount", flat=True).get()
 
 
-def _take(item: Item, count: int) -> int | None:
-    """Take COUNT containers out of ITEM and return its new quantity, or
-    None, changing nothing, when it holds fewer."""
-    if not Item.objects.filter(pk=item.pk, quantity__gte=count).update(
-            quantity=F("quantity") - count):
+def _held(item: Item, batch: Batch | None) -> int:
+    """Return the containers of ITEM in the share of BATCH, the share of
+    unknown batch for None; zero where the item has no such share."""
+    return BatchStock.objects.filter(item=item.pk, batch=batch).values_list(
+        "quantity", flat=True).first() or 0
+
+
+def _shift(item: Item, batch: Batch | None, count: int) -> int | None:
+    """Add COUNT containers, below zero for a take, to the share of BATCH
+    of ITEM and to the item's quantity, and return the item's new
+    quantity.
+
+    BATCH is None for the share of unknown batch. A share that does not
+    exist yet is created by an addition, also of zero. A take of more
+    than the share holds returns None and changes nothing.
+    """
+    stocks = BatchStock.objects.filter(item=item.pk, batch=batch)
+    if count >= 0:
+        BatchStock.objects.get_or_create(item_id=item.pk, batch=batch)
+        stocks.update(quantity=F("quantity") + count)
+    elif not stocks.filter(quantity__gte=-count).update(
+            quantity=F("quantity") + count):
         return None
-    return _quantity(item.pk)
-
-
-def _add(item: Item, count: int) -> int:
-    """Add COUNT containers to ITEM and return its new quantity."""
-    Item.objects.filter(pk=item.pk).update(quantity=F("quantity") + count)
+    Item.objects.filter(pk=item.pk).update(
+        quantity=F("quantity") + count)
     return _quantity(item.pk)
 
 
@@ -224,6 +243,10 @@ def number_taken(article: Article | None, article_number: str) -> bool:
     return others.exists()
 
 
+OTHER_SUBSTANCE = gettext_lazy("The batch is of another substance.")
+COLLIDED = gettext_lazy(
+    "The stock changed while this was booked; check the counts and book "
+    "again.")
 TAKEN = gettext_lazy(
     "This article already has an item of this size and unit.")
 NUMBER_TAKEN = gettext_lazy("Another article has this article number.")
@@ -319,12 +342,17 @@ def _article_for(user: Any, substance: Substance, number: str | None,
 
 def create_item(user: Any, *, substance: Substance,
                 article_number: str | None, size: Decimal, unit: str,
-                quantity: int, category: str = "", note: str = "",
+                quantity: int, batch: Batch | None = None,
+                category: str = "", note: str = "",
                 date: Date | None = None, stocked_on: Date | None = None,
                 compartment: str = "", box: str = "") -> Item:
     """Create an item of the article of SUBSTANCE with QUANTITY
     containers and its opening count, booked by USER and dated DATE,
     today by default.
+
+    The containers are of BATCH, a batch of SUBSTANCE, or of unknown
+    batch when BATCH is None; the item has its share of unknown batch
+    either way, and a share of BATCH when that is given.
 
     A substance without an article gets one, numbered ARTICLE_NUMBER,
     none when it is None or empty, in CATEGORY. For a substance with an
@@ -335,12 +363,15 @@ def create_item(user: Any, *, substance: Substance,
     opening count's date. Refuse a QUANTITY below zero, a SIZE of zero
     or less, an unknown UNIT, a DATE or STOCKED_ON after today, a value
     too long for its field, an article number another article has or
-    other than the article's, and an item whose size and unit another
-    item of the article has; a refusal changes nothing.
+    other than the article's, a BATCH of another substance, and an item
+    whose size and unit another item of the article has; a refusal
+    changes nothing.
     """
     day = _day(date)
     if quantity < 0:
         raise Refused({"quantity": _("The count may not be negative.")})
+    if batch is not None and batch.substance_id != substance.pk:
+        raise Refused({"batch": str(OTHER_SUBSTANCE)})
     number = _number(article_number)
     if number is not None:
         _checked(Article(substance=substance, article_number=number))
@@ -358,42 +389,58 @@ def create_item(user: Any, *, substance: Substance,
                                    unit=unit).exists():
                 raise Refused({"size": taken})
             _attributed(item, user).save()
+            BatchStock.objects.create(
+                item=item, quantity=0 if batch else quantity)
+            if batch is not None:
+                BatchStock.objects.create(item=item, batch=batch,
+                                          quantity=quantity)
             _movement(user, item, Movement.Kind.OPENING, quantity, quantity,
-                      day)
+                      day, batch=batch)
     except IntegrityError as error:
         raise Refused({"size": taken}) from error
     return item
 
 
-def book_note(user: Any, *, date: Date, lines: Sequence[tuple[Item, int]],
+def book_note(user: Any, *, date: Date,
+              lines: Sequence[tuple[Item, Batch | None, int]],
               number: str | None = "", recipient: str = "", note: str = "",
               historical: bool = False) -> DeliveryNote:
-    """Create a delivery note of LINES, pairs of an item and a count,
-    made by USER, and return it.
+    """Create a delivery note of LINES, triples of an item, a batch of
+    the item's substance and a count, made by USER, and return it.
 
-    A current note books one delivery movement per line, dated DATE; a
-    HISTORICAL note changes no quantity. Refuse, with the position of
-    the line concerned where there is one: a note without lines; an item
-    twice, or one whose article has no article number; a count of zero
-    or less; for a current note, a count above the item's quantity;
-    for a historical note, an item with an entered consumption value for
-    the quarter of DATE. Refuse too a DATE after today, a NUMBER another
-    note has, and a value too long for its field. An empty NUMBER is
-    none.
+    A current note books, for each line in order, an assignment of the
+    containers of unknown batch that the line's batch lacks, when it
+    lacks any, and then one delivery movement from the share of the
+    line's batch, all dated DATE; a HISTORICAL note changes no
+    quantity. Refuse, with the position of the line concerned where
+    there is one: a note without lines; an item whose article has no
+    article number; a line without a batch or with a batch of another
+    substance than the item's, at ``batch``; an item and batch twice, at
+    ``batch``; a count of zero or less; for a current note, a count above
+    what the line's batch and the item's share of unknown batch hold
+    together, after the lines before it; for a historical note, an item
+    with an entered consumption value for the quarter of DATE. Refuse
+    too a DATE after today, a NUMBER another note has, and a value too
+    long for its field. An empty NUMBER is none.
     """
     day = _day(date)
     if not lines:
         raise Refused(_("A delivery note needs at least one line."))
-    seen: set[int] = set()
-    for position, (item, count) in enumerate(lines):
+    seen: set[tuple[int, int]] = set()
+    for position, (item, batch, count) in enumerate(lines):
         if _stored_number(item.article_id) is None:
             raise Refused({"item": _(
                 "Enter the item's article number before its first "
                 "delivery.")}, line=position)
-        if item.pk in seen:
-            raise Refused({"item": _("The item is already in the note.")},
-                          line=position)
-        seen.add(item.pk)
+        if batch is None:
+            raise Refused({"batch": _("Choose the batch.")}, line=position)
+        if batch.substance_id != item.article_id:
+            raise Refused({"batch": str(OTHER_SUBSTANCE)}, line=position)
+        if (item.pk, batch.pk) in seen:
+            raise Refused({"batch": _(
+                "The item and batch are already in the note.")},
+                line=position)
+        seen.add((item.pk, batch.pk))
         if count <= 0:
             raise Refused({"count": _("The count must be above zero.")},
                           line=position)
@@ -407,33 +454,55 @@ def book_note(user: Any, *, date: Date, lines: Sequence[tuple[Item, int]],
         raise Refused({"number": taken})
     try:
         with transaction.atomic():
-            _lock([item for item, _count in lines])
+            _lock([item for item, _batch, _count in lines])
             if historical:
                 _check_quarters(lines, day)
             _attributed(record, user).save()
-            for position, (item, count) in enumerate(lines):
+            for position, (item, batch, count) in enumerate(lines):
                 DeliveryLine.objects.create(delivery_note=record,
-                                            item=item, count=count)
-                if historical:
-                    continue
-                after = _take(item, count)
-                if after is None:
-                    raise Refused({"count": _(
-                        "Only %(quantity)s containers of %(item)s are "
-                        "left.") % {"quantity": _quantity(item.pk),
-                                    "item": item}}, line=position)
-                _movement(user, item, Movement.Kind.DELIVERY, count, after,
-                          day, delivery_note=record)
+                                            item=item, batch=batch,
+                                            count=count)
+                if not historical:
+                    _deliver(user, item, batch, count, day, record,
+                             position)
     except IntegrityError as error:
-        raise Refused({"number": taken}) from error
+        if record.number and DeliveryNote.objects.filter(
+                number=record.number).exists():
+            raise Refused({"number": taken}) from error
+        raise Refused(str(COLLIDED)) from error
     return record
 
 
-def _check_quarters(lines: Sequence[tuple[Item, int]], day: Date) -> None:
+def _deliver(user: Any, item: Item, batch: Batch, count: int, day: Date,
+             note: DeliveryNote, position: int) -> None:
+    """Book the delivery of COUNT containers of BATCH of ITEM for the
+    line at POSITION of NOTE, dated DAY, after the assignment of what
+    the share of BATCH lacks from the share of unknown batch; refuse, at
+    the line, when the two shares hold fewer. The item's row is locked
+    by the caller."""
+    lacking = max(count - _held(item, batch), 0)
+    if lacking:
+        after = _shift(item, None, -lacking)
+        if after is None:
+            raise Refused({"count": _(
+                "Only %(quantity)s containers of %(item)s are left for "
+                "the batch %(batch)s.") % {
+                    "quantity": _held(item, batch) + _held(item, None),
+                    "item": item, "batch": batch}}, line=position)
+        after = _shift(item, batch, lacking)
+        _movement(user, item, Movement.Kind.ASSIGNMENT, lacking, after, day,
+                  batch=batch, delivery_note=note)
+    after = _shift(item, batch, -count)
+    _movement(user, item, Movement.Kind.DELIVERY, count, after, day,
+              batch=batch, delivery_note=note)
+
+
+def _check_quarters(lines: Sequence[tuple[Item, Batch | None, int]],
+                    day: Date) -> None:
     """Refuse a historical note dated DAY when an item of LINES has an
     entered consumption value for the quarter of DAY."""
     year, quarter = quarter_of(day)
-    for position, (item, _count) in enumerate(lines):
+    for position, (item, _batch, _count) in enumerate(lines):
         if EnteredConsumption.objects.filter(
                 item=item, year=year, quarter=quarter).exists():
             raise Refused({"count": _(
@@ -471,7 +540,8 @@ def fill(user: Any, item: Item, *, count: int, vessel: Vessel | None,
          amount: Decimal | None = None) -> Movement:
     """Book COUNT containers filled into ITEM from VESSEL by USER, dated
     DATE, today by default, and return the item's movement, which names
-    the vessel's.
+    the vessel's and its batch; the containers go into the share of that
+    batch.
 
     The filling takes AMOUNT, in the vessel's unit, from the vessel in
     the same transaction. An AMOUNT of None takes the proposed amount:
@@ -492,15 +562,20 @@ def fill(user: Any, item: Item, *, count: int, vessel: Vessel | None,
             "Choose the vessel the containers are filled from.")})
     if vessel.batch.substance_id != item.article_id:
         raise Refused({"vessel": _("The vessel holds another substance.")})
-    with transaction.atomic():
-        _hold_flask(vessel)
-        after = _add(item, count)
-        base = _taken(item, count, vessel, amount)
-        taken = _vessel_movement(
-            user, vessel, VesselMovement.Kind.FILLING, base,
-            _vessel_change(vessel, -base), day, note)
-        return _movement(user, item, Movement.Kind.FILLING, count, after,
-                         day, note=note, vessel_movement=taken)
+    try:
+        with transaction.atomic():
+            _hold_flask(vessel)
+            _lock([item])
+            after = _shift(item, vessel.batch, count)
+            base = _taken(item, count, vessel, amount)
+            taken = _vessel_movement(
+                user, vessel, VesselMovement.Kind.FILLING, base,
+                _vessel_change(vessel, -base), day, note)
+            return _movement(user, item, Movement.Kind.FILLING, count,
+                             after, day, note=note, vessel_movement=taken,
+                             batch=vessel.batch)
+    except IntegrityError as error:
+        raise Refused(str(COLLIDED)) from error
 
 
 def _passed(amount: Decimal, unit: str, message: str) -> Decimal:
@@ -534,30 +609,43 @@ def _taken(item: Item, count: int, vessel: Vessel, amount: Decimal | None
 
 
 def correct(user: Any, item: Item, *, count: int, note: str,
-            date: Date | None = None) -> Movement:
-    """Set the quantity of ITEM to COUNT, the containers counted, with
-    NOTE, by USER, dated DATE, today by default; return the movement.
+            batch: Batch | None = None, date: Date | None = None
+            ) -> Movement:
+    """Set the share of BATCH of ITEM, the share of unknown batch when
+    BATCH is None, to COUNT, the containers counted, with NOTE, by USER,
+    dated DATE, today by default; return the movement.
 
-    Refuse a COUNT below zero, an empty NOTE and a DATE after today.
+    The item's quantity changes by the difference between COUNT and what
+    the share held once the item's row was locked. The movement names
+    BATCH and holds COUNT. Refuse a COUNT below zero, an empty NOTE, a
+    BATCH of another substance than the item's, and a DATE after today.
     """
     day = _day(date)
     text = _required(note)
     if count < 0:
         raise Refused({"count": _("The count may not be negative.")})
-    with transaction.atomic():
-        Item.objects.filter(pk=item.pk).update(quantity=count)
-        return _movement(user, item, Movement.Kind.CORRECTION, count,
-                         _quantity(item.pk), day, note=text)
+    if batch is not None and batch.substance_id != item.article_id:
+        raise Refused({"batch": str(OTHER_SUBSTANCE)})
+    try:
+        with transaction.atomic():
+            _lock([item])
+            after = _shift(item, batch, count - _held(item, batch))
+            return _movement(user, item, Movement.Kind.CORRECTION, count,
+                             after, day, note=text, batch=batch)
+    except IntegrityError as error:
+        raise Refused(str(COLLIDED)) from error
 
 
 def reverse(user: Any, movement: Movement, *, note: str) -> Movement:
     """Reverse the delivery or filling MOVEMENT with NOTE, by USER, dated
     today, and return the reversal.
 
-    A delivery's count goes back into the item. A filling's count is
-    taken back out, and its amount returns to its vessel with a vessel
-    reversal. Refuse an empty NOTE, a movement of another kind, one
-    already reversed, a filling whose containers are no longer there,
+    A delivery's count goes back into the share of its batch. A filling's
+    count is taken back out of the share of its batch, and its amount
+    returns to its vessel with a vessel reversal. The reversal names the
+    batch of MOVEMENT. Refuse an empty NOTE, a movement of another kind
+    (an assignment is reversed by no one), one already reversed, a
+    filling whose batch's share holds fewer containers than it took in,
     and a filling from the flask of a task that is neither planned nor
     running.
     """
@@ -572,13 +660,14 @@ def reverse(user: Any, movement: Movement, *, note: str) -> Movement:
             taken = movement.vessel_movement
             if taken is not None:
                 _hold_flask(taken.vessel)
+            _lock([item])
             if Movement.objects.filter(reverses=movement).exists():
                 raise Refused(done)
             returned = None
             if movement.kind == Movement.Kind.DELIVERY:
-                after = _add(item, movement.count)
+                after = _shift(item, movement.batch, movement.count)
             else:
-                after = _take(item, movement.count)
+                after = _shift(item, movement.batch, -movement.count)
                 if after is None:
                     raise Refused(_("The containers of the filling are no "
                                     "longer there."))
@@ -590,7 +679,8 @@ def reverse(user: Any, movement: Movement, *, note: str) -> Movement:
                         text)
             return _movement(user, item, Movement.Kind.REVERSAL,
                              movement.count, after, day, note=text,
-                             reverses=movement, vessel_movement=returned)
+                             reverses=movement, vessel_movement=returned,
+                             batch=movement.batch)
     except IntegrityError as error:
         raise Refused(done) from error
 

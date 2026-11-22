@@ -113,8 +113,9 @@ class Item(models.Model):
 
     The article, size and unit identify the item and are fixed once it
     exists. Its substance, name, article number and category are its
-    article's. The quantity changes only by movements; the change
-    history covers the other fields.
+    article's. The quantity, the sum of the item's shares
+    (``BatchStock``), changes only by movements; the change history
+    covers the other fields.
     """
 
     article = models.ForeignKey(Article, verbose_name=_("article"),
@@ -215,7 +216,8 @@ class Item(models.Model):
 class DeliveryNote(models.Model):
     """A delivery note (``Lieferschein``) and its lines.
 
-    A current note books one delivery movement per line; a historical
+    A current note books one delivery movement per line, after an
+    assignment where the line's batch lacks containers; a historical
     note records deliveries made before they could be booked and changes
     no quantity. A historical note is reversed whole, by its REVERSED
     flag; a current note's lines are reversed through their movements.
@@ -248,7 +250,13 @@ class DeliveryNote(models.Model):
 
 
 class DeliveryLine(models.Model):
-    """A line of a delivery note: COUNT containers of ITEM."""
+    """A line of a delivery note: COUNT containers of ITEM from BATCH.
+
+    The batch is a batch of the item's substance. Its column is nullable
+    only for lines stored before lines named a batch; forms, bookings and
+    the admin require it. A note has at most one line of an item and
+    batch.
+    """
 
     delivery_note = models.ForeignKey(
         DeliveryNote, on_delete=models.PROTECT, related_name="lines",
@@ -256,6 +264,9 @@ class DeliveryLine(models.Model):
     item = models.ForeignKey(Item, on_delete=models.PROTECT,
                              related_name="delivery_lines",
                              verbose_name=_("item"))
+    batch = models.ForeignKey(
+        "inventory.Batch", on_delete=models.PROTECT,
+        related_name="delivery_lines", null=True, verbose_name=_("Batch"))
     count = models.PositiveIntegerField(
         _("Count"), validators=[MinValueValidator(1)])
 
@@ -264,8 +275,9 @@ class DeliveryLine(models.Model):
         verbose_name = _("line")
         verbose_name_plural = _("lines")
         constraints = [
-            models.UniqueConstraint(fields=["delivery_note", "item"],
-                                    name="inventory_line_item_once"),
+            models.UniqueConstraint(
+                fields=["delivery_note", "item", "batch"],
+                name="inventory_line_batch_once"),
         ]
 
     def __str__(self) -> str:
@@ -567,17 +579,21 @@ class Movement(models.Model):
     """A change of an item's quantity.
 
     COUNT is the containers moved, or for an opening count or a
-    correction the quantity entered; QUANTITY_AFTER is the item's
-    quantity once the movement was booked. DATE is the day it took
-    place, BOOKED_AT the time it was booked. A delivery names its
-    DELIVERY_NOTE; a filling from a vessel, and the reversal of one, name
-    the vessel's movement as VESSEL_MOVEMENT; a reversal names the
-    movement it REVERSES, which is reversed at most once.
+    correction the quantity entered in the share the movement names;
+    QUANTITY_AFTER is the item's quantity once the movement was booked.
+    BATCH is the batch whose share the movement changes, None for the
+    share of unknown batch; an assignment moves containers from the
+    share of unknown batch into BATCH. DATE is the day it took place,
+    BOOKED_AT the time it was booked. A delivery and an assignment name
+    their DELIVERY_NOTE; a filling from a vessel, and the reversal of
+    one, name the vessel's movement as VESSEL_MOVEMENT; a reversal names
+    the movement it REVERSES, which is reversed at most once.
     """
 
     class Kind(models.TextChoices):
         OPENING = "opening", _("Opening count")
         DELIVERY = "delivery", _("Delivery")
+        ASSIGNMENT = "assignment", _("Assignment")
         FILLING = "filling", _("Filling")
         CORRECTION = "correction", _("Correction")
         REVERSAL = "reversal", _("Reversal")
@@ -588,6 +604,9 @@ class Movement(models.Model):
     kind = models.CharField(_("Kind"), max_length=10, choices=Kind.choices)
     count = models.PositiveIntegerField(_("Count"))
     quantity_after = models.PositiveIntegerField(_("Stock after"))
+    batch = models.ForeignKey(
+        Batch, verbose_name=_("Batch"), on_delete=models.PROTECT,
+        null=True, blank=True, related_name="item_movements")
     date = models.DateField(_("Date"))
     booked_at = models.DateTimeField(_("Booked at"))
     user = models.ForeignKey(settings.AUTH_USER_MODEL,
@@ -618,6 +637,41 @@ class Movement(models.Model):
     def reversible(self) -> bool:
         """Whether the movement is a delivery or a filling."""
         return self.kind in (self.Kind.DELIVERY, self.Kind.FILLING)
+
+
+class BatchStock(models.Model):
+    """The containers of ITEM that are of BATCH: one share of its stock.
+
+    A BATCH of None is the share of unknown batch. An item has one share
+    of unknown batch from the moment it exists and one share of a batch
+    from the first booking into that batch, which stays when it is
+    emptied. The item's quantity is the sum of its shares; both change
+    together, by bookings alone.
+    """
+
+    item = models.ForeignKey(Item, on_delete=models.CASCADE,
+                             related_name="stocks",
+                             verbose_name=_("item"))
+    batch = models.ForeignKey(Batch, on_delete=models.PROTECT, null=True,
+                              blank=True, related_name="stocks",
+                              verbose_name=_("Batch"))
+    quantity = models.PositiveIntegerField(_("Stock"), default=0)
+
+    class Meta:
+        ordering = ["item_id", models.F("batch_id").asc(nulls_last=True)]
+        verbose_name = _("share")
+        verbose_name_plural = _("shares")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["item", "batch"], name="inventory_stock_batch_once",
+                condition=Q(batch__isnull=False)),
+            models.UniqueConstraint(
+                fields=["item"], name="inventory_stock_unknown_once",
+                condition=Q(batch__isnull=True)),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.item} {self.batch or _('unknown')}: {self.quantity}"
 
 
 class EnteredConsumption(models.Model):

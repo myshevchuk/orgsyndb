@@ -63,5 +63,37 @@
 {% endfor %}</tbody>
 </table>
 </div>
+{% endif %}<h2>{% translate "Containers" %}</h2>
+{% if stocks %}<div class="table-scroll">
+<table class="inventory-table">
+<thead>
+<tr><th scope="col">{% translate "Item" %}</th><th scope="col">{% translate "Containers" %}</th></tr>
+</thead>
+<tbody>
+{% for stock in stocks %}<tr>
+<td><a href="/lab/inventory/items/{{ stock.item.pk }}/">{% if stock.item.article_number %}{{ stock.item.article_number }} · {% endif %}{{ stock.item.container }}</a></td>
+<td class="number">{{ stock.quantity }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% else %}<p>{% translate "No containers." %}</p>
+{% endif %}{% if lines %}<h2>{% translate "Deliveries" %}</h2>
+<div class="table-scroll">
+<table class="inventory-table">
+<thead>
+<tr><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Delivery note" %}</th><th scope="col">{% translate "Recipient" %}</th><th scope="col">{% translate "Item" %}</th><th scope="col">{% translate "Count" %}</th></tr>
+</thead>
+<tbody>
+{% for row in lines %}<tr>
+<td>{{ row.line.delivery_note.date }}</td>
+<td><a href="/lab/inventory/deliveries/{{ row.line.delivery_note.pk }}/">{{ row.line.delivery_note }}</a>{% if row.historical %} <span class="badge badge--historical">{% translate "entered later" %}</span>{% endif %}{% if row.reversed %} <span class="badge badge--reversed">{% translate "reversed" %}</span>{% endif %}</td>
+<td>{{ row.line.delivery_note.recipient }}</td>
+<td><a href="/lab/inventory/items/{{ row.line.item.pk }}/">{% if row.line.item.article_number %}{{ row.line.item.article_number }} · {% endif %}{{ row.line.item.container }}</a></td>
+<td class="number">{{ row.line.count }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</div>
 {% endif %}{% include "inventory/history.html" %}
 {% endblock %}
