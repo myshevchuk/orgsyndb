@@ -8,7 +8,6 @@
 !site/hugo.toml
 !site/i18n/
 webapp/.venv/
-webapp/db.sqlite3
 webapp/staticfiles/
 **/__pycache__/
 **/.pytest_cache/

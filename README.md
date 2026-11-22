@@ -1305,11 +1305,15 @@ cd webapp
 uv run pytest
 ```
 
-The suite uses SQLite, a database stored in one file, by default. Set
-`ORGSYNDB_DATABASE_URL` to run it against PostgreSQL instead. The
+The suite needs a PostgreSQL server. By default it connects to
+`postgres://lab:lab@localhost:5432/lab`, the local development database;
+set `ORGSYNDB_DATABASE_URL` to use another. One way to provide it is a
+container: `podman run -d --name orgsyndb-pg -e POSTGRES_USER=lab -e
+POSTGRES_PASSWORD=lab -e POSTGRES_DB=lab -p 127.0.0.1:5432:5432
+postgres:18`, or the same with `docker`. The
 [`webapp.yml`](.github/workflows/webapp.yml) GitHub Actions workflow runs
-this suite on SQLite and on a PostgreSQL 18 service on a push to any
-branch, so a change branch is checked before it is merged.
+this suite on a PostgreSQL 18 service on a push to any branch, so a
+change branch is checked before it is merged.
 
 The full suite takes several minutes. Run it in parallel, one worker per
 processor core, with `uv run pytest -n auto`, or pass the files you need,
@@ -1338,8 +1342,9 @@ uv run python manage.py migrate
 uv run python manage.py runserver
 ```
 
-Open <http://127.0.0.1:8000/lab/>. The local database is
-`webapp/db.sqlite3` unless you set `ORGSYNDB_DATABASE_URL`.
+Open <http://127.0.0.1:8000/lab/>. The local database is the local
+development database the tests use, unless you set
+`ORGSYNDB_DATABASE_URL`.
 The interface uses the latest accepted collection import's language,
 German or English. It uses German until an import is accepted. See
 [Inspect collection imports](#inspect-collection-imports) for the records
@@ -1348,20 +1353,21 @@ the application reads from a collection. Add substances in the
 empty registry from a snapshot. Substance names, molar masses and article
 numbers come from that registry.
 
-To try the lab with invented records, use a separate SQLite file. The
-demo runs without building a collection. From the repository root:
+To try the lab with invented records, use a separate database, such as
+`demo` on the same server, created with `podman exec orgsyndb-pg
+createdb -U lab demo`. The demo runs without building a collection. From the repository root:
 
 ```sh
 cd webapp
 export ORGSYNDB_DEBUG=true
 export ORGSYNDB_DEMO=true
-export ORGSYNDB_DATABASE_URL=sqlite:////tmp/orgsyndb-demo.sqlite3
+export ORGSYNDB_DATABASE_URL=postgres://lab:lab@localhost:5432/demo
 uv run python manage.py migrate
 uv run python manage.py demo_data
 uv run python manage.py runserver
 ```
 
-This keeps the demo apart from `webapp/db.sqlite3`. The command loads
+This keeps the demo apart from the local development database. The command loads
 `webapp/demo/registry.json`, then writes inventory and task records dated
 back from today in Europe/Berlin. For example, a successful run prints:
 

@@ -1,6 +1,5 @@
-# Runs the lab application's suite (webapp/) on SQLite and on
-# PostgreSQL 18, the database of the container deployment, so that a
-# difference between the two fails here.
+# Runs the lab application's suite (webapp/) on PostgreSQL 18, the
+# database of the container deployment.
 name: Lab application
 
 # Every pushed branch runs the whole suite, so a change branch is
@@ -13,20 +12,6 @@ permissions:
   contents: read
 
 jobs:
-  sqlite:
-    runs-on: ubuntu-24.04
-    defaults:
-      run:
-        working-directory: webapp
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.14"
-      - uses: astral-sh/setup-uv@v6
-      - run: uv sync --frozen
-      - run: uv run pytest -n auto
-
   postgres:
     runs-on: ubuntu-24.04
     services:

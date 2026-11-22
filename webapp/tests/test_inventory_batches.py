@@ -207,8 +207,7 @@ class BatchNumberTests(InventoryCase):
         self.assertEqual(Batch.objects.count(), 1)
 
     def test_the_key_folds_the_sharp_s(self) -> None:
-        """`Straße` and `STRASSE` collide, on SQLite as on
-        PostgreSQL."""
+        """`Straße` and `STRASSE` collide."""
         make_batch(self.kl, number="Straße")
         with self.assertRaises(IntegrityError), transaction.atomic():
             make_batch(self.kl, number="STRASSE")

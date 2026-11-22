@@ -1,5 +1,5 @@
-"""Settings of the application's tests: SQLite unless
-ORGSYNDB_DATABASE_URL names another database."""
+"""Settings of the application's tests: the local development database
+unless ORGSYNDB_DATABASE_URL names another."""
 
 import os
 
