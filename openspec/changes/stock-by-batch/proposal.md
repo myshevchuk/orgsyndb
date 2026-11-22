@@ -40,9 +40,10 @@ The owner decided on 2026-11-21 and 2026-11-22 the following:
 - **BREAKING** Every delivery note line, current or historical, names
   a batch of its item's substance. One note may hold the same item
   once per batch.
-- The new-item form takes an optional batch for the opening count. The
-  correction form corrects one share, chosen among the item's batches
-  and `unbekannt`.
+- The new-item form takes an optional batch for the opening count. A
+  delivery row's batch choice narrows to its item's substance in the
+  browser. The correction form corrects one share, chosen among the
+  item's batches and `unbekannt`.
 - The item page shows the containers by batch, and the ledger shows
   each movement's batch. Delivery notes show each line's batch. The
   batch page lists the items holding its containers and its
@@ -72,7 +73,8 @@ None.
     `DeliveryLine.batch`;
   - a schema-only migration;
   - `bookings.py`, forms, views, templates, admin and the German
-    catalogue.
+    catalogue;
+  - `lab.js`, for narrowing the batch choice.
 - `webapp/demo/`: data and seeding.
 - `webapp/orgsyndb_web/schema_diagram.py` (grid) and the regenerated
   `webapp/docs/database-schema.html`.

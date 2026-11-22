@@ -7,6 +7,7 @@ conditional updates on the item's row (`_take`, `_add` in
 `inventory/bookings.py`). A delivery note line is an item and a count,
 unique per note and item. Planning, the item list, the overview and
 consumption all read `Item.quantity` or delivery movements.
+`postgresql-only` made PostgreSQL the only database.
 
 ## Goals / Non-Goals
 
@@ -15,13 +16,12 @@ consumption all read `Item.quantity` or delivery movements.
 - Keep every container's batch from its filling to its delivery.
 - Let old stock stay of unknown batch until it is delivered.
 - Keep the guarantee that concurrent bookings never take more than
-  is there, on PostgreSQL and SQLite.
+  is there.
 
 **Non-Goals:**
 
 - Stock-taking (Inventur): deferred by the owner to `STATE.md`.
 - A table of suppliers.
-- Narrowing a row's batch choice to the chosen item in the browser.
 
 ## Decisions
 
@@ -33,23 +33,21 @@ consumption all read `Item.quantity` or delivery movements.
   foreign key with `PROTECT`. A row whose `batch` is null is the share
   of unknown batch.
 - `quantity` is a `PositiveIntegerField` with a check of `>= 0`.
-- Two conditional unique constraints keep one row per (item, batch)
-  where the batch is set, and one row per item where it is null.
-  `nulls_distinct` would need only one constraint, but SQLite does not
-  support it.
+- One unique constraint on (item, batch) with `nulls_distinct=False`
+  keeps one row per batch and one unknown row per item (PostgreSQL 15
+  and later).
 - The unknown row is created with the item. A batch row is created by
   the first booking into it, and kept at zero once emptied.
 
 Every share change is a conditional `UPDATE … SET quantity = quantity
 ± n WHERE quantity >= n` on the share row, and the item's quantity
 changes by the same amount in the same transaction. An assignment is
-therefore two conditional updates, unknown down and batch up, which
-are atomic on both databases.
+therefore two conditional updates, unknown down and batch up.
 
 Bookings that create a batch row lock the item row first (`_lock`), so
-on PostgreSQL concurrent first bookings into one batch create the row
-once. On SQLite writes are serialized. A unique violation that still
-occurs is refused like a lost race, never shown as a server error.
+concurrent first bookings into one batch create the row once. A unique
+violation that still occurs is refused like a lost race, never shown
+as a server error.
 
 `Item.quantity` stays stored, because the list sorts and filters by it
 and planning reads it. It always equals the sum of the shares. A
@@ -59,8 +57,7 @@ Rejected:
 
 - **An implicit unknown share** (the quantity less the batch rows). An
   assignment would then need a conditional update on a sum across
-  rows, which neither database does atomically without locks. SQLite
-  has none.
+  rows, which only works under a lock held for the whole booking.
 - **No share table**, deriving shares by summing movements. Openings
   and corrections hold absolute counts rather than changes, and every
   read would aggregate the ledger.
@@ -102,16 +99,27 @@ movements and leaves out its assignments.
 ### Choosing a batch in a form
 
 On a delivery row and on the new-item form, the batch is a `<select>`
-of every batch of the substances offered, grouped by substance in
-`<optgroup>`. Booking refuses a batch of another substance than the
-item's. The correction form offers only the batches of the item's
-substance, with the counts the item holds.
+of every batch of the substances offered. The batches are grouped in
+one `<optgroup>` per substance, carrying `data-substance` with the
+substance's key, and each item option carries the same attribute.
+`lab.js` hides the groups of other substances than the one chosen in
+the row, or typed on the new-item form, and clears a choice that it
+hid. The function that picks the groups to show is pure and
+exported on `OrgSynLab`, so `test_lab_script.py` tests it under Node.
+The DOM wiring is a thin adapter. Booking still refuses a batch of
+another substance than the item's, so the form stays correct without
+the script.
+
+The correction form offers only the batches of the item's substance,
+with the counts the item holds. Its choice needs no narrowing.
 
 Rejected:
 
 - **One select of item and batch pairs.** It breaks `?item=`
   pre-filling, and the list grows as items times batches.
 - **A typed batch number.** The owner chose recorded batches only.
+- **Loading a row's batches with htmx.** A request per row change
+  costs more than hiding groups already on the page.
 
 ### Correction stays one share at a time
 
@@ -123,7 +131,7 @@ a delivery waits for the Inventur.
 ## Risks / Trade-offs
 
 - [The delivery form renders ten selects of every batch] → The lab
-  has few hundred batches at most. Narrowing in the browser is a
+  has at most a few hundred batches. Rendering rows on demand is a
   later change if needed.
 - [A forgotten share update would drift `Item.quantity` from the sum]
   → Every share change goes through one helper that updates both, and
@@ -131,8 +139,7 @@ a delivery waits for the Inventur.
 
 ## Migration Plan
 
-The migration is schema-only. It adds `BatchStock`,
-`Movement.batch` and `DeliveryLine.batch` (non-null, with no
-default), and swaps the line constraint. Before 1.0 there is no data
-to carry. The test server is reseeded with `demo_data --replace`
-after deploy.
+The migration is schema-only. It adds `BatchStock`, `Movement.batch`
+and `DeliveryLine.batch` (non-null, with no default), and swaps the
+line constraint. Before 1.0 there is no data to carry. The test
+server is reseeded with `demo_data --replace` after deploy.

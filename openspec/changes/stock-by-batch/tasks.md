@@ -8,8 +8,9 @@
   one item in two batches; a batch twice, a missing batch and a batch
   of another substance refused; reversed and partly reversed notes
   leave assignments out
-- [ ] 1.3 Forms: the new-item batch, the delivery rows' batch choice,
-  the correction's shares
+- [ ] 1.3 Forms: the new-item batch, the delivery rows' batch choice
+  with its `data-substance` groups, the correction's shares; the
+  narrowing function of `lab.js` under Node
 - [ ] 1.4 Pages: the item page's containers by batch and ledger batch
   column; the note page's and the delivery list's batch; the batch
   page's items and deliveries; the admin's shares and batch deletion
@@ -26,10 +27,12 @@
   `book_note`, `correct`, `reverse` keep shares and quantity together
 - [ ] 2.3 Forms, views and templates: new item, delivery note, correction,
   item page, note page, delivery list, batch page
-- [ ] 2.4 Admin: shares read-only on the item, batch deletion rule
-- [ ] 2.5 Demo data and seeding; schema diagram grid and regenerated
+- [ ] 2.4 `lab.js`: narrowing a row's or the new-item form's batch
+  choice to the chosen substance
+- [ ] 2.5 Admin: shares read-only on the item, batch deletion rule
+- [ ] 2.6 Demo data and seeding; schema diagram grid and regenerated
   `webapp/docs/database-schema.html`
-- [ ] 2.6 German catalogue
+- [ ] 2.7 German catalogue
 
 ## 3. Documentation
 
@@ -42,7 +45,7 @@
 - [ ] 4.2 On the test server after `demo_data --replace`: an item page's
   containers by batch; a delivery of unknown containers booking an
   assignment; its reversal; a correction of one share; the batch page's
-  items and deliveries
+  items and deliveries; a row's batch choice narrowed to its item
 
 ## 5. Review and archive
 
