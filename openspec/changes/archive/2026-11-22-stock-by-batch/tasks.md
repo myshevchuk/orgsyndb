@@ -56,4 +56,4 @@
 ## 5. Review and archive
 
 - [x] 5.1 Codex reviewer
-- [ ] 5.2 Archive and squash-merge into `develop`
+- [x] 5.2 Archive and squash-merge into `develop`

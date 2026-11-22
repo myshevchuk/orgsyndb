@@ -29,7 +29,7 @@ A row's tooltip names the column, its type and nullability, the table and column
 
 #### Scenario: Keys of a movement
 - **WHEN** a test generates the diagram
-- **THEN** in the box `inventory_movement`, `item_id` is marked `FK` and typed `bigint`, `delivery_note_id` is marked `FK` and typed `bigint?`, `vessel_movement_id` and `reverses_id` are marked `1:1`, and `booked_at` is typed `timestamptz`
+- **THEN** in the box `inventory_movement`, `item_id` is marked `FK` and typed `bigint`, `delivery_note_id` and `batch_id` are marked `FK` and typed `bigint?`, `vessel_movement_id` and `reverses_id` are marked `1:1`, and `booked_at` is typed `timestamptz`
 
 #### Scenario: Notes in English
 - **WHEN** a test generates the diagram with German active
@@ -37,7 +37,7 @@ A row's tooltip names the column, its type and nullability, the table and column
 
 #### Scenario: Only the application's tables
 - **WHEN** a test generates the diagram
-- **THEN** its boxes are exactly `accounts_user`, `registry_substance`, `registry_substanceclass`, `vocabulary_chemicalclass`, `vocabulary_group`, `vocabulary_project`, `vocabulary_reactiontype`, `inventory_article`, `inventory_item`, `inventory_movement`, `inventory_deliverynote`, `inventory_deliveryline`, `inventory_batch`, `inventory_vessel`, `inventory_vesselmovement`, `inventory_enteredconsumption`, `tasks_task`, `tasks_taskstep`, `tasks_counter`, `collection_import`, `collection_procedure`, `collection_procedureauthor`, `collection_scopeentry`, `collection_entrysubstance`, `collection_sequence`, `collection_step`, `collection_issuedid`, `accounts_accesstoken`, `journal_notebook`, `journal_entry`, `planning_parameters`, `demo_demomark` and the box of the history tables
+- **THEN** its boxes are exactly `accounts_user`, `registry_substance`, `registry_substanceclass`, `vocabulary_chemicalclass`, `vocabulary_group`, `vocabulary_project`, `vocabulary_reactiontype`, `inventory_article`, `inventory_item`, `inventory_movement`, `inventory_deliverynote`, `inventory_deliveryline`, `inventory_batchstock`, `inventory_batch`, `inventory_vessel`, `inventory_vesselmovement`, `inventory_enteredconsumption`, `tasks_task`, `tasks_taskstep`, `tasks_counter`, `collection_import`, `collection_procedure`, `collection_procedureauthor`, `collection_scopeentry`, `collection_entrysubstance`, `collection_sequence`, `collection_step`, `collection_issuedid`, `accounts_accesstoken`, `journal_notebook`, `journal_entry`, `planning_parameters`, `demo_demomark` and the box of the history tables
 
 #### Scenario: An article's key
 - **WHEN** a test generates the diagram
