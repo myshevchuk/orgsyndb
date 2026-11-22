@@ -395,6 +395,24 @@ class BatchEditFormTests(BatchFormCase):
         self.assertEqual(field_value(root, "date"), "2026-10-01")
         self.assertEqual(field_value(root, "note"), "alt")
 
+    def test_a_note_edit_keeps_the_exact_yield(self) -> None:
+        Batch.objects.filter(pk=self.made.pk).update(
+            yield_amount=Decimal("2.123456"), yield_unit="mg")
+        root = page(self.client.get(batch_url(self.made, "edit")))
+        self.client.post(batch_url(self.made, "edit"), self.data(
+            note="neu", yield_amount=field_value(root, "yield_amount"),
+            yield_unit=field_value(root, "yield_unit")))
+        stored = Batch.objects.get(pk=self.made.pk)
+        self.assertEqual((stored.note, stored.yield_amount),
+                         ("neu", Decimal("2.123456")))
+
+    def test_an_edited_yield_rounding_to_zero_is_refused(self) -> None:
+        done = self.client.post(batch_url(self.made, "edit"), self.data(
+            yield_amount="0.0000004", yield_unit="mg"))
+        self.assertEqual(done.status_code, 200)
+        self.assertEqual(Batch.objects.get(pk=self.made.pk).yield_amount,
+                         self.made.yield_amount)
+
     def test_the_form_of_a_bought_batch(self) -> None:
         root = page(self.client.get(batch_url(self.bought, "edit")))
         names = names_of(root, "supplier")

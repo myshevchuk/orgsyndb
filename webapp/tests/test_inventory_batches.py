@@ -286,6 +286,12 @@ class RecordWithoutStepTests(InventoryCase):
         self.assertEqual(Batch.objects.count(), 2)
         self.assertEqual(fresh(made).number_key, "kl0412fa")
 
+    def test_an_opening_amount_too_large_is_refused(self) -> None:
+        with self.refusing("amount"):
+            record_batch(self.kl, substance=substance_for("CH-0012"),
+                         number="KL2", amount=Decimal("1000000000"),
+                         unit="g")
+
     def test_the_batch_keeps_its_fields_and_a_history(self) -> None:
         batch = record_batch(
             self.kl, substance=substance_for("CH-0012"), number="KL1",

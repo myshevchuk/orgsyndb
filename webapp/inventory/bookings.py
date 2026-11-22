@@ -741,6 +741,8 @@ def record_batch(user: Any, *, substance: Substance,
                     "substance": substance.key}})
     base = _batch_amount(amount, unit, task_step is not None)
     _field_checked(Vessel, location=location)
+    if base is not None:
+        _field_checked(Vessel, amount=base)
     batch = Batch(
         substance=substance, source=source, number=number,
         journal_entry=journal_entry, task_step=task_step, date=date,
@@ -757,6 +759,14 @@ def record_batch(user: Any, *, substance: Substance,
                     raise Refused({"step": _(
                         "Task %(number)s is neither planned nor "
                         "running.") % {"number": task.number}})
+                task_step.task = task
+                if substance not in task_step.products():
+                    raise Refused({"substance": _(
+                        "Step %(position)s of task %(number)s does not "
+                        "make %(substance)s.") % {
+                            "position": task_step.position,
+                            "number": task.number,
+                            "substance": substance.key}})
                 entry = TaskStep.objects.filter(
                     pk=task_step.pk).values_list(
                         "journal_entry_id", flat=True).first()
@@ -855,9 +865,10 @@ def withdraw(user: Any, vessel: Vessel, *, task_step: TaskStep,
     withdrawal.
 
     Refuse an AMOUNT that is not above zero or rounds to zero in six
-    places of its unit or of the base unit, an AMOUNT above the vessel's,
-    a vessel that is used up, a DATE after today, a step whose task is neither planned
-    nor running, and the flask of a task that is neither; the rows of
+    places of its unit or of the base unit, an AMOUNT above the
+    vessel's, a vessel that is used up, a DATE after today, a step whose
+    task is neither planned nor running, and the flask of a task that is
+    neither; the rows of
     the tasks are locked while their states are checked.
     """
     day = _day(date)

@@ -18,8 +18,8 @@ from django.utils.translation import pgettext_lazy
 
 from inventory.bookings import Refused
 from inventory.figures import to_base
-from inventory.models import (Batch, DeliveryNote, Item, Source, Unit,
-                              Vessel)
+from inventory.models import (FACTOR, Batch, DeliveryNote, Item, Source,
+                              Unit, Vessel)
 from journal.entries import entry_for, named
 from registry.forms import SubstanceKeyField, decimal_field
 from tasks.models import TaskStep
@@ -536,7 +536,9 @@ class BatchEditForm(forms.ModelForm):
                 del self.fields[name]
             self.initial["journal_entry"] = str(batch.journal_entry) \
                 if batch.journal_entry_id else ""
-            self.initial["yield_amount"] = batch.shown_yield
+            self.initial["yield_amount"] = (
+                (batch.yield_amount / FACTOR[batch.yield_unit]).normalize()
+                if batch.yield_amount is not None else None)
             self.initial["yield_unit"] = batch.yield_unit or Unit.G
         else:
             for name in ("number", "journal_entry", "yield_amount",
@@ -572,7 +574,7 @@ class BatchEditForm(forms.ModelForm):
             self.instance.yield_amount, self.instance.yield_unit = None, ""
         elif not unit:
             self.add_error("yield_unit", _("Choose the unit of the yield."))
-        elif amount <= 0:
+        elif amount <= 0 or to_base(amount, unit) <= 0:
             self.add_error("yield_amount", _("The yield must be above zero."))
         else:
             self.instance.yield_amount = to_base(amount, unit)

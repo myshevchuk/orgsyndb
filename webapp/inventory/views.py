@@ -44,12 +44,12 @@ from inventory.forms import (ROWS, BatchEditForm, BatchForm,
 from inventory.history import history_entries
 from inventory.models import (FACTOR, LEVEL_ORDER, Article, Batch,
                               DeliveryNote, Item, Level, Movement, Source,
-                              Unit, Vessel, VesselKind, VesselMovement,
-                              plain, shown)
+                              Vessel, VesselKind, VesselMovement,
+                              plain)
 from inventory.statistics import Statistics, statistics
 from journal.entries import entry_for
 from planning import plan
-from tasks.models import TaskStep
+from tasks.models import Task, TaskStep
 
 LIST = "/lab/inventory/end-products/"
 BATCHES = "/lab/inventory/batches/"
@@ -1251,6 +1251,8 @@ def batch_new(request: HttpRequest) -> HttpResponse:
     def book(data: dict[str, Any]) -> HttpResponse:
         amount = data["amount"]
         with transaction.atomic():
+            if step is not None:
+                Task.objects.select_for_update().get(pk=step.task_id)
             text = data["journal_entry"]
             batch = bookings.record_batch(
                 request.user, substance=data["substance"],
