@@ -1,62 +1,42 @@
-{% extends "orgsyndb_web/base.html" %}{% load i18n l10n lab inventory %}
+{% extends "orgsyndb_web/base.html" %}{% load i18n l10n lab inventory planning %}
 {% block title %}{% if item.article_number %}{{ item.article_number }} {% endif %}{{ item.name }}{% endblock %}
 {% block main %}
 <div id="item-refresh" data-refresh>
 <h1>{% if item.article_number %}{{ item.article_number }} · {% endif %}{{ item.name }}{% if item|new_on:today %}<sup class="mark-new">{% translate "new" context "item" %}</sup>{% endif %}</h1>
 {% if user.is_authenticated %}<div class="lab-actions">
 {% include "inventory/item_actions.html" %}</div>
-{% endif %}<dl class="metadata">
-<dt>{% translate "Substance" %}</dt>
-<dd>{% substance item.substance %}</dd>
-<dt>{% translate "Category" %}</dt>
-<dd>{{ item.category|default:"–" }}</dd>
-<dt>{% translate "Container" %}</dt>
-<dd>{{ item.container }}</dd>
-{% if item.status != "active" %}<dt>{% translate "Status" %}</dt>
-<dd>{{ item.get_status_display }}</dd>
-{% endif %}<dt>{% translate "In stock since" %}</dt>
-<dd>{{ item.stocked_on|default_if_none:"–" }}</dd>
-<dt>{% translate "Compartment" %}</dt>
-<dd>{{ item.compartment|default:"–" }}</dd>
-<dt>{% translate "Box" %}</dt>
-<dd>{{ item.box|default:"–" }}</dd>
-<dt>{% translate "Stock" %}</dt>
-<dd><span class="stock level-{{ figures.level }}">{{ item.quantity }} <span class="level-label">{{ figures.level|level_label }}</span></span></dd>
-<dt>{% translate "Mean per quarter" %}</dt>
-<dd{% if figures.projected %} class="projected" title="{% translate "projected from the current year" %}"{% endif %}>{% if figures.mean_quarter is not None %}{{ figures.mean_quarter|floatformat:1 }}{% else %}–{% endif %}</dd>
-<dt>{% translate "Mean per year" %}</dt>
-<dd{% if figures.projected %} class="projected" title="{% translate "projected from the current year" %}"{% endif %}>{% if figures.mean_year is not None %}{{ figures.mean_year|floatformat:1 }}{% else %}–{% endif %}</dd>
-<dt>{% translate "This year" %}</dt>
-<dd>{{ figures.this_year }}</dd>
-<dt>{% translate "Coverage" %}</dt>
-<dd{% if figures.projected and figures.coverage is not None %} class="projected" title="{% translate "projected from the current year" %}"{% endif %}>{% if figures.coverage is not None %}{% blocktranslate with coverage=figures.coverage|floatformat:1 %}{{ coverage }} quarters{% endblocktranslate %}{% else %}–{% endif %}</dd>
-</dl>
-{% if item.note %}<h2>{% translate "Note" context "inventory" %}</h2>
-<div class="lab-note">{{ item.note|linebreaks }}</div>
-{% endif %}<h2>{% translate "Containers by batch" %}</h2>
-{% if stocks or unknown %}<dl class="metadata batch-stock">
-{% for stock in stocks %}<dt><a href="/lab/inventory/batches/{{ stock.batch.pk }}/">{{ stock.batch }}</a></dt>
-<dd>{{ stock.quantity }}</dd>
-{% endfor %}{% if unknown %}<dt>{% translate "unknown" %}</dt>
-<dd>{{ unknown }}</dd>
-{% endif %}</dl>
-{% else %}<p>{% translate "No containers." %}</p>
-{% endif %}<h2>{% translate "Consumption" %}</h2>
+{% endif %}<div class="figures-strip">
+<div class="figure-tile"><span class="figure-tile__label">{% translate "Stock" %}</span><span class="figure-tile__value"><span class="stock level-{{ figures.level }}">{{ item.quantity }} <span class="level-label">{{ figures.level|level_label }}</span></span></span></div>
+<div class="figure-tile"><span class="figure-tile__label">{% translate "Coverage" %}</span><span class="figure-tile__value{% if figures.projected and figures.coverage is not None %} projected{% endif %}"{% if figures.projected and figures.coverage is not None %} title="{% translate "projected from the current year" %}"{% endif %}>{% if figures.coverage is not None %}{% blocktranslate with coverage=figures.coverage|floatformat:1 %}{{ coverage }} quarters{% endblocktranslate %}{% else %}–{% endif %}</span></div>
+<div class="figure-tile"><span class="figure-tile__label">{% translate "Mean per quarter" %}</span><span class="figure-tile__value{% if figures.projected and figures.mean_quarter is not None %} projected{% endif %}"{% if figures.projected and figures.mean_quarter is not None %} title="{% translate "projected from the current year" %}"{% endif %}>{% if figures.mean_quarter is not None %}{{ figures.mean_quarter|floatformat:1 }}{% else %}–{% endif %}</span></div>
+<div class="figure-tile"><span class="figure-tile__label">{% translate "Mean per year" %}</span><span class="figure-tile__value{% if figures.projected and figures.mean_year is not None %} projected{% endif %}"{% if figures.projected and figures.mean_year is not None %} title="{% translate "projected from the current year" %}"{% endif %}>{% if figures.mean_year is not None %}{{ figures.mean_year|floatformat:1 }}{% else %}–{% endif %}</span></div>
+<div class="figure-tile"><span class="figure-tile__label">{% translate "This year" %}</span><span class="figure-tile__value">{{ figures.this_year }}</span></div>
+<div class="figure-tile"><span class="figure-tile__label">{% translate "Usable bulk" %}</span><span class="figure-tile__value">{% if entry.model %}{{ forecast.usable_bulk|amount }} {{ forecast.bulk_unit_label }}{% else %}–{% endif %}</span></div>
+<div class="figure-tile"><span class="figure-tile__label">{% translate "Latest start" %}</span><span class="figure-tile__value">{% if entry.model and forecast.latest_start %}{{ forecast.latest_start }}{{ forecast.rough|rough }}{% else %}–{% endif %}</span></div>
+</div>
+<div class="item-grid">
+<div class="item-col">
+<section class="widget">
+<div class="widget__head"><h2>{% translate "Consumption" %}</h2></div>
+<div class="widget__body">
 {% include "inventory/consumption.html" with link_mode="dialog" %}
-<h2>{% translate "Movements" %}</h2>
-<div class="table-scroll">
-<table class="inventory-table">
+</div>
+</section>
+<section class="widget">
+<div class="widget__head"><h2>{% translate "Movements" %}</h2><span class="widget__count">{{ ledger|length }}</span></div>
+<div class="widget__body widget__body--flush"><div class="table-scroll table-scroll--tall">
+<table id="movements" class="widget-table" data-sortable>
 <thead>
-<tr><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Booked at" %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col">{% translate "Count" %}</th><th scope="col">{% translate "Stock after" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "User" %}</th><th scope="col">{% translate "Delivery note" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th>{% if user.is_authenticated %}<th scope="col"><span class="visually-hidden">{% translate "Actions" %}</span></th>{% endif %}</tr>
+<tr><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Booked at" %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col" class="num">{% translate "Count" %}</th><th scope="col" class="num">{% translate "Stock after" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "User" %}</th><th scope="col">{% translate "Delivery note" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th>{% if user.is_authenticated %}<th scope="col"><span class="visually-hidden">{% translate "Actions" %}</span></th>{% endif %}</tr>
 </thead>
 <tbody>
 {% for row in ledger %}{% with movement=row.movement %}<tr>
-<td>{{ movement.date }}</td>
-<td>{{ movement.booked_at }}</td>
+<td class="nowrap" data-sort="{{ movement.date|date:'Y-m-d' }}">{{ movement.date }}</td>
+<td class="nowrap" data-sort="{{ movement.booked_at|date:'Y-m-d\TH:i' }}">{{ movement.booked_at }}</td>
 <td>{{ movement.get_kind_display }}{% if row.reversed %} <span class="badge badge--reversed">{% translate "reversed" %}</span>{% endif %}</td>
-<td class="number">{{ movement.count }}</td>
-<td class="number">{{ movement.quantity_after }}</td>
-<td>{% if movement.batch %}<a href="/lab/inventory/batches/{{ movement.batch.pk }}/">{{ movement.batch }}</a>{% else %}{% translate "unknown" %}{% endif %}</td>
+<td class="num" data-sort="{{ movement.count|unlocalize }}">{{ movement.count }}</td>
+<td class="num" data-sort="{{ movement.quantity_after|unlocalize }}">{{ movement.quantity_after }}</td>
+<td class="nowrap">{% if movement.batch %}<a href="/lab/inventory/batches/{{ movement.batch.pk }}/">{{ movement.batch }}</a>{% else %}{% translate "unknown" %}{% endif %}</td>
 <td>{% person movement.user %}</td>
 <td>{% if movement.delivery_note %}<a href="/lab/inventory/deliveries/{{ movement.delivery_note.pk }}/">{{ movement.delivery_note }}</a> {{ movement.delivery_note.recipient }}{% endif %}</td>
 <td>{% if movement.delivery_note.note %}{{ movement.delivery_note.note }} {% endif %}{{ movement.note }}</td>
@@ -64,30 +44,66 @@
 </tr>
 {% endwith %}{% endfor %}</tbody>
 </table>
-</div>
-<h2>{% translate "Bulk" %}</h2>
-{% if vessels %}<p>{% include "inventory/bulk.html" %}</p>
-<div class="table-scroll">
-<table class="inventory-table">
+</div></div>
+</section>
+<section class="widget">
+<div class="widget__head"><h2>{% translate "Bulk" %}</h2>{% if vessels %}<span class="widget__count">{{ vessels|length }}</span><span class="widget__note">{% include "inventory/bulk.html" %}</span>{% endif %}</div>
+<div class="widget__body widget__body--flush">
+{% if vessels %}<div class="table-scroll">
+<table class="widget-table">
 <thead>
-<tr><th scope="col">{% translate "Vessel" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col">{% translate "Amount" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Containers" %}</th></tr>
+<tr><th scope="col">{% translate "Vessel" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col" class="num">{% translate "Amount" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col" class="num">{% translate "Containers" %}</th></tr>
 </thead>
 <tbody>
 {% for vessel, containers in vessels %}<tr>
 <td><a href="/lab/inventory/vessels/{{ vessel.pk }}/">#{{ vessel.pk }}</a></td>
 <td><a href="/lab/inventory/batches/{{ vessel.batch.pk }}/">{{ vessel.batch }}</a></td>
 <td>{{ vessel.kind_label }}</td>
-<td class="number">{{ vessel.amount|in_vessel_unit:vessel }}</td>
+<td class="num">{{ vessel.amount|in_vessel_unit:vessel }}</td>
 <td>{{ vessel.location }}</td>
-<td>{{ vessel.batch.date|default_if_none:"" }}</td>
-<td class="number">{% if containers is None %}<span class="lab-mark">{% translate "does not convert" %}</span>{% else %}{{ containers }}{% endif %}</td>
+<td class="nowrap">{{ vessel.batch.date|default_if_none:"" }}</td>
+<td class="num">{% if containers is None %}<span class="lab-mark">{% translate "does not convert" %}</span>{% else %}{{ containers }}{% endif %}</td>
 </tr>
 {% endfor %}</tbody>
 </table>
 </div>
-{% else %}<p>{% translate "No open vessel." %}</p>
-{% endif %}{% if user.is_authenticated and item.article_number %}<p class="actions"><a href="/lab/inventory/batches/new/?substance={{ item.substance.key|urlencode }}">{% translate "New batch" %}</a></p>
-{% endif %}{% include "planning/item_forecast.html" %}
+{% else %}<p class="lab-empty">{% translate "No open vessel." %}</p>
+{% endif %}{% if user.is_authenticated and item.article_number %}<p class="widget__foot"><a href="/lab/inventory/batches/new/?substance={{ item.substance.key|urlencode }}">{% translate "New batch" %}</a></p>
+{% endif %}</div>
+</section>
+</div>
+<div class="item-col">
+<section class="widget">
+<div class="widget__head"><h2>{% translate "Item data" %}</h2>{% if item.article_number %}<span class="widget__note">{{ item.article_number }}</span>{% endif %}</div>
+<div class="widget__body widget__body--flush">
+<table class="kv-table"><tbody>
+<tr><th scope="row">{% translate "Substance" %}</th><td>{% substance item.substance %}</td></tr>
+<tr><th scope="row">{% translate "Category" %}</th><td>{{ item.category|default:"–" }}</td></tr>
+<tr><th scope="row">{% translate "Container" %}</th><td>{{ item.container }}</td></tr>
+{% if item.status != "active" %}<tr><th scope="row">{% translate "Status" %}</th><td>{{ item.get_status_display }}</td></tr>
+{% endif %}<tr><th scope="row">{% translate "In stock since" %}</th><td>{{ item.stocked_on|default_if_none:"–" }}</td></tr>
+<tr><th scope="row">{% translate "Compartment" %}</th><td>{{ item.compartment|default:"–" }}</td></tr>
+<tr><th scope="row">{% translate "Box" %}</th><td>{{ item.box|default:"–" }}</td></tr>
+</tbody></table>
+{% if item.note %}<div class="item-note">{{ item.note|linebreaks }}</div>
+{% endif %}</div>
+</section>
+<section class="widget">
+<div class="widget__head"><h2>{% translate "Containers by batch" %}</h2></div>
+<div class="widget__body widget__body--flush">
+{% if stocks or unknown %}<table class="widget-table">
+<thead><tr><th scope="col">{% translate "Batch" %}</th> <th scope="col" class="num">{% translate "Containers" %}</th></tr></thead>
+<tbody>
+{% for stock in stocks %}<tr><td><a href="/lab/inventory/batches/{{ stock.batch.pk }}/">{{ stock.batch }}</a></td> <td class="num"><strong>{{ stock.quantity }}</strong></td></tr>
+{% endfor %}{% if unknown %}<tr><td class="muted">{% translate "unknown" %}</td> <td class="num"><strong>{{ unknown }}</strong></td></tr>
+{% endif %}</tbody>
+</table>
+{% else %}<p class="lab-empty">{% translate "No containers." %}</p>
+{% endif %}</div>
+</section>
+{% include "planning/item_forecast.html" %}
 {% include "inventory/history.html" %}
+</div>
+</div>
 </div>
 {% endblock %}

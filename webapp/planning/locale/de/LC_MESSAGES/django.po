@@ -235,3 +235,43 @@ msgstr "Synthese planen über %(sequence)s ab Stufe %(step)s, %(name)s vorrätig
 #, python-format
 msgid "%(amount)s %(unit)s, each open vessel less the largest container size"
 msgstr "%(amount)s %(unit)s, jedes offene Gefäß abzüglich der größten Gebindegröße"
+
+msgid "Quarterly totals"
+msgstr "Quartalssummen"
+
+#, python-format
+msgid "m = %(m)s, v = %(v)s from %(count)s quarters"
+msgstr "m = %(m)s, v = %(v)s aus %(count)s Quartalen"
+
+#, python-format
+msgid "λ = %(rate)s per day"
+msgstr "λ = %(rate)s je Tag"
+
+#, python-format
+msgid "%(count)s orders · median %(median)s · max. %(largest)s containers"
+msgstr "%(count)s Aufträge · Median %(median)s · max. %(largest)s Gebinde"
+
+#, python-format
+msgid "for %(stock)s containers at a certainty of %(certainty)s"
+msgstr "für %(stock)s Gebinde bei einer Sicherheit von %(certainty)s"
+
+msgid "each open vessel less the largest container size"
+msgstr "jedes offene Gefäß abzüglich der größten Gebindegröße"
+
+#, python-format
+msgid "at a certainty of %(certainty)s for each size"
+msgstr "bei einer Sicherheit von %(certainty)s je Größe"
+
+#, python-format
+msgid "runway less buffer (%(buffer)s) and synthesis time"
+msgstr "Reichweite abzüglich Puffer (%(buffer)s) und Synthesedauer"
+
+#, python-format
+msgid "high below %(high)s and medium below %(medium)s days of slack"
+msgstr "hoch unter %(high)s, mittel unter %(medium)s Tagen Spielraum"
+
+msgid "median of the past 730 days"
+msgstr "Median der letzten 730 Tage"
+
+msgid "fewer than three deliveries in the past 730 days"
+msgstr "weniger als drei Lieferungen in den letzten 730 Tagen"

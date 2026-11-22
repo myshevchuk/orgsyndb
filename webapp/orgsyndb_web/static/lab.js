@@ -116,7 +116,73 @@
     clear: key !== "" && chosen !== null && chosen !== key,
   });
 
-  globalThis.OrgSynLab = { place, paramSearch, narrowBatches };
+  const NUMBER_KEY = /^[+-]?(?:\d+(?:[.,]\d+)?|[.,]\d+)$/;
+  const ISO_DATE_KEY = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?$/;
+  const DE_DATE_KEY = /^(\d{2})\.(\d{2})\.(\d{4})(?:[T ](\d{2}):(\d{2}))?$/;
+
+  const parseSortKey = (rawKey) => {
+    const raw = String(rawKey ?? "").trim();
+    if (raw === "" || raw === "–") return { group: 3, value: "" };
+    if (NUMBER_KEY.test(raw)) {
+      return { group: 0, value: Number(raw.replace(",", ".")) };
+    }
+    let m = ISO_DATE_KEY.exec(raw);
+    if (m) {
+      const value = m[4] ? `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}`
+        : `${m[1]}-${m[2]}-${m[3]}`;
+      return { group: 1, value };
+    }
+    m = DE_DATE_KEY.exec(raw);
+    if (m) {
+      const value = m[4] ? `${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}`
+        : `${m[3]}-${m[2]}-${m[1]}`;
+      return { group: 1, value };
+    }
+    return { group: 2, value: raw };
+  };
+
+  const makeCollator = (locale) => {
+    try {
+      if (locale && Intl.Collator.supportedLocalesOf([locale]).length > 0) {
+        return new Intl.Collator(locale);
+      }
+    } catch {
+      // Unsupported or invalid locale: fall back to the runtime default.
+    }
+    return new Intl.Collator();
+  };
+
+  // Returns the indices of KEYS in sorted order. Numbers precede dates
+  // which precede text (by LOCALE collation) when ascending; DESCENDING
+  // reverses that whole order. Empty keys and "–" come last either way,
+  // and equal keys keep their original order.
+  const sortOrder = (keys, descending = false, locale = undefined) => {
+    const collator = makeCollator(locale);
+    const items = keys.map((key, index) => ({
+      index,
+      ...parseSortKey(key),
+    }));
+    const dir = descending ? -1 : 1;
+    items.sort((a, b) => {
+      if (a.group === 3 && b.group === 3) return a.index - b.index;
+      if (a.group === 3) return 1;
+      if (b.group === 3) return -1;
+      let cmp = a.group - b.group;
+      if (cmp === 0) {
+        if (a.group === 0) {
+          cmp = a.value - b.value;
+        } else if (a.group === 1) {
+          cmp = a.value < b.value ? -1 : (a.value > b.value ? 1 : 0);
+        } else {
+          cmp = collator.compare(a.value, b.value);
+        }
+      }
+      return cmp !== 0 ? cmp * dir : a.index - b.index;
+    });
+    return items.map((item) => item.index);
+  };
+
+  globalThis.OrgSynLab = { place, paramSearch, narrowBatches, sortOrder };
   if (typeof document === "undefined") return;
 
   let open = null;
@@ -399,6 +465,85 @@
     follow(paneItem());
   };
 
+  // Wraps each visible header of every table[data-sortable] in ROOT in
+  // a button.sort-header so keyboard and pointer activate it.
+  const enhanceSortable = (root) => {
+    const tables = [];
+    if (root instanceof Element && root.matches("table[data-sortable]")) {
+      tables.push(root);
+    }
+    tables.push(...root.querySelectorAll("table[data-sortable]"));
+    for (const table of tables) {
+      const headRow = table.tHead && table.tHead.rows[0];
+      if (!headRow) continue;
+      for (const th of headRow.cells) {
+        if (th.querySelector(":scope > button.sort-header")) continue;
+        const hidden = th.querySelector(".visually-hidden");
+        const visible = hidden
+          ? th.textContent.replace(hidden.textContent, "").trim()
+          : th.textContent.trim();
+        if (!visible) continue;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "sort-header";
+        button.append(...th.childNodes);
+        th.append(button);
+      }
+    }
+  };
+
+  const sortTable = (table, colIndex, descending) => {
+    const tbody = table.tBodies[0];
+    const headRow = table.tHead && table.tHead.rows[0];
+    if (!tbody || !headRow) return;
+    const headers = [...headRow.cells];
+    const th = headers[colIndex];
+    if (!th) return;
+    const rows = [...tbody.rows];
+    const keys = rows.map((row) => {
+      const cell = row.cells[colIndex];
+      if (!cell) return "";
+      return cell.hasAttribute("data-sort")
+        ? cell.getAttribute("data-sort")
+        : cell.textContent;
+    });
+    const order = sortOrder(keys, descending,
+                            document.documentElement.lang || undefined);
+    for (const idx of order) tbody.append(rows[idx]);
+    for (const header of headers) header.removeAttribute("aria-sort");
+    th.setAttribute("aria-sort", descending ? "descending" : "ascending");
+  };
+
+  enhanceSortable(document);
+  document.addEventListener("click", (event) => {
+    if (!plain(event) || !(event.target instanceof Element)) return;
+    const button = event.target.closest(
+      "table[data-sortable] thead th > button.sort-header");
+    if (!button) return;
+    const th = button.parentElement;
+    const table = th.closest("table[data-sortable]");
+    const colIndex = [...th.parentElement.cells].indexOf(th);
+    const descending = th.getAttribute("aria-sort") === "ascending";
+    sortTable(table, colIndex, descending);
+  });
+
+  // Fallback for browsers without ::details-content print support: open
+  // closed collapsible widgets on beforeprint and close them afterwards.
+  let openedForPrint = [];
+  window.addEventListener("beforeprint", () => {
+    openedForPrint = [];
+    for (const el of document.querySelectorAll("details.widget:not([open])")) {
+      el.open = true;
+      openedForPrint.push(el);
+    }
+  });
+  window.addEventListener("afterprint", () => {
+    for (const el of openedForPrint) {
+      if (el.isConnected) el.open = false;
+    }
+    openedForPrint = [];
+  });
+
   // Fetches the page's own address as a page and puts what changed in.
   const refreshPage = async () => {
     // On the item list the page asks for the item whose details it
@@ -421,7 +566,35 @@
     const ticked = new Set(
       [...document.querySelectorAll("input[name=item]:checked")]
         .map((box) => box.value));
-    for (const node of refreshParts(fresh)) htmx.process(node);
+    const widgetOpen = new Map(
+      [...document.querySelectorAll("details.widget[id]")]
+        .map((el) => [el.id, el.open]));
+    const tableSort = new Map();
+    for (const table of document.querySelectorAll(
+      "table[data-sortable][id]")) {
+      const sorted = table.tHead
+        && table.tHead.querySelector("th[aria-sort]");
+      if (sorted) {
+        tableSort.set(table.id, {
+          colIndex: [...sorted.parentElement.cells].indexOf(sorted),
+          descending: sorted.getAttribute("aria-sort") === "descending",
+        });
+      }
+    }
+    for (const node of refreshParts(fresh)) {
+      htmx.process(node);
+      enhanceSortable(node);
+    }
+    for (const [id, isOpen] of widgetOpen) {
+      const el = document.getElementById(id);
+      if (el && el.matches("details.widget")) el.open = isOpen;
+    }
+    for (const [id, state] of tableSort) {
+      const table = document.getElementById(id);
+      if (table && table.matches("table[data-sortable]")) {
+        sortTable(table, state.colIndex, state.descending);
+      }
+    }
     restoreList(ticked);
   };
 
