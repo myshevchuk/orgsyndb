@@ -19,7 +19,7 @@ chosen mockup is `planning-B` in
 their demand in one row each; the parameters out of the way.
 
 **Non-Goals:** the mockup's figures strip (new data); counts on the
-filter buttons; filtering on the server or keeping the filter in the
+filter buttons; scrolling to the inspector on selection; filtering on the server or keeping the filter in the
 address; a fragment endpoint for the inspector; changes to the
 forecast, the row selection rules or the actions.
 
@@ -65,16 +65,36 @@ forecast, the row selection rules or the actions.
    line (`95 % · 28 T. · …`), its body a `.kv-table` with one row per
    parameter. Print opens it (web-app "Widgets").
 
-7. **Print** shows the list, the selected article's inspector and the
-   parameters: what the screen shows.
+7. **Print** shows the list's rows that show, the selected article's
+   inspector and the parameters: what the screen shows. The filter
+   buttons are not printed; the count tells how many rows show.
+
+8. **Blocks found by `data-article`, not by `id`.** Article numbers are
+   free text of up to 30 characters; they go into attributes and, URL
+   encoded, into the address, never into an `id` or a selector string.
+
+9. **Script kept apart from the item list.** The planning handlers sit
+   beside the item list's, scoped to the planning table, and read the
+   rows that show at each key press. The pure parts — which rows a
+   filter shows, which row an arrow key moves to — are functions on
+   `OrgSynLab`, tested under Node like `sortOrder`.
+
+10. **Departures from the mockup.** The repo's widget classes
+    (`.widget__head`, `.widget__count`, `.widget__note`, `.widget-table`,
+    `.kv-table`) replace the mockup's own; the labels are the spec's
+    (`Bulk`, not `Nutzbares Bulk`); `Planungsdetails` has no
+    `Maßnahmen` row, since the actions stand in the list; the
+    containers widget has no count. The list comes before the
+    parameters in the document.
 
 ## Risks / Trade-offs
 
-- [Selected row filtered out] → the inspector keeps showing it; the
-  filter only hides rows.
+- [Selected row filtered out] → the first row that shows is selected,
+  so the inspector never shows an article the list hides; when no row
+  shows, the list says so and the inspector keeps its article.
 - [Sorting moves the selected row] → selection follows the article,
   not the position; arrow keys move in the current order.
 - [Tests read the old twelve columns] → rewritten to read the list's
   cells and the inspector's tables (tasks section 1).
-- [Narrow windows] → the inspector follows the list; selecting a row
-  there scrolls the inspector into view.
+- [Narrow windows] → the inspector follows the list in the document;
+  selecting does not scroll, so the arrow keys keep the list in view.

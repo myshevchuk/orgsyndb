@@ -50,5 +50,11 @@ None.
 - `webapp/orgsyndb_web/static/lab.js` (selection and filters) and
   `lab.css` (the master–detail layout).
 - `webapp/planning/views.py` passes `selected` to the template.
-- Tests in `webapp/tests/test_planning_list.py`, `planning_support.py`
-  and others that read the old columns or the parameters line.
+- `webapp/planning/templatetags/planning.py` if a sort-key filter is
+  needed (whole days as digits).
+- Tests that read the old columns, the parameters line or the first
+  table's first column as the article number:
+  `webapp/tests/test_planning_list.py`, `planning_support.py`
+  (`rows_by_article`), `test_planning_stock.py`,
+  `test_planning_matching.py`, `test_demo_days.py` and
+  `test_demo_records.py`.
