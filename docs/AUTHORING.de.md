@@ -423,40 +423,42 @@ die Spanne aller Produkte aller Einträge, `<min>–<max> %`, bei gleichen
 Ausbeuten nur eine Prozentzahl.
 
 Ohne `scheme_image` zeigt eine Einzelvorschrift für jedes Produkt mit
-Strukturbild eine Abbildung, in der Reihenfolge von `products`. Auf einem
-breiten Bildschirm stehen die Bilder rechts neben dem Titel, über dem
-Datenfeld. In einem schmalen Fenster folgen sie auf die Druckschaltfläche, vor
-dem Datenfeld. Auch im Ausdruck stehen sie vor dem Datenfeld. Fehlen sowohl
+Strukturbild eine Abbildung, in der Reihenfolge von `products`. Die Bilder
+eröffnen den Kasten **Verbindung** (**Produkte** bei mehreren Produkten), den
+ersten Kasten des Datenfelds, auf dem Bildschirm wie im Ausdruck. Fehlen sowohl
 Schema als auch Produktbilder, erscheint der Platzhalter **Keine
 Strukturformel**, der im Ausdruck fehlt. Eine Linie schließt den Titelblock auf
 dem Bildschirm ab.
 
 Das Datenfeld verlinkt die Produktnamen immer unter **Produkt** oder
-**Produkte** auf ihre Stoffseiten im Labor, auch bei gleichem Namen wie im Titel.
-Bei einem Produkt zeigt es außerdem Summenformel, Molmasse, gegebenenfalls die
-CAS-Nummer und SMILES. Bei mehreren Produkten finden Sie diese Daten auf den
-Stoffseiten im Labor. **Ausgangsstoffe** verlinkt die Verbindungen aus
-`substrates`. Bei einer allgemeinen Vorschrift umfassen beide Listen alle
-Einträge, jede Verbindung einmal in der Reihenfolge ihres ersten Auftretens.
-Auch Vorstufen- und Folgelinks berücksichtigen alle Einträge. Es folgen
-Reaktionstyp, Schlagwörter, Autoren, bei Entwürfen und zurückgezogenen
-Vorschriften gegebenenfalls die Prüfenden unter **Geprüft von**,
-Journalfelder, deklarierte Vorschriftenfelder, Erstellungs- und Änderungszeit
-sowie die Links zu
-Vorstufen und Folgevorschriften. Wenn
-Ihre Vorschrift eine Stufe eines Synthesewegs ist, folgt auf **Verwendet in**
-das Feld **Synthesewege** mit verlinkten Titeln, nach Nummer geordnet. Ziffern
-der Summenformel erscheinen tiefgestellt. Molmasse und Ausbeute erscheinen mit
-Dezimalkomma, mit `g/mol` und Prozentzeichen; neben SMILES steht eine
-Schaltfläche **Kopieren**. Reaktionstyp und Schlagwörter verlinken auf
-Seiten mit verwandten Vorschriften. Unter **Autoren** verlinkt der Name
-jedes Kontos auf `/authors/<user name>/`, zum Beispiel
-`/authors/klehmann/`. Die Website zeigt die Namen genau wie in den Konten
-gespeichert, einschließlich der Groß- und Kleinschreibung. Das
+**Produkte** auf ihre Stoffseiten im Labor, auch bei gleichem Namen wie im
+Titel. Bei einem Produkt zeigt es außerdem Summenformel, Molmasse,
+gegebenenfalls die CAS-Nummer und SMILES. Bei mehreren Produkten finden Sie
+diese Daten auf den Stoffseiten im Labor. **Ausgangsstoffe** verlinkt die
+Verbindungen aus `substrates`. Bei einer allgemeinen Vorschrift umfassen beide
+Listen alle Einträge, jede Verbindung einmal in der Reihenfolge ihres ersten
+Auftretens. Auch Vorstufen- und Folgelinks berücksichtigen alle Einträge. Es
+folgen Reaktionstyp, Schlagwörter, Autoren, bei Entwürfen und zurückgezogenen
+Vorschriften gegebenenfalls die Prüfenden unter **Geprüft von**, Journalfelder,
+deklarierte Vorschriftenfelder, Erstellungs- und Änderungszeit sowie die Links
+zu Vorstufen und Folgevorschriften. Wenn Ihre Vorschrift eine Stufe eines
+Synthesewegs ist, folgt auf **Verwendet in** das Feld **Synthesewege** mit
+verlinkten Titeln, nach Nummer geordnet. Ziffern der Summenformel erscheinen
+tiefgestellt. Molmasse und Ausbeute erscheinen mit Dezimalkomma, mit `g/mol`
+und Prozentzeichen; neben SMILES steht eine Schaltfläche **Kopieren**.
+Reaktionstyp und Schlagwörter verlinken auf Seiten mit verwandten Vorschriften.
+Unter **Autoren** verlinkt der Name jedes Kontos auf `/authors/<user name>/`,
+zum Beispiel `/authors/klehmann/`. Die Website zeigt die Namen genau wie in den
+Konten gespeichert, einschließlich der Groß- und Kleinschreibung. Das
 Autorenverzeichnis, die Autorenseiten und der Filter **Autor** im Katalog
-zeigen ebenfalls diese Namen. Die acht Abschnitte des Textes stehen auf
-einem breiten Bildschirm neben dem Datenfeld, in einem
-schmalen Fenster und im Ausdruck danach.
+zeigen ebenfalls diese Namen. Das Datenfeld besteht aus drei Kästen:
+**Verbindung** (die Produkte und ihre Daten), **Angaben** (Reaktionstyp bis
+Änderungszeit) und **Synthesekontext** (Ausgangsstoffe, Vorstufen, Verwendungen
+und Synthesewege). Jeder der acht Abschnitte des Textes folgt in einem eigenen
+Kasten. Auf einem breiten Bildschirm stehen die Kästen des Datenfelds
+nebeneinander über dem Text, und **Anmerkungen** steht neben **Durchführung**
+und **Aufarbeitung und Reinigung**, die darauf verweisen; in einem schmalen
+Fenster und im Ausdruck folgen die Kästen in ihrer Reihenfolge aufeinander.
 
 Nach jedem Produkt- oder Ausgangsstofflink zeigt das Datenfeld
 Artikelnummer und Kurzname des Stoffs, sofern vorhanden, in dieser

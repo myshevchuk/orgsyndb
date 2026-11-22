@@ -354,35 +354,37 @@ is the range over all products of all entries, `<min>–<max> %`, or one
 percentage when all yields are equal.
 
 Without `scheme_image`, a specific procedure shows one structure figure for
-each product whose compound has an image, in product order. On a wide screen,
-the figures sit to the right of the title, above the information panel. In a
-narrow window they follow the print button, before the panel. In print they
-also precede the panel. When neither a scheme nor product figures are shown,
-the screen shows a **No structure image** placeholder, which is omitted from
-printouts. A rule closes the title block on screen.
+each product whose compound has an image, in product order. The figures open
+the **Compound** box (**Products** for several products), the first box of the
+information panel, on screen and in print. When neither a scheme nor product
+figures are shown, the screen shows a **No structure image** placeholder, which
+is omitted from printouts. A rule closes the title block on screen.
 
-The information panel always links the product names to their lab substance pages
-under **Product** or **Products**, even when a name equals the title. For a
-single product it also shows formula, molecular weight, CAS number when present
-and SMILES. For several products, find those data on the lab substance pages.
-**Starting materials** links the compounds in `substrates`. For a general
-procedure, both lists include all entries, each compound once in order of first
-appearance. Precursor and used-in links also consider every entry. The panel
-then shows reaction type, tags, authors, checkers when present for draft or
-retired procedures under **Checked by**, journal fields, declared procedure
+The information panel always links the product names to their lab substance
+pages under **Product** or **Products**, even when a name equals the title. For
+a single product it also shows formula, molecular weight, CAS number when
+present and SMILES. For several products, find those data on the lab substance
+pages. **Starting materials** links the compounds in `substrates`. For a
+general procedure, both lists include all entries, each compound once in order
+of first appearance. Precursor and used-in links also consider every entry. The
+panel then shows reaction type, tags, authors, checkers when present for draft
+or retired procedures under **Checked by**, journal fields, declared procedure
 fields, created and modified times, and precursor or used-in links. When your
-procedure is a
-step of a sequence,
-**Sequences** follows **Used in** and links those sequences by title, ordered
-by sequence ID. Formula digits appear as subscripts. Molecular
-weight gains `g/mol`, yield gains a percent sign, and SMILES has a **Copy**
-button. Reaction type and tag values link to pages that list related
-procedures. Under **Authors**, each account's name links to
-`/authors/<user name>/`, for example `/authors/klehmann/`. The site shows
-names exactly as the accounts have them, including capitalization. The
-author directory, author pages and catalogue's **Author** filter show these
-names too. The eight body sections appear beside the panel on a
-wide screen and after it in a narrow window or in print.
+procedure is a step of a sequence, **Sequences** follows **Used in** and links
+those sequences by title, ordered by sequence ID. Formula digits appear as
+subscripts. Molecular weight gains `g/mol`, yield gains a percent sign, and
+SMILES has a **Copy** button. Reaction type and tag values link to pages that
+list related procedures. Under **Authors**, each account's name links to
+`/authors/<user name>/`, for example `/authors/klehmann/`. The site shows names
+exactly as the accounts have them, including capitalization. The author
+directory, author pages and catalogue's **Author** filter show these names too.
+The panel's three boxes are **Compound** (the products and their data),
+**Details** (reaction type to modified time) and **Synthesis context**
+(starting materials, precursor and used-in links, sequences). Each of the eight
+body sections follows in a box of its own. On a wide screen the panel's boxes
+stand side by side above the body, and **Notes** stands beside **Procedure**
+and **Workup and Purification**, which refer to it; in a narrow window and in
+print the boxes follow one another in order.
 
 After each product or starting-material link, the panel shows the substance’s
 article number and short name when supplied, in that order.
