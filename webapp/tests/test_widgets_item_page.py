@@ -417,6 +417,20 @@ class MovementsTableTests(ItemPageCase):
         kinds = [row["Art"].text() for row in rows]
         self.assertEqual(kinds, ["Abgabe", "Abgabe", "Anfangsbestand"])
 
+    def test_a_reversed_kind_sorts_with_its_kind(self) -> None:
+        """The kind cell's key is the kind alone, so that the reversal
+        mark does not split rows of one kind when sorted."""
+        from inventory.bookings import reverse
+        item = self.scenario_item()
+        delivery = item.movements.filter(kind="delivery").order_by(
+            "id").first()
+        reverse(self.kl, delivery, note="falsch")
+        _, rows = grid(self.table(self.show(item)))
+        marked = [row["Art"] for row in rows
+                  if "storniert" in row["Art"].text()]
+        self.assertEqual(len(marked), 1)
+        self.assertEqual(marked[0].get("data-sort"), "Abgabe")
+
     def test_the_date_key_is_a_key_sort_order_reads(self) -> None:
         """A date key is ``YYYY-MM-DD``, else ``sortOrder`` of lab.js
         would read it as text."""

@@ -84,3 +84,14 @@ class PrintRuleTests(SimpleTestCase):
                         "th > button.sort-header")
         shown = [d for d in found if d.get("display", "none") != "none"]
         self.assertTrue(shown, f"no rule shows the buttons: {found}")
+
+
+class ScreenOnlyLayoutTests(SimpleTestCase):
+    """A layout grid for the screen leaves the print layout alone."""
+
+    def test_the_item_grid_is_a_grid_on_the_screen_only(self) -> None:
+        text = CSS.read_text(encoding="utf-8")
+        for names, declarations in rules(text):
+            if ".item-grid" in names:
+                with self.subTest(selectors=names):
+                    self.assertNotEqual(declarations.get("display"), "grid")
