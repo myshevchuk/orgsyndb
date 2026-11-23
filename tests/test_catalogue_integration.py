@@ -290,12 +290,15 @@ class PlainCatalogueTests(cs.CatalogueCase):
 
     def test_links_and_assets_resolve_under_a_prefix(self) -> None:
         """Scenario: Links and assets under a prefix (the references to
-        the lab that every build writes)."""
+        the lab that every build writes, the notebook pages among
+        them)."""
         base = f"http://127.0.0.1{PREFIX.rstrip('/')}"
         lab = f"{PREFIX}lab/"
         allowed = {f"{lab}registry/"} | {
             f"{lab}registry/substances/{key}/"
-            for key in ps.read_registry(self.sandbox)}
+            for key in ps.read_registry(self.sandbox)} | {
+            f"{lab}journal/{notebook['code']}/"
+            for notebook in ps.read_snapshot(self.sandbox)["notebooks"]}
         checked = 0
         into_lab = set()
         for path, page in self.pages():
@@ -326,6 +329,7 @@ class PlainCatalogueTests(cs.CatalogueCase):
         self.assertGreater(checked, 100)
         self.assertIn(f"{lab}registry/", into_lab)
         self.assertIn(f"{lab}registry/substances/salicylic-acid/", into_lab)
+        self.assertIn(f"{lab}journal/AE-1/", into_lab)
 
 
 class DetailsChecks:

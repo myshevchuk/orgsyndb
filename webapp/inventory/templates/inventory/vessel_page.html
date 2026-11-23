@@ -1,6 +1,7 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n lab inventory %}
 {% block title %}{{ vessel }}{% endblock %}
 {% block main %}
+{% translate "Vessels" as back %}{% include "orgsyndb_web/back.html" with url="/lab/inventory/vessels/" text=back %}
 <h1>{{ vessel }}</h1>
 {% if user.is_authenticated %}<div class="lab-actions">
 <a href="/lab/inventory/vessels/{{ vessel.pk }}/correct/">{% translate "Correct" %}</a>

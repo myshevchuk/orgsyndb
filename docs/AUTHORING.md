@@ -152,15 +152,16 @@ requires a non-empty list of different keys. A field with `required = true`
 must be set, including in a general procedure. A field with `unique = true`
 needs a value no other procedure uses. In the demo, all four are optional.
 
-Write a notebook reference as `<code>/<number>`, such as `AE-1/2` for entry
-2 of notebook `AE-1`. The code uses capital letters and digits joined by
-single hyphens; the entry number runs from 1 to 9999 and has no leading zero.
-The exact pattern is `[A-Z0-9]+(-[A-Z0-9]+)*/[1-9][0-9]{0,3}`. Register the
+Write a notebook reference as `<code>/<number>`, such as `AE-1/2` for entry 2
+of notebook `AE-1`. The code uses capital letters and digits joined by single
+hyphens; the entry number runs from 1 to 9999 and has no leading zero. The
+exact pattern is `[A-Z0-9]+(-[A-Z0-9]+)*/[1-9][0-9]{0,3}`. Register the
 notebook in the lab application at `/lab/journal/` before validating or
-importing the procedure. If you see `unknown notebook`, check the code and
-that the collection's registry snapshot lists the notebook. No other
-procedure may use the same entry; translations of one procedure share it.
-The entry's contents stay on paper.
+importing the procedure. If you see `unknown notebook`, check the code and that
+the collection's registry snapshot lists the notebook. No other procedure may
+use the same entry; translations of one procedure share it. The entry's
+contents stay on paper. On the procedure page the reference links to the
+notebook's page in the lab.
 
 Set `project` to one key from the lab registry’s `projects` vocabulary,
 including `first-year-practical` under `teaching` in the demo. Use one

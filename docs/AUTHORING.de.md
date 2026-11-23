@@ -191,16 +191,17 @@ gesetzt sein, auch in einer allgemeinen Vorschrift. Bei `unique = true`
 darf keine andere Vorschrift denselben Wert verwenden. In der
 Beispielsammlung sind alle vier Felder optional.
 
-Schreiben Sie einen Laborjournalverweis als `<code>/<number>`, etwa
-`AE-1/2` für Eintrag 2 des Journals `AE-1`. Der Code besteht aus
-Großbuchstaben und Ziffern, verbunden durch einzelne Bindestriche. Die
-Eintragsnummer liegt zwischen 1 und 9999 und hat keine führende Null. Das genaue
-Muster lautet `[A-Z0-9]+(-[A-Z0-9]+)*/[1-9][0-9]{0,3}`. Registrieren Sie das
-Journal vor der Prüfung oder dem Import der Vorschrift in der
-Laboranwendung unter `/lab/journal/`. Bei `unknown notebook` prüfen Sie
-den Code und ob der Register-Snapshot der Sammlung das Journal aufführt.
-Keine andere Vorschrift darf denselben Eintrag verwenden; Übersetzungen
-einer Vorschrift teilen ihn. Der Inhalt des Eintrags bleibt auf Papier.
+Schreiben Sie einen Laborjournalverweis als `<code>/<number>`, etwa `AE-1/2`
+für Eintrag 2 des Journals `AE-1`. Der Code besteht aus Großbuchstaben und
+Ziffern, verbunden durch einzelne Bindestriche. Die Eintragsnummer liegt
+zwischen 1 und 9999 und hat keine führende Null. Das genaue Muster lautet
+`[A-Z0-9]+(-[A-Z0-9]+)*/[1-9][0-9]{0,3}`. Registrieren Sie das Journal vor der
+Prüfung oder dem Import der Vorschrift in der Laboranwendung unter
+`/lab/journal/`. Bei `unknown notebook` prüfen Sie den Code und ob der
+Register-Snapshot der Sammlung das Journal aufführt. Keine andere Vorschrift
+darf denselben Eintrag verwenden; Übersetzungen einer Vorschrift teilen ihn.
+Der Inhalt des Eintrags bleibt auf Papier. Auf der Seite der Vorschrift
+verweist der Eintrag auf die Seite des Journals in der Laboranwendung.
 
 Setzen Sie `project` auf einen Schlüssel aus dem Vokabular `projects` des
 Laborregisters, in der Beispielsammlung etwa `first-year-practical` unter

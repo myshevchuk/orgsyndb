@@ -518,6 +518,39 @@ class YearListTests(OverviewCase):
         self.assertEqual([r["Gebinde"].text() for r in found],
                          ["6", "2", "3", "5", "4"])
 
+    def test_the_latest_notes_link_the_delivery_list(self) -> None:
+        """Scenario: A note without a number (the link in the title
+        bar)."""
+        self.scenario()
+        found = widget(self.get(), "Letzte Lieferscheine")
+        links = found.find(cls="widget__head").find_all("a")
+        self.assertEqual([(a.get("href"), a.text()) for a in links],
+                         [("/lab/inventory/deliveries/", "Alle →")])
+
+    def test_the_link_to_the_delivery_list_in_english(self) -> None:
+        self.scenario()
+        accept(language="en")
+        found = widget(self.get(), "Latest delivery notes")
+        links = found.find(cls="widget__head").find_all("a")
+        self.assertEqual([(a.get("href"), a.text()) for a in links],
+                         [("/lab/inventory/deliveries/", "All →")])
+
+    def test_the_link_to_the_delivery_list_stands_without_notes(
+            self) -> None:
+        found = widget(self.get(), "Letzte Lieferscheine")
+        self.assertEqual(
+            [a.get("href") for a in found.find(
+                cls="widget__head").find_all("a")],
+            ["/lab/inventory/deliveries/"])
+
+    def test_no_other_year_list_links_the_delivery_list(self) -> None:
+        self.scenario()
+        root = self.get()
+        for title in ("Meistgefragt 2026", "Empfänger 2026"):
+            with self.subTest(title=title):
+                self.assertIsNone(widget(root, title).find(
+                    "a", href="/lab/inventory/deliveries/"))
+
     def test_the_recipients_leave_out_notes_without_one(self) -> None:
         self.scenario()
         _, found = self.grid("Empfänger 2026")
@@ -548,8 +581,8 @@ class SummaryWidgetTests(OverviewCase):
                             for w in widgets(section)))
         self.assertEqual(list(figures(root)), list(FIGURES))
         self.assertEqual(root.find("base").get("target"), "_top")
-        self.assertEqual(section.find("a", href="/lab/").text(),
-                         "Zur Übersicht")
+        self.assertEqual(
+            [a for a in root.find_all("a") if a.get("href") == "/lab/"], [])
         for title in ("Nächste Synthesen", "Abgaben je Monat"):
             self.assertNotIn(title, [title_of(w) for w in widgets(root)])
         self.assertIsNone(root.find("table"))

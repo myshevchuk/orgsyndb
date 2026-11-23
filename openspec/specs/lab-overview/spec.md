@@ -17,7 +17,7 @@ The package `overview` SHALL answer `/lab/` with the page `Labor auf einen Blick
 - **The year's lists**, each of at most five rows:
   - `Meistgefragt <year>` (`Most requested in <year>`): the article numbers with the most containers delivered in the current year, most first, then by article number, each linking to the page of the article's first item in the item list's order, with the article's name and the containers;
   - `Empfänger <year>` (`Recipients in <year>`): the recipients of the most containers delivered in the current year, most first, then by recipient regardless of case, notes without a recipient left out, each with the containers;
-  - `Letzte Lieferscheine` (`Latest delivery notes`): the first five notes of the delivery list (end-product-inventory "Delivery list"), each with its date, its number linking to its page, or `–` linking to it for a note without one, its recipient, or `–` for a note without one, and the containers of its lines.
+  - `Letzte Lieferscheine` (`Latest delivery notes`), with a link `Alle →` (`All →`) to the delivery list `/lab/inventory/deliveries/` in its title bar: the first five notes of the delivery list (end-product-inventory "Delivery list"), each with its date, its number linking to its page, or `#<id>` linking to it for a note without one, `<id>` the note's database id, its recipient, or `–` for a note without one, and the containers of its lines.
 
   A list without entries reads `Keine Abgaben.` (`No deliveries.`).
 
@@ -47,10 +47,14 @@ The figures and the stock are the page's summary, which `/lab/summary/` shows al
 - **WHEN** the latest accepted import's language is `en` and a test client requests `/lab/`
 - **THEN** the `h1` reads `Lab at a glance` and the widgets are titled `Inventory`, `Next syntheses`, `Deliveries per month` and `Latest delivery notes`, among others
 
+#### Scenario: A note without a number
+- **WHEN** the newest delivery note has no number and a test client requests `/lab/`
+- **THEN** the first row of `Letzte Lieferscheine` reads `#<id>` with the note's id, linking to `/lab/inventory/deliveries/<id>/`, and the widget's title bar links `Alle →` to `/lab/inventory/deliveries/`
+
 ### Requirement: Summary for the home page
-`/lab/summary/` SHALL show, readable without signing in, the overview's summary alone: a `section.lab-summary` holding the `h1` `Labor auf einen Blick` (`Lab at a glance`), visually hidden, the figures and the stock as the overview page shows them, and a link `Zur Übersicht` (`To the overview`) to `/lab/`, every link opening in the top window. It is a page made to be framed: the web-app Page shell states its shell, without the site's header and with the demo note of a demo database. The site's home page frames it in a build that links the lab (site-theme "Home page").
+`/lab/summary/` SHALL show, readable without signing in, the overview's summary alone: a `section.lab-summary` holding the `h1` `Labor auf einen Blick` (`Lab at a glance`), visually hidden, and the figures and the stock as the overview page shows them, every link opening in the top window. It has no link of its own to `/lab/`: the home page that frames it carries that link. It is a page made to be framed: the web-app Page shell states its shell, without the site's header and with the demo note of a demo database. The site's home page frames it in a build that links the lab (site-theme "Home page").
 
 #### Scenario: Summary
 - **WHEN** the database holds two items at the level ok and one at low, one running task and one open vessel, and a test client not signed in requests `/lab/summary/`
-- **THEN** the page holds one `section.lab-summary` with the stock bar's links `level-low` and `level-ok`, the four figures, those of syntheses due, tasks and open vessels with their links, and the link to `/lab/`, and no widget `Nächste Synthesen`, no table and no `svg`
+- **THEN** the page holds one `section.lab-summary` with the stock bar's links `level-low` and `level-ok`, the four figures, those of syntheses due, tasks and open vessels with their links, no link whose target is `/lab/` itself, and no widget `Nächste Synthesen`, no table and no `svg`
 

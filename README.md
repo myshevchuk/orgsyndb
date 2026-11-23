@@ -91,13 +91,14 @@ both keys are reserved.
 
 The demo declares only `working_time` (hours, at least zero) and
 `inert_atmosphere` (a boolean). Its `projects` vocabulary in the registry
-groups first-year and advanced practicals under **Teaching**, and biaryls
-and cinnamates under **Research**. Every demo procedure sets `notebook` and
+groups first-year and advanced practicals under **Teaching**, and biaryls and
+cinnamates under **Research**. Every demo procedure sets `notebook` and
 `project` in both languages; most set `working_time`, and some set
-`inert_atmosphere`. Every demo notebook reference names `AE-1`, `AE-2`,
-`CE-1` or `CE-3`. All four fields are optional for a new procedure.
-Procedure pages show journal fields before declared fields, and the
-catalogues offer **Project** and **Inert atmosphere** filters.
+`inert_atmosphere`. Every demo notebook reference names `AE-1`, `AE-2`, `CE-1`
+or `CE-3`. All four fields are optional for a new procedure. Procedure pages
+show journal fields before declared fields, where **Lab notebook** links to the
+notebook's page in the lab, and the catalogues offer **Project** and **Inert
+atmosphere** filters.
 
 You can explore the same collection on the [live demo site](https://myshevchuk.github.io/orgsyndb/).
 

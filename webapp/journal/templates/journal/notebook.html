@@ -1,11 +1,11 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n lab %}
 {% block title %}{{ notebook.code }}{% endblock %}
 {% block main %}
+{% translate "Lab notebooks" as back %}{% include "orgsyndb_web/back.html" with url="/lab/journal/" text=back %}
 <div class="lab-heading">
 <h1>{{ notebook.code }}</h1>
 {% if user.is_authenticated %}<p class="actions"><a href="/lab/journal/{{ notebook.code }}/edit/">{% translate "Edit" %}</a></p>
 {% endif %}</div>
-<p><a href="/lab/journal/">{% translate "Lab notebooks" %}</a></p>
 <dl class="metadata">
 <dt>{% translate "Owner" %}</dt>
 <dd>{% person notebook.user %} {{ notebook.user.display_name }}</dd>

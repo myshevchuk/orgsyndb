@@ -93,7 +93,7 @@
 {% endif %}</div>
 </section>
 <section class="widget">
-<div class="widget__head"><h2>{% translate "Latest delivery notes" %}</h2>{% if latest %}<span class="widget__count">{{ latest|length }}</span>{% endif %}</div>
+<div class="widget__head"><h2>{% translate "Latest delivery notes" %}</h2>{% if latest %}<span class="widget__count">{{ latest|length }}</span>{% endif %}<span class="widget__note"><a href="/lab/inventory/deliveries/">{% translate "All →" %}</a></span></div>
 <div class="widget__body widget__body--flush">
 {% if latest %}<div class="table-scroll">
 <table class="widget-table">
@@ -102,7 +102,7 @@
 </thead>
 <tbody>
 {% for entry in latest %}<tr>
-<td class="nowrap"><a href="/lab/inventory/deliveries/{{ entry.note.pk }}/">{{ entry.note.number|default:"–" }}</a></td>
+<td class="nowrap"><a href="/lab/inventory/deliveries/{{ entry.note.pk }}/">{{ entry.note }}</a></td>
 <td class="nowrap">{{ entry.note.date }}</td>
 <td{% if not entry.note.recipient %} class="muted"{% endif %}>{{ entry.note.recipient|default:"–" }}</td>
 <td class="num">{{ entry.count }}</td>

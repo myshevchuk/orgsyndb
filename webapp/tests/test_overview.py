@@ -185,10 +185,18 @@ class FigureTests(OverviewCase):
     def test_a_note_without_number(self) -> None:
         item = self.item("CH-0012", quantity=5)
         note = self.deliver(item, 1, date(2026, 11, 2), number=None)
-        cell = rows(self.get(), "Letzte Lieferscheine")[0]["Beleg"]
-        self.assertEqual(cell.find("a").text(), "–")
+        root = self.get()
+        cell = rows(root, "Letzte Lieferscheine")[0]["Beleg"]
+        self.assertEqual(cell.find("a").text(), f"#{note.pk}")
         self.assertEqual(cell.find("a").get("href"),
                          f"/lab/inventory/deliveries/{note.pk}/")
+        head = widget(root, "Letzte Lieferscheine").find(
+            cls="widget__head")
+        link = head.find("a", href="/lab/inventory/deliveries/")
+        self.assertIsNotNone(link)
+        self.assertEqual(link.text(), "Alle →")
+        self.assertEqual(
+            len(head.find_all("a", href="/lab/inventory/deliveries/")), 1)
 
     def test_historical_notes_count(self) -> None:
         from inventory.bookings import book_note
@@ -377,8 +385,8 @@ class SummaryTests(OverviewCase):
             [hrefs(each) for each in figures(root).values()],
             [[], ["/lab/planning/"], ["/lab/tasks/"],
              ["/lab/inventory/vessels/"]])
-        self.assertEqual(sections[0].find("a", href="/lab/").text(),
-                         "Zur Übersicht")
+        self.assertEqual(
+            [a for a in root.find_all("a") if a.get("href") == "/lab/"], [])
         self.assertIsNone(root.find("section", "lab-overview"))
         self.assertIsNone(root.find("table"))
         self.assertIsNone(root.find("svg"))

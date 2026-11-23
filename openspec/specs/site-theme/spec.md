@@ -171,7 +171,7 @@ The metadata panel is the `dt`/`dd` pairs of these lists, read in document order
 - `Tags`, as one link per tag to its term page, with the tag as text;
 - `Authors`, as one link per author to the author's term page, with the account's name as text (procedure-authors "Author data for the site");
 - `Checked by`, as the names joined by `, `, not linked, only when the status is not `checked`;
-- each procedure field the collection declares (procedure-fields "Procedure field declarations") that the procedure sets, in declared order, labelled with the field's shown label (procedure-fields "Procedure field data"), its value written as compound-fields "Field display" writes a value;
+- each procedure field the collection declares (procedure-fields "Procedure field declarations") that the procedure sets, in declared order, labelled with the field's shown label (procedure-fields "Procedure field data"), its value written as compound-fields "Field display" writes a value, except that the journal field `notebook` (procedure-fields "Journal fields"), `<code>/<number>`, is a link to the lab's notebook page `/lab/journal/<code>/` with the value as text;
 - `Created`, as `<time datetime="<RFC 3339 date>">YYYY-MM-DD HH:MM</time>`;
 - `Modified`, the same for `lastmod`;
 - `Starting materials`: one `a.compound` per entry of `substrates`, in its order, linking the compound's page with its name as text, each followed by its note as for `Product`, joined by `, `;
@@ -209,6 +209,10 @@ Whitespace separates every `</dt>` from the following `<dd>` in the published HT
 #### Scenario: No context widget without links
 - **WHEN** a test scans every procedure page after a theme build
 - **THEN** a page has a context widget exactly when it has one of the pairs `Starting materials`, `Precursors`, `Used in` and `Sequences`, and every page has exactly one compound widget, first in the details wrapper
+
+#### Scenario: The notebook links the journal
+- **WHEN** a test scans `procedures/osdb-0002/index.html` after a theme build, whose procedure sets `notebook = "AE-1/2"`
+- **THEN** the `Lab notebook` value is one link to `/lab/journal/AE-1/` with the text `AE-1/2`
 
 ### Requirement: Precursor and used-in links
 A procedure's precursors SHALL be the other published procedures that have among their products a compound of its `substrates`, and the procedures it is used in SHALL be the other published procedures that have among their `substrates` a compound of its products. The `Precursors` value holds one `a.precursor` per precursor and the `Used in` value one `a.used-in` per procedure it is used in, each linking that procedure's page with the text `<ID> <title>`, ordered by ID. A procedure with no precursor has no `Precursors` pair, and one used in no other procedure has no `Used in` pair.
