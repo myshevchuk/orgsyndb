@@ -757,6 +757,40 @@ class ShippedSiteTests(SiteCase):
                     self.declared_pairs(item.data))
                 self.assertTrue(declared, "the procedure sets no field")
 
+    def test_the_notebook_links_the_journal(self) -> None:
+        """Scenario: The notebook links the journal."""
+        page = self.page_of(self.by_id()["OSDB-0002"])
+        panel = self.panel(page)
+        links = panel["Lab notebook"].definition.find_all("a")
+        self.assertEqual([(page.resolve(l.attrs["href"]), l.norm())
+                          for l in links],
+                         [("/lab/journal/AE-1/", "AE-1/2")])
+        self.assertEqual(panel["Lab notebook"].definition.norm(), "AE-1/2")
+        for label in ("Project", "Working time", "Inert atmosphere"):
+            with self.subTest(label=label):
+                self.assertEqual(panel[label].definition.find_all("a"), [])
+
+    def test_every_notebook_value_links_the_notebook_of_its_code(
+            self) -> None:
+        """Requirement: Metadata panel (the code is the value before the
+        last `/`)."""
+        checked = 0
+        for item in self.order_by_id():
+            value = item.data.get("notebook")
+            if value is None:
+                continue
+            with self.subTest(procedure=item.id):
+                page = self.page_of(item)
+                links = self.panel(page)["Lab notebook"].definition \
+                    .find_all("a")
+                self.assertEqual(
+                    [(page.resolve(l.attrs["href"]), l.norm())
+                     for l in links],
+                    [(f"/lab/journal/{value.rsplit('/', 1)[0]}/", value)])
+                self.assertFalse(links[0].attrs["href"].startswith("/"))
+                checked += 1
+        self.assertGreaterEqual(checked, 9)
+
     def test_a_field_a_procedure_does_not_set_is_not_shown(self) -> None:
         """Requirement: Metadata panel (each pair present only when the
         field is set)."""
@@ -1813,11 +1847,14 @@ class LabNavigationTests(SiteCase):
                          [("/lab/", "Open the lab overview")])
 
     def test_lab_references_at_the_root(self) -> None:
-        """Scenario: Lab references at the root."""
+        """Scenario: Lab references at the root (the notebook pages of
+        the registry among them)."""
         lab = {"/lab/", "/lab/summary/", "/lab/registry/",
                *(entry["url"] for entry in ns.links(self.site, True)
                  if entry["url"].startswith("/lab/"))}
         substances = {fs.substance_url(key) for key in self.registry()}
+        notebooks = {f"/lab/journal/{notebook['code']}/" for notebook in
+                     ps.read_snapshot(self.sandbox)["notebooks"]}
         scheme = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
         found_lab: set[str] = set()
         problems = []
@@ -1837,15 +1874,16 @@ class LabNavigationTests(SiteCase):
                         urllib.parse.urlsplit(joined).path)
                     if target.startswith("/lab/") or target == "/lab":
                         found_lab.add(target)
-                        if target not in lab | substances:
+                        if target not in lab | substances | notebooks:
                             problems.append((page.url, value))
                         continue
                     if not ps.target_file(self.public, target).is_file():
                         problems.append((page.url, value))
         self.assertEqual(problems, [])
         self.assertLessEqual(lab, found_lab)
-        self.assertLessEqual(found_lab, lab | substances)
+        self.assertLessEqual(found_lab, lab | substances | notebooks)
         self.assertIn(fs.substance_url("salicylic-acid"), found_lab)
+        self.assertIn("/lab/journal/AE-1/", found_lab)
 
     def test_compound_links_are_the_same_with_the_lab(self) -> None:
         """Scenario: every `a.compound` links the substance's lab page

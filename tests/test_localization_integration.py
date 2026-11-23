@@ -209,6 +209,12 @@ class GermanSiteTests(GermanCase):
              ("Projekt", "Lehre › Grundpraktikum"),
              ("Arbeitszeit", "2,5 h"), ("Schutzgas", "Nein")])
         self.assertEqual(labels[first + 4], "Erstellt")
+        links = pairs[first].definition.find_all("a")
+        self.assertEqual([(page.resolve(a.attrs["href"]), a.norm())
+                          for a in links],
+                         [("/lab/journal/AE-1/", "AE-1/2")])
+        for pair in pairs[first + 1:first + 4]:
+            self.assertEqual(pair.definition.find_all("a"), [], pair.label)
 
     def test_german_labels_for_reaction_types(self) -> None:
         """Scenario: German labels for reaction types."""
