@@ -1,12 +1,14 @@
 ## 1. Tests
 
-- [ ] 1.1 Back links on the seven record pages: one `p.lab-back` before
-  the `h1`, target, text equal to the list's `h1`, arrow hidden; English
-  texts.
+- [ ] 1.1 Back links on the seven record pages, in German and English:
+  one `p.lab-back` after the demo note and before the `h1`, target,
+  text equal to the list's `h1`, arrow hidden, and exactly one link to
+  the list outside the navigation and section tabs.
 - [ ] 1.2 Overview: `#<id>` for a note without a number, `Alle →` link.
 - [ ] 1.3 Summary: no link to `/lab/` itself; existing summary tests
   updated.
-- [ ] 1.4 Site: the notebook value links `/lab/journal/<code>/`.
+- [ ] 1.4 Site: the notebook value links `/lab/journal/<code>/`; the
+  prefix and root link tests accept notebook pages of the registry.
 
 ## 2. Implementation
 

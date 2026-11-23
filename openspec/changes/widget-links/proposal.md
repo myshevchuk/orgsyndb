@@ -34,6 +34,8 @@ None.
 - `lab-overview`: "Overview page" (`#<id>`, `Alle →`) and "Summary for
   the home page" (no own link to `/lab/`).
 - `site-theme`: "Metadata panel" (the notebook value links its page).
+- `site-build`: "Deployment under a path prefix" (notebook pages among
+  the lab references).
 
 ## Impact
 
@@ -44,4 +46,6 @@ None.
   `site/layouts/_partials/procedure-meta.html`.
 - `lab.css` for `.lab-back`; German catalogues where a string is new.
 - Tests reading the summary's link (`test_overview.py`,
-  `test_widgets_overview.py`) and the overview's `–` for notes.
+  `test_widgets_overview.py`), the overview's `–` for notes, and the
+  site's lab-link checks (`tests/test_catalogue_integration.py`,
+  `tests/test_theme_integration.py`).
