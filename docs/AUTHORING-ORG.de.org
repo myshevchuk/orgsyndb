@@ -46,6 +46,7 @@
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-16 Mon 01:56] -- Verbindungsstrukturen aus Molfile-Dateien, Reaktionsschemata und Bildübernahme beim Build
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-16 Mon 09:01] -- Stoffseiten im Labor, Verbindungslinks, Navigation und Herstellungswege
 #+AI_PASS: claude-opus-5-5 [2026-11-22 Sun 23:00] -- Kästen der Vorschriftenseite
+#+AI_PASS: claude-opus-5-5 [2026-11-23 Mon 20:25] -- Journal-Link auf Vorschriftenseiten
 
 Deutsche Fassung von [[file:AUTHORING-ORG.org][AUTHORING-ORG.org]]; bei Abweichungen gilt die englische.
 Sie beschreibt Org-Vorschriften auf Deutsch und Übersetzungen englischer
@@ -185,16 +186,17 @@ Meldungen.
   darf keine andere Vorschrift denselben Wert verwenden; Übersetzungen einer
   Vorschrift zählen als eine. Die vier Beispielfelder sind optional.
 
-  Schreiben Sie einen Laborjournalverweis als ~<code>/<number>~, etwa
-  ~AE-1/1~ für Eintrag 1 des Journals ~AE-1~. Der Code besteht aus
-  Großbuchstaben und Ziffern, verbunden durch einzelne Bindestriche. Die
-  Eintragsnummer liegt zwischen 1 und 9999 und hat keine führende Null. Das genaue
-  Muster lautet ~[A-Z0-9]+(-[A-Z0-9]+)*/[1-9][0-9]{0,3}~. Registrieren Sie das
-  Journal vor der Prüfung oder dem Import der Vorschrift in der
-  Laboranwendung unter ~/lab/journal/~. Bei ~unknown notebook~ prüfen Sie
-  den Code und ob der Register-Snapshot der Sammlung das Journal aufführt.
-  Keine andere Vorschrift darf denselben Eintrag verwenden; Übersetzungen
-  einer Vorschrift teilen ihn. Der Inhalt des Eintrags bleibt auf Papier.
+  Schreiben Sie einen Laborjournalverweis als ~<code>/<number>~, etwa ~AE-1/1~
+  für Eintrag 1 des Journals ~AE-1~. Der Code besteht aus Großbuchstaben und
+  Ziffern, verbunden durch einzelne Bindestriche. Die Eintragsnummer liegt
+  zwischen 1 und 9999 und hat keine führende Null. Das genaue Muster lautet
+  ~[A-Z0-9]+(-[A-Z0-9]+)*/[1-9][0-9]{0,3}~. Registrieren Sie das Journal vor der
+  Prüfung oder dem Import der Vorschrift in der Laboranwendung unter
+  ~/lab/journal/~. Bei ~unknown notebook~ prüfen Sie den Code und ob der
+  Register-Snapshot der Sammlung das Journal aufführt. Keine andere Vorschrift
+  darf denselben Eintrag verwenden; Übersetzungen einer Vorschrift teilen ihn.
+  Der Inhalt des Eintrags bleibt auf Papier. Auf der Seite der Vorschrift
+  verweist der Eintrag auf die Seite des Journals in der Laboranwendung.
 
   Die Arbeitszeit steht in Stunden und ist mindestens null.
   Projektschlüssel kommen aus dem Vokabular ~projects~ des Laborregisters.

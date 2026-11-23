@@ -51,6 +51,7 @@
 #+AI_PASS: claude-opus-5-5 [2026-11-16 Mon 02:00] -- line wrapping in the structure passage
 #+AI_PASS: doc-writer gpt-6.1-sol [2026-11-16 Mon 09:01] -- lab substance pages, compound links, navigation and route trees
 #+AI_PASS: claude-opus-5-5 [2026-11-22 Sun 23:00] -- procedure page widgets
+#+AI_PASS: claude-opus-5-5 [2026-11-23 Mon 20:25] -- notebook link on procedure pages
 
 Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORING-ORG.de.org]].
 
@@ -165,15 +166,16 @@ Eine deutsche Fassung dieser Anleitung ist [[file:AUTHORING-ORG.de.org][AUTHORIN
   translations of one procedure count as one. The demo's four fields are
   optional.
 
-  Write a notebook reference as ~<code>/<number>~, such as ~AE-1/1~ for
-  entry 1 of notebook ~AE-1~. The code uses capital letters and digits
-  joined by single hyphens; the entry number runs from 1 to 9999 and has no leading
-  zero. The exact pattern is ~[A-Z0-9]+(-[A-Z0-9]+)*/[1-9][0-9]{0,3}~.
-  Register the notebook in the lab application at ~/lab/journal/~ before
-  validating or importing the procedure. If you see ~unknown notebook~,
-  check the code and that the collection's registry snapshot lists the
-  notebook. No other procedure may use the same entry; translations of one
-  procedure share it. The entry's contents stay on paper.
+  Write a notebook reference as ~<code>/<number>~, such as ~AE-1/1~ for entry 1
+  of notebook ~AE-1~. The code uses capital letters and digits joined by single
+  hyphens; the entry number runs from 1 to 9999 and has no leading zero. The
+  exact pattern is ~[A-Z0-9]+(-[A-Z0-9]+)*/[1-9][0-9]{0,3}~. Register the
+  notebook in the lab application at ~/lab/journal/~ before validating or
+  importing the procedure. If you see ~unknown notebook~, check the code and
+  that the collection's registry snapshot lists the notebook. No other procedure
+  may use the same entry; translations of one procedure share it. The entry's
+  contents stay on paper. On the procedure page the reference links to the
+  notebook's page in the lab.
 
   Working time is in hours and at least zero. Project keys come from the
   lab registry’s ~projects~ vocabulary. A choice field’s ~vocabulary~
