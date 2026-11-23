@@ -54,6 +54,6 @@
 - [x] 4.1 Browser at 1440, 1000 and 500 px, light and dark: OSDB-0005,
   OSDB-0009 (general, scope) and OSDB-0002; no horizontal page scroll,
   notes beside the steps at 1440, single column at 500.
-- [ ] 4.2 Owner checks a procedure page on the test server.
+- [x] 4.2 Owner checks a procedure page on the test server.
 - [x] 4.3 PDF build: warning-free; page images of OSDB-0003, 0004 and
   0008 show nothing clipped and the structure on the first page.

@@ -31,7 +31,7 @@
 ## 4. Verification
 
 - [x] 4.1 Area tests, then both suites once; CI green on the branch
-- [ ] 4.2 In a browser: the page of `1-biphenyl-4-yl-ethanol` beside
+- [x] 4.2 In a browser: the page of `1-biphenyl-4-yl-ethanol` beside
   the mockup at 1440 px, and at a narrow width, in the light and the
   dark scheme; print preview; the
   owner checks it on the test server

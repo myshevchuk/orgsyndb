@@ -57,7 +57,7 @@
 ## 5. Verification
 
 - [x] 5.1 Area tests, then both suites once; CI green on the branch
-- [ ] 5.2 In a browser: screenshot of the item page beside the
+- [x] 5.2 In a browser: screenshot of the item page beside the
   mockup; a dialog save on the item page keeps the history open and
   the movements sorted, and a header sorts again after it; print
   preview with the history closed shows its rows and the movements'

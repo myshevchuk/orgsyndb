@@ -44,4 +44,4 @@
 - [x] 4.1 Browser on the demo at 1440, 1000 and 500 px, light and
   dark: no horizontal scrolling at 1440, filters, selection by click
   and keys, address, print preview.
-- [ ] 4.2 Owner checks `/lab/planning/` on the test server.
+- [x] 4.2 Owner checks `/lab/planning/` on the test server.

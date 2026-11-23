@@ -33,7 +33,7 @@
 ## 3. Verification
 
 - [x] 3.1 Area tests, then both suites once; CI green on the branch
-- [ ] 3.2 In a browser: `/lab/` beside the mockup at 1440 px and
+- [x] 3.2 In a browser: `/lab/` beside the mockup at 1440 px and
   narrow; the home page's frame at 1440, 1000, 500 and 390 px with the
   demo note; the owner
   checks it on the test server

@@ -21,4 +21,4 @@
 
 - [x] 3.1 Browser: back links on each page, light and dark; the home
   page's lab box at 1440 and 390 px.
-- [ ] 3.2 Owner checks the links on the test server.
+- [x] 3.2 Owner checks the links on the test server.
