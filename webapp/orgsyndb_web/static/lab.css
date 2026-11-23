@@ -57,6 +57,14 @@
 .lab-demo-accounts { margin-top: var(--space-5); font-family: var(--font-ui); }
 .lab-demo-accounts ul { padding-left: var(--space-4); }
 
+/* The link back to a record's list, above its heading. */
+.lab-back {
+  margin: 0 0 0.25rem;
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+}
+.lab-back a { color: var(--muted); text-decoration: none; }
+.lab-back a:hover { color: var(--link); text-decoration: underline; }
 .lab-heading {
   display: flex;
   flex-wrap: wrap;
@@ -724,7 +732,6 @@ table.note-lines { padding: 0; }
 .priority--high { background: var(--banner-bg); color: var(--banner-fg); border-color: var(--banner-border); }
 .priority--medium { background: var(--draft-bg); color: var(--draft-fg); }
 .priority--low { background: var(--surface); color: var(--muted); border-color: var(--border); }
-.lab-links { font-family: var(--font-ui); }
 .badge--late { background: var(--banner-bg); color: var(--banner-fg); border-color: var(--banner-border); }
 
 /* The overview at /lab/: the stock bar and its legend, the chart of the
@@ -800,7 +807,6 @@ body.lab-framed { display: block; min-height: 0; margin: 0; padding: 0; max-widt
 body.lab-framed main { padding: 0; }
 body.lab-framed .lab-demo { margin-bottom: var(--space-2); }
 body.lab-framed .figures-strip { margin-bottom: 0.6rem; }
-body.lab-framed .lab-links { margin: 0.5rem 0 0; font-size: 0.8125rem; }
 
 /* Overview, item and substance page widget grids and widget-local adjustments. */
 @media screen {

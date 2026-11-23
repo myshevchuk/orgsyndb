@@ -36,9 +36,6 @@ msgstr[1] "%(count)s verspätet"
 msgid "%(running)s running · %(planned)s planned"
 msgstr "%(running)s laufend · %(planned)s geplant"
 
-msgid "To the overview"
-msgstr "Zur Übersicht"
-
 msgid "Next syntheses"
 msgstr "Nächste Synthesen"
 
@@ -81,3 +78,6 @@ msgstr "Keine Abgaben."
 
 msgid "Open vessels"
 msgstr "Offene Gefäße"
+
+msgid "All →"
+msgstr "Alle →"

@@ -50,7 +50,7 @@ indexes each label and value as separate words. */ -}}
 {{ range hugo.Data.collection.fields.procedure -}}
 {{ if isset $p .key -}}
 <dt>{{ .label }}</dt>
-<dd>{{ partial "field-value.html" (dict "field" . "value" (index $p .key)) }}</dd>
+<dd>{{ if eq .key "notebook" }}{{ $entry := index $p .key }}<a href="/lab/journal/{{ index (findRE `^[^/]+` $entry) 0 }}/">{{ $entry }}</a>{{ else }}{{ partial "field-value.html" (dict "field" . "value" (index $p .key)) }}{{ end }}</dd>
 {{ end -}}
 {{ end -}}
 {{ if not .Date.IsZero -}}

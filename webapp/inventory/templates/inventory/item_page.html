@@ -2,6 +2,7 @@
 {% block title %}{% if item.article_number %}{{ item.article_number }} {% endif %}{{ item.name }}{% endblock %}
 {% block main %}
 <div id="item-refresh" data-refresh>
+{% translate "End products" as back %}{% include "orgsyndb_web/back.html" with url="/lab/inventory/end-products/" text=back %}
 <h1>{% if item.article_number %}{{ item.article_number }} · {% endif %}{{ item.name }}{% if item|new_on:today %}<sup class="mark-new">{% translate "new" context "item" %}</sup>{% endif %}</h1>
 {% if user.is_authenticated %}<div class="lab-actions">
 {% include "inventory/item_actions.html" %}</div>
