@@ -28,7 +28,7 @@ The owner asked on 2026-11-23 for a demo with:
 - The demo collection grows to about thirty sample procedures,
   counting the general procedure. The nine existing ones stay. The new
   ones are Markdown procedures. Every sample has a German variant.
-- Every chemical a sample uses, water and ice excepted, is a row of
+- Every chemical a sample uses, water, ice and inert gas excepted, is a row of
   its Reagents table: substrates, reagents, catalysts, solvents and
   workup chemicals alike. A row of a solvent or an auxiliary writes
   `–` for `mmol` and `Equiv` and is exempt from the quantity rules, as

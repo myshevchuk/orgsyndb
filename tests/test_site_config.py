@@ -167,14 +167,15 @@ class DemoCollectionTests(unittest.TestCase):
             self.assertFalse((REPO / path).exists(), path)
 
     def test_the_registry_holds_the_compounds_the_samples_name(self) -> None:
-        """Scenario: Samples live in the demo collection (registry)."""
-        named = set()
-        for sample in sample_support.sample_procedures(DEMO):
-            named |= set(sample_support.named_compounds(sample))
+        """Scenario: Samples live in the demo collection (registry):
+        every key the samples name is a substance, and every substance is
+        named by a sample, carries the CAS number of a sample's Reagents
+        row, is `new-compound-7` or has the group `reagents` or
+        `starting-materials`, some of those groups being named by no
+        sample."""
+        self.assertEqual(sample_support.coverage_violations(DEMO), [])
         table = json.loads((REPO / "webapp" / "demo" / "registry.json")
                            .read_text(encoding="utf-8"))
-        self.assertEqual({s["key"] for s in table["substances"]},
-                         named | {"new-compound-7"})
         for entry in table["substances"]:
             with self.subTest(compound=entry["key"]):
                 self.assertTrue(entry["name_de"], "no name_de")

@@ -33,11 +33,15 @@ IDS = "/lab/collection/ids/"
 TOKEN = "s3cret"
 FIXTURE = Path(__file__).resolve().parents[1] / "demo" / "manifest.json"
 TOOLING = "b" * 40
-# The numbers of the demo collection's procedures and sequences.
-PROCEDURES = 9
-SEQUENCES = 2
-# The user names the demo's procedures credit, in the order of their
-# files (sample-procedures "Sample marking").
+# The numbers of the demo collection's procedures and sequences, as its
+# manifest lists them.
+_DEMO = json.loads(FIXTURE.read_text(encoding="utf-8"))
+PROCEDURES = len(_DEMO["procedures"])
+SEQUENCES = len(_DEMO["sequences"])
+SCOPE_ENTRIES = sum(len(item["entries"]) for item in _DEMO["procedures"])
+STEPS = sum(len(item["steps"]) for item in _DEMO["sequences"])
+# The user names the nine oldest procedures of the demo credit, in the
+# order of their files (sample-procedures "Sample marking").
 DEMO_CREDITS = {
     "OSDB-0001": ["klehmann", "tbauer"], "OSDB-0002": ["klehmann", "aschmidt"],
     "OSDB-0003": ["tbauer", "jkoch"], "OSDB-0004": ["aschmidt", "mwolf"],
@@ -45,8 +49,8 @@ DEMO_CREDITS = {
     "OSDB-0007": ["aschmidt"], "OSDB-0008": ["aschmidt", "tbauer"],
     "OSDB-0009": ["mwolf"]}
 
-# The notebook and the project the demo's procedures name (sample-
-# procedures "Demo collection").
+# The notebook and the project the nine oldest procedures of the demo name
+# (sample-procedures "Demo collection").
 DEMO_JOURNAL = {
     "OSDB-0001": ("AE-1/1", "first-year-practical"),
     "OSDB-0002": ("AE-1/2", "first-year-practical"),

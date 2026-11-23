@@ -71,3 +71,18 @@ The planning parameters are stored, created with `target_days` 180 more than a y
 #### Scenario: A demo task from stock
 - **WHEN** the demo data set is written and a test client requests the page of the planned task of `SEQ-0001`
 - **THEN** it shows `SEQ-0001 ab Stufe 2` and one step, of `OSDB-0002`, and an open vessel of `salicylic-acid` belongs to a batch whose page names the first step of an ended task of `SEQ-0001` as the step that made it
+
+### Requirement: Demo planning
+On `D`, under the data set's parameters, the planning list SHALL show without `all=1`, among others, the articles `CH-0012`, `CH-0013`, `CH-0010`, `CH-0016` and `NV-0007`:
+
+- `CH-0012` with priority high and a running task marked `verspätet`, its figures from the order model;
+- `CH-0013` with priority high, no task, and `Synthese planen`;
+- `CH-0010` with priority medium, a planned task of `SEQ-0001`, and no `Synthese planen`;
+- `CH-0016` with priority low and `Abfüllen` for one of its sizes;
+- `NV-0007` with `Bulk prüfen` and no `Synthese planen`.
+
+With `all=1` it also shows `CH-0001`, with priority low and its figures marked `grob`, and `CH-0002`, with priority low and a running task not marked late; it never shows `CH-0001` or `CH-0002` without `all=1`. The item without an article number has no forecast; its item page shows `Kein Verbrauch, keine Prognose.`
+
+#### Scenario: Any seeding day
+- **WHEN** the data set is written, each time into an empty database, as of 2026-01-01, 2026-02-14, 2026-03-31, 2026-11-07 and 2028-02-29, and a test client requests `/lab/planning/` and `/lab/planning/?all=1` on that day
+- **THEN** on each day both lists show the articles, priorities, tasks and actions this requirement names, and the list without `all=1` shows neither `CH-0001` nor `CH-0002`

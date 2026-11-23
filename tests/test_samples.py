@@ -18,7 +18,8 @@ MD_SEED = DEMO / "md" / "procedures" / "OSDB-0002-aspirin.md"
 COLLECTION = FIXTURES / "collection"
 DEMO_REGISTRY = REPO / "webapp" / "demo" / "registry.json"
 # The demo's accounts (lab-demo "Demo accounts") and, per sample ID, the
-# user names its procedures credit (sample-procedures "Sample marking").
+# user names the nine oldest procedures credit (sample-procedures "Sample
+# marking"). Every further sample credits demo accounts.
 DEMO_ACCOUNTS = {"aschmidt": "Anna Schmidt", "jkoch": "Jonas Koch",
                  "klehmann": "Katrin Lehmann", "mwolf": "Miriam Wolf",
                  "tbauer": "Tobias Bauer"}
@@ -106,14 +107,17 @@ class DemoAuthorsTests(unittest.TestCase):
     def test_each_procedure_credits_its_demo_accounts(self) -> None:
         """Requirement: Sample marking (the demo's procedures credit
         the demo accounts, `A.` to `klehmann` and so on)."""
-        found = {}
+        found = set()
         for sample in samples():
             ident = sample.data["id"]
             with self.subTest(sample=sample.path.name):
-                self.assertEqual(sample.data["authors"],
-                                 DEMO_CREDITS[ident])
-            found[ident] = sample.data["authors"]
-        self.assertEqual(sorted(found), sorted(DEMO_CREDITS))
+                authors = sample.data["authors"]
+                self.assertTrue(authors)
+                self.assertLessEqual(set(authors), set(DEMO_ACCOUNTS))
+                if ident in DEMO_CREDITS:
+                    self.assertEqual(authors, DEMO_CREDITS[ident])
+            found.add(ident)
+        self.assertLessEqual(set(DEMO_CREDITS), found)
 
 
 class SampleQuantityTests(unittest.TestCase):
@@ -122,6 +126,80 @@ class SampleQuantityTests(unittest.TestCase):
         for sample in samples():
             with self.subTest(sample=sample.path.name):
                 self.assertEqual(sup.quantity_violations(sample), [])
+
+
+class ReagentsInRegistryTests(unittest.TestCase):
+    """Requirement: Reagents in the registry."""
+
+    def test_every_row_is_a_registry_substance(self) -> None:
+        """Scenario: Every row is a registry substance."""
+        registry = sup.read_registry(DEMO)
+        self.assertEqual(
+            sup.reagent_violations(samples(), registry), [])
+
+    def test_every_sample_lists_reagents(self) -> None:
+        """Requirement: Reagents in the registry (the substrates are rows
+        of the table, and so are the solvents and the workup
+        chemicals)."""
+        for sample in samples():
+            with self.subTest(sample=sample.path.name):
+                self.assertGreater(len(sample.table), 1)
+
+    def test_the_demo_lists_solvents_and_auxiliaries(self) -> None:
+        """Requirement: Quantities agree (a row of `–` in `mmol` and
+        `Equiv` is a solvent or an auxiliary)."""
+        rows = [row for sample in samples() for row in sample.table[1:]]
+        self.assertTrue([row for row in rows if row[4:] == ["–", "–"]])
+
+    def sample(self, name: str, table: list[list[str]],
+               data: dict | None = None) -> sup.Sample:
+        language = "de" if ".de." in name else "en"
+        return sup.Sample(Path(name), data or {}, None, "",
+                          [sup.TERMS[language]["header"], *table])
+
+    def test_the_checker_rejects_what_the_spec_forbids(self) -> None:
+        """Scenario: Every row is a registry substance (checker)."""
+        registry = {"water": {"cas": "7732-18-5"},
+                    "ethanol": {"cas": "64-17-5"},
+                    "ethanol-twin": {"cas": "64-17-5"},
+                    "ether": {"cas": "60-29-7"}}
+        english = ["Ether", "60-29-7", "74.12", "10 mL", "–", "–"]
+        other = ["Water", "7732-18-5", "18.02", "1 mL", "–", "–"]
+        german = ["Ether", "60-29-7", "74,12", "10 mL", "–", "–"]
+        good = [self.sample("OSDB-0990-x.md", [english, other]),
+                self.sample("OSDB-0990-x.de.md", [german, other])]
+        self.assertEqual(sup.reagent_violations(good, registry), [])
+        broken = {
+            "a CAS no substance has": [
+                self.sample("OSDB-0990-x.md",
+                            [english[:1] + ["67-64-1"] + english[2:]])],
+            "a CAS two substances have": [
+                self.sample("OSDB-0990-x.md",
+                            [["Ethanol", "64-17-5", "46.07", "1 mL", "–",
+                              "–"]])],
+            "German rows in another order": [
+                good[0], self.sample("OSDB-0990-x.de.md", [other, german])],
+            "a German row less": [
+                good[0], self.sample("OSDB-0990-x.de.md", [german])],
+            "a German table without its original": [good[1]],
+        }
+        for name, found in broken.items():
+            with self.subTest(case=name):
+                self.assertNotEqual(
+                    sup.reagent_violations(found, registry), [])
+
+    def test_a_substrate_must_be_a_row(self) -> None:
+        """Requirement: Reagents in the registry (the substrates of a
+        procedure are rows of its Reagents table)."""
+        registry = {"ether": {"cas": "60-29-7"},
+                    "water": {"cas": "7732-18-5"}}
+        row = ["Water", "7732-18-5", "18.02", "1 mL", "–", "–"]
+        found = [self.sample("OSDB-0990-x.md", [row],
+                             {"substrates": ["ether"]})]
+        self.assertNotEqual(sup.reagent_violations(found, registry), [])
+        found = [self.sample("OSDB-0990-x.md", [row],
+                             {"substrates": ["water"]})]
+        self.assertEqual(sup.reagent_violations(found, registry), [])
 
 
 class CompoundWeightTests(unittest.TestCase):
@@ -198,7 +276,8 @@ class QuantityRuleCheckerTests(unittest.TestCase):
                  ["Natriumhydroxid", "1310-73-2", "40,00", "6,00 g", "150",
                   "3,0"],
                  ["Phosphorsäure, 85 %", "7664-38-2", "97,99", "5 Tropfen",
-                  "kat.", "kat."]]
+                  "kat.", "kat."],
+                 ["Ethanol", "64-17-5", "46,07", "20 mL", "–", "–"]]
         return base._replace(path=base.path.with_suffix(".de.org"),
                              table=table)
 
@@ -214,6 +293,37 @@ class QuantityRuleCheckerTests(unittest.TestCase):
         self.assertNotEqual(sup.quantity_violations(
             german._replace(table=self.good().table)), [],
             "a German sample must use the German columns")
+
+    def test_a_solvent_row_is_exempt_but_for_its_cas_number(self) -> None:
+        """Scenario: Translated sample tables are consistent (checker,
+        solvent row): a row of `–` in `mmol` and `Equiv` is exempt from
+        every rule but the check digit."""
+        german = self.german()
+        self.assertEqual(german.table[-1][4:], ["–", "–"])
+
+        def with_solvent(row: list[str]) -> sup.Sample:
+            return german._replace(table=[*german.table[:-1], row])
+
+        for row in (["Ethanol", "64-17-5", "46,07", "20 g", "–", "–"],
+                    ["Ethanol", "64-17-5", "99,99", "20 mL", "–", "–"],
+                    ["Magnesiumsulfat", "7487-88-9", "120,37", "ca. 2 g",
+                     "–", "–"]):
+            with self.subTest(row=row):
+                self.assertEqual(
+                    sup.quantity_violations(with_solvent(row)), [])
+        self.assertNotEqual(sup.quantity_violations(
+            with_solvent(["Ethanol", "64-17-6", "46,07", "20 mL", "–",
+                          "–"])), [], "the check digit of a solvent row")
+
+    def test_a_row_with_one_dash_is_no_solvent_row(self) -> None:
+        """Scenario: Translated sample tables are consistent (checker,
+        solvent row): only a row with `–` in both columns is exempt."""
+        german = self.german()
+        for mmol, equiv in (("–", "2,0"), ("100", "–")):
+            row = ["Ethanol", "64-17-5", "46,07", "20 mL", mmol, equiv]
+            with self.subTest(mmol=mmol, equiv=equiv):
+                self.assertNotEqual(sup.quantity_violations(
+                    german._replace(table=[*german.table[:-1], row])), [])
 
 
 EXPECTED_SAMPLES = {
@@ -238,9 +348,13 @@ EXPECTED_SAMPLES = {
         "OSDB-0008", "hydrolysis", "cinnamic-acid", ["ethyl-cinnamate"],
         "C9H8O2", "140-10-3"),
 }
-CHAINS = {("OSDB-0001", "OSDB-0002"), ("OSDB-0004", "OSDB-0005"),
-          ("OSDB-0004", "OSDB-0009"), ("OSDB-0007", "OSDB-0008")}
-GENERAL_SAMPLE = "md/procedures/OSDB-0009-benzylic-alcohols.md"
+# The chains the requirement names: the sample that makes the compound and
+# the sample that starts from it, by the compound.
+CHAINS = {("OSDB-0001", "OSDB-0002"): "salicylic-acid",
+          ("OSDB-0004", "OSDB-0005"): "4-acetylbiphenyl",
+          ("OSDB-0004", "OSDB-0009"): "4-acetylbiphenyl",
+          ("OSDB-0007", "OSDB-0008"): "ethyl-cinnamate"}
+ORG_SAMPLES = {"OSDB-0001", "OSDB-0003", "OSDB-0004", "OSDB-0007"}
 GENERAL_SCOPE = [
     {"substrates": ["4-acetylbiphenyl"], "time": "30 min",
      "products": [{"compound": "1-biphenyl-4-yl-ethanol",
@@ -267,7 +381,7 @@ STRUCTURE_SAMPLE = (DEMO / "org" / "procedures"
 
 
 class ThemeSampleSetTests(unittest.TestCase):
-    def test_set_counts_and_chains(self) -> None:
+    def test_set_formats_and_chains(self) -> None:
         """Scenario: Set, counts and chain."""
         registry = sup.read_registry(DEMO)
         for relative, (ident, reaction, product, substrates, formula,
@@ -287,33 +401,21 @@ class ThemeSampleSetTests(unittest.TestCase):
                 self.assertEqual(registry[product].get("formula"), formula)
                 self.assertEqual(registry[product].get("cas"), cas)
         found = [s for s in samples() if s.language == "en"]
-        self.assertEqual(
-            sum(s.path.suffix == ".org" for s in found), 4,
-            "number of Org samples")
-        self.assertEqual(
-            sum(s.path.suffix == ".md" for s in found), 5,
-            "number of Markdown samples")
+        by_id = {s.data["id"]: s for s in found}
+        org = {i for i, s in by_id.items() if s.path.suffix == ".org"}
+        markdown = {i for i, s in by_id.items() if s.path.suffix == ".md"}
+        self.assertLessEqual(ORG_SAMPLES, org, "the Org samples named")
+        self.assertIn("OSDB-0009", markdown, "the general procedure")
+        self.assertTrue(markdown - {"OSDB-0009"}, "no Markdown sample")
         self.assertGreaterEqual(
             len({r for s in found for r in s.data.get("reaction_types", [])}),
             5)
-        makers = {key: s for s in found
-                  for key in sup.product_keys(s.data)}
-        chains = set()
-        for sample in found:
-            for key in sup.substrate_keys(sample.data):
-                if key in makers:
-                    maker = makers[key]
-                    chains.add((maker.data["id"], sample.data["id"]))
-                    with self.subTest(chain=f"{key} -> {sample.path.name}"):
-                        self.assertEqual(maker.path.suffix, ".org")
-                        self.assertEqual(sample.path.suffix, ".md")
-        self.assertEqual(chains, CHAINS)
-        used = {c for o in found for c in sup.substrate_keys(o.data)}
-        made_and_used = [
-            s.data["id"] for s in found
-            if any(k in makers for k in sup.substrate_keys(s.data))
-            and any(k in used for k in sup.product_keys(s.data))]
-        self.assertEqual(made_and_used, [], "a procedure needing both links")
+        for (maker, user), key in CHAINS.items():
+            with self.subTest(chain=f"{maker} -> {user}"):
+                self.assertEqual(by_id[maker].path.suffix, ".org")
+                self.assertEqual(by_id[user].path.suffix, ".md")
+                self.assertIn(key, sup.product_keys(by_id[maker].data))
+                self.assertIn(key, sup.substrate_keys(by_id[user].data))
         for sample in found:
             with self.subTest(sample=sample.path.name):
                 self.assertTrue(
@@ -321,6 +423,7 @@ class ThemeSampleSetTests(unittest.TestCase):
                     "no tag besides sample-data")
         for key in sorted(sup.named_compounds_of(DEMO)):
             with self.subTest(compound=key):
+                self.assertIn(key, registry)
                 self.assertTrue(sup.cas_ok(registry[key].get("cas", "")))
 
 
@@ -388,9 +491,12 @@ class LongSampleTests(unittest.TestCase):
 
 class GermanSampleTests(unittest.TestCase):
     def test_every_sample_has_a_german_translation(self) -> None:
-        """Scenario: Every sample has a German translation."""
-        for relative in [*EXPECTED_SAMPLES, GENERAL_SAMPLE]:
-            original = DEMO / relative
+        """Scenario: Every sample has a German translation (every sample
+        file without a language code has a twin)."""
+        originals = [p for p in sample_files()
+                     if sup.language_of(p) == "en"]
+        self.assertTrue(originals)
+        for original in originals:
             translation = original.with_suffix(".de" + original.suffix)
             with self.subTest(file=translation.name):
                 self.assertTrue(translation.is_file(),
@@ -496,7 +602,7 @@ class DemoGeneralProcedureTests(unittest.TestCase):
         general = modified(self.read(""))
         others = [modified(s) for s in samples()
                   if s.language == "en" and s.data["id"] != "OSDB-0009"]
-        self.assertEqual(len(others), 8)
+        self.assertTrue(others)
         self.assertLessEqual(general, min(others))
 
 
@@ -623,6 +729,12 @@ def sample_files() -> list[Path]:
          *(DEMO / "md" / "procedures").glob("OSDB-*.md")])
 
 
+def converted_name(path: Path) -> str:
+    """The name of the test collection's file for the demo sample file
+    ``path``: ``<stem>.md`` for an Org sample, else the same name."""
+    return path.stem + ".md" if path.suffix == ".org" else path.name
+
+
 def relative_files(root: Path) -> set[str]:
     return {p.relative_to(root).as_posix()
             for p in root.rglob("*") if p.is_file()}
@@ -649,20 +761,40 @@ DEMO_SEQUENCES = {
 }
 
 
-def read_sequence(path: Path) -> tuple[dict, str]:
-    """Front matter and body of a sequence file."""
-    text = path.read_text(encoding="utf-8")
-    _, front, body = text.split("+++\n", 2)
-    return tomllib.loads(front), body
+read_sequence = sup.read_sequence
 
 
 class DemoSequenceTests(unittest.TestCase):
-    def test_the_demo_holds_two_sequences_and_their_variants(self) -> None:
-        """Scenario: The demo's sequences."""
-        self.assertEqual(
-            sorted(p.name for p in SEQUENCES.glob("*")),
-            sorted(f"{stem}{suffix}" for stem in DEMO_SEQUENCES
-                   for suffix in (".md", ".de.md")))
+    def test_the_named_sequences_and_their_variants_exist(self) -> None:
+        """Scenario: The demo's sequences (the two named sequences, each
+        in English and German, among others)."""
+        names = {p.name for p in SEQUENCES.glob("*")}
+        self.assertLessEqual(
+            {f"{stem}{suffix}" for stem in DEMO_SEQUENCES
+             for suffix in (".md", ".de.md")}, names)
+
+    def test_the_demo_holds_sequences_of_three_and_four_steps(self) -> None:
+        """Scenario: The demo's sequences (a sequence of three steps and
+        one of four)."""
+        lengths = {len(read_sequence(path)[0]["steps"])
+                   for path in sup.sequence_files(DEMO)}
+        self.assertLessEqual({3, 4}, lengths)
+
+    def test_every_sequence_is_chained_with_a_german_variant(self) -> None:
+        """Scenario: The demo's sequences (every sequence with a `.de`
+        variant sharing its steps and target, its steps chained)."""
+        self.assertTrue(sup.sequence_files(DEMO))
+        self.assertEqual(sup.sequence_violations(DEMO), [])
+
+    def test_every_file_is_a_sequence_or_its_german_variant(self) -> None:
+        """Scenario: The demo's sequences (every sequence has a `.de`
+        variant, and no variant lacks its sequence)."""
+        english = {p.name for p in sup.sequence_files(DEMO)}
+        german = {p.name for p in sup.sequence_files(DEMO, "de")}
+        self.assertEqual({n.replace(".de.md", ".md") for n in german},
+                         english)
+        self.assertEqual(english | german,
+                         {p.name for p in SEQUENCES.glob("*")})
 
     def test_each_sequence_has_the_stated_title_target_and_steps(
             self) -> None:
@@ -680,7 +812,8 @@ class DemoSequenceTests(unittest.TestCase):
                     self.assertIn(wanted["notes"], " ".join(body.split()))
 
     def test_the_german_variants_share_target_and_steps(self) -> None:
-        """Scenario: The demo's sequences (the German variants)."""
+        """Scenario: The demo's sequences (the German variants of the
+        two named sequences)."""
         for stem, wanted in DEMO_SEQUENCES.items():
             path = SEQUENCES / f"{stem}.de.md"
             with self.subTest(sequence=stem):
@@ -695,10 +828,37 @@ class DemoSequenceTests(unittest.TestCase):
                 self.assertNotEqual(body, english_body)
                 self.assertNotIn("## Notes", body)
 
+    def test_every_target_has_an_article_number(self) -> None:
+        """Requirement: Demo sequences (each sequence's target is a
+        substance with an article number)."""
+        registry = sup.read_registry(DEMO)
+        for path in sup.sequence_files(DEMO):
+            with self.subTest(sequence=path.name):
+                target = read_sequence(path)[0]["target"]
+                self.assertIn("article_number", registry[target])
+
+    def test_the_substances_carried_between_steps_are_intermediates(
+            self) -> None:
+        """Requirement: Demo sequences (a substance that one step makes
+        and the next starts from has the group `intermediates`)."""
+        registry = sup.read_registry(DEMO)
+        by_id = {s.data["id"]: s for s in samples() if s.language == "en"}
+        carried = 0
+        for path in sup.sequence_files(DEMO):
+            runs = [sup.step_run(by_id, step)
+                    for step in read_sequence(path)[0]["steps"]]
+            for before, after in zip(runs, runs[1:]):
+                for key in set(before[1]) & set(after[0]):
+                    carried += 1
+                    with self.subTest(sequence=path.name, compound=key):
+                        self.assertEqual(registry[key]["group"],
+                                         "intermediates")
+        self.assertGreater(carried, 0)
+
     def test_dates_are_berlin_offset_datetimes(self) -> None:
         """Requirement: Demo sequences (dates like the samples')."""
         files = sorted(SEQUENCES.glob("*.md"))
-        self.assertEqual(len(files), 4)
+        self.assertTrue(files)
         for path in files:
             data, _ = read_sequence(path)
             with self.subTest(file=path.name):
@@ -711,12 +871,15 @@ class DemoSequenceTests(unittest.TestCase):
 
     def test_the_steps_name_samples_of_the_demo(self) -> None:
         """Requirement: Demo sequences (they validate with the demo's
-        procedures)."""
+        procedures): a step names a sample, a general procedure's by the
+        product of exactly one entry."""
         samples = {s.data["id"]: s for s in sup.sample_procedures(DEMO)}
-        for stem in DEMO_SEQUENCES:
-            data, _ = read_sequence(SEQUENCES / f"{stem}.md")
+        files = sup.sequence_files(DEMO)
+        self.assertTrue(files)
+        for path in files:
+            data, _ = read_sequence(path)
             for step in data["steps"]:
-                with self.subTest(sequence=stem, step=step):
+                with self.subTest(sequence=path.name, step=step):
                     sample = samples[step["procedure"]]
                     entries = sample.data.get("scope")
                     self.assertNotIn("entry", step)
@@ -754,14 +917,21 @@ class DemoFieldTests(unittest.TestCase):
             self.assertFalse((DEMO / name).exists(), name)
 
     def test_the_chemical_classes_of_the_demo(self) -> None:
-        """Requirement: Demo collection (the vocabularies)."""
-        self.assertEqual(
-            sorted(sup.read_vocabulary(DEMO, "chemical-classes")),
-            sorted(["carbonyl-compounds", "aldehydes", "ketones",
-                    "aryl-ketones", "carboxylic-acids", "acid-derivatives",
-                    "esters", "anhydrides", "alcohols", "phenols",
-                    "aryl-halides", "organoboron-compounds",
-                    "organophosphorus-compounds"]))
+        """Requirement: Demo collection (the vocabularies: every term has
+        a German label, every class a substance has is a term, and some
+        class has two ancestors)."""
+        classes = sup.read_vocabulary(DEMO, "chemical-classes")
+        self.assertTrue(classes)
+        for key, term in classes.items():
+            with self.subTest(term=key):
+                self.assertTrue(term.get("label_de", "").strip())
+                self.assertIn(term.get("parent", key), classes)
+        for key, compound in sup.read_registry(DEMO).items():
+            with self.subTest(compound=key):
+                self.assertLessEqual(set(compound["chemical_classes"]),
+                                     set(classes))
+        self.assertTrue(any(sup.vocabulary_depth(classes, key) == 2
+                            for key in classes))
 
     def test_the_reaction_types_of_the_demo(self) -> None:
         """Requirement: Demo collection (every term has a German label;
@@ -841,7 +1011,7 @@ class DemoFieldTests(unittest.TestCase):
         """Scenario: The demo declares its fields (the procedures'
         values)."""
         values = sup.procedure_values(DEMO)
-        self.assertEqual(len(values), 9)
+        self.assertLessEqual(set(DEMO_CREDITS), set(values))
         for number, variants in values.items():
             with self.subTest(procedure=number):
                 self.assertEqual(len(variants), 2)
@@ -862,9 +1032,13 @@ class DemoFieldTests(unittest.TestCase):
         numbers = {key: compound["article_number"]
                    for key, compound in registry.items()
                    if "article_number" in compound}
-        self.assertEqual(numbers, sup.DEMO_NUMBERS)
-        self.assertEqual(
-            {registry[key]["group"] for key in numbers}, {"final-products"})
+        for key, number in sup.DEMO_NUMBERS.items():
+            self.assertEqual(numbers.get(key), number, key)
+        for key, number in numbers.items():
+            with self.subTest(compound=key):
+                if key != "new-compound-7":
+                    self.assertRegex(number, r"^CH-\d{4}$")
+                self.assertEqual(registry[key]["group"], "final-products")
         self.assertEqual(registry["acetic-acid"]["short_name"], "AcOH")
         self.assertEqual(registry["methyl-salicylate"]["chemical_classes"],
                          ["esters", "phenols"])
@@ -881,31 +1055,29 @@ class DemoFieldTests(unittest.TestCase):
                 self.assertTrue(compound.get("name_de", "").strip())
 
     def test_the_demo_groups_of_the_compounds(self) -> None:
-        """Scenario: The demo's registry and fields (the group values)."""
+        """Scenario: The demo's registry and fields (the group values):
+        a substance that one sample makes and another starts from has the
+        group `intermediates` unless it has an article number."""
         registry = sup.read_registry(DEMO)
-        wanted = {
-            "reagents": ["acetic-acid", "acetic-anhydride",
-                         "ethyl-triphenylphosphoranylidene-acetate",
-                         "phenylboronic-acid"],
-            "starting-materials": ["acetone", "acetophenone",
-                                   "benzaldehyde", "4-bromoacetophenone",
-                                   "isopentyl-alcohol",
-                                   "methyl-salicylate"],
-            "intermediates": ["salicylic-acid", "4-acetylbiphenyl",
-                              "ethyl-cinnamate"],
-            "final-products": ["acetylsalicylic-acid", "isopentyl-acetate",
-                               "1-biphenyl-4-yl-ethanol",
-                               "dibenzylideneacetone", "cinnamic-acid",
-                               "1-phenylethanol",
-                               "1-4-bromophenyl-ethanol",
-                               "new-compound-7"]}
+        for key, compound in registry.items():
+            with self.subTest(compound=key):
+                self.assertIn(compound.get("group"), sup.GROUP_VALUES)
+        self.assertEqual(sup.chain_group_violations(DEMO, registry), [])
+        for key in ("salicylic-acid", "4-acetylbiphenyl", "ethyl-cinnamate"):
+            with self.subTest(chain=key):
+                self.assertEqual(registry[key]["group"], "intermediates")
         self.assertEqual(
-            {group: sorted(key for key, c in registry.items()
-                           if c.get("group") == group)
-             for group in wanted},
-            {group: sorted(keys) for group, keys in wanted.items()})
-        self.assertEqual(len(registry), 21)
-        self.assertEqual(sup.purchased_and_synthesised(DEMO), (10, 10))
+            {registry[key]["group"] for key in registry
+             if "article_number" in registry[key]}, {"final-products"})
+
+    def test_the_registry_covers_the_samples(self) -> None:
+        """Scenario: Samples live in the demo collection (every key the
+        samples name is a substance; every substance is named by a
+        sample, carries the CAS number of a Reagents row, is
+        `new-compound-7` or has the group `reagents` or
+        `starting-materials`; some substance of those groups is named by
+        no sample)."""
+        self.assertEqual(sup.coverage_violations(DEMO), [])
 
 
 class ProcedureFieldCheckerTests(unittest.TestCase):
@@ -1043,6 +1215,158 @@ class ProcedureFieldCheckerTests(unittest.TestCase):
         self.assertNotEqual(sup.field_violations(root), [])
 
 
+class RegistryRuleCheckerTests(unittest.TestCase):
+    """The rules for the registry's substances and the sequences must be
+    enforced, or the demo tests would hold nothing."""
+
+    def collection(self) -> Path:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name) / "collection"
+        shutil.copytree(COLLECTION, root)
+        return root
+
+    def edit_registry(self, root: Path, change) -> None:
+        path = root / "registry.json"
+        table = json.loads(path.read_text(encoding="utf-8"))
+        change({entry["key"]: entry for entry in table["substances"]},
+               table)
+        path.write_text(json.dumps(table), encoding="utf-8")
+
+    def edit_sequence(self, root: Path, old: str, new: str,
+                      suffixes: tuple[str, ...] = (".md", ".de.md")) -> None:
+        for suffix in suffixes:
+            path = (root / "md" / "sequences"
+                    / f"SEQ-0001-aspirin-from-wintergreen{suffix}")
+            text = path.read_text(encoding="utf-8")
+            self.assertEqual(text.count(old), 1, old)
+            path.write_text(text.replace(old, new), encoding="utf-8")
+
+    def test_the_test_collection_meets_the_rules(self) -> None:
+        """Scenario: The demo's sequences (as mirrored in the test
+        collection)."""
+        root = self.collection()
+        self.assertEqual(sup.sequence_violations(root), [])
+        self.assertEqual(sup.coverage_violations(root), [])
+
+    def test_each_sequence_rule_is_enforced(self) -> None:
+        """Scenario: The demo's sequences (checker, rejected)."""
+        steps = ('steps = [{ procedure = "OSDB-0001" }, '
+                 '{ procedure = "OSDB-0002" }]')
+        self.assertIn(steps, (COLLECTION / "md" / "sequences" /
+                              "SEQ-0001-aspirin-from-wintergreen.md"
+                              ).read_text(encoding="utf-8"))
+        cases = {
+            "a step that starts from nothing the step before made": (
+                steps, 'steps = [{ procedure = "OSDB-0002" }, '
+                '{ procedure = "OSDB-0001" }]', (".md", ".de.md")),
+            "a target that the last step does not make": (
+                'target = "acetylsalicylic-acid"',
+                'target = "salicylic-acid"', (".md", ".de.md")),
+            "a German variant with other steps": (
+                steps, 'steps = [{ procedure = "OSDB-0001" }]',
+                (".de.md",)),
+            "a German variant with another target": (
+                'target = "acetylsalicylic-acid"',
+                'target = "isopentyl-acetate"', (".de.md",)),
+            "a step that names no sample": (
+                steps, 'steps = [{ procedure = "OSDB-0001" }, '
+                '{ procedure = "OSDB-0777" }]', (".md", ".de.md")),
+        }
+        for name, (old, new, suffixes) in cases.items():
+            with self.subTest(case=name):
+                root = self.collection()
+                self.edit_sequence(root, old, new, suffixes)
+                self.assertNotEqual(sup.sequence_violations(root), [])
+
+    def test_a_sequence_without_a_german_variant_is_rejected(self) -> None:
+        """Scenario: The demo's sequences (checker, no variant)."""
+        root = self.collection()
+        (root / "md" / "sequences"
+         / "SEQ-0001-aspirin-from-wintergreen.de.md").unlink()
+        self.assertTrue(any("German variant" in line for line in
+                            sup.sequence_violations(root)))
+
+    def test_a_target_without_an_article_number_is_rejected(self) -> None:
+        """Requirement: Demo sequences (each sequence's target is a
+        substance with an article number)."""
+        root = self.collection()
+        self.edit_registry(root, lambda by_key, table: by_key[
+            "acetylsalicylic-acid"].update(article_number=None))
+        self.assertTrue(any("article number" in line for line in
+                            sup.sequence_violations(root)))
+
+    def test_a_carried_substance_that_is_no_intermediate_is_rejected(
+            self) -> None:
+        """Requirement: Demo sequences (a substance that one step makes
+        and the next starts from has the group `intermediates`); Demo
+        collection (the same unless it has an article number)."""
+        root = self.collection()
+        self.edit_registry(root, lambda by_key, table: by_key[
+            "salicylic-acid"].update(group="reagents"))
+        self.assertTrue(any("salicylic-acid" in line for line in
+                            sup.sequence_violations(root)))
+        self.assertTrue(any("salicylic-acid" in line for line in
+                            sup.field_violations(root)))
+
+    def test_an_article_number_rule_is_enforced(self) -> None:
+        """Scenario: The demo's registry and fields (checker, article
+        numbers): each of the form `CH-<nnnn>` but that of
+        `new-compound-7`, and had by final products only."""
+        cases = {
+            "a form that is none": lambda by_key, table: by_key[
+                "cinnamic-acid"].update(article_number="CH-12"),
+            "the named number gone": lambda by_key, table: by_key[
+                "cinnamic-acid"].update(article_number=None),
+            "an article number on a starting material": lambda by_key,
+            table: by_key["acetone"].update(article_number="CH-0099"),
+        }
+        for name, change in cases.items():
+            with self.subTest(case=name):
+                root = self.collection()
+                self.edit_registry(root, change)
+                self.assertNotEqual(sup.field_violations(root), [])
+
+    def test_an_orphan_substance_is_rejected(self) -> None:
+        """Scenario: Samples live in the demo collection (checker): a
+        substance that no sample names or lists and that is no
+        commercial chemical, and a key that a sample names but the
+        registry lacks."""
+        root = self.collection()
+
+        def add(by_key: dict, table: dict) -> None:
+            table["substances"].append(
+                {**by_key["acetone"], "key": "orphan",
+                 "cas": "50-00-0", "group": "intermediates"})
+
+        self.edit_registry(root, add)
+        self.assertTrue(any("orphan" in line for line in
+                            sup.coverage_violations(root)))
+        root = self.collection()
+
+        def remove(by_key: dict, table: dict) -> None:
+            table["substances"].remove(by_key["benzaldehyde"])
+
+        self.edit_registry(root, remove)
+        self.assertTrue(any("benzaldehyde" in line for line in
+                            sup.coverage_violations(root)))
+
+    def test_a_registry_of_named_substances_only_is_rejected(self) -> None:
+        """Scenario: Samples live in the demo collection (checker): some
+        commercial chemical is named by no sample."""
+        root = self.collection()
+        named = sup.named_compounds_of(root)
+
+        def keep_named(by_key: dict, table: dict) -> None:
+            table["substances"] = [
+                e for e in table["substances"]
+                if e["key"] in named or e["key"] == "new-compound-7"]
+
+        self.edit_registry(root, keep_named)
+        self.assertTrue(any("commercial" in line for line in
+                            sup.coverage_violations(root)))
+
+
 class TestCollectionTests(unittest.TestCase):
     def test_the_collection_mirrors_the_demo(self) -> None:
         """Scenario: The test collection mirrors the demo."""
@@ -1096,7 +1420,7 @@ class TestCollectionTests(unittest.TestCase):
         for name in ("compounds", "vocabularies"):
             self.assertFalse((COLLECTION / name).exists(), name)
         sequences = relative_files(DEMO / "md" / "sequences")
-        self.assertEqual(len(sequences), 4, "the demo's sequences")
+        self.assertTrue(sequences, "the demo's sequences")
         for relative in sorted(sequences):
             with self.subTest(file=relative):
                 self.assertTrue(
@@ -1109,14 +1433,13 @@ class TestCollectionTests(unittest.TestCase):
         self.assertEqual(
             relative_files(COLLECTION / "md" / "sequences"), sequences,
             "md/sequences/ files")
-        names = {p.stem + ".md" if p.suffix == ".org" else p.name
-                 for p in sample_files()}
-        self.assertEqual(len(names), 18)
+        names = [converted_name(p) for p in sample_files()]
+        self.assertTrue(names, "the demo's samples")
+        self.assertEqual(len(set(names)), len(names),
+                         "two sample files of one converted name")
         self.assertEqual(
-            relative_files(COLLECTION / "md" / "procedures"), names)
-        markdown = [p for p in sample_files() if p.suffix == ".md"]
-        self.assertEqual(len(markdown), 10)
-        for path in markdown:
+            relative_files(COLLECTION / "md" / "procedures"), set(names))
+        for path in [p for p in sample_files() if p.suffix == ".md"]:
             with self.subTest(file=path.name):
                 self.assertEqual(
                     (COLLECTION / "md" / "procedures"
@@ -1131,9 +1454,12 @@ class TestCollectionTests(unittest.TestCase):
         for path in sorted((COLLECTION / "md" / "procedures").glob("*.md")):
             data = sup.read_markdown(path).data
             with self.subTest(file=path.name):
-                self.assertEqual(data["authors"],
-                                 DEMO_CREDITS[data["id"]])
+                if data["id"] in DEMO_CREDITS:
+                    self.assertEqual(data["authors"],
+                                     DEMO_CREDITS[data["id"]])
+                self.assertTrue(data["authors"])
                 for author in data["authors"]:
+                    self.assertIn(author, DEMO_ACCOUNTS)
                     self.assertIn(author, accounts)
                     self.assertRegex(author, USER_NAME)
 
@@ -1141,7 +1467,7 @@ class TestCollectionTests(unittest.TestCase):
         """Scenario: Converted samples agree with their Org sources."""
         self.assertTrue(COLLECTION.is_dir(), f"{COLLECTION} is missing")
         orgs = sorted((DEMO / "org" / "procedures").glob("OSDB-*.org"))
-        self.assertEqual(len(orgs), 8)
+        self.assertTrue(orgs, "no Org sample")
         for org in orgs:
             converted = COLLECTION / "md" / "procedures" / (
                 org.stem + ".md")

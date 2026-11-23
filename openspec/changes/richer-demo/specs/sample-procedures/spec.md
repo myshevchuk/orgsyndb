@@ -5,7 +5,7 @@ Every sample procedure's Reagents table SHALL have the columns `Reagent | CAS | 
 - **Mass and moles.** Where `Amount` begins with a mass `<number> g`, `mmol` equals `1000 × mass / MW` within 1 %.
 - **Limiting reagent.** Exactly one row has `Equiv` `1.0`. Every other row's `Equiv` equals its `mmol` divided by that row's `mmol`, within 0.05.
 - **Scale.** When `scale` is given in `mmol`, its number equals the limiting row's `mmol` within 1 %.
-- **Compound weights.** The `mw` of every substance of the demo registry that has a `formula` and an `mw` equals the formula weight of its `formula`, computed from standard atomic weights (B 10.81, C 12.011, H 1.008, N 14.007, O 15.999, Na 22.990, P 30.974, S 32.06, Cl 35.45, K 39.098, Br 79.904), within 0.02 g/mol.
+- **Compound weights.** The `mw` of every substance of the demo registry that has a `formula` and an `mw` equals the formula weight of its `formula`, computed from standard atomic weights (Li 6.94, B 10.81, C 12.011, H 1.008, N 14.007, O 15.999, Na 22.990, Mg 24.305, P 30.974, S 32.06, Cl 35.45, K 39.098, Fe 55.845, Cu 63.546, Br 79.904, Pd 106.42, I 126.904), within 0.02 g/mol.
 - **CAS numbers.** Every CAS number in the table passes the CAS check-digit rule.
 
 #### Scenario: Seed tables are consistent
@@ -130,7 +130,7 @@ All validate cleanly with the demo's procedures and registry, and their German v
 ## ADDED Requirements
 
 ### Requirement: Reagents in the registry
-Every chemical that a sample procedure's text uses, water and ice excepted, SHALL be a row of its Reagents table: the substrates, reagents and catalysts, the solvents of the reaction and of the workup, and the acids, bases, salts and drying agents of the workup. A solution is listed as its solute, such as hydrochloric acid as hydrogen chloride, with the concentration in `Amount`. The CAS number of every row is the `cas` of exactly one substance of the demo registry, and a German table has the same rows with the same CAS numbers as its original.
+Every chemical that a sample procedure's text uses, water, ice and the inert gas of a protective atmosphere excepted, SHALL be a row of its Reagents table: the substrates, reagents and catalysts, the solvents of the reaction and of the workup, and the acids, bases, salts and drying agents of the workup. A solution is listed as its solute, such as hydrochloric acid as hydrogen chloride, with the concentration in `Amount`. The CAS number of every row is the `cas` of exactly one substance of the demo registry, and a German table has the same rows with the same CAS numbers as its original.
 
 #### Scenario: Every row is a registry substance
 - **WHEN** a test parses the Reagents table of every sample procedure, in either language, and reads the demo registry
@@ -138,4 +138,4 @@ Every chemical that a sample procedure's text uses, water and ice excepted, SHAL
 
 #### Scenario: Review of the tables
 - **WHEN** the orchestrator reviews each sample procedure before archiving this change
-- **THEN** every chemical its text uses, water and ice excepted, is a row of its Reagents table
+- **THEN** every chemical its text uses, water, ice and inert gas excepted, is a row of its Reagents table

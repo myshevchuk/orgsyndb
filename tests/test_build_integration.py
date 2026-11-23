@@ -729,9 +729,9 @@ class ShippedTreeValidationTests(DemoBuildTestCase):
             list(self.sandbox.root.glob("org/procedures/OSDB-*.org"))
             or list(self.sandbox.root.glob("md/procedures/OSDB-*.md")),
             "no shipped procedures to validate")
-        self.assertEqual(
-            len(list(self.sandbox.root.glob("md/sequences/SEQ-*.md"))), 4,
-            "the demo's sequences")
+        self.assertTrue(
+            list(self.sandbox.root.glob("md/sequences/SEQ-*.md")),
+            "no shipped sequences to validate")
         self.assertRegex(result.stderr, r"validated \d+ files: 0 errors, "
                          r"0 warnings")
 

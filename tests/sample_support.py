@@ -23,9 +23,12 @@ TERMS = {
            "procedure": "Durchführung", "notes": "Anmerkungen",
            "catalyst": "kat.", "unverified": "nicht experimentell überprüft"},
 }
-WEIGHTS = {"B": 10.81, "C": 12.011, "H": 1.008, "N": 14.007, "O": 15.999,
-           "Na": 22.990, "P": 30.974, "S": 32.06, "Cl": 35.45, "K": 39.098,
-           "Br": 79.904}
+# A solvent or an auxiliary row writes this in `mmol` and `Equiv`.
+DASH = "–"
+WEIGHTS = {"Li": 6.94, "B": 10.81, "C": 12.011, "H": 1.008, "N": 14.007,
+           "O": 15.999, "Na": 22.990, "Mg": 24.305, "P": 30.974,
+           "S": 32.06, "Cl": 35.45, "K": 39.098, "Fe": 55.845,
+           "Cu": 63.546, "Br": 79.904, "Pd": 106.42, "I": 126.904}
 
 
 class Sample(NamedTuple):
@@ -285,6 +288,10 @@ def formula_weight(formula: str) -> float:
     parts = re.findall(r"([A-Z][a-z]?)(\d*)", formula)
     if "".join(e + n for e, n in parts) != formula:
         raise ValueError(f"cannot read formula {formula!r}")
+    unknown = sorted({e for e, _ in parts} - WEIGHTS.keys())
+    if unknown:
+        raise ValueError(f"no standard atomic weight for {unknown} in "
+                         f"{formula!r}")
     return sum(WEIGHTS[e] * int(n or 1) for e, n in parts)
 
 
@@ -310,7 +317,11 @@ def compound_violations(key: str, compound: dict[str, Any]) -> list[str]:
 
 
 def quantity_violations(sample: Sample) -> list[str]:
-    """Return the quantity rules the sample's Reagents table breaks."""
+    """Return the quantity rules the sample's Reagents table breaks.
+
+    A row whose ``mmol`` or ``Equiv`` is the catalyst marker, or whose
+    ``mmol`` and ``Equiv`` are both ``–`` (a solvent or an auxiliary),
+    is exempt from every rule but the CAS check digit."""
     problems = []
     header = sample.terms["header"]
     if not sample.table or sample.table[0] != header:
@@ -325,7 +336,18 @@ def quantity_violations(sample: Sample) -> list[str]:
     for name, cas, _mw, _amount, _mmol, _equiv in rows:
         if not cas_ok(cas):
             problems.append(f"{name}: CAS {cas} fails the check digit")
-    full = [r for r in rows if sample.terms["catalyst"] not in (r[4], r[5])]
+    full = []
+    for row in rows:
+        quantities = row[4:]
+        if sample.terms["catalyst"] in quantities:
+            continue
+        if quantities == [DASH, DASH]:
+            continue
+        if DASH in quantities:
+            problems.append(f"{row[0]}: only one of mmol and Equiv is "
+                            f"{DASH}")
+            continue
+        full.append(row)
     for name, _cas, mw, amount, mmol, _equiv in full:
         mass = re.match(r"^(\d+(?:[.,]\d+)?) g(?:\s|$)", amount)
         if mass:
@@ -345,6 +367,90 @@ def quantity_violations(sample: Sample) -> list[str]:
         sample.data.get("scale", "")))
     if scale and abs(number(scale.group(1)) - base) > 0.01 * base:
         problems.append(f"scale {scale.group(1)} mmol vs limiting {base:g}")
+    return problems
+
+
+# --- sequences ---------------------------------------------------------------
+
+def read_sequence(path: Path) -> tuple[dict[str, Any], str]:
+    """The front matter and the body of a sequence file."""
+    _, front, body = path.read_text(encoding="utf-8").split("+++\n", 2)
+    return tomllib.loads(front), body
+
+
+def sequence_files(collection: Path, language: str = "en") -> list[Path]:
+    """The sequence files of ``collection`` of ``language``, by name."""
+    return sorted(p for p in (collection / "md" / "sequences").glob("*.md")
+                  if language_of(p) == language)
+
+
+def step_run(samples: dict[str, Sample], step: dict[str, Any]
+             ) -> tuple[list[str], list[str]] | None:
+    """The substrates and the products of the run a sequence step names:
+    those of its procedure, or of the one entry of a general procedure
+    that makes the step's ``product``. None where the step names no
+    sample or no such entry."""
+    sample = samples.get(step.get("procedure", ""))
+    if sample is None:
+        return None
+    if "scope" not in sample.data:
+        return substrate_keys(sample.data), product_keys(sample.data)
+    entries = [e for e in sample.data["scope"]
+               if step.get("product") in
+               [p["compound"] for p in e["products"]]]
+    if len(entries) != 1:
+        return None
+    return list(entries[0]["substrates"]), [
+        p["compound"] for p in entries[0]["products"]]
+
+
+def sequence_violations(collection: Path) -> list[str]:
+    """Return the rules of sample-procedures "Demo sequences" that the
+    sequences of ``collection`` break, except the stated ones and the
+    counts of steps: each has a German variant sharing its ``id``,
+    ``slug``, ``target`` and ``steps`` and written in German, its steps
+    name samples, each step but the first starts from a product of the
+    step before it, a substance carried from one step to the next has the
+    group ``intermediates``, its target is a product of its last step,
+    and the target is a substance with an article number."""
+    problems: list[str] = []
+    samples = {s.data["id"]: s for s in sample_procedures(collection)
+               if s.language == "en"}
+    registry = read_registry(collection)
+    for path in sequence_files(collection):
+        data, body = read_sequence(path)
+        name = path.name
+        runs = [step_run(samples, step) for step in data.get("steps", [])]
+        if not runs or None in runs:
+            problems.append(f"{name}: a step names no sample or entry")
+        else:
+            for before, after in zip(runs, runs[1:]):
+                carried = set(before[1]) & set(after[0])
+                if not carried:
+                    problems.append(f"{name}: a step starts from none of "
+                                    f"{before[1]}")
+                for key in sorted(carried):
+                    if registry.get(key, {}).get("group") != "intermediates":
+                        problems.append(f"{name}: {key} is made by one "
+                                        "step and started from by the next, "
+                                        "but is no intermediate")
+            if data.get("target") not in runs[-1][1]:
+                problems.append(f"{name}: the target is no product of the "
+                                "last step")
+        if "article_number" not in registry.get(data.get("target"), {}):
+            problems.append(f"{name}: the target has no article number")
+        twin = path.with_suffix(".de.md")
+        if not twin.is_file():
+            problems.append(f"{name}: has no German variant")
+            continue
+        german, german_body = read_sequence(twin)
+        for key in ("id", "slug", "target", "steps"):
+            if german.get(key) != data.get(key):
+                problems.append(f"{twin.name}: {key} differs")
+        if german.get("title") == data.get("title"):
+            problems.append(f"{twin.name}: the title is not German")
+        if german_body == body or "## Notes" in german_body:
+            problems.append(f"{twin.name}: the body is not German")
     return problems
 
 
@@ -538,6 +644,7 @@ INVENTORY_GROUPS = [
     ("final-products", "synthesised", "Final products", "Endprodukte"),
 ]
 PURCHASED_GROUPS = ("starting-materials", "reagents")
+ARTICLE_NUMBER = re.compile(r"CH-\d{4}")
 GROUP_VALUES = ("starting-materials", "reagents", "intermediates",
                 "final-products")
 
@@ -615,10 +722,7 @@ def field_violations(collection: Path) -> list[str]:
                 problems.append(f"{procedure.path.name}: reaction type "
                                 f"{named!r} is not a term")
     problems += registry_violations(registry, classes)
-    counts = purchased_and_synthesised(collection)
-    if counts != (10, 10):
-        problems.append(f"{counts[0]} purchased and {counts[1]} "
-                        "synthesised substances are named")
+    problems += chain_group_violations(collection, registry)
     return problems + procedure_field_violations(
         collection, settings, vocabularies["projects"])
 
@@ -641,8 +745,17 @@ def registry_violations(registry: dict[str, dict[str, Any]],
             problems.append(f"no substance has group {value!r}")
     numbers = {key: c["article_number"] for key, c in registry.items()
                if "article_number" in c}
-    if numbers != DEMO_NUMBERS:
-        problems.append(f"article numbers are {numbers}")
+    for key, wanted in DEMO_NUMBERS.items():
+        if numbers.get(key) != wanted:
+            problems.append(f"{key}: article number is "
+                            f"{numbers.get(key)!r}, not {wanted!r}")
+    for key, held in numbers.items():
+        if key != "new-compound-7" and not ARTICLE_NUMBER.fullmatch(held):
+            problems.append(f"{key}: article number {held!r} is not "
+                            "CH-<nnnn>")
+        if registry[key].get("group") != "final-products":
+            problems.append(f"{key}: has an article number and the group "
+                            f"{registry[key].get('group')!r}")
     sets = [c.get("chemical_classes") for c in registry.values()]
     if not any(isinstance(c, list) and len(c) == 2 for c in sets):
         problems.append("no substance has two chemical classes")
@@ -656,14 +769,95 @@ def registry_violations(registry: dict[str, dict[str, Any]],
     return problems
 
 
-def purchased_and_synthesised(collection: Path) -> tuple[int, int]:
-    """How many of the substances that the procedures of ``collection``
-    name are purchased and how many are synthesised."""
+def chain_group_violations(collection: Path,
+                           registry: dict[str, dict[str, Any]]
+                           ) -> list[str]:
+    """Return the substances that one sample makes and another starts
+    from that have neither the group ``intermediates`` nor an article
+    number (sample-procedures "Demo collection", Values)."""
+    samples = sample_procedures(collection)
+    made = {key for s in samples for key in product_keys(s.data)}
+    started = {key for s in samples for key in substrate_keys(s.data)}
+    return [f"{key}: made and started from, with the group "
+            f"{registry[key].get('group')!r} and no article number"
+            for key in sorted(made & started & set(registry))
+            if registry[key].get("group") != "intermediates"
+            and "article_number" not in registry[key]]
+
+
+def substances_by_cas(registry: dict[str, dict[str, Any]]
+                      ) -> dict[str, list[str]]:
+    """The keys of the registry's substances, by their ``cas``."""
+    found: dict[str, list[str]] = {}
+    for key, compound in registry.items():
+        if "cas" in compound:
+            found.setdefault(compound["cas"], []).append(key)
+    return found
+
+
+def listed_cas(samples: list[Sample]) -> set[str]:
+    """The CAS numbers of the rows of the samples' Reagents tables."""
+    return {row[1] for sample in samples for row in sample.table[1:]
+            if len(row) > 1}
+
+
+def reagent_violations(samples: list[Sample],
+                       registry: dict[str, dict[str, Any]]) -> list[str]:
+    """Return the rules of sample-procedures "Reagents in the registry"
+    that the samples' tables break against ``registry``: the CAS number
+    of every row is the ``cas`` of exactly one substance, a German table
+    lists the CAS numbers of its original in the same order, and the
+    substrates of a specific procedure are rows of its table."""
+    problems: list[str] = []
+    by_cas = substances_by_cas(registry)
+    originals = {s.path.name: s for s in samples}
+    for sample in samples:
+        name = sample.path.name
+        rows = [row for row in sample.table[1:] if len(row) > 1]
+        for row in rows:
+            found = by_cas.get(row[1], [])
+            if len(found) != 1:
+                problems.append(f"{name}: {row[0]} has CAS {row[1]}, "
+                                f"which {len(found)} substances have")
+        if sample.language == "de":
+            original = originals.get(name.replace(".de.", ".", 1))
+            if original is None:
+                problems.append(f"{name}: has no original")
+            elif [r[1] for r in rows] != [
+                    r[1] for r in original.table[1:] if len(r) > 1]:
+                problems.append(f"{name}: lists other CAS numbers, or in "
+                                "another order, than its original")
+        if "scope" not in sample.data:
+            for key in sample.data.get("substrates", []):
+                cas = registry.get(key, {}).get("cas")
+                if cas not in [row[1] for row in rows]:
+                    problems.append(f"{name}: the substrate {key} (CAS "
+                                    f"{cas}) is no row of the table")
+    return problems
+
+
+def coverage_violations(collection: Path) -> list[str]:
+    """Return the rules of sample-procedures "Demo collection" for the
+    substances of the registry against the samples of ``collection``:
+    every key a sample names is a substance; every substance is named by
+    a sample, carries the CAS number of a Reagents row, is
+    ``new-compound-7`` or has a group of ``PURCHASED_GROUPS``; and some
+    substance of those groups is named by no sample."""
     registry = read_registry(collection)
-    named = named_compounds_of(collection)
-    purchased = sum(registry[key]["group"] in PURCHASED_GROUPS
-                    for key in named if key in registry)
-    return purchased, len(named & set(registry)) - purchased
+    samples = sample_procedures(collection)
+    named = {key for s in samples for key in named_compounds(s)}
+    problems = [f"{key}: a sample names it, the registry lacks it"
+                for key in sorted(named - set(registry))]
+    rows = listed_cas(samples)
+    for key, compound in registry.items():
+        if (key not in named and compound.get("cas") not in rows
+                and key != "new-compound-7"
+                and compound.get("group") not in PURCHASED_GROUPS):
+            problems.append(f"{key}: no sample names or lists it")
+    if not any(compound.get("group") in PURCHASED_GROUPS
+               and key not in named for key, compound in registry.items()):
+        problems.append("every commercial chemical is named by a sample")
+    return problems
 
 
 def procedure_values(collection: Path) -> dict[str, list[dict[str, Any]]]:

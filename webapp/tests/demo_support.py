@@ -12,7 +12,7 @@ from typing import Any
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 
-from . import BERLIN, frozen, parse
+from . import BERLIN, REPO, frozen, parse
 
 # The days the data set is seeded as of in the tests that check its
 # outcomes: the start, middle and end of quarters, a day whose order
@@ -42,6 +42,60 @@ ITEMS = "/lab/inventory/end-products/"
 DELIVERIES = "/lab/inventory/deliveries/"
 TASKS = "/lab/tasks/"
 LOGIN = "/lab/accounts/login/"
+
+
+SAMPLES = REPO / "examples" / "demo"
+SEPARATOR = re.compile(r"\|[-+|:\s]+\|?")
+VOLUME = re.compile(r"\d\s*m?L\b")
+
+
+def reagent_rows() -> list[list[str]]:
+    """The cells of every row of the Reagents tables of the demo's
+    sample procedures, read from the English source files, Org and
+    Markdown, without the header and the separator lines."""
+    rows = []
+    for path in sorted([*(SAMPLES / "org" / "procedures").glob("OSDB-*.org"),
+                        *(SAMPLES / "md" / "procedures").glob("OSDB-*.md")]):
+        if ".de." in path.name:
+            continue
+        inside = False
+        for line in path.read_text(encoding="utf-8").splitlines():
+            heading = re.match(r"^(?:##|\*) (.+?)\s*$", line)
+            if heading:
+                inside = heading.group(1) == "Reagents"
+            elif inside and line.startswith("|") \
+                    and not SEPARATOR.fullmatch(line.strip()):
+                cells = [cell.strip()
+                         for cell in line.strip("| \n").split("|")]
+                if cells[0] != "Reagent":
+                    rows.append(cells)
+    return rows
+
+
+def sample_chemicals() -> dict[str, set[str]]:
+    """The substances of the demo registry that the demo's samples use,
+    as sets of keys: ``started`` (the substrates of every procedure and
+    scope entry), ``made`` (their products), ``listed`` (the chemicals
+    of the Reagents tables, by CAS number) and ``by_volume`` (those the
+    tables list by `–` in `mmol` and `Equiv` and give a volume in
+    `Amount`)."""
+    from .collection_support import demo_collection
+    from .registry_support import demo_registry
+    by_cas = {entry["cas"]: entry["key"]
+              for entry in demo_registry()["substances"]
+              if entry.get("cas")}
+    entries = [entry for procedure in demo_collection()["procedures"]
+               for entry in procedure["entries"]]
+    rows = reagent_rows()
+    return {
+        "started": {key for entry in entries for key in entry["substrates"]},
+        "made": {product["compound"] for entry in entries
+                 for product in entry["products"]},
+        "listed": {by_cas[row[1]] for row in rows if row[1] in by_cas},
+        "by_volume": {by_cas[row[1]] for row in rows
+                      if row[1] in by_cas and row[4:] == ["–", "–"]
+                      and VOLUME.search(row[3])},
+    }
 
 
 def opening(day: date) -> date:
