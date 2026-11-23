@@ -130,7 +130,7 @@ All validate cleanly with the demo's procedures and registry, and their German v
 ## ADDED Requirements
 
 ### Requirement: Reagents in the registry
-Every chemical that a sample procedure's text uses, water, ice and the inert gas of a protective atmosphere excepted, SHALL be a row of its Reagents table: the substrates, reagents and catalysts, the solvents of the reaction and of the workup, and the acids, bases, salts and drying agents of the workup. A solution is listed as its solute, such as hydrochloric acid as hydrogen chloride, with the concentration in `Amount`. The CAS number of every row is the `cas` of exactly one substance of the demo registry, and a German table has the same rows with the same CAS numbers as its original.
+Every chemical that a sample procedure's text uses SHALL be a row of its Reagents table, except water, ice, the inert gas of a protective atmosphere and the materials of analysis (TLC plates, indicator paper, NMR solvents): the substrates, reagents and catalysts, the solvents of the reaction and of the workup, and the acids, bases, salts and drying agents of the workup. A solution is listed as its solute, such as hydrochloric acid as hydrogen chloride, with the concentration in `Amount`. The CAS number of every row is the `cas` of exactly one substance of the demo registry, and a German table has the same rows with the same CAS numbers as its original.
 
 #### Scenario: Every row is a registry substance
 - **WHEN** a test parses the Reagents table of every sample procedure, in either language, and reads the demo registry
@@ -138,4 +138,4 @@ Every chemical that a sample procedure's text uses, water, ice and the inert gas
 
 #### Scenario: Review of the tables
 - **WHEN** the orchestrator reviews each sample procedure before archiving this change
-- **THEN** every chemical its text uses, water, ice and inert gas excepted, is a row of its Reagents table
+- **THEN** every chemical its text uses, but water, ice, inert gas and the materials of analysis, is a row of its Reagents table
