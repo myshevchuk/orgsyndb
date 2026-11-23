@@ -41,6 +41,8 @@ nicht experimentell überprüft.
 | Methylsalicylat | 119-36-8 | 152,15 | 7,61 g (6,48 mL) | 50,0 | 1,0 |
 | Natriumhydroxid | 1310-73-2 | 40,00 | 6,00 g | 150 | 3,0 |
 | Salzsäure, 37 % (12,1 M) | 7647-01-0 | 36,46 | 15,0 mL | 182 | 3,6 |
+| Ethanol | 64-17-5 | 46,07 | etwas für die Eisen(III)-chlorid-Probe | – | – |
+| Eisen(III)-chlorid | 7705-08-0 | 162,20 | 1 Tropfen Lösung | – | – |
 
 ## Durchführung
 

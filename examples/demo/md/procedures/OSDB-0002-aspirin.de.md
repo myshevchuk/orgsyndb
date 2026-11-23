@@ -41,6 +41,8 @@ Lehrbuchmethode, sind aber nicht experimentell überprüft.
 | Salicylsäure | 69-72-7 | 138,12 | 2,76 g | 20,0 | 1,0 |
 | Acetanhydrid | 108-24-7 | 102,09 | 6,13 g (5,67 mL) | 60,0 | 3,0 |
 | Phosphorsäure, 85 % | 7664-38-2 | 97,99 | 5 Tropfen | kat. | kat. |
+| Ethanol | 64-17-5 | 46,07 | etwas zum Umkristallisieren und für die Eisen(III)-chlorid-Probe | – | – |
+| Eisen(III)-chlorid | 7705-08-0 | 162,20 | 1 Tropfen Lösung | – | – |
 
 ## Durchführung
 

@@ -33,6 +33,13 @@ Lehrbuchmethode, sind aber nicht experimentell überprüft.
 | Kaliumcarbonat, wasserfrei, fein gemahlen           |  584-08-7 | 138,21    | 2,76 g (vor Gebrauch bei 120 °C getrocknet)         | 20,0 | 2,0    |
 | Tetra-n-butylammoniumbromid (Phasentransferreagenz) | 1643-19-2 | 322,37    | 1,61 g (bei 60 °C im Vakuum getrocknet)             | 5,00 | 0,5    |
 | Palladium(II)-acetat (Katalysator)                  | 3375-31-3 | 224,51    | 11,2 mg (0,5 mol-%, in ein Glasröhrchen eingewogen) | kat. | kat.   |
+| Ethylacetat | 141-78-6 | 88,11 | 70 mL | – | – |
+| Heptan | 142-82-5 | 100,21 | etwas für DC | – | – |
+| Ethanol | 64-17-5 | 46,07 | 10–15 mL und 2 × 3 mL | – | – |
+| Natriumchlorid | 7647-14-5 | 58,44 | gesättigte Lösung, 20 mL | – | – |
+| Natriumsulfat | 7757-82-6 | 142,04 | nach Bedarf | – | – |
+| Aktivkohle | 7440-44-0 | 12,01 | bei Bedarf eine Spatelspitze | – | – |
+| Kieselgur | 61790-53-2 | – | 2 cm hohe Filterschicht | – | – |
 
 * Durchführung
 1. Das Kaliumcarbonat (2,76 g, 20,0 mmol) und das
@@ -70,7 +77,7 @@ Lehrbuchmethode, sind aber nicht experimentell überprüft.
 12. Ethylacetat (30 mL) und Wasser (20 mL) zugeben und rühren, bis sich
     der Feststoff in der organischen Phase gelöst hat.
 13. Das Zweiphasengemisch unter schwachem Sog durch eine
-    Celite-Schicht (etwa 2 cm auf einer Glasfilternutsche) filtrieren,
+    Celite-Schicht aus Kieselgur (etwa 2 cm auf einer Glasfilternutsche) filtrieren,
     um die Palladiumrückstände zu entfernen. Kolben und Filterschicht
     mit zwei Portionen Ethylacetat zu je 10 mL nachspülen
     (Anmerkung 6).

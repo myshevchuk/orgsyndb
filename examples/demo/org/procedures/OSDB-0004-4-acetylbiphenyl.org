@@ -33,6 +33,13 @@ the quantities follow the textbook method but are not experimentally verified.
 | Potassium carbonate, anhydrous, finely ground        | 584-08-7  |     138.21 | 2.76 g (dried at 120 °C before use)            | 20.0 |   2.0 |
 | Tetra-n-butylammonium bromide (phase-transfer agent) | 1643-19-2 |     322.37 | 1.61 g (dried at 60 °C under vacuum)           | 5.00 |   0.5 |
 | Palladium(II) acetate (catalyst)                     | 3375-31-3 |     224.51 | 11.2 mg (0.5 mol %, weighed into a glass vial) | cat. |  cat. |
+| Ethyl acetate | 141-78-6 | 88.11 | 70 mL | – | – |
+| Heptane | 142-82-5 | 100.21 | a little for TLC | – | – |
+| Ethanol | 64-17-5 | 46.07 | 10–15 mL plus 2 × 3 mL | – | – |
+| Sodium chloride | 7647-14-5 | 58.44 | saturated solution, 20 mL | – | – |
+| Sodium sulfate | 7757-82-6 | 142.04 | as needed | – | – |
+| Activated carbon | 7440-44-0 | 12.01 | a spatula tip, if needed | – | – |
+| Diatomaceous earth | 61790-53-2 | – | a 2 cm filtration pad | – | – |
 
 * Procedure
 1. Weigh the potassium carbonate (2.76 g, 20.0 mmol) and the
@@ -66,7 +73,7 @@ the quantities follow the textbook method but are not experimentally verified.
     with stirring. The product solidifies to a grey, granular cake.
 12. Add ethyl acetate (30 mL) and water (20 mL), and stir until the
     solid has dissolved in the organic layer.
-13. Filter the two-phase mixture through a pad of Celite (about 2 cm on
+13. Filter the two-phase mixture through a pad of Celite (diatomaceous earth, about 2 cm on
     a sintered-glass funnel) under gentle suction, to remove the
     palladium residues. Rinse the flask and the pad with ethyl acetate
     in two 10 mL portions (Note 6).

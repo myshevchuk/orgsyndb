@@ -41,6 +41,9 @@ der Lehrbuchmethode, sind aber nicht experimentell überprüft.
 | Isopentylalkohol (3-Methylbutan-1-ol) | 123-51-3 | 88,15 | 4,41 g (5,44 mL) | 50,0 | 1,0 |
 | Essigsäure, Eisessig | 64-19-7 | 60,05 | 6,01 g (5,73 mL) | 100 | 2,0 |
 | Schwefelsäure, 96 % | 7664-93-9 | 98,08 | 0,5 mL | kat. | kat. |
+| Natriumhydrogencarbonat | 144-55-8 | 84,01 | gesättigte Lösung, 2 × 15 mL | – | – |
+| Natriumchlorid | 7647-14-5 | 58,44 | gesättigte Lösung, 10 mL | – | – |
+| Natriumsulfat | 7757-82-6 | 142,04 | nach Bedarf | – | – |
 
 ## Durchführung
 
