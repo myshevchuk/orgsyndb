@@ -42,5 +42,5 @@
 - [x] 3.1 Chemistry check of compounds, structures, CAS numbers,
   relations and Reagents rows by a second model; findings judged and
   fixed; CAS numbers spot-checked against PubChem
-- [ ] 3.2 Area tests, then both suites on CI
+- [x] 3.2 Area tests, then both suites on CI
 - [ ] 3.3 Demo reseeded on the test server; the owner looks at it
