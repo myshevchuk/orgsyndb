@@ -63,7 +63,13 @@ None.
   Reagents rows for every chemical; German variants of every sample;
   the test collection; sequences.
 - `lab-demo`: the inventory's articles and vessels; a task of a
-  sequence of three or more steps.
+  sequence of three or more steps; the planning list names its
+  articles without excluding others.
+- `build-script`: the demo's manifest lists its procedures in ID order,
+  beginning with `OSDB-0001` to `OSDB-0009`.
+- `collection-import`: the IDs issued after the demo's import follow
+  its highest IDs; `OSDB-0990` stands for an ID no one took.
+- `synthesis-routes`: the named route trees are among the demo's.
 
 ## Impact
 
@@ -73,7 +79,7 @@ None.
 - `webapp/demo/registry.json`: new substances with molfiles, the
   digest; `webapp/demo/manifest.json` regenerated;
   `webapp/demo/data.py` and `seed.py`.
-- `tests/fixtures/collection/`: the copies and converted samples the
-  requirement Test collection derives from the demo.
+- `tests/fixtures/collection/`: reduced to the nine named samples, two
+  sequences and the substances they name, with the new Reagents rows.
 - Tests that count the demo's procedures, substances, articles or
   sequences.

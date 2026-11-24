@@ -97,7 +97,7 @@ Integration tests that build, validate, serve or print a collection and do not e
 
 #### Scenario: The test collection mirrors the demo
 - **WHEN** a test lists `tests/fixtures/collection/` and compares it with `examples/demo/`
-- **THEN** `.gitignore` and every file under `static/` are byte-identical to the demo's, `static/structures/aryl-ketone-reduction.svg` among them, every file under `substances/` is byte-identical to the one at its path under `webapp/demo/substances/`, and the two hold the same paths, `registry.json` equals the demo registry but for its `accounts`, which add the test fixtures' fictitious accounts to the demo's, and its `digest`, `orgsyndb.toml` differs from the demo's only in `registry`, and no `org/` directory exists
+- **THEN** `.gitignore` and every file under `static/` are byte-identical to the demo's, `static/structures/aryl-ketone-reduction.svg` among them, every file under `substances/` is byte-identical to the one at its path under `webapp/demo/substances/`, and the two hold the same paths, `registry.json` equals the demo registry restricted as the requirement states, but for its `accounts`, which add the test fixtures' fictitious accounts to the demo's, and its `digest`, `orgsyndb.toml` differs from the demo's only in `registry`, and no `org/` directory exists
 - **AND** `md/procedures/` holds exactly the 18 file names derived from the demo's files of `OSDB-0001` to `OSDB-0009`, and the file for each of their ten Markdown files is byte-identical to it, `md/sequences/` the demo's four files of `SEQ-0001` and `SEQ-0002`, and the registry exactly the substances its procedures name and `new-compound-7`, 21 in all
 
 #### Scenario: Converted samples agree with their Org sources

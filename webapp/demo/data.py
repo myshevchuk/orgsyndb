@@ -885,6 +885,14 @@ COMMERCIAL = (
      "1000", ('Chemikalienschrank 3', 'Chemicals cabinet 3')),
 )
 
+# Where the second bottle of a chemical stands, apart from the first.
+SECOND_PLACES: dict[str, Text] = {
+    "benzaldehyde": ("Kühlschrank 2", "Fridge 2"),
+    "methanol": ("Lösungsmittelschrank (Labor 2)", "Solvent cabinet (lab 2)"),
+    "acetone": ("Lösungsmittelschrank (Labor 2)", "Solvent cabinet (lab 2)"),
+    "vanillin": ("Chemikalienschrank 3", "Chemicals cabinet 3"),
+}
+
 RECIPIENTS: tuple[Text, ...] = (
     ("AG Weber (Biochemie)", "Weber group (biochemistry)"),
     ("Analytiklabor", "Analytical laboratory"),
@@ -1061,9 +1069,10 @@ def changes(today: date, language: str) -> list[Change]:
                  number="", supplier="ChemPur GmbH",
                  supplier_article_number=article, supplier_batch=batch,
                  unit="g", amount=Decimal("500"),
-                 location=line.text(("Laugenschrank", "Base cabinet")
-                                    if key == "sodium-hydroxide" else
-                                    ("Lösungsmittelschrank", "Solvent cabinet")),
+                 location=line.text(
+                     ("Laugenschrank", "Base cabinet")
+                     if key == "sodium-hydroxide" else
+                     ("Lösungsmittelschrank", "Solvent cabinet")),
                  date=line.day(1))
     for index, (key, supplier, article, batch, amount, location) in enumerate(
             COMMERCIAL):
@@ -1083,12 +1092,7 @@ def changes(today: date, language: str) -> list[Change]:
                                           "3823.1")[index],
                  supplier_batch=f"R{260200 + index}", unit="g",
                  amount=Decimal("250"),
-                 location=line.text(("Kühlschrank 1", "Fridge 1")
-                                    if key == "benzaldehyde" else
-                                    ("Chemikalienschrank 3",
-                                     "Chemicals cabinet 3")
-                                    if key == "vanillin" else
-                                    ("Lösungsmittelschrank", "Solvent cabinet")),
+                 location=line.text(SECOND_PLACES[key]),
                  date=line.day(10))
     _notes(line, orders)
     return line.changes()

@@ -3,7 +3,7 @@
 The demo collection (`examples/demo/`), its registry
 (`webapp/demo/registry.json`) and the lab demo data set
 (`webapp/demo/data.py`, `seed.py`) are one invented lab. The test
-collection (`tests/fixtures/collection/`) mirrors the demo. The
+collection (`tests/fixtures/collection/`) mirrored the demo. The
 requirements fix the demo's contents closely, by counts and lists; this
 change loosens the lists where they would block growth and keeps every
 named fact that other tests rely on.
@@ -32,10 +32,20 @@ the requirements.
 
 ### New samples are Markdown
 
-The new samples are Markdown. An Org sample needs a
-hand-converted twin in the test collection; a Markdown sample is
-copied byte for byte. The four Org samples stay as they are and keep
+The new samples are Markdown, the simpler of the two source formats to
+write and check. The four Org samples stay as they are and keep
 showing the Org export.
+
+### A fixed test collection
+
+The test collection is the fixture that build, site, search and
+localization tests build. Had it kept mirroring the demo, each new
+demo procedure would change the scenarios of those capabilities and
+slow their tests. It holds the nine named samples, `SEQ-0001`,
+`SEQ-0002` and a registry of the substances they name; the demo grows
+without it. Scenarios that read the demo itself, such as its manifest,
+its routes and the IDs issued after its import, name the demo's facts
+or derive their values from its highest IDs.
 
 ### Chemicals are matched by CAS number
 
