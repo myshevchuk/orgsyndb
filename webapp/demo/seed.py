@@ -28,7 +28,9 @@ from unittest import mock
 
 from django.apps import apps
 from django.contrib.auth import get_user_model
+from django.core.management.color import no_style
 from django.core.exceptions import ValidationError
+from django.db import connection
 from django.utils import timezone
 
 from collection import importing
@@ -194,10 +196,21 @@ def write(today: date, language: str) -> Summary:
         with clock(change.moment):
             writer.make(change)
     DemoMark.objects.create(seeded_on=today)
+    _reset_account_keys()
     return Summary(accounts=len(writer.users),
                    substances=Substance.objects.count(),
                    items=len(writer.items), notes=len(writer.notes),
                    tasks=len(writer.tasks))
+
+
+def _reset_account_keys() -> None:
+    """Move the account table's key sequence past the highest key, so
+    that an account created after the demo accounts, whose keys were
+    given, takes a key above them."""
+    with connection.cursor() as cursor:
+        for statement in connection.ops.sequence_reset_sql(
+                no_style(), [get_user_model()]):
+            cursor.execute(statement)
 
 
 class _Writer:
@@ -321,9 +334,11 @@ class _Writer:
     def account(self, change: data.CreateAccount) -> Any:
         """Create the account of CHANGE, with the password
         ``data.PASSWORD`` or none usable and its email address, joined
-        at the change's moment."""
+        at the change's moment, and the primary key of its position in
+        ``data.ACCOUNTS``, from 1."""
         account = change.account
         return get_user_model().objects.create_user(
+            id=data.ACCOUNTS.index(account) + 1,
             username=account.username,
             password=data.PASSWORD if account.signs_in else None,
             first_name=account.first_name, last_name=account.last_name,
