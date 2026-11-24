@@ -42,6 +42,7 @@ method but are not experimentally verified.
 |---|---|---|---|---|---|
 | Benzaldehyde | 100-52-7 | 106.12 | 0.531 g (0.509 mL) | 5.00 | 1.0 |
 | Ethyl (triphenylphosphoranylidene)acetate | 1099-45-2 | 348.38 | 2.09 g | 6.00 | 1.2 |
+| Heptane | 142-82-5 | 100.21 | 15 mL, 2 × 5 mL, and 5 mL if needed | – | – |
 
 ## Procedure
 

@@ -1044,7 +1044,8 @@ class ShippedSiteTests(SiteCase):
             with self.subTest(procedure=item.id):
                 self.assertIsNone(page.find("section", "scope"))
                 self.assertIsNone(page.find("table", "scope-table"))
-        self.assertEqual(checked, 8)
+        self.assertEqual(
+            checked, sum(not item.is_general for item in self.content()))
 
     def test_yields_of_a_general_procedure(self) -> None:
         """Scenario: Yields of a general procedure."""

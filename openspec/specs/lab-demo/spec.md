@@ -87,7 +87,7 @@ Every account but `mwolf` has the password `demo` and the email address `<user n
 ### Requirement: Demo inventory
 The data set SHALL open the inventory on the opening day `O`, `D` less 400 days, and hold:
 
-- items of seven articles: `CH-0001`, `CH-0002`, `CH-0010`, `CH-0012`, `CH-0013` and `CH-0016`, the articles of the substances that set `item_number` in `examples/demo`; and `NV-0007`, the article of the substance `new-compound-7`, `Neuverbindung 7` (`New compound 7`), which the demo registry adds. At least one article has three sizes, and the sizes use the units `mg`, `g` and `umol`;
+- items of the articles of the substances that have an article number in the demo registry, among them `CH-0001`, `CH-0002`, `CH-0010`, `CH-0012`, `CH-0013` and `CH-0016`; and `NV-0007`, the article of the substance `new-compound-7`, `Neuverbindung 7` (`New compound 7`), which the demo registry adds. At least one article has three sizes, and the sizes use the units `mg`, `g` and `umol`;
 - one item of the substance `1-phenylethanol`, whose article has no article number, opened after `O`, filled 89 days before `D` from the flask of the product batch of its task, which ends after that filling, and never delivered;
 - sizes that planning leaves out: `CH-0012` in 1 g, `discontinued`, and `CH-0010` in 25 g, `not_needed`, each set aside after its opening count and never delivered; and `CH-0001` in 250 mg, whose consumption is entered for the four quarters from the eighth to the fifth before the quarter of `O` and is none since;
 - `CH-0013` in 1 g, opened 60 days before `D`, with a delivery of one container every 15 days from then on;
@@ -100,11 +100,15 @@ The data set SHALL open the inventory on the opening day `O`, `D` less 400 days,
 - every delivery note numbered `LS-<year>-<nnn>`, where `<year>` is the year of its date and `<nnn>` counts the notes of that year in the order of their dates from `001`;
 - one delivery reversed with a note, and one correction with a note;
 - batches and vessels: made batches recorded from task steps, each naming its step's journal entry where the step names one, two of them naming one entry; made batches recorded without a step of two kinds: some each with its number, the date it was made and a stored vessel with a location, and others with their number alone and no vessel, the batches printed on old containers, among them one of every substance with delivered items that no task makes; a batch of `NV-0007` with a vessel in `umol`; a batch bought from a supplier, with the supplier's article number and batch; and an open vessel of a made batch of a substance that has no article;
-- fillings, each from a vessel and naming its movement; one vessel used up, one corrected with a note, and one transfer from a flask into a stored vessel.
+- fillings, each from a vessel and naming its movement; one vessel used up, one corrected with a note, and one transfer from a flask into a stored vessel;
+- on `D`, an open vessel of every substance that a sample procedure starts from or lists in its Reagents table (sample-procedures "Reagents in the registry"): of a bought batch, with its supplier, the supplier's article number and the supplier's batch, for a substance that no sample makes; of a made or a bought batch for one that a sample makes;
+- on `D`, an open vessel of a bought batch of every commercial chemical of the demo registry that no sample names, some substances with two or more vessels in different locations;
+- on `D`, open vessels of made batches of several substances that have no article;
+- vessels of liquids and solvents entered by mass, in `g`.
 
 #### Scenario: Item list
 - **WHEN** the data set is written as of `D` and a test client requests `/lab/inventory/end-products/`
-- **THEN** the list shows the seven article numbers, the name of each item with an article number linking to its substance's page, `Neuverbindung 7` among them, and the item `1-Phenylethanol` without an article number after the other items of its category, its name linking to its page
+- **THEN** the list shows the article number of every substance of the demo registry that has one, the name of each item with an article number linking to its substance's page, `Neuverbindung 7` among them, and the item `1-Phenylethanol` without an article number after the other items of its category, its name linking to its page
 
 #### Scenario: Levels on any seeding day
 - **WHEN** the data set is written, each time into an empty database, as of 2026-01-01, 2026-02-14, 2026-03-31, 2026-11-07 and 2028-02-29, and a test client requests `/lab/inventory/end-products/` on that day
@@ -129,6 +133,7 @@ The data set SHALL hold tasks for the articles of the demo inventory and for its
 - at least three ended tasks matching `CH-0012`, so that its synthesis time is `längste der letzten 3 Synthesen`;
 - tasks of the sequences `SEQ-0001`, of the substance of `CH-0010`, and `SEQ-0002`, of the substance of `CH-0002`, of the data set's import, each with one step per step of its sequence from the one it starts at (task-tracker "Task record"); the first step of an ended task of `SEQ-0001` made a batch of salicylic acid, stored in a vessel, from which the planned task of `SEQ-0001` starts at its second step; one of them running with the first of its two steps done, which made a batch of its intermediate whose flask was withdrawn in part into its second step;
 - one task without an assignee;
+- a running task following a sequence of at least three steps, with its first two steps done, each naming a journal entry and having made a batch of its intermediate stored in a vessel;
 - an ended task of `1-phenylethanol`, whose article has no article number, with its product batch;
 - every other ended task that has not failed with a product batch recorded from its last step, so that each such task lists its batches and each batch its task;
 - no flask of a task that is ended, failed or cancelled holding an amount.
@@ -152,7 +157,7 @@ The planning parameters are stored, created with `target_days` 180 more than a y
 - **THEN** it shows `SEQ-0001 ab Stufe 2` and one step, of `OSDB-0002`, and an open vessel of `salicylic-acid` belongs to a batch whose page names the first step of an ended task of `SEQ-0001` as the step that made it
 
 ### Requirement: Demo planning
-On `D`, under the data set's parameters, the planning list SHALL show without `all=1` exactly the articles `CH-0012`, `CH-0013`, `CH-0010`, `CH-0016` and `NV-0007`:
+On `D`, under the data set's parameters, the planning list SHALL show without `all=1`, among others, the articles `CH-0012`, `CH-0013`, `CH-0010`, `CH-0016` and `NV-0007`:
 
 - `CH-0012` with priority high and a running task marked `verspätet`, its figures from the order model;
 - `CH-0013` with priority high, no task, and `Synthese planen`;
@@ -160,11 +165,11 @@ On `D`, under the data set's parameters, the planning list SHALL show without `a
 - `CH-0016` with priority low and `Abfüllen` for one of its sizes;
 - `NV-0007` with `Bulk prüfen` and no `Synthese planen`.
 
-With `all=1` it also shows `CH-0001`, with priority low and its figures marked `grob`, and `CH-0002`, with priority low and a running task not marked late, and no other article. The item without an article number has no forecast; its item page shows `Kein Verbrauch, keine Prognose.`
+With `all=1` it also shows `CH-0001`, with priority low and its figures marked `grob`, and `CH-0002`, with priority low and a running task not marked late; it never shows `CH-0001` or `CH-0002` without `all=1`. The item without an article number has no forecast; its item page shows `Kein Verbrauch, keine Prognose.`
 
 #### Scenario: Any seeding day
 - **WHEN** the data set is written, each time into an empty database, as of 2026-01-01, 2026-02-14, 2026-03-31, 2026-11-07 and 2028-02-29, and a test client requests `/lab/planning/` and `/lab/planning/?all=1` on that day
-- **THEN** on each day both lists show the articles, priorities, tasks and actions this requirement names
+- **THEN** on each day both lists show the articles, priorities, tasks and actions this requirement names, and the list without `all=1` shows neither `CH-0001` nor `CH-0002`
 
 ### Requirement: Recorded past
 The data set SHALL be written as a sequence of changes, each made at its own moment: a day from `O` to `D` and a time between 08:00 and 18:00 in `Europe/Berlin`, the moments rising in the order the changes are made. Each change is made with the application's clock at its moment, so that every time a change stamps, a movement's `booked_at`, a delivery note's or task's `created_at`, an entered value's `entered_at` and a change-history record's time, is that moment, and each history record names the account that made the change. A movement is dated the day it is made, and a task's start or end never lies after the day of the change that sets it. The dates and quarters records name may lie before `O`: historical notes and entered consumption describe the time before the inventory, and are entered in its first 30 days. An item's movements, newest first, are therefore in descending order of date, and task numbers ascend with `created_at`. A task's history holds its creation and each later change of its dates, steps or flags at the moment it was made.

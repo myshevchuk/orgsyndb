@@ -8,13 +8,20 @@ from typing import Any
 from django.test import Client, override_settings
 
 from . import BERLIN
-from .collection_support import (IDS, TOKEN, ImportCase, issue_ids,
-                                 issued_keys, issued_to, make_token,
-                                 manifest, post, refused, request_id)
+from .collection_support import (IDS, TOKEN, ImportCase, demo_collection,
+                                 ids_of, issue_ids, issued_keys, issued_to,
+                                 make_token, manifest, post, refused,
+                                 request_id)
 from .demo_support import DAY, SeededCase
 
-DEMO_IDS = [*(f"OSDB-{number:04d}" for number in range(1, 10)),
-            "SEQ-0001", "SEQ-0002"]
+DEMO_IDS = sorted(ids_of(demo_collection()))
+# The numbers of the highest procedure and sequence IDs of the demo.
+LAST_PROCEDURE = max(int(key[5:]) for key in DEMO_IDS
+                     if key.startswith("OSDB-"))
+LAST_SEQUENCE = max(int(key[4:]) for key in DEMO_IDS
+                    if key.startswith("SEQ-"))
+NEXT_PROCEDURE = f"OSDB-{LAST_PROCEDURE + 1:04d}"
+NEXT_SEQUENCE = f"SEQ-{LAST_SEQUENCE + 1:04d}"
 
 
 def answer(case: Any, response: Any) -> Any:
@@ -38,23 +45,24 @@ class TurnTests(SeededCase):
 
     def test_two_ids_in_turn(self) -> None:
         """Scenario: Two IDs in turn."""
+        second_id = f"OSDB-{LAST_PROCEDURE + 2:04d}"
         first = request_id(self.client, "procedure",
                            make_token("klehmann"))
         second = request_id(self.client, "procedure",
                             make_token("tbauer"))
         self.assertEqual((first.status_code, answer(self, first)),
-                         (201, {"id": "OSDB-0010"}))
+                         (201, {"id": NEXT_PROCEDURE}))
         self.assertEqual((second.status_code, answer(self, second)),
-                         (201, {"id": "OSDB-0011"}))
-        self.assertEqual(issued_to("OSDB-0010"), "klehmann")
-        self.assertEqual(issued_to("OSDB-0011"), "tbauer")
+                         (201, {"id": second_id}))
+        self.assertEqual(issued_to(NEXT_PROCEDURE), "klehmann")
+        self.assertEqual(issued_to(second_id), "tbauer")
 
     def test_a_sequence_id(self) -> None:
         """Scenario: A sequence ID."""
         done = request_id(self.client, "sequence", make_token("klehmann"))
         self.assertEqual((done.status_code, answer(self, done)),
-                         (201, {"id": "SEQ-0003"}))
-        self.assertEqual(issued_to("SEQ-0003"), "klehmann")
+                         (201, {"id": NEXT_SEQUENCE}))
+        self.assertEqual(issued_to(NEXT_SEQUENCE), "klehmann")
 
     def test_the_kinds_count_apart(self) -> None:
         """Requirement: Issued IDs (the ID of that kind one above the
@@ -63,15 +71,18 @@ class TurnTests(SeededCase):
         got = [answer(self, request_id(self.client, kind, token))["id"]
                for kind in ("sequence", "procedure", "sequence",
                             "procedure")]
-        self.assertEqual(got, ["SEQ-0003", "OSDB-0010", "SEQ-0004",
-                               "OSDB-0011"])
+        self.assertEqual(got, [
+            f"SEQ-{LAST_SEQUENCE + 1:04d}",
+            f"OSDB-{LAST_PROCEDURE + 1:04d}",
+            f"SEQ-{LAST_SEQUENCE + 2:04d}",
+            f"OSDB-{LAST_PROCEDURE + 2:04d}"])
 
     def test_the_time_of_issue_is_kept(self) -> None:
         """Requirement: Issued IDs (when it was issued)."""
         from collection.models import IssuedId
         request_id(self.client, "procedure", make_token("klehmann"))
         self.assertEqual(
-            IssuedId.objects.get(key="OSDB-0010").issued_at,
+            IssuedId.objects.get(key=NEXT_PROCEDURE).issued_at,
             datetime(DAY.year, DAY.month, DAY.day, 19, tzinfo=BERLIN))
 
     def test_each_id_is_kept_once(self) -> None:
@@ -80,19 +91,20 @@ class TurnTests(SeededCase):
         for _ in range(3):
             request_id(self.client, "procedure", token)
         self.assertEqual(issued_keys(), sorted(
-            [*DEMO_IDS, "OSDB-0010", "OSDB-0011", "OSDB-0012"]))
+            [*DEMO_IDS, *(f"OSDB-{LAST_PROCEDURE + n:04d}"
+                          for n in (1, 2, 3))]))
 
     def test_gaps_are_not_filled(self) -> None:
         """Requirement: Issued IDs (one above the highest issued one,
         an adopted one included)."""
-        issue_ids("OSDB-0020", "SEQ-0007")
+        issue_ids("OSDB-0990", "SEQ-0980")
         token = make_token("klehmann")
         self.assertEqual(
             answer(self, request_id(self.client, "procedure",
-                                    token))["id"], "OSDB-0021")
+                                    token))["id"], "OSDB-0991")
         self.assertEqual(
             answer(self, request_id(self.client, "sequence",
-                                    token))["id"], "SEQ-0008")
+                                    token))["id"], "SEQ-0981")
 
     def test_the_token_decides_who_takes_the_id(self) -> None:
         """Requirement: Issued IDs (issues to the token's account),
@@ -101,7 +113,7 @@ class TurnTests(SeededCase):
         done = request_id(self.client, "procedure",
                           make_token("klehmann"))
         self.assertEqual(done.status_code, 201, done.content)
-        self.assertEqual(issued_to("OSDB-0010"), "klehmann")
+        self.assertEqual(issued_to(NEXT_PROCEDURE), "klehmann")
 
     def test_the_path_is_exempt_from_csrf_checks(self) -> None:
         """Requirement: Issued IDs (the path is exempt from CSRF
@@ -122,7 +134,7 @@ class TurnTests(SeededCase):
         other = request_id(self.client, "sequence", token)
         self.assertEqual(
             (other.status_code, answer(self, other)),
-            (201, {"id": "SEQ-0003"}))
+            (201, {"id": f"SEQ-{LAST_SEQUENCE + 1:04d}"}))
 
     def test_no_sequence_beyond_9999(self) -> None:
         """Requirement: Issued IDs (a kind whose ID `9999` is issued)."""
@@ -262,7 +274,7 @@ class BeforeAnImportTests(ImportCase):
         self.accept()
         done = request_id(self.client, "procedure", token)
         self.assertEqual((done.status_code, answer(self, done)),
-                         (201, {"id": "OSDB-0010"}))
+                         (201, {"id": NEXT_PROCEDURE}))
 
     def test_an_empty_collection_starts_at_one(self) -> None:
         """Requirement: Issued IDs (the ID one above the highest

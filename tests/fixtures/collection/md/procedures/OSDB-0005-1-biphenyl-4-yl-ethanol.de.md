@@ -41,6 +41,12 @@ folgen der Lehrbuchmethode, sind aber nicht experimentell überprüft.
 |---|---|---|---|---|---|
 | 4-Acetylbiphenyl | 92-91-1 | 196,25 | 0,981 g | 5,00 | 1,0 |
 | Natriumborhydrid | 16940-66-2 | 37,83 | 0,114 g | 3,01 | 0,6 |
+| Ethanol | 64-17-5 | 46,07 | 20 mL | – | – |
+| Ethylacetat | 141-78-6 | 88,11 | 2 × 20 mL und etwas zum Umkristallisieren und für DC | – | – |
+| Heptan | 142-82-5 | 100,21 | etwas zum Umkristallisieren und für DC | – | – |
+| Chlorwasserstoff | 7647-01-0 | 36,46 | 1 M, etwa 5 mL | – | – |
+| Natriumchlorid | 7647-14-5 | 58,44 | gesättigte Lösung, 15 mL | – | – |
+| Natriumsulfat | 7757-82-6 | 142,04 | nach Bedarf | – | – |
 
 ## Durchführung
 

@@ -36,11 +36,13 @@ class DayChecks:
                 for number, text in task_texts(row["Aufgaben"]).items()]
 
     def test_listed_articles(self: Any) -> None:
-        self.assertEqual(set(self.rows()), LISTED)
+        rows = set(self.rows())
+        self.assertLessEqual(LISTED, rows)
+        self.assertFalse(rows & ALSO_WITH_ALL)
 
     def test_all_articles(self: Any) -> None:
         rows = self.rows("?all=1")
-        self.assertEqual(set(rows), LISTED | ALSO_WITH_ALL)
+        self.assertLessEqual(LISTED | ALSO_WITH_ALL, set(rows))
         self.assertNotIn(None, rows)
         self.assertNotIn(NUMBERLESS[0], self.get(PLAN + "?all=1").text())
 

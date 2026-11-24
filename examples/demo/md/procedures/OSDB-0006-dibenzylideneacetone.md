@@ -44,6 +44,8 @@ not experimentally verified.
 | Benzaldehyde | 100-52-7 | 106.12 | 2.12 g (2.03 mL) | 20.0 | 2.0 |
 | Acetone | 67-64-1 | 58.08 | 0.581 g (0.735 mL) | 10.0 | 1.0 |
 | Sodium hydroxide | 1310-73-2 | 40.00 | 2.00 g | 50.0 | 5.0 |
+| Ethanol | 64-17-5 | 46.07 | 17 mL and a little for washing | – | – |
+| Ethyl acetate | 141-78-6 | 88.11 | about 2.5 mL per g crude product | – | – |
 
 ## Procedure
 

@@ -9,11 +9,11 @@ from datetime import date, datetime, time, timedelta
 from django.test import TestCase
 
 from . import BERLIN, DEMO_NOTEBOOKS, frozen, page, table
-from .collection_support import accept
+from .collection_support import accept, demo_collection
 from .demo_support import (ACCOUNTS, ARTICLES, DAY, DELIVERIES,
                            DEMO_PASSWORD, ITEMS, LOGIN, NOTE_NUMBER,
                            NUMBERLESS, PLAN, TASKS, SeededCase, noon,
-                           opening, run, seed)
+                           opening, run, sample_chemicals, seed)
 from .planning_support import block_of, details
 from .registry_support import demo_registry
 from .widget_support import widget
@@ -183,7 +183,6 @@ class RegistryTests(SeededCase):
             self) -> None:
         from registry.models import Substance
         keys = set(Substance.objects.values_list("key", flat=True))
-        self.assertEqual(len(keys), 21)
         self.assertLessEqual({"cinnamic-acid", "new-compound-7",
                               NUMBERLESS[1]}, keys)
         self.assertEqual(
@@ -256,7 +255,7 @@ class NotebookTests(SeededCase):
         numbers = {code: sorted(Entry.objects.filter(
             notebook__code=code).values_list("number", flat=True))
             for code in DEMO_NOTEBOOKS}
-        self.assertEqual(numbers["CE-3"], [1, 2])
+        self.assertLessEqual({1, 2}, set(numbers["CE-3"]))
         entry = Entry.objects.get(notebook__code="CE-3", number=1)
         self.assertEqual([p.key for p in entry.procedures.all()],
                          ["OSDB-0009"])
@@ -300,12 +299,29 @@ class NotebookTests(SeededCase):
         self.assertEqual({key: journal_of(key) for key in DEMO_JOURNAL},
                          DEMO_JOURNAL)
 
+    def test_every_procedure_names_the_entry_of_the_manifest(self) -> None:
+        """Requirement: Demo notebooks (the data set's import gives every
+        procedure the entry its `notebook` names, and its project)."""
+        from .collection_support import journal_of
+        for procedure in demo_collection()["procedures"]:
+            with self.subTest(procedure=procedure["id"]):
+                self.assertEqual(journal_of(procedure["id"]),
+                                 (procedure["notebook"],
+                                  procedure["project"]))
+
     def test_only_the_named_entries_exist(self) -> None:
         """Requirement: Notebooks and entries (nothing but an import or a
-        task step creates an entry): nine of the procedures and one of
-        the step."""
+        task step creates an entry): those the procedures name and those
+        the task steps name."""
         from journal.models import Entry
-        self.assertEqual(Entry.objects.count(), 10)
+        from tasks.models import TaskStep
+        named = {procedure["notebook"]
+                 for procedure in demo_collection()["procedures"]
+                 if procedure["notebook"]}
+        named |= {str(step.journal_entry) for step in
+                  TaskStep.objects.exclude(journal_entry=None)}
+        self.assertEqual({str(entry) for entry in Entry.objects.all()},
+                         named)
 
     def test_the_done_step_names_the_entry(self) -> None:
         """Requirement: Demo notebooks (the done first step of the
@@ -316,7 +332,9 @@ class NotebookTests(SeededCase):
         self.assertEqual(str(step.journal_entry), "CE-3/2")
         others = TaskStep.objects.exclude(pk=step.pk).filter(
             journal_entry__isnull=False)
-        self.assertEqual(others.count(), 0)
+        for other in others:
+            with self.subTest(step=str(other)):
+                self.assertIsNotNone(other.done_on)
 
 
 class InventoryTests(SeededCase):
@@ -326,8 +344,9 @@ class InventoryTests(SeededCase):
         from inventory.models import Item
         header, rows = table(self.get(ITEMS))
         numbered = [row for row in rows if row[header[0]].text()]
+        self.assertLessEqual(set(ARTICLES), set(compound_keys()))
         self.assertEqual({row[header[0]].text() for row in numbered},
-                         set(ARTICLES))
+                         set(compound_keys()))
         bare = [index for index, row in enumerate(rows)
                 if not row[header[0]].text()]
         self.assertEqual(len(bare), 1)
@@ -422,13 +441,26 @@ class InventoryTests(SeededCase):
         from inventory.models import Article
         from registry.models import Substance
         numbered = Article.objects.exclude(article_number__isnull=True)
+        self.assertLessEqual(set(ARTICLES), set(compound_keys()))
         self.assertEqual(
             {article.article_number for article in numbered},
-            set(ARTICLES))
-        self.assertEqual(Article.objects.count(), len(ARTICLES) + 1)
+            set(compound_keys()))
+        self.assertEqual(
+            Article.objects.filter(article_number__isnull=True).count(), 1)
         for article in Article.objects.all():
             self.assertTrue(Substance.objects.filter(
                 pk=article.pk).exists())
+
+    def test_every_article_number_of_the_registry_has_an_item(self) -> None:
+        """Requirement: Demo inventory (items of the articles of the
+        substances that have an article number in the demo registry)."""
+        from inventory.models import Item
+        for number, key in compound_keys().items():
+            with self.subTest(article=number):
+                items = Item.objects.filter(article__article_number=number)
+                self.assertTrue(items.exists())
+                self.assertEqual(
+                    {item.article.substance.key for item in items}, {key})
 
     def test_sizes_and_units(self) -> None:
         from inventory.models import Item
@@ -767,7 +799,8 @@ class InventoryTests(SeededCase):
     def test_every_kind_of_vessel_appears(self) -> None:
         from inventory.models import Vessel
         kinds = {vessel.kind for vessel in Vessel.objects.all()}
-        self.assertLessEqual({"end-product", "intermediate"}, kinds)
+        self.assertLessEqual({"end-product", "intermediate", "reagent"},
+                             kinds)
 
     def test_notes(self) -> None:
         """Scenario: Notes."""
@@ -784,6 +817,98 @@ class InventoryTests(SeededCase):
                              for text in historical), 1)
         current = [text for text in texts if "nachgetragen" not in text]
         self.assertTrue(any("storniert" in text for text in current))
+
+
+class SampleVesselTests(SeededCase):
+    """The vessels behind the samples' chemicals (lab-demo: Demo
+    inventory, with sample-procedures "Reagents in the registry")."""
+
+    def open_vessels(self, key: str):
+        from inventory.models import Vessel
+        return Vessel.objects.filter(batch__substance__key=key,
+                                     amount__gt=0)
+
+    def commercial(self) -> list[str]:
+        """The keys of the commercial chemicals of the demo registry that
+        no sample names."""
+        used = sample_chemicals()
+        return sorted(
+            entry["key"] for entry in demo_registry()["substances"]
+            if entry["group"] in ("starting-materials", "reagents")
+            and entry["key"] not in used["started"] | used["made"])
+
+    def test_every_substance_a_sample_uses_has_an_open_vessel(self) -> None:
+        """Requirement: Demo inventory (on `D`, an open vessel of every
+        substance that a sample procedure starts from or lists in its
+        Reagents table, of a made or a bought batch for one that a sample
+        makes)."""
+        used = sample_chemicals()
+        wanted = used["started"] | used["listed"]
+        self.assertTrue(used["listed"], "no Reagents row names a substance")
+        for key in sorted(wanted):
+            with self.subTest(substance=key):
+                self.assertTrue(self.open_vessels(key).exists())
+
+    def test_a_substance_no_sample_makes_has_a_bought_vessel(self) -> None:
+        """Requirement: Demo inventory (of a bought batch, with its
+        supplier, the supplier's article number and the supplier's batch,
+        for a substance that no sample makes)."""
+        used = sample_chemicals()
+        for key in sorted((used["started"] | used["listed"])
+                          - used["made"]):
+            bought = [v for v in self.open_vessels(key).filter(
+                batch__source="bought").select_related("batch")
+                if v.batch.supplier.strip()
+                and v.batch.supplier_article_number.strip()
+                and v.batch.supplier_batch.strip()]
+            with self.subTest(substance=key):
+                self.assertTrue(bought)
+
+    def test_every_commercial_chemical_no_sample_names_is_bought(
+            self) -> None:
+        """Requirement: Demo inventory (on `D`, an open vessel of a
+        bought batch of every commercial chemical of the demo registry
+        that no sample names)."""
+        found = self.commercial()
+        self.assertTrue(found, "no commercial chemical that no sample "
+                        "names")
+        for key in found:
+            with self.subTest(substance=key):
+                self.assertTrue(self.open_vessels(key).filter(
+                    batch__source="bought").exists())
+
+    def test_some_commercial_chemicals_have_vessels_in_two_places(
+            self) -> None:
+        """Requirement: Demo inventory (some substances with two or more
+        vessels in different locations)."""
+        found = [key for key in self.commercial()
+                 if len({vessel.location for vessel in
+                         self.open_vessels(key)} - {""}) >= 2]
+        self.assertGreaterEqual(len(found), 2)
+
+    def test_several_substances_without_an_article_have_made_vessels(
+            self) -> None:
+        """Requirement: Demo inventory (on `D`, open vessels of made
+        batches of several substances that have no article)."""
+        from inventory.models import Article, Vessel
+        found = {vessel.batch.substance_id for vessel in
+                 Vessel.objects.filter(batch__source="made", amount__gt=0)
+                 .select_related("batch")
+                 if not Article.objects.filter(
+                     pk=vessel.batch.substance_id).exists()}
+        self.assertGreaterEqual(len(found), 2)
+
+    def test_liquids_and_solvents_are_weighed(self) -> None:
+        """Requirement: Demo inventory (vessels of liquids and solvents
+        entered by mass, in `g`): a chemical that a Reagents row lists
+        by volume, with `–` in `mmol` and `Equiv`."""
+        from inventory.models import Vessel
+        liquids = sample_chemicals()["by_volume"]
+        self.assertTrue(liquids, "no solvent row gives a volume")
+        for key in sorted(liquids):
+            for vessel in Vessel.objects.filter(batch__substance__key=key):
+                with self.subTest(substance=key, vessel=vessel.pk):
+                    self.assertEqual(vessel.unit, "g")
 
 
 class TaskTests(SeededCase):
@@ -862,6 +987,34 @@ class TaskTests(SeededCase):
                 for step in task.steps.order_by("position")]
             == [True, False]
             for task in Task.objects.exclude(sequence=None)))
+
+    def test_a_running_task_follows_a_sequence_of_three_steps(self) -> None:
+        """Requirement: Demo tasks and parameters (a running task
+        following a sequence of at least three steps, with its first two
+        steps done, each naming a journal entry and having made a batch
+        of its intermediate stored in a vessel)."""
+        from inventory.models import Batch
+        from tasks.models import State, Task
+        found = [task for task in Task.objects.exclude(sequence=None)
+                 if task.state == State.RUNNING
+                 and task.sequence.steps.count() >= 3]
+        self.assertTrue(found)
+        for task in found:
+            steps = list(task.steps.order_by("position"))
+            with self.subTest(task=task.number):
+                self.assertEqual(task.start_step, 1)
+                self.assertEqual(len(steps), task.sequence.steps.count())
+                for step in steps[:2]:
+                    self.assertIsNotNone(step.done_on)
+                    self.assertIsNotNone(step.journal_entry)
+                    batches = Batch.objects.filter(task_step=step,
+                                                   source="made")
+                    self.assertTrue(batches.exists())
+                    for batch in batches:
+                        self.assertTrue(step.entry.substances.filter(
+                            role="product",
+                            substance=batch.substance).exists())
+                        self.assertTrue(batch.vessels.exists())
 
     def test_the_steps_of_a_sequence_task_name_the_demo_entries(
             self) -> None:
@@ -1022,7 +1175,7 @@ class TaskTests(SeededCase):
             if not taken.exists():
                 continue
             task = batch.task_step.task
-            first, second = task.steps.order_by("position")
+            first, second = list(task.steps.order_by("position"))[:2]
             if (task.state == State.RUNNING and task.sequence is not None
                     and batch.task_step == first and first.done_on
                     and second.done_on is None):
@@ -1104,7 +1257,8 @@ class StockedStepTests(SeededCase):
         for task in others:
             with self.subTest(task=task.number):
                 self.assertEqual(task.start_step, 1)
-                self.assertEqual(task.steps.count(), 2)
+                self.assertEqual(task.steps.count(),
+                                 task.sequence.steps.count())
 
     def test_the_task_page_names_the_step(self) -> None:
         """Scenario: A demo task from stock (it shows `SEQ-0001 ab Stufe
@@ -1337,4 +1491,3 @@ class DemoRegistryNamesTests(TestCase):
             with self.subTest(article=article):
                 self.assertIn(article, names)
         self.assertEqual(names["NV-0007"], "Neuverbindung 7")
-        self.assertNotIn("CH-0003", names)

@@ -325,16 +325,16 @@ class ValidateSequenceTests(BuildTestCase):
 
     def broken_sequence(self, text_edit: tuple[str, str]) -> Path:
         """Add a copy of the first sequence with one edit, as
-        ``md/sequences/SEQ-0003-broken.md``."""
+        ``md/sequences/SEQ-0993-broken.md``."""
         source = (self.sandbox.root / "md" / "sequences"
                   / "SEQ-0001-aspirin-from-wintergreen.md")
         text = source.read_text(encoding="utf-8")
-        for old, new in (('id = "SEQ-0001"', 'id = "SEQ-0003"'),
-                         ('slug = "seq-0001"', 'slug = "seq-0003"'),
+        for old, new in (('id = "SEQ-0001"', 'id = "SEQ-0993"'),
+                         ('slug = "seq-0001"', 'slug = "seq-0993"'),
                          text_edit):
             self.assertEqual(text.count(old), 1, old)
             text = text.replace(old, new)
-        target = source.parent / "SEQ-0003-broken.md"
+        target = source.parent / "SEQ-0993-broken.md"
         target.write_text(text, encoding="utf-8")
         return target
 
@@ -342,7 +342,7 @@ class ValidateSequenceTests(BuildTestCase):
         """Scenario: Seeds validate (the sequences are counted)."""
         root = self.sandbox.root
         sequences = list((root / "md" / "sequences").glob("SEQ-*.md"))
-        self.assertEqual(len(sequences), 4)
+        self.assertTrue(sequences)
         files = (len(list((root / "md" / "procedures").glob("*.md")))
                  + len(sequences))
         result = self.build("validate")
@@ -360,7 +360,7 @@ class ValidateSequenceTests(BuildTestCase):
         lines = problem_lines(result.stdout)
         self.assertEqual(len(lines), 1, result.stdout)
         self.assertTrue(lines[0].startswith(
-            "md/sequences/SEQ-0003-broken.md:target: error: "), lines[0])
+            "md/sequences/SEQ-0993-broken.md:target: error: "), lines[0])
         self.assertIn('unknown compound "no-such-compound"', lines[0])
 
     def test_a_step_of_an_unknown_procedure_is_reported(self) -> None:
@@ -370,7 +370,7 @@ class ValidateSequenceTests(BuildTestCase):
         result = self.build("validate")
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertTrue(any(
-            ln.startswith("md/sequences/SEQ-0003-broken.md:"
+            ln.startswith("md/sequences/SEQ-0993-broken.md:"
                           "steps[2].procedure: error:")
             and "OSDB-0999 not found" in ln
             for ln in result.stdout.splitlines()), result.stdout)
@@ -729,9 +729,9 @@ class ShippedTreeValidationTests(DemoBuildTestCase):
             list(self.sandbox.root.glob("org/procedures/OSDB-*.org"))
             or list(self.sandbox.root.glob("md/procedures/OSDB-*.md")),
             "no shipped procedures to validate")
-        self.assertEqual(
-            len(list(self.sandbox.root.glob("md/sequences/SEQ-*.md"))), 4,
-            "the demo's sequences")
+        self.assertTrue(
+            list(self.sandbox.root.glob("md/sequences/SEQ-*.md")),
+            "no shipped sequences to validate")
         self.assertRegex(result.stderr, r"validated \d+ files: 0 errors, "
                          r"0 warnings")
 

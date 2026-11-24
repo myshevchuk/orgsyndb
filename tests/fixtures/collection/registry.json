@@ -179,6 +179,11 @@
         "label_de": "Amidkupplung"
       },
       {
+        "key": "benzoin-condensation",
+        "label": "Benzoin condensation",
+        "label_de": "Benzoin-Kondensation"
+      },
+      {
         "key": "cross-coupling",
         "label": "Cross-coupling",
         "label_de": "Kreuzkupplung"
@@ -189,9 +194,19 @@
         "label_de": "Cycloaddition"
       },
       {
+        "key": "cyclocondensation",
+        "label": "Cyclocondensation",
+        "label_de": "Cyclokondensation"
+      },
+      {
         "key": "deprotection",
         "label": "Deprotection",
         "label_de": "Entschützung"
+      },
+      {
+        "key": "electrophilic-aromatic-substitution",
+        "label": "Electrophilic aromatic substitution",
+        "label_de": "Elektrophile aromatische Substitution"
       },
       {
         "key": "esterification",
@@ -199,9 +214,19 @@
         "label_de": "Veresterung"
       },
       {
+        "key": "grignard-reaction",
+        "label": "Grignard reaction",
+        "label_de": "Grignard-Reaktion"
+      },
+      {
         "key": "hydrolysis",
         "label": "Hydrolysis",
         "label_de": "Hydrolyse"
+      },
+      {
+        "key": "knoevenagel-condensation",
+        "label": "Knoevenagel condensation",
+        "label_de": "Knoevenagel-Kondensation"
       },
       {
         "key": "nucleophilic-substitution",
@@ -222,6 +247,11 @@
         "key": "protection",
         "label": "Protection",
         "label_de": "Schützung"
+      },
+      {
+        "key": "rearrangement",
+        "label": "Rearrangement",
+        "label_de": "Umlagerung"
       },
       {
         "key": "reduction",
@@ -676,5 +706,5 @@
       "user": "mwolf"
     }
   ],
-  "digest": "b57039623613b5a07f63b6ce919eaf858cc07159dc85620ef1a41ae20eb0cc0a"
+  "digest": "3f47bc9b786299425d9e420b108c98c2315b0685dc557b8c741da5c517572cce"
 }

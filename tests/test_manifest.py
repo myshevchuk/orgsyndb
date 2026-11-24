@@ -48,8 +48,15 @@ DEMO_JOURNAL = {
     "OSDB-0007": ("AE-2/11", "cinnamates"),
     "OSDB-0008": ("AE-2/12", "cinnamates"),
     "OSDB-0009": ("CE-3/1", "advanced-practical")}
+DEMO_ACCOUNTS = {"aschmidt", "jkoch", "klehmann", "mwolf", "tbauer"}
 SEQUENCE_KEYS = {"id", "title", "title_de", "target", "steps"}
-IDS = [f"OSDB-{number:04d}" for number in range(1, 10)]
+# The IDs of the test collection's procedures and sequences, which its
+# manifest lists in order.
+IDS = sorted({path.name[:9] for path in
+              (TEST_COLLECTION / "md" / "procedures").glob("OSDB-*.md")})
+SEQUENCE_IDS = sorted({
+    path.name[:8]
+    for path in (TEST_COLLECTION / "md" / "sequences").glob("SEQ-*.md")})
 FRONT_MATTER = ('+++\nid = "{id}"\ntitle = "{title}"\n'
                 'status = "{status}"\nauthors = {authors}\n'
                 'reaction_types = ["hydrolysis"]\n'
@@ -329,12 +336,12 @@ class ManifestDataTests(unittest.TestCase):
         """Requirement: manifest subcommand (`sequences`: one table per
         ID, ordered, with `target` and `steps`)."""
         sequences = self.data["sequences"]
-        self.assertEqual([s["id"] for s in sequences],
-                         ["SEQ-0001", "SEQ-0002"])
+        self.assertEqual([s["id"] for s in sequences], SEQUENCE_IDS)
         for sequence in sequences:
             with self.subTest(id=sequence["id"]):
                 self.assertEqual(set(sequence), SEQUENCE_KEYS)
-        first, second = sequences
+        first = by_id(sequences, "SEQ-0001")
+        second = by_id(sequences, "SEQ-0002")
         self.assertEqual(first["target"], "acetylsalicylic-acid")
         self.assertEqual(first["steps"], [
             {"procedure": "OSDB-0001", "entry": None},
@@ -474,8 +481,7 @@ class ManifestDataTests(unittest.TestCase):
         (sequences / "SEQ-0099-Not A Slug.md").write_text("x\n")
         data = manifest_of(self.root)
         self.assertEqual([p["id"] for p in data["procedures"]], IDS)
-        self.assertEqual([s["id"] for s in data["sequences"]],
-                         ["SEQ-0001", "SEQ-0002"])
+        self.assertEqual([s["id"] for s in data["sequences"]], SEQUENCE_IDS)
 
     def test_no_registry_is_read_and_no_value_checked(self) -> None:
         """Requirement: manifest subcommand (it reads no registry and
@@ -547,62 +553,62 @@ class DeletedTests(unittest.TestCase):
     def test_the_ids_are_in_upper_case_and_in_order(self) -> None:
         """Requirement: manifest subcommand (in upper case and in
         order, read as `new` reads it)."""
-        old = [write(self.root, "md/sequences/seq-0006-old.md"),
-               write(self.root, "org/procedures/OSDB-0014-old.org"),
-               write(self.root, "md/procedures/osdb-0013-old.md"),
-               write(self.root, "md/procedures/OSDB-0012-old.de.md"),
-               write(self.root, "md/procedures/OSDB-0012-old.md"),
-               write(self.root, "md/sequences/SEQ-0004-old.md")]
+        old = [write(self.root, "md/sequences/seq-0994-old.md"),
+               write(self.root, "org/procedures/OSDB-0994-old.org"),
+               write(self.root, "md/procedures/osdb-0993-old.md"),
+               write(self.root, "md/procedures/OSDB-0992-old.de.md"),
+               write(self.root, "md/procedures/OSDB-0992-old.md"),
+               write(self.root, "md/sequences/SEQ-0992-old.md")]
         git(self.root, "add", "-A")
         git(self.root, "commit", "-q", "-m", "add old files")
         for path in old:
             path.unlink()
         git(self.root, "commit", "-q", "-a", "-m", "delete them")
         self.assertEqual(
-            self.deleted(), ["OSDB-0012", "OSDB-0013", "OSDB-0014",
-                             "SEQ-0004", "SEQ-0006"])
+            self.deleted(), ["OSDB-0992", "OSDB-0993", "OSDB-0994",
+                             "SEQ-0992", "SEQ-0994"])
 
     def test_an_id_the_files_name_is_not_deleted(self) -> None:
         """Requirement: manifest subcommand (that `procedures` and
         `sequences` do not name)."""
         old = [write(self.root, "md/procedures/OSDB-0002-old-name.md"),
                write(self.root, "md/sequences/SEQ-0001-old-name.md"),
-               write(self.root, "md/procedures/OSDB-0020-old.md")]
+               write(self.root, "md/procedures/OSDB-0990-old.md")]
         git(self.root, "add", "-A")
         git(self.root, "commit", "-q", "-m", "add old files")
         for path in old:
             path.unlink()
         git(self.root, "commit", "-q", "-a", "-m", "delete them")
-        self.assertEqual(self.deleted(), ["OSDB-0020"])
+        self.assertEqual(self.deleted(), ["OSDB-0990"])
 
     def test_an_id_in_a_branch_is_deleted_too(self) -> None:
         """Requirement: manifest subcommand (the collection's git
         history, read as `new` reads it: all refs)."""
         git(self.root, "checkout", "-q", "-b", "other")
-        old = write(self.root, "md/procedures/OSDB-0031-branch.md")
+        old = write(self.root, "md/procedures/OSDB-0991-branch.md")
         git(self.root, "add", "-A")
         git(self.root, "commit", "-q", "-m", "add on a branch")
         old.unlink()
         git(self.root, "commit", "-q", "-a", "-m", "delete on a branch")
         git(self.root, "checkout", "-q", "-")
-        self.assertEqual(self.deleted(), ["OSDB-0031"])
+        self.assertEqual(self.deleted(), ["OSDB-0991"])
 
     def test_the_list_is_plain_json(self) -> None:
         """Requirement: manifest subcommand (strict JSON)."""
-        write(self.root, "md/procedures/OSDB-0012-old.md")
+        write(self.root, "md/procedures/OSDB-0992-old.md")
         git(self.root, "add", "-A")
         git(self.root, "commit", "-q", "-m", "add old file")
-        (self.root / "md" / "procedures" / "OSDB-0012-old.md").unlink()
+        (self.root / "md" / "procedures" / "OSDB-0992-old.md").unlink()
         git(self.root, "commit", "-q", "-a", "-m", "delete it")
         data, _out, _err = captured(manifest_of, self.root)
-        self.assertEqual(data.get("deleted"), ["OSDB-0012"])
+        self.assertEqual(data.get("deleted"), ["OSDB-0992"])
         self.assertEqual(json.loads(json.dumps(data, allow_nan=False)),
                          data)
 
     def test_a_shallow_clone_warns(self) -> None:
         """Requirement: manifest subcommand (in a shallow clone it warns
         on stderr as `new` does)."""
-        old = write(self.root, "md/procedures/OSDB-0012-old.md")
+        old = write(self.root, "md/procedures/OSDB-0992-old.md")
         git(self.root, "add", "-A")
         git(self.root, "commit", "-q", "-m", "add old file")
         old.unlink()
@@ -647,8 +653,7 @@ class ManifestSubcommandTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         data = json.loads(result.stdout)
         self.assertEqual([p["id"] for p in data["procedures"]], IDS)
-        self.assertEqual([s["id"] for s in data["sequences"]],
-                         ["SEQ-0001", "SEQ-0002"])
+        self.assertEqual([s["id"] for s in data["sequences"]], SEQUENCE_IDS)
         self.assertEqual(path.sudo_calls(), [])
         self.assertFalse((sandbox.root / "build").exists())
 
@@ -679,7 +684,7 @@ class ManifestSubcommandTests(unittest.TestCase):
             "manifest", cwd=sandbox.root / "md" / "procedures")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
-            len(json.loads(result.stdout)["procedures"]), 9)
+            len(json.loads(result.stdout)["procedures"]), len(IDS))
 
     def test_org_sources_need_the_export(self) -> None:
         """Scenario: Org sources need the export."""
@@ -724,18 +729,27 @@ class DemoManifestFileTests(unittest.TestCase):
 
     def test_the_file_credits_the_demo_accounts(self) -> None:
         data = json.loads(FIXTURE.read_text(encoding="utf-8"))
-        self.assertEqual(
-            {p["id"]: p.get("authors") for p in data["procedures"]},
-            DEMO_CREDITS)
+        found = {p["id"]: p.get("authors") for p in data["procedures"]}
+        for ident, authors in DEMO_CREDITS.items():
+            self.assertEqual(found[ident], authors, ident)
+        for ident, authors in found.items():
+            with self.subTest(id=ident):
+                self.assertTrue(authors)
+                self.assertLessEqual(set(authors), DEMO_ACCOUNTS)
 
     def test_the_file_names_the_journal_fields(self) -> None:
         """Scenario: Journal fields in the manifest (the file the lab
         application's demo data applies gives each procedure's `notebook`
         and `project`)."""
         data = json.loads(FIXTURE.read_text(encoding="utf-8"))
-        self.assertEqual(
-            {p["id"]: (p.get("notebook"), p.get("project"))
-             for p in data["procedures"]}, DEMO_JOURNAL)
+        found = {p["id"]: (p.get("notebook"), p.get("project"))
+                 for p in data["procedures"]}
+        for ident, journal in DEMO_JOURNAL.items():
+            self.assertEqual(found[ident], journal, ident)
+        for ident, (notebook, project) in found.items():
+            with self.subTest(id=ident):
+                self.assertRegex(notebook, r"^(AE-1|AE-2|CE-1|CE-3)/\d+$")
+                self.assertTrue(project)
 
     def test_the_file_deletes_no_id(self) -> None:
         """Scenario: Nothing deleted from the demo."""
@@ -761,14 +775,30 @@ class DemoManifestTests(unittest.TestCase):
         self.assertEqual(data["language"], "de")
         self.assertEqual(data.get("deleted"), [])
         procedures = data["procedures"]
-        self.assertEqual([p["id"] for p in procedures], IDS)
+        demo_ids = sorted(
+            {p.name[:9] for p in
+             (DEMO / "org" / "procedures").glob("OSDB-*.org")}
+            | {p.name[:9] for p in
+               (DEMO / "md" / "procedures").glob("OSDB-*.md")})
+        self.assertEqual([p["id"] for p in procedures], demo_ids)
+        self.assertEqual([p["id"] for p in procedures[:len(IDS)]], IDS)
         self.assertEqual(by_id(procedures, "OSDB-0001")["source"], "org")
         self.assertEqual(by_id(procedures, "OSDB-0002")["source"], "md")
-        self.assertEqual({p["id"]: p.get("authors") for p in procedures},
-                         DEMO_CREDITS)
-        self.assertEqual(
-            {p["id"]: (p.get("notebook"), p.get("project"))
-             for p in procedures}, DEMO_JOURNAL)
+        authors = {p["id"]: p.get("authors") for p in procedures}
+        for ident, wanted in DEMO_CREDITS.items():
+            self.assertEqual(authors[ident], wanted, ident)
+        for ident, listed in authors.items():
+            with self.subTest(id=ident):
+                self.assertTrue(listed)
+                self.assertLessEqual(set(listed), DEMO_ACCOUNTS)
+        journal = {p["id"]: (p.get("notebook"), p.get("project"))
+                   for p in procedures}
+        for ident, wanted in DEMO_JOURNAL.items():
+            self.assertEqual(journal[ident], wanted, ident)
+        for ident, (notebook, project) in journal.items():
+            with self.subTest(id=ident):
+                self.assertRegex(notebook, r"^(AE-1|AE-2|CE-1|CE-3)/\d+$")
+                self.assertTrue(project)
         general = by_id(procedures, "OSDB-0009")
         self.assertEqual(len(general["entries"]), 3)
         self.assertEqual(general["entries"][0], {

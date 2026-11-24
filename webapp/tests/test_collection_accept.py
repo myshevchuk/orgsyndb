@@ -8,7 +8,8 @@ from django.test import override_settings
 
 from registry.models import Substance
 
-from .collection_support import (PROCEDURES, SEQUENCES, TOKEN, TOOLING,
+from .collection_support import (PROCEDURES, SCOPE_ENTRIES, SEQUENCES, STEPS,
+                                 TOKEN, TOOLING,
                                  ImportCase, counts, demo_collection, dump,
                                  manifest, post, refused)
 from .demo_support import SeededCase
@@ -50,8 +51,8 @@ class FirstImportTests(ImportCase):
         self.assertEqual(
             sorted(Procedure.objects.values_list("key", flat=True)),
             [p["id"] for p in demo_collection()["procedures"]])
-        self.assertEqual(ScopeEntry.objects.count(), 11)
-        self.assertEqual(Step.objects.count(), 4)
+        self.assertEqual(ScopeEntry.objects.count(), SCOPE_ENTRIES)
+        self.assertEqual(Step.objects.count(), STEPS)
 
 
 @override_settings(ORGSYNDB_BUILDER_TOKEN=TOKEN)

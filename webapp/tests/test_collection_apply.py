@@ -5,14 +5,18 @@ from typing import Any
 
 from django.test import SimpleTestCase
 
-from .collection_support import (DEMO_CREDITS, DEMO_JOURNAL, ImportCase,
-                                 author_rows, authors_of, by_id,
-                                 copy_procedure, counts, credited,
-                                 demo_collection, dump, entries_of, issue_ids,
-                                 journal_of, steps_of, substances_of)
+from .collection_support import (DEMO_CREDITS, DEMO_JOURNAL, PROCEDURES,
+                                 SEQUENCES, ImportCase, author_rows,
+                                 authors_of, by_id, copy_procedure, counts,
+                                 credited, demo_collection, dump, entries_of,
+                                 issue_ids, journal_of, steps_of,
+                                 substances_of)
 from .journal_support import entries_named, entry_of
 
 SPECIFIC = "acetic-anhydride + salicylic-acid >> acetylsalicylic-acid"
+# An ID and notebook entries that the demo collection does not use.
+STRAY = "OSDB-0990"
+ENTRIES = ("AE-1/990", "AE-1/991")
 GENERAL = ["4-acetylbiphenyl >> 1-biphenyl-4-yl-ethanol",
            "acetophenone >> 1-phenylethanol",
            "4-bromoacetophenone >> 1-4-bromophenyl-ethanol"]
@@ -216,7 +220,7 @@ class ChangedValuesTests(ImportCase):
         self.assertEqual(
             Procedure.objects.get(key="OSDB-0002").last_import, first)
         self.assertEqual(entries_of("OSDB-0002")[0].pk, entry.pk)
-        self.assertEqual(counts()["Procedure"], 9)
+        self.assertEqual(counts()["Procedure"], PROCEDURES)
 
     def test_an_unchanged_collection_changes_no_row(self) -> None:
         """Requirement: Applying an import (a row keeps the import it
@@ -310,18 +314,18 @@ class ChangedValuesTests(ImportCase):
         is created)."""
         from collection.models import Procedure
         first = self.accept()
-        issue_ids("OSDB-0010")
+        issue_ids(STRAY)
         data = demo_collection()
-        new = copy_procedure(data, "OSDB-0008", "OSDB-0010")
+        new = copy_procedure(data, "OSDB-0008", STRAY)
         new["title"] = "Another"
         data["procedures"].append(new)
         second = self.accept(data)
-        self.assertEqual(Procedure.objects.count(), 10)
+        self.assertEqual(Procedure.objects.count(), PROCEDURES + 1)
         self.assertEqual(
-            Procedure.objects.get(key="OSDB-0010").last_import, second)
+            Procedure.objects.get(key=STRAY).last_import, second)
         self.assertEqual(
             Procedure.objects.get(key="OSDB-0008").last_import, first)
-        self.assertEqual(signatures("OSDB-0010"),
+        self.assertEqual(signatures(STRAY),
                          [(1, "ethyl-cinnamate >> cinnamic-acid", False)])
 
     def test_a_new_entry_is_created(self) -> None:
@@ -347,9 +351,16 @@ class ManifestFileTests(SimpleTestCase):
     data applies, names the authors of the demo's procedures)."""
 
     def test_the_file_credits_the_demo_accounts(self) -> None:
-        self.assertEqual(
-            {p["id"]: p.get("authors")
-             for p in demo_collection()["procedures"]}, DEMO_CREDITS)
+        found = {p["id"]: p.get("authors")
+                 for p in demo_collection()["procedures"]}
+        for ident, authors in DEMO_CREDITS.items():
+            self.assertEqual(found[ident], authors, ident)
+        for ident, authors in found.items():
+            with self.subTest(id=ident):
+                self.assertTrue(authors)
+                self.assertLessEqual(
+                    set(authors),
+                    {"aschmidt", "jkoch", "klehmann", "mwolf", "tbauer"})
 
 
 class JournalManifestFileTests(SimpleTestCase):
@@ -358,9 +369,14 @@ class JournalManifestFileTests(SimpleTestCase):
     procedures)."""
 
     def test_the_file_names_the_journal_fields(self) -> None:
-        self.assertEqual(
-            {p["id"]: (p.get("notebook"), p.get("project"))
-             for p in demo_collection()["procedures"]}, DEMO_JOURNAL)
+        found = {p["id"]: (p.get("notebook"), p.get("project"))
+                 for p in demo_collection()["procedures"]}
+        for ident, journal in DEMO_JOURNAL.items():
+            self.assertEqual(found[ident], journal, ident)
+        for ident, (notebook, project) in found.items():
+            with self.subTest(id=ident):
+                self.assertTrue(notebook)
+                self.assertTrue(project)
 
 
 class JournalApplyTests(ImportCase):
@@ -392,7 +408,10 @@ class JournalApplyTests(ImportCase):
         self.accept()
         self.assertEqual(
             {key: journal_of(key) for key in DEMO_JOURNAL}, DEMO_JOURNAL)
-        self.assertEqual(Entry.objects.count(), 9)
+        self.assertEqual(
+            Entry.objects.count(),
+            sum(p["notebook"] is not None
+                for p in demo_collection()["procedures"]))
 
     def test_an_entry_the_notebook_has_is_taken(self) -> None:
         """Requirement: Applying an import (created in that notebook when
@@ -452,11 +471,11 @@ class JournalApplyTests(ImportCase):
         from collection.models import Procedure
         first = self.accept()
         data = demo_collection()
-        procedure_of(data, "OSDB-0001")["notebook"] = "AE-1/9"
+        procedure_of(data, "OSDB-0001")["notebook"] = ENTRIES[0]
         second = self.accept(data)
-        self.assertEqual(journal_of("OSDB-0001")[0], "AE-1/9")
+        self.assertEqual(journal_of("OSDB-0001")[0], ENTRIES[0])
         self.assertEqual(entries_named("AE-1/1"), 1)
-        self.assertEqual(entries_named("AE-1/9"), 1)
+        self.assertEqual(entries_named(ENTRIES[0]), 1)
         self.assertEqual(
             Procedure.objects.get(key="OSDB-0001").last_import, second)
         self.assertEqual(
@@ -496,14 +515,14 @@ class JournalApplyTests(ImportCase):
         """Requirement: Applying an import (a procedure the rows lack is
         created, with its `journal_entry` and `project`)."""
         self.accept()
-        issue_ids("OSDB-0010")
+        issue_ids(STRAY)
         data = demo_collection()
-        new = copy_procedure(data, "OSDB-0008", "OSDB-0010")
-        new.update(notebook="AE-1/30", project="biaryls")
+        new = copy_procedure(data, "OSDB-0008", STRAY)
+        new.update(notebook=ENTRIES[1], project="biaryls")
         data["procedures"].append(new)
         self.accept(data)
-        self.assertEqual(journal_of("OSDB-0010"), ("AE-1/30", "biaryls"))
-        self.assertEqual(entries_named("AE-1/30"), 1)
+        self.assertEqual(journal_of(STRAY), (ENTRIES[1], "biaryls"))
+        self.assertEqual(entries_named(ENTRIES[1]), 1)
 
     def test_a_withdrawn_procedure_keeps_its_entry(self) -> None:
         """Requirement: Applying an import (a withdrawn procedure keeps
@@ -589,8 +608,9 @@ class AuthorsTests(ImportCase):
         self.assertEqual(
             [position for key, _, position in author_rows()
              if key == "OSDB-0002"], [1, 2])
-        self.assertEqual(len(author_rows()),
-                         sum(len(users) for users in DEMO_CREDITS.values()))
+        self.assertEqual(
+            len(author_rows()),
+            sum(len(p["authors"]) for p in credited()["procedures"]))
 
     def test_the_demo_manifest_credits_the_demo_accounts(self) -> None:
         """Scenario: Manifest of the demo (as the lab application applies
@@ -656,11 +676,11 @@ class AuthorsTests(ImportCase):
 
     def test_a_new_procedure_gets_its_authors(self) -> None:
         data = credited()
-        new = copy_procedure(data, "OSDB-0008", "OSDB-0010")
+        new = copy_procedure(data, "OSDB-0008", STRAY)
         new.update(authors=["jkoch", "mwolf"])
         data["procedures"].append(new)
         self.accept(data)
-        self.assertEqual(authors_of("OSDB-0010"), ["jkoch", "mwolf"])
+        self.assertEqual(authors_of(STRAY), ["jkoch", "mwolf"])
 
     def test_an_account_that_is_not_active_can_be_an_author(self) -> None:
         """Requirement: Authors are accounts (an account named as an
@@ -759,7 +779,7 @@ class WithdrawnTests(ImportCase):
         self.accept(without(demo_collection(), "OSDB-0006"))
         row.refresh_from_db()
         self.assertTrue(row.withdrawn)
-        self.assertEqual(Procedure.objects.count(), 9)
+        self.assertEqual(Procedure.objects.count(), PROCEDURES)
         self.assertEqual(signatures("OSDB-0006"), entries)
         self.assertEqual(substances_of(entries_of("OSDB-0006")[0],
                                        "substrate"), substances)
@@ -769,7 +789,7 @@ class WithdrawnTests(ImportCase):
         again = Procedure.objects.get(key="OSDB-0006")
         self.assertEqual(again.pk, row.pk)
         self.assertFalse(again.withdrawn)
-        self.assertEqual(Procedure.objects.count(), 9)
+        self.assertEqual(Procedure.objects.count(), PROCEDURES)
 
     def test_a_procedure_and_its_sequence_gone_and_back(self) -> None:
         """Scenario: A file gone and back (`OSDB-0002`, with the
@@ -792,8 +812,8 @@ class WithdrawnTests(ImportCase):
         self.assertFalse(procedure.withdrawn)
         self.assertFalse(sequence.withdrawn)
         self.assertEqual(steps_of("SEQ-0001"), steps)
-        self.assertEqual(Procedure.objects.count(), 9)
-        self.assertEqual(Sequence.objects.count(), 2)
+        self.assertEqual(Procedure.objects.count(), PROCEDURES)
+        self.assertEqual(Sequence.objects.count(), SEQUENCES)
 
     def test_a_sequence_gone_and_back(self) -> None:
         """Requirement: Applying an import (a sequence the manifest
@@ -821,12 +841,12 @@ class WithdrawnTests(ImportCase):
         after = counts()
         for name in ("Procedure", "ScopeEntry", "Sequence", "Step"):
             self.assertGreaterEqual(after[name], before[name], name)
-        self.assertEqual(after["Procedure"], 9)
-        self.assertEqual(after["Sequence"], 2)
+        self.assertEqual(after["Procedure"], PROCEDURES)
+        self.assertEqual(after["Sequence"], SEQUENCES)
         self.accept({"language": "de", "procedures": [], "sequences": [],
                      "deleted": []})
-        self.assertEqual(counts()["Procedure"], 9)
-        self.assertEqual(counts()["Sequence"], 2)
+        self.assertEqual(counts()["Procedure"], PROCEDURES)
+        self.assertEqual(counts()["Sequence"], SEQUENCES)
         from collection.models import Procedure, Sequence
         self.assertEqual(Procedure.objects.filter(withdrawn=False).count(),
                          0)

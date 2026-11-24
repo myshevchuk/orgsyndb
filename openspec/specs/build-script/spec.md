@@ -385,7 +385,7 @@ It reads no registry and checks no value: it runs after a build that validated t
 
 #### Scenario: Manifest of the demo
 - **WHEN** a test builds a copy of the demo collection and runs `tools/orgsyndb -C <collection> manifest`
-- **THEN** it exits 0 and stdout is one line of JSON whose `language` is `de`, whose `procedures` are `OSDB-0001` to `OSDB-0009` in order, `OSDB-0001` with `source` `org` and `OSDB-0002` with `source` `md`, whose `OSDB-0009` has three entries, the first with the substrates `["4-acetylbiphenyl"]` and the products `[{"compound": "1-biphenyl-4-yl-ethanol", "yield_percent": 90}]`, and whose `SEQ-0002` has the steps `OSDB-0004` with entry `null` and `OSDB-0009` with entry `1`
+- **THEN** it exits 0 and stdout is one line of JSON whose `language` is `de`, whose `procedures` are the demo's procedures in the order of their IDs, beginning with `OSDB-0001` to `OSDB-0009`, `OSDB-0001` with `source` `org` and `OSDB-0002` with `source` `md`, whose `OSDB-0009` has three entries, the first with the substrates `["4-acetylbiphenyl"]` and the products `[{"compound": "1-biphenyl-4-yl-ethanol", "yield_percent": 90}]`, and whose `SEQ-0002` has the steps `OSDB-0004` with entry `null` and `OSDB-0009` with entry `1`
 
 #### Scenario: Titles in both languages
 - **WHEN** the same test reads the entry of `OSDB-0002`

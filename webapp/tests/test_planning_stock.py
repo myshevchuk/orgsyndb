@@ -26,8 +26,8 @@ def key_of(value: Any) -> Any:
 class StockCase(PlanningCase):
     """The planning case with the demo registry and a collection that
     holds the demo's sequences and, for ``cinnamic-acid`` (article
-    ``CH-0012``), the three-step ``SEQ-0003`` and the two-step
-    ``SEQ-0004`` (``longer_collection``): the article of ``CH-0010``
+    ``CH-0012``), the three-step ``SEQ-0993`` and the two-step
+    ``SEQ-0994`` (``longer_collection``): the article of ``CH-0010``
     is made by ``SEQ-0001`` alone, whose intermediate is
     ``salicylic-acid``."""
 
@@ -167,18 +167,18 @@ class StartStepTests(StockCase):
         ID)."""
         self.cinnamic()
         self.assertEqual(self.starts("CH-0012"),
-                         [("SEQ-0003", 1, None), ("SEQ-0004", 1, None)])
+                         [("SEQ-0993", 1, None), ("SEQ-0994", 1, None)])
 
     def test_the_latest_step_with_a_vessel_is_proposed(self) -> None:
         """Requirement: Starting from stock (the last step `k`)."""
         self.cinnamic()
         self.stock("benzaldehyde")
         self.assertEqual(self.starts("CH-0012"), [
-            ("SEQ-0003", 2, "benzaldehyde"), ("SEQ-0004", 1, None)])
+            ("SEQ-0993", 2, "benzaldehyde"), ("SEQ-0994", 1, None)])
         self.stock("ethyl-cinnamate")
         self.assertEqual(self.starts("CH-0012"), [
-            ("SEQ-0003", 3, "ethyl-cinnamate"),
-            ("SEQ-0004", 2, "ethyl-cinnamate")])
+            ("SEQ-0993", 3, "ethyl-cinnamate"),
+            ("SEQ-0994", 2, "ethyl-cinnamate")])
 
     def test_a_later_intermediate_alone_skips_the_earlier_steps(
             self) -> None:
@@ -188,8 +188,8 @@ class StartStepTests(StockCase):
         self.cinnamic()
         self.stock("ethyl-cinnamate")
         self.assertEqual(self.starts("CH-0012"), [
-            ("SEQ-0003", 3, "ethyl-cinnamate"),
-            ("SEQ-0004", 2, "ethyl-cinnamate")])
+            ("SEQ-0993", 3, "ethyl-cinnamate"),
+            ("SEQ-0994", 2, "ethyl-cinnamate")])
 
     def test_the_target_itself_is_not_an_intermediate(self) -> None:
         """Requirement: Starting from stock (the intermediate of a step
@@ -197,7 +197,7 @@ class StartStepTests(StockCase):
         self.cinnamic()
         self.stock(CINNAMIC)
         self.assertEqual(self.starts("CH-0012"), [
-            ("SEQ-0003", 1, None), ("SEQ-0004", 1, None)])
+            ("SEQ-0993", 1, None), ("SEQ-0994", 1, None)])
 
     def test_plan_synthesis_stays_a_flag(self) -> None:
         """Requirement: Planning list (the synthesis action is offered
@@ -266,15 +266,15 @@ class ActionTests(StockCase):
         self.stock("ethyl-cinnamate")
         text = self.actions("CH-0012").text()
         name = "(E)-Zimtsäureethylester vorrätig"
-        first = f"Synthese planen über SEQ-0003 ab Stufe 3, {name}"
-        second = f"Synthese planen über SEQ-0004 ab Stufe 2, {name}"
+        first = f"Synthese planen über SEQ-0993 ab Stufe 3, {name}"
+        second = f"Synthese planen über SEQ-0994 ab Stufe 2, {name}"
         self.assertIn(first, text)
         self.assertIn(second, text)
         self.assertLess(text.index(first), text.index(second))
         self.assertEqual(self.new_task_links("CH-0012"), [
-            NEW_TASK + f"?substance={CINNAMIC}&sequence=SEQ-0003"
+            NEW_TASK + f"?substance={CINNAMIC}&sequence=SEQ-0993"
             "&start_step=3",
-            NEW_TASK + f"?substance={CINNAMIC}&sequence=SEQ-0004"
+            NEW_TASK + f"?substance={CINNAMIC}&sequence=SEQ-0994"
             "&start_step=2"])
 
     def test_the_action_is_not_a_link_for_a_visitor(self) -> None:

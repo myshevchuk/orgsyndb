@@ -276,6 +276,585 @@
           ]
         }
       ]
+    },
+    {
+      "id": "OSDB-0010",
+      "source": "md",
+      "title": "Benzoin aus Benzaldehyd",
+      "status": "draft",
+      "title_de": "Benzoin aus Benzaldehyd",
+      "reaction_type": "benzoin-condensation",
+      "general": false,
+      "authors": [
+        "mwolf"
+      ],
+      "notebook": "CE-3/40",
+      "project": "advanced-practical",
+      "entries": [
+        {
+          "substrates": [
+            "benzaldehyde"
+          ],
+          "products": [
+            {
+              "compound": "benzoin",
+              "yield_percent": 70
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0011",
+      "source": "md",
+      "title": "Benzil aus Benzoin",
+      "status": "draft",
+      "title_de": "Benzil aus Benzoin",
+      "reaction_type": "oxidation",
+      "general": false,
+      "authors": [
+        "mwolf"
+      ],
+      "notebook": "CE-3/41",
+      "project": "advanced-practical",
+      "entries": [
+        {
+          "substrates": [
+            "benzoin"
+          ],
+          "products": [
+            {
+              "compound": "benzil",
+              "yield_percent": 70
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0012",
+      "source": "md",
+      "title": "Benzilsäure aus Benzil",
+      "status": "draft",
+      "title_de": "Benzilsäure aus Benzil",
+      "reaction_type": "rearrangement",
+      "general": false,
+      "authors": [
+        "mwolf"
+      ],
+      "notebook": "CE-3/42",
+      "project": "advanced-practical",
+      "entries": [
+        {
+          "substrates": [
+            "benzil"
+          ],
+          "products": [
+            {
+              "compound": "benzilic-acid",
+              "yield_percent": 70
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0013",
+      "source": "md",
+      "title": "Tetraphenylcyclopentadienon aus Benzil",
+      "status": "draft",
+      "title_de": "Tetraphenylcyclopentadienon aus Benzil",
+      "reaction_type": "aldol-condensation",
+      "general": false,
+      "authors": [
+        "mwolf"
+      ],
+      "notebook": "CE-3/43",
+      "project": "advanced-practical",
+      "entries": [
+        {
+          "substrates": [
+            "benzil",
+            "1-3-diphenylacetone"
+          ],
+          "products": [
+            {
+              "compound": "tetraphenylcyclopentadienone",
+              "yield_percent": 70
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0014",
+      "source": "md",
+      "title": "Hexaphenylbenzol aus Tetraphenylcyclopentadienon",
+      "status": "draft",
+      "title_de": "Hexaphenylbenzol aus Tetraphenylcyclopentadienon",
+      "reaction_type": "cycloaddition",
+      "general": false,
+      "authors": [
+        "mwolf"
+      ],
+      "notebook": "CE-3/44",
+      "project": "advanced-practical",
+      "entries": [
+        {
+          "substrates": [
+            "tetraphenylcyclopentadienone",
+            "diphenylacetylene"
+          ],
+          "products": [
+            {
+              "compound": "hexaphenylbenzene",
+              "yield_percent": 70
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0015",
+      "source": "md",
+      "title": "Biphenyl-4-carbonsäure durch Haloformoxidation",
+      "status": "draft",
+      "title_de": "Biphenyl-4-carbonsäure durch Haloformoxidation",
+      "reaction_type": "oxidation",
+      "general": false,
+      "authors": [
+        "mwolf"
+      ],
+      "notebook": "CE-3/45",
+      "project": "biaryls",
+      "entries": [
+        {
+          "substrates": [
+            "4-acetylbiphenyl"
+          ],
+          "products": [
+            {
+              "compound": "biphenyl-4-carboxylic-acid",
+              "yield_percent": 70
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0016",
+      "source": "md",
+      "title": "Biphenyl-4-carbonsäuremethylester",
+      "status": "draft",
+      "title_de": "Biphenyl-4-carbonsäuremethylester",
+      "reaction_type": "esterification",
+      "general": false,
+      "authors": [
+        "mwolf"
+      ],
+      "notebook": "CE-3/46",
+      "project": "biaryls",
+      "entries": [
+        {
+          "substrates": [
+            "biphenyl-4-carboxylic-acid"
+          ],
+          "products": [
+            {
+              "compound": "methyl-biphenyl-4-carboxylate",
+              "yield_percent": 70
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0017",
+      "source": "md",
+      "title": "Biphenyl-4-ylmethanol aus Biphenyl-4-carbonsäuremethylester",
+      "status": "draft",
+      "title_de": "Biphenyl-4-ylmethanol aus Biphenyl-4-carbonsäuremethylester",
+      "reaction_type": "reduction",
+      "general": false,
+      "authors": [
+        "mwolf"
+      ],
+      "notebook": "CE-3/47",
+      "project": "biaryls",
+      "entries": [
+        {
+          "substrates": [
+            "methyl-biphenyl-4-carboxylate"
+          ],
+          "products": [
+            {
+              "compound": "biphenyl-4-ylmethanol",
+              "yield_percent": 70
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0018",
+      "source": "md",
+      "title": "N-Benzylbiphenyl-4-carboxamid",
+      "status": "draft",
+      "title_de": "N-Benzylbiphenyl-4-carboxamid",
+      "reaction_type": "amide-coupling",
+      "general": false,
+      "authors": [
+        "mwolf"
+      ],
+      "notebook": "CE-3/48",
+      "project": "biaryls",
+      "entries": [
+        {
+          "substrates": [
+            "biphenyl-4-carboxylic-acid",
+            "benzylamine"
+          ],
+          "products": [
+            {
+              "compound": "n-benzylbiphenyl-4-carboxamide",
+              "yield_percent": 70
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0019",
+      "source": "md",
+      "title": "(E)-4-Methoxyzimtsäure",
+      "status": "draft",
+      "title_de": "(E)-4-Methoxyzimtsäure",
+      "reaction_type": "knoevenagel-condensation",
+      "general": false,
+      "authors": [
+        "mwolf"
+      ],
+      "notebook": "CE-3/49",
+      "project": "cinnamates",
+      "entries": [
+        {
+          "substrates": [
+            "anisaldehyde",
+            "malonic-acid"
+          ],
+          "products": [
+            {
+              "compound": "4-methoxycinnamic-acid",
+              "yield_percent": 70
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0020",
+      "source": "md",
+      "title": "Anthracen-Maleinsäureanhydrid-Cycloaddukt",
+      "status": "draft",
+      "title_de": "Anthracen-Maleinsäureanhydrid-Cycloaddukt",
+      "reaction_type": "cycloaddition",
+      "general": false,
+      "authors": [
+        "mwolf"
+      ],
+      "notebook": "CE-3/50",
+      "project": "advanced-practical",
+      "entries": [
+        {
+          "substrates": [
+            "anthracene",
+            "maleic-anhydride"
+          ],
+          "products": [
+            {
+              "compound": "ethanoanthracene-dicarboxylic-anhydride",
+              "yield_percent": 70
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0021",
+      "source": "md",
+      "title": "2-Butoxynaphthalin",
+      "status": "draft",
+      "title_de": "2-Butoxynaphthalin",
+      "reaction_type": "nucleophilic-substitution",
+      "general": false,
+      "authors": [
+        "mwolf"
+      ],
+      "notebook": "CE-3/51",
+      "project": "advanced-practical",
+      "entries": [
+        {
+          "substrates": [
+            "2-naphthol",
+            "1-bromobutane"
+          ],
+          "products": [
+            {
+              "compound": "2-butoxynaphthalene",
+              "yield_percent": 70
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0022",
+      "source": "md",
+      "title": "Campher aus Borneol",
+      "status": "draft",
+      "title_de": "Campher aus Borneol",
+      "reaction_type": "oxidation",
+      "general": false,
+      "authors": [
+        "mwolf"
+      ],
+      "notebook": "CE-3/52",
+      "project": "advanced-practical",
+      "entries": [
+        {
+          "substrates": [
+            "borneol"
+          ],
+          "products": [
+            {
+              "compound": "camphor",
+              "yield_percent": 70
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0023",
+      "source": "md",
+      "title": "Isoborneol aus Campher",
+      "status": "draft",
+      "title_de": "Isoborneol aus Campher",
+      "reaction_type": "reduction",
+      "general": false,
+      "authors": [
+        "mwolf"
+      ],
+      "notebook": "CE-3/53",
+      "project": "advanced-practical",
+      "entries": [
+        {
+          "substrates": [
+            "camphor"
+          ],
+          "products": [
+            {
+              "compound": "isoborneol",
+              "yield_percent": 70
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0024",
+      "source": "md",
+      "title": "Triphenylmethanol durch Grignard-Addition",
+      "status": "draft",
+      "title_de": "Triphenylmethanol durch Grignard-Addition",
+      "reaction_type": "grignard-reaction",
+      "general": false,
+      "authors": [
+        "mwolf"
+      ],
+      "notebook": "CE-3/54",
+      "project": "advanced-practical",
+      "entries": [
+        {
+          "substrates": [
+            "methyl-benzoate",
+            "bromobenzene"
+          ],
+          "products": [
+            {
+              "compound": "triphenylmethanol",
+              "yield_percent": 70
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0025",
+      "source": "md",
+      "title": "Acetanilid aus Anilin",
+      "status": "draft",
+      "title_de": "Acetanilid aus Anilin",
+      "reaction_type": "acylation",
+      "general": false,
+      "authors": [
+        "mwolf"
+      ],
+      "notebook": "CE-3/55",
+      "project": "advanced-practical",
+      "entries": [
+        {
+          "substrates": [
+            "aniline",
+            "acetic-anhydride"
+          ],
+          "products": [
+            {
+              "compound": "acetanilide",
+              "yield_percent": 70
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0026",
+      "source": "md",
+      "title": "4-Bromacetanilid aus Acetanilid",
+      "status": "draft",
+      "title_de": "4-Bromacetanilid aus Acetanilid",
+      "reaction_type": "electrophilic-aromatic-substitution",
+      "general": false,
+      "authors": [
+        "mwolf"
+      ],
+      "notebook": "CE-3/56",
+      "project": "advanced-practical",
+      "entries": [
+        {
+          "substrates": [
+            "acetanilide"
+          ],
+          "products": [
+            {
+              "compound": "4-bromoacetanilide",
+              "yield_percent": 70
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0027",
+      "source": "md",
+      "title": "(E)-Chalcon",
+      "status": "draft",
+      "title_de": "(E)-Chalcon",
+      "reaction_type": "aldol-condensation",
+      "general": false,
+      "authors": [
+        "mwolf"
+      ],
+      "notebook": "CE-3/57",
+      "project": "advanced-practical",
+      "entries": [
+        {
+          "substrates": [
+            "acetophenone",
+            "benzaldehyde"
+          ],
+          "products": [
+            {
+              "compound": "chalcone",
+              "yield_percent": 70
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0028",
+      "source": "md",
+      "title": "Benzoesäuremethylester aus Benzoesäure",
+      "status": "draft",
+      "title_de": "Benzoesäuremethylester aus Benzoesäure",
+      "reaction_type": "esterification",
+      "general": false,
+      "authors": [
+        "mwolf"
+      ],
+      "notebook": "CE-3/58",
+      "project": "advanced-practical",
+      "entries": [
+        {
+          "substrates": [
+            "benzoic-acid"
+          ],
+          "products": [
+            {
+              "compound": "methyl-benzoate",
+              "yield_percent": 70
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0029",
+      "source": "md",
+      "title": "2,5-Dimethyl-1-phenylpyrrol",
+      "status": "draft",
+      "title_de": "2,5-Dimethyl-1-phenylpyrrol",
+      "reaction_type": "cyclocondensation",
+      "general": false,
+      "authors": [
+        "mwolf"
+      ],
+      "notebook": "CE-3/59",
+      "project": "advanced-practical",
+      "entries": [
+        {
+          "substrates": [
+            "hexane-2-5-dione",
+            "aniline"
+          ],
+          "products": [
+            {
+              "compound": "2-5-dimethyl-1-phenylpyrrole",
+              "yield_percent": 70
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OSDB-0030",
+      "source": "md",
+      "title": "Biginelli-Dihydropyrimidinon",
+      "status": "draft",
+      "title_de": "Biginelli-Dihydropyrimidinon",
+      "reaction_type": "cyclocondensation",
+      "general": false,
+      "authors": [
+        "mwolf"
+      ],
+      "notebook": "CE-3/60",
+      "project": "advanced-practical",
+      "entries": [
+        {
+          "substrates": [
+            "benzaldehyde",
+            "ethyl-acetoacetate",
+            "urea"
+          ],
+          "products": [
+            {
+              "compound": "ethyl-tetrahydropyrimidinone-carboxylate",
+              "yield_percent": 70
+            }
+          ]
+        }
+      ]
     }
   ],
   "sequences": [
@@ -308,6 +887,94 @@
         {
           "procedure": "OSDB-0009",
           "entry": 1
+        }
+      ]
+    },
+    {
+      "id": "SEQ-0003",
+      "title": "Benzilsäure aus Benzaldehyd",
+      "title_de": "Benzilsäure aus Benzaldehyd",
+      "target": "benzilic-acid",
+      "steps": [
+        {
+          "procedure": "OSDB-0010",
+          "entry": null
+        },
+        {
+          "procedure": "OSDB-0011",
+          "entry": null
+        },
+        {
+          "procedure": "OSDB-0012",
+          "entry": null
+        }
+      ]
+    },
+    {
+      "id": "SEQ-0004",
+      "title": "Hexaphenylbenzol aus Benzaldehyd",
+      "title_de": "Hexaphenylbenzol aus Benzaldehyd",
+      "target": "hexaphenylbenzene",
+      "steps": [
+        {
+          "procedure": "OSDB-0010",
+          "entry": null
+        },
+        {
+          "procedure": "OSDB-0011",
+          "entry": null
+        },
+        {
+          "procedure": "OSDB-0013",
+          "entry": null
+        },
+        {
+          "procedure": "OSDB-0014",
+          "entry": null
+        }
+      ]
+    },
+    {
+      "id": "SEQ-0005",
+      "title": "N-Benzylbiphenyl-4-carboxamid aus 4-Bromacetophenon",
+      "title_de": "N-Benzylbiphenyl-4-carboxamid aus 4-Bromacetophenon",
+      "target": "n-benzylbiphenyl-4-carboxamide",
+      "steps": [
+        {
+          "procedure": "OSDB-0004",
+          "entry": null
+        },
+        {
+          "procedure": "OSDB-0015",
+          "entry": null
+        },
+        {
+          "procedure": "OSDB-0018",
+          "entry": null
+        }
+      ]
+    },
+    {
+      "id": "SEQ-0006",
+      "title": "Biphenyl-4-ylmethanol aus 4-Bromacetophenon",
+      "title_de": "Biphenyl-4-ylmethanol aus 4-Bromacetophenon",
+      "target": "biphenyl-4-ylmethanol",
+      "steps": [
+        {
+          "procedure": "OSDB-0004",
+          "entry": null
+        },
+        {
+          "procedure": "OSDB-0015",
+          "entry": null
+        },
+        {
+          "procedure": "OSDB-0016",
+          "entry": null
+        },
+        {
+          "procedure": "OSDB-0017",
+          "entry": null
         }
       ]
     }

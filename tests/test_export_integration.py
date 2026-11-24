@@ -286,7 +286,8 @@ class DeclaredFieldExportTests(ExportTestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         stems = sorted(path.stem for path in
                        (sandbox.root / "org" / "procedures").glob("*.org"))
-        self.assertEqual(len(stems), 8)
+        self.assertEqual(
+            len(stems), len(list((DEMO / "org" / "procedures").glob("*.org"))))
         keys = self.declared_keys()
         self.assertEqual(
             keys, ["notebook", "project", "working_time",

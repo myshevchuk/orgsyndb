@@ -7,13 +7,20 @@ from django.test import TestCase, override_settings
 
 from . import (BERLIN, frozen, make_group, make_substance, make_task,
                make_user)
-from .collection_support import (PROCEDURES, SEQUENCES, TOKEN, accept,
-                                 copy_procedure, demo_collection, ids_of,
-                                 import_collection, issue_ids, issued_keys,
-                                 issued_to, make_import, make_token, manifest,
-                                 post, request_id)
+from .collection_support import (PROCEDURES, SCOPE_ENTRIES, SEQUENCES, STEPS,
+                                 TOKEN, accept, copy_procedure,
+                                 demo_collection, ids_of, import_collection,
+                                 issue_ids, issued_keys, issued_to,
+                                 make_import, make_token, manifest, post,
+                                 request_id)
 from .demo_support import (ACCOUNTS, DAY, lab_records, noon, opening, run,
                            seed, task_counter)
+from .registry_support import demo_registry
+
+# An ID the demo collection does not use, for the procedures and issued IDs
+# that the tests add to it.
+STRAY = "OSDB-0990"
+ISSUED = "OSDB-0995"
 
 EMPTY = {"accounts": 0, "substances": 0, "terms": 0, "articles": 0,
          "tasks": 0, "items": 0, "stocks": 0, "movements": 0, "notes": 0,
@@ -139,7 +146,8 @@ class ReplaceTests(TestCase):
         self.assertFalse(Substance.objects.filter(
             key="stray-substance").exists())
         self.assertFalse(Group.objects.filter(key="stray-group").exists())
-        self.assertEqual(Substance.objects.count(), 21)
+        self.assertEqual(Substance.objects.count(),
+                         len(demo_registry()["substances"]))
         users = get_user_model().objects
         self.assertFalse(users.filter(username="kl").exists())
         self.assertEqual(sorted(users.values_list("username", flat=True)),
@@ -157,19 +165,20 @@ class ReplaceTests(TestCase):
         from journal.models import Entry, Notebook
         from .journal_support import entry_of
         seed(DAY)
+        written = Entry.objects.count()
         kl = make_user("kl", "KL9")
         stray = Notebook.objects.create(code="ZZ-1", user=kl)
-        entry_of("AE-1/40")
+        entry_of("AE-1/990")
         entry_of("ZZ-1/1")
-        self.assertEqual(Entry.objects.count(), 12)
+        self.assertEqual(Entry.objects.count(), written + 2)
         with frozen(noon(DAY)):
             run("--replace")
         self.assertFalse(Notebook.objects.filter(pk=stray.pk).exists())
         self.assertEqual(
             sorted(Notebook.objects.values_list("code", flat=True)),
             ["AE-1", "AE-2", "CE-1", "CE-3"])
-        self.assertEqual(Entry.objects.count(), 10)
-        self.assertFalse(Entry.objects.filter(number=40).exists())
+        self.assertEqual(Entry.objects.count(), written)
+        self.assertFalse(Entry.objects.filter(number=990).exists())
 
     def test_replace_writes_the_same_counts_again(self) -> None:
         seed(DAY)
@@ -378,11 +387,11 @@ def imported_rows() -> dict[str, int]:
 
 
 def with_extra_procedure() -> dict:
-    """The demo collection with a tenth procedure, which the demo
+    """The demo collection with one more procedure, which the demo
     manifest lacks."""
     data = demo_collection()
     data["procedures"].append(
-        copy_procedure(data, "OSDB-0008", "OSDB-0010"))
+        copy_procedure(data, "OSDB-0008", STRAY))
     return data
 
 
@@ -399,12 +408,16 @@ class DataSetImportTests(TestCase):
         (own,) = Import.objects.all()
         self.assertEqual((own.outcome, own.release, own.trigger),
                          ("accepted", "demo", "catch-up"))
+        procedures = set(Procedure.objects.values_list("key", flat=True))
+        sequences = set(Sequence.objects.values_list("key", flat=True))
+        self.assertLessEqual(
+            {f"OSDB-{number:04d}" for number in range(1, 10)}, procedures)
+        self.assertLessEqual({"SEQ-0001", "SEQ-0002"}, sequences)
         self.assertEqual(
-            sorted(Procedure.objects.values_list("key", flat=True)),
-            [f"OSDB-{number:04d}" for number in range(1, 10)])
+            procedures,
+            {p["id"] for p in demo_collection()["procedures"]})
         self.assertEqual(
-            sorted(Sequence.objects.values_list("key", flat=True)),
-            ["SEQ-0001", "SEQ-0002"])
+            sequences, {s["id"] for s in demo_collection()["sequences"]})
         self.assertFalse(Procedure.objects.filter(withdrawn=True).exists())
         self.assertFalse(Sequence.objects.filter(withdrawn=True).exists())
 
@@ -425,8 +438,8 @@ class DataSetImportTests(TestCase):
         self.assertEqual(
             {name: imported_rows()[name]
              for name in ("Procedure", "ScopeEntry", "Sequence", "Step")},
-            {"Procedure": PROCEDURES, "ScopeEntry": 11,
-             "Sequence": SEQUENCES, "Step": 4})
+            {"Procedure": PROCEDURES, "ScopeEntry": SCOPE_ENTRIES,
+             "Sequence": SEQUENCES, "Step": STEPS})
 
     def test_the_data_sets_import_has_no_pusher(self) -> None:
         """Scenario: The pusher (the demo data command's import has
@@ -585,13 +598,13 @@ class IssuedIdTests(TestCase):
         record: accounts with their access tokens, issued IDs)."""
         seed(DAY)
         import_collection(with_extra_procedure())
-        issue_ids("OSDB-0012")
+        issue_ids(ISSUED)
         done = request_id(self.client, "procedure",
                           make_token("klehmann"))
         self.assertEqual(done.status_code, 201, done.content)
         make_token("tbauer", "Server")
         self.assertEqual(tokens(), 2)
-        self.assertEqual(len(issued_keys()), 11 + 1 + 1 + 1)
+        self.assertEqual(len(issued_keys()), len(demo_ids()) + 1 + 1 + 1)
         with frozen(noon(DAY)):
             out, _err = run("--replace")
         self.assertTrue(out.strip())
@@ -609,12 +622,14 @@ class IssuedIdTests(TestCase):
             run("--replace")
         done = request_id(self.client, "procedure",
                           make_token("klehmann"))
-        self.assertEqual(done.json(), {"id": "OSDB-0010"})
+        last = max(int(key.removeprefix("OSDB-")) for key in demo_ids()
+                   if key.startswith("OSDB-"))
+        self.assertEqual(done.json(), {"id": f"OSDB-{last + 1:04d}"})
 
     def test_issued_ids_alone_are_lab_records(self) -> None:
         """Requirement: Demo data command (issued IDs are lab
         records)."""
-        issue_ids("OSDB-0012")
+        issue_ids(ISSUED)
         with frozen(noon(DAY)), self.assertRaises(CommandError) as caught:
             run()
         self.assertIn("--replace", str(caught.exception))
@@ -622,7 +637,7 @@ class IssuedIdTests(TestCase):
             run("--replace")
         with frozen(noon(DAY)):
             run("--if-empty")
-        self.assertEqual(issued_keys(), ["OSDB-0012"])
+        self.assertEqual(issued_keys(), [ISSUED])
         self.assertEqual(lab_records(), EMPTY)
         self.assertEqual(demo_marks(), 0)
 
@@ -631,7 +646,7 @@ class IssuedIdTests(TestCase):
         and tokens)."""
         from inventory import bookings
         seed(DAY)
-        issue_ids("OSDB-0012")
+        issue_ids(ISSUED)
         make_token("klehmann")
         before = (issued_keys(), tokens())
         real = bookings.book_note

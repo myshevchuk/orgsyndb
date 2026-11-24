@@ -41,6 +41,8 @@ but are not experimentally verified.
 | Salicylic acid | 69-72-7 | 138.12 | 2.76 g | 20.0 | 1.0 |
 | Acetic anhydride | 108-24-7 | 102.09 | 6.13 g (5.67 mL) | 60.0 | 3.0 |
 | Phosphoric acid, 85 % | 7664-38-2 | 97.99 | 5 drops | cat. | cat. |
+| Ethanol | 64-17-5 | 46.07 | a little for recrystallisation and the iron(III) chloride test | – | – |
+| Iron(III) chloride | 7705-08-0 | 162.20 | 1 drop of solution | – | – |
 
 ## Procedure
 

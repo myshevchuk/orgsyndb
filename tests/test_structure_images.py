@@ -531,6 +531,8 @@ class HelperTests(unittest.TestCase):
         """Harness: fixture images go beside the sandbox's registry, and
         their substances get a molfile."""
         sandbox = make_sandbox(self)
+        ps.edit_snapshot(sandbox, support.without_substance(ETHYL_ACETATE),
+                         support.without_substance(ETHANOL))
         added = ps.put_compounds(sandbox, ETHYL_ACETATE, "trans-stilbene",
                                  ETHANOL)
         self.assertIn(ETHYL_ACETATE, added)

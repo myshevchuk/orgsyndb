@@ -33,11 +33,15 @@ IDS = "/lab/collection/ids/"
 TOKEN = "s3cret"
 FIXTURE = Path(__file__).resolve().parents[1] / "demo" / "manifest.json"
 TOOLING = "b" * 40
-# The numbers of the demo collection's procedures and sequences.
-PROCEDURES = 9
-SEQUENCES = 2
-# The user names the demo's procedures credit, in the order of their
-# files (sample-procedures "Sample marking").
+# The numbers of the demo collection's procedures and sequences, as its
+# manifest lists them.
+_DEMO = json.loads(FIXTURE.read_text(encoding="utf-8"))
+PROCEDURES = len(_DEMO["procedures"])
+SEQUENCES = len(_DEMO["sequences"])
+SCOPE_ENTRIES = sum(len(item["entries"]) for item in _DEMO["procedures"])
+STEPS = sum(len(item["steps"]) for item in _DEMO["sequences"])
+# The user names the nine oldest procedures of the demo credit, in the
+# order of their files (sample-procedures "Sample marking").
 DEMO_CREDITS = {
     "OSDB-0001": ["klehmann", "tbauer"], "OSDB-0002": ["klehmann", "aschmidt"],
     "OSDB-0003": ["tbauer", "jkoch"], "OSDB-0004": ["aschmidt", "mwolf"],
@@ -45,8 +49,8 @@ DEMO_CREDITS = {
     "OSDB-0007": ["aschmidt"], "OSDB-0008": ["aschmidt", "tbauer"],
     "OSDB-0009": ["mwolf"]}
 
-# The notebook and the project the demo's procedures name (sample-
-# procedures "Demo collection").
+# The notebook and the project the nine oldest procedures of the demo name
+# (sample-procedures "Demo collection").
 DEMO_JOURNAL = {
     "OSDB-0001": ("AE-1/1", "first-year-practical"),
     "OSDB-0002": ("AE-1/2", "first-year-practical"),
@@ -83,7 +87,8 @@ def credited(collection: dict[str, Any] | None = None,
     for procedure in data["procedures"]:
         key = procedure["id"]
         procedure["authors"] = list(
-            authors.get(key.replace("-", "_"), DEMO_CREDITS[key]))
+            authors.get(key.replace("-", "_"),
+                        DEMO_CREDITS.get(key, procedure["authors"])))
     return data
 
 
@@ -516,23 +521,23 @@ class ImportCase(TestCase):
 
 
 def longer_collection() -> dict[str, Any]:
-    """The demo collection with a procedure ``OSDB-0010``, which makes
+    """The demo collection with a procedure ``OSDB-0990``, which makes
     ``benzaldehyde`` from ``acetone``, and two more sequences of
-    ``cinnamic-acid``: ``SEQ-0003``, of three steps, ``OSDB-0010``,
+    ``cinnamic-acid``: ``SEQ-0993``, of three steps, ``OSDB-0990``,
     ``OSDB-0007`` and ``OSDB-0008``, whose intermediates are
-    ``benzaldehyde`` and ``ethyl-cinnamate``; and ``SEQ-0004``, of the
+    ``benzaldehyde`` and ``ethyl-cinnamate``; and ``SEQ-0994``, of the
     two steps ``OSDB-0007`` and ``OSDB-0008``, whose intermediate is
     ``ethyl-cinnamate``."""
     data = demo_collection()
-    new = copy_procedure(data, "OSDB-0007", "OSDB-0010")
+    new = copy_procedure(data, "OSDB-0007", "OSDB-0990")
     new["entries"][0]["substrates"] = ["acetone"]
     new["entries"][0]["products"] = [
         {"compound": "benzaldehyde", "yield_percent": 90}]
     data["procedures"].append(new)
     title = "Zimtsäure in Stufen"
-    for ident, steps in (("SEQ-0003", ["OSDB-0010", "OSDB-0007",
+    for ident, steps in (("SEQ-0993", ["OSDB-0990", "OSDB-0007",
                                        "OSDB-0008"]),
-                         ("SEQ-0004", ["OSDB-0007", "OSDB-0008"])):
+                         ("SEQ-0994", ["OSDB-0007", "OSDB-0008"])):
         data["sequences"].append({
             "id": ident, "title": title, "title_de": title,
             "target": "cinnamic-acid",
@@ -541,21 +546,21 @@ def longer_collection() -> dict[str, Any]:
 
 
 def shortened_collection() -> dict[str, Any]:
-    """``longer_collection`` with ``SEQ-0003`` of the two steps
+    """``longer_collection`` with ``SEQ-0993`` of the two steps
     ``OSDB-0007`` and ``OSDB-0008``."""
     data = longer_collection()
-    by_id(data["sequences"], "SEQ-0003")["steps"].pop(0)
+    by_id(data["sequences"], "SEQ-0993")["steps"].pop(0)
     return data
 
 
 def retargeted_collection() -> dict[str, Any]:
     """``longer_collection`` in which ``OSDB-0008`` makes
-    ``ethyl-cinnamate`` too, which is the target of ``SEQ-0003``."""
+    ``ethyl-cinnamate`` too, which is the target of ``SEQ-0993``."""
     data = longer_collection()
     by_id(data["procedures"], "OSDB-0008")["entries"][0][
         "products"].append({"compound": "ethyl-cinnamate",
                             "yield_percent": 50})
-    by_id(data["sequences"], "SEQ-0003")["target"] = "ethyl-cinnamate"
+    by_id(data["sequences"], "SEQ-0993")["target"] = "ethyl-cinnamate"
     return data
 
 

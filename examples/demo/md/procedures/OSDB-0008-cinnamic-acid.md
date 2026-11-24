@@ -40,6 +40,7 @@ not experimentally verified.
 | Ethyl (E)-cinnamate | 103-36-6 | 176.21 | 0.529 g (0.504 mL) | 3.00 | 1.0 |
 | Sodium hydroxide | 1310-73-2 | 40.00 | 0.360 g | 9.00 | 3.0 |
 | Hydrochloric acid, 37 % (12.1 M) | 7647-01-0 | 36.46 | 1.00 mL | 12.1 | 4.0 |
+| Ethanol | 64-17-5 | 46.07 | 5 mL plus a little for recrystallisation | – | – |
 
 ## Procedure
 
