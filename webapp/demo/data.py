@@ -270,6 +270,14 @@ class CorrectVessel(Change):
 
 
 @dataclass(frozen=True, kw_only=True)
+class OpenVessel(Change):
+    """Record the first vessel of the batch VESSEL, a bought one, as
+    opened on the change's day."""
+
+    vessel: str
+
+
+@dataclass(frozen=True, kw_only=True)
 class NameJournalEntry(Change):
     """Make the step at POSITION of the task TASK name the lab notebook
     entry ENTRY, ``<code>/<number>``."""
@@ -1083,6 +1091,9 @@ def changes(today: date, language: str) -> list[Change]:
                  supplier_batch=batch, unit="g", amount=Decimal(amount) * (
                      Decimal("0.7") if index % 5 == 0 else Decimal("1")),
                  location=line.text(location), date=line.day(2))
+        if index % 5 == 0 or key in SECOND_PLACES:
+            line.add(line.day(12 + index), BATCH, OpenVessel,
+                     user="mwolf", vessel=vessel)
     for index, key in enumerate(("benzaldehyde", "methanol", "acetone",
                                  "vanillin")):
         line.add(line.day(10), BATCH, RecordBatch, user="tbauer",
