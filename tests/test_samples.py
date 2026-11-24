@@ -1246,11 +1246,16 @@ class RegistryRuleCheckerTests(unittest.TestCase):
             self.assertEqual(text.count(old), 1, old)
             path.write_text(text.replace(old, new), encoding="utf-8")
 
-    def test_the_test_collection_meets_the_rules(self) -> None:
+    def test_the_demo_meets_the_rules(self) -> None:
         """Scenario: The demo's sequences; Samples live in the demo
         collection."""
         self.assertEqual(sup.sequence_violations(DEMO), [])
         self.assertEqual(sup.coverage_violations(DEMO), [])
+
+    def test_the_test_collection_meets_the_sequence_rules(self) -> None:
+        """Scenario: The demo's sequences (as mirrored in the test
+        collection)."""
+        self.assertEqual(sup.sequence_violations(COLLECTION), [])
 
     def test_each_sequence_rule_is_enforced(self) -> None:
         """Scenario: The demo's sequences (checker, rejected)."""
@@ -1372,6 +1377,8 @@ class RegistryRuleCheckerTests(unittest.TestCase):
 
 
 class TestCollectionTests(unittest.TestCase):
+    FIXED_IDS = {f"OSDB-{n:04d}" for n in range(1, 10)}
+
     def test_the_collection_mirrors_the_demo(self) -> None:
         """Scenario: The test collection mirrors the demo."""
         self.assertTrue(COLLECTION.is_dir(), f"{COLLECTION} is missing")
@@ -1461,8 +1468,7 @@ class TestCollectionTests(unittest.TestCase):
         self.assertEqual(
             relative_files(COLLECTION / "md" / "sequences"), sequences,
             "md/sequences/ files")
-        fixed_ids = {f"OSDB-{n:04d}" for n in range(1, 10)}
-        fixed = [p for p in sample_files() if p.name[:9] in fixed_ids]
+        fixed = [p for p in sample_files() if p.name[:9] in self.FIXED_IDS]
         names = [converted_name(p) for p in fixed]
         self.assertEqual(len(names), 18)
         self.assertEqual(len(set(names)), len(names),
@@ -1498,8 +1504,10 @@ class TestCollectionTests(unittest.TestCase):
     def test_converted_samples_agree_with_their_org_sources(self) -> None:
         """Scenario: Converted samples agree with their Org sources."""
         self.assertTrue(COLLECTION.is_dir(), f"{COLLECTION} is missing")
-        orgs = sorted((DEMO / "org" / "procedures").glob("OSDB-*.org"))
-        self.assertTrue(orgs, "no Org sample")
+        orgs = [p for p in sorted(
+            (DEMO / "org" / "procedures").glob("OSDB-*.org"))
+            if p.name[:9] in self.FIXED_IDS]
+        self.assertEqual(len(orgs), 8)
         for org in orgs:
             converted = COLLECTION / "md" / "procedures" / (
                 org.stem + ".md")

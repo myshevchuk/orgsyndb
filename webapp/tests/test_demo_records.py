@@ -884,7 +884,7 @@ class SampleVesselTests(SeededCase):
         found = [key for key in self.commercial()
                  if len({vessel.location for vessel in
                          self.open_vessels(key)} - {""}) >= 2]
-        self.assertTrue(found)
+        self.assertGreaterEqual(len(found), 2)
 
     def test_several_substances_without_an_article_have_made_vessels(
             self) -> None:
