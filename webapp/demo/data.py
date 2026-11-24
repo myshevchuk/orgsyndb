@@ -1093,7 +1093,7 @@ def changes(today: date, language: str) -> list[Change]:
                  location=line.text(location), date=line.day(2))
         if index % 5 == 0 or key in SECOND_PLACES:
             line.add(line.day(12 + index), BATCH, OpenVessel,
-                     user="mwolf", vessel=vessel)
+                     user="tbauer", vessel=vessel)
     for index, key in enumerate(("benzaldehyde", "methanol", "acetone",
                                  "vanillin")):
         line.add(line.day(10), BATCH, RecordBatch, user="tbauer",
