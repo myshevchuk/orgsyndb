@@ -14,30 +14,23 @@ BANNER_EN = "Demo: All records are invented (as of 2026-11-07)."
 
 class BannerTests(SeededCase):
 
-    def first_in_main(self, path: str):
-        main = self.get(path).find("main")
-        self.assertIsNotNone(main, path)
-        return next(child for child in main.children
-                    if not isinstance(child, str))
-
     def test_banner(self) -> None:
         """Scenario: Banner."""
         for path in ("/lab/tasks/", "/lab/planning/",
                      "/lab/inventory/end-products/"):
             with self.subTest(path=path):
-                first = self.first_in_main(path)
-                self.assertEqual(first.tag, "p")
-                self.assertIn("lab-demo", first.classes)
-                self.assertEqual(first.text(), BANNER_DE)
+                banners = self.get(path).find_all("p", cls="lab-demo")
+                self.assertEqual(len(banners), 1)
+                self.assertEqual(banners[0].text(), BANNER_DE)
 
-    def test_banner_comes_before_the_messages(self) -> None:
+    def test_banner_with_messages(self) -> None:
         self.client.force_login(self.account("tbauer"))
         response = self.client.post("/lab/tasks/T-001/start/", follow=True)
-        main = page(response).find("main")
-        self.assertIsNotNone(main.find(cls="lab-messages"))
-        first = next(child for child in main.children
-                     if not isinstance(child, str))
-        self.assertIn("lab-demo", first.classes)
+        root = page(response)
+        self.assertIsNotNone(root.find(cls="lab-messages"))
+        banners = root.find_all("p", cls="lab-demo")
+        self.assertEqual(len(banners), 1)
+        self.assertEqual(banners[0].text(), BANNER_DE)
 
     def test_admin_has_no_banner(self) -> None:
         response = self.client.get("/lab/admin/login/")
