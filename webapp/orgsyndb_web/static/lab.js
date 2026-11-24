@@ -265,6 +265,9 @@
       return;
     }
     if (event.newState === "open") {
+      for (const menu of document.querySelectorAll("details.lab-view-menu[open]")) {
+        menu.open = false;
+      }
       open = popup;
       popup.dataset.placed = "";
       reposition();
@@ -272,6 +275,20 @@
       open = null;
     }
   }, true);
+  document.addEventListener("click", (event) => {
+    if (!(event.target instanceof Element)) return;
+    for (const menu of document.querySelectorAll("details.lab-view-menu[open]")) {
+      if (!menu.contains(event.target)) menu.open = false;
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    for (const menu of document.querySelectorAll("details.lab-view-menu[open]")) {
+      menu.open = false;
+      const summary = menu.querySelector(":scope > summary");
+      if (summary) summary.focus();
+    }
+  });
   document.addEventListener("scroll", reposition, true);
   window.addEventListener("resize", reposition);
 

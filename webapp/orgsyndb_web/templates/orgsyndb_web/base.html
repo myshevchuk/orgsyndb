@@ -36,7 +36,8 @@
 {% else %}<li><a href="{{ item.url }}"{% if item.current %} aria-current="{{ item.current }}"{% endif %}>{{ item.label }}</a></li>
 {% endif %}{% endfor %}</ul>
 </nav>
-<div class="lab-account">
+{% if demo_mark %}<p class="lab-demo">{% blocktranslate with day=demo_mark.seeded_on|date:"SHORT_DATE_FORMAT" %}Demo: All records are invented (as of {{ day }}).{% endblocktranslate %}</p>
+{% endif %}<div class="lab-account">
 {% if user.is_authenticated %}<a href="/lab/accounts/password/" title="{% blocktranslate with name=user.display_name %}{{ name }}: change password{% endblocktranslate %}">{{ user.initials }}</a>
 <a class="lab-account-tokens" href="/lab/accounts/tokens/">{% translate "Access tokens" %}</a>
 <form method="post" action="/lab/accounts/logout/">{% csrf_token %}<button type="submit">{% translate "Sign out" %}</button></form>
@@ -44,7 +45,7 @@
 {% endif %}</div>
 </header>
 {% endblock %}<main id="main">
-{% if demo_mark %}<p class="lab-demo">{% blocktranslate with day=demo_mark.seeded_on|date:"SHORT_DATE_FORMAT" %}Demo: All records are invented (as of {{ day }}).{% endblocktranslate %}</p>
+{% if demo_mark and request.resolver_match.url_name == "summary" %}<p class="lab-demo">{% blocktranslate with day=demo_mark.seeded_on|date:"SHORT_DATE_FORMAT" %}Demo: All records are invented (as of {{ day }}).{% endblocktranslate %}</p>
 {% endif %}{% block messages %}{% if messages %}<ul class="lab-messages">
 {% for message in messages %}<li class="lab-message lab-message--{{ message.level_tag }}"{% if message.level_tag == "error" %} role="alert"{% else %} role="status"{% endif %}>{{ message }}</li>
 {% endfor %}</ul>

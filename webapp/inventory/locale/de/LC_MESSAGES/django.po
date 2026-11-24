@@ -1053,3 +1053,27 @@ msgstr "Änderung"
 
 msgid "Item data"
 msgstr "Artikeldaten"
+
+#, python-format
+msgid "%(count)s batch"
+msgid_plural "%(count)s batches"
+msgstr[0] "%(count)s Charge"
+msgstr[1] "%(count)s Chargen"
+
+#, python-format
+msgid "%(count)s vessel"
+msgid_plural "%(count)s vessels"
+msgstr[0] "%(count)s Gefäß"
+msgstr[1] "%(count)s Gefäße"
+
+#, python-format
+msgid "%(count)s delivery note"
+msgid_plural "%(count)s delivery notes"
+msgstr[0] "%(count)s Lieferschein"
+msgstr[1] "%(count)s Lieferscheine"
+
+msgid "Batch, substance or supplier"
+msgstr "Charge, Substanz oder Lieferant"
+
+msgid "Number or recipient"
+msgstr "Nummer oder Empfänger"

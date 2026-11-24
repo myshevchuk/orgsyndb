@@ -1,17 +1,19 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n lab inventory %}
 {% block title %}{% translate "Vessels" %}{% endblock %}
+{% block body_class %} class="lab-frame"{% endblock %}
 {% block main %}
 <div class="lab-heading">
 <h1>{% translate "Vessels" %}</h1>
-{% if user.is_authenticated %}<p class="actions"><a href="/lab/inventory/batches/new/">{% translate "New batch" %}</a></p>{% endif %}
+<span class="lab-count">{% blocktranslate count count=vessels|length %}{{ count }} vessel{% plural %}{{ count }} vessels{% endblocktranslate %}</span>
+{% if user.is_authenticated %}<div class="lab-heading__actions"><p class="actions"><a href="/lab/inventory/batches/new/">{% translate "New batch" %}</a></p></div>{% endif %}
 </div>
 {% include "inventory/tabs.html" %}
-<form class="lab-filters" method="get" action="/lab/inventory/vessels/">
-<label>{% translate "Kind" %} <select name="kind">
+<form class="lab-filters lab-toolbar" method="get" action="/lab/inventory/vessels/">
+<label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Kind" %}:</span><select name="kind">
 <option value=""{% if not kind %} selected{% endif %}>{% translate "All kinds" %}</option>
 {% for value, label in kinds %}<option value="{{ value }}"{% if value == kind %} selected{% endif %}>{{ label }}</option>
 {% endfor %}</select></label>
-<label><input type="checkbox" name="empty" value="1"{% if empty %} checked{% endif %}> {% translate "Used-up vessels too" %}</label>
+<label class="lab-inline-check"><input type="checkbox" name="empty" value="1"{% if empty %} checked{% endif %}> {% translate "Used-up vessels too" %}</label>
 <button type="submit">{% translate "Filter" %}</button>
 </form>
 <div class="table-scroll">
