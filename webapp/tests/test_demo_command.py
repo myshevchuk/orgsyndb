@@ -284,6 +284,21 @@ class ReplaceTests(TestCase):
             run("--replace")
         self.assertEqual(Task.history.count(), before)
 
+    def test_keys_survive_a_replace(self) -> None:
+        """Scenario: Keys that survive a replace."""
+        from django.contrib.auth import get_user_model
+        users = get_user_model().objects
+        expected = dict(zip(ACCOUNTS, range(1, len(ACCOUNTS) + 1)))
+        seed(DAY)
+        self.assertEqual(dict(users.values_list("username", "pk")), expected)
+        kl = make_user("kl", "KL9")
+        self.assertGreater(kl.pk, 5)
+        with frozen(noon(DAY)):
+            run("--replace")
+        self.assertEqual(dict(users.values_list("username", "pk")), expected)
+        tb = make_user("tb", "TB9")
+        self.assertGreater(tb.pk, 5)
+
 
 class AtStartTests(TestCase):
 
