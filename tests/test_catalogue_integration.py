@@ -16,7 +16,13 @@ import urllib.parse
 import catalogue_support as cs
 import field_support as fs
 import pipeline_support as ps
-from pipeline_support import Content
+from pipeline_support import TEST_COLLECTION, Content
+
+
+def shipped_ids() -> list[str]:
+    """The IDs of the test collection's procedures, each once."""
+    return sorted({path.name[:9] for path in
+                   (TEST_COLLECTION / "md" / "procedures").glob("OSDB-*.md")})
 
 SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 PREFIX = "/orgsyndb/"
@@ -418,9 +424,9 @@ class CatalogueFixtureTests(DetailsChecks, cs.CatalogueCase):
     def test_the_fixtures_are_published_with_the_collection(self) -> None:
         """Harness: the build holds the shipped and the fixture procedures."""
         ids = [item.id for item in self.content()]
-        self.assertEqual(len(ids), 15)
+        self.assertEqual(len(ids), len(shipped_ids()) + 6)
         self.assertEqual(sorted(set(ids)), sorted(ids))
-        self.assertEqual(sorted(ids)[9:],
+        self.assertEqual(sorted(ids)[len(shipped_ids()):],
                          [f"OSDB-092{n}" for n in range(1, 7)])
 
     def test_rows_carry_the_records(self) -> None:
@@ -521,14 +527,15 @@ class CatalogueFixtureTests(DetailsChecks, cs.CatalogueCase):
         self.assertEqual(tied["OSDB-0921"], tied["OSDB-0922"])
         counts = [entry.find("span", "count").norm() for entry in
                   page.find("ul", "browse-list").find_all("li")]
-        self.assertEqual(counts[0], "(15)")
+        self.assertEqual(counts[0], f"({len(shipped_ids()) + 6})")
         unchecked = page.find("section", "home-unchecked")
         self.assertEqual(
             [entry.elements()[0].norm().split()[0] for entry in
              unchecked.find("ol", "unchecked-list").find_all("li")],
             [f"OSDB-000{n}" for n in range(1, 6)])
+        drafts = sum(item.data["status"] == "draft" for item in items)
         self.assertEqual(unchecked.find("p").find("span", "count").norm(),
-                         "(12)")
+                         f"({drafts})")
 
 
     def test_the_sign_off_of_a_checked_procedure(self) -> None:
@@ -556,7 +563,7 @@ class TwoProductDetailsTests(DetailsChecks, cs.CatalogueCase):
         page = self.page("procedures/index.html")
         registry = ps.read_registry(self.sandbox)
         items = self.content()
-        self.assertEqual(len(items), 10)
+        self.assertEqual(len(items), len(shipped_ids()) + 1)
         row = page.find("tr", data_id="OSDB-0907")
         self.assertIsNotNone(row, "no row for OSDB-0907")
         pairs = [(p.label, p.definition.norm()) for p in

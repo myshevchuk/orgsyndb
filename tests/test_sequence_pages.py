@@ -18,6 +18,12 @@ import support
 import test_theme_integration as tti
 from pipeline_support import Page, Sequence
 
+SEQUENCE_FILES = ps.TEST_COLLECTION / "md" / "sequences"
+# The sequences of the test collection: the files without a language code,
+# and their IDs.
+SHIPPED_FILES = sorted(p.name for p in SEQUENCE_FILES.glob("SEQ-*.md")
+                       if p.name.count(".") == 1)
+SHIPPED_IDS = [name[:8] for name in SHIPPED_FILES]
 BASELINE_PROCEDURE = ps.FIXTURES / "baseline" / "OSDB-0100-baseline.md"
 
 
@@ -132,15 +138,15 @@ class SequenceSiteTests(SequenceCase):
 
     def test_one_page_per_sequence(self) -> None:
         """Requirement: Sequence pages (/sequences/<slug>/)."""
-        self.assertEqual([s.id for s in self.sequences()],
-                         ["SEQ-0001", "SEQ-0002"])
+        self.assertEqual([s.id for s in self.sequences()], SHIPPED_IDS)
         self.assertEqual(
-            [s.path.name for s in self.sequences()],
-            ["SEQ-0001-aspirin-from-wintergreen.md",
-             "SEQ-0002-biphenylyl-ethanol.md"])
+            [s.path.name for s in self.sequences()], SHIPPED_FILES)
+        self.assertEqual(SHIPPED_FILES[:2],
+                         ["SEQ-0001-aspirin-from-wintergreen.md",
+                          "SEQ-0002-biphenylyl-ethanol.md"])
         built = sorted(p.parent.name for p in
                        (self.public / "sequences").glob("*/index.html"))
-        self.assertEqual(built, ["seq-0001", "seq-0002"])
+        self.assertEqual(built, [i.lower() for i in SHIPPED_IDS])
 
     def test_sequence_page_of_the_demo(self) -> None:
         """Scenario: Sequence page of the demo."""
@@ -225,8 +231,9 @@ class SequenceSiteTests(SequenceCase):
                      if m.node.has_class("sequence-table"))
         self.assertEqual([c.text for c in model.rows[0]],
                          ["Sequence", "Target", "Steps", "Overall yield"])
-        self.assertEqual([[c.text for c in row[2:]] for row in model.rows[1:]],
-                         [["2", "60 %"], ["2", "77 %"]])
+        rows = [[c.text for c in row[2:]] for row in model.rows[1:]]
+        self.assertEqual(len(rows), len(SHIPPED_IDS))
+        self.assertEqual(rows[:2], [["2", "60 %"], ["2", "77 %"]])
 
     def test_links_from_the_procedure_panels(self) -> None:
         """Scenario: Links to the demo sequence (the panels)."""
@@ -265,9 +272,7 @@ class SequenceSiteTests(SequenceCase):
         self.check_staging()
         staged = self.sandbox.root / "build" / "content" / "sequences"
         self.assertEqual(
-            sorted(p.name for p in staged.iterdir()),
-            ["SEQ-0001-aspirin-from-wintergreen.md",
-             "SEQ-0002-biphenylyl-ethanol.md"])
+            sorted(p.name for p in staged.iterdir()), SHIPPED_FILES)
         text = (staged / "SEQ-0001-aspirin-from-wintergreen.md").read_text(
             encoding="utf-8")
         self.assertNotIn("language", ps.front_matter(text))
@@ -392,9 +397,10 @@ class PartialSequenceTests(SequenceCase):
         """Requirement: Sequence files (the variant is chosen as for a
         procedure)."""
         chosen = {s.id: s.path.name for s in self.sequences()}
-        self.assertEqual(chosen, {
-            "SEQ-0001": "SEQ-0001-aspirin-from-wintergreen.de.md",
-            "SEQ-0002": "SEQ-0002-biphenylyl-ethanol.md"})
+        german = {name[:8]: name.replace(".md", ".de.md")
+                  for name in SHIPPED_FILES}
+        german["SEQ-0002"] = "SEQ-0002-biphenylyl-ethanol.md"
+        self.assertEqual(chosen, german)
         page = self.sequence_page(self.by_sequence("SEQ-0002"))
         self.assertEqual(
             page.find("main").find("h1").norm(),
@@ -424,8 +430,8 @@ class IntermediateSiteTests(SequenceCase):
         ps.put_compounds(cls.sandbox, "ethyl-acetate", "cis-stilbene",
                          "trans-stilbene")
         (cls.sandbox.root / "md" / "sequences"
-         / "SEQ-0003-stilbenes.md").write_text(
-            '+++\nid = "SEQ-0003"\nslug = "seq-0003"\n'
+         / "SEQ-0993-stilbenes.md").write_text(
+            '+++\nid = "SEQ-0993"\nslug = "seq-0993"\n'
             'title = "Ethyl acetate from the stilbenes"\n'
             "date = 2026-10-24T09:00:00+02:00\n"
             "lastmod = 2026-10-24T09:00:00+02:00\n"
@@ -437,7 +443,7 @@ class IntermediateSiteTests(SequenceCase):
     def test_the_first_product_in_order_carries_on(self) -> None:
         """Requirement: Sequence pages (the intermediate is the first
         product that the next step takes)."""
-        sequence = self.by_sequence("SEQ-0003")
+        sequence = self.by_sequence("SEQ-0993")
         page = self.sequence_page(sequence)
         scheme = page.find("figure", "sequence-scheme").find("ol")
         items = [n for n in scheme.elements() if n.tag == "li"]
@@ -516,17 +522,17 @@ class StepEntrySiteTests(SequenceCase):
                     'substrates = ["propyl-acetate", "benzyl-acetate"]')]),
             encoding="utf-8")
         sequences = cls.sandbox.root / "md" / "sequences"
-        (sequences / "SEQ-0003-by-signature.md").write_text(
+        (sequences / "SEQ-0993-by-signature.md").write_text(
             sequence_text(
-                3, "Alcohol by signature", "1-biphenyl-4-yl-ethanol",
+                993, "Alcohol by signature", "1-biphenyl-4-yl-ethanol",
                 '{ procedure = "OSDB-0004" }, { procedure = "OSDB-0009", '
                 'substrates = ["4-acetylbiphenyl"], products = '
                 '["1-biphenyl-4-yl-ethanol"] }',
                 "The entry is named by its compounds."),
             encoding="utf-8")
-        (sequences / "SEQ-0004-both-products.md").write_text(
+        (sequences / "SEQ-0994-both-products.md").write_text(
             sequence_text(
-                4, "Ethyl acetate from both esters", "ethyl-acetate",
+                994, "Ethyl acetate from both esters", "ethyl-acetate",
                 '{ procedure = "OSDB-0140", substrates = ["acetic-acid"], '
                 'products = ["propyl-acetate", "benzyl-acetate"] }, '
                 '{ procedure = "OSDB-0100" }',
@@ -568,11 +574,11 @@ class StepEntrySiteTests(SequenceCase):
     def test_a_step_named_by_its_signature(self) -> None:
         """Requirement: Sequence pages (the build stages every step of a
         general procedure with its entry, however it names it)."""
-        self.assertEqual(self.staged("SEQ-0003-by-signature.md"), [
+        self.assertEqual(self.staged("SEQ-0993-by-signature.md"), [
             {"procedure": "OSDB-0004"},
             {"procedure": "OSDB-0009", "substrates": ["4-acetylbiphenyl"],
              "products": ["1-biphenyl-4-yl-ethanol"], "entry": 3}])
-        page = self.sequence_page(self.by_sequence("SEQ-0003"))
+        page = self.sequence_page(self.by_sequence("SEQ-0993"))
         steps = page.find("main").find("ol", "sequence-steps").find_all("li")
         self.assertIn(" · entry 3 · ", steps[1].norm())
 
@@ -581,8 +587,8 @@ class StepEntrySiteTests(SequenceCase):
         signature takes its intermediate in the order of its entry's
         products); Sequence pages (the scheme's intermediate)."""
         self.assertEqual(
-            self.staged("SEQ-0004-both-products.md")[0]["entry"], 2)
-        page = self.sequence_page(self.by_sequence("SEQ-0004"))
+            self.staged("SEQ-0994-both-products.md")[0]["entry"], 2)
+        page = self.sequence_page(self.by_sequence("SEQ-0994"))
         scheme = page.find("figure", "sequence-scheme").find("ol")
         items = [n for n in scheme.elements() if n.tag == "li"]
         self.assertEqual([n.classes[0] for n in items], [
@@ -595,7 +601,7 @@ class StepEntrySiteTests(SequenceCase):
         """Requirement: Sequence pages (header, scheme, steps, body);
         Sequence files (staged in build/content/sequences/)."""
         self.assertEqual([s.id for s in self.sequences()],
-                         ["SEQ-0001", "SEQ-0002", "SEQ-0003", "SEQ-0004"])
+                         [*SHIPPED_IDS, "SEQ-0993", "SEQ-0994"])
         for sequence in self.sequences():
             with self.subTest(sequence=sequence.id):
                 self.check_page(sequence)

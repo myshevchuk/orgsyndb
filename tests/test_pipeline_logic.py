@@ -724,7 +724,10 @@ class FieldDataTests(unittest.TestCase):
         term of the vocabulary)."""
         classes = {f["key"]: f for f in self.data("de")["compound"]
                    }["chemical_class"]["values"]
-        self.assertEqual(len(classes), 13)
+        self.assertEqual(
+            set(classes),
+            {t["key"] for t in load_registry()["vocabularies"][
+                "chemical-classes"]})
         self.assertEqual(
             classes["aryl-ketones"],
             {"label": "Arylketone",

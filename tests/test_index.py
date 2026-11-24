@@ -23,6 +23,16 @@ from pipeline_support import (DEMO, TEST_COLLECTION, closed_address,
                               snapshot_digest)
 from support import load_snapshot, procedure_declaration, write_snapshot
 
+
+def shipped(collection: Path) -> tuple[int, int, int]:
+    """The substances of the registry, the Markdown procedure files and
+    the Markdown sequence files that ``collection`` holds, which the index
+    lists."""
+    return (len(load_snapshot(collection / "registry.json")["substances"]),
+            len(list((collection / "md" / "procedures").glob("OSDB-*.md"))),
+            len(list((collection / "md" / "sequences").glob("SEQ-*.md"))))
+
+
 # The declaration that the scenarios "A declaration names a missing
 # vocabulary" and "Configuration error" add to the test collection's
 # `orgsyndb.toml`.
@@ -447,7 +457,8 @@ class OrgProceduresTests(unittest.TestCase):
             "format": "org", "front_matter": None})
         org = [item for item in index["procedures"]
                if item["format"] == "org"]
-        self.assertEqual(len(org), 8)
+        self.assertEqual(
+            len(org), len(list((DEMO / "org" / "procedures").glob("*.org"))))
         self.assertFalse(any("error" in item for item in org))
 
 
@@ -483,7 +494,8 @@ class BrokenContentTests(unittest.TestCase):
         paths = [item["path"] for item in index["procedures"]]
         self.assertNotIn("md/procedures/notes.txt", paths)
         self.assertNotIn("md/procedures/OSDB-12-short.md", paths)
-        self.assertEqual(len(index["compounds"]), 21)
+        self.assertEqual(len(index["compounds"]),
+                         shipped(TEST_COLLECTION)[0])
 
     def test_entries_left_out(self) -> None:
         """Index data: dotfiles, subdirectories, names the patterns do
@@ -493,8 +505,10 @@ class BrokenContentTests(unittest.TestCase):
         (root / "md" / "procedures" / "nested.md").mkdir()
         (root / "md" / "sequences" / "OSDB-0001-x.md").write_text("+++\n+++\n")
         index = index_of(root)
-        self.assertEqual(len(index["procedures"]), 18)
-        self.assertEqual(len(index["sequences"]), 4)
+        self.assertEqual(len(index["procedures"]),
+                         shipped(TEST_COLLECTION)[1])
+        self.assertEqual(len(index["sequences"]),
+                         shipped(TEST_COLLECTION)[2])
 
     def test_a_compound_directory_is_not_read(self) -> None:
         """Requirement: Registry source (a `compounds/` directory is read
@@ -506,7 +520,8 @@ class BrokenContentTests(unittest.TestCase):
         (root / "vocabularies" / "projects.toml").write_text(
             '[extra]\nlabel = "Extra"\n')
         index = index_of(root)
-        self.assertEqual(len(index["compounds"]), 21)
+        self.assertEqual(len(index["compounds"]),
+                         shipped(TEST_COLLECTION)[0])
         self.assertNotIn("extra", index["vocabularies"]["projects"])
 
     def test_non_finite_numbers(self) -> None:
@@ -681,7 +696,8 @@ class IndexSubcommandTests(unittest.TestCase):
         result = sandbox.program(
             "index", cwd=sandbox.root / "md" / "procedures")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(len(json.loads(result.stdout)["compounds"]), 21)
+        self.assertEqual(len(json.loads(result.stdout)["compounds"]),
+                         shipped(TEST_COLLECTION)[0])
 
 
 if __name__ == "__main__":

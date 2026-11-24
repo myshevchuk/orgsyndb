@@ -20,14 +20,14 @@ from .task_support import NEW, TaskCase, steps_of
 
 ASA = "acetylsalicylic-acid"
 CINNAMIC = "cinnamic-acid"
-THREE = [("OSDB-0010", 1), ("OSDB-0007", 1), ("OSDB-0008", 1)]
+THREE = [("OSDB-0990", 1), ("OSDB-0007", 1), ("OSDB-0008", 1)]
 
 
 class StartCase(TaskCase):
     """The task case with the demo collection and, imported after it,
     ``longer_collection``: ``SEQ-0001`` of two steps makes
-    ``acetylsalicylic-acid``, and ``SEQ-0003`` of three steps and
-    ``SEQ-0004`` of two make ``cinnamic-acid``. ``kl`` is signed in;
+    ``acetylsalicylic-acid``, and ``SEQ-0993`` of three steps and
+    ``SEQ-0994`` of two make ``cinnamic-acid``. ``kl`` is signed in;
     a form that names a sequence without a substance names its
     target."""
 
@@ -46,7 +46,7 @@ class StartCase(TaskCase):
         self.assertTrue(any(name in errors for name in fields),
                         f"no error at {fields}: {sorted(errors)}")
 
-    def followed(self, sequence: str = "SEQ-0003", start_step: str = "",
+    def followed(self, sequence: str = "SEQ-0993", start_step: str = "",
                  **fields: str) -> Task:
         """The only task, made through the form."""
         done = self.create(sequence=sequence, start_step=start_step,
@@ -155,7 +155,7 @@ class StartStepRuleTests(StartCase):
         1)."""
         for text in ("0", "-1", "two", "1.5"):
             with self.subTest(start_step=text):
-                done = self.create(sequence="SEQ-0003", start_step=text)
+                done = self.create(sequence="SEQ-0993", start_step=text)
                 self.refused(done, "start_step")
                 self.assertEqual(Task.objects.count(), 0)
 
@@ -170,8 +170,8 @@ class StartStepRuleTests(StartCase):
         substance)."""
         for sequence, substance in (("SEQ-0001", "aspirin"),
                                     ("SEQ-0002", ASA),
-                                    ("SEQ-0003", ASA),
-                                    ("SEQ-0004", "aspirin")):
+                                    ("SEQ-0993", ASA),
+                                    ("SEQ-0994", "aspirin")):
             with self.subTest(sequence=sequence, substance=substance):
                 self.refused(self.create(substance=substance,
                                          sequence=sequence), "sequence")
@@ -182,8 +182,8 @@ class StartStepRuleTests(StartCase):
         substance)."""
         for sequence, substance in (("SEQ-0001", ASA),
                                     ("SEQ-0002", "1-biphenyl-4-yl-ethanol"),
-                                    ("SEQ-0003", CINNAMIC),
-                                    ("SEQ-0004", CINNAMIC)):
+                                    ("SEQ-0993", CINNAMIC),
+                                    ("SEQ-0994", CINNAMIC)):
             with self.subTest(sequence=sequence):
                 done = self.create(substance=substance, sequence=sequence)
                 self.assertEqual(done.status_code, 302)
@@ -209,7 +209,7 @@ class StartStepRuleTests(StartCase):
         done = self.change(task, sequence="SEQ-0001", substance=CINNAMIC)
         self.refused(done, "sequence")
         task = self.only_task()
-        self.assertEqual(task.sequence.key, "SEQ-0003")
+        self.assertEqual(task.sequence.key, "SEQ-0993")
         self.assertEqual(self.entries(task), THREE)
 
     def test_a_substance_changed_away_from_the_target(self) -> None:
@@ -272,18 +272,18 @@ class ChangingTheStartTests(StartCase):
         the steps become one per step of the sequence from
         `start_step`)."""
         task = self.followed(start_step="2")
-        done = self.change(task, sequence="SEQ-0004")
+        done = self.change(task, sequence="SEQ-0994")
         self.assertEqual(done.status_code, 302)
         task = self.only_task()
         self.assertEqual((task.sequence.key, task.start_step), (
-            "SEQ-0004", 2))
+            "SEQ-0994", 2))
         self.assertEqual(self.entries(task), [("OSDB-0008", 1)])
 
     def test_setting_a_sequence_with_a_start_step(self) -> None:
         """Requirement: Task record (a sequence set replaces the steps
         from `start_step` on)."""
         task = make_task(self.kl, CINNAMIC, steps=5)
-        done = self.change(task, sequence="SEQ-0003", start_step="2")
+        done = self.change(task, sequence="SEQ-0993", start_step="2")
         self.assertEqual(done.status_code, 302)
         task = self.only_task()
         self.assertEqual(task.start_step, 2)
@@ -438,7 +438,7 @@ class FormTests(StartCase):
         task = self.followed(start_step="2")
         root = page(self.client.get(task_url(task, "edit")))
         self.assertEqual(field_value(root, "start_step"), "2")
-        self.assertEqual(field_value(root, "sequence"), "SEQ-0003")
+        self.assertEqual(field_value(root, "sequence"), "SEQ-0993")
         self.assertEqual(field_value(root, "steps_total"), "2")
 
 
@@ -488,7 +488,7 @@ class PageTests(StartCase):
                           for item in items],
                          [["/procedures/osdb-0007/"],
                           ["/procedures/osdb-0008/"]])
-        self.assertIn("SEQ-0003 ab Stufe 2", self.show(task).text())
+        self.assertIn("SEQ-0993 ab Stufe 2", self.show(task).text())
 
     def test_a_withdrawn_sequence_keeps_the_start_on_the_page(
             self) -> None:
@@ -560,7 +560,7 @@ class AdminTests(AdminBase):
         self.assertEqual(done.status_code, 302)
         task = self.only_task()
         self.assertEqual((task.note, task.start_step, task.sequence.key),
-                         ("Aus dem Admin", 2, "SEQ-0003"))
+                         ("Aus dem Admin", 2, "SEQ-0993"))
 
     def test_no_revert_from_the_history(self) -> None:
         """Requirement: Tasks in the admin (`start_step` read-only:

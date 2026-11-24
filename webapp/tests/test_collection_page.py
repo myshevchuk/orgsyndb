@@ -7,10 +7,10 @@ from typing import Any
 from django.test import override_settings
 
 from . import berlin, frozen, make_user, page, table, ticking
-from .collection_support import accept, latest_import
-from .collection_support import (IMPORTS, SEQUENCES, TOKEN, ImportCase,
-                                 demo_collection, make_import, manifest,
-                                 post, refused)
+from .collection_support import (IMPORTS, PROCEDURES, SEQUENCES, TOKEN,
+                                 ImportCase, accept, demo_collection,
+                                 latest_import, make_import, manifest, post,
+                                 refused)
 from .demo_support import DAY, SeededCase, noon
 
 COLUMNS_DE = ["Empfangen", "Commit", "Anlass", "Gepusht von", "Ergebnis",
@@ -127,7 +127,7 @@ class ImportsListedTests(SeededCase):
         self.assertIn(body["commit"][:10], above)
         self.assertNotIn(body["commit"][:11], above)
         self.assertIn(body["release"], above)
-        self.assertTrue(has_number(above, 9), above)
+        self.assertTrue(has_number(above, PROCEDURES), above)
         self.assertTrue(has_number(above, SEQUENCES), above)
         self.assertIn(str(DAY.year), above)
         self.assertNotIn("Noch keine Importe.", root.text())
@@ -270,9 +270,9 @@ class LatestAcceptedTests(ImportCase):
         self.assertIn(second.commit[:10], above)
         self.assertIn(second.release, above)
         self.assertNotIn(first.commit[:10], above)
-        self.assertTrue(has_number(above, 7), above)
-        self.assertFalse(has_number(above, 9), above)
-        self.assertTrue(has_number(above, 2), above)
+        self.assertTrue(has_number(above, PROCEDURES - 2), above)
+        self.assertFalse(has_number(above, PROCEDURES), above)
+        self.assertTrue(has_number(above, SEQUENCES), above)
         self.assertEqual(len(table(root)[1]), 3)
 
     def test_without_an_accepted_import_there_is_no_line(self) -> None:

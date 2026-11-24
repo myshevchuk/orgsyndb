@@ -89,14 +89,22 @@ class NotebookListTests(DemoJournalCase):
     def test_the_number_of_entries(self) -> None:
         """Requirement: Journal pages (`Einträge`, the number of its
         entries)."""
+        from journal.models import Entry
+
+        def stored() -> dict[str, str]:
+            return {code: str(Entry.objects.filter(
+                notebook__code=code).count())
+                for code in ("AE-1", "AE-2", "CE-1", "CE-3")}
+
         counts = {code: row["Einträge"].text() for code, row
                   in rows_of(self.anonymous(JOURNAL)).items()}
-        self.assertEqual(counts, {"AE-1": "3", "AE-2": "4", "CE-1": "1",
-                                  "CE-3": "2"})
-        entry_of("CE-1/9")
+        self.assertEqual(counts, stored())
+        before = int(counts["CE-1"])
+        entry_of("CE-1/990")
         counts = {code: row["Einträge"].text() for code, row
                   in rows_of(self.anonymous(JOURNAL)).items()}
-        self.assertEqual(counts["CE-1"], "2")
+        self.assertEqual(counts["CE-1"], str(before + 1))
+        self.assertEqual(counts, stored())
 
     def test_the_note(self) -> None:
         """Requirement: Journal pages (`Notiz`)."""
@@ -212,7 +220,7 @@ class NotebookPageTests(DemoJournalCase):
         step = TaskStep.objects.get(journal_entry__notebook__code="CE-3",
                                     journal_entry__number=2)
         rows = rows_of(self.anonymous(notebook_url("CE-3")))
-        self.assertEqual(set(rows), {"CE-3/1", "CE-3/2"})
+        self.assertLessEqual({"CE-3/1", "CE-3/2"}, set(rows))
         cell = rows["CE-3/2"]["Aufgabenschritte"]
         self.assertIn(step.task.number, cell.text())
         self.assertIn("Stufe 1", cell.text())
@@ -247,9 +255,9 @@ class NotebookPageTests(DemoJournalCase):
         steps = list(TaskStep.objects.filter(
             journal_entry__isnull=True).order_by("pk")[:2])
         for step in steps:
-            step.journal_entry = entry_of("CE-1/9")
+            step.journal_entry = entry_of("CE-1/990")
             step.save()
-        row = rows_of(self.anonymous(notebook_url("CE-1")))["CE-1/9"]
+        row = rows_of(self.anonymous(notebook_url("CE-1")))["CE-1/990"]
         self.assertEqual(sorted(hrefs(row["Aufgabenschritte"])),
                          sorted(task_url(step.task) for step in steps))
         self.assertEqual(row["Vorschrift"].text(), "")
@@ -279,8 +287,8 @@ class NotebookPageTests(DemoJournalCase):
     def test_an_entry_nothing_names_shows_empty_cells(self) -> None:
         """Requirement: Journal pages (an entry that no procedure or
         step names has no procedure and no step)."""
-        entry_of("CE-1/9")
-        row = rows_of(self.anonymous(notebook_url("CE-1")))["CE-1/9"]
+        entry_of("CE-1/990")
+        row = rows_of(self.anonymous(notebook_url("CE-1")))["CE-1/990"]
         self.assertEqual(row["Vorschrift"].text(), "")
         self.assertEqual(row["Aufgabenschritte"].text(), "")
         self.assertEqual(row["Chargen"].text(), "")

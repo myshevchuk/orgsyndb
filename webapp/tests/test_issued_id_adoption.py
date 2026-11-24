@@ -10,13 +10,15 @@ from django.test import override_settings
 
 from . import make_user
 from .collection_support import (TOKEN, ImportCase, by_id, copy_procedure,
-                                 demo_collection, issue_ids, issued_keys,
-                                 issued_to, latest_import, make_token,
+                                 demo_collection, ids_of, issue_ids,
+                                 issued_keys, issued_to, latest_import,
+                                 make_token,
                                  manifest, post, refused, request_id)
 from .demo_support import SeededCase
 
-DEMO_IDS = [*(f"OSDB-{number:04d}" for number in range(1, 10)),
-            "SEQ-0001", "SEQ-0002"]
+DEMO_IDS = sorted(ids_of(demo_collection()))
+NEXT_PROCEDURE = "OSDB-{:04d}".format(max(
+    int(key[5:]) for key in DEMO_IDS if key.startswith("OSDB-")) + 1)
 
 
 def adopt(*arguments: str) -> list[str]:
@@ -84,7 +86,7 @@ class FirstImportTests(ImportCase):
     def test_a_stale_manifest_adopts_nothing(self) -> None:
         """Requirement: Accepting an import (a stale manifest is
         recorded nowhere)."""
-        done = self.send(manifest(base=999, deleted=["OSDB-0012"]))
+        done = self.send(manifest(base=999, deleted=["OSDB-0990"]))
         self.assertEqual(done.status_code, 409, done.content)
         self.assertEqual(issued_keys(), [])
 
@@ -116,7 +118,7 @@ class FirstImportTests(ImportCase):
         refuse an ID that is not issued)."""
         self.accept()
         before = issued_keys()
-        done = self.send(self.follow(with_procedure("OSDB-0010")))
+        done = self.send(self.follow(with_procedure("OSDB-0990")))
         self.assertEqual(done.json()["outcome"], "refused")
         self.assertEqual(issued_keys(), before)
 
@@ -185,50 +187,51 @@ class AdoptCommandTests(SeededCase):
     def test_both_kinds_are_adopted(self) -> None:
         """Requirement: Issued IDs (adopts each named ID that is not
         issued)."""
-        lines = adopt("SEQ-0005", "OSDB-0015")
-        self.assertEqual(lines, ["adopted SEQ-0005", "adopted OSDB-0015"])
+        lines = adopt("SEQ-0985", "OSDB-0985")
+        self.assertEqual(lines, ["adopted SEQ-0985", "adopted OSDB-0985"])
         self.assertEqual(issued_keys(), sorted(
-            [*DEMO_IDS, "SEQ-0005", "OSDB-0015"]))
+            [*DEMO_IDS, "SEQ-0985", "OSDB-0985"]))
 
     def test_an_adopted_id_is_below_the_next_one(self) -> None:
         """Requirement: Issued IDs (one above the highest issued one)."""
-        adopt("OSDB-0015", "SEQ-0005")
+        adopt("OSDB-0985", "SEQ-0985")
         token = make_token("klehmann")
         self.assertEqual(
             request_id(self.client, "procedure", token).json(),
-            {"id": "OSDB-0016"})
+            {"id": "OSDB-0986"})
         self.assertEqual(
             request_id(self.client, "sequence", token).json(),
-            {"id": "SEQ-0006"})
+            {"id": "SEQ-0986"})
 
     def test_an_id_is_adopted_once(self) -> None:
         """Requirement: Issued IDs (each named ID that is not
         issued)."""
-        self.assertEqual(adopt("OSDB-0012"), ["adopted OSDB-0012"])
-        self.assertEqual(adopt("OSDB-0012"), ["OSDB-0012 was issued"])
-        self.assertEqual(issued_keys().count("OSDB-0012"), 1)
+        self.assertEqual(adopt("OSDB-0990"), ["adopted OSDB-0990"])
+        self.assertEqual(adopt("OSDB-0990"), ["OSDB-0990 was issued"])
+        self.assertEqual(issued_keys().count("OSDB-0990"), 1)
 
     def test_an_id_issued_to_an_account_stays_with_it(self) -> None:
         """Requirement: Issued IDs (an ID that was issued is said to
         be)."""
         request_id(self.client, "procedure", make_token("klehmann"))
-        self.assertEqual(adopt("OSDB-0010"), ["OSDB-0010 was issued"])
-        self.assertEqual(issued_to("OSDB-0010"), "klehmann")
+        self.assertEqual(adopt(NEXT_PROCEDURE),
+                         [f"{NEXT_PROCEDURE} was issued"])
+        self.assertEqual(issued_to(NEXT_PROCEDURE), "klehmann")
 
     def test_the_way_back_after_a_restore(self) -> None:
         """Design: Reconciling by hand (the next import is refused,
         naming the IDs issued after the dump; the operator adopts them
         and the next build is accepted)."""
-        data = with_procedure("OSDB-0010", "OSDB-0011")
+        data = with_procedure("OSDB-0990", "OSDB-0991")
         done = post(self.client, after_the_latest(data))
         self.assertEqual(done.json()["outcome"], "refused", done.content)
         from collection.models import Import
         errors = Import.objects.get(pk=done.json()["import"]).errors
         self.assertEqual(
             errors.splitlines(),
-            ["OSDB-0010: not issued by the lab application",
-             "OSDB-0011: not issued by the lab application"])
-        adopt("OSDB-0010", "OSDB-0011")
+            ["OSDB-0990: not issued by the lab application",
+             "OSDB-0991: not issued by the lab application"])
+        adopt("OSDB-0990", "OSDB-0991")
         again = post(self.client, after_the_latest(data))
         self.assertEqual(again.json()["outcome"], "accepted",
                          again.content)

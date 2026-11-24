@@ -21,8 +21,9 @@ from django.test import TestCase, TransactionTestCase, override_settings
 from . import (load_demo_registry, make_article, make_class,
                make_demo_accounts, make_demo_notebooks, make_group,
                make_substance, make_user, page)
-from .collection_support import (TOKEN, import_collection, make_token,
-                                 manifest, post, refused, request_id)
+from .collection_support import (TOKEN, demo_collection, ids_of,
+                                 import_collection, make_token, manifest,
+                                 post, refused, request_id)
 from .registry_support import (NEW_SUBSTANCE, OLD_LAYOUT, small_snapshot,
                                term_url, write_json)
 from .test_registry_forms import substance_data
@@ -506,20 +507,23 @@ class IssuedIdTests(LockCase):
         transaction that issues, before the ID is recorded)."""
         from collection.models import IssuedId
         token = make_token("kl")
+        last = max(int(key[5:]) for key in ids_of(demo_collection())
+                   if key.startswith("OSDB-"))
+        issued = f"OSDB-{last + 1:04d}"
         with self.recording(lambda: IssuedId.objects.filter(
-                key="OSDB-0010").exists()) as calls:
+                key=issued).exists()) as calls:
             done = request_id(self.client, "procedure", token)
         self.assertEqual(done.status_code, 201, done.content)
-        self.assertTrue(IssuedId.objects.filter(key="OSDB-0010").exists())
+        self.assertTrue(IssuedId.objects.filter(key=issued).exists())
         self.assertLocked(calls, before=False)
 
     def test_adopting_an_id(self) -> None:
         """Requirement: One lock (`adopt_ids` takes it)."""
         from collection.models import IssuedId
         with self.recording(lambda: IssuedId.objects.filter(
-                key="OSDB-0012").exists()) as calls:
-            call_command("adopt_ids", "OSDB-0012", stdout=io.StringIO())
-        self.assertTrue(IssuedId.objects.filter(key="OSDB-0012").exists())
+                key="OSDB-0990").exists()) as calls:
+            call_command("adopt_ids", "OSDB-0990", stdout=io.StringIO())
+        self.assertTrue(IssuedId.objects.filter(key="OSDB-0990").exists())
         self.assertLocked(calls, before=False)
 
 
@@ -535,7 +539,8 @@ class AdoptionTests(LockCase):
         with self.recording(IssuedId.objects.count) as calls:
             done = post(self.client, manifest())
         self.assertEqual(done.status_code, 200, done.content)
-        self.assertEqual(IssuedId.objects.count(), 11)
+        self.assertEqual(IssuedId.objects.count(),
+                         len(ids_of(demo_collection())))
         self.assertLocked(calls, before=0)
 
 

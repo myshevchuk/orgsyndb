@@ -4,10 +4,11 @@ Import checks)."""
 import copy
 from typing import Any
 
-from .collection_support import (ImportCase, author_rows, authors_of, by_id,
-                                 counts, credited, demo_collection, dump,
-                                 issued_keys, journal_of, make_token,
-                                 manifest, request_id)
+from .collection_support import (PROCEDURES, ImportCase, author_rows,
+                                 authors_of, by_id, counts, credited,
+                                 demo_collection, dump, issued_keys,
+                                 journal_of, make_token, manifest,
+                                 request_id)
 from .journal_support import make_notebook
 
 
@@ -255,41 +256,43 @@ class IssuedCheckTests(CheckCase):
         """Requirement: Import checks (an ID the application has not
         issued, among the sequences)."""
         from collection.models import Sequence
-        data = self.with_new("SEQ-0003", sequence=True)
-        self.only_error(data, self.NOT_ISSUED.format("SEQ-0003"))
-        self.assertFalse(Sequence.objects.filter(key="SEQ-0003").exists())
+        last = max(int(s["id"][4:]) for s in demo_collection()["sequences"])
+        ident = f"SEQ-{last + 1:04d}"
+        data = self.with_new(ident, sequence=True)
+        self.only_error(data, self.NOT_ISSUED.format(ident))
+        self.assertFalse(Sequence.objects.filter(key=ident).exists())
         done = request_id(self.client, "sequence", make_token("tbauer"))
-        self.assertEqual(done.json(), {"id": "SEQ-0003"})
+        self.assertEqual(done.json(), {"id": ident})
         self.accept(data)
-        self.assertTrue(Sequence.objects.filter(key="SEQ-0003").exists())
+        self.assertTrue(Sequence.objects.filter(key=ident).exists())
 
     def test_each_id_is_one_error(self) -> None:
         """Requirement: Import checks (one error for each, each
         beginning with the ID it concerns)."""
-        data = self.with_new("OSDB-0010")
-        data["procedures"] += self.with_new("OSDB-0012")["procedures"][-1:]
+        data = self.with_new("OSDB-0990")
+        data["procedures"] += self.with_new("OSDB-0991")["procedures"][-1:]
         data["sequences"] += self.with_new(
-            "SEQ-0004", sequence=True)["sequences"][-1:]
+            "SEQ-0994", sequence=True)["sequences"][-1:]
         errors = self.refused_by(data)
         self.assertEqual(sorted(errors), [
-            self.NOT_ISSUED.format("OSDB-0010"),
-            self.NOT_ISSUED.format("OSDB-0012"),
-            self.NOT_ISSUED.format("SEQ-0004")])
+            self.NOT_ISSUED.format("OSDB-0990"),
+            self.NOT_ISSUED.format("OSDB-0991"),
+            self.NOT_ISSUED.format("SEQ-0994")])
 
     def test_it_comes_with_the_other_errors(self) -> None:
         """Requirement: Import checks (one error for each of these)."""
-        data = self.with_new("OSDB-0010")
-        by_id(data["procedures"], "OSDB-0010")["entries"][0][
+        data = self.with_new("OSDB-0990")
+        by_id(data["procedures"], "OSDB-0990")["entries"][0][
             "substrates"] = ["no-such-substance"]
         errors = self.refused_by(data)
         self.assertEqual(sorted(errors), sorted([
-            self.NOT_ISSUED.format("OSDB-0010"),
-            'OSDB-0010: unknown substance "no-such-substance"']))
+            self.NOT_ISSUED.format("OSDB-0990"),
+            'OSDB-0990: unknown substance "no-such-substance"']))
 
     def test_a_refusal_issues_nothing(self) -> None:
         """Requirement: Issued IDs (a refused import adopts nothing)."""
         before = issued_keys()
-        self.refused_by(self.with_new("OSDB-0010"))
+        self.refused_by(self.with_new("OSDB-0990"))
         self.assertEqual(issued_keys(), before)
 
     def test_a_procedure_that_went_may_come_back(self) -> None:
@@ -300,7 +303,7 @@ class IssuedCheckTests(CheckCase):
                               if p["id"] != "OSDB-0003"]
         self.accept(data)
         self.accept()
-        self.assertEqual(counts()["Procedure"], 9)
+        self.assertEqual(counts()["Procedure"], PROCEDURES)
 
 
 class NotebookCheckTests(CheckCase):
@@ -402,7 +405,7 @@ class NotebookCheckTests(CheckCase):
             procedure["notebook"] = None
             procedure["project"] = None
         self.accept(data)
-        self.assertEqual(Procedure.objects.count(), 9)
+        self.assertEqual(Procedure.objects.count(), PROCEDURES)
         self.assertEqual(journal_of("OSDB-0002"), (None, None))
         self.assertEqual(Entry.objects.count(), 0)
 

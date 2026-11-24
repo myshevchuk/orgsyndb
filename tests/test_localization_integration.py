@@ -429,13 +429,12 @@ class PartialTranslationTests(GermanCase):
         english = self.page("procedures/osdb-0004/index.html")
         used_in = [(l.target, l.node.norm()) for l in english.links()
                    if l.node.has_class("used-in")]
-        self.assertEqual(
-            used_in,
-            [("/procedures/osdb-0005/",
-              "OSDB-0005 1-(Biphenyl-4-yl)ethanol"),
-             ("/procedures/osdb-0009/",
-              "OSDB-0009 Sekundäre Benzylalkohole durch Reduktion mit "
-              "Natriumborhydrid")])
+        for named in [("/procedures/osdb-0005/",
+                       "OSDB-0005 1-(Biphenyl-4-yl)ethanol"),
+                      ("/procedures/osdb-0009/",
+                       "OSDB-0009 Sekundäre Benzylalkohole durch Reduktion "
+                       "mit Natriumborhydrid")]:
+            self.assertIn(named, used_in)
 
 
 class GermanGeneralFixtureTests(GermanCase):
