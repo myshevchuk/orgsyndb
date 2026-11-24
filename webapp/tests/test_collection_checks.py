@@ -6,7 +6,7 @@ from typing import Any
 
 from .collection_support import (PROCEDURES, ImportCase, author_rows,
                                  authors_of, by_id, counts, credited,
-                                 demo_collection, dump, issued_keys,
+                                 demo_collection, dump, issue_ids, issued_keys,
                                  journal_of, make_token, manifest,
                                  request_id)
 from .journal_support import make_notebook
@@ -241,16 +241,17 @@ class IssuedCheckTests(CheckCase):
     def test_an_id_not_issued(self) -> None:
         """Scenario: An ID not issued."""
         from collection.models import Procedure
-        data = self.with_new("OSDB-0010")
-        self.only_error(data, self.NOT_ISSUED.format("OSDB-0010"))
+        data = self.with_new("OSDB-0990")
+        self.only_error(data, self.NOT_ISSUED.format("OSDB-0990"))
         self.assertFalse(Procedure.objects.filter(
-            key="OSDB-0010").exists())
+            key="OSDB-0990").exists())
+        issue_ids("OSDB-0989")
         done = request_id(self.client, "procedure",
                           make_token("klehmann"))
-        self.assertEqual(done.json(), {"id": "OSDB-0010"})
+        self.assertEqual(done.json(), {"id": "OSDB-0990"})
         self.accept(data)
         self.assertTrue(Procedure.objects.filter(
-            key="OSDB-0010").exists())
+            key="OSDB-0990").exists())
 
     def test_a_sequence_not_issued(self) -> None:
         """Requirement: Import checks (an ID the application has not

@@ -57,19 +57,19 @@ class FirstImportTests(ImportCase):
     def test_adopted_by_the_first_accepted_import(self) -> None:
         """Scenario: Adopted by the first accepted import."""
         refusal = self.send(self.follow(self.refusable(),
-                                        deleted=["OSDB-0011"]))
+                                        deleted=["OSDB-0989"]))
         self.assertEqual(refusal.json()["outcome"], "refused")
         self.assertEqual(issued_keys(), [])
-        self.accept(deleted=["OSDB-0012"])
+        self.accept(deleted=["OSDB-0990"])
         self.assertEqual(issued_keys(),
-                         sorted([*DEMO_IDS, "OSDB-0012"]))
+                         sorted([*DEMO_IDS, "OSDB-0990"]))
         for key in issued_keys():
             with self.subTest(key=key):
                 self.assertIsNone(issued_to(key))
         done = request_id(self.client, "procedure",
                           make_token("klehmann"))
         self.assertEqual((done.status_code, done.json()),
-                         (201, {"id": "OSDB-0013"}))
+                         (201, {"id": "OSDB-0991"}))
 
     def test_a_refused_import_adopts_nothing(self) -> None:
         """Requirement: Issued IDs (a refused import adopts nothing)."""
@@ -140,13 +140,13 @@ class AdoptCommandTests(SeededCase):
 
     def test_adopting_by_hand(self) -> None:
         """Scenario: Adopting by hand."""
-        lines = adopt("OSDB-0012", "OSDB-0003")
-        self.assertIn("adopted OSDB-0012", lines)
+        lines = adopt("OSDB-0990", "OSDB-0003")
+        self.assertIn("adopted OSDB-0990", lines)
         self.assertIn("OSDB-0003 was issued", lines)
         self.assertNotIn("adopted OSDB-0003", lines)
-        self.assertIsNone(issued_to("OSDB-0012"))
+        self.assertIsNone(issued_to("OSDB-0990"))
         done = post(self.client, after_the_latest(
-            with_procedure("OSDB-0012")))
+            with_procedure("OSDB-0990")))
         self.assertEqual(done.json()["outcome"], "accepted", done.content)
 
     def test_a_malformed_argument_adopts_nothing(self) -> None:

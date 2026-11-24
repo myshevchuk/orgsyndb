@@ -21,6 +21,7 @@ LAST_PROCEDURE = max(int(key[5:]) for key in DEMO_IDS
 LAST_SEQUENCE = max(int(key[4:]) for key in DEMO_IDS
                     if key.startswith("SEQ-"))
 NEXT_PROCEDURE = f"OSDB-{LAST_PROCEDURE + 1:04d}"
+NEXT_SEQUENCE = f"SEQ-{LAST_SEQUENCE + 1:04d}"
 
 
 def answer(case: Any, response: Any) -> Any:
@@ -44,23 +45,24 @@ class TurnTests(SeededCase):
 
     def test_two_ids_in_turn(self) -> None:
         """Scenario: Two IDs in turn."""
+        second_id = f"OSDB-{LAST_PROCEDURE + 2:04d}"
         first = request_id(self.client, "procedure",
                            make_token("klehmann"))
         second = request_id(self.client, "procedure",
                             make_token("tbauer"))
         self.assertEqual((first.status_code, answer(self, first)),
-                         (201, {"id": "OSDB-0010"}))
+                         (201, {"id": NEXT_PROCEDURE}))
         self.assertEqual((second.status_code, answer(self, second)),
-                         (201, {"id": "OSDB-0011"}))
-        self.assertEqual(issued_to("OSDB-0010"), "klehmann")
-        self.assertEqual(issued_to("OSDB-0011"), "tbauer")
+                         (201, {"id": second_id}))
+        self.assertEqual(issued_to(NEXT_PROCEDURE), "klehmann")
+        self.assertEqual(issued_to(second_id), "tbauer")
 
     def test_a_sequence_id(self) -> None:
         """Scenario: A sequence ID."""
         done = request_id(self.client, "sequence", make_token("klehmann"))
         self.assertEqual((done.status_code, answer(self, done)),
-                         (201, {"id": "SEQ-0003"}))
-        self.assertEqual(issued_to("SEQ-0003"), "klehmann")
+                         (201, {"id": NEXT_SEQUENCE}))
+        self.assertEqual(issued_to(NEXT_SEQUENCE), "klehmann")
 
     def test_the_kinds_count_apart(self) -> None:
         """Requirement: Issued IDs (the ID of that kind one above the

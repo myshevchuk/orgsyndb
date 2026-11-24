@@ -775,14 +775,30 @@ class DemoManifestTests(unittest.TestCase):
         self.assertEqual(data["language"], "de")
         self.assertEqual(data.get("deleted"), [])
         procedures = data["procedures"]
-        self.assertEqual([p["id"] for p in procedures], IDS)
+        demo_ids = sorted(
+            {p.name[:9] for p in
+             (DEMO / "org" / "procedures").glob("OSDB-*.org")}
+            | {p.name[:9] for p in
+               (DEMO / "md" / "procedures").glob("OSDB-*.md")})
+        self.assertEqual([p["id"] for p in procedures], demo_ids)
+        self.assertEqual([p["id"] for p in procedures[:len(IDS)]], IDS)
         self.assertEqual(by_id(procedures, "OSDB-0001")["source"], "org")
         self.assertEqual(by_id(procedures, "OSDB-0002")["source"], "md")
-        self.assertEqual({p["id"]: p.get("authors") for p in procedures},
-                         DEMO_CREDITS)
-        self.assertEqual(
-            {p["id"]: (p.get("notebook"), p.get("project"))
-             for p in procedures}, DEMO_JOURNAL)
+        authors = {p["id"]: p.get("authors") for p in procedures}
+        for ident, wanted in DEMO_CREDITS.items():
+            self.assertEqual(authors[ident], wanted, ident)
+        for ident, listed in authors.items():
+            with self.subTest(id=ident):
+                self.assertTrue(listed)
+                self.assertLessEqual(set(listed), DEMO_ACCOUNTS)
+        journal = {p["id"]: (p.get("notebook"), p.get("project"))
+                   for p in procedures}
+        for ident, wanted in DEMO_JOURNAL.items():
+            self.assertEqual(journal[ident], wanted, ident)
+        for ident, (notebook, project) in journal.items():
+            with self.subTest(id=ident):
+                self.assertRegex(notebook, r"^(AE-1|AE-2|CE-1|CE-3)/\d+$")
+                self.assertTrue(project)
         general = by_id(procedures, "OSDB-0009")
         self.assertEqual(len(general["entries"]), 3)
         self.assertEqual(general["entries"][0], {

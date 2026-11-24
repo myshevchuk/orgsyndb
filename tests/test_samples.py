@@ -11,7 +11,8 @@ from pathlib import Path
 
 import sample_support as sup
 import test_theme_static as tts
-from pipeline_support import DEMO, FIXTURES, REPO, snapshot_digest
+from pipeline_support import (DEMO, FIXTURES, REPO, keep_registry_inside,
+                              snapshot_digest)
 
 ORG_SEED = DEMO / "org" / "procedures" / "OSDB-0001-salicylic-acid.org"
 MD_SEED = DEMO / "md" / "procedures" / "OSDB-0002-aspirin.md"
@@ -1219,11 +1220,14 @@ class RegistryRuleCheckerTests(unittest.TestCase):
     """The rules for the registry's substances and the sequences must be
     enforced, or the demo tests would hold nothing."""
 
-    def collection(self) -> Path:
+    def collection(self, source: Path = COLLECTION) -> Path:
+        """A temporary copy of ``source`` with its registry inside."""
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         root = Path(tmp.name) / "collection"
-        shutil.copytree(COLLECTION, root)
+        shutil.copytree(source, root, ignore=shutil.ignore_patterns(
+            "build", "public", "pdf"))
+        keep_registry_inside(source, root)
         return root
 
     def edit_registry(self, root: Path, change) -> None:
@@ -1243,11 +1247,10 @@ class RegistryRuleCheckerTests(unittest.TestCase):
             path.write_text(text.replace(old, new), encoding="utf-8")
 
     def test_the_test_collection_meets_the_rules(self) -> None:
-        """Scenario: The demo's sequences (as mirrored in the test
-        collection)."""
-        root = self.collection()
-        self.assertEqual(sup.sequence_violations(root), [])
-        self.assertEqual(sup.coverage_violations(root), [])
+        """Scenario: The demo's sequences; Samples live in the demo
+        collection."""
+        self.assertEqual(sup.sequence_violations(DEMO), [])
+        self.assertEqual(sup.coverage_violations(DEMO), [])
 
     def test_each_sequence_rule_is_enforced(self) -> None:
         """Scenario: The demo's sequences (checker, rejected)."""
@@ -1332,7 +1335,7 @@ class RegistryRuleCheckerTests(unittest.TestCase):
         substance that no sample names or lists and that is no
         commercial chemical, and a key that a sample names but the
         registry lacks."""
-        root = self.collection()
+        root = self.collection(DEMO)
 
         def add(by_key: dict, table: dict) -> None:
             table["substances"].append(
@@ -1342,7 +1345,7 @@ class RegistryRuleCheckerTests(unittest.TestCase):
         self.edit_registry(root, add)
         self.assertTrue(any("orphan" in line for line in
                             sup.coverage_violations(root)))
-        root = self.collection()
+        root = self.collection(DEMO)
 
         def remove(by_key: dict, table: dict) -> None:
             table["substances"].remove(by_key["benzaldehyde"])
@@ -1354,7 +1357,8 @@ class RegistryRuleCheckerTests(unittest.TestCase):
     def test_a_registry_of_named_substances_only_is_rejected(self) -> None:
         """Scenario: Samples live in the demo collection (checker): some
         commercial chemical is named by no sample."""
-        root = self.collection()
+        root = self.collection(DEMO)
+        self.assertEqual(sup.coverage_violations(root), [])
         named = sup.named_compounds_of(root)
 
         def keep_named(by_key: dict, table: dict) -> None:
@@ -1399,17 +1403,39 @@ class TestCollectionTests(unittest.TestCase):
         demo_table = json.loads(DEMO_REGISTRY.read_text(encoding="utf-8"))
         test_table = json.loads(
             (COLLECTION / "registry.json").read_text(encoding="utf-8"))
+        self.assertEqual(test_table["digest"], snapshot_digest(test_table))
+        named = sup.named_compounds_of(COLLECTION) | {"new-compound-7"}
+        self.assertEqual(len(named), 21)
+        demo_table["substances"] = [
+            s for s in demo_table["substances"] if s["key"] in named]
+        by_key = {
+            c["key"]: c
+            for c in demo_table["vocabularies"]["chemical-classes"]}
+        classes: set[str] = set()
+        frontier = {c for s in demo_table["substances"]
+                    for c in s["chemical_classes"]}
+        while frontier:
+            classes |= frontier
+            frontier = {
+                by_key[k]["parent"] for k in frontier
+                if by_key[k].get("parent")} - classes
+        demo_table["vocabularies"]["chemical-classes"] = [
+            c for c in demo_table["vocabularies"]["chemical-classes"]
+            if c["key"] in classes]
+        demo_accounts = {a["username"]: a["name"]
+                         for a in demo_table["accounts"]}
+        test_accounts = accounts_of(COLLECTION / "registry.json")
+        self.assertLess(set(demo_accounts), set(test_accounts))
+        self.assertEqual(
+            {user: name for user, name in test_accounts.items()
+             if user in demo_accounts}, demo_accounts)
+        self.assertIn("a.example", test_accounts)
+        self.assertEqual(test_accounts["ae.mueller"], "Ä. Müller")
         for table in (demo_table, test_table):
             table.pop("accounts", None)
             table.pop("digest")
         self.assertEqual(test_table, demo_table)
         self.assertEqual(test_table["notebooks"], sup.DEMO_NOTEBOOKS)
-        test_accounts = accounts_of(COLLECTION / "registry.json")
-        self.assertEqual(
-            {user: name for user, name in test_accounts.items()
-             if user in DEMO_ACCOUNTS}, DEMO_ACCOUNTS)
-        self.assertIn("a.example", test_accounts)
-        self.assertEqual(test_accounts["ae.mueller"], "Ä. Müller")
         demo = tomllib.loads(
             (DEMO / "orgsyndb.toml").read_text(encoding="utf-8"))
         test = tomllib.loads(
@@ -1419,8 +1445,10 @@ class TestCollectionTests(unittest.TestCase):
         self.assertEqual(test, demo)
         for name in ("compounds", "vocabularies"):
             self.assertFalse((COLLECTION / name).exists(), name)
-        sequences = relative_files(DEMO / "md" / "sequences")
-        self.assertTrue(sequences, "the demo's sequences")
+        sequences = {
+            p.name for prefix in ("SEQ-0001-", "SEQ-0002-")
+            for p in (DEMO / "md" / "sequences").glob(f"{prefix}*.md")}
+        self.assertEqual(len(sequences), 4)
         for relative in sorted(sequences):
             with self.subTest(file=relative):
                 self.assertTrue(
@@ -1433,13 +1461,17 @@ class TestCollectionTests(unittest.TestCase):
         self.assertEqual(
             relative_files(COLLECTION / "md" / "sequences"), sequences,
             "md/sequences/ files")
-        names = [converted_name(p) for p in sample_files()]
-        self.assertTrue(names, "the demo's samples")
+        fixed_ids = {f"OSDB-{n:04d}" for n in range(1, 10)}
+        fixed = [p for p in sample_files() if p.name[:9] in fixed_ids]
+        names = [converted_name(p) for p in fixed]
+        self.assertEqual(len(names), 18)
         self.assertEqual(len(set(names)), len(names),
                          "two sample files of one converted name")
         self.assertEqual(
             relative_files(COLLECTION / "md" / "procedures"), set(names))
-        for path in [p for p in sample_files() if p.suffix == ".md"]:
+        markdown = [p for p in fixed if p.suffix == ".md"]
+        self.assertEqual(len(markdown), 10)
+        for path in markdown:
             with self.subTest(file=path.name):
                 self.assertEqual(
                     (COLLECTION / "md" / "procedures"

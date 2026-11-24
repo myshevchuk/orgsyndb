@@ -73,9 +73,17 @@ class DemoRoutesTests(SeededCase):
         return {key: tree for key, tree in drawn.items() if tree}
 
     def test_the_substances_with_a_tree(self) -> None:
-        self.assertEqual(sorted(self.trees()), [
-            "1-biphenyl-4-yl-ethanol", "acetylsalicylic-acid",
-            "cinnamic-acid"])
+        from collection.models import EntrySubstance
+        from registry.models import Substance
+        trees = self.trees()
+        self.assertLessEqual(
+            {"1-biphenyl-4-yl-ethanol", "acetylsalicylic-acid",
+             "cinnamic-acid"}, set(trees))
+        made = set(EntrySubstance.objects.filter(
+            role="product").values_list("substance__key", flat=True))
+        unmade = set(Substance.objects.values_list("key", flat=True)) - made
+        self.assertTrue(unmade)
+        self.assertEqual(set(trees) & unmade, set())
 
     def test_the_tree_of_aspirin(self) -> None:
         self.assertEqual(self.trees()["acetylsalicylic-acid"], [
