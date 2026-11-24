@@ -14,7 +14,7 @@ The route tree of R is its tree to the largest depth from 1 to the depth limit w
 
 #### Scenario: Routes of the demo data
 - **WHEN** the demo data set is written and a test draws the route tree of every substance in the lab
-- **THEN** exactly `acetylsalicylic-acid`, `1-biphenyl-4-yl-ethanol` and `cinnamic-acid` have one
+- **THEN** `acetylsalicylic-acid`, `1-biphenyl-4-yl-ethanol` and `cinnamic-acid` are among the substances that have one, and a substance that no sample makes has none
 - **AND** the tree of `acetylsalicylic-acid` is the one step `OSDB-0002` with the yield 75, starting from `salicylic-acid`, expanded with the one step `OSDB-0001` at 80 that starts from `methyl-salicylate`, a plain leaf, and from `acetic-anhydride`, a plain leaf
 - **AND** the tree of `1-biphenyl-4-yl-ethanol` holds `OSDB-0005` at 90 and entry 1 of `OSDB-0009` at 90, in that order, each starting from `4-acetylbiphenyl`, expanded with `OSDB-0004` at 85
 

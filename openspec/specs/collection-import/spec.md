@@ -133,8 +133,8 @@ A refused import writes no procedure, entry or sequence.
 - **THEN** the import is refused with an error `OSDB-0002: unknown author "nobody"`
 
 #### Scenario: An ID not issued
-- **WHEN** the demo collection was imported and a test posts its manifest with an added procedure `OSDB-0010` that nobody took
-- **THEN** the import is refused with the error `OSDB-0010: not issued by the lab application`, and after user `klehmann` takes `OSDB-0010` the manifest, posted again as a new build, is accepted
+- **WHEN** the demo collection was imported and a test posts its manifest with an added procedure `OSDB-0990` that nobody took
+- **THEN** the import is refused with the error `OSDB-0990: not issued by the lab application`, and after user `klehmann` takes `OSDB-0990` the manifest, posted again as a new build, is accepted
 
 #### Scenario: An unknown notebook
 - **WHEN** a test posts the demo manifest after setting the `notebook` of `OSDB-0002` to `ZZ-9/1`
@@ -223,11 +223,11 @@ The application SHALL issue the IDs of procedures, `OSDB-NNNN`, and of sequences
 
 #### Scenario: Two IDs in turn
 - **WHEN** the demo data set is written and user `klehmann` requests a procedure ID with a token, and then user `tbauer` does
-- **THEN** the answers are `OSDB-0010` and `OSDB-0011`, the first issued to `klehmann` and the second to `tbauer`
+- **THEN** the answers are the two procedure IDs after the highest the demo collection names, such as `OSDB-0031` and `OSDB-0032` after `OSDB-0030`, the first issued to `klehmann` and the second to `tbauer`
 
 #### Scenario: A sequence ID
 - **WHEN** the demo data set is written and a client requests a sequence ID with a token
-- **THEN** the answer is `SEQ-0003`
+- **THEN** the answer is the sequence ID after the highest the demo collection names
 
 #### Scenario: Not before an import
 - **WHEN** the demo registry is loaded, no import exists, and user `klehmann` requests a procedure ID with a token
@@ -238,12 +238,12 @@ The application SHALL issue the IDs of procedures, `OSDB-NNNN`, and of sequences
 - **THEN** the answer is 401 and no ID is issued to `klehmann`
 
 #### Scenario: Adopted by the first accepted import
-- **WHEN** the demo registry is loaded, no import exists, a manifest that names an unknown substance is refused, and then the demo collection's manifest with `deleted` set to `["OSDB-0012"]` is accepted
-- **THEN** `OSDB-0001` to `OSDB-0009`, `OSDB-0012`, `SEQ-0001` and `SEQ-0002` are issued, to no account, and the next procedure ID issued is `OSDB-0013`
+- **WHEN** the demo registry is loaded, no import exists, a manifest that names an unknown substance is refused, and then the demo collection's manifest with `deleted` set to `["OSDB-0990"]` is accepted
+- **THEN** the IDs of the demo's procedures and sequences and `OSDB-0990` are issued, to no account, and the next procedure ID issued is `OSDB-0991`
 
 #### Scenario: Adopting by hand
-- **WHEN** the demo data set is written and an operator runs `manage.py adopt_ids OSDB-0012 OSDB-0003`, and then a test posts the demo manifest with an added procedure `OSDB-0012`
-- **THEN** the command prints `adopted OSDB-0012` and `OSDB-0003 was issued`, and the import is accepted
+- **WHEN** the demo data set is written and an operator runs `manage.py adopt_ids OSDB-0990 OSDB-0003`, and then a test posts the demo manifest with an added procedure `OSDB-0990`
+- **THEN** the command prints `adopted OSDB-0990` and `OSDB-0003 was issued`, and the import is accepted
 - **AND** `manage.py adopt_ids OSDB-12` exits 1 and adopts nothing
 
 ### Requirement: Checking a manifest
