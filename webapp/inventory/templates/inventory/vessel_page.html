@@ -22,7 +22,9 @@
 <dd>{{ vessel.amount|in_vessel_unit:vessel }}{% if not vessel.amount %} <span class="badge badge--reversed">{% translate "used up" %}</span>{% endif %}</dd>
 <dt>{% translate "Location" %}</dt>
 <dd>{{ vessel.location|default:"–" }}</dd>
-</dl>
+{% if vessel.batch.source == "bought" %}<dt>{% translate "State" context "vessel" %}</dt>
+<dd>{% if vessel.opened_on %}{% blocktranslate with date=vessel.opened_on %}Opened on {{ date }}{% endblocktranslate %}{% else %}{% translate "sealed" %}{% endif %}</dd>
+{% endif %}</dl>
 {% if vessel.note %}<h2>{% translate "Note" context "inventory" %}</h2>
 <div class="lab-note">{{ vessel.note|linebreaks }}</div>
 {% endif %}<h2>{% translate "Movements" %}</h2>

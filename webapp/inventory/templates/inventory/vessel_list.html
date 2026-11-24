@@ -17,7 +17,7 @@
 <div class="table-scroll">
 <table class="inventory-table">
 <thead>
-<tr><th scope="col">{% translate "Vessel" %}</th><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Article no." %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "Source" %}</th><th scope="col">{% translate "Amount" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th></tr>
+<tr><th scope="col">{% translate "Vessel" %}</th><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Article no." %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "Source" %}</th><th scope="col">{% translate "Amount" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Opened" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th></tr>
 </thead>
 <tbody>
 {% for vessel in vessels %}{% with batch=vessel.batch %}<tr>
@@ -30,6 +30,7 @@
 <td class="number">{{ vessel.amount|in_vessel_unit:vessel }}{% if not vessel.amount %} <span class="lab-mark">{% translate "used up" %}</span>{% endif %}</td>
 <td>{{ vessel.location }}</td>
 <td>{{ batch.date|default_if_none:"" }}</td>
+<td>{% if batch.source == "bought" %}{% if vessel.opened_on %}{{ vessel.opened_on }}{% else %}{% translate "sealed" %}{% endif %}{% endif %}</td>
 <td>{{ vessel.note }}</td>
 </tr>{% endwith %}
 {% endfor %}</tbody>

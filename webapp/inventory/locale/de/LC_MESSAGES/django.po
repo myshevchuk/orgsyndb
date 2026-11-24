@@ -226,6 +226,26 @@ msgstr "Charge"
 msgid "Location"
 msgstr "Ort"
 
+msgid "Opened on"
+msgstr "Angebrochen am"
+
+msgid "Opened"
+msgstr "Angebrochen"
+
+#, python-format
+msgid "Opened on %(date)s"
+msgstr "Angebrochen am %(date)s"
+
+msgid "sealed"
+msgstr "versiegelt"
+
+msgid "A vessel of a made batch has no opening date."
+msgstr "Ein Gefäß einer hergestellten Charge hat kein Anbruchdatum."
+
+msgctxt "vessel"
+msgid "State"
+msgstr "Zustand"
+
 msgid "Opening amount"
 msgstr "Anfangsmenge"
 

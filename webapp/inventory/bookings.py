@@ -213,9 +213,21 @@ def _movement(user: Any, item: Item, kind: str, count: int, after: int,
     return movement
 
 
+# The movements that take from a vessel and so open a sealed one.
+_OPENING = (VesselMovement.Kind.FILLING, VesselMovement.Kind.WITHDRAWAL,
+            VesselMovement.Kind.TRANSFER_OUT)
+
+
 def _vessel_movement(user: Any, vessel: Vessel, kind: str,
                      amount: Decimal, after: Decimal, day: Date,
                      note: str = "", **fields: Any) -> VesselMovement:
+    """Store the movement of KIND of VESSEL dated DAY and return it; a
+    movement that takes from a sealed vessel of a bought batch opens it
+    on DAY."""
+    if kind in _OPENING:
+        Vessel.objects.filter(
+            pk=vessel.pk, opened_on__isnull=True,
+            batch__source=Source.BOUGHT).update(opened_on=day)
     return VesselMovement.objects.create(
         vessel=vessel, kind=kind, amount=amount, amount_after=after,
         date=day, booked_at=timezone.now(), user=user, note=note, **fields)
@@ -897,9 +909,13 @@ def _open(user: Any, batch: Batch, unit: str, base: Decimal, day: Date, *,
           ) -> VesselMovement:
     """Store a vessel of BATCH in UNIT holding BASE, its base unit, at
     LOCATION, and its first movement of KIND dated DAY, which takes the
-    keywords FIELDS; return the movement."""
-    vessel = Vessel(batch=batch, unit=unit, amount=base, flask=flask,
-                    location=location)
+    keywords FIELDS; return the movement. A vessel of a bought batch
+    that a transfer makes is opened on DAY."""
+    vessel = Vessel(
+        batch=batch, unit=unit, amount=base, flask=flask,
+        location=location,
+        opened_on=day if kind == VesselMovement.Kind.TRANSFER_IN
+        and batch.source == Source.BOUGHT else None)
     _attributed(vessel, user).save(force_insert=True)
     return _vessel_movement(user, vessel, kind, base, base, day,
                             **fields)
