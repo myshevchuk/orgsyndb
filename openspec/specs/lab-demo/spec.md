@@ -107,6 +107,7 @@ The data set SHALL open the inventory on the opening day `O`, `D` less 400 days,
 - fillings, each from a vessel and naming its movement; one vessel used up, one corrected with a note, and one transfer from a flask into a stored vessel;
 - on `D`, an open vessel of every substance that a sample procedure starts from or lists in its Reagents table (sample-procedures "Reagents in the registry"): of a bought batch, with its supplier, the supplier's article number and the supplier's batch, for a substance that no sample makes; of a made or a bought batch for one that a sample makes;
 - on `D`, an open vessel of a bought batch of every commercial chemical of the demo registry that no sample names, some substances with two or more vessels in different locations;
+- among the open vessels of bought batches on `D`, opened ones, each with the day it was opened, and sealed ones, some substances with one of each;
 - on `D`, open vessels of made batches of several substances that have no article;
 - vessels of liquids and solvents entered by mass, in `g`.
 
@@ -129,6 +130,10 @@ The data set SHALL open the inventory on the opening day `O`, `D` less 400 days,
 #### Scenario: Containers by batch
 - **WHEN** the data set is written as of `D` and a test client requests the pages of the items
 - **THEN** one page lists containers of two batches, one lists `unbekannt` among its containers by batch, and one ledger holds an assignment
+
+#### Scenario: Opened and sealed bottles
+- **WHEN** the data set is written as of `D`
+- **THEN** among the open vessels of bought batches some have an `opened_on` no later than `D` and some are sealed, at least one substance has one of each, and no vessel of a made batch has an `opened_on`
 
 ### Requirement: Demo tasks and parameters
 The data set SHALL hold tasks for the articles of the demo inventory and for its item without an article number, each checked by the task's own validation before every save, as a form's would be, and numbered in the order they were created:

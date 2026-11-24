@@ -14,4 +14,4 @@
 
 ## 3. Check
 
-- [ ] 3.1 Inventory and demo tests, then CI
+- [x] 3.1 Inventory and demo tests, then CI
