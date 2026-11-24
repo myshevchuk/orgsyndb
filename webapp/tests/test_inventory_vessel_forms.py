@@ -2,16 +2,17 @@
 transfer, correction and edit (end-product-inventory: Inventory forms,
 Vessels, Vessel page)."""
 
+from datetime import date
 from decimal import Decimal
 
-from inventory.bookings import write_off_flasks
+from inventory.bookings import fill, write_off_flasks
 from inventory.models import Vessel, VesselMovement
 from tasks.models import Task, TaskStep
 
-from . import (context_form, field_value, make_batch, make_task,
-               make_vessel, make_withdrawal, page, past, sent_messages,
-               substance_for)
-from .inventory_support import (TODAY, FormCase, fresh, snapshot,
+from . import (berlin, context_form, field_value, make_batch, make_item,
+               make_task, make_vessel, make_withdrawal, page, past,
+               sent_messages, substance_for, table, ticking)
+from .inventory_support import (TODAY, VESSELS, FormCase, fresh, snapshot,
                                 vessel_movement_url, vessel_url)
 from .task_support import (TODAY_ISO, StepCase, make_product_batch,
                            steps_of)
@@ -473,6 +474,39 @@ class VesselEditFormTests(VesselFormCase):
         self.assertEqual(self.client.get(
             "/lab/inventory/vessels/999999/edit/").status_code, 404)
 
+    def test_a_made_vessel_is_never_sealed(self) -> None:
+        """Scenario: A made vessel is never sealed."""
+        with ticking(berlin(2026, 11, 24, 8)):
+            done = self.client.post(self.url(), {
+                "location": "Alt", "note": "alt",
+                "opened_on": "2026-11-20"})
+        self.assertRedirects(done, vessel_url(self.target),
+                             fetch_redirect_response=False)
+        self.assertIsNone(fresh(self.target).opened_on)
+
+    def test_opening_date_entered_and_cleared(self) -> None:
+        """Scenario: Opening date entered and cleared."""
+        bought = make_vessel(
+            self.kl, article="CH-0012", source="bought", supplier="Sigma",
+            location="Alt", note="alt")
+        url = vessel_url(bought, "edit")
+        with ticking(berlin(2026, 11, 24, 8)):
+            done = self.client.post(url, {
+                "location": "Alt", "note": "alt",
+                "opened_on": "2026-11-10"})
+            self.assertRedirects(done, vessel_url(bought),
+                                 fetch_redirect_response=False)
+            self.assertEqual(fresh(bought).opened_on, date(2026, 11, 10))
+            self.refused(self.client.post(url, {
+                "location": "Alt", "note": "alt",
+                "opened_on": "2026-11-25"}), "opened_on")
+            self.assertEqual(fresh(bought).opened_on, date(2026, 11, 10))
+            done = self.client.post(url, {
+                "location": "Alt", "note": "alt", "opened_on": ""})
+            self.assertRedirects(done, vessel_url(bought),
+                                 fetch_redirect_response=False)
+            self.assertIsNone(fresh(bought).opened_on)
+
 
 class VesselCorrectionFormTests(VesselFormCase):
 
@@ -578,3 +612,48 @@ class VesselPageLinkTests(VesselFormCase):
         links = self.hrefs(self.flask)
         for text in ("Korrigieren", "Bearbeiten", "Entnahme", "Umfüllen"):
             self.assertNotIn(text, links)
+
+
+class VesselOpenedDisplayTests(FormCase):
+    """Requirement: Vessel list, Vessel page (`opened_on` / `versiegelt`)."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.made = make_vessel(self.kl, article="CH-0012", number="B-MADE")
+        self.sealed = make_vessel(
+            self.kl, article="CH-0012", source="bought", supplier="Sigma",
+            supplier_batch="B-SEALED")
+        self.opened = make_vessel(
+            self.kl, article="CH-0012", source="bought", supplier="Sigma",
+            supplier_batch="B-OPEN")
+        item = make_item(self.kl, "CH-0012", size="10", unit="umol",
+                         quantity=0)
+        fill(self.kl, item, count=1, vessel=self.opened,
+             date=date(2026, 11, 2))
+
+    def test_the_vessel_list_shows_opened_on_and_sealed_for_bought_vessels(
+            self) -> None:
+        """Requirement: Vessel list ("with the columns `Gefäß`, `Name`,
+        `Artikelnr.`, `Art`, `Charge`, `Herkunft`, `Menge`, `Ort`,
+        `Datum`, `Angebrochen` and `Bemerkung` ... for a vessel of a
+        bought batch its `opened_on` or `versiegelt`, and nothing for
+        one of a made batch")."""
+        header, rows = table(page(self.client.get(VESSELS)))
+        self.assertIn("Angebrochen", header)
+        by_batch = {row["Charge"].text(): row for row in rows}
+        self.assertEqual(by_batch["B-SEALED"]["Angebrochen"].text(),
+                         "versiegelt")
+        self.assertEqual(by_batch["B-OPEN"]["Angebrochen"].text(),
+                         "02.11.2026")
+        self.assertEqual(by_batch["B-MADE"]["Angebrochen"].text(), "")
+
+    def test_the_vessel_page_shows_opened_on_or_sealed(self) -> None:
+        """Requirement: Vessel page ("for a vessel of a bought batch
+        `Angebrochen am <date>` or `versiegelt`")."""
+        sealed_text = page(self.client.get(vessel_url(self.sealed))).text()
+        self.assertIn("versiegelt", sealed_text)
+        opened_text = page(self.client.get(vessel_url(self.opened))).text()
+        self.assertIn("Angebrochen am 02.11.2026", opened_text)
+        made_text = page(self.client.get(vessel_url(self.made))).text()
+        self.assertNotIn("Angebrochen am", made_text)
+        self.assertNotIn("versiegelt", made_text)

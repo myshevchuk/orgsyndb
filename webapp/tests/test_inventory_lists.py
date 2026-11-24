@@ -28,9 +28,9 @@ BATCHES_DE = ["Charge", "Name", "Artikelnr.", "Herkunft", "Laborjournal",
 BATCHES_EN = ["Batch", "Name", "Article no.", "Source", "Lab notebook",
               "Date", "Yield", "Stock"]
 VESSELS_DE = ["Gefäß", "Name", "Artikelnr.", "Art", "Charge", "Herkunft",
-              "Menge", "Ort", "Datum", "Bemerkung"]
+              "Menge", "Ort", "Datum", "Angebrochen", "Bemerkung"]
 VESSELS_EN = ["Vessel", "Name", "Article no.", "Kind", "Batch", "Source",
-              "Amount", "Location", "Date", "Note"]
+              "Amount", "Location", "Date", "Opened", "Note"]
 
 
 class ListCase(InventoryCase):

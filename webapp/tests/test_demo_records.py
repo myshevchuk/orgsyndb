@@ -910,6 +910,28 @@ class SampleVesselTests(SeededCase):
                 with self.subTest(substance=key, vessel=vessel.pk):
                     self.assertEqual(vessel.unit, "g")
 
+    def test_opened_and_sealed_bottles(self) -> None:
+        """Scenario: Opened and sealed bottles."""
+        from inventory.models import Vessel
+        bought = list(Vessel.objects.filter(
+            batch__source="bought", amount__gt=0))
+        opened = [v for v in bought if v.opened_on is not None]
+        sealed = [v for v in bought if v.opened_on is None]
+        self.assertTrue(opened)
+        self.assertTrue(sealed)
+        for vessel in opened:
+            with self.subTest(vessel=vessel.pk):
+                self.assertLessEqual(vessel.opened_on, self.DAY)
+        by_substance = defaultdict(set)
+        for vessel in bought:
+            by_substance[vessel.batch.substance_id].add(
+                vessel.opened_on is not None)
+        self.assertTrue(any(states == {True, False}
+                            for states in by_substance.values()))
+        for vessel in Vessel.objects.filter(batch__source="made"):
+            with self.subTest(vessel=vessel.pk):
+                self.assertIsNone(vessel.opened_on)
+
 
 class TaskTests(SeededCase):
 

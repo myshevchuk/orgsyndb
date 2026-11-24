@@ -826,12 +826,29 @@ class TransferForm(forms.Form):
 
 
 class VesselEditForm(MetadataForm):
-    """The fields of a vessel that may change."""
+    """The fields of a vessel that may change: its location, its note
+    and, for a vessel of a bought batch, the day it was opened, empty
+    for a sealed one and never after today."""
 
     class Meta:
         model = Vessel
-        fields = ["location", "note"]
-        widgets = {"location": LOCATION, "note": NOTE}
+        fields = ["location", "opened_on", "note"]
+        widgets = {"location": LOCATION, "opened_on": DATE, "note": NOTE}
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        if self.instance.batch.source != Source.BOUGHT:
+            del self.fields["opened_on"]
+        else:
+            self.fields["opened_on"].validators.append(not_in_future)
+
+    def save(self, commit: bool = True) -> Any:
+        """Return the vessel with the form's values; with COMMIT, save
+        the fields the form offers and no other."""
+        vessel = forms.ModelForm.save(self, commit=False)
+        if commit:
+            vessel.save(update_fields=list(self.fields))
+        return vessel
 
 
 class VesselCorrectionForm(forms.Form):

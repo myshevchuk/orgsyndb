@@ -14,8 +14,8 @@ from inventory.figures import convert
 from inventory.models import Batch, Movement, Vessel, VesselMovement
 from tasks.models import Task, TaskStep
 
-from . import (make_batch, make_item, make_task, make_vessel,
-               make_withdrawal, past, substance_for)
+from . import (berlin, make_batch, make_item, make_task, make_vessel,
+               make_withdrawal, past, substance_for, ticking)
 from .inventory_support import TODAY, InventoryCase, fresh, newest_movement
 from .task_support import StepCase, make_product_batch, steps_of
 
@@ -673,6 +673,51 @@ class WithdrawalTests(WithdrawalCase):
                  amount=Decimal("0.4"))
         self.assertEqual(fresh(flask).amount, Decimal("600"))
 
+    def test_a_bought_bottle_is_opened_by_its_first_withdrawal(
+            self) -> None:
+        """Scenario: A bought bottle is opened by its first
+        withdrawal."""
+        with ticking(berlin(2026, 11, 24, 8)):
+            batch = record_batch(
+                self.kl, substance=substance_for("acetophenone"),
+                source="bought", supplier="Sigma",
+                amount=Decimal("100"), unit="g",
+                location="Chemikalienschrank 1")
+            vessel = batch.vessels.get()
+            self.assertIsNone(vessel.opened_on)
+            withdraw(self.kl, vessel, task_step=self.second,
+                     amount=Decimal("5"), date=date(2026, 11, 20))
+            self.assertEqual(fresh(vessel).opened_on, date(2026, 11, 20))
+            withdraw(self.kl, fresh(vessel), task_step=self.second,
+                     amount=Decimal("5"), date=date(2026, 11, 22))
+            self.assertEqual(fresh(vessel).opened_on, date(2026, 11, 20))
+
+    def test_a_correction_and_a_reversal_leave_opened_on(self) -> None:
+        """Requirement: Vessels ("a correction, and the reversal of the
+        movement, leave it as it is.")."""
+        sealed = make_vessel(self.kl, article="CH-0012", source="bought",
+                             supplier="Sigma", unit="g", amount="2")
+        correct_vessel(self.kl, sealed, amount=Decimal("1.9"),
+                       note="nachgewogen", date=date(2026, 11, 1))
+        self.assertIsNone(fresh(sealed).opened_on)
+        taken = withdraw(self.kl, fresh(sealed), task_step=self.second,
+                         amount=Decimal("0.5"), date=date(2026, 11, 2))
+        self.assertEqual(fresh(sealed).opened_on, date(2026, 11, 2))
+        reverse_withdrawal(self.kl, taken)
+        self.assertEqual(fresh(sealed).opened_on, date(2026, 11, 2))
+        correct_vessel(self.kl, fresh(sealed), amount=Decimal("1.8"),
+                       note="nachgewogen", date=date(2026, 11, 3))
+        self.assertEqual(fresh(sealed).opened_on, date(2026, 11, 2))
+        item = make_item(self.kl, "CH-0012", size="10", unit="umol",
+                         quantity=0)
+        bottle = make_vessel(self.kl, article="CH-0012", source="bought",
+                             supplier="Sigma", unit="mg", amount="50")
+        filling = fill(self.kl, item, count=1, vessel=bottle,
+                       date=date(2026, 11, 2))
+        self.assertEqual(fresh(bottle).opened_on, date(2026, 11, 2))
+        reverse(self.kl, filling, note="doppelt")
+        self.assertEqual(fresh(bottle).opened_on, date(2026, 11, 2))
+
 
 class WithdrawalReversalTests(WithdrawalCase):
 
@@ -948,6 +993,39 @@ class TransferTests(TransferCase):
         with self.refusing():
             reverse_withdrawal(self.kl, out)
 
+    def test_a_transfer_out_of_a_sealed_bottle_sets_opened_on(self) -> None:
+        """Requirement: Vessels ("The first filling, withdrawal or
+        transfer out of a sealed vessel sets its `opened_on` to that
+        movement's date in the transaction that books it")."""
+        bought = make_batch(self.kl, "CH-0012", source="bought",
+                            supplier="Sigma")
+        bottle = make_vessel(self.kl, bought, unit="g", amount="2",
+                             location="Schrank")
+        self.assertIsNone(bottle.opened_on)
+        transfer(self.kl, bottle, amount=Decimal("0.5"),
+                 location="Regal", date=date(2026, 11, 1))
+        self.assertEqual(fresh(bottle).opened_on, date(2026, 11, 1))
+        transfer(self.kl, fresh(bottle), amount=Decimal("0.5"),
+                 location="Regal 2", date=date(2026, 11, 3))
+        self.assertEqual(fresh(bottle).opened_on, date(2026, 11, 1))
+
+    def test_a_vessel_made_by_a_transfer_has_the_transfers_date(
+            self) -> None:
+        """Requirement: Vessels ("A vessel of a bought batch opens
+        sealed, unless a transfer makes it: a vessel a transfer makes is
+        opened on the transfer's date.")."""
+        bought = make_batch(self.kl, "CH-0012", source="bought",
+                            supplier="Sigma")
+        bottle = make_vessel(self.kl, bought, unit="g", amount="2",
+                             location="Schrank")
+        _out, into = transfer(self.kl, bottle, amount=Decimal("0.5"),
+                              location="Regal", date=date(2026, 11, 2))
+        self.assertEqual(fresh(into.vessel).opened_on, date(2026, 11, 2))
+        _out2, made_into = transfer(
+            self.kl, self.flask, amount=Decimal("100"), location="Regal",
+            date=date(2026, 11, 2))
+        self.assertIsNone(fresh(made_into.vessel).opened_on)
+
 
 class FillingFromVesselTests(InventoryCase):
     """Requirement: Filling from bulk (the booking)."""
@@ -1123,6 +1201,23 @@ class FillingFromVesselTests(InventoryCase):
         with self.refusing():
             reverse(self.kl, filling, note="doppelt")
         self.assertEqual(fresh(vessel).amount, Decimal("42.592"))
+
+    def test_a_filling_from_a_sealed_bottle_sets_opened_on(self) -> None:
+        """Requirement: Vessels ("The first filling, withdrawal or
+        transfer out of a sealed vessel sets its `opened_on` to that
+        movement's date in the transaction that books it")."""
+        item = self.item("CH-0012", size="10", unit="umol", quantity=0)
+        vessel = self.vessel("CH-0012", "mg", "50", source="bought",
+                             supplier="Sigma")
+        self.assertIsNone(vessel.opened_on)
+        fill(self.kl, item, count=1, vessel=vessel, date=date(2026, 11, 1))
+        self.assertEqual(fresh(vessel).opened_on, date(2026, 11, 1))
+        fill(self.kl, item, count=1, vessel=fresh(vessel),
+             date=date(2026, 11, 3))
+        self.assertEqual(fresh(vessel).opened_on, date(2026, 11, 1))
+        made = self.vessel("CH-0012", "mg", "50")
+        fill(self.kl, item, count=1, vessel=made, date=date(2026, 11, 1))
+        self.assertIsNone(fresh(made).opened_on)
 
 
 class AdminDeletionTests(InventoryCase):

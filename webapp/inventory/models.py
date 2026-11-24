@@ -437,7 +437,9 @@ class Vessel(models.Model):
     which holds the batch's yield until the task of its step ends; a
     batch has at most one. The batch, unit and flask flag are fixed once
     the vessel exists. A vessel belongs to every item of its substance's
-    article.
+    article. OPENED_ON, for a vessel of a bought batch, is the day it
+    was first opened, None while it is sealed; a vessel of a made batch
+    has none.
     """
 
     batch = models.ForeignKey(Batch, verbose_name=_("Batch"),
@@ -448,6 +450,7 @@ class Vessel(models.Model):
                                  decimal_places=6, default=0)
     flask = models.BooleanField(_("Flask"), default=False)
     location = models.CharField(_("Location"), max_length=100, blank=True)
+    opened_on = models.DateField(_("Opened on"), null=True, blank=True)
     note = models.TextField(pgettext_lazy("inventory", "Note"), blank=True)
 
     history = RecordedHistory(excluded_fields=["amount"])
@@ -467,6 +470,19 @@ class Vessel(models.Model):
 
     def __str__(self) -> str:
         return f"{self.batch} #{self.pk}"
+
+    def clean(self) -> None:
+        """Refuse an opening date on a vessel of a made batch and one
+        after today."""
+        super().clean()
+        if self.opened_on is None:
+            return
+        if self.batch.source != Source.BOUGHT:
+            raise ValidationError({"opened_on": _(
+                "A vessel of a made batch has no opening date.")})
+        if self.opened_on > timezone.localdate():
+            raise ValidationError({"opened_on": _(
+                "The date may not lie in the future.")})
 
     @property
     def substance(self) -> Any:

@@ -318,6 +318,14 @@ class _Writer:
                     note=change.note, date=day,
                     batch=self.batches[change.batch] if change.batch
                     else None)
+            case data.OpenVessel():
+                vessel = self.vessels[change.vessel]
+                vessel.refresh_from_db(fields=["opened_on"])
+                if vessel.opened_on is None:
+                    vessel.opened_on = day
+                    vessel.full_clean()
+                    vessel._history_user = user
+                    vessel.save(update_fields=["opened_on"])
             case data.CorrectVessel():
                 bookings.correct_vessel(
                     user, self.vessels[change.vessel],
