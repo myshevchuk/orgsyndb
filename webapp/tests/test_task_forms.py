@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from django.utils import timezone
 
+from collection.models import Sequence
 from inventory.bookings import record_batch
 from inventory.models import Vessel
 from tasks.models import Task
@@ -450,11 +451,20 @@ class SequenceFieldTests(FormCase):
         self.assertIsNotNone(select, "the form has no sequence choice")
         return {o.get("value"): o.text() for o in select.find_all("option")}
 
+    def expected_choices(self, task: Task | None = None) -> set[str]:
+        """The sequence keys the form offers: none, every non-withdrawn
+        sequence, and ``task``'s own sequence if it has one."""
+        keys = set(Sequence.objects.filter(withdrawn=False)
+                   .values_list("key", flat=True))
+        if task is not None and task.sequence_id is not None:
+            keys.add(task.sequence.key)
+        return {"", *keys}
+
     def test_the_choice_offers_the_sequences_by_id_and_title(self) -> None:
         """Requirement: Task forms (a choice of the collection's
         sequences, by ID and title, or none)."""
         options = self.options(NEW)
-        self.assertEqual(set(options), {"", "SEQ-0001", "SEQ-0002"})
+        self.assertEqual(set(options), self.expected_choices())
         for key in ("SEQ-0001", "SEQ-0002"):
             with self.subTest(key=key):
                 self.assertIn(key, options[key])
@@ -466,7 +476,10 @@ class SequenceFieldTests(FormCase):
         """Requirement: Task forms (the sequences that are not
         withdrawn)."""
         import_collection(without_ids("SEQ-0001"))
-        self.assertEqual(set(self.options(NEW)), {"", "SEQ-0002"})
+        choices = set(self.options(NEW))
+        self.assertEqual(choices, self.expected_choices())
+        self.assertNotIn("SEQ-0001", choices)
+        self.assertIn("SEQ-0002", choices)
 
     def test_the_choice_keeps_a_withdrawn_sequence_of_the_task(
             self) -> None:
@@ -476,13 +489,17 @@ class SequenceFieldTests(FormCase):
         task = self.only_task()
         import_collection(without_ids("SEQ-0001"))
         path = task_url(task, "edit")
-        self.assertEqual(set(self.options(path)),
-                         {"", "SEQ-0001", "SEQ-0002"})
+        choices = set(self.options(path))
+        self.assertEqual(choices, self.expected_choices(task))
+        self.assertIn("SEQ-0001", choices)
+        self.assertIn("SEQ-0002", choices)
         self.assertEqual(field_value(page(self.client.get(path)),
                                      "sequence"), "SEQ-0001")
         other = make_task(self.kl)
-        self.assertEqual(set(self.options(task_url(other, "edit"))),
-                         {"", "SEQ-0002"})
+        other_choices = set(self.options(task_url(other, "edit")))
+        self.assertEqual(other_choices, self.expected_choices(other))
+        self.assertNotIn("SEQ-0001", other_choices)
+        self.assertIn("SEQ-0002", other_choices)
 
     def test_the_edit_form_shows_the_sequence(self) -> None:
         self.create(sequence="SEQ-0002")
