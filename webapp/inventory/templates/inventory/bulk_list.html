@@ -20,7 +20,7 @@
 <option value=""{% if not source %} selected{% endif %}>{% translate "All" %}</option>
 {% for value, label in sources %}<option value="{{ value }}"{% if value == source %} selected{% endif %}>{{ label }}</option>
 {% endfor %}</select></label>
-<label><input type="checkbox" name="flask" value="1"{% if flask %} checked{% endif %} data-submit> {% translate "Flasks only" %}</label>
+<label class="lab-inline-check"><input type="checkbox" name="flask" value="1"{% if flask %} checked{% endif %} data-submit> {% translate "Flasks only" %}</label>
 {% if selected %}<input type="hidden" name="selected" value="{{ selected }}">
 {% endif %}<button type="submit">{% translate "Filter" %}</button>
 </form>
@@ -62,7 +62,7 @@
 </dl>
 <p class="detail-links"><a href="/lab/inventory/vessels/{{ vessel.pk }}/">{% translate "Open vessel page" %}</a></p>
 <h3>{% translate "Newest movements" %}</h3>
-<table class="detail-table">
+<table class="detail-table detail-table--movements">
 <thead><tr>
 <th scope="col">{% translate "Date" %}</th>
 <th scope="col">{% translate "Kind" %}</th>
