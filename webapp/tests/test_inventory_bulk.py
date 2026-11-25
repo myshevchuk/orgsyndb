@@ -24,6 +24,7 @@ from .collection_support import accept
 from .inventory_support import (
     DELIVERIES,
     LIST,
+    NEW_BATCH,
     InventoryCase,
     batch_url,
     count_beside,
