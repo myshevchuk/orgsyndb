@@ -4,11 +4,11 @@
 Fill a test deployment's lab database with the records of an invented lab, dated back from the day it is seeded: the demo accounts, inventory, tasks and planning parameters, written through the application's own write paths by `manage.py demo_data`, only with `ORGSYNDB_DEMO` set, and marked so that every page of a demo database says its records are invented.
 ## Requirements
 ### Requirement: Demo database
-A database SHALL be a demo database when it holds the demo mark, which the demo data set writes with the day `D` it was seeded as of. On a demo database, every page of the application but the admin's shows, as the first element of `main`, before the messages, a `p` with the class `lab-demo` and the text `Demo: Alle Einträge sind erfunden (Stand: <D>).` (`Demo: All records are invented (as of <D>).`), `<D>` in the date format of the interface language. Its sign-in page shows, below the form, an element with the class `lab-demo-accounts` listing the user names of the demo accounts that can sign in (Demo accounts), each with its display name, and the text `Passwort für alle: demo` (`Password for all: demo`). A database without the mark shows neither, whatever `ORGSYNDB_DEMO` says.
+A database SHALL be a demo database when it holds the demo mark, which the demo data set writes with the day `D` it was seeded as of. On a demo database, every page of the application but the admin's shows once a `p` with the class `lab-demo` and the text `Demo: Alle Einträge sind erfunden (Stand: <D>).` (`Demo: All records are invented (as of <D>).`), `<D>` in the date format of the interface language. Its sign-in page shows, below the form, an element with the class `lab-demo-accounts` listing the user names of the demo accounts that can sign in (Demo accounts), each with its display name, and the text `Passwort für alle: demo` (`Password for all: demo`). A database without the mark shows neither, whatever `ORGSYNDB_DEMO` says.
 
 #### Scenario: Banner
 - **WHEN** the data set is written as of 2026-11-07 and a test client requests `/lab/tasks/`, `/lab/planning/`, `/lab/inventory/end-products/` and `/lab/admin/login/`
-- **THEN** the first three show `Demo: Alle Einträge sind erfunden (Stand: 07.11.2026).` as the first element of `main`, and the admin's page does not
+- **THEN** the first three show `Demo: Alle Einträge sind erfunden (Stand: 07.11.2026).` once, and the admin's page does not
 
 #### Scenario: Sign-in note
 - **WHEN** the data set is written and a test client requests `/lab/accounts/login/`

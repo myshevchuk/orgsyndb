@@ -13,5 +13,5 @@
 
 - [x] 3.1 Screenshots at 1440 × 900 and 800 × 900 of the four lists,
   both item list views
-- [ ] 3.2 Tests of the shell, the demo and the inventory lists, then
+- [x] 3.2 Tests of the shell, the demo and the inventory lists, then
   CI
