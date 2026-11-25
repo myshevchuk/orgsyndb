@@ -47,7 +47,8 @@ section tabs they share.
   applies them, so the vessel table shows exactly the vessels the row
   sums. A key naming a substance without an open vessel of the category
   answers 404; one whose vessels the filters all hide shows `Keine
-  Gefäße`.
+  Gefäße`; a list request never selects such a substance, since it
+  selects among the rows it lists.
 - **Vertical split in `Details`.** The table above and the vessels
   below share the frame's height at a fixed ratio of about 45 to 55,
   each scrolling in its own box with a sticky head; the ratio does not
@@ -76,6 +77,10 @@ section tabs they share.
   source `gekauft` filled in; no separate receipt form.
 
 ## Alternatives rejected
+
+- **The split's orientation in the requirement**: the owner keeps
+  layout out of specs; the vertical split is fixed here and checked on
+  screenshots.
 
 - **Grey substance header rows over vessel rows** (series 1): read as
   section labels and move the focus to vessels; rejected by the owner.
