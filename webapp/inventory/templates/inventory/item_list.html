@@ -16,6 +16,7 @@
 {% endif %}</div>
 {% include "inventory/tabs.html" %}
 <div class="lab-toolbar">
+{% include "inventory/layers.html" %}
 <form id="filters" class="lab-filters" method="get" action="/lab/inventory/end-products/">
 <label class="lab-inline-field"><span class="visually-hidden">{% translate "Search items" %}</span><input type="search" name="q" value="{{ filters.q }}" placeholder="{% translate "Name or article number" %}"></label>
 <label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Category" %}:</span><select id="filter-category" name="category" data-submit data-refresh>

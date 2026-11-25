@@ -1077,3 +1077,58 @@ msgstr "Charge, Substanz oder Lieferant"
 
 msgid "Number or recipient"
 msgstr "Nummer oder Empfänger"
+
+msgid "All vessels"
+msgstr "Alle Gefäße"
+
+msgctxt "layer"
+msgid "Containers"
+msgstr "Gebinde"
+
+msgctxt "layer"
+msgid "Bulk"
+msgstr "Bulk"
+
+msgctxt "layer"
+msgid "Deliveries"
+msgstr "Lieferungen"
+
+msgid "Article"
+msgstr "Artikel"
+
+msgctxt "bulk"
+msgid "Fills"
+msgstr "Reicht für"
+
+msgid "no number"
+msgstr "ohne Nr."
+
+msgid "Molar mass missing"
+msgstr "Molmasse fehlt"
+
+msgid "or"
+msgstr "oder"
+
+msgid "Name, article no., batch"
+msgstr "Name, Artikelnr., Charge"
+
+msgid "Flasks only"
+msgstr "Nur Kolben"
+
+msgid "Open vessel page"
+msgstr "Gefäßseite öffnen"
+
+msgid "Newest movements"
+msgstr "Letzte Buchungen"
+
+msgid "No vessel is chosen."
+msgstr "Kein Gefäß ist gewählt."
+
+msgid "Contents"
+msgstr "Inhalt"
+
+msgid "Open delivery note"
+msgstr "Lieferschein öffnen"
+
+msgid "No delivery note is chosen."
+msgstr "Kein Lieferschein ist gewählt."

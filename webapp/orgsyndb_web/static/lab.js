@@ -10,11 +10,13 @@
 //   changes, and hides that form's submit buttons.
 // - Restores each control marked data-remember from localStorage when
 //   the page loads, and saves it there whenever it changes.
-// - Marks the item list's layout (.item-layout) data-scripted, so that
+// - Marks the layout (.item-layout) of a list with two views, the
+//   item, bulk and delivery lists, data-scripted, so that
 //   lab.css follows its data-view and no longer the radio buttons of
 //   the switch between the views, `Tabelle` and `Details`
 //   (#view-table, #view-details). When one of them changes, the script
-//   saves the view in the cookie `item-list-view`, which the server
+//   saves the view in the cookie the layout's data-cookie names,
+//   `item-list-view` without it, for the list's path, which the server
 //   reads, and sets data-view, inside a view transition where the
 //   browser has them and the user has not asked for reduced motion.
 //   The radio buttons keep their native behaviour. While the details
@@ -959,8 +961,9 @@
     radio.addEventListener("change", () => {
       if (!radio.checked || wanted === radio.value) return;
       wanted = radio.value;
-      document.cookie = `item-list-view=${wanted};`
-        + " path=/lab/inventory/end-products/; max-age=31536000;"
+      const cookie = layout.dataset.cookie || "item-list-view";
+      document.cookie = `${cookie}=${wanted};`
+        + ` path=${location.pathname}; max-age=31536000;`
         + " SameSite=Lax";
       const show = () => {
         layout.dataset.view = wanted;

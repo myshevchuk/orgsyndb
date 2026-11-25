@@ -55,15 +55,41 @@ LIST = "/lab/inventory/end-products/"
 BATCHES = "/lab/inventory/batches/"
 VESSELS = "/lab/inventory/vessels/"
 DELIVERIES = "/lab/inventory/deliveries/"
+BULK = "/lab/inventory/end-products/bulk/"
 
 
 def tabs(current: str) -> list[dict[str, Any]]:
-    """Return the section tabs of the four lists, marking CURRENT, the
-    path of the list shown."""
+    """Return the section tabs of the inventory, marking CURRENT, the
+    path of the tab's list; the end products' layers are under
+    ``LIST``."""
     return [{"url": url, "label": label, "current": url == current}
-            for url, label in ((LIST, _("Items")), (BATCHES, _("Batches")),
-                               (VESSELS, _("Vessels")),
-                               (DELIVERIES, _("Deliveries")))]
+            for url, label in ((LIST, _("End products")),
+                               (BATCHES, _("Batches")),
+                               (VESSELS, _("All vessels")))]
+
+
+def layers(current: str) -> list[dict[str, Any]]:
+    """Return the layers of the end products, the item list, the bulk
+    list and the delivery list, each with its count, marking CURRENT,
+    the path of the layer shown."""
+    return [{"url": url, "label": label, "count": count,
+             "current": url == current}
+            for url, label, count in (
+                (LIST, pgettext_lazy("layer", "Containers"),
+                 Item.objects.count()),
+                (BULK, pgettext_lazy("layer", "Bulk"),
+                 bulk_vessels().count()),
+                (DELIVERIES, pgettext_lazy("layer", "Deliveries"),
+                 DeliveryNote.objects.count()))]
+
+
+def bulk_vessels() -> Any:
+    """Return the open vessels of the substances that have an article,
+    with their batch, its step's task, the substance and its article
+    read."""
+    return Vessel.objects.filter(
+        amount__gt=0, batch__substance__article__isnull=False
+    ).select_related("batch__substance__article", "batch__task_step__task")
 
 
 def open_vessels(item: Item | None = None) -> list[Vessel]:
@@ -192,6 +218,8 @@ MORE_FILTERS = ("container", "compartment", "box")
 TIES = ("number", "container")
 # The cookie that remembers the view of the item list.
 VIEW_COOKIE = "item-list-view"
+BULK_COOKIE = "bulk-list-view"
+NOTE_COOKIE = "delivery-list-view"
 
 
 @dataclass(frozen=True)
@@ -490,6 +518,7 @@ def item_list(request: HttpRequest) -> HttpResponse:
         "heats": [f"heat-{n}" for n in range(1, 6)],
         "today": today,
         "tabs": tabs(LIST),
+        "layers": layers(LIST),
     })
 
 
@@ -589,11 +618,14 @@ def note_states(notes: list[DeliveryNote]) -> dict[int, str]:
     return states
 
 
+@vary_on_cookie
 def note_list(request: HttpRequest) -> HttpResponse:
     """List the delivery notes, newest date first, then newest booking
     first; ``q`` selects those whose number or recipient holds the text
     regardless of case, and ``item`` those with a line of the item of
-    that ID."""
+    that ID. The note ``selected`` names among those listed, else the
+    first, is selected, in the view the cookie ``delivery-list-view``
+    remembers."""
     q = request.GET.get("q", "").strip()
     chosen = request.GET.get("item", "").strip()
     notes = DeliveryNote.objects.annotate(line_count=Count("lines")) \
@@ -609,14 +641,144 @@ def note_list(request: HttpRequest) -> HttpResponse:
              if not words or words in "\n".join(
                  [note.number or "", note.recipient]).casefold()]
     states = note_states(shown)
+    wanted = request.GET.get("selected", "")
+    selected = next((note for note in shown if str(note.pk) == wanted),
+                    shown[0] if shown else None)
     return render(request, "inventory/note_list.html", {
         "notes": [(note, states[note.pk]) for note in shown],
+        "selected_note": selected,
+        "selected": str(selected.pk) if selected else "",
+        **(note_context(selected) if selected else {}),
+        "view": list_view(request, NOTE_COOKIE),
+        "layers": layers(DELIVERIES),
         "q": q,
         "chosen": chosen,
         "items": sorted(Item.objects.filter(
             article__article_number__isnull=False).select_related(
                 "article__substance"), key=Item.sort_key),
-        "tabs": tabs(DELIVERIES),
+        "tabs": tabs(LIST),
+    })
+
+
+@dataclass(frozen=True)
+class Fills:
+    """The containers of ITEM a vessel would fill: COUNT, or None when
+    the vessel does not convert into the item's unit."""
+
+    item: Item
+    count: int | None
+
+
+@dataclass(frozen=True)
+class BulkRow:
+    """A vessel of the bulk list with the containers it would fill of
+    each item of its substance's article, by size."""
+
+    vessel: Vessel
+    fills: list[Fills]
+
+    def searched(self) -> str:
+        """The text the list's search looks in, folded for a comparison
+        regardless of case: the article number, the substance's key and
+        names, and the batch's number and supplier's batch."""
+        batch = self.vessel.batch
+        substance = batch.substance
+        return "\n".join([substance.article.article_number or "",
+                          substance.key, substance.name,
+                          substance.name_de, batch.number,
+                          batch.supplier_batch]).casefold()
+
+
+def bulk_rows(vessels: list[Vessel]) -> list[BulkRow]:
+    """Return VESSELS as rows of the bulk list, with the containers each
+    would fill of every item of its substance's article, by size."""
+    items: dict[int, list[Item]] = {}
+    for item in sorted(Item.objects.filter(
+            article_id__in={vessel.batch.substance_id
+                            for vessel in vessels}
+            ).select_related("article__substance"),
+            key=Item.container_order):
+        items.setdefault(item.article_id, []).append(item)
+    return [BulkRow(vessel=vessel, fills=[
+        Fills(item=item, count=containers_from(vessel, item,
+                                               molar_mass(item)))
+        for item in items.get(vessel.batch.substance_id, [])])
+        for vessel in vessels]
+
+
+def bulk_order(vessel: Vessel) -> tuple[Any, ...]:
+    """The bulk list's order: by article number, articles without one
+    last and by name regardless of case, then by the batch's date,
+    oldest first and undated ones last, then by ID."""
+    substance = vessel.batch.substance
+    number = substance.article.article_number
+    return (number is None, number or "",
+            substance.shown_name.casefold(), vessel.batch.date is None,
+            vessel.batch.date or date.min, vessel.pk)
+
+
+def list_view(request: HttpRequest, cookie: str) -> str:
+    """Return the view of a list with two views that the cookie COOKIE
+    remembers, ``details`` or else ``table``."""
+    return "details" if request.COOKIES.get(cookie) == "details" \
+        else "table"
+
+
+@vary_on_cookie
+def bulk_list(request: HttpRequest) -> HttpResponse:
+    """List the open vessels of the substances that have an article, in
+    the bulk list's order, with the containers each would fill; ``q``,
+    ``location``, ``source`` and ``flask=1`` select among them. The
+    vessel ``selected`` names among those listed, else the first, is
+    selected, in the view the cookie ``bulk-list-view`` remembers."""
+    q = request.GET.get("q", "").strip()
+    location = request.GET.get("location", "").strip()
+    source = request.GET.get("source", "")
+    if source not in Source.values:
+        source = ""
+    flask = request.GET.get("flask") == "1"
+    vessels = list(bulk_vessels())
+    locations = sorted({vessel.location for vessel in vessels
+                        if vessel.location}, key=natural)
+    words = q.casefold()
+    rows = [row for row in bulk_rows(sorted(vessels, key=bulk_order))
+            if (not words or words in row.searched())
+            and (not location or row.vessel.location == location)
+            and (not source or row.vessel.batch.source == source)
+            and (not flask or row.vessel.flask)]
+    wanted = request.GET.get("selected", "")
+    chosen = next((row for row in rows if str(row.vessel.pk) == wanted),
+                  rows[0] if rows else None)
+    return render(request, "inventory/bulk_list.html", {
+        "rows": rows,
+        "chosen": chosen,
+        "ledger": vessel_ledger(chosen.vessel, 5) if chosen else [],
+        "selected": str(chosen.vessel.pk) if chosen else "",
+        "view": list_view(request, BULK_COOKIE),
+        "q": q,
+        "location": location,
+        "source": source,
+        "sources": Source.choices,
+        "flask": flask,
+        "locations": locations,
+        "tabs": tabs(LIST),
+        "layers": layers(BULK),
+    })
+
+
+@vary_on_headers("HX-Request")
+def bulk_detail(request: HttpRequest, pk: int) -> HttpResponse:
+    """Answer an htmx request (``HX-Request: true``) with the details of
+    the vessel PK alone, as the bulk list shows them beside its table,
+    and any other request with a redirect to the list with ``selected``
+    naming the vessel. Answer 404 for a vessel the bulk list does not
+    hold."""
+    vessel = get_object_or_404(bulk_vessels(), pk=pk)
+    if request.headers.get("HX-Request") != "true":
+        return redirect(f"{BULK}?{urlencode({'selected': vessel.pk})}")
+    return render(request, "inventory/bulk_list.html#detail", {
+        "chosen": bulk_rows([vessel])[0],
+        "ledger": vessel_ledger(vessel, 5),
     })
 
 
@@ -737,10 +899,24 @@ def vessel_page(request: HttpRequest, pk: int) -> HttpResponse:
     answer 404 for an unknown ID."""
     vessel = get_object_or_404(Vessel.objects.select_related(
         "batch__substance__article"), pk=pk)
+    return render(request, "inventory/vessel_page.html", {
+        "vessel": vessel,
+        "ledger": vessel_ledger(vessel),
+        "history": history_entries(vessel),
+    })
+
+
+def vessel_ledger(vessel: Vessel, limit: int | None = None
+                  ) -> list["VesselLedgerRow"]:
+    """Return the movements of VESSEL, newest first, the LIMIT newest
+    alone when it is given, each with the item it filled, the other
+    vessel of a transfer and whether it can be reversed."""
     movements = vessel.movements.select_related(
         "user", "item_movement__item__article", "task_step__task",
         "task_step__entry__procedure", "reverses", "reversal",
         "transfer__vessel", "transferred__vessel").order_by("-id")
+    if limit is not None:
+        movements = movements[:limit]
     rows = []
     for movement in movements:
         other = None
@@ -756,11 +932,7 @@ def vessel_page(request: HttpRequest, pk: int) -> HttpResponse:
             other=other,
             reversible=movement.kind == VesselMovement.Kind.WITHDRAWAL
             and not hasattr(movement, "reversal")))
-    return render(request, "inventory/vessel_page.html", {
-        "vessel": vessel,
-        "ledger": rows,
-        "history": history_entries(vessel),
-    })
+    return rows
 
 
 @dataclass(frozen=True)
@@ -829,15 +1001,11 @@ def batch_page(request: HttpRequest, pk: int) -> HttpResponse:
     })
 
 
-def note_page(request: HttpRequest, pk: int) -> HttpResponse:
-    """Show the delivery note PK with its lines, their movements and the
-    history; answer 404 for an unknown ID.
-
-    A line of a current note is shown with its delivery movement, found
-    by item and batch; the assignments the note booked are left out.
-    """
-    note = get_object_or_404(
-        DeliveryNote.objects.annotate(line_count=Count("lines")), pk=pk)
+def note_context(note: DeliveryNote) -> dict[str, Any]:
+    """Return the context NOTE is shown with, on its page and in the
+    delivery list's details: the note, its state and its lines, each
+    with its delivery movement, found by item and batch, and whether
+    that is reversed; the assignments the note booked are left out."""
     movements = {(movement.item_id, movement.batch_id): movement
                  for movement in note.movements.filter(
                      kind=Movement.Kind.DELIVERY).select_related(
@@ -845,13 +1013,32 @@ def note_page(request: HttpRequest, pk: int) -> HttpResponse:
     shown = [(line, movements.get((line.item_id, line.batch_id)))
              for line in note.lines.select_related(
                  "item__article__substance", "batch")]
+    return {"note": note, "state": note_states([note])[note.pk],
+            "lines": [(line, movement, hasattr(movement, "reversal"))
+                      for line, movement in shown]}
+
+
+def note_page(request: HttpRequest, pk: int) -> HttpResponse:
+    """Show the delivery note PK with its lines, their movements and the
+    history; answer 404 for an unknown ID."""
+    note = get_object_or_404(
+        DeliveryNote.objects.annotate(line_count=Count("lines")), pk=pk)
     return render(request, "inventory/note_page.html", {
-        "note": note,
-        "state": note_states([note])[note.pk],
-        "lines": [(line, movement, hasattr(movement, "reversal"))
-                  for line, movement in shown],
-        "history": history_entries(note),
-    })
+        **note_context(note), "history": history_entries(note)})
+
+
+@vary_on_headers("HX-Request")
+def note_detail(request: HttpRequest, pk: int) -> HttpResponse:
+    """Answer an htmx request (``HX-Request: true``) with the details of
+    the delivery note PK alone, as the delivery list shows them beside
+    its table, and any other request with a redirect to the list with
+    ``selected`` naming the note. Answer 404 for an unknown ID."""
+    note = get_object_or_404(
+        DeliveryNote.objects.annotate(line_count=Count("lines")), pk=pk)
+    if request.headers.get("HX-Request") != "true":
+        return redirect(f"{DELIVERIES}?{urlencode({'selected': note.pk})}")
+    return render(request, "inventory/note_list.html#detail",
+                  note_context(note))
 
 
 def for_dialog(request: HttpRequest) -> bool:
@@ -1061,7 +1248,8 @@ def item_edit(request: HttpRequest, pk: int) -> HttpResponse:
 
 @item_form
 def item_fill(request: HttpRequest, pk: int) -> HttpResponse:
-    """Book a filling of the item PK from a vessel of its substance.
+    """Book a filling of the item PK from a vessel of its substance;
+    ``vessel`` in the query chooses that vessel when the form offers it.
 
     The button ``propose`` books nothing: it shows the form again with
     the amount set to the proposal for the count and vessel entered, or
@@ -1069,6 +1257,10 @@ def item_fill(request: HttpRequest, pk: int) -> HttpResponse:
     """
     item = get_object_or_404(Item, pk=pk)
     form = FillForm(request.POST or None, item=item)
+    wanted = request.GET.get("vessel", "")
+    if not form.is_bound and wanted.isdigit() and form.fields[
+            "vessel"].queryset.filter(pk=int(wanted)).exists():
+        form.initial["vessel"] = int(wanted)
     if request.method == "POST" and "propose" in request.POST:
         if form.is_valid():
             form = proposed(request, form, item)

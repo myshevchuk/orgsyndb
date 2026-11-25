@@ -1,0 +1,88 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n lab inventory %}
+{% block title %}{% translate "End products" %} · {% translate "Bulk" context "layer" %}{% endblock %}
+{% block body_class %} class="lab-frame"{% endblock %}
+{% block main %}
+<div class="lab-heading">
+<h1>{% translate "End products" %}</h1>
+<span class="lab-count">{% blocktranslate count count=rows|length %}{{ count }} vessel{% plural %}{{ count }} vessels{% endblocktranslate %}</span>
+{% if user.is_authenticated %}<div class="lab-heading__actions"><p class="actions"><a href="/lab/inventory/batches/new/">{% translate "New batch" %}</a></p></div>{% endif %}
+</div>
+{% include "inventory/tabs.html" %}
+<div class="lab-toolbar">
+{% include "inventory/layers.html" %}
+<form id="filters" class="lab-filters" method="get" action="/lab/inventory/end-products/bulk/">
+<label class="lab-inline-field"><span class="visually-hidden">{% translate "Search" %}</span><input type="search" name="q" value="{{ q }}" placeholder="{% translate "Name, article no., batch" %}"></label>
+<label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Location" %}:</span><select name="location" data-submit>
+<option value=""{% if not location %} selected{% endif %}>{% translate "All" %}</option>
+{% for value in locations %}<option value="{{ value }}"{% if value == location %} selected{% endif %}>{{ value }}</option>
+{% endfor %}</select></label>
+<label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Source" %}:</span><select name="source" data-submit>
+<option value=""{% if not source %} selected{% endif %}>{% translate "All" %}</option>
+{% for value, label in sources %}<option value="{{ value }}"{% if value == source %} selected{% endif %}>{{ label }}</option>
+{% endfor %}</select></label>
+<label><input type="checkbox" name="flask" value="1"{% if flask %} checked{% endif %} data-submit> {% translate "Flasks only" %}</label>
+{% if selected %}<input type="hidden" name="selected" value="{{ selected }}">
+{% endif %}<button type="submit">{% translate "Filter" %}</button>
+</form>
+<div class="lab-toolbar__end">
+{% include "inventory/view_switch.html" %}
+</div>
+</div>
+<div class="item-layout" data-view="{{ view }}" data-cookie="bulk-list-view">
+<div class="table-scroll table-sticky">
+<table class="inventory-table item-table bulk-table">
+<thead>
+<tr><th scope="col">{% translate "Article" %}</th><th scope="col">{% translate "Vessel" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "Source" %}</th><th scope="col" class="number">{% translate "Amount" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Fills" context "bulk" %}</th></tr>
+</thead>
+<tbody id="item-rows" hx-target="#item-detail" hx-swap="outerHTML" hx-sync="this:replace" hx-indicator="#item-detail">
+{% for row in rows %}{% with vessel=row.vessel batch=row.vessel.batch %}<tr data-item="{{ vessel.pk }}" hx-get="/lab/inventory/end-products/bulk/{{ vessel.pk }}/" hx-trigger="item-select"{% if row is chosen %} aria-current="true"{% endif %}>
+<td><span class="article-number">{{ batch.substance.article.article_number|default_if_none:_("no number") }}</span> {% substance batch.substance %}</td>
+<td><a href="/lab/inventory/vessels/{{ vessel.pk }}/">#{{ vessel.pk }}</a></td>
+<td><a href="/lab/inventory/batches/{{ batch.pk }}/">{{ batch }}</a></td>
+<td>{% include "inventory/batch_source.html" %}</td>
+<td class="number">{{ vessel.amount|in_vessel_unit:vessel }}</td>
+<td>{% if vessel.flask %}<span class="badge badge--flask">{% translate "Flask" %}</span>{% else %}{{ vessel.location }}{% endif %}</td>
+<td>{{ batch.date|default_if_none:"" }}</td>
+<td>{% partial fills %}</td>
+</tr>{% endwith %}
+{% endfor %}</tbody>
+</table>
+</div>
+{% partialdef detail inline %}{% if chosen %}{% with vessel=chosen.vessel batch=chosen.vessel.batch %}<aside id="item-detail" class="item-detail" data-item="{{ vessel.pk }}" aria-labelledby="item-detail-title">
+<header class="detail-head">
+<h2 id="item-detail-title"><a href="/lab/inventory/vessels/{{ vessel.pk }}/">{{ vessel }}</a></h2>
+<p>{{ batch.substance.article.article_number|default_if_none:_("no number") }} · {{ batch.substance.shown_name }}</p>
+</header>
+<dl class="detail-location">
+<dt>{% translate "Batch" %}</dt><dd><a href="/lab/inventory/batches/{{ batch.pk }}/">{{ batch }}</a></dd>
+<dt>{% translate "Source" %}</dt><dd>{% include "inventory/batch_source.html" %}</dd>
+<dt>{% translate "Amount" %}</dt><dd>{{ vessel.amount|in_vessel_unit:vessel }}</dd>
+<dt>{% translate "Location" %}</dt><dd>{% if vessel.flask %}{% translate "Flask" %}{% else %}{{ vessel.location|default:"–" }}{% endif %}</dd>
+<dt>{% translate "Fills" context "bulk" %}</dt><dd>{% with row=chosen %}{% partial fills %}{% endwith %}</dd>
+</dl>
+<p class="detail-links"><a href="/lab/inventory/vessels/{{ vessel.pk }}/">{% translate "Open vessel page" %}</a></p>
+<h3>{% translate "Newest movements" %}</h3>
+<table class="detail-table">
+<thead><tr>
+<th scope="col">{% translate "Date" %}</th>
+<th scope="col">{% translate "Kind" %}</th>
+<th scope="col" class="number">{% translate "Amount" %}</th>
+<th scope="col">{% translate "Note" context "inventory" %}</th>
+</tr></thead>
+<tbody>
+{% for row in ledger %}<tr>
+<td>{{ row.movement.date }}</td>
+<td>{{ row.movement.get_kind_display }}</td>
+<td class="number">{{ row.movement.amount|in_vessel_unit:vessel }}</td>
+<td>{{ row.movement.note }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</aside>
+{% endwith %}{% else %}<aside id="item-detail" class="item-detail">
+<p class="lab-empty">{% translate "No vessel is chosen." %}</p>
+</aside>
+{% endif %}{% endpartialdef %}
+</div>
+{% partialdef fills %}{% for fill in row.fills %}{% if not forloop.first %} {% translate "or" %} {% endif %}{% if fill.count is None %}<span class="badge badge--warning">{% translate "Molar mass missing" %}</span> {{ fill.item.container }}{% elif user.is_authenticated %}<a href="/lab/inventory/items/{{ fill.item.pk }}/fill/?vessel={{ row.vessel.pk }}">{{ fill.count }} × {{ fill.item.container }}</a>{% else %}{{ fill.count }} × {{ fill.item.container }}{% endif %}{% endfor %}{% endpartialdef %}
+{% endblock %}

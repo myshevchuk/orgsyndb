@@ -1,36 +1,77 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n %}
-{% block title %}{% translate "Deliveries" %}{% endblock %}
+{% block title %}{% translate "End products" %} · {% translate "Deliveries" context "layer" %}{% endblock %}
 {% block body_class %} class="lab-frame"{% endblock %}
 {% block main %}
 <div class="lab-heading">
-<h1>{% translate "Deliveries" %}</h1>
+<h1>{% translate "End products" %}</h1>
 <span class="lab-count">{% blocktranslate count count=notes|length %}{{ count }} delivery note{% plural %}{{ count }} delivery notes{% endblocktranslate %}</span>
 {% if user.is_authenticated %}<div class="lab-heading__actions"><p class="actions"><a href="/lab/inventory/deliveries/new/">{% translate "New delivery note" %}</a></p></div>{% endif %}
 </div>
 {% include "inventory/tabs.html" %}
-<form class="lab-filters lab-toolbar" method="get" action="/lab/inventory/deliveries/">
+<div class="lab-toolbar">
+{% include "inventory/layers.html" %}
+<form id="filters" class="lab-filters" method="get" action="/lab/inventory/deliveries/">
 <label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Item" %}:</span><select name="item">
 <option value=""{% if not chosen %} selected{% endif %}>{% translate "All" %}</option>
 {% for item in items %}<option value="{{ item.pk }}"{% if item.pk|stringformat:"d" == chosen %} selected{% endif %}>{{ item.article_number }} · {{ item.container }} · {{ item.name }}</option>
 {% endfor %}</select></label>
 <label class="lab-inline-field"><span class="visually-hidden">{% translate "Search" %}</span><input type="search" name="q" value="{{ q }}" placeholder="{% translate "Number or recipient" %}"></label>
-<button type="submit">{% translate "Filter" %}</button>
+{% if selected %}<input type="hidden" name="selected" value="{{ selected }}">
+{% endif %}<button type="submit">{% translate "Filter" %}</button>
 </form>
-<div class="table-scroll">
-<table class="inventory-table">
+<div class="lab-toolbar__end">
+{% include "inventory/view_switch.html" %}
+</div>
+</div>
+<div class="item-layout" data-view="{{ view }}" data-cookie="delivery-list-view">
+<div class="table-scroll table-sticky">
+<table class="inventory-table item-table note-table">
 <thead>
-<tr><th scope="col">{% translate "Number" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Recipient" %}</th><th scope="col">{% translate "Lines" %}</th></tr>
+<tr><th scope="col">{% translate "Number" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Recipient" %}</th><th scope="col" class="number table-only-summary">{% translate "Lines" %}</th><th scope="col">{% translate "Contents" %}</th></tr>
 </thead>
-<tbody>
-{% for note, state in notes %}<tr>
+<tbody id="item-rows" hx-target="#item-detail" hx-swap="outerHTML" hx-sync="this:replace" hx-indicator="#item-detail">
+{% for note, state in notes %}<tr data-item="{{ note.pk }}" hx-get="/lab/inventory/deliveries/{{ note.pk }}/detail/" hx-trigger="item-select"{% if note == selected_note %} aria-current="true"{% endif %}>
 <td><a href="/lab/inventory/deliveries/{{ note.pk }}/">{{ note }}</a>{% include "inventory/note_marks.html" %}</td>
 <td>{{ note.date }}</td>
 <td>{{ note.recipient }}</td>
+<td class="number">{{ note.line_count }}</td>
 <td><ul class="note-lines">
 {% for line in note.lines.all %}<li>{{ line.item.article_number }} {{ line.item.name }} · {{ line.item.container }}{% if line.batch %} · {{ line.batch }}{% endif %} × {{ line.count }}</li>
 {% endfor %}</ul></td>
 </tr>
 {% endfor %}</tbody>
 </table>
+</div>
+{% partialdef detail inline %}{% if note %}<aside id="item-detail" class="item-detail" data-item="{{ note.pk }}" aria-labelledby="item-detail-title">
+<header class="detail-head">
+<h2 id="item-detail-title"><a href="/lab/inventory/deliveries/{{ note.pk }}/">{{ note }}</a>{% include "inventory/note_marks.html" %}</h2>
+<p>{{ note.date }} · {{ note.recipient }}</p>
+</header>
+<p class="detail-links"><a href="/lab/inventory/deliveries/{{ note.pk }}/">{% translate "Open delivery note" %}</a></p>
+<table class="detail-table">
+<thead><tr>
+<th scope="col">{% translate "Article no." %}</th>
+<th scope="col">{% translate "Name" %}</th>
+<th scope="col">{% translate "Container" %}</th>
+<th scope="col">{% translate "Batch" %}</th>
+<th scope="col" class="number">{% translate "Count" %}</th>
+</tr></thead>
+<tbody>
+{% for line, movement, reversed in lines %}<tr>
+<td>{{ line.item.article_number|default_if_none:"" }}</td>
+<td>{{ line.item.name }}</td>
+<td>{{ line.item.container }}</td>
+<td>{% if line.batch %}<a href="/lab/inventory/batches/{{ line.batch.pk }}/">{{ line.batch }}</a>{% endif %}</td>
+<td class="number">{{ line.count }}{% if reversed %} <span class="lab-mark">{% translate "reversed" %}</span>{% endif %}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+{% if note.note %}<h3>{% translate "Note" context "inventory" %}</h3>
+<div class="lab-note">{{ note.note|linebreaks }}</div>
+{% endif %}</aside>
+{% else %}<aside id="item-detail" class="item-detail">
+<p class="lab-empty">{% translate "No delivery note is chosen." %}</p>
+</aside>
+{% endif %}{% endpartialdef %}
 </div>
 {% endblock %}

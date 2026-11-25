@@ -1,0 +1,3 @@
+{% load i18n %}<nav class="lab-layers" aria-label="{% translate "End products" %}">
+{% for layer in layers %}<a href="{{ layer.url }}"{% if layer.current %} aria-current="page"{% endif %}>{{ layer.label }} <span class="lab-layer-count">{{ layer.count }}</span></a>
+{% endfor %}</nav>
