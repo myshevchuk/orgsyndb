@@ -8,7 +8,6 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from orgsyndb_web.history import RecordedHistory
-from planning.forecast import z_of
 
 
 def within(low: float, high: float | None = None) -> list[BaseValidator]:
@@ -69,12 +68,6 @@ class Parameters(models.Model):
         """Return the stored record, or an unsaved one holding the
         defaults when none is stored."""
         return cls.objects.order_by("pk").first() or cls()
-
-    @property
-    def z(self) -> float:
-        """The quantile of the standard normal distribution at the
-        certainty."""
-        return z_of(self.certainty)
 
     def clean(self) -> None:
         """Check that the high band lies below the medium band; raise

@@ -1,11 +1,12 @@
 """Tests of the demand models (production-planning: Demand models)."""
 
 from datetime import date
+from statistics import NormalDist
 
 from django.test import SimpleTestCase
 
 from planning import forecast
-from planning.forecast import OrderModel, QuarterlyModel
+from planning.forecast import OrderModel, QuarterlyModel, z_of
 
 from .inventory_support import TODAY
 from .planning_support import (WINDOW, eight_orders, lumpy, middle, params,
@@ -20,6 +21,18 @@ def demand(entered=None, orders=None, **over):
 def on(quarter, count, *more):
     """Orders of ``count`` in the middle of ``quarter``."""
     return [(middle(quarter), count)] + [(middle(quarter), c) for c in more]
+
+
+class QuantileTests(SimpleTestCase):
+
+    def test_z_of_is_the_inverse_of_the_normal_distribution(self) -> None:
+        for certainty in (0.5, 0.9, 0.95, 0.975, 0.999):
+            with self.subTest(certainty=certainty):
+                self.assertAlmostEqual(
+                    z_of(certainty), NormalDist().inv_cdf(certainty),
+                    places=12)
+        self.assertAlmostEqual(z_of(0.95), 1.6449, places=4)
+        self.assertEqual(z_of(0.5), 0)
 
 
 class OrderModelTests(SimpleTestCase):

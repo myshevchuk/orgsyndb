@@ -14,11 +14,11 @@ The `planning` package SHALL keep one record of planning parameters, with a chan
 - `high_days` and `medium_days`, the priority bands, `0 ≤ high_days < medium_days`, defaults 14 and 56;
 - `target_days`, from 30 to 1095, default 365.
 
-When no record exists, the defaults apply. `z` is `statistics.NormalDist().inv_cdf(certainty)`.
+When no record exists, the defaults apply.
 
 #### Scenario: Defaults
 - **WHEN** no parameter record exists
-- **THEN** the forecast uses 0.95, 28, 21, 12, 6, 14, 56 and 365, and `z` is 1.6449 to four places
+- **THEN** the forecast uses 0.95, 28, 21, 12, 6, 14, 56 and 365
 
 #### Scenario: Bands out of order
 - **WHEN** a staff user saves `high_days` 60 and `medium_days` 56

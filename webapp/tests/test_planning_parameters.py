@@ -1,8 +1,6 @@
 """Tests of the planning parameters (production-planning: Planning
 parameters)."""
 
-from statistics import NormalDist
-
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
@@ -31,7 +29,6 @@ class DefaultTests(TestCase):
         found = Parameters.current()
         self.assertEqual(
             {name: getattr(found, name) for name in DEFAULTS}, DEFAULTS)
-        self.assertAlmostEqual(found.z, 1.6449, places=4)
 
     def test_without_a_record_the_current_one_is_not_stored(self) -> None:
         found = Parameters.current()
@@ -45,14 +42,6 @@ class DefaultTests(TestCase):
         self.assertEqual(found.pk, stored.pk)
         self.assertEqual((found.certainty, found.buffer_days), (0.9, 40))
         self.assertEqual(found.target_days, 365)
-
-    def test_z_is_the_inverse_of_the_normal_distribution(self) -> None:
-        for certainty in (0.5, 0.9, 0.95, 0.975, 0.999):
-            with self.subTest(certainty=certainty):
-                found = Parameters(**{**DEFAULTS, "certainty": certainty})
-                self.assertAlmostEqual(
-                    found.z, NormalDist().inv_cdf(certainty), places=12)
-        self.assertEqual(Parameters(**{**DEFAULTS, "certainty": 0.5}).z, 0)
 
     def test_the_defaults_pass_validation(self) -> None:
         self.assertEqual(errors(), {})
