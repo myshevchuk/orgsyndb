@@ -15,4 +15,4 @@
 ## 3. Check
 
 - [x] 3.1 Screenshots of the three layers in both views at 1440 × 900
-- [ ] 3.2 Inventory and back-link tests, then CI
+- [x] 3.2 Inventory and back-link tests, then CI
