@@ -13,7 +13,8 @@
 <label class="lab-inline-field"><span class="visually-hidden">{% translate "Search" %}</span><input type="search" name="q" value="{{ filters.q }}" placeholder="{% if is_intermediate %}{% translate "Name, batch, task" %}{% else %}{% translate "Name, CAS, supplier, batch" %}{% endif %}"></label>
 {% if not is_intermediate %}<label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Group" %}:</span><select name="group" data-submit>
 <option value=""{% if not filters.group %} selected{% endif %}>{% translate "All" %}</option>
-{% for term, depth in groups %}<option value="{{ term.key }}"{% if term.key == filters.group %} selected{% endif %}>{% indent depth %}{{ term.shown_label }}</option>
+{% if stale_group %}<option value="{{ stale_group }}" selected>{{ stale_group }}</option>
+{% endif %}{% for term, depth in groups %}<option value="{{ term.key }}"{% if term.key == filters.group %} selected{% endif %}>{% indent depth %}{{ term.shown_label }}</option>
 {% endfor %}</select></label>
 {% endif %}<label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Location" %}:</span><select id="filter-location" name="location" data-refresh data-submit>
 <option value=""{% if not filters.location %} selected{% endif %}>{% translate "All" %}</option>
@@ -21,7 +22,8 @@
 {% endfor %}</select></label>
 {% if is_intermediate %}<label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Chemical class" %}:</span><select name="class" data-submit>
 <option value=""{% if not filters.chemical_class %} selected{% endif %}>{% translate "All" %}</option>
-{% for term, depth in classes %}<option value="{{ term.key }}"{% if term.key == filters.chemical_class %} selected{% endif %}>{% indent depth %}{{ term.shown_label }}</option>
+{% if stale_class %}<option value="{{ stale_class }}" selected>{{ stale_class }}</option>
+{% endif %}{% for term, depth in classes %}<option value="{{ term.key }}"{% if term.key == filters.chemical_class %} selected{% endif %}>{% indent depth %}{{ term.shown_label }}</option>
 {% endfor %}</select></label>
 <label class="lab-inline-check"><input type="checkbox" name="flask" value="1"{% if filters.flask %} checked{% endif %} data-submit> {% translate "Flasks only" %}</label>
 <label class="lab-inline-check"><input type="checkbox" name="old" value="1"{% if filters.old %} checked{% endif %} data-submit> {% translate "Older than 1 y" %}</label>

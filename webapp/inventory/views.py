@@ -1045,6 +1045,10 @@ def category_list_response(request: HttpRequest, category: str
     selected = chosen.substance.key if chosen else ""
     detail_vessels = chosen.vessels if chosen else []
     single_vessel = detail_vessels[0] if len(detail_vessels) == 1 else None
+    classes = (tree_order(ChemicalClass.objects.select_related("parent"))
+               if is_int else [])
+    groups = ([] if is_int
+              else tree_order(Group.objects.select_related("parent")))
     return render(request, "inventory/category_list.html", {
         "category": category,
         "is_intermediate": is_int,
@@ -1064,12 +1068,20 @@ def category_list_response(request: HttpRequest, category: str
         "filter_query": filters.query_string(category),
         "locations": sorted(offered_locations, key=natural),
         "suppliers": offered_suppliers,
-        "classes": (tree_order(ChemicalClass.objects.select_related("parent"))
-                    if is_int else []),
-        "groups": ([] if is_int
-                   else tree_order(Group.objects.select_related("parent"))),
+        "classes": classes,
+        "groups": groups,
+        "stale_class": stale_key(filters.chemical_class, classes),
+        "stale_group": stale_key(filters.group, groups),
         "tabs": tabs(base_url),
     })
+
+
+def stale_key(key: str, terms: list[tuple[Any, int]]) -> str:
+    """Return KEY, a vocabulary filter's value, when it names none of
+    TERMS, so that the filter can still offer it as the value in force;
+    else the empty string."""
+    return key if key and all(term.key != key for term, _ in terms) \
+        else ""
 
 
 def category_detail_response(request: HttpRequest, category: str, key: str

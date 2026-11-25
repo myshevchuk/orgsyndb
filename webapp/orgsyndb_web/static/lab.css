@@ -1066,7 +1066,13 @@ main:has(#heat-switch:not(:checked)) .item-table td[class*="heat-"] { background
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    body.lab-frame .section-tabs ul { flex-wrap: nowrap; }
+    /* With five tabs the row may be wider than a narrow frame: it
+       scrolls sideways rather than clip the last tabs. */
+    body.lab-frame .section-tabs ul {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
     body.lab-frame .lab-toolbar { flex-wrap: nowrap; }
     body.lab-frame .lab-toolbar .lab-filters { flex-wrap: nowrap; min-width: 0; }
     body.lab-frame .lab-toolbar input[type="search"] { flex: 0 1 10.25rem; }
