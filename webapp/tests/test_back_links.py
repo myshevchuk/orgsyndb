@@ -119,10 +119,9 @@ class BackLinkTests(SeededCase):
         shell, before the heading)."""
         for kind, root, _, _ in self.pages():
             with self.subTest(kind=kind):
-                main = root.find("main")
-                note = main.find("p", "lab-demo")
+                note = root.find("p", "lab-demo")
                 self.assertIsNotNone(note)
-                order = list(main.walk())
+                order = list(root.walk())
                 back = self.back_link(root)
                 self.assertLess(position(order, note),
                                 position(order, back))
@@ -136,13 +135,13 @@ class BackLinkTests(SeededCase):
         response = self.client.post("/lab/tasks/T-001/start/", follow=True)
         self.assertEqual(response.status_code, 200)
         root = page(response)
-        main = root.find("main")
-        messages = main.find(cls="lab-messages")
+        note = root.find("p", "lab-demo")
+        self.assertIsNotNone(note)
+        messages = root.find(cls="lab-messages")
         self.assertIsNotNone(messages)
-        order = list(main.walk())
+        order = list(root.walk())
         back = self.back_link(root)
-        self.assertLess(position(order, main.find("p", "lab-demo")),
-                        position(order, messages))
+        self.assertLess(position(order, note), position(order, messages))
         self.assertLess(position(order, messages), position(order, back))
         self.assertLess(position(order, back),
                         position(order, root.find("h1")))
