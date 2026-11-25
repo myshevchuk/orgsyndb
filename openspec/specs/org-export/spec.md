@@ -124,17 +124,16 @@ No math renderer is configured or loaded anywhere in the site.
 - **THEN** the export exits 0 and the marker file does not exist
 
 ### Requirement: Complete and fresh export directory
-`tools/orgsyndb export` SHALL leave `build/export/` holding exactly one `<stem>.md` for each Org source `<stem>.org` of `org/procedures/`, and no other file. The Org sources here are the entries that `validate.discover("org/procedures", ".org")` returns with no problem attached, and `pipeline.org_stems(org_root)` returns their stems, sorted. It uses the sibling directories `build/.export-staging/` and `build/.export-previous/` in these steps:
-1. **Recover.** `pipeline.recover_export(build)` runs first:
+`tools/orgsyndb export` SHALL leave `build/export/` holding exactly one `<stem>.md` for each valid Org source `<stem>.org` of `org/procedures/`, and no other file. Valid Org sources are top-level `*.org` entries in `org/procedures/` other than dotfiles, sorted by stem. The export uses the sibling directories `build/.export-staging/` and `build/.export-previous/` in these steps:
+1. **Recover.** Before staging:
    - If `.export-previous/` exists and `export/` does not, it renames `.export-previous/` to `export/`.
    - If both exist, it deletes `.export-previous/`.
    - It deletes any `.export-staging/`, and empties `build/tmp/`.
-2. **Stage.** The export writes into a new, empty `.export-staging/`.
-3. **Install.** `pipeline.check_staging(build, stems)` and then `pipeline.replace_export(build, rename, remove)` run. `rename` defaults to `os.rename` and `remove` to `shutil.rmtree`; both are injectable so that tests can make a step fail:
-   1. It checks that the staging directory holds exactly `<stem>.md` for each of `stems`.
-   2. It renames an existing `export/` to `.export-previous/`.
-   3. It renames `.export-staging/` to `export/`. When that rename fails, it renames `.export-previous/` back to `export/` before failing.
-   4. It deletes `.export-previous/`. A failure of this delete is a warning only.
+2. **Stage.** The export writes into a new, empty `.export-staging/` and verifies that `.export-staging/` holds exactly `<stem>.md` for each valid Org source stem, failing and naming any missing or unexpected files before touching `export/`.
+3. **Install.** Once staging is verified:
+   1. It renames an existing `export/` to `.export-previous/`.
+   2. It renames `.export-staging/` to `export/`. When that rename fails, it renames `.export-previous/` back to `export/` before failing; when the restore also fails, the error states that the next export will recover.
+   3. It deletes `.export-previous/`. A failure of this delete is a warning only.
 
 When there are no Org sources, `build/export/` exists and is empty. When any step fails, the command exits 1, and `build/export/` holds its previous contents, either directly or after the next run's recovery step.
 
@@ -147,25 +146,25 @@ When there are no Org sources, `build/export/` exists and is empty. When any ste
 - **THEN** the second export exits 1, and `build/export/` holds the same files with the same bytes as after the first export
 
 #### Scenario: Org stems
-- **WHEN** a test calls `org_stems` on a temporary directory holding `OSDB-0002-b.org`, `OSDB-0001-a.de.org`, `.#OSDB-0001-a.org`, `notes.txt` and a subdirectory `nested/`, and on a directory that does not exist
-- **THEN** it returns `["OSDB-0001-a.de", "OSDB-0002-b"]` for the first and `[]` for the second
+- **WHEN** a test inspects a temporary directory holding `OSDB-0002-b.org`, `OSDB-0001-a.de.org`, `.#OSDB-0001-a.org`, `notes.txt` and a subdirectory `nested/`, and a directory that does not exist
+- **THEN** the valid Org source stems are `["OSDB-0001-a.de", "OSDB-0002-b"]` for the first and `[]` for the second
 
 #### Scenario: Staging check
-- **WHEN** a unit test calls `check_staging` with the stems `A` and `B` on a `build/.export-staging/` that holds `A.md` and `C.md`
-- **THEN** it raises `pipeline.ExportError` naming `B.md` as missing and `C.md` as unexpected
+- **WHEN** a unit test checks a `build/.export-staging/` holding `A.md` and `C.md` against the expected stems `A` and `B`
+- **THEN** the check fails naming `B.md` as missing and `C.md` as unexpected
 
 #### Scenario: Second rename fails
-- **WHEN** a unit test builds `build/export/` (one file `A.md`) and `build/.export-staging/` (one file `B.md`), and calls `replace_export` with a `rename` that fails on its second call
-- **THEN** `replace_export` raises, `build/export/` holds exactly `A.md` with its original bytes, and `build/.export-previous/` does not exist
+- **WHEN** a unit test swaps `build/export/` (one file `A.md`) with `build/.export-staging/` (one file `B.md`) and the rename of `.export-staging/` to `export/` fails
+- **THEN** the install fails, `build/export/` holds exactly `A.md` with its original bytes, and `build/.export-previous/` does not exist
 
 #### Scenario: Restore fails too
-- **WHEN** the same test uses a `rename` that fails on its second and third calls
-- **THEN** `replace_export` raises with a message saying that the next export will recover
-- **AND** a following call of `recover_export` leaves `build/export/` holding exactly `A.md`, with no `.export-previous/` and no `.export-staging/`
+- **WHEN** the same test also makes the rollback rename of `.export-previous/` to `export/` fail
+- **THEN** the install fails with a message saying that the next export will recover
+- **AND** a following recovery leaves `build/export/` holding exactly `A.md`, with no `.export-previous/` and no `.export-staging/`
 
 #### Scenario: Backup deletion fails after a successful swap
-- **WHEN** the same test lets both renames succeed but passes a `remove` that raises `OSError`
-- **THEN** `replace_export` returns normally, `build/export/` holds exactly `B.md`, and a following call of `recover_export` removes `.export-previous/`
+- **WHEN** the same test lets both renames succeed but removing `.export-previous/` raises `OSError`
+- **THEN** the install succeeds, `build/export/` holds exactly `B.md`, and a following recovery removes `.export-previous/`
 
 #### Scenario: Leftovers from a crashed run
 - **WHEN** an integration test leaves `build/.export-previous/` holding a complete earlier export with no `build/export/`, plus a partial `build/.export-staging/`, and then runs `tools/orgsyndb -C <collection> export`
@@ -220,13 +219,14 @@ When the collection has no Org sources, as the build-script spec defines them, `
 `tools/orgsyndb export` handles `org/procedures` as follows:
 - **Not a directory.** After the recovery step and before staging, it fails with `orgsyndb: error: org/procedures is not a directory` when `org/procedures` exists but is not a directory. No Emacs starts, and `build/export/` is unchanged.
 - **Streams.** It writes Emacs's stdout and stderr to `build/export.log`, and prints Emacs's stdout on its own stdout, unchanged, whether the export succeeds or fails.
-- **Failure.** A line's severity is read after its path, which is `org/procedures/` joined with the name of an entry that `validate.discover("org/procedures", ".org")` returns, the longest such path when several fit, and after its field; `pipeline.org_error_reported(report, paths)` makes this test. When Emacs exits non-zero and its stdout holds a line with severity `error`, `orgsyndb` fails with `orgsyndb: error: the Org sources have errors; build/export/ is unchanged`, without printing the log. When Emacs exits non-zero otherwise, `orgsyndb` prints the log to stderr and fails with `orgsyndb: error: export failed; Emacs output is in build/export.log`.
+- **Failure.** A line's severity is read after its path, which is `org/procedures/` joined with the name of a discovered top-level entry of `org/procedures/`, taking the longest matching path when several fit, and after its field. When Emacs exits non-zero and its stdout holds a line with severity `error`, `orgsyndb` fails with `orgsyndb: error: the Org sources have errors; build/export/ is unchanged`, without printing the log. When Emacs exits non-zero otherwise, `orgsyndb` prints the log to stderr and fails with `orgsyndb: error: export failed; Emacs output is in build/export.log`.
 
 In each failure case `build/export/` is unchanged, and no later step of the subcommand runs.
 
 #### Scenario: Severity is read after the entry path
-- **WHEN** a test calls `org_error_reported` with the paths `org/procedures/x:file_name: error: y` and `org/procedures/OSDB-0001-a.org`, and in turn the report `org/procedures/x:file_name: error: y:file_name: warning: not a procedure file; ignored`, that report followed by the line `org/procedures/OSDB-0001-a.org:#+CREATED: error: keyword missing`, the line `other/OSDB-0001-a.org:#+CREATED: error: keyword missing`, and an empty report
-- **THEN** it returns false, true, false and false
+- **WHEN** a test checks export-report severity against the entry paths `org/procedures/x:file_name: error: y` and `org/procedures/OSDB-0001-a.org`, for in turn the report `org/procedures/x:file_name: error: y:file_name: warning: not a procedure file; ignored`, that report followed by `org/procedures/OSDB-0001-a.org:#+CREATED: error: keyword missing`, the line `other/OSDB-0001-a.org:#+CREATED: error: keyword missing`, and an empty report
+- **THEN** they report no error, an error, no error and no error respectively
+
 #### Scenario: Entries of the Org root
 - **WHEN** an ERT test calls `osdb-org-examine` on a temporary directory `R` holding a copy of `tests/fixtures/valid/org/OSDB-0003-propyl-acetate.org`, a dangling symlink named `.#OSDB-0003-x.org`, a regular file `.OSDB-0005-hidden.org`, a file `_index.md`, a subdirectory `nested.org/` and a file `notes.txt`
 - **THEN** the sources are exactly the `OSDB-0003` source, with its absolute path, stem `OSDB-0003-propyl-acetate`, `date` `2026-10-19T17:42:05+02:00`, `lastmod` `2026-10-19T18:30:00+02:00` and no AI model
