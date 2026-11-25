@@ -302,7 +302,7 @@ class IntermediateListTests(InventoryCase):
         self.assertIn("+gekauft", text)
 
         accept(language="en")
-        en_text = row_map(self.listing("?flask=1"))["sub-1"]["Substanz"].text()
+        en_text = row_map(self.listing("?flask=1"))["sub-1"]["Substance"].text()
         self.assertIn("Acids", en_text)
         self.assertIn("Ketones", en_text)
         self.assertLess(en_text.index("Acids"), en_text.index("Ketones"))
@@ -348,7 +348,7 @@ class IntermediateListTests(InventoryCase):
 
         accept(language="en")
         en_rows = row_map(self.listing())
-        self.assertIn("1 in flask", en_rows["both"]["Gefäße"].text())
+        self.assertIn("1 in flask", en_rows["both"]["Vessels"].text())
 
     def test_locations_cell_order_not_recorded_and_flask(self) -> None:
         """Requirement: Lists by substance (`Ort`: natural order, `+<n>`,
@@ -490,13 +490,20 @@ class IntermediateListTests(InventoryCase):
             task_step=t21.steps.get(), flask=True, location="Regal 1",
             date=date(2026, 10, 1))
 
-        for q in ("acetophenone", "acetophenon", "AP", "98-86", "kl0412",
-                  "t-008"):
+        for q, want in (
+                ("acetophenone", "5"),
+                ("acetophenon", "5"),
+                ("AP", "5"),
+                ("98-86", "5"),
+                ("kl0412", "2"),
+                ("t-008", "2"),
+        ):
             with self.subTest(q=q):
                 rows = row_map(self.listing(f"?q={quote(q)}"))
                 self.assertEqual(list(rows), ["acetophenone"])
                 self.assertTrue(
-                    has_amount(rows["acetophenone"]["Menge"].text(), "2", "g"))
+                    has_amount(rows["acetophenone"]["Menge"].text(), want,
+                               "g"))
 
         loc_rows = row_map(self.listing(f"?location={quote('Regal 1')}"))
         self.assertTrue(
@@ -731,7 +738,7 @@ class CommercialListTests(InventoryCase):
         accept(language="en")
         self.assertIn(
             "+made",
-            row_map(self.listing("?sealed=1"))["benzaldehyde"]["Substanz"]
+            row_map(self.listing("?sealed=1"))["benzaldehyde"]["Substance"]
             .text())
 
         Vessel.objects.filter(pk=made.pk).update(amount=0)
@@ -799,12 +806,19 @@ class CommercialListTests(InventoryCase):
         make_vessel(self.kl, substance=sub, source="made",
                     location="Zwischenlager", amount="5")
 
-        for q in ("acetone", "aceton", "AC", "67-64", "mk-11", "merck"):
+        for q, want in (
+                ("acetone", "30"),
+                ("aceton", "30"),
+                ("AC", "30"),
+                ("67-64", "30"),
+                ("mk-11", "10"),
+                ("merck", "10"),
+        ):
             with self.subTest(q=q):
                 rows = row_map(self.listing(f"?q={quote(q)}"))
                 self.assertEqual(list(rows), ["acetone"])
                 self.assertTrue(
-                    has_amount(rows["acetone"]["Menge"].text(), "10", "mg"))
+                    has_amount(rows["acetone"]["Menge"].text(), want, "mg"))
 
         self.assertEqual(
             list(row_map(self.listing("?group=purchased"))), ["acetone"])
@@ -1026,11 +1040,11 @@ class CategoryViewAndDetailsTests(InventoryCase):
         hidden = self.client.get(
             detail_url(INTERMEDIATES, "acetophenone", "?flask=1"), **HTMX)
         self.assertEqual(hidden.status_code, 200)
-        self.assertIn("Keine Gefäße", hidden.text())
+        self.assertIn("Keine Gefäße", page(hidden).text())
         accept(language="en")
         hidden_en = self.client.get(
             detail_url(INTERMEDIATES, "acetophenone", "?flask=1"), **HTMX)
-        self.assertIn("No vessels", hidden_en.text())
+        self.assertIn("No vessels", page(hidden_en).text())
 
     def test_details_table_columns_cells_and_actions(self) -> None:
         """Requirement: Lists by substance (details heading, columns, vessel
