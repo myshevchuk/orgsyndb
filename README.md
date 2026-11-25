@@ -23,10 +23,11 @@ separate single-column A4 layout.
 This repository is the application: the build program, the validator, the
 procedure and sequence schemas, the theme, the lab application
 and the tests. The lab application in `webapp/` uses Django, a Python web
-framework, to track synthesis tasks and the end-product inventory at
-`/lab/` beside the static site. The inventory counts containers ready to
-deliver by batch, including containers whose batch is unknown. It records
-deliveries and tracks which batches and vessels supply material for filling.
+framework, to track synthesis tasks and lab stock at `/lab/` beside the
+static site. The inventory shows end products, intermediates and commercial
+chemicals. It counts containers ready to deliver by batch, including
+containers whose batch is unknown. It records deliveries and tracks which
+batches and vessels supply material for filling.
 See [Container deployment](#container-deployment) to run both.
 
 The repository holds no procedures of its own apart from a demo.
@@ -2219,10 +2220,10 @@ before the command deletes anything, or German when there is no accepted
 import. The data set's own import carries that language. Registry and
 stock records are the same in either language.
 
-Every lab page except the admin shows a banner stating that all records
-are invented, with the seeding date. The sign-in page lists the accounts
-that can sign in and their shared password, `demo`. The demo contains
-these accounts:
+Every lab page except the admin shows a sidebar notice stating that all
+records are invented, with the seeding date. The sign-in page lists the
+accounts that can sign in and their shared password, `demo`. The demo
+contains these accounts:
 
 | User name | Name | Access |
 |---|---|---|
@@ -2271,7 +2272,7 @@ Before using a demo database for real records, set `ORGSYNDB_DEMO=false`
 in `orgsyndb.env` and run `docker compose up -d app` from `deploy/` to apply
 the setting. Then empty the database with the same `flush` command, or
 remove the `db` volume. Switching the flag off alone keeps the demo
-accounts with password `demo`, the banner and the sign-in note: both
+accounts with password `demo`, the sidebar notice and the sign-in note: both
 notices follow the database's demo mark, which seeding writes, rather than
 the flag.
 
@@ -2306,7 +2307,8 @@ Four figures head the page, above the stock bar:
 - **Aufgaben** (**Tasks**) shows the running and planned task counts and
   links to the task list.
 - **Offene Gefäße** (**Open vessels**) counts vessels of any substance with
-  material remaining, including flasks. It links to the vessel list.
+  material remaining, including flasks. It links to **Alle Gefäße**
+  (**All vessels**).
 
 **Nächste Synthesen** (**Next syntheses**) lists up to five articles with
 a forecast, smallest slack first, in the same order as planning's
@@ -2625,27 +2627,107 @@ directly from the lab registry.
 
 ### End-product inventory
 
-Use the inventory to see which end products are ready to deliver and how
-long their stock will last. In the sidebar's **Labor** (**Lab**) group,
-choose **Bestand** (**Inventory**), or open
+Use the inventory to find material, book movements and see which end
+products are ready to deliver or need replenishing. Choose **Bestand**
+(**Inventory**) in the sidebar's **Labor** (**Lab**) group, or open
 `/lab/inventory/end-products/`. `/lab/inventory/` redirects to the same
-list; `/lab/` opens the [lab overview](#lab-overview). You can read the
+list. `/lab/` opens the [lab overview](#lab-overview). You can read the
 inventory without signing in. Use the same account as for tasks to enter
 items, book stock changes or edit records.
 
-The inventory has four tabs.
+Use the five tabs to find stock or trace its source.
 
-- **Artikel** (**Items**), `/lab/inventory/end-products/`, shows the
-  stock of finished containers by article and size.
+- **Endprodukte** (**End products**), `/lab/inventory/end-products/`, shows
+  finished containers, material available for filling and delivery notes.
+- **Zwischenprodukte** (**Intermediates**), `/lab/inventory/intermediates/`,
+  groups made stock by substance for substances without an article.
+- **Handelschemikalien** (**Commercial chemicals**),
+  `/lab/inventory/chemicals/`, groups bought stock by substance for
+  substances without an article.
 - **Chargen** (**Batches**), `/lab/inventory/batches/`, shows where each
   batch came from and how much material remains.
-- **Gefäße** (**Vessels**), `/lab/inventory/vessels/`, shows where the
-  material is held and how much is in each vessel.
-- **Lieferungen** (**Deliveries**), `/lab/inventory/deliveries/`, lists
-  delivery notes.
+- **Alle Gefäße** (**All vessels**), `/lab/inventory/vessels/`, lists
+  individual vessels across all categories, with their amounts and
+  locations.
 
-**Bulk** is the material an item or article can draw on from open
-vessels of its substance, including flasks.
+A vessel is open while it contains material, even if it is still
+sealed. If the substance has an [article](#enter-items-and-find-stock),
+look for its open vessels in **Endprodukte**. Otherwise, look in
+**Zwischenprodukte** for made batches and **Handelschemikalien** for
+bought batches. Flasks follow the same rule. Giving a substance an
+article moves its open vessels to **Endprodukte**.
+
+On **Endprodukte**, use the links at the left of the toolbar to switch
+between three lists. Each link shows its total count, and the heading
+stays **Endprodukte** on all three.
+
+- **Gebinde** (**Containers**) counts items, one per article and
+  container size. Use it to find finished containers and check how long
+  they will last.
+- **Bulk**, `/lab/inventory/end-products/bulk/`, counts open vessels of
+  substances with an article. Bulk is the material you can draw from
+  those vessels to fill containers.
+- **Lieferungen** (**Deliveries**), `/lab/inventory/deliveries/`, counts
+  delivery notes. Use it to find a past delivery or book a new one.
+
+At window widths of 900 px and up, the inventory lists fit the window.
+Scroll inside the tables and details panes. Table headers stay in view.
+In narrower windows the page scrolls.
+
+#### Find intermediates and commercial chemicals
+
+Open **Zwischenprodukte** or **Handelschemikalien** to check how much of
+a substance is on hand, where to find it and which vessels to use.
+**Tabelle** (**Table**) shows one row per substance. Use the text
+search to find a substance by name, CAS number, batch or supplier. On
+**Zwischenprodukte** you can also search by task number.
+Use **Ort** (**Location**) on either list to find stored vessels at a
+particular location.
+
+The filters narrow both the vessels listed and the totals. **Menge**
+(**Amount**) adds the amounts separately for each unit (`mg`, `g`,
+`µmol` or `mmol`). **Gefäße** (**Vessels**) counts vessels and shows how
+many are flasks or how many are sealed, depending on the list. **Ort**
+shows the shared location or the first location with `+n` for the
+number of other locations. It uses **nicht hinterlegt** (**not
+recorded**) for stored vessels without a location and **im Kolben**
+(**in flask**) for material in flasks.
+
+On **Zwischenprodukte**, **Herkunft** (**Source**) shows up to two task
+numbers, `+n` for further tasks and **ohne Auftrag** (**no task**) for
+batches made without a task. **Alter** (**Age**) shows the range from
+the newest to the oldest dated batch. The range is highlighted when the
+oldest batch is at least a year old.
+Choose **Stoffklasse** (**Chemical class**) to include that class and
+its subclasses. Use **Nur Kolben** (**Flasks only**) for flask stock
+or **Älter als 1 J** (**Older than 1 y**) for batches at least a year old.
+**+gekauft** (**+bought**) marks substances that also have bought stock.
+
+On **Handelschemikalien**, **Gruppe** (**Group**) shows the inventory
+group. **Lieferanten** (**Suppliers**) shows the first supplier and
+`+n` for any others, with **unbekannt** (**unknown**) for a missing
+supplier. **Angebrochen** (**Opened**) shows the earliest opening date,
+or **versiegelt** (**sealed**) when all the listed vessels of the
+substance are sealed. Filter by **Gruppe** to include a group and its
+subgroups, by **Lieferant** (**Supplier**) to find a supplier's stock,
+or by **Nur versiegelt** (**Sealed only**) to find sealed vessels.
+**+hergestellt** (**+made**) marks substances that also have made stock.
+
+Choose **Details** and select a row to see the vessels included in its
+totals. In the desktop layout, the vessel table opens below the
+substance list. It shows each vessel's batch, amount, location, source,
+batch date and note. For bought stock it also shows **Angebrochen am**
+(**Opened on**). If the selection shows one vessel, you also see its
+five newest movements.
+
+Sign in to use **Entnahme** (**Withdraw**), **Umfüllen** (**Transfer**),
+**Korrigieren** (**Correct**) or **Bearbeiten** (**Edit**) beside a
+vessel. Each opens a dialog and updates the list when you save. To
+[record a batch](#record-a-batch), choose **Neue Charge** (**New batch**)
+on **Zwischenprodukte** or **Wareneingang** (**Goods receipt**) on
+**Handelschemikalien**. **Wareneingang** opens the new-batch form with
+**gekauft** (**bought**) selected. The buttons in **Details** also
+fill in the selected substance.
 
 #### Enter items and find stock
 
@@ -2726,13 +2808,12 @@ Its page offers **Enter article number** in place of **Book delivery**,
 and has no **Enter consumption** or **New batch** link.
 
 Enter items and past quarterly consumption by hand; there is no Excel
-import. The heading **Endprodukte** (**End products**) shows the number
-of items in the whole inventory.
+import.
 
-Use the two-part switch above the list to choose **Tabelle** (**Table**)
-to compare items or **Details** to find where the selected item is stored
-and read its consumption figures. The details pane opens beside the
-table or below it in a narrow window.
+Use the switch at the right end of the **Gebinde** toolbar. Choose
+**Tabelle** (**Table**) to compare items or **Details** to find where
+the selected item is stored and read its consumption figures. The
+details pane opens beside the table or below it in a narrow window.
 
 Both views start with **Artikelnr.** (**Article no.**), **Name**,
 **Kategorie** (**Category**), **Gebinde** (**Container**) and
@@ -2828,8 +2909,8 @@ many of its three filters are in force. Choices apply as soon as they
 change, and the controls show the filters in force. Consumption,
 coverage and bulk have no filter.
 
-The line above the table shows how many items match out of the whole
-inventory and names the order in force. While any filter is in force,
+Beside the **Endprodukte** heading, read how many items match out of
+the whole inventory and how the list is sorted. While any filter is in force,
 **Zurücksetzen** (**Reset**) at the end of that line clears every filter
 and keeps your order.
 
@@ -2864,17 +2945,18 @@ and **Abgegeben**. Each column ranks its positive values across the whole
 inventory into fifths, from least to most consumed; equal values share a
 step. The scale compares all categories and container sizes together.
 Zero and missing values stay uncoloured, and filtering does not change
-the colours. Above the table, **Verbrauch einfärben** (**Colour
-consumption**) shows the scale from **wenig** (**little**) to **viel**
-(**much**). It is checked by default; uncheck it to hide the consumption
-colours.
+the colours. Open **Ansicht** (**View**) beside **Spalten** to find
+**Verbrauch einfärben** (**Colour consumption**) and its scale from
+**wenig** (**little**) to **viel** (**much**). It is checked by default.
+Uncheck it to hide the consumption colours.
 
-To fit more rows on screen, use **Zeilenhöhe** (**Row height**) to choose
-**Kompakt** (**Compact**), the default, or **Sehr kompakt** (**Very
-compact**). Your browser uses local storage to remember column choices,
-row height and consumption colours across pages. It remembers the view
-in the `item-list-view` cookie, separately from the address. **Tabelle**
-is the default. Bookmark the address to save your filters and sort order.
+To fit more rows on screen, use **Zeilenhöhe** (**Row height**) in
+**Ansicht**. Choose **Kompakt** (**Compact**), the default, or
+**Sehr kompakt** (**Very compact**). Your browser uses local storage to
+remember column choices, row height and consumption colours across
+pages. It remembers the view in the `item-list-view` cookie, separately
+from the address. **Tabelle** is the default. Bookmark the address to
+save your filters and sort order.
 
 The **Bestandsstatus**, **Weitere Filter** and **Spalten** menus open beside
 their buttons. Without JavaScript, these menus open in the centre of the
@@ -2906,16 +2988,17 @@ or a batch of another substance.
 To book a request for several articles, sign in and tick their rows in
 the item list's **Artikelnr.** (**Article no.**) column. Only items with an
 article number have a check box. Choose **Lieferschein mit Auswahl**
-(**Delivery note from selection**) above the table. The new note form
+(**Delivery note from selection**) beside the heading. The new note form
 opens with the selected items in its first rows, in the list's order
 from top to bottom. Select the batches and enter the container counts.
 If you select more than ten items, only the first ten appear. Book a
 second note for the rest.
 
 For one item, choose **Book delivery** on its item page to fill the
-note's first row. To start an empty note, choose **New delivery note** on
-the deliveries list. Each item choice shows the article number,
-container size, name and location, for example
+note's first row. To start an empty note, open **Lieferungen** under
+**Endprodukte** and choose **Neuer Lieferschein** (**New delivery
+note**). Each item choice shows the article number, container size,
+name and location, for example
 `CH-0012 · 100 mg · (E)-Zimtsäure · Fach 2 / Box 7`.
 An empty compartment or box is left out of the label; an item with neither
 shows no location.
@@ -2940,12 +3023,17 @@ more containers than its batch and the item's unknown stock hold
 together, the application refuses the whole note and changes nothing.
 A historical note records consumption without changing stock.
 
-The deliveries list shows newest notes first and lets you filter by
-text or item. Both the list and the note page show the batch on each
-line. On the note page, each batch links to its own page. Each line also
+In **Lieferungen**, find the newest notes first. Filter by item or
+search by number or recipient. **Tabelle** (**Table**) shows each
+note's lines, with batches and container counts. In **Details**, select
+a row to read its lines and follow **Lieferschein öffnen** (**Open
+delivery note**).
+
+On the note page, each batch links to its own page. Each line also
 shows the item's current **Fach** and **Box**, including on historical
 notes and reprints. Print the note as a pick list when fetching the
-containers.
+containers. Use **Endprodukte** on the note page to return to
+**Lieferungen**.
 
 On the item page, **Gebinde nach Charge** (**Containers by batch**)
 shows the count for each batch with stock and links to its page. It
@@ -3111,9 +3199,10 @@ opening amount, unit, location and note.
 
 #### Find and move material in vessels
 
-The vessel list shows open vessels of every substance, including
-substances without an article. It shows the batch, source, amount,
-location and batch date. To narrow the list, choose an **Art** (**Kind**).
+**Alle Gefäße** (**All vessels**) shows open vessels of every substance,
+including substances without an article. It shows the batch, source,
+amount, location and batch date. To narrow the list, choose an
+**Art** (**Kind**).
 
 - **Kolben** (**Flask**) holds the yield recorded from a task step
   without a storage location.
@@ -3121,8 +3210,9 @@ location and batch date. To narrow the list, choose an **Art** (**Kind**).
   has an article.
 - **Zwischenprodukt** (**Intermediate**) is a stored vessel of a made
   batch whose substance has no article.
-- **Reagenz** (**Reagent**) is a stored vessel of a bought batch whose
-  substance has no article.
+- **Handelschemikalie** (**Commercial chemical**) is a stored vessel of
+  a bought batch whose substance has no article
+  (`/lab/inventory/vessels/?kind=commercial`).
 
 A vessel at zero is used up. Tick **Auch aufgebrauchte** (**Used-up
 vessels too**) to include those vessels. Open a vessel to see its batch,
@@ -3132,6 +3222,19 @@ Reversals identify the movement they reverse. Use **Bearbeiten**
 (**Edit**) to change the location or note. After weighing, use
 **Korrigieren** (**Correct**) to record the amount and give a note.
 Each vessel keeps its batch and unit and stays a flask or a stored vessel.
+
+For vessels of bought batches, read **Angebrochen** (**Opened**) in
+**Alle Gefäße** or **Zustand** (**State**) on the vessel page to see
+the opening date or **versiegelt** (**sealed**). A vessel you enter for
+a bought batch starts sealed. The first filling, withdrawal or transfer
+out marks it opened on the movement's date. If a transfer creates the
+vessel, it starts with that transfer's date as its opening date. The
+opening date is retained through corrections and reversals.
+
+To enter or clear a bought vessel's opening date, choose **Bearbeiten**
+and change **Angebrochen am** (**Opened on**). Use today or an earlier
+date, or clear the date to mark the vessel sealed. Vessels of made
+batches have no opening date.
 
 To take material into a synthesis, choose **Entnahme** (**Withdraw**)
 on an open vessel at `/lab/inventory/vessels/<id>/withdraw/`. Select
@@ -3152,6 +3255,25 @@ the transfer. If it was wrong, use a transfer back where allowed or
 record a correction.
 
 #### Fill containers
+
+To find a vessel for filling, choose **Bulk** under **Endprodukte**.
+The list includes every open vessel of a substance with an article,
+including flasks and bought stock. In **Tabelle** (**Table**), each
+row identifies the article, vessel and batch and shows the source,
+amount, location and batch date. A flask shows **Kolben** (**Flask**)
+under **Ort** (**Location**).
+Search by name, article number or batch, or filter by **Ort**,
+**Herkunft** (**Source**) or **Nur Kolben** (**Flasks only**).
+
+**Reicht für** (**Fills**) shows how many whole containers the vessel
+can fill at each size, for example `25 × 100 mg oder 2 × 1 g`. Read
+the sizes as alternatives. **Molmasse fehlt** (**Molar mass missing**)
+beside a size means the application needs the molar mass to calculate
+that count. When you sign in, choose a count and size to open
+**Abfüllen** (**Fill**) with that vessel selected. Use **Details** to
+see the selected vessel's batch, source, amount, location, filling
+options and five newest movements. Choose **Gefäßseite öffnen**
+(**Open vessel page**) to read its full ledger.
 
 On an item page, choose **Abfüllen** (**Fill**) and select an open
 vessel of the same substance. The form shows the vessels' kind,
