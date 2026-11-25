@@ -1,0 +1,5 @@
+{% load i18n %}<fieldset class="view-switch">
+<legend class="visually-hidden">{% translate "View" context "item list" %}</legend>
+<label><input type="radio" id="view-table" name="view" value="table" class="visually-hidden"{% if view == "table" %} checked{% endif %}><span>{% translate "Table" context "item list" %}</span></label>
+<label><input type="radio" id="view-details" name="view" value="details" class="visually-hidden"{% if view == "details" %} checked{% endif %}><span>{% translate "Details" %}</span></label>
+</fieldset>
