@@ -44,14 +44,22 @@ from inventory.forms import (ROWS, BatchEditForm, BatchForm,
 from inventory.history import history_entries
 from inventory.models import (FACTOR, LEVEL_ORDER, Article, Batch,
                               DeliveryLine, DeliveryNote, Item, Level,
-                              Movement, Source, Vessel, VesselKind,
-                              VesselMovement, plain)
+                              Movement, Source, StockCategory, Vessel,
+                              VesselKind, VesselMovement, plain)
 from inventory.statistics import Statistics, statistics
+from inventory.summaries import (AgeSummary, LocationSummary, SourceSummary,
+                                 SupplierSummary, age_summary,
+                                 amounts_by_unit, earliest_opened, is_old,
+                                 location_summary, natural, source_summary,
+                                 supplier_summary)
 from journal.entries import entry_for
 from planning import plan
 from tasks.models import Task, TaskStep
+from vocabulary.models import ChemicalClass, Group, Term, descendants, tree_order
 
 LIST = "/lab/inventory/end-products/"
+INTERMEDIATES = "/lab/inventory/intermediates/"
+CHEMICALS = "/lab/inventory/chemicals/"
 BATCHES = "/lab/inventory/batches/"
 VESSELS = "/lab/inventory/vessels/"
 DELIVERIES = "/lab/inventory/deliveries/"
@@ -64,6 +72,8 @@ def tabs(current: str) -> list[dict[str, Any]]:
     ``LIST``."""
     return [{"url": url, "label": label, "current": url == current}
             for url, label in ((LIST, _("End products")),
+                               (INTERMEDIATES, _("Intermediates")),
+                               (CHEMICALS, _("Commercial chemicals")),
                                (BATCHES, _("Batches")),
                                (VESSELS, _("All vessels")))]
 
@@ -220,6 +230,8 @@ TIES = ("number", "container")
 VIEW_COOKIE = "item-list-view"
 BULK_COOKIE = "bulk-list-view"
 NOTE_COOKIE = "delivery-list-view"
+INTERMEDIATE_COOKIE = "intermediate-list-view"
+CHEMICAL_COOKIE = "chemical-list-view"
 
 
 @dataclass(frozen=True)
@@ -782,6 +794,344 @@ def bulk_detail(request: HttpRequest, pk: int) -> HttpResponse:
     })
 
 
+def filed_under(model: type[Term], key: str) -> set[Any]:
+    """Return the IDs of the term of MODEL whose key is KEY and of all
+    terms filed below it; empty when no term has KEY."""
+    term = model.objects.filter(key=key).first()
+    return set() if term is None else {
+        term.pk, *(below.pk for below in descendants(term))}
+
+
+def category_vessels(category: str) -> Any:
+    """Return the open vessels of the stock category CATEGORY
+    (``StockCategory.INTERMEDIATES`` or ``StockCategory.COMMERCIAL``)
+    with the related records their list and details need."""
+    source = (Source.MADE if category == StockCategory.INTERMEDIATES
+              else Source.BOUGHT)
+    vessels = Vessel.objects.filter(
+        amount__gt=0,
+        batch__substance__article__isnull=True,
+        batch__source=source,
+    )
+    if category == StockCategory.INTERMEDIATES:
+        return vessels.select_related(
+            "batch__substance__group",
+            "batch__task_step__task",
+            "batch__task_step__entry__procedure",
+            "batch__journal_entry__notebook",
+        ).prefetch_related("batch__substance__chemical_classes")
+    return vessels.select_related("batch__substance__group")
+
+
+def vessel_detail_order(vessel: Vessel) -> tuple[Any, ...]:
+    """Order vessels in the details table: by batch date oldest first,
+    undated vessels last, then by ID."""
+    return (vessel.batch.date is None, vessel.batch.date or date.min,
+            vessel.pk)
+
+
+@dataclass(frozen=True)
+class CategoryFilters:
+    """The GET filter parameters of an intermediate or commercial
+    chemical list."""
+
+    q: str = ""
+    location: str = ""
+    chemical_class: str = ""
+    flask: bool = False
+    old: bool = False
+    group: str = ""
+    supplier: str = ""
+    sealed: bool = False
+
+    @classmethod
+    def from_query(cls, query: Any, category: str) -> "CategoryFilters":
+        """Read the parameters applicable to CATEGORY from QUERY."""
+        q = query.get("q", "").strip()
+        location = query.get("location", "").strip()
+        if category == StockCategory.INTERMEDIATES:
+            return cls(
+                q=q,
+                location=location,
+                chemical_class=query.get("class", "").strip(),
+                flask=query.get("flask") == "1",
+                old=query.get("old") == "1",
+            )
+        return cls(
+            q=q,
+            location=location,
+            group=query.get("group", "").strip(),
+            supplier=query.get("supplier", "").strip(),
+            sealed=query.get("sealed") == "1",
+        )
+
+    def query_string(self, category: str) -> str:
+        """Return the active filter parameters encoded with a leading
+        ``?``, or empty when no filter is set."""
+        pairs: list[tuple[str, str]] = []
+        if self.q:
+            pairs.append(("q", self.q))
+        if self.location:
+            pairs.append(("location", self.location))
+        if category == StockCategory.INTERMEDIATES:
+            if self.chemical_class:
+                pairs.append(("class", self.chemical_class))
+            if self.flask:
+                pairs.append(("flask", "1"))
+            if self.old:
+                pairs.append(("old", "1"))
+        else:
+            if self.group:
+                pairs.append(("group", self.group))
+            if self.supplier:
+                pairs.append(("supplier", self.supplier))
+            if self.sealed:
+                pairs.append(("sealed", "1"))
+        return "?" + urlencode(pairs) if pairs else ""
+
+
+def vessel_searched(vessel: Vessel, include_task: bool) -> str:
+    """Return the casefolded text searched by ``q`` for VESSEL."""
+    batch = vessel.batch
+    substance = batch.substance
+    parts = [
+        substance.key, substance.name, substance.name_de,
+        substance.short_name, substance.cas,
+        batch.number, batch.supplier_batch, batch.supplier,
+    ]
+    if include_task and batch.task_step_id is not None:
+        parts.append(batch.task_step.task.number)
+    return "\n".join(parts).casefold()
+
+
+def filter_category_vessels(vessels: list[Vessel], filters: CategoryFilters,
+                            category: str, today: date) -> list[Vessel]:
+    """Return the vessels of VESSELS admitted by FILTERS for CATEGORY as
+    of TODAY."""
+    is_int = category == StockCategory.INTERMEDIATES
+    words = filters.q.casefold()
+    admitted_classes = (filed_under(ChemicalClass, filters.chemical_class)
+                        if is_int and filters.chemical_class else None)
+    admitted_groups = (filed_under(Group, filters.group)
+                       if not is_int and filters.group else None)
+    result: list[Vessel] = []
+    for vessel in vessels:
+        batch = vessel.batch
+        substance = batch.substance
+        if words and words not in vessel_searched(vessel, is_int):
+            continue
+        if filters.location and (vessel.flask
+                                 or vessel.location != filters.location):
+            continue
+        if is_int:
+            if admitted_classes is not None and not any(
+                    term.pk in admitted_classes
+                    for term in substance.chemical_classes.all()):
+                continue
+            if filters.flask and not vessel.flask:
+                continue
+            if filters.old and (batch.date is None
+                                or not is_old(batch.date, today)):
+                continue
+        else:
+            if admitted_groups is not None \
+                    and substance.group_id not in admitted_groups:
+                continue
+            if filters.supplier and batch.supplier != filters.supplier:
+                continue
+            if filters.sealed and vessel.opened_on is not None:
+                continue
+        result.append(vessel)
+    return result
+
+
+@dataclass(frozen=True)
+class CategoryRow:
+    """A substance row in the intermediate or commercial chemical list,
+    summarising its admitted vessels of that category."""
+
+    substance: Any
+    vessels: list[Vessel]
+    amounts: list[tuple[Any, str]]
+    vessel_count: int
+    flask_count: int
+    sealed_count: int
+    locations: LocationSummary
+    sources: SourceSummary | None
+    age: AgeSummary | None
+    suppliers: SupplierSummary | None
+    opened_on: date | None
+    classes: list[str]
+    in_other_category: bool
+
+
+def category_row(substance: Any, vessels: list[Vessel], category: str,
+                 today: date, in_other: bool) -> CategoryRow:
+    """Build the ``CategoryRow`` of SUBSTANCE from its admitted VESSELS
+    in CATEGORY as of TODAY."""
+    ordered = sorted(vessels, key=vessel_detail_order)
+    is_int = category == StockCategory.INTERMEDIATES
+    return CategoryRow(
+        substance=substance,
+        vessels=ordered,
+        amounts=amounts_by_unit(ordered),
+        vessel_count=len(ordered),
+        flask_count=sum(1 for vessel in ordered if vessel.flask),
+        sealed_count=sum(1 for vessel in ordered if vessel.opened_on is None),
+        locations=location_summary(ordered, show_flask=is_int),
+        sources=source_summary(ordered) if is_int else None,
+        age=age_summary(ordered, today) if is_int else None,
+        suppliers=None if is_int else supplier_summary(ordered),
+        opened_on=None if is_int else earliest_opened(ordered),
+        classes=sorted(
+            (term.shown_label for term in substance.chemical_classes.all()),
+            key=str.casefold) if is_int else [],
+        in_other_category=in_other,
+    )
+
+
+def category_rows(vessels: list[Vessel], category: str, today: date,
+                  other_substances: set[int]) -> list[CategoryRow]:
+    """Group VESSELS by substance and return their ``CategoryRow``s
+    ordered by substance name regardless of case."""
+    grouped: dict[int, tuple[Any, list[Vessel]]] = {}
+    for vessel in vessels:
+        substance = vessel.batch.substance
+        entry = grouped.setdefault(substance.pk, (substance, []))
+        entry[1].append(vessel)
+    rows = [
+        category_row(substance, group, category, today,
+                     substance.pk in other_substances)
+        for substance, group in grouped.values()
+    ]
+    rows.sort(key=lambda row: (row.substance.shown_name.casefold(),
+                               row.substance.key))
+    return rows
+
+
+def category_list_response(request: HttpRequest, category: str
+                           ) -> HttpResponse:
+    """Render the intermediate or commercial chemical list for CATEGORY."""
+    is_int = category == StockCategory.INTERMEDIATES
+    base_url = INTERMEDIATES if is_int else CHEMICALS
+    cookie = INTERMEDIATE_COOKIE if is_int else CHEMICAL_COOKIE
+    today = timezone.localdate()
+    filters = CategoryFilters.from_query(request.GET, category)
+    all_vessels = list(category_vessels(category))
+    admitted = filter_category_vessels(all_vessels, filters, category, today)
+    other_source = Source.BOUGHT if is_int else Source.MADE
+    other_substances = set(Vessel.objects.filter(
+        amount__gt=0,
+        batch__substance__article__isnull=True,
+        batch__source=other_source,
+    ).values_list("batch__substance_id", flat=True))
+    rows = category_rows(admitted, category, today, other_substances)
+
+    offered_locations = {vessel.location for vessel in all_vessels
+                         if not vessel.flask and vessel.location}
+    if filters.location:
+        offered_locations.add(filters.location)
+    offered_suppliers: list[str] = []
+    if not is_int:
+        suppliers_set = {vessel.batch.supplier for vessel in all_vessels
+                         if vessel.batch.supplier}
+        if filters.supplier:
+            suppliers_set.add(filters.supplier)
+        offered_suppliers = sorted(suppliers_set, key=str.casefold)
+
+    wanted = request.GET.get("selected", "")
+    chosen = next((row for row in rows if row.substance.key == wanted),
+                  rows[0] if rows else None)
+    selected = chosen.substance.key if chosen else ""
+    detail_vessels = chosen.vessels if chosen else []
+    single_vessel = detail_vessels[0] if len(detail_vessels) == 1 else None
+    return render(request, "inventory/category_list.html", {
+        "category": category,
+        "is_intermediate": is_int,
+        "base_url": base_url,
+        "cookie": cookie,
+        "heading": _("Intermediates") if is_int else _("Commercial chemicals"),
+        "rows": rows,
+        "vessel_total": sum(row.vessel_count for row in rows),
+        "chosen": chosen,
+        "detail_substance": chosen.substance if chosen else None,
+        "detail_vessels": detail_vessels,
+        "single_vessel": single_vessel,
+        "ledger": vessel_ledger(single_vessel, 5) if single_vessel else [],
+        "selected": selected,
+        "view": list_view(request, cookie),
+        "filters": filters,
+        "filter_query": filters.query_string(category),
+        "locations": sorted(offered_locations, key=natural),
+        "suppliers": offered_suppliers,
+        "classes": (tree_order(ChemicalClass.objects.select_related("parent"))
+                    if is_int else []),
+        "groups": ([] if is_int
+                   else tree_order(Group.objects.select_related("parent"))),
+        "tabs": tabs(base_url),
+    })
+
+
+def category_detail_response(request: HttpRequest, category: str, key: str
+                             ) -> HttpResponse:
+    """Answer an htmx request with the details pane of substance KEY in
+    CATEGORY under the request's filters, or redirect non-htmx requests
+    to the list. Answer 404 when KEY has no open vessel of CATEGORY."""
+    is_int = category == StockCategory.INTERMEDIATES
+    base_url = INTERMEDIATES if is_int else CHEMICALS
+    all_for_sub = list(category_vessels(category).filter(
+        batch__substance__key=key))
+    if not all_for_sub:
+        raise Http404
+    if request.headers.get("HX-Request") != "true":
+        params = request.GET.copy()
+        params["selected"] = key
+        return redirect(f"{base_url}?{params.urlencode()}")
+    today = timezone.localdate()
+    filters = CategoryFilters.from_query(request.GET, category)
+    admitted = sorted(
+        filter_category_vessels(all_for_sub, filters, category, today),
+        key=vessel_detail_order)
+    substance = all_for_sub[0].batch.substance
+    single_vessel = admitted[0] if len(admitted) == 1 else None
+    return render(request, "inventory/category_list.html#detail", {
+        "category": category,
+        "is_intermediate": is_int,
+        "detail_substance": substance,
+        "detail_vessels": admitted,
+        "single_vessel": single_vessel,
+        "ledger": vessel_ledger(single_vessel, 5) if single_vessel else [],
+    })
+
+
+@vary_on_cookie
+def intermediate_list(request: HttpRequest) -> HttpResponse:
+    """List the substances with an open intermediate vessel, one row per
+    substance, with filters, summaries and the details view."""
+    return category_list_response(request, StockCategory.INTERMEDIATES)
+
+
+@vary_on_headers("HX-Request")
+def intermediate_detail(request: HttpRequest, key: str) -> HttpResponse:
+    """Answer an htmx request with the details pane of the intermediate
+    substance KEY under the query's filters, or redirect to the list."""
+    return category_detail_response(request, StockCategory.INTERMEDIATES, key)
+
+
+@vary_on_cookie
+def chemical_list(request: HttpRequest) -> HttpResponse:
+    """List the substances with an open commercial chemical vessel, one
+    row per substance, with filters, summaries and the details view."""
+    return category_list_response(request, StockCategory.COMMERCIAL)
+
+
+@vary_on_headers("HX-Request")
+def chemical_detail(request: HttpRequest, key: str) -> HttpResponse:
+    """Answer an htmx request with the details pane of the commercial
+    chemical KEY under the query's filters, or redirect to the list."""
+    return category_detail_response(request, StockCategory.COMMERCIAL, key)
+
+
 @dataclass(frozen=True)
 class LedgerRow:
     """A movement as a ledger shows it: whether it is reversed, and
@@ -1131,18 +1481,18 @@ def form_page(request: HttpRequest, form: BaseForm,
 
 
 def saved(request: HttpRequest, text: str, target: str,
-          item: Item | None = None) -> HttpResponse:
+          record: Any = None) -> HttpResponse:
     """Leave the message TEXT and redirect to TARGET.
 
-    When ITEM is given and REQUEST is for a dialog (see ``for_dialog``),
+    When RECORD is given and REQUEST is for a dialog (see ``for_dialog``),
     the answer is instead ``204 No Content`` with an ``HX-Trigger``
-    header that fires the event ``lab-saved`` with the ID of ITEM as its
-    ``item``.
+    header that fires the event ``lab-saved`` naming RECORD's ID.
     """
     messages.success(request, text)
-    if item is not None and for_dialog(request):
+    if record is not None and for_dialog(request):
+        key = "vessel" if isinstance(record, Vessel) else "item"
         return HttpResponse(status=204, headers={
-            "HX-Trigger": json.dumps({"lab-saved": {"item": item.pk}})})
+            "HX-Trigger": json.dumps({"lab-saved": {key: record.pk}})})
     return redirect(target)
 
 
@@ -1189,15 +1539,6 @@ def in_use(field: str) -> list[str]:
     once, in natural order."""
     return sorted(set(Item.objects.exclude(**{field: ""}).values_list(
         field, flat=True)), key=natural)
-
-
-def natural(text: str) -> tuple[Any, ...]:
-    """The order of TEXT among locations: its runs of the digits 0 to 9
-    by their value, so that ``2`` comes before ``10``, the rest, digits
-    of other scripts included, as text regardless of case."""
-    return tuple(int(part) if odd else part.casefold()
-                 for odd, part in zip(itertools.cycle((False, True)),
-                                      re.split(r"([0-9]+)", text)))
 
 
 @login_required
@@ -1507,8 +1848,12 @@ def batch_new(request: HttpRequest) -> HttpResponse:
         return saved(request, _("Batch %(batch)s recorded.")
                      % {"batch": batch}, batch_url(batch))
 
-    initial = step_initial(step) if step is not None else {
-        "substance": request.GET.get("substance", "")}
+    if step is not None:
+        initial = step_initial(step)
+    else:
+        initial = {"substance": request.GET.get("substance", "")}
+        if request.GET.get("source") == Source.BOUGHT:
+            initial["source"] = Source.BOUGHT
     title = _("New batch") if step is None else _(
         "New batch of %(task)s, %(step)s") % {
             "task": step.task.number, "step": step.label}
@@ -1561,7 +1906,7 @@ def vessel_new(request: HttpRequest, pk: int) -> HttpResponse:
          "cancel": batch_url(batch), "locations": locations()})
 
 
-@login_required
+@item_form
 def vessel_withdraw(request: HttpRequest, pk: int) -> HttpResponse:
     """Book a withdrawal from the vessel PK into a task step, chosen in
     the form or filled in from ``step`` in the query; answer 404 for an
@@ -1573,13 +1918,14 @@ def vessel_withdraw(request: HttpRequest, pk: int) -> HttpResponse:
         bookings.withdraw(request.user, vessel, task_step=data["step"],
                           amount=data["amount"], date=data["date"])
         return saved(request, _("Withdrawal from %(vessel)s booked.")
-                     % {"vessel": vessel}, vessel_url(vessel))
+                     % {"vessel": vessel}, vessel_url(vessel), vessel)
 
     return form_page(
         request, WithdrawalForm(request.POST or None, initial={
             "step": request.GET.get("step", "")}), book,
         {"title": _("Withdraw from %(vessel)s") % {"vessel": vessel},
-         "cancel": vessel_url(vessel), "unit": vessel.unit_label})
+         "cancel": vessel_url(vessel), "unit": vessel.unit_label},
+        dialog=True)
 
 
 @login_required
@@ -1601,7 +1947,7 @@ def vessel_movement_reverse(request: HttpRequest, pk: int
                  % {"vessel": vessel}, vessel_url(vessel))
 
 
-@login_required
+@item_form
 def vessel_transfer(request: HttpRequest, pk: int) -> HttpResponse:
     """Transfer an amount from the vessel PK into another stored vessel
     of its batch or into a new one; answer 404 for an unknown vessel."""
@@ -1611,16 +1957,16 @@ def vessel_transfer(request: HttpRequest, pk: int) -> HttpResponse:
     def book(data: dict[str, Any]) -> HttpResponse:
         bookings.transfer(request.user, vessel, **data)
         return saved(request, _("Transfer from %(vessel)s booked.")
-                     % {"vessel": vessel}, vessel_url(vessel))
+                     % {"vessel": vessel}, vessel_url(vessel), vessel)
 
     return form_page(
         request, TransferForm(request.POST or None, source=vessel), book,
         {"title": _("Transfer from %(vessel)s") % {"vessel": vessel},
          "cancel": vessel_url(vessel), "unit": vessel.unit_label,
-         "locations": locations()})
+         "locations": locations()}, dialog=True)
 
 
-@login_required
+@item_form
 def vessel_edit(request: HttpRequest, pk: int) -> HttpResponse:
     """Change the location and note of the vessel PK; answer 404 for an
     unknown vessel."""
@@ -1631,16 +1977,16 @@ def vessel_edit(request: HttpRequest, pk: int) -> HttpResponse:
         form.instance._history_user = request.user
         form.save()
         return saved(request, _("Vessel %(vessel)s saved.")
-                     % {"vessel": vessel}, vessel_url(vessel))
+                     % {"vessel": vessel}, vessel_url(vessel), vessel)
 
     form = VesselEditForm(request.POST or None, instance=vessel)
     return form_page(request, form, book,
                      {"title": _("Edit %(item)s") % {"item": vessel},
                       "cancel": vessel_url(vessel),
-                      "locations": locations()})
+                      "locations": locations()}, dialog=True)
 
 
-@login_required
+@item_form
 def vessel_correct(request: HttpRequest, pk: int) -> HttpResponse:
     """Set the amount of the vessel PK after weighing; answer 404 for an
     unknown vessel."""
@@ -1650,11 +1996,12 @@ def vessel_correct(request: HttpRequest, pk: int) -> HttpResponse:
     def book(data: dict[str, Any]) -> HttpResponse:
         bookings.correct_vessel(request.user, vessel, **data)
         return saved(request, _("Amount of %(vessel)s corrected.")
-                     % {"vessel": vessel}, vessel_url(vessel))
+                     % {"vessel": vessel}, vessel_url(vessel), vessel)
 
     return form_page(
         request, VesselCorrectionForm(request.POST or None, initial={
             "amount": vessel.shown_amount}), book,
         {"title": _("Correct the amount of %(vessel)s") % {
             "vessel": vessel},
-         "cancel": vessel_url(vessel), "unit": vessel.unit_label})
+         "cancel": vessel_url(vessel), "unit": vessel.unit_label},
+        dialog=True)

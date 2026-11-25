@@ -909,8 +909,8 @@ msgstr "Endprodukt"
 msgid "Intermediate"
 msgstr "Zwischenprodukt"
 
-msgid "Reagent"
-msgstr "Reagenz"
+msgid "Commercial chemical"
+msgstr "Handelschemikalie"
 
 msgid "vessel"
 msgstr "Gefäß"
@@ -1132,3 +1132,83 @@ msgstr "Lieferschein öffnen"
 
 msgid "No delivery note is chosen."
 msgstr "Kein Lieferschein ist gewählt."
+
+msgid "Intermediates"
+msgstr "Zwischenprodukte"
+
+msgid "Commercial chemicals"
+msgstr "Handelschemikalien"
+
+msgid "Goods receipt"
+msgstr "Wareneingang"
+
+#, python-format
+msgid "%(count)s substance"
+msgid_plural "%(count)s substances"
+msgstr[0] "%(count)s Substanz"
+msgstr[1] "%(count)s Substanzen"
+
+msgid "Name, batch, task"
+msgstr "Name, Charge, Auftrag"
+
+msgid "Name, CAS, supplier, batch"
+msgstr "Name, CAS, Lieferant, Charge"
+
+msgid "Chemical class"
+msgstr "Stoffklasse"
+
+msgid "Group"
+msgstr "Gruppe"
+
+msgid "Older than 1 y"
+msgstr "Älter als 1 J"
+
+msgid "Sealed only"
+msgstr "Nur versiegelt"
+
+msgid "Age"
+msgstr "Alter"
+
+msgid "Suppliers"
+msgstr "Lieferanten"
+
+#, python-format
+msgid "%(count)s in flask"
+msgstr "%(count)s Kolben"
+
+#, python-format
+msgid "%(count)s sealed"
+msgstr "%(count)s versiegelt"
+
+msgid "in flask"
+msgstr "im Kolben"
+
+msgid "no task"
+msgstr "ohne Auftrag"
+
+msgid "today"
+msgstr "heute"
+
+#, python-format
+msgid "%(count)s day"
+msgid_plural "%(count)s days"
+msgstr[0] "%(count)s Tag"
+msgstr[1] "%(count)s Tage"
+
+#, python-format
+msgid "%(months)s mo."
+msgstr "%(months)s Mon."
+
+#, python-format
+msgid "%(years)s y"
+msgstr "%(years)s J"
+
+#, python-format
+msgid "%(years)s y %(months)s mo."
+msgstr "%(years)s J %(months)s Mon."
+
+msgid "No vessels"
+msgstr "Keine Gefäße"
+
+msgid "No substance is chosen."
+msgstr "Keine Substanz gewählt."
