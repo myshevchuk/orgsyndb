@@ -167,7 +167,7 @@ class VesselKindTests(InventoryCase):
     def test_kinds_of_vessels(self) -> None:
         """Scenario: Kinds of vessels."""
         self.assertEqual(self.kinds(), ["flask", "end-product",
-                                        "intermediate", "reagent"])
+                                        "intermediate", "commercial"])
 
     def test_the_labels(self) -> None:
         make_item(self.kl, "CH-0012")
@@ -175,18 +175,20 @@ class VesselKindTests(InventoryCase):
         flask = make_vessel(self.kl, made, flask=True)
         stored = make_vessel(self.kl, made)
         intermediate = make_vessel(self.kl, article="acetophenone")
-        reagent = make_vessel(self.kl, article="acetophenone",
-                              source="bought")
+        commercial = make_vessel(self.kl, article="acetophenone",
+                                 source="bought")
         with translation.override("de"):
             self.assertEqual(
                 [v.kind_label for v in (flask, stored, intermediate,
-                                        reagent)],
-                ["Kolben", "Endprodukt", "Zwischenprodukt", "Reagenz"])
+                                        commercial)],
+                ["Kolben", "Endprodukt", "Zwischenprodukt",
+                 "Handelschemikalie"])
         with translation.override("en"):
             self.assertEqual(
                 [str(v.kind_label) for v in (flask, stored, intermediate,
-                                             reagent)],
-                ["Flask", "End product", "Intermediate", "Reagent"])
+                                             commercial)],
+                ["Flask", "End product", "Intermediate",
+                 "Commercial chemical"])
 
     def test_a_flask_of_a_substance_without_an_article_is_a_flask(
             self) -> None:

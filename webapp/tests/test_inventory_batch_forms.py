@@ -58,6 +58,14 @@ class NewBatchFormTests(BatchFormCase):
         root = page(self.client.get(f"{NEW_BATCH}?substance=cinnamic-acid"))
         self.assertEqual(field_value(root, "substance"), "cinnamic-acid")
 
+    def test_goods_receipt(self) -> None:
+        """Scenario: Goods receipt."""
+        make_substance("benzaldehyde", "Benzaldehyde")
+        root = page(self.client.get(
+            f"{NEW_BATCH}?substance=benzaldehyde&source=bought"))
+        self.assertEqual(field_value(root, "substance"), "benzaldehyde")
+        self.assertEqual(field_value(root, "source"), "bought")
+
     def test_the_source_is_made_by_default(self) -> None:
         root = page(self.client.get(NEW_BATCH))
         self.assertEqual(field_value(root, "source"), "made")

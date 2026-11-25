@@ -799,7 +799,7 @@ class InventoryTests(SeededCase):
     def test_every_kind_of_vessel_appears(self) -> None:
         from inventory.models import Vessel
         kinds = {vessel.kind for vessel in Vessel.objects.all()}
-        self.assertLessEqual({"end-product", "intermediate", "reagent"},
+        self.assertLessEqual({"end-product", "intermediate", "commercial"},
                              kinds)
 
     def test_notes(self) -> None:
