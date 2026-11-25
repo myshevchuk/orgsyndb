@@ -24,4 +24,4 @@
 
 - [ ] 4.1 Screenshots of both lists in both views at 1440 × 900,
   compared with the approved mockups
-- [ ] 4.2 Inventory, back-link, shell and script tests, then CI
+- [x] 4.2 Inventory, back-link, shell and script tests, then CI
