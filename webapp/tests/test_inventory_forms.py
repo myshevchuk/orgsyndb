@@ -896,6 +896,27 @@ class FillFormTests(FormCase):
                                              field: value})), field)
         self.assertEqual(snapshot(), before)
 
+    def test_vessel_in_the_url_is_chosen(self) -> None:
+        """Requirement: Inventory forms ("`/lab/inventory/items/<id>/fill/`:
+        its vessel chosen among the open vessels of the item's substance, or
+        given as `?vessel=<id>`, which chooses that vessel when the form
+        offers it")."""
+        self.vessel("CH-0012", "mg", "50")
+        second = self.vessel("CH-0012", "g", "1")
+        root = page(self.client.get(f"{self.url()}?vessel={second.pk}"))
+        self.assertEqual(field_value(root, "vessel"), str(second.pk))
+
+    def test_an_unoffered_vessel_in_the_url_is_ignored(self) -> None:
+        """Requirement: Inventory forms ("`?vessel=<id>`, which chooses that
+        vessel when the form offers it")."""
+        self.vessel("CH-0012", "mg", "50")
+        used = self.vessel("CH-0012", "mg", "0")
+        other = self.vessel("CH-0013", "mg", "50")
+        for value in (str(used.pk), str(other.pk), "9999", "abc", ""):
+            with self.subTest(vessel=value):
+                root = page(self.client.get(f"{self.url()}?vessel={value}"))
+                self.assertEqual(field_value(root, "vessel"), "")
+
 
 class CorrectFormTests(FormCase):
 

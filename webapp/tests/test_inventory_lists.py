@@ -3,7 +3,7 @@ inventory: Item list, Batch list, Vessel list, Delivery list)."""
 
 import re
 from datetime import date, datetime, timezone
-from urllib.parse import quote
+from urllib.parse import parse_qs, quote, urlsplit
 
 from inventory.bookings import book_note, reverse, reverse_historical
 
@@ -331,10 +331,18 @@ class ItemListFurnishingTests(ListCase):
         self.assertEqual(num(row["Abgegeben"]), 32)
 
 
+BULK = "/lab/inventory/end-products/bulk/"
+HTMX = {"HTTP_HX_REQUEST": "true"}
+DELIVERY_COOKIE = "delivery-list-view"
+VIEWS = (None, "table", "details")
+
+
 class SectionTabTests(ListCase):
 
-    TABS = [(LIST, "Artikel"), (BATCHES, "Chargen"), (VESSELS, "Gefäße"),
-            (DELIVERIES, "Lieferungen")]
+    TABS = [(LIST, "Endprodukte"), (BATCHES, "Chargen"),
+            (VESSELS, "Alle Gefäße")]
+    LISTS = [(LIST, LIST), (BULK, LIST), (DELIVERIES, LIST),
+             (BATCHES, BATCHES), (VESSELS, VESSELS)]
 
     def tabs(self, path: str):
         response = self.client.get(path)
@@ -343,10 +351,16 @@ class SectionTabTests(ListCase):
         self.assertIsNotNone(nav, f"{path} has no section tabs")
         return nav.find_all("a")
 
-    def test_the_four_lists_carry_the_tabs(self) -> None:
-        for current, _ in self.TABS:
-            with self.subTest(path=current):
-                links = self.tabs(current)
+    def test_the_five_lists_carry_the_tabs(self) -> None:
+        """Requirement: Batch list ("The item list, the bulk list, the
+        delivery list, the batch list and the vessel list carry section tabs
+        `Endprodukte`, `Chargen` and `Alle Gefäße` (`End products`, `Batches`,
+        `All vessels`), linking to `/lab/inventory/end-products/`,
+        `/lab/inventory/batches/` and `/lab/inventory/vessels/`, in the
+        site's `nav.section-tabs` markup.")."""
+        for path, current in self.LISTS:
+            with self.subTest(path=path):
+                links = self.tabs(path)
                 self.assertEqual([(a.get("href"), a.text()) for a in links],
                                  self.TABS)
                 self.assertEqual(
@@ -357,17 +371,16 @@ class SectionTabTests(ListCase):
     def test_english_tabs(self) -> None:
         accept(language="en")
         self.assertEqual([a.text() for a in self.tabs(LIST)],
-                         ["Items", "Batches", "Vessels", "Deliveries"])
+                         ["End products", "Batches", "All vessels"])
 
 
 class OldAddressTests(InventoryCase):
-    """Requirement: Bulk list (removed): the old addresses are gone."""
+    """The old `/lab/inventory/bulk/` addresses are gone."""
 
     def test_the_old_addresses_answer_404(self) -> None:
         vessel = self.vessel("CH-0012")
         self.client.force_login(self.kl)
-        for path in ("/lab/inventory/end-products/bulk/",
-                     "/lab/inventory/bulk/", "/lab/inventory/bulk/new/",
+        for path in ("/lab/inventory/bulk/", "/lab/inventory/bulk/new/",
                      f"/lab/inventory/bulk/{vessel.pk}/",
                      f"/lab/inventory/bulk/{vessel.pk}/edit/",
                      f"/lab/inventory/bulk/{vessel.pk}/correct/",
@@ -885,3 +898,108 @@ class DeliveryListTests(InventoryCase):
         self.client.force_login(self.kl)
         links = self.listing().find_all("a", href=NEW_NOTE)
         self.assertEqual([a.text() for a in links], ["New delivery note"])
+
+    def test_heading_is_end_products(self) -> None:
+        """Requirement: Delivery list ("`/lab/inventory/deliveries/` SHALL list
+        the delivery notes, under the heading `Endprodukte`")."""
+        self.assertEqual(self.listing().find("main").find("h1").text(),
+                         "Endprodukte")
+        accept(language="en")
+        self.assertEqual(self.listing().find("main").find("h1").text(),
+                         "End products")
+
+    def test_view_cookie_and_selected(self) -> None:
+        """Requirement: Delivery list ("The list shows its notes in the views
+        `Tabelle` and `Details`, remembered in the cookie `delivery-list-view`,
+        with one note selected by `selected=<id>`, as the item list does with
+        its items")."""
+        item = self.item(quantity=20)
+        first = self.deliver(item, 1, date(2026, 10, 1), number="LS-1")
+        second = self.deliver(item, 1, date(2026, 10, 2), number="LS-2")
+        for cookie, want in ((None, "table"), ("table", "table"),
+                             ("details", "details"), ("other", "table"),
+                             ("", "table")):
+            with self.subTest(cookie=cookie):
+                if cookie is None:
+                    self.client.cookies.pop(DELIVERY_COOKIE, None)
+                else:
+                    self.client.cookies[DELIVERY_COOKIE] = cookie
+                root = self.listing()
+                layout = root.find(attrs={"data-view": True})
+                self.assertIsNotNone(layout)
+                self.assertEqual(layout.get("data-view"), want)
+                radios = {r.get("id"): r for r in root.find_all(
+                    "input", type="radio", name="view")}
+                self.assertEqual(sorted(radios),
+                                 ["view-details", "view-table"])
+                self.assertEqual(
+                    [name for name, r in radios.items()
+                     if "checked" in r.attrs],
+                    [f"view-{want}"])
+        for view in VIEWS:
+            for query, target in (
+                    ("", second),
+                    (f"?selected={first.pk}", first),
+                    ("?selected=999999", second),
+                    (f"?q=LS-1&selected={second.pk}", first)):
+                with self.subTest(view=view, query=query):
+                    if view is None:
+                        self.client.cookies.pop(DELIVERY_COOKIE, None)
+                    else:
+                        self.client.cookies[DELIVERY_COOKIE] = view
+                    root = self.listing(query)
+                    grid = root.find("table")
+                    marked = [
+                        tr for tr in grid.find("tbody").find_all("tr")
+                        if tr.closest("table") is grid
+                        and tr.get("aria-current") == "true"]
+                    self.assertEqual(len(marked), 1)
+                    self.assertEqual(
+                        marked[0].get("hx-get"),
+                        f"/lab/inventory/deliveries/{target.pk}/detail/")
+                    aside = root.find("main").find("aside")
+                    self.assertIsNotNone(aside)
+                    self.assertIsNotNone(
+                        aside.find("a", href=note_url(target)))
+
+    def test_a_note_in_the_details_view(self) -> None:
+        """Scenario: A note in the details view."""
+        first = self.item("CH-0013", size="100", unit="mg", quantity=20)
+        second = self.item("CH-0016", size="1", unit="g", quantity=20)
+        batch1 = self.batch("CH-0013", number="KL13")
+        batch2 = self.batch("CH-0016", number="KL16")
+        self.deliver(first, 1, date(2026, 10, 20), number="LS-2026-200")
+        note = book_note(
+            self.kl, date=date(2026, 10, 15), number="LS-2026-156",
+            recipient="Produktion",
+            lines=[delivery_line(first, 2, batch1),
+                   delivery_line(second, 3, batch2)])
+        self.client.cookies[DELIVERY_COOKIE] = "details"
+        root = self.listing(f"?selected={note.pk}")
+        aside = root.find("main").find("aside")
+        self.assertIsNotNone(aside)
+        text = aside.text()
+        for expected in ("LS-2026-156", "CH-0013", "KL13", "CH-0016", "KL16"):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, text)
+        self.assertTrue(has_number(text, "2"), text)
+        self.assertTrue(has_number(text, "3"), text)
+        self.assertIsNotNone(aside.find("a", href=note_url(note)))
+        detail = f"/lab/inventory/deliveries/{note.pk}/detail/"
+        fragment = self.client.get(detail, **HTMX)
+        self.assertEqual(fragment.status_code, 200)
+        frag_root = page(fragment)
+        for tag in ("html", "head", "body", "main", "nav", "script"):
+            self.assertEqual(frag_root.find_all(tag), [], tag)
+        self.assertIn("LS-2026-156", frag_root.text())
+        self.assertIsNotNone(frag_root.find("a", href=note_url(note)))
+        plain = self.client.get(detail)
+        self.assertIn(plain.status_code, (302, 303))
+        target = urlsplit(plain["Location"])
+        self.assertEqual(target.path, DELIVERIES)
+        self.assertEqual(parse_qs(target.query), {"selected": [str(note.pk)]})
+        self.assertEqual(
+            self.client.get(
+                f"/lab/inventory/deliveries/{note.pk + 999}/detail/",
+                **HTMX).status_code,
+            404)
