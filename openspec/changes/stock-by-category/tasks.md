@@ -18,7 +18,7 @@
 
 ## 3. Docs
 
-- [ ] 3.1 README: the vessel kind and the two lists
+- [x] 3.1 README: the vessel kind and the two lists
 
 ## 4. Check
 
