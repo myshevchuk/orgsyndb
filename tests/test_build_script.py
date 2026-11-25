@@ -5,7 +5,6 @@ collection rules that need no build (collection).
 A missing tools/orgsyndb fails them, because it is a deliverable.
 """
 
-import ast
 import importlib.machinery
 import importlib.util
 import json
@@ -28,7 +27,8 @@ from pipeline_support import (BOOTSTRAP_HINT, DEMO, GIT_QUIET, HOOK,
                               pipeline_function, require_pagefind,
                               require_tool, run_script, serve_snapshot,
                               snapshot)
-from support import load_snapshot, template_registry
+from support import (imported_modules, load_snapshot, local_tool_modules,
+                     template_registry)
 
 SUBCOMMANDS = ["export", "validate", "build", "serve", "pdf", "new", "init",
                "clean", "check-deps", "index", "manifest", "help"]
@@ -117,16 +117,10 @@ class SourceTests(unittest.TestCase):
 
     def test_only_standard_library_imports(self) -> None:
         """Scenario: Only standard-library imports."""
-        tree = ast.parse(ORGSYNDB.read_text(encoding="utf-8"))
-        names = set()
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                names |= {alias.name.split(".")[0] for alias in node.names}
-            elif isinstance(node, ast.ImportFrom) and node.module:
-                names.add(node.module.split(".")[0])
-        extra = names - set(sys.stdlib_module_names) - {"pipeline",
-                                                        "validate"}
-        self.assertEqual(extra, set())
+        allowed = set(sys.stdlib_module_names) | local_tool_modules()
+        for path in [ORGSYNDB, *sorted(TOOLS.rglob("*.py"))]:
+            with self.subTest(path=path.relative_to(REPO)):
+                self.assertEqual(imported_modules(path) - allowed, set())
         self.assertTrue(ORGSYNDB.read_text().startswith(
             "#!/usr/bin/env python3\n"))
 

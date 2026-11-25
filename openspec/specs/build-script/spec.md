@@ -4,7 +4,7 @@
 Define `tools/orgsyndb`, its subcommands and conventions, the stdlib pipeline helper module, the optional pre-commit hook, the Caddyfile example and the ignore rules. Content and output paths are relative to the collection; `tools/`, `site/`, `templates/`, `.emacs-batch/` and `.tools/` belong to the application.
 ## Requirements
 ### Requirement: Entry point conventions
-`tools/orgsyndb` SHALL be an executable Python program that uses only the standard library, besides importing `pipeline` and `validate` from its own directory. It has a `#!/usr/bin/env python3` shebang and is invoked as `orgsyndb [-C DIR] <subcommand> [options] [arguments]`, with the subcommands `export`, `validate`, `build`, `serve`, `pdf`, `new`, `init`, `clean`, `check-deps`, `index`, `manifest` and `help`. It follows these conventions:
+`tools/orgsyndb` SHALL be an executable Python program that uses no third-party Python packages, importing only from the standard library and local modules under `tools/`. It has a `#!/usr/bin/env python3` shebang and is invoked as `orgsyndb [-C DIR] <subcommand> [options] [arguments]`, with the subcommands `export`, `validate`, `build`, `serve`, `pdf`, `new`, `init`, `clean`, `check-deps`, `index`, `manifest` and `help`. It follows these conventions:
 - It locates the application from its own resolved path, following symlinks, so it works from any working directory. It refuses to run, with exit 1, unless `<app>/tools/orgsyndb` and `<app>/site/hugo.toml` exist.
 - It chooses the collection as the `collection` capability says.
 - It sets `TZ=Europe/Berlin` and `LC_TIME=C` in its own environment, so every child process inherits them.
@@ -30,8 +30,8 @@ Define `tools/orgsyndb`, its subcommands and conventions, the stdlib pipeline he
 - **THEN** both succeed
 
 #### Scenario: Only standard-library imports
-- **WHEN** a test parses `tools/orgsyndb` with `ast` and collects the top-level module names of every import
-- **THEN** every name is in `sys.stdlib_module_names` or is `pipeline` or `validate`
+- **WHEN** a test parses `tools/orgsyndb` and every `.py` file under `tools/` with `ast` and collects the top-level module names of every absolute import
+- **THEN** every name is in `sys.stdlib_module_names` or is a local module or package under `tools/`
 
 #### Scenario: Invoked through a symlink
 - **WHEN** a test creates a symlink to `tools/orgsyndb` in a temporary directory and runs `<symlink> help` from that directory
@@ -291,11 +291,11 @@ It never installs anything and never invokes `sudo`.
 - **AND** stdout has the lines `optional emacs (not installed; only for Org procedures)` and `optional git (not installed; only for Org procedures)`
 
 ### Requirement: Pipeline helper module
-`tools/pipeline.py` SHALL be a Python module that uses only the standard library, besides importing `validate` from its own directory, and it annotates every callable. It has no command-line interface: `tools/orgsyndb` imports it, and the messages it prints name the program `orgsyndb`. It reads no Org source; of `org/procedures/` it reads only the entry names. The only Org files it reads are the documents of the application's `docs/` that it stages as help pages (site-help spec). It exposes the functions `slugify`, `next_id`, `org_timestamp`, `rfc3339`, `fill_template`, `has_org_sources`, `org_stems`, `org_error_reported`, `check_staging`, `recover_export`, `replace_export`, `new_procedure`, `pdf_jobs`, `install_pagefind`, `ensure_pagefind`, `hugo_overlay`, `help_slug`, `help_page`, `stage_help`, `index_data` and `remove_tree`.
+`tools/pipeline.py` SHALL be a Python module that uses no third-party Python packages, importing only from the standard library and local modules under `tools/`, and it annotates every callable. It has no command-line interface: `tools/orgsyndb` imports it, and the messages it prints name the program `orgsyndb`. It reads no Org source; of `org/procedures/` it reads only the entry names. The only Org files it reads are the documents of the application's `docs/` that it stages as help pages (site-help spec).
 
 #### Scenario: Only standard-library imports
-- **WHEN** a test parses `tools/pipeline.py` with `ast` and collects the top-level module names of every import
-- **THEN** every name is in `sys.stdlib_module_names` or is `validate`
+- **WHEN** a test parses `tools/pipeline.py` with `ast` and collects the top-level module names of every absolute import
+- **THEN** every name is in `sys.stdlib_module_names` or is a local module or package under `tools/`
 
 #### Scenario: No command-line interface
 - **WHEN** a test reads `tools/pipeline.py`

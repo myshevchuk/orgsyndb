@@ -4,6 +4,7 @@ Tests drive tools/validate.py as a subprocess with ``cwd`` set to a
 temporary directory, and locate the repository from this file.
 """
 
+import ast
 import contextlib
 import hashlib
 import json
@@ -18,8 +19,9 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 REPO = Path(__file__).resolve().parent.parent
+TOOLS = REPO / "tools"
 FIXTURES = REPO / "tests" / "fixtures"
-VALIDATOR = REPO / "tools" / "validate.py"
+VALIDATOR = TOOLS / "validate.py"
 BASELINE = FIXTURES / "baseline" / "OSDB-0100-baseline.md"
 GENERAL = FIXTURES / "general" / "OSDB-0140-general.md"
 SEQUENCES = FIXTURES / "sequences"
@@ -50,6 +52,26 @@ class Result(NamedTuple):
     stdout: str
     stderr: str
     problems: list[Problem]
+
+
+def local_tool_modules() -> set[str]:
+    """Return the top-level Python module and package names under tools/."""
+    names = {p.stem for p in TOOLS.glob("*.py")}
+    names |= {p.name for p in TOOLS.iterdir()
+              if p.is_dir() and (p / "__init__.py").is_file()}
+    return names
+
+
+def imported_modules(path: Path) -> set[str]:
+    """Return the top-level module names of every absolute import in PATH."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names |= {alias.name.split(".")[0] for alias in node.names}
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            names.add(node.module.split(".")[0])
+    return names
 
 
 def parse_problems(stdout: str) -> list[Problem]:

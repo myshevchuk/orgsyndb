@@ -4,7 +4,7 @@
 Define how `tools/validate.py` is invoked on Markdown content roots, what it reports and in which format, its exit statuses, and the fixture suite that proves each rejection.
 ## Requirements
 ### Requirement: Command-line interface
-The validator SHALL be the executable file `tools/validate.py`, invoked as `validate.py [--settings FILE] [--static-dir DIR] [--registry FILE] [--sequences DIR] CONTENT_ROOT...`, and it SHALL use only the Python standard library.
+The validator SHALL be the executable file `tools/validate.py`, invoked as `validate.py [--settings FILE] [--static-dir DIR] [--registry FILE] [--sequences DIR] CONTENT_ROOT...`, and it SHALL use no third-party Python packages: it imports only from the Python standard library and local modules under `tools/`.
 - Each positional `CONTENT_ROOT` is a directory of procedure Markdown files with `+++` TOML front matter, such as an ox-hugo export directory or `md/procedures/`.
 - At least one content root is required.
 - `--sequences` names the directory of synthesis sequences (synthesis-sequences "Sequence files"). The validator checks every sequence in it against the procedures of the content roots and the registry.
@@ -30,8 +30,8 @@ The validator SHALL be the executable file `tools/validate.py`, invoked as `vali
 - **THEN** it exits 2, and stderr contains `validate.py: error:` and `not a directory`
 
 #### Scenario: Only standard-library imports
-- **WHEN** a test parses `tools/validate.py` with `ast` and collects the top-level module names of every `import` and `from ... import` statement
-- **THEN** every name is in `sys.stdlib_module_names`
+- **WHEN** a test parses `tools/validate.py` with `ast` and collects the top-level module names of every absolute `import` and `from ... import` statement
+- **THEN** every name is in `sys.stdlib_module_names` or is a local module or package under `tools/`
 
 ### Requirement: Problem report format
 The validator SHALL print each problem to stdout as one line of the form `<path>:<field>: <severity>: <message>`, where `<severity>` is `error` or `warning`.

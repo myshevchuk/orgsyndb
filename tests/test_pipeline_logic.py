@@ -1,7 +1,6 @@
 """Pure behaviour of tools/pipeline.py: next-ID, slugs, timestamps, stubs,
 PDF job naming and the helper module's shape (build-script)."""
 
-import ast
 import datetime as dt
 import json
 import locale
@@ -1198,16 +1197,10 @@ class HelperModuleTests(unittest.TestCase):
         """Scenario: Only standard-library imports."""
         self.assertTrue(PIPELINE.is_file(),
                         "tools/pipeline.py does not exist")
-        tree = ast.parse(PIPELINE.read_text(encoding="utf-8"))
-        names = set()
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                names |= {a.name.split(".")[0] for a in node.names}
-            elif isinstance(node, ast.ImportFrom) and node.level == 0:
-                names.add((node.module or "").split(".")[0])
+        names = support.imported_modules(PIPELINE)
         self.assertTrue(names, "no imports found")
-        self.assertEqual(names - set(sys.stdlib_module_names) - {"validate"},
-                         set())
+        allowed = set(sys.stdlib_module_names) | support.local_tool_modules()
+        self.assertEqual(names - allowed, set())
 
     def test_module_has_no_command_line(self) -> None:
         """Scenario: No command-line interface."""
