@@ -16,7 +16,8 @@ the same frame, toolbar and view switch as the other Bestand lists.
 
 Non-goals: `Verwendet in` (which procedures use an intermediate),
 purity, expiry, hazards, supplier documents, a stored category, volume
-units, changes to Endprodukte or Chargen.
+units, changes to the Endprodukte layers or the batch list beyond the
+section tabs they share.
 
 ## Decisions
 
@@ -37,21 +38,40 @@ units, changes to Endprodukte or Chargen.
   never shows an amount it hid. The page's offered values come from the
   category's open vessels, not from the filtered set, so a filter can be
   changed without clearing the others.
-- **Selection by key.** Rows are substances, selected by
-  `selected=<key>` and loaded in place from
+- **Selection by key, details under the same filters.** Rows are
+  substances, selected by `selected=<key>` and loaded in place from
   `/lab/inventory/intermediates/<key>/` and
   `/lab/inventory/chemicals/<key>/` for htmx requests, as the item
-  list's details are; other requests redirect to the list.
+  list's details are; other requests redirect to the list. Each row's
+  `hx-get` carries the list's filter parameters, and the details view
+  applies them, so the vessel table shows exactly the vessels the row
+  sums. A key naming a substance without an open vessel of the category
+  answers 404; one whose vessels the filters all hide shows `Keine
+  Gefäße`.
 - **Vertical split in `Details`.** The table above and the vessels
   below share the frame's height at a fixed ratio of about 45 to 55,
   each scrolling in its own box with a sticky head; the ratio does not
   follow the selection, so arrowing through substances never moves the
   divider. `.item-layout` takes a modifier for this orientation; the
   selection script is unchanged.
-- **Actions in dialogs.** The vessel withdrawal, transfer and
-  correction forms become dialog forms (as the item forms are); after a
-  save the list's parts marked for refresh are replaced, so the row's
-  sums and the vessel table show the new amounts.
+- **Actions in dialogs.** The vessel withdrawal, transfer, correction
+  and edit forms become dialog forms, as the item forms are: the
+  decorator and `saved()` that handle a dialog request, a signed-out
+  one included, are generalised from items to vessels. After a save the
+  page's parts marked `data-refresh` with an `id` are replaced: the
+  heading's counts, the rows, the offered locations and suppliers, and
+  the details with its vessel table, whose scroll box gets an `id` so
+  its scroll position is kept. Requested as pages, the forms stay as
+  they are, and the vessel page keeps linking them as pages.
+- **View transitions.** `lab.css` names the item list's table box for
+  view transitions through `.table-scroll.table-sticky`; the lower
+  vessel table gets its own transition name, or none, so no name occurs
+  twice, and the details move vertically in the split, not
+  horizontally.
+- **Orders.** Locations sort as the item list's compartments do
+  (`natural`), units in the order of their choices (`mg`, `g`, `µmol`,
+  `mmol`), chemical classes by label regardless of case, task numbers by
+  their serial.
 - **Wareneingang** is the new-batch form with the substance and the
   source `gekauft` filled in; no separate receipt form.
 

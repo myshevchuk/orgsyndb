@@ -48,6 +48,9 @@ None.
 
 - `webapp/inventory/` models (kind), a pure module of summaries and
   ages, views, URLs, forms (dialogs for vessel forms), templates,
-  `lab.css`, `lab.js`, German translations; tests.
+  `lab.css`, German translations; tests, among them the demo test that
+  lists the vessel kinds and the tests of the section tabs.
+- `README.md` names the vessel kind `Reagenz`; the doc stage updates it
+  and describes the two lists.
 - The vessel list's `kind=reagent` becomes `kind=commercial`; no
   alias is kept.

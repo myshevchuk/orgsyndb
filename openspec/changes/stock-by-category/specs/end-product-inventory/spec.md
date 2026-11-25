@@ -8,24 +8,28 @@ Every open vessel SHALL belong to one stock category, from two facts alone, whet
 - **THEN** the two vessels of `cinnamic-acid` are `Endprodukte`, the flask and the stored made vessel of `acetophenone` `Zwischenprodukte`, and the bought one `Handelschemikalien`
 
 ### Requirement: Lists by substance
-`/lab/inventory/intermediates/` and `/lab/inventory/chemicals/` SHALL list the substances that have an open vessel of the category `Zwischenprodukte` and of `Handelschemikalien` respectively (Stock categories), one row per substance, under the headings `Zwischenprodukte` (`Intermediates`) and `Handelschemikalien` (`Commercial chemicals`), each followed by the number of substances and of vessels listed, and ordered by the substance's name regardless of case. A row's cells describe the substance's open vessels of the list's category that the filters admit, its vessels for short:
+`/lab/inventory/intermediates/` and `/lab/inventory/chemicals/` SHALL list the substances that have an open vessel of the category `Zwischenprodukte` and of `Handelschemikalien` respectively (Stock categories), one row per substance, under the headings `Zwischenprodukte` (`Intermediates`) and `Handelschemikalien` (`Commercial chemicals`), each followed by the number of substances and of vessels listed, and ordered by the substance's name regardless of case. A signed-in user sees a link `Neue Charge` (`New batch`) to `/lab/inventory/batches/new/` on the intermediate list and `Wareneingang` (`Goods receipt`) to `/lab/inventory/batches/new/?source=bought` on the commercial chemical list.
 
-- `Substanz` (`Substance`): the substance's name, linking to its page, followed on the intermediate list by its chemical classes and on the commercial chemical list by its short name and CAS number where it has them; and the mark `+gekauft` (`+bought`) on the intermediate list, `+hergestellt` (`+made`) on the commercial chemical list, when the substance has an open vessel of the other of the two categories;
-- `Menge` (`Amount`): the amount in its vessels by unit, as the batch list shows a batch's;
+A row's cells describe the substance's open vessels of the list's category that the filters admit, its vessels for short. Locations are ordered as the item list orders compartments, numbers in them by value; other texts regardless of case.
+
+- `Substanz` (`Substance`): the substance's name, linking to its page, followed on the intermediate list by its chemical classes, by label, and on the commercial chemical list by its short name and CAS number where it has them; and the mark `+gekauft` (`+bought`) on the intermediate list, `+hergestellt` (`+made`) on the commercial chemical list, when the substance has an open vessel of the other of the two categories, whatever the filters;
+- `Menge` (`Amount`): the amount in its vessels summed per unit, the units in the order `mg`, `g`, `µmol`, `mmol`;
 - `Gefäße` (`Vessels`): their number, followed on the intermediate list by `<n> Kolben` (`<n> in flask`) when flasks are among them, and on the commercial chemical list by `(<n> versiegelt)` (`(<n> sealed)`) when sealed vessels are among them;
-- `Ort` (`Location`): the one location of its stored vessels when they share it, else the first by name regardless of case followed by `+<n>`, the number of the other locations; on the intermediate list followed by `im Kolben` (`in flask`) when flasks are among them; `–` when no vessel has a location;
-- on the intermediate list, `Herkunft` (`Source`): the numbers of the tasks whose steps made the batches, linking to the tasks' pages, in the order of their numbers, at most two followed by `+<n>`, and `ohne Auftrag` (`no task`) for batches made by no step, alone when no batch has a step; and `Alter` (`Age`): the age of the newest and of the oldest batch date among its vessels, joined by ` – `, or one when they are equal, `–` when no batch has a date, an age, from the batch date to today, shown as `<n> Tage` (`<n> days`) below one calendar month, else in whole calendar months as `<n> Mon.` (`<n> mo.`) below one year and `<y> J <m> Mon.` (`<y> y <m> mo.`), or `<y> J` (`<y> y`) with no months, from one year; and marked as old when the oldest is a year or more;
-- on the commercial chemical list, `Gruppe` (`Group`): the substance's inventory group; `Lieferanten` (`Suppliers`): the suppliers of the batches, the first by name regardless of case followed by `+<n>`; and `Angebrochen` (`Opened`): the earliest `opened_on` among its vessels, or `versiegelt` (`sealed`) when all are sealed.
+- `Ort` (`Location`): from the stored vessels, the location they all share, else the first followed by `+<n>`, the number of other locations, a stored vessel without a location counting as the location `nicht hinterlegt` (`not recorded`), placed last; then, on the intermediate list, `im Kolben` (`in flask`) when flasks are among them, alone when all are flasks; a flask's own location is not shown;
+- on the intermediate list, `Herkunft` (`Source`): the numbers of the tasks whose steps made the batches, linking to the tasks' pages, in the order of the tasks' numbers by value, at most two followed by `+<n>`, then `ohne Auftrag` (`no task`) when a batch was made by no step, alone when none was; and `Alter` (`Age`): the age of the newest and of the oldest batch date among its vessels, joined by ` – `, or one when the two read alike, `–` when no batch has a date, and marked as old, in a `span.age-old`, when the oldest age is a year or more;
+- on the commercial chemical list, `Gruppe` (`Group`): the substance's inventory group; `Lieferanten` (`Suppliers`): the suppliers of the batches, `unbekannt` (`unknown`) for a batch without one, the first followed by `+<n>`, the number of the others; and `Angebrochen` (`Opened`): the earliest `opened_on` among its vessels, or `versiegelt` (`sealed`) when all are sealed.
+
+An age runs from a batch's date to today in whole calendar months, a month being complete on the same day of the month, or on a shorter month's last day: `heute` (`today`) for today, `1 Tag` (`1 day`) and `<n> Tage` (`<n> days`) below one month, `<n> Mon.` (`<n> mo.`) below twelve months, and `<y> J` (`<y> y`) or `<y> J <m> Mon.` (`<y> y <m> mo.`) from twelve months.
 
 GET parameters filter the list and keep their values; a filter on vessels admits vessels, and a row is listed while it has at least one vessel the filters admit:
 
-- on both lists, `q`: vessels in whose substance's key, name, German name, short name or CAS number, or in whose batch's number, supplier's batch or supplier, the text is found regardless of case, and on the intermediate list also in the number of the task that made the batch; and `location`: vessels at that location;
-- on the intermediate list, `class`: substances that have the chemical class of that key; `flask=1`: flasks; and `old=1`: vessels whose batch is dated 365 days or more before today;
-- on the commercial chemical list, `group`: substances in the inventory group of that key; `supplier`: vessels of batches bought from that supplier; and `sealed=1`: sealed vessels.
+- on both lists, `q`: vessels in whose substance's key, name, German name, short name or CAS number, or in whose batch's number, supplier's batch or supplier, the text is found regardless of case, and on the intermediate list also in the number of the task that made the batch; and `location`: stored vessels at that location, flasks never;
+- on the intermediate list, `class`: substances filed under the chemical class of that key or under a class filed below it, at any depth; `flask=1`: flasks; and `old=1`: vessels whose batch's age is a year or more;
+- on the commercial chemical list, `group`: substances filed under the inventory group of that key or under a group filed below it, at any depth; `supplier`: vessels of batches bought from that supplier; and `sealed=1`: sealed vessels.
 
-The page offers each location of the category's open vessels, and each chemical class, inventory group and supplier of the substances and batches the category's open vessels have. The list shows its substances in the views `Tabelle` and `Details`, remembered in the cookies `intermediate-list-view` and `chemical-list-view`, with one substance selected by `selected=<key>`, as the item list does with its items.
+A `class` or `group` key that names no term lists none. The page offers each location of the category's open stored vessels and each supplier of its bought batches, and each term of the chemical classes or inventory groups in the order of the vocabulary's page; the value in force is offered even when no vessel has it any more. The list shows its substances in the views `Tabelle` and `Details`, remembered in the cookies `intermediate-list-view` and `chemical-list-view`, with one substance selected by `selected=<key>`, as the item list does with its items.
 
-The details view shows, with the table, the selected substance: its name, linking to its page, and for a signed-in user a link `Neue Charge` (`New batch`) to `/lab/inventory/batches/new/?substance=<key>` on the intermediate list and `Wareneingang` (`Goods receipt`) to `/lab/inventory/batches/new/?substance=<key>&source=bought` on the commercial chemical list; and a table of its vessels, ordered by their batch's date, oldest first and vessels without one last, then by id, with the columns `Gefäß`, `Charge`, `Menge`, `Ort`, `Herkunft`, `Datum` and `Bemerkung` (`Vessel`, `Batch`, `Amount`, `Location`, `Source`, `Date`, `Note`), and on the commercial chemical list `Angebrochen am` (`Opened on`) before `Bemerkung`: `#<id>`, linking to the vessel's page; the batch, linking to its page; the amount; the location, or `Kolben` (`Flask`) for a flask; for a made batch the task number, the step and the journal entry where the batch names them, each linking to its page, and for a bought batch the supplier, the supplier's article number and the supplier's batch; the batch's date; the `opened_on` or `versiegelt`; and the vessel's note. For a signed-in user each vessel offers `Entnahme` (`Withdraw`), `Umfüllen` (`Transfer`) and `Korrigieren` (`Correct`), which open the vessel's withdrawal, transfer and correction forms in a dialog over the page (web-app "Form dialogs"). When the selected substance has a single vessel, the details also show that vessel's five newest movements as the vessel page shows them.
+The details view shows, with the table, the selected substance and its vessels, the same vessels its row describes: its name, linking to its page, and for a signed-in user `Neue Charge` to `/lab/inventory/batches/new/?substance=<key>` on the intermediate list and `Wareneingang` to `/lab/inventory/batches/new/?substance=<key>&source=bought` on the commercial chemical list; and a table of its vessels, ordered by their batch's date, oldest first and vessels without one last, then by id, with the columns `Gefäß`, `Charge`, `Menge`, `Ort`, `Herkunft`, `Datum` and `Bemerkung` (`Vessel`, `Batch`, `Amount`, `Location`, `Source`, `Date`, `Note`), and on the commercial chemical list `Angebrochen am` (`Opened on`) before `Bemerkung`: `#<id>`, linking to the vessel's page; the batch, linking to its page; the amount; the location, `nicht hinterlegt` without one, or `Kolben` (`Flask`) for a flask; for a made batch the task's number linking to its page, the step's label and the journal entry linking to its notebook's page, where the batch names them, or `ohne Auftrag`, and for a bought batch the supplier and the supplier's article number; the batch's date; the `opened_on` or `versiegelt`; and the vessel's note. For a signed-in user each vessel offers `Entnahme` (`Withdraw`), on an open vessel, `Umfüllen` (`Transfer`), `Korrigieren` (`Correct`) and `Bearbeiten` (`Edit`), which open the vessel's withdrawal, transfer, correction and edit forms in a dialog over the page (web-app "Form dialogs"). When the substance has a single vessel there, the details also show that vessel's five newest movements, newest first, with date, kind, amount, amount after, the user's initials and note, and a link to the vessel's page. A substance that has no vessel the filters admit shows `Keine Gefäße` (`No vessels`) in place of the table.
 
 #### Scenario: Intermediates by substance
 - **WHEN** `acetophenone`, which has no article, has a flask of a batch made by a step of task `T-021` holding `1` g, a stored vessel of the same batch holding `1,5` g in `Chemikalienschrank 3` and one of a batch made by a step of `T-008` holding `12` g there, and a bought vessel, and a test client requests the intermediate list
@@ -37,19 +41,35 @@ The details view shows, with the table, the selected substance: its name, linkin
 
 #### Scenario: Filters narrow the sums
 - **WHEN** the same database is listed with `supplier=TCI`, and then with `sealed=1`
-- **THEN** both show the row of `benzaldehyde` with `100 g`, one vessel, `Kühlschrank 2`, `TCI` and `versiegelt`
+- **THEN** both show the row of `benzaldehyde` with `100 g`, one vessel, `Kühlschrank 2`, `TCI` and `versiegelt`, and its details list that bottle alone
+
+#### Scenario: Locations not recorded
+- **WHEN** a substance has two bought bottles, one in `Regal 10` and one without a location, and another substance a flask alone on the intermediate list
+- **THEN** the first row shows `Regal 10 +1`, its details `nicht hinterlegt` for the second bottle, and the second row `im Kolben`
 
 #### Scenario: Containers of the selected substance
 - **WHEN** a signed-in user with the cookie `intermediate-list-view` set to `details` requests the intermediate list with `selected=acetophenone`
-- **THEN** the details show the three vessels of `acetophenone`, the flask with `Kolben` and `T-021`, each with `Entnahme`, `Umfüllen` and `Korrigieren` opening in a dialog, and a link `Neue Charge` to `/lab/inventory/batches/new/?substance=acetophenone`
+- **THEN** the details show the three vessels of `acetophenone`, the flask with `Kolben` and `T-021`, each with `Entnahme`, `Umfüllen`, `Korrigieren` and `Bearbeiten` opening in a dialog, and a link `Neue Charge` to `/lab/inventory/batches/new/?substance=acetophenone`
+
+#### Scenario: Booking in a dialog
+- **WHEN** a signed-in user opens `Entnahme` of a vessel holding `12` g in the details and books `2` g into a step of a running task
+- **THEN** the dialog closes, the row shows the substance's amount `2` g lower and the details show the vessel with `10 g`, the list's selection and view unchanged
 
 #### Scenario: One bottle with its movements
 - **WHEN** a substance has a single bought vessel, from which two withdrawals were booked, and a test client requests the commercial chemical list with `selected` naming it and the cookie `chemical-list-view` set to `details`
-- **THEN** the details show that vessel and its movements, the newest first
+- **THEN** the details show that vessel and its opening and two withdrawals, the newest first, with their amounts after
 
 #### Scenario: Ages
-- **WHEN** on 2026-11-24 one substance has intermediates of batches dated 2026-11-20 and 2026-04-06, and another has one of a batch dated 2025-05-01
-- **THEN** the first row's age shows `4 Tage – 7 Mon.`, not marked as old, and the second row's `1 J 6 Mon.`, marked as old
+- **WHEN** on 2026-11-24 one substance has intermediates of batches dated 2026-11-20 and 2026-04-06, another has one of a batch dated 2025-05-01, and a third one of a batch dated 2025-11-24
+- **THEN** the first row's age shows `4 Tage – 7 Mon.` with no `span.age-old`, the second row's `1 J 6 Mon.` and the third row's `1 J`, both in a `span.age-old`, and `old=1` lists the second and third substances alone
+
+#### Scenario: Month ends
+- **WHEN** on 2026-02-28 a batch is dated 2026-01-31, and on 2026-02-27 another is dated 2026-01-31
+- **THEN** the first shows `1 Mon.` and the second `27 Tage`
+
+#### Scenario: Classes below a class
+- **WHEN** `acetophenone` has the chemical class `aryl-ketones`, filed under `ketones`, and a test client requests the intermediate list with `class=ketones`, and with `class=nothing`
+- **THEN** the first lists `acetophenone` and the second lists no substance
 
 ## MODIFIED Requirements
 
@@ -155,6 +175,8 @@ For a signed-in user, the application SHALL offer:
 - `/lab/inventory/vessels/movements/<id>/reverse/`, a POST: reverses a withdrawal not yet reversed;
 - `/lab/inventory/vessels/<id>/edit/`, for the location and note and, for a vessel of a bought batch, its `opened_on`, which may be emptied to mark it sealed, and `/lab/inventory/vessels/<id>/correct/`.
 
+The withdrawal, transfer, correction and edit forms of a vessel open in a dialog over the page where a list offers them so (Lists by substance); the vessel's page links them as pages, as before.
+
 A batch of another substance than the item's is refused at the batch, on the new-item form and in a delivery note's row. With the page's script, a delivery note's row offers only the batches of the substance of the item chosen in it, and the new-item form only those of the substance entered, and a batch chosen that is no longer offered is cleared; without the script, every batch stays offered. A substance is named by its key, offered through a `datalist` of every substance's key labelled with its name; an unknown key is an error at the field. On the new-item form, the article number and the category make the substance's article when it has none, an empty number giving it none. When the substance has an article, a field left empty leaves the article's value as it is; a category entered replaces the article's; an article number entered gives the article that number when it has none, as the edit form does, and must otherwise be its number, or the form shows an error at it. On the edit form, the category field holds the article's category and saves what it holds, empty included, and the article number, offered only while the article has none, gives it one when entered and leaves it without one when empty. Invalid input shows the form again with the errors beside their fields and saves nothing. A saved form leads, with a message naming the record, to the page of the delivery note for the forms of notes, to the page of the batch for the new-batch form, and to the page of the item, batch or vessel for every other; a form saved in a dialog leaves the page it was opened from in place instead. On an item's page and in the item list's details, the links to the item's edit form, its filling, its count correction and its consumption, and on its page each link `Stornieren` beside a movement, open those forms in a dialog over the page (web-app "Form dialogs"); `Abgabe buchen` leads to the new delivery note's form page.
 
 #### Scenario: New item
@@ -240,3 +262,35 @@ A batch of another substance than the item's is refused at the batch, on the new
 #### Scenario: Opening date entered and cleared
 - **WHEN** on 2026-11-24 a signed-in user posts the edit form of a sealed vessel of a bought batch with the `opened_on` 2026-11-10, then with 2026-11-25, then with the field empty
 - **THEN** the vessel has the `opened_on` 2026-11-10 after the first, the form shows an error at the field and the vessel keeps 2026-11-10 after the second, and the vessel is sealed after the third
+
+#### Scenario: Goods receipt
+- **WHEN** a signed-in user requests `/lab/inventory/batches/new/?substance=benzaldehyde&source=bought`
+- **THEN** the form has the substance `benzaldehyde` and the source `gekauft` filled in
+
+### Requirement: Batches
+The `inventory` package SHALL keep batches (`Chargen`), each a quantity of one substance with one origin, with a change history:
+
+- `substance`, a substance of the registry;
+- `source` (`Herkunft`, `Source`), `made` (`hergestellt`, `made`) or `bought` (`gekauft`, `bought`);
+- for a made batch: `number` (`Charge`, `Batch`), required, at most 30 characters, unique among made batches regardless of case and of their substance; `journal_entry` (`Laborjournal`, `Lab notebook`), the journal entry it is written down in (lab-journal "Notebooks and entries"), or none; `task_step`, the task step that made it, or none: a step whose entry has the batch's substance among its products, or, for a step without an entry, whose task makes the batch's substance; and `yield` (`Ausbeute`, `Yield`), an amount above zero in one of the units `mg`, `g`, `umol` and `mmol`, or none;
+- for a bought batch: `supplier` (`Lieferant`, `Supplier`), at most 100 characters, and `supplier_article_number` (`Artikelnr. des Lieferanten`, `Supplier's article no.`) and `supplier_batch` (`Charge des Lieferanten`, `Supplier's batch`), at most 50 characters each, each optional; a bought batch has no number, journal entry, step or yield;
+- `date` (`Datum`, `Date`), the day it was made or received, or none, never after today;
+- `note`.
+
+The substance, source and `task_step` are fixed once the batch exists. A batch may be of any substance, intermediates and commercial chemicals among them, and one substance may have made and bought batches side by side; a journal entry may be named by no batch, one or several. A batch shows as its number, a bought batch as its supplier's batch number, and either, when it has none, as `#<id>`. A batch is recorded from a task step only while the step's task is planned or running, and then names the step's journal entry when the step names one. Its yield shows in its unit to three decimal places, rounded half up. A batch that has vessels, or that a task step made, cannot be deleted, except by `demo_data --replace` (lab-demo "Demo data command").
+
+#### Scenario: Made and bought batches
+- **WHEN** a signed-in user records a batch of `cinnamic-acid` made in the lab with the number `KL0412FA`, and another bought from `Sigma` with the supplier's article number `C80857` and the supplier's batch `MKCK1234`
+- **THEN** both batches exist with their sources, the first showing as `KL0412FA` and the second as `MKCK1234` with its supplier and article number
+
+#### Scenario: Numbers unique regardless of case
+- **WHEN** a made batch `KL0412FA` of `cinnamic-acid` exists and a signed-in user records a made batch of `acetophenone` with the number `kl0412fa`
+- **THEN** the form shows an error at the number and no batch is created
+
+#### Scenario: Fractions of one entry
+- **WHEN** the first step of a running task following `SEQ-0002` names the journal entry `CE-3/2`, and a signed-in user records from that step two batches of `4-acetylbiphenyl`, `CE3002FA` and `CE3002FB`, and then one of `cinnamic-acid`
+- **THEN** the first two exist, each made by that step and naming `CE-3/2`, and the third is refused with an error at the substance
+
+#### Scenario: Not from an ended task
+- **WHEN** a signed-in user posts the new-batch form for a step of an ended task
+- **THEN** the form shows an error and no batch is created
