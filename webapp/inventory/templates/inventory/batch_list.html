@@ -1,13 +1,15 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n lab inventory %}
 {% block title %}{% translate "Batches" %}{% endblock %}
+{% block body_class %} class="lab-frame"{% endblock %}
 {% block main %}
 <div class="lab-heading">
 <h1>{% translate "Batches" %}</h1>
-{% if user.is_authenticated %}<p class="actions"><a href="/lab/inventory/batches/new/">{% translate "New batch" %}</a></p>{% endif %}
+<span class="lab-count">{% blocktranslate count count=rows|length %}{{ count }} batch{% plural %}{{ count }} batches{% endblocktranslate %}</span>
+{% if user.is_authenticated %}<div class="lab-heading__actions"><p class="actions"><a href="/lab/inventory/batches/new/">{% translate "New batch" %}</a></p></div>{% endif %}
 </div>
 {% include "inventory/tabs.html" %}
-<form class="lab-filters" method="get" action="/lab/inventory/batches/">
-<label>{% translate "Search" %} <input type="search" name="q" value="{{ q }}" autocomplete="off"></label>
+<form class="lab-filters lab-toolbar" method="get" action="/lab/inventory/batches/">
+<label class="lab-inline-field"><span class="visually-hidden">{% translate "Search" %}</span><input type="search" name="q" value="{{ q }}" placeholder="{% translate "Batch, substance or supplier" %}" autocomplete="off"></label>
 <button type="submit">{% translate "Filter" %}</button>
 </form>
 <div class="table-scroll">

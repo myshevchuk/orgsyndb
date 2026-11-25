@@ -54,6 +54,20 @@
   background: var(--banner-bg);
   color: var(--banner-fg);
 }
+.site-header > .lab-demo {
+  margin: auto 0 calc(-1 * var(--space-3));
+  padding: 0.42rem 0.55rem;
+  font-size: 0.71875rem;
+  line-height: 1.38;
+}
+.site-header > .lab-demo + .lab-account { margin-top: 0; }
+@media (max-width: 55rem) {
+  .site-header > .lab-demo {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+  :root[data-sidebar="collapsed"] .site-header > .lab-demo { display: none; }
+}
 .lab-demo-accounts { margin-top: var(--space-5); font-family: var(--font-ui); }
 .lab-demo-accounts ul { padding-left: var(--space-4); }
 
@@ -329,87 +343,295 @@ span.stock[class*="level-"] { padding: 0 var(--space-2); border-radius: 0.25rem;
 .inventory-table th[aria-sort="ascending"] a::after { content: " ▲"; content: " ▲" / ""; font-size: 0.75em; }
 .inventory-table th[aria-sort="descending"] a::after { content: " ▼"; content: " ▼" / ""; font-size: 0.75em; }
 
-/* The item list: the bar of filters and menus above the table, the line
-   that counts and orders the rows with the view controls beside it,
-   the compact table, and the note below it. The details of one item
-   have their own rules further down. */
+/* The inventory lists: compact heading, section tabs, single-line
+   toolbar, view menu, compact item table and the note below it. The
+   details of one item and the fixed-height screen frame have their own
+   rules further down. */
 .lab-count { color: var(--muted); font-family: var(--font-ui); }
-.lab-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--space-2) var(--space-3);
-  margin: 0 0 var(--space-3);
-  font-family: var(--font-ui);
-  font-size: 0.875rem;
-}
-.lab-toolbar .lab-filters { margin: 0; font-size: inherit; }
-.lab-toolbar .lab-filters input[type="search"] { width: 15rem; }
-.lab-toolbar :is(input, select, button) {
-  font: inherit;
-  color: var(--fg);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 0.2rem;
-  min-height: 2rem;
-  padding: 0.25rem 0.5rem;
-}
-.lab-control { display: flex; flex-direction: column; gap: var(--space-1); }
-.lab-columns { margin-left: auto; }
-.lab-toolbar .lab-menu-button { min-width: 11rem; text-align: left; background: var(--surface); }
-.lab-columns .lab-menu-button { min-width: 0; }
-.lab-toolbar button:disabled { color: var(--muted); cursor: default; opacity: 0.6; }
-.lab-menu-button::after { content: " ▾"; content: " ▾" / ""; }
-.lab-toolbar .lab-text-button { border-color: transparent; background: none; color: var(--link); }
-
-.table-caption {
+.lab-frame .lab-heading {
+  flex: none;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-1) var(--space-3);
-  margin: 0 0 var(--space-2);
-  color: var(--muted);
+  gap: 0.35rem 0.55rem;
+  margin: 0 0 0.35rem;
+  min-height: 1.95rem;
+}
+.lab-frame .lab-heading h1 {
+  margin: 0;
+  font-size: 1.4rem;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.lab-frame .lab-heading .lab-count {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+.lab-heading__actions {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  flex: none;
+}
+.lab-heading__actions .actions { margin: 0; }
+.lab-frame .lab-heading__actions .actions a {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.3;
+  padding: 0.24rem 0.68rem;
+  border: 1px solid var(--link);
+  border-radius: 0.25rem;
+  background: var(--link);
+  color: var(--bg);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.lab-frame .lab-heading__actions .actions a:hover { filter: brightness(1.08); }
+.lab-frame .lab-heading__actions .lab-pick button {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.3;
+  padding: 0.24rem 0.62rem;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  background: var(--surface);
+  color: var(--fg);
+  white-space: nowrap;
+}
+.lab-frame .lab-heading__actions .lab-pick button:hover { border-color: var(--muted); }
+
+.lab-frame .section-tabs { flex: none; }
+.lab-frame .section-tabs ul {
+  align-items: baseline;
+  gap: 0.25rem 1.25rem;
+  margin: 0 0 0.5rem;
+  padding: 0 0 0.35rem;
+  font-size: 0.875rem;
+}
+.lab-frame .section-tabs a { padding-bottom: 0.32rem; white-space: nowrap; }
+
+.lab-toolbar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.45rem;
+  margin: 0 0 0.5rem;
+  min-height: 1.9rem;
   font-family: var(--font-ui);
   font-size: 0.8125rem;
 }
-.list-summary { margin: 0; }
-.lab-view-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-4); }
+.lab-toolbar .lab-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.45rem;
+  margin: 0;
+  font-size: inherit;
+}
+.lab-toolbar .lab-inline-field {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+  margin: 0;
+}
+.lab-toolbar .lab-inline-select,
+.lab-toolbar .lab-control--inline {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.22rem;
+  height: 1.85rem;
+  padding: 0 0.2rem 0 0.48rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.22rem;
+}
+.lab-toolbar .lab-control--inline { padding-right: 0; }
+.lab-toolbar .lab-field-prefix {
+  color: var(--muted);
+  white-space: nowrap;
+  user-select: none;
+}
+.lab-toolbar :is(.lab-inline-select, .lab-control--inline):has(:focus-visible) {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+.lab-toolbar :is(.lab-inline-select select, .lab-control--inline button):focus-visible {
+  outline: 0;
+}
+.lab-toolbar input[type="search"],
+.lab-toolbar button,
+.lab-toolbar summary.lab-menu-button {
+  font: inherit;
+  line-height: 1.25;
+  height: 1.85rem;
+  padding: 0.12rem 0.48rem;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.22rem;
+}
+.lab-toolbar input[type="search"] { width: 12.5rem; min-width: 0; }
+form.lab-toolbar input[type="search"] { width: 17rem; }
+.lab-toolbar .lab-inline-select select {
+  font: inherit;
+  line-height: 1.25;
+  height: 100%;
+  padding: 0 0.2rem 0 0;
+  color: var(--fg);
+  background: transparent;
+  border: 0;
+  max-width: 13.5rem;
+  min-width: 0;
+}
+.lab-toolbar .lab-inline-check {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.3rem;
+  height: 1.85rem;
+  white-space: nowrap;
+  cursor: pointer;
+  padding: 0 0.15rem;
+}
+.lab-toolbar .lab-inline-check input { margin: 0; }
+.lab-control { display: flex; flex-direction: column; gap: var(--space-1); }
+.lab-toolbar__end {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex: none;
+}
+.lab-toolbar .lab-menu-button {
+  background: var(--surface);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.lab-toolbar .lab-control--inline .lab-menu-button {
+  height: 100%;
+  padding: 0 0.48rem 0 0.1rem;
+  background: transparent;
+  border: 0;
+}
+.lab-toolbar button[type="submit"] { background: var(--surface); white-space: nowrap; }
+.lab-toolbar button:disabled { color: var(--muted); cursor: default; opacity: 0.6; }
+.lab-menu-button::after { content: " ▾"; content: " ▾" / ""; }
+.lab-toolbar .lab-text-button {
+  border-color: transparent;
+  background: none;
+  color: var(--link);
+  padding: 0.12rem 0.35rem;
+  white-space: nowrap;
+}
+.lab-toolbar .lab-text-button:hover { text-decoration: underline; }
+
+details.lab-view-menu { position: relative; display: inline-block; }
+details.lab-view-menu > summary.lab-menu-button {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+}
+details.lab-view-menu > summary.lab-menu-button::-webkit-details-marker { display: none; }
+details.lab-view-menu[open] > summary.lab-menu-button {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+.lab-view-controls {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 20;
+  min-width: 17.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.65rem;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--muted);
+  border-radius: 0.25rem;
+  box-shadow: 0 6px 22px rgb(0 0 0 / 0.18);
+  font-size: 0.875rem;
+  white-space: normal;
+}
+.lab-view-controls > label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+}
 .lab-view-controls select {
   font: inherit;
   color: var(--fg);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 0.2rem;
-  margin-left: var(--space-1);
-  padding: 0.1rem 0.3rem;
+  padding: 0.25rem 0.45rem;
 }
-.heat-legend { margin: 0; }
+.heat-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+}
+.heat-legend label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+}
+.heat-legend input { margin: 0; }
 /* The switch between the two views: a compact segmented control of two
    radio buttons, which are hidden but keep their native behaviour; the
    label of the checked one is filled. */
 .view-switch {
   display: inline-flex;
+  height: 1.85rem;
+  align-items: stretch;
+  flex: none;
   min-width: 0;
   margin: 0;
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 0.2rem;
+  border-radius: 0.22rem;
 }
-.view-switch label { position: relative; display: block; cursor: pointer; }
+.view-switch label { position: relative; display: flex; cursor: pointer; }
 .view-switch label + label { border-left: 1px solid var(--border); }
 .view-switch span {
-  display: block;
-  padding: 0.25rem 0.75rem;
-  line-height: 1.25rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.62rem;
+  font-size: 0.78125rem;
+  line-height: 1;
+  white-space: nowrap;
   color: var(--fg);
   background: var(--bg);
 }
 .view-switch label:hover span { background: var(--surface); }
 .view-switch label:has(:checked) span { color: var(--bg); background: var(--link); font-weight: 600; }
 .view-switch label:has(:focus-visible) { outline: 2px solid var(--focus); outline-offset: -2px; }
-.heat-scale { margin-left: var(--space-2); }
+.heat-scale {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
 
 /* The table keeps the width its cells ask for, which the base columns
    have in both views; the note, when shown, takes what is left. */
@@ -433,6 +655,7 @@ span.stock[class*="level-"] { padding: 0 var(--space-2); border-radius: 0.25rem;
 [popovertarget]:has(+ :popover-open) { outline: 2px solid var(--link); outline-offset: 2px; }
 .lab-table-note { margin: var(--space-2) 0 0; color: var(--muted); font-family: var(--font-ui); font-size: 0.8125rem; }
 .lab-table-note strong { color: var(--fg); font-weight: 600; }
+.lab-frame .lab-table-note { flex: none; margin: 0.35rem 0 0; font-size: 0.75rem; line-height: 1.35; }
 
 /* The view controls work through these rules alone: an unchecked box of
    `Spalten` hides its column through a rule the page itself brings,
@@ -615,6 +838,123 @@ main:has(#heat-switch:not(:checked)) .item-table td[class*="heat-"] { background
     main:has(#view-details:checked) .item-layout:not([data-scripted]) { grid-template-columns: minmax(0, 1fr); }
     .item-layout[data-scripted][data-view="details"] #item-detail,
     main:has(#view-details:checked) .item-layout:not([data-scripted]) #item-detail { position: static; max-height: none; }
+  }
+
+  /* Opt-in fixed-viewport frame for the four Bestand lists on screens
+     at least 900 px wide: no page scroll, tables and the item details
+     pane scroll in their own boxes under sticky headers. Off below
+     900 px and in print. */
+  @media (min-width: 900px) {
+    html:has(body.lab-frame) {
+      height: 100vh;
+      overflow: hidden;
+      scrollbar-gutter: auto;
+    }
+    body.lab-frame {
+      height: 100vh;
+      min-height: 0;
+      overflow: hidden;
+      grid-template-rows: minmax(0, 1fr);
+    }
+    body.lab-frame .site-header {
+      grid-row: 1;
+      height: 100vh;
+    }
+    body.lab-frame main {
+      position: relative;
+      grid-row: 1;
+      height: 100vh;
+      min-height: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding: 0.75rem 0;
+    }
+    body.lab-frame .lab-messages { flex: none; margin-bottom: 0.45rem; }
+    body.lab-frame .lab-heading { flex-wrap: nowrap; }
+    body.lab-frame .lab-heading .lab-count {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    body.lab-frame .section-tabs ul { flex-wrap: nowrap; }
+    body.lab-frame .lab-toolbar { flex-wrap: nowrap; }
+    body.lab-frame .lab-toolbar .lab-filters { flex-wrap: nowrap; min-width: 0; }
+    body.lab-frame .lab-toolbar input[type="search"] { flex: 0 1 12.5rem; }
+    body.lab-frame form.lab-toolbar input[type="search"] { flex: 0 1 17rem; }
+    body.lab-frame .item-layout {
+      flex: 1 1 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    /* Positioned, so that absolutely positioned descendants such as
+       visually hidden labels stay inside the scroll box instead of
+       lengthening the page. */
+    body.lab-frame .table-scroll {
+      position: relative;
+      flex: 1 1 0;
+      min-height: 0;
+      max-height: none;
+      margin: 0;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 0.25rem;
+      background: var(--bg);
+    }
+    body.lab-frame .table-scroll table {
+      border-collapse: separate;
+      border-spacing: 0;
+    }
+    body.lab-frame .table-scroll thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    body.lab-frame .table-sticky thead :is(th, td):first-child { z-index: 3; }
+    body.lab-frame .inventory-table:not(.item-table) thead th {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.4rem 0.55rem;
+      white-space: nowrap;
+    }
+    body.lab-frame .inventory-table:not(.item-table) tbody td {
+      font-size: 0.8125rem;
+      padding: 0.34rem 0.55rem;
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+    }
+    body.lab-frame .inventory-table tbody tr:last-child td { border-bottom: 0; }
+    body.lab-frame .inventory-table:not(.item-table) tbody tr:hover td {
+      background: color-mix(in srgb, var(--surface) 70%, transparent);
+    }
+    body.lab-frame .inventory-table:not(.item-table) td a { text-decoration: none; }
+    body.lab-frame .inventory-table:not(.item-table) td a:hover { text-decoration: underline; }
+    body.lab-frame .item-layout[data-scripted][data-view="details"],
+    body.lab-frame main:has(#view-details:checked) .item-layout:not([data-scripted]) {
+      display: grid;
+      grid-template-columns: fit-content(calc(100% - 21rem - 0.75rem)) minmax(21rem, 1fr);
+      grid-template-rows: minmax(0, 1fr);
+      gap: 0.75rem;
+      align-items: stretch;
+      overflow: hidden;
+    }
+    body.lab-frame .item-layout[data-scripted][data-view="details"] .table-scroll,
+    body.lab-frame main:has(#view-details:checked) .item-layout:not([data-scripted]) .table-scroll {
+      height: 100%;
+      min-height: 0;
+    }
+    body.lab-frame .item-layout[data-scripted][data-view="details"] #item-detail,
+    body.lab-frame main:has(#view-details:checked) .item-layout:not([data-scripted]) #item-detail {
+      position: static;
+      height: 100%;
+      min-height: 0;
+      max-height: none;
+      overflow: auto;
+    }
   }
 
   /* The switch between the views is animated where the browser has view

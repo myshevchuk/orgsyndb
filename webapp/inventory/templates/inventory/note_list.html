@@ -1,19 +1,19 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n %}
 {% block title %}{% translate "Deliveries" %}{% endblock %}
+{% block body_class %} class="lab-frame"{% endblock %}
 {% block main %}
 <div class="lab-heading">
 <h1>{% translate "Deliveries" %}</h1>
-{% if user.is_authenticated %}<p class="actions"><a href="/lab/inventory/deliveries/new/">{% translate "New delivery note" %}</a></p>{% endif %}
+<span class="lab-count">{% blocktranslate count count=notes|length %}{{ count }} delivery note{% plural %}{{ count }} delivery notes{% endblocktranslate %}</span>
+{% if user.is_authenticated %}<div class="lab-heading__actions"><p class="actions"><a href="/lab/inventory/deliveries/new/">{% translate "New delivery note" %}</a></p></div>{% endif %}
 </div>
 {% include "inventory/tabs.html" %}
-<form class="lab-filters" method="get" action="/lab/inventory/deliveries/">
-<label>{% translate "Item" %}
-<select name="item">
+<form class="lab-filters lab-toolbar" method="get" action="/lab/inventory/deliveries/">
+<label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Item" %}:</span><select name="item">
 <option value=""{% if not chosen %} selected{% endif %}>{% translate "All" %}</option>
 {% for item in items %}<option value="{{ item.pk }}"{% if item.pk|stringformat:"d" == chosen %} selected{% endif %}>{{ item.article_number }} · {{ item.container }} · {{ item.name }}</option>
 {% endfor %}</select></label>
-<label>{% translate "Search" %}
-<input type="search" name="q" value="{{ q }}"></label>
+<label class="lab-inline-field"><span class="visually-hidden">{% translate "Search" %}</span><input type="search" name="q" value="{{ q }}" placeholder="{% translate "Number or recipient" %}"></label>
 <button type="submit">{% translate "Filter" %}</button>
 </form>
 <div class="table-scroll">

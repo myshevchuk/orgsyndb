@@ -1,22 +1,24 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n l10n lab inventory %}
 {% block title %}{% translate "End products" %}{% endblock %}
+{% block body_class %} class="lab-frame"{% endblock %}
 {% block head %}<style>
 {% for column in table_columns %}main:has(#column-{{ column.key }}:not(:checked)) .item-table .col-{{ column.key }} { display: none; }
 {% endfor %}</style>{% endblock %}
 {% block main %}
 <div class="lab-heading">
 <h1>{% translate "End products" %}</h1>
-<span id="item-count" class="lab-count" data-refresh>{% blocktranslate count count=total %}{{ count }} item{% plural %}{{ count }} items{% endblocktranslate %}</span>
-{% if user.is_authenticated %}<p class="actions"><a href="/lab/inventory/end-products/new/">{% translate "New item" %}</a></p>
+<span id="item-count" class="visually-hidden" data-refresh>{% blocktranslate count count=total %}{{ count }} item{% plural %}{{ count }} items{% endblocktranslate %}</span>
+<p id="list-summary" class="list-summary lab-count" data-refresh>{% blocktranslate with shown=rows|length count total=total %}{{ shown }} of {{ total }} item{% plural %}{{ shown }} of {{ total }} items{% endblocktranslate %} · {{ order }}{% if filters.active %} · <a href="{{ reset }}">{% translate "Reset" %}</a>{% endif %}</p>
+{% if user.is_authenticated %}<div class="lab-heading__actions">
 <form id="pick" class="lab-pick" method="get" action="/lab/inventory/deliveries/new/"><button type="submit">{% translate "Delivery note from selection" %}</button></form>
+<p class="actions"><a href="/lab/inventory/end-products/new/">{% translate "New item" %}</a></p>
+</div>
 {% endif %}</div>
 {% include "inventory/tabs.html" %}
 <div class="lab-toolbar">
 <form id="filters" class="lab-filters" method="get" action="/lab/inventory/end-products/">
-<label>{% translate "Search items" %}
-<input type="search" name="q" value="{{ filters.q }}" placeholder="{% translate "Name or article number" %}"></label>
-<label>{% translate "Category" %}
-<select id="filter-category" name="category" data-submit data-refresh>
+<label class="lab-inline-field"><span class="visually-hidden">{% translate "Search items" %}</span><input type="search" name="q" value="{{ filters.q }}" placeholder="{% translate "Name or article number" %}"></label>
+<label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Category" %}:</span><select id="filter-category" name="category" data-submit data-refresh>
 <option value=""{% if not filters.category %} selected{% endif %}>{% translate "All categories" %}</option>
 {% for category in categories %}<option value="{{ category }}"{% if category == filters.category %} selected{% endif %}>{{ category }}</option>
 {% endfor %}</select></label>
@@ -26,8 +28,8 @@
 {% endif %}{% if selected %}<input type="hidden" name="selected" value="{{ selected }}">
 {% endif %}<button type="submit">{% translate "Filter" %}</button>
 </form>
-<div class="lab-control">
-<span id="stock-filter-label">{% translate "Stock status" %}</span>
+<div class="lab-control lab-control--inline">
+<span id="stock-filter-label" class="lab-field-prefix">{% translate "Stock status" %}:</span>
 <button type="button" id="stock-filter" class="lab-menu-button" data-refresh popovertarget="stock-menu" aria-labelledby="stock-filter-label stock-filter">{% if stock_choice.level %}{{ stock_choice.label }}{% else %}{% translate "All" %}{% endif %} ({{ stock_choice.count }})</button>
 <div id="stock-menu" class="lab-popup stock-menu" popover>
 <ul id="stock-entries" data-refresh>
@@ -55,6 +57,7 @@
 {% endfor %}</select></label>
 </div>
 </div>
+<div class="lab-toolbar__end">
 <div class="lab-control lab-columns">
 <button type="button" class="lab-menu-button" popovertarget="columns-menu">{% translate "Columns" %}</button>
 <div id="columns-menu" class="lab-popup lab-menu" popover>
@@ -64,21 +67,22 @@
 {% endfor %}</fieldset>
 </div>
 </div>
-</div>
-<div class="table-caption">
-<p id="list-summary" class="list-summary" data-refresh>{% blocktranslate with shown=rows|length count total=total %}{{ shown }} of {{ total }} item{% plural %}{{ shown }} of {{ total }} items{% endblocktranslate %} · {{ order }}{% if filters.active %} · <a href="{{ reset }}">{% translate "Reset" %}</a>{% endif %}</p>
-<div class="lab-view-controls">
-<fieldset class="view-switch">
-<legend class="visually-hidden">{% translate "View" context "item list" %}</legend>
-<label><input type="radio" id="view-table" name="view" value="table" class="visually-hidden"{% if view == "table" %} checked{% endif %}><span>{% translate "Table" context "item list" %}</span></label>
-<label><input type="radio" id="view-details" name="view" value="details" class="visually-hidden"{% if view == "details" %} checked{% endif %}><span>{% translate "Details" %}</span></label>
-</fieldset>
+<details class="lab-control lab-view-menu">
+<summary class="lab-menu-button">{% translate "View" context "item list" %}</summary>
+<div class="lab-view-controls lab-menu">
 <label>{% translate "Row height" %}
 <select id="row-height" data-remember="item-list:row-height">
 <option value="compact" selected>{% translate "Compact" %}</option>
 <option value="tight">{% translate "Very compact" %}</option>
 </select></label>
 <p class="heat-legend"><label><input type="checkbox" id="heat-switch" data-remember="item-list:heat" checked> {% translate "Colour consumption" %}</label> <span class="heat-scale">{% translate "little" context "consumption" %}{% for name in heats %} <span class="heat-swatch {{ name }}" aria-hidden="true"></span>{% endfor %} {% translate "much" context "consumption" %}</span></p>
+</div>
+</details>
+<fieldset class="view-switch">
+<legend class="visually-hidden">{% translate "View" context "item list" %}</legend>
+<label><input type="radio" id="view-table" name="view" value="table" class="visually-hidden"{% if view == "table" %} checked{% endif %}><span>{% translate "Table" context "item list" %}</span></label>
+<label><input type="radio" id="view-details" name="view" value="details" class="visually-hidden"{% if view == "details" %} checked{% endif %}><span>{% translate "Details" %}</span></label>
+</fieldset>
 </div>
 </div>
 <div class="item-layout" data-view="{{ view }}">
