@@ -347,7 +347,6 @@ class CatalogueCase(fs.ProcedureFieldsMixin, ps.ThemeBuildCase):
                          [("/procedures/", texts["browse_all"])])
         self.assertIn("data-browse-all", links[0].node.attrs)
         fixed = page.find("details", "facet", data_facet="kind")
-        self.assertIn("data-fixed", fixed.attrs)
         self.assertIn("open", fixed.attrs)
         boxes = fixed.find_all("input")
         self.assertEqual(len(boxes), 1)
@@ -363,8 +362,6 @@ class CatalogueCase(fs.ProcedureFieldsMixin, ps.ThemeBuildCase):
             if other != "kind":
                 self.assertEqual(ps.facet_values(page, other),
                                  ps.facet_values(everything, other), other)
-                group = page.find("details", "facet", data_facet=other)
-                self.assertNotIn("data-fixed", group.attrs)
 
     # --- controls --------------------------------------------------------
 
@@ -381,7 +378,6 @@ class CatalogueCase(fs.ProcedureFieldsMixin, ps.ThemeBuildCase):
         self.assertEqual(len(forms), 1, "not one form in the site header")
         form = forms[0]
         self.assertTrue(form.has_class("site-search"))
-        self.assertIn("data-catalogue-search", form.attrs)
         self.assertNotIn("hidden", form.attrs)
         self.assertEqual(form.attrs.get("role"), "search")
         self.assertEqual(form.attrs.get("method", "").lower(), "get")
@@ -461,10 +457,6 @@ class CatalogueCase(fs.ProcedureFieldsMixin, ps.ThemeBuildCase):
         opens = (facet in ("type", "kind", "status") or facet == fixed
                  or facet in declared)
         self.assertEqual("open" in group.attrs, opens)
-        if facet == fixed:
-            self.assertIn("data-fixed", group.attrs)
-        else:
-            self.assertNotIn("data-fixed", group.attrs)
         for label in values.find_all("label", "facet-value"):
             box = label.find("input")
             self.assertEqual((box.attrs.get("type"), box.attrs.get("name")),

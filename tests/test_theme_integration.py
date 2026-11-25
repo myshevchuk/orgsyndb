@@ -333,7 +333,7 @@ class ShippedSiteTests(SiteCase):
         self.assertEqual(len(fields), 1)
         self.assertEqual((fields[0].attrs.get("type"),
                           fields[0].attrs.get("name")), ("search", "q"))
-        self.assertEqual("data-catalogue-search" in form.attrs, catalogue)
+        self.assertEqual(fields[0].attrs.get("id") == "catalogue-q", catalogue)
         if not catalogue:
             self.assertEqual(page.resolve(form.attrs.get("action", "")),
                              "/procedures/")

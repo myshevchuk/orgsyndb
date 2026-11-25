@@ -51,7 +51,7 @@ aria-current="true". */ -}}
 <button type="button" class="sidebar-toggle" aria-expanded="true" data-sidebar-toggle>{{ T "nav_toggle" }}</button>
 <a class="site-title" href="/">{{ site.Title }}</a>
 </div>
-<form class="site-search" role="search" method="get" action="{{ $action }}"{{ if $catalogue }} data-catalogue-search{{ end }}>
+<form class="site-search" role="search" method="get" action="{{ $action }}">
 <input type="search" name="q"{{ if $catalogue }} id="catalogue-q"{{ end }} aria-label="{{ $label }}" placeholder="{{ $hint }}">
 <button type="submit">{{ T "search_button" }}</button>
 </form>

@@ -61,7 +61,7 @@ data-text-* attributes of div.catalogue. */ -}}
 {{ else -}}
 {{ $values = partial "terms-by-label.html" (index $plurals $facet) -}}
 {{ end -}}
-<details class="facet" data-facet="{{ $facet }}"{{ if eq $facet $fixed }} data-fixed{{ end }}{{ if or (eq $facet "type") (eq $facet "kind") (eq $facet "status") (eq $facet $fixed) }} open{{ end }}>
+<details class="facet" data-facet="{{ $facet }}"{{ if or (eq $facet "type") (eq $facet "kind") (eq $facet "status") (eq $facet $fixed) }} open{{ end }}>
 <summary id="facet-{{ $facet }}">{{ T (printf "facet_%s" $facet) }}</summary>
 <div class="facet-values" role="group" aria-labelledby="facet-{{ $facet }}">
 {{ range $values -}}

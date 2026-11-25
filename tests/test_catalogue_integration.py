@@ -74,7 +74,6 @@ class PlainCatalogueTests(cs.CatalogueCase):
              "tag", "author"])
         group = page.find("details", "facet", data_facet="kind")
         self.assertIn("open", group.attrs)
-        self.assertNotIn("data-fixed", group.attrs)
         self.assertEqual(group.find("summary").norm(), "Kind")
         self.assertEqual(ps.facet_values(page, "kind"), [
             ("specific", "Specific procedure"),
@@ -105,7 +104,6 @@ class PlainCatalogueTests(cs.CatalogueCase):
                     self.assertEqual(group.find("summary").norm(), label)
                     self.assertIn("open", group.attrs)
                     self.assertEqual(group.find_all("a"), [])
-                    self.assertNotIn("data-fixed", group.attrs)
                 entries = fs.facet_entries(project, published, "en")
                 self.assertEqual(
                     ps.facet_values(page, "project"),
@@ -232,7 +230,6 @@ class PlainCatalogueTests(cs.CatalogueCase):
                     [("/procedures/", texts["browse_all"])])
                 self.assertIn("data-browse-all", links[0].node.attrs)
                 fixed = page.find("details", "facet", data_facet=facet)
-                self.assertIn("data-fixed", fixed.attrs)
                 self.assertIn("open", fixed.attrs)
                 boxes = fixed.find_all("input")
                 self.assertEqual(len(boxes), 1)
@@ -247,9 +244,6 @@ class PlainCatalogueTests(cs.CatalogueCase):
                     if other != facet:
                         self.assertEqual(ps.facet_values(page, other),
                                          ps.facet_values(home, other))
-                        group = page.find("details", "facet",
-                                          data_facet=other)
-                        self.assertNotIn("data-fixed", group.attrs)
 
     def test_script_wiring(self) -> None:
         """Scenario: Script wiring."""
