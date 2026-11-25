@@ -302,12 +302,12 @@ class VesselPageTests(PageCase):
 
     def test_the_substance_the_source_and_the_kind(self) -> None:
         self.item("CH-0012")
-        reagent = self.vessel("acetophenone", "mg", "5", source="bought",
-                              supplier="Sigma")
-        root = self.show(vessel_url(reagent))
+        commercial = self.vessel("acetophenone", "mg", "5", source="bought",
+                                 supplier="Sigma")
+        root = self.show(vessel_url(commercial))
         self.assertIn("/lab/registry/substances/acetophenone/",
                       [a.get("href") for a in root.find_all("a")])
-        self.assertIn("Reagenz", root.text())
+        self.assertIn("Handelschemikalie", root.text())
         self.assertNotRegex(root.text(), r"[A-Z]{2}-\d{4}")
 
     def test_an_intermediate(self) -> None:

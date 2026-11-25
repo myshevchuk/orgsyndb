@@ -130,7 +130,8 @@ class LayerTests(BulkCase):
         tabs = root.find("nav", cls="section-tabs").find_all("a")
         self.assertEqual(
             [(a.text(), a.get("aria-current")) for a in tabs],
-            [("Endprodukte", "page"), ("Chargen", None),
+            [("Endprodukte", "page"), ("Zwischenprodukte", None),
+             ("Handelschemikalien", None), ("Chargen", None),
              ("Alle Gefäße", None)])
 
     def test_all_three_lists_offer_the_layers(self) -> None:

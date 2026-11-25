@@ -332,6 +332,8 @@ class ItemListFurnishingTests(ListCase):
 
 
 BULK = "/lab/inventory/end-products/bulk/"
+INTERMEDIATES = "/lab/inventory/intermediates/"
+CHEMICALS = "/lab/inventory/chemicals/"
 HTMX = {"HTTP_HX_REQUEST": "true"}
 DELIVERY_COOKIE = "delivery-list-view"
 VIEWS = (None, "table", "details")
@@ -339,9 +341,11 @@ VIEWS = (None, "table", "details")
 
 class SectionTabTests(ListCase):
 
-    TABS = [(LIST, "Endprodukte"), (BATCHES, "Chargen"),
+    TABS = [(LIST, "Endprodukte"), (INTERMEDIATES, "Zwischenprodukte"),
+            (CHEMICALS, "Handelschemikalien"), (BATCHES, "Chargen"),
             (VESSELS, "Alle Gefäße")]
     LISTS = [(LIST, LIST), (BULK, LIST), (DELIVERIES, LIST),
+             (INTERMEDIATES, INTERMEDIATES), (CHEMICALS, CHEMICALS),
              (BATCHES, BATCHES), (VESSELS, VESSELS)]
 
     def tabs(self, path: str):
@@ -353,9 +357,12 @@ class SectionTabTests(ListCase):
 
     def test_the_five_lists_carry_the_tabs(self) -> None:
         """Requirement: Batch list ("The item list, the bulk list, the
-        delivery list, the batch list and the vessel list carry section tabs
-        `Endprodukte`, `Chargen` and `Alle Gefäße` (`End products`, `Batches`,
+        delivery list, the intermediate list, the commercial chemical list,
+        the batch list and the vessel list carry section tabs `Endprodukte`,
+        `Zwischenprodukte`, `Handelschemikalien`, `Chargen` and `Alle Gefäße`
+        (`End products`, `Intermediates`, `Commercial chemicals`, `Batches`,
         `All vessels`), linking to `/lab/inventory/end-products/`,
+        `/lab/inventory/intermediates/`, `/lab/inventory/chemicals/`,
         `/lab/inventory/batches/` and `/lab/inventory/vessels/`, in the
         site's `nav.section-tabs` markup.")."""
         for path, current in self.LISTS:
@@ -370,8 +377,10 @@ class SectionTabTests(ListCase):
 
     def test_english_tabs(self) -> None:
         accept(language="en")
-        self.assertEqual([a.text() for a in self.tabs(LIST)],
-                         ["End products", "Batches", "All vessels"])
+        self.assertEqual(
+            [a.text() for a in self.tabs(LIST)],
+            ["End products", "Intermediates", "Commercial chemicals",
+             "Batches", "All vessels"])
 
 
 class OldAddressTests(InventoryCase):
@@ -690,12 +699,12 @@ class VesselListTests(InventoryCase):
         rows = self.rows()
         self.assertEqual({k: v["Art"].text() for k, v in rows.items()},
                          {"KL0412": "Kolben", "B-I": "Zwischenprodukt",
-                          "B-R": "Reagenz"})
+                          "B-R": "Handelschemikalie"})
         self.assertEqual(rows["KL0412"]["Artikelnr."].text(), "CH-0012")
         self.assertEqual(rows["B-I"]["Artikelnr."].text(), "")
         self.assertEqual(rows["B-R"]["Artikelnr."].text(), "")
         self.assertEqual(rows["B-R"]["Herkunft"].text(), "gekauft · Sigma")
-        self.assertEqual(self.batches("?kind=reagent"), ["B-R"])
+        self.assertEqual(self.batches("?kind=commercial"), ["B-R"])
 
     def test_every_kind_has_its_filter(self) -> None:
         self.item("CH-0012", name="Zimtsäure")
@@ -706,7 +715,7 @@ class VesselListTests(InventoryCase):
         self.vessel("acetophenone", number="B-I")
         self.vessel("acetophenone", source="bought", supplier_batch="B-R")
         cases = {"flask": ["KL0412"], "end-product": ["KL0412"],
-                 "intermediate": ["B-I"], "reagent": ["B-R"]}
+                 "intermediate": ["B-I"], "commercial": ["B-R"]}
         for kind, want in cases.items():
             with self.subTest(kind=kind):
                 self.assertEqual(self.batches(f"?kind={kind}"), want)
@@ -732,7 +741,7 @@ class VesselListTests(InventoryCase):
     def test_the_page_offers_each_kind_and_shows_the_one_in_force(
             self) -> None:
         self.vessel("acetophenone", number="B-I")
-        root = self.listing("?kind=reagent")
+        root = self.listing("?kind=commercial")
         controls = [el for el in root.find("main").find_all(
             ("a", "option", "input"))
             if el.closest("nav") is None]
@@ -742,12 +751,12 @@ class VesselListTests(InventoryCase):
             if el.tag != "a" and el.get("value"):
                 offered.add(el.get("value"))
         self.assertLessEqual({"flask", "end-product", "intermediate",
-                              "reagent"}, offered)
+                              "commercial"}, offered)
         marked = [el for el in controls
                   if {"aria-current", "selected", "checked"} & set(el.attrs)]
         shown = " ".join(el.get("href", "") + el.get("value", "")
                          for el in marked)
-        self.assertIn("reagent", shown)
+        self.assertIn("commercial", shown)
         for other in ("flask", "end-product", "intermediate"):
             self.assertNotIn(other, shown)
 

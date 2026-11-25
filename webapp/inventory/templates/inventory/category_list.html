@@ -1,0 +1,122 @@
+{% extends "orgsyndb_web/base.html" %}{% load i18n lab inventory %}
+{% block title %}{{ heading }}{% endblock %}
+{% block body_class %} class="lab-frame"{% endblock %}
+{% block main %}
+<div class="lab-heading">
+<h1>{{ heading }}</h1>
+<span id="category-count" class="lab-count" data-refresh>{% blocktranslate count count=rows|length %}{{ count }} substance{% plural %}{{ count }} substances{% endblocktranslate %} · {% blocktranslate count count=vessel_total %}{{ count }} vessel{% plural %}{{ count }} vessels{% endblocktranslate %}</span>
+{% if user.is_authenticated %}<div class="lab-heading__actions"><p class="actions">{% if is_intermediate %}<a href="/lab/inventory/batches/new/">{% translate "New batch" %}</a>{% else %}<a href="/lab/inventory/batches/new/?source=bought">{% translate "Goods receipt" %}</a>{% endif %}</p></div>{% endif %}
+</div>
+{% include "inventory/tabs.html" %}
+<div class="lab-toolbar">
+<form id="filters" class="lab-filters" method="get" action="{{ base_url }}">
+<label class="lab-inline-field"><span class="visually-hidden">{% translate "Search" %}</span><input type="search" name="q" value="{{ filters.q }}" placeholder="{% if is_intermediate %}{% translate "Name, batch, task" %}{% else %}{% translate "Name, CAS, supplier, batch" %}{% endif %}"></label>
+{% if not is_intermediate %}<label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Group" %}:</span><select name="group" data-submit>
+<option value=""{% if not filters.group %} selected{% endif %}>{% translate "All" %}</option>
+{% if stale_group %}<option value="{{ stale_group }}" selected>{{ stale_group }}</option>
+{% endif %}{% for term, depth in groups %}<option value="{{ term.key }}"{% if term.key == filters.group %} selected{% endif %}>{% indent depth %}{{ term.shown_label }}</option>
+{% endfor %}</select></label>
+{% endif %}<label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Location" %}:</span><select id="filter-location" name="location" data-refresh data-submit>
+<option value=""{% if not filters.location %} selected{% endif %}>{% translate "All" %}</option>
+{% for value in locations %}<option value="{{ value }}"{% if value == filters.location %} selected{% endif %}>{{ value }}</option>
+{% endfor %}</select></label>
+{% if is_intermediate %}<label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Chemical class" %}:</span><select name="class" data-submit>
+<option value=""{% if not filters.chemical_class %} selected{% endif %}>{% translate "All" %}</option>
+{% if stale_class %}<option value="{{ stale_class }}" selected>{{ stale_class }}</option>
+{% endif %}{% for term, depth in classes %}<option value="{{ term.key }}"{% if term.key == filters.chemical_class %} selected{% endif %}>{% indent depth %}{{ term.shown_label }}</option>
+{% endfor %}</select></label>
+<label class="lab-inline-check"><input type="checkbox" name="flask" value="1"{% if filters.flask %} checked{% endif %} data-submit> {% translate "Flasks only" %}</label>
+<label class="lab-inline-check"><input type="checkbox" name="old" value="1"{% if filters.old %} checked{% endif %} data-submit> {% translate "Older than 1 y" %}</label>
+{% else %}<label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Supplier" %}:</span><select id="filter-supplier" name="supplier" data-refresh data-submit>
+<option value=""{% if not filters.supplier %} selected{% endif %}>{% translate "All" %}</option>
+{% for value in suppliers %}<option value="{{ value }}"{% if value == filters.supplier %} selected{% endif %}>{{ value }}</option>
+{% endfor %}</select></label>
+<label class="lab-inline-check"><input type="checkbox" name="sealed" value="1"{% if filters.sealed %} checked{% endif %} data-submit> {% translate "Sealed only" %}</label>
+{% endif %}{% if selected %}<input type="hidden" name="selected" value="{{ selected }}">
+{% endif %}<button type="submit">{% translate "Filter" %}</button>
+</form>
+<div class="lab-toolbar__end">
+{% include "inventory/view_switch.html" %}
+</div>
+</div>
+<div class="item-layout item-layout--split" data-view="{{ view }}" data-cookie="{{ cookie }}">
+<div id="category-table-scroll" class="table-scroll table-sticky">
+<table class="inventory-table item-table category-table">
+<thead>
+{% if is_intermediate %}<tr><th scope="col">{% translate "Substance" %}</th><th scope="col" class="number">{% translate "Amount" %}</th><th scope="col">{% translate "Vessels" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Source" %}</th><th scope="col">{% translate "Age" %}</th></tr>
+{% else %}<tr><th scope="col">{% translate "Substance" %}</th><th scope="col">{% translate "Group" %}</th><th scope="col" class="number">{% translate "Amount" %}</th><th scope="col">{% translate "Vessels" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Suppliers" %}</th><th scope="col">{% translate "Opened" %}</th></tr>
+{% endif %}</thead>
+<tbody id="item-rows" data-refresh hx-target="#item-detail" hx-swap="outerHTML" hx-sync="this:replace" hx-indicator="#item-detail">
+{% for row in rows %}<tr data-item="{{ row.substance.key }}" hx-get="{{ base_url }}{{ row.substance.key }}/{{ filter_query }}" hx-trigger="item-select"{% if row is chosen %} aria-current="true"{% endif %}>
+<td>{% substance row.substance %}{% if is_intermediate %}{% if row.classes %} <span class="cat-meta">{{ row.classes|join:", " }}</span>{% endif %}{% if row.in_other_category %} <span class="badge badge--cross">+{% translate "bought" context "batch source" %}</span>{% endif %}{% else %}{% if row.substance.short_name %} <span class="cat-meta">{{ row.substance.short_name }}</span>{% endif %}{% if row.substance.cas %} <span class="cat-meta cat-cas">{{ row.substance.cas }}</span>{% endif %}{% if row.in_other_category %} <span class="badge badge--cross">+{% translate "made" context "batch source" %}</span>{% endif %}{% endif %}</td>
+{% if not is_intermediate %}<td>{{ row.substance.group.shown_label }}</td>
+{% endif %}<td class="number cat-amount">{% for amount, unit in row.amounts %}{% if not forloop.first %}, {% endif %}{{ amount|decimal }} {{ unit }}{% endfor %}</td>
+<td>{% if is_intermediate %}{{ row.vessel_count }}{% if row.flask_count %} <span class="badge badge--flask">{% blocktranslate with count=row.flask_count %}{{ count }} in flask{% endblocktranslate %}</span>{% endif %}{% else %}{{ row.vessel_count }}{% if row.sealed_count %} <span class="cat-meta">({% blocktranslate with count=row.sealed_count %}{{ count }} sealed{% endblocktranslate %})</span>{% endif %}{% endif %}</td>
+<td>{% if row.locations.first %}{{ row.locations.first }}{% if row.locations.more %} <span class="cat-meta">+{{ row.locations.more }}</span>{% endif %}{% if row.locations.in_flask %} <span class="cat-meta">· {% translate "in flask" %}</span>{% endif %}{% elif row.locations.in_flask %}<span class="cat-meta">{% translate "in flask" %}</span>{% endif %}</td>
+{% if is_intermediate %}<td>{% for number in row.sources.task_numbers %}{% if not forloop.first %}, {% endif %}<a href="/lab/tasks/{{ number }}/">{{ number }}</a>{% endfor %}{% if row.sources.more %} <span class="cat-meta">+{{ row.sources.more }}</span>{% endif %}{% if row.sources.no_task %}{% if row.sources.task_numbers %} <span class="cat-meta">· {% translate "no task" %}</span>{% else %}<span class="cat-meta">{% translate "no task" %}</span>{% endif %}{% endif %}</td>
+<td>{% if row.age.old %}<span class="age-old">{{ row.age.text }}</span>{% else %}{{ row.age.text }}{% endif %}</td>
+{% else %}<td>{{ row.suppliers.first }}{% if row.suppliers.more %} <span class="cat-meta">+{{ row.suppliers.more }}</span>{% endif %}</td>
+<td>{% if row.opened_on %}{{ row.opened_on }}{% else %}<span class="badge badge--sealed">{% translate "sealed" %}</span>{% endif %}</td>
+{% endif %}</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% partialdef detail inline %}{% if detail_substance %}<aside id="item-detail" class="item-detail item-detail--split" data-item="{{ detail_substance.key }}" data-refresh aria-labelledby="item-detail-title">
+<header class="split-detail-head">
+<div class="split-detail-title">
+<h2 id="item-detail-title"><a href="/lab/registry/substances/{{ detail_substance.key }}/">{{ detail_substance.shown_name }}</a></h2>
+{% if detail_substance.short_name %}<span class="cat-meta">{{ detail_substance.short_name }}</span>{% endif %}
+{% if detail_substance.cas %}<span class="cat-meta cat-cas">{{ detail_substance.cas }}</span>{% endif %}
+{% if detail_vessels %}<span class="cat-meta">{% blocktranslate count count=detail_vessels|length %}{{ count }} vessel{% plural %}{{ count }} vessels{% endblocktranslate %}</span>{% endif %}
+</div>
+{% if user.is_authenticated %}<div class="split-detail-actions">
+{% if is_intermediate %}<a class="split-detail-btn" href="/lab/inventory/batches/new/?substance={{ detail_substance.key }}">{% translate "New batch" %}</a>{% else %}<a class="split-detail-btn" href="/lab/inventory/batches/new/?substance={{ detail_substance.key }}&amp;source=bought">{% translate "Goods receipt" %}</a>{% endif %}
+</div>{% endif %}
+</header>
+<div id="detail-vessels-scroll" class="table-scroll table-sticky split-detail-scroll">
+{% if detail_vessels %}<table class="inventory-table split-vessel-table">
+<thead>
+<tr><th scope="col">{% translate "Vessel" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col" class="number">{% translate "Amount" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Source" %}</th><th scope="col">{% translate "Date" %}</th>{% if not is_intermediate %}<th scope="col">{% translate "Opened on" %}</th>{% endif %}<th scope="col"{% if user.is_authenticated %} colspan="2"{% endif %}>{% translate "Note" context "inventory" %}</th></tr>
+</thead>
+<tbody>
+{% for vessel in detail_vessels %}{% with batch=vessel.batch %}<tr>
+<td><a href="/lab/inventory/vessels/{{ vessel.pk }}/">#{{ vessel.pk }}</a></td>
+<td><a href="/lab/inventory/batches/{{ batch.pk }}/">{{ batch }}</a></td>
+<td class="number cat-amount">{{ vessel.amount|in_vessel_unit:vessel }}</td>
+<td>{% if vessel.flask %}<span class="badge badge--flask">{% translate "Flask" %}</span>{% elif vessel.location %}{{ vessel.location }}{% else %}<span class="cat-meta">{% translate "not recorded" %}</span>{% endif %}</td>
+<td>{% if is_intermediate %}{% if batch.task_step %}<a href="/lab/tasks/{{ batch.task_step.task.number }}/">{{ batch.task_step.task.number }}</a> · {{ batch.task_step.label }}{% else %}<span class="cat-meta">{% translate "no task" %}</span>{% endif %}{% if batch.journal_entry %} · <a href="/lab/journal/{{ batch.journal_entry.notebook.code }}/">{{ batch.journal_entry }}</a>{% endif %}{% else %}{% if batch.supplier %}{{ batch.supplier }}{% if batch.supplier_article_number %} <span class="cat-meta">{{ batch.supplier_article_number }}</span>{% endif %}{% elif batch.supplier_article_number %}{{ batch.supplier_article_number }}{% else %}<span class="cat-meta">{% translate "unknown" %}</span>{% endif %}{% endif %}</td>
+<td>{{ batch.date|default_if_none:"" }}</td>
+{% if not is_intermediate %}<td>{% if vessel.opened_on %}{{ vessel.opened_on }}{% else %}<span class="badge badge--sealed">{% translate "sealed" %}</span>{% endif %}</td>
+{% endif %}<td class="split-vessel-note">{{ vessel.note }}</td>
+{% if user.is_authenticated %}<td class="split-vessel-actions">{% if vessel.amount %}<a href="/lab/inventory/vessels/{{ vessel.pk }}/withdraw/" data-dialog>{% translate "Withdraw" %}</a> · {% endif %}<a href="/lab/inventory/vessels/{{ vessel.pk }}/transfer/" data-dialog>{% translate "Transfer" %}</a> · <a href="/lab/inventory/vessels/{{ vessel.pk }}/correct/" data-dialog>{% translate "Correct" %}</a> · <a href="/lab/inventory/vessels/{{ vessel.pk }}/edit/" data-dialog>{% translate "Edit" %}</a></td>{% endif %}
+</tr>{% endwith %}
+{% endfor %}</tbody>
+</table>
+{% if single_vessel %}<div class="split-movements-head">
+<h3>{% translate "Newest movements" %} · #{{ single_vessel.pk }}</h3>
+<a href="/lab/inventory/vessels/{{ single_vessel.pk }}/">{% translate "Open vessel page" %}</a>
+</div>
+<table class="inventory-table split-movements-table">
+<thead>
+<tr><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col" class="number">{% translate "Amount" %}</th><th scope="col" class="number">{% translate "Amount after" %}</th><th scope="col">{% translate "User" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th></tr>
+</thead>
+<tbody>
+{% for row in ledger %}<tr>
+<td>{{ row.movement.date }}</td>
+<td>{{ row.movement.get_kind_display }}</td>
+<td class="number">{{ row.movement.amount|in_vessel_unit:single_vessel }}</td>
+<td class="number">{{ row.movement.amount_after|in_vessel_unit:single_vessel }}</td>
+<td>{% person row.movement.user %}</td>
+<td>{{ row.movement.note }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+{% endif %}{% else %}<p class="lab-empty split-empty">{% translate "No vessels" %}</p>
+{% endif %}</div>
+</aside>
+{% else %}<aside id="item-detail" class="item-detail item-detail--split" data-refresh>
+<p class="lab-empty split-empty">{% translate "No substance is chosen." %}</p>
+</aside>
+{% endif %}{% endpartialdef %}
+</div>
+{% endblock %}

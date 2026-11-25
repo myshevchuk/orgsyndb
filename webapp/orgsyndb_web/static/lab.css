@@ -702,14 +702,130 @@ details.lab-view-menu[open] > summary.lab-menu-button {
   white-space: nowrap;
 }
 .bulk-table,
-.note-table { width: 100%; }
+.note-table,
+.category-table { width: 100%; }
 .bulk-table .article-number {
   font-family: var(--font-mono);
   font-size: 0.71875rem;
   color: var(--muted);
   margin-right: 0.3rem;
 }
-.bulk-table td:first-child a { font-weight: 600; }
+.bulk-table td:first-child a,
+.category-table td:first-child a { font-weight: 600; }
+/* Long substance names wrap rather than push the last columns out of
+   the table's box. */
+.category-table td:first-child { white-space: normal; min-width: 14rem; }
+.cat-meta { color: var(--muted); font-size: 0.75rem; }
+.cat-cas { font-family: var(--font-mono); font-size: 0.71875rem; }
+.cat-amount { font-weight: 600; font-variant-numeric: tabular-nums; }
+.badge--cross,
+.badge--sealed {
+  background: color-mix(in srgb, var(--link) 10%, var(--bg));
+  color: var(--link);
+  border-color: color-mix(in srgb, var(--link) 32%, transparent);
+}
+.age-old {
+  display: inline-block;
+  padding: 0 0.42rem;
+  border-radius: 99px;
+  font-size: 0.71875rem;
+  font-weight: 600;
+  line-height: 1.4;
+  background: var(--draft-bg);
+  color: var(--draft-fg);
+  border: 1px solid color-mix(in srgb, var(--draft-fg) 30%, transparent);
+}
+.item-detail--split {
+  padding: 0;
+  overflow: hidden;
+}
+.split-detail-head {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  padding: 0.42rem 0.65rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.split-detail-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.55rem;
+  min-width: 0;
+}
+.split-detail-title h2 { margin: 0; font-size: 0.9375rem; }
+.split-detail-title h2 a { text-decoration: none; }
+.split-detail-title h2 a:hover { text-decoration: underline; }
+.split-detail-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: none;
+}
+.split-detail-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.16rem 0.55rem;
+  font-size: 0.78125rem;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.22rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.split-detail-btn:hover { border-color: var(--muted); text-decoration: none; }
+.split-detail-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+}
+.split-vessel-table,
+.split-movements-table {
+  width: 100%;
+  font-size: 0.8125rem;
+}
+.split-movements-table td { white-space: nowrap; }
+.split-vessel-table td { white-space: normal; }
+.split-vessel-table td.number,
+.split-vessel-table td:nth-child(4) { white-space: nowrap; }
+.split-vessel-table td.split-vessel-note,
+.split-movements-table td:last-child {
+  white-space: normal;
+  min-width: 6rem;
+}
+.split-vessel-actions {
+  text-align: right;
+  white-space: nowrap;
+  font-size: 0.78125rem;
+}
+.split-movements-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.65rem 0.3rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 0.75rem;
+}
+.split-movements-head h3 {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 0.71875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.split-empty { margin: 0; padding: 0.75rem; }
 .item-table tr.category-start > td { border-top: 1px solid var(--muted); }
 .item-table tbody tr:hover > td:not(.stock, [class*="heat-"]) { background: var(--surface); }
 [popovertarget]:has(+ :popover-open) { outline: 2px solid var(--link); outline-offset: 2px; }
@@ -950,7 +1066,13 @@ main:has(#heat-switch:not(:checked)) .item-table td[class*="heat-"] { background
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    body.lab-frame .section-tabs ul { flex-wrap: nowrap; }
+    /* With five tabs the row may be wider than a narrow frame: it
+       scrolls sideways rather than clip the last tabs. */
+    body.lab-frame .section-tabs ul {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: thin;
+    }
     body.lab-frame .lab-toolbar { flex-wrap: nowrap; }
     body.lab-frame .lab-toolbar .lab-filters { flex-wrap: nowrap; min-width: 0; }
     body.lab-frame .lab-toolbar input[type="search"] { flex: 0 1 10.25rem; }
@@ -1027,9 +1149,24 @@ main:has(#heat-switch:not(:checked)) .item-table td[class*="heat-"] { background
       max-height: none;
       overflow: auto;
     }
+    body.lab-frame .item-layout.item-layout--split[data-scripted][data-view="details"],
+    body.lab-frame main:has(#view-details:checked) .item-layout.item-layout--split:not([data-scripted]) {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(0, 45fr) minmax(0, 55fr);
+    }
+    body.lab-frame .item-layout.item-layout--split[data-scripted][data-view="details"] #item-detail,
+    body.lab-frame main:has(#view-details:checked) .item-layout.item-layout--split:not([data-scripted]) #item-detail {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    body.lab-frame .split-detail-scroll {
+      border: 0;
+      border-radius: 0;
+    }
     @media (min-width: 1200px) {
-      body.lab-frame .item-layout[data-scripted][data-view="details"],
-      body.lab-frame main:has(#view-details:checked) .item-layout:not([data-scripted]) {
+      body.lab-frame .item-layout:not(.item-layout--split)[data-scripted][data-view="details"],
+      body.lab-frame main:has(#view-details:checked) .item-layout:not(.item-layout--split):not([data-scripted]) {
         grid-template-columns: fit-content(calc(100% - 25rem - 0.75rem)) minmax(25rem, 1fr);
       }
     }
@@ -1065,8 +1202,9 @@ main:has(#heat-switch:not(:checked)) .item-table td[class*="heat-"] { background
      slides in from the right and out to it. */
   @media (prefers-reduced-motion: no-preference) {
     :root { --view-duration: 0.25s; }
-    .table-scroll.table-sticky { view-transition-name: item-table; }
+    .item-layout > .table-scroll.table-sticky { view-transition-name: item-table; }
     #item-detail { view-transition-name: item-pane; }
+    #item-detail.item-detail--split { view-transition-name: split-pane; }
     ::view-transition-group(item-table) { overflow: clip; animation-duration: var(--view-duration); }
     ::view-transition-old(item-table),
     ::view-transition-new(item-table) {
@@ -1080,6 +1218,11 @@ main:has(#heat-switch:not(:checked)) .item-table td[class*="heat-"] { background
     ::view-transition-new(item-pane) { animation: item-pane-in var(--view-duration) ease both; }
     @keyframes item-pane-in { from { opacity: 0; transform: translateX(100%); } }
     @keyframes item-pane-out { to { opacity: 0; transform: translateX(100%); } }
+    ::view-transition-group(split-pane) { animation-duration: var(--view-duration); }
+    ::view-transition-old(split-pane) { animation: split-pane-out var(--view-duration) ease both; }
+    ::view-transition-new(split-pane) { animation: split-pane-in var(--view-duration) ease both; }
+    @keyframes split-pane-in { from { opacity: 0; transform: translateY(100%); } }
+    @keyframes split-pane-out { to { opacity: 0; transform: translateY(100%); } }
   }
 }
 

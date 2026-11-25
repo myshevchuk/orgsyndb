@@ -418,6 +418,15 @@ class Batch(models.Model):
         return str(Unit(self.yield_unit).label) if self.yield_unit else ""
 
 
+class StockCategory(models.TextChoices):
+    """The stock category of an open vessel, derived from whether its
+    substance has an article and whether its batch is made or bought."""
+
+    END_PRODUCTS = "end-products", _("End products")
+    INTERMEDIATES = "intermediates", _("Intermediates")
+    COMMERCIAL = "commercial", _("Commercial chemicals")
+
+
 class VesselKind(models.TextChoices):
     """What a vessel is for, which follows from its flag, its batch and
     its substance."""
@@ -425,7 +434,7 @@ class VesselKind(models.TextChoices):
     FLASK = "flask", _("Flask")
     END_PRODUCT = "end-product", _("End product")
     INTERMEDIATE = "intermediate", _("Intermediate")
-    REAGENT = "reagent", _("Reagent")
+    COMMERCIAL = "commercial", _("Commercial chemical")
 
 
 class Vessel(models.Model):
@@ -499,13 +508,24 @@ class Vessel(models.Model):
         """The vessel's kind, a value of ``VesselKind``: ``flask`` for a
         flask; for a stored vessel ``end-product`` when its substance has
         an article, else ``intermediate`` for a made batch and
-        ``reagent`` for a bought one."""
+        ``commercial`` for a bought one."""
         if self.flask:
             return VesselKind.FLASK
         if hasattr(self.batch.substance, "article"):
             return VesselKind.END_PRODUCT
         return VesselKind.INTERMEDIATE \
-            if self.batch.source == Source.MADE else VesselKind.REAGENT
+            if self.batch.source == Source.MADE else VesselKind.COMMERCIAL
+
+    @property
+    def category(self) -> str:
+        """The vessel's stock category, a value of ``StockCategory``:
+        ``end-products`` when its substance has an article, else
+        ``intermediates`` for a made batch and ``commercial`` for a
+        bought one."""
+        if hasattr(self.batch.substance, "article"):
+            return StockCategory.END_PRODUCTS
+        return StockCategory.INTERMEDIATES \
+            if self.batch.source == Source.MADE else StockCategory.COMMERCIAL
 
     @property
     def kind_label(self) -> str:
