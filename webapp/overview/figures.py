@@ -2,11 +2,12 @@
 consumption, the items, the forecasts and the tasks."""
 
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 
-from inventory.figures import consumption, counted_lines
-from inventory.models import DeliveryNote, Item, Level, Vessel
+from inventory.figures import ConsumptionBatch, counted_lines
+from inventory.models import DeliveryLine, DeliveryNote, Item, Level
 from planning.plan import ArticleForecast, Plan, TaskLine
 from tasks.models import Priority, State
 
@@ -27,13 +28,15 @@ class Delivered:
     count: int
 
 
-def delivered() -> list[Delivered]:
+def delivered(lines: Iterable[DeliveryLine] | None = None
+              ) -> list[Delivered]:
     """Return every delivery that counts as consumption, dated by its
     note."""
+    source = counted_lines() if lines is None else lines
     return [Delivered(day=line.delivery_note.date, item=line.item,
                       recipient=line.delivery_note.recipient.strip(),
                       count=line.count)
-            for line in counted_lines()]
+            for line in source]
 
 
 def a_year_before(day: date) -> date:
@@ -134,11 +137,14 @@ class StockPart:
     count: int
 
 
-def stock_parts(items: list[Item], today: date) -> list[StockPart]:
+def stock_parts(items: list[Item], today: date,
+                batch: ConsumptionBatch | None = None) -> list[StockPart]:
     """Return the levels at which ITEMS stand on TODAY, in urgency order,
     each with the number of items at it; levels without items are left
     out."""
-    counts = Counter(consumption(item, today).level for item in items)
+    if batch is None:
+        batch = ConsumptionBatch.load(items)
+    counts = Counter(batch.consumption(item, today).level for item in items)
     return [StockPart(level, str(level.label), counts[level])
             for level in Level if counts[level]]
 
@@ -181,7 +187,8 @@ class Summary:
 
 
 def summary(today: date, plan: Plan, items: list[Item],
-            deliveries: list[Delivered]) -> Summary:
+            deliveries: list[Delivered],
+            batch: ConsumptionBatch | None = None) -> Summary:
     """Return the summary on TODAY of ITEMS, every item, of DELIVERIES
     and of what PLAN holds; the open vessels counted are those of any
     substance."""
@@ -190,7 +197,8 @@ def summary(today: date, plan: Plan, items: list[Item],
     late = [task for task in plan.tasks
             if (slack := plan.task_slack(task)) is not None and slack < 0]
     return Summary(
-        today=today, parts=stock_parts(items, today), items=len(items),
+        today=today, parts=stock_parts(items, today, batch=batch),
+        items=len(items),
         this_year=total(deliveries, date(today.year, 1, 1), today),
         last_year=total(deliveries, date(end.year, 1, 1), end),
         last_year_end=end,
@@ -198,7 +206,7 @@ def summary(today: date, plan: Plan, items: list[Item],
                 for found in plan.forecasts()),
         late=len(late), running=states[State.RUNNING],
         planned=states[State.PLANNED],
-        vessels=Vessel.objects.filter(amount__gt=0).count())
+        vessels=len(plan.vessels))
 
 
 def next_syntheses(plan: Plan) -> list[NextSynthesis]:

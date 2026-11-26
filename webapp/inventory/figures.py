@@ -129,11 +129,30 @@ class Consumption:
         return self.quarters.get(quarter, 0)
 
 
-def counted_lines(item: Item | None = None) -> list[DeliveryLine]:
-    """Return the delivery lines of ITEM, or of every item when it is
-    None, that count as consumption: those of current notes whose own
-    delivery movement is not reversed, and those of historical notes that
-    are not reversed.
+def entered_by_item(items: Iterable[Item] | None = None
+                    ) -> dict[int, dict[Quarter, int]]:
+    """Return entered quarterly consumption mapped by item ID, for ITEMS
+    or for every item when ITEMS is None."""
+    rows = EnteredConsumption.objects.all()
+    if items is not None:
+        ids = [item.pk for item in items]
+        if not ids:
+            return {}
+        rows = rows.filter(item_id__in=ids)
+    found: dict[int, dict[Quarter, int]] = {}
+    for item_id, year, quarter, count in rows.values_list(
+            "item_id", "year", "quarter", "count"):
+        found.setdefault(item_id, {})[(year, quarter)] = count
+    return found
+
+
+def counted_lines(item: Item | None = None,
+                  items: Iterable[Item] | None = None
+                  ) -> list[DeliveryLine]:
+    """Return the delivery lines of ITEM, of ITEMS, or of every item when
+    both are None, that count as consumption: those of current notes
+    whose own delivery movement is not reversed, and those of historical
+    notes that are not reversed.
 
     A line is matched to its delivery by note, item and batch, so that
     the reversal of one line leaves the note's other lines of the item in
@@ -146,6 +165,12 @@ def counted_lines(item: Item | None = None) -> list[DeliveryLine]:
     if item is not None:
         movements = movements.filter(item=item)
         lines = lines.filter(item=item)
+    elif items is not None:
+        ids = [each.pk for each in items]
+        if not ids:
+            return []
+        movements = movements.filter(item_id__in=ids)
+        lines = lines.filter(item_id__in=ids)
     reversed_lines = set(movements.values_list(
         "item_id", "delivery_note_id", "batch_id"))
     return [line for line in lines
@@ -153,6 +178,48 @@ def counted_lines(item: Item | None = None) -> list[DeliveryLine]:
                     and line.delivery_note.reversed)
             and (line.item_id, line.delivery_note_id, line.batch_id)
             not in reversed_lines]
+
+
+@dataclass(frozen=True)
+class ConsumptionBatch:
+    """Preloaded entered consumption and counted delivery lines indexed
+    by item ID, so repeated consumption and rhythm lookups issue no
+    further queries."""
+
+    entered: dict[int, dict[Quarter, int]]
+    lines: dict[int, list[DeliveryLine]]
+    all_lines: list[DeliveryLine]
+
+    @classmethod
+    def load(cls, items: Iterable[Item] | None = None
+             ) -> "ConsumptionBatch":
+        """Load entered consumption and counted delivery lines for ITEMS,
+        or for every item when ITEMS is None."""
+        entered = entered_by_item(items)
+        all_lines = counted_lines(items=items)
+        by_item: dict[int, list[DeliveryLine]] = {}
+        for line in all_lines:
+            by_item.setdefault(line.item_id, []).append(line)
+        return cls(entered=entered, lines=by_item, all_lines=all_lines)
+
+    def consumption(self, item: Item, today: date) -> Consumption:
+        """Return the consumption of ITEM as of TODAY from the preloaded
+        data."""
+        delivered: dict[Quarter, int] = {}
+        for line in self.lines.get(item.pk, ()):
+            key = quarter_of(line.delivery_note.date)
+            delivered[key] = delivered.get(key, 0) + line.count
+        return figures_of(item.quantity, self.entered.get(item.pk, {}),
+                          delivered, today, item.status)
+
+
+def vessels_by_substance(vessels: Iterable[Vessel]
+                         ) -> dict[int, list[Vessel]]:
+    """Group VESSELS by their batch's substance ID, preserving order."""
+    grouped: dict[int, list[Vessel]] = {}
+    for vessel in vessels:
+        grouped.setdefault(vessel.batch.substance_id, []).append(vessel)
+    return grouped
 
 
 # The days of a quarter, in ten-thousandths, so that a projection

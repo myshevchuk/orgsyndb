@@ -20,11 +20,9 @@ from django.utils.translation import gettext as _
 
 from collection.models import EntrySubstance, Sequence
 from collection.models import Step as SequenceStep
-from inventory.figures import (Consumption, bulk, consumption, convert,
-                               counted_lines, figures_of, molar_mass,
-                               quarter_of)
-from inventory.models import (BASE_UNIT, Article, EnteredConsumption, Item,
-                              Level, Unit, Vessel)
+from inventory.figures import (Consumption, ConsumptionBatch, bulk, convert,
+                               molar_mass, vessels_by_substance)
+from inventory.models import BASE_UNIT, Article, Item, Level, Unit, Vessel
 from planning import forecast
 from planning.forecast import Model, Rhythm
 from planning.models import Parameters
@@ -250,35 +248,73 @@ class Plan:
     """
 
     def __init__(self, today: date,
-                 parameters: Parameters | None = None) -> None:
+                 parameters: Parameters | None = None, *,
+                 batch: ConsumptionBatch | None = None,
+                 article_number: str | None = None) -> None:
         self.today = today
         self.parameters = parameters or Parameters.current()
+        self._batch = batch
+        self._article_number = article_number
         self._forecasts: dict[str, ArticleForecast | None] = {}
 
     @cached_property
     def items(self) -> dict[str, list[Item]]:
         """The items whose article has an article number, by article
         number, each in the item list's order."""
+        queryset = Item.objects.select_related("article__substance")
+        if self._article_number is not None:
+            queryset = queryset.filter(
+                article__article_number=self._article_number)
+        else:
+            queryset = queryset.filter(article__article_number__isnull=False)
         found: dict[str, list[Item]] = {}
-        for item in sorted(Item.objects.filter(
-                article__article_number__isnull=False).select_related(
-                    "article__substance"), key=Item.sort_key):
+        for item in sorted(queryset, key=Item.sort_key):
             found.setdefault(item.article_number, []).append(item)
         return found
+
+    @cached_property
+    def consumption_batch(self) -> ConsumptionBatch:
+        """The preloaded entered consumption and counted delivery lines
+        for this plan's scope."""
+        if self._batch is not None:
+            return self._batch
+        if self._article_number is not None:
+            scoped = [item for group in self.items.values() for item in group]
+            return ConsumptionBatch.load(scoped)
+        return ConsumptionBatch.load()
 
     @cached_property
     def numbers(self) -> dict[int, str]:
         """The article numbers of the numbered articles, with items or
         without, by the ID of their substance."""
-        return dict(Article.objects.filter(
-            article_number__isnull=False).values_list("pk",
-                                                      "article_number"))
+        queryset = Article.objects.filter(
+            article_number=self._article_number
+        ) if self._article_number is not None else Article.objects.filter(
+            article_number__isnull=False)
+        return dict(queryset.values_list("pk", "article_number"))
 
     @cached_property
     def vessels(self) -> list[Vessel]:
         """The open vessels, flasks among them, each with its batch."""
-        return list(Vessel.objects.filter(amount__gt=0).select_related(
-            "batch"))
+        queryset = Vessel.objects.filter(amount__gt=0).select_related(
+            "batch")
+        if self._article_number is not None:
+            substances = {item.article_id for group in self.items.values()
+                          for item in group}
+            if not substances:
+                return []
+            queryset = queryset.filter(batch__substance_id__in=substances)
+        return list(queryset)
+
+    @cached_property
+    def vessels_by_substance(self) -> dict[int, list[Vessel]]:
+        """The open vessels grouped by their batch's substance ID."""
+        return vessels_by_substance(self.vessels)
+
+    @cached_property
+    def stocked_substances(self) -> set[int]:
+        """The IDs of the substances that hold an open vessel."""
+        return set(self.vessels_by_substance)
 
     @cached_property
     def sequences(self) -> dict[int, list[tuple[Sequence, list[Any]]]]:
@@ -317,7 +353,7 @@ class Plan:
         order of ID: the last step whose preceding step's intermediate
         has an open vessel, of any kind or source, or step 1 when none
         has."""
-        stocked = {vessel.batch.substance_id for vessel in self.vessels}
+        stocked = self.stocked_substances
         starts = []
         for sequence, intermediates in self.sequences.get(
                 found.substance.pk, []):
@@ -331,8 +367,23 @@ class Plan:
 
     @cached_property
     def tasks(self) -> list[Task]:
-        """Every task."""
-        return list(Task.objects.select_related("substance"))
+        """Every task in this plan's scope."""
+        queryset = Task.objects.select_related("substance")
+        if self._article_number is not None:
+            substances = {item.article_id for group in self.items.values()
+                          for item in group}
+            if not substances:
+                return []
+            queryset = queryset.filter(substance_id__in=substances)
+        return list(queryset)
+
+    @cached_property
+    def tasks_by_substance(self) -> dict[int, list[Task]]:
+        """The tasks grouped by their substance ID."""
+        grouped: dict[int, list[Task]] = {}
+        for task in self.tasks:
+            grouped.setdefault(task.substance_id, []).append(task)
+        return grouped
 
     def matches(self, task: Task, article_number: str) -> bool:
         """Whether TASK names the substance of the article
@@ -364,15 +415,18 @@ class Plan:
         if not items:
             return None
         settings = self.parameters
-        planned = [item for item in items if consumption(
-            item, self.today).level not in UNPLANNED]
+        batch = self.consumption_batch
+        item_figures = [(item, batch.consumption(item, self.today))
+                        for item in items]
+        planned = [item for item, figures in item_figures
+                   if figures.level not in UNPLANNED]
         if not planned:
             return None
         mass = molar_mass(items[0])
         unit = Unit.UMOL if mass else BASE_UNIT[planned[0].unit]
-        vessels = [vessel for vessel in self.vessels
-                   if vessel.batch.substance_id == items[0].article_id]
-        entries = [self._item(item, unit, mass) for item in items]
+        vessels = self.vessels_by_substance.get(items[0].article_id, [])
+        entries = [self._item(item, unit, mass, figures, vessels)
+                   for item, figures in item_figures]
         held = [entry for entry in entries if entry.model is not None]
         if not held:
             return None
@@ -434,23 +488,16 @@ class Plan:
                                             mass)))
         return forecast.whole(exact), mg
 
-    def _item(self, item: Item, unit: str, mass: Decimal | None
-              ) -> ItemForecast:
+    def _item(self, item: Item, unit: str, mass: Decimal | None,
+              figures: Consumption, vessels: list[Vessel]) -> ItemForecast:
         """Return the forecast of ITEM with its size in UNIT, MASS being
         the molar mass of its substance; a dormant or never-delivered
         item has no demand model."""
-        entered = {(row.year, row.quarter): row.count for row in
-                   EnteredConsumption.objects.filter(item=item)}
-        lines = counted_lines(item)
+        entered = self.consumption_batch.entered.get(item.pk, {})
+        lines = self.consumption_batch.lines.get(item.pk, ())
         orders = [(line.delivery_note.date, line.count) for line in lines]
         notes = {line.delivery_note_id: line.delivery_note.date
                  for line in lines}
-        delivered: dict[tuple[int, int], int] = {}
-        for day, count in orders:
-            delivered[quarter_of(day)] = delivered.get(
-                quarter_of(day), 0) + count
-        figures = figures_of(item.quantity, entered, delivered,
-                             self.today, item.status)
         model = None if figures.level in UNPLANNED else forecast.demand(
             entered, orders, self.today, self.parameters)
         on_hand = None if model is None else model.runway(
@@ -462,16 +509,19 @@ class Plan:
             rhythm=forecast.rhythm(notes.values(), self.today),
             fill=(on_hand is not None
                   and on_hand < self.parameters.buffer_days
-                  and bulk(item, self.vessels).containers > 0))
+                  and bulk(item, vessels).containers > 0))
 
     def _durations(self, article_number: str) -> list[int]:
         """Return the durations in days of the ended tasks that match
         ARTICLE_NUMBER and are neither cancelled nor failed, each at
         least 1, ordered by end date, then start date, then number."""
+        items = self.items.get(article_number, [])
+        if not items:
+            return []
         ended = sorted(
-            (task for task in self.tasks
-             if task.state == State.ENDED and task.started
-             and self.matches(task, article_number)),
+            (task for task in self.tasks_by_substance.get(
+                items[0].article_id, ())
+             if task.state == State.ENDED and task.started),
             key=lambda task: (task.ended, task.started, task.serial))
         return [max(1, (task.ended - task.started).days)
                 for task in ended]
@@ -512,8 +562,8 @@ class Plan:
         """Return the planned and running tasks that match the article of
         FOUND, running first, then by number."""
         active = sorted(
-            (task for task in self.tasks if task.state in ACTIVE
-             and self.matches(task, found.article_number)),
+            (task for task in self.tasks_by_substance.get(
+                found.substance.pk, ()) if task.state in ACTIVE),
             key=lambda task: (task.state != State.RUNNING, task.serial))
         lines = []
         for task in active:
@@ -547,7 +597,8 @@ def article(article_number: str, today: date) -> ArticleForecast | None:
     """Return the forecast of ARTICLE_NUMBER as of TODAY under the
     current parameters, None when none of its items has demand or it has
     no item."""
-    return Plan(today).forecast(article_number)
+    return Plan(today, article_number=article_number).forecast(
+        article_number)
 
 
 def task_priority(task: Task, today: date) -> TaskPriority:
