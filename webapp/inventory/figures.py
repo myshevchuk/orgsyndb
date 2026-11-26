@@ -158,8 +158,7 @@ def counted_lines(item: Item | None = None,
     the reversal of one line leaves the note's other lines of the item in
     the result.
     """
-    movements = Movement.objects.filter(kind=Movement.Kind.DELIVERY,
-                                        reversal__isnull=False)
+    movements = Movement.objects.reversed_deliveries()
     lines = DeliveryLine.objects.select_related(
         "delivery_note", "item__article__substance")
     if item is not None:
@@ -379,7 +378,7 @@ def open_amounts(batches: Iterable[Batch]
     open vessels by unit as ``stock_of`` gives it; a batch without an
     open vessel maps to an empty list."""
     held: dict[int, list[Vessel]] = {batch.pk: [] for batch in batches}
-    for vessel in Vessel.objects.filter(batch_id__in=held, amount__gt=0
-                                        ).order_by("id"):
+    for vessel in Vessel.objects.open().filter(batch_id__in=held
+                                               ).order_by("id"):
         held[vessel.batch_id].append(vessel)
     return {pk: stock_of(vessels) for pk, vessels in held.items()}

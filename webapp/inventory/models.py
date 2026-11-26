@@ -108,6 +108,18 @@ class Article(LockedWrites, models.Model):
         return self.substance.shown_name
 
 
+class ItemQuerySet(models.QuerySet["Item"]):
+    """Reusable filters and joins for ``Item`` queries."""
+
+    def with_substance(self) -> "ItemQuerySet":
+        """Join each item's article and substance."""
+        return self.select_related("article__substance")
+
+    def numbered(self) -> "ItemQuerySet":
+        """Keep items whose article has an article number."""
+        return self.filter(article__article_number__isnull=False)
+
+
 class Item(models.Model):
     """An article in one container size, counted in whole containers.
 
@@ -117,6 +129,8 @@ class Item(models.Model):
     (``BatchStock``), changes only by movements; the change history
     covers the other fields.
     """
+
+    objects = ItemQuerySet.as_manager()
 
     article = models.ForeignKey(Article, verbose_name=_("article"),
                                 on_delete=models.PROTECT,
@@ -437,6 +451,18 @@ class VesselKind(models.TextChoices):
     COMMERCIAL = "commercial", _("Commercial chemical")
 
 
+class VesselQuerySet(models.QuerySet["Vessel"]):
+    """Reusable filters and joins for ``Vessel`` queries."""
+
+    def open(self) -> "VesselQuerySet":
+        """Keep vessels holding an amount above zero."""
+        return self.filter(amount__gt=0)
+
+    def with_substance(self) -> "VesselQuerySet":
+        """Join each vessel's batch, substance, and article."""
+        return self.select_related("batch__substance__article")
+
+
 class Vessel(models.Model):
     """A weighed amount of one batch in one place.
 
@@ -450,6 +476,8 @@ class Vessel(models.Model):
     was first opened, None while it is sealed; a vessel of a made batch
     has none.
     """
+
+    objects = VesselQuerySet.as_manager()
 
     batch = models.ForeignKey(Batch, verbose_name=_("Batch"),
                               on_delete=models.PROTECT,
@@ -611,6 +639,15 @@ class VesselMovement(models.Model):
         return f"{self.vessel} {self.get_kind_display()}"
 
 
+class MovementQuerySet(models.QuerySet["Movement"]):
+    """Reusable filters for ``Movement`` queries."""
+
+    def reversed_deliveries(self) -> "MovementQuerySet":
+        """Keep delivery movements that have been reversed."""
+        return self.filter(kind=Movement.Kind.DELIVERY,
+                           reversal__isnull=False)
+
+
 class Movement(models.Model):
     """A change of an item's quantity.
 
@@ -625,6 +662,8 @@ class Movement(models.Model):
     one, name the vessel's movement as VESSEL_MOVEMENT; a reversal names
     the movement it REVERSES, which is reversed at most once.
     """
+
+    objects = MovementQuerySet.as_manager()
 
     class Kind(models.TextChoices):
         OPENING = "opening", _("Opening count")
