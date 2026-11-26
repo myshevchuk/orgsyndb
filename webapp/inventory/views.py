@@ -650,8 +650,9 @@ def note_list(request: HttpRequest) -> HttpResponse:
     q = request.GET.get("q", "").strip()
     chosen = request.GET.get("item", "").strip()
     notes = DeliveryNote.objects.annotate(line_count=Count("lines")) \
-        .prefetch_related("lines__item", "lines__batch").order_by(
-            *DeliveryNote._meta.ordering)
+        .prefetch_related("lines__item__article__substance",
+                          "lines__batch").order_by(
+                              *DeliveryNote._meta.ordering)
     if chosen.isdigit():
         notes = notes.filter(pk__in=DeliveryNote.objects.filter(
             lines__item_id=int(chosen)).values("pk"))
@@ -669,7 +670,9 @@ def note_list(request: HttpRequest) -> HttpResponse:
         "notes": [(note, states[note.pk]) for note in shown],
         "selected_note": selected,
         "selected": str(selected.pk) if selected else "",
-        **(note_context(selected) if selected else {}),
+        **(note_context(selected, state=states[selected.pk],
+                        lines=list(selected.lines.all()))
+           if selected else {}),
         "view": list_view(request, NOTE_COOKIE),
         "layers": layers(DELIVERIES),
         "q": q,
@@ -1289,7 +1292,8 @@ def vessel_ledger(vessel: Vessel, limit: int | None = None
     movements = vessel.movements.select_related(
         "user", "item_movement__item__article", "task_step__task",
         "task_step__entry__procedure", "reverses", "reversal",
-        "transfer__vessel", "transferred__vessel").order_by("-id")
+        "transfer__vessel__batch",
+        "transferred__vessel__batch").order_by("-id")
     if limit is not None:
         movements = movements[:limit]
     rows = []
@@ -1376,7 +1380,9 @@ def batch_page(request: HttpRequest, pk: int) -> HttpResponse:
     })
 
 
-def note_context(note: DeliveryNote) -> dict[str, Any]:
+def note_context(note: DeliveryNote, *, state: str | None = None,
+                 lines: list[DeliveryLine] | None = None
+                 ) -> dict[str, Any]:
     """Return the context NOTE is shown with, on its page and in the
     delivery list's details: the note, its state and its lines, each
     with its delivery movement, found by item and batch, and whether
@@ -1385,10 +1391,13 @@ def note_context(note: DeliveryNote) -> dict[str, Any]:
                  for movement in note.movements.filter(
                      kind=Movement.Kind.DELIVERY).select_related(
                          "user", "reversal")}
+    if lines is None:
+        lines = list(note.lines.select_related(
+            "item__article__substance", "batch"))
     shown = [(line, movements.get((line.item_id, line.batch_id)))
-             for line in note.lines.select_related(
-                 "item__article__substance", "batch")]
-    return {"note": note, "state": note_states([note])[note.pk],
+             for line in lines]
+    return {"note": note,
+            "state": note_states([note])[note.pk] if state is None else state,
             "lines": [(line, movement, hasattr(movement, "reversal"))
                       for line, movement in shown]}
 

@@ -6,6 +6,7 @@ from django.contrib import admin
 from django.contrib.admin.utils import unquote
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
+from django.db.models import Count, Q, QuerySet
 from django.forms import ModelForm
 from django.http import HttpRequest, HttpResponse
 from django.utils.translation import gettext_lazy as _
@@ -48,11 +49,21 @@ class TaskAdmin(SimpleHistoryAdmin):
                        "created_at")
     inlines = (TaskStepInline,)
 
+    def get_queryset(self, request: HttpRequest) -> QuerySet[Task]:
+        return super().get_queryset(request).annotate(
+            _steps_total=Count("steps"),
+            _steps_done=Count("steps", filter=Q(steps__done_on__isnull=False)),
+        )
+
     @admin.display(description=_("Progress"))
     def progress_shown(self, task: Task) -> str:
         """Return the steps of TASK done and its steps, as ``2/5``, or
         ``–`` without steps."""
-        done, total = task.step_counts
+        total = getattr(task, "_steps_total", None)
+        if total is None:
+            done, total = task.step_counts
+        else:
+            done = task._steps_done
         return f"{done}/{total}" if total else "–"
 
     def revert_disabled(self, request: HttpRequest, obj: Any = None
