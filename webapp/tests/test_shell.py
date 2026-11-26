@@ -1,6 +1,7 @@
 """Tests of the page shell and the interface language (web-app: Page
 shell, Interface language)."""
 
+import html
 import json
 import re
 import tomllib
@@ -8,17 +9,19 @@ from datetime import date
 from pathlib import Path
 
 from django.contrib.staticfiles import finders
+from django.http import HttpResponse
 from django.test import SimpleTestCase, TestCase
 
-from . import (HTMX, REPO, SHELL_SCRIPT, berlin, frozen, make_item,
-               make_task, make_user, make_vessel, page, shell_scripts,
-               substance_for, table, task_url, ticking)
+from . import (HTMX, IDIOMORPH, REPO, SHELL_SCRIPT, berlin, frozen,
+               make_item, make_task, make_user, make_vessel, page,
+               shell_scripts, substance_for, table, task_url, ticking)
 from . import navigation_support as ns
 from .collection_support import accept, make_import
 
 CSS = REPO / "site" / "assets" / "css"
 JS = REPO / "site" / "assets" / "js"
 STYLESHEETS = ["tokens.css", "base.css", "screen.css", "print.css"]
+ALLOWED_MORPH_SWAPS = ("morph", "morph:outerHTML", "morph:innerHTML")
 
 
 def site_strings(language: str) -> dict:
@@ -173,6 +176,14 @@ class ShellTests(TestCase):
                 self.assertFalse(
                     name.startswith(("on", "hx-on", "data-hx-on")),
                     f"<{element.tag}> carries {name}")
+            for attr in ("hx-swap", "data-hx-swap"):
+                if attr in element.attrs:
+                    tokens = element.attrs[attr].split()
+                    style = tokens[0] if tokens else ""
+                    if style.startswith("morph"):
+                        self.assertIn(
+                            style, ALLOWED_MORPH_SWAPS,
+                            f"<{element.tag}> carries {attr}={style!r}")
         config = root.find("meta", attrs={"name": "htmx-config"})
         self.assertIsNotNone(config, "no meta htmx-config")
         self.assertIs(json.loads(config.get("content"))["allowEval"], False)
@@ -197,6 +208,17 @@ class ShellTests(TestCase):
                     [c.tag for c in brand.children if not isinstance(c, str)],
                     ["button", "a"])
 
+    def test_body_carries_morph_extension(self) -> None:
+        """The page shell enables the idiomorph hx-ext on body."""
+        for signed_in in (True, False):
+            with self.subTest(signed_in=signed_in):
+                self.client.logout()
+                root = self.shell(signed_in)
+                shell_scripts(root)
+                body = root.find("body")
+                self.assertIsNotNone(body)
+                self.assertEqual(body.get("hx-ext"), "morph")
+
     def test_every_page_carries_the_shell(self) -> None:
         paths = [task_url(self.task), "/lab/tasks/new/",
                  task_url(self.task, "edit"), "/lab/accounts/password/"]
@@ -212,6 +234,9 @@ class ShellTests(TestCase):
         self.assertEqual(response.status_code, 200)
         root = page(response)
         self.assertIsNotNone(root.find("header", cls="site-header"))
+        body = root.find("body")
+        self.assertIsNotNone(body)
+        self.assertEqual(body.get("hx-ext"), "morph")
         hrefs = [e.get("href") for e in root.find_all("link")
                  if e.get("rel") == "stylesheet"]
         self.assertEqual(hrefs[-1], "/lab/static/lab.css")
@@ -269,6 +294,7 @@ class InventoryShellTests(TestCase):
                 response = self.client.get(path)
                 root = page(response)
                 shell_scripts(root)
+                self.assertEqual(root.find("body").get("hx-ext"), "morph")
                 self.assertIsNotNone(root.find("header", cls="site-header"))
                 hrefs = [e.get("href") for e in root.find_all("link")
                          if e.get("rel") == "stylesheet"]
@@ -321,6 +347,7 @@ class PlanningShellTests(TestCase):
                 response = self.client.get("/lab/planning/")
                 root = page(response)
                 shell_scripts(root)
+                self.assertEqual(root.find("body").get("hx-ext"), "morph")
                 self.assertIsNotNone(root.find("header", cls="site-header"))
                 hrefs = [e.get("href") for e in root.find_all("link")
                          if e.get("rel") == "stylesheet"]
@@ -361,6 +388,7 @@ class RegistryShellTests(TestCase):
                 response = self.client.get(path)
                 root = page(response)
                 shell_scripts(root)
+                self.assertEqual(root.find("body").get("hx-ext"), "morph")
                 self.assertIsNotNone(root.find("header", cls="site-header"))
                 hrefs = [e.get("href") for e in root.find_all("link")
                          if e.get("rel") == "stylesheet"]
@@ -388,11 +416,49 @@ class StaticFilesTests(SimpleTestCase):
         self.assertTrue(found, f"{HTMX} is not found")
         self.assertTrue((Path(found).parent / "LICENSE").is_file())
 
+    def test_idiomorph_kept_with_its_licence(self) -> None:
+        """Scenario: idiomorph kept with its licence (web-app: Scripts)."""
+        found = finders.find(IDIOMORPH.removeprefix("/lab/static/"))
+        self.assertTrue(found, f"{IDIOMORPH} is not found")
+        self.assertTrue((Path(found).parent / "LICENSE").is_file())
+
     def test_the_sites_script_is_collected(self) -> None:
         found = finders.find(SHELL_SCRIPT.removeprefix("/lab/static/"))
         self.assertTrue(found, f"{SHELL_SCRIPT} is not found")
         self.assertEqual(Path(found).read_bytes(),
                          (JS / "site.js").read_bytes())
+
+
+class ScriptsHelperTests(SimpleTestCase):
+    """Unit tests for the morph swap check in ``ShellTests.assert_scripts``."""
+
+    def _page_with_swap(self, attr: str, value: str) -> HttpResponse:
+        escaped = html.escape(value, quote=True)
+        return HttpResponse(
+            '<html><head>'
+            '<meta name="htmx-config" content=\'{"allowEval": false}\'>'
+            f'</head><body><div {attr}="{escaped}"></div></body></html>')
+
+    def test_assert_scripts_rejects_disallowed_morph_swaps(self) -> None:
+        for attr in ("hx-swap", "data-hx-swap"):
+            for value in ('morph:{morphStyle:"innerHTML"}',
+                          "morph:custom",
+                          "morph:{morphStyle: 'innerHTML'} scroll:top"):
+                with self.subTest(attr=attr, value=value):
+                    with self.assertRaises(AssertionError):
+                        ShellTests.assert_scripts(
+                            self, self._page_with_swap(attr, value))
+
+    def test_assert_scripts_allows_standard_morph_swaps(self) -> None:
+        for attr in ("hx-swap", "data-hx-swap"):
+            for value in ("morph",
+                          "morph:outerHTML",
+                          "morph:innerHTML",
+                          "morph:outerHTML scroll:top",
+                          "outerHTML"):
+                with self.subTest(attr=attr, value=value):
+                    ShellTests.assert_scripts(
+                        self, self._page_with_swap(attr, value))
 
 
 class LanguageTests(TestCase):

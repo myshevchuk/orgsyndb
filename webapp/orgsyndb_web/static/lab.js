@@ -1,7 +1,7 @@
 // The lab application's script, loaded on every page of the shell
-// after htmx. What it wires today lives on the item list, where the
-// browser opens and closes popups by itself and the view controls
-// take effect through lab.css; the script adds:
+// after htmx and idiomorph. What it wires today lives on the item
+// list, where the browser opens and closes popups by itself and the
+// view controls take effect through lab.css; the script adds:
 //
 // - Places each popup below the button that opened it, or above it
 //   when there is no room below, or else over it, always inside the
@@ -40,15 +40,15 @@
 //   closes the dialog on a click on its close button or on the form's
 //   cancel link; Escape closes it by itself. Closing empties it. A
 //   form that is saved there fires the event `lab-saved`; the script
-//   then fetches the page again as a page, replaces each element
-//   marked data-refresh, and the messages, with the new page's, keeps
-//   what the user ticked and chose in the list, closes the dialog and
-//   moves focus to where the user was working. The dialog's buttons
-//   stay disabled until then. If the page cannot be fetched, the page
-//   is reloaded. While the dialog's form is posted, and while that
-//   refresh is under way, the dialog's body is inert, so that nothing
-//   in it, such as a link to another form, replaces the form whose
-//   save is pending.
+//   then fetches the page again as a page, morphs each element marked
+//   data-refresh in place, replaces the messages with the new page's,
+//   keeps what the user ticked and chose in the list, closes the
+//   dialog and moves focus to where the user was working. The dialog's
+//   buttons stay disabled until then. If the page cannot be fetched,
+//   the page is reloaded. While the dialog's form is posted, and while
+//   that refresh is under way, the dialog's body is inert, so that
+//   nothing in it, such as a link to another form, replaces the form
+//   whose save is pending.
 // - Narrows each batch choice (a select marked data-batch-for, whose
 //   options sit in one optgroup per substance, marked data-substance
 //   with the substance's key) to the substance of the control that
@@ -241,6 +241,33 @@
     place, paramSearch, narrowBatches, sortOrder, planFilterShows, planStep,
   };
   if (typeof document === "undefined") return;
+
+  // Restrict htmx's morph extension to the three literal styles so no
+  // custom morph: suffix ever reaches Function() under allowEval: false.
+  if (typeof htmx !== "undefined" && typeof Idiomorph !== "undefined") {
+    const morphConfig = (swapStyle) => {
+      if (swapStyle === "morph" || swapStyle === "morph:outerHTML") {
+        return { morphStyle: "outerHTML" };
+      }
+      if (swapStyle === "morph:innerHTML") {
+        return { morphStyle: "innerHTML" };
+      }
+      return null;
+    };
+    htmx.defineExtension("morph", {
+      isInlineSwap: (swapStyle) => {
+        const config = morphConfig(swapStyle);
+        return Boolean(config && config.morphStyle === "outerHTML");
+      },
+      handleSwap: (swapStyle, target, fragment) => {
+        const config = morphConfig(swapStyle);
+        if (config) {
+          return Idiomorph.morph(target, fragment.children, config);
+        }
+        return false;
+      },
+    });
+  }
 
   let open = null;
 
@@ -466,6 +493,7 @@
   const dialog = document.getElementById("lab-dialog");
   const dialogBody = document.getElementById("lab-dialog-body");
   let dialogOpener = null; // the link that opened the dialog
+  let dialogOpenerHref = ""; // its href when opened
   let loading = null; // the address of the form being requested
   let saving = false; // a save is posted and its refresh not done
   let posting = false; // the dialog's form is being posted
@@ -489,18 +517,25 @@
   const plain = (event) => event.button === 0 && !event.ctrlKey
     && !event.metaKey && !event.shiftKey && !event.altKey;
 
-  // Replaces every element of the page marked data-refresh, and the
-  // messages, with the same element of FRESH, the parsed new page,
-  // and returns the elements put in. An element the new page lacks is
-  // removed.
+  const REFRESH_MORPH = {
+    callbacks: {
+      beforeAttributeUpdated: (attr, node) => !(
+        attr === "open" && node.matches("details.widget")
+      ),
+    },
+  };
+
+  // Morphs every element of the page marked data-refresh in place
+  // against the matching element of FRESH, the parsed new page,
+  // replaces the messages, and returns the morphed elements. An
+  // element the new page lacks is removed.
   const refreshParts = (fresh) => {
     const added = [];
     for (const old of document.querySelectorAll("[data-refresh][id]")) {
       const next = fresh.getElementById(old.id);
       if (next) {
-        const node = document.adoptNode(next);
-        old.replaceWith(node);
-        added.push(node);
+        Idiomorph.morph(old, next, REFRESH_MORPH);
+        added.push(old);
       } else {
         old.remove();
       }
@@ -640,9 +675,6 @@
     const ticked = new Set(
       [...document.querySelectorAll("input[name=item]:checked")]
         .map((box) => box.value));
-    const widgetOpen = new Map(
-      [...document.querySelectorAll("details.widget[id]")]
-        .map((el) => [el.id, el.open]));
     const tableSort = new Map();
     for (const table of document.querySelectorAll(
       "table[data-sortable][id]")) {
@@ -671,10 +703,6 @@
       htmx.process(node);
       enhanceSortable(node);
     }
-    for (const [id, isOpen] of widgetOpen) {
-      const el = document.getElementById(id);
-      if (el && el.matches("details.widget")) el.open = isOpen;
-    }
     for (const [id, state] of tableSort) {
       const table = document.getElementById(id);
       if (table && table.matches("table[data-sortable]")) {
@@ -692,10 +720,12 @@
     restoreList(ticked);
   };
 
-  // Moves focus to the link that opened the dialog while it is in the
-  // page, else to the heading of the details, else to the page's.
+  // Moves focus to the link that opened the dialog while it is still
+  // in the page and points to the same action, else to the heading of
+  // the details, else to the page's.
   const focusAfterSave = () => {
-    if (dialogOpener && dialogOpener.isConnected) {
+    if (dialogOpener && dialogOpener.isConnected
+        && dialogOpener.getAttribute("href") === dialogOpenerHref) {
       dialogOpener.focus({ preventScroll: true });
       return;
     }
@@ -715,6 +745,7 @@
         // One form at a time: a second click while one loads is lost.
         if (loading !== null || dialog.open) return;
         dialogOpener = link;
+        dialogOpenerHref = link.getAttribute("href") || "";
         loading = link.href;
         htmx.ajax("GET", link.href,
                   { target: dialogBody, swap: "innerHTML" });
