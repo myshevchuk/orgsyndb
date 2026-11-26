@@ -242,6 +242,33 @@
   };
   if (typeof document === "undefined") return;
 
+  // Restrict htmx's morph extension to the three literal styles so no
+  // custom morph: suffix ever reaches Function() under allowEval: false.
+  if (typeof htmx !== "undefined" && typeof Idiomorph !== "undefined") {
+    const morphConfig = (swapStyle) => {
+      if (swapStyle === "morph" || swapStyle === "morph:outerHTML") {
+        return { morphStyle: "outerHTML" };
+      }
+      if (swapStyle === "morph:innerHTML") {
+        return { morphStyle: "innerHTML" };
+      }
+      return null;
+    };
+    htmx.defineExtension("morph", {
+      isInlineSwap: (swapStyle) => {
+        const config = morphConfig(swapStyle);
+        return Boolean(config && config.morphStyle === "outerHTML");
+      },
+      handleSwap: (swapStyle, target, fragment) => {
+        const config = morphConfig(swapStyle);
+        if (config) {
+          return Idiomorph.morph(target, fragment.children, config);
+        }
+        return false;
+      },
+    });
+  }
+
   let open = null;
 
   const opener = (popup) => [
@@ -466,6 +493,7 @@
   const dialog = document.getElementById("lab-dialog");
   const dialogBody = document.getElementById("lab-dialog-body");
   let dialogOpener = null; // the link that opened the dialog
+  let dialogOpenerHref = ""; // its href when opened
   let loading = null; // the address of the form being requested
   let saving = false; // a save is posted and its refresh not done
   let posting = false; // the dialog's form is being posted
@@ -692,10 +720,12 @@
     restoreList(ticked);
   };
 
-  // Moves focus to the link that opened the dialog while it is in the
-  // page, else to the heading of the details, else to the page's.
+  // Moves focus to the link that opened the dialog while it is still
+  // in the page and points to the same action, else to the heading of
+  // the details, else to the page's.
   const focusAfterSave = () => {
-    if (dialogOpener && dialogOpener.isConnected) {
+    if (dialogOpener && dialogOpener.isConnected
+        && dialogOpener.getAttribute("href") === dialogOpenerHref) {
       dialogOpener.focus({ preventScroll: true });
       return;
     }
@@ -715,6 +745,7 @@
         // One form at a time: a second click while one loads is lost.
         if (loading !== null || dialog.open) return;
         dialogOpener = link;
+        dialogOpenerHref = link.getAttribute("href") || "";
         loading = link.href;
         htmx.ajax("GET", link.href,
                   { target: dialogBody, swap: "innerHTML" });
