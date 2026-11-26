@@ -1504,8 +1504,7 @@ def substance_page(source: str, key: str) -> str | None:
     or None when SOURCE is a path."""
     if not is_address(source):
         return None
-    parts = urllib.parse.urlsplit(source)
-    return (f"{parts.scheme}://{parts.netloc}/lab/registry/substances/"
+    return (f"{origin(source)}/lab/registry/substances/"
             f"{urllib.parse.quote(key)}/")
 
 

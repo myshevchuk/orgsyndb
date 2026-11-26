@@ -355,6 +355,28 @@ class RegistryAtAnAddressTests(unittest.TestCase):
         self.assertEqual(index["notebooks"], table["notebooks"])
         self.assertFalse((root / "build").exists())
 
+    def test_userinfo_is_stripped_from_compound_urls(self) -> None:
+        """Requirement: Index data (substance URL uses scheme, host and
+        port only, omitting userinfo)."""
+        table = load_snapshot(TEST_COLLECTION / "registry.json")
+        address = "http://user:pass@127.0.0.1:8443/lab/registry/snapshot.json"
+        root = copy_collection(self, TEST_COLLECTION)
+        name_registry(root, address)
+        raw = json.dumps(table).encode("utf-8")
+        with unittest.mock.patch.object(
+                pipeline(), "_fetch_snapshot", return_value=raw):
+            index = index_of(root)
+        url = compound(index["compounds"], "acetic-anhydride")["url"]
+        self.assertEqual(
+            url,
+            "http://127.0.0.1:8443/lab/registry/substances/acetic-anhydride/")
+        substance_page = pipeline_function("substance_page")
+        self.assertIsNone(substance_page("registry.json", "acetic-anhydride"))
+        self.assertEqual(
+            substance_page("https://user:pass@lab.example:8443/registry.json",
+                           "a b"),
+            "https://lab.example:8443/lab/registry/substances/a%20b/")
+
     def test_the_environment_names_the_registry(self) -> None:
         """Requirement: Index data (the registry as the collection or
         `ORGSYNDB_REGISTRY` names it)."""
