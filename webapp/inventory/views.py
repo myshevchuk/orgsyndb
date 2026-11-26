@@ -32,9 +32,10 @@ from django.views.decorators.vary import vary_on_cookie, vary_on_headers
 from inventory import bookings
 from inventory.bookings import Refused
 from inventory.chart import chart, quarters_shown
-from inventory.figures import (Bulk, Consumption, bulk, consumption,
-                               containers_from, molar_mass, newest_first,
-                               open_amounts, proposed_amount)
+from inventory.figures import (Bulk, Consumption, ConsumptionBatch, bulk,
+                               consumption, containers_from, molar_mass,
+                               newest_first, open_amounts, proposed_amount,
+                               vessels_by_substance)
 from inventory.forms import (ROWS, BatchEditForm, BatchForm,
                              ConsumptionForm, CorrectionForm, FillForm,
                              ItemEditForm, ItemForm, NewVesselForm,
@@ -464,10 +465,12 @@ def stock_menu(rows: list[Row], filters: ItemFilters, selected: str = ""
                     counts[level]) for level in Level)]
 
 
-def row_of(item: Item, today: date, vessels: list[Vessel]) -> Row:
+def row_of(item: Item, today: date, vessels: list[Vessel],
+           figures: Consumption | None = None) -> Row:
     """The row of ITEM as of TODAY, with its bulk among VESSELS, the
     open vessels, and without heats."""
-    figures = consumption(item, today)
+    if figures is None:
+        figures = consumption(item, today)
     return Row(item=item, figures=figures, bulk=bulk(item, vessels),
                statistics=statistics(figures, today))
 
@@ -495,8 +498,12 @@ def item_list(request: HttpRequest) -> HttpResponse:
     filters = ItemFilters.from_query(request.GET)
     items = sorted(Item.objects.select_related("article__substance"),
                    key=Item.sort_key)
-    vessels = open_vessels()
-    rows = heated([row_of(item, today, vessels) for item in items])
+    by_substance = vessels_by_substance(open_vessels())
+    batch = ConsumptionBatch.load(items)
+    rows = heated([
+        row_of(item, today, by_substance.get(item.article_id, []),
+               batch.consumption(item, today))
+        for item in items])
     shown = filters.ordered([row for row in rows if filters.admits(row)])
     if filters.sort == "category":
         shown = by_category(shown)
@@ -523,8 +530,10 @@ def item_list(request: HttpRequest) -> HttpResponse:
         "categories": sorted({item.category for item in items
                               if item.category}),
         "containers": list(containers.items()),
-        "compartments": in_use("compartment"),
-        "boxes": in_use("box"),
+        "compartments": sorted({item.compartment for item in items
+                                if item.compartment}, key=natural),
+        "boxes": sorted({item.box for item in items if item.box},
+                        key=natural),
         "stock_menu": menu,
         "stock_choice": next(entry for entry in menu if entry.current),
         "heats": [f"heat-{n}" for n in range(1, 6)],
@@ -1170,7 +1179,8 @@ class QuarterRow:
     href: str | None = None
 
 
-def consumption_section(item: Item, today: date, links: bool
+def consumption_section(item: Item, today: date, links: bool,
+                        figures: Consumption | None = None
                         ) -> dict[str, Any]:
     """Return the context of the template ``inventory/consumption.html``
     for ITEM as of TODAY: ``figures``, its consumption (see
@@ -1184,7 +1194,8 @@ def consumption_section(item: Item, today: date, links: bool
     not reversed; the quarter then takes an entered value (see
     ``bookings.enter_consumption``).
     """
-    figures = consumption(item, today)
+    if figures is None:
+        figures = consumption(item, today)
     open_for_links = links and item.article_number is not None
     held = bookings.held_quarters(item) if open_for_links else set()
     rows = []
@@ -1224,6 +1235,7 @@ def item_page(request: HttpRequest, pk: int) -> HttpResponse:
     mass = molar_mass(item)
     found = plan.article(item.article_number, today) \
         if item.article_number is not None else None
+    entry = found.entry(item) if found else None
     vessels = open_vessels(item)
     held = [stock for stock in item.stocks.select_related("batch")
             if stock.quantity]
@@ -1233,13 +1245,14 @@ def item_page(request: HttpRequest, pk: int) -> HttpResponse:
         "stocks": [stock for stock in held if stock.batch_id is not None],
         "unknown": sum(stock.quantity for stock in held
                        if stock.batch_id is None),
-        **consumption_section(item, today, request.user.is_authenticated),
+        **consumption_section(item, today, request.user.is_authenticated,
+                              figures=entry.figures if entry else None),
         "ledger": ledger,
         "vessels": [(vessel, containers_from(vessel, item, mass))
                     for vessel in vessels],
         "bulk": bulk(item, vessels),
         "forecast": found,
-        "entry": found.entry(item) if found else None,
+        "entry": entry,
         "history": history_entries(item),
     })
 
