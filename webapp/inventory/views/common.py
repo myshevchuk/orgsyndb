@@ -1,7 +1,6 @@
 """Shared paths, navigation, master-detail, dialog, and URL helpers for
 inventory views."""
 
-import json
 from collections.abc import Callable, Sequence
 from datetime import date
 from functools import wraps
@@ -18,6 +17,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
 from django.utils.translation import pgettext_lazy
 from django.views.decorators.vary import vary_on_headers
+from django_htmx.http import HttpResponseClientRedirect, trigger_client_event
 
 from inventory.bookings import Refused
 from inventory.forms import show_refusal
@@ -122,7 +122,7 @@ def htmx_detail_or_redirect(request: HttpRequest, base_url: str,
                             keep_query: bool = False) -> HttpResponse:
     """Render TEMPLATE with CONTEXT_FN() for an htmx request, or redirect
     non-htmx requests to BASE_URL with ``selected`` set to SELECTED."""
-    if request.headers.get("HX-Request") != "true":
+    if not request.htmx:
         if keep_query:
             params = request.GET.copy()
             params["selected"] = str(selected)
@@ -137,8 +137,7 @@ def for_dialog(request: HttpRequest) -> bool:
     That is an htmx request that is not htmx's reload of a page from its
     history, which needs the complete page.
     """
-    return (request.headers.get("HX-Request") == "true"
-            and request.headers.get("HX-History-Restore-Request") != "true")
+    return bool(request.htmx and not request.htmx.history_restore_request)
 
 
 def sign_in_next(request: HttpRequest) -> str:
@@ -148,7 +147,7 @@ def sign_in_next(request: HttpRequest) -> str:
     REQUEST, named by its ``HX-Current-URL`` header, when the page is on
     the host of REQUEST; otherwise the path of REQUEST.
     """
-    current = request.headers.get("HX-Current-URL", "")
+    current = request.htmx.current_url or ""
     if current and url_has_allowed_host_and_scheme(
             current, {request.get_host()}, request.is_secure()):
         parts = urlsplit(current)
@@ -177,8 +176,8 @@ def item_form(view: Callable[..., HttpResponse]
     def wrapper(request: HttpRequest, *args: Any, **kwargs: Any
                 ) -> HttpResponse:
         if for_dialog(request) and not request.user.is_authenticated:
-            return HttpResponse(status=204, headers={
-                "HX-Redirect": redirect_to_login(sign_in_next(request)).url})
+            return HttpResponseClientRedirect(
+                redirect_to_login(sign_in_next(request)).url, status=204)
         return signed_in(request, *args, **kwargs)
 
     return wrapper
@@ -231,8 +230,8 @@ def saved(request: HttpRequest, text: str, target: str,
     messages.success(request, text)
     if record is not None and for_dialog(request):
         key = "vessel" if isinstance(record, Vessel) else "item"
-        return HttpResponse(status=204, headers={
-            "HX-Trigger": json.dumps({"lab-saved": {key: record.pk}})})
+        return trigger_client_event(
+            HttpResponse(status=204), "lab-saved", {key: record.pk})
     return redirect(target)
 
 
