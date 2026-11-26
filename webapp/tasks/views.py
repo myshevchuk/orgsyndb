@@ -10,6 +10,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Prefetch
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -17,6 +18,7 @@ from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy, pgettext_lazy
 from django.views.decorators.http import require_POST
 
+from collection.models import EntrySubstance
 from inventory.bookings import write_off_flasks
 from inventory.figures import stock_of
 from inventory.models import Batch, Vessel, VesselMovement, shown
@@ -195,10 +197,15 @@ def made_by(step: TaskStep) -> list[MadeBatch]:
     """Return the batches STEP made, in the order of their IDs, each
     with the amount of its flask while that holds one and the amounts of
     its stored vessels."""
+    batches = getattr(step, "prefetched_batches", None)
+    if batches is None:
+        batches = list(step.batches.select_related(
+            "substance", "journal_entry__notebook").prefetch_related(
+                Prefetch("vessels", queryset=Vessel.objects.order_by("id"))
+            ).order_by("id"))
     found = []
-    for batch in step.batches.select_related(
-            "substance", "journal_entry__notebook").order_by("id"):
-        vessels = list(batch.vessels.order_by("id"))
+    for batch in batches:
+        vessels = list(batch.vessels.all())
         flask = next((vessel for vessel in vessels
                       if vessel.flask and vessel.amount > 0), None)
         found.append(MadeBatch(
@@ -210,18 +217,23 @@ def made_by(step: TaskStep) -> list[MadeBatch]:
     return found
 
 
-def shown_step(step: TaskStep, offer: bool = False) -> Step:
+def shown_step(step: TaskStep, offer: bool = False,
+               offered: list[Vessel] | None = None) -> Step:
     """Return STEP, its entry and procedure read, as its task's page
     lists it, with the batches it made and the withdrawals into it; when
     OFFER, with the open vessels of its substrates, or of any substance
     for a step without an entry, as those offered for a withdrawal."""
+    withdrawals = getattr(step, "prefetched_withdrawals", None)
+    if withdrawals is None:
+        withdrawals = list(step.vessel_movements.filter(
+            kind=VesselMovement.Kind.WITHDRAWAL).select_related(
+                "vessel__batch", "reversal").order_by("id"))
     records = {
         "id": step.pk, "position": step.position, "done_on": step.done_on,
         "batches": made_by(step),
-        "withdrawals": list(step.vessel_movements.filter(
-            kind=VesselMovement.Kind.WITHDRAWAL).select_related(
-                "vessel__batch", "reversal").order_by("id")),
-        "offered": offered_vessels(step) if offer else [],
+        "withdrawals": withdrawals,
+        "offered": (offered if offered is not None
+                    else offered_vessels(step)) if offer else [],
         "journal_entry": step.journal_entry}
     entry = step.entry
     if entry is None:
@@ -247,6 +259,29 @@ def offered_vessels(step: TaskStep) -> list[Vessel]:
     return list(vessels.order_by("batch__substance__key", "id"))
 
 
+def _offered_by_step(steps: list[TaskStep]) -> dict[int, list[Vessel]]:
+    """Return the open vessels offered for withdrawal for each step in
+    STEPS, loading open vessels and entry substrates once."""
+    all_open = list(Vessel.objects.filter(amount__gt=0).select_related(
+        "batch__substance").order_by("batch__substance__key", "id"))
+    entry_ids = {step.entry_id for step in steps if step.entry_id is not None}
+    substrates: dict[int, set[int]] = {}
+    if entry_ids:
+        for entry_id, substance_id in EntrySubstance.objects.filter(
+                entry_id__in=entry_ids, role="substrate").values_list(
+                    "entry_id", "substance_id"):
+            substrates.setdefault(entry_id, set()).add(substance_id)
+    offered: dict[int, list[Vessel]] = {}
+    for step in steps:
+        if step.entry_id is None:
+            offered[step.pk] = all_open
+        else:
+            needed = substrates.get(step.entry_id, set())
+            offered[step.pk] = [vessel for vessel in all_open
+                                if vessel.batch.substance_id in needed]
+    return offered
+
+
 def task_page(request: HttpRequest, number: str) -> HttpResponse:
     """Show the task NUMBER with its priority, sequence, steps, actions,
     the forecast of each article it matches, its product batches and its
@@ -261,13 +296,31 @@ def task_page(request: HttpRequest, number: str) -> HttpResponse:
     task = get_object_or_404(Task.objects.select_related(
         "assignee", "created_by", "substance", "sequence"), number=number)
     plan = Plan(timezone.localdate())
-    steps = task.steps.select_related(
-        "entry__procedure", "journal_entry__notebook").order_by("position")
+    steps = list(task.steps.select_related(
+        "entry__procedure", "journal_entry__notebook").prefetch_related(
+        Prefetch(
+            "batches",
+            queryset=Batch.objects.select_related(
+                "substance", "journal_entry__notebook").prefetch_related(
+                Prefetch("vessels", queryset=Vessel.objects.order_by("id"))
+            ).order_by("id"),
+            to_attr="prefetched_batches",
+        ),
+        Prefetch(
+            "vessel_movements",
+            queryset=VesselMovement.objects.filter(
+                kind=VesselMovement.Kind.WITHDRAWAL).select_related(
+                "vessel__batch", "reversal").order_by("id"),
+            to_attr="prefetched_withdrawals",
+        ),
+    ).order_by("position"))
     recording = request.user.is_authenticated and task.state in (
         State.PLANNED, State.RUNNING)
+    offered = _offered_by_step(steps) if recording else {}
     return render(request, "tasks/page.html", {
         "task": task,
-        "steps": [shown_step(step, recording) for step in steps],
+        "steps": [shown_step(step, recording, offered.get(step.pk))
+                  for step in steps],
         "recording": recording,
         "sequence_known": task.sequence is not None
         and not task.sequence.withdrawn,
