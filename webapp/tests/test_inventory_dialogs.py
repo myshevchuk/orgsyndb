@@ -13,6 +13,10 @@ import json
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
+from django.conf import settings
+from django.http import HttpResponse
+from django.test import RequestFactory, SimpleTestCase
+
 from . import PASSWORD, Element, field_value, page
 from .inventory_support import (
     LIST,
@@ -238,6 +242,15 @@ class TheFormAloneTests(DialogCase):
         done = self.client.post(self.urls()["correct"], correction())
         self.assertRedirects(done, item_url(self.target),
                              fetch_redirect_response=False)
+
+    def test_request_has_htmx_attribute(self) -> None:
+        url = self.urls()["edit"]
+        htmx_response = self.client.get(url, **HTMX)
+        self.assertTrue(hasattr(htmx_response.wsgi_request, "htmx"))
+        self.assertTrue(htmx_response.wsgi_request.htmx)
+        page_response = self.client.get(url)
+        self.assertTrue(hasattr(page_response.wsgi_request, "htmx"))
+        self.assertFalse(page_response.wsgi_request.htmx)
 
     def test_other_forms_are_unchanged(self) -> None:
         for path in (NEW_ITEM, NEW_NOTE):
@@ -538,6 +551,37 @@ class SignedOutTests(InventoryCase):
                 self.assertEqual(
                     self.led_to(self.client.get(path, **HTMX)), path)
 
+    def test_sign_in_next_edge_cases(self) -> None:
+        path = item_url(self.target, "fill")
+        cases = [
+            ("same-host https on http",
+             "https://testserver/lab/inventory/end-products/?q=CH",
+             "/lab/inventory/end-products/?q=CH"),
+            ("scheme-relative",
+             "//testserver/lab/inventory/end-products/?q=CH",
+             "/lab/inventory/end-products/?q=CH"),
+            ("local path with query",
+             "/lab/inventory/end-products/?q=CH&selected=3",
+             "/lab/inventory/end-products/?q=CH&selected=3"),
+            ("host-only",
+             "http://testserver",
+             "/"),
+            ("fragment stripped",
+             "http://testserver/lab/inventory/end-products/?q=CH#row-1",
+             "/lab/inventory/end-products/?q=CH"),
+            ("malformed host",
+             "http://[invalid",
+             path),
+            ("malformed port",
+             "http://testserver:bad/lab/inventory/end-products/",
+             path),
+        ]
+        for label, current_url, expected in cases:
+            with self.subTest(case=label):
+                headers = {**HTMX, "HTTP_HX_CURRENT_URL": current_url}
+                self.assertEqual(
+                    self.led_to(self.client.get(path, **headers)), expected)
+
     def test_without_htmx_the_redirect_is_as_before(self) -> None:
         before = snapshot()
         for path, data in self.forms.items():
@@ -816,4 +860,26 @@ class ScriptsTests(DialogCase):
         root = page(self.client.get(f"{LIST}?selected={self.target.pk}"))
         self.assertTrue(root.find_all(attrs={"data-refresh": True}))
         assert_scripts(self, root)
+
+
+class HtmxMiddlewareTests(SimpleTestCase):
+    """django-htmx settings and middleware integration."""
+
+    def test_django_htmx_is_configured(self) -> None:
+        self.assertIn("django_htmx", settings.INSTALLED_APPS)
+        self.assertIn("django_htmx.middleware.HtmxMiddleware",
+                      settings.MIDDLEWARE)
+
+    def test_htmx_middleware_attaches_request_htmx(self) -> None:
+        from django_htmx.middleware import HtmxMiddleware
+        middleware = HtmxMiddleware(lambda request: HttpResponse())
+        factory = RequestFactory()
+        htmx_request = factory.get("/lab/inventory/end-products/", **HTMX)
+        middleware(htmx_request)
+        self.assertTrue(hasattr(htmx_request, "htmx"))
+        self.assertTrue(htmx_request.htmx)
+        plain_request = factory.get("/lab/inventory/end-products/")
+        middleware(plain_request)
+        self.assertTrue(hasattr(plain_request, "htmx"))
+        self.assertFalse(plain_request.htmx)
 
