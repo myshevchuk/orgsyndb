@@ -4,6 +4,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -17,6 +18,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy, pgettext_lazy
 from django.views.decorators.http import require_POST
+from django.views.decorators.vary import vary_on_headers
 
 from collection.models import EntrySubstance
 from inventory.bookings import write_off_flasks
@@ -24,7 +26,7 @@ from inventory.figures import stock_of
 from inventory.models import Batch, Vessel, VesselMovement, shown
 from journal.entries import entry_for
 from orgsyndb_web import lock
-from orgsyndb_web.lists import clean_choice
+from orgsyndb_web.lists import clean_choice, htmx_list_push_url
 from planning.plan import Plan, TaskPriority
 from tasks.closing import amounts
 from tasks.forms import TaskEditForm, TaskForm
@@ -78,6 +80,20 @@ class Filters:
             priority=clean_choice(priority, Priority.values),
             q=query.get("q", "").strip())
 
+    def query_string(self) -> str:
+        """Return the non-default active filter parameters encoded with a
+        leading ``?``, or empty when all filters are at their defaults."""
+        pairs: list[tuple[str, str]] = []
+        if self.state != "active":
+            pairs.append(("state", self.state))
+        if self.person:
+            pairs.append(("person", self.person))
+        if self.priority:
+            pairs.append(("priority", self.priority))
+        if self.q:
+            pairs.append(("q", self.q))
+        return "?" + urlencode(pairs) if pairs else ""
+
 
 def searched_text(task: Task) -> str:
     """The text the list's search looks in, folded for a comparison
@@ -124,6 +140,7 @@ def selected(tasks: list[Task], filters: Filters,
         and (not words or words in searched_text(task))]
 
 
+@vary_on_headers("HX-Request", "HX-History-Restore-Request")
 def task_list(request: HttpRequest) -> HttpResponse:
     """List the tasks the query's filters select, in the list's order,
     each with its priority, computed or entered, and the counts of
@@ -141,7 +158,7 @@ def task_list(request: HttpRequest) -> HttpResponse:
                    key=lambda task: task.sort_key(
                        priorities[task.pk].priority,
                        priorities[task.pk].slack))
-    return render(request, "tasks/list.html", {
+    response = render(request, "tasks/list.html", {
         "tasks": [(task, priorities[task.pk], product_numbers(task))
                   for task in shown],
         "filters": filters,
@@ -154,6 +171,8 @@ def task_list(request: HttpRequest) -> HttpResponse:
             "followup": sum(t.needs_follow_up for t in counted),
         },
     })
+    return htmx_list_push_url(
+        request, response, "/lab/tasks/" + filters.query_string())
 
 
 @dataclass(frozen=True)

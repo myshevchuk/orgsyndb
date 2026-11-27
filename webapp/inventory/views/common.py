@@ -116,15 +116,6 @@ def pick_selected(rows: Sequence[T], wanted: str,
     return rows[0], str(key(rows[0]))
 
 
-def htmx_list_push_url(request: HttpRequest, response: HttpResponse,
-                       canonical_url: str) -> HttpResponse:
-    """Set ``HX-Push-Url`` to CANONICAL_URL on RESPONSE for a non-restore
-    htmx request, and return RESPONSE."""
-    if request.htmx and not request.htmx.history_restore_request:
-        response["HX-Push-Url"] = canonical_url
-    return response
-
-
 def htmx_detail_or_redirect(request: HttpRequest, base_url: str,
                             selected: Any, template: str,
                             context_fn: Callable[[], dict[str, Any]],

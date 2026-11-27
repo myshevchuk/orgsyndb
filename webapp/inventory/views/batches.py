@@ -19,9 +19,10 @@ from inventory.forms import BatchEditForm, BatchForm
 from inventory.history import history_entries
 from inventory.models import (Batch, DeliveryLine, Item, Movement, Source,
                               VesselMovement)
-from inventory.views.common import (BATCHES, batch_url, form_page,
-                                    htmx_list_push_url, locations, saved, tabs)
+from inventory.views.common import (BATCHES, batch_url, form_page, locations,
+                                    saved, tabs)
 from journal.entries import entry_for
+from orgsyndb_web.lists import htmx_list_push_url
 from tasks.models import Task, TaskStep
 
 

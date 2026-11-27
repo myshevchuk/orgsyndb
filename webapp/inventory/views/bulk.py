@@ -13,11 +13,10 @@ from inventory.figures import containers_from, molar_mass
 from inventory.models import Item, Source, Vessel
 from inventory.summaries import natural
 from inventory.views.common import (BULK, BULK_COOKIE, LIST, bulk_vessels,
-                                    htmx_detail_or_redirect,
-                                    htmx_list_push_url, layers, list_view,
-                                    pick_selected, tabs)
+                                    htmx_detail_or_redirect, layers,
+                                    list_view, pick_selected, tabs)
 from inventory.views.vessels import vessel_ledger
-from orgsyndb_web.lists import clean_choice
+from orgsyndb_web.lists import clean_choice, htmx_list_push_url
 
 
 @dataclass(frozen=True)

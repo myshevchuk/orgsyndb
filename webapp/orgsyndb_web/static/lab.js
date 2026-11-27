@@ -6,8 +6,6 @@
 // - Places each popup below the button that opened it, or above it
 //   when there is no room below, or else over it, always inside the
 //   window, and keeps it there while the page or a table box scrolls.
-// - Submits the form of a control marked data-submit when its value
-//   changes, and hides that form's submit buttons.
 // - Restores each control marked data-remember from localStorage when
 //   the page loads, and saves it there whenever it changes.
 // - Marks the layout (.item-layout) of a list with two views, the
@@ -478,22 +476,6 @@
       event.stopPropagation();
     }
   }, true);
-
-  for (const control of document.querySelectorAll("[data-submit]")) {
-    if (!control.form) continue;
-    for (const button of control.form.querySelectorAll(
-      "button[type=submit]")) {
-      button.hidden = true;
-    }
-  }
-  // Delegated, so that a control a refresh put in still submits.
-  document.addEventListener("change", (event) => {
-    const control = event.target;
-    if (control instanceof Element && control.matches("[data-submit]")
-        && control.form) {
-      control.form.requestSubmit();
-    }
-  });
 
   const storage = (() => {
     try {

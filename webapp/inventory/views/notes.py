@@ -15,9 +15,10 @@ from inventory.forms import ROWS, NoteEditForm, NoteForm, ReversalForm
 from inventory.history import history_entries
 from inventory.models import DeliveryLine, DeliveryNote, Item, Movement
 from inventory.views.common import (DELIVERIES, LIST, NOTE_COOKIE, form_page,
-                                    htmx_detail_or_redirect,
-                                    htmx_list_push_url, layers, list_view,
-                                    note_url, pick_selected, saved, tabs)
+                                    htmx_detail_or_redirect, layers,
+                                    list_view, note_url, pick_selected, saved,
+                                    tabs)
+from orgsyndb_web.lists import htmx_list_push_url
 
 
 def note_states(notes: list[DeliveryNote]) -> dict[int, str]:

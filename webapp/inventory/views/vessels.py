@@ -20,10 +20,9 @@ from inventory.forms import (NewVesselForm, TransferForm,
                              WithdrawalForm)
 from inventory.history import history_entries
 from inventory.models import Batch, Item, Vessel, VesselKind, VesselMovement
-from inventory.views.common import (VESSELS, batch_url, form_page,
-                                    htmx_list_push_url, item_form, locations,
-                                    saved, tabs, vessel_url)
-from orgsyndb_web.lists import clean_choice
+from inventory.views.common import (VESSELS, batch_url, form_page, item_form,
+                                    locations, saved, tabs, vessel_url)
+from orgsyndb_web.lists import clean_choice, htmx_list_push_url
 
 
 @dataclass(frozen=True)

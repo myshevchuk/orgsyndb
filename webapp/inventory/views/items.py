@@ -33,11 +33,10 @@ from inventory.statistics import Statistics, statistics
 from inventory.summaries import natural
 from inventory.views.common import (LIST, VIEW_COOKIE, categories,
                                     consumption_url, form_page,
-                                    htmx_detail_or_redirect,
-                                    htmx_list_push_url, in_use, item_form,
+                                    htmx_detail_or_redirect, in_use, item_form,
                                     item_url, layers, list_view, open_vessels,
                                     pick_selected, render_form, saved, tabs)
-from orgsyndb_web.lists import clean_choice, sort_rows
+from orgsyndb_web.lists import clean_choice, htmx_list_push_url, sort_rows
 from planning import plan
 
 

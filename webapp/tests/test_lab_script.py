@@ -922,3 +922,109 @@ class LiveListScriptTests(TestCase):
                 self.assertFalse(result["clicks"][key]["prevented"])
         self.assertFalse(result["clicks"]["plainLeft"]["stopped"])
         self.assertFalse(result["clicks"]["nonHtmxCtrl"]["stopped"])
+
+    def test_no_data_submit_auto_submit_handler(self) -> None:
+        runner = r"""
+const fs = require("fs");
+const vm = require("vm");
+
+const listeners = [];
+class FakeElement {
+  constructor(tag, attrs = {}, parent = null) {
+    this.tagName = tag.toUpperCase();
+    this.attrs = { ...attrs };
+    this.id = attrs.id || "";
+    this.parent = parent;
+    this.hidden = false;
+  }
+  getAttribute(name) { return name in this.attrs ? this.attrs[name] : null; }
+  hasAttribute(name) { return name in this.attrs; }
+  setAttribute(name, val) { this.attrs[name] = String(val); }
+  matches(selector) {
+    if (selector === "[data-submit]") return "data-submit" in this.attrs;
+    return false;
+  }
+  closest() { return null; }
+  querySelectorAll() { return []; }
+  querySelector() { return null; }
+  addEventListener() {}
+}
+
+let submitCalls = 0;
+const submitBtn = new FakeElement("button", { type: "submit" });
+const plainForm = new FakeElement("form", {
+  method: "get", action: "/lab/other/",
+});
+plainForm.requestSubmit = () => { submitCalls += 1; };
+plainForm.querySelectorAll = (sel) => (
+  sel === "button[type=submit]" ? [submitBtn] : []
+);
+const control = new FakeElement("select", { "data-submit": "" }, plainForm);
+control.form = plainForm;
+
+const doc = {
+  documentElement: {
+    clientWidth: 1000, dataset: {}, lang: "de",
+    classList: { toggle() {}, add() {}, remove() {} },
+  },
+  body: { dataset: {} },
+  addEventListener(type, fn, capture = false) {
+    listeners.push({ type, fn, capture: Boolean(capture) });
+  },
+  querySelectorAll(sel) {
+    if (sel === "[data-submit]") return [control];
+    return [];
+  },
+  querySelector() { return null; },
+  getElementById() { return null; },
+  cookie: "",
+};
+
+const win = {
+  document: doc,
+  Element: FakeElement,
+  HTMLElement: FakeElement,
+  addEventListener() {},
+  matchMedia() { return { matches: false }; },
+  localStorage: { getItem() { return null; }, setItem() {}, removeItem() {} },
+  location: {
+    pathname: "/lab/other/",
+    search: "",
+    hash: "",
+    href: "http://testserver/lab/other/",
+  },
+  history: { replaceState() {} },
+  navigator: {},
+  innerHeight: 800,
+};
+
+const context = vm.createContext({
+  window: win, document: doc, Element: FakeElement, HTMLElement: FakeElement,
+  localStorage: win.localStorage, location: win.location, history: win.history,
+  URL, URLSearchParams, Set, Map, CustomEvent: class {},
+});
+vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), context,
+                { filename: process.argv[1] });
+
+const ev = {
+  type: "change",
+  target: control,
+  bubbles: true,
+  preventDefault() {},
+  stopPropagation() {},
+  stopImmediatePropagation() {},
+};
+for (const item of listeners) {
+  if (item.type === "change") item.fn(ev);
+}
+
+process.stdout.write(JSON.stringify({
+  submitHidden: submitBtn.hidden,
+  submitCalls,
+}));
+"""
+        done = subprocess.run(
+            [NODE, "-e", runner, str(SCRIPT)],
+            capture_output=True, text=True, check=True)
+        result = json.loads(done.stdout)
+        self.assertEqual(result, {"submitHidden": False, "submitCalls": 0})

@@ -4,6 +4,7 @@ the snapshot."""
 from collections import Counter
 from decimal import Decimal
 from typing import Any
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -12,11 +13,13 @@ from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
+from django.views.decorators.vary import vary_on_headers
 
 from collection import routes
 from collection.models import EntrySubstance, Procedure, Role, Sequence
 from inventory.figures import newest_first, open_amounts
 from inventory.models import Batch, Item
+from orgsyndb_web.lists import htmx_list_push_url
 from registry import snapshot
 from registry.forms import SubstanceForm
 from registry.models import Substance, SubstanceClass
@@ -58,6 +61,7 @@ def filed_under(model: type[Term], key: str) -> list[Any]:
         term.pk, *(below.pk for below in descendants(term))]
 
 
+@vary_on_headers("HX-Request", "HX-History-Restore-Request")
 def substance_list(request: HttpRequest) -> HttpResponse:
     """List the substances, by name regardless of case: those whose key,
     names, short name or CAS number hold the query's ``q`` regardless of
@@ -79,11 +83,28 @@ def substance_list(request: HttpRequest) -> HttpResponse:
                     if not words or words in searched(substance)),
                    key=lambda substance: (substance.shown_name.casefold(),
                                           substance.key))
-    return render(request, "registry/list.html", {
+    groups = tree_order(Group.objects.all())
+    classes = tree_order(ChemicalClass.objects.all())
+    response = render(request, "registry/list.html", {
         "substances": shown, "q": query, "group": group,
         "chemical_class": chemical_class,
-        "groups": tree_order(Group.objects.all()),
-        "classes": tree_order(ChemicalClass.objects.all())})
+        "groups": groups,
+        "classes": classes,
+        "group_unknown": bool(group) and all(
+            term.key != group for term, _ in groups),
+        "class_unknown": bool(chemical_class) and all(
+            term.key != chemical_class for term, _ in classes),
+    })
+    pairs: list[tuple[str, str]] = []
+    if query:
+        pairs.append(("q", query))
+    if group:
+        pairs.append(("group", group))
+    if chemical_class:
+        pairs.append(("class", chemical_class))
+    return htmx_list_push_url(
+        request, response,
+        f"{REGISTRY}?{urlencode(pairs)}" if pairs else REGISTRY)
 
 
 def shown_yield(value: float | None) -> Decimal | None:

@@ -1,7 +1,9 @@
-"""Shared query-choice validation and sorting helpers for list views."""
+"""Shared query-choice, sorting, and HTMX URL helpers for list views."""
 
 from collections.abc import Callable, Container, Sequence
 from typing import Any, TypeVar
+
+from django.http import HttpRequest, HttpResponse
 
 T = TypeVar("T")
 
@@ -20,3 +22,12 @@ def sort_rows(rows: Sequence[T], value: Callable[[T], Any],
     present = [row for row in rows if value(row) is not None]
     present.sort(key=value, reverse=descending)
     return present + [row for row in rows if value(row) is None]
+
+
+def htmx_list_push_url(request: HttpRequest, response: HttpResponse,
+                       canonical_url: str) -> HttpResponse:
+    """Set ``HX-Push-Url`` to CANONICAL_URL on RESPONSE for a non-restore
+    htmx request, and return RESPONSE."""
+    if request.htmx and not request.htmx.history_restore_request:
+        response["HX-Push-Url"] = canonical_url
+    return response

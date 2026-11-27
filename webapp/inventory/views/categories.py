@@ -19,10 +19,10 @@ from inventory.summaries import (AgeSummary, LocationSummary, SourceSummary,
                                  supplier_summary)
 from inventory.views.common import (CHEMICAL_COOKIE, CHEMICALS,
                                     INTERMEDIATE_COOKIE, INTERMEDIATES,
-                                    htmx_detail_or_redirect,
-                                    htmx_list_push_url, list_view,
+                                    htmx_detail_or_redirect, list_view,
                                     oldest_vessel_order, pick_selected, tabs)
 from inventory.views.vessels import vessel_ledger
+from orgsyndb_web.lists import htmx_list_push_url
 from vocabulary.models import ChemicalClass, Group, Term, descendants, tree_order
 
 
