@@ -12,8 +12,8 @@ from django.contrib.staticfiles import finders
 from django.http import HttpResponse
 from django.test import SimpleTestCase, TestCase
 
-from . import (HTMX, IDIOMORPH, REPO, SHELL_SCRIPT, berlin, frozen,
-               make_item, make_task, make_user, make_vessel, page,
+from . import (HTMX, IDIOMORPH, REPO, SHELL_SCRIPT, STIMULUS, berlin,
+               frozen, make_item, make_task, make_user, make_vessel, page,
                shell_scripts, substance_for, table, task_url, ticking)
 from . import navigation_support as ns
 from .collection_support import accept, make_import
@@ -423,6 +423,12 @@ class StaticFilesTests(SimpleTestCase):
         """Scenario: idiomorph kept with its licence (web-app: Scripts)."""
         found = finders.find(IDIOMORPH.removeprefix("/lab/static/"))
         self.assertTrue(found, f"{IDIOMORPH} is not found")
+        self.assertTrue((Path(found).parent / "LICENSE").is_file())
+
+    def test_stimulus_kept_with_its_licence(self) -> None:
+        """Scenario: Stimulus kept with its licence (web-app: Scripts)."""
+        found = finders.find(STIMULUS.removeprefix("/lab/static/"))
+        self.assertTrue(found, f"{STIMULUS} is not found")
         self.assertTrue((Path(found).parent / "LICENSE").is_file())
 
     def test_the_sites_script_is_collected(self) -> None:

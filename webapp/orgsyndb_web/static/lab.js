@@ -1,80 +1,20 @@
-// The lab application's script, loaded on every page of the shell
-// after htmx and idiomorph. What it wires today lives on the item
-// list, where the browser opens and closes popups by itself and the
-// view controls take effect through lab.css; the script adds:
+// The lab application's script, loaded with defer on every page of the
+// shell after htmx, idiomorph, and Stimulus.
 //
-// - Places each popup below the button that opened it, or above it
-//   when there is no room below, or else over it, always inside the
-//   window, and keeps it there while the page or a table box scrolls.
-// - Restores each control marked data-remember from localStorage when
-//   the page loads, and saves it there whenever it changes.
-// - Marks the layout (.item-layout) of a list with two views, the
-//   item, bulk and delivery lists, data-scripted, so that
-//   lab.css follows its data-view and no longer the radio buttons of
-//   the switch between the views, `Tabelle` and `Details`
-//   (#view-table, #view-details). When one of them changes, the script
-//   saves the view in the cookie the layout's data-cookie names,
-//   `item-list-view` without it, for the list's path, which the server
-//   reads, and sets data-view, inside a view transition where the
-//   browser has them and the user has not asked for reduced motion.
-//   The radio buttons keep their native behaviour. While the details
-//   view shows, the button `Spalten` is disabled.
-// - In both views, chooses a row: a plain click in it, but not on a
-//   link or an input, or an arrow key up or down in the table, which
-//   also focuses the row it moves to. Choosing fires the event
-//   `item-select` on the row, which makes htmx load the row's details
-//   into #item-detail, and nothing else.
-// - Once htmx has swapped details in, and once a dialog's save has
-//   refreshed the list, makes the list follow the details' item: its
-//   row is marked with aria-current="true", and its id is written as
-//   `selected` into the address, the filter form's hidden field and
-//   the links of the list to itself, which are the column headers, the
-//   stock levels and the reset link. A request that is aborted or
-//   fails swaps nothing, so pane, mark and address stay as they were.
-//   While details load, the pane is inert.
-//
-// - Opens the form that a link marked data-dialog leads to in the
-//   dialog of the page shell (#lab-dialog) on a plain click, and
-//   closes the dialog on a click on its close button or on the form's
-//   cancel link; Escape closes it by itself. Closing empties it. A
-//   form that is saved there fires the event `lab-saved`; the script
-//   then fetches the page again as a page, morphs each element marked
-//   data-refresh in place, replaces the messages with the new page's,
-//   keeps what the user ticked and chose in the list, closes the
-//   dialog and moves focus to where the user was working. The dialog's
-//   buttons stay disabled until then. If the page cannot be fetched,
-//   the page is reloaded. While the dialog's form is posted, and while
-//   that refresh is under way, the dialog's body is inert, so that
-//   nothing in it, such as a link to another form, replaces the form
-//   whose save is pending.
-// - Narrows each batch choice (a select marked data-batch-for, whose
-//   options sit in one optgroup per substance, marked data-substance
-//   with the substance's key) to the substance of the control that
-//   data-batch-for names: the chosen option of an item select, by its
-//   data-substance, or the text typed in the new-item form's
-//   substance field. It hides and disables the groups of other
-//   substances, and clears a chosen batch that it hid. It does so when
-//   the page loads and whenever that control changes or is typed in;
-//   with no substance, every group shows.
-//
-// - On the planning list (.planning-grid), reveals the filter buttons
-//   and filters rows in the browser by data-priority, data-action and
-//   data-late, updating the shown count, moving the selection to the
-//   first shown row when the selected row is hidden, and showing the
-//   no-match note when nothing shows while keeping the inspector's
-//   article. A plain click in a row (not on other links or buttons) or
-//   on its article link, or ArrowUp/ArrowDown in the list over the rows
-//   that show, selects the row without loading a page, switches the
-//   inspector block matched by data-article, marks the row with
-//   aria-current="true", focuses it and writes `selected` into the
-//   address with history.replaceState.
-//
-// OrgSynLab.place is the placement's arithmetic,
-// OrgSynLab.paramSearch the address's, OrgSynLab.narrowBatches the
-// batch choice's, OrgSynLab.sortOrder the table sorting's, and
-// OrgSynLab.planFilterShows and OrgSynLab.planStep the planning list's
-// filtering and arrow-key stepping, each kept apart from the page so
-// that tests can run it without one.
+// Exports six pure helpers on globalThis.OrgSynLab (place, paramSearch,
+// narrowBatches, sortOrder, planFilterShows, planStep) so tests can run
+// them without a DOM. In a browser document, installs the no-eval
+// htmx morph extension, print-time collapsible widget fallback, and
+// live-list document guards, then starts Stimulus with actionAttribute
+// "data-lab-action" and registers seven controllers:
+//   - popover-anchor: CSS Anchor Positioning with OrgSynLab.place fallback
+//   - view-menu: outside-click and Escape closing for details.lab-view-menu
+//   - remember: localStorage persistence for [data-remember] controls
+//   - batch-narrow: substance-scoped optgroup narrowing on [data-batch-for]
+//   - sortable-table: client-side sorting on table[data-sortable]
+//   - split-list: unified master-detail selection and stepping in htmx
+//     (.item-layout) and local (.planning-grid) modes
+//   - dialog: shell modal lifecycle and in-place [data-refresh] morphing
 (() => {
   "use strict";
 
@@ -97,12 +37,6 @@
     return { left, top: above >= EDGE ? above : lowest };
   };
 
-  // The query string of SEARCH, as location.search holds it, with or
-  // without its leading "?", whose parameter NAME is set to VALUE, a
-  // number or text, or removed when VALUE is null; every other
-  // parameter keeps its text and its place. It is "?" and the
-  // parameters, or "" when none is left. Repeated NAME parameters become
-  // one, at the place of the first.
   // The decoded name of the query pair PAIR, or its raw name when it
   // does not decode.
   const paramName = (pair) => {
@@ -114,6 +48,12 @@
     }
   };
 
+  // The query string of SEARCH, as location.search holds it, with or
+  // without its leading "?", whose parameter NAME is set to VALUE, a
+  // number or text, or removed when VALUE is null; every other
+  // parameter keeps its text and its place. It is "?" and the
+  // parameters, or "" when none is left. Repeated NAME parameters become
+  // one, at the place of the first.
   const paramSearch = (search, name, value) => {
     const kept = [];
     let placed = value === null || value === undefined;
@@ -134,8 +74,7 @@
   // does, given GROUPS, the keys of the choice's optgroups in order,
   // and CHOSEN, the key of the group of the batch chosen, or null for
   // none: the keys of the groups to hide, and whether the chosen batch
-  // is to be cleared. With a KEY, every group but its own is hidden
-  // and a batch of any other group is cleared; with none, nothing is.
+  // is to be cleared.
   const narrowBatches = (key, groups, chosen) => ({
     hidden: key === "" ? [] : groups.filter((group) => group !== key),
     clear: key !== "" && chosen !== null && chosen !== key,
@@ -240,9 +179,31 @@
   };
   if (typeof document === "undefined") return;
 
+  const plain = (event) => event.button === 0 && !event.ctrlKey
+    && !event.metaKey && !event.shiftKey && !event.altKey;
+
+  const storage = (() => {
+    try {
+      return window.localStorage;
+    } catch {
+      return null;
+    }
+  })();
+
+  const supportsAnchor = () =>
+    typeof CSS !== "undefined"
+    && typeof CSS.supports === "function"
+    && CSS.supports("anchor-name", "--a")
+    && CSS.supports("position-anchor", "--a")
+    && CSS.supports("top", "anchor(bottom)")
+    && CSS.supports("position-try-fallbacks", "flip-block");
+
   // Restrict htmx's morph extension to the three literal styles so no
   // custom morph: suffix ever reaches Function() under allowEval: false.
-  if (typeof htmx !== "undefined" && typeof Idiomorph !== "undefined") {
+  const setupMorphExtension = () => {
+    if (typeof htmx === "undefined" || typeof Idiomorph === "undefined") {
+      return;
+    }
     const morphConfig = (swapStyle) => {
       if (swapStyle === "morph" || swapStyle === "morph:outerHTML") {
         return { morphStyle: "outerHTML" };
@@ -265,260 +226,194 @@
         return false;
       },
     });
-  }
-
-  let open = null;
-
-  const opener = (popup) => [
-    ...document.querySelectorAll("[popovertarget]"),
-  ].find((button) => button.getAttribute("popovertarget") === popup.id
-         && !popup.contains(button));
-
-  const reposition = () => {
-    if (!open) return;
-    const button = opener(open);
-    if (!button) return;
-    const spot = place(button.getBoundingClientRect(),
-                       { width: open.offsetWidth, height: open.offsetHeight },
-                       { width: document.documentElement.clientWidth,
-                         height: window.innerHeight });
-    open.style.left = `${spot.left}px`;
-    open.style.top = `${spot.top}px`;
   };
 
-  document.addEventListener("toggle", (event) => {
-    const popup = event.target;
-    if (!(popup instanceof HTMLElement) || !popup.hasAttribute("popover")) {
-      return;
-    }
-    if (event.newState === "open") {
-      for (const menu of document.querySelectorAll("details.lab-view-menu[open]")) {
-        menu.open = false;
-      }
-      open = popup;
-      popup.dataset.placed = "";
-      reposition();
-    } else if (open === popup) {
-      open = null;
-    }
-  }, true);
-  document.addEventListener("click", (event) => {
-    if (!(event.target instanceof Element)) return;
-    for (const menu of document.querySelectorAll("details.lab-view-menu[open]")) {
-      if (!menu.contains(event.target)) menu.open = false;
-    }
-  });
-  document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
-    for (const menu of document.querySelectorAll("details.lab-view-menu[open]")) {
-      menu.open = false;
-      const summary = menu.querySelector(":scope > summary");
-      if (summary) summary.focus();
-    }
-  });
-  document.addEventListener("scroll", reposition, true);
-  window.addEventListener("resize", reposition);
-
-  const plain = (event) => event.button === 0 && !event.ctrlKey
-    && !event.metaKey && !event.shiftKey && !event.altKey;
-
-  const hideLiveSubmits = (root = document) => {
-    for (const form of root.querySelectorAll("form.lab-filters[hx-get]")) {
-      for (const button of form.querySelectorAll("button[type=submit]")) {
-        button.hidden = true;
-      }
-    }
-  };
-  hideLiveSubmits();
-  document.addEventListener("htmx:afterSettle", () => hideLiveSubmits());
-
-  // Track #filter-q input events against newer #main:replace requests so a
-  // stale debounced search timer never aborts a newer live action, keep
-  // newly typed search text across an older #filters OOB morph, and
-  // restore applied filter controls when a row selection cancels a filter.
-  let actionSeq = 0;
-  let lastInputSeq = 0;
-  let filterInFlight = false;
-  let pendingSearch = null;
-  let appliedFilters = null;
-
-  const liveFilterForm = () =>
-    document.querySelector("form.lab-filters[hx-get]");
-
-  const snapshotFilters = () => {
-    const form = liveFilterForm();
-    if (!form || !form.elements) return;
-    const prev = appliedFilters;
-    const next = new Map();
-    const keepAppliedSearch = lastInputSeq > 0 && lastInputSeq === actionSeq;
-    for (const control of form.elements) {
-      if (!control || !control.name) continue;
-      if (control.type === "hidden" || control.type === "submit") continue;
-      if (control.type === "checkbox") {
-        next.set(control.name, { kind: "checkbox", value: control.checked });
-      } else if (control.id === "filter-q" && keepAppliedSearch
-                 && prev && prev.has(control.name)) {
-        next.set(control.name, prev.get(control.name));
-      } else {
-        next.set(control.name, { kind: "value", value: control.value });
-      }
-    }
-    appliedFilters = next;
-  };
-
-  const restoreFilters = () => {
-    const form = liveFilterForm();
-    if (!form || !form.elements || !appliedFilters) return;
-    for (const control of form.elements) {
-      if (!control || !control.name || !appliedFilters.has(control.name)) {
-        continue;
-      }
-      const saved = appliedFilters.get(control.name);
-      if (saved.kind === "checkbox") {
-        control.checked = saved.value;
-      } else {
-        control.value = saved.value;
-      }
-    }
-  };
-
-  snapshotFilters();
-
-  document.addEventListener("input", (event) => {
-    if (event.target instanceof Element
-        && event.target.matches("#filter-q")) {
-      lastInputSeq = ++actionSeq;
-    }
-  });
-  document.addEventListener("htmx:beforeRequest", (event) => {
-    const elt = event.detail && event.detail.elt;
-    if (elt instanceof Element && elt.matches("form.lab-filters[hx-get]")) {
-      filterInFlight = true;
-    }
-  });
-  for (const type of [
-    "htmx:afterRequest", "htmx:responseError", "htmx:sendError",
-    "htmx:abort",
-  ]) {
-    document.addEventListener(type, (event) => {
-      const elt = event.detail && event.detail.elt;
-      if (elt instanceof Element
-          && elt.matches("form.lab-filters[hx-get]")) {
-        filterInFlight = false;
+  // Fallback for browsers without ::details-content print support: open
+  // closed collapsible widgets on beforeprint and close them afterwards.
+  const setupPrintWidgets = () => {
+    let openedForPrint = [];
+    window.addEventListener("beforeprint", () => {
+      openedForPrint = [];
+      for (const el of document.querySelectorAll("details.widget:not([open])")) {
+        el.open = true;
+        openedForPrint.push(el);
       }
     });
-  }
-  document.addEventListener("htmx:oobBeforeSwap", (event) => {
-    const target = event.detail && event.detail.target;
-    if (!target || target.id !== "filters") return;
-    if (lastInputSeq > 0 && lastInputSeq === actionSeq) {
+    window.addEventListener("afterprint", () => {
+      for (const el of openedForPrint) {
+        if (el.isConnected) el.open = false;
+      }
+      openedForPrint = [];
+    });
+  };
+
+  // Document-level guards for live-filtered lists: hide fallback submit
+  // buttons, cancel stale debounced searches after newer #main:replace
+  // requests, preserve freshly typed search text across older OOB swaps,
+  // restore applied filter controls when row selection cancels a filter,
+  // and keep modified/non-primary clicks native on a[href][hx-get].
+  const setupLiveListGuards = () => {
+    const hideLiveSubmits = (root = document) => {
+      for (const form of root.querySelectorAll("form.lab-filters[hx-get]")) {
+        for (const button of form.querySelectorAll("button[type=submit]")) {
+          button.hidden = true;
+        }
+      }
+    };
+    hideLiveSubmits();
+    document.addEventListener("htmx:afterSettle", () => hideLiveSubmits());
+
+    let actionSeq = 0;
+    let lastInputSeq = 0;
+    let filterInFlight = false;
+    let pendingSearch = null;
+    let appliedFilters = null;
+
+    const liveFilterForm = () =>
+      document.querySelector("form.lab-filters[hx-get]");
+
+    const snapshotFilters = () => {
+      const form = liveFilterForm();
+      if (!form || !form.elements) return;
+      const prev = appliedFilters;
+      const next = new Map();
+      const keepAppliedSearch = lastInputSeq > 0 && lastInputSeq === actionSeq;
+      for (const control of form.elements) {
+        if (!control || !control.name) continue;
+        if (control.type === "hidden" || control.type === "submit") continue;
+        if (control.type === "checkbox") {
+          next.set(control.name, { kind: "checkbox", value: control.checked });
+        } else if (control.id === "filter-q" && keepAppliedSearch
+                   && prev && prev.has(control.name)) {
+          next.set(control.name, prev.get(control.name));
+        } else {
+          next.set(control.name, { kind: "value", value: control.value });
+        }
+      }
+      appliedFilters = next;
+    };
+
+    const restoreFilters = () => {
+      const form = liveFilterForm();
+      if (!form || !form.elements || !appliedFilters) return;
+      for (const control of form.elements) {
+        if (!control || !control.name || !appliedFilters.has(control.name)) {
+          continue;
+        }
+        const saved = appliedFilters.get(control.name);
+        if (saved.kind === "checkbox") {
+          control.checked = saved.value;
+        } else {
+          control.value = saved.value;
+        }
+      }
+    };
+
+    snapshotFilters();
+
+    document.addEventListener("input", (event) => {
+      if (event.target instanceof Element
+          && event.target.matches("#filter-q")) {
+        lastInputSeq = ++actionSeq;
+      }
+    });
+    document.addEventListener("htmx:beforeRequest", (event) => {
+      const elt = event.detail && event.detail.elt;
+      if (elt instanceof Element && elt.matches("form.lab-filters[hx-get]")) {
+        filterInFlight = true;
+      }
+    });
+    for (const type of [
+      "htmx:afterRequest", "htmx:responseError", "htmx:sendError",
+      "htmx:abort",
+    ]) {
+      document.addEventListener(type, (event) => {
+        const elt = event.detail && event.detail.elt;
+        if (elt instanceof Element
+            && elt.matches("form.lab-filters[hx-get]")) {
+          filterInFlight = false;
+        }
+      });
+    }
+    document.addEventListener("htmx:oobBeforeSwap", (event) => {
+      const target = event.detail && event.detail.target;
+      if (!target || target.id !== "filters") return;
+      if (lastInputSeq > 0 && lastInputSeq === actionSeq) {
+        const input = document.getElementById("filter-q");
+        if (input) {
+          pendingSearch = {
+            value: input.value,
+            start: input.selectionStart,
+            end: input.selectionEnd,
+          };
+        }
+      }
+    });
+    document.addEventListener("htmx:oobAfterSwap", (event) => {
+      const target = event.detail && event.detail.target;
+      if (!target || target.id !== "filters" || !pendingSearch) return;
       const input = document.getElementById("filter-q");
       if (input) {
-        pendingSearch = {
-          value: input.value,
-          start: input.selectionStart,
-          end: input.selectionEnd,
-        };
-      }
-    }
-  });
-  document.addEventListener("htmx:oobAfterSwap", (event) => {
-    const target = event.detail && event.detail.target;
-    if (!target || target.id !== "filters" || !pendingSearch) return;
-    const input = document.getElementById("filter-q");
-    if (input) {
-      input.value = pendingSearch.value;
-      if (typeof input.setSelectionRange === "function"
-          && typeof pendingSearch.start === "number"
-          && typeof pendingSearch.end === "number"
-          && document.activeElement === input) {
-        input.setSelectionRange(pendingSearch.start, pendingSearch.end);
-      }
-    }
-    pendingSearch = null;
-  });
-  document.addEventListener("htmx:afterSettle", (event) => {
-    const target = event.detail && event.detail.target;
-    if (target && (target.id === "item-rows" || target.id === "batch-rows"
-                   || target.id === "vessel-rows")) {
-      snapshotFilters();
-    }
-  });
-  document.addEventListener("htmx:confirm", (event) => {
-    const detail = event.detail;
-    const elt = detail && detail.elt;
-    if (!(elt instanceof Element)) return;
-    const trigType = detail.triggeringEvent && detail.triggeringEvent.type;
-    if (elt.matches("form.lab-filters[hx-get]") && trigType === "input"
-        && lastInputSeq < actionSeq) {
-      event.preventDefault();
-      return;
-    }
-    if (elt.matches("tr[data-item][hx-get]")
-        && (filterInFlight
-            || (lastInputSeq > 0 && lastInputSeq === actionSeq))) {
-      restoreFilters();
-      filterInFlight = false;
-    }
-    const syncHost = elt.getAttribute("hx-sync") === "#main:replace"
-      ? elt
-      : (elt.closest ? elt.closest("[hx-sync]") : null);
-    if (syncHost && syncHost.getAttribute("hx-sync") === "#main:replace") {
-      actionSeq += 1;
-    }
-  });
-
-  // Preserve native open-in-new-tab/window on modified or non-primary
-  // clicks on live links by stopping propagation before htmx sees them.
-  document.addEventListener("click", (event) => {
-    if (plain(event) || !(event.target instanceof Element)) return;
-    if (event.target.closest("a[href][hx-get]")) {
-      event.stopPropagation();
-    }
-  }, true);
-
-  const storage = (() => {
-    try {
-      return window.localStorage;
-    } catch {
-      return null;
-    }
-  })();
-  for (const control of document.querySelectorAll("[data-remember]")) {
-    const key = `orgsyndb:${control.dataset.remember}`;
-    const checkable = control.type === "checkbox";
-    let saved = null;
-    try {
-      saved = storage && storage.getItem(key);
-    } catch {
-      saved = null;
-    }
-    if (saved !== null) {
-      if (checkable) {
-        control.checked = saved === "1";
-      } else if ([...control.options].some((o) => o.value === saved)) {
-        control.value = saved;
-      }
-    }
-    control.addEventListener("change", () => {
-      try {
-        if (storage) {
-          storage.setItem(key, checkable ? (control.checked ? "1" : "0")
-                                         : control.value);
+        input.value = pendingSearch.value;
+        if (typeof input.setSelectionRange === "function"
+            && typeof pendingSearch.start === "number"
+            && typeof pendingSearch.end === "number"
+            && document.activeElement === input) {
+          input.setSelectionRange(pendingSearch.start, pendingSearch.end);
         }
-      } catch {
-        // Storage refused: the choice lasts until the page is left.
+      }
+      pendingSearch = null;
+    });
+    document.addEventListener("htmx:afterSettle", (event) => {
+      const target = event.detail && event.detail.target;
+      if (target && (target.id === "item-rows" || target.id === "batch-rows"
+                     || target.id === "vessel-rows")) {
+        snapshotFilters();
       }
     });
-  }
+    document.addEventListener("htmx:confirm", (event) => {
+      const detail = event.detail;
+      const elt = detail && detail.elt;
+      if (!(elt instanceof Element)) return;
+      const trigType = detail.triggeringEvent && detail.triggeringEvent.type;
+      if (elt.matches("form.lab-filters[hx-get]") && trigType === "input"
+          && lastInputSeq < actionSeq) {
+        event.preventDefault();
+        return;
+      }
+      if (elt.matches("tr[data-item][hx-get]")
+          && (filterInFlight
+              || (lastInputSeq > 0 && lastInputSeq === actionSeq))) {
+        restoreFilters();
+        filterInFlight = false;
+      }
+      const syncHost = elt.getAttribute("hx-sync") === "#main:replace"
+        ? elt
+        : (elt.closest ? elt.closest("[hx-sync]") : null);
+      if (syncHost && syncHost.getAttribute("hx-sync") === "#main:replace") {
+        actionSeq += 1;
+      }
+    });
 
-  // The key of the substance a control that drives a batch choice
-  // holds: the data-substance of an item select's chosen option, or
-  // the text of the substance field; "" for none.
+    document.addEventListener("click", (event) => {
+      if (plain(event) || !(event.target instanceof Element)) return;
+      if (event.target.closest("a[href][hx-get]")) {
+        event.stopPropagation();
+      }
+    }, true);
+  };
+
+  setupMorphExtension();
+  setupPrintWidgets();
+  setupLiveListGuards();
+
+  if (typeof Stimulus === "undefined") return;
+
+  // Shared helpers used across controllers.
   const substanceOf = (control) => {
     if (control.tagName === "SELECT") {
       const option = control.selectedOptions[0];
-      return option && option.dataset.substance || "";
+      return (option && option.dataset.substance) || "";
     }
     return control.value.trim();
   };
@@ -529,7 +424,8 @@
     if (!driver) return;
     const groups = [...select.querySelectorAll("optgroup[data-substance]")];
     const option = select.selectedOptions[0];
-    const group = option && option.parentElement.matches("optgroup")
+    const group = option && option.parentElement
+      && option.parentElement.matches("optgroup")
       ? option.parentElement.dataset.substance : null;
     const { hidden, clear } = narrowBatches(
       substanceOf(driver), groups.map((each) => each.dataset.substance),
@@ -540,45 +436,43 @@
     if (clear) select.value = "";
   };
 
-  for (const select of document.querySelectorAll("select[data-batch-for]")) {
-    narrow(select);
-  }
-  // Delegated, so that each control that drives a choice is heard.
-  for (const type of ["change", "input"]) {
-    document.addEventListener(type, (event) => {
-      const control = event.target;
-      if (!(control instanceof Element) || !control.name) return;
-      for (const select of document.querySelectorAll(
-        "select[data-batch-for]")) {
-        if (select.form === control.form
-            && select.dataset.batchFor === control.name) {
-          narrow(select);
-        }
-      }
-    });
-  }
+  const makeFocusable = (rows) => {
+    for (const row of rows) row.tabIndex = -1;
+  };
 
-  const layout = document.querySelector(".item-layout");
-  const ROWS = ".item-table tbody tr[data-item]";
-  // The links of the list to itself, which name the selected item.
+  const markCurrent = (rows, active) => {
+    for (const row of rows) {
+      if (row === active) {
+        row.setAttribute("aria-current", "true");
+      } else {
+        row.removeAttribute("aria-current");
+      }
+    }
+  };
+
+  const replaceSelected = (id) => {
+    try {
+      history.replaceState(
+        history.state, "",
+        `${location.pathname}${paramSearch(location.search, "selected",
+                                           id === "" ? null : id)}`
+        + location.hash);
+    } catch {
+      // The address cannot change: the page shows the selection regardless.
+    }
+  };
+
+  const stepIndex = (rows, shown, from, key) =>
+    planStep(shown, rows.indexOf(from), key);
+
+  const HTMX_ROWS = ".item-table tbody tr[data-item]";
   const OWN_LINKS = ".item-table thead a, #stock-entries a, #list-summary a";
 
-  const markedRow = () => document.querySelector(
-    `${ROWS}[aria-current="true"]`);
-
-  // The id of the item whose details the pane holds, "" for none.
   const paneItem = () => {
     const pane = document.getElementById("item-detail");
     return pane && pane.dataset.item ? pane.dataset.item : "";
   };
 
-  // Rows take focus, so that the arrow keys have a row to start from.
-  const focusable = () => {
-    for (const row of document.querySelectorAll(ROWS)) row.tabIndex = -1;
-  };
-
-  // Sets the parameter `selected` of the link's address to ID, or
-  // removes it when ID is empty, keeping its path and hx-get in sync.
   const relink = (link, id) => {
     const href = link.getAttribute("href");
     const at = href.indexOf("?");
@@ -589,131 +483,6 @@
     if (link.hasAttribute("hx-get")) {
       link.setAttribute("hx-get", next);
     }
-  };
-
-  // Brings the list in step with the details' item ID, "" for none: its
-  // row is marked and the others are not, and the address, the filter
-  // form's hidden field and the links of the list to itself name it, or
-  // do not name any item for no id.
-  const follow = (id) => {
-    for (const row of document.querySelectorAll(ROWS)) {
-      if (id !== "" && row.dataset.item === id) {
-        row.setAttribute("aria-current", "true");
-      } else {
-        row.removeAttribute("aria-current");
-      }
-    }
-    try {
-      history.replaceState(
-        history.state, "",
-        `${location.pathname}${paramSearch(location.search, "selected",
-                                           id === "" ? null : id)}`
-        + location.hash);
-    } catch {
-      // The address cannot change: the page shows the item regardless.
-    }
-    const selectedHost = document.getElementById("filter-selected")
-      || document.getElementById("filters");
-    if (selectedHost) {
-      let field = selectedHost.querySelector("input[name=selected]");
-      if (id === "") {
-        if (field) field.remove();
-      } else {
-        if (!field) {
-          field = document.createElement("input");
-          field.type = "hidden";
-          field.name = "selected";
-          selectedHost.append(field);
-        }
-        field.value = id;
-      }
-    }
-    for (const link of document.querySelectorAll(OWN_LINKS)) {
-      relink(link, id);
-    }
-  };
-
-  // The dialog of the page shell, and what the script knows of the
-  // form in it.
-  const dialog = document.getElementById("lab-dialog");
-  const dialogBody = document.getElementById("lab-dialog-body");
-  let dialogOpener = null; // the link that opened the dialog
-  let dialogOpenerHref = ""; // its href when opened
-  let loading = null; // the address of the form being requested
-  let saving = false; // a save is posted and its refresh not done
-  let posting = false; // the dialog's form is being posted
-
-  // The body takes neither pointer nor keyboard while its form is
-  // posted or a save's refresh is under way, so that nothing in it, a
-  // link choosing another quarter among them, replaces the form whose
-  // save is pending.
-  const guardBody = () => {
-    dialogBody.inert = posting || saving;
-  };
-
-  const lockDialog = (locked) => {
-    saving = locked;
-    for (const button of dialog.querySelectorAll("button")) {
-      button.disabled = locked;
-    }
-    guardBody();
-  };
-
-  const REFRESH_MORPH = {
-    callbacks: {
-      beforeAttributeUpdated: (attr, node) => !(
-        attr === "open" && node.matches("details.widget")
-      ),
-    },
-  };
-
-  // Morphs every element of the page marked data-refresh in place
-  // against the matching element of FRESH, the parsed new page,
-  // replaces the messages, and returns the morphed elements. An
-  // element the new page lacks is removed.
-  const refreshParts = (fresh) => {
-    const added = [];
-    for (const old of document.querySelectorAll("[data-refresh][id]")) {
-      const next = fresh.getElementById(old.id);
-      if (next) {
-        Idiomorph.morph(old, next, REFRESH_MORPH);
-        added.push(old);
-      } else {
-        old.remove();
-      }
-    }
-    const shown = document.querySelector("ul.lab-messages");
-    const message = fresh.querySelector("ul.lab-messages");
-    if (message) {
-      const node = document.adoptNode(message);
-      if (shown) {
-        shown.replaceWith(node);
-      } else {
-        const main = document.getElementById("main");
-        const demo = main.querySelector(":scope > .lab-demo");
-        if (demo) {
-          demo.after(node);
-        } else {
-          main.prepend(node);
-        }
-      }
-    } else if (shown) {
-      shown.remove();
-    }
-    document.title = fresh.title;
-    return added;
-  };
-
-  // Brings what the user set in the item list back after its parts
-  // were replaced: TICKED, the values of the check boxes that were
-  // ticked, the rows' focus, and the list's follow of the details' item.
-  const restoreList = (ticked) => {
-    for (const box of document.querySelectorAll("input[name=item]")) {
-      box.checked = ticked.has(box.value);
-    }
-    if (!layout) return;
-    focusable();
-    follow(paneItem());
   };
 
   // Wraps each visible header of every table[data-sortable] in ROOT in
@@ -765,311 +534,321 @@
     th.setAttribute("aria-sort", descending ? "descending" : "ascending");
   };
 
-  enhanceSortable(document);
-  document.addEventListener("click", (event) => {
-    if (!plain(event) || !(event.target instanceof Element)) return;
-    const button = event.target.closest(
-      "table[data-sortable] thead th > button.sort-header");
-    if (!button) return;
-    const th = button.parentElement;
-    const table = th.closest("table[data-sortable]");
-    const colIndex = [...th.parentElement.cells].indexOf(th);
-    const descending = th.getAttribute("aria-sort") === "ascending";
-    sortTable(table, colIndex, descending);
-  });
-
-  // Fallback for browsers without ::details-content print support: open
-  // closed collapsible widgets on beforeprint and close them afterwards.
-  let openedForPrint = [];
-  window.addEventListener("beforeprint", () => {
-    openedForPrint = [];
-    for (const el of document.querySelectorAll("details.widget:not([open])")) {
-      el.open = true;
-      openedForPrint.push(el);
-    }
-  });
-  window.addEventListener("afterprint", () => {
-    for (const el of openedForPrint) {
-      if (el.isConnected) el.open = false;
-    }
-    openedForPrint = [];
-  });
-
-  // Fetches the page's own address as a page and puts what changed in.
-  const refreshPage = async () => {
-    // On the item list the page asks for the item whose details it
-    // shows, which the address need not name yet, so that the save
-    // keeps it while it is listed.
-    const address = layout && paneItem()
-      ? `${location.pathname}${paramSearch(location.search, "selected",
-                                           paneItem())}`
-      : location.href;
-    const response = await fetch(address, {
-      credentials: "same-origin",
-      cache: "no-store",
-      headers: { Accept: "text/html" },
-    });
-    if (!response.ok || response.redirected) {
-      throw new Error(`refresh answered ${response.status}`);
-    }
-    const fresh = new DOMParser().parseFromString(
-      await response.text(), "text/html");
-    const ticked = new Set(
-      [...document.querySelectorAll("input[name=item]:checked")]
-        .map((box) => box.value));
-    const tableSort = new Map();
-    for (const table of document.querySelectorAll(
-      "table[data-sortable][id]")) {
-      const sorted = table.tHead
-        && table.tHead.querySelector("th[aria-sort]");
-      if (sorted) {
-        tableSort.set(table.id, {
-          colIndex: [...sorted.parentElement.cells].indexOf(sorted),
-          descending: sorted.getAttribute("aria-sort") === "descending",
-        });
-      }
-    }
-    const boxScroll = new Map();
-    for (const box of document.querySelectorAll(".table-scroll")) {
-      const table = box.id ? null : box.querySelector("table[id]");
-      const id = box.id || (table && table.id);
-      if (id && (box.scrollTop || box.scrollLeft)) {
-        boxScroll.set(id, {
-          byBox: Boolean(box.id),
-          top: box.scrollTop,
-          left: box.scrollLeft,
-        });
-      }
-    }
-    for (const node of refreshParts(fresh)) {
-      htmx.process(node);
-      enhanceSortable(node);
-    }
-    for (const [id, state] of tableSort) {
-      const table = document.getElementById(id);
-      if (table && table.matches("table[data-sortable]")) {
-        sortTable(table, state.colIndex, state.descending);
-      }
-    }
-    for (const [id, pos] of boxScroll) {
-      const el = document.getElementById(id);
-      const box = pos.byBox ? el : el && el.closest(".table-scroll");
-      if (box) {
-        box.scrollTop = pos.top;
-        box.scrollLeft = pos.left;
-      }
-    }
-    restoreList(ticked);
+  const REFRESH_MORPH = {
+    callbacks: {
+      beforeAttributeUpdated: (attr, node) => !(
+        attr === "open" && node.matches("details.widget")
+      ),
+    },
   };
 
-  // Moves focus to the link that opened the dialog while it is still
-  // in the page and points to the same action, else to the heading of
-  // the details, else to the page's.
-  const focusAfterSave = () => {
-    if (dialogOpener && dialogOpener.isConnected
-        && dialogOpener.getAttribute("href") === dialogOpenerHref) {
-      dialogOpener.focus({ preventScroll: true });
-      return;
-    }
-    const heading = document.getElementById("item-detail-title")
-      || document.querySelector("main h1");
-    if (!heading) return;
-    heading.tabIndex = -1;
-    heading.focus({ preventScroll: true });
-  };
-
-  if (dialog && dialogBody) {
-    document.addEventListener("click", (event) => {
-      if (!plain(event) || !(event.target instanceof Element)) return;
-      const link = event.target.closest("a[data-dialog]");
-      if (link && typeof htmx !== "undefined") {
-        event.preventDefault();
-        // One form at a time: a second click while one loads is lost.
-        if (loading !== null || dialog.open) return;
-        dialogOpener = link;
-        dialogOpenerHref = link.getAttribute("href") || "";
-        loading = link.href;
-        htmx.ajax("GET", link.href,
-                  { target: dialogBody, swap: "innerHTML" });
-        return;
-      }
-      const closer = event.target.closest(
-        ".lab-dialog-close, #lab-dialog-body .lab-buttons a");
-      if (closer && dialog.contains(closer)) {
-        event.preventDefault();
-        if (!saving && !posting) dialog.close();
-      }
-    });
-
-    // The form is in: show the dialog, or, where the dialog already
-    // shows and the form is back with errors, move to the first one.
-    // The form is in: show the dialog when a link of the page asked for
-    // it; a form that arrives for a dialog closed meanwhile stays shut.
-    dialogBody.addEventListener("htmx:afterSwap", () => {
-      const opening = loading !== null;
-      loading = null;
-      if (!dialog.open && opening) dialog.showModal();
-    });
-
-    // A form back with errors: move to the first, once the body takes
-    // input again.
-    const focusError = () => {
-      const wrong = dialogBody.querySelector(
-        ".lab-field--error :is(input, select, textarea)");
-      if (wrong) wrong.focus();
-    };
-
-    // A form that could not be requested opens as the page it is.
-    // htmx fires the request's events on its source, the body, not on
-    // the dialog it targets.
-    const unopened = (event) => {
-      if (loading === null || event.detail.target !== dialogBody) return;
-      const href = loading;
-      loading = null;
-      location.assign(href);
-    };
-    document.addEventListener("htmx:responseError", unopened);
-    document.addEventListener("htmx:sendError", unopened);
-
-    dialog.addEventListener("close", () => dialogBody.replaceChildren());
-    dialog.addEventListener("cancel", (event) => {
-      if (saving || posting) event.preventDefault();
-    });
-
-    // While the dialog's form is posted it stays open, so that a save
-    // still finds it. A post the server refuses outright, such as one
-    // without a session or its CSRF cookie, reloads the page; one that
-    // does not reach the server leaves the form as it was, to send
-    // again.
-    // Only a post counts: a link that loads another form into the
-    // dialog leaves it free to close.
-    dialog.addEventListener("htmx:beforeRequest", (event) => {
-      const config = event.detail.requestConfig;
-      if (!config || String(config.verb).toLowerCase() !== "post") return;
-      posting = true;
-      guardBody();
-    });
-    dialog.addEventListener("htmx:responseError", () => {
-      posting = false;
-      location.reload();
-    });
-
-    // htmx enables the buttons again when the save's request ends,
-    // which is before the refresh does.
-    dialog.addEventListener("htmx:afterRequest", () => {
-      posting = false;
-      if (saving) {
-        lockDialog(true);
+  // Morphs every element of the page marked data-refresh in place
+  // against the matching element of FRESH, replaces the messages, and
+  // returns the morphed elements. An element FRESH lacks is removed.
+  const refreshParts = (fresh) => {
+    const added = [];
+    for (const old of document.querySelectorAll("[data-refresh][id]")) {
+      const next = fresh.getElementById(old.id);
+      if (next) {
+        Idiomorph.morph(old, next, REFRESH_MORPH);
+        added.push(old);
       } else {
-        guardBody();
-        if (dialog.open) focusError();
+        old.remove();
       }
-    });
-
-    document.addEventListener("lab-saved", async (event) => {
-      if (!(event.target instanceof Element)
-          || !dialog.contains(event.target) || saving) {
-        return;
-      }
-      lockDialog(true);
-      try {
-        await refreshPage();
-      } catch {
-        location.reload();
-        return;
-      }
-      lockDialog(false);
-      dialog.close();
-      focusAfterSave();
-    });
-  }
-
-  const planGrid = document.querySelector(".planning-grid");
-  const planTable = planGrid && planGrid.querySelector("table[data-sortable]");
-  const planBody = planTable && planTable.tBodies[0];
-  if (planGrid && planTable && planBody) {
-    const planCount = planGrid.querySelector("[data-planning-count]");
-    const planFilterGroup = planGrid.querySelector(".planning-filters");
-    const planNoMatch = planGrid.querySelector(".planning-no-match");
-    const planStatus = planGrid.querySelector(".planning-status");
-
-    const planRows = () => [...planBody.querySelectorAll("tr[data-article]")];
-    const planBlocks = () => [
-      ...planGrid.querySelectorAll("[data-article]"),
-    ].filter((el) => el.tagName !== "TR");
-
-    for (const row of planRows()) row.tabIndex = -1;
-    if (planFilterGroup) planFilterGroup.hidden = false;
-
-    const selectPlanRow = (row, focusMode = null) => {
-      const article = row.dataset.article;
-      for (const each of planRows()) {
-        if (each === row) {
-          each.setAttribute("aria-current", "true");
+    }
+    const shown = document.querySelector("ul.lab-messages");
+    const message = fresh.querySelector("ul.lab-messages");
+    if (message) {
+      const node = document.adoptNode(message);
+      if (shown) {
+        shown.replaceWith(node);
+      } else {
+        const main = document.getElementById("main");
+        const demo = main.querySelector(":scope > .lab-demo");
+        if (demo) {
+          demo.after(node);
         } else {
-          each.removeAttribute("aria-current");
+          main.prepend(node);
         }
       }
-      for (const block of planBlocks()) {
+    } else if (shown) {
+      shown.remove();
+    }
+    document.title = fresh.title;
+    return added;
+  };
+
+  // Positions .lab-popup[popover] elements via OrgSynLab.place when the
+  // browser lacks full CSS Anchor Positioning, and always closes open
+  // details.lab-view-menu elements when a popover opens.
+  class PopoverAnchorController extends Stimulus.Controller {
+    connect() {
+      this._open = false;
+      this._onReposition = () => this._reposition();
+      this._onToggle = (event) => {
+        if (event.newState === "open") {
+          for (const menu of document.querySelectorAll(
+            "details.lab-view-menu[open]")) {
+            menu.open = false;
+          }
+          if (!supportsAnchor()) {
+            this._open = true;
+            this.element.dataset.placed = "";
+            this._reposition();
+            document.addEventListener("scroll", this._onReposition, true);
+            window.addEventListener("resize", this._onReposition);
+          }
+        } else {
+          this._detachPositionListeners();
+        }
+      };
+      this.element.addEventListener("toggle", this._onToggle);
+    }
+
+    disconnect() {
+      this.element.removeEventListener("toggle", this._onToggle);
+      this._detachPositionListeners();
+    }
+
+    _detachPositionListeners() {
+      if (!this._open) return;
+      this._open = false;
+      document.removeEventListener("scroll", this._onReposition, true);
+      window.removeEventListener("resize", this._onReposition);
+    }
+
+    _reposition() {
+      if (!this._open) return;
+      const button = [...document.querySelectorAll("[popovertarget]")]
+        .find((el) => el.getAttribute("popovertarget") === this.element.id
+              && !this.element.contains(el));
+      if (!button) return;
+      const spot = place(
+        button.getBoundingClientRect(),
+        { width: this.element.offsetWidth, height: this.element.offsetHeight },
+        { width: document.documentElement.clientWidth,
+          height: window.innerHeight });
+      this.element.style.left = `${spot.left}px`;
+      this.element.style.top = `${spot.top}px`;
+    }
+  }
+
+  // Closes details.lab-view-menu on outside clicks or Escape.
+  class ViewMenuController extends Stimulus.Controller {
+    connect() {
+      this._onDocClick = (event) => {
+        if (!this.element.open || !(event.target instanceof Element)) return;
+        if (!this.element.contains(event.target)) {
+          this.element.open = false;
+        }
+      };
+      this._onDocKeydown = (event) => {
+        if (event.key !== "Escape" || !this.element.open) return;
+        this.element.open = false;
+        const summary = this.element.querySelector(":scope > summary");
+        if (summary) summary.focus();
+      };
+      document.addEventListener("click", this._onDocClick);
+      document.addEventListener("keydown", this._onDocKeydown);
+    }
+
+    disconnect() {
+      document.removeEventListener("click", this._onDocClick);
+      document.removeEventListener("keydown", this._onDocKeydown);
+    }
+  }
+
+  // Restores and persists a [data-remember] control in localStorage.
+  class RememberController extends Stimulus.Controller {
+    connect() {
+      const name = this.element.dataset.remember;
+      if (!name) return;
+      const key = `orgsyndb:${name}`;
+      const checkable = this.element.type === "checkbox";
+      let saved = null;
+      try {
+        saved = storage && storage.getItem(key);
+      } catch {
+        saved = null;
+      }
+      if (saved !== null) {
+        if (checkable) {
+          this.element.checked = saved === "1";
+        } else if ([...this.element.options].some((o) => o.value === saved)) {
+          this.element.value = saved;
+        }
+      }
+      this._onChange = () => {
+        try {
+          if (storage) {
+            storage.setItem(key, checkable
+              ? (this.element.checked ? "1" : "0") : this.element.value);
+          }
+        } catch {
+          // Storage refused: the choice lasts until the page is left.
+        }
+      };
+      this.element.addEventListener("change", this._onChange);
+    }
+
+    disconnect() {
+      if (this._onChange) {
+        this.element.removeEventListener("change", this._onChange);
+        this._onChange = null;
+      }
+    }
+  }
+
+  // Narrows a select[data-batch-for] to the substance of its named
+  // driver control in the same form.
+  class BatchNarrowController extends Stimulus.Controller {
+    connect() {
+      this._form = this.element.form;
+      this._onDriverEvent = (event) => {
+        const control = event.target;
+        if (control instanceof Element
+            && control.name === this.element.dataset.batchFor) {
+          narrow(this.element);
+        }
+      };
+      narrow(this.element);
+      if (this._form) {
+        this._form.addEventListener("change", this._onDriverEvent);
+        this._form.addEventListener("input", this._onDriverEvent);
+      }
+    }
+
+    disconnect() {
+      if (this._form && this._onDriverEvent) {
+        this._form.removeEventListener("change", this._onDriverEvent);
+        this._form.removeEventListener("input", this._onDriverEvent);
+      }
+      this._form = null;
+      this._onDriverEvent = null;
+    }
+  }
+
+  // Enhances a table[data-sortable] with sort buttons and sorts on click.
+  class SortableTableController extends Stimulus.Controller {
+    connect() {
+      enhanceSortable(this.element);
+      this._onClick = (event) => {
+        if (!plain(event) || !(event.target instanceof Element)) return;
+        const button = event.target.closest("thead th > button.sort-header");
+        if (!button || !this.element.contains(button)) return;
+        const th = button.parentElement;
+        if (th.closest("table[data-sortable]") !== this.element) return;
+        const colIndex = [...th.parentElement.cells].indexOf(th);
+        const descending = th.getAttribute("aria-sort") === "ascending";
+        sortTable(this.element, colIndex, descending);
+      };
+      this.element.addEventListener("click", this._onClick);
+    }
+
+    disconnect() {
+      this.element.removeEventListener("click", this._onClick);
+    }
+  }
+
+  // Master-detail split list in either "htmx" (.item-layout) or "local"
+  // (.planning-grid) mode.
+  class SplitListController extends Stimulus.Controller {
+    static values = { mode: String };
+
+    connect() {
+      if (this.modeValue === "local") {
+        this._connectLocal();
+      } else {
+        this._connectHtmx();
+      }
+    }
+
+    disconnect() {
+      if (this.modeValue === "local") {
+        this._disconnectLocal();
+      } else {
+        this._disconnectHtmx();
+      }
+    }
+
+    // --- Local mode (.planning-grid) ---
+
+    _planRows() {
+      return [...this._body.querySelectorAll("tr[data-article]")];
+    }
+
+    _planBlocks() {
+      return [...this.element.querySelectorAll("[data-article]")]
+        .filter((el) => el.tagName !== "TR");
+    }
+
+    _selectPlanRow(row, focusMode = null) {
+      const article = row.dataset.article;
+      markCurrent(this._planRows(), row);
+      for (const block of this._planBlocks()) {
         block.hidden = block.dataset.article !== article;
       }
-      try {
-        history.replaceState(
-          history.state, "",
-          `${location.pathname}${paramSearch(location.search, "selected",
-                                             article)}`
-          + location.hash);
-      } catch {
-        // The address cannot change: the page shows the article regardless.
-      }
+      replaceSelected(article);
       if (focusMode === "click") {
         row.focus({ preventScroll: true });
       } else if (focusMode === "key") {
         row.focus();
       }
-    };
+    }
 
-    planTable.addEventListener("click", (event) => {
-      if (!plain(event) || !(event.target instanceof Element)) return;
-      const row = event.target.closest("tbody tr[data-article]");
-      if (!row || !planBody.contains(row)) return;
-      const selectLink = event.target.closest("a.planning-select");
-      if (selectLink && row.contains(selectLink)) {
+    _connectLocal() {
+      this._table = this.element.querySelector("table[data-sortable]");
+      this._body = this._table && this._table.tBodies[0];
+      if (!this._table || !this._body) return;
+      this._count = this.element.querySelector("[data-planning-count]");
+      this._filterGroup = this.element.querySelector(".planning-filters");
+      this._noMatch = this.element.querySelector(".planning-no-match");
+      this._status = this.element.querySelector(".planning-status");
+
+      makeFocusable(this._planRows());
+      if (this._filterGroup) this._filterGroup.hidden = false;
+
+      this._onLocalClick = (event) => {
+        if (!plain(event) || !(event.target instanceof Element)) return;
+        const row = event.target.closest("tbody tr[data-article]");
+        if (!row || !this._body.contains(row)) return;
+        const selectLink = event.target.closest("a.planning-select");
+        if (selectLink && row.contains(selectLink)) {
+          event.preventDefault();
+        } else if (event.target.closest("a, button, input, select, textarea")) {
+          return;
+        }
+        this._selectPlanRow(row, "click");
+      };
+
+      this._onLocalKeydown = (event) => {
+        if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+        if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
+          return;
+        }
+        const rows = this._planRows();
+        const shown = rows.map((row) => !row.hidden);
+        const focused = event.target instanceof Element
+          ? event.target.closest("tbody tr[data-article]") : null;
+        const marked = rows.find(
+          (row) => row.getAttribute("aria-current") === "true") || null;
+        const from = focused && this._body.contains(focused)
+          ? focused : marked;
+        const current = rows.indexOf(from);
+        const next = stepIndex(rows, shown, from, event.key);
         event.preventDefault();
-      } else if (event.target.closest("a, button, input, select, textarea")) {
-        return;
-      }
-      selectPlanRow(row, "click");
-    });
+        if (next >= 0 && rows[next] && shown[next]
+            && (next !== current || rows[next] !== marked)) {
+          this._selectPlanRow(rows[next], "key");
+        }
+      };
 
-    planTable.addEventListener("keydown", (event) => {
-      if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
-      if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
-        return;
-      }
-      const rows = planRows();
-      const shown = rows.map((row) => !row.hidden);
-      const focused = event.target instanceof Element
-        ? event.target.closest("tbody tr[data-article]") : null;
-      const marked = rows.find(
-        (row) => row.getAttribute("aria-current") === "true") || null;
-      const current = rows.indexOf(focused && planBody.contains(focused)
-        ? focused : marked);
-      const next = planStep(shown, current, event.key);
-      event.preventDefault();
-      if (next >= 0 && rows[next] && shown[next]
-          && (next !== current || rows[next] !== marked)) {
-        selectPlanRow(rows[next], "key");
-      }
-    });
-
-    if (planFilterGroup) {
-      planFilterGroup.addEventListener("click", (event) => {
+      this._onFilterClick = (event) => {
         if (!plain(event) || !(event.target instanceof Element)) return;
         const button = event.target.closest("button[data-plan-filter]");
-        if (!button || !planFilterGroup.contains(button)) return;
+        if (!button || !this._filterGroup.contains(button)) return;
         const filter = button.dataset.planFilter;
-        for (const each of planFilterGroup.querySelectorAll(
+        for (const each of this._filterGroup.querySelectorAll(
           "button[data-plan-filter]")) {
           each.setAttribute(
             "aria-pressed",
@@ -1078,7 +857,7 @@
         let shownCount = 0;
         let firstShown = null;
         let selectedHidden = false;
-        for (const row of planRows()) {
+        for (const row of this._planRows()) {
           const visible = planFilterShows({
             priority: row.dataset.priority || "",
             action: row.dataset.action === "1",
@@ -1092,170 +871,477 @@
             selectedHidden = true;
           }
         }
-        if (planCount) planCount.textContent = String(shownCount);
-        if (planNoMatch) planNoMatch.hidden = shownCount > 0;
-        if (planStatus) {
-          planStatus.textContent = shownCount > 0
-            ? planStatus.dataset.text.replace("{n}", String(shownCount))
-            : (planNoMatch ? planNoMatch.textContent : "");
+        if (this._count) this._count.textContent = String(shownCount);
+        if (this._noMatch) this._noMatch.hidden = shownCount > 0;
+        if (this._status) {
+          this._status.textContent = shownCount > 0
+            ? this._status.dataset.text.replace("{n}", String(shownCount))
+            : (this._noMatch ? this._noMatch.textContent : "");
         }
         if (selectedHidden && firstShown) {
-          selectPlanRow(firstShown);
+          this._selectPlanRow(firstShown);
         }
-      });
-    }
-  }
-
-  if (!layout) return;
-
-  // From here on lab.css follows data-view, which the radio buttons
-  // agree with unless the browser restored them differently.
-  layout.dataset.scripted = "";
-  const radios = [...document.querySelectorAll("input[name=view]")];
-  const checked = radios.find((radio) => radio.checked);
-  if (checked) layout.dataset.view = checked.value;
-  focusable();
-
-  const columnsButton = document.querySelector(
-    "[popovertarget=columns-menu]");
-  // The columns of `Spalten` are those of the table view, so the
-  // button has nothing to offer while the details view shows.
-  const syncColumnsButton = () => {
-    if (columnsButton) {
-      columnsButton.disabled = layout.dataset.view === "details";
-    }
-  };
-  syncColumnsButton();
-
-  // The view last asked for, which a pending transition may not have
-  // shown yet; the transition shows whichever view is asked for last.
-  let wanted = layout.dataset.view;
-  for (const radio of radios) {
-    radio.addEventListener("change", () => {
-      if (!radio.checked || wanted === radio.value) return;
-      wanted = radio.value;
-      const cookie = layout.dataset.cookie || "item-list-view";
-      document.cookie = `${cookie}=${wanted};`
-        + ` path=${location.pathname}; max-age=31536000;`
-        + " SameSite=Lax";
-      const show = () => {
-        layout.dataset.view = wanted;
-        syncColumnsButton();
       };
-      if (document.startViewTransition
-          && !window.matchMedia("(prefers-reduced-motion: reduce)")
-            .matches) {
-        document.startViewTransition(show);
-      } else {
-        show();
+
+      this._table.addEventListener("click", this._onLocalClick);
+      this._table.addEventListener("keydown", this._onLocalKeydown);
+      if (this._filterGroup) {
+        this._filterGroup.addEventListener("click", this._onFilterClick);
       }
-    });
+    }
+
+    _disconnectLocal() {
+      if (this._table) {
+        this._table.removeEventListener("click", this._onLocalClick);
+        this._table.removeEventListener("keydown", this._onLocalKeydown);
+      }
+      if (this._filterGroup) {
+        this._filterGroup.removeEventListener("click", this._onFilterClick);
+      }
+    }
+
+    // --- HTMX mode (.item-layout) ---
+
+    _htmxRows() {
+      return [...document.querySelectorAll(HTMX_ROWS)];
+    }
+
+    _syncColumnsButton() {
+      if (this._columnsButton) {
+        this._columnsButton.disabled = this.element.dataset.view === "details";
+      }
+    }
+
+    _follow(id) {
+      const rows = this._htmxRows();
+      const active = id !== ""
+        ? rows.find((row) => row.dataset.item === id) || null
+        : null;
+      markCurrent(rows, active);
+      replaceSelected(id);
+      const selectedHost = document.getElementById("filter-selected")
+        || document.getElementById("filters");
+      if (selectedHost) {
+        let field = selectedHost.querySelector("input[name=selected]");
+        if (id === "") {
+          if (field) field.remove();
+        } else {
+          if (!field) {
+            field = document.createElement("input");
+            field.type = "hidden";
+            field.name = "selected";
+            selectedHost.append(field);
+          }
+          field.value = id;
+        }
+      }
+      for (const link of document.querySelectorAll(OWN_LINKS)) {
+        relink(link, id);
+      }
+    }
+
+    restoreAfterRefresh(ticked) {
+      if (this.modeValue !== "htmx") return;
+      for (const box of document.querySelectorAll("input[name=item]")) {
+        box.checked = ticked.has(box.value);
+      }
+      makeFocusable(this._htmxRows());
+      this._follow(paneItem());
+    }
+
+    _connectHtmx() {
+      this.element.dataset.scripted = "";
+      this._radios = [...document.querySelectorAll("input[name=view]")];
+      const checked = this._radios.find((radio) => radio.checked);
+      if (checked) this.element.dataset.view = checked.value;
+      makeFocusable(this._htmxRows());
+
+      this._columnsButton = document.querySelector(
+        "[popovertarget=columns-menu]");
+      this._syncColumnsButton();
+      this._wanted = this.element.dataset.view;
+      this._liveTicked = null;
+
+      this._onRadioChange = (event) => {
+        const radio = event.currentTarget;
+        if (!radio.checked || this._wanted === radio.value) return;
+        this._wanted = radio.value;
+        const cookie = this.element.dataset.cookie || "item-list-view";
+        document.cookie = `${cookie}=${this._wanted};`
+          + ` path=${location.pathname}; max-age=31536000;`
+          + " SameSite=Lax";
+        const show = () => {
+          this.element.dataset.view = this._wanted;
+          this._syncColumnsButton();
+        };
+        if (document.startViewTransition
+            && !window.matchMedia("(prefers-reduced-motion: reduce)")
+              .matches) {
+          document.startViewTransition(show);
+        } else {
+          show();
+        }
+      };
+      for (const radio of this._radios) {
+        radio.addEventListener("change", this._onRadioChange);
+      }
+
+      this._onBeforeRequest = (event) => {
+        const pane = document.getElementById("item-detail");
+        if (pane && event.target && event.target.matches
+            && event.target.matches(HTMX_ROWS)) {
+          pane.inert = true;
+        }
+      };
+      this._onAfterRequest = (event) => {
+        const pane = document.getElementById("item-detail");
+        if (pane && event.target && event.target.matches
+            && event.target.matches(HTMX_ROWS)) {
+          pane.inert = false;
+        }
+      };
+      this._onHtmxClick = (event) => {
+        if (!(event.target instanceof Element)) return;
+        if (event.target.closest("#stock-menu a[hx-get]")) {
+          const menu = document.getElementById("stock-menu");
+          if (menu && typeof menu.hidePopover === "function") {
+            try {
+              menu.hidePopover();
+            } catch {
+              // Already closed.
+            }
+          }
+          return;
+        }
+        if (typeof htmx === "undefined" || !plain(event)) return;
+        const row = event.target.closest(HTMX_ROWS);
+        if (!row || event.target.closest("a, input")) return;
+        htmx.trigger(row, "item-select");
+      };
+      this._onHtmxKeydown = (event) => {
+        if (typeof htmx === "undefined") return;
+        if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+        if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
+          return;
+        }
+        if (!(event.target instanceof Element)
+            || !event.target.closest(".item-table")) {
+          return;
+        }
+        const rows = this._htmxRows();
+        const marked = rows.find(
+          (row) => row.getAttribute("aria-current") === "true") || null;
+        const from = event.target.closest(HTMX_ROWS) || marked;
+        if (!from) return;
+        event.preventDefault();
+        const shown = rows.map((row) => !row.hidden);
+        const current = rows.indexOf(from);
+        const next = stepIndex(rows, shown, from, event.key);
+        if (next < 0 || next === current || !rows[next]) return;
+        rows[next].focus();
+        htmx.trigger(rows[next], "item-select");
+      };
+      this._onConfigRequest = (event) => {
+        const elt = event.detail && event.detail.elt;
+        if (elt instanceof Element && elt.matches(OWN_LINKS)) {
+          const next = elt.getAttribute("hx-get");
+          if (next) event.detail.path = next;
+        }
+      };
+      this._onBeforeSwap = (event) => {
+        if (event.detail && event.detail.target
+            && event.detail.target.id === "item-rows") {
+          this._liveTicked = new Set(
+            [...document.querySelectorAll("input[name=item]:checked")]
+              .map((box) => box.value));
+        }
+      };
+      this._onAfterSwap = (event) => {
+        if (event.detail && event.detail.target
+            && event.detail.target.id === "item-rows") {
+          if (this._liveTicked) {
+            for (const box of document.querySelectorAll("input[name=item]")) {
+              box.checked = this._liveTicked.has(box.value);
+            }
+            this._liveTicked = null;
+          }
+          makeFocusable(this._htmxRows());
+          return;
+        }
+        const row = event.detail && event.detail.requestConfig
+          && event.detail.requestConfig.elt;
+        if (!row || !row.matches || !row.matches(HTMX_ROWS)) return;
+        this._follow(paneItem());
+      };
+
+      document.addEventListener("htmx:beforeRequest", this._onBeforeRequest);
+      document.addEventListener("htmx:afterRequest", this._onAfterRequest);
+      document.addEventListener("click", this._onHtmxClick);
+      document.addEventListener("keydown", this._onHtmxKeydown);
+      document.addEventListener("htmx:configRequest", this._onConfigRequest);
+      document.addEventListener("htmx:beforeSwap", this._onBeforeSwap);
+      document.addEventListener("htmx:afterSwap", this._onAfterSwap);
+    }
+
+    _disconnectHtmx() {
+      if (this._radios) {
+        for (const radio of this._radios) {
+          radio.removeEventListener("change", this._onRadioChange);
+        }
+      }
+      document.removeEventListener(
+        "htmx:beforeRequest", this._onBeforeRequest);
+      document.removeEventListener("htmx:afterRequest", this._onAfterRequest);
+      document.removeEventListener("click", this._onHtmxClick);
+      document.removeEventListener("keydown", this._onHtmxKeydown);
+      document.removeEventListener(
+        "htmx:configRequest", this._onConfigRequest);
+      document.removeEventListener("htmx:beforeSwap", this._onBeforeSwap);
+      document.removeEventListener("htmx:afterSwap", this._onAfterSwap);
+    }
   }
 
-  // While a row's details load, the pane takes neither pointer nor
-  // keyboard, so the previous item's links cannot be used; once the
-  // request ends, swapped or not, the pane in the page is usable. The
-  // body's hx-sync aborts a request before the next one starts, so no
-  // other row's request is pending then. The pane's class is no guide:
-  // until it settles, a swapped-in pane carries the old one's.
-  document.addEventListener("htmx:beforeRequest", (event) => {
-    const pane = document.getElementById("item-detail");
-    if (pane && event.target.matches && event.target.matches(ROWS)) {
-      pane.inert = true;
-    }
-  });
-  document.addEventListener("htmx:afterRequest", (event) => {
-    const pane = document.getElementById("item-detail");
-    if (pane && event.target.matches && event.target.matches(ROWS)) {
-      pane.inert = false;
-    }
-  });
+  // Manages the page shell's #lab-dialog modal and in-place page refresh
+  // on lab-saved.
+  class DialogController extends Stimulus.Controller {
+    connect() {
+      this._body = document.getElementById("lab-dialog-body");
+      if (!this._body) return;
+      this._opener = null;
+      this._openerHref = "";
+      this._loading = null;
+      this._saving = false;
+      this._posting = false;
 
-  // Asks htmx for the details of ROW.
-  const choose = (row) => htmx.trigger(row, "item-select");
+      this._onDocClick = (event) => {
+        if (!plain(event) || !(event.target instanceof Element)) return;
+        const link = event.target.closest("a[data-dialog]");
+        if (link && typeof htmx !== "undefined") {
+          event.preventDefault();
+          if (this._loading !== null || this.element.open) return;
+          this._opener = link;
+          this._openerHref = link.getAttribute("href") || "";
+          this._loading = link.href;
+          htmx.ajax("GET", link.href,
+                    { target: this._body, swap: "innerHTML" });
+          return;
+        }
+        const closer = event.target.closest(
+          ".lab-dialog-close, #lab-dialog-body .lab-buttons a");
+        if (closer && this.element.contains(closer)) {
+          event.preventDefault();
+          if (!this._saving && !this._posting) this.element.close();
+        }
+      };
 
-  // A click chooses the row it lands in unless it lands on a link,
-  // which leads where it links, or on an input.
-  document.addEventListener("click", (event) => {
-    if (typeof htmx === "undefined" || !plain(event)) return;
-    if (!(event.target instanceof Element)) return;
-    const row = event.target.closest(ROWS);
-    if (!row || event.target.closest("a, input")) return;
-    choose(row);
-  });
+      this._onBodyAfterSwap = () => {
+        const opening = this._loading !== null;
+        this._loading = null;
+        if (!this.element.open && opening) this.element.showModal();
+      };
 
-  document.addEventListener("keydown", (event) => {
-    if (typeof htmx === "undefined") return;
-    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
-    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
-      return;
+      this._onUnopened = (event) => {
+        if (this._loading === null
+            || !event.detail || event.detail.target !== this._body) {
+          return;
+        }
+        const href = this._loading;
+        this._loading = null;
+        location.assign(href);
+      };
+
+      this._onClose = () => this._body.replaceChildren();
+      this._onCancel = (event) => {
+        if (this._saving || this._posting) event.preventDefault();
+      };
+
+      this._onBeforeRequest = (event) => {
+        const config = event.detail && event.detail.requestConfig;
+        if (!config || String(config.verb).toLowerCase() !== "post") return;
+        this._posting = true;
+        this._guardBody();
+      };
+
+      this._onDialogResponseError = () => {
+        this._posting = false;
+        location.reload();
+      };
+
+      this._onAfterRequest = () => {
+        this._posting = false;
+        if (this._saving) {
+          this._lockDialog(true);
+        } else {
+          this._guardBody();
+          if (this.element.open) this._focusError();
+        }
+      };
+
+      this._onSaved = async (event) => {
+        if (!(event.target instanceof Element)
+            || !this.element.contains(event.target) || this._saving) {
+          return;
+        }
+        this._lockDialog(true);
+        try {
+          await this._refreshPage();
+        } catch {
+          location.reload();
+          return;
+        }
+        this._lockDialog(false);
+        this.element.close();
+        this._focusAfterSave();
+      };
+
+      document.addEventListener("click", this._onDocClick);
+      document.addEventListener("htmx:responseError", this._onUnopened);
+      document.addEventListener("htmx:sendError", this._onUnopened);
+      document.addEventListener("lab-saved", this._onSaved);
+      this._body.addEventListener("htmx:afterSwap", this._onBodyAfterSwap);
+      this.element.addEventListener("close", this._onClose);
+      this.element.addEventListener("cancel", this._onCancel);
+      this.element.addEventListener(
+        "htmx:beforeRequest", this._onBeforeRequest);
+      this.element.addEventListener(
+        "htmx:responseError", this._onDialogResponseError);
+      this.element.addEventListener("htmx:afterRequest", this._onAfterRequest);
     }
-    if (!(event.target instanceof Element)
-        || !event.target.closest(".item-table")) {
-      return;
-    }
-    const from = event.target.closest(ROWS) || markedRow();
-    if (!from) return;
-    event.preventDefault();
-    const rows = [...document.querySelectorAll(ROWS)];
-    const step = event.key === "ArrowDown" ? 1 : -1;
-    const to = rows[rows.indexOf(from) + step];
-    if (!to) return;
-    to.focus();
-    choose(to);
-  });
 
-  // htmx captures hx-get at element initialization, so live sort, stock,
-  // and Reset links read their current relinked hx-get on request.
-  document.addEventListener("htmx:configRequest", (event) => {
-    const elt = event.detail.elt;
-    if (elt instanceof Element && elt.matches(OWN_LINKS)) {
-      const next = elt.getAttribute("hx-get");
-      if (next) event.detail.path = next;
+    disconnect() {
+      if (!this._body) return;
+      document.removeEventListener("click", this._onDocClick);
+      document.removeEventListener("htmx:responseError", this._onUnopened);
+      document.removeEventListener("htmx:sendError", this._onUnopened);
+      document.removeEventListener("lab-saved", this._onSaved);
+      this._body.removeEventListener("htmx:afterSwap", this._onBodyAfterSwap);
+      this.element.removeEventListener("close", this._onClose);
+      this.element.removeEventListener("cancel", this._onCancel);
+      this.element.removeEventListener(
+        "htmx:beforeRequest", this._onBeforeRequest);
+      this.element.removeEventListener(
+        "htmx:responseError", this._onDialogResponseError);
+      this.element.removeEventListener(
+        "htmx:afterRequest", this._onAfterRequest);
+      this._body = null;
     }
-  });
 
-  document.addEventListener("click", (event) => {
-    if (!(event.target instanceof Element)) return;
-    if (!event.target.closest("#stock-menu a[hx-get]")) return;
-    const menu = document.getElementById("stock-menu");
-    if (menu && typeof menu.hidePopover === "function") {
-      try {
-        menu.hidePopover();
-      } catch {
-        // Already closed.
+    _guardBody() {
+      this._body.inert = this._posting || this._saving;
+    }
+
+    _lockDialog(locked) {
+      this._saving = locked;
+      for (const button of this.element.querySelectorAll("button")) {
+        button.disabled = locked;
       }
+      this._guardBody();
     }
-  });
 
-  // Preserve ticked item checkboxes and row focusability across live
-  // #item-rows swaps.
-  let liveTicked = null;
-  document.addEventListener("htmx:beforeSwap", (event) => {
-    if (event.detail.target && event.detail.target.id === "item-rows") {
-      liveTicked = new Set(
+    _focusError() {
+      const wrong = this._body.querySelector(
+        ".lab-field--error :is(input, select, textarea)");
+      if (wrong) wrong.focus();
+    }
+
+    _focusAfterSave() {
+      if (this._opener && this._opener.isConnected
+          && this._opener.getAttribute("href") === this._openerHref) {
+        this._opener.focus({ preventScroll: true });
+        return;
+      }
+      const heading = document.getElementById("item-detail-title")
+        || document.querySelector("main h1");
+      if (!heading) return;
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+    }
+
+    async _refreshPage() {
+      const layout = document.querySelector(".item-layout");
+      const address = layout && paneItem()
+        ? `${location.pathname}${paramSearch(location.search, "selected",
+                                             paneItem())}`
+        : location.href;
+      const response = await fetch(address, {
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: { Accept: "text/html" },
+      });
+      if (!response.ok || response.redirected) {
+        throw new Error(`refresh answered ${response.status}`);
+      }
+      const fresh = new DOMParser().parseFromString(
+        await response.text(), "text/html");
+      const ticked = new Set(
         [...document.querySelectorAll("input[name=item]:checked")]
           .map((box) => box.value));
-    }
-  });
-
-  // htmx dispatches htmx:afterSwap on the elements it swapped in, and
-  // names the element that asked for them in the request's
-  // configuration.
-  document.addEventListener("htmx:afterSwap", (event) => {
-    if (event.detail.target && event.detail.target.id === "item-rows") {
-      if (liveTicked) {
-        for (const box of document.querySelectorAll("input[name=item]")) {
-          box.checked = liveTicked.has(box.value);
+      const tableSort = new Map();
+      for (const table of document.querySelectorAll(
+        "table[data-sortable][id]")) {
+        const sorted = table.tHead
+          && table.tHead.querySelector("th[aria-sort]");
+        if (sorted) {
+          tableSort.set(table.id, {
+            colIndex: [...sorted.parentElement.cells].indexOf(sorted),
+            descending: sorted.getAttribute("aria-sort") === "descending",
+          });
         }
-        liveTicked = null;
       }
-      focusable();
-      return;
+      const boxScroll = new Map();
+      for (const box of document.querySelectorAll(".table-scroll")) {
+        const table = box.id ? null : box.querySelector("table[id]");
+        const id = box.id || (table && table.id);
+        if (id && (box.scrollTop || box.scrollLeft)) {
+          boxScroll.set(id, {
+            byBox: Boolean(box.id),
+            top: box.scrollTop,
+            left: box.scrollLeft,
+          });
+        }
+      }
+      for (const node of refreshParts(fresh)) {
+        htmx.process(node);
+        enhanceSortable(node);
+      }
+      for (const [id, state] of tableSort) {
+        const table = document.getElementById(id);
+        if (table && table.matches("table[data-sortable]")) {
+          sortTable(table, state.colIndex, state.descending);
+        }
+      }
+      for (const [id, pos] of boxScroll) {
+        const el = document.getElementById(id);
+        const box = pos.byBox ? el : el && el.closest(".table-scroll");
+        if (box) {
+          box.scrollTop = pos.top;
+          box.scrollLeft = pos.left;
+        }
+      }
+      const splitCtrl = layout
+        && this.application.getControllerForElementAndIdentifier(
+          layout, "split-list");
+      if (splitCtrl) {
+        splitCtrl.restoreAfterRefresh(ticked);
+      } else {
+        for (const box of document.querySelectorAll("input[name=item]")) {
+          box.checked = ticked.has(box.value);
+        }
+      }
     }
-    const row = event.detail.requestConfig
-      && event.detail.requestConfig.elt;
-    if (!row || !row.matches || !row.matches(ROWS)) return;
-    follow(paneItem());
-  });
+  }
+
+  const schema = {
+    ...Stimulus.defaultSchema,
+    actionAttribute: "data-lab-action",
+  };
+  const application = Stimulus.Application.start(
+    document.documentElement, schema);
+  application.register("popover-anchor", PopoverAnchorController);
+  application.register("view-menu", ViewMenuController);
+  application.register("remember", RememberController);
+  application.register("batch-narrow", BatchNarrowController);
+  application.register("sortable-table", SortableTableController);
+  application.register("split-list", SplitListController);
+  application.register("dialog", DialogController);
 })();

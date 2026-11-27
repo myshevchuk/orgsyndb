@@ -22,7 +22,7 @@
 </c-widget>
 {% translate "Movements" as movements_title %}<c-widget :title="movements_title" count="{{ ledger|length }}" flush>
 <div class="table-scroll table-scroll--tall">
-<table id="movements" class="widget-table" data-sortable>
+<table id="movements" class="widget-table" data-sortable data-controller="sortable-table">
 <thead>
 <tr><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Booked at" %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col" class="num">{% translate "Count" %}</th><th scope="col" class="num">{% translate "Stock after" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "User" %}</th><th scope="col">{% translate "Delivery note" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th>{% if user.is_authenticated %}<th scope="col"><span class="visually-hidden">{% translate "Actions" %}</span></th>{% endif %}</tr>
 </thead>

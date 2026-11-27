@@ -841,9 +841,10 @@ main:has(#row-height option[value="tight"]:checked) .item-table { font-size: 0.7
 main:has(#row-height option[value="tight"]:checked) .item-table :is(th, td) { height: 1.75rem; padding: 0.1rem 0.45rem; }
 main:has(#heat-switch:not(:checked)) .item-table td[class*="heat-"] { background: none; color: inherit; }
 
-/* Menus that open as popups. Without lab.js the browser centres a popup
-   in the window; lab.js marks it data-placed and sets its left and
-   top. */
+/* Menus that open as popups. Browsers with full CSS Anchor Positioning
+   place each popup against its trigger button and flip or clamp to the
+   viewport; older browsers fall back to lab.js marking data-placed and
+   setting left and top. */
 .lab-popup {
   padding: 0;
   color: var(--fg);
@@ -860,6 +861,42 @@ main:has(#heat-switch:not(:checked)) .item-table td[class*="heat-"] { background
   overflow: auto;
 }
 .lab-popup[data-placed] { position: fixed; inset: auto; margin: 0; }
+@supports (anchor-name: --a) and (position-anchor: --a) and (top: anchor(bottom)) and (position-try-fallbacks: flip-block) {
+  @position-try --popover-below-inset {
+    top: calc(anchor(bottom) + 8px);
+    bottom: auto;
+    left: 16px;
+    right: auto;
+  }
+  @position-try --popover-above-inset {
+    top: auto;
+    bottom: calc(anchor(top) + 8px);
+    left: 16px;
+    right: auto;
+  }
+  @position-try --popover-fit {
+    top: auto;
+    bottom: 16px;
+    left: 16px;
+    right: auto;
+  }
+  .lab-popup[popover] {
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    top: calc(anchor(bottom) + 8px);
+    left: max(16px, anchor(left));
+    max-width: calc(100vw - 2rem);
+    max-height: calc(100vh - 2rem);
+    position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline, --popover-below-inset, --popover-above-inset, --popover-fit;
+  }
+  [popovertarget="stock-menu"] { anchor-name: --stock-menu-anchor; }
+  #stock-menu { position-anchor: --stock-menu-anchor; }
+  [popovertarget="more-filters"] { anchor-name: --more-filters-anchor; }
+  #more-filters { position-anchor: --more-filters-anchor; }
+  [popovertarget="columns-menu"] { anchor-name: --columns-menu-anchor; }
+  #columns-menu { position-anchor: --columns-menu-anchor; }
+}
 .lab-menu { padding: var(--space-2) var(--space-3); }
 .lab-menu > label { display: flex; flex-direction: column; gap: var(--space-1); margin: 0 0 var(--space-2); }
 .lab-menu fieldset { margin: 0; padding: 0; border: 0; }

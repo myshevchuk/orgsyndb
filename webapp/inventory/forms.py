@@ -119,7 +119,7 @@ class BatchField(forms.ModelChoiceField):
     def __init__(self, *, queryset: Any, follows: str, label: Any,
                  required: bool = False, empty_label: Any = "",
                  aria_label: Any = None, **kwargs: Any) -> None:
-        attrs = {"data-batch-for": follows}
+        attrs = {"data-batch-for": follows, "data-controller": "batch-narrow"}
         if aria_label:
             attrs["aria-label"] = aria_label
         super().__init__(queryset=queryset, required=required, label=label,

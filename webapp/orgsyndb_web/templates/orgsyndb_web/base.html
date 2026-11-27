@@ -14,6 +14,7 @@
 <script src="{% static 'site/site.js' %}"></script>
 <script src="{% static 'htmx/htmx.min.js' %}" defer></script>
 <script src="{% static 'idiomorph/idiomorph-ext.min.js' %}" defer></script>
+<script src="{% static 'stimulus/stimulus.umd.js' %}" defer></script>
 <script src="{% static 'lab.js' %}" defer></script>
 {% endblock %}{% block head %}{% endblock %}</head>
 <body hx-ext="morph"{% block body_class %}{% endblock %}>
@@ -52,7 +53,7 @@
 {% endfor %}</ul>
 {% endif %}{% endblock %}{% block main %}{% endblock %}
 </main>
-<dialog id="lab-dialog" class="lab-dialog" aria-labelledby="lab-dialog-title">
+<dialog id="lab-dialog" class="lab-dialog" data-controller="dialog" aria-labelledby="lab-dialog-title">
 <div id="lab-dialog-body"></div>
 <button type="button" class="lab-dialog-close" aria-label="{% translate "Close" %}"><span aria-hidden="true">×</span></button>
 </dialog>

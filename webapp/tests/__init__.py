@@ -649,18 +649,19 @@ def page_text(response: Any) -> str:
 
 
 # The page shell's scripts: the site's, run before the page is parsed,
-# then htmx, idiomorph, and the application's, deferred.
+# then htmx, idiomorph, Stimulus, and the application's, deferred.
 SHELL_SCRIPT = "/lab/static/site/site.js"
 HTMX = "/lab/static/htmx/htmx.min.js"
 IDIOMORPH = "/lab/static/idiomorph/idiomorph-ext.min.js"
+STIMULUS = "/lab/static/stimulus/stimulus.umd.js"
 LAB_SCRIPT = "/lab/static/lab.js"
 
 
 def shell_scripts(root: Element) -> None:
     """Assert that the page ROOT loads the page shell's scripts:
     SHELL_SCRIPT once, from the head, without ``defer`` and before every
-    other script, then HTMX, IDIOMORPH, and LAB_SCRIPT in that order,
-    each once and with ``defer``."""
+    other script, then HTMX, IDIOMORPH, STIMULUS, and LAB_SCRIPT in that
+    order, each once and with ``defer``."""
     scripts = root.find_all("script")
     sources = [s.get("src") for s in scripts]
     shell = [s for s in scripts if s.get("src") == SHELL_SCRIPT]
@@ -668,15 +669,15 @@ def shell_scripts(root: Element) -> None:
     assert shell[0].parent.tag == "head", "the shell's script is not in head"
     assert "defer" not in shell[0].attrs, "the shell's script is deferred"
     assert scripts[0] is shell[0], "a script precedes the shell's"
-    for source in (HTMX, IDIOMORPH, LAB_SCRIPT):
+    for source in (HTMX, IDIOMORPH, STIMULUS, LAB_SCRIPT):
         assert sources.count(source) == 1, \
             f"{sources.count(source)} scripts load {source}"
         assert "defer" in scripts[sources.index(source)].attrs, \
             f"{source} is not deferred"
-    assert sources.index(HTMX) < sources.index(IDIOMORPH), \
-        f"{IDIOMORPH} comes before {HTMX}"
-    assert sources.index(IDIOMORPH) < sources.index(LAB_SCRIPT), \
-        f"{LAB_SCRIPT} comes before {IDIOMORPH}"
+    for earlier, later in ((HTMX, IDIOMORPH), (IDIOMORPH, STIMULUS),
+                           (STIMULUS, LAB_SCRIPT)):
+        assert sources.index(earlier) < sources.index(later), \
+            f"{later} comes before {earlier}"
 
 
 def field_value(root: Element, name: str) -> str | None:
