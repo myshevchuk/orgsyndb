@@ -1,0 +1,6 @@
+<c-vars view="table" cookie="" split="" scroll_id="" /><div class="item-layout{% if split %} item-layout--split{% endif %}" data-view="{{ view }}"{% if cookie %} data-cookie="{{ cookie }}"{% endif %}>
+<div{% if scroll_id %} id="{{ scroll_id }}"{% endif %} class="table-scroll table-sticky">
+{{ slot }}
+</div>
+{{ detail }}
+</div>

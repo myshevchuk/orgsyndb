@@ -2,16 +2,14 @@
 {% block title %}{% translate "Batches" %}{% endblock %}
 {% block body_class %} class="lab-frame"{% endblock %}
 {% block main %}
-<div class="lab-heading">
-<h1>{% translate "Batches" %}</h1>
-<span class="lab-count">{% blocktranslate count count=rows|length %}{{ count }} batch{% plural %}{{ count }} batches{% endblocktranslate %}</span>
-{% if user.is_authenticated %}<div class="lab-heading__actions"><p class="actions"><a href="/lab/inventory/batches/new/">{% translate "New batch" %}</a></p></div>{% endif %}
-</div>
+{% translate "Batches" as heading %}<c-list-heading :title="heading" wrap_actions>
+<c-slot name="count_slot"><span class="lab-count">{% blocktranslate count count=rows|length %}{{ count }} batch{% plural %}{{ count }} batches{% endblocktranslate %}</span></c-slot>
+{% if user.is_authenticated %}<c-slot name="actions"><p class="actions"><a href="/lab/inventory/batches/new/">{% translate "New batch" %}</a></p></c-slot>{% endif %}
+</c-list-heading>
 {% include "inventory/tabs.html" %}
-<form class="lab-filters lab-toolbar" method="get" action="/lab/inventory/batches/">
-<label class="lab-inline-field"><span class="visually-hidden">{% translate "Search" %}</span><input type="search" name="q" value="{{ q }}" placeholder="{% translate "Batch, substance or supplier" %}" autocomplete="off"></label>
-<button type="submit">{% translate "Filter" %}</button>
-</form>
+{% translate "Search" as search_label %}{% translate "Batch, substance or supplier" as search_placeholder %}<c-filter-bar action="/lab/inventory/batches/" :toolbar="False" form_class="lab-filters lab-toolbar">
+<c-filter-search :value="q" :label="search_label" :placeholder="search_placeholder" autocomplete="off" />
+</c-filter-bar>
 <div class="table-scroll">
 <table class="inventory-table">
 <thead>

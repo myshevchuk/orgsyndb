@@ -1,0 +1,2 @@
+<c-vars name="q" value="" label="" placeholder="" :inline="True" />{% if inline %}<label class="lab-inline-field"><span class="visually-hidden">{{ label }}</span><input type="search" name="{{ name }}" value="{{ value }}"{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if attrs %} {{ attrs }}{% endif %}></label>{% else %}<label>{{ label }}
+<input type="search" name="{{ name }}" value="{{ value }}"{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if attrs %} {{ attrs }}{% endif %}></label>{% endif %}

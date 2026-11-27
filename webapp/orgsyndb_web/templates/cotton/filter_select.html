@@ -1,0 +1,4 @@
+<c-vars name="" label="" :inline="True" />{% if inline %}<label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{{ label }}:</span><select name="{{ name }}"{% if attrs %} {{ attrs }}{% endif %}>
+{{ slot }}</select></label>{% else %}<label>{{ label }}
+<select name="{{ name }}"{% if attrs %} {{ attrs }}{% endif %}>
+{{ slot }}</select></label>{% endif %}

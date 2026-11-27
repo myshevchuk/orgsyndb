@@ -1,23 +1,17 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n planning inventory lab %}
 {% block title %}{% translate "Planning" %}{% endblock %}
 {% block main %}
-<div class="lab-heading">
-<h1>{% translate "Planning" %}</h1>
-<p class="actions">{% if all %}<a href="/lab/planning/">{% translate "Urgent articles only" %}</a>{% else %}<a href="/lab/planning/?all=1">{% translate "All articles" %}</a>{% endif %}</p>
-</div>
+{% translate "Planning" as heading %}<c-list-heading :title="heading">
+<c-slot name="actions"><p class="actions">{% if all %}<a href="/lab/planning/">{% translate "Urgent articles only" %}</a>{% else %}<a href="/lab/planning/?all=1">{% translate "All articles" %}</a>{% endif %}</p></c-slot>
+</c-list-heading>
 {% if rows %}<div class="planning-grid">
-<section class="widget planning-list">
-<div class="widget__head">
-<h2>{% translate "Planning list" %}</h2>
-<span class="widget__count" data-planning-count>{{ rows|length }}</span>
-<div class="planning-filters" role="group" aria-label="{% translate "Filter" context "planning" %}" hidden>
+{% translate "Planning list" as list_title %}<c-widget :title="list_title" count="{{ rows|length }}" count_attr="data-planning-count" extra_class="planning-list" flush>
+<c-slot name="head_extra"><div class="planning-filters" role="group" aria-label="{% translate "Filter" context "planning" %}" hidden>
 <button type="button" class="planning-filter" data-plan-filter="all" aria-pressed="true">{% translate "All" %}</button>
 <button type="button" class="planning-filter" data-plan-filter="high" aria-pressed="false">{% translate "High priority" %}</button>
 <button type="button" class="planning-filter" data-plan-filter="action" aria-pressed="false">{% translate "With action" %}</button>
 <button type="button" class="planning-filter" data-plan-filter="late" aria-pressed="false">{% translate "Late" %}</button>
-</div>
-</div>
-<div class="widget__body widget__body--flush">
+</div></c-slot>
 <div class="table-scroll">
 <table id="planning-list" class="widget-table planning-table" data-sortable>
 <thead>
@@ -45,8 +39,7 @@
 </div>
 <p class="lab-empty planning-no-match" hidden>{% translate "No row matches the filter." %}</p>
 <p class="visually-hidden planning-status" role="status" data-text="{% translate "Rows shown: {n}" %}"></p>
-</div>
-</section>
+</c-widget>
 <aside class="planning-inspector" aria-label="{% translate "Article details" %}">
 {% for row in rows %}{% include "planning/inspector.html" %}{% endfor %}
 </aside>

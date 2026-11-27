@@ -12,6 +12,7 @@ dependencies = [
     "django-oauth-toolkit>=3.4",
     "rdkit>=2026.9.2",
     "django-htmx>=1.29",
+    "django-cotton>=2.9",
 ]
 
 [dependency-groups]

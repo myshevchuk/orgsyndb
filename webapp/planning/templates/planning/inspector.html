@@ -1,7 +1,6 @@
 {% load i18n planning inventory lab %}{% with found=row.forecast %}<div class="planning-block" data-article="{{ found.article_number }}"{% if found.article_number != selected %} hidden{% endif %}>
-<section class="widget">
-<div class="widget__head"><h2>{% translate "Containers and demand" %}</h2><span class="widget__note compound-key">{{ found.article_number }}</span></div>
-<div class="widget__body widget__body--flush"><div class="table-scroll">
+{% translate "Containers and demand" as containers_title %}<c-widget :title="containers_title" :note="found.article_number" note_class="compound-key" flush>
+<div class="table-scroll">
 <table class="widget-table planning-containers">
 <thead>
 <tr><th scope="col">{% translate "Container" %}</th><th scope="col">{% translate "Stock" %}</th><th scope="col" class="num">{% translate "Runway" %}</th><th scope="col" class="num">{% translate "Demand per year" %}</th></tr>
@@ -15,11 +14,10 @@
 </tr>
 {% endfor %}</tbody>
 </table>
-</div></div>
-</section>
-<section class="widget">
-<div class="widget__head"><h2>{% translate "Planning details" %}</h2><span class="widget__note"><span class="badge priority priority--{{ found.priority }}">{{ found.priority_label }}</span></span></div>
-<div class="widget__body widget__body--flush">
+</div>
+</c-widget>
+{% translate "Planning details" as details_title %}<c-widget :title="details_title" flush>
+<c-slot name="note_slot"><span class="badge priority priority--{{ found.priority }}">{{ found.priority_label }}</span></c-slot>
 <table class="kv-table"><tbody>
 <tr><th scope="row">{% translate "Substance" %}</th><td>{% substance found.substance %}</td></tr>
 <tr><th scope="row">{% translate "Last delivery" %}</th><td{% if not found.last_delivery %} class="muted"{% endif %}>{{ found.last_delivery|default_if_none:"–" }}</td></tr>
@@ -31,6 +29,5 @@
 {% for line in row.tasks %}<li><a href="/lab/tasks/{{ line.task.number }}/">{{ line.task.number }}</a> {% include "tasks/state.html" with task=line.task %}{% if line.late %} <span class="badge badge--late">{% translate "late" %}</span>{% endif %} <span class="kv-sub">{% blocktranslate with end=line.end|date:"SHORT_DATE_FORMAT" %}expected end {{ end }}{% endblocktranslate %}</span></li>
 {% endfor %}</ul>{% else %}–{% endif %}</td></tr>
 </tbody></table>
-</div>
-</section>
+</c-widget>
 </div>{% endwith %}

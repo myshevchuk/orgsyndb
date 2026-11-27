@@ -1,0 +1,5 @@
+<c-vars title="" count="" count_id="" count_class="lab-count" count_refresh="" wrap_actions="" /><div class="lab-heading">
+<h1>{{ title }}</h1>
+{% if count_slot %}{{ count_slot }}{% elif count != "" %}<span{% if count_id %} id="{{ count_id }}"{% endif %} class="{{ count_class }}"{% if count_refresh %} data-refresh{% endif %}>{{ count }}</span>
+{% endif %}{% if actions %}{% if wrap_actions %}<div class="lab-heading__actions">{{ actions }}</div>{% else %}{{ actions }}{% endif %}
+{% endif %}</div>

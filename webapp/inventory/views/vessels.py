@@ -20,6 +20,7 @@ from inventory.history import history_entries
 from inventory.models import Batch, Item, Vessel, VesselKind, VesselMovement
 from inventory.views.common import (VESSELS, batch_url, form_page, item_form,
                                     locations, saved, tabs, vessel_url)
+from orgsyndb_web.lists import clean_choice
 
 
 @dataclass(frozen=True)
@@ -41,9 +42,7 @@ def vessel_list(request: HttpRequest) -> HttpResponse:
     last, then by ID. ``kind`` names one of ``VesselKind`` and lists the
     vessels of that kind; another value lists every kind."""
     empty = request.GET.get("empty") == "1"
-    kind = request.GET.get("kind", "")
-    if kind not in VesselKind.values:
-        kind = ""
+    kind = clean_choice(request.GET.get("kind", ""), VesselKind.values)
     vessels = Vessel.objects.with_substance().select_related(
         "batch__task_step__task")
     if not empty:

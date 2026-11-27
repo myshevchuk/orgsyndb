@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     "simple_history",
     "oauth2_provider",
     "django_htmx",
+    "django_cotton",
 ]
 
 MIDDLEWARE = [

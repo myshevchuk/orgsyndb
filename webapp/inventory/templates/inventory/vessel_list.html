@@ -2,20 +2,18 @@
 {% block title %}{% translate "Vessels" %}{% endblock %}
 {% block body_class %} class="lab-frame"{% endblock %}
 {% block main %}
-<div class="lab-heading">
-<h1>{% translate "Vessels" %}</h1>
-<span class="lab-count">{% blocktranslate count count=vessels|length %}{{ count }} vessel{% plural %}{{ count }} vessels{% endblocktranslate %}</span>
-{% if user.is_authenticated %}<div class="lab-heading__actions"><p class="actions"><a href="/lab/inventory/batches/new/">{% translate "New batch" %}</a></p></div>{% endif %}
-</div>
+{% translate "Vessels" as heading %}<c-list-heading :title="heading" wrap_actions>
+<c-slot name="count_slot"><span class="lab-count">{% blocktranslate count count=vessels|length %}{{ count }} vessel{% plural %}{{ count }} vessels{% endblocktranslate %}</span></c-slot>
+{% if user.is_authenticated %}<c-slot name="actions"><p class="actions"><a href="/lab/inventory/batches/new/">{% translate "New batch" %}</a></p></c-slot>{% endif %}
+</c-list-heading>
 {% include "inventory/tabs.html" %}
-<form class="lab-filters lab-toolbar" method="get" action="/lab/inventory/vessels/">
-<label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Kind" %}:</span><select name="kind">
+{% translate "Kind" as kind_label %}{% translate "Used-up vessels too" as empty_label %}<c-filter-bar action="/lab/inventory/vessels/" :toolbar="False" form_class="lab-filters lab-toolbar">
+<c-filter-select name="kind" :label="kind_label">
 <option value=""{% if not kind %} selected{% endif %}>{% translate "All kinds" %}</option>
 {% for value, label in kinds %}<option value="{{ value }}"{% if value == kind %} selected{% endif %}>{{ label }}</option>
-{% endfor %}</select></label>
-<label class="lab-inline-check"><input type="checkbox" name="empty" value="1"{% if empty %} checked{% endif %}> {% translate "Used-up vessels too" %}</label>
-<button type="submit">{% translate "Filter" %}</button>
-</form>
+{% endfor %}</c-filter-select>
+<c-filter-check name="empty" :label="empty_label" :checked="empty" />
+</c-filter-bar>
 <div class="table-scroll">
 <table class="inventory-table">
 <thead>

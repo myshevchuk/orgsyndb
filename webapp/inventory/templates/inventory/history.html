@@ -1,6 +1,5 @@
-{% load i18n lab %}<details class="widget" id="history">
-<summary class="widget__head"><h2>{% translate "History" %}</h2><span class="widget__count">{{ history|length }}</span></summary>
-<div class="widget__body widget__body--flush"><div class="table-scroll">
+{% load i18n lab %}{% translate "History" as history_title %}<c-widget id="history" :title="history_title" count="{{ history|length }}" collapsible flush>
+<div class="table-scroll">
 <table class="widget-table">
 <thead>
 <tr><th scope="col">{% translate "Time" %}</th><th scope="col">{% translate "User" %}</th><th scope="col">{% translate "Subject" %}</th><th scope="col">{% translate "Change" %}</th></tr>
@@ -11,5 +10,5 @@
 {% endfor %}{% else %}<tr><td class="nowrap muted">{{ entry.time }}</td><td class="nowrap">{% person entry.user %}</td><td class="nowrap">{{ entry.heading }}</td><td class="history-change">{% if not entry.heading %}{% translate "No field changed" %}{% endif %}</td></tr>
 {% endif %}{% endfor %}</tbody>
 </table>
-</div></div>
-</details>
+</div>
+</c-widget>
