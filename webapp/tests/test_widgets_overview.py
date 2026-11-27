@@ -11,6 +11,7 @@ from django.test import SimpleTestCase
 
 from . import Element, page
 from .collection_support import accept
+from .main_lists_support import (lists_records, key_number, unsorted_reasons)
 from .overview_support import (FIGURES, FIGURES_EN, SUMMARY,
                                WIDGET_TITLES, YEAR_LISTS, YEAR_LISTS_EN,
                                OverviewCase, figure_values, figures,
@@ -556,6 +557,63 @@ class YearListTests(OverviewCase):
         _, found = self.grid("Empfänger 2026")
         self.assertEqual([r["Empfänger"].text() for r in found],
                          ["AK Weber"])
+
+
+class SortableTablesTests(OverviewCase):
+    """The tables of the year's lists and of the next syntheses sort in
+    the browser (web-app: Widgets, "Widget and pane tables sort in the
+    browser")."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.at_the_seventh()
+        self.scenario()
+        self.planned_item("NV-10", quantity=10)
+        self.planned_item("NV-15", quantity=15)
+
+    def test_every_table_is_sortable_and_auxiliary(self) -> None:
+        root = self.get()
+        self.assertEqual(unsorted_reasons(root), [])
+        found = [t for t in root.find_all("table") if lists_records(t)]
+        self.assertGreaterEqual(len(found), 4)
+        for one in found:
+            self.assertTrue(one.get("id"))
+
+    def test_the_ids_are_unique_on_the_page(self) -> None:
+        root = self.get()
+        ids = [e.get("id") for e in root.walk() if e.get("id")]
+        self.assertEqual(len(ids), len(set(ids)))
+
+    def test_the_dates_carry_the_iso_date(self) -> None:
+        root = self.get()
+        _, rows = widget_grid(widget(root, "Letzte Lieferscheine"))
+        self.assertTrue(rows)
+        for row in rows:
+            shown = row["Datum"].text()
+            day, month, year = shown.split(".")
+            self.assertEqual(row["Datum"].get("data-sort"),
+                             f"{year}-{month}-{day}")
+
+    def test_the_latest_starts_carry_the_iso_date(self) -> None:
+        _, rows = widget_grid(widget(self.get(), "Nächste Synthesen"))
+        self.assertTrue(rows)
+        for row in rows:
+            cell = row["Spätester Start"]
+            self.assertRegex(cell.get("data-sort") or "",
+                             r"\A\d{4}-\d{2}-\d{2}\Z", cell.text())
+
+    def test_the_priority_keys_on_its_rank(self) -> None:
+        _, rows = widget_grid(widget(self.get(), "Nächste Synthesen"))
+        ranks = {row["Priorität"].text(): row["Priorität"].get("data-sort")
+                 for row in rows}
+        self.assertLessEqual({"hoch", "mittel"}, set(ranks))
+        self.assertLess(key_number(ranks["hoch"]), key_number(ranks["mittel"]))
+
+    def test_the_counts_are_their_own_keys(self) -> None:
+        """A count shows its value, so it needs no key of its own."""
+        _, rows = widget_grid(widget(self.get(), "Empfänger 2026"))
+        for row in rows:
+            self.assertRegex(row["Gebinde"].text(), r"\A\d+\Z")
 
 
 class SummaryWidgetTests(OverviewCase):

@@ -76,19 +76,6 @@ process.stdout.write(JSON.stringify(
         Array.from(order(keys, descending, locale)))
     : null));
 """
-FILTER_RUNNER = r"""
-const fs = require("fs");
-const vm = require("vm");
-const context = vm.createContext({});
-vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), context,
-                { filename: process.argv[1] });
-const cases = JSON.parse(fs.readFileSync(0, "utf8"));
-const shows = context.OrgSynLab.planFilterShows;
-process.stdout.write(JSON.stringify(
-  typeof shows === "function"
-    ? cases.map(([row, filter]) => shows(row, filter))
-    : null));
-"""
 STEP_RUNNER = r"""
 const fs = require("fs");
 const vm = require("vm");
@@ -366,13 +353,20 @@ class ExportTests(TestCase):
             capture_output=True, text=True, check=True)
         self.assertIn("narrowBatches", json.loads(done.stdout))
 
-    def test_the_planning_helpers_are_exported(self) -> None:
+    def test_the_arrow_key_step_is_exported(self) -> None:
+        done = subprocess.run(
+            [NODE, "-e", GONE_RUNNER, str(SCRIPT)],
+            capture_output=True, text=True, check=True)
+        self.assertIn("planStep", json.loads(done.stdout))
+
+    def test_the_planning_filter_helper_is_gone(self) -> None:
+        """The planning list filters on the server."""
         done = subprocess.run(
             [NODE, "-e", GONE_RUNNER, str(SCRIPT)],
             capture_output=True, text=True, check=True)
         exported = json.loads(done.stdout)
-        self.assertIn("planFilterShows", exported)
         self.assertIn("planStep", exported)
+        self.assertNotIn("planFilterShows", exported)
 
 
 @skipUnless(NODE, "node is not installed")
@@ -574,71 +568,13 @@ class SortOrderTests(TestCase):
 
 
 @skipUnless(NODE, "node is not installed")
-class PlanFilterTests(TestCase):
-    """``OrgSynLab.planFilterShows(row, filter)`` tells whether the
-    planning list's filter FILTER, one of ``"all"``, ``"high"``,
-    ``"action"`` and ``"late"``, shows ROW, an object with ``priority``,
-    a string (``"high"``, ``"medium"`` or ``"low"``), and the booleans
-    ``action`` and ``late``; it returns a boolean (production-planning:
-    Planning list)."""
-
-    ROWS = [{"priority": priority, "action": action, "late": late}
-            for priority in ("high", "medium", "low")
-            for action in (False, True) for late in (False, True)]
-
-    def shows(self, *cases: tuple) -> list[bool]:
-        done = subprocess.run(
-            [NODE, "-e", FILTER_RUNNER, str(SCRIPT)],
-            input=json.dumps(cases), capture_output=True, text=True,
-            check=True)
-        found = json.loads(done.stdout)
-        self.assertIsNotNone(found, "lab.js exports no planFilterShows")
-        return found
-
-    def test_all_shows_every_row(self) -> None:
-        found = self.shows(*[(row, "all") for row in self.ROWS])
-        self.assertEqual(len(found), len(self.ROWS))
-        for row, shown in zip(self.ROWS, found):
-            with self.subTest(row=row):
-                self.assertIs(shown, True)
-
-    def test_high_shows_the_rows_of_high_priority(self) -> None:
-        found = self.shows(*[(row, "high") for row in self.ROWS])
-        for row, shown in zip(self.ROWS, found):
-            with self.subTest(row=row):
-                self.assertIs(shown, row["priority"] == "high")
-
-    def test_action_shows_the_rows_with_an_action(self) -> None:
-        found = self.shows(*[(row, "action") for row in self.ROWS])
-        for row, shown in zip(self.ROWS, found):
-            with self.subTest(row=row):
-                self.assertIs(shown, row["action"])
-
-    def test_late_shows_the_rows_with_a_late_task(self) -> None:
-        found = self.shows(*[(row, "late") for row in self.ROWS])
-        for row, shown in zip(self.ROWS, found):
-            with self.subTest(row=row):
-                self.assertIs(shown, row["late"])
-
-    def test_a_filter_looks_at_its_own_attribute_only(self) -> None:
-        quiet = {"priority": "low", "action": False, "late": False}
-        found = self.shows(
-            ({**quiet, "late": True}, "action"),
-            ({**quiet, "action": True}, "late"),
-            ({**quiet, "action": True, "late": True}, "high"),
-            ({**quiet, "priority": "medium"}, "high"))
-        self.assertEqual(found, [False, False, False, False])
-
-
-@skipUnless(NODE, "node is not installed")
 class PlanStepTests(TestCase):
     """``OrgSynLab.planStep(shown, current, key)`` takes SHOWN, a list of
     booleans, one for each row of the planning list in its current order,
     whether the row shows; CURRENT, the index of the selected row, or -1
     for none; and KEY, ``"ArrowUp"`` or ``"ArrowDown"``. It returns the
     index of the nearest row that shows before (up) or after (down)
-    CURRENT, and CURRENT when there is none (production-planning:
-    Planning list)."""
+    CURRENT, and CURRENT when there is none (web-app: Main lists)."""
 
     def step(self, shown: list[bool], current: int, key: str) -> int:
         return self.steps((shown, current, key))[0]
@@ -1028,3 +964,35 @@ process.stdout.write(JSON.stringify({
             capture_output=True, text=True, check=True)
         result = json.loads(done.stdout)
         self.assertEqual(result, {"submitHidden": False, "submitCalls": 0})
+
+
+class ScriptSourceTests(TestCase):
+    """What the script no longer names: the markup of the lists before
+    the main lists (web-app: Main lists)."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        cls.text = SCRIPT.read_text(encoding="utf-8")
+
+    def test_it_names_no_markup_of_the_old_lists(self) -> None:
+        for name in ("planFilterShows", "data-plan-filter", "data-article",
+                     "planning-select", "planning-grid", "planning-filters",
+                     "planning-inspector", "planning-no-match",
+                     "data-planning-count", "batch-rows", "vessel-rows",
+                     ".item-table", "_connectLocal", "_disconnectLocal",
+                     "_planRows", "_planBlocks"):
+            with self.subTest(name=name):
+                self.assertNotIn(name, self.text)
+
+    def test_it_has_no_local_mode(self) -> None:
+        self.assertNotRegex(self.text, r"[\"']local[\"']")
+
+    def test_it_names_the_main_table(self) -> None:
+        self.assertIn(".main-table tbody tr[data-item]", self.text)
+        self.assertIn(".main-table thead a", self.text)
+        self.assertIn('closest(".main-table")', self.text)
+
+    def test_a_click_on_any_control_of_a_row_selects_nothing(self) -> None:
+        self.assertIn("a, button, label, input, select, textarea",
+                      self.text)

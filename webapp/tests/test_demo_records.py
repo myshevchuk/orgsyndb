@@ -12,9 +12,9 @@ from . import BERLIN, DEMO_NOTEBOOKS, frozen, page, table
 from .collection_support import accept, demo_collection
 from .demo_support import (ACCOUNTS, ARTICLES, DAY, DELIVERIES,
                            DEMO_PASSWORD, ITEMS, LOGIN, NOTE_NUMBER,
-                           NUMBERLESS, PLAN, TASKS, SeededCase, noon,
+                           NUMBERLESS, TASKS, SeededCase, noon,
                            opening, run, sample_chemicals, seed)
-from .planning_support import block_of, details
+from .planning_support import detail_pane, details
 from .registry_support import demo_registry
 from .widget_support import widget
 
@@ -973,7 +973,7 @@ class TaskTests(SeededCase):
                  if task.state == State.ENDED
                  and task.substance.key == "cinnamic-acid"]
         self.assertGreaterEqual(len(ended), 3)
-        found = block_of(self.get(PLAN), "CH-0012")
+        found = detail_pane(self.client, "CH-0012", "")
         self.assertIn("längste der letzten 3 Synthesen",
                       details(found)["Synthesedauer"].text())
 

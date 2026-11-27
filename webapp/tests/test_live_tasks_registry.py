@@ -15,6 +15,10 @@ from .test_task_list import ListCase
 TASKS_URL = "/lab/tasks/"
 REGISTRY_URL = "/lab/registry/"
 MIDDLE_DOT = "·"
+TASK_OOB = ["#task-counts:morph", "#item-head:morph", "#item-detail:morph",
+            "#filter-selected:morph"]
+SUBSTANCE_OOB = ["#substance-count:morph", "#item-head:morph",
+                 "#item-detail:morph", "#filter-selected:morph"]
 
 
 class LivePageContractMixin(LiveListAssertions):
@@ -32,7 +36,7 @@ class LivePageContractMixin(LiveListAssertions):
         *,
         url: str,
         target: str,
-        oob_entry: str,
+        oob_entries: list[str],
     ) -> None:
         self.assert_no_data_submit(root)
         form = root.find("form", id="filters")
@@ -46,9 +50,9 @@ class LivePageContractMixin(LiveListAssertions):
             root,
             expected_get=url,
             target=target,
-            required_oob={oob_entry},
+            required_oob=set(oob_entries),
         )
-        self.assertEqual(entries, [oob_entry])
+        self.assertEqual(entries, oob_entries)
         self.assert_scoped_triggers(
             form,
             has_search=True,
@@ -57,6 +61,30 @@ class LivePageContractMixin(LiveListAssertions):
         )
         self.assertNotRegex(form.get("hx-trigger") or "", r"\bchanged\b")
 
+    def assert_live_header_links(
+        self,
+        url: str,
+        count: str,
+        sortable: int,
+    ) -> None:
+        """The header links of the list at URL update ``#item-rows``
+        in place, and out of band the count COUNT, ``#item-head``,
+        ``#item-detail`` and ``#filters``."""
+        root = page(self.client.get(url + "?state=all", **HTMX))
+        head = root.find(id="item-head")
+        self.assertIsNotNone(head)
+        links = head.find_all("a")
+        self.assertEqual(len(links), sortable)
+        wanted = [f"#{count}:morph", "#item-head:morph",
+                  "#item-detail:morph", "#filters:morph"]
+        for link in links:
+            with self.subTest(link=link.text()):
+                self.assertTrue(link.get("href"))
+                entries = self.assert_live_element(
+                    link, root, expected_get=link.get("href"),
+                    target="#item-rows", required_oob=set(wanted))
+                self.assertEqual(entries, wanted)
+
     def assert_complete_page_variants(
         self,
         *,
@@ -64,7 +92,7 @@ class LivePageContractMixin(LiveListAssertions):
         full_url: str,
         expected_push_url: str,
         target: str,
-        oob_entry: str,
+        oob_entries: list[str],
     ) -> None:
         htmx_res = self.client.get(full_url, **HTMX)
         restore_res = self.client.get(full_url, **RESTORE)
@@ -92,7 +120,7 @@ class LivePageContractMixin(LiveListAssertions):
                     root,
                     url=base_url,
                     target=target,
-                    oob_entry=oob_entry,
+                    oob_entries=oob_entries,
                 )
                 meta = root.find("meta", attrs={"name": "htmx-config"})
                 cfg = json.loads(meta.get("content"))
@@ -128,9 +156,13 @@ class TaskListLiveTests(LivePageContractMixin, ListCase):
         )
 
     def row_ids(self, root: Any) -> list[str]:
-        tbody = root.find("tbody", id="task-rows")
+        tbody = root.find("tbody", id="item-rows")
         self.assertIsNotNone(tbody)
         return [tr.get("id") for tr in tbody.find_all("tr")]
+
+    def row_keys(self, root: Any) -> list[str]:
+        return [tr.get("data-item") for tr in
+                root.find("tbody", id="item-rows").find_all("tr")]
 
     def test_live_filtering_and_canonical_push_url(self) -> None:
         """Scenario: Live filtering and canonical URL on the task list."""
@@ -152,9 +184,9 @@ class TaskListLiveTests(LivePageContractMixin, ListCase):
                 f"{MIDDLE_DOT} 1 Nacharbeit",
             ),
             (
-                f"{TASKS_URL}?state=running",
-                {"state": "running"},
-                f"{TASKS_URL}?state=running",
+                f"{TASKS_URL}?state=running&sort=number",
+                {"state": "running", "sort": "number"},
+                f"{TASKS_URL}?state=running&sort=number",
                 [self.running],
                 f"1 geplant {MIDDLE_DOT} 1 in Arbeit "
                 f"{MIDDLE_DOT} 1 Nacharbeit",
@@ -186,6 +218,11 @@ class TaskListLiveTests(LivePageContractMixin, ListCase):
         ]
         for query, expected_q, exact_url, expected_tasks, counts_text in cases:
             with self.subTest(query=query):
+                if expected_tasks:
+                    chosen = expected_tasks[0].number
+                    expected_q = {**expected_q, "selected": chosen}
+                    exact_url += ("&" if "?" in exact_url else "?") \
+                        + f"selected={chosen}"
                 res = self.client.get(query, **HTMX)
                 test_shell.ShellTests.assert_scripts(self, res)
                 self.assertLessEqual(
@@ -199,24 +236,42 @@ class TaskListLiveTests(LivePageContractMixin, ListCase):
                 self.assert_live_filter_form(
                     root,
                     url=TASKS_URL,
-                    target="#task-rows",
-                    oob_entry="#task-counts:morph",
+                    target="#item-rows",
+                    oob_entries=TASK_OOB,
                 )
                 self.assertEqual(
                     self.row_ids(root),
                     [f"task-row-{t.pk}" for t in expected_tasks],
                 )
+                self.assertEqual(self.row_keys(root),
+                                 [t.number for t in expected_tasks])
                 counts = root.find(id="task-counts")
                 self.assertIsNotNone(counts)
                 self.assertEqual(counts.text(), counts_text)
+
+    def test_the_header_links_update_the_list_in_place(self) -> None:
+        self.assert_live_header_links(TASKS_URL, "task-counts", 11)
+
+    def test_the_filter_form_hides_nothing_in_the_default_order(self) -> None:
+        root = page(self.client.get(TASKS_URL, **HTMX))
+        form = root.find("form", id="filters")
+        names = {i.get("name") for i in form.find_all("input", type="hidden")}
+        self.assertNotIn("sort", names)
+        root = page(self.client.get(f"{TASKS_URL}?sort=number&dir=desc"))
+        found = {i.get("name"): i.get("value") for i in
+                 root.find("form", id="filters").find_all(
+                     "input", type="hidden")}
+        self.assertEqual((found.get("sort"), found.get("dir")),
+                         ("number", "desc"))
 
     def test_htmx_get_history_restore_and_plain_get(self) -> None:
         self.assert_complete_page_variants(
             base_url=TASKS_URL,
             full_url=f"{TASKS_URL}?state=running",
-            expected_push_url=f"{TASKS_URL}?state=running",
-            target="#task-rows",
-            oob_entry="#task-counts:morph",
+            expected_push_url=(f"{TASKS_URL}?state=running"
+                               f"&selected={self.running.number}"),
+            target="#item-rows",
+            oob_entries=TASK_OOB,
         )
 
 
@@ -227,9 +282,13 @@ class RegistryListLiveTests(LivePageContractMixin, RegistryCase):
     """
 
     def row_ids(self, root: Any) -> list[str]:
-        tbody = root.find("tbody", id="substance-rows")
+        tbody = root.find("tbody", id="item-rows")
         self.assertIsNotNone(tbody)
         return [tr.get("id") for tr in tbody.find_all("tr")]
+
+    def row_keys(self, root: Any) -> list[str]:
+        return [tr.get("data-item") for tr in
+                root.find("tbody", id="item-rows").find_all("tr")]
 
     def assert_selected_option(
         self, root: Any, field: str, expected: str,
@@ -317,6 +376,14 @@ class RegistryListLiveTests(LivePageContractMixin, RegistryCase):
                 "1",
                 ("class", None),
             ),
+            (
+                f"{REGISTRY_URL}?group=&q=zimt&sort=formula&dir=desc",
+                {"q": "zimt", "sort": "formula", "dir": "desc"},
+                f"{REGISTRY_URL}?q=zimt&sort=formula&dir=desc",
+                [cinnamic],
+                "1",
+                ("group", None),
+            ),
         ]
         for (
             query,
@@ -327,6 +394,11 @@ class RegistryListLiveTests(LivePageContractMixin, RegistryCase):
             (select_name, selected_value),
         ) in cases:
             with self.subTest(query=query):
+                if expected_subs:
+                    chosen = expected_subs[0].key
+                    expected_q = {**expected_q, "selected": chosen}
+                    exact_url += ("&" if "?" in exact_url else "?") \
+                        + f"selected={chosen}"
                 res = self.client.get(query, **HTMX)
                 test_shell.ShellTests.assert_scripts(self, res)
                 self.assertLessEqual(
@@ -340,13 +412,15 @@ class RegistryListLiveTests(LivePageContractMixin, RegistryCase):
                 self.assert_live_filter_form(
                     root,
                     url=REGISTRY_URL,
-                    target="#substance-rows",
-                    oob_entry="#substance-count:morph",
+                    target="#item-rows",
+                    oob_entries=SUBSTANCE_OOB,
                 )
                 self.assertEqual(
                     self.row_ids(root),
                     [f"substance-row-{s.pk}" for s in expected_subs],
                 )
+                self.assertEqual(self.row_keys(root),
+                                 [s.key for s in expected_subs])
                 count_el = root.find(id="substance-count")
                 self.assertIsNotNone(count_el)
                 self.assertEqual(count_el.text(), count_text)
@@ -359,11 +433,15 @@ class RegistryListLiveTests(LivePageContractMixin, RegistryCase):
                         field_value(root, select_name), ("", None),
                     )
 
+    def test_the_header_links_update_the_list_in_place(self) -> None:
+        self.assert_live_header_links(REGISTRY_URL, "substance-count", 8)
+
     def test_htmx_get_history_restore_and_plain_get(self) -> None:
         self.assert_complete_page_variants(
             base_url=REGISTRY_URL,
             full_url=f"{REGISTRY_URL}?q=zimt",
-            expected_push_url=f"{REGISTRY_URL}?q=zimt",
-            target="#substance-rows",
-            oob_entry="#substance-count:morph",
+            expected_push_url=(f"{REGISTRY_URL}?q=zimt"
+                               "&selected=cinnamic-acid"),
+            target="#item-rows",
+            oob_entries=SUBSTANCE_OOB,
         )

@@ -5,12 +5,14 @@ Registry pages; web-app: Widgets)."""
 
 import re
 from datetime import date
+from decimal import Decimal
 
 from . import (Element, make_batch, make_item, make_substance, make_task,
                make_vessel)
 from .collection_support import accept
 from .demo_support import SeededCase
 from .inventory_support import has_amount, has_number
+from .main_lists_support import (lists_records, key_number, unsorted_reasons)
 from .registry_support import RegistryCase, substance_url
 from .structure_support import ETHANOL
 from .widget_support import (count_of, kv, kv_rows, title_of, widget,
@@ -293,6 +295,61 @@ class ContainersBatchesTasksTests(SubstanceCase):
         self.assertEqual(len(rows), 1)
 
 
+class SortableTablesTests(SubstanceCase):
+    """The tables that list records one per row sort in the browser
+    (web-app: Widgets, "Widget and pane tables sort in the browser")."""
+
+    def test_every_record_table_is_sortable_and_auxiliary(self) -> None:
+        cinnamic = self.records["cinnamic"]
+        make_item(self.kl, "CH-0012", size="10", quantity=3,
+                  substance=cinnamic)
+        batch = make_batch(self.kl, substance=cinnamic, number="B-1",
+                           date=date(2026, 1, 1))
+        make_vessel(self.kl, batch, unit="mg", amount="30")
+        make_task(self.kl, cinnamic)
+        root = self.show("cinnamic-acid")
+        self.assertEqual(unsorted_reasons(root), [])
+        self.assertEqual(
+            len([t for t in root.find_all("table") if lists_records(t)]), 3)
+
+    def test_the_key_value_table_is_no_sortable_table(self) -> None:
+        root = self.show("cinnamic-acid")
+        found = root.find_all("table", cls="kv-table")
+        self.assertTrue(found)
+        for one in found:
+            self.assertIn("aux-table", one.classes)
+            self.assertNotIn("data-sortable", one.attrs)
+
+    def test_a_container_count_keys_on_its_number(self) -> None:
+        cinnamic = self.records["cinnamic"]
+        make_item(self.kl, "CH-0012", size="10", quantity=3,
+                  substance=cinnamic)
+        make_item(self.kl, "CH-0012", size="50", quantity=12,
+                  substance=cinnamic)
+        _, rows = widget_grid(widget(self.show("cinnamic-acid"), "Gebinde"))
+        self.assertEqual(
+            sorted((row["Bestand"].text(), row["Bestand"].get("data-sort"))
+                   for row in rows),
+            [("12 Gebinde", "12"), ("3 Gebinde", "3")])
+
+    def test_a_batch_stock_keys_on_its_masses_in_mg(self) -> None:
+        cinnamic = self.records["cinnamic"]
+        masses = make_batch(self.kl, substance=cinnamic, number="B-1")
+        make_vessel(self.kl, masses, unit="g", amount="2")
+        make_vessel(self.kl, masses, unit="mg", amount="30")
+        make_vessel(self.kl, masses, unit="umol", amount="7")
+        moles = make_batch(self.kl, substance=cinnamic, number="B-2")
+        make_vessel(self.kl, moles, unit="umol", amount="20")
+        make_vessel(self.kl, moles, unit="mmol", amount="1")
+        make_batch(self.kl, substance=cinnamic, number="B-3")
+        _, rows = widget_grid(widget(self.show("cinnamic-acid"), "Chargen"))
+        keys = {link_of(row["Charge"]).text(): row["Bestand"].get("data-sort")
+                for row in rows}
+        self.assertEqual(key_number(keys["B-1"]), Decimal(2030))
+        self.assertEqual(key_number(keys["B-2"]), Decimal(1020))
+        self.assertNotRegex(keys["B-3"] or "", r"\d")
+
+
 class EmptyWidgetsTests(SubstanceCase):
     """Scenario: Empty widgets of a substance."""
 
@@ -351,6 +408,28 @@ class ProcedureTablesTests(SeededCase):
         self.assertEqual([row["Ausbeute"].text() for row in rows],
                          ["90 %", "90 %"])
         self.assertEqual(count_of(found), 2)
+
+    def test_the_cells_of_the_made_by_table_key_on_their_values(
+            self) -> None:
+        """Compound cells key on their value (web-app: Widgets)."""
+        _header, rows = widget_grid(widget(
+            self.show("1-biphenyl-4-yl-ethanol"), "Hergestellt nach"))
+        self.assertEqual([row["Eintrag"].text() for row in rows],
+                         ["–", "Eintrag 1"])
+        self.assertIn(rows[0]["Eintrag"].get("data-sort"), (None, "", "–"))
+        self.assertEqual(rows[1]["Eintrag"].get("data-sort"), "1")
+        self.assertEqual([row["Ausbeute"].get("data-sort") for row in rows],
+                         ["90", "90"])
+
+    def test_every_record_table_of_a_demo_substance_is_sortable(
+            self) -> None:
+        for key in ("acetylsalicylic-acid", "salicylic-acid",
+                    "1-biphenyl-4-yl-ethanol", "cinnamic-acid"):
+            with self.subTest(key=key):
+                root = self.show(key)
+                self.assertEqual(unsorted_reasons(root), [])
+                self.assertTrue([t for t in root.find_all("table")
+                                 if lists_records(t)])
 
     def test_an_unknown_yield_is_a_dash(self) -> None:
         from collection.models import EntrySubstance

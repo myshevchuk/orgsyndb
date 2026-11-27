@@ -7,7 +7,7 @@ from typing import Any
 from . import table
 from .demo_support import (ITEMS, LEVELS, NUMBERLESS, PLAN, SEEDING_DAYS,
                            SeededCase)
-from .planning_support import rows_by_article, task_texts
+from .planning_support import priority_of, rows_by_article, task_texts
 
 LISTED = {"CH-0012", "CH-0013", "CH-0010", "CH-0016", "NV-0007"}
 ALSO_WITH_ALL = {"CH-0001", "CH-0002"}
@@ -27,7 +27,7 @@ class DayChecks:
         return rows_by_article(self.get(PLAN + query))
 
     def priority(self: Any, row: Any) -> str:
-        return row.element.get("data-priority")
+        return priority_of(row)
 
     def tasks(self: Any, row: Any) -> list[Any]:
         """The tasks the row lists, each with the text of its line."""

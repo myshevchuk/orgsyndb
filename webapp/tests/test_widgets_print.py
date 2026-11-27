@@ -2,12 +2,14 @@
 printing a page from a browser)."""
 
 import re
+from pathlib import Path
 
 from django.test import SimpleTestCase
 
 from . import REPO
 
 CSS = REPO / "webapp" / "orgsyndb_web" / "static" / "lab.css"
+SITE_CSS = REPO / "site" / "assets" / "css" / "screen.css"
 
 
 def balanced(text: str, start: int) -> tuple[str, int]:
@@ -158,28 +160,66 @@ class OverviewLayoutTests(SimpleTestCase):
                 self.assertNotIn(name, text)
 
 
-class PlanningLayoutTests(SimpleTestCase):
-    """The planning page's grid is for the screen, and the rules of the
-    page's former markup are gone."""
+def stripped(path: Path) -> str:
+    """The stylesheet at PATH without its comments."""
+    return re.sub(r"/\*.*?\*/", "", path.read_text(encoding="utf-8"),
+                  flags=re.DOTALL)
 
-    def test_the_planning_grid_is_a_grid_on_the_screen_only(self) -> None:
-        text = CSS.read_text(encoding="utf-8")
-        for names, declarations in [*rules(text),
-                                    *(rule for block in print_blocks(text)
-                                      for rule in rules(block))]:
-            if ".planning-grid" in names:
-                with self.subTest(selectors=names):
-                    self.assertNotEqual(declarations.get("display"), "grid")
-        shown = [declarations for block in screen_blocks(text)
-                 for names, declarations in rules(block)
-                 if ".planning-grid" in names]
-        self.assertTrue(any(d.get("display") == "grid" for d in shown),
-                        f"no @media screen rule sets .planning-grid "
-                        f"to display: grid: {shown}")
+
+class PlanningLayoutTests(SimpleTestCase):
+    """The rules of the planning page's former markup are gone: its grid,
+    its list widget, its inspector and its filter buttons."""
 
     def test_no_rule_styles_the_former_planning_markup(self) -> None:
-        text = re.sub(r"/\*.*?\*/", "",
-                      CSS.read_text(encoding="utf-8"), flags=re.DOTALL)
-        for name in (".lab-parameters", ".planning-cell"):
+        text = stripped(CSS)
+        for name in (".lab-parameters", ".planning-cell", ".planning-grid",
+                     ".planning-list", ".planning-inspector",
+                     ".planning-block", ".planning-filter",
+                     ".planning-select", ".planning-table",
+                     ".planning-status", ".planning-no-match"):
             with self.subTest(selector=name):
                 self.assertNotIn(name, text)
+
+
+class TableStyleTests(SimpleTestCase):
+    """Two table styles, ``main-table`` and ``aux-table`` (web-app: Main
+    lists, "Table styles")."""
+
+    REMOVED = ("inventory-table", "item-table", "task-table",
+               "widget-table", "detail-table", "planning-table")
+
+    def test_both_styles_have_their_rules(self) -> None:
+        text = stripped(CSS)
+        for name in (".main-table", ".aux-table"):
+            with self.subTest(selector=name):
+                self.assertRegex(text, rf"(?<![\w-]){re.escape(name)}\b")
+
+    def test_the_main_table_has_a_fill_modifier(self) -> None:
+        self.assertRegex(stripped(CSS), r"\.col-fill\b")
+
+    def test_the_removed_table_classes_are_styled_no_more(self) -> None:
+        text = stripped(CSS)
+        for name in self.REMOVED:
+            with self.subTest(selector=name):
+                self.assertNotRegex(text, rf"(?<![\w-]){name}\b")
+
+    def test_no_rule_names_the_movements_table_by_its_id(self) -> None:
+        self.assertNotIn("#movements", stripped(CSS))
+
+    def test_the_key_value_table_and_the_sort_button_stay_in_the_lab(
+            self) -> None:
+        text = stripped(CSS)
+        self.assertRegex(text, r"(?<![\w-])\.kv-table\b")
+        self.assertRegex(text, r"button\.sort-header")
+
+    def test_the_site_stylesheet_holds_no_lab_table_rules(self) -> None:
+        text = stripped(SITE_CSS)
+        for name in (".widget-table", ".kv-table", "sort-header"):
+            with self.subTest(selector=name):
+                self.assertNotIn(name, text)
+
+    def test_the_sort_buttons_print_so_that_the_headers_do(self) -> None:
+        """The print rule for the headers' buttons outlives the table
+        classes it once sat beside."""
+        text = stripped(CSS)
+        self.assertRegex(text, r"th\s*>\s*button\.sort-header")

@@ -10,6 +10,7 @@ from typing import Any
 from urllib.parse import parse_qsl, unquote_plus, urlsplit
 
 from . import Element, make_class, make_group, make_substance, page
+from .main_lists_support import row_keys
 from .inventory_support import (
     BATCHES,
     DELIVERIES,
@@ -37,12 +38,28 @@ ITEM_LIST_OOB = {
 ITEM_RESET_OOB = (ITEM_LIST_OOB - {
     "#filter-selected:morph", "#filter-hidden:morph"
 }) | {"#filters:morph", "#more-filters:morph"}
-CATEGORY_OOB = {
-    "#category-count:morph",
-    "#item-detail:morph",
-    "#filter-selected:morph",
-}
-SPLIT_DETAIL_OOB = {"#item-detail:morph", "#filter-selected:morph"}
+
+
+def form_oob(count: str) -> set[str]:
+    """The parts a filter form of a main list updates out of band: the
+    count COUNT, ``#item-head``, ``#item-detail`` and
+    ``#filter-selected``."""
+    return {f"#{count}:morph", "#item-head:morph", "#item-detail:morph",
+            "#filter-selected:morph"}
+
+
+def link_oob(count: str) -> set[str]:
+    """The parts a header link of a main list updates out of band: the
+    count COUNT, ``#item-head``, ``#item-detail`` and ``#filters``."""
+    return {f"#{count}:morph", "#item-head:morph", "#item-detail:morph",
+            "#filters:morph"}
+
+
+CATEGORY_OOB = form_oob("category-count")
+BULK_OOB = form_oob("bulk-count")
+DELIVERY_OOB = form_oob("note-count")
+BATCH_OOB = form_oob("batch-count")
+VESSEL_OOB = form_oob("vessel-count")
 
 
 def triggers_of(element: Element) -> list[str]:
@@ -258,6 +275,7 @@ class LiveListContractTests(LiveListAssertions, InventoryCase):
                 ),
                 "required_oob": ITEM_LIST_OOB,
                 "split_view": True,
+                "link_oob": ITEM_RESET_OOB,
             },
             {
                 "url": INTERMEDIATES,
@@ -268,6 +286,7 @@ class LiveListContractTests(LiveListAssertions, InventoryCase):
                 "extra_triggers": (),
                 "required_oob": CATEGORY_OOB,
                 "split_view": True,
+                "link_oob": link_oob("category-count"),
             },
             {
                 "url": CHEMICALS,
@@ -278,6 +297,7 @@ class LiveListContractTests(LiveListAssertions, InventoryCase):
                 "extra_triggers": (),
                 "required_oob": CATEGORY_OOB,
                 "split_view": True,
+                "link_oob": link_oob("category-count"),
             },
             {
                 "url": BULK,
@@ -286,8 +306,9 @@ class LiveListContractTests(LiveListAssertions, InventoryCase):
                 "has_select": True,
                 "has_checkbox": True,
                 "extra_triggers": (),
-                "required_oob": SPLIT_DETAIL_OOB,
+                "required_oob": BULK_OOB,
                 "split_view": True,
+                "link_oob": link_oob("bulk-count"),
             },
             {
                 "url": DELIVERIES,
@@ -296,8 +317,9 @@ class LiveListContractTests(LiveListAssertions, InventoryCase):
                 "has_select": True,
                 "has_checkbox": False,
                 "extra_triggers": (),
-                "required_oob": SPLIT_DETAIL_OOB,
+                "required_oob": DELIVERY_OOB,
                 "split_view": True,
+                "link_oob": link_oob("note-count"),
             },
             {
                 "url": BATCHES,
@@ -306,8 +328,9 @@ class LiveListContractTests(LiveListAssertions, InventoryCase):
                 "has_select": False,
                 "has_checkbox": False,
                 "extra_triggers": (),
-                "required_oob": set(),
-                "split_view": False,
+                "required_oob": BATCH_OOB,
+                "split_view": True,
+                "link_oob": link_oob("batch-count"),
             },
             {
                 "url": VESSELS,
@@ -316,8 +339,9 @@ class LiveListContractTests(LiveListAssertions, InventoryCase):
                 "has_select": True,
                 "has_checkbox": True,
                 "extra_triggers": (),
-                "required_oob": set(),
-                "split_view": False,
+                "required_oob": VESSEL_OOB,
+                "split_view": True,
+                "link_oob": link_oob("vessel-count"),
             },
         ]
 
@@ -339,13 +363,12 @@ class LiveListContractTests(LiveListAssertions, InventoryCase):
                 self.assertEqual(form.get("action"), url)
                 self.assertIsNotNone(form.find("button", type="submit"))
                 tbody = root.find("table").find("tbody")
-                tbody_id = tbody.get("id")
-                self.assertTrue(tbody_id, f"{url} tbody lacks id")
+                self.assertEqual(tbody.get("id"), "item-rows")
                 entries = self.assert_live_element(
                     form,
                     root,
                     expected_get=url,
-                    target=f"#{tbody_id}",
+                    target="#item-rows",
                     required_oob=spec["required_oob"],
                 )
                 self.assert_scoped_triggers(
@@ -369,6 +392,27 @@ class LiveListContractTests(LiveListAssertions, InventoryCase):
                             "input", type="hidden", name="selected")),
                         1,
                     )
+
+    def test_the_header_links_are_live_on_every_list(self) -> None:
+        """Each header link updates ``#item-rows`` and, out of band, the
+        count, ``#item-head``, ``#item-detail`` and ``#filters``, and
+        keeps its ``href``."""
+        for spec in self.list_specs():
+            url = spec["url"]
+            with self.subTest(url=url):
+                root = page(self.client.get(url, **HTMX))
+                head = root.find(id="item-head")
+                self.assertIsNotNone(head)
+                links = head.find_all("a")
+                self.assertTrue(links)
+                for link in links:
+                    with self.subTest(link=link.text()):
+                        self.assertTrue(link.get("href"))
+                        self.assert_live_element(
+                            link, root, expected_get=link.get("href"),
+                            target="#item-rows",
+                            required_oob=spec["link_oob"],
+                            forbidden_oob={"#filter-selected:morph"})
 
     def test_plain_get_htmx_get_and_history_restore_on_all_lists(self) -> None:
         """Scenario: Live list filter request and history restore."""
@@ -510,8 +554,8 @@ class ItemListLiveTests(LiveListAssertions, InventoryCase):
         self.assert_push_url(
             res_default,
             LIST,
-            {"sort": "category", "selected": str(item.pk)},
-            exact_url=f"{LIST}?sort=category&selected={item.pk}",
+            {"selected": str(item.pk)},
+            exact_url=f"{LIST}?selected={item.pk}",
         )
 
         res_filtered = self.client.get(
@@ -541,12 +585,43 @@ class ItemListLiveTests(LiveListAssertions, InventoryCase):
         self.assert_push_url(
             res_empty,
             LIST,
-            {"category": "Basen", "sort": "category"},
-            exact_url=f"{LIST}?category=Basen&sort=category",
+            {"category": "Basen"},
+            exact_url=f"{LIST}?category=Basen",
         )
         selected_wrap = page(res_empty).find(id="filter-selected")
         self.assertIsNotNone(selected_wrap)
         self.assertEqual(selected_wrap.find_all("input", name="selected"), [])
+
+
+    def test_the_default_order_is_not_pushed(self) -> None:
+        """Scenario: The canonical address omits the default order."""
+        item = self.item("CH-0012", category="Ester")
+        for query, pushed in (
+                ("", f"{LIST}?selected={item.pk}"),
+                ("?sort=category", f"{LIST}?selected={item.pk}"),
+                ("?sort=category&dir=up", f"{LIST}?selected={item.pk}"),
+                ("?sort=category&dir=desc",
+                 f"{LIST}?sort=category&dir=desc&selected={item.pk}"),
+                ("?sort=name",
+                 f"{LIST}?sort=name&selected={item.pk}")):
+            with self.subTest(query=query):
+                res = self.client.get(LIST + query, **HTMX)
+                self.assertEqual(res["HX-Push-Url"], pushed)
+
+    def test_the_filter_form_holds_the_order_unless_it_is_the_default(
+            self) -> None:
+        self.item("CH-0012", category="Ester")
+        for query, held in (
+                ("", {}), ("?sort=category", {}),
+                ("?sort=name", {"sort": "name"}),
+                ("?sort=name&dir=desc", {"sort": "name", "dir": "desc"})):
+            with self.subTest(query=query):
+                root = page(self.client.get(LIST + query, **HTMX))
+                form = root.find("form", id="filters")
+                fields = {i.get("name"): i.get("value")
+                          for i in form.find_all("input", type="hidden")
+                          if i.get("name") in ("sort", "dir")}
+                self.assertEqual(fields, held)
 
 
 class CategoryListLiveTests(LiveListAssertions, InventoryCase):
@@ -611,6 +686,30 @@ class CategoryListLiveTests(LiveListAssertions, InventoryCase):
             {"sealed": "1", "selected": "benzaldehyde"},
             exact_url=f"{CHEMICALS}?sealed=1&selected=benzaldehyde",
         )
+
+    def test_category_lists_push_an_order_that_is_not_the_default(
+            self) -> None:
+        self.vessel(substance=make_substance("acetophenone", "Acetophenone"),
+                    location="Regal 1")
+        self.vessel(substance=make_substance("benzaldehyde", "Benzaldehyde"),
+                    source="bought", supplier="Sigma")
+        key = "acetophenone"
+        for query, pushed in (
+                ("?sort=substance", f"{INTERMEDIATES}?selected={key}"),
+                ("?sort=amount",
+                 f"{INTERMEDIATES}?sort=amount&selected={key}"),
+                ("?sort=amount&dir=desc",
+                 f"{INTERMEDIATES}?sort=amount&dir=desc&selected={key}"),
+                ("?sort=substance&dir=desc",
+                 f"{INTERMEDIATES}?sort=substance&dir=desc"
+                 f"&selected={key}")):
+            with self.subTest(query=query):
+                res = self.client.get(INTERMEDIATES + query, **HTMX)
+                self.assertEqual(res["HX-Push-Url"], pushed)
+        res = self.client.get(f"{CHEMICALS}?sort=group&dir=desc", **HTMX)
+        self.assertEqual(
+            res["HX-Push-Url"],
+            f"{CHEMICALS}?sort=group&dir=desc&selected=benzaldehyde")
 
     def test_category_lists_canonical_push_url_rules(self) -> None:
         ketones = make_class("ketones", "Ketones")
@@ -679,7 +778,7 @@ class OtherInventoryListsLiveTests(LiveListAssertions, InventoryCase):
         item = self.item("CH-0012")
         flask = self.vessel("CH-0012", number="B-1", flask=True)
         note = self.deliver(item, 1, number="LS-1")
-        self.vessel("CH-0012", amount="0", number="USED-1")
+        used_up = self.vessel("CH-0012", amount="0", number="USED-1")
 
         res_bulk = self.client.get(
             f"{BULK}?flask=1&source=bogus&q=+CH+", **HTMX)
@@ -689,7 +788,7 @@ class OtherInventoryListsLiveTests(LiveListAssertions, InventoryCase):
             root_bulk,
             expected_get=BULK,
             target="#item-rows",
-            required_oob=SPLIT_DETAIL_OOB,
+            required_oob=BULK_OOB,
         )
         self.assert_scoped_triggers(
             root_bulk.find("form", id="filters"),
@@ -709,7 +808,7 @@ class OtherInventoryListsLiveTests(LiveListAssertions, InventoryCase):
             root_note,
             expected_get=DELIVERIES,
             target="#item-rows",
-            required_oob=SPLIT_DETAIL_OOB,
+            required_oob=DELIVERY_OOB,
         )
         self.assert_scoped_triggers(
             root_note.find("form", id="filters"),
@@ -721,53 +820,50 @@ class OtherInventoryListsLiveTests(LiveListAssertions, InventoryCase):
             {"q": "LS", "selected": str(note.pk)},
         )
 
-        res_batch = self.client.get(f"{BATCHES}?q=+B-1+", **HTMX)
+        res_batch = self.client.get(
+            f"{BATCHES}?q=+B-1+&sort=bogus", **HTMX)
         root_batch = page(res_batch)
-        batch_tbody = root_batch.find("table").find("tbody").get("id")
-        self.assertTrue(batch_tbody)
-        batch_count = root_batch.find(cls="lab-count").get("id")
-        self.assertTrue(batch_count)
         self.assert_live_element(
             root_batch.find("form", cls="lab-filters"),
             root_batch,
             expected_get=BATCHES,
-            target=f"#{batch_tbody}",
-            required_oob={f"#{batch_count}:morph"},
+            target="#item-rows",
+            required_oob=BATCH_OOB,
         )
         self.assert_scoped_triggers(
             root_batch.find("form", cls="lab-filters"),
             has_search=True, has_select=False, has_checkbox=False,
         )
+        chosen = row_keys(root_batch)[0]
+        self.assertEqual(chosen, str(flask.batch_id))
         self.assert_push_url(
             res_batch,
             BATCHES,
-            {"q": "B-1"},
-            exact_url=f"{BATCHES}?q=B-1",
+            {"q": "B-1", "selected": chosen},
+            exact_url=f"{BATCHES}?q=B-1&selected={chosen}",
         )
 
         res_vessel = self.client.get(
-            f"{VESSELS}?kind=bogus&empty=1", **HTMX)
+            f"{VESSELS}?kind=bogus&empty=1&sort=amount", **HTMX)
         root_vessel = page(res_vessel)
-        vessel_tbody = root_vessel.find("table").find("tbody").get("id")
-        self.assertTrue(vessel_tbody)
-        vessel_count = root_vessel.find(cls="lab-count").get("id")
-        self.assertTrue(vessel_count)
         self.assert_live_element(
             root_vessel.find("form", cls="lab-filters"),
             root_vessel,
             expected_get=VESSELS,
-            target=f"#{vessel_tbody}",
-            required_oob={f"#{vessel_count}:morph"},
+            target="#item-rows",
+            required_oob=VESSEL_OOB,
         )
         self.assert_scoped_triggers(
             root_vessel.find("form", cls="lab-filters"),
             has_search=False, has_select=True, has_checkbox=True,
         )
+        chosen = row_keys(root_vessel)[0]
+        self.assertEqual(chosen, str(used_up.pk))
         self.assert_push_url(
             res_vessel,
             VESSELS,
-            {"empty": "1"},
-            exact_url=f"{VESSELS}?empty=1",
+            {"empty": "1", "sort": "amount", "selected": chosen},
+            exact_url=f"{VESSELS}?empty=1&sort=amount&selected={chosen}",
         )
 
     def test_canonical_push_url_edge_cases_on_other_lists(self) -> None:
@@ -805,8 +901,14 @@ class OtherInventoryListsLiveTests(LiveListAssertions, InventoryCase):
         self.assert_push_url(
             self.client.get(f"{BATCHES}?q=+&foo=bar", **HTMX),
             BATCHES,
-            {},
-            exact_url=BATCHES,
+            {"selected": str(vessel.batch_id)},
+            exact_url=f"{BATCHES}?selected={vessel.batch_id}",
+        )
+        self.assert_push_url(
+            self.client.get(f"{BATCHES}?q=nothing", **HTMX),
+            BATCHES,
+            {"q": "nothing"},
+            exact_url=f"{BATCHES}?q=nothing",
         )
         self.assert_push_url(
             self.client.get(f"{VESSELS}?kind=intermediate&empty=0", **HTMX),
@@ -817,14 +919,14 @@ class OtherInventoryListsLiveTests(LiveListAssertions, InventoryCase):
         self.assert_push_url(
             self.client.get(VESSELS, **HTMX),
             VESSELS,
-            {},
-            exact_url=VESSELS,
+            {"selected": str(vessel.pk)},
+            exact_url=f"{VESSELS}?selected={vessel.pk}",
         )
 
 
 class SplitViewDetailReplaceUrlTests(LiveListAssertions, InventoryCase):
     """``HX-Replace-Url``, single ``#item-detail`` body, and ``Vary`` across
-    all five split-view detail endpoints."""
+    all seven split-view detail endpoints."""
 
     def test_inventory_detail_endpoints_replace_the_list_url(self) -> None:
         """Scenario: Inventory detail endpoints replace the list URL."""
@@ -852,6 +954,17 @@ class SplitViewDetailReplaceUrlTests(LiveListAssertions, InventoryCase):
             f"location=Regal+1&selected=acetophenone",
         )
 
+        batch = self.vessel("CH-0012", number="KL-9").batch
+        res_batch = self.client.get(
+            f"/lab/inventory/batches/{batch.pk}/detail/",
+            **current(f"{BATCHES}?q=KL&sort=yield"),
+        )
+        self.assert_single_detail_fragment(res_batch, str(batch.pk))
+        self.assertEqual(
+            res_batch["HX-Replace-Url"],
+            f"{BATCHES}?q=KL&sort=yield&selected={batch.pk}",
+        )
+
         res_foreign = self.client.get(
             f"/lab/inventory/items/{item.pk}/detail/",
             **current(
@@ -865,13 +978,14 @@ class SplitViewDetailReplaceUrlTests(LiveListAssertions, InventoryCase):
             f"{LIST}?selected={item.pk}",
         )
 
-    def test_all_five_detail_endpoints_vary_and_replace_url(self) -> None:
+    def test_all_seven_detail_endpoints_vary_and_replace_url(self) -> None:
         """Scenario: Split-view detail response sets HX-Replace-Url."""
         item = self.item("CH-0012", category="Ester")
         bulk_v = self.vessel("CH-0012", flask=True)
         note = self.deliver(item, 1, number="LS-1")
         self.vessel("acetophenone", location="Regal 1")
         self.vessel("benzaldehyde", source="bought", supplier="Sigma")
+        batch_v = self.vessel("CH-0012", number="KL-2")
 
         endpoints = [
             (f"/lab/inventory/items/{item.pk}/detail/", LIST,
@@ -884,6 +998,10 @@ class SplitViewDetailReplaceUrlTests(LiveListAssertions, InventoryCase):
              "flask=1", str(bulk_v.pk), False),
             (f"{DELIVERIES}{note.pk}/detail/", DELIVERIES,
              "q=LS", str(note.pk), False),
+            (f"{BATCHES}{batch_v.batch_id}/detail/", BATCHES,
+             "q=KL", str(batch_v.batch_id), False),
+            (f"{VESSELS}{batch_v.pk}/detail/", VESSELS,
+             "kind=end-product", str(batch_v.pk), False),
         ]
         for detail_url, base_url, flt, rec_id, keep_query in endpoints:
             with self.subTest(detail_url=detail_url):
