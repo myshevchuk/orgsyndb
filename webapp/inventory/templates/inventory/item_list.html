@@ -7,45 +7,45 @@
 {% block main %}
 {% translate "End products" as heading %}<c-list-heading :title="heading" wrap_actions>
 <c-slot name="count_slot"><span id="item-count" class="visually-hidden" data-refresh>{% blocktranslate count count=total %}{{ count }} item{% plural %}{{ count }} items{% endblocktranslate %}</span>
-<p id="list-summary" class="list-summary lab-count" data-refresh>{% blocktranslate with shown=rows|length count total=total %}{{ shown }} of {{ total }} item{% plural %}{{ shown }} of {{ total }} items{% endblocktranslate %} · {{ order }}{% if filters.active %} · <a href="{{ reset }}">{% translate "Reset" %}</a>{% endif %}</p></c-slot>
+<p id="list-summary" class="list-summary lab-count" data-refresh>{% blocktranslate with shown=rows|length count total=total %}{{ shown }} of {{ total }} item{% plural %}{{ shown }} of {{ total }} items{% endblocktranslate %} · {{ order }}{% if filters.active %} · <a href="{{ reset }}" hx-get="{{ reset }}" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#item-count:morph,#list-summary:morph,#item-head:morph,#item-detail:morph,#stock-filter:morph,#stock-entries:morph,#more-filters-button:morph,#filters:morph,#more-filters:morph" hx-push-url="true" hx-sync="#main:replace">{% translate "Reset" %}</a>{% endif %}</p></c-slot>
 {% if user.is_authenticated %}<c-slot name="actions"><form id="pick" class="lab-pick" method="get" action="/lab/inventory/deliveries/new/"><button type="submit">{% translate "Delivery note from selection" %}</button></form>
 <p class="actions"><a href="/lab/inventory/end-products/new/">{% translate "New item" %}</a></p></c-slot>{% endif %}
 </c-list-heading>
 {% include "inventory/tabs.html" %}
-{% translate "Search items" as search_label %}{% translate "Name or article number" as search_placeholder %}{% translate "Category" as category_label %}<c-filter-bar id="filters" action="/lab/inventory/end-products/" :selected="selected">
+{% translate "Search items" as search_label %}{% translate "Name or article number" as search_placeholder %}{% translate "Category" as category_label %}<c-filter-bar id="filters" action="/lab/inventory/end-products/" :selected="selected" hx-get="/lab/inventory/end-products/" hx-trigger="submit, search from:#filter-q, input delay:200ms from:#filter-q, change target:select, change from:#filter-container, change from:#filter-compartment, change from:#filter-box" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#item-count:morph,#list-summary:morph,#item-head:morph,#item-detail:morph,#stock-filter:morph,#stock-entries:morph,#more-filters-button:morph,#filter-selected:morph,#filter-hidden:morph" hx-push-url="true" hx-sync="#main:replace">
 <c-slot name="start">{% include "inventory/layers.html" %}</c-slot>
-<c-filter-search :value="filters.q" :label="search_label" :placeholder="search_placeholder" />
-<c-filter-select id="filter-category" name="category" :label="category_label" data-submit data-refresh>
+<c-filter-search id="filter-q" :value="filters.q" :label="search_label" :placeholder="search_placeholder" />
+<c-filter-select id="filter-category" name="category" :label="category_label" data-refresh>
 <option value=""{% if not filters.category %} selected{% endif %}>{% translate "All categories" %}</option>
 {% for category in categories %}<option value="{{ category }}"{% if category == filters.category %} selected{% endif %}>{{ category }}</option>
 {% endfor %}</c-filter-select>
-{% if filters.stock %}<input type="hidden" name="stock" value="{{ filters.stock }}">
+<span id="filter-hidden">{% if filters.stock %}<input type="hidden" name="stock" value="{{ filters.stock }}">
 {% endif %}<input type="hidden" name="sort" value="{{ filters.sort }}">
 {% if filters.descending %}<input type="hidden" name="dir" value="desc">
-{% endif %}<c-slot name="after"><div class="lab-control lab-control--inline">
+{% endif %}</span><c-slot name="after"><div class="lab-control lab-control--inline">
 <span id="stock-filter-label" class="lab-field-prefix">{% translate "Stock status" %}:</span>
 <button type="button" id="stock-filter" class="lab-menu-button" data-refresh popovertarget="stock-menu" aria-labelledby="stock-filter-label stock-filter">{% if stock_choice.level %}{{ stock_choice.label }}{% else %}{% translate "All" %}{% endif %} ({{ stock_choice.count }})</button>
 <div id="stock-menu" class="lab-popup stock-menu" popover>
-<ul id="stock-entries" data-refresh>
-{% for entry in stock_menu %}<li><a href="{{ entry.href }}"{% if entry.current %} aria-current="true"{% endif %}><span class="swatch{% if entry.level %} level-{{ entry.level }}{% else %} swatch-all{% endif %}" aria-hidden="true"></span><span class="entry-label"><strong>{{ entry.label }}</strong>{% if entry.meaning %}<small>{{ entry.meaning }}</small>{% endif %}</span><span class="count">{{ entry.count }}</span></a></li>
+<ul id="stock-entries" data-refresh hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#item-count:morph,#list-summary:morph,#item-head:morph,#item-detail:morph,#stock-filter:morph,#stock-entries:morph,#more-filters-button:morph,#filters:morph,#more-filters:morph" hx-push-url="true" hx-sync="#main:replace">
+{% for entry in stock_menu %}<li><a href="{{ entry.href }}" hx-get="{{ entry.href }}"{% if entry.current %} aria-current="true"{% endif %}><span class="swatch{% if entry.level %} level-{{ entry.level }}{% else %} swatch-all{% endif %}" aria-hidden="true"></span><span class="entry-label"><strong>{{ entry.label }}</strong>{% if entry.meaning %}<small>{{ entry.meaning }}</small>{% endif %}</span><span class="count">{{ entry.count }}</span></a></li>
 {% endfor %}</ul>
 </div>
 </div>
 <div class="lab-control">
-<button type="button" class="lab-text-button" popovertarget="more-filters">{% translate "More filters" %}{% if filters.more %} ({{ filters.more }}){% endif %}</button>
+<button type="button" id="more-filters-button" class="lab-text-button" popovertarget="more-filters">{% translate "More filters" %}{% if filters.more %} ({{ filters.more }}){% endif %}</button>
 <div id="more-filters" class="lab-popup lab-menu" popover>
 <label>{% translate "Container" %}
-<select id="filter-container" name="container" form="filters" data-submit data-refresh>
+<select id="filter-container" name="container" form="filters" data-refresh>
 <option value=""{% if not filters.container %} selected{% endif %}>{% translate "All" %}</option>
 {% for value, label in containers %}<option value="{{ value }}"{% if value == filters.container %} selected{% endif %}>{{ label }}</option>
 {% endfor %}</select></label>
 <label>{% translate "Compartment" %}
-<select id="filter-compartment" name="compartment" form="filters" data-submit data-refresh>
+<select id="filter-compartment" name="compartment" form="filters" data-refresh>
 <option value=""{% if not filters.compartment %} selected{% endif %}>{% translate "All" %}</option>
 {% for value in compartments %}<option value="{{ value }}"{% if value == filters.compartment %} selected{% endif %}>{{ value }}</option>
 {% endfor %}</select></label>
 <label>{% translate "Box" %}
-<select id="filter-box" name="box" form="filters" data-submit data-refresh>
+<select id="filter-box" name="box" form="filters" data-refresh>
 <option value=""{% if not filters.box %} selected{% endif %}>{% translate "All" %}</option>
 {% for value in boxes %}<option value="{{ value }}"{% if value == filters.box %} selected{% endif %}>{{ value }}</option>
 {% endfor %}</select></label>
@@ -75,11 +75,11 @@
 </c-filter-bar>
 <c-split-layout :view="view">
 <table class="inventory-table item-table">
-<thead>
-<tr>{% for column in columns %}<c-sort-th :label="column.label" :href="column.href" :classes="column.classes" :aria_sort="column.aria_sort" :unit="column.unit" />{% endfor %}</tr>
+<thead id="item-head" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#item-count:morph,#list-summary:morph,#item-head:morph,#item-detail:morph,#stock-filter:morph,#stock-entries:morph,#more-filters-button:morph,#filters:morph,#more-filters:morph" hx-push-url="true" hx-sync="#main:replace">
+<tr>{% for column in columns %}<c-sort-th :label="column.label" :href="column.href" :classes="column.classes" :aria_sort="column.aria_sort" :unit="column.unit" hx-get="{{ column.href }}" />{% endfor %}</tr>
 </thead>
-<tbody id="item-rows" data-refresh hx-target="#item-detail" hx-swap="outerHTML" hx-sync="this:replace" hx-indicator="#item-detail">
-{% for row in rows %}<tr data-item="{{ row.item.pk }}" hx-get="/lab/inventory/items/{{ row.item.pk }}/detail/" hx-trigger="item-select"{% if row is chosen %} aria-current="true"{% endif %}{% if row.category_start %} class="category-start"{% endif %}>
+<tbody id="item-rows" data-refresh hx-target="#item-detail" hx-swap="outerHTML" hx-sync="#main:replace" hx-indicator="#item-detail">
+{% for row in rows %}<tr id="item-row-{{ row.item.pk }}" data-item="{{ row.item.pk }}" hx-get="/lab/inventory/items/{{ row.item.pk }}/detail/" hx-trigger="item-select"{% if row is chosen %} aria-current="true"{% endif %}{% if row.category_start %} class="category-start"{% endif %}>
 {% for column in columns %}{% partial cell %}{% endfor %}
 </tr>
 {% endfor %}</tbody>

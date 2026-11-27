@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlencode
 
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
@@ -9,6 +10,7 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.utils.translation import gettext as _
+from django.views.decorators.vary import vary_on_headers
 
 from inventory import bookings
 from inventory.bookings import Refused
@@ -17,8 +19,8 @@ from inventory.forms import BatchEditForm, BatchForm
 from inventory.history import history_entries
 from inventory.models import (Batch, DeliveryLine, Item, Movement, Source,
                               VesselMovement)
-from inventory.views.common import (BATCHES, batch_url, form_page, locations,
-                                    saved, tabs)
+from inventory.views.common import (BATCHES, batch_url, form_page,
+                                    htmx_list_push_url, locations, saved, tabs)
 from journal.entries import entry_for
 from tasks.models import Task, TaskStep
 
@@ -44,6 +46,7 @@ class LineRow:
     reversed: bool
 
 
+@vary_on_headers("HX-Request", "HX-History-Restore-Request")
 def batch_list(request: HttpRequest) -> HttpResponse:
     """List the batches of every substance, newest date first and
     undated ones last, then newest recorded first, each with the amount
@@ -64,11 +67,14 @@ def batch_list(request: HttpRequest) -> HttpResponse:
             found.append(batch)
     found = newest_first(found)
     stock = open_amounts(found)
-    return render(request, "inventory/batch_list.html", {
+    response = render(request, "inventory/batch_list.html", {
         "rows": [(batch, stock[batch.pk]) for batch in found],
         "q": q,
         "tabs": tabs(BATCHES),
     })
+    return htmx_list_push_url(
+        request, response,
+        f"{BATCHES}?{urlencode({'q': q})}" if q else BATCHES)
 
 
 def batch_page(request: HttpRequest, pk: int) -> HttpResponse:

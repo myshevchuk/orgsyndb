@@ -1,6 +1,7 @@
 """Delivery note list, detail, page, and form views."""
 
 from typing import Any
+from urllib.parse import urlencode
 
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count
@@ -14,7 +15,8 @@ from inventory.forms import ROWS, NoteEditForm, NoteForm, ReversalForm
 from inventory.history import history_entries
 from inventory.models import DeliveryLine, DeliveryNote, Item, Movement
 from inventory.views.common import (DELIVERIES, LIST, NOTE_COOKIE, form_page,
-                                    htmx_detail_or_redirect, layers, list_view,
+                                    htmx_detail_or_redirect,
+                                    htmx_list_push_url, layers, list_view,
                                     note_url, pick_selected, saved, tabs)
 
 
@@ -62,6 +64,7 @@ def note_context(note: DeliveryNote, *, state: str | None = None,
 
 
 @vary_on_cookie
+@vary_on_headers("HX-Request", "HX-History-Restore-Request")
 def note_list(request: HttpRequest) -> HttpResponse:
     """List the delivery notes, newest date first, then newest booking
     first; ``q`` selects those whose number or recipient holds the text
@@ -87,7 +90,7 @@ def note_list(request: HttpRequest) -> HttpResponse:
     states = note_states(shown)
     selected_note, selected = pick_selected(
         shown, request.GET.get("selected", ""), lambda note: note.pk)
-    return render(request, "inventory/note_list.html", {
+    response = render(request, "inventory/note_list.html", {
         "notes": [(note, states[note.pk]) for note in shown],
         "selected_note": selected_note,
         "selected": selected,
@@ -102,6 +105,16 @@ def note_list(request: HttpRequest) -> HttpResponse:
                         key=Item.sort_key),
         "tabs": tabs(LIST),
     })
+    pairs: list[tuple[str, str]] = []
+    if q:
+        pairs.append(("q", q))
+    if chosen:
+        pairs.append(("item", chosen))
+    if selected:
+        pairs.append(("selected", selected))
+    return htmx_list_push_url(
+        request, response,
+        f"{DELIVERIES}?{urlencode(pairs)}" if pairs else DELIVERIES)
 
 
 def note_page(request: HttpRequest, pk: int) -> HttpResponse:
@@ -113,7 +126,7 @@ def note_page(request: HttpRequest, pk: int) -> HttpResponse:
         **note_context(note), "history": history_entries(note)})
 
 
-@vary_on_headers("HX-Request")
+@vary_on_headers("HX-Request", "HX-Current-URL")
 def note_detail(request: HttpRequest, pk: int) -> HttpResponse:
     """Answer an htmx request (``HX-Request: true``) with the details of
     the delivery note PK alone, as the delivery list shows them beside

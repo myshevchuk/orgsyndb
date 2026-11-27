@@ -3,22 +3,22 @@
 {% block body_class %} class="lab-frame"{% endblock %}
 {% block main %}
 {% translate "End products" as heading %}<c-list-heading :title="heading" wrap_actions>
-<c-slot name="count_slot"><span class="lab-count">{% blocktranslate count count=rows|length %}{{ count }} vessel{% plural %}{{ count }} vessels{% endblocktranslate %}</span></c-slot>
+<c-slot name="count_slot"><span id="bulk-count" class="lab-count">{% blocktranslate count count=rows|length %}{{ count }} vessel{% plural %}{{ count }} vessels{% endblocktranslate %}</span></c-slot>
 {% if user.is_authenticated %}<c-slot name="actions"><p class="actions"><a href="/lab/inventory/batches/new/">{% translate "New batch" %}</a></p></c-slot>{% endif %}
 </c-list-heading>
 {% include "inventory/tabs.html" %}
-{% translate "Search" as search_label %}{% translate "Name, article no., batch" as search_placeholder %}{% translate "Location" as location_label %}{% translate "Source" as source_label %}{% translate "Flasks only" as flask_label %}<c-filter-bar id="filters" action="/lab/inventory/end-products/bulk/" :selected="selected">
+{% translate "Search" as search_label %}{% translate "Name, article no., batch" as search_placeholder %}{% translate "Location" as location_label %}{% translate "Source" as source_label %}{% translate "Flasks only" as flask_label %}<c-filter-bar id="filters" action="/lab/inventory/end-products/bulk/" :selected="selected" hx-get="/lab/inventory/end-products/bulk/" hx-trigger="submit, search from:#filter-q, input delay:200ms from:#filter-q, change target:(select, input[type=checkbox])" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#bulk-count:morph,#item-detail:morph,#filter-selected:morph" hx-push-url="true" hx-sync="#main:replace">
 <c-slot name="start">{% include "inventory/layers.html" %}</c-slot>
-<c-filter-search :value="q" :label="search_label" :placeholder="search_placeholder" />
-<c-filter-select name="location" :label="location_label" data-submit>
+<c-filter-search id="filter-q" :value="q" :label="search_label" :placeholder="search_placeholder" />
+<c-filter-select name="location" :label="location_label">
 <option value=""{% if not location %} selected{% endif %}>{% translate "All" %}</option>
 {% for value in locations %}<option value="{{ value }}"{% if value == location %} selected{% endif %}>{{ value }}</option>
 {% endfor %}</c-filter-select>
-<c-filter-select name="source" :label="source_label" data-submit>
+<c-filter-select name="source" :label="source_label">
 <option value=""{% if not source %} selected{% endif %}>{% translate "All" %}</option>
 {% for value, label in sources %}<option value="{{ value }}"{% if value == source %} selected{% endif %}>{{ label }}</option>
 {% endfor %}</c-filter-select>
-<c-filter-check name="flask" :label="flask_label" :checked="flask" data-submit />
+<c-filter-check name="flask" :label="flask_label" :checked="flask" />
 <c-slot name="end">{% include "inventory/view_switch.html" %}</c-slot>
 </c-filter-bar>
 <c-split-layout :view="view" cookie="bulk-list-view">
@@ -26,7 +26,7 @@
 <thead>
 <tr><th scope="col">{% translate "Article" %}</th><th scope="col">{% translate "Vessel" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "Source" %}</th><th scope="col" class="number">{% translate "Amount" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Fills" context "bulk" %}</th></tr>
 </thead>
-<tbody id="item-rows" hx-target="#item-detail" hx-swap="outerHTML" hx-sync="this:replace" hx-indicator="#item-detail">
+<tbody id="item-rows" hx-target="#item-detail" hx-swap="outerHTML" hx-sync="#main:replace" hx-indicator="#item-detail">
 {% for row in rows %}{% with vessel=row.vessel batch=row.vessel.batch %}<tr data-item="{{ vessel.pk }}" hx-get="/lab/inventory/end-products/bulk/{{ vessel.pk }}/" hx-trigger="item-select"{% if row is chosen %} aria-current="true"{% endif %}>
 <td><span class="article-number">{{ batch.substance.article.article_number|default_if_none:_("no number") }}</span> {% substance batch.substance %}</td>
 <td><a href="/lab/inventory/vessels/{{ vessel.pk }}/">#{{ vessel.pk }}</a></td>

@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
+from urllib.parse import urlencode
 
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, render
@@ -12,7 +13,8 @@ from inventory.figures import containers_from, molar_mass
 from inventory.models import Item, Source, Vessel
 from inventory.summaries import natural
 from inventory.views.common import (BULK, BULK_COOKIE, LIST, bulk_vessels,
-                                    htmx_detail_or_redirect, layers, list_view,
+                                    htmx_detail_or_redirect,
+                                    htmx_list_push_url, layers, list_view,
                                     pick_selected, tabs)
 from inventory.views.vessels import vessel_ledger
 from orgsyndb_web.lists import clean_choice
@@ -76,6 +78,7 @@ def bulk_order(vessel: Vessel) -> tuple[Any, ...]:
 
 
 @vary_on_cookie
+@vary_on_headers("HX-Request", "HX-History-Restore-Request")
 def bulk_list(request: HttpRequest) -> HttpResponse:
     """List the open vessels of the substances that have an article, in
     the bulk list's order, with the containers each would fill; ``q``,
@@ -97,7 +100,7 @@ def bulk_list(request: HttpRequest) -> HttpResponse:
             and (not flask or row.vessel.flask)]
     chosen, selected = pick_selected(
         rows, request.GET.get("selected", ""), lambda row: row.vessel.pk)
-    return render(request, "inventory/bulk_list.html", {
+    response = render(request, "inventory/bulk_list.html", {
         "rows": rows,
         "chosen": chosen,
         "ledger": vessel_ledger(chosen.vessel, 5) if chosen else [],
@@ -112,9 +115,22 @@ def bulk_list(request: HttpRequest) -> HttpResponse:
         "tabs": tabs(LIST),
         "layers": layers(BULK),
     })
+    pairs: list[tuple[str, str]] = []
+    if q:
+        pairs.append(("q", q))
+    if location:
+        pairs.append(("location", location))
+    if source:
+        pairs.append(("source", source))
+    if flask:
+        pairs.append(("flask", "1"))
+    if selected:
+        pairs.append(("selected", selected))
+    return htmx_list_push_url(
+        request, response, f"{BULK}?{urlencode(pairs)}" if pairs else BULK)
 
 
-@vary_on_headers("HX-Request")
+@vary_on_headers("HX-Request", "HX-Current-URL")
 def bulk_detail(request: HttpRequest, pk: int) -> HttpResponse:
     """Answer an htmx request (``HX-Request: true``) with the details of
     the vessel PK alone, as the bulk list shows them beside its table,

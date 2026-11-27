@@ -492,7 +492,10 @@ class FilterTests(TableCase):
         self.assertIn("Artikel suchen", search.parent.text())
         category = form.find("select", name="category")
         self.assertIn("Kategorie", category.parent.text())
-        self.assertIn("data-submit", category.attrs)
+        self.assertNotIn("data-submit", category.attrs)
+        triggers = [part.strip() for part in
+                    (form.get("hx-trigger") or "").split(",")]
+        self.assertIn("change target:select", triggers)
         self.assertEqual([(o.get("value"), o.text())
                           for o in category.find_all("option")],
                          [("", "Alle Kategorien"), ("Ester", "Ester")])
@@ -505,6 +508,9 @@ class FilterTests(TableCase):
         kept(self.item("G-1", size="2.5", unit="mg"), "2", "7")
         kept(self.item("G-2", size="10", unit="umol"), "10", "7")
         root = self.listing()
+        form = root.find("form", id="filters")
+        triggers = [part.strip() for part in
+                    (form.get("hx-trigger") or "").split(",")]
         button = root.find("button", attrs={"popovertarget": "more-filters"})
         self.assertEqual(button.text(), "Weitere Filter")
         popup = root.find(id="more-filters")
@@ -514,7 +520,9 @@ class FilterTests(TableCase):
             with self.subTest(name=name):
                 control = popup.find("select", name=name)
                 self.assertEqual(control.get("form"), "filters")
-                self.assertIn("data-submit", control.attrs)
+                self.assertEqual(control.get("id"), f"filter-{name}")
+                self.assertNotIn("data-submit", control.attrs)
+                self.assertIn(f"change from:#filter-{name}", triggers)
                 self.assertIn(label, control.parent.text())
         self.assertEqual([(o.get("value"), o.text()) for o in popup.find(
             "select", name="compartment").find_all("option")],

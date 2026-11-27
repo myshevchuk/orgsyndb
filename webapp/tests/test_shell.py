@@ -186,7 +186,10 @@ class ShellTests(TestCase):
                             f"<{element.tag}> carries {attr}={style!r}")
         config = root.find("meta", attrs={"name": "htmx-config"})
         self.assertIsNotNone(config, "no meta htmx-config")
-        self.assertIs(json.loads(config.get("content"))["allowEval"], False)
+        htmx_config = json.loads(config.get("content"))
+        self.assertIs(htmx_config.get("allowEval"), False)
+        self.assertIs(htmx_config.get("historyCacheSize"), 0)
+        self.assertIs(htmx_config.get("refreshOnHistoryMiss"), True)
 
     def test_the_sidebar_toggle(self) -> None:
         for signed_in, language in ((False, "de"), (True, "en")):
@@ -434,9 +437,14 @@ class ScriptsHelperTests(SimpleTestCase):
 
     def _page_with_swap(self, attr: str, value: str) -> HttpResponse:
         escaped = html.escape(value, quote=True)
+        config = json.dumps({
+            "allowEval": False,
+            "historyCacheSize": 0,
+            "refreshOnHistoryMiss": True,
+        })
         return HttpResponse(
-            '<html><head>'
-            '<meta name="htmx-config" content=\'{"allowEval": false}\'>'
+            "<html><head>"
+            f"<meta name='htmx-config' content='{config}'>"
             f'</head><body><div {attr}="{escaped}"></div></body></html>')
 
     def test_assert_scripts_rejects_disallowed_morph_swaps(self) -> None:

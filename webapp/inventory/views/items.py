@@ -33,10 +33,10 @@ from inventory.statistics import Statistics, statistics
 from inventory.summaries import natural
 from inventory.views.common import (LIST, VIEW_COOKIE, categories,
                                     consumption_url, form_page,
-                                    htmx_detail_or_redirect, in_use,
-                                    item_form, item_url, layers, list_view,
-                                    open_vessels, pick_selected, render_form,
-                                    saved, tabs)
+                                    htmx_detail_or_redirect,
+                                    htmx_list_push_url, in_use, item_form,
+                                    item_url, layers, list_view, open_vessels,
+                                    pick_selected, render_form, saved, tabs)
 from orgsyndb_web.lists import clean_choice, sort_rows
 from planning import plan
 
@@ -387,6 +387,7 @@ def row_of(item: Item, today: date, vessels: list[Vessel],
 
 
 @vary_on_cookie
+@vary_on_headers("HX-Request", "HX-History-Restore-Request")
 def item_list(request: HttpRequest) -> HttpResponse:
     """List the items the query's filters select, with their figures,
     heats and bulk, in the order the query names, in the view the cookie
@@ -413,7 +414,7 @@ def item_list(request: HttpRequest) -> HttpResponse:
         shown, request.GET.get("selected", ""), lambda row: row.item.pk)
     menu = stock_menu(rows, filters, selected)
     shown_columns = columns(filters, today.year, selected)
-    return render(request, "inventory/item_list.html", {
+    response = render(request, "inventory/item_list.html", {
         "rows": shown,
         "chosen": chosen,
         "selected": selected,
@@ -440,9 +441,13 @@ def item_list(request: HttpRequest) -> HttpResponse:
         "tabs": tabs(LIST),
         "layers": layers(LIST),
     })
+    return htmx_list_push_url(
+        request, response,
+        LIST + filters.link(filters.sort, filters.descending,
+                            selected=selected))
 
 
-@vary_on_headers("HX-Request")
+@vary_on_headers("HX-Request", "HX-Current-URL")
 def item_detail(request: HttpRequest, pk: int) -> HttpResponse:
     """Answer an htmx request (``HX-Request: true``) with the details of
     the item PK alone, as the item list shows them beside its table,

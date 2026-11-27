@@ -701,3 +701,224 @@ class PlanStepTests(TestCase):
     def test_one_row(self) -> None:
         self.assertEqual(self.steps(([True], 0, "ArrowDown"),
                                     ([True], 0, "ArrowUp")), [0, 0])
+
+
+LIVE_LIST_RUNNER = r"""
+const fs = require("fs");
+const vm = require("vm");
+
+const listeners = [];
+class FakeElement {
+  constructor(tag, attrs = {}, parent = null) {
+    this.tagName = tag.toUpperCase();
+    this.attrs = { ...attrs };
+    this.id = attrs.id || "";
+    this.parent = parent;
+    this.hidden = false;
+  }
+  getAttribute(name) { return name in this.attrs ? this.attrs[name] : null; }
+  hasAttribute(name) { return name in this.attrs; }
+  setAttribute(name, val) { this.attrs[name] = String(val); }
+  matches(selector) {
+    if (selector === "form.lab-filters[hx-get]") {
+      return this.tagName === "FORM"
+        && (this.attrs.class || "").split(/\s+/).includes("lab-filters")
+        && "hx-get" in this.attrs;
+    }
+    if (selector === "a[href][hx-get]") {
+      return this.tagName === "A" && "href" in this.attrs
+        && "hx-get" in this.attrs;
+    }
+    if (selector === "#filter-q") return this.id === "filter-q";
+    if (selector === "tr[data-item][hx-get]") {
+      return this.tagName === "TR" && "data-item" in this.attrs
+        && "hx-get" in this.attrs;
+    }
+    return false;
+  }
+  closest(selector) {
+    for (let el = this; el; el = el.parent) {
+      if (el.matches(selector)) return el;
+    }
+    return null;
+  }
+  querySelectorAll() { return []; }
+  querySelector() { return null; }
+  addEventListener() {}
+}
+
+const form = new FakeElement("form", {
+  id: "filters", class: "lab-filters", "hx-get": "/lab/inventory/",
+  "hx-sync": "#main:replace",
+});
+const search = new FakeElement("input", {
+  id: "filter-q", name: "q", type: "search",
+}, form);
+search.name = "q";
+search.type = "search";
+search.value = "";
+const category = new FakeElement("select", { name: "category" }, form);
+category.name = "category";
+category.type = "select-one";
+category.value = "";
+form.elements = [search, category];
+
+const tbody = new FakeElement("tbody", {
+  id: "item-rows", "hx-sync": "#main:replace",
+});
+const row = new FakeElement("tr", {
+  "data-item": "42", "hx-get": "/lab/inventory/items/42/detail/",
+}, tbody);
+const link = new FakeElement("a", {
+  href: "/lab/inventory/?sort=name", "hx-get": "/lab/inventory/?sort=name",
+  "hx-sync": "#main:replace",
+});
+const spanInLink = new FakeElement("span", {}, link);
+const plainLink = new FakeElement("a", { href: "/lab/inventory/items/1/" });
+
+const doc = {
+  documentElement: { dataset: {}, lang: "de", classList: { toggle() {}, add() {}, remove() {} } },
+  body: { dataset: {} },
+  addEventListener(type, fn, capture = false) {
+    listeners.push({ type, fn, capture: Boolean(capture) });
+  },
+  querySelectorAll() { return []; },
+  querySelector(sel) {
+    if (sel === "form.lab-filters[hx-get]") return form;
+    return null;
+  },
+  getElementById(id) {
+    if (id === "filters") return form;
+    if (id === "filter-q") return search;
+    return null;
+  },
+  cookie: "",
+};
+
+const win = {
+  document: doc,
+  Element: FakeElement,
+  HTMLElement: FakeElement,
+  addEventListener() {},
+  matchMedia() { return { matches: false }; },
+  localStorage: { getItem() { return null; }, setItem() {}, removeItem() {} },
+  location: { pathname: "/lab/inventory/", search: "", hash: "", href: "http://testserver/lab/inventory/" },
+  history: { replaceState() {} },
+  navigator: {},
+};
+
+const context = vm.createContext({
+  window: win, document: doc, Element: FakeElement, HTMLElement: FakeElement,
+  localStorage: win.localStorage, location: win.location, history: win.history,
+  URL, URLSearchParams, Set, Map, CustomEvent: class {},
+});
+vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), context,
+                { filename: process.argv[1] });
+
+function fire(type, event, captureOnly = false) {
+  let prevented = false;
+  let stopped = false;
+  const ev = {
+    type,
+    preventDefault() { prevented = true; },
+    stopPropagation() { stopped = true; },
+    stopImmediatePropagation() { stopped = true; },
+    ...event,
+  };
+  for (const item of listeners) {
+    if (item.type !== type) continue;
+    if (captureOnly && !item.capture) continue;
+    item.fn(ev);
+  }
+  return { prevented, stopped };
+}
+
+// 1. Stale delayed search timer cancelled after a newer sort click
+fire("input", { target: search });
+const sortConfirm = fire("htmx:confirm", {
+  target: link,
+  detail: { elt: link, triggeringEvent: { type: "click" } },
+});
+const staleSearch = fire("htmx:confirm", {
+  target: form,
+  detail: { elt: form, triggeringEvent: { type: "input" } },
+});
+// 2. Fresh input after the sort click is NOT cancelled, and survives an
+// older sort response morphing #filters before the debounce expires
+search.value = "abc";
+fire("input", { target: search });
+fire("htmx:oobBeforeSwap", { target: form, detail: { target: form } });
+search.value = "";
+fire("htmx:oobAfterSwap", { target: form, detail: { target: form } });
+const preservedSearch = search.value;
+const freshSearch = fire("htmx:confirm", {
+  target: form,
+  detail: { elt: form, triggeringEvent: { type: "input" } },
+});
+fire("htmx:afterSettle", { target: tbody, detail: { target: tbody } });
+// 3. Reset click clears #filter-q when no newer input arrived after Reset
+fire("htmx:confirm", {
+  target: link,
+  detail: { elt: link, triggeringEvent: { type: "click" } },
+});
+fire("htmx:oobBeforeSwap", { target: form, detail: { target: form } });
+search.value = "";
+fire("htmx:oobAfterSwap", { target: form, detail: { target: form } });
+const resetSearch = search.value;
+fire("htmx:afterSettle", { target: tbody, detail: { target: tbody } });
+// 4. Row selection cancelling an in-flight filter restores applied controls
+category.value = "Ester";
+fire("htmx:confirm", {
+  target: form,
+  detail: { elt: form, triggeringEvent: { type: "change" } },
+});
+fire("htmx:beforeRequest", { target: form, detail: { elt: form } });
+fire("htmx:confirm", {
+  target: row,
+  detail: { elt: row, triggeringEvent: { type: "item-select" } },
+});
+const restoredCategory = category.value;
+// 5. Modified and non-primary clicks on a[href][hx-get] stop propagation
+const clicks = {
+  ctrl: fire("click", { target: spanInLink, ctrlKey: true, button: 0 }, true),
+  meta: fire("click", { target: link, metaKey: true, button: 0 }, true),
+  shift: fire("click", { target: link, shiftKey: true, button: 0 }, true),
+  alt: fire("click", { target: link, altKey: true, button: 0 }, true),
+  middle: fire("click", { target: link, button: 1 }, true),
+  plainLeft: fire("click", { target: link, button: 0 }, true),
+  nonHtmxCtrl: fire("click", { target: plainLink, ctrlKey: true, button: 0 }, true),
+};
+
+process.stdout.write(JSON.stringify({
+  sortPrevented: sortConfirm.prevented,
+  staleSearchPrevented: staleSearch.prevented,
+  preservedSearch,
+  freshSearchPrevented: freshSearch.prevented,
+  resetSearch,
+  restoredCategory,
+  clicks,
+}));
+"""
+
+
+@skipUnless(NODE, "node is not installed")
+class LiveListScriptTests(TestCase):
+    """Live-list event guards in ``lab.js`` (web-app: Live lists)."""
+
+    def test_stale_search_cancellation_and_modified_clicks(self) -> None:
+        done = subprocess.run(
+            [NODE, "-e", LIVE_LIST_RUNNER, str(SCRIPT)],
+            capture_output=True, text=True, check=True)
+        result = json.loads(done.stdout)
+        self.assertFalse(result["sortPrevented"])
+        self.assertTrue(result["staleSearchPrevented"])
+        self.assertEqual(result["preservedSearch"], "abc")
+        self.assertFalse(result["freshSearchPrevented"])
+        self.assertEqual(result["resetSearch"], "")
+        self.assertEqual(result["restoredCategory"], "")
+        for key in ("ctrl", "meta", "shift", "alt", "middle"):
+            with self.subTest(click=key):
+                self.assertTrue(result["clicks"][key]["stopped"])
+                self.assertFalse(result["clicks"][key]["prevented"])
+        self.assertFalse(result["clicks"]["plainLeft"]["stopped"])
+        self.assertFalse(result["clicks"]["nonHtmxCtrl"]["stopped"])

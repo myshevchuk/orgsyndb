@@ -3,19 +3,19 @@
 {% block body_class %} class="lab-frame"{% endblock %}
 {% block main %}
 {% translate "Batches" as heading %}<c-list-heading :title="heading" wrap_actions>
-<c-slot name="count_slot"><span class="lab-count">{% blocktranslate count count=rows|length %}{{ count }} batch{% plural %}{{ count }} batches{% endblocktranslate %}</span></c-slot>
+<c-slot name="count_slot"><span id="batch-count" class="lab-count">{% blocktranslate count count=rows|length %}{{ count }} batch{% plural %}{{ count }} batches{% endblocktranslate %}</span></c-slot>
 {% if user.is_authenticated %}<c-slot name="actions"><p class="actions"><a href="/lab/inventory/batches/new/">{% translate "New batch" %}</a></p></c-slot>{% endif %}
 </c-list-heading>
 {% include "inventory/tabs.html" %}
-{% translate "Search" as search_label %}{% translate "Batch, substance or supplier" as search_placeholder %}<c-filter-bar action="/lab/inventory/batches/" :toolbar="False" form_class="lab-filters lab-toolbar">
-<c-filter-search :value="q" :label="search_label" :placeholder="search_placeholder" autocomplete="off" />
+{% translate "Search" as search_label %}{% translate "Batch, substance or supplier" as search_placeholder %}<c-filter-bar id="filters" action="/lab/inventory/batches/" :toolbar="False" form_class="lab-filters lab-toolbar" hx-get="/lab/inventory/batches/" hx-trigger="submit, search from:#filter-q, input delay:200ms from:#filter-q" hx-target="#batch-rows" hx-select="#batch-rows" hx-swap="morph:outerHTML" hx-select-oob="#batch-count:morph" hx-push-url="true" hx-sync="#main:replace">
+<c-filter-search id="filter-q" :value="q" :label="search_label" :placeholder="search_placeholder" autocomplete="off" />
 </c-filter-bar>
 <div class="table-scroll">
 <table class="inventory-table">
 <thead>
 <tr><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Article no." %}</th><th scope="col">{% translate "Source" %}</th><th scope="col">{% translate "Lab notebook" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Yield" %}</th><th scope="col">{% translate "Stock" %}</th></tr>
 </thead>
-<tbody>
+<tbody id="batch-rows">
 {% for batch, stock in rows %}<tr>
 <td><a href="/lab/inventory/batches/{{ batch.pk }}/">{{ batch }}</a></td>
 <td>{% substance batch.substance %}</td>

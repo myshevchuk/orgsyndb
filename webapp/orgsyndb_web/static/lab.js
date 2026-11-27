@@ -321,6 +321,164 @@
   document.addEventListener("scroll", reposition, true);
   window.addEventListener("resize", reposition);
 
+  const plain = (event) => event.button === 0 && !event.ctrlKey
+    && !event.metaKey && !event.shiftKey && !event.altKey;
+
+  const hideLiveSubmits = (root = document) => {
+    for (const form of root.querySelectorAll("form.lab-filters[hx-get]")) {
+      for (const button of form.querySelectorAll("button[type=submit]")) {
+        button.hidden = true;
+      }
+    }
+  };
+  hideLiveSubmits();
+  document.addEventListener("htmx:afterSettle", () => hideLiveSubmits());
+
+  // Track #filter-q input events against newer #main:replace requests so a
+  // stale debounced search timer never aborts a newer live action, keep
+  // newly typed search text across an older #filters OOB morph, and
+  // restore applied filter controls when a row selection cancels a filter.
+  let actionSeq = 0;
+  let lastInputSeq = 0;
+  let filterInFlight = false;
+  let pendingSearch = null;
+  let appliedFilters = null;
+
+  const liveFilterForm = () =>
+    document.querySelector("form.lab-filters[hx-get]");
+
+  const snapshotFilters = () => {
+    const form = liveFilterForm();
+    if (!form || !form.elements) return;
+    const prev = appliedFilters;
+    const next = new Map();
+    const keepAppliedSearch = lastInputSeq > 0 && lastInputSeq === actionSeq;
+    for (const control of form.elements) {
+      if (!control || !control.name) continue;
+      if (control.type === "hidden" || control.type === "submit") continue;
+      if (control.type === "checkbox") {
+        next.set(control.name, { kind: "checkbox", value: control.checked });
+      } else if (control.id === "filter-q" && keepAppliedSearch
+                 && prev && prev.has(control.name)) {
+        next.set(control.name, prev.get(control.name));
+      } else {
+        next.set(control.name, { kind: "value", value: control.value });
+      }
+    }
+    appliedFilters = next;
+  };
+
+  const restoreFilters = () => {
+    const form = liveFilterForm();
+    if (!form || !form.elements || !appliedFilters) return;
+    for (const control of form.elements) {
+      if (!control || !control.name || !appliedFilters.has(control.name)) {
+        continue;
+      }
+      const saved = appliedFilters.get(control.name);
+      if (saved.kind === "checkbox") {
+        control.checked = saved.value;
+      } else {
+        control.value = saved.value;
+      }
+    }
+  };
+
+  snapshotFilters();
+
+  document.addEventListener("input", (event) => {
+    if (event.target instanceof Element
+        && event.target.matches("#filter-q")) {
+      lastInputSeq = ++actionSeq;
+    }
+  });
+  document.addEventListener("htmx:beforeRequest", (event) => {
+    const elt = event.detail && event.detail.elt;
+    if (elt instanceof Element && elt.matches("form.lab-filters[hx-get]")) {
+      filterInFlight = true;
+    }
+  });
+  for (const type of [
+    "htmx:afterRequest", "htmx:responseError", "htmx:sendError",
+    "htmx:abort",
+  ]) {
+    document.addEventListener(type, (event) => {
+      const elt = event.detail && event.detail.elt;
+      if (elt instanceof Element
+          && elt.matches("form.lab-filters[hx-get]")) {
+        filterInFlight = false;
+      }
+    });
+  }
+  document.addEventListener("htmx:oobBeforeSwap", (event) => {
+    const target = event.detail && event.detail.target;
+    if (!target || target.id !== "filters") return;
+    if (lastInputSeq > 0 && lastInputSeq === actionSeq) {
+      const input = document.getElementById("filter-q");
+      if (input) {
+        pendingSearch = {
+          value: input.value,
+          start: input.selectionStart,
+          end: input.selectionEnd,
+        };
+      }
+    }
+  });
+  document.addEventListener("htmx:oobAfterSwap", (event) => {
+    const target = event.detail && event.detail.target;
+    if (!target || target.id !== "filters" || !pendingSearch) return;
+    const input = document.getElementById("filter-q");
+    if (input) {
+      input.value = pendingSearch.value;
+      if (typeof input.setSelectionRange === "function"
+          && typeof pendingSearch.start === "number"
+          && typeof pendingSearch.end === "number"
+          && document.activeElement === input) {
+        input.setSelectionRange(pendingSearch.start, pendingSearch.end);
+      }
+    }
+    pendingSearch = null;
+  });
+  document.addEventListener("htmx:afterSettle", (event) => {
+    const target = event.detail && event.detail.target;
+    if (target && (target.id === "item-rows" || target.id === "batch-rows"
+                   || target.id === "vessel-rows")) {
+      snapshotFilters();
+    }
+  });
+  document.addEventListener("htmx:confirm", (event) => {
+    const detail = event.detail;
+    const elt = detail && detail.elt;
+    if (!(elt instanceof Element)) return;
+    const trigType = detail.triggeringEvent && detail.triggeringEvent.type;
+    if (elt.matches("form.lab-filters[hx-get]") && trigType === "input"
+        && lastInputSeq < actionSeq) {
+      event.preventDefault();
+      return;
+    }
+    if (elt.matches("tr[data-item][hx-get]")
+        && (filterInFlight
+            || (lastInputSeq > 0 && lastInputSeq === actionSeq))) {
+      restoreFilters();
+      filterInFlight = false;
+    }
+    const syncHost = elt.getAttribute("hx-sync") === "#main:replace"
+      ? elt
+      : (elt.closest ? elt.closest("[hx-sync]") : null);
+    if (syncHost && syncHost.getAttribute("hx-sync") === "#main:replace") {
+      actionSeq += 1;
+    }
+  });
+
+  // Preserve native open-in-new-tab/window on modified or non-primary
+  // clicks on live links by stopping propagation before htmx sees them.
+  document.addEventListener("click", (event) => {
+    if (plain(event) || !(event.target instanceof Element)) return;
+    if (event.target.closest("a[href][hx-get]")) {
+      event.stopPropagation();
+    }
+  }, true);
+
   for (const control of document.querySelectorAll("[data-submit]")) {
     if (!control.form) continue;
     for (const button of control.form.querySelectorAll(
@@ -438,13 +596,17 @@
   };
 
   // Sets the parameter `selected` of the link's address to ID, or
-  // removes it when ID is empty, keeping its path.
+  // removes it when ID is empty, keeping its path and hx-get in sync.
   const relink = (link, id) => {
     const href = link.getAttribute("href");
     const at = href.indexOf("?");
-    link.setAttribute("href", (at < 0 ? href : href.slice(0, at))
+    const next = (at < 0 ? href : href.slice(0, at))
       + paramSearch(at < 0 ? "" : href.slice(at), "selected",
-                    id === "" ? null : id));
+                    id === "" ? null : id);
+    link.setAttribute("href", next);
+    if (link.hasAttribute("hx-get")) {
+      link.setAttribute("hx-get", next);
+    }
   };
 
   // Brings the list in step with the details' item ID, "" for none: its
@@ -468,9 +630,10 @@
     } catch {
       // The address cannot change: the page shows the item regardless.
     }
-    const form = document.getElementById("filters");
-    if (form) {
-      let field = form.querySelector("input[name=selected]");
+    const selectedHost = document.getElementById("filter-selected")
+      || document.getElementById("filters");
+    if (selectedHost) {
+      let field = selectedHost.querySelector("input[name=selected]");
       if (id === "") {
         if (field) field.remove();
       } else {
@@ -478,7 +641,7 @@
           field = document.createElement("input");
           field.type = "hidden";
           field.name = "selected";
-          form.append(field);
+          selectedHost.append(field);
         }
         field.value = id;
       }
@@ -513,9 +676,6 @@
     }
     guardBody();
   };
-
-  const plain = (event) => event.button === 0 && !event.ctrlKey
-    && !event.metaKey && !event.shiftKey && !event.altKey;
 
   const REFRESH_MORPH = {
     callbacks: {
@@ -1063,10 +1223,54 @@
     choose(to);
   });
 
+  // htmx captures hx-get at element initialization, so live sort, stock,
+  // and Reset links read their current relinked hx-get on request.
+  document.addEventListener("htmx:configRequest", (event) => {
+    const elt = event.detail.elt;
+    if (elt instanceof Element && elt.matches(OWN_LINKS)) {
+      const next = elt.getAttribute("hx-get");
+      if (next) event.detail.path = next;
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!(event.target instanceof Element)) return;
+    if (!event.target.closest("#stock-menu a[hx-get]")) return;
+    const menu = document.getElementById("stock-menu");
+    if (menu && typeof menu.hidePopover === "function") {
+      try {
+        menu.hidePopover();
+      } catch {
+        // Already closed.
+      }
+    }
+  });
+
+  // Preserve ticked item checkboxes and row focusability across live
+  // #item-rows swaps.
+  let liveTicked = null;
+  document.addEventListener("htmx:beforeSwap", (event) => {
+    if (event.detail.target && event.detail.target.id === "item-rows") {
+      liveTicked = new Set(
+        [...document.querySelectorAll("input[name=item]:checked")]
+          .map((box) => box.value));
+    }
+  });
+
   // htmx dispatches htmx:afterSwap on the elements it swapped in, and
   // names the element that asked for them in the request's
   // configuration.
   document.addEventListener("htmx:afterSwap", (event) => {
+    if (event.detail.target && event.detail.target.id === "item-rows") {
+      if (liveTicked) {
+        for (const box of document.querySelectorAll("input[name=item]")) {
+          box.checked = liveTicked.has(box.value);
+        }
+        liveTicked = null;
+      }
+      focusable();
+      return;
+    }
     const row = event.detail.requestConfig
       && event.detail.requestConfig.elt;
     if (!row || !row.matches || !row.matches(ROWS)) return;

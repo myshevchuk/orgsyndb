@@ -19,7 +19,8 @@ from inventory.summaries import (AgeSummary, LocationSummary, SourceSummary,
                                  supplier_summary)
 from inventory.views.common import (CHEMICAL_COOKIE, CHEMICALS,
                                     INTERMEDIATE_COOKIE, INTERMEDIATES,
-                                    htmx_detail_or_redirect, list_view,
+                                    htmx_detail_or_redirect,
+                                    htmx_list_push_url, list_view,
                                     oldest_vessel_order, pick_selected, tabs)
 from inventory.views.vessels import vessel_ledger
 from vocabulary.models import ChemicalClass, Group, Term, descendants, tree_order
@@ -123,9 +124,9 @@ class CategoryFilters:
             sealed=query.get("sealed") == "1",
         )
 
-    def query_string(self, category: str) -> str:
-        """Return the active filter parameters encoded with a leading
-        ``?``, or empty when no filter is set."""
+    def query_string(self, category: str, selected: str = "") -> str:
+        """Return the active filter parameters, and SELECTED when given,
+        encoded with a leading ``?``, or empty when none are set."""
         pairs: list[tuple[str, str]] = []
         if self.q:
             pairs.append(("q", self.q))
@@ -145,6 +146,8 @@ class CategoryFilters:
                 pairs.append(("supplier", self.supplier))
             if self.sealed:
                 pairs.append(("sealed", "1"))
+        if selected:
+            pairs.append(("selected", selected))
         return "?" + urlencode(pairs) if pairs else ""
 
 
@@ -330,7 +333,7 @@ def category_list_response(request: HttpRequest, category: str
                if config.is_intermediate else [])
     groups = ([] if config.is_intermediate
               else tree_order(Group.objects.select_related("parent")))
-    return render(request, "inventory/category_list.html", {
+    response = render(request, "inventory/category_list.html", {
         "category": category,
         "is_intermediate": config.is_intermediate,
         "base_url": config.base_url,
@@ -355,6 +358,9 @@ def category_list_response(request: HttpRequest, category: str
         "stale_group": stale_key(filters.group, groups),
         "tabs": tabs(config.base_url),
     })
+    return htmx_list_push_url(
+        request, response,
+        config.base_url + filters.query_string(category, selected))
 
 
 def category_detail_response(request: HttpRequest, category: str, key: str
@@ -390,13 +396,14 @@ def category_detail_response(request: HttpRequest, category: str, key: str
 
 
 @vary_on_cookie
+@vary_on_headers("HX-Request", "HX-History-Restore-Request")
 def intermediate_list(request: HttpRequest) -> HttpResponse:
     """List the substances with an open intermediate vessel, one row per
     substance, with filters, summaries and the details view."""
     return category_list_response(request, StockCategory.INTERMEDIATES)
 
 
-@vary_on_headers("HX-Request")
+@vary_on_headers("HX-Request", "HX-Current-URL")
 def intermediate_detail(request: HttpRequest, key: str) -> HttpResponse:
     """Answer an htmx request with the details pane of the intermediate
     substance KEY under the query's filters, or redirect to the list."""
@@ -404,13 +411,14 @@ def intermediate_detail(request: HttpRequest, key: str) -> HttpResponse:
 
 
 @vary_on_cookie
+@vary_on_headers("HX-Request", "HX-History-Restore-Request")
 def chemical_list(request: HttpRequest) -> HttpResponse:
     """List the substances with an open commercial chemical vessel, one
     row per substance, with filters, summaries and the details view."""
     return category_list_response(request, StockCategory.COMMERCIAL)
 
 
-@vary_on_headers("HX-Request")
+@vary_on_headers("HX-Request", "HX-Current-URL")
 def chemical_detail(request: HttpRequest, key: str) -> HttpResponse:
     """Answer an htmx request with the details pane of the commercial
     chemical KEY under the query's filters, or redirect to the list."""

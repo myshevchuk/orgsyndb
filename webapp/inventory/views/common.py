@@ -11,7 +11,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import redirect_to_login
 from django.forms import BaseForm
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, QueryDict
 from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
@@ -116,19 +116,40 @@ def pick_selected(rows: Sequence[T], wanted: str,
     return rows[0], str(key(rows[0]))
 
 
+def htmx_list_push_url(request: HttpRequest, response: HttpResponse,
+                       canonical_url: str) -> HttpResponse:
+    """Set ``HX-Push-Url`` to CANONICAL_URL on RESPONSE for a non-restore
+    htmx request, and return RESPONSE."""
+    if request.htmx and not request.htmx.history_restore_request:
+        response["HX-Push-Url"] = canonical_url
+    return response
+
+
 def htmx_detail_or_redirect(request: HttpRequest, base_url: str,
                             selected: Any, template: str,
                             context_fn: Callable[[], dict[str, Any]],
                             keep_query: bool = False) -> HttpResponse:
-    """Render TEMPLATE with CONTEXT_FN() for an htmx request, or redirect
-    non-htmx requests to BASE_URL with ``selected`` set to SELECTED."""
+    """Render TEMPLATE with CONTEXT_FN() and ``HX-Replace-Url`` for an
+    htmx request, or redirect non-htmx requests to BASE_URL with
+    ``selected`` set to SELECTED."""
     if not request.htmx:
         if keep_query:
             params = request.GET.copy()
             params["selected"] = str(selected)
             return redirect(f"{base_url}?{params.urlencode()}")
         return redirect(f"{base_url}?{urlencode({'selected': selected})}")
-    return render(request, template, context_fn())
+    response = render(request, template, context_fn())
+    current = request.htmx.current_url or ""
+    if current and url_has_allowed_host_and_scheme(
+            current, {request.get_host()}, request.is_secure()):
+        params = QueryDict(urlsplit(current).query, mutable=True)
+    elif keep_query:
+        params = request.GET.copy()
+    else:
+        params = QueryDict(mutable=True)
+    params["selected"] = str(selected)
+    response["HX-Replace-Url"] = f"{base_url}?{params.urlencode()}"
+    return response
 
 
 def for_dialog(request: HttpRequest) -> bool:

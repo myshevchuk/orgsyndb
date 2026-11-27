@@ -3,11 +3,11 @@
 {% block body_class %} class="lab-frame"{% endblock %}
 {% block main %}
 {% translate "Vessels" as heading %}<c-list-heading :title="heading" wrap_actions>
-<c-slot name="count_slot"><span class="lab-count">{% blocktranslate count count=vessels|length %}{{ count }} vessel{% plural %}{{ count }} vessels{% endblocktranslate %}</span></c-slot>
+<c-slot name="count_slot"><span id="vessel-count" class="lab-count">{% blocktranslate count count=vessels|length %}{{ count }} vessel{% plural %}{{ count }} vessels{% endblocktranslate %}</span></c-slot>
 {% if user.is_authenticated %}<c-slot name="actions"><p class="actions"><a href="/lab/inventory/batches/new/">{% translate "New batch" %}</a></p></c-slot>{% endif %}
 </c-list-heading>
 {% include "inventory/tabs.html" %}
-{% translate "Kind" as kind_label %}{% translate "Used-up vessels too" as empty_label %}<c-filter-bar action="/lab/inventory/vessels/" :toolbar="False" form_class="lab-filters lab-toolbar">
+{% translate "Kind" as kind_label %}{% translate "Used-up vessels too" as empty_label %}<c-filter-bar id="filters" action="/lab/inventory/vessels/" :toolbar="False" form_class="lab-filters lab-toolbar" hx-get="/lab/inventory/vessels/" hx-trigger="submit, change target:(select, input[type=checkbox])" hx-target="#vessel-rows" hx-select="#vessel-rows" hx-swap="morph:outerHTML" hx-select-oob="#vessel-count:morph" hx-push-url="true" hx-sync="#main:replace">
 <c-filter-select name="kind" :label="kind_label">
 <option value=""{% if not kind %} selected{% endif %}>{% translate "All kinds" %}</option>
 {% for value, label in kinds %}<option value="{{ value }}"{% if value == kind %} selected{% endif %}>{{ label }}</option>
@@ -19,7 +19,7 @@
 <thead>
 <tr><th scope="col">{% translate "Vessel" %}</th><th scope="col">{% translate "Name" %}</th><th scope="col">{% translate "Article no." %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "Source" %}</th><th scope="col">{% translate "Amount" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Opened" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th></tr>
 </thead>
-<tbody>
+<tbody id="vessel-rows">
 {% for vessel in vessels %}{% with batch=vessel.batch %}<tr>
 <td><a href="/lab/inventory/vessels/{{ vessel.pk }}/">#{{ vessel.pk }}</a></td>
 <td>{% substance batch.substance %}</td>

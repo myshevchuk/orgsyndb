@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -10,6 +11,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
+from django.views.decorators.vary import vary_on_headers
 
 from inventory import bookings
 from inventory.bookings import Refused
@@ -18,8 +20,9 @@ from inventory.forms import (NewVesselForm, TransferForm,
                              WithdrawalForm)
 from inventory.history import history_entries
 from inventory.models import Batch, Item, Vessel, VesselKind, VesselMovement
-from inventory.views.common import (VESSELS, batch_url, form_page, item_form,
-                                    locations, saved, tabs, vessel_url)
+from inventory.views.common import (VESSELS, batch_url, form_page,
+                                    htmx_list_push_url, item_form, locations,
+                                    saved, tabs, vessel_url)
 from orgsyndb_web.lists import clean_choice
 
 
@@ -35,6 +38,7 @@ class VesselLedgerRow:
     reversible: bool
 
 
+@vary_on_headers("HX-Request", "HX-History-Restore-Request")
 def vessel_list(request: HttpRequest) -> HttpResponse:
     """List the open vessels of every substance, and the used-up ones
     too with ``empty=1``, by the substance's name regardless of case,
@@ -53,13 +57,21 @@ def vessel_list(request: HttpRequest) -> HttpResponse:
                        vessel.batch.substance.shown_name.casefold(),
                        vessel.batch.date is None,
                        vessel.batch.date or date.min, vessel.pk))
-    return render(request, "inventory/vessel_list.html", {
+    response = render(request, "inventory/vessel_list.html", {
         "vessels": found,
         "empty": empty,
         "kind": kind,
         "kinds": VesselKind.choices,
         "tabs": tabs(VESSELS),
     })
+    pairs: list[tuple[str, str]] = []
+    if kind:
+        pairs.append(("kind", kind))
+    if empty:
+        pairs.append(("empty", "1"))
+    return htmx_list_push_url(
+        request, response,
+        f"{VESSELS}?{urlencode(pairs)}" if pairs else VESSELS)
 
 
 def vessel_page(request: HttpRequest, pk: int) -> HttpResponse:

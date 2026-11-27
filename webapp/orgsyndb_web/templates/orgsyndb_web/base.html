@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="{% static 'site/screen.css' %}" media="screen">
 <link rel="stylesheet" href="{% static 'site/print.css' %}" media="print">
 <link rel="stylesheet" href="{% static 'lab.css' %}">
-{% block scripts %}<meta name="htmx-config" content='{"allowEval": false, "includeIndicatorStyles": false}'>
+{% block scripts %}<meta name="htmx-config" content='{"allowEval": false, "includeIndicatorStyles": false, "historyCacheSize": 0, "refreshOnHistoryMiss": true}'>
 <script src="{% static 'site/site.js' %}"></script>
 <script src="{% static 'htmx/htmx.min.js' %}" defer></script>
 <script src="{% static 'idiomorph/idiomorph-ext.min.js' %}" defer></script>

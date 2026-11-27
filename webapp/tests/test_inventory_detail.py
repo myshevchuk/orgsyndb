@@ -447,7 +447,7 @@ class RowTests(DetailCase):
             {name: body.get(name) for name in (
                 "hx-target", "hx-swap", "hx-sync", "hx-indicator")},
             {"hx-target": "#item-detail", "hx-swap": "outerHTML",
-             "hx-sync": "this:replace", "hx-indicator": "#item-detail"})
+             "hx-sync": "#main:replace", "hx-indicator": "#item-detail"})
         rows = body_rows(root)
         self.assertEqual([row.get("data-item") for row in rows],
                          [str(item.pk) for item in items[:2]])
