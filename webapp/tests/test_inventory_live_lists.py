@@ -496,6 +496,11 @@ class ItemListLiveTests(LiveListAssertions, InventoryCase):
             required_oob=ITEM_RESET_OOB,
             forbidden_oob={"#filter-selected:morph", "#filter-hidden:morph"},
         )
+        # `#list-summary:morph` removes the Reset link from the DOM
+        # before htmx runs the main `morph:outerHTML` swap; htmx looks
+        # up `hx-ext` on the detached context element, so the link must
+        # carry `hx-ext="morph"` itself rather than relying on `<body>`.
+        self.assertEqual(reset.get("hx-ext"), "morph")
 
     def test_canonical_push_url_cleaning_and_empty_selection(self) -> None:
         item = self.item("CH-0012", category="Säuren", size="100", unit="mg",
