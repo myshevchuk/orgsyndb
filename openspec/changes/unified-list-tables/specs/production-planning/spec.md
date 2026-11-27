@@ -8,7 +8,7 @@
 - a choice `Anzeigen` (`Show`), the GET parameter `show`, offering `Alle`, `Priorität hoch`, `Mit Maßnahme` and `Verspätet` (`All`, `High priority`, `With action`, `Late`). `high` lists the rows whose priority is high; `action` those whose `Maßnahmen` holds an action; `late` those whose `Aufgaben` holds a task marked `verspätet`. Without `show`, or with another value, it lists every row.
 - a check box `Alle Artikel` (`All articles`), the GET parameter `all=1`.
 
-The form keeps their values and the order in force. It implements live list updates (web-app "Live lists"): it updates `#item-rows` in place with `morph:outerHTML`, and `#planning-count`, `#item-detail` and `#filter-selected` out of band with `#planning-count:morph,#item-detail:morph,#filter-selected:morph`. It uses `hx-get="/lab/planning/"`, `hx-push-url="true"`, `hx-sync="#main:replace"` and the triggers `submit, change target:(select, input[type=checkbox])`. It keeps `method="get"`, `action="/lab/planning/"` and a submit button. Its non-restore HTMX GET responses push `/lab/planning/` with:
+The form keeps their values and the order in force. It implements live list updates (web-app "Live lists"): it updates `#item-rows` in place with `morph:outerHTML`, and `#planning-count`, `#item-head`, `#item-detail` and `#filter-selected` out of band with `#planning-count:morph,#item-head:morph,#item-detail:morph,#filter-selected:morph`. Its column header links update `#item-rows` in place, and out of band `#planning-count:morph,#item-head:morph,#item-detail:morph,#filters:morph`. It uses `hx-get="/lab/planning/"`, `hx-push-url="true"`, `hx-sync="#main:replace"` and the triggers `submit, change target:(select, input[type=checkbox])`. It keeps `method="get"`, `action="/lab/planning/"` and a submit button. Its non-restore HTMX GET responses push `/lab/planning/` with:
 
 - `all=1` when given;
 - a valid `show`;
@@ -25,13 +25,13 @@ The form keeps their values and the order in force. It implements live list upda
   - `Bulk prüfen` (`Check bulk`), linking to the vessel list, when an open vessel of the article's substance does not convert;
   - a synthesis, when the priority is high or medium, no matching task is planned or running, and every open vessel of the article's substance converts, since a vessel that does not may hold enough. For each sequence that Starting from stock proposes, it offers `Synthese planen über <ID>` (`Plan synthesis via <ID>`), followed, when the sequence starts at a later step `k`, by ` ab Stufe <k>, <name> vorrätig` (` from step <k>, <name> in stock`), the name of the substance in stock. For a signed-in user it links to `/lab/tasks/new/?substance=<key>&sequence=<ID>&start_step=<k>`, `<key>` the key of the article's substance. When Starting from stock proposes no sequence, it offers `Synthese planen` (`Plan synthesis`), linking for a signed-in user to `/lab/tasks/new/?substance=<key>`.
 
-When the list has no row, its table body is empty and the list says, in place of rows:
+When the list has no article, `#item-rows` holds a single row whose one cell, spanning the columns, says:
 
 - `Keine Zeile passt zum Filter.` (`No row matches the filter.`) when `show` is in force and the list without it has a row;
 - otherwise `Kein Artikel braucht eine Synthese oder eine andere Maßnahme.` (`No article needs a synthesis or another action.`);
 - or, with `all=1`, `Kein Artikel hat eine Prognose.` (`No article has a forecast.`).
 
-**The details of an article**, `/lab/planning/<article number>/detail/` with the filters of the list, show the article's name and number as heading and two parts:
+**The details of an article**, `/lab/planning/<article number>/detail/`, the article number percent-encoded as one path segment, `/` among its characters, show the article's name and number as heading and two parts:
 
 - `Gebinde & Bedarf` (`Containers and demand`): a table with the columns `Gebinde`, `Bestand`, `Reichweite` and `Bedarf/Jahr` (`Container`, `Stock`, `Runway`, `Demand per year`), one row per item in the item list's order. Each row holds the item's size linking to its page; its quantity with its level; its runway on hand, or `–`; and its demand per year in containers, rounded half up to one place, or `–`.
 - `Planungsdetails` (`Planning details`), with the priority: a key–value table with these entries:
@@ -43,7 +43,7 @@ When the list has no row, its table body is empty and the list says, in place of
   - `Spätester Start` (`Latest start`), or `–`;
   - `Aufgaben` (`Tasks`), each task of the `Aufgaben` column with its expected end, today plus its remaining synthesis time, marked `verspätet` like there, or `–`.
 
-An article number that names no article with a forecast answers 404.
+A row requests its article's details with the list's `all` and `show` in force as its query. The endpoint keeps that query in `HX-Replace-Url` and in its redirect without HTMX, so that an article listed only with `all=1` stays selected. An article number that names no article with a forecast answers 404.
 
 **The planning parameters** are the collapsible widget `Planungsparameter` (`Planning parameters`), closed when the page loads. Its note states the parameters in force in short, and its body lists each: the certainty, the buffer, the synthesis time until three syntheses exist, the history in quarters, the orders from which the order model applies, the high and medium priority bands, and the target.
 
@@ -68,15 +68,19 @@ An article number that names no article with a forecast answers 404.
 - **THEN** its table `Gebinde & Bedarf` holds one row per item, in the item list's order, each with its size linking its page, its quantity and level, its runway on hand, and `4,3` and `0,5` under `Bedarf/Jahr` in its own row
 
 #### Scenario: Filters on the server
-- **WHEN** with `all=1` the list holds an article of high priority with no action, one of low priority with an action, and one of medium priority with a late task, and a test client requests it with `show=high`, `show=action`, `show=late` and `show=bogus`
-- **THEN** the answers list the first article, the second, the third, and all three, and each shows its rows' number as the count
+- **WHEN** with `all=1` the list holds an article of high priority with no action and no late task, one of low priority with an action, and one of high priority with a late task, and a test client requests it with `show=high`, `show=action`, `show=late` and `show=bogus`
+- **THEN** the answers list the first and third articles, the second, the third, and all three, and each shows its rows' number as the count
 
 #### Scenario: A filter that matches no row
-- **WHEN** the list without `all=1` holds only articles of medium priority with no late task, and a test client requests it with `show=late`
-- **THEN** `#item-rows` holds no article, the list says `Keine Zeile passt zum Filter.`, and `#item-detail` holds no article's details
+- **WHEN** the list without `all=1` holds only articles of medium priority with no late task, and a test client requests it with `show=late`, once with `HX-Request: true`
+- **THEN** both answers' `#item-rows` hold a single row saying `Keine Zeile passt zum Filter.` and no article, and `#item-detail` holds no article's details
+
+#### Scenario: An article number with reserved characters
+- **WHEN** an article `XY 1&2+3#4/5` has a forecast, and a test client requests the list with `all=1` and `selected` naming it, and then its details endpoint with `all=1` and without HTMX headers
+- **THEN** its row's `hx-get` names the number percent-encoded with `all=1`, the details show the article, and the redirect leads to `/lab/planning/` with `all=1` and `selected` naming it
 
 #### Scenario: The canonical address
-- **WHEN** a test client requests `/lab/planning/?all=1&show=late&sort=priority&dir=desc` and `/lab/planning/?show=bogus&sort=start` with `HX-Request: true`
+- **WHEN** with `all=1` the list holds an article with a late task, and a test client requests `/lab/planning/?all=1&show=late&sort=priority&dir=desc` and `/lab/planning/?show=bogus&sort=start` with `HX-Request: true`
 - **THEN** the first pushes `/lab/planning/?all=1&show=late&sort=priority&dir=desc&selected=<resolved>`, and the second `/lab/planning/?selected=<resolved>`, or `/lab/planning/` when it lists no row
 
 #### Scenario: Parameters closed

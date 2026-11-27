@@ -19,7 +19,7 @@ Planung, Aufgaben and Substanzen. They share these pieces:
 - `.inventory-table`;
 - `.item-table`, layered on `.inventory-table`;
 - `.task-table`;
-- `.widget-table`, which has no rules of its own;
+- `.widget-table`, styled only by `site/assets/css/screen.css`, which also carries `.kv-table` and `th > button.sort-header` rules that no Hugo layout uses;
 - `.detail-table`;
 - `.kv-table`.
 
@@ -104,6 +104,13 @@ keeps only its `htmx` mode, with its row selector widened to
 planning-only `planFilterShows` helper and any helper the local mode
 alone used.
 
+Four more `lab.js` sites name the old markup and move with it:
+
+- `OWN_LINKS` (`.item-table thead a`), which relinks header links to the selection;
+- the arrow-key guard `closest(".item-table")`;
+- the live-list guards naming `batch-rows` and `vessel-rows`;
+- the row-click guard, which ignores `a, input` and widens to links, buttons, labels and form controls (`a, button, label, input, select, textarea`).
+
 Each page holds one main list, so the fixed identifiers do not collide.
 The existing count identifiers (`#task-counts`, `#substance-count`,
 `#batch-count`, `#vessel-count`) stay. The row identifiers
@@ -125,7 +132,18 @@ owner asked for.
 
 They follow the `/detail/` suffix of the item and delivery endpoints.
 The task route goes before `<number>/<action>/`, so `detail` never
-reaches `task_action`. Each endpoint answers as web-app "Live lists"
+reaches `task_action`, and the task details view answers only GET
+(`require_GET`), so a POST answers 405.
+
+The planning route uses the `path` converter (`<path:number>`). Article
+numbers are free text, and Django decodes `%2F` before routing. The row's
+`hx-get` percent-encodes the number and carries the list's `all` and
+`show`. The endpoint keeps them in `HX-Replace-Url` and in its redirect.
+
+Every list that becomes a split list varies on the cookie
+(`vary_on_cookie`), as the existing split lists do, and its page sets
+`body.lab-frame`, as the Bestand lists do, so the split layout's CSS
+applies. Each endpoint answers as web-app "Live lists"
 states: for HTMX, the fragment with `HX-Replace-Url`; otherwise, a
 redirect to the list with `selected`.
 
@@ -153,14 +171,22 @@ selection mechanisms and a filter state that does not survive a sort.
 ### 6. Two table styles
 
 `lab.css` defines `.main-table` (dense, bordered cells, hover and
-selection marks, sticky first column in the split layout) and
+selection marks, sticky first column in the split layout, and its
+natural width, `width: auto`, as the item list's "a base column is as
+wide in one view as in the other" requires, with a `col-fill` modifier
+for the one column that takes the rest of the row) and
 `.aux-table` (smaller type, lighter headers, no cell borders).
 `.kv-table` stays as a modifier of `.aux-table` for its label column.
 Modifiers remain only for column width and wrapping (`col-*`,
 `category-table`, and similar). They do not restyle a table's look.
 
 The rules on `inventory-table`, `item-table`, `task-table`,
-`widget-table`, `detail-table`, `planning-table` and `#movements` go.
+`widget-table`, `detail-table`, `planning-table` and `#movements` go,
+in `lab.css` and in `site/assets/css/screen.css` alike. The lab-only
+`.widget-table`, `.kv-table` and `button.sort-header` rules leave
+`screen.css`, which no site layout needs them in, so `lab.css` alone
+styles the lab's tables. The item list's inline column-hiding
+`<style>` follows the new class.
 One sort-indicator style covers both the server header links and the
 client `button.sort-header`.
 
@@ -186,10 +212,24 @@ It excludes:
   headers;
 - the change history, whose rows of one save share `rowspan` cells.
 
-### 8. Canonical address
+### 8. Client sorting wiring
+
+A client-sortable table carries `data-controller="sortable-table"` beside
+`data-sortable`, since the controller binds only through
+`data-controller`. Amount cells key on mg, or on µmol for an amount of
+substance. The client sorter has no tier for kinds, so masses before
+amounts of substance holds only on the server. This is accepted
+because a pane or widget table rarely mixes the kinds.
+
+Compound cells key on their value. These include the overview's
+priority, the substance page's stock, entry and yield, the delivery
+list's reversed counts, and the planning pane's stock and runway.
+
+### 9. Canonical address
 
 Live responses push `sort`, and `dir=desc` when descending, only when
-the order in force is not the default. Today the item list always
+the order in force is not the default. The filter form's hidden `sort`
+and `dir` fields follow the same rule. Today the item list always
 pushes `sort=category`. That changes, and its live-list requirement is
 amended. Header links may still name the default order explicitly.
 

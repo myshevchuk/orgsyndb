@@ -35,8 +35,12 @@
   "Vessel details"; `task-tracker` "Task details"; `lab-registry`
   "Substance details"; `production-planning` "Planning list" details):
   cover content, signed-in links, the HTMX fragment, the redirect
-  without HTMX, 404 for an unknown key, `HX-Replace-Url`, and a POST to
-  `/lab/tasks/<number>/detail/` leaving the task unchanged.
+  without HTMX, 404 for an unknown key, `HX-Replace-Url`, a POST to
+  `/lab/tasks/<number>/detail/` answering 405, the planning endpoint
+  with a reserved-character article number, and `data-item` on every
+  populated `#item-detail`, and `data-refresh` on the count,
+  `#item-rows` and `#item-detail` of every main list, with a dialog save
+  from the vessel list's details refreshing them.
 - [ ] 1.4 Live lists (`end-product-inventory` "Live inventory lists",
   `task-tracker` "Live task list", `lab-registry` "Live substance
   list", the planning list's filter form): update the existing
@@ -44,7 +48,12 @@
   `test_live_tasks_registry.py` to `#item-rows`, the new OOB targets,
   `selected` and `sort` in `HX-Push-Url`, and the item list no longer
   pushing the default `sort=category`. Add the planning list's live
-  form and canonical address.
+  form and canonical address. Keep the item list's own target
+  assertions (summary, stock button, stock entries, more-filters button,
+  `#filter-hidden` on filter submission) while adding `#item-head`.
+  Update `test_inventory_table.py`'s default-filter test (no hidden
+  `sort=category`) and the item list's order-summary test, whose ties
+  stay article number, then container.
 - [ ] 1.5 Planning list (`production-planning` "Planning list"): rewrite
   `test_planning_list.py` and `test_planning_inspector.py` for:
   - server-side `show` and `all`;
@@ -54,6 +63,14 @@
   - the `Artikel` link to the substance's page;
   - no `data-sortable`, `data-priority`, `data-action` or `data-late`
     on the main table.
+
+  Update the shared helper in `planning_support.py`, which looks inside
+  the removed list widget and reads `data-article`, and its callers
+  (`test_planning_stock.py`, `test_planning_matching.py`,
+  `test_demo_days.py`, the last also reading `data-priority`), keeping
+  their checks on planning decisions. Update
+  `test_inventory_consumption_widget.py`, which finds the pane's
+  consumption table by `detail-table`, keeping its quarter-link checks.
 - [ ] 1.6 Client-sortable auxiliary tables (`web-app` "Widgets", "Widget
   and pane tables sort in the browser"): cover `data-sortable`, unique
   `id`s and ISO `data-sort` keys on the item page, the substance page,
@@ -64,7 +81,10 @@
   test files.
 - [ ] 1.7 Table classes (`web-app` "Main lists", "Two table classes"):
   a sweep over the pages the scenario names, asserting every `table`
-  carries exactly one of `main-table` and `aux-table`.
+  carries exactly one of `main-table` and `aux-table`, with an access
+  token created and records chosen so that every conditional table
+  renders. Update the CSS-reading tests that name the removed classes
+  (`test_inventory_table.py`'s width test, `test_widgets_print.py`).
 - [ ] 1.8 Script (`test_lab_script.py`, `test_stimulus_controllers.py`):
   - `split-list` has no local mode;
   - `planFilterShows` is no longer exported;
@@ -87,17 +107,23 @@
 - [ ] 3.1 Bulk, delivery, intermediate and commercial chemical lists:
   columns, sorting and canonical URLs (`inventory/views/{bulk,notes,
   categories}.py` and their templates).
+- [ ] 3.0 For every list that becomes a split list: `vary_on_cookie` and
+  `body.lab-frame`. For all ten lists: `#item-head`, `data-refresh` on
+  the count, `#item-rows` and `#item-detail` (bulk and delivery lists
+  included), `data-item` on every populated `#item-detail`, and the
+  hidden `sort` / `dir` fields present only off the default order.
 - [ ] 3.2 Batch and vessel lists: split layout, view switch and cookies,
   sorting, details endpoints and templates, and URL routes
   (`inventory/views/{batches,vessels}.py`, `inventory/urls.py`).
-- [ ] 3.3 Task list: split layout, sorting, the details endpoint routed
-  before `<number>/<action>/`, and templates (`tasks/views.py`,
+- [ ] 3.3 Task list: split layout, sorting, the details endpoint
+  (GET only) routed before `<number>/<action>/`, and templates (`tasks/views.py`,
   `tasks/urls.py`, `tasks/templates/tasks/`).
 - [ ] 3.4 Substance list: split layout, sorting, the details endpoint and
   templates (`registry/views.py`, `registry/urls.py`,
   `registry/templates/registry/`).
 - [ ] 3.5 Planning list: the filter form (`show`, `all`), sorting, the
-  split layout, the details endpoint and templates, and the removal of
+  split layout, the details endpoint on `<path:number>` keeping `all`
+  and `show`, the empty-list row, and templates, and the removal of
   the list widget, the inspector blocks and the filter buttons
   (`planning/views.py`, `planning/urls.py`,
   `planning/templates/planning/`).
@@ -108,15 +134,25 @@
   `main-table` and `aux-table`, and `kv-table` as the key–value
   modifier.
 - [ ] 4.2 Mark the client-sortable auxiliary tables with `data-sortable`,
-  unique `id`s and `data-sort` keys (design decision 7).
+  `data-controller="sortable-table"`, unique `id`s and `data-sort` keys
+  (design decisions 7 and 8). Key the compound cells on their value: the
+  overview's priority, the substance page's stock, entry and yield, the
+  delivery list's reversed counts, and the planning pane's stock and
+  runway.
 - [ ] 4.3 `lab.css`: define `.main-table` and `.aux-table` with a single
   sort-indicator style. Remove the rules of `inventory-table`,
   `item-table`, `task-table`, `widget-table`, `detail-table`,
-  `planning-table`, `planning-*` and `#movements`.
+  `planning-table`, `planning-*` and `#movements`, and move the lab-only
+  `.widget-table`, `.kv-table` and `button.sort-header` rules out of
+  `site/assets/css/screen.css`. Give `.main-table` its natural width
+  with a `col-fill` modifier. Update the inline column-hiding `<style>`
+  of `item_list.html`.
 - [ ] 4.4 `lab.js`: remove `split-list`'s local mode, `planFilterShows`
   and any helper only that mode used (`planStep` stays, `stepIndex` uses
   it). Widen the row selector to
-  `.main-table`, and update the header comment.
+  `.main-table`, and update `OWN_LINKS`, the arrow-key guard, the
+  `batch-rows` / `vessel-rows` guards and the row-click guard (design
+  decision 3), and the header comment.
 - [ ] 4.5 German catalogues: translate the new strings and compile.
 
 ## 5. Verification
@@ -125,7 +161,9 @@
   `test_main_lists.py`, the details files, `test_inventory_*` lists and
   live lists, `test_live_tasks_registry.py`, `test_task_*`,
   `test_registry_*`, `test_planning_list.py`,
-  `test_planning_inspector.py`, `test_widgets_*.py`,
+  `test_planning_inspector.py`, `test_planning_stock.py`,
+  `test_planning_matching.py`, `test_demo_days.py`,
+  `test_inventory_consumption_widget.py`, `test_widgets_*.py`,
   `test_lab_script.py`, `test_stimulus_controllers.py`,
   `test_back_links.py`)
   until green.

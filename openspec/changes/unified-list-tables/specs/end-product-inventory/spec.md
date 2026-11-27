@@ -45,8 +45,8 @@ For a signed-in user the details offer `Korrigieren` (`Correct`) and `Bearbeiten
 ### Requirement: Live inventory lists
 All seven inventory lists—`/lab/inventory/end-products/`, `/lab/inventory/intermediates/`, `/lab/inventory/chemicals/`, `/lab/inventory/end-products/bulk/`, `/lab/inventory/deliveries/`, `/lab/inventory/batches/`, and `/lab/inventory/vessels/`—SHALL implement live list updates (web-app "Live lists") as main lists (web-app "Main lists"):
 
-- Each list's filter form updates `#item-rows` in place with `morph:outerHTML` and updates its count, `#item-detail` and `#filter-selected` out of band with disjoint `:morph` selectors. It uses triggers scoped exclusively to its own controls: `submit`; a single `change` clause, `change target:select` when only selects are inside `#filters`, or `change target:(select, input[type=checkbox])` when both selects and checkboxes are inside `#filters`; and `search from:#filter-q` / `input delay:200ms from:#filter-q` where present. It synchronizes with split-view row requests on `#main:replace`.
-- Each list's column header links update `#item-rows` and its dependent regions in place via HTMX with `hx-sync="#main:replace"`, keeping their `href` fallbacks.
+- Each list's filter form updates `#item-rows` in place with `morph:outerHTML` and updates its count, `#item-head`, `#item-detail` and `#filter-selected` out of band with disjoint `:morph` selectors. It uses triggers scoped exclusively to its own controls: `submit`; a single `change` clause, `change target:select` when only selects are inside `#filters`, or `change target:(select, input[type=checkbox])` when both selects and checkboxes are inside `#filters`; and `search from:#filter-q` / `input delay:200ms from:#filter-q` where present. It synchronizes with split-view row requests on `#main:replace`.
+- Each list's column header links update `#item-rows` in place via HTMX with `hx-sync="#main:replace"`, and its count, `#item-head`, `#item-detail` and `#filters` out of band, keeping their `href` fallbacks.
 - On `/lab/inventory/end-products/`, `#filters` also triggers on `change from:#filter-container`, `change from:#filter-compartment`, and `change from:#filter-box`. The header links (`#item-head`), the stock-status menu links (`#stock-entries`) and the `Reset` link in `#list-summary` use disjoint OOB targets that morph `#filters:morph` and `#more-filters:morph`, without separately targeting their children `#filter-selected` or `#filter-hidden`, so visible filter controls stay synchronized with the applied response and URL. They keep their `href` / `method="get"` fallbacks.
 - Each list's non-restore HTMX GET response sets `HX-Push-Url` to its canonical path and cleaned query. On every list the query names `sort` and `dir=desc` as web-app "Main lists" states, and the resolved `selected` (omitted when empty):
   - `/lab/inventory/end-products/`: nonempty `q`, `category`, `stock`, `container`, `compartment`, `box`, and `selected` naming an item ID;
@@ -60,7 +60,7 @@ All seven inventory lists—`/lab/inventory/end-products/`, `/lab/inventory/inte
 
 #### Scenario: Live filtering on category lists
 - **WHEN** a test client requests `/lab/inventory/intermediates/?location=Regal+1&sealed=1&selected=missing`, `/lab/inventory/intermediates/?location=nowhere`, and `/lab/inventory/chemicals/?sealed=1&flask=1` with `HX-Request: true`
-- **THEN** each page's filter form carries `hx-get`, `hx-push-url="true"`, `hx-sync="#main:replace"`, scoped triggers, `hx-target="#item-rows"`, `hx-select="#item-rows"`, `hx-swap="morph:outerHTML"`, and `hx-select-oob` naming `#category-count:morph`, `#item-detail:morph`, and `#filter-selected:morph`
+- **THEN** each page's filter form carries `hx-get`, `hx-push-url="true"`, `hx-sync="#main:replace"`, scoped triggers, `hx-target="#item-rows"`, `hx-select="#item-rows"`, `hx-swap="morph:outerHTML"`, and `hx-select-oob` naming `#category-count:morph`, `#item-head:morph`, `#item-detail:morph`, and `#filter-selected:morph`
 - **AND** the first sets `HX-Push-Url` to `/lab/inventory/intermediates/?location=Regal+1&selected=<resolved>`, dropping `sealed`; the second to `/lab/inventory/intermediates/?location=nowhere` with no `selected`; and the third to `/lab/inventory/chemicals/?sealed=1&selected=<resolved>`, dropping `flask`
 
 #### Scenario: Live filtering, sorting, stock status, and reset on the item list
@@ -70,7 +70,7 @@ All seven inventory lists—`/lab/inventory/end-products/`, `/lab/inventory/inte
 
 #### Scenario: Live filtering on bulk, delivery, batch, and vessel lists
 - **WHEN** a test client requests `/lab/inventory/end-products/bulk/?flask=1&source=bogus&q=+CH+`, `/lab/inventory/deliveries/?q=+LS+&item=abc`, `/lab/inventory/batches/?q=+B-1+&sort=bogus`, and `/lab/inventory/vessels/?kind=bogus&empty=1&sort=amount` with `HX-Request: true`
-- **THEN** each list's filter form carries scoped HTMX live attributes targeting `#item-rows` with `morph:outerHTML`, `hx-sync="#main:replace"`, and `:morph` OOB targets for its count, `#item-detail` and `#filter-selected`
+- **THEN** each list's filter form carries scoped HTMX live attributes targeting `#item-rows` with `morph:outerHTML`, `hx-sync="#main:replace"`, and `:morph` OOB targets for its count, `#item-head`, `#item-detail` and `#filter-selected`
 - **AND** their `HX-Push-Url` headers drop invalid values, trim `q`, resolve `selected`, drop the batch list's unknown `sort`, and keep the vessel list's `sort=amount`
 
 #### Scenario: Inventory details endpoints replace the list URL
