@@ -1,26 +1,20 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n lab inventory %}
 {% block title %}{% translate "Substances" %}{% endblock %}
 {% block main %}
-<div class="lab-heading">
-<h1>{% translate "Substances" %}</h1>
-<span class="lab-count">{{ substances|length }}</span>
-{% if user.is_authenticated %}<p class="actions"><a href="/lab/registry/substances/new/">{% translate "New substance" %}</a></p>
-{% endif %}</div>
-<form class="lab-filters" method="get" action="/lab/registry/">
-<label>{% translate "Search substances" %}
-<input type="search" name="q" value="{{ q }}"></label>
-<label>{% translate "Inventory group" %}
-<select name="group">
+{% translate "Substances" as heading %}<c-list-heading :title="heading" count="{{ substances|length }}">
+{% if user.is_authenticated %}<c-slot name="actions"><p class="actions"><a href="/lab/registry/substances/new/">{% translate "New substance" %}</a></p></c-slot>{% endif %}
+</c-list-heading>
+{% translate "Search substances" as search_label %}{% translate "Inventory group" as group_label %}{% translate "Chemical class" as class_label %}<c-filter-bar action="/lab/registry/" :toolbar="False">
+<c-filter-search :value="q" :label="search_label" :inline="False" />
+<c-filter-select name="group" :label="group_label" :inline="False">
 <option value="">{% translate "All" context "registry" %}</option>
 {% for term, depth in groups %}<option value="{{ term.key }}"{% if term.key == group %} selected{% endif %}>{% indent depth %}{{ term.shown_label }}</option>
-{% endfor %}</select></label>
-<label>{% translate "Chemical class" %}
-<select name="class">
+{% endfor %}</c-filter-select>
+<c-filter-select name="class" :label="class_label" :inline="False">
 <option value="">{% translate "All" context "registry" %}</option>
 {% for term, depth in classes %}<option value="{{ term.key }}"{% if term.key == chemical_class %} selected{% endif %}>{% indent depth %}{{ term.shown_label }}</option>
-{% endfor %}</select></label>
-<button type="submit">{% translate "Filter" %}</button>
-</form>
+{% endfor %}</c-filter-select>
+</c-filter-bar>
 <div class="table-scroll">
 <table class="inventory-table registry-table">
 <thead>

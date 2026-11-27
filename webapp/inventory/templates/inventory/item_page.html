@@ -17,15 +17,11 @@
 </div>
 <div class="item-grid">
 <div class="item-col">
-<section class="widget">
-<div class="widget__head"><h2>{% translate "Consumption" %}</h2></div>
-<div class="widget__body">
+{% translate "Consumption" as consumption_title %}<c-widget :title="consumption_title">
 {% include "inventory/consumption.html" with link_mode="dialog" %}
-</div>
-</section>
-<section class="widget">
-<div class="widget__head"><h2>{% translate "Movements" %}</h2><span class="widget__count">{{ ledger|length }}</span></div>
-<div class="widget__body widget__body--flush"><div class="table-scroll table-scroll--tall">
+</c-widget>
+{% translate "Movements" as movements_title %}<c-widget :title="movements_title" count="{{ ledger|length }}" flush>
+<div class="table-scroll table-scroll--tall">
 <table id="movements" class="widget-table" data-sortable>
 <thead>
 <tr><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Booked at" %}</th><th scope="col">{% translate "Kind" %}</th><th scope="col" class="num">{% translate "Count" %}</th><th scope="col" class="num">{% translate "Stock after" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "User" %}</th><th scope="col">{% translate "Delivery note" %}</th><th scope="col">{% translate "Note" context "inventory" %}</th>{% if user.is_authenticated %}<th scope="col"><span class="visually-hidden">{% translate "Actions" %}</span></th>{% endif %}</tr>
@@ -45,11 +41,10 @@
 </tr>
 {% endwith %}{% endfor %}</tbody>
 </table>
-</div></div>
-</section>
-<section class="widget">
-<div class="widget__head"><h2>{% translate "Bulk" %}</h2>{% if vessels %}<span class="widget__count">{{ vessels|length }}</span><span class="widget__note">{% include "inventory/bulk.html" %}</span>{% endif %}</div>
-<div class="widget__body widget__body--flush">
+</div>
+</c-widget>
+{% translate "Bulk" as bulk_title %}<c-widget :title="bulk_title" count="{% if vessels %}{{ vessels|length }}{% endif %}" flush>
+{% if vessels %}<c-slot name="note_slot">{% include "inventory/bulk.html" %}</c-slot>{% endif %}
 {% if vessels %}<div class="table-scroll">
 <table class="widget-table">
 <thead>
@@ -70,13 +65,10 @@
 </div>
 {% else %}<p class="lab-empty">{% translate "No open vessel." %}</p>
 {% endif %}{% if user.is_authenticated and item.article_number %}<p class="widget__foot"><a href="/lab/inventory/batches/new/?substance={{ item.substance.key|urlencode }}">{% translate "New batch" %}</a></p>
-{% endif %}</div>
-</section>
+{% endif %}</c-widget>
 </div>
 <div class="item-col">
-<section class="widget">
-<div class="widget__head"><h2>{% translate "Item data" %}</h2>{% if item.article_number %}<span class="widget__note">{{ item.article_number }}</span>{% endif %}</div>
-<div class="widget__body widget__body--flush">
+{% translate "Item data" as item_data_title %}<c-widget :title="item_data_title" note="{{ item.article_number|default:'' }}" flush>
 <table class="kv-table"><tbody>
 <tr><th scope="row">{% translate "Substance" %}</th><td>{% substance item.substance %}</td></tr>
 <tr><th scope="row">{% translate "Category" %}</th><td>{{ item.category|default:"–" }}</td></tr>
@@ -87,11 +79,8 @@
 <tr><th scope="row">{% translate "Box" %}</th><td>{{ item.box|default:"–" }}</td></tr>
 </tbody></table>
 {% if item.note %}<div class="item-note">{{ item.note|linebreaks }}</div>
-{% endif %}</div>
-</section>
-<section class="widget">
-<div class="widget__head"><h2>{% translate "Containers by batch" %}</h2></div>
-<div class="widget__body widget__body--flush">
+{% endif %}</c-widget>
+{% translate "Containers by batch" as containers_title %}<c-widget :title="containers_title" flush>
 {% if stocks or unknown %}<table class="widget-table">
 <thead><tr><th scope="col">{% translate "Batch" %}</th> <th scope="col" class="num">{% translate "Containers" %}</th></tr></thead>
 <tbody>
@@ -100,8 +89,7 @@
 {% endif %}</tbody>
 </table>
 {% else %}<p class="lab-empty">{% translate "No containers." %}</p>
-{% endif %}</div>
-</section>
+{% endif %}</c-widget>
 {% include "planning/item_forecast.html" %}
 {% include "inventory/history.html" %}
 </div>

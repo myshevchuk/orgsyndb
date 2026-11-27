@@ -5,31 +5,24 @@
 {% for column in table_columns %}main:has(#column-{{ column.key }}:not(:checked)) .item-table .col-{{ column.key }} { display: none; }
 {% endfor %}</style>{% endblock %}
 {% block main %}
-<div class="lab-heading">
-<h1>{% translate "End products" %}</h1>
-<span id="item-count" class="visually-hidden" data-refresh>{% blocktranslate count count=total %}{{ count }} item{% plural %}{{ count }} items{% endblocktranslate %}</span>
-<p id="list-summary" class="list-summary lab-count" data-refresh>{% blocktranslate with shown=rows|length count total=total %}{{ shown }} of {{ total }} item{% plural %}{{ shown }} of {{ total }} items{% endblocktranslate %} · {{ order }}{% if filters.active %} · <a href="{{ reset }}">{% translate "Reset" %}</a>{% endif %}</p>
-{% if user.is_authenticated %}<div class="lab-heading__actions">
-<form id="pick" class="lab-pick" method="get" action="/lab/inventory/deliveries/new/"><button type="submit">{% translate "Delivery note from selection" %}</button></form>
-<p class="actions"><a href="/lab/inventory/end-products/new/">{% translate "New item" %}</a></p>
-</div>
-{% endif %}</div>
+{% translate "End products" as heading %}<c-list-heading :title="heading" wrap_actions>
+<c-slot name="count_slot"><span id="item-count" class="visually-hidden" data-refresh>{% blocktranslate count count=total %}{{ count }} item{% plural %}{{ count }} items{% endblocktranslate %}</span>
+<p id="list-summary" class="list-summary lab-count" data-refresh>{% blocktranslate with shown=rows|length count total=total %}{{ shown }} of {{ total }} item{% plural %}{{ shown }} of {{ total }} items{% endblocktranslate %} · {{ order }}{% if filters.active %} · <a href="{{ reset }}">{% translate "Reset" %}</a>{% endif %}</p></c-slot>
+{% if user.is_authenticated %}<c-slot name="actions"><form id="pick" class="lab-pick" method="get" action="/lab/inventory/deliveries/new/"><button type="submit">{% translate "Delivery note from selection" %}</button></form>
+<p class="actions"><a href="/lab/inventory/end-products/new/">{% translate "New item" %}</a></p></c-slot>{% endif %}
+</c-list-heading>
 {% include "inventory/tabs.html" %}
-<div class="lab-toolbar">
-{% include "inventory/layers.html" %}
-<form id="filters" class="lab-filters" method="get" action="/lab/inventory/end-products/">
-<label class="lab-inline-field"><span class="visually-hidden">{% translate "Search items" %}</span><input type="search" name="q" value="{{ filters.q }}" placeholder="{% translate "Name or article number" %}"></label>
-<label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Category" %}:</span><select id="filter-category" name="category" data-submit data-refresh>
+{% translate "Search items" as search_label %}{% translate "Name or article number" as search_placeholder %}{% translate "Category" as category_label %}<c-filter-bar id="filters" action="/lab/inventory/end-products/" :selected="selected">
+<c-slot name="start">{% include "inventory/layers.html" %}</c-slot>
+<c-filter-search :value="filters.q" :label="search_label" :placeholder="search_placeholder" />
+<c-filter-select id="filter-category" name="category" :label="category_label" data-submit data-refresh>
 <option value=""{% if not filters.category %} selected{% endif %}>{% translate "All categories" %}</option>
 {% for category in categories %}<option value="{{ category }}"{% if category == filters.category %} selected{% endif %}>{{ category }}</option>
-{% endfor %}</select></label>
+{% endfor %}</c-filter-select>
 {% if filters.stock %}<input type="hidden" name="stock" value="{{ filters.stock }}">
 {% endif %}<input type="hidden" name="sort" value="{{ filters.sort }}">
 {% if filters.descending %}<input type="hidden" name="dir" value="desc">
-{% endif %}{% if selected %}<input type="hidden" name="selected" value="{{ selected }}">
-{% endif %}<button type="submit">{% translate "Filter" %}</button>
-</form>
-<div class="lab-control lab-control--inline">
+{% endif %}<c-slot name="after"><div class="lab-control lab-control--inline">
 <span id="stock-filter-label" class="lab-field-prefix">{% translate "Stock status" %}:</span>
 <button type="button" id="stock-filter" class="lab-menu-button" data-refresh popovertarget="stock-menu" aria-labelledby="stock-filter-label stock-filter">{% if stock_choice.level %}{{ stock_choice.label }}{% else %}{% translate "All" %}{% endif %} ({{ stock_choice.count }})</button>
 <div id="stock-menu" class="lab-popup stock-menu" popover>
@@ -57,9 +50,8 @@
 {% for value in boxes %}<option value="{{ value }}"{% if value == filters.box %} selected{% endif %}>{{ value }}</option>
 {% endfor %}</select></label>
 </div>
-</div>
-<div class="lab-toolbar__end">
-<div class="lab-control lab-columns">
+</div></c-slot>
+<c-slot name="end"><div class="lab-control lab-columns">
 <button type="button" class="lab-menu-button" popovertarget="columns-menu">{% translate "Columns" %}</button>
 <div id="columns-menu" class="lab-popup lab-menu" popover>
 <fieldset>
@@ -79,18 +71,12 @@
 <p class="heat-legend"><label><input type="checkbox" id="heat-switch" data-remember="item-list:heat" checked> {% translate "Colour consumption" %}</label> <span class="heat-scale">{% translate "little" context "consumption" %}{% for name in heats %} <span class="heat-swatch {{ name }}" aria-hidden="true"></span>{% endfor %} {% translate "much" context "consumption" %}</span></p>
 </div>
 </details>
-<fieldset class="view-switch">
-<legend class="visually-hidden">{% translate "View" context "item list" %}</legend>
-<label><input type="radio" id="view-table" name="view" value="table" class="visually-hidden"{% if view == "table" %} checked{% endif %}><span>{% translate "Table" context "item list" %}</span></label>
-<label><input type="radio" id="view-details" name="view" value="details" class="visually-hidden"{% if view == "details" %} checked{% endif %}><span>{% translate "Details" %}</span></label>
-</fieldset>
-</div>
-</div>
-<div class="item-layout" data-view="{{ view }}">
-<div class="table-scroll table-sticky">
+{% include "inventory/view_switch.html" %}</c-slot>
+</c-filter-bar>
+<c-split-layout :view="view">
 <table class="inventory-table item-table">
 <thead>
-<tr>{% for column in columns %}<th scope="col" class="{{ column.classes }}"{% if column.aria_sort %} aria-sort="{{ column.aria_sort }}"{% endif %}><a href="{{ column.href }}">{{ column.label }}</a>{% if column.unit %}<small>{{ column.unit }}</small>{% endif %}</th>{% endfor %}</tr>
+<tr>{% for column in columns %}<c-sort-th :label="column.label" :href="column.href" :classes="column.classes" :aria_sort="column.aria_sort" :unit="column.unit" />{% endfor %}</tr>
 </thead>
 <tbody id="item-rows" data-refresh hx-target="#item-detail" hx-swap="outerHTML" hx-sync="this:replace" hx-indicator="#item-detail">
 {% for row in rows %}<tr data-item="{{ row.item.pk }}" hx-get="/lab/inventory/items/{{ row.item.pk }}/detail/" hx-trigger="item-select"{% if row is chosen %} aria-current="true"{% endif %}{% if row.category_start %} class="category-start"{% endif %}>
@@ -98,8 +84,7 @@
 </tr>
 {% endfor %}</tbody>
 </table>
-</div>
-{% partialdef detail inline %}{% if chosen %}{% with item=chosen.item figures=chosen.figures statistics=chosen.statistics bulk=chosen.bulk %}{% translate "not recorded" as missing %}<aside id="item-detail" class="item-detail" data-refresh data-item="{{ item.pk }}" aria-labelledby="item-detail-title">
+<c-slot name="detail">{% partialdef detail inline %}{% if chosen %}{% with item=chosen.item figures=chosen.figures statistics=chosen.statistics bulk=chosen.bulk %}{% translate "not recorded" as missing %}<aside id="item-detail" class="item-detail" data-refresh data-item="{{ item.pk }}" aria-labelledby="item-detail-title">
 <header class="detail-head">
 <h2 id="item-detail-title">{% if item.article_number %}{% substance item.substance %}{% else %}<a href="/lab/inventory/items/{{ item.pk }}/">{{ item.name }}</a>{% endif %}{% if item|new_on:today %}<sup class="mark-new">{% translate "new" context "item" %}</sup>{% endif %}</h2>
 <p>{% if item.article_number %}{{ item.article_number }} · {% endif %}{{ item.container }}{% if item.category %} · {{ item.category }}{% endif %}{% if item.status != "active" %} · {{ item.get_status_display }}{% endif %}</p>
@@ -143,8 +128,8 @@
 {% endwith %}{% else %}<aside id="item-detail" class="item-detail" data-refresh>
 <p class="lab-empty">{% translate "No item is chosen." %}</p>
 </aside>
-{% endif %}{% endpartialdef %}
-</div>
+{% endif %}{% endpartialdef %}</c-slot>
+</c-split-layout>
 <p class="lab-table-note">{% blocktranslate trimmed %}<strong>Stock:</strong> colours and meanings in the filter “Stock status”. <strong>Details</strong> shows the chosen item's compartment, box, bulk and consumption beside the table.{% endblocktranslate %}</p>
 {% partialdef cell %}{% with item=row.item figures=row.figures %}{% if column.key == "number" %}<td class="{{ column.classes }}">{% if item.article_number %}{% if user.is_authenticated %}<input type="checkbox" name="item" value="{{ item.pk }}" form="pick" aria-label="{% blocktranslate %}Select {{ item }}{% endblocktranslate %}"> {% endif %}<a href="/lab/inventory/items/{{ item.pk }}/">{{ item.article_number }}</a>{% endif %}</td>
 {% elif column.key == "name" %}<td class="{{ column.classes }}">{% if not item.article_number %}<a href="/lab/inventory/items/{{ item.pk }}/">{{ item.name }}</a>{% else %}{% substance item.substance %}{% endif %}{% if item|new_on:today %}<sup class="mark-new">{% translate "new" context "item" %}</sup>{% endif %}</td>

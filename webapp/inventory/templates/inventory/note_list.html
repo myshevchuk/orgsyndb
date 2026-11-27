@@ -2,29 +2,21 @@
 {% block title %}{% translate "End products" %} · {% translate "Deliveries" context "layer" %}{% endblock %}
 {% block body_class %} class="lab-frame"{% endblock %}
 {% block main %}
-<div class="lab-heading">
-<h1>{% translate "End products" %}</h1>
-<span class="lab-count">{% blocktranslate count count=notes|length %}{{ count }} delivery note{% plural %}{{ count }} delivery notes{% endblocktranslate %}</span>
-{% if user.is_authenticated %}<div class="lab-heading__actions"><p class="actions"><a href="/lab/inventory/deliveries/new/">{% translate "New delivery note" %}</a></p></div>{% endif %}
-</div>
+{% translate "End products" as heading %}<c-list-heading :title="heading" wrap_actions>
+<c-slot name="count_slot"><span class="lab-count">{% blocktranslate count count=notes|length %}{{ count }} delivery note{% plural %}{{ count }} delivery notes{% endblocktranslate %}</span></c-slot>
+{% if user.is_authenticated %}<c-slot name="actions"><p class="actions"><a href="/lab/inventory/deliveries/new/">{% translate "New delivery note" %}</a></p></c-slot>{% endif %}
+</c-list-heading>
 {% include "inventory/tabs.html" %}
-<div class="lab-toolbar">
-{% include "inventory/layers.html" %}
-<form id="filters" class="lab-filters" method="get" action="/lab/inventory/deliveries/">
-<label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Item" %}:</span><select name="item">
+{% translate "Item" as item_label %}{% translate "Search" as search_label %}{% translate "Number or recipient" as search_placeholder %}<c-filter-bar id="filters" action="/lab/inventory/deliveries/" :selected="selected">
+<c-slot name="start">{% include "inventory/layers.html" %}</c-slot>
+<c-filter-select name="item" :label="item_label">
 <option value=""{% if not chosen %} selected{% endif %}>{% translate "All" %}</option>
 {% for item in items %}<option value="{{ item.pk }}"{% if item.pk|stringformat:"d" == chosen %} selected{% endif %}>{{ item.article_number }} · {{ item.container }} · {{ item.name }}</option>
-{% endfor %}</select></label>
-<label class="lab-inline-field"><span class="visually-hidden">{% translate "Search" %}</span><input type="search" name="q" value="{{ q }}" placeholder="{% translate "Number or recipient" %}"></label>
-{% if selected %}<input type="hidden" name="selected" value="{{ selected }}">
-{% endif %}<button type="submit">{% translate "Filter" %}</button>
-</form>
-<div class="lab-toolbar__end">
-{% include "inventory/view_switch.html" %}
-</div>
-</div>
-<div class="item-layout" data-view="{{ view }}" data-cookie="delivery-list-view">
-<div class="table-scroll table-sticky">
+{% endfor %}</c-filter-select>
+<c-filter-search :value="q" :label="search_label" :placeholder="search_placeholder" />
+<c-slot name="end">{% include "inventory/view_switch.html" %}</c-slot>
+</c-filter-bar>
+<c-split-layout :view="view" cookie="delivery-list-view">
 <table class="inventory-table item-table note-table">
 <thead>
 <tr><th scope="col">{% translate "Number" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Recipient" %}</th><th scope="col" class="number table-only-summary">{% translate "Lines" %}</th><th scope="col">{% translate "Contents" %}</th></tr>
@@ -41,8 +33,7 @@
 </tr>
 {% endfor %}</tbody>
 </table>
-</div>
-{% partialdef detail inline %}{% if note %}<aside id="item-detail" class="item-detail" data-item="{{ note.pk }}" aria-labelledby="item-detail-title">
+<c-slot name="detail">{% partialdef detail inline %}{% if note %}<aside id="item-detail" class="item-detail" data-item="{{ note.pk }}" aria-labelledby="item-detail-title">
 <header class="detail-head">
 <h2 id="item-detail-title"><a href="/lab/inventory/deliveries/{{ note.pk }}/">{{ note }}</a>{% include "inventory/note_marks.html" %}</h2>
 <p>{{ note.date }} · {{ note.recipient }}</p>
@@ -72,6 +63,6 @@
 {% else %}<aside id="item-detail" class="item-detail">
 <p class="lab-empty">{% translate "No delivery note is chosen." %}</p>
 </aside>
-{% endif %}{% endpartialdef %}
-</div>
+{% endif %}{% endpartialdef %}</c-slot>
+</c-split-layout>
 {% endblock %}

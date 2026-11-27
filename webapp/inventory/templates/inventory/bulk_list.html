@@ -2,34 +2,26 @@
 {% block title %}{% translate "End products" %} · {% translate "Bulk" context "layer" %}{% endblock %}
 {% block body_class %} class="lab-frame"{% endblock %}
 {% block main %}
-<div class="lab-heading">
-<h1>{% translate "End products" %}</h1>
-<span class="lab-count">{% blocktranslate count count=rows|length %}{{ count }} vessel{% plural %}{{ count }} vessels{% endblocktranslate %}</span>
-{% if user.is_authenticated %}<div class="lab-heading__actions"><p class="actions"><a href="/lab/inventory/batches/new/">{% translate "New batch" %}</a></p></div>{% endif %}
-</div>
+{% translate "End products" as heading %}<c-list-heading :title="heading" wrap_actions>
+<c-slot name="count_slot"><span class="lab-count">{% blocktranslate count count=rows|length %}{{ count }} vessel{% plural %}{{ count }} vessels{% endblocktranslate %}</span></c-slot>
+{% if user.is_authenticated %}<c-slot name="actions"><p class="actions"><a href="/lab/inventory/batches/new/">{% translate "New batch" %}</a></p></c-slot>{% endif %}
+</c-list-heading>
 {% include "inventory/tabs.html" %}
-<div class="lab-toolbar">
-{% include "inventory/layers.html" %}
-<form id="filters" class="lab-filters" method="get" action="/lab/inventory/end-products/bulk/">
-<label class="lab-inline-field"><span class="visually-hidden">{% translate "Search" %}</span><input type="search" name="q" value="{{ q }}" placeholder="{% translate "Name, article no., batch" %}"></label>
-<label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Location" %}:</span><select name="location" data-submit>
+{% translate "Search" as search_label %}{% translate "Name, article no., batch" as search_placeholder %}{% translate "Location" as location_label %}{% translate "Source" as source_label %}{% translate "Flasks only" as flask_label %}<c-filter-bar id="filters" action="/lab/inventory/end-products/bulk/" :selected="selected">
+<c-slot name="start">{% include "inventory/layers.html" %}</c-slot>
+<c-filter-search :value="q" :label="search_label" :placeholder="search_placeholder" />
+<c-filter-select name="location" :label="location_label" data-submit>
 <option value=""{% if not location %} selected{% endif %}>{% translate "All" %}</option>
 {% for value in locations %}<option value="{{ value }}"{% if value == location %} selected{% endif %}>{{ value }}</option>
-{% endfor %}</select></label>
-<label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Source" %}:</span><select name="source" data-submit>
+{% endfor %}</c-filter-select>
+<c-filter-select name="source" :label="source_label" data-submit>
 <option value=""{% if not source %} selected{% endif %}>{% translate "All" %}</option>
 {% for value, label in sources %}<option value="{{ value }}"{% if value == source %} selected{% endif %}>{{ label }}</option>
-{% endfor %}</select></label>
-<label class="lab-inline-check"><input type="checkbox" name="flask" value="1"{% if flask %} checked{% endif %} data-submit> {% translate "Flasks only" %}</label>
-{% if selected %}<input type="hidden" name="selected" value="{{ selected }}">
-{% endif %}<button type="submit">{% translate "Filter" %}</button>
-</form>
-<div class="lab-toolbar__end">
-{% include "inventory/view_switch.html" %}
-</div>
-</div>
-<div class="item-layout" data-view="{{ view }}" data-cookie="bulk-list-view">
-<div class="table-scroll table-sticky">
+{% endfor %}</c-filter-select>
+<c-filter-check name="flask" :label="flask_label" :checked="flask" data-submit />
+<c-slot name="end">{% include "inventory/view_switch.html" %}</c-slot>
+</c-filter-bar>
+<c-split-layout :view="view" cookie="bulk-list-view">
 <table class="inventory-table item-table bulk-table">
 <thead>
 <tr><th scope="col">{% translate "Article" %}</th><th scope="col">{% translate "Vessel" %}</th><th scope="col">{% translate "Batch" %}</th><th scope="col">{% translate "Source" %}</th><th scope="col" class="number">{% translate "Amount" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Date" %}</th><th scope="col">{% translate "Fills" context "bulk" %}</th></tr>
@@ -47,8 +39,7 @@
 </tr>{% endwith %}
 {% endfor %}</tbody>
 </table>
-</div>
-{% partialdef detail inline %}{% if chosen %}{% with vessel=chosen.vessel batch=chosen.vessel.batch %}<aside id="item-detail" class="item-detail" data-item="{{ vessel.pk }}" aria-labelledby="item-detail-title">
+<c-slot name="detail">{% partialdef detail inline %}{% if chosen %}{% with vessel=chosen.vessel batch=chosen.vessel.batch %}<aside id="item-detail" class="item-detail" data-item="{{ vessel.pk }}" aria-labelledby="item-detail-title">
 <header class="detail-head">
 <h2 id="item-detail-title"><a href="/lab/inventory/vessels/{{ vessel.pk }}/">{{ vessel }}</a></h2>
 <p>{{ batch.substance.article.article_number|default_if_none:_("no number") }} · {{ batch.substance.shown_name }}</p>
@@ -82,7 +73,7 @@
 {% endwith %}{% else %}<aside id="item-detail" class="item-detail">
 <p class="lab-empty">{% translate "No vessel is chosen." %}</p>
 </aside>
-{% endif %}{% endpartialdef %}
-</div>
+{% endif %}{% endpartialdef %}</c-slot>
+</c-split-layout>
 {% partialdef fills %}{% for fill in row.fills %}{% if not forloop.first %} {% translate "or" %} {% endif %}{% if fill.count is None %}<span class="badge badge--warning">{% translate "Molar mass missing" %}</span> {{ fill.item.container }}{% elif user.is_authenticated %}<a href="/lab/inventory/items/{{ fill.item.pk }}/fill/?vessel={{ row.vessel.pk }}">{{ fill.count }} × {{ fill.item.container }}</a>{% else %}{{ fill.count }} × {{ fill.item.container }}{% endif %}{% endfor %}{% endpartialdef %}
 {% endblock %}

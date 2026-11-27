@@ -1,30 +1,24 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n lab %}
 {% block title %}{% translate "Tasks" %}{% endblock %}
 {% block main %}
-<div class="lab-heading">
-<h1>{% translate "Tasks" %}</h1>
-{% if user.is_authenticated %}<p class="actions"><a href="/lab/tasks/new/">{% translate "New task" %}</a></p>{% endif %}
-</div>
-<form class="lab-filters" method="get" action="/lab/tasks/">
-<label>{% translate "State" %}
-<select name="state">
+{% translate "Tasks" as heading %}<c-list-heading :title="heading">
+{% if user.is_authenticated %}<c-slot name="actions"><p class="actions"><a href="/lab/tasks/new/">{% translate "New task" %}</a></p></c-slot>{% endif %}
+</c-list-heading>
+{% translate "State" as state_label %}{% translate "Person" as person_label %}{% translate "Priority" as priority_label %}{% translate "Search" as search_label %}<c-filter-bar action="/lab/tasks/" :toolbar="False">
+<c-filter-select name="state" :label="state_label" :inline="False">
 {% for value, label in state_filters %}<option value="{{ value }}"{% if value == filters.state %} selected{% endif %}>{{ label }}</option>
-{% endfor %}</select></label>
-<label>{% translate "Person" %}
-<select name="person">
+{% endfor %}</c-filter-select>
+<c-filter-select name="person" :label="person_label" :inline="False">
 <option value=""{% if not filters.person %} selected{% endif %}>{% translate "Everyone" %}</option>
 <option value="none"{% if filters.person == "none" %} selected{% endif %}>{% translate "Nobody" %}</option>
 {% for account in accounts %}<option value="{{ account.initials }}"{% if account.initials == filters.person %} selected{% endif %}>{{ account.initials }} – {{ account.display_name }}</option>
-{% endfor %}</select></label>
-<label>{% translate "Priority" %}
-<select name="priority">
+{% endfor %}</c-filter-select>
+<c-filter-select name="priority" :label="priority_label" :inline="False">
 <option value=""{% if not filters.priority %} selected{% endif %}>{% translate "Any" %}</option>
 {% for value, label in priorities %}<option value="{{ value }}"{% if value == filters.priority %} selected{% endif %}>{{ label }}</option>
-{% endfor %}</select></label>
-<label>{% translate "Search" %}
-<input type="search" name="q" value="{{ filters.q }}"></label>
-<button type="submit">{% translate "Filter" %}</button>
-</form>
+{% endfor %}</c-filter-select>
+<c-filter-search :value="filters.q" :label="search_label" :inline="False" />
+</c-filter-bar>
 <p class="count">{% blocktranslate with planned=counts.planned running=counts.running followup=counts.followup %}{{ planned }} planned · {{ running }} running · {{ followup }} follow-up{% endblocktranslate %}</p>
 <div class="table-scroll">
 <table class="task-table">

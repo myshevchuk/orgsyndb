@@ -15,10 +15,8 @@
 {% endif %}</div>
 <div class="substance-grid">
 <aside class="substance-aside">
-<section class="widget">
-<div class="widget__head"><h2>{% translate "Compound" %}</h2><span class="widget__note compound-key">{{ substance.key }}</span></div>
-{% if substance.molfile %}<figure class="structure"><img src="/lab/registry/substances/{{ substance.key }}/structure.svg" alt="{% blocktranslate with name=substance.shown_name %}Structure of {{ name }}{% endblocktranslate %}"></figure>
-{% endif %}<div class="widget__body widget__body--flush">
+{% translate "Compound" as compound_title %}<c-widget :title="compound_title" :note="substance.key" note_class="compound-key" flush>
+{% if substance.molfile %}<c-slot name="before_body"><figure class="structure"><img src="/lab/registry/substances/{{ substance.key }}/structure.svg" alt="{% blocktranslate with name=substance.shown_name %}Structure of {{ name }}{% endblocktranslate %}"></figure></c-slot>{% endif %}
 <table class="kv-table"><tbody>
 <tr><th scope="row">{% translate "Article no." %}</th><td{% if not substance.article_number %} class="muted"{% endif %}>{% if substance.article_number %}<strong>{{ substance.article_number }}</strong>{% else %}–{% endif %}</td></tr>
 <tr><th scope="row">{% translate "Formula" %}</th><td{% if not substance.formula %} class="muted"{% endif %}>{{ substance.formula|default:"–" }}</td></tr>
@@ -33,14 +31,11 @@
 <tr><th scope="row">{% translate "Short name" %}</th><td{% if not substance.short_name %} class="muted"{% endif %}>{{ substance.short_name|default:"–" }}</td></tr>
 <tr><th scope="row">{% translate "Note" %}</th><td{% if not substance.note %} class="muted"{% endif %}>{% if substance.note %}{{ substance.note|linebreaksbr }}{% else %}–{% endif %}</td></tr>
 </tbody></table>
-</div>
-</section>
+</c-widget>
 </aside>
 <div class="substance-main">
 <div class="substance-trio">
-<section class="widget">
-<div class="widget__head"><h2>{% translate "Containers" context "substance" %}</h2>{% if items %}<span class="widget__count">{{ items|length }}</span>{% endif %}</div>
-<div class="widget__body widget__body--flush">
+{% translate "Containers" context "substance" as containers_title %}<c-widget :title="containers_title" count="{% if items %}{{ items|length }}{% endif %}" flush>
 {% if items %}<div class="table-scroll">
 <table class="widget-table">
 <thead><tr><th scope="col">{% translate "Article / size" %}</th><th scope="col" class="num">{% translate "Stock" %}</th></tr></thead>
@@ -53,11 +48,8 @@
 </table>
 </div>
 {% else %}<p class="lab-empty">{% translate "None" context "registry" %}</p>
-{% endif %}</div>
-</section>
-<section class="widget">
-<div class="widget__head"><h2>{% translate "Batches" context "substance" %}</h2>{% if batches %}<span class="widget__count">{{ batches|length }}</span>{% endif %}</div>
-<div class="widget__body widget__body--flush">
+{% endif %}</c-widget>
+{% translate "Batches" context "substance" as batches_title %}<c-widget :title="batches_title" count="{% if batches %}{{ batches|length }}{% endif %}" flush>
 {% if batches %}<div class="table-scroll">
 <table class="widget-table">
 <thead><tr><th scope="col">{% translate "Batch" %}</th><th scope="col" class="num">{% translate "Stock" %}</th></tr></thead>
@@ -70,11 +62,8 @@
 </table>
 </div>
 {% else %}<p class="lab-empty">{% translate "None" context "registry" %}</p>
-{% endif %}</div>
-</section>
-<section class="widget">
-<div class="widget__head"><h2>{% translate "Tasks" context "substance" %}</h2>{% if tasks %}<span class="widget__count">{{ tasks|length }}</span>{% endif %}</div>
-<div class="widget__body widget__body--flush">
+{% endif %}</c-widget>
+{% translate "Tasks" context "substance" as tasks_title %}<c-widget :title="tasks_title" count="{% if tasks %}{{ tasks|length }}{% endif %}" flush>
 {% if tasks %}<div class="table-scroll">
 <table class="widget-table">
 <thead><tr><th scope="col">{% translate "Task" context "substance" %}</th><th scope="col">{% translate "Status" %}</th></tr></thead>
@@ -87,12 +76,10 @@
 </table>
 </div>
 {% else %}<p class="lab-empty">{% translate "None" context "registry" %}</p>
-{% endif %}</div>
-</section>
+{% endif %}</c-widget>
 </div>
-{% if made_by %}<section class="widget">
-<div class="widget__head"><h2>{% translate "Made by" context "substance" %}</h2><span class="widget__count">{{ made_by|length }}</span></div>
-<div class="widget__body widget__body--flush"><div class="table-scroll">
+{% if made_by %}{% translate "Made by" context "substance" as made_by_title %}<c-widget :title="made_by_title" count="{{ made_by|length }}" flush>
+<div class="table-scroll">
 <table class="widget-table">
 <thead><tr><th scope="col">{% translate "Procedure" %}</th><th scope="col">{% translate "Entry" %}</th><th scope="col" class="num">{% translate "Yield" %}</th><th scope="col">{% translate "Status" %}</th></tr></thead>
 <tbody>
@@ -104,11 +91,10 @@
 </tr>
 {% endfor %}</tbody>
 </table>
-</div></div>
-</section>
-{% endif %}{% if used_in %}<section class="widget">
-<div class="widget__head"><h2>{% translate "Used in" context "substance" %}</h2><span class="widget__count">{{ used_in|length }}</span></div>
-<div class="widget__body widget__body--flush"><div class="table-scroll">
+</div>
+</c-widget>
+{% endif %}{% if used_in %}{% translate "Used in" context "substance" as used_in_title %}<c-widget :title="used_in_title" count="{{ used_in|length }}" flush>
+<div class="table-scroll">
 <table class="widget-table">
 <thead><tr><th scope="col">{% translate "Procedure" %}</th><th scope="col">{% translate "Status" %}</th></tr></thead>
 <tbody>
@@ -118,11 +104,10 @@
 </tr>
 {% endfor %}</tbody>
 </table>
-</div></div>
-</section>
-{% endif %}{% if sequences %}<section class="widget">
-<div class="widget__head"><h2>{% translate "Sequences" context "substance" %}</h2><span class="widget__count">{{ sequences|length }}</span></div>
-<div class="widget__body widget__body--flush"><div class="table-scroll">
+</div>
+</c-widget>
+{% endif %}{% if sequences %}{% translate "Sequences" context "substance" as sequences_title %}<c-widget :title="sequences_title" count="{{ sequences|length }}" flush>
+<div class="table-scroll">
 <table class="widget-table">
 <thead><tr><th scope="col">{% translate "Sequence" %}</th></tr></thead>
 <tbody>
@@ -131,15 +116,12 @@
 </tr>
 {% endfor %}</tbody>
 </table>
-</div></div>
-</section>
-{% endif %}{% if route %}<details id="substance-routes" class="widget" open>
-<summary class="widget__head"><h2>{% translate "Routes" context "substance" %}</h2><span class="widget__count">{{ route|length }}</span></summary>
-<div class="widget__body">
+</div>
+</c-widget>
+{% endif %}{% if route %}{% translate "Routes" context "substance" as routes_title %}<c-widget id="substance-routes" :title="routes_title" count="{{ route|length }}" collapsible open>
 <ul class="route-tree">
 {% include "registry/route_steps.html" with steps=route %}</ul>
-</div>
-</details>
+</c-widget>
 {% endif %}</div>
 </div>
 {% endblock %}

@@ -37,6 +37,7 @@ from inventory.views.common import (LIST, VIEW_COOKIE, categories,
                                     item_form, item_url, layers, list_view,
                                     open_vessels, pick_selected, render_form,
                                     saved, tabs)
+from orgsyndb_web.lists import clean_choice, sort_rows
 from planning import plan
 
 
@@ -170,11 +171,11 @@ class ItemFilters:
     def from_query(cls, query: Any) -> "ItemFilters":
         """Return the filters of QUERY, a mapping of GET parameters."""
         given = {name: query.get(name, "").strip() for name in FILTERS}
-        if given["stock"] not in Level.values:
-            given["stock"] = ""
-        sort = query.get("sort", "")
-        return cls(**given, sort=sort if sort in SORTS else DEFAULT_SORT,
-                   descending=query.get("dir") == "desc")
+        given["stock"] = clean_choice(given["stock"], Level.values)
+        return cls(
+            **given,
+            sort=clean_choice(query.get("sort", ""), SORTS, DEFAULT_SORT),
+            descending=query.get("dir") == "desc")
 
     @property
     def active(self) -> bool:
@@ -218,9 +219,7 @@ class ItemFilters:
         after the others; ties keep their order."""
         value = next(spec.value for spec in COLUMN_MODEL
                      if spec.key == self.sort)
-        present = [row for row in rows if value(row) is not None]
-        present.sort(key=value, reverse=self.descending)
-        return present + [row for row in rows if value(row) is None]
+        return sort_rows(rows, value, descending=self.descending)
 
 
 @dataclass(frozen=True)

@@ -15,6 +15,7 @@ from inventory.views.common import (BULK, BULK_COOKIE, LIST, bulk_vessels,
                                     htmx_detail_or_redirect, layers, list_view,
                                     pick_selected, tabs)
 from inventory.views.vessels import vessel_ledger
+from orgsyndb_web.lists import clean_choice
 
 
 @dataclass(frozen=True)
@@ -83,9 +84,7 @@ def bulk_list(request: HttpRequest) -> HttpResponse:
     selected, in the view the cookie ``bulk-list-view`` remembers."""
     q = request.GET.get("q", "").strip()
     location = request.GET.get("location", "").strip()
-    source = request.GET.get("source", "")
-    if source not in Source.values:
-        source = ""
+    source = clean_choice(request.GET.get("source", ""), Source.values)
     flask = request.GET.get("flask") == "1"
     vessels = list(bulk_vessels())
     locations = sorted({vessel.location for vessel in vessels

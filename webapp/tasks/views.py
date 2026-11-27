@@ -24,6 +24,7 @@ from inventory.figures import stock_of
 from inventory.models import Batch, Vessel, VesselMovement, shown
 from journal.entries import entry_for
 from orgsyndb_web import lock
+from orgsyndb_web.lists import clean_choice
 from planning.plan import Plan, TaskPriority
 from tasks.closing import amounts
 from tasks.forms import TaskEditForm, TaskForm
@@ -71,10 +72,10 @@ class Filters:
         person = query.get("person", "").strip()
         priority = query.get("priority", "")
         return cls(
-            state=state if state in STATE_TESTS else "active",
-            person=("none" if person == "none" else person.upper()
-                    if person.upper() in initials else ""),
-            priority=priority if priority in Priority.values else "",
+            state=clean_choice(state, STATE_TESTS, "active"),
+            person=("none" if person == "none"
+                    else clean_choice(person.upper(), initials)),
+            priority=clean_choice(priority, Priority.values),
             q=query.get("q", "").strip())
 
 

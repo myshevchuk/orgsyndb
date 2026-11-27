@@ -2,45 +2,37 @@
 {% block title %}{{ heading }}{% endblock %}
 {% block body_class %} class="lab-frame"{% endblock %}
 {% block main %}
-<div class="lab-heading">
-<h1>{{ heading }}</h1>
-<span id="category-count" class="lab-count" data-refresh>{% blocktranslate count count=rows|length %}{{ count }} substance{% plural %}{{ count }} substances{% endblocktranslate %} · {% blocktranslate count count=vessel_total %}{{ count }} vessel{% plural %}{{ count }} vessels{% endblocktranslate %}</span>
-{% if user.is_authenticated %}<div class="lab-heading__actions"><p class="actions">{% if is_intermediate %}<a href="/lab/inventory/batches/new/">{% translate "New batch" %}</a>{% else %}<a href="/lab/inventory/batches/new/?source=bought">{% translate "Goods receipt" %}</a>{% endif %}</p></div>{% endif %}
-</div>
+<c-list-heading :title="heading" wrap_actions>
+<c-slot name="count_slot"><span id="category-count" class="lab-count" data-refresh>{% blocktranslate count count=rows|length %}{{ count }} substance{% plural %}{{ count }} substances{% endblocktranslate %} · {% blocktranslate count count=vessel_total %}{{ count }} vessel{% plural %}{{ count }} vessels{% endblocktranslate %}</span></c-slot>
+{% if user.is_authenticated %}<c-slot name="actions"><p class="actions">{% if is_intermediate %}<a href="/lab/inventory/batches/new/">{% translate "New batch" %}</a>{% else %}<a href="/lab/inventory/batches/new/?source=bought">{% translate "Goods receipt" %}</a>{% endif %}</p></c-slot>{% endif %}
+</c-list-heading>
 {% include "inventory/tabs.html" %}
-<div class="lab-toolbar">
-<form id="filters" class="lab-filters" method="get" action="{{ base_url }}">
-<label class="lab-inline-field"><span class="visually-hidden">{% translate "Search" %}</span><input type="search" name="q" value="{{ filters.q }}" placeholder="{% if is_intermediate %}{% translate "Name, batch, task" %}{% else %}{% translate "Name, CAS, supplier, batch" %}{% endif %}"></label>
-{% if not is_intermediate %}<label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Group" %}:</span><select name="group" data-submit>
+{% translate "Search" as search_label %}{% if is_intermediate %}{% translate "Name, batch, task" as search_placeholder %}{% else %}{% translate "Name, CAS, supplier, batch" as search_placeholder %}{% endif %}{% translate "Group" as group_label %}{% translate "Location" as location_label %}{% translate "Chemical class" as class_label %}{% translate "Supplier" as supplier_label %}{% translate "Flasks only" as flask_label %}{% translate "Older than 1 y" as old_label %}{% translate "Sealed only" as sealed_label %}<c-filter-bar id="filters" :action="base_url" :selected="selected">
+<c-filter-search :value="filters.q" :label="search_label" :placeholder="search_placeholder" />
+{% if not is_intermediate %}<c-filter-select name="group" :label="group_label" data-submit>
 <option value=""{% if not filters.group %} selected{% endif %}>{% translate "All" %}</option>
 {% if stale_group %}<option value="{{ stale_group }}" selected>{{ stale_group }}</option>
 {% endif %}{% for term, depth in groups %}<option value="{{ term.key }}"{% if term.key == filters.group %} selected{% endif %}>{% indent depth %}{{ term.shown_label }}</option>
-{% endfor %}</select></label>
-{% endif %}<label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Location" %}:</span><select id="filter-location" name="location" data-refresh data-submit>
+{% endfor %}</c-filter-select>
+{% endif %}<c-filter-select id="filter-location" name="location" :label="location_label" data-refresh data-submit>
 <option value=""{% if not filters.location %} selected{% endif %}>{% translate "All" %}</option>
 {% for value in locations %}<option value="{{ value }}"{% if value == filters.location %} selected{% endif %}>{{ value }}</option>
-{% endfor %}</select></label>
-{% if is_intermediate %}<label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Chemical class" %}:</span><select name="class" data-submit>
+{% endfor %}</c-filter-select>
+{% if is_intermediate %}<c-filter-select name="class" :label="class_label" data-submit>
 <option value=""{% if not filters.chemical_class %} selected{% endif %}>{% translate "All" %}</option>
 {% if stale_class %}<option value="{{ stale_class }}" selected>{{ stale_class }}</option>
 {% endif %}{% for term, depth in classes %}<option value="{{ term.key }}"{% if term.key == filters.chemical_class %} selected{% endif %}>{% indent depth %}{{ term.shown_label }}</option>
-{% endfor %}</select></label>
-<label class="lab-inline-check"><input type="checkbox" name="flask" value="1"{% if filters.flask %} checked{% endif %} data-submit> {% translate "Flasks only" %}</label>
-<label class="lab-inline-check"><input type="checkbox" name="old" value="1"{% if filters.old %} checked{% endif %} data-submit> {% translate "Older than 1 y" %}</label>
-{% else %}<label class="lab-inline-field lab-inline-select"><span class="lab-field-prefix">{% translate "Supplier" %}:</span><select id="filter-supplier" name="supplier" data-refresh data-submit>
+{% endfor %}</c-filter-select>
+<c-filter-check name="flask" :label="flask_label" :checked="filters.flask" data-submit />
+<c-filter-check name="old" :label="old_label" :checked="filters.old" data-submit />
+{% else %}<c-filter-select id="filter-supplier" name="supplier" :label="supplier_label" data-refresh data-submit>
 <option value=""{% if not filters.supplier %} selected{% endif %}>{% translate "All" %}</option>
 {% for value in suppliers %}<option value="{{ value }}"{% if value == filters.supplier %} selected{% endif %}>{{ value }}</option>
-{% endfor %}</select></label>
-<label class="lab-inline-check"><input type="checkbox" name="sealed" value="1"{% if filters.sealed %} checked{% endif %} data-submit> {% translate "Sealed only" %}</label>
-{% endif %}{% if selected %}<input type="hidden" name="selected" value="{{ selected }}">
-{% endif %}<button type="submit">{% translate "Filter" %}</button>
-</form>
-<div class="lab-toolbar__end">
-{% include "inventory/view_switch.html" %}
-</div>
-</div>
-<div class="item-layout item-layout--split" data-view="{{ view }}" data-cookie="{{ cookie }}">
-<div id="category-table-scroll" class="table-scroll table-sticky">
+{% endfor %}</c-filter-select>
+<c-filter-check name="sealed" :label="sealed_label" :checked="filters.sealed" data-submit />
+{% endif %}<c-slot name="end">{% include "inventory/view_switch.html" %}</c-slot>
+</c-filter-bar>
+<c-split-layout :view="view" :cookie="cookie" split scroll_id="category-table-scroll">
 <table class="inventory-table item-table category-table">
 <thead>
 {% if is_intermediate %}<tr><th scope="col">{% translate "Substance" %}</th><th scope="col" class="number">{% translate "Amount" %}</th><th scope="col">{% translate "Vessels" %}</th><th scope="col">{% translate "Location" %}</th><th scope="col">{% translate "Source" %}</th><th scope="col">{% translate "Age" %}</th></tr>
@@ -60,8 +52,7 @@
 {% endif %}</tr>
 {% endfor %}</tbody>
 </table>
-</div>
-{% partialdef detail inline %}{% if detail_substance %}<aside id="item-detail" class="item-detail item-detail--split" data-item="{{ detail_substance.key }}" data-refresh aria-labelledby="item-detail-title">
+<c-slot name="detail">{% partialdef detail inline %}{% if detail_substance %}<aside id="item-detail" class="item-detail item-detail--split" data-item="{{ detail_substance.key }}" data-refresh aria-labelledby="item-detail-title">
 <header class="split-detail-head">
 <div class="split-detail-title">
 <h2 id="item-detail-title"><a href="/lab/registry/substances/{{ detail_substance.key }}/">{{ detail_substance.shown_name }}</a></h2>
@@ -117,6 +108,6 @@
 {% else %}<aside id="item-detail" class="item-detail item-detail--split" data-refresh>
 <p class="lab-empty split-empty">{% translate "No substance is chosen." %}</p>
 </aside>
-{% endif %}{% endpartialdef %}
-</div>
+{% endif %}{% endpartialdef %}</c-slot>
+</c-split-layout>
 {% endblock %}
