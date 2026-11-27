@@ -6,7 +6,7 @@
 <tr><th scope="row">{% translate "Default synthesis time" %}</th><td><strong>{{ parameters.default_synthesis_days|days }}</strong> <span class="kv-sub">{% translate "until three syntheses exist" %}</span></td></tr>
 <tr><th scope="row">{% translate "History" context "planning" %}</th><td><strong>{% blocktranslate count count=parameters.history_quarters %}{{ count }} quarter{% plural %}{{ count }} quarters{% endblocktranslate %}</strong></td></tr>
 <tr><th scope="row">{% translate "Order model" %}</th><td><strong>{% blocktranslate count count=parameters.min_orders %}from {{ count }} order{% plural %}from {{ count }} orders{% endblocktranslate %}</strong></td></tr>
-<tr><th scope="row">{% translate "Priority bands" %}</th><td><strong>{% blocktranslate with high=parameters.high_days medium=parameters.medium_days %}high below {{ high }} and medium below {{ medium }} days of slack{% endblocktranslate %}</strong></td></tr>
+<tr><th scope="row">{% translate "Priority bands" %}</th><td>{% blocktranslate with high=parameters.high_days medium=parameters.medium_days %}high below {{ high }} and medium below {{ medium }} days of slack{% endblocktranslate %}</td></tr>
 <tr><th scope="row">{% translate "Target" context "planning" %}</th><td><strong>{{ parameters.target_days|days }}</strong></td></tr>
 </tbody></table>
 </c-widget>
