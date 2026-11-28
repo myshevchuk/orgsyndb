@@ -7,11 +7,11 @@ The lists of this table SHALL be the lab's main lists:
 |---|---|---|---|---|---|
 | item list | `/lab/inventory/end-products/` | `number`, `name`, `category`, `container`, `stock`, `mean_year`, `this_year`, `coverage`, `compartment`, `box`, `bulk` | `category` ascending | `/lab/inventory/items/<id>/detail/` | `item-list-view` |
 | bulk list | `/lab/inventory/end-products/bulk/` | `article`, `vessel`, `batch`, `source`, `amount`, `location`, `date`, (`fills`) | `article` ascending | `/lab/inventory/end-products/bulk/<id>/` | `bulk-list-view` |
-| delivery list | `/lab/inventory/deliveries/` | `number`, `date`, `recipient`, `lines`, (`contents`) | `date` descending | `/lab/inventory/deliveries/<id>/detail/` | `delivery-list-view` |
+| delivery list | `/lab/inventory/deliveries/` | `number`, `date`, `recipient`, `lines` | `date` descending | `/lab/inventory/deliveries/<id>/detail/` | `delivery-list-view` |
 | intermediate list | `/lab/inventory/intermediates/` | `substance`, `amount`, `vessels`, `location`, `source`, `age` | `substance` ascending | `/lab/inventory/intermediates/<key>/` | `intermediate-list-view` |
 | commercial chemical list | `/lab/inventory/chemicals/` | `substance`, `group`, `amount`, `vessels`, `location`, `suppliers`, `opened` | `substance` ascending | `/lab/inventory/chemicals/<key>/` | `chemical-list-view` |
 | batch list | `/lab/inventory/batches/` | `batch`, `name`, `article`, `source`, `notebook`, `date`, `yield`, `stock` | `date` descending | `/lab/inventory/batches/<id>/detail/` | `batch-list-view` |
-| vessel list | `/lab/inventory/vessels/` | `vessel`, `name`, `article`, `kind`, `batch`, `source`, `amount`, `location`, `date`, `opened` | `name` ascending | `/lab/inventory/vessels/<id>/detail/` | `vessel-list-view` |
+| vessel list | `/lab/inventory/vessels/` | `vessel`, `name`, `kind`, `batch`, `source`, `amount`, `location`, `date` | `name` ascending | `/lab/inventory/vessels/<id>/detail/` | `vessel-list-view` |
 | planning list | `/lab/planning/` | `article`, `runway`, `synthesis`, `start`, `priority`, `tasks`, (`actions`) | `start` ascending | `/lab/planning/<article number>/detail/` | `planning-list-view` |
 | task list | `/lab/tasks/` | `number`, `product`, `priority`, `assignee`, `started`, `ended`, `progress`, `batch`, `report`, `qc`, `state` | `priority` ascending | `/lab/tasks/<number>/detail/` | `task-list-view` |
 | substance list | `/lab/registry/` | `name`, `key`, `short_name`, `group`, `classes`, `formula`, `molar_mass`, `article` | `name` ascending | `/lab/registry/substances/<key>/detail/` | `substance-list-view` |
@@ -40,7 +40,6 @@ A column orders its rows by the value its cells show:
 These columns have orders of their own:
 
 - the item list's `stock` orders by level, most urgent first, in the order end-product-inventory "Stock levels" lists the levels, then by coverage, items without one after the others at their level;
-- its `bulk` orders by the number of containers its bulk would fill;
 - its `container` orders by size as end-product-inventory "Items" orders sizes;
 - the bulk list's `article` orders by article number, articles without one last, then by name regardless of case;
 - the planning list's `article` orders by the article's name.
@@ -71,8 +70,8 @@ A details endpoint answers an HTMX request with the `#item-detail` fragment alon
 - **THEN** every header link of the task list names `state=all`, `person=KL` and `selected` naming that task, and the filter form holds the order in force
 
 #### Scenario: Amounts across units and text after values
-- **WHEN** the database holds open vessels of `1` g, `500` mg and `20` µmol, a vessel of a bought batch opened on 2026-05-01, one sealed, and one of a made batch, and a test client requests the vessel list with `sort=amount`, and then with `sort=opened`
-- **THEN** the first lists `500 mg`, `1 g` and then `20 µmol`; the second lists the opened vessel, then the sealed vessel, then the vessel of the made batch, which shows nothing
+- **WHEN** the database holds open vessels of `1` g, `500` mg and `20` µmol, and two commercial chemicals, one with a bottle opened on 2026-05-01 and one with a sealed bottle, and a test client requests the vessel list with `sort=amount`, and the commercial chemical list with `sort=opened`
+- **THEN** the first lists `500 mg`, `1 g` and then `20 µmol`; the second lists the opened chemical before the sealed one
 
 #### Scenario: The canonical address omits the default order
 - **WHEN** a test client requests, with `HX-Request: true`, the batch list with `sort=date&dir=desc`, then with `sort=yield`, and the item list with `sort=category`
@@ -106,5 +105,5 @@ A details endpoint answers an HTMX request with the `#item-detail` fragment alon
 - **THEN** it lists `#2` before `#10`
 
 #### Scenario: Descending puts text first
-- **WHEN** the vessel list of the scenario "Amounts across units and text after values" is requested with `sort=opened&dir=desc`
-- **THEN** it lists the sealed vessel, then the opened vessel, then the vessel of the made batch
+- **WHEN** the commercial chemical list of the scenario "Amounts across units and text after values" is requested with `sort=opened&dir=desc`
+- **THEN** it lists the sealed chemical before the opened one

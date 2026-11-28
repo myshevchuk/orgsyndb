@@ -21,16 +21,22 @@ lose the text that governs the removed controls and gain none.
   height and heat switch. Both views show every column. The consumption
   heat is always shown, and its legend moves into the hint line below the
   table.
-- **BREAKING** The vessel list drops its `note` column. Notes show in the
-  details panes, which already hold them.
+- **BREAKING** The vessel list drops its `note`, `article` and `opened`
+  columns, and its `Herkunft` shows only the task that made the batch or
+  the supplier. Notes and the opening date show in its details pane.
+- **BREAKING** The item list's bulk cell shows the bulk's amount alone;
+  the number of containers it would fill moves to the details pane, and
+  the column sorts as an amount.
+- **BREAKING** The delivery list drops its `contents` column; the details
+  pane shows a note's lines.
 - **BREAKING** Projected means and coverage are no longer marked, on the
   item list, its details or the item page. They are still computed as
   before.
 - All ten main tables share one row height, today's compact one, and one
   rule for bold text: the column naming the record and one column the
   design names per list. Column widths are set so that each table fits
-  a 1920×1080 window with the sidebar open; long names are cut with an
-  ellipsis and shown whole in a tooltip.
+  a window 1650 px wide with the sidebar open; long names are cut with
+  an ellipsis and shown whole in a tooltip.
 - The sidebar sits at the window's left edge on every page, the site's
   and the lab's alike, and the main lists' pages use the full width to
   the right of it. The task and substance lists' filter bars use the
@@ -47,11 +53,13 @@ None.
 ### Modified Capabilities
 
 - `end-product-inventory`: "Item list" loses its base and table-only
-  column groups, column hiding, the `note` column and the projected mark;
-  "Consumption" loses the projected mark; "Vessel list" loses its `note`
-  column.
-- `web-app`: "Main lists" drops `note` from the item and vessel lists'
-  column keys.
+  column groups, column hiding, the `note` column and the projected mark,
+  and its bulk cell shows the amount alone; "Consumption" loses the
+  projected mark; "Vessel list" loses three columns and shortens its
+  source; "Filling from bulk" no longer prescribes where the bulk shows;
+  "Delivery list" loses its lines column.
+- `web-app`: "Main lists" drops the removed columns' keys and the item
+  list's own bulk order.
 - `site-theme`: "Measure and tables" no longer fixes the shell's width.
 
 ## Impact

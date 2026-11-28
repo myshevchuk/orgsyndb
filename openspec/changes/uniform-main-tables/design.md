@@ -33,8 +33,9 @@ its details pane and the item page's figure tiles.
 ## Goals / Non-Goals
 
 Goals: one look, one row height and all columns for every main table;
-every main table fits 1920×1080 with the sidebar open; no control or
-mark without a stated purpose.
+every main table fits a window 1650 px wide with the sidebar open, a
+compromise the owner chose on 2026-11-28 between older and newer
+monitors; no control or mark without a stated purpose.
 
 Non-goals:
 
@@ -60,8 +61,25 @@ corrected or extended. The deltas delete:
 - "Main lists": `note` among the item and vessel lists' keys;
 - "Measure and tables": "with a shell up to 96rem wide".
 
-No width, height, weight or position becomes a requirement. Fitting
-1920×1080 is a design goal, checked by screenshot (tasks 5.2).
+The owner's amendment of 2026-11-28 adds, all as deletions or
+shortenings:
+
+- "Item list": the bulk cell shows the bulk by unit; the details gain
+  the number of containers it would fill, which the cell gave before;
+- "Filling from bulk": "wherever an item shows its bulk, it shows that
+  amount by unit and the number of its containers" goes; the number's
+  definition stays;
+- "Vessel list": `Artikelnr.` and `Angebrochen` go (the opening date
+  stays in the details pane), and `Herkunft` shows only the task or the
+  supplier;
+- "Delivery list": the lines in the table go; the details keep them;
+- "Main lists": the keys `contents` (delivery), `article` and `opened`
+  (vessel), and the item list's own `bulk` order go. Its two scenarios
+  that sorted the vessel list by `opened` move to the commercial chemical
+  list's `opened`.
+
+No width, height, weight or position becomes a requirement. Fitting a
+window 1650 px wide is a design goal, checked by screenshot (tasks 5.2).
 
 Rejected: a width test in the suite. The owner called fitting a design
 goal, and a test would pin column widths that the next change revisits.
@@ -144,8 +162,14 @@ decides how means are computed.
   `overflow: hidden` and `text-overflow: ellipsis`, inside `@media
   screen`, so paper keeps whole names); the templates give each capped
   cell the whole name in `title`. Other columns keep their natural
-  width. The ui-specialist sets the cap so that each list fits. Whether
-  the caps suffice is unverified until the screenshots of tasks 5.2.
+  width. The ui-specialist sets the cap so that each list fits. The
+  vessel list's names are not capped (owner); `Ort` is not capped
+  either, as German place names run long. Whether the caps suffice is
+  unverified until the screenshots of tasks 5.2. Measured on
+  2026-11-28 at 1920 px, the item list was ~1,460 px wide and the vessel
+  list ~1,380 px against ~1,260 px available at 1650 px; the bulk cell's
+  fill counts (~200 px) and the vessel list's three columns and shorter
+  source bring both within it.
 - Dead rules go: `.col-note`, the unused `.col-fill`, and the print test's
   assertion on it.
 

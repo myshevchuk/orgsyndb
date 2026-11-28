@@ -55,6 +55,21 @@
   `test_inventory_batches.py` and `test_planning_list.py` assert about
   the cells' markup, where the change alters it.
 
+- [ ] 1.9 Amendment of 2026-11-28 (`end-product-inventory` "Item list",
+  "Filling from bulk", "Vessel list", "Delivery list"; `web-app` "Main
+  lists"): the item list's bulk cell shows the amount by unit and no
+  container count, its details show the count, and `sort=bulk` orders
+  by amount; the vessel list has no `Artikelnr.` or `Angebrochen` column
+  and its `Herkunft` reads the task number or the supplier without
+  `gekauft`/`hergestellt`; the vessel details still show the opening
+  date; the delivery list's table has no lines column and its details
+  show the lines; the two moved "Main lists" scenarios on the commercial
+  chemical list. Files: `test_inventory_lists.py`,
+  `test_inventory_table.py`, `test_inventory_bulk.py` (where it covers
+  the item list's bulk), `test_inventory_vessel_details.py`,
+  `test_main_lists.py` with `main_lists_support.py`, and the delivery
+  list's tests (grep `deliveries/`).
+
 ## 2. Item and vessel lists
 
 - [ ] 2.1 `inventory/views/items.py`: drop `note`, `group`, `shown`,
@@ -66,6 +81,11 @@
   note column.
 - [ ] 2.4 Drop the projected mark from `item_list.html`'s pane and
   `item_page.html`.
+- [ ] 2.5 Item list: bulk cell by unit only, sorted as an amount; the
+  pane shows the container count.
+- [ ] 2.6 Vessel list: drop `article` and `opened`; `Herkunft` with the
+  task or the supplier only; names uncapped.
+- [ ] 2.7 Delivery list: drop the `contents` column.
 
 ## 3. Main-table look and shell
 
@@ -98,6 +118,6 @@
   `python3 -m pytest tests/test_theme_static.py -q` at the repository
   root.
 - [ ] 5.2 On the local demo database, screenshot each of the ten lists in
-  the table view at 1920×1080 with the sidebar open: no table scrolls
+  the table view at 1650×1050 with the sidebar open: no table scrolls
   sideways; the sidebar sits at the left edge on a lab page and a site
   page.
