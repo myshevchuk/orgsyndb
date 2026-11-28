@@ -1,0 +1,159 @@
+# Design: Uniform main tables
+
+## Context
+
+After `unified-list-tables` the ten main lists share `table.main-table`,
+server sorting and one selection mechanism. Screenshots of the demo data
+set at 1920×1080 (2026-11-28) show:
+
+- `body` is `max-width: 96rem` and centred (`base.css` `margin: 0 auto`,
+  `screen.css` grid `17rem minmax(0, 1fr)`), so `main` is about 1,150 px
+  wide and about 450 px of the window stay empty;
+- the item list overflows it (`Reichweite`, `Fach`, `Box`, `Bulk` cut),
+  the vessel list overflows (`Ort` cut, `Bemerkung` off screen), and the
+  task list's `Status` cell with two badges overflows;
+- names such as `9,10-Dihydro-9,10-ethanoanthracen-11,12-dicarbonsäureanhydrid`
+  set the width of the name columns of the item, substance and planning
+  lists;
+- the task and substance lists render their filter controls stacked
+  (`:inline="False"`), and their search field as a tall empty box;
+- planning's `Artikel` cell is two lines high (name over number).
+
+The item list carries controls no other list has: the `Spalten` menu
+(`#columns-menu`, one `remember`ed check box per table-only column and an
+inline `<style>` that hides unchecked columns), the `Ansicht` menu
+(`details.lab-view-menu`: `#row-height` compact or tight, `#heat-switch`
+with the heat scale), the `table-only` class that the details view hides,
+and `SplitListController`'s disabling of the `Spalten` button in the
+details view. `RememberController` and `ViewMenuController` serve only
+these controls. `.projected` (italic, with the title `hochgerechnet aus
+dem laufenden Jahr`) marks projected means and coverage in the item list,
+its details pane and the item page's figure tiles.
+
+## Goals / Non-Goals
+
+Goals: one look, one row height and all columns for every main table;
+every main table fits 1920×1080 with the sidebar open; no control or
+mark without a stated purpose.
+
+Non-goals:
+
+- the stacked split and widget panes (next change);
+- a requirement on widths or row heights (owner: interface decisions);
+- changing what any column holds or how it sorts, beyond removing the two
+  note columns.
+
+## Decisions
+
+### 1. Specs only lose text
+
+The owner asked that specs governing these controls be removed, not
+corrected or extended. The deltas delete:
+
+- "Item list": the split into base and table-only columns, "of which a
+  user may hide each", "a base column is as wide in one view as in the
+  other", the projected mark, the `note` column, and the scenarios "Base
+  columns first" and "Columns a user may hide". The column list stays,
+  as one list, because it states what the list shows;
+- "Consumption": the projected mark and "each marked as projected";
+- "Vessel list": the `Bemerkung` column;
+- "Main lists": `note` among the item and vessel lists' keys;
+- "Measure and tables": "with a shell up to 96rem wide".
+
+No width, height, weight or position becomes a requirement. Fitting
+1920×1080 is a design goal, checked by screenshot (tasks 5.2).
+
+Rejected: a width test in the suite. The owner called fitting a design
+goal, and a test would pin column widths that the next change revisits.
+
+### 2. The shell
+
+The Navigation requirement (site-theme) keeps the site title, search,
+navigation and the start of `main` in the same place on every page, the
+site's and the lab's alike. So the sidebar moves to the window's left
+edge everywhere: `body` loses its centring (`margin-left: 0`) in
+`screen.css`, which both the site and the lab load. Pages other than the
+main lists keep the 96rem cap, now left-aligned. `body.lab-frame`, the
+main lists' pages, drops the cap, so `main` runs to the window's right
+edge.
+
+Rejected: moving only the lab's sidebar. It breaks the Navigation
+requirement's "the same position on every page".
+
+### 3. The item list's columns and controls
+
+- `ColumnSpec` loses `group` and `shown`, and `Column` loses `table_only`
+  and `shown`; the `table-only` class and the `table_columns` context go.
+- The `note` column goes from `COLUMN_MODEL` and the cell partial. `q`
+  still searches the note (Item list's filters are unchanged).
+- The `Spalten` menu, its inline `<style>`, the `Ansicht` menu, and
+  `SplitListController`'s columns-button handling go.
+- `RememberController` and `ViewMenuController` go, with
+  `PopoverAnchorController`'s closing of `details.lab-view-menu`, and
+  every CSS rule that names `#row-height`, `#heat-switch`,
+  `.lab-view-menu`, `.lab-view-controls`, `.heat-legend`, `.table-only`,
+  `.lab-columns` or `#columns-menu`.
+- The heat scale (`wenig`, five swatches, `viel`) moves into
+  `.lab-table-note`, after the stock legend. Its hint says the details
+  view shows the chosen item's details; it stops listing columns the
+  details view no longer hides.
+- Values users stored under `orgsyndb:item-list:*` in `localStorage` are
+  left alone; nothing reads them again.
+
+### 4. No projected mark
+
+`.projected`, its title and the string go from the item list, its pane
+and `item_page.html`. `figures.projected` stays in the model: it still
+decides how means are computed.
+
+### 5. One main-table look
+
+- Row height: the compact one, `1.875rem` at `0.8125rem`, single line,
+  for all ten lists; no list overrides it. Planning's `Artikel` cell puts
+  the article number before the name on one line, as the bulk list does.
+- Bold: the column naming the record, plus one column per list:
+
+  | List | Record column | Second column |
+  |---|---|---|
+  | item | `name` | `container` |
+  | bulk | `article` | `amount` |
+  | delivery | `number` | `recipient` |
+  | intermediate | `substance` | `amount` |
+  | chemical | `substance` | `amount` |
+  | batch | `name` | `stock` |
+  | vessel | `name` | `amount` |
+  | planning | `article` | `start` |
+  | task | `product` | `priority` |
+  | substance | `name` | `article` |
+
+  Bold comes from one rule on a class (`col-strong`) set on those
+  columns' header and cells, replacing the per-list rules such as
+  `.category-table td:first-child a`.
+- Widths: name columns are capped (`max-width` with `text-overflow:
+  ellipsis`, the whole name in `title`); other columns keep their natural
+  width. The ui-specialist sets the cap so that each list fits; the rest
+  of the row fills from the table's natural width.
+- Dead rules go: `.col-note`, the unused `.col-fill`, and the print test's
+  assertion on it.
+
+### 6. Filter bars
+
+The task and substance lists use the inline filter controls
+(`c-filter-select` and `c-filter-search` without `:inline="False"`), as
+the inventory and planning lists do. Their labels stay, as the controls'
+prefixes or as visually hidden text.
+
+## Risks / Trade-offs
+
+- **Details view until the next change.** With all columns shown, the
+  item list's side-by-side details view squeezes a wide table beside the
+  pane; the table scrolls. The next change stacks the pane below.
+- **Site pages move.** Every site page's shell moves to the left edge on
+  wide windows. The Navigation requirement wants this consistency.
+- **Cut names.** A name longer than the cap shows an ellipsis; the
+  tooltip, the details pane and the record page show it whole.
+
+## Migration Plan
+
+None. Pre-1.0: the controls, classes, strings and the two columns are
+removed outright.
