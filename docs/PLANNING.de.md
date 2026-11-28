@@ -18,11 +18,13 @@ Die englische Fassung ist [PLANNING.md](PLANNING.md).
 Navigation. Die Liste zeigt Artikel mit hoher oder mittlerer Priorität und
 Artikel, bei denen eine Maßnahme ansteht. Der kleinste **Spielraum** steht
 zuerst: Das ist die Zeit, die bis zum nötigen Beginn einer neuen Synthese
-bleibt. Mit **Alle Artikel** sehen Sie jeden Artikel mit einer Prognose.
-Klicken Sie in die Zeile eines Artikels oder wechseln Sie mit den
-Pfeiltasten, um neben der Liste seine **Gebinde & Bedarf** und
-**Planungsdetails** zu sehen. Die Schaltflächen **Alle**, **Priorität
-hoch**, **Mit Maßnahme** und **Verspätet** schränken die Liste ein.
+bleibt. Kreuzen Sie **Alle Artikel** an, um jeden Artikel mit einer
+Prognose zu sehen. Klicken Sie in die Zeile eines Artikels oder wechseln
+Sie mit den Pfeiltasten, um neben der Liste seine **Gebinde & Bedarf** und
+**Planungsdetails** zu sehen. Die Auswahl **Anzeigen** schränkt die Liste
+auf **Priorität hoch**, **Mit Maßnahme** oder **Verspätet** ein; **Alle**
+zeigt wieder jede Zeile. Klicken Sie auf eine Spaltenüberschrift, um nach
+dieser Spalte zu sortieren, und erneut, um die Reihenfolge umzukehren.
 
 Ein *Artikel* fasst alle Gebindegrößen mit derselben Artikelnummer
 zusammen. Jede Größe hat ihren eigenen Bestand und Bedarf. Folgen Sie
