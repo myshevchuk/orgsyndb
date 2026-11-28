@@ -978,7 +978,15 @@
           this._openerInPopover = Boolean(link.closest("[popover]"));
           const pane = link.closest("#lot-detail, #item-detail");
           this._openerPane = pane ? pane.id : "";
-          const openPopover = link.closest("[popover]:popover-open");
+          let openPopover = link.closest("[popover]");
+          try {
+            if (openPopover && !openPopover.matches(":popover-open")) {
+              openPopover = null;
+            }
+          } catch {
+            // A browser without :popover-open has no open popover.
+            openPopover = null;
+          }
           if (openPopover && typeof openPopover.hidePopover === "function") {
             try {
               openPopover.hidePopover();

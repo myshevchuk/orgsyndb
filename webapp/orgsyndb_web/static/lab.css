@@ -1188,7 +1188,10 @@ details.widget[open] > summary.widget__head h3::before {
       grid-template-columns: minmax(0, 1fr);
       grid-template-rows: auto auto;
     }
-    .split__pane > .table-scroll { max-height: 34vh; }
+    .split--outer[data-scripted][data-view="details"] .split__pane > .table-scroll,
+    main:has(#view-details:checked) .split--outer:not([data-scripted]) .split__pane > .table-scroll {
+      max-height: 34vh;
+    }
     .widget-grid {
       grid-template-columns: minmax(0, 1fr);
       grid-auto-rows: auto;
