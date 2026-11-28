@@ -13,7 +13,7 @@ Each of these record pages SHALL begin its own content with a `p.lab-back`, afte
 | a substance, `/lab/registry/substances/<key>/` | `/lab/registry/?selected=<key>` | `Substanzen` (`Substances`) |
 | a notebook, `/lab/journal/<code>/` | `/lab/journal/` | `Laborjournale` (`Lab notebooks`) |
 
-A list's heading is the `h1` of its page in the same language. The notebook list selects nothing, so its link carries no `selected`. When the page was opened from a page of that list in the same tab, activating the link with no modifier key returns there as the browser's back button does, so the list shows the filters, selection and view it had; otherwise, and without scripts, the link opens its address.
+A list's heading is the `h1` of its page in the same language. A task the task list hides by default, one neither planned, running nor needing follow-up, adds `state=all` before `selected`, and a used-up vessel adds `empty=1`, so the list shows the record it selects. The notebook list selects nothing, so its link carries no `selected`. When the page was opened from a page of that list in the same tab, activating the link with no modifier key returns there as the browser's back button does, so the list shows the filters, selection and view it had; otherwise, and without scripts, the link opens its address.
 
 The back link is the page's only link to that list outside the navigation and the section tabs; the notebook page's former plain link to `/lab/journal/` is gone.
 

@@ -951,6 +951,7 @@ function createHarness(options = {}) {
     replaceState(state, title, url) {
       this.state = state;
       this.replaceCalls.push(url);
+      if (url === undefined || url === null) return;
       const parsed = new URL(url, locationObj.href);
       locationObj.pathname = parsed.pathname;
       locationObj.search = parsed.search;
@@ -2332,10 +2333,13 @@ process.stdout.write(JSON.stringify({
         self.assertEqual(result["views"], ["details"] * 4)
         self.assertEqual(result["inner"], "first")
         self.assertEqual(result["triggers"], 0)
+        # Each choice writes the side, even one this page shows already:
+        # another tab may have stored the other.
         self.assertEqual(result["afterWide"], 1)
-        self.assertEqual(result["afterRepeat"], 1)
-        self.assertEqual(len(result["writes"]), 2, result["writes"])
-        for write, side in zip(result["writes"], ("second", "first")):
+        self.assertEqual(result["afterRepeat"], 2)
+        self.assertEqual(len(result["writes"]), 3, result["writes"])
+        for write, side in zip(result["writes"],
+                               ("second", "second", "first")):
             parts = [part.strip() for part in write.split(";")]
             self.assertEqual(parts[0], f"intermediate-list-split={side}")
             self.assertIn("path=/lab/inventory/intermediates/", parts)
@@ -2501,9 +2505,10 @@ class BackLinkScriptTests(SimpleTestCase):
 
     def clicks(self, referrer: str, length: int = 3,
                href: str = "/lab/registry/?selected=acetophenone",
-               **init: object) -> dict:
+               later: bool = False, **init: object) -> dict:
         """What a click on the back link does on a page whose referrer is
-        REFERRER, after LENGTH history entries."""
+        REFERRER, after LENGTH history entries; LATER clicks from a later
+        entry of the same page, such as one a skip link added."""
         return run_node_test(f"""
 const h = createHarness({{
   pathname: "/lab/registry/substances/acetophenone/",
@@ -2516,6 +2521,7 @@ const h = createHarness({{
   `,
 }});
 await h.flush();
+if ({json.dumps(later)}) h.historyObj.state = null;
 const click = (id, init) => {{
   const ev = h.fire(h.doc.getElementById(id), "click",
                     Object.assign({{ button: 0 }}, init));
@@ -2529,6 +2535,15 @@ process.stdout.write(JSON.stringify({{
   plain: click("plain", init), final: h.historyObj.backCalls,
 }}));
 """)
+
+    def test_a_later_entry_of_the_page_follows_the_link(self) -> None:
+        """A skip link adds an entry of the same page; going back from
+        it would stay on the page, so the link is followed."""
+        result = self.clicks(
+            "http://testserver/lab/registry/?q=aceto&selected=acetophenone",
+            later=True)
+        self.assertFalse(result["prevented"])
+        self.assertEqual(result["backs"], 0)
 
     def test_a_click_from_the_list_goes_back_in_history(self) -> None:
         """Scenario: Back to the list as it was."""

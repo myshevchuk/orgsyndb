@@ -17,9 +17,8 @@ radio-styled buttons, each an icon with a visually hidden label:
 größer` (`Details, larger table` / `larger details`). The two Details
 buttons set the view cookie to `details` and the split cookie to
 `first` or `second`; the table button sets the view to `table` and
-leaves the split cookie. Without scripts the three are radio inputs in
-the filter form submitting `view`, as the switch does today, and the
-ratio stays at its cookie. The picker is one tab stop; arrow keys move
+leaves the split cookie. Without scripts the three radios switch the
+view in CSS, as the two did before, and the ratio stays at its cookie. The picker is one tab stop; arrow keys move
 within it (native radio behaviour). The `split#toggle` button and its
 "Größere Fläche" label go. Rejected: one cycling button (next state
 hidden, up to two clicks); two separate toggles (owner chose the
@@ -38,7 +37,9 @@ right.
 `lab.js`: on a plain primary click, when `document.referrer` has this
 origin and the link's path, and `history.length > 1`, it prevents the
 default and calls `history.back()`. Anything else follows the link.
-The notebook page passes no key.
+The notebook page passes no key. The page marks the history entry it
+loaded in (`history.state.backEntry`) and goes back only from that
+entry, so an entry a skip link added is never the one left.
 
 ## Risks
 

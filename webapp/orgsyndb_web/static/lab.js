@@ -762,7 +762,9 @@
           const radio = event.currentTarget;
           if (!radio.checked) return;
           const major = radio.dataset.major || "";
-          if (major && major !== this.element.dataset.major) {
+          if (major) {
+            // Written even when unchanged here: another tab may have
+            // stored the other side.
             this.element.dataset.major = major;
             const split = this.element.dataset.splitCookie;
             if (split) {
@@ -1222,11 +1224,21 @@
   }
 
   // A back link returns through history when this page was opened from
-  // a page of the list it leads to, so the list keeps its state.
+  // a page of the list it leads to, so the list keeps its state. The
+  // page marks the history entry it loaded in; from a later entry of the
+  // same page, such as one a skip link added, the link is followed.
+  if (document.querySelector("a[data-back]")) {
+    try {
+      history.replaceState({ ...(history.state || {}), backEntry: true }, "");
+    } catch {
+      // History state unavailable: the links are followed.
+    }
+  }
   document.addEventListener("click", (event) => {
     if (!plain(event) || !(event.target instanceof Element)) return;
     const link = event.target.closest("a[data-back]");
     if (!link || history.length < 2 || !document.referrer) return;
+    if (!(history.state && history.state.backEntry)) return;
     let from;
     try {
       from = new URL(document.referrer);
