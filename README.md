@@ -2671,14 +2671,21 @@ stays **Endprodukte** on all three.
 - **Lieferungen** (**Deliveries**), `/lab/inventory/deliveries/`, counts
   delivery notes. Use it to find a past delivery or book a new one.
 
-On the lab's main lists, choose **Tabelle** (**Table**) to compare rows
-or **Details** to see the selected record and the table together. The
-default split puts the table above the details and gives the table more
-space. On **Lieferungen** (**Deliveries**), the table and details sit
-side by side by default, with more space for the details. Click
-**Größere Fläche: Tabelle | Details** (**Larger area: table | details**)
-to give the other pane more space. Your browser remembers that choice
-separately for each list.
+On the lab's main lists, three buttons at the right of the toolbar
+choose the layout. Their icons show it, and pointing at one shows its
+name: **Tabelle** (**Table**) shows the table alone to compare rows;
+**Details, Tabelle größer** (**Details, larger table**) and **Details,
+Details größer** (**Details, larger details**) show the selected record
+with the table and give the named side more space. The split puts the
+table above the details, except on **Lieferungen** (**Deliveries**),
+where they sit side by side. **Lieferungen** starts with more space for
+the details, the other lists with more space for the table. Your
+browser remembers the choice separately for each list.
+
+On a record's own page, the link back to its list above the heading
+returns to the list as you left it, with its filters and selection,
+like the browser's back button. Opened from elsewhere, the link opens
+the list with that record selected.
 
 The details pane groups the record's data in titled sections called
 widgets. Its header shows the record's title and a link to its full

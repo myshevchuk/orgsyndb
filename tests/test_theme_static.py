@@ -216,11 +216,23 @@ class ShellAtTheLeftEdgeTests(unittest.TestCase):
         self.assertIn(self.left_margin(css("screen.css")),
                       ("0", "0px", "0rem"))
 
-    def test_the_shell_keeps_its_cap_for_the_other_pages(self) -> None:
+    def test_the_shell_sets_no_width_cap_on_any_page(self) -> None:
+        """base.css caps body at the reading measure, so the screen
+        stylesheet lifts it with ``none`` rather than leaving it."""
         caps = [ps.plain_value(decl.value) for decl in css("screen.css")
                 if not decl.context and decl.prop == "max-width"
                 and "body" in ps.selectors_of(decl)]
-        self.assertEqual(caps, ["96rem"])
+        self.assertEqual(caps, ["none"])
+
+    def test_the_prose_measures_stay(self) -> None:
+        capped = {selector
+                  for decl in css("screen.css") + css("base.css")
+                  if decl.prop == "max-width"
+                  and ps.plain_value(decl.value) not in ("none", "100%")
+                  for selector in ps.selectors_of(decl)}
+        self.assertTrue(
+            any(".lede" in selector for selector in capped),
+            "no measure is left on .lede")
 
 
 class RowDetailsTests(unittest.TestCase):

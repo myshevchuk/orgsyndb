@@ -1,7 +1,7 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n lab inventory %}
 {% block title %}{{ substance.shown_name }}{% endblock %}
 {% block main %}
-{% translate "Substances" as back %}{% include "orgsyndb_web/back.html" with url="/lab/registry/" text=back %}
+{% translate "Substances" as back %}{% include "orgsyndb_web/back.html" with url="/lab/registry/" key=substance.key text=back %}
 <div class="substance-head">
 <div class="substance-head__title">
 <h1>{{ substance.shown_name }}</h1>

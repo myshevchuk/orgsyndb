@@ -745,18 +745,25 @@ form.lab-toolbar input[type="search"] { width: 17rem; }
 }
 .view-switch label { position: relative; display: flex; cursor: pointer; }
 .view-switch label + label { border-left: 1px solid var(--border); }
-.view-switch span {
-  display: inline-flex;
+.view-switch label {
   align-items: center;
-  padding: 0 0.62rem;
-  font-size: 0.78125rem;
-  line-height: 1;
-  white-space: nowrap;
+  padding: 0 0.45rem;
   color: var(--fg);
   background: var(--bg);
 }
-.view-switch label:hover span { background: var(--surface); }
-.view-switch label:has(:checked) span { color: var(--bg); background: var(--link); font-weight: 600; }
+.view-switch label:hover { background: var(--surface); }
+.view-switch label:has(:checked) { color: var(--bg); background: var(--link); }
+.layout-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+}
+/* The icons show the list's own split: stacked or side by side. */
+.layout-icon__cols { display: none; }
+main:has(.split--outer.split--columns) .layout-icon__rows { display: none; }
+main:has(.split--outer.split--columns) .layout-icon__cols { display: inline; }
 .view-switch label:has(:focus-visible) { outline: 2px solid var(--focus); outline-offset: -2px; }
 .heat-scale {
   display: inline-flex;
@@ -886,7 +893,6 @@ form.lab-toolbar input[type="search"] { width: 17rem; }
 .stock-menu a[aria-current] .swatch-all::before { content: "✓"; content: "✓" / ""; }
 
 /* Details panes: hidden outside the details view and off paper. */
-.pane-toggle { display: none; }
 .item-detail {
   display: flex;
   flex-direction: column;
@@ -1102,35 +1108,17 @@ details.widget[open] > summary.widget__head h3::before {
   }
 
   .split.split--outer[data-scripted][data-view="table"],
-  main:not(:has(#view-details:checked)) .split.split--outer:not([data-scripted]) {
+  main:not(:has(input[name="view"][value="details"]:checked)) .split.split--outer:not([data-scripted]) {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
   }
   .split.split--outer[data-scripted][data-view="table"] > .split__pane:last-child,
-  main:not(:has(#view-details:checked)) .split.split--outer:not([data-scripted]) > .split__pane:last-child {
+  main:not(:has(input[name="view"][value="details"]:checked)) .split.split--outer:not([data-scripted]) > .split__pane:last-child {
     display: none;
   }
   .split.split--outer[data-scripted][data-view="details"] #item-detail,
-  main:has(#view-details:checked) .split.split--outer:not([data-scripted]) #item-detail {
+  main:has(input[name="view"][value="details"]:checked) .split.split--outer:not([data-scripted]) #item-detail {
     display: flex;
-  }
-
-  main:has(.split--outer[data-scripted][data-view="details"]) .pane-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    cursor: pointer;
-    background: var(--surface);
-    font-size: 0.78125rem;
-    white-space: nowrap;
-  }
-  .pane-toggle__label,
-  .pane-toggle__sep,
-  .pane-toggle__choice { color: var(--muted); }
-  main:has(.split--outer[data-major="first"]) .pane-toggle__first,
-  main:has(.split--outer[data-major="second"]) .pane-toggle__second {
-    color: var(--fg);
-    font-weight: 600;
   }
 
   .widget-grid {
@@ -1189,7 +1177,7 @@ details.widget[open] > summary.widget__head h3::before {
       grid-template-rows: auto auto;
     }
     .split--outer[data-scripted][data-view="details"] .split__pane > .table-scroll,
-    main:has(#view-details:checked) .split--outer:not([data-scripted]) .split__pane > .table-scroll {
+    main:has(input[name="view"][value="details"]:checked) .split--outer:not([data-scripted]) .split__pane > .table-scroll {
       max-height: 34vh;
     }
     .widget-grid {

@@ -44,6 +44,19 @@
 {% if user.is_authenticated %}<c-slot name="menu"><a href="/lab/registry/substances/{{ substance.key }}/edit/">{% translate "Edit" %}</a></c-slot>{% endif %}
 </c-pane-head>
 <c-widget-grid columns="2">
+<c-widget :title="compound_title" heading="h3" flush>
+{% if substance.molfile %}<figure class="structure"><img src="/lab/registry/substances/{{ substance.key }}/structure.svg" alt="{% blocktranslate with name=substance.shown_name %}Structure of {{ name }}{% endblocktranslate %}"></figure>
+{% endif %}<table class="aux-table kv-table"><tbody>
+<tr><th scope="row">{% translate "Key" %}</th><td>{{ substance.key }}</td></tr>
+<tr><th scope="row">{% translate "Short name" %}</th><td>{{ substance.short_name|default:"–" }}</td></tr>
+<tr><th scope="row">{% translate "Inventory group" %}</th><td>{% if substance.group %}{{ substance.group.shown_label }}{% else %}–{% endif %}</td></tr>
+<tr><th scope="row">{% translate "Chemical classes" %}</th><td>{% for term in detail_classes %}{{ term.shown_label }}{% if not forloop.last %}, {% endif %}{% empty %}–{% endfor %}</td></tr>
+<tr><th scope="row">{% translate "Formula" %}</th><td>{{ substance.formula|default:"–" }}</td></tr>
+<tr><th scope="row">{% translate "Molar mass" %}</th><td>{% if substance.mw is not None %}{{ substance.mw|decimal }} g/mol{% else %}–{% endif %}</td></tr>
+<tr><th scope="row">{% translate "CAS number" %}</th><td>{{ substance.cas|default:"–" }}</td></tr>
+<tr><th scope="row">{% translate "Article no." %}</th><td>{{ substance.article_number|default:"–" }}</td></tr>
+</tbody></table>
+</c-widget>
 <div class="widget-grid__col">
 <c-widget :title="containers_title" heading="h3" flush>
 {% if detail_items %}<table id="substance-detail-items" class="aux-table" data-sortable data-controller="sortable-table">
@@ -93,19 +106,6 @@
 {% else %}<p class="lab-empty">{% translate "None" context "registry" %}</p>
 {% endif %}</c-widget>
 </div>
-<c-widget :title="compound_title" heading="h3" flush>
-{% if substance.molfile %}<figure class="structure"><img src="/lab/registry/substances/{{ substance.key }}/structure.svg" alt="{% blocktranslate with name=substance.shown_name %}Structure of {{ name }}{% endblocktranslate %}"></figure>
-{% endif %}<table class="aux-table kv-table"><tbody>
-<tr><th scope="row">{% translate "Key" %}</th><td>{{ substance.key }}</td></tr>
-<tr><th scope="row">{% translate "Short name" %}</th><td>{{ substance.short_name|default:"–" }}</td></tr>
-<tr><th scope="row">{% translate "Inventory group" %}</th><td>{% if substance.group %}{{ substance.group.shown_label }}{% else %}–{% endif %}</td></tr>
-<tr><th scope="row">{% translate "Chemical classes" %}</th><td>{% for term in detail_classes %}{{ term.shown_label }}{% if not forloop.last %}, {% endif %}{% empty %}–{% endfor %}</td></tr>
-<tr><th scope="row">{% translate "Formula" %}</th><td>{{ substance.formula|default:"–" }}</td></tr>
-<tr><th scope="row">{% translate "Molar mass" %}</th><td>{% if substance.mw is not None %}{{ substance.mw|decimal }} g/mol{% else %}–{% endif %}</td></tr>
-<tr><th scope="row">{% translate "CAS number" %}</th><td>{{ substance.cas|default:"–" }}</td></tr>
-<tr><th scope="row">{% translate "Article no." %}</th><td>{{ substance.article_number|default:"–" }}</td></tr>
-</tbody></table>
-</c-widget>
 </c-widget-grid>
 </aside>
 {% endwith %}{% else %}<aside id="item-detail" class="item-detail" data-refresh>

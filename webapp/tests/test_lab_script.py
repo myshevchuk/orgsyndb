@@ -1018,10 +1018,11 @@ class ScriptSourceTests(TestCase):
 
     def test_it_registers_the_controllers_that_stay(self) -> None:
         for name in ("popover-anchor", "batch-narrow", "sortable-table",
-                     "master-detail", "split", "dialog"):
+                     "master-detail", "dialog"):
             with self.subTest(name=name):
                 self.assertRegex(
                     self.text, rf"register\(\s*[\"']{name}[\"']")
+        self.assertNotRegex(self.text, r"register\(\s*[\"']split[\"']")
         self.assertFalse("split-list" in self.text,
                          "lab.js still names split-list")
 

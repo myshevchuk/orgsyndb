@@ -49,7 +49,7 @@ DIALOG_LINKS = ("Abfüllen", "Bestand korrigieren", "Verbrauch nachtragen",
 # user typed in, the view switch and the field that names the selected
 # item.
 KEPT = ({"name": "q"}, {"id": "view-table"}, {"id": "view-details"},
-        {"name": "selected"})
+        {"id": "view-details-wide"}, {"name": "selected"})
 
 
 def correction(**over: str) -> dict[str, str]:

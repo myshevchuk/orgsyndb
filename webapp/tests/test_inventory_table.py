@@ -838,8 +838,9 @@ class ViewTests(TableCase):
 
     def radios(self, root) -> dict[str, Any]:
         found = root.find_all("input", type="radio", name="view")
-        self.assertEqual(sorted(r.get("id") for r in found),
-                         ["view-details", "view-table"])
+        self.assertEqual(
+            sorted(r.get("id") for r in found),
+            ["view-details", "view-details-wide", "view-table"])
         return {r.get("id"): r for r in found}
 
     def label_of(self, root, control) -> str:
@@ -851,20 +852,48 @@ class ViewTests(TableCase):
         self.assertEqual(len(named), 1)
         return named[0].text()
 
-    def test_the_switch_is_a_fieldset_of_two_radios(self) -> None:
+    def test_the_switch_is_a_fieldset_of_three_radios(self) -> None:
+        """Layout picker: the table, and the details with either side
+        larger, each an icon with a hidden label."""
         self.item("V-1")
         root = self.listing()
         radios = self.radios(root)
-        table_radio, details_radio = radios["view-table"], \
-            radios["view-details"]
-        fieldset = table_radio.closest("fieldset")
+        fieldset = radios["view-table"].closest("fieldset")
         self.assertIsNotNone(fieldset)
-        self.assertIs(details_radio.closest("fieldset"), fieldset)
+        self.assertIn("view-switch", fieldset.classes)
+        self.assertIn("layout-picker", fieldset.classes)
+        self.assertEqual(fieldset.find_all("input"), list(radios.values()))
         self.assertEqual(fieldset.find("legend").text(), "Ansicht")
-        self.assertEqual(self.label_of(root, table_radio), "Tabelle")
-        self.assertEqual(self.label_of(root, details_radio), "Details")
+        wanted = {
+            "view-table": ("table", None, "Tabelle"),
+            "view-details": ("details", "first", "Details, Tabelle größer"),
+            "view-details-wide": ("details", "second",
+                                  "Details, Details größer"),
+        }
+        for key, (value, major, label) in wanted.items():
+            with self.subTest(radio=key):
+                radio = radios[key]
+                self.assertIs(radio.closest("fieldset"), fieldset)
+                self.assertEqual(radio.get("value"), value)
+                self.assertEqual(radio.get("data-major"), major)
+                self.assertEqual(self.label_of(root, radio), label)
+                icons = [svg for svg in radio.closest("label").find_all(
+                    "svg") if "layout-icon" in svg.classes]
+                self.assertEqual(len(icons), 1)
+                hidden = radio.closest("label").find(
+                    "span", cls="visually-hidden")
+                self.assertIsNotNone(hidden)
+                self.assertEqual(hidden.text(), label)
         self.assertIsNotNone(fieldset.closest("main"))
         self.assertIsNotNone(outer_split(root))
+
+    def test_the_larger_area_toggle_is_gone(self) -> None:
+        self.item("V-1")
+        root = self.listing()
+        self.assertEqual(root.find_all("button", cls="pane-toggle"), [])
+        self.assertNotIn("Größere Fläche", root.text())
+        self.assertNotIn("split#toggle", " ".join(
+            e.get("data-lab-action") or "" for e in root.walk()))
 
     def test_the_switch_belongs_to_no_form(self) -> None:
         self.item("V-1")
@@ -885,10 +914,41 @@ class ViewTests(TableCase):
                 root = self.listing()
                 radios = self.radios(root)
                 self.assertEqual(
-                    [name for name, radio in radios.items()
-                     if "checked" in radio.attrs], [f"view-{view}"])
+                    [radio.get("value") for radio in radios.values()
+                     if "checked" in radio.attrs], [view])
                 self.assertEqual(
                     must_outer_split(root).get("data-view"), view)
+
+    def test_the_details_radio_checked_follows_the_split_cookie(
+            self) -> None:
+        """The two details buttons stand for the two sides: the one
+        for the larger side, as the split cookie has it, is checked."""
+        self.item("V-1")
+        self.remember("details")
+        for cookie, want in ((None, "view-details"),
+                             ("first", "view-details"),
+                             ("second", "view-details-wide"),
+                             ("other", "view-details")):
+            with self.subTest(split=cookie):
+                if cookie is None:
+                    self.client.cookies.pop("item-list-split", None)
+                else:
+                    self.client.cookies["item-list-split"] = cookie
+                root = self.listing()
+                self.assertEqual(
+                    [name for name, radio in self.radios(root).items()
+                     if "checked" in radio.attrs], [want])
+                if cookie == "second":
+                    self.assertEqual(
+                        must_outer_split(root).get("data-major"),
+                        "second")
+        self.client.cookies.pop("item-list-split", None)
+        self.remember("table")
+        self.client.cookies["item-list-split"] = "second"
+        root = self.listing()
+        self.assertEqual(
+            [name for name, radio in self.radios(root).items()
+             if "checked" in radio.attrs], ["view-table"])
 
     def test_the_cookie_does_not_change_the_rows(self) -> None:
         self.item("V-1")
@@ -933,8 +993,9 @@ class ViewTests(TableCase):
                 root = self.listing(query)
                 self.assertEqual(
                     must_outer_split(root).get("data-view"), "table")
-                self.assertNotIn("checked",
-                                 self.radios(root)["view-details"].attrs)
+                for radio in self.radios(root).values():
+                    self.assertEqual("checked" in radio.attrs,
+                                     radio.get("value") == "table")
                 root = self.listing(query, view="details")
                 self.assertEqual(
                     must_outer_split(root).get("data-view"), "details")
@@ -1260,7 +1321,8 @@ class StylesheetTests(SimpleTestCase):
         parts = [" ".join(part.split())
                  for _, selector, _ in located(self.text)
                  for part in selector.split(",")
-                 if "[data-view" in part or "#view-details:checked" in part]
+                 if "[data-view" in part
+                 or "[value=\"details\"]:checked" in part]
         self.assertTrue(parts)
         named = [part for part in parts if re.search(r"\.split(?![\w])",
                                                      part)]
@@ -1339,7 +1401,7 @@ class StylesheetTests(SimpleTestCase):
     def test_the_radio_rules_are_for_the_screen_alone(self) -> None:
         spans = screen_blocks(blanked(self.text))
         found = [start for start, selector, _ in located(self.text)
-                 if "#view-details" in selector]
+                 if "[value=\"details\"]:checked" in selector]
         self.assertTrue(found)
         for place in found:
             with self.subTest(at=place):
@@ -1355,7 +1417,7 @@ class StylesheetTests(SimpleTestCase):
             re.search(r"\[data-view=[\"']?details[\"']?\]", part)
             and "[data-scripted]" in part for part, _ in shown), shown)
         self.assertTrue(any(
-            "#view-details:checked" in part
+            "input[name=\"view\"][value=\"details\"]:checked" in part
             and ":not([data-scripted])" in part for part, _ in shown),
             shown)
 
