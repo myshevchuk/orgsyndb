@@ -11,7 +11,8 @@
 <c-filter-search id="filter-q" :value="q" :label="search_label" :placeholder="search_placeholder" autocomplete="off" />
 <c-slot name="end">{% include "inventory/view_switch.html" %}</c-slot>
 </c-filter-bar>
-<c-split-layout :view="view" cookie="batch-list-view">
+<c-split dir="rows" :major="major" cookie="batch-list-split" outer :view="view" view_cookie="batch-list-view" level="outer" rows="item-rows" pane="item-detail" param="selected">
+<c-slot name="first"><div class="table-scroll table-sticky">
 <table class="main-table">
 <thead id="item-head" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#batch-count:morph,#item-head:morph,#item-detail:morph,#filters:morph" hx-push-url="true" hx-sync="#main:replace">
 <tr>{% for col in headers %}<c-sort-th :label="col.label" :href="col.href" :classes="col.classes" :aria_sort="col.aria_sort" hx-get="{{ col.href }}" />{% endfor %}</tr>
@@ -29,20 +30,15 @@
 </tr>
 {% endfor %}</tbody>
 </table>
-<c-slot name="detail">{% partialdef detail inline %}{% if detail_batch %}{% with batch=detail_batch %}<aside id="item-detail" class="item-detail" data-refresh data-item="{{ batch.pk }}" aria-labelledby="item-detail-title">
-<header class="detail-head">
-<h2 id="item-detail-title"><a href="/lab/inventory/batches/{{ batch.pk }}/">{{ batch }}</a></h2>
-<p>{% substance batch.substance %}{% if batch.article_number %} · {{ batch.article_number }}{% endif %}</p>
-</header>
-<dl class="detail-location">
-<dt>{% translate "Source" %}</dt><dd>{% include "inventory/batch_source.html" %}</dd>
-{% if batch.source == "made" %}<dt>{% translate "Lab notebook" %}</dt><dd>{% if batch.journal_entry %}<a href="/lab/journal/{{ batch.journal_entry.notebook.code }}/">{{ batch.journal_entry }}</a>{% else %}–{% endif %}</dd>
-<dt>{% translate "Yield" %}</dt><dd>{% if batch.yield_amount is not None %}{{ batch|in_yield_unit }}{% else %}–{% endif %}</dd>
-{% endif %}<dt>{% translate "Date" %}</dt><dd>{% if batch.date %}{{ batch.date }}{% else %}–{% endif %}</dd>
-</dl>
-<p class="detail-links"><a href="/lab/inventory/batches/{{ batch.pk }}/">{% translate "Open batch page" %}</a></p>
-{% if user.is_authenticated %}<p class="lab-actions"><a href="/lab/inventory/batches/{{ batch.pk }}/edit/">{% translate "Edit" %}</a> · <a href="/lab/inventory/batches/{{ batch.pk }}/vessels/new/">{% translate "New vessel" %}</a></p>
-{% endif %}<h3>{% translate "Open vessels" %}</h3>
+</div></c-slot>
+<c-slot name="second">{% partialdef detail inline %}{% if detail_batch %}{% with batch=detail_batch %}{% translate "Open batch page" as open_page %}{% translate "Open vessels" as vessels_title %}{% translate "Batch details" as details_title %}<aside id="item-detail" class="item-detail" data-refresh data-item="{{ batch.pk }}" aria-labelledby="item-detail-title">
+<c-pane-head :title="batch" href="/lab/inventory/batches/{{ batch.pk }}/" :page_label="open_page">
+<c-slot name="meta">{% substance batch.substance %}{% if batch.article_number %} · {{ batch.article_number }}{% endif %}</c-slot>
+{% if user.is_authenticated %}<c-slot name="primary"><a class="pane-head__btn" href="/lab/inventory/batches/{{ batch.pk }}/vessels/new/">{% translate "New vessel" %}</a></c-slot>
+<c-slot name="menu"><a href="/lab/inventory/batches/{{ batch.pk }}/edit/">{% translate "Edit" %}</a></c-slot>{% endif %}
+</c-pane-head>
+<c-widget-grid columns="2">
+<c-widget :title="vessels_title" heading="h3" flush>
 {% if detail_vessels %}<table id="batch-detail-vessels" class="aux-table" data-sortable data-controller="sortable-table">
 <thead><tr>
 <th scope="col">{% translate "Vessel" %}</th>
@@ -60,10 +56,20 @@
 {% endfor %}</tbody>
 </table>
 {% else %}<p class="lab-empty">{% translate "None" %}</p>
-{% endif %}</aside>
+{% endif %}</c-widget>
+<c-widget :title="details_title" heading="h3" flush>
+<table class="aux-table kv-table"><tbody>
+<tr><th scope="row">{% translate "Source" %}</th><td>{% include "inventory/batch_source.html" %}</td></tr>
+{% if batch.source == "made" %}<tr><th scope="row">{% translate "Lab notebook" %}</th><td>{% if batch.journal_entry %}<a href="/lab/journal/{{ batch.journal_entry.notebook.code }}/">{{ batch.journal_entry }}</a>{% else %}–{% endif %}</td></tr>
+<tr><th scope="row">{% translate "Yield" %}</th><td>{% if batch.yield_amount is not None %}{{ batch|in_yield_unit }}{% else %}–{% endif %}</td></tr>
+{% endif %}<tr><th scope="row">{% translate "Date" %}</th><td>{% if batch.date %}{{ batch.date }}{% else %}–{% endif %}</td></tr>
+</tbody></table>
+</c-widget>
+</c-widget-grid>
+</aside>
 {% endwith %}{% else %}<aside id="item-detail" class="item-detail" data-refresh>
 <p class="lab-empty">{% translate "No batch is chosen." %}</p>
 </aside>
 {% endif %}{% endpartialdef %}</c-slot>
-</c-split-layout>
+</c-split>
 {% endblock %}

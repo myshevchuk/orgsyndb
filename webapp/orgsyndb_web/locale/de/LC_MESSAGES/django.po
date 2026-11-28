@@ -78,3 +78,6 @@ msgstr "Stufe"
 
 msgid "Done"
 msgstr "Erledigt"
+
+msgid "Actions"
+msgstr "Aktionen"

@@ -6,11 +6,12 @@
 // DOM. In a browser document, installs the no-eval htmx morph extension,
 // print-time collapsible widget fallback, and live-list document guards,
 // then starts Stimulus with actionAttribute "data-lab-action" and
-// registers five controllers:
+// registers six controllers:
 //   - popover-anchor: CSS Anchor Positioning with OrgSynLab.place fallback
 //   - batch-narrow: substance-scoped optgroup narrowing on [data-batch-for]
 //   - sortable-table: client-side sorting on table[data-sortable]
-//   - split-list: master-detail selection and stepping on .main-table
+//   - master-detail: nestable row selection, stepping, and view switching
+//   - split: golden-ratio major-side toggle persisted per list
 //   - dialog: shell modal lifecycle and in-place [data-refresh] morphing
 (() => {
   "use strict";
@@ -429,35 +430,53 @@
     }
   };
 
-  const replaceSelected = (id) => {
+  const replaceParam = (name, value) => {
     try {
       history.replaceState(
         history.state, "",
-        `${location.pathname}${paramSearch(location.search, "selected",
-                                           id === "" ? null : id)}`
+        `${location.pathname}${paramSearch(location.search, name,
+                                           value === "" ? null : value)}`
         + location.hash);
     } catch {
       // The address cannot change: the page shows the selection regardless.
     }
   };
 
+  const setHiddenParam = (name, value) => {
+    const host = document.getElementById("filter-selected")
+      || document.getElementById("filters");
+    if (!host) return;
+    let field = host.querySelector(`input[name=${name}]`);
+    if (value === "" || value === null || value === undefined) {
+      if (field) field.remove();
+    } else {
+      if (!field) {
+        field = document.createElement("input");
+        field.type = "hidden";
+        field.name = name;
+        host.append(field);
+      }
+      field.value = value;
+    }
+  };
+
   const stepIndex = (rows, shown, from, key) =>
     planStep(shown, rows.indexOf(from), key);
 
-  const HTMX_ROWS = ".main-table tbody tr[data-item]";
   const OWN_LINKS = ".main-table thead a, #stock-entries a, #list-summary a";
 
-  const paneItem = () => {
-    const pane = document.getElementById("item-detail");
+  const paneItemOf = (paneId) => {
+    const pane = document.getElementById(paneId);
     return pane && pane.dataset.item ? pane.dataset.item : "";
   };
 
-  const relink = (link, id) => {
+  const relinkParam = (link, name, value) => {
     const href = link.getAttribute("href");
+    if (!href) return;
     const at = href.indexOf("?");
     const next = (at < 0 ? href : href.slice(0, at))
-      + paramSearch(at < 0 ? "" : href.slice(at), "selected",
-                    id === "" ? null : id);
+      + paramSearch(at < 0 ? "" : href.slice(at), name,
+                    value === "" ? null : value);
     link.setAttribute("href", next);
     if (link.hasAttribute("hx-get")) {
       link.setAttribute("hx-get", next);
@@ -662,97 +681,181 @@
     }
   }
 
-  // Master-detail split list on .item-layout with .main-table rows.
-  class SplitListController extends Stimulus.Controller {
-    _htmxRows() {
-      return [...document.querySelectorAll(HTMX_ROWS)];
+  // Swaps a split's golden-ratio major side and persists it per list.
+  class SplitController extends Stimulus.Controller {
+    static values = { cookie: String };
+
+    toggle(event) {
+      if (!plain(event) || !(event.target instanceof Element)) return;
+      const button = event.target.closest("button[data-lab-action]");
+      const action = button && button.getAttribute("data-lab-action");
+      if (!action || !action.split(/\s+/).some(
+        (descriptor) => descriptor.endsWith("->split#toggle")
+      )) return;
+      const list = button.closest("main, body");
+      if (!list || list.querySelector(".split--outer") !== this.element) {
+        return;
+      }
+
+      const next = this.element.dataset.major === "second"
+        ? "first" : "second";
+      this.element.dataset.major = next;
+      button.setAttribute("aria-pressed", String(next === "second"));
+      if (this.hasCookieValue && this.cookieValue) {
+        document.cookie = `${this.cookieValue}=${next};`
+          + ` path=${location.pathname}; max-age=31536000;`
+          + " SameSite=Lax";
+      }
     }
 
-    _follow(id) {
-      const rows = this._htmxRows();
+    connect() {
+      // The toolbar is outside the split's Stimulus scope.
+      this._onDocClick = this.toggle.bind(this);
+      document.addEventListener("click", this._onDocClick);
+    }
+
+    disconnect() {
+      document.removeEventListener("click", this._onDocClick);
+    }
+  }
+
+  // Nestable master-detail controller binding one tbody's rows to one
+  // details pane and one URL parameter. The outer level also owns the
+  // page's view switch, stock-menu dismissal, and ticked item boxes.
+  class MasterDetailController extends Stimulus.Controller {
+    static values = {
+      level: String,
+      rows: String,
+      pane: String,
+      param: String,
+    };
+
+    _isOuter() {
+      return this.levelValue !== "inner";
+    }
+
+    _rowSelector() {
+      return `#${this.rowsValue} > tr[data-item]`;
+    }
+
+    _rows() {
+      return [...this.element.querySelectorAll(this._rowSelector())];
+    }
+
+    _paneItem() {
+      return paneItemOf(this.paneValue);
+    }
+
+    _syncRows(id) {
+      const rows = this._rows();
+      makeFocusable(rows);
       const active = id !== ""
         ? rows.find((row) => row.dataset.item === id) || null
         : null;
       markCurrent(rows, active);
-      replaceSelected(id);
-      const selectedHost = document.getElementById("filter-selected")
-        || document.getElementById("filters");
-      if (selectedHost) {
-        let field = selectedHost.querySelector("input[name=selected]");
-        if (id === "") {
-          if (field) field.remove();
-        } else {
-          if (!field) {
-            field = document.createElement("input");
-            field.type = "hidden";
-            field.name = "selected";
-            selectedHost.append(field);
-          }
-          field.value = id;
-        }
-      }
+    }
+
+    _syncParam(name, value) {
+      replaceParam(name, value);
+      setHiddenParam(name, value);
       for (const link of document.querySelectorAll(OWN_LINKS)) {
-        relink(link, id);
+        relinkParam(link, name, value);
+      }
+    }
+
+    _follow(id) {
+      this._syncRows(id);
+      this._syncParam(this.paramValue, id);
+      if (this._isOuter()) {
+        const lot = paneItemOf("lot-detail");
+        if (lot || document.querySelector("#filter-selected input[name=lot]")
+            || new URLSearchParams(location.search).has("lot")) {
+          this._syncParam("lot", lot);
+        }
       }
     }
 
     restoreAfterRefresh(ticked) {
-      for (const box of document.querySelectorAll("input[name=item]")) {
-        box.checked = ticked.has(box.value);
+      if (this._isOuter()) {
+        for (const box of document.querySelectorAll("input[name=item]")) {
+          box.checked = ticked.has(box.value);
+        }
       }
-      makeFocusable(this._htmxRows());
-      this._follow(paneItem());
+      this._follow(this._paneItem());
     }
 
     connect() {
-      this.element.dataset.scripted = "";
-      this._radios = [...document.querySelectorAll("input[name=view]")];
-      const checked = this._radios.find((radio) => radio.checked);
-      if (checked) this.element.dataset.view = checked.value;
-      makeFocusable(this._htmxRows());
-      this._wanted = this.element.dataset.view;
+      makeFocusable(this._rows());
+      this._radios = null;
       this._liveTicked = null;
 
-      this._onRadioChange = (event) => {
-        const radio = event.currentTarget;
-        if (!radio.checked || this._wanted === radio.value) return;
-        this._wanted = radio.value;
-        const cookie = this.element.dataset.cookie || "item-list-view";
-        document.cookie = `${cookie}=${this._wanted};`
-          + ` path=${location.pathname}; max-age=31536000;`
-          + " SameSite=Lax";
-        const show = () => {
-          this.element.dataset.view = this._wanted;
+      if (this._isOuter()) {
+        this.element.dataset.scripted = "";
+        this._radios = [...document.querySelectorAll("input[name=view]")];
+        const checked = this._radios.find((radio) => radio.checked);
+        if (checked) this.element.dataset.view = checked.value;
+        this._wanted = this.element.dataset.view;
+
+        this._onRadioChange = (event) => {
+          const radio = event.currentTarget;
+          if (!radio.checked || this._wanted === radio.value) return;
+          this._wanted = radio.value;
+          const cookie = this.element.dataset.cookie || "item-list-view";
+          document.cookie = `${cookie}=${this._wanted};`
+            + ` path=${location.pathname}; max-age=31536000;`
+            + " SameSite=Lax";
+          const show = () => {
+            this.element.dataset.view = this._wanted;
+          };
+          if (document.startViewTransition
+              && !window.matchMedia("(prefers-reduced-motion: reduce)")
+                .matches) {
+            document.startViewTransition(show);
+          } else {
+            show();
+          }
         };
-        if (document.startViewTransition
-            && !window.matchMedia("(prefers-reduced-motion: reduce)")
-              .matches) {
-          document.startViewTransition(show);
-        } else {
-          show();
+        for (const radio of this._radios) {
+          radio.addEventListener("change", this._onRadioChange);
         }
-      };
-      for (const radio of this._radios) {
-        radio.addEventListener("change", this._onRadioChange);
+
+        this._onConfigRequest = (event) => {
+          const elt = event.detail && event.detail.elt;
+          if (elt instanceof Element && elt.matches(OWN_LINKS)) {
+            const next = elt.getAttribute("hx-get");
+            if (next) event.detail.path = next;
+          }
+        };
+        this._onBeforeSwap = (event) => {
+          if (event.detail && event.detail.target
+              && event.detail.target.id === this.rowsValue) {
+            this._liveTicked = new Set(
+              [...document.querySelectorAll("input[name=item]:checked")]
+                .map((box) => box.value));
+          }
+        };
+        document.addEventListener("htmx:configRequest", this._onConfigRequest);
+        document.addEventListener("htmx:beforeSwap", this._onBeforeSwap);
       }
 
       this._onBeforeRequest = (event) => {
-        const pane = document.getElementById("item-detail");
+        const pane = document.getElementById(this.paneValue);
         if (pane && event.target && event.target.matches
-            && event.target.matches(HTMX_ROWS)) {
+            && event.target.matches(this._rowSelector())) {
           pane.inert = true;
         }
       };
       this._onAfterRequest = (event) => {
-        const pane = document.getElementById("item-detail");
+        const pane = document.getElementById(this.paneValue);
         if (pane && event.target && event.target.matches
-            && event.target.matches(HTMX_ROWS)) {
+            && event.target.matches(this._rowSelector())) {
           pane.inert = false;
         }
       };
-      this._onHtmxClick = (event) => {
+      this._onClick = (event) => {
         if (!(event.target instanceof Element)) return;
-        if (event.target.closest("#stock-menu a[hx-get]")) {
+        if (this._isOuter()
+            && event.target.closest("#stock-menu a[hx-get]")) {
           const menu = document.getElementById("stock-menu");
           if (menu && typeof menu.hidePopover === "function") {
             try {
@@ -764,27 +867,28 @@
           return;
         }
         if (typeof htmx === "undefined" || !plain(event)) return;
-        const row = event.target.closest(HTMX_ROWS);
-        if (!row || event.target.closest(
+        const row = event.target.closest(this._rowSelector());
+        if (!row || !this.element.contains(row) || event.target.closest(
           "a, button, label, input, select, textarea")) {
           return;
         }
+        row.focus({ preventScroll: true });
         htmx.trigger(row, "item-select");
       };
-      this._onHtmxKeydown = (event) => {
+      this._onKeydown = (event) => {
         if (typeof htmx === "undefined") return;
         if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
         if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
           return;
         }
-        if (!(event.target instanceof Element)
-            || !event.target.closest(".main-table")) {
-          return;
-        }
-        const rows = this._htmxRows();
+        if (!(event.target instanceof Element)) return;
+        const body = document.getElementById(this.rowsValue);
+        const table = body && body.closest("table");
+        if (!table || event.target.closest("table") !== table) return;
+        const rows = this._rows();
         const marked = rows.find(
           (row) => row.getAttribute("aria-current") === "true") || null;
-        const from = event.target.closest(HTMX_ROWS) || marked;
+        const from = event.target.closest(this._rowSelector()) || marked;
         if (!from) return;
         event.preventDefault();
         const shown = rows.map((row) => !row.hidden);
@@ -794,46 +898,35 @@
         rows[next].focus();
         htmx.trigger(rows[next], "item-select");
       };
-      this._onConfigRequest = (event) => {
-        const elt = event.detail && event.detail.elt;
-        if (elt instanceof Element && elt.matches(OWN_LINKS)) {
-          const next = elt.getAttribute("hx-get");
-          if (next) event.detail.path = next;
-        }
-      };
-      this._onBeforeSwap = (event) => {
-        if (event.detail && event.detail.target
-            && event.detail.target.id === "item-rows") {
-          this._liveTicked = new Set(
-            [...document.querySelectorAll("input[name=item]:checked")]
-              .map((box) => box.value));
-        }
-      };
       this._onAfterSwap = (event) => {
-        if (event.detail && event.detail.target
-            && event.detail.target.id === "item-rows") {
-          if (this._liveTicked) {
+        const target = event.detail && event.detail.target;
+        if (target && target.id === this.rowsValue) {
+          if (this._isOuter() && this._liveTicked) {
             for (const box of document.querySelectorAll("input[name=item]")) {
               box.checked = this._liveTicked.has(box.value);
             }
             this._liveTicked = null;
           }
-          makeFocusable(this._htmxRows());
+          makeFocusable(this._rows());
           return;
         }
         const row = event.detail && event.detail.requestConfig
           && event.detail.requestConfig.elt;
-        if (!row || !row.matches || !row.matches(HTMX_ROWS)) return;
-        this._follow(paneItem());
+        if (row && row.matches && row.matches(this._rowSelector())) {
+          this._follow(this._paneItem());
+          return;
+        }
+        makeFocusable(this._rows());
       };
+      this._onRefocusable = () => this._syncRows(this._paneItem());
 
       document.addEventListener("htmx:beforeRequest", this._onBeforeRequest);
       document.addEventListener("htmx:afterRequest", this._onAfterRequest);
-      document.addEventListener("click", this._onHtmxClick);
-      document.addEventListener("keydown", this._onHtmxKeydown);
-      document.addEventListener("htmx:configRequest", this._onConfigRequest);
-      document.addEventListener("htmx:beforeSwap", this._onBeforeSwap);
+      document.addEventListener("click", this._onClick);
+      document.addEventListener("keydown", this._onKeydown);
       document.addEventListener("htmx:afterSwap", this._onAfterSwap);
+      document.addEventListener("htmx:oobAfterSwap", this._onRefocusable);
+      document.addEventListener("htmx:afterSettle", this._onRefocusable);
     }
 
     disconnect() {
@@ -842,15 +935,21 @@
           radio.removeEventListener("change", this._onRadioChange);
         }
       }
+      if (this._onConfigRequest) {
+        document.removeEventListener(
+          "htmx:configRequest", this._onConfigRequest);
+      }
+      if (this._onBeforeSwap) {
+        document.removeEventListener("htmx:beforeSwap", this._onBeforeSwap);
+      }
       document.removeEventListener(
         "htmx:beforeRequest", this._onBeforeRequest);
       document.removeEventListener("htmx:afterRequest", this._onAfterRequest);
-      document.removeEventListener("click", this._onHtmxClick);
-      document.removeEventListener("keydown", this._onHtmxKeydown);
-      document.removeEventListener(
-        "htmx:configRequest", this._onConfigRequest);
-      document.removeEventListener("htmx:beforeSwap", this._onBeforeSwap);
+      document.removeEventListener("click", this._onClick);
+      document.removeEventListener("keydown", this._onKeydown);
       document.removeEventListener("htmx:afterSwap", this._onAfterSwap);
+      document.removeEventListener("htmx:oobAfterSwap", this._onRefocusable);
+      document.removeEventListener("htmx:afterSettle", this._onRefocusable);
     }
   }
 
@@ -862,6 +961,8 @@
       if (!this._body) return;
       this._opener = null;
       this._openerHref = "";
+      this._openerInPopover = false;
+      this._openerPane = "";
       this._loading = null;
       this._saving = false;
       this._posting = false;
@@ -874,6 +975,17 @@
           if (this._loading !== null || this.element.open) return;
           this._opener = link;
           this._openerHref = link.getAttribute("href") || "";
+          this._openerInPopover = Boolean(link.closest("[popover]"));
+          const pane = link.closest("#lot-detail, #item-detail");
+          this._openerPane = pane ? pane.id : "";
+          const openPopover = link.closest("[popover]:popover-open");
+          if (openPopover && typeof openPopover.hidePopover === "function") {
+            try {
+              openPopover.hidePopover();
+            } catch {
+              // Already closed.
+            }
+          }
           this._loading = link.href;
           htmx.ajax("GET", link.href,
                     { target: this._body, swap: "innerHTML" });
@@ -998,24 +1110,51 @@
     }
 
     _focusAfterSave() {
-      if (this._opener && this._opener.isConnected
+      if (!this._openerInPopover && this._opener && this._opener.isConnected
           && this._opener.getAttribute("href") === this._openerHref) {
         this._opener.focus({ preventScroll: true });
         return;
       }
-      const heading = document.getElementById("item-detail-title")
+      const titleId = this._openerPane === "lot-detail"
+        ? "lot-detail-title" : "item-detail-title";
+      const heading = document.getElementById(titleId)
+        || document.getElementById("item-detail-title")
         || document.querySelector("main h1");
       if (!heading) return;
       heading.tabIndex = -1;
       heading.focus({ preventScroll: true });
     }
 
+    _masterDetailControllers() {
+      const found = [];
+      for (const el of document.querySelectorAll("[data-controller]")) {
+        const ctrl = this.application.getControllerForElementAndIdentifier(
+          el, "master-detail");
+        if (ctrl) found.push(ctrl);
+      }
+      return found;
+    }
+
+    _widgetKey(body) {
+      const widget = body.closest(".widget");
+      if (!widget) return "";
+      if (widget.id) return widget.id;
+      const pane = widget.closest("aside[id]");
+      const head = widget.querySelector(".widget__head :is(h2, h3)");
+      return head ? `${pane?.id || ""}:${head.textContent.trim()}` : "";
+    }
+
     async _refreshPage() {
-      const layout = document.querySelector(".item-layout");
-      const address = layout && paneItem()
-        ? `${location.pathname}${paramSearch(location.search, "selected",
-                                             paneItem())}`
-        : location.href;
+      const beforeCtrls = this._masterDetailControllers();
+      let address = location.href;
+      if (beforeCtrls.length) {
+        let search = location.search;
+        for (const ctrl of beforeCtrls) {
+          const item = paneItemOf(ctrl.paneValue);
+          if (item) search = paramSearch(search, ctrl.paramValue, item);
+        }
+        address = `${location.pathname}${search}`;
+      }
       const response = await fetch(address, {
         credentials: "same-origin",
         cache: "no-store",
@@ -1043,13 +1182,23 @@
       }
       const boxScroll = new Map();
       for (const box of document.querySelectorAll(".table-scroll")) {
-        const table = box.id ? null : box.querySelector("table[id]");
-        const id = box.id || (table && table.id);
+        const part = box.querySelector("table[id], tbody[id]");
+        const id = box.id || part?.id;
         if (id && (box.scrollTop || box.scrollLeft)) {
           boxScroll.set(id, {
             byBox: Boolean(box.id),
             top: box.scrollTop,
             left: box.scrollLeft,
+          });
+        }
+      }
+      const widgetScroll = new Map();
+      for (const body of document.querySelectorAll(".widget__body")) {
+        const key = this._widgetKey(body);
+        if (key && (body.scrollTop || body.scrollLeft)) {
+          widgetScroll.set(key, {
+            top: body.scrollTop,
+            left: body.scrollLeft,
           });
         }
       }
@@ -1071,11 +1220,18 @@
           box.scrollLeft = pos.left;
         }
       }
-      const splitCtrl = layout
-        && this.application.getControllerForElementAndIdentifier(
-          layout, "split-list");
-      if (splitCtrl) {
-        splitCtrl.restoreAfterRefresh(ticked);
+      for (const body of document.querySelectorAll(".widget__body")) {
+        const pos = widgetScroll.get(this._widgetKey(body));
+        if (pos) {
+          body.scrollTop = pos.top;
+          body.scrollLeft = pos.left;
+        }
+      }
+      const afterCtrls = this._masterDetailControllers();
+      if (afterCtrls.length) {
+        for (const ctrl of afterCtrls) {
+          ctrl.restoreAfterRefresh(ticked);
+        }
       } else {
         for (const box of document.querySelectorAll("input[name=item]")) {
           box.checked = ticked.has(box.value);
@@ -1093,6 +1249,7 @@
   application.register("popover-anchor", PopoverAnchorController);
   application.register("batch-narrow", BatchNarrowController);
   application.register("sortable-table", SortableTableController);
-  application.register("split-list", SplitListController);
+  application.register("master-detail", MasterDetailController);
+  application.register("split", SplitController);
   application.register("dialog", DialogController);
 })();

@@ -122,11 +122,12 @@ class Order:
         key: str,
         filters: Sequence[tuple[str, str]] = (),
         selected: str = "",
+        extra: Sequence[tuple[str, str]] = (),
     ) -> str:
         """Return the query string for KEY's column header link.
 
         Toggles to descending when KEY is currently active ascending,
-        and ascending otherwise. Keeps FILTERS and SELECTED.
+        and ascending otherwise. Keeps FILTERS, SELECTED, and EXTRA.
         """
         pairs: list[tuple[str, str]] = list(filters)
         pairs.append(("sort", key))
@@ -134,6 +135,7 @@ class Order:
             pairs.append(("dir", "desc"))
         if selected:
             pairs.append(("selected", selected))
+        pairs.extend(extra)
         return f"?{urlencode(pairs)}"
 
     def aria_sort(self, key: str) -> str:
@@ -164,13 +166,14 @@ class Order:
         filters: Sequence[tuple[str, str]] = (),
         selected: str = "",
         classes: Mapping[str, str] | None = None,
+        extra: Sequence[tuple[str, str]] = (),
     ) -> list[dict[str, Any]]:
         """Build header dictionaries for rendering with ``c-sort-th``."""
         col_classes = classes or {}
         result: list[dict[str, Any]] = []
         for col in self.columns:
             href = (
-                f"{base_url}{self.link(col.key, filters, selected)}"
+                f"{base_url}{self.link(col.key, filters, selected, extra)}"
                 if col.sortable
                 else ""
             )
@@ -372,6 +375,14 @@ def list_view(request: HttpRequest, cookie: str,
     return value if value in ("table", "details") else default
 
 
+def split_major(request: HttpRequest, cookie: str,
+                default: str = "first") -> str:
+    """Return the larger side of a list's split remembered in COOKIE
+    (``"first"`` or ``"second"``), or DEFAULT when missing or invalid."""
+    value = request.COOKIES.get(cookie, "")
+    return value if value in ("first", "second") else default
+
+
 def pick_selected(rows: Sequence[T], wanted: str,
                   key: Callable[[T], Any]) -> tuple[T | None, str]:
     """Select the row in ROWS whose stringified KEY equals WANTED, else
@@ -386,6 +397,20 @@ def pick_selected(rows: Sequence[T], wanted: str,
     return rows[0], str(key(rows[0]))
 
 
+def detail_query(request: HttpRequest,
+                 keep_query: bool = False) -> QueryDict:
+    """Return a mutable query for a list detail request.
+
+    Use the same-host HTMX current URL when available. Otherwise, copy
+    the request query if KEEP_QUERY is set, or return an empty query.
+    """
+    current = request.htmx.current_url if request.htmx else None
+    if current and url_has_allowed_host_and_scheme(
+            current, {request.get_host()}, request.is_secure()):
+        return QueryDict(urlsplit(current).query, mutable=True)
+    return request.GET.copy() if keep_query else QueryDict(mutable=True)
+
+
 def htmx_detail_or_redirect(
     request: HttpRequest,
     base_url: str,
@@ -393,25 +418,25 @@ def htmx_detail_or_redirect(
     template: str,
     context_fn: Callable[[], dict[str, Any]],
     keep_query: bool = False,
+    extra: Sequence[tuple[str, str | None]] = (),
 ) -> HttpResponse:
-    """Render TEMPLATE with CONTEXT_FN() and ``HX-Replace-Url`` for an
-    htmx request, or redirect non-htmx requests to BASE_URL with
-    ``selected`` set to SELECTED."""
-    if not request.htmx:
-        if keep_query:
-            params = request.GET.copy()
-            params["selected"] = str(selected)
-            return redirect(f"{base_url}?{params.urlencode()}")
-        return redirect(f"{base_url}?{urlencode({'selected': selected})}")
-    response = render(request, template, context_fn())
-    current = request.htmx.current_url or ""
-    if current and url_has_allowed_host_and_scheme(
-            current, {request.get_host()}, request.is_secure()):
-        params = QueryDict(urlsplit(current).query, mutable=True)
-    elif keep_query:
-        params = request.GET.copy()
-    else:
-        params = QueryDict(mutable=True)
+    """Answer a list detail request with a pane or redirect.
+
+    Both responses name SELECTED at BASE_URL and apply EXTRA query
+    pairs. A None value drops a parameter. KEEP_QUERY controls the
+    fallback query when no same-host HTMX current URL is available.
+    For HTMX, render TEMPLATE with CONTEXT_FN() and set
+    ``HX-Replace-Url``. Otherwise, redirect to the list URL.
+    """
+    params = detail_query(request, keep_query)
     params["selected"] = str(selected)
-    response["HX-Replace-Url"] = f"{base_url}?{params.urlencode()}"
+    for name, value in extra:
+        params.pop(name, None)
+        if value is not None:
+            params[name] = value
+    address = f"{base_url}?{params.urlencode()}"
+    if not request.htmx:
+        return redirect(address)
+    response = render(request, template, context_fn())
+    response["HX-Replace-Url"] = address
     return response

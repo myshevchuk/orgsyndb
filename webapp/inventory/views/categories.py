@@ -5,7 +5,7 @@ from datetime import date
 from typing import Any
 from urllib.parse import urlencode
 
-from django.http import Http404, HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse, QueryDict
 from django.shortcuts import render
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -18,13 +18,15 @@ from inventory.summaries import (AgeSummary, LocationSummary, SourceSummary,
                                  amounts_by_unit, earliest_opened, is_old,
                                  location_summary, natural, source_summary,
                                  supplier_summary)
-from inventory.views.common import (CHEMICAL_COOKIE, CHEMICALS,
-                                    INTERMEDIATE_COOKIE, INTERMEDIATES,
-                                    htmx_detail_or_redirect, list_view,
-                                    oldest_vessel_order, pick_selected, tabs)
+from inventory.views.common import (CHEMICAL_COOKIE, CHEMICAL_SPLIT_COOKIE,
+                                    CHEMICALS, INTERMEDIATE_COOKIE,
+                                    INTERMEDIATE_SPLIT_COOKIE, INTERMEDIATES,
+                                    oldest_vessel_order, tabs)
 from inventory.views.vessels import vessel_ledger
-from orgsyndb_web.lists import (Order, SortColumn, htmx_list_push_url,
-                                pairs_sort_key, sort_value)
+from orgsyndb_web.lists import (Order, SortColumn, detail_query,
+                                htmx_detail_or_redirect,
+                                htmx_list_push_url, list_view, pairs_sort_key,
+                                pick_selected, sort_value, split_major)
 from vocabulary.models import ChemicalClass, Group, Term, descendants, tree_order
 
 
@@ -39,6 +41,7 @@ class CategoryConfig:
     other_source: str
     base_url: str
     cookie: str
+    split_cookie: str
     heading: Any
 
 
@@ -50,6 +53,7 @@ CONFIGS: dict[str, CategoryConfig] = {
         other_source=Source.BOUGHT,
         base_url=INTERMEDIATES,
         cookie=INTERMEDIATE_COOKIE,
+        split_cookie=INTERMEDIATE_SPLIT_COOKIE,
         heading=gettext_lazy("Intermediates"),
     ),
     StockCategory.COMMERCIAL: CategoryConfig(
@@ -59,6 +63,7 @@ CONFIGS: dict[str, CategoryConfig] = {
         other_source=Source.MADE,
         base_url=CHEMICALS,
         cookie=CHEMICAL_COOKIE,
+        split_cookie=CHEMICAL_SPLIT_COOKIE,
         heading=gettext_lazy("Commercial chemicals"),
     ),
 }
@@ -106,7 +111,8 @@ class CategoryFilters:
     sealed: bool = False
 
     @classmethod
-    def from_query(cls, query: Any, category: str) -> "CategoryFilters":
+    def from_query(cls, query: QueryDict,
+                   category: str) -> "CategoryFilters":
         """Read the parameters applicable to CATEGORY from QUERY."""
         q = query.get("q", "").strip()
         location = query.get("location", "").strip()
@@ -150,15 +156,18 @@ class CategoryFilters:
         return pairs
 
     def query_string(self, category: str, selected: str = "",
-                     extra: list[tuple[str, str]] | None = None) -> str:
-        """Return the active filter parameters, EXTRA pairs, and SELECTED
-        when given, encoded with a leading ``?``, or empty when none are
-        set."""
+                     extra: list[tuple[str, str]] | None = None,
+                     lot: str = "") -> str:
+        """Return the active filter parameters, EXTRA pairs, SELECTED,
+        and LOT when given, encoded with a leading ``?``, or empty when
+        none are set."""
         pairs = self.filter_pairs(category)
         if extra:
             pairs.extend(extra)
         if selected:
             pairs.append(("selected", selected))
+        if lot:
+            pairs.append(("lot", lot))
         return "?" + urlencode(pairs) if pairs else ""
 
 
@@ -404,31 +413,37 @@ def category_list_response(request: HttpRequest, category: str
     chosen, selected = pick_selected(
         rows, request.GET.get("selected", ""), lambda row: row.substance.key)
     detail_vessels = chosen.vessels if chosen else []
-    single_vessel = detail_vessels[0] if len(detail_vessels) == 1 else None
+    chosen_lot, lot = pick_selected(
+        detail_vessels, request.GET.get("lot", ""), lambda vessel: vessel.pk)
     classes = (tree_order(ChemicalClass.objects.select_related("parent"))
                if config.is_intermediate else [])
     groups = ([] if config.is_intermediate
               else tree_order(Group.objects.select_related("parent")))
     filter_pairs = filters.filter_pairs(category)
+    lot_extra = [("lot", lot)] if lot else ()
     response = render(request, "inventory/category_list.html", {
-        "category": category,
         "is_intermediate": config.is_intermediate,
         "base_url": config.base_url,
         "cookie": config.cookie,
+        "split_cookie": config.split_cookie,
         "heading": str(config.heading),
         "rows": rows,
         "vessel_total": sum(row.vessel_count for row in rows),
         "chosen": chosen,
         "detail_substance": chosen.substance if chosen else None,
         "detail_vessels": detail_vessels,
-        "single_vessel": single_vessel,
-        "ledger": vessel_ledger(single_vessel, 5) if single_vessel else [],
+        "chosen_lot": chosen_lot,
+        "lot": lot,
+        "lot_ledger": vessel_ledger(chosen_lot, 5) if chosen_lot else [],
         "selected": selected,
         "order": order,
         "headers": order.headers(
             config.base_url, filter_pairs, selected,
-            {"substance": "col-strong col-name", "amount": "number col-strong"}),
+            {"substance": "col-strong col-name",
+             "amount": "number col-strong"},
+            extra=lot_extra),
         "view": list_view(request, config.cookie),
+        "major": split_major(request, config.split_cookie, "first"),
         "filters": filters,
         "filter_query": filters.query_string(category),
         "locations": offered_locations,
@@ -442,39 +457,69 @@ def category_list_response(request: HttpRequest, category: str
     return htmx_list_push_url(
         request, response,
         config.base_url + filters.query_string(
-            category, selected, extra=order.pairs()))
+            category, selected, extra=order.pairs(), lot=lot))
 
 
 def category_detail_response(request: HttpRequest, category: str, key: str
                              ) -> HttpResponse:
     """Answer an htmx request with the details pane of substance KEY in
-    CATEGORY under the request's filters, or redirect non-htmx requests
-    to the list. Answer 404 when KEY has no open vessel of CATEGORY."""
+    CATEGORY under the active filters, naming its first admitted lot, or
+    redirect non-htmx requests to the list. Answer 404 when KEY has no
+    open vessel of CATEGORY."""
     config = CONFIGS[category]
     all_for_sub = list(category_vessels(category).filter(
         batch__substance__key=key))
     if not all_for_sub:
         raise Http404
 
-    def detail_context() -> dict[str, Any]:
+    admitted = []
+    if request.htmx:
         today = timezone.localdate()
-        filters = CategoryFilters.from_query(request.GET, category)
+        filters = CategoryFilters.from_query(
+            detail_query(request, keep_query=True), category)
         admitted = sorted(
             filter_category_vessels(all_for_sub, filters, category, today),
             key=oldest_vessel_order)
-        single = admitted[0] if len(admitted) == 1 else None
-        return {
-            "category": category,
-            "is_intermediate": config.is_intermediate,
-            "detail_substance": all_for_sub[0].batch.substance,
-            "detail_vessels": admitted,
-            "single_vessel": single,
-            "ledger": vessel_ledger(single, 5) if single else [],
-        }
+    chosen_lot = admitted[0] if admitted else None
 
     return htmx_detail_or_redirect(
         request, config.base_url, key, "inventory/category_list.html#detail",
-        detail_context, keep_query=True)
+        lambda: {
+            "is_intermediate": config.is_intermediate,
+            "base_url": config.base_url,
+            "detail_substance": all_for_sub[0].batch.substance,
+            "detail_vessels": admitted,
+            "chosen_lot": chosen_lot,
+            "lot_ledger": vessel_ledger(chosen_lot, 5) if chosen_lot else [],
+        },
+        keep_query=True, extra=[("lot", str(chosen_lot.pk)
+                                 if chosen_lot else None)])
+
+
+def category_lot_detail_response(request: HttpRequest, category: str,
+                                 key: str, pk: int) -> HttpResponse:
+    """Answer an htmx request with the lot details pane of vessel PK of
+    substance KEY in CATEGORY, or redirect non-htmx requests to the list.
+    Answer 404 when KEY or PK names no open vessel of CATEGORY admitted
+    by the active filters."""
+    config = CONFIGS[category]
+    candidates = list(category_vessels(category).filter(
+        pk=pk, batch__substance__key=key))
+    filters = CategoryFilters.from_query(
+        detail_query(request, keep_query=True), category)
+    admitted = filter_category_vessels(
+        candidates, filters, category, timezone.localdate())
+    if not admitted:
+        raise Http404
+    vessel = admitted[0]
+
+    return htmx_detail_or_redirect(
+        request, config.base_url, key, "inventory/category_list.html#lot",
+        lambda: {
+            "chosen_lot": vessel,
+            "lot_ledger": vessel_ledger(vessel, 5),
+        },
+        keep_query=True, extra=[("lot", str(vessel.pk))])
 
 
 @vary_on_cookie
@@ -488,8 +533,17 @@ def intermediate_list(request: HttpRequest) -> HttpResponse:
 @vary_on_headers("HX-Request", "HX-Current-URL")
 def intermediate_detail(request: HttpRequest, key: str) -> HttpResponse:
     """Answer an htmx request with the details pane of the intermediate
-    substance KEY under the query's filters, or redirect to the list."""
+    substance KEY under the active filters, or redirect to the list."""
     return category_detail_response(request, StockCategory.INTERMEDIATES, key)
+
+
+@vary_on_headers("HX-Request", "HX-Current-URL")
+def intermediate_lot_detail(request: HttpRequest, key: str, pk: int
+                            ) -> HttpResponse:
+    """Answer an htmx request with the lot details pane of intermediate
+    vessel PK of substance KEY, or redirect to the list."""
+    return category_lot_detail_response(
+        request, StockCategory.INTERMEDIATES, key, pk)
 
 
 @vary_on_cookie
@@ -503,5 +557,14 @@ def chemical_list(request: HttpRequest) -> HttpResponse:
 @vary_on_headers("HX-Request", "HX-Current-URL")
 def chemical_detail(request: HttpRequest, key: str) -> HttpResponse:
     """Answer an htmx request with the details pane of the commercial
-    chemical KEY under the query's filters, or redirect to the list."""
+    chemical KEY under the active filters, or redirect to the list."""
     return category_detail_response(request, StockCategory.COMMERCIAL, key)
+
+
+@vary_on_headers("HX-Request", "HX-Current-URL")
+def chemical_lot_detail(request: HttpRequest, key: str, pk: int
+                        ) -> HttpResponse:
+    """Answer an htmx request with the lot details pane of commercial
+    chemical vessel PK of substance KEY, or redirect to the list."""
+    return category_lot_detail_response(
+        request, StockCategory.COMMERCIAL, key, pk)

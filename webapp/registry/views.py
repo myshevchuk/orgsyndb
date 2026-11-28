@@ -21,7 +21,7 @@ from inventory.figures import newest_first, open_amounts
 from inventory.models import Batch, Item
 from orgsyndb_web.lists import (Order, SortColumn, htmx_detail_or_redirect,
                                 htmx_list_push_url, list_view, pick_selected,
-                                sort_value)
+                                sort_value, split_major)
 from registry import snapshot
 from registry.forms import SubstanceForm
 from registry.models import Substance, SubstanceClass
@@ -32,6 +32,7 @@ from vocabulary.models import (ChemicalClass, Group, Project, ReactionType,
 
 REGISTRY = "/lab/registry/"
 SUBSTANCE_COOKIE = "substance-list-view"
+SUBSTANCE_SPLIT_COOKIE = "substance-list-split"
 SUBSTANCE_COLUMNS: tuple[SortColumn, ...] = (
     SortColumn("name", gettext_lazy("Name"),
                lambda s: sort_value(s.shown_name)),
@@ -154,6 +155,7 @@ def substance_list(request: HttpRequest) -> HttpResponse:
         "headers": order.headers(REGISTRY, filter_pairs, selected_key,
                                  SUBSTANCE_CLASSES),
         "view": list_view(request, SUBSTANCE_COOKIE),
+        "major": split_major(request, SUBSTANCE_SPLIT_COOKIE, "first"),
         "q": query, "group": group,
         "chemical_class": chemical_class,
         "groups": groups,

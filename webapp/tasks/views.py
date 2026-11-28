@@ -28,7 +28,8 @@ from journal.entries import entry_for
 from orgsyndb_web import lock
 from orgsyndb_web.lists import (Order, SortColumn, clean_choice,
                                 htmx_detail_or_redirect, htmx_list_push_url,
-                                list_view, pick_selected, sort_value)
+                                list_view, pick_selected, sort_value,
+                                split_major)
 from planning.plan import Plan, TaskPriority
 from tasks.closing import amounts
 from tasks.forms import TaskEditForm, TaskForm
@@ -38,6 +39,7 @@ from tasks.steps import finish
 
 TASKS_URL = "/lab/tasks/"
 TASK_COOKIE = "task-list-view"
+TASK_SPLIT_COOKIE = "task-list-split"
 PRIORITY_ORDER = {Priority.HIGH: 0, Priority.MEDIUM: 1, Priority.LOW: 2}
 STATE_ORDER = {
     State.RUNNING: 0,
@@ -253,6 +255,7 @@ def task_list(request: HttpRequest) -> HttpResponse:
         "headers": order.headers(TASKS_URL, filter_pairs, selected_key,
                                  TASK_CLASSES),
         "view": list_view(request, TASK_COOKIE),
+        "major": split_major(request, TASK_SPLIT_COOKIE, "first"),
         "filters": filters,
         "accounts": accounts,
         "state_filters": STATE_FILTERS,

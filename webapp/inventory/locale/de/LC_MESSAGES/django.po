@@ -663,17 +663,23 @@ msgstr "Details"
 msgid "<strong>Stock:</strong> colours and meanings in the filter “Stock status”."
 msgstr "<strong>Bestand:</strong> Farben und Bedeutungen im Filter „Bestandsstatus“."
 
-msgid "<strong>Details</strong> shows the chosen item's details beside the table."
-msgstr "<strong>Details</strong> zeigt die Details des gewählten Artikels neben der Tabelle."
+msgid "<strong>Details</strong> shows the chosen item's details with the table."
+msgstr "<strong>Details</strong> zeigt die Details des gewählten Artikels mit der Tabelle."
 
 msgid "not recorded"
 msgstr "nicht hinterlegt"
 
-msgid "Finished containers"
-msgstr "Fertige Gebinde"
+msgid "Larger area"
+msgstr "Größere Fläche"
 
-msgid "Bulk, stored separately"
-msgstr "Bulk, separat gelagert"
+msgid "Stock and location"
+msgstr "Bestand & Lagerort"
+
+msgid "Vessel details"
+msgstr "Gefäßdaten"
+
+msgid "Batch details"
+msgstr "Chargendaten"
 
 msgid "Open item page"
 msgstr "Artikelseite öffnen"

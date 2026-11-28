@@ -1,4 +1,4 @@
-{% load i18n %}<fieldset class="view-switch">
+{% load i18n %}<button type="button" class="pane-toggle" data-lab-action="click@document->split#toggle" aria-pressed="{% if major == 'second' %}true{% else %}false{% endif %}"><span class="pane-toggle__label">{% translate "Larger area" %}:</span> <span class="pane-toggle__choice pane-toggle__first">{% translate "Table" context "item list" %}</span><span class="pane-toggle__sep" aria-hidden="true">|</span><span class="pane-toggle__choice pane-toggle__second">{% translate "Details" %}</span></button><fieldset class="view-switch">
 <legend class="visually-hidden">{% translate "View" context "item list" %}</legend>
 <label><input type="radio" id="view-table" name="view" value="table" class="visually-hidden"{% if view == "table" %} checked{% endif %}><span>{% translate "Table" context "item list" %}</span></label>
 <label><input type="radio" id="view-details" name="view" value="details" class="visually-hidden"{% if view == "details" %} checked{% endif %}><span>{% translate "Details" %}</span></label>
