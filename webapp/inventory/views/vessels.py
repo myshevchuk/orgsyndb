@@ -10,7 +10,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
-from django.utils.translation import gettext_lazy, pgettext_lazy
+from django.utils.translation import gettext_lazy
 from django.views.decorators.http import require_POST
 from django.views.decorators.vary import vary_on_cookie, vary_on_headers
 
@@ -60,10 +60,8 @@ VESSEL_COLUMNS: tuple[SortColumn, ...] = (
     SortColumn("date", gettext_lazy("Date"),
                lambda v: sort_value(v.batch.date)),
     SortColumn("opened", gettext_lazy("Opened"), _vessel_opened_sort),
-    SortColumn("note", pgettext_lazy("inventory", "Note"),
-               lambda v: sort_value(v.note)),
 )
-VESSEL_CLASSES = {"amount": "number"}
+VESSEL_CLASSES = {"name": "col-strong col-name", "amount": "number col-strong"}
 
 
 @dataclass(frozen=True)

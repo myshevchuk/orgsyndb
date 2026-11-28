@@ -357,3 +357,6 @@ msgstr "Nur eine Aufgabe in Arbeit ohne Produktcharge kann fehlschlagen."
 #, python-format
 msgid "Written off: %(amounts)s."
 msgstr "Ausgebucht: %(amounts)s."
+
+msgid "Number, substance, batch or note"
+msgstr "Nr., Substanz, Charge oder Notiz"

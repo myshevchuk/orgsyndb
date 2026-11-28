@@ -199,3 +199,6 @@ msgstr "Artikel / Gebinde"
 msgctxt "substance"
 msgid "Task"
 msgstr "Auftrag"
+
+msgid "Name, short name, key or CAS"
+msgstr "Name, Kurzname, Schlüssel oder CAS"

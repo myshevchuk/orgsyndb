@@ -51,7 +51,11 @@ SUBSTANCE_COLUMNS: tuple[SortColumn, ...] = (
     SortColumn("article", gettext_lazy("Article no."),
                lambda s: sort_value(s.article_number)),
 )
-SUBSTANCE_CLASSES = {"molar_mass": "number"}
+SUBSTANCE_CLASSES = {
+    "name": "col-strong col-name",
+    "molar_mass": "number",
+    "article": "col-strong",
+}
 # The vocabularies by the names of their pages, each with its model and
 # its heading.
 VOCABULARIES: dict[str, tuple[type[Term], Any]] = {

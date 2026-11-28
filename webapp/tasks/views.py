@@ -78,6 +78,7 @@ TASK_COLUMNS: tuple[SortColumn, ...] = (
     SortColumn("state", gettext_lazy("State"),
                lambda row: STATE_ORDER.get(row[0].state, 4)),
 )
+TASK_CLASSES = {"product": "col-strong col-name", "priority": "col-strong"}
 
 STATE_FILTERS = [
     ("active", gettext_lazy("Active")),
@@ -249,7 +250,8 @@ def task_list(request: HttpRequest) -> HttpResponse:
         **detail,
         "selected": selected_key,
         "order": order,
-        "headers": order.headers(TASKS_URL, filter_pairs, selected_key),
+        "headers": order.headers(TASKS_URL, filter_pairs, selected_key,
+                                 TASK_CLASSES),
         "view": list_view(request, TASK_COOKIE),
         "filters": filters,
         "accounts": accounts,

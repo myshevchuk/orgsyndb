@@ -1,9 +1,6 @@
 {% extends "orgsyndb_web/base.html" %}{% load i18n l10n lab inventory %}
 {% block title %}{% translate "End products" %}{% endblock %}
 {% block body_class %} class="lab-frame"{% endblock %}
-{% block head %}<style>
-{% for column in table_columns %}main:has(#column-{{ column.key }}:not(:checked)) .main-table .col-{{ column.key }} { display: none; }
-{% endfor %}</style>{% endblock %}
 {% block main %}
 {% translate "End products" as heading %}<c-list-heading :title="heading" wrap_actions>
 <c-slot name="count_slot"><span id="item-count" class="visually-hidden" data-refresh>{% blocktranslate count count=total %}{{ count }} item{% plural %}{{ count }} items{% endblocktranslate %}</span>
@@ -51,27 +48,7 @@
 {% endfor %}</select></label>
 </div>
 </div></c-slot>
-<c-slot name="end"><div class="lab-control lab-columns">
-<button type="button" class="lab-menu-button" popovertarget="columns-menu">{% translate "Columns" %}</button>
-<div id="columns-menu" class="lab-popup lab-menu" popover data-controller="popover-anchor">
-<fieldset>
-<legend>{% translate "Columns" %}</legend>
-{% for column in table_columns %}<label><input type="checkbox" id="column-{{ column.key }}" data-controller="remember" data-remember="item-list:column-{{ column.key }}"{% if column.shown %} checked{% endif %}> {{ column.label }}</label>
-{% endfor %}</fieldset>
-</div>
-</div>
-<details class="lab-control lab-view-menu" data-controller="view-menu">
-<summary class="lab-menu-button">{% translate "View" context "item list" %}</summary>
-<div class="lab-view-controls lab-menu">
-<label>{% translate "Row height" %}
-<select id="row-height" data-controller="remember" data-remember="item-list:row-height">
-<option value="compact" selected>{% translate "Compact" %}</option>
-<option value="tight">{% translate "Very compact" %}</option>
-</select></label>
-<p class="heat-legend"><label><input type="checkbox" id="heat-switch" data-controller="remember" data-remember="item-list:heat" checked> {% translate "Colour consumption" %}</label> <span class="heat-scale">{% translate "little" context "consumption" %}{% for name in heats %} <span class="heat-swatch {{ name }}" aria-hidden="true"></span>{% endfor %} {% translate "much" context "consumption" %}</span></p>
-</div>
-</details>
-{% include "inventory/view_switch.html" %}</c-slot>
+<c-slot name="end">{% include "inventory/view_switch.html" %}</c-slot>
 </c-filter-bar>
 <c-split-layout :view="view" cookie="item-list-view">
 <table class="main-table">
@@ -91,7 +68,7 @@
 </header>
 <dl class="detail-figures">
 <div><dt>{% translate "Stock" %}</dt><dd><span class="stock level-{{ figures.level }}">{{ item.quantity }} <span class="level-label">{{ figures.level|level_label }}</span></span></dd></div>
-<div><dt>{% translate "Coverage" %}</dt><dd{% if figures.projected and figures.coverage is not None %} class="projected" title="{% translate "projected from the current year" %}"{% endif %}>{% if figures.coverage is not None %}{% blocktranslate with coverage=figures.coverage|floatformat:1 %}{{ coverage }} quarters{% endblocktranslate %}{% else %}–{% endif %}</dd></div>
+<div><dt>{% translate "Coverage" %}</dt><dd>{% if figures.coverage is not None %}{% blocktranslate with coverage=figures.coverage|floatformat:1 %}{{ coverage }} quarters{% endblocktranslate %}{% else %}–{% endif %}</dd></div>
 </dl>
 <p class="detail-links"><a href="/lab/inventory/items/{{ item.pk }}/">{% translate "Open item page" %}</a></p>
 {% if user.is_authenticated %}<p class="lab-actions">
@@ -105,8 +82,8 @@
 {% endif %}<h3>{% translate "Consumption" %}</h3>
 <dl class="detail-figures">
 <div><dt>{% blocktranslate with year=statistics.year|unlocalize day=today|date:"MONTH_DAY_FORMAT" %}{{ year }} to {{ day }}{% endblocktranslate %}</dt><dd>{{ figures.this_year }}</dd></div>
-<div><dt>{% translate "Mean per year" %}</dt><dd{% if figures.projected %} class="projected" title="{% translate "projected from the current year" %}"{% endif %}>{% if figures.mean_year is not None %}{{ figures.mean_year|floatformat:1 }}{% else %}–{% endif %}</dd></div>
-<div><dt>{% translate "Mean per quarter" %}</dt><dd{% if figures.projected %} class="projected" title="{% translate "projected from the current year" %}"{% endif %}>{% if figures.mean_quarter is not None %}{{ figures.mean_quarter|floatformat:1 }}{% else %}–{% endif %}</dd></div>
+<div><dt>{% translate "Mean per year" %}</dt><dd>{% if figures.mean_year is not None %}{{ figures.mean_year|floatformat:1 }}{% else %}–{% endif %}</dd></div>
+<div><dt>{% translate "Mean per quarter" %}</dt><dd>{% if figures.mean_quarter is not None %}{{ figures.mean_quarter|floatformat:1 }}{% else %}–{% endif %}</dd></div>
 </dl>
 <h4>{% blocktranslate with year=statistics.year|unlocalize %}Quarters of {{ year }}{% endblocktranslate %}</h4>
 <ol class="quarter-bars">
@@ -130,18 +107,17 @@
 </aside>
 {% endif %}{% endpartialdef %}</c-slot>
 </c-split-layout>
-<p class="lab-table-note">{% blocktranslate trimmed %}<strong>Stock:</strong> colours and meanings in the filter “Stock status”. <strong>Details</strong> shows the chosen item's compartment, box, bulk and consumption beside the table.{% endblocktranslate %}</p>
+<p class="lab-table-note">{% blocktranslate trimmed %}<strong>Stock:</strong> colours and meanings in the filter “Stock status”.{% endblocktranslate %} <strong>{% translate "Consumption" %}:</strong> <span class="heat-scale">{% translate "little" context "consumption" %}{% for name in heats %} <span class="heat-swatch {{ name }}" aria-hidden="true"></span>{% endfor %} {% translate "much" context "consumption" %}</span>. {% blocktranslate trimmed %}<strong>Details</strong> shows the chosen item's details beside the table.{% endblocktranslate %}</p>
 {% partialdef cell %}{% with item=row.item figures=row.figures %}{% if column.key == "number" %}<td class="{{ column.classes }}">{% if item.article_number %}{% if user.is_authenticated %}<input type="checkbox" name="item" value="{{ item.pk }}" form="pick" aria-label="{% blocktranslate %}Select {{ item }}{% endblocktranslate %}"> {% endif %}<a href="/lab/inventory/items/{{ item.pk }}/">{{ item.article_number }}</a>{% endif %}</td>
-{% elif column.key == "name" %}<td class="{{ column.classes }}">{% if not item.article_number %}<a href="/lab/inventory/items/{{ item.pk }}/">{{ item.name }}</a>{% else %}{% substance item.substance %}{% endif %}{% if item|new_on:today %}<sup class="mark-new">{% translate "new" context "item" %}</sup>{% endif %}</td>
+{% elif column.key == "name" %}<td class="{{ column.classes }}" title="{{ item.name }}">{% if not item.article_number %}<a href="/lab/inventory/items/{{ item.pk }}/">{{ item.name }}</a>{% else %}{% substance item.substance %}{% endif %}{% if item|new_on:today %}<sup class="mark-new">{% translate "new" context "item" %}</sup>{% endif %}</td>
 {% elif column.key == "category" %}<td class="{{ column.classes }}">{{ item.category }}</td>
 {% elif column.key == "container" %}<td class="{{ column.classes }}">{{ item.container }}</td>
 {% elif column.key == "stock" %}<td class="{{ column.classes }} stock level-{{ figures.level }}" title="{{ figures.level|level_label }}">{{ item.quantity }}<span class="visually-hidden"> {{ figures.level|level_label }}</span></td>
-{% elif column.key == "mean_year" %}<td class="{{ column.classes }}{% if row.heat_mean %} {{ row.heat_mean }}{% endif %}{% if figures.projected %} projected" title="{% translate "projected from the current year" %}{% endif %}">{% if figures.mean_year is not None %}{{ figures.mean_year|floatformat:1 }}{% endif %}</td>
+{% elif column.key == "mean_year" %}<td class="{{ column.classes }}{% if row.heat_mean %} {{ row.heat_mean }}{% endif %}">{% if figures.mean_year is not None %}{{ figures.mean_year|floatformat:1 }}{% endif %}</td>
 {% elif column.key == "this_year" %}<td class="{{ column.classes }}{% if row.heat_year %} {{ row.heat_year }}{% endif %}">{{ figures.this_year }}</td>
-{% elif column.key == "coverage" %}<td class="{{ column.classes }}{% if figures.projected and figures.coverage is not None %} projected" title="{% translate "projected from the current year" %}{% endif %}">{% if figures.coverage is not None %}{{ figures.coverage|floatformat:1 }}{% endif %}</td>
+{% elif column.key == "coverage" %}<td class="{{ column.classes }}">{% if figures.coverage is not None %}{{ figures.coverage|floatformat:1 }}{% endif %}</td>
 {% elif column.key == "compartment" %}<td class="{{ column.classes }}">{{ item.compartment }}</td>
 {% elif column.key == "box" %}<td class="{{ column.classes }}">{{ item.box }}</td>
 {% elif column.key == "bulk" %}<td class="{{ column.classes }}">{% include "inventory/bulk.html" with bulk=row.bulk %}</td>
-{% elif column.key == "note" %}<td class="{{ column.classes }}">{{ item.note }}</td>
 {% endif %}{% endwith %}{% endpartialdef %}
 {% endblock %}

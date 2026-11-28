@@ -67,6 +67,7 @@ body {
   column-gap: var(--space-5);
   min-height: 100vh;
   max-width: 96rem;
+  margin-left: 0;
   padding: 0 2.5rem;
 }
 main, .site-footer { grid-column: 2; }

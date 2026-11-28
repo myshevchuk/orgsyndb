@@ -568,9 +568,6 @@ msgctxt "item"
 msgid "new"
 msgstr "neu"
 
-msgid "projected from the current year"
-msgstr "hochgerechnet aus dem laufenden Jahr"
-
 msgid "The day the item entered the end-product stock; left empty, the opening count sets it when it is above zero."
 msgstr "Der Tag, an dem der Artikel in den Endproduktbestand kam; bleibt es leer, setzt ihn der Anfangsbestand, wenn er über null liegt."
 
@@ -650,25 +647,10 @@ msgstr "Bestandsstatus"
 msgid "More filters"
 msgstr "Weitere Filter"
 
-msgid "Columns"
-msgstr "Spalten"
-
 msgid "%(shown)s of %(total)s item"
 msgid_plural "%(shown)s of %(total)s items"
 msgstr[0] "%(shown)s von %(total)s Artikel"
 msgstr[1] "%(shown)s von %(total)s Artikeln"
-
-msgid "Row height"
-msgstr "Zeilenhöhe"
-
-msgid "Compact"
-msgstr "Kompakt"
-
-msgid "Very compact"
-msgstr "Sehr kompakt"
-
-msgid "Colour consumption"
-msgstr "Verbrauch einfärben"
 
 msgctxt "item list"
 msgid "View"
@@ -681,14 +663,11 @@ msgstr "Tabelle"
 msgid "Details"
 msgstr "Details"
 
-msgid ""
-"<strong>Stock:</strong> colours and meanings in the filter “Stock status”. "
-"<strong>Details</strong> shows the chosen item's compartment, box, bulk and "
-"consumption beside the table."
-msgstr ""
-"<strong>Bestand:</strong> Farben und Bedeutungen im Filter "
-"„Bestandsstatus“. <strong>Details</strong> zeigt Fach, Box, Bulk und "
-"Verbrauch des gewählten Artikels neben der Tabelle."
+msgid "<strong>Stock:</strong> colours and meanings in the filter “Stock status”."
+msgstr "<strong>Bestand:</strong> Farben und Bedeutungen im Filter „Bestandsstatus“."
+
+msgid "<strong>Details</strong> shows the chosen item's details beside the table."
+msgstr "<strong>Details</strong> zeigt die Details des gewählten Artikels neben der Tabelle."
 
 msgid "not recorded"
 msgstr "nicht hinterlegt"

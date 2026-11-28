@@ -17,10 +17,10 @@
 </thead>
 <tbody id="item-rows" data-refresh hx-target="#item-detail" hx-swap="outerHTML" hx-sync="#main:replace" hx-indicator="#item-detail">
 {% for row in rows %}{% with found=row.forecast %}<tr data-item="{{ found.article_number }}" hx-get="/lab/planning/{{ found.article_number|urlencode:"" }}/detail/{{ row_query }}" hx-trigger="item-select"{% if found.article_number == selected %} aria-current="true"{% endif %}>
-<td>{% substance found.substance %} <span class="kv-sub compound-key">{{ found.article_number }}</span></td>
+<td class="col-strong col-name" title="{{ found.article_number }} {{ found.substance.shown_name }}"><span class="article-number">{{ found.article_number }}</span> {% substance found.substance %}</td>
 <td class="num">{{ found.runway|days }}{{ found.rough|rough }}</td>
 <td class="num">{{ found.synthesis_days|days }}</td>
-<td class="{% if found.latest_start %}nowrap{% else %}muted{% endif %}">{{ found.latest_start|default_if_none:"–" }}</td>
+<td class="col-strong {% if found.latest_start %}nowrap{% else %}muted{% endif %}">{{ found.latest_start|default_if_none:"–" }}</td>
 <td><span class="badge priority priority--{{ found.priority }}">{{ found.priority_label }}</span></td>
 <td{% if not row.tasks %} class="muted"{% endif %}>{% if row.tasks %}<ul class="planning-lines">
 {% for line in row.tasks %}<li><a href="/lab/tasks/{{ line.task.number }}/">{{ line.task.number }}</a> {% include "tasks/state.html" with task=line.task %}{% if line.late %} <span class="badge badge--late">{% translate "late" %}</span>{% endif %}</li>

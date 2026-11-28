@@ -33,7 +33,11 @@ NOTE_COLUMNS: tuple[SortColumn, ...] = (
                lambda note: sort_value(note.line_count)),
     SortColumn("contents", gettext_lazy("Contents"), sortable=False),
 )
-NOTE_CLASSES = {"lines": "number table-only-summary"}
+NOTE_CLASSES = {
+    "number": "col-strong",
+    "recipient": "col-strong",
+    "lines": "number table-only-summary",
+}
 
 
 def note_states(notes: list[DeliveryNote]) -> dict[int, str]:

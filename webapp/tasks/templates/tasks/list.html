@@ -5,20 +5,20 @@
 {% translate "Tasks" as heading %}<c-list-heading :title="heading">
 {% if user.is_authenticated %}<c-slot name="actions"><p class="actions"><a href="/lab/tasks/new/">{% translate "New task" %}</a></p></c-slot>{% endif %}
 </c-list-heading>
-{% translate "State" as state_label %}{% translate "Person" as person_label %}{% translate "Priority" as priority_label %}{% translate "Search" as search_label %}<c-filter-bar id="filters" action="/lab/tasks/" :selected="selected" :sort="order.sort_field" :dir="order.dir_field" hx-get="/lab/tasks/" hx-push-url="true" hx-sync="#main:replace" hx-trigger="submit, search from:#filter-q, input delay:200ms from:#filter-q, change target:select" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#task-counts:morph,#item-head:morph,#item-detail:morph,#filter-selected:morph">
-<c-filter-select name="state" :label="state_label" :inline="False">
+{% translate "State" as state_label %}{% translate "Person" as person_label %}{% translate "Priority" as priority_label %}{% translate "Search" as search_label %}{% translate "Number, substance, batch or note" as search_placeholder %}<c-filter-bar id="filters" action="/lab/tasks/" :selected="selected" :sort="order.sort_field" :dir="order.dir_field" hx-get="/lab/tasks/" hx-push-url="true" hx-sync="#main:replace" hx-trigger="submit, search from:#filter-q, input delay:200ms from:#filter-q, change target:select" hx-target="#item-rows" hx-select="#item-rows" hx-swap="morph:outerHTML" hx-select-oob="#task-counts:morph,#item-head:morph,#item-detail:morph,#filter-selected:morph">
+<c-filter-select name="state" :label="state_label">
 {% for value, label in state_filters %}<option value="{{ value }}"{% if value == filters.state %} selected{% endif %}>{{ label }}</option>
 {% endfor %}</c-filter-select>
-<c-filter-select name="person" :label="person_label" :inline="False">
+<c-filter-select name="person" :label="person_label">
 <option value=""{% if not filters.person %} selected{% endif %}>{% translate "Everyone" %}</option>
 <option value="none"{% if filters.person == "none" %} selected{% endif %}>{% translate "Nobody" %}</option>
 {% for account in accounts %}<option value="{{ account.initials }}"{% if account.initials == filters.person %} selected{% endif %}>{{ account.initials }} – {{ account.display_name }}</option>
 {% endfor %}</c-filter-select>
-<c-filter-select name="priority" :label="priority_label" :inline="False">
+<c-filter-select name="priority" :label="priority_label">
 <option value=""{% if not filters.priority %} selected{% endif %}>{% translate "Any" %}</option>
 {% for value, label in priorities %}<option value="{{ value }}"{% if value == filters.priority %} selected{% endif %}>{{ label }}</option>
 {% endfor %}</c-filter-select>
-<c-filter-search id="filter-q" :value="filters.q" :label="search_label" :inline="False" />
+<c-filter-search id="filter-q" :value="filters.q" :label="search_label" :placeholder="search_placeholder" />
 <c-slot name="end">{% include "inventory/view_switch.html" %}</c-slot>
 </c-filter-bar>
 <p id="task-counts" class="count" data-refresh>{% blocktranslate with planned=counts.planned running=counts.running followup=counts.followup %}{{ planned }} planned · {{ running }} running · {{ followup }} follow-up{% endblocktranslate %}</p>
@@ -30,8 +30,8 @@
 <tbody id="item-rows" data-refresh hx-target="#item-detail" hx-swap="outerHTML" hx-sync="#main:replace" hx-indicator="#item-detail">
 {% for task, shown, batches in tasks %}<tr id="task-row-{{ task.pk }}" data-state="{{ task.state }}" data-item="{{ task.number }}" hx-get="/lab/tasks/{{ task.number }}/detail/" hx-trigger="item-select"{% if task == detail_task %} aria-current="true"{% endif %}>
 <td><a href="/lab/tasks/{{ task.number }}/">{{ task.number }}</a></td>
-<td>{% substance task.substance %}</td>
-<td>{% include "tasks/priority.html" %}</td>
+<td class="col-strong col-name" title="{{ task.substance.shown_name }}">{% substance task.substance %}</td>
+<td class="col-strong">{% include "tasks/priority.html" %}</td>
 <td>{% person task.assignee %}</td>
 <td>{{ task.started|default_if_none:"" }}</td>
 <td>{{ task.ended|default_if_none:"" }}</td>
