@@ -741,12 +741,11 @@ class SortingScenarioTests(InventoryCase):
         self.assertEqual(sorted(query_of(response["HX-Push-Url"])),
                          ["selected"])
 
+    CHEMICALS = "/lab/inventory/chemicals/"
+
     def amounts(self) -> dict[str, Any]:
-        """Open vessels of 1 g, 500 mg and 20 µmol, a vessel of a bought
-        batch opened on 2026-05-01, one sealed, and one of a made batch,
-        in the order of their ids; the amounts of the first three."""
-        from inventory.models import Vessel
-        found = {
+        """Open vessels of 1 g, 500 mg and 20 µmol of one article."""
+        return {
             "1 g": make_vessel(self.kl, unit="g", amount="1",
                                article="CH-0012", date=date(2026, 1, 1)),
             "500 mg": make_vessel(self.kl, unit="mg", amount="500",
@@ -756,44 +755,44 @@ class SortingScenarioTests(InventoryCase):
                                    article="CH-0012",
                                    date=date(2026, 3, 1)),
         }
-        found["opened"] = make_vessel(
-            self.kl, unit="mg", amount="5", article="CH-0013",
-            source="bought", supplier="Sigma", date=date(2026, 1, 1))
-        found["sealed"] = make_vessel(
-            self.kl, unit="mg", amount="5", article="CH-0013",
-            source="bought", supplier="Sigma", date=date(2026, 2, 1))
-        found["made"] = make_vessel(
-            self.kl, unit="mg", amount="5", article="CH-0013",
-            date=date(2026, 3, 1))
-        Vessel.objects.filter(pk=found["opened"].pk).update(
+
+    def chemicals(self, opened: str, sealed: str) -> dict[str, str]:
+        """Two commercial chemicals named OPENED and SEALED, the first
+        with a bottle opened on 2026-05-01 and the second with a sealed
+        one; the key of the first and of the second by their names."""
+        from inventory.models import Vessel
+        first = make_vessel(self.kl, unit="mg", amount="5", article=opened,
+                            source="bought", supplier="Sigma")
+        second = make_vessel(self.kl, unit="mg", amount="5",
+                             article=sealed, source="bought",
+                             supplier="Sigma")
+        Vessel.objects.filter(pk=first.pk).update(
             opened_on=date(2026, 5, 1))
-        return found
+        return {"opened": first.batch.substance.key,
+                "sealed": second.batch.substance.key}
 
     def test_amounts_across_units_and_text_after_values(self) -> None:
         """Scenario: Amounts across units and text after values."""
-        found = self.amounts()
-        by_pk = {str(vessel.pk): name for name, vessel in found.items()}
+        self.amounts()
         response = self.client.get(self.VESSELS + "?sort=amount")
         root = page(response)
         shown = [cell.text() for row in body_rows(root)
                  for cell in row.find_all("td")
                  if cell.text() in ("500 mg", "1 g", "20 µmol")]
         self.assertEqual(shown, ["500 mg", "1 g", "20 µmol"])
-        opened = [by_pk[key] for key in
-                  self.keys(self.VESSELS + "?sort=opened")]
-        self.assertEqual([name for name in opened
-                          if name in ("opened", "sealed", "made")],
-                         ["opened", "sealed", "made"])
+        found = self.chemicals("benzaldehyde", "acetophenone")
+        self.assertEqual(self.keys(self.CHEMICALS),
+                         [found["sealed"], found["opened"]])
+        self.assertEqual(self.keys(self.CHEMICALS + "?sort=opened"),
+                         [found["opened"], found["sealed"]])
 
     def test_descending_puts_text_first(self) -> None:
         """Scenario: Descending puts text first."""
-        found = self.amounts()
-        by_pk = {str(vessel.pk): name for name, vessel in found.items()}
-        opened = [by_pk[key] for key in
-                  self.keys(self.VESSELS + "?sort=opened&dir=desc")]
-        self.assertEqual([name for name in opened
-                          if name in ("opened", "sealed", "made")],
-                         ["sealed", "opened", "made"])
+        found = self.chemicals("acetophenone", "benzaldehyde")
+        self.assertEqual(self.keys(self.CHEMICALS),
+                         [found["opened"], found["sealed"]])
+        self.assertEqual(self.keys(self.CHEMICALS + "?sort=opened&dir=desc"),
+                         [found["sealed"], found["opened"]])
 
     def test_sorting_text_with_numbers_in_it(self) -> None:
         """Scenario: Sorting text with numbers in it."""

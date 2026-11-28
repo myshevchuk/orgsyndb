@@ -77,11 +77,10 @@ MAIN_LISTS: dict[str, MainList] = {spec.name: spec for spec in (
         capped="article"),
     MainList(
         "delivery", "/lab/inventory/deliveries/",
-        ("number", "date", "recipient", "lines", "contents"),
+        ("number", "date", "recipient", "lines"),
         "date", "delivery-list-view",
         _under("/lab/inventory/deliveries/", "detail/"), "note-count",
-        unsorted=frozenset({"contents"}), descending=True,
-        strong=("number", "recipient")),
+        descending=True, strong=("number", "recipient")),
     MainList(
         "intermediate", "/lab/inventory/intermediates/",
         ("substance", "amount", "vessels", "location", "source", "age"),
@@ -104,11 +103,11 @@ MAIN_LISTS: dict[str, MainList] = {spec.name: spec for spec in (
         descending=True, strong=("name", "stock"), capped="name"),
     MainList(
         "vessel", "/lab/inventory/vessels/",
-        ("vessel", "name", "article", "kind", "batch", "source", "amount",
-         "location", "date", "opened"),
+        ("vessel", "name", "kind", "batch", "source", "amount", "location",
+         "date"),
         "name", "vessel-list-view",
         _under("/lab/inventory/vessels/", "detail/"), "vessel-count",
-        searches=(), strong=("name", "amount"), capped="name"),
+        searches=(), strong=("name", "amount")),
     MainList(
         "planning", "/lab/planning/",
         ("article", "runway", "synthesis", "start", "priority", "tasks",

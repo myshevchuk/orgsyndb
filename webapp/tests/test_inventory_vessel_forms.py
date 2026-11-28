@@ -615,7 +615,7 @@ class VesselPageLinkTests(VesselFormCase):
 
 
 class VesselOpenedDisplayTests(FormCase):
-    """Requirement: Vessel list, Vessel page (`opened_on` / `versiegelt`)."""
+    """Requirement: Vessel details, Vessel page (`opened_on`, `versiegelt`)."""
 
     def setUp(self) -> None:
         super().setUp()
@@ -631,21 +631,31 @@ class VesselOpenedDisplayTests(FormCase):
         fill(self.kl, item, count=1, vessel=self.opened,
              date=date(2026, 11, 2))
 
-    def test_the_vessel_list_shows_opened_on_and_sealed_for_bought_vessels(
-            self) -> None:
-        """Requirement: Vessel list ("with the columns `Gefäß`, `Name`,
-        `Artikelnr.`, `Art`, `Charge`, `Herkunft`, `Menge`, `Ort`,
-        `Datum`, `Angebrochen` and `Bemerkung` ... for a vessel of a
-        bought batch its `opened_on` or `versiegelt`, and nothing for
-        one of a made batch")."""
+    def test_the_vessel_list_has_no_opening_column(self) -> None:
+        """Requirement: Vessel list (no `Angebrochen` column; the
+        opening shows in the vessel's details)."""
         header, rows = table(page(self.client.get(VESSELS)))
-        self.assertIn("Angebrochen", header)
-        by_batch = {row["Charge"].text(): row for row in rows}
-        self.assertEqual(by_batch["B-SEALED"]["Angebrochen"].text(),
-                         "versiegelt")
-        self.assertEqual(by_batch["B-OPEN"]["Angebrochen"].text(),
-                         "02.11.2026")
-        self.assertEqual(by_batch["B-MADE"]["Angebrochen"].text(), "")
+        self.assertNotIn("Angebrochen", header)
+        for row in rows:
+            self.assertNotIn("Angebrochen", row)
+        text = " ".join(cell.text() for row in rows for cell in row.values())
+        self.assertNotIn("versiegelt", text)
+        self.assertNotIn("02.11.2026", text)
+
+    def test_the_vessel_details_show_opened_on_or_sealed(self) -> None:
+        """Requirement: Vessel details ("`Angebrochen am <date>` or
+        `versiegelt` for a vessel of a bought batch, nothing for one of
+        a made batch")."""
+        def details(vessel) -> str:
+            root = page(self.client.get(f"{VESSELS}?selected={vessel.pk}"))
+            return root.find(id="item-detail").text()
+
+        self.assertIn("versiegelt", details(self.sealed))
+        self.assertNotIn("Angebrochen am", details(self.sealed))
+        self.assertIn("Angebrochen am 02.11.2026", details(self.opened))
+        self.assertNotIn("versiegelt", details(self.opened))
+        for shown in ("Angebrochen am", "versiegelt"):
+            self.assertNotIn(shown, details(self.made))
 
     def test_the_vessel_page_shows_opened_on_or_sealed(self) -> None:
         """Requirement: Vessel page ("for a vessel of a bought batch

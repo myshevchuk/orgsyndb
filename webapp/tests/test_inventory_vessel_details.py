@@ -9,8 +9,9 @@ from inventory.models import Vessel
 from . import Element, make_task, make_vessel, make_withdrawal, page
 from .inventory_support import (VESSELS, InventoryCase, batch_url,
                                 vessel_url)
-from .main_lists_support import (HTMX, body_of, cells, headers_of, heading_of,
-                                 link_in, must_pane, replaced, texts_of_links,
+from .main_lists_support import (HTMX, body_of, cells, head_cells,
+                                 headers_of, heading_of, link_in, must_pane,
+                                 replaced, rows_of, texts_of_links,
                                  unsorted_reasons)
 from .test_inventory_dialogs import current
 
@@ -128,6 +129,30 @@ class DetailsOfAVesselTests(VesselDetailsCase):
         self.assertNotIn("Bemerkung", [th.text() for th in
                                        head.find_all("th")])
         self.assertNotIn("Rest vom Ansatz", root.find(id="item-rows").text())
+
+    def test_the_article_number_and_the_opening_are_not_in_the_table(
+            self) -> None:
+        """The article number and the opening of a vessel show in its
+        details, not in the table's columns."""
+        self.item("CH-0012")
+        opened = make_vessel(self.kl, article="CH-0012", source="bought",
+                             supplier="Sigma", supplier_batch="B-OPEN")
+        Vessel.objects.filter(pk=opened.pk).update(
+            opened_on=date(2026, 3, 5))
+        sealed = make_vessel(self.kl, article="CH-0012", source="bought",
+                             supplier="Sigma", supplier_batch="B-SEALED")
+        root = self.listed(opened)
+        headers = [th.text() for th in head_cells(root)]
+        for gone in ("Artikelnr.", "Angebrochen"):
+            self.assertNotIn(gone, headers)
+        rows = rows_of(root).text()
+        for gone in ("CH-0012", "versiegelt", "05.03.2026"):
+            with self.subTest(gone=gone):
+                self.assertNotIn(gone, rows)
+        details = must_pane(root).text()
+        self.assertIn("CH-0012", details)
+        self.assertIn("Angebrochen am 05.03.2026", details)
+        self.assertIn("versiegelt", self.details(sealed).text())
 
     def test_the_opening_of_a_bought_vessel(self) -> None:
         opened = self.bought()

@@ -399,16 +399,27 @@ class SortTests(TableCase):
         self.assertEqual(self.articles("?sort=stock&dir=desc"),
                          ["A-2", "A-1", "A-4", "A-5", "A-3"])
 
-    def test_bulk_by_the_containers_it_fills(self) -> None:
+    def test_bulk_by_its_amount(self) -> None:
+        """Masses by mg, then amounts of substance by µmol, items
+        without bulk last, whatever the number of containers the bulk
+        fills: here the order by amount is the reverse of the order by
+        fill count."""
         self.item("CH-0001", size="10", unit="mg")
-        self.item("CH-0002", size="10", unit="mg")
-        self.item("CH-0010", size="10", unit="mg")
+        self.item("CH-0002", size="1", unit="mg")
+        self.item("CH-0003", size="10", unit="umol")
+        self.item("CH-0004", size="10", unit="mg")
+        self.item("CH-0005", size="10", unit="mg")
         self.vessel("CH-0001", "mg", "50")
-        self.vessel("CH-0002", "mg", "5")
+        self.vessel("CH-0002", "mg", "20")
+        self.vessel("CH-0003", "umol", "5")
+        self.vessel("CH-0004", "g", "1")
+        self.vessel("CH-0004", "umol", "3")
         self.assertEqual(self.articles("?sort=bulk"),
-                         ["CH-0002", "CH-0001", "CH-0010"])
+                         ["CH-0002", "CH-0001", "CH-0004", "CH-0003",
+                          "CH-0005"])
         self.assertEqual(self.articles("?sort=bulk&dir=desc"),
-                         ["CH-0001", "CH-0002", "CH-0010"])
+                         ["CH-0003", "CH-0004", "CH-0001", "CH-0002",
+                          "CH-0005"])
 
     def test_ties_keep_the_default_order(self) -> None:
         for article in ("E-2", "E-3", "E-1"):

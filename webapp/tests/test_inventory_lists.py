@@ -6,6 +6,7 @@ from datetime import date, datetime, timezone
 from urllib.parse import parse_qs, quote, urlsplit
 
 from inventory.bookings import book_note, reverse, reverse_historical
+from inventory.models import Vessel
 
 from . import field_value, frozen, make_substance, page, table
 from .collection_support import accept
@@ -16,7 +17,7 @@ from .inventory_support import (BATCHES, COMPOUND_PAGE, DELIVERIES, LEVELS,
                                 has_number, historical_line, item_url,
                                 note_blocks, note_url, num, vessel_url)
 from .journal_support import entry_of, make_notebook
-from .main_lists_support import projected_marks, strong_columns
+from .main_lists_support import must_pane, projected_marks, strong_columns
 
 COLUMNS_DE = ["Artikelnr.", "Name", "Kategorie", "Gebinde", "Bestand",
               "Ø Jahr", "Abgegeben", "Reichweite", "Fach", "Box",
@@ -28,10 +29,10 @@ BATCHES_DE = ["Charge", "Name", "Artikelnr.", "Herkunft", "Laborjournal",
               "Datum", "Ausbeute", "Bestand"]
 BATCHES_EN = ["Batch", "Name", "Article no.", "Source", "Lab notebook",
               "Date", "Yield", "Stock"]
-VESSELS_DE = ["Gefäß", "Name", "Artikelnr.", "Art", "Charge", "Herkunft",
-              "Menge", "Ort", "Datum", "Angebrochen"]
-VESSELS_EN = ["Vessel", "Name", "Article no.", "Kind", "Batch", "Source",
-              "Amount", "Location", "Date", "Opened"]
+VESSELS_DE = ["Gefäß", "Name", "Art", "Charge", "Herkunft", "Menge", "Ort",
+              "Datum"]
+VESSELS_EN = ["Vessel", "Name", "Kind", "Batch", "Source", "Amount",
+              "Location", "Date"]
 
 
 class ListCase(InventoryCase):
@@ -654,19 +655,20 @@ class VesselListTests(InventoryCase):
         self.assertEqual(row["Gefäß"].text(), f"#{vessel.pk}")
         self.assertEqual([a.get("href") for a in row["Gefäß"].find_all("a")],
                          [vessel_url(vessel)])
-        self.assertEqual(row["Artikelnr."].text(), "CH-0012")
         self.assertEqual(row["Name"].text(), "Zimtsäure")
         self.assertEqual([a.get("href") for a in row["Name"].find_all("a")],
                          ["/lab/registry/substances/cinnamic-acid/"])
         self.assertEqual(row["Art"].text(), "Endprodukt")
         self.assertEqual([a.get("href") for a in row["Charge"].find_all(
             "a")], [batch_url(vessel.batch)])
-        self.assertEqual(row["Herkunft"].text(), "hergestellt")
+        self.assertEqual(row["Herkunft"].text(), "")
         self.assertTrue(has_amount(row["Menge"].text(), "50", "mg"))
         self.assertEqual(row["Ort"].text(), "Kühlraum")
         self.assertEqual(row["Datum"].text(), "01.10.2026")
-        self.assertNotIn("Bemerkung", row)
+        for gone in ("Artikelnr.", "Angebrochen", "Bemerkung"):
+            self.assertNotIn(gone, row)
         self.assertNotIn("Rest", [cell.text() for cell in row.values()])
+        self.assertNotIn("CH-0012", [cell.text() for cell in row.values()])
 
     def test_the_name_and_the_amount_are_strong(self) -> None:
         self.item("CH-0012", name="Zimtsäure")
@@ -674,18 +676,92 @@ class VesselListTests(InventoryCase):
         root = self.listing()
         self.assertEqual(strong_columns(root),
                          (["Name", "Menge"], ["Name", "Menge"]))
-        cell = table(root)[1][0]["Name"]
-        self.assertEqual(cell.get("title"), "Zimtsäure")
 
-    def test_the_source_and_the_supplier(self) -> None:
+    def test_the_names_are_not_cut(self) -> None:
+        """Requirement: Vessel list (names are shown whole): neither
+        the header nor a cell of the name column carries the class that
+        the stylesheet caps with an ellipsis."""
+        self.item("CH-0012", name="9,10-Dihydro-9,10-ethanoanthracen-11,"
+                  "12-dicarbonsäureanhydrid")
+        self.vessel("CH-0012", "mg", "50", number="B-1")
+        root = self.listing()
+        cell = table(root)[1][0]["Name"]
+        self.assertIn("dicarbonsäureanhydrid", cell.text())
+        self.assertNotIn("col-name", cell.classes)
+        self.assertNotIn("col-name",
+                         root.find(id="item-head").find_all("th")[1].classes)
+
+    def test_the_source_is_the_task_or_the_supplier(self) -> None:
+        """Requirement: Vessel list (for a made batch the number of the
+        task that made it, linking to the task's page, and for a bought
+        one its supplier, empty when the batch names neither)."""
+        from . import make_batch, make_task, make_vessel, past
+        self.item("CH-0012", name="Zimtsäure")
+        task = make_task(self.kl, "CH-0012", steps=1, started=past(1))
+        made = make_batch(self.kl, "CH-0012", number="B-T",
+                          task_step=task.steps.get())
+        make_vessel(self.kl, made, unit="g", amount="2")
         self.vessel("X-1", number="B-M", source="made")
         self.vessel("X-1", source="bought", supplier_batch="B-B")
         self.vessel("X-1", source="bought", supplier="Sigma",
                     supplier_batch="B-S")
         rows = self.rows()
-        self.assertEqual(rows["B-M"]["Herkunft"].text(), "hergestellt")
-        self.assertEqual(rows["B-B"]["Herkunft"].text(), "gekauft")
-        self.assertEqual(rows["B-S"]["Herkunft"].text(), "gekauft · Sigma")
+        self.assertEqual(rows["B-T"]["Herkunft"].text(), task.number)
+        self.assertEqual([a.get("href") for a in rows["B-T"][
+            "Herkunft"].find_all("a")], [f"/lab/tasks/{task.number}/"])
+        self.assertEqual(rows["B-M"]["Herkunft"].text(), "")
+        self.assertEqual(rows["B-B"]["Herkunft"].text(), "")
+        self.assertEqual(rows["B-S"]["Herkunft"].text(), "Sigma")
+        self.assertEqual(rows["B-S"]["Herkunft"].find_all("a"), [])
+
+    def test_the_english_source_has_no_word_either(self) -> None:
+        accept(language="en")
+        self.vessel("X-1", number="B-M", source="made")
+        self.vessel("X-1", source="bought", supplier="Sigma",
+                    supplier_batch="B-S")
+        rows = {r["Batch"].text(): r for r in table(self.listing())[1]}
+        self.assertEqual(rows["B-M"]["Source"].text(), "")
+        self.assertEqual(rows["B-S"]["Source"].text(), "Sigma")
+
+    def test_the_source_sorts_as_it_shows(self) -> None:
+        """The order by `source` is that of the task numbers and
+        suppliers, empty cells last in either direction, not that of the
+        words `gekauft` and `hergestellt`."""
+        from . import make_batch, make_task, make_vessel, past
+        self.item("CH-0012", name="Zimtsäure")
+        task = make_task(self.kl, "CH-0012", steps=1, started=past(1))
+        made = make_batch(self.kl, "CH-0012", number="B-T",
+                          task_step=task.steps.get())
+        make_vessel(self.kl, made, unit="g", amount="2")
+        self.vessel("X-1", source="bought", supplier="Zeta",
+                    supplier_batch="B-S")
+        self.vessel("X-1", number="B-M", source="made")
+        self.assertEqual(self.batches("?sort=source"),
+                         ["B-T", "B-S", "B-M"])
+        self.assertEqual(self.batches("?sort=source&dir=desc"),
+                         ["B-S", "B-T", "B-M"])
+
+    def test_the_gone_columns_do_not_sort(self) -> None:
+        """`sort=article` and `sort=opened` name no column: the list is
+        in its default order, by name, and the `Name` header says so."""
+        self.item("A-1", name="Zeta")
+        self.item("A-2", name="Alpha")
+        zeta = self.vessel("A-1", source="bought", supplier="Sigma",
+                           supplier_batch="B-Z")
+        self.vessel("A-2", source="bought", supplier="Sigma",
+                    supplier_batch="B-A")
+        Vessel.objects.filter(pk=zeta.pk).update(opened_on=date(2026, 5, 1))
+        default = self.batches()
+        self.assertEqual(default, ["B-A", "B-Z"])
+        for query in ("?sort=article", "?sort=opened"):
+            with self.subTest(query=query):
+                root = self.listing(query)
+                self.assertEqual(self.batches(query), default)
+                self.assertEqual(
+                    [th.get("aria-sort")
+                     for th in root.find(id="item-head").find_all("th")],
+                    ["ascending" if th == "Name" else None
+                     for th in table(root)[0]])
 
     def test_the_amount_shows_in_the_unit_of_the_vessel(self) -> None:
         self.vessel("X-1", "g", "1", number="B-G")
@@ -743,10 +819,7 @@ class VesselListTests(InventoryCase):
         self.assertEqual({k: v["Art"].text() for k, v in rows.items()},
                          {"KL0412": "Kolben", "B-I": "Zwischenprodukt",
                           "B-R": "Handelschemikalie"})
-        self.assertEqual(rows["KL0412"]["Artikelnr."].text(), "CH-0012")
-        self.assertEqual(rows["B-I"]["Artikelnr."].text(), "")
-        self.assertEqual(rows["B-R"]["Artikelnr."].text(), "")
-        self.assertEqual(rows["B-R"]["Herkunft"].text(), "gekauft · Sigma")
+        self.assertEqual(rows["B-R"]["Herkunft"].text(), "Sigma")
         self.assertEqual(self.batches("?kind=commercial"), ["B-R"])
 
     def test_every_kind_has_its_filter(self) -> None:
@@ -841,22 +914,92 @@ class DeliveryListTests(InventoryCase):
         link, _ = note_blocks(self.listing())[0]
         self.assertEqual(link.text(), f"#{note.pk}")
 
-    def test_a_note_with_its_lines(self) -> None:
+    def test_a_row_holds_the_note_and_the_count_of_its_lines(self) -> None:
         first = self.item("CH-0012", name="Zimtsäure", size="10",
                           unit="umol", quantity=20)
         second = self.item("X-1", name="Anderes", size="2.5", unit="mg",
                            quantity=20)
+        batch = self.batch("CH-0012", number="KL12")
+        note = book_note(
+            self.kl, date=date(2026, 10, 15), number="LS-9",
+            recipient="Produktion",
+            lines=[delivery_line(first, 2, batch), delivery_line(second, 7)])
+        header, rows = table(self.listing())
+        self.assertEqual(header, ["Nummer", "Datum", "Empfänger", "Zeilen"])
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        self.assertEqual(row["Nummer"].text(), "LS-9")
+        self.assertEqual([a.get("href") for a in row["Nummer"].find_all("a")],
+                         [note_url(note)])
+        self.assertEqual(row["Datum"].text(), "15.10.2026")
+        self.assertEqual(row["Empfänger"].text(), "Produktion")
+        self.assertEqual(row["Zeilen"].text(), "2")
+
+    def test_a_row_names_no_line(self) -> None:
+        """Requirement: Delivery list (the table has no `contents`
+        column: the lines, with their articles, sizes and batches, show
+        in the details)."""
+        first = self.item("CH-0012", name="Zimtsäure", size="10",
+                          unit="umol", quantity=20)
+        second = self.item("X-1", name="Anderes", size="2.5", unit="mg",
+                           quantity=20)
+        batch = self.batch("CH-0012", number="KL12")
         book_note(self.kl, date=date(2026, 10, 15), number="LS-9",
                   recipient="Produktion",
-                  lines=[delivery_line(first, 2), delivery_line(second, 7)])
-        text = self.listing().text()
+                  lines=[delivery_line(first, 2, batch),
+                         delivery_line(second, 7)])
+        root = self.listing()
+        self.assertNotIn("Inhalt", table(root)[0])
+        self.assertNotIn("Contents", table(root)[0])
+        rows = root.find(id="item-rows").text()
+        for line in ("CH-0012", "Zimtsäure", "X-1", "Anderes", "KL12"):
+            with self.subTest(line=line):
+                self.assertNotIn(line, rows)
+        self.assertEqual(root.find(id="item-rows").find_all("li"), [])
+
+    def test_the_english_columns(self) -> None:
+        accept(language="en")
+        item = self.item(quantity=20)
+        self.deliver(item, 1, number="LS-1")
+        self.assertEqual(table(self.listing())[0],
+                         ["Number", "Date", "Recipient", "Lines"])
+
+    def test_the_details_show_the_lines_with_their_batches(self) -> None:
+        """Requirement: Delivery list (the details view shows the
+        selected note as its page shows it, with its lines)."""
+        first = self.item("CH-0012", name="Zimtsäure", size="10",
+                          unit="umol", quantity=20)
+        second = self.item("X-1", name="Anderes", size="2.5", unit="mg",
+                           quantity=20)
+        made = self.batch("CH-0012", number="KL12")
+        bought = self.batch("X-1", source="bought", supplier="Sigma",
+                            supplier_batch="S-77")
+        note = book_note(
+            self.kl, date=date(2026, 10, 15), number="LS-9",
+            recipient="Produktion",
+            lines=[delivery_line(first, 2, made),
+                   delivery_line(second, 7, bought)])
+        text = must_pane(self.listing(f"?selected={note.pk}")).text()
         for expected in ("LS-9", "15.10.2026", "Produktion", "CH-0012",
-                         "Zimtsäure", "X-1", "Anderes"):
+                         "Zimtsäure", "X-1", "Anderes", "KL12", "S-77"):
             with self.subTest(expected=expected):
                 self.assertIn(expected, text)
         self.assertTrue(has_amount(text, "10", MICRO + "mol"), text)
         self.assertTrue(has_amount(text, "2,5", "mg"), text)
+        self.assertTrue(has_number(text, "2"), text)
         self.assertTrue(has_number(text, "7"), text)
+
+    def test_the_details_of_a_historical_note_show_its_lines(self) -> None:
+        item = self.item("X-1", name="Anderes", quantity=50)
+        note = book_note(self.kl, date=date(2025, 3, 1), number="H-1",
+                         historical=True, lines=[historical_line(item, 4)])
+        root = self.listing(f"?selected={note.pk}")
+        self.assertEqual(root.find(id="item-rows").find_all("li"), [])
+        text = must_pane(root).text()
+        for expected in ("H-1", "X-1", "Anderes"):
+            with self.subTest(expected=expected):
+                self.assertIn(expected, text)
+        self.assertTrue(has_number(text, "4"), text)
 
     def test_the_marks(self) -> None:
         item = self.item("X-1", quantity=50)
